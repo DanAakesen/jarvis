@@ -8,7 +8,7 @@ export const dailyViewIds = Object.freeze({
 export const dailyModuleId = 'daily';
 export const dailyContractVersion = 1;
 
-export const dailyQuerySources = Object.freeze({
+const legacyQuerySources = Object.freeze({
   metrics: 'daily.health.metrics',
   sleep: 'daily.health.sleep',
   workouts: 'daily.health.workouts',
@@ -17,9 +17,15 @@ export const dailyQuerySources = Object.freeze({
   meals: 'daily.nutrition.meals',
   favorites: 'daily.nutrition.favorites',
   plans: 'daily.nutrition.plans',
+  sync: 'daily.sync',
+});
+export const dailyQuerySourcesV1 = Object.freeze(Object.values(legacyQuerySources));
+export const dailyCapabilitiesVersion = 2;
+export const dailyCapabilitiesAccept = 'application/json;version=2, application/json';
+export const dailyQuerySources = Object.freeze({
+  ...legacyQuerySources,
   briefs: 'daily.briefs.history',
   brief: 'daily.briefs.detail',
-  sync: 'daily.sync',
 });
 const record = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 const keys = (v, allowed) => Object.keys(v).every((key) => allowed.includes(key));

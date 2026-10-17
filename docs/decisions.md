@@ -17,6 +17,13 @@ it explicitly for briefs at both service and reader, without broadening MCP.
 No notification or schedule implementation is required to read history. This
 decision authorises no private import, provider access, activation or cutover.
 
+Review identified that even inactive source must preserve the existing strict
+v1 capability consumers. Negotiate capability v2 explicitly through standard
+Accept with plain-JSON fallback; retain the exact v1 source set for old clients.
+Do not merely filter unknown sources after breaking the old advertisement.
+The updated client accepts older v1 servers; no new CORS header or URL selector
+is needed. The query/native-view version stays unchanged.
+
 ## Prepare the single Daily page without activating migration (17 October 2026)
 
 Continue the confirmed one-page scope under Dan's standing autonomous migration

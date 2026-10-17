@@ -14,6 +14,9 @@ export const dailyQuerySources: Readonly<{
   briefs: 'daily.briefs.history'; brief: 'daily.briefs.detail';
 }>;
 export type DailySourceId = typeof dailyQuerySources[keyof typeof dailyQuerySources];
+export const dailyQuerySourcesV1: readonly Exclude<DailySourceId, 'daily.briefs.history' | 'daily.briefs.detail'>[];
+export const dailyCapabilitiesVersion: 2;
+export const dailyCapabilitiesAccept: 'application/json;version=2, application/json';
 export type DailyCursor = { date: string; key: string } | { minute: string; metric: string } | { createdAt: string; id: string } | { id: string } | { startedAt: string; id: string };
 export type DailyQuery =
   | { source: 'daily.health.metrics' | 'daily.health.sleep' | 'daily.health.workouts'; startDate: string; endDate: string; limit?: number; cursor?: { date: string; key: string } }

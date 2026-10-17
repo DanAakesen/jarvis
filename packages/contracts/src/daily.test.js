@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { dailyViewIds, dailyModuleId, dailyContractVersion, dailyQuerySources, dailyQuerySchema, isDailyQuery } from './index.js';
+import { dailyViewIds, dailyModuleId, dailyContractVersion, dailyQuerySources, dailyQuerySourcesV1, dailyCapabilitiesVersion, dailyCapabilitiesAccept, dailyQuerySchema, isDailyQuery } from './index.js';
 
 test('Daily reserves four distinct stable view IDs without registering renderers', () => {
   assert.equal(dailyModuleId, 'daily');
@@ -10,6 +10,18 @@ test('Daily reserves four distinct stable view IDs without registering renderers
   });
   assert.equal(new Set(Object.values(dailyViewIds)).size, 4);
   assert.ok(Object.isFrozen(dailyViewIds));
+});
+
+test('capability v2 is explicit and the immutable legacy advertisement remains the original nine sources', () => {
+  assert.equal(dailyCapabilitiesVersion, 2);
+  assert.equal(dailyCapabilitiesAccept, 'application/json;version=2, application/json');
+  assert.deepEqual(dailyQuerySourcesV1, [
+    'daily.health.metrics', 'daily.health.sleep', 'daily.health.workouts', 'daily.health.workout',
+    'daily.health.heart-rate', 'daily.nutrition.meals', 'daily.nutrition.favorites', 'daily.nutrition.plans', 'daily.sync',
+  ]);
+  assert.ok(Object.isFrozen(dailyQuerySourcesV1));
+  assert.ok(!dailyQuerySourcesV1.includes(dailyQuerySources.briefs));
+  assert.ok(!dailyQuerySourcesV1.includes(dailyQuerySources.brief));
 });
 
 for (const source of [dailyQuerySources.favorites, dailyQuerySources.plans]) {

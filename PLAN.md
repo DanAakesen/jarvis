@@ -18,6 +18,15 @@ default-off, original Daily canonical, recurring Daily notifications disabled
 and existing non-Daily notifications untouched. Real imported history/provider/
 device/activation/cutover acceptance remains open.
 
+Initial665 CI passed application checks but its final SQL persisted-byte
+assertion compared SQL bigint text as a JS number; use an exact BigInt comparison
+without weakening the threshold. Review also found an upgrade-compatibility
+gap: old v1 clients reject an expanded source list. Keep the original nine-source
+advertisement for legacy Accept headers and explicitly negotiate capability v2
+through standard Accept, with v1 fallback for new clients on old backends.
+No CORS expansion, new query selector or activation follows. The corrected head
+requires fresh normal qualification.
+
 ## Inactive single Daily page (17 October 2026; delivered source slice)
 
 Delivered #877 as actual main `fa4e52f9`, matching qualified `db166834` tree

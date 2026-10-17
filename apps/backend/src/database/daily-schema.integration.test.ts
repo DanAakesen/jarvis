@@ -141,8 +141,8 @@ describe('Daily SQL owner schema on real SQL Server', () => {
     expect((await pool.request().query("SELECT COUNT(*) AS count FROM daily.briefing_runs WHERE delivery_status<>N'not_requested'")).recordset[0].count).toBe(0);
     await insert(owner, 'oversized', JSON.stringify('x'.repeat(dailyResultByteLimit)));
     await expect(reader.detail('oversized', signal())).rejects.toThrow('read budget');
-    expect((await pool.request().query("SELECT DATALENGTH(body_json) AS bytes FROM daily.briefing_runs WHERE id=N'oversized'")).recordset[0].bytes)
-      .toBeGreaterThan(dailyResultByteLimit * 2);
+    const bytes = (await pool.request().query<{ bytes: string }>("SELECT DATALENGTH(body_json) AS bytes FROM daily.briefing_runs WHERE id=N'oversized'")).recordset[0]!.bytes;
+    expect(BigInt(bytes)).toBeGreaterThan(BigInt(dailyResultByteLimit) * 2n);
   });
 
   it('refuses destructive down migration while any Daily record exists', async () => {

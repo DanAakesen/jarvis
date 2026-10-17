@@ -4593,6 +4593,15 @@ timestamps are not converted or used to claim freshness; observation time remain
 the actual read time. The same query/tool DTO drives the single page and on-demand
 GenUI. No generation, delivery, recurrence, source import or new permission occurs.
 
+Capabilities negotiate separately from the unchanged query DTO/native-view v1
+contract. Unversioned/ordinary Accept requests retain the original nine-source
+v1 advertisement. Updated clients request
+`application/json;version=2, application/json`; upgraded servers return capability
+v2 with brief sources, `Content-Type` version2, no-store and `Vary: Accept`.
+Updated clients also accept a genuine nine-source v1 response from older backends.
+This preserves cached old web bundles during backend-first deployment and new
+bundles during rollback without widening CORS or adding caller query selectors.
+
 ### Default-off single-page composition (17 October 2026)
 
 `App({ dailyEnabled: false })` retains the released production route/rail/mobile

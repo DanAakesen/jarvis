@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { dailyQuerySources as sources, type DailyQuery } from '@jarvis/contracts';
+import { dailyCapabilitiesAccept, dailyQuerySources as sources, dailyQuerySourcesV1, type DailyQuery } from '@jarvis/contracts';
 import { DailyReadError, isDailyResult, loadDailySources, queryDaily } from './client';
 import { dailyFixture, jsonResponse } from './test-support';
 
@@ -51,7 +51,7 @@ describe('owner-authenticated Daily query client', () => {
   });
   it('keeps disabled/unavailable capabilities distinct and accepts only known unique source IDs', async () => {
     const fetch = vi.fn()
-      .mockResolvedValueOnce(jsonResponse({ module: 'daily', version: 1, sources: Object.values(sources) }))
+      .mockResolvedValueOnce(jsonResponse({ module: 'daily', version: 2, sources: Object.values(sources) }))
       .mockResolvedValueOnce(jsonResponse({ module: 'daily', version: 1, sources: [sources.metrics, sources.metrics] }))
       .mockResolvedValueOnce(jsonResponse({ module: 'daily', version: 1, sources: ['arbitrary-provider'] }));
     vi.stubGlobal('fetch', fetch);
@@ -59,6 +59,16 @@ describe('owner-authenticated Daily query client', () => {
     await expect(loadDailySources('http://localhost:3999', token, signal())).rejects.toThrow('not available');
     await expect(loadDailySources('http://localhost:3999', token, signal())).rejects.toThrow('not available');
     await expect(queryDaily(null, query, token, signal())).rejects.toMatchObject({ kind: 'disabled' });
+  });
+  it('explicitly negotiates v2 yet accepts an unchanged v1 server without losing existing collections', async () => {
+    const fetch = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ module: 'daily', version: 1, sources: dailyQuerySourcesV1 }))
+      .mockResolvedValueOnce(jsonResponse({ module: 'daily', version: 1, sources: Object.values(sources) }));
+    vi.stubGlobal('fetch', fetch);
+    expect(await loadDailySources('http://localhost:3999', token, signal())).toEqual(dailyQuerySourcesV1);
+    expect(fetch.mock.calls[0]?.[1]).toMatchObject({ headers: { Accept: dailyCapabilitiesAccept } });
+    expect(fetch).toHaveBeenCalledTimes(1);
+    await expect(loadDailySources('http://localhost:3999', token, signal())).rejects.toMatchObject({ kind: 'invalid' });
   });
   it('does not claim success for oversized or mismatched responses', async () => {
     const fetch = vi.fn()

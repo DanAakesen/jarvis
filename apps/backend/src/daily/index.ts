@@ -1,4 +1,4 @@
-import { dailyContractVersion, dailyModuleId, dailyViewIds, dailyQuerySources } from '@jarvis/contracts';
+import { dailyContractVersion, dailyCapabilitiesVersion, dailyModuleId, dailyViewIds, dailyQuerySources, dailyQuerySourcesV1 } from '@jarvis/contracts';
 import type { BackendModule } from '../modules.js';
 import { resolveDailyOwner } from './owner.js';
 import type { DailyData } from './query.js';
@@ -46,9 +46,14 @@ export function createDailyModules(enabled = false, data?: DailyData, connector?
       }, async (request, reply) => {
         resolveDailyOwner(request);
         reply.header('Cache-Control', 'no-store');
+        const modern = request.headers.accept?.split(',').some(media =>
+          media.toLowerCase().replace(/\s/gu, '') === 'application/json;version=2') ?? false;
+        const vary = reply.getHeader('Vary');
+        reply.header('Vary', [...(Array.isArray(vary) ? vary : vary ? [String(vary)] : []), 'Accept'].join(', '));
+        reply.type(modern ? 'application/json;version=2' : 'application/json');
         return {
           module: dailyModuleId,
-          version: dailyContractVersion,
+          version: modern ? dailyCapabilitiesVersion : dailyContractVersion,
           stage: internalNutrition || savedNutrition ? 'internal-nutrition-rehearsal' : connector ? 'connector-rehearsal' : data ? 'read-only' : 'contract-only',
           reservedViewIds: dailyViewIds,
           // Reserved view IDs do not advertise unfinished functionality as available.
@@ -56,7 +61,7 @@ export function createDailyModules(enabled = false, data?: DailyData, connector?
           tools: tools.map(tool => tool.name),
           ...(connector ? { connector: { transport: 'streamable-http', path: '/daily/mcp', writes: connector.writesEnabled === true } } : {}),
           ...(data ? {
-            sources: Object.values(dailyQuerySources),
+            sources: modern ? Object.values(dailyQuerySources) : dailyQuerySourcesV1,
             refresh: { event: 'now', refetchOn: ['connect', 'reconnect', 'refocus'], revision: 'query-content-sha256' },
           } : {}),
         };

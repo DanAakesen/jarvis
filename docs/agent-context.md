@@ -26,6 +26,14 @@ separation worked; no page overflow, under44px controls or off-origin resources
 were observed. This is not private imported-history or physical-phone proof.
 The single-page foundation #877 is already released/receipted; do not requalify it.
 
+First665 CI's final real-SQL byte assertion exposed SQL bigint-as-text; compare
+with BigInt while retaining the exact threshold. Source review found expanded
+v1 capability advertisement would reject cached clients. Correct with explicit
+Accept-negotiated capability v2, original v1 source list and new-client v1
+fallback; keep every query-string selector rejected and shared CORS unchanged.
+Added native contracts, real HTTP old/new consumer and client compatibility cases.
+Corrected source requires normal exact-head qualification before release.
+
 ## Inactive Daily page checks (17 October 2026)
 
 Use the existing approved x64 Node22.23.3 and pinned single-React graph; do not
