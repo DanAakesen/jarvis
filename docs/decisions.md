@@ -54,9 +54,10 @@ Everything stays behind the default-off Daily gate: Daily off leaves Jarvis
 unchanged and this slice has no production caller. The budget adapter (recorded
 in the entry above) reports unknown burn or unknown meal macros as unknown, never
 zero, and counts only the exact active-energy metric so resting energy is not
-double-counted. The Settings section and the default-off composition are separate
-slices. No provider, device or private access, live probe, activation or
-acceptance follows from this record.
+double-counted. The Settings section ships as its own web slice over the same
+route, and the default-off composition is a further separate slice. No provider,
+device or private access, live probe, activation or acceptance follows from this
+record.
 
 ## Restore green/yellow/blue presence, rename Task recipes to Routines and keep Save above the composer (17 October 2026; P9-102, P9-103, P9-98)
 
