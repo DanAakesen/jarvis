@@ -47,9 +47,16 @@ as small PRs:
    presentation of Google results shows a clean list or text, never raw JSON or
    message bodies. Regressions cover voice create/update/arrange/close,
    browser and non-owner refusal, the scope boundary and each presentation shape.
-2. Specific refusals and model guidance (next). Chat refusals come from
-   generated-view validation returning one generic message; name the field to
-   fix so the model corrects once, and never misdescribe the cause.
+2. Specific refusals and model guidance (PR 2, with Google truncation
+   honesty). Chat refusals came from generated-view validation returning one
+   generic message; the voice path shares the same validators. A refusal now
+   names the field to fix and says nothing was changed or shown, using only
+   static wording and known key names, so the model corrects once and never
+   misdescribes the cause. Regressions cover the exact refused shapes in chat
+   and voice with identical messages. The same PR closes Codex's P1 on #888: a
+   Google result the tool reports as truncated, or that the presenter cuts to
+   fit, shows a static note in the view and a `partial` source, so free time
+   from an incomplete event list is never presented as complete.
 3. Offline end-to-end (after). Fake Gmail/Calendar: find, show view, stage
    (`awaiting_confirmation`), plain yes, confirm.
 

@@ -105,6 +105,31 @@ generated-view validation and is handled in a separate PR (specific refusals,
 model guidance), then an offline find, show, stage, confirm test. Dan's live
 re-test closes #885; source tests are not acceptance.
 
+## Name the failing field in workspace_command refusals and mark incomplete Google results partial (17 October 2026; P11-09)
+
+After the voice fix, Dan's chat test still showed "Workspace command: Refused"
+twice and an answer blaming an "invalid" summary. Ajv names only the top-level
+property for a failure inside `view`, and the hand validators returned one
+generic sentence, so the model could not correct itself and misdescribed the cause.
+
+A refused workspace command now says which field is wrong and why, and that
+nothing was changed or shown, in the same words in chat and voice (`Invalid
+arguments: <field>: <problem>. Nothing was changed or shown by this call. Retry
+with arguments matching the tool schema.`). It uses only static wording,
+enumerations, counts and key names from known property sets, so a refusal never
+echoes a model-supplied value. The `tool.invalid_arguments` log payload and every
+authority check are unchanged. Tools opt in through an optional
+`explainInvalidInput`; when it finds nothing the old message stays. Guidance for
+the model sits in the tool description because the shared capability instructions
+have about 34 code points of headroom. Rejected: deriving hints from Ajv's error
+list (a `oneOf` reports a misleading first-branch error) and relaxing validation
+so the model's guess passes.
+
+From Codex's P1 on #888: a Google result the tool marks truncated, or that the
+presenter cuts to fit, carries a static value-free note in the view and a
+`partial` source with the same reason, because free time computed from an
+incomplete event list can show busy time as free. Dan's live re-test closes #885.
+
 ## Label backend-side chat failures and retry a thrown acceptance check once (17 October 2026; #820)
 
 Three consecutive main deploys failed different chat checks with the bare

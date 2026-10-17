@@ -8,7 +8,8 @@ import { MAX_TOOL_DESCRIPTION_CHARACTERS, ToolFailure, ToolRefusal } from './too
 import { isWorkspaceReflexOperation, WorkspaceCommandBroker, workspaceCommandTool } from './workspace-commands.js';
 import { workspaceNavigationPages, type WorkspaceCommand } from '@jarvis/contracts';
 import { executeReflexAction, reflexTargets, registerChatReflex, undoPartialReflexAction } from './reflex.js';
-import { toModelToolSchema } from '../voice/realtime.js';
+import { toModelToolSchema, executeRealtimeToolCall } from '../voice/realtime.js';
+import type { BackendModule } from '../modules.js';
 import { createDailyModules } from '../daily/index.js';
 import { createDailyChanges } from '../daily/revisions.js';
 
@@ -30,11 +31,11 @@ afterEach(async () => {
   await Promise.all(apps.splice(0).map((app) => app.close()));
 });
 
-function fixture(dailyEnabled = false) {
+function fixture(dailyEnabled = false, extraModules: readonly BackendModule[] = []) {
   const broker = new WorkspaceCommandBroker();
   const records: unknown[] = [];
   const app = buildApp(config, undefined, {
-    modules: [coreModule, ...createDailyModules(dailyEnabled, { query: { query: vi.fn() }, changes: createDailyChanges() })],
+    modules: [coreModule, ...createDailyModules(dailyEnabled, { query: { query: vi.fn() }, changes: createDailyChanges() }), ...extraModules],
     auth: async (token) => token === 'header.user.signature'
       ? { objectId: ownerId, tenantId: config.auth.tenantId, displayName: 'Dan' }
       : { kind: 'jarvis-agent', objectId: 'b331004a-777a-4e53-b7b0-40bf9ab3b9ef', tenantId: config.auth.tenantId },
@@ -1111,7 +1112,158 @@ describe('Jarvis control of its own workspace views', () => {
     expect(workspaceCommandTool.description).toContain('never raw JSON or full message bodies');
     expect(workspaceCommandTool.description).toContain('"viewId":"hotels-found"');
     expect(workspaceCommandTool.description).toContain('create and update both need viewId and view');
+    expect(workspaceCommandTool.description).toContain('view is a JSON object, never a string of JSON');
+    expect(workspaceCommandTool.description).toContain('position a new view with a separate place, arrange, move or resize command');
     expect(workspaceCommandTool.description).toContain('correct it and retry once');
     expect(Array.from(workspaceCommandTool.description).length).toBeLessThanOrEqual(MAX_TOOL_DESCRIPTION_CHARACTERS);
+  });
+
+  describe('specific refusals in chat and voice', () => {
+    const listView = {
+      version: 1, title: 'private-title', renderer: 'list', source: { id: 'now', status: 'complete' },
+      data: { items: [{ title: 'private-hotel', description: 'private-description' }] },
+    };
+    const create = (value: unknown, extra: Record<string, unknown> = {}) =>
+      ({ commandId: 'refused-1', operation: 'create', viewId: 'private-view', view: value, ...extra });
+    const refusal = (explanation: string) =>
+      `Invalid arguments: ${explanation}. Nothing was changed or shown by this call. Retry with arguments matching the tool schema.`;
+    const viewExample = '{"version":1,"title":"...","renderer":"list","source":{"id":"now","status":"complete"},"data":{"items":[{"title":"..."}]}}';
+    const viewIdRule = 'viewId: is required, and must start with a letter, then letters, digits, _ or - (up to 64 characters)';
+    const refusedShapes = [
+      {
+        name: 'a source.id the model made up (gmail)',
+        payload: create({ ...listView, source: { id: 'gmail', status: 'complete' } }),
+        explanation: 'view.source.id: must be one of now, factory.tasks, factory.projects, usage, image_generation, html_generation, research or knowledge_graph (use now when none of the others fit)',
+      },
+      {
+        name: 'a call-tool action for a tool that is not registered',
+        payload: create({ ...listView, actions: [{ type: 'call-tool', tool: 'gmail_search' }] }),
+        explanation: 'view.actions[0].tool: is not a registered tool (use an exact tool name from your tool list, or leave the action out)',
+      },
+      {
+        name: 'an open-link action on a host that is not allowed',
+        payload: create({
+          ...listView,
+          data: { items: [{ title: 'private-hotel', action: { type: 'open-link', url: 'https://booking.example/private-hotel', label: 'Open' } }] },
+        }),
+        explanation: 'view.data.items[0].action.url: must be an https link on github.com, learn.microsoft.com, azure.com or *.azure.com, with no port or login details',
+      },
+      {
+        name: 'a view sent as a JSON string',
+        payload: create(JSON.stringify(listView)),
+        explanation: `view: must be a JSON object, not text containing JSON, like ${viewExample}`,
+      },
+      {
+        name: 'create without viewId and view',
+        payload: { commandId: 'refused-1', operation: 'create' },
+        explanation: `${viewIdRule}; view: is required, and must be a JSON object like ${viewExample}`,
+      },
+      {
+        name: 'create without a viewId',
+        payload: { commandId: 'refused-1', operation: 'create', view: listView },
+        explanation: viewIdRule,
+      },
+      {
+        name: 'create with placement fields',
+        payload: create(listView, { region: 'left', x: 0.1, y: 0.1 }),
+        explanation: 'region, x, y: not allowed with operation create, which takes viewId and view only (position a view with a separate place, arrange, move or resize command)',
+      },
+      {
+        name: 'a table row with the wrong number of cells',
+        payload: create({
+          version: 1, title: 'private-title', renderer: 'table', source: { id: 'now', status: 'complete' },
+          data: { columns: ['Hotel', 'Nights'], rows: [['private-a', 2], ['private-b']] },
+        }),
+        explanation: 'view.data.rows[1]: has 1 cell but there are 2 columns, so give every row exactly one cell per column',
+      },
+      {
+        name: 'a timeline event with a date that does not exist',
+        payload: create({
+          version: 1, title: 'private-title', renderer: 'timeline', source: { id: 'now', status: 'complete' },
+          data: { events: [{ at: '2026-02-31', title: 'private-trip' }] },
+        }),
+        explanation: 'view.data.events[0].at: must be a real date such as 2026-01-31 or a date-time with a timezone such as 2026-01-31T09:00:00Z (use label for a period)',
+      },
+    ];
+    const channels = [
+      { channel: 'chat', url: '/tools/workspace_command', headers: agentHeaders },
+      { channel: 'voice', url: '/test/voice', headers: userHeaders },
+    ];
+
+    // The voice route runs the model-issued call the way the relay does: on the owner's request, inside its call scope.
+    function chatAndVoice() {
+      const voiceProbe: BackendModule = {
+        id: 'voice-probe', tools: [],
+        registerRoutes: async (instance) => {
+          instance.post('/test/voice', async (request) => JSON.parse(await runModelToolCall(request, () =>
+            executeRealtimeToolCall({
+              type: 'response.function_call_arguments.done', name: 'workspace_command', call_id: 'call-1',
+              arguments: JSON.stringify(request.body),
+            }, instance.jarvisTools, request, new AbortController().signal))));
+        },
+      };
+      return fixture(false, [voiceProbe]);
+    }
+
+    it.each(refusedShapes)('refuses $name with one specific message in chat and voice', async ({ payload, explanation }) => {
+      const { app, broker } = chatAndVoice();
+      const { delivered, connection } = autoAckTab(broker);
+      const chat = await app.inject({ method: 'POST', url: '/tools/workspace_command', headers: agentHeaders, payload });
+      const voice = await app.inject({ method: 'POST', url: '/test/voice', headers: userHeaders, payload });
+      expect(chat.statusCode).toBe(200);
+      expect(voice.statusCode).toBe(200);
+      expect(chat.json()).toEqual({
+        tool: 'workspace_command', outcome: 'refused', result: { refused: refusal(explanation) },
+        confirmation: `Not done: workspace_command was refused. ${refusal(explanation)}`,
+      });
+      expect(voice.json()).toEqual(chat.json());
+      expect(Array.from(chat.json().result.refused as string).length).toBeLessThanOrEqual(500);
+      expect(chat.body + voice.body).not.toContain('private-');
+      expect(delivered).toEqual([]);
+      connection.close();
+    });
+
+    it.each(channels)('accepts the same clean list in $channel and shows it', async ({ channel, url, headers }) => {
+      const { app, broker } = chatAndVoice();
+      const { delivered, connection } = autoAckTab(broker);
+      const response = await app.inject({
+        method: 'POST', url, headers,
+        payload: { commandId: `hotels-${channel}`, operation: 'create', viewId: 'hotels-found', view: hotels },
+      });
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toMatchObject({ outcome: 'ok', result: { type: 'generated-view', view: hotels } });
+      expect(delivered.map(({ commandId }) => commandId)).toEqual([`hotels-${channel}`]);
+      connection.close();
+    });
+
+    it.each(channels)('lets Jarvis fix the named field and retry once in $channel', async ({ url, headers }) => {
+      const { app, broker } = chatAndVoice();
+      const { delivered, connection } = autoAckTab(broker);
+      const send = (payload: Record<string, unknown>) => app.inject({ method: 'POST', url, headers, payload });
+      const refused = await send({ commandId: 'retry-1', operation: 'create', view: hotels });
+      expect(refused.json()).toMatchObject({
+        outcome: 'refused', result: { refused: expect.stringContaining(`${viewIdRule}.`) },
+      });
+      expect(delivered).toEqual([]);
+      const retried = await send({ commandId: 'retry-2', operation: 'create', viewId: 'hotels-found', view: hotels });
+      expect(retried.json()).toMatchObject({ outcome: 'ok', result: { type: 'generated-view', view: hotels } });
+      expect(delivered.map(({ commandId }) => commandId)).toEqual(['retry-2']);
+      connection.close();
+    });
+
+    it('still gives the browser the owner-only refusal, not a validation hint, for an invalid create', async () => {
+      const { app, broker } = chatAndVoice();
+      const { delivered, connection } = autoAckTab(broker);
+      const response = await app.inject({
+        method: 'POST', url: '/tools/workspace_command', headers: { ...userHeaders, 'x-jarvis-message-id': '101' },
+        payload: { commandId: 'owner-invalid', operation: 'create' },
+      });
+      expect(response.json()).toMatchObject({ outcome: 'refused' });
+      const reason = String(response.json().result.refused);
+      expect(reason).toContain('Creating, updating or navigating views is done by Jarvis');
+      expect(reason).not.toContain('viewId');
+      expect(delivered).toEqual([]);
+      connection.close();
+    });
   });
 });

@@ -1050,6 +1050,509 @@ export function isWorkspaceCommand(value, options = {}) {
   }
 }
 
+const workspaceProblemLimit = 3;
+const workspaceViewIdPattern = /^[A-Za-z][A-Za-z0-9_-]{0,63}$/;
+const workspaceViewIdHint = 'must start with a letter, then letters, digits, _ or - (up to 64 characters)';
+const operationShape = (keys, required = keys) => Object.freeze({ keys, required });
+const workspaceOperationShapes = Object.freeze({
+  create: operationShape(['viewId', 'view']),
+  update: operationShape(['viewId', 'view']),
+  show: operationShape(['viewId']),
+  close: operationShape(['viewId']),
+  minimise: operationShape(['viewId']),
+  restore: operationShape(['viewId']),
+  focus: operationShape(['viewId']),
+  move: operationShape(['viewId', 'x', 'y']),
+  resize: operationShape(['viewId', 'width', 'height', 'x', 'y'], ['viewId', 'width', 'height']),
+  layout: operationShape(['arrangement']),
+  'context-panel': operationShape(['action', 'view'], ['action']),
+  navigate: operationShape(['page', 'section', 'taskId', 'issueNumber'], ['page']),
+  conversation: operationShape(['action']),
+  session: operationShape(['action', 'value']),
+  place: operationShape(['viewId', 'region']),
+  arrange: operationShape(['layout', 'viewIds'], ['layout']),
+  'minimise-all': operationShape([]),
+  'restore-all': operationShape([]),
+  'close-all': operationShape([]),
+  pin: operationShape(['viewId']),
+  unpin: operationShape(['viewId']),
+});
+const workspaceActionValues = Object.freeze({
+  conversation: ['show', 'hide'], session: ['language', 'voice', 'camera'], 'context-panel': ['open', 'close', 'toggle'],
+});
+const workspaceSessionValues = Object.freeze({ language: ['da', 'en'], voice: ['end'], camera: ['front', 'rear', 'off'] });
+const generatedViewKeys = Object.freeze(['version', 'title', 'renderer', 'source', 'data', 'actions']);
+const generatedSourceKeys = Object.freeze(['id', 'status', 'updatedAt', 'reason', 'page']);
+const generatedViewExample =
+  '{"version":1,"title":"...","renderer":"list","source":{"id":"now","status":"complete"},"data":{"items":[{"title":"..."}]}}';
+const generatedDataShapes = Object.freeze({
+  table: { example: '{"columns":["A","B"],"rows":[["x","y"]]}', keys: ['columns', 'rows'], required: ['columns', 'rows'] },
+  list: { example: '{"items":[{"title":"..."}]}', keys: ['items'], required: ['items'] },
+  detail: { example: '{"fields":[{"label":"...","value":"..."}]}', keys: ['fields'], required: ['fields'] },
+  text: { example: '{"format":"plain","content":"..."}', keys: ['format', 'content'], required: ['format', 'content'] },
+  timeline: { example: '{"events":[{"at":"2026-01-31","title":"..."}]}', keys: ['events'], required: ['events'] },
+  chart: {
+    example: '{"kind":"line","series":[{"name":"...","points":[{"x":1,"y":2}]}]}',
+    keys: ['kind', 'series'], required: ['kind', 'series'],
+  },
+  'task-card': {
+    example: '{"id":"...","title":"...","state":"..."}',
+    keys: ['id', 'title', 'state', 'summary'], required: ['id', 'title', 'state'],
+  },
+  status: { example: '{"label":"...","state":"ok"}', keys: ['label', 'value', 'state'], required: ['label', 'state'] },
+  image: { example: '{"images":[{"url":"https://...","alt":"..."}]}', keys: ['images'], required: ['images'] },
+  'html-app': { example: '{"artifactId":"<id of an existing HTML app>"}', keys: ['artifactId'], required: ['artifactId'] },
+  'knowledge-graph': {
+    example: '{"query":"...","highlight":[]}', keys: ['query', 'highlight'], required: ['query', 'highlight'],
+  },
+  code: {
+    example: '{"repo":"owner/name","path":"src/file.ts","content":"..."}',
+    keys: ['repo', 'path', 'ref', 'language', 'content', 'startLine', 'highlight', 'query'],
+    required: ['repo', 'path', 'content'],
+  },
+});
+
+function listText(values, joiner = 'or') {
+  return values.length < 2 ? values.join('') : `${values.slice(0, -1).join(', ')} ${joiner} ${values[values.length - 1]}`;
+}
+
+const requiredText = (value) => value === undefined ? 'is required, and ' : '';
+const countText = (count, noun) => `${count} ${noun}${count === 1 ? '' : 's'}`;
+
+function stringProblem(value, min, max) {
+  return boundedString(value, max, min) ? undefined
+    : `${requiredText(value)}must be a string of ${min > 0 ? `${min}-${max}` : `at most ${max}`} characters`;
+}
+
+function addWorkspaceProblem(problems, path, problem) {
+  if (problem !== undefined && problems.length < workspaceProblemLimit) problems.push({ path, problem });
+}
+
+function eachWorkspaceItem(items, problems, visit) {
+  for (let index = 0; index < items.length && problems.length < workspaceProblemLimit; index += 1) visit(items[index], index);
+}
+
+function workspaceFieldProblem(command, key) {
+  const value = command[key];
+  const range = (min, max) => Number.isFinite(value) && value >= min && value <= max
+    ? undefined : `must be a number from ${min} to ${max}`;
+  switch (key) {
+    case 'viewId':
+      return typeof value === 'string' && workspaceViewIdPattern.test(value) ? undefined : workspaceViewIdHint;
+    case 'viewIds':
+      return Array.isArray(value) && value.length >= 1 && value.length <= 8 && new Set(value).size === value.length &&
+        value.every((id) => typeof id === 'string' && workspaceViewIdPattern.test(id))
+        ? undefined : 'must be an array of 1-8 different view ids';
+    case 'region':
+      return workspaceWindowRegions.includes(value) ? undefined : `must be one of ${listText(workspaceWindowRegions)}`;
+    case 'layout':
+      return workspaceArrangeLayouts.includes(value) ? undefined : `must be one of ${listText(workspaceArrangeLayouts)}`;
+    case 'arrangement':
+      return ['tiled', 'layered'].includes(value) ? undefined : 'must be tiled or layered';
+    case 'page':
+      return workspaceNavigationPages.includes(value) ? undefined : `must be one of ${listText(workspaceNavigationPages)}`;
+    case 'section':
+      if (command.page !== 'settings') return 'is only allowed with page settings';
+      return workspaceSettingsSections.includes(value) ? undefined : `must be one of ${listText(workspaceSettingsSections)}`;
+    case 'taskId':
+      if (command.page !== 'factory') return 'is only allowed with page factory';
+      return isTaskEventId(value) ? undefined : 'must be a task id: up to 19 digits, not starting with 0';
+    case 'issueNumber':
+      if (command.page !== 'factory') return 'is only allowed with page factory';
+      return Number.isSafeInteger(value) && value > 0 ? undefined : 'must be a positive whole number';
+    case 'width':
+      return range(0.32, 0.92);
+    case 'height':
+      return range(0.34, 0.92);
+    case 'x':
+    case 'y': {
+      if (command.operation === 'move') return range(0, 1);
+      if (!Number.isFinite(value) || value < 0) return 'must be a number of at least 0';
+      const size = command[key === 'x' ? 'width' : 'height'];
+      return Number.isFinite(size) && value + size > 1
+        ? `must leave room for ${key === 'x' ? 'width' : 'height'} (${key} plus ${key === 'x' ? 'width' : 'height'} must not exceed 1)`
+        : undefined;
+    }
+    case 'action': {
+      const actions = workspaceActionValues[command.operation];
+      return actions.includes(value) ? undefined : `must be ${listText(actions)}`;
+    }
+    case 'value': {
+      const values = typeof command.action === 'string' && Object.hasOwn(workspaceSessionValues, command.action)
+        ? workspaceSessionValues[command.action] : undefined;
+      return values === undefined || values.includes(value)
+        ? undefined : `must be ${listText(values)} for action ${command.action}`;
+    }
+    default:
+      return undefined;
+  }
+}
+
+function generatedActionProblems(action, path, problems, options, listItem = false) {
+  const types = listItem ? ['open-route', 'open-link'] : generatedViewActionTypes;
+  if (!isObject(action)) {
+    addWorkspaceProblem(problems, path, `must be an object whose type is one of ${listText(types)}`);
+    return;
+  }
+  if (!types.includes(action.type)) {
+    addWorkspaceProblem(problems, `${path}.type`, `${requiredText(action.type)}must be one of ${listText(types)}`);
+    return;
+  }
+  const keys = {
+    'open-route': ['type', 'route'], 'open-link': ['type', 'url', 'label'], 'call-tool': ['type', 'tool'],
+    window: ['type', 'operation', 'windowId', 'x', 'y', 'width', 'height'],
+  }[action.type];
+  if (Object.keys(action).some((key) => !keys.includes(key))) {
+    addWorkspaceProblem(problems, path, `has an unexpected property, and ${action.type} takes ${listText(keys, 'and')} only`);
+  }
+  if (action.type === 'open-route' && !validAction({ type: 'open-route', route: action.route })) {
+    addWorkspaceProblem(problems, `${path}.route`,
+      'must be /, /usage, /settings, /factory/tasks/<id>, /factory/projects/<id> or /factory/releases/<id>');
+  } else if (action.type === 'open-link') {
+    if (!safeHttpsUrl(action.url, linkHosts)) {
+      addWorkspaceProblem(problems, `${path}.url`,
+        `${requiredText(action.url)}must be an https link on github.com, learn.microsoft.com, azure.com or *.azure.com, with no port or login details`);
+    }
+    addWorkspaceProblem(problems, `${path}.label`, stringProblem(action.label, 1, 200));
+  } else if (action.type === 'call-tool') {
+    if (typeof action.tool !== 'string' || !/^[A-Za-z0-9_-]{1,64}$/.test(action.tool)) {
+      addWorkspaceProblem(problems, `${path}.tool`,
+        `${requiredText(action.tool)}must be a tool name of 1-64 letters, digits, _ or -`);
+    } else if (options.registeredTools !== undefined && !options.registeredTools.includes(action.tool)) {
+      addWorkspaceProblem(problems, `${path}.tool`,
+        'is not a registered tool (use an exact tool name from your tool list, or leave the action out)');
+    }
+  } else if (action.type === 'window' && !validAction(action)) {
+    addWorkspaceProblem(problems, path,
+      'is not a valid window action (it needs windowId and an operation of focus, minimise, restore, close, move or resize)');
+  }
+}
+
+function generatedSourceProblems(source, problems) {
+  if (!isObject(source)) {
+    addWorkspaceProblem(problems, 'view.source',
+      `${requiredText(source)}must be an object like {"id":"now","status":"complete"}`);
+    return;
+  }
+  const ids = sourceSchema.properties.id.enum;
+  if (Object.keys(source).some((key) => !generatedSourceKeys.includes(key))) {
+    addWorkspaceProblem(problems, 'view.source', `has an unexpected property, and takes ${listText(generatedSourceKeys, 'and')} only`);
+  }
+  if (!ids.includes(source.id)) {
+    addWorkspaceProblem(problems, 'view.source.id',
+      `${requiredText(source.id)}must be one of ${listText(ids)} (use now when none of the others fit)`);
+  }
+  if (!['complete', 'partial', 'unavailable'].includes(source.status)) {
+    addWorkspaceProblem(problems, 'view.source.status', `${requiredText(source.status)}must be complete, partial or unavailable`);
+  }
+  if (source.updatedAt !== undefined && (typeof source.updatedAt !== 'string' || Number.isNaN(Date.parse(source.updatedAt)) ||
+    !/^\d{4}-\d{2}-\d{2}[tT ]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:[zZ]|[+-]\d{2}(?::?\d{2})?)$/.test(source.updatedAt))) {
+    addWorkspaceProblem(problems, 'view.source.updatedAt',
+      'must be an ISO date-time with a timezone such as 2026-01-31T09:00:00Z, or left out');
+  }
+  if (source.reason !== undefined && !boundedString(source.reason, 500)) {
+    addWorkspaceProblem(problems, 'view.source.reason', 'must be a string of at most 500 characters');
+  }
+  if (source.page !== undefined && !validSource({ id: 'now', status: 'complete', page: source.page })) {
+    addWorkspaceProblem(problems, 'view.source.page',
+      'must have integer limit (1-1000), offset (0-10000), nextOffset (null, or offset plus limit) and an optional total that agrees with them');
+  }
+}
+
+function generatedLabelValueProblems(entry, path, problems) {
+  if (!isObject(entry)) {
+    addWorkspaceProblem(problems, path, 'must be an object like {"label":"...","value":"..."}');
+    return;
+  }
+  if (Object.keys(entry).some((key) => !['label', 'value'].includes(key))) {
+    addWorkspaceProblem(problems, path, 'has an unexpected property, and takes label and value only');
+  }
+  addWorkspaceProblem(problems, `${path}.label`, stringProblem(entry.label, 1, 100));
+  addWorkspaceProblem(problems, `${path}.value`, stringProblem(entry.value, 0, 2_000));
+}
+
+function generatedListItemProblems(item, path, problems, options) {
+  if (!isObject(item)) {
+    addWorkspaceProblem(problems, path, 'must be an object like {"title":"..."}');
+    return;
+  }
+  if (Object.keys(item).some((key) => !['title', 'description', 'details', 'action'].includes(key))) {
+    addWorkspaceProblem(problems, path, 'has an unexpected property, and takes title, description, details and action only');
+  }
+  addWorkspaceProblem(problems, `${path}.title`, stringProblem(item.title, 1, 200));
+  if (item.description !== undefined) addWorkspaceProblem(problems, `${path}.description`, stringProblem(item.description, 0, 2_000));
+  if (item.details !== undefined) {
+    if (!Array.isArray(item.details) || item.details.length > 10) {
+      addWorkspaceProblem(problems, `${path}.details`, 'must be an array of at most 10 {"label","value"} objects');
+    } else {
+      eachWorkspaceItem(item.details, problems, (detail, index) =>
+        generatedLabelValueProblems(detail, `${path}.details[${index}]`, problems));
+    }
+  }
+  if (item.action !== undefined) generatedActionProblems(item.action, `${path}.action`, problems, options, true);
+}
+
+function generatedDataProblems(renderer, data, options, problems) {
+  const shape = generatedDataShapes[renderer];
+  if (!isObject(data) || Object.keys(data).some((key) => !shape.keys.includes(key)) ||
+    shape.required.some((key) => data[key] === undefined)) {
+    addWorkspaceProblem(problems, 'view.data', `for renderer ${renderer} must look like ${shape.example}`);
+    return;
+  }
+  const path = 'view.data';
+  const collection = (key, max, noun) => {
+    if (Array.isArray(data[key]) && data[key].length <= max) return true;
+    addWorkspaceProblem(problems, `${path}.${key}`, `must be an array of at most ${max} ${noun}`);
+    return false;
+  };
+  switch (renderer) {
+    case 'table': {
+      const { columns, rows } = data;
+      const columnCount = Array.isArray(columns) && columns.length >= 1 && columns.length <= 20 ? columns.length : undefined;
+      if (columnCount === undefined) addWorkspaceProblem(problems, `${path}.columns`, 'must be an array of 1-20 column labels');
+      else eachWorkspaceItem(columns, problems, (column, index) =>
+        addWorkspaceProblem(problems, `${path}.columns[${index}]`, stringProblem(column, 1, 80)));
+      if (collection('rows', rowLimit, 'rows') && columnCount !== undefined) {
+        eachWorkspaceItem(rows, problems, (row, index) => {
+          const rowPath = `${path}.rows[${index}]`;
+          if (!Array.isArray(row)) {
+            addWorkspaceProblem(problems, rowPath, 'must be an array of cells');
+          } else if (row.length !== columnCount) {
+            addWorkspaceProblem(problems, rowPath,
+              `has ${countText(row.length, 'cell')} but there ${columnCount === 1 ? 'is' : 'are'} ${countText(columnCount, 'column')}, so give every row exactly one cell per column`);
+          } else {
+            eachWorkspaceItem(row, problems, (cell, cellIndex) => {
+              if (!(cell === null || typeof cell === 'boolean' || (typeof cell === 'number' && Number.isFinite(cell)) ||
+                (typeof cell === 'string' && cell.length <= 2_000))) {
+                addWorkspaceProblem(problems, `${rowPath}[${cellIndex}]`,
+                  'must be a string of at most 2000 characters, a number, a boolean or null');
+              }
+            });
+          }
+        });
+      }
+      break;
+    }
+    case 'list':
+      if (collection('items', rowLimit, 'items')) {
+        eachWorkspaceItem(data.items, problems, (item, index) =>
+          generatedListItemProblems(item, `${path}.items[${index}]`, problems, options));
+      }
+      break;
+    case 'detail':
+      if (collection('fields', 100, 'fields')) {
+        eachWorkspaceItem(data.fields, problems, (field, index) =>
+          generatedLabelValueProblems(field, `${path}.fields[${index}]`, problems));
+      }
+      break;
+    case 'text':
+      if (!['plain', 'markdown'].includes(data.format)) addWorkspaceProblem(problems, `${path}.format`, 'must be plain or markdown');
+      addWorkspaceProblem(problems, `${path}.content`, stringProblem(data.content, 0, 10_000));
+      break;
+    case 'timeline':
+      if (collection('events', rowLimit, 'events')) {
+        eachWorkspaceItem(data.events, problems, (event, index) => {
+          const eventPath = `${path}.events[${index}]`;
+          if (!isObject(event)) {
+            addWorkspaceProblem(problems, eventPath, 'must be an object like {"at":"2026-01-31","title":"..."}');
+            return;
+          }
+          if (Object.keys(event).some((key) => !['at', 'label', 'title', 'description'].includes(key))) {
+            addWorkspaceProblem(problems, eventPath, 'has an unexpected property, and takes at, label, title and description only');
+          }
+          if (event.at === undefined && event.label === undefined) addWorkspaceProblem(problems, eventPath, 'needs at or label');
+          if (event.at !== undefined && !validTimelineDate(event.at)) {
+            addWorkspaceProblem(problems, `${eventPath}.at`,
+              'must be a real date such as 2026-01-31 or a date-time with a timezone such as 2026-01-31T09:00:00Z (use label for a period)');
+          }
+          if (event.label !== undefined && !(typeof event.label === 'string' && event.label.length > 0 &&
+            Array.from(event.label).length <= 40)) {
+            addWorkspaceProblem(problems, `${eventPath}.label`, 'must be a string of 1-40 characters');
+          }
+          addWorkspaceProblem(problems, `${eventPath}.title`, stringProblem(event.title, 1, 200));
+          if (event.description !== undefined) {
+            addWorkspaceProblem(problems, `${eventPath}.description`, stringProblem(event.description, 0, 2_000));
+          }
+        });
+      }
+      break;
+    case 'chart': {
+      if (!['line', 'bar', 'area'].includes(data.kind)) addWorkspaceProblem(problems, `${path}.kind`, 'must be line, bar or area');
+      if (!Array.isArray(data.series) || data.series.length < 1 || data.series.length > 5) {
+        addWorkspaceProblem(problems, `${path}.series`, 'must be an array of 1-5 series');
+        break;
+      }
+      let points = 0;
+      eachWorkspaceItem(data.series, problems, (series, index) => {
+        const seriesPath = `${path}.series[${index}]`;
+        if (!isObject(series)) {
+          addWorkspaceProblem(problems, seriesPath, 'must be an object like {"name":"...","points":[{"x":1,"y":2}]}');
+          return;
+        }
+        if (Object.keys(series).some((key) => !['name', 'points'].includes(key))) {
+          addWorkspaceProblem(problems, seriesPath, 'has an unexpected property, and takes name and points only');
+        }
+        addWorkspaceProblem(problems, `${seriesPath}.name`, stringProblem(series.name, 1, 100));
+        if (!Array.isArray(series.points)) {
+          addWorkspaceProblem(problems, `${seriesPath}.points`, 'must be an array of {"x","y"} points');
+          return;
+        }
+        points += series.points.length;
+        eachWorkspaceItem(series.points, problems, (point, pointIndex) => {
+          if (!isObject(point) || Object.keys(point).some((key) => !['x', 'y'].includes(key)) ||
+            !((typeof point.x === 'number' && Number.isFinite(point.x)) || boundedString(point.x, 200)) ||
+            typeof point.y !== 'number' || !Number.isFinite(point.y)) {
+            addWorkspaceProblem(problems, `${seriesPath}.points[${pointIndex}]`,
+              'must be {"x": a number or a string of at most 200 characters, "y": a number}');
+          }
+        });
+      });
+      if (points > 1_000) addWorkspaceProblem(problems, `${path}.series`, 'has more than 1000 points in total');
+      break;
+    }
+    case 'task-card':
+      addWorkspaceProblem(problems, `${path}.id`, stringProblem(data.id, 1, 64));
+      addWorkspaceProblem(problems, `${path}.title`, stringProblem(data.title, 1, 200));
+      addWorkspaceProblem(problems, `${path}.state`, stringProblem(data.state, 1, 50));
+      if (data.summary !== undefined) addWorkspaceProblem(problems, `${path}.summary`, stringProblem(data.summary, 0, 2_000));
+      break;
+    case 'status':
+      addWorkspaceProblem(problems, `${path}.label`, stringProblem(data.label, 1, 100));
+      if (!['ok', 'warning', 'error', 'unknown'].includes(data.state)) {
+        addWorkspaceProblem(problems, `${path}.state`, 'must be ok, warning, error or unknown');
+      }
+      if (data.value !== undefined) addWorkspaceProblem(problems, `${path}.value`, stringProblem(data.value, 0, 500));
+      break;
+    case 'image':
+      if (collection('images', 10, 'images')) {
+        eachWorkspaceItem(data.images, problems, (image, index) => {
+          const imagePath = `${path}.images[${index}]`;
+          if (!isObject(image)) {
+            addWorkspaceProblem(problems, imagePath, 'must be an object like {"url":"https://...","alt":"..."}');
+            return;
+          }
+          if (Object.keys(image).some((key) => !['url', 'alt'].includes(key))) {
+            addWorkspaceProblem(problems, imagePath, 'has an unexpected property, and takes url and alt only');
+          }
+          if (!safeHttpsUrl(image.url, imageHosts, options.trustedBlobHost)) {
+            addWorkspaceProblem(problems, `${imagePath}.url`,
+              `${requiredText(image.url)}must be an https link on github.com, raw.githubusercontent.com, avatars.githubusercontent.com or the trusted image storage host`);
+          }
+          addWorkspaceProblem(problems, `${imagePath}.alt`, stringProblem(image.alt, 1, 500));
+        });
+      }
+      break;
+    case 'html-app':
+      if (!validData(renderer, data)) addWorkspaceProblem(problems, `${path}.artifactId`, 'must be the id (a UUID) of an existing HTML app');
+      break;
+    case 'knowledge-graph':
+      if (!boundedString(data.query, 500, 1) || !/\S/u.test(data.query)) {
+        addWorkspaceProblem(problems, `${path}.query`, 'must be a non-blank string of 1-500 characters');
+      }
+      if (!Array.isArray(data.highlight) || data.highlight.length > 50 ||
+        !data.highlight.every((id) => typeof id === 'string' && /^[0-9a-f]{64}$/u.test(id)) ||
+        new Set(data.highlight).size !== data.highlight.length) {
+        addWorkspaceProblem(problems, `${path}.highlight`, 'must be an array of at most 50 different node ids (64 hex characters each)');
+      }
+      break;
+    default:
+      if (!isGeneratedCodeData(data)) {
+        addWorkspaceProblem(problems, path, 'is not valid code data (repo, path and content are required, and content is at most 400 lines)');
+      }
+  }
+}
+
+function generatedViewProblems(view, options, problems) {
+  if (!isObject(view)) {
+    addWorkspaceProblem(problems, 'view', `${requiredText(view)}must be a JSON object${typeof view === 'string' ? ', not text containing JSON,' : ''} like ${generatedViewExample}`);
+    return;
+  }
+  let bytes;
+  try {
+    bytes = new TextEncoder().encode(JSON.stringify(view)).byteLength;
+  } catch {
+    addWorkspaceProblem(problems, 'view', 'must contain plain JSON data only');
+    return;
+  }
+  if (bytes > maxBytes) {
+    addWorkspaceProblem(problems, 'view', 'is larger than 256 KiB, so send fewer rows or shorter text');
+    return;
+  }
+  const before = problems.length;
+  if (Object.keys(view).some((key) => !generatedViewKeys.includes(key))) {
+    addWorkspaceProblem(problems, 'view', `has an unexpected property, and takes ${listText(generatedViewKeys, 'and')} only`);
+  }
+  if (view.version !== generatedViewVersion) addWorkspaceProblem(problems, 'view.version', `${requiredText(view.version)}must be the number 1`);
+  const renderer = generatedViewRenderers.includes(view.renderer) ? view.renderer : undefined;
+  if (renderer === undefined) {
+    addWorkspaceProblem(problems, 'view.renderer', `${requiredText(view.renderer)}must be one of ${listText(generatedViewRenderers)}`);
+  }
+  addWorkspaceProblem(problems, 'view.title', stringProblem(view.title, 1, 200));
+  generatedSourceProblems(view.source, problems);
+  if (renderer !== undefined) generatedDataProblems(renderer, view.data, options, problems);
+  if (view.actions !== undefined) {
+    if (!Array.isArray(view.actions) || view.actions.length > 10) {
+      addWorkspaceProblem(problems, 'view.actions', 'must be an array of at most 10 actions');
+    } else {
+      eachWorkspaceItem(view.actions, problems, (action, index) =>
+        generatedActionProblems(action, `view.actions[${index}]`, problems, options));
+    }
+  }
+  if (problems.length === before && !isGeneratedView(view, options)) {
+    addWorkspaceProblem(problems, 'view', 'does not match the contract for its renderer');
+  }
+}
+
+/**
+ * Explains why `isWorkspaceCommand(value, options)` rejects a command (or why the tool schema would), as up to
+ * three `{ path, problem }` entries. Paths are known property names and array indexes; problems are static text,
+ * enumerations and counts. It never repeats a value from `value`, so the result is safe to show to the model.
+ * It returns `[]` when it finds nothing concrete to say.
+ */
+export function workspaceCommandProblems(value, options = {}) {
+  if (!isObject(value)) return [{ path: 'arguments', problem: 'must be a JSON object' }];
+  const problems = [];
+  if (typeof value.commandId !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/.test(value.commandId)) {
+    addWorkspaceProblem(problems, 'commandId', `${requiredText(value.commandId)}must be 1-128 letters, digits, _ or -`);
+  }
+  if (value.target !== undefined && !workspaceCommandTargets.includes(value.target)) {
+    addWorkspaceProblem(problems, 'target', `must be one of ${listText(workspaceCommandTargets)}`);
+  }
+  const operation = typeof value.operation === 'string' && Object.hasOwn(workspaceOperationShapes, value.operation)
+    ? value.operation : undefined;
+  if (operation === undefined) {
+    addWorkspaceProblem(problems, 'operation',
+      `${requiredText(value.operation)}must be one of ${listText(Object.keys(workspaceOperationShapes))}`);
+    return problems;
+  }
+  const shape = workspaceOperationShapes[operation];
+  const allowed = operation === 'context-panel' && value.action !== 'open' ? ['action'] : shape.keys;
+  const extra = Object.keys(value).filter((key) => !['commandId', 'operation', 'target', ...allowed].includes(key));
+  const knownExtra = extra.filter((key) => Object.hasOwn(workspaceCommandSchema.properties, key));
+  if (knownExtra.length > 0) {
+    let notAllowed = `not allowed with operation ${operation}, which takes ${allowed.length > 0 ? `${listText(allowed, 'and')} only` : 'no other properties'}`;
+    if (operation === 'create' || operation === 'update') {
+      notAllowed += ' (position a view with a separate place, arrange, move or resize command)';
+    } else if (operation === 'context-panel' && value.action !== 'open') {
+      notAllowed += ' (view is only allowed when action is open)';
+    }
+    addWorkspaceProblem(problems, knownExtra.join(', '), notAllowed);
+  }
+  if (extra.length > knownExtra.length) addWorkspaceProblem(problems, 'arguments', 'has an unexpected property');
+  for (const key of shape.required) {
+    if (value[key] !== undefined) continue;
+    const hint = key === 'view' ? `a JSON object like ${generatedViewExample}` : workspaceFieldProblem(value, key);
+    addWorkspaceProblem(problems, key, `is required${hint === undefined ? '' : `, and ${key === 'view' ? 'must be ' : ''}${hint}`}`);
+  }
+  for (const key of shape.keys) {
+    if (key !== 'view' && allowed.includes(key) && value[key] !== undefined) {
+      addWorkspaceProblem(problems, key, workspaceFieldProblem(value, key));
+    }
+  }
+  if (allowed.includes('view') && value.view !== undefined) generatedViewProblems(value.view, options, problems);
+  return problems;
+}
+
 const activityIdPattern = /^[\da-f]{8}-(?:[\da-f]{4}-){3}[\da-f]{12}$/i;
 const toolNamePattern = /^[A-Za-z0-9_-]{1,64}$/;
 const activityStateTypes = new Set([

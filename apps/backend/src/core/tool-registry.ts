@@ -1,4 +1,4 @@
-import type { FastifyRequest } from 'fastify';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { gmailAccessGuard } from './gmail-access-policy.js';
 
 export interface JarvisTool {
@@ -14,6 +14,12 @@ export interface JarvisTool {
   /** Refuse phone calls before approval, even when the tool is otherwise public. */
   readonly denyOnPhone?: boolean;
   readonly bodyLimit?: number;
+  /**
+   * Names the concrete problem when the arguments fail schema validation, so a refusal tells the model what to
+   * fix. The text must be value-free (static wording, enumerations, counts and known property names only):
+   * it reaches the model and the logs. Return undefined when nothing concrete can be said.
+   */
+  readonly explainInvalidInput?: (input: unknown, app: FastifyInstance) => string | undefined;
   /** The core dispatcher supplies validated input, the request and a cancellation signal. */
   readonly execute: (input: unknown, request: FastifyRequest, signal: AbortSignal) => Promise<unknown>;
 }
