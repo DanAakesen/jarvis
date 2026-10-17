@@ -39,7 +39,7 @@ Dan approved P12 on 12 October 2026 and explicitly released only P12-01 for this
 - `apps/backend/src/daily/index.ts` exports `createDailyModules(enabled = false)`. This trusted server composition flag accepts only boolean true; disabled composition is an empty array. Production composition does not import or enable Daily yet. No environment variable, navigation or write activation is added by P12-01.
 - Explicitly enabled contract composition provides only authenticated `GET /daily/capabilities` metadata with no-store caching. It reports contract-only stage, reserved view IDs, and empty implemented page/tool lists. It accepts no query fields or owner parameters and exposes no identity or health record. This is not a Daily data API.
 - `resolveDailyOwner(request)` consumes only existing root-authenticated request principals and `request.server.ownerObjectId`. A matching delegated user or verified hosted Jarvis agent resolves to the same configured owner; the agent's service object ID is never used as a data owner. Coding runners, bridge/event/deploy identities and other users are denied. Device authentication/scopes remain P12-04/P12-11/P12-12, not implemented here.
-- Shared contracts reserve `daily-status`, `daily-recomp`, `daily-review`, `daily-ready` under source/module `daily`, version 1. These are stable future native view IDs, not generated renderer registrations or functioning views. P12-16 supplies native rendering in the one existing conversation.
+- Shared contracts reserve `daily-status`, `daily-recomp`, `daily-review`, `daily-ready` under source/module `daily`, version 1. These are reserved identifiers only, not generated renderer registrations or functioning views; Dan's 15 October scope does not require native views for them, and P12-16 is on-demand GenUI instead.
 
 ## Downstream interfaces and ownership
 
@@ -51,7 +51,7 @@ do not add a tool per UI button or declare UI-only functionality complete.
 Protected or unavailable operations stay explicitly gated, not bypassed through
 a model flag. Excluded coaching/widgets and private activation are not restored.
 
-P12-09 owns actual `/daily/…` data routes, shared services used by pages and tools, module composition activation, source-message idempotency and revision invalidation. Use the existing sensitive tool registry/dispatcher with content-redacted audit outcomes; no new dispatcher. Writes publish revisions only after committed persistence. P12-15 owns gated navigation/pages, P12-16 owns native assistant views and bounded generated datasets. Same-ID updates and reconnect/refocus refresh reuse existing workspace/artifact lifecycle and owner-authorized reads; do not widen CSP, bridge or generated-code network permissions.
+P12-09 owns actual `/daily/…` data routes, shared services used by pages and tools, module composition activation, source-message idempotency and revision invalidation. Use the existing sensitive tool registry/dispatcher with content-redacted audit outcomes; no new dispatcher. Writes publish revisions only after committed persistence. P12-15 owns the gated single Daily page, P12-16 owns on-demand GenUI over bounded Daily datasets. Same-ID updates and reconnect/refocus refresh reuse existing workspace/artifact lifecycle and owner-authorized reads; do not widen CSP, bridge or generated-code network permissions.
 
 The inactive internal direct-intake continuation adds an optional sensitive
 `daily_food` catalogue entry, independently of external MCP writes. Current
@@ -278,7 +278,13 @@ Reuse existing Google auth and read APIs; extend all visible calendars, Gmail at
 
 Reuse Jarvis Gmail/Google Calendar connections for the same user. Include all visible calendars, waiting-for-you/others, active deliveries, suppressions, freshness and manual refresh. Verify required provider scopes and do not claim an unavailable feed works. No TickTick adapter, personal-task/habit/countdown UI or active snapshot import.
 
-### [P12-11: Read-only iPhone widget & deep links](https://github.com/DanAakesen/jarvis/issues/726)
+### [P12-11: iPhone widget — cancelled](https://github.com/DanAakesen/jarvis/issues/726)
+
+Cancelled by Dan on 15 October 2026 and closed as not planned (#726), not delivered.
+The text below is the superseded original requirement, not a backlog; the ordinary
+mobile destination is the single Daily page (P12-15). No widget endpoint, device
+credential, refresh or deep-link work is planned. Health Auto Export ingestion and
+the optional nutrition export (P12-12) are unaffected.
 
 **NEW DAILY CAPABILITY — permanent** · Personal integrations & phone surfaces
 
@@ -297,6 +303,9 @@ Claim / complete export endpoints and updated optional iPhone Shortcut; SQL meal
 Preserve claim/complete and duplicate-safe retries. Use scoped owner-bound device credentials; never place the human login password in a Shortcut. Verify actual iPhone execution and one nutrition export per canonical meal.
 
 ### [P12-13: Football preferences & live table behaviour](https://github.com/DanAakesen/jarvis/issues/728)
+
+Closed as not planned on 12 October 2026 (#728) and excluded from the retained
+scope. The text below is the original requirement, not a backlog.
 
 **REUSE EXISTING JARVIS — permanent** · Personal integrations & phone surfaces
 
@@ -320,12 +329,12 @@ Import brief history; reuse Jarvis notification infrastructure. Recurring notifi
 
 Preserve historical briefs and notification capability, but recurring Daily notifications stay off. Do not resurrect the old 09:00/13:00/19:00 schedules. Any future notification schedule is a separate user decision.
 
-### [P12-15: Daily, Workouts & Nutrition pages](https://github.com/DanAakesen/jarvis/issues/730)
+### [P12-15: Single Daily page, data browsing & visuals](https://github.com/DanAakesen/jarvis/issues/730)
 
-**NEW DAILY CAPABILITY — permanent** · Native UI & one assistant experience
+**NEW DAILY CAPABILITY — permanent** · One Daily page in the existing Jarvis app
 
-17 October source preparation follows the later confirmed one-page scope, not
-the historical separate pages/card-deck requirement below. The default-off page
+17 October source preparation follows the confirmed 15 October one-page scope,
+not the superseded separate pages/card-deck requirement. The default-off page
 uses delivered shared queries for measurements, sleep, workouts/detail/heart rate,
 food history, favourites, plans and sync evidence. It provides applied periods,
 opaque cursor paging, inspectable records and direct-observation charts in the
@@ -352,17 +361,17 @@ not completed by the record browser. Device/export provisioning and real-phone/
 provider acceptance retain their separate approval gates. No UI-only capability
 or generic lookup may be reported as full retained-tool parity.
 
-Gated Jarvis navigation / source contracts; current card deck and complete health / food / workout details. Keep existing shell and voice workflow.
+One gated Daily destination in the existing Jarvis app (side rail and mobile navigation) for Dan to browse retained health, food, workout and scan history himself, from the same owner-authorised sources as P12-16. Keep existing shell and voice workflow.
 
-Port Daily/Workouts/Nutrition functionality into the existing Jarvis shell/design system: period selectors, card deck, health/food/workout histories, scan charts, source freshness and loading/error states. Mobile first: readable units/axes/legend, every actual scan point, no overflow at narrow phone widths. No TickTick surfaces. Disabled Daily preserves existing navigation.
+Reuse the existing side rail (canonical gym/dumbbell icon), mobile navigation, login, module gate, styling and shared components. Make retained history usable through the shared data contracts: period/filter selection, inspectable records, charts with correct units/dates/axes, every actual scan point, and visible source freshness/coverage; missing or partial data stays explicit. Mobile first, no overflow at narrow phone widths. The legacy card deck, separate Daily/Workouts/Nutrition pages, fixed Status/Recomp/Review/Ready screens and the iPhone widget are not required, and detailed composition is not fixed. Requests for particular summaries or visuals use P12-16. No second shell, sidebar, login or rendering framework; TickTick stays excluded. Disabled Daily preserves existing navigation.
 
-### [P12-16: Status, Recomp, Review & Ready views](https://github.com/DanAakesen/jarvis/issues/731)
+### [P12-16: On-demand Daily GenUI integration](https://github.com/DanAakesen/jarvis/issues/731)
 
-**NEW DAILY CAPABILITY — permanent** · Native UI & one assistant experience
+**REUSE EXISTING JARVIS — permanent** · On-demand Daily GenUI, not four fixed views
 
-Native React assistant views, stable IDs, contextual routing and bounded Daily datasets for generated UI.
+Owner-authorised, bounded Daily data and capabilities exposed through the existing chat/voice, GenUI and workspace/artifact lifecycle.
 
-Status/recomp/review/ready short commands show the correct native React view in the one conversation and existing sign-in. Stable IDs prevent duplicate cards. Support bounded Daily datasets for ad-hoc generated UI while preserving CSP/bridge validation; generated apps cannot fetch credentials/backend data arbitrarily. Use robust native icons, short contextual readiness summaries and mobile-first charts.
+When Dan asks for a status, trend, workout detail, nutrition/recomp analysis, readiness or review, Jarvis chooses a data-backed summary or visual on demand. These topics are capabilities, not prebuilt native React screens or exact short-command routes. Reuse the P12-09 source/read-model contracts and backend calculations, coordinate self-service access with the P12-15 page, and keep provenance, freshness/coverage, dates, units, missing-data semantics and bounded payloads explicit; trusted calculations never move into generated code. Reuse stable artifact IDs, same-ID revision refresh, owner-authorised fetch, sandbox validation and the trusted theme bridge; generated content receives no credentials or arbitrary backend/network access. No new GenUI engine, parallel renderer, Daily shell, extra permanent navigation page or widget.
 
 ### [P12-17: End-to-end, mobile & real-iPhone acceptance](https://github.com/DanAakesen/jarvis/issues/732)
 
