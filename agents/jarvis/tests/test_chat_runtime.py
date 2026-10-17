@@ -1090,10 +1090,11 @@ def test_load_verified_history_checks_token_and_uses_stored_context(monkeypatch)
     assert result == [ModelMessage("user", "Older"), ModelMessage("assistant", "Answer")]
     assert result[0].source_message_id == "20"
     assert result[1].source_message_id is None
-    assert request_timeouts == [
+    assert sorted(request_timeouts) == sorted([
         ("https://backend.example/me", 17),
         ("https://backend.example/conversation/history?limit=100", 17),
-    ]
+        ("https://backend.example/conversation/summary", 5),
+    ])
 
 
 @pytest.mark.parametrize("description", ["A red mug.", "\x01" * 5_000])
@@ -1394,4 +1395,5 @@ def test_history_uses_the_default_timeout_when_agent_settings_are_refused(monkey
     monkeypatch.setattr(httpx, "AsyncClient", lambda **_kwargs: Client())
 
     assert asyncio.run(chat_runtime.load_verified_history(TOKEN, "42", "Hi", "en")) == []
-    assert timeouts == [10, 10]
+    # The summary fetch is capped at 5 s so a slow backend cannot hold the first token.
+    assert sorted(timeouts) == [5, 10, 10]
