@@ -108,6 +108,15 @@ describe('nutrition failure/privacy boundaries', () => {
     expect(await store().feedback('favorite', null, signal(), 1n)).toEqual(cleared);
     expect(db.query).toHaveBeenCalledTimes(2);
   });
+  it('persists an initial clear tombstone so a delayed revision-0 like cannot overwrite it', async () => {
+    const cleared = { meal_key: 'favorite', preference: null, revision: '1' };
+    db.query.mockResolvedValueOnce({ recordset: [] }).mockResolvedValueOnce({ recordset: [cleared] });
+    expect(await store().feedback('favorite', null, signal(), 0n)).toEqual(cleared);
+    expect(db.query).toHaveBeenNthCalledWith(2, expect.stringContaining('INSERT daily.nutrition_recommendation_feedback'));
+    db.query.mockResolvedValueOnce({ recordset: [cleared] });
+    await expect(store().feedback('favorite', 'like', signal(), 0n)).rejects.toThrow('preference changed');
+    expect(db.query).toHaveBeenCalledTimes(3);
+  });
   const collectionMutations = [
     { name: 'favourite', source: dailyQuerySources.favorites, records: [[sourceRow], [], []],
       run: (persistence: NutritionStore) => persistence.favorite({ id: 'favorite', name: 'Synthetic favourite', aliases: [],

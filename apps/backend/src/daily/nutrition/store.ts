@@ -165,7 +165,7 @@ export class NutritionStore {
     return { rows, next: more && last ? { createdAt: last.created_at as string, id: last.id as string } : null };
   }
   async feedback(mealKey: string, preference: 'like' | 'dislike' | null, signal: AbortSignal,
-    expectedRevision?: bigint, reviewedFavorite?: string): Promise<Record<string, unknown> | null> {
+    expectedRevision?: bigint, reviewedFavorite?: string): Promise<Record<string, unknown>> {
     text(mealKey); if (preference !== null && preference !== 'like' && preference !== 'dislike') throw new TypeError('Invalid meal preference');
     if (expectedRevision !== undefined && (typeof expectedRevision !== 'bigint' || expectedRevision < 0n || expectedRevision >= 9223372036854775807n)) throw new TypeError('Invalid feedback revision');
     return this.transaction(signal, async (transaction) => {
@@ -182,7 +182,7 @@ export class NutritionStore {
         if (currentRevision === expectedRevision + 1n && current?.preference === preference) return current;
         throw new ToolRefusal('Food preference changed. Read the latest revision before updating it.');
       }
-      if (current?.preference === preference || !current && preference === null) return current ?? null;
+      if (current && current.preference === preference) return current;
       const now = this.now(); instant(now);
       const request = this.request(transaction, signal).input('key', sql.NVarChar(256), mealKey).input('preference', sql.NVarChar(256), preference).input('now', sql.NVarChar(64), now);
       return (await this.query(request, current

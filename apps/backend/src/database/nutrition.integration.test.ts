@@ -278,4 +278,14 @@ describe('inactive nutrition services on real SQL Server', () => {
     await expect(persistence.feedback(key, null, signal(), 3n, '0'.repeat(64))).rejects.toThrow('reviewed favourite changed');
     expect(await persistence.preferences([key], signal())).toMatchObject([{ meal_key: key, preference: 'dislike', revision: '3' }]);
   });
+  it('stores the first clear as revision 1 and rejects an older initial like', async () => {
+    const persistence = store(); const key = 'definition';
+    const reviewed = favoriteFingerprint((await persistence.favoriteRecords([key], signal()))[0]!);
+    expect(await persistence.preferences([key], signal())).toEqual([]);
+    const cleared = await persistence.feedback(key, null, signal(), 0n, reviewed);
+    expect(cleared).toMatchObject({ meal_key: key, preference: null, revision: '1' });
+    expect(await persistence.feedback(key, null, signal(), 0n, reviewed)).toEqual(cleared);
+    await expect(persistence.feedback(key, 'like', signal(), 0n, reviewed)).rejects.toThrow('preference changed');
+    expect(await persistence.preferences([key], signal())).toMatchObject([{ preference: null, revision: '1' }]);
+  });
 });

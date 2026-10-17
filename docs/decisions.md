@@ -11,7 +11,9 @@ and then silently resolve different quantities at commit.
 
 Add target-only favourite/feedback revision counters in new 0050, keeping
 deployed 0049 immutable. Preference clears retain null/version evidence;
-old retries must not resurrect a superseded preference. Return actual rows,
+old retries must not resurrect a superseded preference. This includes initial
+clears: persist revision 1 rather than leaving revision 0 available to an old like.
+Return actual rows,
 preserve normalized-name ID reuse and omit repeat updates/notifications.
 The migration also extends the constrained existing audit allowlist; guarded
 rollback refuses used revisions/clears/new audit rather than erasing them.

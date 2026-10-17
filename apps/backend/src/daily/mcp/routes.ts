@@ -358,9 +358,11 @@ export function dailyMcpRoutes(query: Pick<DailyQueryService, 'query'>, options:
                 ...context(requestTime, 'set-feedback', ctx.mcpReq.signal),
                 reviewedFavorites: new Map([[change.favoriteId, favoriteFingerprint(favorite)]]),
               });
-              if (!row && change.preference !== null) throw new ToolFailure('The preference may have committed, but its receipt is unavailable. Retry the same preference and revision.');
-              return response({ status: row ? 'committed' : 'unchanged', operation: change.operation,
-                record: row ? projectDailyRecord(row, ['meal_key', 'preference', 'revision', 'created_at', 'updated_at']) : null });
+              if (!row || row.meal_key !== change.favoriteId || !/^[1-9]\d*$/u.test(String(row.revision ?? ''))) {
+                throw new ToolFailure('The preference may have committed, but its receipt is unavailable. Retry the same preference and revision.');
+              }
+              return response({ status: 'committed', operation: change.operation,
+                record: projectDailyRecord(row, ['meal_key', 'preference', 'revision', 'created_at', 'updated_at']) });
             }));
             server.registerTool('log_food', {
               title: 'Log food', description: 'Log eaten food only after native review. Keep operationId unchanged on retries. Supplied nutrients are not independently verified; no Apple Health export occurs.',

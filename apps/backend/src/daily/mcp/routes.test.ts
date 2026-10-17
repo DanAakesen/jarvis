@@ -208,6 +208,20 @@ describe('inactive hosted nutrition MCP adapter', () => {
     expect(messages[0]).toContain('Synthetic source');
     expect(messages[0]).not.toContain('never-expose');
   });
+  it('returns a persisted initial clear revision and refuses missing preference receipts', async () => {
+    const f = await fixture();
+    const { client, messages } = await f.connect();
+    const change = { ...savedChanges[3].change, preference: null };
+    vi.mocked(f.nutrition.feedback).mockResolvedValue({ meal_key: savedFavorite.id, preference: null, revision: 1n });
+    const result = await client.callTool({ name: 'manage_saved_food', arguments: { change } });
+    expect(result.structuredContent).toMatchObject({ status: 'committed', record: { preference: null, revision: '1' } });
+    expect(messages).toHaveLength(1);
+    expect(f.nutrition.feedback).toHaveBeenCalledWith(savedFavorite.id, null, 0n, expect.objectContaining({ intent: 'set-feedback' }));
+    vi.mocked(f.nutrition.feedback).mockResolvedValue({});
+    const missing = await client.callTool({ name: 'manage_saved_food', arguments: { change } });
+    expect(missing.isError).toBe(true);
+    expect(JSON.stringify(missing)).toContain('may have committed');
+  });
   it('refuses a changed plan source between native display and acceptance instead of saving new undisplayed totals', async () => {
     const f = await fixture();
     const { client, messages } = await f.connect();

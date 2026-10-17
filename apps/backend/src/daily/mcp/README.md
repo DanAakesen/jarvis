@@ -58,7 +58,8 @@ provenance, quantities and totals. The same shared plan builder runs under SQL
 locks; source revision/fingerprint checks reject races after review.
 Favourite saves return actual stored rows and exact repeats do not update or
 publish again. Preference clears retain a null tombstone and revision, so a
-delayed old like cannot overwrite a newer clear. Feedback uses canonical owned
+delayed old like cannot overwrite a newer clear, including a first-operation
+clear of a previously absent preference. Feedback uses canonical owned
 favourite IDs, not aliases or model-created meal keys.
 
 Every external mutation requires native form review of the exact proposal,
