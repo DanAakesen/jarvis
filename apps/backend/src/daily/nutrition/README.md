@@ -1,6 +1,6 @@
 # Inactive nutrition services (P12-07)
 
-Construct `NutritionStore.forRequest` only after existing Jarvis authentication. It resolves the existing server owner; no input selects an email/owner. This module has no routes, registered tools, composition flag, provider credentials or production writes. P12-09 owns integration with the existing sensitive-tool dispatcher and trusted confirmation/evidence context. That integration must never deserialize `IntakeAuthority` from model/client arguments.
+Construct `NutritionStore.forRequest` only after existing Jarvis authentication. It resolves the existing server owner; no input selects an email/owner. This library does not register routes/tools, supply provider credentials or activate production writes. P12-09's optional compositions integrate the existing sensitive-tool dispatcher and trusted confirmation/evidence context. They must never deserialize `IntakeAuthority` from model/client arguments.
 
 `handlers.ts` supplies typed functions for existing P12-09 composition, not registered tools/routes. Its trusted execution context derives user intent/proposal acceptance from existing Jarvis metadata, never legacy/model `userConfirmed`. Text/voice inputs and photo/portion proposals reuse existing Jarvis transcription/attachment/frame evidence; no new vision model or upload pipeline. Explicit exact-label/favourite logging needs no second confirmation. Photo/portion estimates require acceptance of the displayed proposal even if model arguments claim accurate confidence. Lookup, recommendations and plans cannot log food. `resolveNutrients` gives exact user quantities priority over estimates; unknown macros stay null. Existing `accurate`/`approximate`/`estimate` and `voice`/`photo`/`text`/`mixed` vocabulary is preserved.
 
@@ -19,6 +19,38 @@ retains null-clear tombstones. Exact repeats return actual rows without another
 update; older conflicting retries refuse. An absent preference's revision 0 is
 only an initial-version sentinel, not a persisted record. The existing optional
 internal feedback call remains available; it does not confer native authority.
+
+## Inactive internal direct intake
+
+Explicit fourth-argument composition
+`createDailyModules(true, data, undefined, data.nutrition)` registers one
+sensitive `daily_food` tool in the existing dispatcher. It is independent of
+MCP enablement and stays absent in production and ordinary read-only
+composition. Its input contains only `operation: log_favorite | log_exact`.
+
+The persisted current Dan message supplies the complete saved name/alias or
+exact label. Supported examples are `Log my favourite Dinner` and
+`Log yoghurt: 200 kcal, protein 10 g`; quote multiword label names, for example
+`Log "Cottage cheese": 123 kcal`. Decimal points have at most two places;
+ambiguous comma/thousands quantities and unknown syntax refuse. Conditional,
+negated or time-qualified requests do not write. This is an explicit-command
+subset, not general conversational or new-estimate review parity.
+
+Owner, message and active chat/voice session are verified; agent-supplied IDs
+are checked against actual latest history. New writes require a current message
+within ten minutes and use its instant/Copenhagen date, plus actual session
+capture channel. Models cannot select a different food, quantity, date or key.
+Explicit favourite selection accepts the existing saved portion without another
+confirmation, preserving stored confidence and nulls. Its DTO fingerprint is
+rechecked under SQL locks before commit.
+
+One owner/session/message operation key prevents retry duplication. The stored
+source-text/time fingerprint and operation bind real receipt recovery before
+mutable favourite lookup. Edited sources, changed operation and deleted intake
+refuse rather than silently recreating food. Exact committed replays do not
+publish refresh again. Ordinary sensitive message-backed audit, canonical
+meals and acknowledged-commit change publication stay shared. No new ledger,
+migration, estimate approval system or Health export is added.
 
 ## Pinned provider contract and evidence limits
 
@@ -47,7 +79,8 @@ The inactive P12-09 shared query service reads bounded meal history, favourites
 and meal plans. Collection sources use exact ID-only cursors (at most 100 rows),
 not invented date periods or intake totals. Whitelisted DTOs preserve raw display
 aliases, saved nutrient provenance and plan snapshots/revisions/tombstones.
-No new intake/write route or tool is registered. An optional fourth
+That read-only composition registers no intake/write route or tool. The separate
+internal composition above is explicit. An optional fourth
 `NutritionStore.forRequest` argument (third `createNutritionHandlers` argument)
 accepts the shared Daily change hub. Log/correction/deletion mark a domain
 change inside their existing transaction and publish only after acknowledged

@@ -1,5 +1,23 @@
 # Project plan
 
+## Internal Daily intake authority (17 October 2026; P12-09 / #724)
+
+The saved-food batch #872 is merged and deployed. The current source candidate
+adds an independently opt-in `daily_food` tool to the existing registry.
+It derives exact-label quantities or a saved favourite name from the verified
+current Dan message, not model arguments. One source-message key protects
+retries; favourite snapshots are rechecked under SQL locks. No redundant
+confirmation is added for these explicit direct requests.
+
+Implemented source includes strict input, owner/agent/session checks, committed
+receipt recovery, source-edit/deletion refusal and unit/SQL/composition cases.
+Pure local checks pass; local tool execution is blocked by missing `jose`.
+Normal exact-head qualification, independent review and release are next.
+This deliberately bounded syntax is not complete internal nutrition parity:
+new estimate review, corrections/deletions and broader conversational wording
+remain unfinished. Production composition stays off; #724 stays open and all
+account, private migration, real-client/device and cutover gates remain.
+
 ## Retained Daily saved-food writes (17 October 2026; P12-09 / #724)
 
 After deployed #871, implement favourite/alias saves, plan snapshots/save/soft

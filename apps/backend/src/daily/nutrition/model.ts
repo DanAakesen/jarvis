@@ -160,6 +160,7 @@ export interface IntakeAuthority {
   explicit: boolean;
   estimateAccepted: boolean;
   proposalRequired: boolean;
+  favorite?: { readonly id: string; readonly fingerprint: string };
 }
 export function text(value: unknown, max = 256): asserts value is string {
   if (typeof value !== 'string' || !value.length || value.length > max || Buffer.from(value, 'utf8').toString('utf8') !== value) throw new TypeError('Invalid nutrition text');

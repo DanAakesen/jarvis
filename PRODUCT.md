@@ -984,6 +984,19 @@ totals; SQL rechecks sources under lock before commit. Real favourite/feedback
 revisions protect retries, including cleared preferences. These operations
 never create intake or Health exports and do not activate the connector.
 
+An independently opt-in internal `daily_food` tool supports direct requests
+such as `Log my favourite NAME` and `Log yoghurt: 200 kcal, protein 10 g`.
+Only its operation is model input: names and exact quantities come from the
+verified current Dan message, with saved portions resolved server-side.
+Absent macros remain null and saved confidence/provenance remain intact.
+These explicit requests do not require a second confirmation. Conditional,
+negated, time-qualified or unsupported wording is refused, not guessed;
+this narrow direct path does not implement new photo/portion-estimate review.
+Repeating one message recovers its actual committed intake without logging
+again, even if the favourite later changes. Edited source requests and deleted
+intakes cannot silently become another intake. Production remains off;
+this is not complete internal food workflow or #724 acceptance.
+
 P12-05 adds an inactive, explicitly invoked health processor over the existing SQL inbox: metrics/sleep/workouts/detail/minute HR, canonical physical units, Copenhagen dates, exact session/checksum replay and bounded retry/quarantine. Domain changes, ingestion lineage and processed-feed freshness commit together; phone heartbeat stays separate. Empty workout exports cannot erase history, missing values stay unknown, and native nutrition cannot feed back into canonical meals. Owner history/detail reads are bounded and unregistered. No scheduler, source import, live device changes or activation; protected/live parity remains gated.
 
 Heart-rate summaries and series must validate declared units consistently. Unsupported rate units quarantine without changing processed freshness; only established legacy summary fields imply BPM when their unit is absent. Missing samples and summaries remain unknown, not inferred.

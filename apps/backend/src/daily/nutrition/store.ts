@@ -97,6 +97,11 @@ export class NutritionStore {
   }
   async log(input: MealInput, authority: IntakeAuthority, signal: AbortSignal): Promise<Record<string, unknown>> {
     writeMeal(input, this.now()); input = structuredClone(input); authorizeIntake(input, authority);
+    const favoriteReview = authority.favorite ? { ...authority.favorite } : undefined;
+    if (favoriteReview) {
+      text(favoriteReview.id);
+      if (!/^[a-f0-9]{64}$/u.test(favoriteReview.fingerprint)) throw new TypeError('Invalid favourite snapshot');
+    }
     return this.transaction(signal, async (transaction, changed) => {
       const lookup = this.request(transaction, signal).input('key', sql.NVarChar(256), input.idempotencyKey);
       const existing = (await this.query(lookup, `SELECT ${select} FROM daily.nutrition_meals WITH (UPDLOCK,HOLDLOCK)
@@ -104,6 +109,11 @@ export class NutritionStore {
       if (existing) {
         if (!same(existing, input) || existing.deleted_at !== null) throw new ToolRefusal('This operation key already belongs to a different or corrected intake.');
         return existing;
+      }
+      if (favoriteReview) {
+        const favorite = (await this.query(this.request(transaction, signal).input('favoriteId', sql.NVarChar(256), favoriteReview.id),
+          `SELECT * FROM daily.nutrition_favorites WITH (UPDLOCK,HOLDLOCK) WHERE owner_object_id=@owner AND ${equalKey('id', 'favoriteId')};`, signal)).recordset[0];
+        if (!favorite || favoriteFingerprint(favorite) !== favoriteReview.fingerprint) throw new ToolRefusal('The selected favourite changed before intake logging. Read it again; no new intake was committed.');
       }
       const now = this.now(); instant(now);
       const request = bind(this.request(transaction, signal), input).input('now', sql.NVarChar(64), now);

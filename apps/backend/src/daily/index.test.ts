@@ -1,10 +1,12 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildApp } from '../app.js';
 import { loadConfig } from '../config.js';
 import { coreModule } from '../core/index.js';
 import type { TokenVerifier } from '../auth/verify.js';
 import { createDailyModules } from './index.js';
 import { resolveDailyOwner } from './owner.js';
+import { createDailyChanges } from './revisions.js';
+import type { DailyData } from './query.js';
 
 const config = { ...loadConfig({}), logLevel: 'silent' as const };
 const owner = config.auth.ownerObjectId;
@@ -68,5 +70,19 @@ describe('Daily integration contract', () => {
     for (const field of ['owner', 'ownerId', 'sourceOwnerId']) {
       expect((await app.inject({ url: `/daily/capabilities?${field}=${other}`, headers: headers() })).statusCode).toBe(400);
     }
+  });
+  it('requires an explicit internal store factory rather than enabling writes with read-only data', async () => {
+    const data: DailyData = { query: { query: vi.fn() }, changes: createDailyChanges() };
+    const internal = vi.fn(() => ({ intake: vi.fn(), lookupSaved: vi.fn(), log: vi.fn() }));
+    expect(createDailyModules(false, data, undefined, internal)).toEqual([]);
+    expect(createDailyModules(true, data)[0]!.tools.map(tool => tool.name)).toEqual(['daily_query']);
+    expect(() => createDailyModules(true, undefined, undefined, internal)).toThrow('shared Daily data');
+    const app = buildApp(config, undefined, { auth, modules: [coreModule, ...createDailyModules(true, data, undefined, internal)] });
+    apps.push(app);
+    const response = await app.inject({ url: '/daily/capabilities', headers: headers() });
+    expect(response.json()).toMatchObject({ stage: 'internal-nutrition-rehearsal', pages: [], tools: ['daily_query', 'daily_food'] });
+    expect(internal).not.toHaveBeenCalled();
+    const catalogue = (await app.inject({ url: '/tools', headers: headers() })).json();
+    expect(JSON.stringify(catalogue)).toContain('daily_food');
   });
 });
