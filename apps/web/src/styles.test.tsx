@@ -135,6 +135,15 @@ function contrast(first: Color, second: Color): number {
   return (lighter + 0.05) / (darker + 0.05);
 }
 
+function hue([red, green, blue]: Color): number {
+  const [r, g, b] = [red / 255, green / 255, blue / 255] as Color;
+  const max = Math.max(r, g, b);
+  const delta = max - Math.min(r, g, b);
+  if (delta === 0) return 0;
+  const sector = max === r ? ((g - b) / delta) % 6 : max === g ? (b - r) / delta + 2 : (r - g) / delta + 4;
+  return (sector * 60 + 360) % 360;
+}
+
 describe('shared glass tokens', () => {
   it('avoids nested window blur and pauses ambient CSS motion behind work pages', () => {
     const source = readFileSync('src/styles.css', 'utf8');
@@ -179,6 +188,20 @@ describe('shared glass tokens', () => {
     expect(phoneChat).toContain('[data-phone="true"][data-voice-active="false"]');
     expect(phoneChat).not.toContain('transform:');
     expect(history).toContain('.app-shell[data-phone="false"][data-voice-active="false"][data-home="false"]:has(.workspace[data-conversation-positioned])');
+  });
+
+  it('keeps phone pages clear of the measured composer so a bottom action such as Save settings stays reachable', () => {
+    const history = readFileSync('src/ConversationHistory.css', 'utf8');
+    const styles = readFileSync('src/styles.css', 'utf8');
+    const clearance = ruleDeclaration(history,
+      /\.app-shell\.app-shell\[data-phone="true"\]\[data-voice-active="false"\]\[data-home="false"\]:not\(\.app-signed-out\) \.shell-main\s*\{([^}]*)\}/,
+      'padding-bottom');
+    // Floor: the nominal dock, so a one-line composer looks as before. Growth: the live composer height, set from its measured box.
+    expect(clearance).toBe('max(calc(var(--dock-space) + 16px), calc(var(--phone-dock-bottom) + var(--conversation-composer-height, 52px) + 16px))');
+    expect(ruleDeclaration(styles, /\.app-shell\[data-phone="true"\]\[data-home="false"\] \.shell-main\s*\{([^}]*)\}/, 'padding-bottom'))
+      .toBe('calc(var(--dock-space) + 16px)');
+    // The settings Save row stays a plain row at the end of the page (Dan, 8 October), so clearance is the fix, not a sticky pill.
+    expect(ruleDeclaration(styles, /\.settings-page > \.settings-save\s*\{([^}]*)\}/, 'position')).toBe('static');
   });
 
   it('lets table replies use the transcript width without widening ordinary prose', () => {
@@ -512,6 +535,35 @@ describe('shared glass tokens', () => {
             const background = composite(selected, alpha, rendered);
             expect(contrast(selected, background), `${selector} ${name} ${token}`).toBeGreaterThanOrEqual(4.5);
             expect(contrast(selected, background)).toBeGreaterThanOrEqual(3);
+          }
+        }
+      }
+    }
+  });
+
+  it('shows presence as green, yellow and blue and holds 3:1 on every surface in both themes', () => {
+    const source = readFileSync('src/styles.css', 'utf8');
+    const hueRanges = { '--presence-present': [90, 160], '--presence-away': [40, 65], '--presence-move': [200, 250] } as const;
+    const surfaces = ['--page', '--surface', '--surface-muted', '--surface-translucent', '--stage-background', '--stage-floor'];
+    // Dark dots are solid. Light dots keep their hue and rely on a ring of 55% of that hue, so the ring is what holds 3:1.
+    const themes = [
+      { name: 'dark', tokens: source.match(/:root, :root\[data-theme="dark"\] \{([^}]*--presence-present[^}]*)\}/)?.[1], surfaces: ':root\\[data-theme="dark"\\]', ring: 1 },
+      { name: 'light', tokens: source.match(/:root\[data-theme="light"\] \{([^}]*--presence-present[^}]*)\}/)?.[1], surfaces: ':root', ring: 0.55 },
+    ];
+    expect(source).toContain(':root[data-theme="light"] .presence-dot { --presence-ring: color-mix(in srgb, var(--tone) 55%, #000); }');
+
+    for (const { name, tokens, surfaces: selector, ring } of themes) {
+      expect(tokens, `${name} presence tokens`).toBeDefined();
+      for (const [token, [low, high]] of Object.entries(hueRanges)) {
+        const fill = parseColor(tokens!.match(new RegExp(`${token}:\\s*([^;]+);`))![1]!.trim()).color;
+        expect(hue(fill), `${name} ${token} hue`).toBeGreaterThanOrEqual(low);
+        expect(hue(fill), `${name} ${token} hue`).toBeLessThanOrEqual(high);
+        const indicator = fill.map((channel) => channel * ring) as Color;
+        for (const surfaceName of surfaces) {
+          const surface = parseColor(tokenValue(source, selector, surfaceName));
+          for (const backdrop of [[0, 0, 0], [255, 255, 255]] as Color[]) {
+            expect(contrast(indicator, composite(surface.color, surface.alpha, backdrop)), `${name} ${token} on ${surfaceName}`)
+              .toBeGreaterThanOrEqual(3);
           }
         }
       }

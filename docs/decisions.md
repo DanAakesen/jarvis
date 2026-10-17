@@ -33,6 +33,44 @@ That adapter, the Settings section and the default-off composition are separate
 slices. No provider, device or private access, live probe, activation or
 acceptance follows from this record.
 
+## Restore green/yellow/blue presence, rename Task recipes to Routines and keep Save above the composer (17 October 2026; P9-102, P9-103, P9-98)
+
+Dan asked for three small web fixes and speed over ceremony, so they ship as
+one PR (#798, #797, #792). The blocked-by chain between them only existed to
+avoid same-file collisions and is ignored.
+
+Presence: Present is green, Away yellow and On the move blue in both themes.
+The 7 October two-accent palette had drifted from `docs/architecture.md` and
+the P6-23 decision, which already say green/yellow/blue. Dark fills measure at
+least 4.11:1 on every surface. The light fills alone fail 3:1 on pale glass, so
+light dots carry a 1.5px ring of their own hue darkened (tone mixed 55% with
+black), measured at least 3.06:1. The label stays beside every dot and the orb
+is unchanged. Known limit: the phone top-bar chip hides its label at 700px and
+below, so colour is the only visible cue there (the accessible name keeps the
+mode), and green against yellow can be hard for some colour-blind users. A shape
+cue is a follow-up if Dan wants one.
+
+Routines: every visible, announced and tested string says Routines. The
+`/recipes` API alias, file and component names, storage key and response key are
+unchanged, so there is no contract change. The copy-cleanup guard now rejects
+"Task recipes".
+
+Save above the composer: on phones, non-Home pages scroll with the window while
+the chat composer is fixed above the dock and grows with its draft, attachments
+and errors, up to 174px. Page-end clearance was a fixed 100px, so any composer
+above 68px covered the last control, and a real tap on Save hit the composer's
+More options button. Clearance now follows the measured composer height (the
+existing `--conversation-composer-height`), floored at the nominal 100px so a
+one-line composer looks as before. The rule is phone-only, non-Home,
+voice-inactive and signed-in. Save remains a plain static row (Dan, 8 October),
+not a sticky bar, and no new shell, keyboard estimate or focus-scroll workaround
+is added. The same rule also clears the last control on other phone pages:
+Kanban's Retry board was hidden behind a tall composer before.
+
+Evidence is headless Chrome with stubbed sign-in and a fake backend at 320×700,
+390×844 and 1440×900 in both themes, plus unit tests. It is not a physical
+iPhone/Safari check. Exact-head CI and live acceptance remain.
+
 ## Treat a model-issued voice call as Jarvis only inside the relay's call scope (17 October 2026; P11-09)
 
 Dan's live test showed Jarvis refusing to put views on screen in voice with
