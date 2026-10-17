@@ -19,6 +19,9 @@ looking up mutable favourite data. Refuse source edits and deleted intake
 instead of duplicating it. Check the selected favourite snapshot under SQL
 locks before first commit. Reuse the existing store, refresh and sensitive
 message-backed audit; no new ledger, dispatcher or schema is needed.
+After independent review's overlapping favourite-edit race, also read back the
+same operation key on a known conflict/uncertain result and validate its source
+binding. Never retry the write or replace absent evidence with success.
 
 ## Bind saved-food review to committed source snapshots (17 October 2026; P12-09)
 

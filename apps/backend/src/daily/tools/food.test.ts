@@ -3,6 +3,7 @@ import type { FastifyRequest } from 'fastify';
 import type { ConversationHistoryMessage, ConversationSession } from '../../core/conversation-store.js';
 import { dailyFoodTool } from './food.js';
 import type { IntakeAuthority, MealInput } from '../nutrition/model.js';
+import { ToolFailure, ToolRefusal } from '../../core/tool-registry.js';
 
 const owner = '11111111-1111-4111-8111-111111111111';
 const at = new Date('2026-10-16T23:30:00Z');
@@ -74,6 +75,31 @@ describe('inactive internal food tool', () => {
     [...f.rows.values()][0]!.deleted_at = at.toISOString();
     await expect(f.tool.execute(favoriteInput, f.request, signal())).rejects.toThrow('not recreated');
     expect(f.store.log).toHaveBeenCalledTimes(1);
+  });
+  it('recovers the committed receipt when an overlapping retry resolves a newer favourite', async () => {
+    const f = fixture(); const committed = await f.tool.execute(favoriteInput, f.request, signal());
+    f.store.intake.mockResolvedValueOnce(null);
+    f.favorite.energy_kcal = 999;
+    f.store.log.mockRejectedValueOnce(new ToolRefusal('This operation key already belongs to different meal data.'));
+    expect(await f.tool.execute(favoriteInput, f.request, signal())).toEqual(committed);
+    expect(f.store.log.mock.calls[1]![0].energyKcal).toBe(999);
+    expect(f.rows.size).toBe(1);
+    expect(f.store.intake).toHaveBeenCalledTimes(3);
+  });
+  it('recovers a real committed row after an uncertain result without executing another write', async () => {
+    const f = fixture(); const persist = f.store.log.getMockImplementation()!;
+    f.store.log.mockImplementationOnce(async (input, authority) => {
+      await persist(input, authority);
+      throw new ToolFailure('Nutrition persistence failed. Retry with the same operation key.');
+    });
+    expect(await f.tool.execute(favoriteInput, f.request, signal())).toMatchObject({ status: 'committed', record: { energy_kcal: 321 } });
+    expect(f.store.log).toHaveBeenCalledTimes(1); expect(f.rows.size).toBe(1);
+  });
+  it('does not turn an unverified persistence refusal into a successful receipt', async () => {
+    const f = fixture();
+    f.store.log.mockRejectedValueOnce(new ToolFailure('Synthetic unverified commit; retry the same message.'));
+    await expect(f.tool.execute(favoriteInput, f.request, signal())).rejects.toThrow('Synthetic unverified commit');
+    expect(f.store.intake).toHaveBeenCalledTimes(2); expect(f.rows.size).toBe(0);
   });
   it('refuses edited source text rather than passing an earlier intake off as the revised request', async () => {
     const f = fixture(); await f.tool.execute(favoriteInput, f.request, signal());

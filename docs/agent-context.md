@@ -20,6 +20,12 @@ The final local pure selection passes 81 tests, including literal multiword
 label names and qualified-request refusals. Changed-file ESLint passes with
 zero warnings. Its first run reported two unused mock parameters, subsequently
 corrected; that failed receipt is retained, not reported as a pass.
+Initial `a618a802` CI passed 192 backend files / 3656 tests, including 21 actual
+tool and 41 intent cases; SQL passed 11 files / 228 tests. All four actual
+CodeQL analyses passed. Review found the overlapping favourite-edit retry race,
+not covered by the original same-snapshot concurrency case. The successor adds
+actual receipt recovery and a gate-controlled SQL interleaving; initial green
+results do not qualify that correction.
 
 ## Voice preview correction checks (16 October 2026; P11-07)
 

@@ -94,10 +94,19 @@ export function dailyFoodTool(nutrition: InternalNutrition, now: () => number = 
         ...definition, id: digest, idempotencyKey: key, captureMethod: session.channel === 'voice' ? 'voice' : 'text',
         provenance: { ...definition.provenance, jarvisIntake: { sourceMessageId: source.id, sourceFingerprint, operation: input.operation, ...(favorite ? { favoriteId: favorite.id } : {}) } },
       }, source.at.toISOString());
-      return receipt(await store.log(intake, {
-        intent: 'log-intake', explicit: true, proposalRequired: false, estimateAccepted: favorite !== undefined,
-        ...(favorite ? { favorite } : {}),
-      }, signal), key, sourceFingerprint, input.operation);
+      let committed: Record<string, unknown>;
+      try {
+        committed = await store.log(intake, {
+          intent: 'log-intake', explicit: true, proposalRequired: false, estimateAccepted: favorite !== undefined,
+          ...(favorite ? { favorite } : {}),
+        }, signal);
+      } catch (error) {
+        if (signal.aborted || !(error instanceof ToolRefusal || error instanceof ToolFailure)) throw error;
+        const recovered = await store.intake(key, signal);
+        if (!recovered) throw error;
+        committed = recovered;
+      }
+      return receipt(committed, key, sourceFingerprint, input.operation);
     },
   };
 }

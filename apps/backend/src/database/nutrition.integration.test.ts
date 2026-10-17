@@ -338,6 +338,48 @@ describe('inactive nutrition services on real SQL Server', () => {
     expect(await tool.execute({ operation: 'log_exact' }, req, signal())).toMatchObject({
       status: 'committed', record: { energy_kcal: 123.5, protein_grams: 10, fat_grams: null, capture_method: 'voice' },
     });
+    req.jarvisConversationMessage = { ...source, id: '123458' };
+    let prepared!: () => void; let firstMayCommit!: () => void;
+    const firstPrepared = new Promise<void>(resolve => { prepared = resolve; });
+    const commitGate = new Promise<void>(resolve => { firstMayCommit = resolve; });
+    let read!: () => void; let secondMayContinue!: () => void;
+    const secondRead = new Promise<void>(resolve => { read = resolve; });
+    const readGate = new Promise<void>(resolve => { secondMayContinue = resolve; });
+    const first = dailyFoodTool(request => {
+      const persistence = NutritionStore.forRequest(pool, request, now);
+      return { intake: persistence.intake.bind(persistence), lookupSaved: persistence.lookupSaved.bind(persistence),
+        log: async (input, authority, signal) => { prepared(); await commitGate; return persistence.log(input, authority, signal); } };
+    }, () => at.getTime());
+    const second = dailyFoodTool(request => {
+      const persistence = NutritionStore.forRequest(pool, request, now);
+      let initial = true;
+      return { lookupSaved: persistence.lookupSaved.bind(persistence), log: persistence.log.bind(persistence),
+        intake: async (key, signal) => {
+          const result = await persistence.intake(key, signal);
+          if (initial) { initial = false; read(); await readGate; }
+          return result;
+        } };
+    }, () => at.getTime());
+    const firstWrite = first.execute({ operation: 'log_favorite' }, req, signal());
+    let secondWrite: Promise<unknown> | undefined;
+    try {
+      await firstPrepared;
+      secondWrite = second.execute({ operation: 'log_favorite' }, req, signal());
+      await secondRead;
+      firstMayCommit();
+      const committed = await firstWrite;
+      const latest = (await store().findFavorite('Internal source', signal()))!;
+      await store().favorite({ id: latest.id as string, name: 'Internal source', aliases: [], definition: {
+        mealName: 'Racing synthetic source', mealType: null, components: [], provenance: {}, confidence: 'accurate',
+        energyKcal: 111, proteinGrams: null, carbohydratesGrams: null, fatGrams: null, fiberGrams: null,
+      } }, { explicit: true, estimateAccepted: false, expectedRevision: BigInt(latest.revision as string) }, signal());
+      secondMayContinue();
+      expect(await secondWrite).toEqual(committed);
+      expect(committed).toMatchObject({ status: 'committed', record: { energy_kcal: 99, revision: '1' } });
+    } finally {
+      firstMayCommit(); secondMayContinue();
+      await Promise.allSettled([firstWrite, ...(secondWrite ? [secondWrite] : [])]);
+    }
     expect((await pool.request().query('SELECT COUNT(*) AS count FROM daily.nutrition_queue')).recordset[0].count).toBe(0);
   });
 });

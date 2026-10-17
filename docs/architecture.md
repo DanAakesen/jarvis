@@ -4599,6 +4599,9 @@ Owner/session/message derive one intake operation key. A source-text/time
 fingerprint binds recovered receipts to the same request and operation.
 Existing committed rows are recovered before re-resolving a changed favourite;
 deleted or source-mismatched rows refuse rather than creating duplicates.
+Known conflicting/uncertain log results also trigger one receipt readback:
+an overlapping commit may already own the key. Only a matching actual receipt
+can recover success; no write is retried and absent evidence retains failure.
 New favourite intake rechecks the selected owned DTO fingerprint under the
 existing SQL locks. `prepareMeal`, write validation, canonical intake storage
 and acknowledged-commit refresh remain shared. The original message instant
