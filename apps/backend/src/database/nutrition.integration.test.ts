@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import sql from 'mssql';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { FastifyRequest } from 'fastify';
 import { loadDatabaseConfig } from './config.js';
 import { applyMigrations, readMigrations, readDownMigration, revertMigration } from './migrations.js';
@@ -8,6 +8,9 @@ import { NutritionStore } from '../daily/nutrition/store.js';
 import { type FoodDefinition, type MealInput, type PlanRequest } from '../daily/nutrition/model.js';
 import { favoriteFingerprint } from '../daily/records.js';
 import { dailyFoodTool } from '../daily/tools/food.js';
+import { dailyFoodReviewTool } from '../daily/tools/food-review.js';
+import { createTeamsNotificationService } from '../teams/service.js';
+import { createTeamsNotificationStore } from './teams-notification-store.js';
 
 const config = loadDatabaseConfig();
 if (!config || process.env.NODE_ENV !== 'test' || config.server !== '127.0.0.1') throw new Error('Nutrition tests require isolated loopback SQL Server');
@@ -381,5 +384,69 @@ describe('inactive nutrition services on real SQL Server', () => {
       await Promise.allSettled([firstWrite, ...(secondWrite ? [secondWrite] : [])]);
     }
     expect((await pool.request().query('SELECT COUNT(*) AS count FROM daily.nutrition_queue')).recordset[0].count).toBe(0);
+  });
+  it('requires actual one-time browser approvals for internal estimate/correction/deletion on real SQL', async () => {
+    const at = new Date(now()); const sessionId = randomUUID();
+    const controller = new AbortController();
+    const notifications: string[] = [];
+    const send = vi.fn(async () => { throw new Error('Synthetic health proposal must never be sent to Teams'); });
+    const confirmations = createTeamsNotificationService({
+      ownerObjectId: owner, tenantId: other, store: createTeamsNotificationStore(pool),
+      connector: { send }, isAway: async () => true, onWebNotification: async () => {},
+    });
+    const source = { id: '223001', sessionId, role: 'dan' as const, text: 'I ate a synthetic portion; review the estimate.', model: null, at };
+    const req = { ...request(owner), headers: {}, jarvisConversationMessage: source,
+      server: { ownerObjectId: owner, teamsNotifications: confirmations, awayModeStore: { read: async () => ({ mode: 'present' }) },
+        conversationStore: { getSession: async () => ({ id: sessionId, channel: 'voice', language: 'en', startedAt: at, endedAt: null }) } } } as unknown as FastifyRequest;
+    const tool = dailyFoodReviewTool(request => NutritionStore.forRequest(pool, request, now, {
+      publish: change => { notifications.push(...change.sources); },
+    }), () => at.getTime());
+    let active: Promise<unknown> | undefined;
+    const review = async (input: unknown, decision: 'approve' | 'reject' = 'approve') => {
+      active = tool.execute(input, req, controller.signal);
+      const outcome = active.then(value => ({ ok: true as const, value }), error => ({ ok: false as const, error }));
+      await vi.waitFor(() => expect(confirmations.pendingBrowserConfirmations()).toHaveLength(1), { timeout: 10000 });
+      const confirmation = confirmations.pendingBrowserConfirmations()[0]!;
+      const remaining = Date.parse(confirmation.expiresAt) - Date.now();
+      expect(remaining).toBeGreaterThan(0);
+      expect(remaining).toBeLessThanOrEqual(120_000);
+      expect(confirmation.summary).toContain('Nothing has changed');
+      expect(send).not.toHaveBeenCalled();
+      expect(await confirmations.resolveBrowserConfirmation(confirmation.id, decision)).toBe(true);
+      const result = await outcome;
+      expect(await confirmations.resolveBrowserConfirmation(confirmation.id, 'approve')).toBe(false);
+      if (!result.ok) throw result.error;
+      return result.value;
+    };
+    try {
+      const input = { change: { operation: 'log_estimate', food: { mealName: 'Synthetic reviewed portion', energyKcal: 200 } } };
+      const logged = await review(input) as { record: { idempotency_key: string } };
+      expect(logged).toMatchObject({ status: 'committed', record: { energy_kcal: 200, protein_grams: null, confidence: 'estimate', capture_method: 'voice', revision: '1' } });
+      expect(await tool.execute(input, req, controller.signal)).toEqual(logged);
+      expect(notifications).toEqual(['daily.nutrition.meals']);
+      const key = logged.record.idempotency_key;
+      req.jarvisConversationMessage = { ...source, id: '223002', text: 'Correct this synthetic portion.' };
+      const correction = { change: { operation: 'correct', idempotencyKey: key, expectedRevision: '1',
+        changes: { energyKcal: 222, occurredAt: '2026-01-01T23:30:00Z' } } };
+      const corrected = await review(correction);
+      expect(corrected).toMatchObject({ status: 'committed', record: { energy_kcal: 222, meal_date: '2026-01-02', revision: '2' } });
+      expect(await tool.execute(correction, req, controller.signal)).toEqual(corrected);
+      expect(notifications).toHaveLength(2);
+      req.jarvisConversationMessage = { ...source, id: '223003', text: 'Delete this synthetic portion.' };
+      const deletion = { change: { operation: 'delete', idempotencyKey: key, expectedRevision: '2' } };
+      await expect(review(deletion, 'reject')).rejects.toThrow('rejected');
+      expect(await store().intake(key, signal())).toMatchObject({ deleted_at: null, revision: '2' });
+      expect(notifications).toHaveLength(2);
+      req.jarvisConversationMessage = { ...source, id: '223004', text: 'Now approve deletion of this synthetic portion.' };
+      expect(await review(deletion)).toMatchObject({ status: 'committed', record: { energy_kcal: 222, revision: '3', deleted_at: expect.any(String) } });
+      expect(await tool.execute(deletion, req, controller.signal)).toMatchObject({ status: 'already-deleted', record: { revision: '3' } });
+      expect(notifications).toHaveLength(3);
+      expect(confirmations.pendingBrowserConfirmations()).toEqual([]);
+      expect(send).not.toHaveBeenCalled();
+      expect((await pool.request().query('SELECT COUNT(*) AS count FROM daily.nutrition_queue')).recordset[0].count).toBe(0);
+    } finally {
+      controller.abort();
+      if (active) await Promise.allSettled([active]);
+    }
   });
 });

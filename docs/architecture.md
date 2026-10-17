@@ -4579,13 +4579,13 @@ The reference lockfile is standalone, outside root workspaces, and contains the 
 ### Inactive internal direct intake (17 October 2026)
 
 An optional fourth `createDailyModules(true, data, undefined, data.nutrition)`
-argument adds one sensitive `daily_food` tool to the existing dispatcher.
+argument adds sensitive `daily_food` and `daily_food_review` tools to the existing dispatcher.
 The explicit store factory is independent of the MCP write gate; ordinary
 read-only and production composition remain unchanged. Capabilities report
 `internal-nutrition-rehearsal`, not read-only, when this writer is present.
 No new HTTP mutation route, model, queue, migration or audit store is added.
 
-The tool accepts only `log_exact` or `log_favorite`. It verifies the existing
+The direct tool accepts only `log_exact` or `log_favorite`. It verifies the existing
 owner/hosted-agent boundary and current persisted Dan message; agent headers
 alone are insufficient. Fresh writes also require an active chat/voice session
 and a message no older than ten minutes, with the existing five-minute clock
@@ -4607,7 +4607,45 @@ existing SQL locks. `prepareMeal`, write validation, canonical intake storage
 and acknowledged-commit refresh remain shared. The original message instant
 supplies occurrence and Copenhagen date; session metadata supplies text/voice
 capture. Unknown macros and saved confidence/provenance are preserved.
-New estimates, full internal correction/deletion UX and activation remain open.
+The same optional internal factory additionally registers `daily_food_review`.
+Its strict estimate/correction/delete schema cannot accept owner, confirmation,
+capture, confidence or provenance authority. Current authenticated Dan
+source/session metadata binds the operation; new estimates share the direct
+tool's one-intake-per-message namespace and retain a proposal fingerprint.
+Corrections capture actual owned before-state/revision, retain stable identity
+and recompute Copenhagen dates from occurrence. Changed nutrients/components
+become unverified estimates; unchanged exact provenance and nulls survive.
+
+Review uses actual `TeamsNotificationService.runConfirmed` with a trusted
+browser-only selector. Default current-channel behaviour is unchanged for
+other callers; browser-only never looks up or sends a Teams conversation or
+voice note, even after presence changes. Food requires present mode before
+staging and in the action callback. Existing Now owner-authenticated approval,
+persisted one-time consumption supplies authority. Food cards have an explicit
+120-second lifetime shared by SQL, visible expiry and the service timer;
+default confirmations for all other callers remain five minutes.
+Per-tool pending target keys prevent duplicate concurrent cards; cancellation
+bounds the entire food operation to 180 seconds from execution entry.
+No global proposal manager, detached writer or new table is added.
+The hosted agent gives only this tool a 210-second response-read deadline,
+below the externally ingressed Container App's 240-second HTTP limit.
+Configured research/ordinary deadlines and connection/write/pool limits remain
+unchanged. Generated input uses one number/null nutrient type, not a coercible
+numeric-first union; strict domain validation still follows HTTP validation.
+Frozen before/after summaries are bounded to 4000 characters and include units,
+unknowns, dates and revision. Existing store revision/range locks recheck writes
+and only acknowledged commits refresh Daily. Exact source-bound replays and
+matching uncertain results return real whitelisted receipts; deleted retries
+report actual tombstones, never recreate intake. No Health write is queued.
+Direct supported exact labels and actual saved favourites refuse this review
+path in favour of the one-step tool. Production stays off; generic spoken
+approval, photo evidence, complete conversational/client/device parity and
+activation/cutover remain open.
+
+Both internal food tools declare `denyOnPhone`. The existing phone dispatcher
+checks this after active-session validation and before generic confirmation or
+execution; denial wins over the public-phone flag. Other tools retain their
+existing public/approval behaviour. Food's own session checks remain in place.
 
 ### Inactive nutrition MCP adapter (17 October 2026)
 

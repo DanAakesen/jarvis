@@ -12,7 +12,7 @@ afterEach(async () => {
   await Promise.all(apps.splice(0).map((app) => app.close()));
 });
 
-async function fixture(active = true) {
+async function fixture(active = true, denyOnPhone = false) {
   const order: string[] = [];
   const executePrivate = vi.fn(async () => {
     order.push('private tool');
@@ -30,6 +30,7 @@ async function fixture(active = true) {
         name: 'read_private_data',
         description: 'Read a private fixture.',
         inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+        denyOnPhone,
         execute: executePrivate,
       },
       {
@@ -37,6 +38,7 @@ async function fixture(active = true) {
         description: 'Research a public topic.',
         inputSchema: { type: 'object', properties: {}, additionalProperties: false },
         publicAllowedOnPhone: true,
+        denyOnPhone,
         execute: executePublic,
       },
     ],
@@ -101,6 +103,18 @@ describe('phone tool approval', () => {
     expect(order).toEqual(['public tool']);
     expect(requestConfirmation).not.toHaveBeenCalled();
     expect(executePublic).toHaveBeenCalledOnce();
+  });
+
+  it.each(['read_private_data', 'web_research'])('refuses phone-denied %s before approval or execution', async (tool) => {
+    const { app, order, executePrivate, executePublic, requestConfirmation } = await fixture(true, true);
+    const response = await app.inject(toolRequest(tool));
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ outcome: 'refused', result: { refused: 'This tool is unavailable during phone calls. Use chat or browser voice.' } });
+    expect(order).toEqual([]);
+    expect(requestConfirmation).not.toHaveBeenCalled();
+    expect(executePrivate).not.toHaveBeenCalled();
+    expect(executePublic).not.toHaveBeenCalled();
   });
 
   it('refuses an inactive phone session before executing the tool', async () => {

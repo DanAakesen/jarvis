@@ -1,5 +1,56 @@
 # Decisions
 
+## Reuse browser-only Now approval for internal food proposals (17 October 2026; P12-09)
+
+Continue Dan's authorised migration with the existing Now confirmation service
+rather than a new nutrition proposal queue or model-supplied acceptance. Add a
+trusted optional browser-only delivery selector; existing callers retain their
+current-channel routing. Food review always selects browser-only, so a race in
+presence cannot send sensitive meal summaries into Teams. Require present mode
+before review and again in its exact action callback.
+
+The optional internal review tool handles estimates, corrections and soft
+deletion against the existing owner/session/message and canonical SQL store.
+Freeze model proposals before display; show actual before/after values and
+dates, reject oversized reviews and serialize pending reviews per target.
+Food cards have an explicit two-minute expiry shared by SQL, the visible card
+and timer, with the whole operation bounded to three minutes from entry.
+Existing callers retain the default five-minute confirmation lifetime.
+Native approval is owner-bound and consumed once before the action. Neither
+origin alone, spoken text nor caller confirmation flags are write authority.
+Exact-label and actual saved-favourite direct requests keep their one-step path.
+
+Initial real HTTP-schema qualification found Ajv converting unknown nutrient
+nulls to zero through a numeric-first union. Generate a single nullable numeric
+type while retaining canonical bounds and strict domain validation. Independent
+review also found that the hosted agent's ordinary 30-second read timeout would
+cancel a pending food approval. The first 390-second read correction passed
+CI, but a further review identified the actual externally ingressed backend's
+[240-second HTTP ceiling](https://learn.microsoft.com/en-us/azure/container-apps/ingress-overview#http),
+verified against current first-party documentation on 17 October.
+Use an explicit shorter food-card profile and a tool-specific 210-second read
+budget instead of pretending that a longer client deadline bypasses ingress.
+This keeps existing approval lifetimes and unrelated tool deadlines unchanged,
+makes the real food expiry visible, and avoids a new background mutation queue
+or writes that survive cancellation. No infrastructure or paid-resource change.
+
+Further review found the generic phone approval ran before food's own context
+refusal, allowing an impossible five-minute approval to consume the HTTP budget.
+Use an explicit tool capability, `denyOnPhone`, checked by the existing dispatcher
+after active-session validation and before any approval or execution. Set it on
+both internal food tools; do not special-case names or change other phone tools.
+The existing Now UI already displays the actual returned `expiresAt`; no new
+frontend control or hardcoded review duration is needed.
+
+New nutrient/component proposals stay estimates and cannot retain a whole-meal
+verification claim. Preserve unchanged exact nutrient provenance and nulls.
+Existing SQL revision/range locks prevent stale correction/deletion, including
+historical records. Recover uncertain results only from matching actual
+source/proposal/revision receipts; a read tombstone is labelled already-deleted,
+not a new mutation. No Health export or new persistence is introduced.
+This is browser-reviewed internal source work, not full conversational/spoken,
+photo-evidence, client/device acceptance, production activation or cutover.
+
 ## Ground direct internal intake in the verified human request (17 October 2026; P12-09)
 
 Use one optional sensitive internal food tool, separate from MCP enablement,

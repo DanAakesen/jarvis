@@ -156,6 +156,7 @@ Long-term knowledge:
 # Nonsecret ID of the `jarvis-api` app from infra/bootstrap.output.json.
 DEFAULT_API_CLIENT_ID = "9f751b64-ea0f-484f-bf09-f08276a69e2f"
 REQUEST_TIMEOUT_SECONDS = 30.0
+FOOD_REVIEW_TIMEOUT_SECONDS = 3 * 60 + REQUEST_TIMEOUT_SECONDS
 BACKEND_HTTP_TIMEOUT_SECONDS = 10.0
 CATALOGUE_TTL_SECONDS = 60.0
 MAX_RESPONSE_BYTES = 1024 * 1024
@@ -747,11 +748,12 @@ class BackendToolClient:
                 return _error(name, "This phone session is invalid; nothing was done.")
             headers["X-Jarvis-Phone-Session-ID"] = phone_session_id
         try:
-            read_timeout = (
-                self._settings.long_tool_timeout_seconds
-                if name == "web_research"
-                else self._settings.tool_timeout_seconds
-            )
+            if name == "daily_food_review":
+                read_timeout = FOOD_REVIEW_TIMEOUT_SECONDS
+            elif name == "web_research":
+                read_timeout = self._settings.long_tool_timeout_seconds
+            else:
+                read_timeout = self._settings.tool_timeout_seconds
             async with self._http.stream(
                 "POST",
                 f"{self._base_url}/tools/{name}",

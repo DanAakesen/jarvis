@@ -23,10 +23,10 @@ internal feedback call remains available; it does not confer native authority.
 ## Inactive internal direct intake
 
 Explicit fourth-argument composition
-`createDailyModules(true, data, undefined, data.nutrition)` registers one
-sensitive `daily_food` tool in the existing dispatcher. It is independent of
+`createDailyModules(true, data, undefined, data.nutrition)` registers
+sensitive `daily_food` and `daily_food_review` tools in the existing dispatcher. It is independent of
 MCP enablement and stays absent in production and ordinary read-only
-composition. Its input contains only `operation: log_favorite | log_exact`.
+composition. The direct `daily_food` input contains only `operation: log_favorite | log_exact`.
 
 The persisted current Dan message supplies the complete saved name/alias or
 exact label. Supported examples are `Log my favourite Dinner` and
@@ -51,6 +51,50 @@ refuse rather than silently recreating food. Exact committed replays do not
 publish refresh again. Ordinary sensitive message-backed audit, canonical
 meals and acknowledged-commit change publication stay shared. No new ledger,
 migration, estimate approval system or Health export is added.
+
+## Inactive internal reviewed changes
+
+`daily_food_review` accepts a strict `change` object with one operation:
+`log_estimate` and a proposed `food`, `correct` and an exact owned
+`idempotencyKey`/`expectedRevision` plus `changes`, or `delete` and that exact
+key/revision. Models cannot supply confirmation, owner, capture, confidence or
+provenance fields. For example:
+
+```json
+{"change":{"operation":"log_estimate","food":{"mealName":"Proposed portion","energyKcal":200,"proteinGrams":null}}}
+```
+
+The current verified Dan message and active chat/voice session supply source
+identity and capture. New logging defaults occurrence to the message instant;
+a proposed explicit occurrence is displayed and validated, with Copenhagen
+date derived server-side. Every new reviewed write requires present-mode
+browser approval in Now; a plain spoken "yes" is not that approval.
+The existing owner-bound one-time persisted confirmation is consumed before
+its exact callback; explicit browser-only routing prevents Teams delivery even
+if presence flips. Rejection, expiry, cancellation and changed presence refuse.
+No new proposal dispatcher, generic approval callback or model authority.
+
+The summary freezes exact before/after values, units, unknowns, dates and
+revision within 4000 characters. Concurrent pending reviews for a target
+refuse. Food cards expire after two minutes in SQL, the visible card and its
+timer; the whole operation is bounded to three minutes from execution entry.
+The hosted agent allows 210 seconds for this tool's response only, below the
+240-second ingress ceiling. Existing approvals retain their default five
+minutes; ordinary tool and connection deadlines are unchanged. No detached
+write continues after cancellation. Nullable nutrient input uses a
+single number/null JSON-schema type so HTTP coercion cannot invent zero values.
+Store revision/range locks still own correctness after approval. Proposed
+nutrient/component changes remain estimates and clear any whole-meal verified
+claim; unchanged exact field provenance remains. Historical corrections and
+soft deletion have no seven-day restriction and never queue Health writes.
+
+Source/proposal fingerprints and existing SQL operation/revision identity
+protect replay and actual receipt recovery. Deleted repeats return a real
+`already-deleted` tombstone without pretending another delete occurred.
+Direct supported exact labels and actual saved favourites use `daily_food`,
+not redundant review. This source integration does not establish general
+conversational/spoken/photo evidence, physical-phone or hosted-client
+acceptance. Production remains off and original Daily canonical.
 
 ## Pinned provider contract and evidence limits
 
@@ -94,7 +138,7 @@ SQL and hosted-client/device acceptance.
 Favourite saves and plan saves/deletions use the same safe hub with their
 actual collection source; retained plan replays do not announce another change.
 
-`npm test --workspace @jarvis/backend -- src/daily/nutrition/model.test.ts src/daily/nutrition/store.test.ts src/daily/nutrition/frida.test.ts src/daily/nutrition/handlers.test.ts src/daily/store/owner-store.test.ts src/daily/index.test.ts src/database/migrations.test.ts src/modules.test.ts`
+`npm test --workspace @jarvis/backend -- src/daily/nutrition/model.test.ts src/daily/nutrition/review.test.ts src/daily/nutrition/store.test.ts src/daily/nutrition/frida.test.ts src/daily/nutrition/handlers.test.ts src/daily/tools/food.test.ts src/daily/tools/food-review.test.ts src/teams/service.test.ts src/daily/store/owner-store.test.ts src/daily/index.test.ts src/database/migrations.test.ts src/modules.test.ts`
 
 `npm run lint --workspace @jarvis/backend` and `npm run build --workspace @jarvis/backend`.
 

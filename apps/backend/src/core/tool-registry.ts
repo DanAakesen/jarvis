@@ -11,6 +11,8 @@ export interface JarvisTool {
   readonly reflexSafe?: boolean;
   /** Phone sessions may execute this tool without a P7-03 Teams approval. */
   readonly publicAllowedOnPhone?: boolean;
+  /** Refuse phone calls before approval, even when the tool is otherwise public. */
+  readonly denyOnPhone?: boolean;
   readonly bodyLimit?: number;
   /** The core dispatcher supplies validated input, the request and a cancellation signal. */
   readonly execute: (input: unknown, request: FastifyRequest, signal: AbortSignal) => Promise<unknown>;

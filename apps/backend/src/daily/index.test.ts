@@ -73,16 +73,17 @@ describe('Daily integration contract', () => {
   });
   it('requires an explicit internal store factory rather than enabling writes with read-only data', async () => {
     const data: DailyData = { query: { query: vi.fn() }, changes: createDailyChanges() };
-    const internal = vi.fn(() => ({ intake: vi.fn(), lookupSaved: vi.fn(), log: vi.fn() }));
+    const internal = vi.fn(() => ({ intake: vi.fn(), lookupSaved: vi.fn(), log: vi.fn(), correct: vi.fn(), remove: vi.fn() }));
     expect(createDailyModules(false, data, undefined, internal)).toEqual([]);
     expect(createDailyModules(true, data)[0]!.tools.map(tool => tool.name)).toEqual(['daily_query']);
     expect(() => createDailyModules(true, undefined, undefined, internal)).toThrow('shared Daily data');
     const app = buildApp(config, undefined, { auth, modules: [coreModule, ...createDailyModules(true, data, undefined, internal)] });
     apps.push(app);
     const response = await app.inject({ url: '/daily/capabilities', headers: headers() });
-    expect(response.json()).toMatchObject({ stage: 'internal-nutrition-rehearsal', pages: [], tools: ['daily_query', 'daily_food'] });
+    expect(response.json()).toMatchObject({ stage: 'internal-nutrition-rehearsal', pages: [], tools: ['daily_query', 'daily_food', 'daily_food_review'] });
     expect(internal).not.toHaveBeenCalled();
     const catalogue = (await app.inject({ url: '/tools', headers: headers() })).json();
     expect(JSON.stringify(catalogue)).toContain('daily_food');
+    expect(JSON.stringify(catalogue)).toContain('daily_food_review');
   });
 });

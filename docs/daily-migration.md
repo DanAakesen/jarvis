@@ -52,6 +52,18 @@ identity; model arguments contain only the operation. Saved favourite snapshots
 are checked under SQL locks, receipts recover actual committed rows, and
 deleted/source-edited retries refuse. This first explicit-command subset is not
 full internal estimate/correction/deletion or conversational acceptance.
+The next internal source continuation adds `daily_food_review` using real
+browser-only Now one-time approval for estimates, revisioned corrections and
+soft deletion, preserving the one-step direct tool. Reviews bind frozen
+before/after values and dates to source/operation identity, require present mode,
+and cannot route health summaries into Teams. Rejected/cancelled/stale reviews
+do not write; canonical locks/replay/tombstones/commit refresh stay shared.
+Food cards use an explicit two-minute expiry with matching SQL/card/timer
+lifetimes, a three-minute whole-operation bound and a 210-second agent read
+deadline, within the actual hosting request ceiling. Other approvals retain
+their five-minute default; no detached mutation queue or infrastructure change.
+Browser approval is not verified spoken/photo/device or general conversation
+acceptance; no complete #724 claim follows.
 No production activation, private migration, provider/device action or native
 dependency change follows from this source work; #724 remains open.
 

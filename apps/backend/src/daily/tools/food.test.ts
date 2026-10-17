@@ -59,6 +59,7 @@ describe('inactive internal food tool', () => {
     expect(JSON.stringify(result)).not.toContain('must-not-escape');
     expect(JSON.stringify(result)).not.toContain(owner);
     expect(f.tool.sensitive).toBe(true); expect(f.tool.reflexSafe).not.toBe(true); expect(f.tool.publicAllowedOnPhone).not.toBe(true);
+    expect(f.tool.denyOnPhone).toBe(true);
   });
   it('recovers a committed message after the favourite changes without logging or resolving it again', async () => {
     const f = fixture();

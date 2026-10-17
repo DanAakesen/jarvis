@@ -53,6 +53,11 @@ export interface BrowserConfirmation {
   readonly expiresAt: string;
 }
 
+export interface BrowserConfirmationDelivery {
+  readonly channel: 'browser';
+  readonly lifetimeSeconds?: number;
+}
+
 export interface TeamsConnector {
   send(reference: ConversationReference, activity: ActivityLike): Promise<void>;
 }
@@ -66,12 +71,14 @@ export interface TeamsNotificationService {
     actionKind: ConfirmationActionKind,
     summary: string,
     signal?: AbortSignal,
+    delivery?: BrowserConfirmationDelivery,
   ): Promise<void>;
   runConfirmed<T>(
     actionKind: ConfirmationActionKind,
     summary: string,
     action: () => Promise<T>,
     signal?: AbortSignal,
+    delivery?: BrowserConfirmationDelivery,
   ): Promise<T>;
   rememberMessage(activity: unknown, reference: ConversationReference): Promise<void>;
   receiveConfirmation(activity: unknown, reference: ConversationReference): Promise<boolean>;
@@ -237,6 +244,7 @@ export function createTeamsNotificationService({
 
   async function waitForDecision(
     id: string,
+    lifetimeSeconds: number,
     signal?: AbortSignal,
   ): Promise<WaitResult> {
     let finish!: (result: WaitResult) => void;
@@ -257,7 +265,7 @@ export function createTeamsNotificationService({
       void store.cancelConfirmation(id, ownerObjectId).catch(() => undefined);
       finish('cancelled');
     };
-    const timer = setTimeout(expire, confirmationLifetimeSeconds * 1000);
+    const timer = setTimeout(expire, lifetimeSeconds * 1000);
     waiters.set(id, finish);
     signal?.addEventListener('abort', abort, { once: true });
     if (signal?.aborted) abort();
@@ -275,13 +283,17 @@ export function createTeamsNotificationService({
     actionKind: ConfirmationActionKind,
     summary: string,
     signal?: AbortSignal,
+    delivery?: BrowserConfirmationDelivery,
   ): Promise<void> {
-    if (!supportedKinds.has(actionKind) || !validText(summary)) {
+    const lifetimeSeconds = delivery?.lifetimeSeconds ?? confirmationLifetimeSeconds;
+    if (!supportedKinds.has(actionKind) || !validText(summary) ||
+        delivery !== undefined && (!delivery || typeof delivery !== 'object' || delivery.channel !== 'browser') ||
+        !Number.isInteger(lifetimeSeconds) || lifetimeSeconds < 1 || lifetimeSeconds > confirmationLifetimeSeconds) {
       throw new ToolRefusal('A valid confirmation request is required.');
     }
     signal?.throwIfAborted();
     let away: boolean;
-    try { away = connector ? await isAway() : false; }
+    try { away = delivery?.channel === 'browser' ? false : connector ? await isAway() : false; }
     catch { throw new ToolRefusal('Confirmation routing is unavailable.'); }
     if (!away && browserConfirmations.size >= maxPendingBrowserConfirmations) {
       throw new ToolRefusal('There are too many pending browser confirmations.');
@@ -297,7 +309,7 @@ export function createTeamsNotificationService({
           ownerObjectId,
           conversationId,
           actionKind,
-          confirmationLifetimeSeconds,
+          lifetimeSeconds,
         );
       } else {
         await store.createConfirmation(
@@ -305,7 +317,7 @@ export function createTeamsNotificationService({
           ownerObjectId,
           conversationId,
           actionKind,
-          confirmationLifetimeSeconds,
+          lifetimeSeconds,
           phoneSessionId,
         );
       }
@@ -318,13 +330,13 @@ export function createTeamsNotificationService({
     const waitSignal = signal
       ? AbortSignal.any([signal, waiterController.signal])
       : waiterController.signal;
-    const decision = waitForDecision(id, waitSignal);
+    const decision = waitForDecision(id, lifetimeSeconds, waitSignal);
     if (!reference) {
       browserConfirmations.set(id, {
         id,
         actionKind,
         summary,
-        expiresAt: new Date(Date.now() + confirmationLifetimeSeconds * 1000).toISOString(),
+        expiresAt: new Date(Date.now() + lifetimeSeconds * 1000).toISOString(),
       });
       onConfirmationsChanged();
       onConfirmationPending?.();
@@ -399,9 +411,9 @@ export function createTeamsNotificationService({
       await sendVoiceNote(reference, text).catch(() => undefined);
     },
     requestConfirmation,
-    async runConfirmed(actionKind, summary, action, signal) {
+    async runConfirmed(actionKind, summary, action, signal, delivery) {
       if (typeof action !== 'function') throw new ToolRefusal('A confirmed action is required.');
-      await requestConfirmation(actionKind, summary, signal);
+      await requestConfirmation(actionKind, summary, signal, delivery);
       signal?.throwIfAborted();
       return action();
     },

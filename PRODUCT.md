@@ -533,7 +533,7 @@ unavailable, including after backend restart.
 
 ### Web notifications and confirmations (P6-22)
 
-Jarvis writes bounded text notifications to the Now activity feed. Gated actions appear as browser approval requests with Approve and Reject controls and expire after five minutes. Unknown, replayed, rejected, cancelled, expired, or unverified responses never run the action. A pending approval is announced to an active browser voice session; the authenticated Now feed remains the approval channel.
+Jarvis writes bounded text notifications to the Now activity feed. Gated actions appear as browser approval requests with Approve and Reject controls and normally expire after five minutes. Internal food-review cards explicitly expire after two minutes to keep the whole operation inside the hosting request limit; the visible expiry matches persistence and cancellation. Unknown, replayed, rejected, cancelled, expired, or unverified responses never run the action. A pending approval is announced to an active browser voice session; the authenticated Now feed remains the approval channel.
 
 These actions always require Dan's confirmation: merge, delete, send mail, calendar changes, repository creation, destructive or externally consequential computer use outside the browser, and anything that spends money. The backend fails closed if Jarvis approval is unavailable or expires; it never proceeds without Dan's authenticated approval. Provider credentials remain server-side; notification content, audio, tokens, and images are not written to logs, task events, or errors.
 
@@ -996,6 +996,23 @@ Repeating one message recovers its actual committed intake without logging
 again, even if the favourite later changes. Edited source requests and deleted
 intakes cannot silently become another intake. Production remains off;
 this is not complete internal food workflow or #724 acceptance.
+
+The next inactive internal composition adds `daily_food_review` for portion
+estimates, revisioned corrections and soft deletion. It uses the existing
+owner-bound one-time approval in Now, not model confirmation flags or a new
+proposal dispatcher. Review shows the exact before/after food, units, unknown
+macros, occurrence/Copenhagen date and target revision. Model proposals remain
+estimates; approval does not make them independently verified. Direct supported
+exact labels and actual saved favourites are routed back to the one-step tool.
+This initial reviewed path requires a present chat/voice session and a browser
+approval within its displayed two-minute window; a spoken "yes" alone is not acceptance. Browser-only delivery prevents
+meal details being routed into Teams even if presence changes. Rejected,
+cancelled, expired or stale reviews cannot mutate intake. Existing canonical
+storage, exact operation/revision replay, tombstones and commit refresh remain
+shared. No Health write, production activation or physical-phone acceptance is
+included; broader conversational and actual client/device gates remain.
+Both internal food tools refuse phone calls before generic approval; an approval
+cannot make their unsupported phone context valid.
 
 P12-05 adds an inactive, explicitly invoked health processor over the existing SQL inbox: metrics/sleep/workouts/detail/minute HR, canonical physical units, Copenhagen dates, exact session/checksum replay and bounded retry/quarantine. Domain changes, ingestion lineage and processed-feed freshness commit together; phone heartbeat stays separate. Empty workout exports cannot erase history, missing values stay unknown, and native nutrition cannot feed back into canonical meals. Owner history/detail reads are bounded and unregistered. No scheduler, source import, live device changes or activation; protected/live parity remains gated.
 
