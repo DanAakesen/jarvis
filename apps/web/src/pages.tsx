@@ -1,10 +1,12 @@
 import type { ReactNode } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import type { SignInSession } from './useSignIn';
 import { Loader } from './Loader';
 import { getSignInGreeting } from './sign-in-greeting';
+import { saveSignInReturnPath } from './auth';
 
 export function SignInPage({ session }: { session: SignInSession }) {
+  const location = useLocation();
   const { state, message } = session;
   if (state === 'checking' || state === 'signing-in') {
     const text = state === 'signing-in' ? 'Signing you in' : 'Loading';
@@ -17,11 +19,15 @@ export function SignInPage({ session }: { session: SignInSession }) {
 
   const pending = state === 'redirecting';
   const unavailable = state === 'unavailable';
+  const beginSignIn = () => {
+    saveSignInReturnPath(`${location.pathname}${location.search}${location.hash}`);
+    void session.signIn();
+  };
   return (
     <section className="signin" aria-labelledby="welcome-heading">
       <h1 id="welcome-heading">{getSignInGreeting()}</h1>
       {state === 'error' && <p className="signin-error" role="alert">{message || 'Sign-in failed.'}</p>}
-      <button className="signin-button luminous-glass" type="button" onClick={() => { void session.signIn(); }}
+      <button className="signin-button luminous-glass" type="button" onClick={beginSignIn}
         disabled={pending || unavailable} aria-label={pending ? 'Redirecting' : 'Sign in with Microsoft'} aria-busy={pending}
         aria-describedby={unavailable ? 'signin-unavailable' : undefined}>
         {pending
