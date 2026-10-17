@@ -127,6 +127,7 @@ import { WorkspacePinStore } from './database/workspace-pin-store.js';
 import { createWeatherModule } from './core/weather.js';
 import { createSystemStatusReader } from './system-status.js';
 import { createProductionModules } from './production-modules.js';
+import { composeDaily } from './daily/composition.js';
 
 try {
   const config = loadConfig();
@@ -848,6 +849,11 @@ try {
     screenVision: screenVisionModule,
     visionWatch: visionWatchModule,
     voiceRelay: voiceRelayModule,
+    daily: composeDaily({
+      enabled: config.dailyEnabled === true,
+      pool: database?.pool,
+      ownerObjectId: config.auth.ownerObjectId,
+    }),
     teamsBot: teamsBotModule,
   });
   const budgetAlertStore = alertActivityStore;

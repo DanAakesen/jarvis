@@ -1,5 +1,33 @@
 # Decisions
 
+## Compose Daily only behind one exact server switch (17 October 2026; P12-09 / #724)
+
+**Builder decision inside Dan's "go with the daily", not an activation and not
+acceptance.** It is the last invisible Daily slice, built under these conditions.
+
+- One switch. `JARVIS_DAILY_ENABLED` is read once at startup. Absent or `false`
+  is off, exactly `true` is on, and any other value stops startup with an error
+  that does not echo it. The repository ships no value: no workflow, Bicep,
+  infrastructure, environment or deploy file sets it, a scan test enforces that,
+  and turning it on is a separate reviewed change.
+- Off means unchanged. The composition returns no module, validates nothing and
+  touches no pool, so the route table, tool catalogue, capability instructions,
+  voice session, health response, startup, jobs and timers stay those of Jarvis
+  without Daily. Tests compare each of them with a Daily-free application.
+- On means the smallest module. One owner-bound module over the existing
+  nutrition data: the capabilities, query and nutrition-targets routes and six
+  tools, which brings the catalogue to 116 of its 128-tool limit. It adds no MCP
+  connector, Frida lookup, Google or Gmail feed, health upload, job or timer.
+- Fail closed. Missing SQL or an owner that is not a UUID stops startup. Every
+  data accessor, and the targets and health readers that the composition wraps,
+  re-check the signed-in owner against the composed owner, so a mismatch is
+  refused before any SQL read. A connector or runner is refused on every Daily
+  route, and an agent reaches the targets only through the approved tool, whose
+  changes keep the exact browser Now approval.
+- Unchanged and out of scope: accounts, consent, grants, secrets, RBAC,
+  resources, imports, provider, device and private reads or writes, and live
+  probes. Rollback is leaving the switch off.
+
 ## Link every web-created Factory task to a GitHub issue (17 October 2026; P10-08 / #902)
 
 The Create task dialog and `POST /factory/tasks` reuse the chat path's
@@ -74,7 +102,8 @@ the least inference the repository allows.
   `suggest` calculation and the persisted dislikes. Nothing invents a meal or a
   quantity, and an unknown energy left applies no energy filter and says so.
 - The tool is read-only, sensitive and phone-denied, behind the default-off Daily
-  gate with no production caller. Daily off leaves Jarvis unchanged.
+  gate; only the default-off composition can reach it. Daily off leaves Jarvis
+  unchanged.
 
 ## Use owner-configured nutrition targets for the daily food budget (17 October 2026; P12-09 / #724)
 
@@ -102,7 +131,7 @@ data in a public repository, so no source, fixture, document, PR text or log
 carries real figures; tests use synthetic values and Dan enters his own.
 
 Everything stays behind the default-off Daily gate: Daily off leaves Jarvis
-unchanged and this slice has no production caller. The budget adapter (recorded
+unchanged and only the default-off composition can reach it. The budget adapter (recorded
 in the entry above) reports unknown burn or unknown meal macros as unknown, never
 zero, and counts only the exact active-energy metric so resting energy is not
 double-counted. The Settings section ships as its own web slice over the same

@@ -460,6 +460,26 @@ locally; the route, composition and tool tests that load Fastify or `jose` need
 the pinned CI graph where those packages are unavailable locally. The
 `active_energy` metric name is not verified against a live export.
 
+## Daily switch checks (17 October 2026; P12-09)
+
+The backend composes Daily only when the environment variable
+`JARVIS_DAILY_ENABLED` is exactly `true`. Absent or `false` leaves Jarvis
+unchanged and any other value stops startup. It is a server switch, not a secret,
+and it is off by default **with nothing setting it**: no workflow, Bicep,
+infrastructure, `.env` or deploy file may carry it, and no session sets it for
+an environment. Only the separate, reviewed change that turns Daily on edits the
+deploy files, and it must update the allow-list in `daily/default-off.test.ts` in
+the same change. The web switch `VITE_DAILY_ENABLED` follows the same rule.
+
+Check the composition with
+`npm test --workspace @jarvis/backend -- src/config.test.ts src/production-modules.test.ts src/daily/default-off.test.ts src/daily/composition.test.ts`.
+All of it uses synthetic owners and an untouched stand-in pool; no check reads or
+writes real data or probes a live service. `composition.test.ts` builds real
+Fastify applications, so it needs the pinned CI graph where those packages are
+unavailable locally. Check that Daily off leaves routes, tools, instructions and
+startup unchanged, that Daily on adds exactly the module's routes and six tools,
+and that the tool count stays inside the 128-tool limit.
+
 ## Internal Daily review checks (17 October 2026; P12-09)
 
 The current inactive continuation registers `daily_food_review` only with the
