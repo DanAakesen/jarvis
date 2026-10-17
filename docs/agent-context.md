@@ -151,6 +151,13 @@ tests both exact capacity boundaries and recovery from a seeded oversized set;
 service native review also proves restoration when listing is unavailable.
 No limit increase, schema change, automatic deletion or acceptance waiver.
 
+Initialf069 CI39043061387 passed application checks and234SQL assertions, but
+both new oversized-list controls exposed the feed transaction replacing an
+already sanitised `ToolFailure` limit message with generic persistence failure.
+Preserve known safe `ToolFailure` alongside `ToolRefusal`; unknown exceptions
+remain sanitised. The exact capacity/update/restore assertions before that
+point passed. Keep the initial failure; successor qualification is required.
+
 ## Safe release reason logging (17 October 2026)
 
 Deploy smoke status lines and the required gate remain unchanged. The standard

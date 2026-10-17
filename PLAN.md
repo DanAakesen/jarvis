@@ -91,6 +91,12 @@ owner isolation, restoration/replacement and already oversized known-key recover
 The shared service also proves native restore survives listing unavailability.
 The corrected head requires qualification;801e greens are retained history.
 
+Initialf069 qualification passed application checks and234SQL assertions; the
+two new oversized-list controls failed because the existing transaction wrapper
+discarded the explicit safe limit `ToolFailure`. Preserve that known safe failure
+without exposing unknown SQL/provider exceptions, then qualify the successor.
+No review is requested on this superseded base before parent integrates705af7c7.
+
 ## Release diagnosis (17 October 2026; safe CI reason codes)
 
 Continue autonomously without direct Azure or credentials. Both new owned

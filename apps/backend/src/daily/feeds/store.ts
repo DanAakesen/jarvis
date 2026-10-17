@@ -109,7 +109,7 @@ export class DailyFeedStore {
       await this.query(new sql.Request(transaction).input('resource',sql.NVarChar(255),resource), "DECLARE @result int; EXEC @result=sys.sp_getapplock @Resource=@resource,@LockMode='Exclusive',@LockOwner='Transaction',@LockTimeout=5000; IF @result<0 THROW 51001,'Feed owner lock unavailable',1;",signal);
       result = await action(transaction, () => { changed = true; }); signal.throwIfAborted(); await transaction.commit();
     }
-    catch (error) { await transaction.rollback().catch(() => undefined); if (signal.aborted) throw signal.reason; if (error instanceof ToolRefusal) throw error; throw new ToolFailure('Feed persistence failed; retry the same operation key. No record/provider diagnostics are exposed.'); }
+    catch (error) { await transaction.rollback().catch(() => undefined); if (signal.aborted) throw signal.reason; if (error instanceof ToolRefusal || error instanceof ToolFailure) throw error; throw new ToolFailure('Feed persistence failed; retry the same operation key. No record/provider diagnostics are exposed.'); }
     if (changed) this.changes.publish({ owner: this.owner, sources: ['daily.feed'] });
     return result;
   }
