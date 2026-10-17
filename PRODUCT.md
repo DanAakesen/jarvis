@@ -22,17 +22,37 @@ conversation visibility and existing reader/tail-following behaviour through
 focus, viewport pan/resize, keyboard dismissal and orientation changes.
 Native-phone acceptance remains separate from controlled browser evidence.
 
-## Header background work (16 October 2026; P11-05 local candidate)
+## Header background work (17 October 2026; P11-12)
 
 The header's **Background work** control covers research, images, apps and
 indexing, not Software Factory tasks or current service health. Show only
 undismissed entries, with their real status, failure details and available
-result/cancellation controls. Dismissing an entry removes it from this header
-immediately and after refresh/reload on the same account, backend and device.
+result/cancellation controls. Dismissing finished work is saved for the account
+on the server, across browsers, devices and cleared browser storage.
 It does not cancel work, delete records or remove saved results. Keep the
 control and an explicit empty state available after the last entry is hidden
 so keyboard focus is not lost. Storage/load failures remain visible and must
 not be presented as a successfully empty list.
+
+### What appears here
+
+- **Research** starts when Jarvis runs a research request. **Image** labels
+  recorded image work; **App** labels app work, including requested weather
+  reports. These are supported job kinds, not a promise that every generation
+  tool creates a header entry.
+- **Memory re-embed** rebuilds memory and vault search vectors after an embedding
+  model change, or at backend startup when vectors are missing. Viewing or
+  dismissing the list does not start it.
+- Rows show the kind, start time and stored reason. A trigger is shown only if
+  recorded; older rows do not establish which trigger started them.
+  **Interrupted by a restart** is neutral history, not a failure count or a
+  claim about current service health.
+- **Dismiss** hides finished work for the account; **Dismiss all finished**
+  hides all finished entries, never running work. Equivalent finished rows can
+  share a count and are dismissed together. Raw records remain available under
+  the existing history retention for Status, Usage and audit.
+- Existing browser dismissals are sent to the server once. A failed transfer
+  remains visible as an error, with those entries hidden locally until confirmed.
 
 ## Readable chat and attached phone typing (16 October 2026; local candidate)
 
@@ -341,12 +361,12 @@ stateDiagram-v2
 - A clean completed invocation without delivery proof retains its observed completed lifecycle and leaves the task in verification attention. Missing proof is neither a runner crash nor permission to deliver, mark Done or merge.
 - The GitHub merge endpoint enforces repository branch protection and required checks. A refusal is recorded on the task and leaves it unfinished.
 
-### New projects
+### Project creation and defaults
 
-Dan never fills in a project form. He gives Jarvis, by voice or chat, a project name and a short description; everything else comes from the **New projects** settings.
+Jarvis creates new repositories from a name and description; the Add project dialog shows the saved defaults that Jarvis applies. Each project keeps its own settings and can change them at any time.
 
 1. Jarvis creates `<owner>/<name>` with the configured visibility and the backend-only `jarvis-repo-admin` token. The token never enters a sandbox.
-2. Jarvis registers the project with the New projects defaults and starts the first task in a sandbox: clone the templates repository, run its initializer (`cpinit`) with the modules the agent chooses from the description, fill `PRODUCT.md` and `PLAN.md` from the description, add the repository's PR-check and release workflow templates (P3-09), and open a pull request.
+2. Jarvis registers the project with the configured defaults and starts the first task in a sandbox: clone the templates repository, run its initializer (`cpinit`) with the modules the agent chooses from the description, fill `PRODUCT.md` and `PLAN.md` from the description, add the repository's PR-check and release workflow templates (P3-09), and open a pull request.
 3. When the description is not enough to choose modules or fill the documents, the task moves to Needs attention with a question for Dan instead of guessing.
 4. A new project starts with the base `node`/`1x2` defaults; this is not a detected stack. Dan can change any project setting afterwards.
 
@@ -686,7 +706,7 @@ It checks free space every 15 seconds; below the configurable threshold it repor
 
 | Data points | Actions |
 | --- | --- |
-| List: every repository of Dan's GitHub account. Managed projects first (name, repository, default agent, policy, tech, running tasks, last release), then the other repositories (name, last push, language) | Edit or archive a managed project; **Manage with Jarvis** registers an existing repository with the New projects defaults (tech detected from the repository); Jarvis can do the same by voice or chat; new repositories are created by Jarvis (see New projects) |
+| List: every repository of Dan's GitHub account. Managed projects first (name, repository, default agent, policy, tech, running tasks, last release), then the other repositories (name, last push, language) | Edit or archive a managed project; **Manage with Jarvis** registers an existing repository with the configured defaults (tech detected from the repository); **Add project** opens the existing-repository and new-repository actions |
 | Project settings: repository, default branch, default agent, policy, merge rules, sandbox size, tech, max parallel tasks | Save (applies to new tasks only) |
 
 The project API lists active projects, creates and updates settings, and archives
@@ -697,12 +717,12 @@ letters, digits, `.`, `_`, and `-`, and max parallel tasks is a positive
 32-bit integer (default 1).
 
 The backend lists every repository in the GitHub App installation for the
-configured New projects owner. It caches the list and refreshes it when Dan asks
+configured project owner. It caches the list and refreshes it when Dan asks
 from the Projects page. Managed projects appear first; each other repository
 shows its last push and primary language, with **Manage with Jarvis** registering
 it without a form. Jarvis can register the same installed repository through
 `manage_repository`. Registration uses the repository's actual default branch,
-the New projects agent, policy, and task-limit defaults, and a tech identifier
+the configured agent, policy, and task-limit defaults, and a tech identifier
 detected from its default-branch files or primary language. The GitHub App token
 and private key stay in the backend.
 
@@ -721,7 +741,7 @@ the last-release field is explicitly unavailable rather than inferred.
 | Voice: speech-to-text model, English voice, fixed Danish voice (Jeppe), default language, minimise windows on voice start (off by default) | Change supported preferences; Danish voice is read-only |
 | Coding agents: Codex default model and reasoning; Copilot default model | Change (applies to new tasks) |
 | Global: max parallel tasks; sleep switch | Change |
-| New projects: owner, visibility, templates repository, default agent, policy, max parallel tasks, default branch | Change (applies to projects Jarvis registers) |
+| Projects: defaults for new projects (owner, visibility, templates repository, default agent, policy, max parallel tasks, default branch) | Change in the Projects section (pre-fills Add project; applies to new projects) |
 | Credentials: name, expiry, last renewal, last check, status (never secret values) | Trigger Codex renewal; open re-seed instructions |
 
 The backend checks Codex daily and renews only when the access token has three

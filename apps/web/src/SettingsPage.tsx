@@ -259,7 +259,7 @@ async function requestSettings(
 }
 
 function SelectField({
-  id, label, value, options, onChange, disabled = false,
+  id, label, value, options, onChange, disabled = false, form,
 }: {
   id: string;
   label: string;
@@ -267,18 +267,19 @@ function SelectField({
   options: readonly string[];
   onChange: (value: string) => void;
   disabled?: boolean;
+  form?: string;
 }) {
   return (
     <div className="settings-field">
       <label htmlFor={id}>{label}</label>
-      <select id={id} value={value} disabled={disabled} onChange={(event) => onChange(event.target.value)}>
+      <select id={id} value={value} disabled={disabled} form={form} onChange={(event) => onChange(event.target.value)}>
         {options.map((option) => <option key={option} value={option}>{optionLabels[option] ?? option}</option>)}
       </select>
     </div>
   );
 }
 
-export function SettingsPage({ backendUrl, getAccessToken, activity, presence, notifications, projects, nutrition, memory, onBack }: {
+export function SettingsPage({ backendUrl, getAccessToken, activity, presence, notifications, projects, renderProjects, nutrition, memory, onBack }: {
   backendUrl: string | null;
   getAccessToken: () => Promise<string>;
   /** Live operational panels (Now feed, backend sleep) shown above the saved settings. */
@@ -287,8 +288,9 @@ export function SettingsPage({ backendUrl, getAccessToken, activity, presence, n
   presence?: ReactNode;
   /** Optional push opt-in controls, present only when the client feature gate is on. */
   notifications?: ReactNode;
-  /** Project management (managed projects and repositories), shown after the saved settings. */
+  /** Project management, rendered with this page's new-project defaults disclosure. */
   projects?: ReactNode;
+  renderProjects?: (projectDefaults: ReactNode) => ReactNode;
   /** Daily nutrition targets, saved on their own; only supplied while Daily is on. */
   nutrition?: ReactNode;
   /** What Jarvis remembers: browse, correct and forget. */
@@ -304,6 +306,10 @@ export function SettingsPage({ backendUrl, getAccessToken, activity, presence, n
   const [credentials, setCredentials] = useState<CredentialStatus[]>([]);
   const [saving, setSaving] = useState(false);
   const [resettingPersonality, setResettingPersonality] = useState(false);
+  const [projectDefaultsNotice, setProjectDefaultsNotice] = useState<{
+    kind: 'saving' | 'saved' | 'error';
+    message: string;
+  } | null>(null);
   const [message, setMessage] = useState('');
   const [personalityResetMessage, setPersonalityResetMessage] = useState('');
   const [error, setError] = useState(backendUrl ? '' : 'Settings unavailable.');
@@ -359,6 +365,7 @@ export function SettingsPage({ backendUrl, getAccessToken, activity, presence, n
       [area]: { ...current[area], [key]: value },
     }) : current);
     if (area === 'personality') setPersonalityResetMessage('');
+    if (area === 'newProjects') setProjectDefaultsNotice(null);
     setMessage('');
   };
 
@@ -413,12 +420,13 @@ export function SettingsPage({ backendUrl, getAccessToken, activity, presence, n
     }
   };
 
-  const save = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
+  const saveSettings = async () => {
     if (!settings || !savedSettings || !backendUrl || saving) return;
     const patch = changedSettings(savedSettings, settings);
     if (Object.keys(patch).length === 0) return;
+    const savingProjectDefaults = !!patch.newProjects;
     setSaving(true);
+    if (savingProjectDefaults) setProjectDefaultsNotice({ kind: 'saving', message: 'Saving project defaults…' });
     setError('');
     setMessage('');
     try {
@@ -429,11 +437,18 @@ export function SettingsPage({ backendUrl, getAccessToken, activity, presence, n
       cacheVoiceWorkspacePreference(result.settings.voice.minimizeWindowsOnVoiceStart);
       setPersonalityResetMessage('');
       setMessage('Saved. These are defaults for new sessions and tasks; running work keeps its current settings.');
+      if (savingProjectDefaults) setProjectDefaultsNotice({ kind: 'saved', message: 'Project defaults saved.' });
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Settings could not be saved. Try again.');
+      const saveError = cause instanceof Error ? cause.message : 'Settings could not be saved. Try again.';
+      setError(saveError);
+      if (savingProjectDefaults) setProjectDefaultsNotice({ kind: 'error', message: saveError });
     } finally {
       setSaving(false);
     }
+  };
+  const save = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    void saveSettings();
   };
 
   const dirty = settings !== null && savedSettings !== null &&
@@ -457,6 +472,84 @@ export function SettingsPage({ backendUrl, getAccessToken, activity, presence, n
     settings.personality.tone === defaultPersonality.tone &&
     settings.personality.responseStyle === defaultPersonality.responseStyle &&
     settings.personality.customInstructions === defaultPersonality.customInstructions;
+  const projectDefaultsDirty = settings !== null && savedSettings !== null &&
+    Object.keys(changedSettings(savedSettings, settings)).includes('newProjects');
+  const saveDisabled = !dirty || !advancedValid || !globalLimitsValid || !maxTasksValid ||
+    !newProjectMaxTasksValid || !personalityInstructionsValid || saving;
+  const projectDefaultsDisabledReason = !newProjectMaxTasksValid
+    ? 'Maximum parallel tasks must be a whole number from 1 to 100 before saving.'
+    : !advancedValid || !globalLimitsValid || !maxTasksValid || !personalityInstructionsValid
+      ? 'Resolve the invalid Settings fields before saving.'
+      : '';
+  const projectDefaults = state === 'loading' ? (
+    <CollapsibleSection storageKey="settings.projects.defaults" headingId="project-defaults-heading" title="Defaults for new projects">
+      <Loader variant="text" label="Loading project defaults…" />
+    </CollapsibleSection>
+  ) : state === 'error' ? (
+    <CollapsibleSection storageKey="settings.projects.defaults" headingId="project-defaults-heading" title="Defaults for new projects">
+      <div className="settings-feedback" role="alert">
+        <p>{backendUrl ? error : 'Project defaults are unavailable because Settings cannot connect to the backend.'}</p>
+        {backendUrl && <button className="secondary-button" type="button" onClick={() => { void load(); }}>Retry settings</button>}
+      </div>
+    </CollapsibleSection>
+  ) : settings && options ? (
+    <CollapsibleSection storageKey="settings.projects.defaults" headingId="project-defaults-heading" title="Defaults for new projects">
+      <p className="settings-explanation">
+        These defaults pre-fill the Add project dialog; every project keeps its own settings and can change them any time.
+      </p>
+      <div className="settings-grid">
+        <div className="settings-field">
+          <label htmlFor="new-project-owner">Owner</label>
+          <input id="new-project-owner" form="settings-form" maxLength={39} value={settings.newProjects.owner} disabled={saving}
+            onChange={(event) => update('newProjects', 'owner', event.target.value)} />
+        </div>
+        <SelectField id="new-project-visibility" label="Visibility" value={settings.newProjects.visibility}
+          options={options.projectVisibilities} disabled={saving} form="settings-form"
+          onChange={(value) => update('newProjects', 'visibility', value as 'private' | 'public')} />
+        <div className="settings-field">
+          <label htmlFor="new-project-templates">Templates repository (owner/name)</label>
+          <input id="new-project-templates" form="settings-form" maxLength={140} value={settings.newProjects.templatesRepository} disabled={saving}
+            onChange={(event) => update('newProjects', 'templatesRepository', event.target.value)} />
+        </div>
+        <SelectField id="new-project-agent" label="Default agent" value={settings.newProjects.defaultAgent}
+          options={options.projectAgents} disabled={saving} form="settings-form"
+          onChange={(value) => update('newProjects', 'defaultAgent', value as 'codex' | 'copilot')} />
+        <SelectField id="new-project-policy" label="Policy" value={settings.newProjects.policy}
+          options={options.projectPolicies} disabled={saving} form="settings-form"
+          onChange={(value) => update('newProjects', 'policy', value as Settings['newProjects']['policy'])} />
+        <div className="settings-field settings-number-field">
+          <label htmlFor="new-project-max-tasks">New project maximum parallel tasks</label>
+          <input id="new-project-max-tasks" form="settings-form" type="number" min="1" max="100" step="1"
+            value={settings.newProjects.maxParallelTasks} disabled={saving}
+            onChange={(event) => update('newProjects', 'maxParallelTasks', Number(event.target.value))} />
+        </div>
+        <div className="settings-field">
+          <label htmlFor="new-project-branch">Default branch</label>
+          <input id="new-project-branch" form="settings-form" maxLength={255} value={settings.newProjects.defaultBranch} disabled={saving}
+            onChange={(event) => update('newProjects', 'defaultBranch', event.target.value)} />
+        </div>
+      </div>
+      {projectDefaultsNotice && (
+        <p className="settings-feedback" role={projectDefaultsNotice.kind === 'error' ? 'alert' : 'status'}>
+          {projectDefaultsNotice.message}
+        </p>
+      )}
+      {projectDefaultsDirty && !projectDefaultsNotice && (
+        <p className="settings-feedback" role="status">Unsaved project defaults.</p>
+      )}
+      {(projectDefaultsDirty || projectDefaultsNotice?.kind === 'error') && (
+        <>
+          {projectDefaultsDisabledReason && <p className="settings-explanation">{projectDefaultsDisabledReason}</p>}
+          <div className="settings-actions">
+            <button className="secondary-button" type="submit" form="settings-form" disabled={saveDisabled}>
+              {projectDefaultsNotice?.kind === 'error' ? 'Retry save' : saving ? 'Saving…' : 'Save settings'}
+            </button>
+          </div>
+          <p className="settings-explanation">This also saves any other changed Settings.</p>
+        </>
+      )}
+    </CollapsibleSection>
+  ) : null;
 
   return (
     <section className="settings-page" aria-labelledby="settings-heading">
@@ -692,41 +785,6 @@ export function SettingsPage({ backendUrl, getAccessToken, activity, presence, n
             )}
           </CollapsibleSection>
 
-          <CollapsibleSection storageKey="settings.new-projects" headingId="new-projects-settings-heading" title="New projects">
-            <div className="settings-grid">
-              <div className="settings-field">
-                <label htmlFor="new-project-owner">Owner</label>
-                <input id="new-project-owner" maxLength={39} value={settings.newProjects.owner} disabled={saving}
-                  onChange={(event) => update('newProjects', 'owner', event.target.value)} />
-              </div>
-              <SelectField id="new-project-visibility" label="Visibility" value={settings.newProjects.visibility}
-                options={options.projectVisibilities} disabled={saving}
-                onChange={(value) => update('newProjects', 'visibility', value as 'private' | 'public')} />
-              <div className="settings-field">
-                <label htmlFor="new-project-templates">Templates repository (owner/name)</label>
-                <input id="new-project-templates" maxLength={140} value={settings.newProjects.templatesRepository} disabled={saving}
-                  onChange={(event) => update('newProjects', 'templatesRepository', event.target.value)} />
-              </div>
-              <SelectField id="new-project-agent" label="Default agent" value={settings.newProjects.defaultAgent}
-                options={options.projectAgents} disabled={saving}
-                onChange={(value) => update('newProjects', 'defaultAgent', value as 'codex' | 'copilot')} />
-              <SelectField id="new-project-policy" label="Policy" value={settings.newProjects.policy}
-                options={options.projectPolicies} disabled={saving}
-                onChange={(value) => update('newProjects', 'policy', value as Settings['newProjects']['policy'])} />
-              <div className="settings-field">
-                <label htmlFor="new-project-max-tasks">New project maximum parallel tasks</label>
-                <input id="new-project-max-tasks" type="number" min="1" max="100" step="1"
-                  value={settings.newProjects.maxParallelTasks} disabled={saving}
-                  onChange={(event) => update('newProjects', 'maxParallelTasks', Number(event.target.value))} />
-              </div>
-              <div className="settings-field">
-                <label htmlFor="new-project-branch">Default branch</label>
-                <input id="new-project-branch" maxLength={255} value={settings.newProjects.defaultBranch} disabled={saving}
-                  onChange={(event) => update('newProjects', 'defaultBranch', event.target.value)} />
-              </div>
-            </div>
-          </CollapsibleSection>
-
           <CollapsibleSection storageKey="settings.credentials" headingId="credentials-heading" title="Credentials">
             <p className="settings-explanation" id="credential-actions-help">Secret values are never shown.</p>
             {credentials.length === 0
@@ -763,14 +821,13 @@ export function SettingsPage({ backendUrl, getAccessToken, activity, presence, n
 
         </form>
       )}
-      {projects}
+      {renderProjects ? renderProjects(projectDefaults) : projects}
       {nutrition}
       {state !== 'ready' && memory && <CollapsibleSection storageKey="settings.memory" id="memory" headingId="memory-settings-heading" title="Memory">{memory}</CollapsibleSection>}
       {backendUrl && <TaskRecipesSettings key={backendUrl} backendUrl={backendUrl} getAccessToken={getAccessToken} />}
       {state === 'ready' && settings && options && (
       <div className="settings-save">
-        <button className="primary-button" type="submit" form="settings-form"
-          disabled={!dirty || !advancedValid || !globalLimitsValid || !maxTasksValid || !newProjectMaxTasksValid || !personalityInstructionsValid || saving}>
+        <button className="primary-button" type="submit" form="settings-form" disabled={saveDisabled}>
           {saving && !resettingPersonality ? 'Saving…' : 'Save settings'}
         </button>
         <p className="settings-feedback" role={error ? 'alert' : 'status'} aria-live="polite">

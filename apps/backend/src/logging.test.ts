@@ -13,6 +13,25 @@ vi.mock('applicationinsights', () => ({
 
 describe('structured log export', () => {
   it.each([
+    'Background job visibility read failed',
+    'Background job dismissal failed',
+    'Background job dismissal import failed',
+  ])('exports the registered job failure without private diagnostics: %s', (event) => {
+    const records: string[] = [];
+    const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
+    const sink = { ...sdk, trackTrace: vi.fn() };
+    const logger = createLogger({ logLevel: 'info' }, sink, output);
+    logger.error({ err: new Error('private-database-error'), jobId: 'private-job-id' }, event);
+    expect(JSON.parse(records[0]!)).toEqual({
+      level: 50, time: expect.any(Number), service: 'jarvis-backend', msg: event,
+    });
+    expect(sink.trackTrace).toHaveBeenLastCalledWith(expect.objectContaining({
+      message: event, properties: { service: 'jarvis-backend' },
+    }));
+    expect(records.join('') + JSON.stringify(sink.trackTrace.mock.calls)).not.toContain('private');
+  });
+
+  it.each([
     ['chat_identity', 'degraded', 'identity_reply'],
     ['chat_no_timestamp', 'degraded', 'capture_time_invented'],
     ['chat_capabilities', 'down', 'capabilities_discovery_missing'],

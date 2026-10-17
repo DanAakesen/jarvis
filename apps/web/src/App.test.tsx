@@ -1550,6 +1550,31 @@ describe('App shell', () => {
     expect(screen.queryByText('Open windows appear here.')).toBeNull();
   });
 
+  it('keeps empty phone background work directly reachable after reload with server-filtered dismissals', async () => {
+    vi.stubGlobal('matchMedia', vi.fn((query: string) => ({
+      matches: query.includes('max-width: 700px'),
+      media: query, addEventListener: vi.fn(), removeEventListener: vi.fn(),
+    })));
+    streamWorkspaceCommands();
+    const respond = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation((input, init) => new URL(String(input)).pathname === '/jobs'
+      ? Promise.resolve(new Response(JSON.stringify({ jobs: [], dismissedJobIds: ['11111111-1111-4111-8111-111111111111'] })))
+      : respond(input, init));
+    localStorage.clear();
+    await renderSignedIn();
+    const user = userEvent.setup();
+    expect(screen.queryByRole('button', { name: /Open windows/ })).toBeNull();
+    expect(document.querySelector('.app-shell')!.getAttribute('data-windows-open')).toBe('false');
+    const history = screen.getByRole('button', { name: 'Show background work' });
+    await user.click(history);
+    expect(screen.getByText('No background work to show.')).not.toBeNull();
+    expect(screen.getByRole('button', { name: 'Dismiss all finished' })).toHaveProperty('disabled', true);
+    await user.keyboard('{Escape}');
+    expect(history).toBe(document.activeElement);
+    expect(document.querySelector('.app-shell')!.getAttribute('data-windows-open')).toBe('false');
+    expect(screen.queryByRole('button', { name: /Open windows/ })).toBeNull();
+  });
+
   it('keeps phone job-only history reachable and open, without changing artifact restore behaviour', async () => {
     vi.stubGlobal('matchMedia', vi.fn((query: string) => ({
       matches: query.includes('max-width: 700px'),
@@ -1557,29 +1582,43 @@ describe('App shell', () => {
     })));
     const stream = streamWorkspaceCommands();
     const respond = fetchMock.getMockImplementation()!;
-    fetchMock.mockImplementation((input, init) => new URL(String(input)).pathname === '/jobs'
-      ? Promise.resolve(new Response(JSON.stringify({ jobs: [] })))
-      : respond(input, init));
+    const jobId = '11111111-1111-4111-8111-111111111111';
+    let dismissed = false;
+    let serverHasJob = false;
+    const historicalJob = {
+      jobId, kind: 'embedding', title: 'Re-embed memory and vault', status: 'failed', step: 1, steps: 2,
+      detail: 'interrupted by restart', startedAt: '2026-10-16T08:00:00.000Z', updatedAt: '2026-10-16T08:05:07.000Z',
+    };
+    fetchMock.mockImplementation((input, init) => {
+      const path = new URL(String(input)).pathname;
+      if (path === '/jobs') return Promise.resolve(new Response(JSON.stringify({
+        jobs: serverHasJob && !dismissed ? [historicalJob] : [], dismissedJobIds: dismissed ? [jobId] : [],
+      })));
+      if (path === `/jobs/${jobId}/dismiss` && init?.method === 'POST') {
+        dismissed = true;
+        return Promise.resolve(new Response(JSON.stringify({ dismissedJobIds: [jobId] })));
+      }
+      return respond(input, init);
+    });
     await renderSignedIn();
     await waitFor(() => expect(activityStream).not.toBeNull());
     expect(screen.queryByRole('button', { name: /Open windows/ })).toBeNull();
-    act(() => publishJob({
-      jobId: '11111111-1111-4111-8111-111111111111', kind: 'embedding',
-      title: 'Re-embed memory and vault', status: 'failed', step: 1, steps: 2,
-      detail: 'interrupted by restart', startedAt: '2026-10-16T08:00:00.000Z', updatedAt: '2026-10-16T08:05:07.000Z',
-    }));
+    serverHasJob = true;
+    act(() => publishJob(historicalJob));
     const user = userEvent.setup();
     const shell = document.querySelector('.app-shell')!;
-    await user.click(screen.getByRole('button', { name: 'Show background work: 1 failed' }));
+    await user.click(screen.getByRole('button', { name: 'Show background work' }));
     expect(shell.getAttribute('data-windows-open')).toBe('false');
-    await user.click(screen.getByRole('button', { name: /Re-embed memory and vault Indexing · failed/ }));
+    await user.click(screen.getByRole('button', { name: /Re-embed memory and vault Memory re-embed · interrupted/ }));
     expect(shell.getAttribute('data-windows-open')).toBe('false');
     await user.click(screen.getByRole('button', { name: 'Dismiss' }));
+    await waitFor(() => expect(screen.queryByRole('group', { name: 'Re-embed memory and vault details' })).toBeNull());
+    expect(fetchMock).toHaveBeenCalledWith(`https://api.example.com/jobs/${jobId}/dismiss`, expect.objectContaining({ method: 'POST' }));
     expect(shell.getAttribute('data-windows-open')).toBe('false');
     expect(screen.queryByRole('button', { name: /Open windows/ })).toBeNull();
     expect(screen.getByRole('img', { name: 'Background work: idle' })).not.toBeNull();
     await user.click(screen.getByRole('button', { name: 'Show background work' }));
-    expect(screen.queryByRole('button', { name: /Re-embed memory and vault Indexing · failed/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Re-embed memory and vault Memory re-embed · interrupted/ })).toBeNull();
     expect(screen.getByText('No background work to show.')).not.toBeNull();
     await user.click(screen.getByRole('button', { name: 'Close job details' }));
     stream.ready();
