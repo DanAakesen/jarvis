@@ -1,5 +1,28 @@
 # Decisions
 
+## Treat a model-issued voice call as Jarvis only inside the relay's call scope (17 October 2026; P11-09)
+
+Dan's live test showed Jarvis refusing to put views on screen in voice with
+"only the workspace owner can create or update views", then explaining it
+wrongly. Cause: the guard accepted the agent identity, or the owner for
+reflex-only operations, but a realtime tool call runs on the owner's WebSocket
+upgrade request, so it looked like the browser. Chat already passes as the agent
+identity. A separate path dumped raw Google JSON, including message bodies, on screen.
+
+Mark exactly the relay's model-issued calls with an in-process async scope (never
+an argument, header, claim or browser message) and treat them as Jarvis only for
+the signed-in workspace owner. Owner-only authorisation, the specific operation
+and the broker stay authoritative; the browser, an owner token over HTTP,
+reflex and other users are unchanged. Rejected: letting the owner create views
+for every caller (the browser could then create what Jarvis could not), a
+model-supplied actor field, and marking the whole socket (reflex work would
+inherit it). Present Google results only as bounded readable summaries, or nothing.
+
+This corrects the demonstrated voice cause. Chat's refusal comes from
+generated-view validation and is handled in a separate PR (specific refusals,
+model guidance), then an offline find, show, stage, confirm test. Dan's live
+re-test closes #885; source tests are not acceptance.
+
 ## Preserve fixed hosted error origins in existing acceptance evidence (17 October 2026; #820)
 
 Deploy39043117488 retained `chat_capabilities=agent_error`, accepted=false and

@@ -266,13 +266,108 @@ describe('best-effort work presentation', () => {
     expect(content).not.toMatch(/&quot;|&amp;|"id"|abc|def/u);
   });
 
-  it('falls back to readable unescaped JSON for other Google results', async () => {
+  it('shows mail search results as a clean list of subject, sender and date, never JSON or message bodies', async () => {
     const { start, commands } = fixture();
-    start('mail_search').finish({ messages: [{ subject: 'Hello & welcome', from: 'a@example.test' }] }, true);
+    start('mail_search', { query: 'hotel' }).finish({
+      messages: [
+        {
+          id: 'msg-secret-1', subject: 'Booking "confirmed" & paid', from: { name: 'Hotel Alpha', address: 'bookings@alpha.example' },
+          receivedDateTime: '2026-10-12T08:30:00.000Z', body: 'Confirmation 4455. password=private-value', bodySource: 'text',
+          bodyTruncated: false, contentWarnings: [],
+        },
+        { id: 'msg-secret-2', subject: '', from: { name: '', address: 'noreply@beta.example' }, receivedDateTime: 'not-a-date', body: 'private-body' },
+      ],
+      truncated: false,
+    }, true);
     await settled();
-    const content = (commands[0] as { view: { data: { content: string } } }).view.data.content;
-    expect(content).toContain('"subject": "Hello & welcome"');
-    expect(content).not.toMatch(/&quot;|&amp;/u);
+    expect(commands[0]).toMatchObject({
+      operation: 'create', viewId: 'google-101',
+      view: {
+        renderer: 'list', title: 'Mail results',
+        data: { items: [
+          { title: 'Booking "confirmed" & paid', description: 'Hotel Alpha · 12 Oct 2026' },
+          { title: '(no subject)', description: 'noreply@beta.example' },
+        ] },
+      },
+    });
+    expect(commands[0] && 'view' in commands[0] && isGeneratedView(commands[0].view)).toBe(true);
+    expect(commands[1]).toMatchObject({ operation: 'focus', viewId: 'google-101' });
+    expect(JSON.stringify(commands)).not.toMatch(/msg-secret|Confirmation 4455|private-value|private-body|bodySource|contentWarnings/u);
+  });
+
+  it('bounds a mail list and says so when a search finds nothing', async () => {
+    const many = fixture();
+    many.start('mail_search').finish({
+      messages: Array.from({ length: 60 }, (_, index) => ({ id: `m${index}`, subject: `Message ${index}`, from: { address: 'a@example.test' } })),
+    }, true);
+    const none = fixture();
+    none.start('mail_search').finish({ messages: [], truncated: false }, true);
+    await settled();
+    expect((many.commands[0] as { view: { data: { items: unknown[] } } }).view.data.items).toHaveLength(50);
+    expect(none.commands[0]).toMatchObject({ view: { renderer: 'text', title: 'Mail results', data: { content: 'No matching messages found.' } } });
+  });
+
+  it('shows mail drafts as a list without their bodies or identifiers', async () => {
+    const { start, commands } = fixture();
+    start('mail_list_drafts').finish({
+      drafts: [{ draftId: 'draft-secret', messageId: 'm1', to: 'ann@example.test', subject: 'Check-in time', body: 'private-body' }],
+      truncated: false,
+    }, true);
+    await settled();
+    expect(commands[0]).toMatchObject({
+      view: { renderer: 'list', title: 'Mail drafts', data: { items: [{ title: 'Check-in time', description: 'To ann@example.test' }] } },
+    });
+    expect(JSON.stringify(commands)).not.toMatch(/draft-secret|private-body/u);
+  });
+
+  it('shows free slots and the next event as readable text', async () => {
+    const slots = fixture();
+    slots.start('calendar_find_free_slots').finish({
+      timeZone: 'Europe/Copenhagen', durationMinutes: 60, truncated: false,
+      slots: [{
+        start: '2026-11-12T08:00:00.000Z', end: '2026-11-12T09:00:00.000Z',
+        startLocal: '12 November 2026, 09:00', endLocal: '12 November 2026, 10:00',
+      }],
+    }, true);
+    const next = fixture();
+    next.start('calendar_next_event').finish({
+      timeZone: 'Europe/Copenhagen', truncated: false,
+      event: { id: 'evt-secret', subject: 'Hotel check-in', start: '2026-11-12T13:00:00.000Z', end: '2026-11-12T14:00:00.000Z' },
+    }, true);
+    const empty = fixture();
+    empty.start('calendar_next_event').finish({ timeZone: 'UTC', event: null, truncated: false }, true);
+    await settled();
+    expect(slots.commands[0]).toMatchObject({
+      view: { renderer: 'text', title: 'Free time', data: { content: 'Free 60-minute slots:\n12 November 2026, 09:00 to 12 November 2026, 10:00' } },
+    });
+    const nextContent = (next.commands[0] as { view: { data: { content: string } } }).view.data.content;
+    expect(nextContent).toContain('14:00–15:00 · Hotel check-in');
+    expect(nextContent).not.toContain('evt-secret');
+    expect(empty.commands[0]).toMatchObject({ view: { data: { content: 'No upcoming event in the next 60 days.' } } });
+  });
+
+  it.each([
+    ['completed', 'Done.'],
+    ['cancelled', 'Cancelled. Nothing was changed.'],
+    ['partial', 'Partly done. Check what was applied before retrying.'],
+  ])('shows a %s staged action as its summary under a plain outcome, never its raw result', async (status, label) => {
+    const { start, commands } = fixture();
+    start('mail_confirm_action').finish({
+      status, summary: 'Archived 2 messages.', detail: 'private-detail', items: [{ id: 'msg-secret' }],
+    }, true);
+    await settled();
+    expect(commands[0]).toMatchObject({
+      view: { renderer: 'text', title: 'Mail', data: { format: 'plain', content: `${label}\n\nArchived 2 messages.` } },
+    });
+    expect(JSON.stringify(commands)).not.toMatch(/private-detail|msg-secret/u);
+  });
+
+  it('puts nothing on screen for a Google result it cannot present instead of dumping raw JSON', async () => {
+    const { start, commands, events } = fixture();
+    start('mail_archive').finish({ id: 'm1', body: 'private-body', nested: { list: [1, 2, 3] } }, true);
+    await settled();
+    expect(commands).toEqual([]);
+    expect(events.map((event) => event.type)).toEqual(['work-started', 'work-finished']);
   });
 
   it.each(['calendar_list_events', 'repo_read', 'vault_search', 'web_search'])(

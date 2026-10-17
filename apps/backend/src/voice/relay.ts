@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { IncomingMessage } from 'node:http';
 import type { Duplex } from 'node:stream';
 import { workspaceContext } from '../core/workspace-context.js';
+import { runModelToolCall } from '../core/tool-origin.js';
 import { modeContext } from '../core/presence-instructions.js';
 import { projectContext, type ProjectContextEntry } from '../factory/project-context.js';
 import websocket from '@fastify/websocket';
@@ -1730,7 +1731,8 @@ function registerVoiceRoute(
         ]);
         if (latestDanMessage) request.jarvisConversationMessage = latestDanMessage;
         try {
-          const output = await executeRealtimeToolCall(call, app.jarvisTools, request, signal);
+          const output = await runModelToolCall(request, () =>
+            executeRealtimeToolCall(call, app.jarvisTools, request, signal));
           if (call.name.startsWith('calendar_')) calendarConversation = true;
           else if (call.name.startsWith('mail_')) calendarConversation = false;
           let outcome: 'ok' | 'refused' | 'error' = 'error';
