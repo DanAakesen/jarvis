@@ -1,5 +1,31 @@
 # Project plan
 
+## Chat acceptance origin provenance (#820, 17 October 2026)
+
+Retained Deploy39043117488 at705af7c7/treee79dbd60 failed required
+`chat_capabilities=agent_error`; aggregate canary failed, plain approval passed,
+and all four components reused accepted baselinef6530a59/backend341/agent109.
+Exact qualification/readiness/reuse succeeded. This does not demonstrate a
+pipeline defect or identify the historical failure cause.
+
+The bounded source candidate repairs demonstrated evidence loss: the hosted
+SSE client already retains origin codes, but the canary discarded every code
+except `catalogue_unavailable`. Preserve a finite fixed allowlist through the
+existing canary, status reader and acceptance/release artifacts. Unknown origins
+still become `agent_error`; no arbitrary exception/provider text is retained.
+Synthetic checks cover prompt isolation, the real SSE-to-report projection,
+backend/Python allowlist parity, redaction, failed acceptance and unchanged
+producer identities. No prompt, predicate, deadline, retry, model, workflow,
+connection lifecycle (#816), Daily or permission change.
+
+All122 script tests pass locally with synthetic `GITHUB_RUN_ATTEMPT=2`,
+plus scoped Ruff/whitespace checks. Backend tests could not collect locally
+because `vitest` is absent; no dependency graph was restored or substituted.
+Next: normal pinned exact-candidate CI and independent review, then the existing
+main-only release path. This is an evidence-only improvement, not a proven
+historical root fix. #820's original attribution and #880's accepted=false
+release blocker remain open; source qualification is not production acceptance.
+
 ## Pipeline event-order recovery (#880, 17 October 2026)
 
 #882 merged normally atf6530a59 with the verified qualified tree; automatic

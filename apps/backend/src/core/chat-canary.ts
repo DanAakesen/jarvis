@@ -3,7 +3,7 @@ import {
   type ConversationAgent,
   type ConversationAgentToolCall,
 } from './chat-agent.js';
-import type { SystemStatusProbe } from '../system-status.js';
+import { chatAgentFailureReasons, type SystemStatusProbe } from '../system-status.js';
 import type { SystemSmokeCheckId, SystemStatusValue } from '@jarvis/contracts';
 
 const chatCanaryTimeoutMs = 55_000;
@@ -172,8 +172,9 @@ async function checkPrompt(
         return failed(id, 'agent_error');
     }
   } catch (error) {
-    return failed(id, error instanceof ChatAgentError && error.code === 'catalogue_unavailable'
-      ? 'catalogue_unavailable'
+    return failed(id, error instanceof ChatAgentError && error.code !== undefined &&
+      chatAgentFailureReasons.has(error.code)
+      ? error.code
       : error instanceof Error && error.message === 'prompt_timeout' ? 'timeout' : 'agent_error');
   }
 }
