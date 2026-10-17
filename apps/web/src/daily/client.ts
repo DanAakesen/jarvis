@@ -23,7 +23,7 @@ function json(value: unknown, depth = 0): value is DailyJson {
   return object(value) && Object.values(value).every(item => json(item, depth + 1));
 }
 export function isDailyResult(value: unknown, query: DailyQuery): value is DailyQueryResult {
-  const limit = query.source === dailyQuerySources.sync || query.source === dailyQuerySources.workout ? 1 : 'limit' in query ? query.limit ?? 50 : 50;
+  const limit = query.source === dailyQuerySources.sync || query.source === dailyQuerySources.workout || query.source === dailyQuerySources.brief ? 1 : 'limit' in query ? query.limit ?? 50 : 50;
   if (!object(value) || value.source !== query.source || !Array.isArray(value.items) ||
       value.items.length > limit ||
       !value.items.every(item => object(item) && json(item)) ||
@@ -42,6 +42,10 @@ export function isDailyResult(value: unknown, query: DailyQuery): value is Daily
         value.period.endDate !== query.endDate || value.period.timeZone !== 'Europe/Copenhagen') return false;
   } else if (value.period !== null) return false;
   if (query.source.startsWith('daily.nutrition.') && value.units.energy_kcal !== 'kcal') return false;
+  if (query.source === dailyQuerySources.brief && value.items.length) {
+    const first: unknown = value.items[0];
+    if (!object(first) || first.id !== query.briefId) return false;
+  }
   if (query.source === dailyQuerySources.sleep && value.units['*_hours'] !== 'h') return false;
   if (value.coverage.hasMore) {
     if (!object(value.coverage.next) || !isDailyQuery({ ...query, cursor: value.coverage.next }) || value.status !== 'partial') return false;

@@ -276,8 +276,10 @@ describe('inactive hosted nutrition MCP adapter', () => {
     expect(f.query.query).toHaveBeenCalledOnce();
     await client.callTool({ name: 'lookup_food', arguments: { components: [{ name: 'Synthetic food', grams: null, preparationMethod: null }] } });
     expect(f.nutrition.lookup).toHaveBeenCalledOnce();
-    const refused = await client.callTool({ name: 'read_nutrition', arguments: { source: 'daily.health.metrics', owner: 'foreign' } });
-    expect(refused.isError).toBe(true);
+    for (const source of ['daily.health.metrics', 'daily.briefs.history', 'daily.briefs.detail']) {
+      const refused = await client.callTool({ name: 'read_nutrition', arguments: { source, owner: 'foreign' } });
+      expect(refused.isError).toBe(true);
+    }
     expect(f.query.query).toHaveBeenCalledOnce();
   });
 

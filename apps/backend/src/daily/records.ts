@@ -3,6 +3,7 @@ import type { DailyJson } from '@jarvis/contracts';
 import { ToolFailure } from '../core/tool-registry.js';
 import { canonicalJson } from './nutrition/model.js';
 
+export const dailyResultByteLimit = 768 * 1024;
 const mealFields = ['id', 'idempotency_key', 'meal_name', 'meal_type', 'occurred_at', 'meal_date',
   'energy_kcal', 'protein_grams', 'carbohydrates_grams', 'fat_grams', 'fiber_grams', 'confidence',
   'capture_method', 'source', 'revision', 'deleted_at', 'created_at', 'updated_at',
@@ -12,7 +13,7 @@ const favoriteFields = ['id', 'favorite_name', 'normalized_name', 'aliases_json'
   'confidence', 'nutrient_provenance_json', 'source_meal_id', 'source_idempotency_key', 'revision', 'created_at', 'updated_at'] as const;
 const planFields = ['id', 'plan_name', 'normalized_name', 'description', 'items_json', 'energy_kcal',
   'protein_grams', 'carbohydrates_grams', 'fat_grams', 'fiber_grams', 'revision', 'deleted_at', 'created_at', 'updated_at'] as const;
-const jsonFields = new Set(['components_json', 'nutrient_provenance_json', 'aliases_json', 'items_json']);
+const jsonFields = new Set(['components_json', 'nutrient_provenance_json', 'aliases_json', 'items_json', 'body_json']);
 
 export function dailyJson(value: unknown): DailyJson {
   if (value === null || typeof value === 'string' || typeof value === 'boolean') return value;

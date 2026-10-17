@@ -31,6 +31,15 @@ describe('owner-authenticated Daily query client', () => {
     expect(init).toMatchObject({ method: 'POST', cache: 'no-store', body: JSON.stringify(query), headers: { Authorization: ['Bearer', 'synthetic-fixture'].join(' ') } });
     expect(init.signal).toBeInstanceOf(AbortSignal);
   });
+  it('bounds brief detail to one row and validates the exact history cursor without reinterpreting source time', () => {
+    const detail: DailyQuery = { source: sources.brief, briefId: ' padded ' };
+    expect(isDailyResult(dailyFixture(detail, [{ id: ' padded ', started_at: 'unknown timezone', body_json: null }]), detail)).toBe(true);
+    expect(isDailyResult(dailyFixture(detail, [{ id: 'padded' }]), detail)).toBe(false);
+    expect(isDailyResult(dailyFixture(detail, [{ id: 'a' }, { id: 'b' }]), detail)).toBe(false);
+    const history: DailyQuery = { source: sources.briefs, limit: 1 };
+    expect(isDailyResult(dailyFixture(history, [{ id: ' padded ' }], { startedAt: 'raw', id: ' padded ' }), history)).toBe(true);
+    expect(isDailyResult(dailyFixture(history, [{ id: ' padded ' }], { id: 'wrong-family' }), history)).toBe(false);
+  });
   it.each([401, 403, 404, 503])('surfaces HTTP %s without parsing or displaying provider diagnostics', async status => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ private_detail: 'must-not-escape' }, status)));
     try { await queryDaily('http://localhost:3999', query, token, signal()); throw new Error('Expected failure'); }

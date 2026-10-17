@@ -1,6 +1,33 @@
 # Project plan
 
-## Inactive single Daily page (17 October 2026; source qualification)
+## Retained brief history (17 October 2026; P12-14 / #729)
+
+Next bounded inactive source work makes existing `briefing_runs` accessible
+through the same Daily query/tool and page, not a new screen, generator or
+notification system. The existing schema already retains the data; private
+import/reconciliation is still gated. Add bounded metadata paging and exact
+owned body detail, preserve raw stored timestamps/IDs and unknown freshness,
+and keep historical delivery distinct from any new send. Explicitly deny the
+nutrition-only connector at the brief boundary.
+
+The bounded source and local/synthetic checks are ready for normal pinned CI;
+real SQL/full runtime qualification and release are still required. Keep #729 and
+its native #723/#725 dependency links unchanged (#723 is closed not_planned, not
+completed acceptance). Daily stays
+default-off, original Daily canonical, recurring Daily notifications disabled
+and existing non-Daily notifications untouched. Real imported history/provider/
+device/activation/cutover acceptance remains open.
+
+## Inactive single Daily page (17 October 2026; delivered source slice)
+
+Delivered #877 as actual main `fa4e52f9`, matching qualified `db166834` tree
+`195b4771`. Final normal CI39022400980 passed all10 jobs (3748 backend,1077 web,
+46 contracts), all four actual CodeQL analyses and exact-head review without
+findings. Normal Deploy39023166005 released backend0000338 and web; infrastructure
+and agent skipped. Health200 and web root/settings passed. Actual smoke13/15ok
+retains PC bridge down and recurring chat identity degraded, without attribution.
+Receipt6232661562 was independently read back. Owned browser/5175 stopped.
+The slice remains inactive and #730 is not complete.
 
 Dan explicitly reiterated that Jarvis needs tools for everything around Daily.
 Treat retained workflow parity across the page, chat and voice as completion
@@ -24,7 +51,7 @@ are unchanged. Client and backend both refuse unavailable Daily navigation.
 Existing query plus workspace/GenUI tools provide equivalent requested data and
 visuals, not remote mutation of this page's local filters. Tool guidance makes
 that distinction explicit; writes retain the delivered native approval rules.
-The source is under qualification, not deployed or accepted as all of #730.
+This source slice is deployed inactive, not accepted as all of #730.
 Native dependencies #724/#725 and private/grant/provider/client/device/export/
 reconciliation/activation/cutover gates stay open. Original Daily remains
 canonical; no repeated Google consent, private export or fabricated budget.

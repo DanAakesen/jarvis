@@ -4,7 +4,7 @@ import type { AreaProps } from '../areas';
 import { ChartView } from '../ChartView';
 import { Loader } from '../Loader';
 import { DailyReadError, loadDailySources } from './client';
-import { dailyColumns, dailyPlots, dailyRequest, dailyRowKey, dailySources, dailyValue, initialDailyPeriod, readable, type Row } from './presentation';
+import { dailyCellValue, dailyColumns, dailyPlots, dailyRequest, dailyRowKey, dailySources, dailyValue, initialDailyPeriod, readable, type Row } from './presentation';
 import { DailyRefreshContext } from './refresh';
 import { useDailyQuery } from './useDailyQuery';
 import './daily.css';
@@ -24,7 +24,7 @@ function SyncEvidence({ item }: { item: Row }) {
     <Records source={sources.sync} rows={feeds} />
   </>;
 }
-function Records({ source, rows, onWorkout }: { source: DailySourceId; rows: readonly Row[]; onWorkout?: (id: string) => void }) {
+function Records({ source, rows, onOpenRecord, openLabel }: { source: DailySourceId; rows: readonly Row[]; onOpenRecord?: (id: string) => void; openLabel?: string }) {
   const columns = dailyColumns(source);
   return <div className="daily-table-wrap" role="region" aria-label="Daily record table" tabIndex={0}>
     <table className={`daily-table${columns.length > 3 ? ' daily-table-wide' : ''}`}>
@@ -32,18 +32,31 @@ function Records({ source, rows, onWorkout }: { source: DailySourceId; rows: rea
       <thead><tr>{columns.map(column => <th scope="col" key={column.key}>{column.label}{column.unit ? ` (${column.unit})` : ''}</th>)}<th scope="col">Inspect</th></tr></thead>
       <tbody>{rows.map((row, index) => <tr key={dailyRowKey(row, source, index)}>
         {columns.map(column => <td key={column.key} title={typeof row[column.key] === 'number' ? String(row[column.key]) : undefined}>
-          {column.key === 'metric_name' && typeof row[column.key] === 'string' ? readable(String(row[column.key])) : dailyValue(row[column.key])}
+          {dailyCellValue(source, column.key, row[column.key])}
           {column.key === 'meal_name' || column.key === 'plan_name' ? row.deleted_at != null && <span className="daily-deleted">Deleted record</span> : null}
         </td>)}
         <td>
-          {onWorkout && typeof row.id === 'string' && row.id.length > 0 && <button className="secondary-button" type="button" onClick={() => {
-            const id = row.id; if (typeof id === 'string') onWorkout(id);
-          }}>Open workout</button>}
+          {onOpenRecord && typeof row.id === 'string' && row.id.length > 0 && <button className="secondary-button" type="button" onClick={() => {
+            const id = row.id; if (typeof id === 'string') onOpenRecord(id);
+          }}>{openLabel}</button>}
           <details className="daily-record-details"><summary>Record details</summary><pre>{JSON.stringify(row, null, 2)}</pre></details>
         </td>
       </tr>)}</tbody>
     </table>
   </div>;
+}
+
+function BriefBody({ item }: { item: Row }) {
+  return <>
+    <Records source={sources.brief} rows={[item]} />
+    <section aria-label="Stored brief body">
+      <h3>Stored brief body</h3>
+      {typeof item.preview_text === 'string' && item.preview_text.length > 0 && <p className="daily-brief-text">{item.preview_text}</p>}
+      {item.body_json == null ? <p>No stored brief body is available.</p> :
+        typeof item.body_json === 'string' ? <p className="daily-brief-text">{item.body_json || 'The stored brief body is empty.'}</p> :
+          <pre>{JSON.stringify(item.body_json, null, 2)}</pre>}
+    </section>
+  </>;
 }
 
 export function DailyPage({ backendUrl, getAccessToken }: AreaProps) {
@@ -56,11 +69,12 @@ export function DailyPage({ backendUrl, getAccessToken }: AreaProps) {
   const [draftPeriod, setDraftPeriod] = useState(initialDailyPeriod);
   const [cursors, setCursors] = useState<DailyCursor[]>([]);
   const [workout, setWorkout] = useState<{ id: string; heartRate: boolean } | null>(null);
+  const [briefId, setBriefId] = useState<string | null>(null);
   const [view, setView] = useState<'table' | 'chart'>('table');
   const [plotId, setPlotId] = useState('');
   const heading = useRef<HTMLHeadingElement>(null);
   const focusAfterLoad = useRef(false);
-  const workoutCursors = useRef<DailyCursor[]>([]);
+  const collectionCursors = useRef<DailyCursor[]>([]);
   useEffect(() => {
     const controller = new AbortController();
     void loadDailySources(backendUrl, getAccessToken, controller.signal).then(
@@ -75,8 +89,8 @@ export function DailyPage({ backendUrl, getAccessToken }: AreaProps) {
   const current = capabilities.key === capabilityKey ? capabilities : { key: capabilityKey };
   const available = dailySources.filter(item => current.sources?.includes(item.id));
   const selected = available.find(item => item.id === source) ?? available[0];
-  const actualSource = workout ? workout.heartRate ? sources.heartRate : sources.workout : selected?.id;
-  const query = actualSource ? dailyRequest(actualSource, period, cursors.at(-1), workout?.id) : null;
+  const actualSource = briefId !== null ? sources.brief : workout ? workout.heartRate ? sources.heartRate : sources.workout : selected?.id;
+  const query = actualSource ? dailyRequest(actualSource, period, cursors.at(-1), briefId ?? workout?.id) : null;
   const result = useDailyQuery(backendUrl, getAccessToken, query, refreshVersion);
   const data = result.data;
   useEffect(() => {
@@ -90,11 +104,13 @@ export function DailyPage({ backendUrl, getAccessToken }: AreaProps) {
   const plot = plots.find(item => item.id === plotId) ?? plots[0];
   const dirtyPeriod = period.startDate !== draftPeriod.startDate || period.endDate !== draftPeriod.endDate;
   const draftValid = selected ? dailyRequest(selected.id, draftPeriod) !== null : false;
-  const changeSource = (value: DailySourceId) => { focusAfterLoad.current = false; setSource(value); setCursors([]); setWorkout(null); setView('table'); setPlotId(''); };
+  const changeSource = (value: DailySourceId) => { focusAfterLoad.current = false; setSource(value); setCursors([]); setWorkout(null); setBriefId(null); setView('table'); setPlotId(''); };
   const applyPeriod = (event: FormEvent) => { event.preventDefault(); if (draftValid) { focusAfterLoad.current = true; setPeriod(draftPeriod); setCursors([]); } };
-  const title = workout ? workout.heartRate ? 'Workout heart rate' : 'Workout details' : selected?.label ?? 'Records';
+  const title = briefId !== null ? 'Brief details' : workout ? workout.heartRate ? 'Workout heart rate' : 'Workout details' : selected?.label ?? 'Records';
+  const detailSource = data?.source === sources.workouts ? sources.workout : data?.source === sources.briefs ? sources.brief : null;
+  const canOpenRecord = detailSource !== null && current.sources?.includes(detailSource);
   return <section className="daily-page" aria-labelledby="daily-heading">
-    <header className="daily-heading"><div><h1 id="daily-heading">Daily</h1><p>Browse recorded health, food and workouts. Dates use Europe/Copenhagen.</p></div>
+    <header className="daily-heading"><div><h1 id="daily-heading">Daily</h1><p>Browse recorded health, food, workouts and historical briefs.</p></div>
       <button className="secondary-button" type="button" disabled={result.pending || !query} onClick={result.reload}>Refresh records</button>
     </header>
     {current.error ? <div className="daily-notice" role="alert"><p>{current.error}</p><button className="secondary-button" type="button" onClick={() => setCapabilityRetry(value => value + 1)}>Retry availability</button></div> :
@@ -112,16 +128,20 @@ export function DailyPage({ backendUrl, getAccessToken }: AreaProps) {
             <button className="secondary-button" type="submit" disabled={!draftValid || !dirtyPeriod}>Apply period</button>
           </form>}
         </div>
-        {selected?.dated && !workout && <p className="daily-meta">Edit the dates, then Apply period. The recorded evidence below names the period actually loaded.</p>}
+        {selected?.dated && !workout && <p className="daily-meta">Periods use Europe/Copenhagen. Edit the dates, then Apply period. The evidence below names the period actually loaded.</p>}
+        {(actualSource === sources.briefs || actualSource === sources.brief) && <p className="daily-meta">Historical records only, not current health or a new delivery. Timestamps stay exactly as stored; their timezone is not inferred. History uses stored start-text order, then exact ID, descending.</p>}
         {available.length === 0 && <p role="status">This backend has not exposed a browsable Daily collection.</p>}
         {selected?.dated && !workout && !draftValid && <p className="error-text" role="alert">Choose valid start and end dates in chronological order.</p>}
         {dirtyPeriod && selected?.dated && !workout && draftValid && <p className="daily-meta">The edited period is not applied yet.</p>}
         <section className="daily-records" aria-labelledby="daily-records-heading" aria-busy={result.pending} data-pending={result.pending || undefined}>
           <div className="daily-records-heading"><h2 id="daily-records-heading" ref={heading} tabIndex={-1}>{title}</h2>
             {workout && <div className="daily-workout-actions">
-              <button className="secondary-button" type="button" onClick={() => { focusAfterLoad.current = true; setWorkout(null); setCursors(workoutCursors.current); setView('table'); }}>Back to workouts</button>
+              <button className="secondary-button" type="button" onClick={() => { focusAfterLoad.current = true; setWorkout(null); setCursors(collectionCursors.current); setView('table'); }}>Back to workouts</button>
               {!workout.heartRate && current.sources?.includes(sources.heartRate) && <button className="secondary-button" type="button" onClick={() => { focusAfterLoad.current = true; setWorkout({ ...workout, heartRate: true }); setCursors([]); }}>Heart rate samples</button>}
             </div>}
+            {briefId !== null && <button className="secondary-button" type="button" onClick={() => {
+              focusAfterLoad.current = true; setBriefId(null); setCursors(collectionCursors.current); setView('table');
+            }}>Back to brief history</button>}
           </div>
           {result.error && <div role="alert" className="daily-notice"><p>{result.error}</p>{data && <p>Previously loaded records remain below; their original read time is unchanged.</p>}
             <button className="secondary-button" type="button" onClick={result.reload} disabled={result.pending}>Retry records</button></div>}
@@ -132,7 +152,8 @@ export function DailyPage({ backendUrl, getAccessToken }: AreaProps) {
               <p>Retained Daily SQL records. Read <time dateTime={data.freshness.observedAt}>{dailyValue(data.freshness.observedAt)}</time>.</p>
               <p>Last successful source processing: {dailyValue(data.freshness.sourceProcessedCommittedAt)}. Source freshness and completeness are not established.</p>
             </div>
-            {data.status === 'empty' ? <p className="daily-empty">No records were returned for this source and period. This does not prove the original source is empty.</p> :
+            {data.status === 'empty' ? <p className="daily-empty">No records were returned for this query. This does not prove the original source is empty.</p> :
+              data.source === sources.brief ? <BriefBody item={data.items[0]!} /> :
               data.source === sources.sync ? <SyncEvidence item={data.items[0]!} /> : <>
                 {plots.length > 0 && <div className="daily-view-options">
                   <div className="daily-view-switch" role="group" aria-label="Record presentation">
@@ -147,8 +168,13 @@ export function DailyPage({ backendUrl, getAccessToken }: AreaProps) {
                   <p>{plot.label}. One bar per numeric recorded observation on this page; unknown values remain in the table. No averaging or interpolation.</p>
                   <ChartView kind="bar" series={plot.series} title={`${plot.label}, recorded Copenhagen dates`} />
                   <p className="daily-meta">X: recorded observation and Copenhagen date. Y: {plot.unit}. Other pages are not included in this chart.</p>
-                </div> : <Records source={data.source} rows={data.items} {...(data.source === sources.workouts && current.sources?.includes(sources.workout)
-                  ? { onWorkout: (id: string) => { workoutCursors.current = cursors; focusAfterLoad.current = true; setWorkout({ id, heartRate: false }); setCursors([]); setView('table'); } } : {})} />}
+                </div> : <Records source={data.source} rows={data.items} {...(canOpenRecord ? {
+                  openLabel: data.source === sources.workouts ? 'Open workout' : 'Open brief',
+                  onOpenRecord: (id: string) => {
+                    collectionCursors.current = cursors; focusAfterLoad.current = true; setCursors([]); setView('table');
+                    if (data.source === sources.workouts) setWorkout({ id, heartRate: false }); else setBriefId(id);
+                  },
+                } : {})} />}
               </>}
             <footer className="daily-pagination">
               <p role="status">{data.coverage.returned} {data.coverage.returned === 1 ? 'record' : 'records'} on page {cursors.length + 1}. {data.coverage.hasMore ? 'More records are available.' : 'End of returned records; original-source coverage remains unknown.'}</p>

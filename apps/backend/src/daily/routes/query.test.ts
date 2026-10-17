@@ -33,7 +33,8 @@ function fixture(enabled = true) {
   const sync = vi.fn().mockResolvedValue({ feeds: [], heartbeat: null, inbox: {} });
   const service = new DailyQueryService({
     health: () => ({ history, sync, workoutDetail: vi.fn(), heartRate: vi.fn() }),
-    nutrition: () => ({ history: vi.fn() }),
+    nutrition: () => ({ history: vi.fn(), favorites: vi.fn(), plans: vi.fn() }),
+    briefs: () => ({ history: vi.fn(), detail: vi.fn() }),
   }, () => Date.parse('2026-10-16T08:00:00Z'));
   const changes = createDailyChanges();
   for (const module of createDailyModules(enabled, { query: service, changes })) app.register(module.registerRoutes);

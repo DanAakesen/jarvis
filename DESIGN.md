@@ -1165,6 +1165,14 @@ new animation is introduced.
 
 ## Daily migration visual requirement (12 October 2026)
 
+17 October brief-history source continuation reuses the existing collection
+selector, exact paging and in-page detail/back interaction. Historical timestamps
+remain verbatim with explicit stored-order/timezone limitations; no calendar
+filter implies a fabricated timezone. Plain stored body text is escaped, not
+executed HTML; structured bodies stay inspectable as JSON. Keep historical status
+and delivery labelled as historical. No additional page, notification settings
+or generation/send controls are introduced.
+
 ### Current Daily scope (15 October 2026)
 
 Dan excluded new P12-08/#723 coaching/recovery/recomp automation. Preserve one

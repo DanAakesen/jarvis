@@ -296,6 +296,14 @@ Men's football only; Chelsea priority 1, classic top six priority 2. Use credibl
 
 ### [P12-14: Brief history & disabled notification support](https://github.com/DanAakesen/jarvis/issues/729)
 
+17 October inactive source continuation adds the missing shared query/tool and
+single-page history/detail path over existing `briefing_runs`, not an import or
+notification job. Preserve exact IDs, raw timestamp text, historical delivery and
+nullable body data. Bound metadata/body reads; do not expose provider snapshots
+or delivery evidence, infer timezone/freshness, or grant nutrition-connector
+access. Original history and native dependencies remain unchanged. Qualification
+is in progress; #729 is not complete and no recurring schedule is created.
+
 **REUSE EXISTING JARVIS — permanent** · Personal integrations & phone surfaces
 
 Import brief history; reuse Jarvis notification infrastructure. Recurring notifications stay disabled; any future schedule is a separate decision.

@@ -68,6 +68,7 @@
 .daily-page details[open] > summary::before { content: '-'; }
 .daily-page summary:focus-visible, .daily-table-wrap:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .daily-page pre { font: var(--type-caption)/1.5 var(--font-mono); white-space: pre-wrap; overflow-wrap: anywhere; max-width: 64ch; }
+.daily-brief-text { white-space: pre-wrap; overflow-wrap: anywhere; }
 .daily-deleted { display: block; color: var(--text-muted); font-size: var(--type-caption); }
 .daily-pagination { margin-top: var(--space-4); align-items: flex-start; }
 .daily-pagination p { flex: 1 1 240px; margin: 0; }
