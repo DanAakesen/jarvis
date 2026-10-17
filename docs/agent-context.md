@@ -386,6 +386,21 @@ independently read back. No source/semantic failure, qualification rerun or
 waiver; initial local style failures remain above. This finished inactive
 release is not actual food/client/device/provider or activation acceptance.
 
+## Owner nutrition targets checks (17 October 2026; P12-09)
+
+The targets store, route and `daily_nutrition_targets` tool compose only through
+the sixth `createDailyModules` argument with Daily on. Use synthetic figures
+only: they are the owner's private health data, so no real value may appear in a
+fixture, document, log or PR text, and no check writes the owner's values.
+Check that Daily off leaves routes, tools and capabilities unchanged, that an
+unset target is "needs configuration" rather than a default, that a change needs
+the exact browser Now approval, and that audit redacts the values. The tool joins
+`daily_food_review`/`daily_saved_food` in the 180-second browser relay budget and
+the 210-second hosted-agent read; other deadlines are unchanged. Pure targets
+tests and lint run locally. Real Fastify route, composition, relay and Python
+agent semantics need the existing pinned CI graph; local Fastify/jose are
+unavailable.
+
 ## Internal Daily review checks (17 October 2026; P12-09)
 
 The current inactive continuation registers `daily_food_review` only with the

@@ -15,6 +15,24 @@ with `agent_error`. Its immutable receipt remains `accepted=false`; #820 owns
 the functional follow-through and #880 stays open. This integration does not
 claim to fix that historical failure or complete private Daily acceptance.
 
+## Owner nutrition targets (17 October 2026; P12-09 / #724)
+
+Dan ruled that the suggestion budget reads owner-entered Settings, not a default,
+an estimate or a coaching rule. This first slice adds the three owner-bound
+targets (resting energy burn, daily deficit, protein): `GET`/`PATCH
+/daily/nutrition-targets` for the signed-in owner and the sensitive
+`daily_nutrition_targets` tool, whose changes need the exact browser Now
+approval. They are Daily-owned `dbo.settings` rows, so there is no migration and
+no core Settings change. All of it stays behind the default-off Daily gate (Daily
+off = Jarvis unchanged) with no production caller yet. Dan enters his own values;
+none is stored in code, tests or documents.
+
+Next, in order: the budget/candidate adapter and a read-only suggest tool
+(allowance = resting burn + active energy so far today - deficit; unknowns
+flagged, never zero), then the Settings section (Daily on only), then the
+default-off composition. No provider, private or device access, live probe, Daily
+activation or acceptance is claimed.
+
 ## Chat acceptance origin provenance (#820, 17 October 2026)
 
 Retained Deploy39043117488 at705af7c7/treee79dbd60 failed required

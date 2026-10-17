@@ -126,6 +126,69 @@ describe('Daily integration contract', () => {
     expect(response.json()).toMatchObject({ stage: 'internal-nutrition-rehearsal', tools: ['daily_query', 'daily_saved_food'], pages: [] });
     expect(saved).not.toHaveBeenCalled();
   });
+  it('adds owner nutrition targets only with the separate accessor, behind the same Daily gate, and keeps writes behind approval', async () => {
+    const data: DailyData = { query: { query: vi.fn() }, changes: createDailyChanges() };
+    const read = vi.fn(async () => ({ targets: { restingKcal: null, deficitKcal: null, proteinGrams: null }, updatedAt: null }));
+    const write = vi.fn();
+    const targets = vi.fn(() => ({ read, write }));
+    expect(createDailyModules(false, data, undefined, undefined, undefined, targets)).toEqual([]);
+    expect(createDailyModules(true, data)[0]!.tools.map(tool => tool.name)).toEqual(['daily_query']);
+    expect(() => createDailyModules(true, undefined, undefined, undefined, undefined, targets)).toThrow('shared Daily data');
+    const calls: ToolCallRecord[] = [];
+    const app = buildApp(config, undefined, { auth, modules: [coreModule, ...createDailyModules(true, data, undefined, undefined, undefined, targets)],
+      toolCallStore: { record: async call => { calls.push(call); } } });
+    apps.push(app);
+    expect((await app.inject({ url: '/daily/capabilities', headers: headers() })).json()).toMatchObject({
+      stage: 'internal-nutrition-rehearsal', tools: ['daily_query', 'daily_nutrition_targets'], pages: [],
+    });
+    expect(targets).not.toHaveBeenCalled();
+    for (const kind of ['owner', 'agent']) {
+      const response = await app.inject({ method: 'POST', url: '/tools/daily_nutrition_targets',
+        headers: { ...headers(kind), 'x-jarvis-message-id': '42' }, payload: { operation: 'read' } });
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toMatchObject({ outcome: 'ok', result: { status: 'needs-configuration', missing: ['restingKcal', 'deficitKcal', 'proteinGrams'] } });
+    }
+    expect(calls).toEqual(expect.arrayContaining([expect.objectContaining({
+      tool: 'daily_nutrition_targets', outcome: 'ok', arguments: { redacted: true }, result: { redacted: true },
+    })]));
+    // A change is refused, not silently applied, when native approval is not available.
+    const change = await app.inject({ method: 'POST', url: '/tools/daily_nutrition_targets',
+      headers: { ...headers('agent'), 'x-jarvis-message-id': '42' }, payload: { operation: 'set_targets', targets: { restingKcal: 1750 } } });
+    expect(change.json()).toMatchObject({ outcome: 'refused' });
+    expect(write).not.toHaveBeenCalled();
+    // The model cannot choose another owner or an extra field.
+    const owned = await app.inject({ method: 'POST', url: '/tools/daily_nutrition_targets',
+      headers: { ...headers('agent'), 'x-jarvis-message-id': '42' }, payload: { operation: 'read', owner: other } });
+    expect(owned.json()).toMatchObject({ outcome: 'refused' });
+    const deniedOwner = await app.inject({ method: 'POST', url: '/tools/daily_nutrition_targets',
+      headers: { ...headers('other'), 'x-jarvis-message-id': '42' }, payload: { operation: 'read' } });
+    expect(deniedOwner.json()).toMatchObject({ outcome: 'error', result: { error: 'Tool execution failed' } });
+    for (const kind of ['runner', 'connector']) {
+      expect((await app.inject({ method: 'POST', url: '/tools/daily_nutrition_targets',
+        headers: { ...headers(kind), 'x-jarvis-message-id': '42' }, payload: { operation: 'read' } })).statusCode).toBe(403);
+    }
+    expect(read).toHaveBeenCalledTimes(3);
+    // The Settings route serves the signed-in owner only; the hosted agent uses the approved tool.
+    const settings = await app.inject({ url: '/daily/nutrition-targets', headers: headers() });
+    expect(settings.statusCode).toBe(200);
+    expect(settings.json()).toMatchObject({ missing: ['restingKcal', 'deficitKcal', 'proteinGrams'], updatedAt: null });
+    expect((await app.inject({ url: '/daily/nutrition-targets', headers: headers('agent') })).statusCode).toBe(403);
+    expect((await app.inject({ url: '/daily/nutrition-targets', headers: headers('other') })).statusCode).toBe(403);
+  });
+  it('leaves Jarvis unchanged when Daily is off, even if the nutrition targets accessor is supplied', async () => {
+    const data: DailyData = { query: { query: vi.fn() }, changes: createDailyChanges() };
+    const targets = vi.fn();
+    const baseline = buildApp(config, undefined, { auth, modules: [coreModule] });
+    const off = buildApp(config, undefined, { auth, modules: [coreModule, ...createDailyModules(false, data, undefined, undefined, undefined, targets)] });
+    apps.push(baseline, off);
+    expect((await off.inject('/health')).json()).toEqual((await baseline.inject('/health')).json());
+    expect((await off.inject({ url: '/tools', headers: headers() })).json()).toEqual((await baseline.inject({ url: '/tools', headers: headers() })).json());
+    for (const url of ['/daily/capabilities', '/daily/nutrition-targets']) {
+      expect((await off.inject({ url, headers: headers() })).statusCode).toBe(404);
+    }
+    expect((await off.inject({ method: 'PATCH', url: '/daily/nutrition-targets', headers: headers(), payload: { restingKcal: 1750 } })).statusCode).toBe(404);
+    expect(targets).not.toHaveBeenCalled();
+  });
   it('exposes public reference lookup only with an explicit provider capability and never calls it during composition', async () => {
     const foodLookup = vi.fn<DailyFoodLookup>();
     const data: DailyData = { query: { query: vi.fn() }, changes: createDailyChanges(), foodLookup };

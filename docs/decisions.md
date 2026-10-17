@@ -1,5 +1,38 @@
 # Decisions
 
+## Use owner-configured nutrition targets for the daily food budget (17 October 2026; P12-09 / #724)
+
+**Confirmed user decision, not a proposal or completed acceptance.** Dan ruled
+that the resting energy burn, the daily deficit and the protein target are
+settings he enters and Jarvis reads: "Put this in settings and read from there."
+They are owner-entered configuration, not defaults in code, tests or documents.
+
+This is an explicit, narrow reversal of the earlier no-maintenance-maths rule
+for one formula only. Allowance today is the owner's resting burn plus the
+active energy burned so far today (stored Health data) minus the owner's
+deficit. Energy left is that allowance minus what has been eaten so far, and
+protein left is the owner's target minus what has been eaten so far, with no
+projection of the rest of the day. Still excluded: any BMR/TDEE estimate from
+weight, height or age, activity factors, and all coaching, recovery or
+recomposition automation. #723 stays withdrawn.
+
+Keep each target as an owner-namespaced Daily row in the existing `dbo.settings`
+table (global scope), not in core `Settings` and not in a migration. An absent
+row means "needs configuration": no default, estimate or fallback. The signed-in
+owner edits them through `GET`/`PATCH /daily/nutrition-targets`; chat and voice
+use the sensitive `daily_nutrition_targets` tool, whose changes need the exact
+browser Now approval. Tool audit redacts the values. They are personal health
+data in a public repository, so no source, fixture, document, PR text or log
+carries real figures; tests use synthetic values and Dan enters his own.
+
+Everything stays behind the default-off Daily gate: Daily off leaves Jarvis
+unchanged and this slice has no production caller. The budget adapter must
+report unknown burn or unknown meal macros as unknown, never zero, and count
+only the exact active-energy metric so resting energy is not double-counted.
+That adapter, the Settings section and the default-off composition are separate
+slices. No provider, device or private access, live probe, activation or
+acceptance follows from this record.
+
 ## Preserve fixed hosted error origins in existing acceptance evidence (17 October 2026; #820)
 
 Deploy39043117488 retained `chat_capabilities=agent_error`, accepted=false and
@@ -207,7 +240,9 @@ Keep attribution, cached retrieval timestamps, unknowns and partial totals.
 No conversation/history/credentials or caller-selected endpoint enter the
 provider interface. No reference result authorises intake. Live-provider
 acceptance remains unverified, and personal suggestions must not invent an
-authoritative remaining budget. This is inactive source integration only.
+authoritative remaining budget (Dan later ruled the owner-configured allowance
+inputs; see "Use owner-configured nutrition targets for the daily food budget").
+This is inactive source integration only.
 Qualified a8 passed its first normal CI, four actual CodeQL analyses and
 automatic source review without findings. #876 merged9334d3ed with the same
 6da17b0c tree; Deploy39012842333 released backend0000337 only. Actual routine
@@ -616,7 +651,9 @@ Keep hosted ChatGPT food writes explicitly unfinished until their scoped
 connector authorisation and trusted intent/proposal-acceptance contracts are
 approved and implemented. Internal Jarvis reads are not a substitute for that
 requirement. No maintenance/TDEE, completeness, expiry or readiness rule is
-invented. Full #724, live/provider/device/source-parity and release acceptance
+invented, except the one owner-configured allowance formula Dan later ruled (see
+"Use owner-configured nutrition targets for the daily food budget"). Full #724,
+live/provider/device/source-parity and release acceptance
 cannot be inferred from synthetic checks.
 
 16 October continuation after #866 deployment: extend this existing read
@@ -1042,6 +1079,8 @@ Core P12-09/#724 API/tools work excludes new coaching; a deliberately excluded
 optional feature and its missing maintenance/TDEE, completeness, expiry or
 readiness interpretation must not remain semantic completion prerequisites.
 Do not invent those rules or activate #724. Existing core validation remains.
+Dan's later ruling narrowly permits only the owner-configured allowance formula;
+see "Use owner-configured nutrition targets for the daily food budget".
 Keep one Daily page plus existing on-demand GenUI, no widget, extra
 Workouts/Nutrition pages or mandatory four native views. Parent owns native
 issue/dependency/board reconciliation after this source update. The coordinator

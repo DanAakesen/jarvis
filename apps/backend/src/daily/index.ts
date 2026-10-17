@@ -8,20 +8,25 @@ import { dailyMcpRoutes, type DailyMcpOptions } from './mcp/routes.js';
 import { dailyFoodTool, type InternalNutrition } from './tools/food.js';
 import { dailyFoodReviewTool } from './tools/food-review.js';
 import { dailySavedFoodTool, type InternalSavedNutrition } from './tools/saved-food.js';
+import { dailyNutritionTargetsTool } from './tools/nutrition-targets.js';
+import { nutritionTargetsRoutes } from './routes/nutrition-targets.js';
+import type { NutritionTargetsAccess } from './nutrition/targets-store.js';
 import { dailyFoodLookupTool } from './tools/food-lookup.js';
 import { dailyFeedTool } from './tools/feed.js';
 
 /** Trusted server composition flag. Not a request parameter or a production rollout. */
-export function createDailyModules(enabled = false, data?: DailyData, connector?: DailyMcpOptions, internalNutrition?: InternalNutrition, savedNutrition?: InternalSavedNutrition): readonly BackendModule[] {
+export function createDailyModules(enabled = false, data?: DailyData, connector?: DailyMcpOptions, internalNutrition?: InternalNutrition, savedNutrition?: InternalSavedNutrition, nutritionTargets?: NutritionTargetsAccess): readonly BackendModule[] {
   if (enabled !== true) return [];
   if (connector && !data) throw new TypeError('Daily MCP requires the shared Daily query service');
   if (internalNutrition && !data) throw new TypeError('Daily food writes require shared Daily data');
   if (savedNutrition && !data) throw new TypeError('Daily saved food requires shared Daily data');
+  if (nutritionTargets && !data) throw new TypeError('Daily nutrition targets require shared Daily data');
   const tools = data ? [dailyQueryTool(data.query),
     ...(data.foodLookup ? [dailyFoodLookupTool(data.foodLookup)] : []),
     ...(data.feeds ? [dailyFeedTool(data.feeds)] : []),
     ...(internalNutrition ? [dailyFoodTool(internalNutrition), dailyFoodReviewTool(internalNutrition)] : []),
     ...(savedNutrition ? [dailySavedFoodTool(savedNutrition)] : []),
+    ...(nutritionTargets ? [dailyNutritionTargetsTool(nutritionTargets)] : []),
   ] : [];
   return [{
     id: dailyModuleId,
@@ -29,6 +34,7 @@ export function createDailyModules(enabled = false, data?: DailyData, connector?
     registerRoutes: async (app) => {
       if (data) {
         await app.register(dailyQueryRoutes(data.query));
+        if (nutritionTargets) await app.register(nutritionTargetsRoutes(nutritionTargets));
         if (connector) await app.register(dailyMcpRoutes(data.query, connector));
         const unsubscribe = data.changes.subscribe(change => {
           if (change.owner.toLowerCase() === app.ownerObjectId.toLowerCase()) app.nowEventHub.publish({ type: 'refresh' });
@@ -58,7 +64,7 @@ export function createDailyModules(enabled = false, data?: DailyData, connector?
         return {
           module: dailyModuleId,
           version: modern ? dailyCapabilitiesVersion : dailyContractVersion,
-          stage: internalNutrition || savedNutrition ? 'internal-nutrition-rehearsal' : data?.feeds ? 'feed-rehearsal' : connector ? 'connector-rehearsal' : data ? 'read-only' : 'contract-only',
+          stage: internalNutrition || savedNutrition || nutritionTargets ? 'internal-nutrition-rehearsal' : data?.feeds ? 'feed-rehearsal' : connector ? 'connector-rehearsal' : data ? 'read-only' : 'contract-only',
           reservedViewIds: dailyViewIds,
           // Reserved view IDs do not advertise unfinished functionality as available.
           pages: [],
