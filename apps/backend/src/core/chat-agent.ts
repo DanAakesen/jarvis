@@ -145,14 +145,57 @@ function errorCode(data: string): string | undefined {
   } catch { return undefined; }
 }
 
+const invocationHttpStatuses: readonly number[] = [400, 401, 403, 404, 408, 409, 424, 429, 500, 502, 503, 504];
+
+// Fixed, content-free reasons for failures on the backend side of a hosted-agent call. The report
+// allowlist (`chatAgentInvocationReasons` in system-status.ts) must contain every value.
+export type ChatAgentInvocationReason =
+  | 'agent_auth_unavailable'
+  | 'agent_request_failed'
+  | 'agent_http_400' | 'agent_http_401' | 'agent_http_403' | 'agent_http_404'
+  | 'agent_http_408' | 'agent_http_409' | 'agent_http_424' | 'agent_http_429'
+  | 'agent_http_500' | 'agent_http_502' | 'agent_http_503' | 'agent_http_504'
+  | 'agent_http_other'
+  | 'agent_response_invalid'
+  | 'agent_stream_failed'
+  | 'agent_stream_ended';
+
+export class ChatAgentInvocationError extends Error {
+  constructor(message: string, readonly reason: ChatAgentInvocationReason, options?: ErrorOptions) {
+    super(message, options);
+    this.name = 'ChatAgentInvocationError';
+  }
+}
+
+function httpFailureReason(status: number): ChatAgentInvocationReason {
+  return invocationHttpStatuses.includes(status)
+    ? `agent_http_${status}` as ChatAgentInvocationReason
+    : 'agent_http_other';
+}
+
+// Cancellation and the request deadline keep their original error; only real failures are tagged.
+function invocationFailure(
+  error: unknown,
+  signal: AbortSignal,
+  message: string,
+  reason: ChatAgentInvocationReason,
+): unknown {
+  if (signal.aborted || (error instanceof Error && error.name === 'AbortError')) return error;
+  return new ChatAgentInvocationError(message, reason, { cause: error });
+}
+
 function deltaFromEvent(event: { event: string; data: string }): string | undefined {
   if (event.event === 'error') throw new ChatAgentError(errorCode(event.data));
   if (event.event !== 'delta') return undefined;
   let payload: unknown;
-  try { payload = JSON.parse(event.data); } catch { throw new Error('Invalid chat response'); }
+  try {
+    payload = JSON.parse(event.data);
+  } catch {
+    throw new ChatAgentInvocationError('Invalid chat response', 'agent_response_invalid');
+  }
   if (typeof payload !== 'object' || payload === null || !('text' in payload) ||
       typeof payload.text !== 'string' || payload.text.length === 0) {
-    throw new Error('Invalid chat response');
+    throw new ChatAgentInvocationError('Invalid chat response', 'agent_response_invalid');
   }
   return payload.text;
 }
@@ -244,10 +287,15 @@ export function createFoundryInvocationConversationAgent(
       }
       const requestSignal = AbortSignal.any([signal, AbortSignal.timeout(requestTimeoutMs)]);
       const authStarted = performance.now();
-      const token = await getToken(FOUNDRY_AGENT_SCOPE, requestSignal);
+      let token: string;
+      try {
+        token = await getToken(FOUNDRY_AGENT_SCOPE, requestSignal);
+      } catch (error) {
+        throw invocationFailure(error, requestSignal, 'Foundry authentication unavailable', 'agent_auth_unavailable');
+      }
       const authMs = performance.now() - authStarted;
       if (typeof token !== 'string' || !token.trim() || /[\r\n]/u.test(token)) {
-        throw new Error('Foundry authentication unavailable');
+        throw new ChatAgentInvocationError('Foundry authentication unavailable', 'agent_auth_unavailable');
       }
       const request = (url: URL) => fetcher(url, {
         method: 'POST',
@@ -265,14 +313,21 @@ export function createFoundryInvocationConversationAgent(
         signal: requestSignal,
       });
       const invocationStarted = performance.now();
-      const response = await request(createFoundryInvocationsEndpoint(
-        projectEndpoint, agentName, agentSessionId,
-      ));
+      const invocationUrl = createFoundryInvocationsEndpoint(projectEndpoint, agentName, agentSessionId);
+      let response: Awaited<ReturnType<typeof fetcher>>;
+      try {
+        response = await request(invocationUrl);
+      } catch (error) {
+        throw invocationFailure(error, requestSignal, 'Chat agent request failed', 'agent_request_failed');
+      }
       onAgentSessionTelemetry?.(foundrySessionTelemetry(response.headers, agentSessionId !== undefined));
       if (!response.ok || !response.body ||
           !response.headers.get('content-type')?.toLowerCase().startsWith('text/event-stream')) {
         await response.body?.cancel().catch(() => {});
-        throw new Error(`Chat agent unavailable (HTTP ${response.status})`);
+        throw new ChatAgentInvocationError(
+          `Chat agent unavailable (HTTP ${response.status})`,
+          response.ok ? 'agent_response_invalid' : httpFailureReason(response.status),
+        );
       }
 
       const reader = response.body.getReader();
@@ -339,10 +394,18 @@ export function createFoundryInvocationConversationAgent(
       };
       try {
         while (!completed) {
-          const { done, value } = await reader.read();
+          let chunk: Awaited<ReturnType<typeof reader.read>>;
+          try {
+            chunk = await reader.read();
+          } catch (error) {
+            throw invocationFailure(error, requestSignal, 'Chat agent stream failed', 'agent_stream_failed');
+          }
+          const { done, value } = chunk;
           if (done) break;
           receivedBytes += value.byteLength;
-          if (receivedBytes > maxStreamBytes) throw new Error('Chat response exceeded the size limit');
+          if (receivedBytes > maxStreamBytes) {
+            throw new ChatAgentInvocationError('Chat response exceeded the size limit', 'agent_response_invalid');
+          }
           buffer += decoder.decode(value, { stream: true });
           const parsed = parseEvents(buffer);
           for (const event of parsed.events) {
@@ -372,7 +435,7 @@ export function createFoundryInvocationConversationAgent(
       } finally {
         await reader.cancel().catch(() => {});
       }
-      if (!completed) throw new Error('Chat agent response ended unexpectedly');
+      if (!completed) throw new ChatAgentInvocationError('Chat agent response ended unexpectedly', 'agent_stream_ended');
     },
   };
 }

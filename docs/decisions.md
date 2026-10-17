@@ -23,6 +23,53 @@ generated-view validation and is handled in a separate PR (specific refusals,
 model guidance), then an offline find, show, stage, confirm test. Dan's live
 re-test closes #885; source tests are not acceptance.
 
+## Label backend-side chat failures and retry a thrown acceptance check once (17 October 2026; #820)
+
+Three consecutive main deploys failed different chat checks with the bare
+`agent_error`: 39043117488 (`705af7c7`) `chat_capabilities`; 39046081711
+(`665fb152`, agent v110) `chat_github_read` and `chat_navigation`; 39049389385
+(`c00818b7`, agent v111) `chat_navigation` and `chat_plain_approval`, with
+`chat_github_read` passing. None of #884's 36 hosted origin codes surfaced and
+the failing set moves between builds. The cause is not established and no
+historical root fix is claimed; #820 and #880 stay open and #884 stays frozen.
+Dan's direction is speed over clean deploys: small, reasoned, reversible fixes,
+with the next deploy's evidence driving the follow-up.
+
+- **Labels.** A bare `agent_error` can come from several backend-side failures.
+  `ChatAgentInvocationError` now tags them with 18 fixed `agent_*` reasons
+  (token unavailable, request failure, fixed HTTP statuses or `agent_http_other`,
+  invalid response, stream failure, stream ended without completion). The cause
+  stays in-process; no message, status text or payload reaches a report. A hosted
+  error event with no code or an unlisted code becomes `agent_error_code_missing`
+  or `agent_error_code_unlisted`, which refines #884's "unknown stays
+  `agent_error`" for `ChatAgentError` only. Everything else stays `agent_error`,
+  and cancellation is never relabelled. The Python formatter mirrors the set with
+  a parity test.
+- **One bounded retry.** A conversation check whose first attempt threw one of
+  these failures (bare `agent_error`, hosted origin or backend label) runs once
+  more, concurrently, only when the first wave ended within 25 seconds of the
+  suite start and under a 25-second window, so it finishes inside the unchanged
+  55-second suite deadline. The retry replaces the first result only when it
+  passes. Assertion failures and timeouts are never retried; smoke prompts are
+  read-only or no-op, so repetition has no side effects. This is a deliberate
+  gate-tolerance change in line with Dan's direction, not a proven fix. It cannot
+  rescue a persistent failure, and a rescued first failure leaves no trace in the
+  artifact. Remove the retry wave in `runSuite` to revert it.
+- **#816 is not the cause by code path.** Smoke invocations never set a chat
+  session, so the invocation-scoped coordination client is never opened and no
+  steering or phase hook is installed. A new agent test pins that. The deploy
+  evidence agrees: the backend image was unchanged between 39046081711 and
+  39049389385 and `chat_github_read` recovered. No revert.
+- **Degraded reasons stay off HTTP.** Open web clients accept reasons only for
+  down checks (14 October decision), so degraded identity and no-timestamp
+  entries remain `not_reported_or_redacted` in artifacts. Their reasons exist
+  only in the `system.smoke_check` log events.
+
+No model, prompt, assertion, timeout, credential, workflow or #816 lifecycle
+change. Synthetic tests cover each label, the missing/unlisted buckets, redaction,
+single-retry behaviour, the retry bound and unchanged assertion failures; normal
+CI and review remain required.
+
 ## Preserve fixed hosted error origins in existing acceptance evidence (17 October 2026; #820)
 
 Deploy39043117488 retained `chat_capabilities=agent_error`, accepted=false and

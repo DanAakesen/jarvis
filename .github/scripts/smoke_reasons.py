@@ -44,7 +44,31 @@ CHAT_AGENT_FAILURE_REASONS = frozenset({
     "error_badrequesterror",
     "error_internalservererror",
 })
-SHARED = frozenset({"agent_error", "timeout"}) | CHAT_AGENT_FAILURE_REASONS
+CHAT_AGENT_INVOCATION_REASONS = frozenset({
+    "agent_auth_unavailable",
+    "agent_request_failed",
+    "agent_http_400",
+    "agent_http_401",
+    "agent_http_403",
+    "agent_http_404",
+    "agent_http_408",
+    "agent_http_409",
+    "agent_http_424",
+    "agent_http_429",
+    "agent_http_500",
+    "agent_http_502",
+    "agent_http_503",
+    "agent_http_504",
+    "agent_http_other",
+    "agent_response_invalid",
+    "agent_stream_failed",
+    "agent_stream_ended",
+    "agent_error_code_missing",
+    "agent_error_code_unlisted",
+})
+SHARED = (
+    frozenset({"agent_error", "timeout"}) | CHAT_AGENT_FAILURE_REASONS | CHAT_AGENT_INVOCATION_REASONS
+)
 SAFE_REASONS = {
     "chat_canary": {"agent_error", "timeout", "acceptance_check_failed"},
     "chat_identity": SHARED | {"catalogue_unavailable", "identity_reply"},

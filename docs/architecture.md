@@ -2060,6 +2060,20 @@ Untyped or unlisted failures remain `agent_error`; the aggregate still returns
 with parity/redaction regressions, so existing acceptance/release artifacts keep
 the origin alongside unchanged qualification and component producer identities.
 This is failure provenance, not proof of an old failure's exclusive root cause.
+Failures raised before any hosted error event carry their own fixed labels:
+`ChatAgentInvocationError` in `chat-agent.ts` tags backend-side token, request,
+HTTP-status, response and stream failures with one of 18 `agent_*` reasons and
+keeps its cause in-process only. A hosted error event without a safe code or with
+an unlisted code reports `agent_error_code_missing` or `agent_error_code_unlisted`;
+any other unexpected exception remains `agent_error`. These
+`chatAgentInvocationReasons` are mirrored by the Python formatter with a parity
+test, and cancellation is never relabelled. The canary re-runs a conversation
+check once when its first attempt threw one of these failures. Assertion failures
+and timeouts are never retried. The retry starts only if the first wave finished
+within 25 seconds of the suite start, runs concurrently in a 25-second window
+inside the unchanged 55-second suite deadline, and replaces the first result only
+when it passes. Smoke prompts are read-only or no-op, so repeating them has no
+side effects; a rescued first failure is not recorded in the report.
 Both `GET /status/smoke` and the retained `smoke` in `GET /status` use a
 non-mutating HTTP projection that omits non-down reasons. This preserves the
 legacy validator in already-open clients during parallel web/backend deploys.

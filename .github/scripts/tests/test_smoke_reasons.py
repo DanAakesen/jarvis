@@ -7,20 +7,29 @@ import tempfile
 import unittest
 
 from smoke_reasons import (
-    CHAT_AGENT_FAILURE_REASONS, CHECK_IDS, MAX_REPORT_BYTES, SAFE_REASONS,
+    CHAT_AGENT_FAILURE_REASONS, CHAT_AGENT_INVOCATION_REASONS, CHECK_IDS, MAX_REPORT_BYTES, SAFE_REASONS,
     failure_reasons, report_ok, safe_report,
 )
+
+BACKEND_STATUS_SOURCE = Path(__file__).resolve().parents[3] / "apps/backend/src/system-status.ts"
+
+
+def backend_reason_set(name: str) -> set[str]:
+    source = BACKEND_STATUS_SOURCE.read_text(encoding="utf-8")
+    block = source.split(f"export const {name}:", 1)[1].split("]);", 1)[0]
+    return set(re.findall(r"'([a-z0-9_]+)'", block))
 
 
 class SmokeReasonsTests(unittest.TestCase):
     def test_hosted_origin_allowlist_matches_the_backend_exactly(self):
-        source = (Path(__file__).resolve().parents[3]
-                  / "apps/backend/src/system-status.ts").read_text(encoding="utf-8")
-        block = source.split("export const chatAgentFailureReasons:", 1)[1].split("]);", 1)[0]
-        self.assertEqual(set(re.findall(r"'([a-z0-9_]+)'", block)), CHAT_AGENT_FAILURE_REASONS)
+        self.assertEqual(backend_reason_set("chatAgentFailureReasons"), CHAT_AGENT_FAILURE_REASONS)
 
-    def test_fixed_hosted_origins_survive_artifact_sanitization_and_still_fail_acceptance(self):
-        for code in CHAT_AGENT_FAILURE_REASONS:
+    def test_backend_side_failure_allowlist_matches_the_backend_exactly(self):
+        self.assertEqual(backend_reason_set("chatAgentInvocationReasons"), CHAT_AGENT_INVOCATION_REASONS)
+        self.assertFalse(CHAT_AGENT_INVOCATION_REASONS & CHAT_AGENT_FAILURE_REASONS)
+
+    def test_fixed_hosted_and_backend_reasons_survive_artifact_sanitization_and_still_fail_acceptance(self):
+        for code in sorted(CHAT_AGENT_FAILURE_REASONS | CHAT_AGENT_INVOCATION_REASONS):
             with self.subTest(code=code):
                 report = {"entries": [{"id": check, "status": "ok"} for check in sorted(CHECK_IDS)]}
                 entry = next(entry for entry in report["entries"] if entry["id"] == "chat_capabilities")
@@ -38,6 +47,7 @@ class SmokeReasonsTests(unittest.TestCase):
 
     def test_unknown_code_shaped_origins_are_redacted_in_logs_and_artifacts(self):
         for code in ("private_provider_detail", "settings_http_418", "error_privateexception",
+                     "agent_http_418", "agent_error_code_other",
                      "settings_timeout\n::error::private"):
             with self.subTest(code=code):
                 report = {"entries": [{"id": check, "status": "ok"} for check in sorted(CHECK_IDS)]}

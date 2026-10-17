@@ -204,6 +204,44 @@ def test_smoke_plain_yes_accepts_only_the_fixed_confirmation_transcript() -> Non
     )
 
 
+def test_smoke_invocations_open_no_coordination_connection(monkeypatch) -> None:
+    prompt = "Please run the no-op test action. Ask me before running it."
+    history = [
+        {"role": "user", "text": prompt},
+        {"role": "assistant", "text": "I need your confirmation before running it."},
+    ]
+    seen: list[tuple[object, object]] = []
+
+    def forbidden_client(**_kwargs):
+        raise AssertionError("smoke invocations must not open a coordination connection")
+
+    class ObservingModel(FakeModel):
+        async def complete_chat(self, *args, **kwargs):
+            seen.append((current_steering_fetcher.get(), current_chat_phase_setter.get()))
+            async for delta in super().complete_chat(*args, **kwargs):
+                yield delta
+
+    monkeypatch.setattr(httpx, "AsyncClient", forbidden_client)
+    app = create_app(
+        ObservingModel(), configure_observability=None, chat_context_loader=lambda *_args: None
+    )
+    with TestClient(app) as client:
+        plain = client.post("/invocations", json={
+            "messageId": "1", "text": "what can you do?", "language": "en", "smoke": True,
+        })
+        approved = client.post("/invocations", json={
+            "messageId": "1", "text": "yes", "language": "en", "smoke": True,
+            "smokeHistory": history, "smokeApproval": True,
+        })
+
+    for response in (plain, approved):
+        assert response.status_code == 200
+        assert "event: delta" in response.text
+        assert "event: done" in response.text
+        assert "event: error" not in response.text
+    assert seen == [(None, None), (None, None)]
+
+
 def test_reused_agent_reloads_history_and_returns_phase_timings() -> None:
     loaded: list[int] = []
 
