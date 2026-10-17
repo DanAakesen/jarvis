@@ -14,7 +14,7 @@ const headers = { authorization: ['Bearer', ['e30', 'e30', 'sig'].join('.')].joi
 const apps: ReturnType<typeof buildApp>[] = [];
 afterEach(async () => { await Promise.all(apps.splice(0).map((app) => app.close())); });
 
-function fixture(inputSchema?: JarvisTool['inputSchema']) {
+function fixture(inputSchema?: JarvisTool['inputSchema'], explainInvalidInput?: JarvisTool['explainInvalidInput']) {
   const execute = vi.fn(async () => ({ completed: true }));
   const beforeExecute = vi.fn(async () => {});
   const record = vi.fn(async () => {});
@@ -30,6 +30,7 @@ function fixture(inputSchema?: JarvisTool['inputSchema']) {
       required: ['query'], additionalProperties: false,
     },
     execute,
+    ...(explainInvalidInput ? { explainInvalidInput } : {}),
   };
   const app = buildApp(config, logger, {
     modules: [coreModule, {
@@ -184,5 +185,77 @@ describe('safe tool argument feedback', () => {
     expect(response.body + logs.join('')).not.toContain('private-json');
     expect(execute).not.toHaveBeenCalled();
     expect(beforeExecute).not.toHaveBeenCalled();
+  });
+});
+
+describe('tool-specific argument explanations', () => {
+  type Explain = NonNullable<JarvisTool['explainInvalidInput']>;
+  const retry = 'Retry with arguments matching the tool schema.';
+  const generic = `Invalid arguments: property 'query' does not match the tool schema. Allowed: query, action. ${retry}`;
+
+  it('puts the tool’s own explanation in the refusal, identically in voice and chat', async () => {
+    const explain = vi.fn<Explain>(() => 'query: give a short phrase to search for. Nothing was changed.');
+    const { app, execute, record, trackTrace } = fixture(undefined, explain);
+    const payload = { query: '' };
+    const chat = await app.inject({ method: 'POST', url: '/tools/argument_test', headers, payload });
+    const voice = await app.inject({ method: 'POST', url: '/test/voice', headers, payload });
+    expect(chat.json()).toMatchObject({
+      tool: 'argument_test', outcome: 'refused',
+      result: { refused: `Invalid arguments: query: give a short phrase to search for. Nothing was changed. ${retry}` },
+    });
+    expect(voice.json()).toEqual(chat.json());
+    expect(explain).toHaveBeenCalledTimes(2);
+    for (const [input, owner] of explain.mock.calls) {
+      expect(input).toEqual(payload);
+      expect(owner.jarvisTools.get('argument_test')?.name).toBe('argument_test');
+    }
+    expect(execute).not.toHaveBeenCalled();
+    expect(record).not.toHaveBeenCalled();
+    const expected = {
+      service: 'jarvis-backend', tool: 'argument_test', keyword: 'minLength', instancePath: '/query', property: 'query',
+    };
+    const events = trackTrace.mock.calls.filter(([trace]) => trace.message === 'tool.invalid_arguments');
+    expect(events.map(([trace]) => trace.properties)).toEqual([expected, expected]);
+  });
+
+  it('does not ask the tool to explain what is already named or cannot be parsed', async () => {
+    const explain = vi.fn<Explain>(() => 'never used');
+    const { app } = fixture(undefined, explain);
+    const unexpected = { query: 'private-query', extra: 'private-value' };
+    const chat = await app.inject({ method: 'POST', url: '/tools/argument_test', headers, payload: unexpected });
+    const voice = await app.inject({ method: 'POST', url: '/test/voice', headers, payload: unexpected });
+    const malformed = await app.inject({
+      method: 'POST', url: '/test/voice', headers: { ...headers, 'content-type': 'text/plain' }, payload: '{private-json',
+    });
+    expect(chat.json().result.refused).toBe(`Invalid arguments: unexpected property 'extra'. Allowed: query, action. ${retry}`);
+    expect(voice.json()).toEqual(chat.json());
+    expect(malformed.json().result.refused).toContain('expected a JSON object');
+    expect(explain).not.toHaveBeenCalled();
+  });
+
+  const silent: [string, Explain][] = [
+    ['undefined', () => undefined],
+    ['empty', () => ''],
+    ['blank', () => '  \n '],
+    ['throwing', () => { throw new Error('private-failure'); }],
+  ];
+  it.each(silent)('keeps the generic refusal when the explanation is %s', async (_name, explain) => {
+    const { app, logs, trackTrace } = fixture(undefined, explain);
+    const payload = { query: '' };
+    const chat = await app.inject({ method: 'POST', url: '/tools/argument_test', headers, payload });
+    const voice = await app.inject({ method: 'POST', url: '/test/voice', headers, payload });
+    expect(chat.json()).toMatchObject({ outcome: 'refused', result: { refused: generic } });
+    expect(voice.json()).toEqual(chat.json());
+    expect(chat.body + voice.body + logs.join('') + JSON.stringify(trackTrace.mock.calls)).not.toContain('private-');
+  });
+
+  it('bounds a long explanation and keeps the retry instruction', async () => {
+    const { app } = fixture(undefined, () => 'x'.repeat(2_000));
+    const chat = await app.inject({ method: 'POST', url: '/tools/argument_test', headers, payload: { query: '' } });
+    const refused = chat.json().result.refused as string;
+    expect(Array.from(refused).length).toBeLessThanOrEqual(500);
+    expect(refused.startsWith('Invalid arguments: xxx')).toBe(true);
+    expect(refused).toContain('…');
+    expect(refused.endsWith(` ${retry}`)).toBe(true);
   });
 });
