@@ -13,13 +13,14 @@ import { FactoryIssueNavigationContext } from '../page-navigation';
 import { TaskDetailPage } from './TaskDetailPage';
 import { TaskReleaseBar } from './TaskReleaseBar';
 import { TaskControls } from './TaskControls';
-import { CreateProjectDialog } from './ProjectsPage';
+import { CompletionPolicyControl, CreateProjectDialog } from './ProjectsPage';
 import { Loader } from '../Loader';
 
 interface Project {
   id: string;
   name: string;
   default_agent: 'codex' | 'copilot';
+  policy: 'deliver_pr' | 'complete_without_deployment';
 }
 
 type TaskState = FactoryBoardTask['state'];
@@ -105,7 +106,8 @@ function isDate(value: unknown): value is string {
 function isProject(value: unknown): value is Project {
   return isObject(value) && typeof value.id === 'string' && taskIdPattern.test(value.id) &&
     BigInt(value.id) <= maxSqlBigInt && typeof value.name === 'string' &&
-    (value.default_agent === 'codex' || value.default_agent === 'copilot');
+    (value.default_agent === 'codex' || value.default_agent === 'copilot') &&
+    (value.policy === 'deliver_pr' || value.policy === 'complete_without_deployment');
 }
 
 function isTask(value: unknown): value is Task {
@@ -566,6 +568,7 @@ export function TasksPage({ backendUrl, getAccessToken }: Props) {
     }
   };
 
+  const createProject = projects.find((project) => project.id === createProjectId);
   const createDialog = dialogOpen && (
     <Modal title="Create task" titleId="create-task-heading" onClose={closeDialog} busy={creating} className="task-dialog">
         <form className="task-create-form" onSubmit={(event) => { void createTask(event); }}>
@@ -586,6 +589,20 @@ export function TasksPage({ backendUrl, getAccessToken }: Props) {
               {projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}
             </select>
           </div>
+          {createProject && (
+            <CompletionPolicyControl
+              key={createProject.id}
+              projectId={createProject.id}
+              projectName={createProject.name}
+              policy={createProject.policy}
+              backendUrl={backendUrl}
+              getAccessToken={getAccessToken}
+              onSaved={(updated) => setProjects((current) =>
+                current.map((project) => project.id === updated.id
+                  ? { ...project, policy: updated.policy }
+                  : project))}
+            />
+          )}
           <div className="task-form-field">
             <label htmlFor="create-agent">Agent</label>
             <select id="create-agent" name="agent" value={createAgent} onChange={(event) => setCreateAgent(event.target.value as Agent)}>
