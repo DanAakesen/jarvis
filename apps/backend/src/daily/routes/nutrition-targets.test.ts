@@ -16,7 +16,7 @@ const foreign = '22222222-2222-4222-8222-222222222222';
 const at = '2026-10-17T10:00:00.000Z';
 const url = '/daily/nutrition-targets';
 const apps: FastifyInstance[] = [];
-const headers = (kind = 'owner') => ({ authorization: `Bearer ${kind}.synthetic` });
+const headers = (kind = 'owner') => ({ authorization: `Bearer ${kind}.synthetic.signature` });
 
 function stored(targets: Partial<NutritionTargets> = {}): StoredNutritionTargets {
   const merged: NutritionTargets = { ...emptyNutritionTargets, ...targets };
