@@ -15,6 +15,34 @@ with `agent_error`. Its immutable receipt remains `accepted=false`; #820 owns
 the functional follow-through and #880 stays open. This integration does not
 claim to fix that historical failure or complete private Daily acceptance.
 
+## Visible Daily page (18 October 2026; P12-15 / #730)
+
+Dan, after the invisible Daily slices: "I have no idea what is built and cannot
+see anything." Daily now opens on an overview before any record table. Under
+"What Daily holds today" it lists each retained collection the backend exposes
+(measurements, sleep, workouts, food history, saved favourites, meal plans, brief
+history, sync evidence) with one plain sentence on what it is for. Each row
+shows what a read-only, one-record check found: Has records, None returned
+(which never claims the original source is empty) or Could not read (with Retry).
+Open takes the row into the existing record browser and Back returns. It uses
+only the two existing owner-bound endpoints, `GET /daily/capabilities` and
+`POST /daily/query`, and adds no endpoint, writer, calculation, migration,
+provider call, account, consent, secret or import. Nothing in it is stored,
+estimated or invented.
+
+The page, route and navigation exist only when the web build sets
+`VITE_DAILY_ENABLED` to exactly `true`. It is off by default (a missing value or
+`false` is off; any other value stops the build) and no workflow or Bicep file
+sets it in this change, so every environment keeps the released navigation. Dan
+pre-authorised switching Daily on for his account once the page is live and
+checked; that is the next, separate change (`JARVIS_DAILY_ENABLED` and
+`VITE_DAILY_ENABLED`), not part of this one.
+
+Checked in a real headless Chromium at 390×844 touch (dark and light), 320, 768
+and 1280 px against synthetic responses (details in DESIGN.md). Local runs are not
+qualification, and no live backend, private data, physical phone or acceptance is
+claimed.
+
 ## Proactive assistance (17 October 2026; P13-01 / #917)
 
 The first delivery-proof milestone is approved. P13-01 builds the owner-bound
@@ -67,7 +95,7 @@ any SQL, and an agent reaches the targets only through the approved tool. No
 migration, account, consent, grant, secret, RBAC, resource or import is added, and
 no provider, device or private data is read or written.
 
-Next: the visible Daily page (P12-15 / #730).
+The visible Daily page (P12-15 / #730) is recorded in its own section.
 
 ## On-screen views authority (17 October 2026; P11-09 / #885)
 
