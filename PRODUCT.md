@@ -253,15 +253,15 @@ Only phase 1 is in scope now, extended by P7 (Jarvis everywhere: web and voice c
 | **Sandbox** | One sandbox per task: starts when work begins, closes after delivery or cancel. Runner terminal status follows bounded cleanup; verified work can survive a later cleanup failure only with authoritative stopped-writer proof. Cancellation waits for owned cleanup and reports failure instead of false success. A completed runner turn is not task Done without verified GitHub delivery and project policy. The agent runs targeted builds and tests only; no Docker. |
 | **Build and release** | Full builds, all tests, and releases run in GitHub Actions, as in Dan's normal workflow; never in the sandbox. Managed projects can copy the repository's PR-check and OIDC-release workflow templates and adapt their build and deployment commands. |
 | **Project settings** | Per project: how far agents may go (deliver a PR, or complete without deployment), merge rules, sandbox size. |
-| **Settings** | A settings page controls Jarvis, voice and coding-agent defaults using only server-validated models, plus the app-wide light/dark appearance; updates affect new sessions and tasks, not running work. Dan can also list and delete saved PC/browser task recipes. |
-| **Task recipes** | After a successful PC/browser run, remember its app/site key, normalized goal and stable operation/target sequence, never entered values or sensitive data. Jev chooses among matching app/site recipes plus none and verifies each step against a fresh snapshot; ambiguous or missing targets fall back to normal planning, and low confidence asks Dan. Existing pause and irreversible-only confirmation gates still apply. |
+| **Settings** | A settings page controls Jarvis, voice and coding-agent defaults using only server-validated models, plus the app-wide light/dark appearance; updates affect new sessions and tasks, not running work. Dan can also list and delete saved PC/browser Routines. |
+| **Routines** (formerly task recipes) | After a successful PC/browser run, remember its app/site key, normalized goal and stable operation/target sequence, never entered values or sensitive data. Jev chooses among matching app/site routines plus none and verifies each step against a fresh snapshot; ambiguous or missing targets fall back to normal planning, and low confidence asks Dan. Existing pause and irreversible-only confirmation gates still apply. |
 | **Decision provider (P9-76)** | Reflex, browser, recipe and PC decisions are scored by Jev (default) or Microsoft-Decision-1, chosen in Settings under Decisions (also by asking Jarvis). Switching applies to the next request. If the chosen service cannot answer, Jarvis acts as if no quick decision was made; it never silently switches. Logs record which service decided, to compare speed and agreement. |
 | **Transparency** | Usage and cost per task and project: sandbox time, model tokens, voice, and Codex/Copilot usage. Show today's UTC Jarvis tool-call counts by tool, including refusals and failures; subscription usage has no fabricated DKK cost. |
 | **Tool argument recovery** | Voice and chat receive safe validation hints so Jarvis can correct invalid arguments and retry without executing the invalid call. Repository search identifies incomplete or empty results and suggests listing and reading files rather than claiming code is absent. |
 | **Sign-in** | Tenant-specific Microsoft sign-in requests the delegated Jarvis API scope; the backend allows only Dan's Entra object ID and returns his display name from `/me`. For chat, the backend calls the hosted agent through Foundry Invocations with its managed identity; the agent verifies Dan's delegated token and stored source message through `/me` and conversation history. The agent has its own identity for reading model settings and listing/calling tools; coding runners use a separate app-only role restricted to task-event ingestion. Google Calendar and Gmail use backend-only OAuth credentials in Key Vault, scoped to Dan's personal account. No passwords in Jarvis. |
 | **Cost** | As low as possible. Slower startup after inactivity is acceptable. |
 | **Database wake** | SQL connection acquisition and explicitly read-only queries retry resume errors 40613, 40197, 40501 and connection timeouts with backoff for up to 90 seconds. Signed-in pages show “Waking Jarvis…” only while the backend reports a database wait. An ambiguous write failure is never automatically replayed. |
-| **Memory** | Carry forward only clearly stated preferences, project facts, decisions and unfinished tasks. Retrieve relevant memories with their source message; Dan can inspect, correct and forget them. Never remember secrets, credentials, banking or health details unless Dan explicitly says “remember”. Memories live in Azure SQL until deleted; forgetting does not delete conversation records. Compaction and generated views have separate lifetimes. |
+| **Memory** | Carry forward only clearly stated preferences, project facts, decisions and unfinished tasks. Retrieve relevant memories with their source message; Dan can inspect, correct and forget them. Never remember secrets, credentials, banking or health details unless Dan explicitly says “remember”. Memories live in Azure SQL until deleted; forgetting does not delete conversation records. Compaction and generated views have separate lifetimes. A long chat keeps its context through a bounded rolling summary of older messages, placed ahead of the recent ones: it keeps decisions, commitments and open tasks, never holds secrets or file contents, never rewrites messages, shows nothing new in the UI, and is limited by a daily setting (default 24, 0 turns it off). If it fails, chat falls back to the plain recent window. |
 | **Turn context** | Each model turn receives current running-task status and recent events plus a bounded recent-message window, so typical status questions do not need a separate task-list model round. |
 
 ### App structure
@@ -381,7 +381,7 @@ Global defaults on the settings page; a task can override the coding-agent model
 
 Dan can also change Jarvis's model or reasoning by chat or voice for the next session, and change the agent or verified model options on a Ready coding task. Running-task model changes are refused with a reason; they never alter an active turn.
 
-Presence has three modes: Present (`present`, cyan), Away (`away`, amber), and On the move (`on_the_move`, neutral). Away and On the move suppress spoken status updates; the Now feed and browser approvals remain available in all modes. The Settings API keeps `personality.customInstructions` as the base instruction and adds one instruction for each mode, each limited to 2,000 characters. Jarvis can change modes from chat or voice without confirmation and announces the change.
+Presence has three modes: Present (`present`, green), Away (`away`, yellow), and On the move (`on_the_move`, blue), in both themes. Away and On the move suppress spoken status updates; the Now feed and browser approvals remain available in all modes. The Settings API keeps `personality.customInstructions` as the base instruction and adds one instruction for each mode, each limited to 2,000 characters. Jarvis can change modes from chat or voice without confirmation and announces the change.
 
 | Area | Setting | Default |
 | --- | --- | --- |
@@ -936,6 +936,7 @@ Under-orb status uses bright white text with a soft glow and contrast shadow, wi
 
 Dan approved these after a gap audit. They are planned, not built.
 
+- **Touch chat resize (P9-117, implemented):** phones have a visible, keyboard-accessible grip inside the Conversation heading. Dragging it changes chat height within the existing resize limits without scrolling or covering the composer; completed changes persist on the device separately from desktop placement. The composer open/close handle and desktop edge/corner resizing remain unchanged. Physical iPhone and Safari acceptance belongs to Dan, not automated browser emulation.
 - **Model control per role.** Settings lists the models actually deployed on the Foundry account and lets Dan pick one per role: chat, vision, research, voice, transcription, embedding, Codex and Copilot, each with a reasoning effort the model supports. Dan can add or remove Foundry deployments from Settings with a confirmation, and Claude models are allowed as the chat model. Jarvis can read and change these settings by voice or chat; model and budget changes need confirmation. Voice tuning (turn detection, barge-in, reply length), research depth, memory and retrieval thresholds, and timeouts are also adjustable. ([#495](https://github.com/DanAakesen/jarvis/issues/495)–[#507](https://github.com/DanAakesen/jarvis/issues/507))
 - **Folio.** Everything Jarvis researched or pulled up (reports, generated apps, images, knowledge-graph views) is kept in the Folio. A rail icon opens a left pane where Dan can search, filter by kind, pin, and reopen items; Jarvis can find and reopen them too ("pull up the Ignite research again"). Jarvis can also rename, pin/unpin or remove one entry by id or unique query; ambiguous matches require Dan to choose. Removal requires Now approval naming the item while Dan is present and retains its source artifact and history. ([#519](https://github.com/DanAakesen/jarvis/issues/519), [#633](https://github.com/DanAakesen/jarvis/issues/633))
   Selecting another page closes the pane rather than leaving Folio selected, including selecting the current page again. This applies to desktop links, the phone menu and Jarvis navigation; an area with multiple pages can open its own navigation instead.
@@ -1067,6 +1068,20 @@ voice supplies write context; phone is unsupported. The two reviewed food tools
 share the bounded 180-second browser relay and 210-second hosted-agent read
 budgets; other tool deadlines remain unchanged. No production activation or
 full client/provider/device acceptance is implied.
+
+Owner-configured nutrition targets feed the personalised suggestion budget:
+resting energy burn, daily deficit and protein target, each a whole number Dan
+enters in Settings or by telling Jarvis; a chat or voice change needs the exact
+browser Now approval. There are no defaults: an unset target shows as needing
+configuration and is never estimated. Allowance today is resting burn plus the
+active energy burned so far today minus the deficit; energy and protein left
+subtract what has been eaten so far, with unknown values flagged rather than
+counted as zero and no projection of the rest of the day. There is no BMR/TDEE
+estimate and no coaching, recovery or recomposition automation. The values are
+private health data and stay out of source, fixtures, documents and logs. The
+stored targets and their approved tool exist only behind the default-off Daily
+gate (Daily off leaves Jarvis unchanged); the budget adapter and Settings
+section follow, and no activation or acceptance is implied.
 
 When an existing Frida adapter is explicitly supplied, owner-authenticated
 `daily_food_lookup` exposes only its public-reference component lookup.

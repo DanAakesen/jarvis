@@ -1,5 +1,76 @@
 # Decisions
 
+## Use owner-configured nutrition targets for the daily food budget (17 October 2026; P12-09 / #724)
+
+**Confirmed user decision, not a proposal or completed acceptance.** Dan ruled
+that the resting energy burn, the daily deficit and the protein target are
+settings he enters and Jarvis reads: "Put this in settings and read from there."
+They are owner-entered configuration, not defaults in code, tests or documents.
+
+This is an explicit, narrow reversal of the earlier no-maintenance-maths rule
+for one formula only. Allowance today is the owner's resting burn plus the
+active energy burned so far today (stored Health data) minus the owner's
+deficit. Energy left is that allowance minus what has been eaten so far, and
+protein left is the owner's target minus what has been eaten so far, with no
+projection of the rest of the day. Still excluded: any BMR/TDEE estimate from
+weight, height or age, activity factors, and all coaching, recovery or
+recomposition automation. #723 stays withdrawn.
+
+Keep each target as an owner-namespaced Daily row in the existing `dbo.settings`
+table (global scope), not in core `Settings` and not in a migration. An absent
+row means "needs configuration": no default, estimate or fallback. The signed-in
+owner edits them through `GET`/`PATCH /daily/nutrition-targets`; chat and voice
+use the sensitive `daily_nutrition_targets` tool, whose changes need the exact
+browser Now approval. Tool audit redacts the values. They are personal health
+data in a public repository, so no source, fixture, document, PR text or log
+carries real figures; tests use synthetic values and Dan enters his own.
+
+Everything stays behind the default-off Daily gate: Daily off leaves Jarvis
+unchanged and this slice has no production caller. The budget adapter must
+report unknown burn or unknown meal macros as unknown, never zero, and count
+only the exact active-energy metric so resting energy is not double-counted.
+That adapter, the Settings section and the default-off composition are separate
+slices. No provider, device or private access, live probe, activation or
+acceptance follows from this record.
+
+## Restore green/yellow/blue presence, rename Task recipes to Routines and keep Save above the composer (17 October 2026; P9-102, P9-103, P9-98)
+
+Dan asked for three small web fixes and speed over ceremony, so they ship as
+one PR (#798, #797, #792). The blocked-by chain between them only existed to
+avoid same-file collisions and is ignored.
+
+Presence: Present is green, Away yellow and On the move blue in both themes.
+The 7 October two-accent palette had drifted from `docs/architecture.md` and
+the P6-23 decision, which already say green/yellow/blue. Dark fills measure at
+least 4.11:1 on every surface. The light fills alone fail 3:1 on pale glass, so
+light dots carry a 1.5px ring of their own hue darkened (tone mixed 55% with
+black), measured at least 3.06:1. The label stays beside every dot and the orb
+is unchanged. Known limit: the phone top-bar chip hides its label at 700px and
+below, so colour is the only visible cue there (the accessible name keeps the
+mode), and green against yellow can be hard for some colour-blind users. A shape
+cue is a follow-up if Dan wants one.
+
+Routines: every visible, announced and tested string says Routines. The
+`/recipes` API alias, file and component names, storage key and response key are
+unchanged, so there is no contract change. The copy-cleanup guard now rejects
+"Task recipes".
+
+Save above the composer: on phones, non-Home pages scroll with the window while
+the chat composer is fixed above the dock and grows with its draft, attachments
+and errors, up to 174px. Page-end clearance was a fixed 100px, so any composer
+above 68px covered the last control, and a real tap on Save hit the composer's
+More options button. Clearance now follows the measured composer height (the
+existing `--conversation-composer-height`), floored at the nominal 100px so a
+one-line composer looks as before. The rule is phone-only, non-Home,
+voice-inactive and signed-in. Save remains a plain static row (Dan, 8 October),
+not a sticky bar, and no new shell, keyboard estimate or focus-scroll workaround
+is added. The same rule also clears the last control on other phone pages:
+Kanban's Retry board was hidden behind a tall composer before.
+
+Evidence is headless Chrome with stubbed sign-in and a fake backend at 320×700,
+390×844 and 1440×900 in both themes, plus unit tests. It is not a physical
+iPhone/Safari check. Exact-head CI and live acceptance remain.
+
 ## Treat a model-issued voice call as Jarvis only inside the relay's call scope (17 October 2026; P11-09)
 
 Dan's live test showed Jarvis refusing to put views on screen in voice with
@@ -198,6 +269,59 @@ and the integration owner's main-only release remain
 separate gates. Remote-enabled runtime state is not exposed here and is not
 claimed. Private Daily/provider/device/access boundaries remain unchanged.
 
+## Keep a rolling, owner-bound conversation summary ahead of a wider window (17 October 2026; P9-105, #800)
+
+Chat history kept only the newest 20 messages, so a decision from message 5 was
+gone by message 40. Dan asked for a rolling summary on 3 October, and his 17
+October priority starts it before #794/#816 settle. Keep messages untouched and
+append versioned summaries to a new owner-bound `dbo.conversation_summaries`
+(migration `0051`; the issue's `0046` was already taken). Each row records the
+message range it covers, its version, the model and the creation time, and the
+backend keeps the newest 200 versions. This is not `core/memory.ts`, which stores
+durable memories.
+
+The agent writes the summary after a finished chat reply (never a smoke or errored
+turn) in one single-flight background task, using the chat model, or
+`JARVIS_SUMMARY_MODEL` when set, and the existing `chat` usage role. Each refresh folds
+the not-yet-covered older messages in order into the previous summary, so earlier
+versions are carried forward rather than rewritten. The model returns two sections,
+`SUMMARY` and `OPEN ITEMS`, which keep decisions, commitments, preferences and open
+tasks. The prompt then carries that summary followed by up to 40 raw messages after
+the covered range, and the newest 20 messages never fold; a refresh starts once 30
+messages are uncovered. Without a summary the window is the old 20 messages.
+
+Secrets and file contents stay out in three places: messages are scrubbed of
+credential shapes and clipped to 1,500 characters before the model sees them; the
+instructions forbid both; and the answer is scrubbed again on the agent and by the
+backend's existing `redactWorkContent`. The summary reaches the model as labelled
+untrusted background, and Jarvis may say it works from a summary of older messages.
+
+Cost is bounded three ways: the setting `global.conversationSummaryDailyLimit`
+(integer 0 to 48, default 24, 0 turns the feature off), a rolling 24-hour attempt
+cap inside the agent, and a server-side 429 once the day's versions reach the
+limit. Each call is one tool-free request with at most 40,000 characters in and
+6,000 tokens out, and its tokens go through `/usage/foundry`. The 40,000 covers the
+whole prompt: the carried summary and open items are charged against it before any new
+message is added, and a prompt still over it is refused as `prompt_too_large` before the
+model is called or an attempt is counted. At the default a long
+chat can fold roughly 240 messages a day; beyond that the summary lags and the
+window is still never worse than before.
+
+Any failure returns the plain window and logs a named, content-free event:
+`chat.memory_summary_failed stage=<fetch|history|summarise|save|schedule|refresh>
+code=<code>`, `chat.memory_summary_skipped reason=<reason>`,
+`chat.memory_summary_gap pages=<n>` and `chat.memory_summary_saved`. A failure pauses
+refresh for 10 minutes; a stale-version conflict or a reached limit does not.
+Both routes are owner-only and run on Dan's delegated token, which the refresh task
+holds in memory for at most about 90 seconds and never logs.
+
+Deferred on purpose: a dedicated usage role and settings model role (they need a
+check-constraint migration and a deploy-order step), history older than the 400
+messages a first summary can reach (logged as a gap), and a forward-cursor history
+API. Verified offline with a fake agent over a recorded 331-message conversation;
+live behaviour is unverified until deploy, and the chat canary and
+`conversation.reply_failed` stay the live checks.
+
 ## Reuse retained feed services through one inactive tool (17 October 2026; P12-09)
 
 Dan requires equivalent tools for retained Daily capabilities. Bind the existing
@@ -302,7 +426,9 @@ Keep attribution, cached retrieval timestamps, unknowns and partial totals.
 No conversation/history/credentials or caller-selected endpoint enter the
 provider interface. No reference result authorises intake. Live-provider
 acceptance remains unverified, and personal suggestions must not invent an
-authoritative remaining budget. This is inactive source integration only.
+authoritative remaining budget (Dan later ruled the owner-configured allowance
+inputs; see "Use owner-configured nutrition targets for the daily food budget").
+This is inactive source integration only.
 Qualified a8 passed its first normal CI, four actual CodeQL analyses and
 automatic source review without findings. #876 merged9334d3ed with the same
 6da17b0c tree; Deploy39012842333 released backend0000337 only. Actual routine
@@ -533,6 +659,15 @@ PR and linked issues; this source checkpoint does not claim a follow-up pass.
 
 ## Mobile composer focus hotfix (16 October 2026)
 
+P9-117 (17 October 2026) retains this desktop/phone ownership boundary: add an
+in-window phone height grip, sharing the existing resize limits and gesture
+handling but saving its preference under `jarvis.conversation-layout.phone.v1`.
+The eight desktop borders were explicitly excluded on phones, not broken
+pointer-event handlers; their outside-edge targets are also unsuitable for
+a full-width dock. Apply only phone height, without enabling desktop placement
+or its composer-anchor path. Physical iPhone and Safari acceptance remains
+Dan's; Chromium touch emulation is not native-device proof.
+
 Confirmed with JarvisPM for P11-06 / #860: suspend desktop manual conversation
 geometry under the existing phone layout policy, preserving its persisted value
 for desktop restoration. Do not patch focus scrolling, invent a keyboard inset
@@ -711,7 +846,9 @@ Keep hosted ChatGPT food writes explicitly unfinished until their scoped
 connector authorisation and trusted intent/proposal-acceptance contracts are
 approved and implemented. Internal Jarvis reads are not a substitute for that
 requirement. No maintenance/TDEE, completeness, expiry or readiness rule is
-invented. Full #724, live/provider/device/source-parity and release acceptance
+invented, except the one owner-configured allowance formula Dan later ruled (see
+"Use owner-configured nutrition targets for the daily food budget"). Full #724,
+live/provider/device/source-parity and release acceptance
 cannot be inferred from synthetic checks.
 
 16 October continuation after #866 deployment: extend this existing read
@@ -1137,6 +1274,8 @@ Core P12-09/#724 API/tools work excludes new coaching; a deliberately excluded
 optional feature and its missing maintenance/TDEE, completeness, expiry or
 readiness interpretation must not remain semantic completion prerequisites.
 Do not invent those rules or activate #724. Existing core validation remains.
+Dan's later ruling narrowly permits only the owner-configured allowance formula;
+see "Use owner-configured nutrition targets for the daily food budget".
 Keep one Daily page plus existing on-demand GenUI, no widget, extra
 Workouts/Nutrition pages or mandatory four native views. Parent owns native
 issue/dependency/board reconciliation after this source update. The coordinator

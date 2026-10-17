@@ -418,6 +418,21 @@ independently read back. No source/semantic failure, qualification rerun or
 waiver; initial local style failures remain above. This finished inactive
 release is not actual food/client/device/provider or activation acceptance.
 
+## Owner nutrition targets checks (17 October 2026; P12-09)
+
+The targets store, route and `daily_nutrition_targets` tool compose only through
+the sixth `createDailyModules` argument with Daily on. Use synthetic figures
+only: they are the owner's private health data, so no real value may appear in a
+fixture, document, log or PR text, and no check writes the owner's values.
+Check that Daily off leaves routes, tools and capabilities unchanged, that an
+unset target is "needs configuration" rather than a default, that a change needs
+the exact browser Now approval, and that audit redacts the values. The tool joins
+`daily_food_review`/`daily_saved_food` in the 180-second browser relay budget and
+the 210-second hosted-agent read; other deadlines are unchanged. Pure targets
+tests and lint run locally. Real Fastify route, composition, relay and Python
+agent semantics need the existing pinned CI graph; local Fastify/jose are
+unavailable.
+
 ## Internal Daily review checks (17 October 2026; P12-09)
 
 The current inactive continuation registers `daily_food_review` only with the
@@ -3576,6 +3591,7 @@ Agent configuration (environment variables, no secrets):
 | `JARVIS_API_CLIENT_ID` | Optional `jarvis-api` client ID for the token scope `api://<id>/.default`; defaults to the bootstrap ID |
 | `AZURE_OPENAI_API_KEY` | Optional local model key; without it the agent identity also gets the model token |
 | `AZURE_OPENAI_SYSTEM_PROMPT`, `AZURE_OPENAI_MAX_OUTPUT_TOKENS`, `JARVIS_REASONING_EFFORT`, `LOG_LEVEL` | Optional overrides, as in the prototype |
+| `JARVIS_SUMMARY_MODEL` | Optional (P9-105). Model deployment name for the conversation-summary call; defaults to the chat model. A name, not a secret |
 
 The main Deploy workflow publishes the agent image by digest, creates a hosted
 version with `JARVIS_BACKEND_URL`, and configures the backend with the version's

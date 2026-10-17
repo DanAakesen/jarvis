@@ -12,6 +12,7 @@ prototype's fake tools are gone: every tool comes from the backend's tool regist
 | `model_client.py` | Per-session configured model and reasoning effort for the Responses API |
 | `jarvis_tools.py` | Instructions and `BackendToolClient` for the backend tool registry |
 | `chat_runtime.py`, `chat_telemetry.py` | Verified chat history, incremental SSE and content-free stage timings |
+| `conversation_memory.py` | Rolling summary of older chat messages: fetch, prompt text, background refresh and fallback (P9-105) |
 
 ## Backend tools
 
@@ -40,8 +41,8 @@ loaded, the turn fails before the model is asked.
 If the context snapshot cannot be loaded, the turn also fails before the model
 call rather than answering with missing or stale task status.
 
-`daily_food_review` and `daily_saved_food` have a 210-second response-read
-deadline. Their Now cards explicitly expire after two minutes and each complete backend operation is
+`daily_food_review`, `daily_saved_food` and `daily_nutrition_targets` have a
+210-second response-read deadline. Their Now cards explicitly expire after two minutes and each complete backend operation is
 bounded to three minutes, below Container Apps' 240-second ingress limit.
 The SQL expiry, browser expiry and cancellation timer agree. Existing approvals
 retain their default five minutes. Connect, write and pool timeouts stay
@@ -66,6 +67,22 @@ chat closes the model stream and joins outstanding preparation reads.
 `chat.latency` logs/spans include stage durations and outcomes, never content or
 exception messages. See [P7-23 evidence](../../docs/decisions.md#p7-23-latency-evidence)
 for the outstanding deployed acceptance check.
+
+P9-105 keeps a long chat from losing its decisions. Chat also reads
+`GET /conversation/summary` with Dan's token (capped at 5 seconds). With a stored
+summary the prompt carries it as untrusted background before up to 40 raw messages
+after the range it covers; without one the window stays at 20 messages. After a
+finished reply, `conversation_memory.py` runs one single-flight background task that
+folds the uncovered older messages into the previous summary with a tool-free call
+to the chat model (`JARVIS_SUMMARY_MODEL` overrides it), reports usage as role
+`chat` and saves the next version through `POST /conversation/summary`. The backend
+setting `conversationSummaryDailyLimit` (default 24, 0 turns it off) bounds the
+cost, and each call's whole prompt, carried summary included, stays within 40,000
+characters (an over-cap prompt fails as `prompt_too_large` before any model call). Any
+failure keeps the plain window and logs `chat.memory_summary_failed`,
+`chat.memory_summary_skipped`, `chat.memory_summary_gap` or
+`chat.memory_summary_saved` with codes only, never message text. Its tests run
+offline against `tests/fixtures/conversation_memory_300.json`.
 
 P9-99 returns `agent_pre_model` (request entry to first model request),
 `model_request` (first request to stream entry), `model_coordination` (first

@@ -5,7 +5,7 @@ import { isWorkspaceCommand, type GeneratedView, type WorkspaceCommand, type Wor
 import { GeneratedViewRenderer } from './GeneratedViewRenderer';
 import { flyWindowAway, flyWindowToTab } from './window-fly-away';
 import { layoutOrder, layoutWindows, type WindowLayout, type WindowPlacement, type WindowRect } from './window-layout';
-import { fitConversationLayout, readConversationLayout, resizeConversationLayout, saveConversationLayout,
+import { fitConversationLayout, phoneConversationLayoutKey, readConversationLayout, resizeConversationLayout, saveConversationLayout,
   type ConversationCanvasSize, type ConversationPosition, type ConversationResizeEdge } from './conversation-layout';
 import { Loader } from './Loader';
 import { readElement, useReadback, type WindowReadback } from './window-readback';
@@ -163,6 +163,7 @@ export const Workspace = forwardRef<WorkspaceController, {
   const [order, setOrder] = useState<string[]>([]);
   const [geometry, setGeometry] = useState<Record<string, Geometry>>({});
   const [conversationLayoutState, setConversationLayoutState] = useState(readConversationLayout);
+  const [phoneConversationLayoutState, setPhoneConversationLayoutState] = useState(() => readConversationLayout(phoneConversationLayoutKey));
   const [minimizedViewIdsState, setMinimizedViewIds] = useState<ReadonlySet<string>>(new Set());
   const [closedViewIdsState, setClosedViewIds] = useState<ReadonlySet<string>>(new Set());
   const [maximizedViewId, setMaximizedViewId] = useState<string | null>(null);
@@ -172,6 +173,7 @@ export const Workspace = forwardRef<WorkspaceController, {
   ));
   // Phone chat shares the viewport dock; retain manual geometry only as the desktop preference.
   const conversationLayout = phone ? null : conversationLayoutState.layout;
+  const resizeLayoutState = phone ? phoneConversationLayoutState : conversationLayoutState;
   const conversationPositioned = Boolean(conversationLayout);
   const [announcement, setAnnouncement] = useState('');
   const [actionErrors, setActionErrors] = useState<Record<string, string>>({});
@@ -752,6 +754,21 @@ export const Workspace = forwardRef<WorkspaceController, {
     return result;
   }, [isViewOpen, pinnedViewIds, pins, workspaceViews]);
 
+  const changeConversationLayout = useCallback((layout: WindowRect | null, size?: ConversationCanvasSize) => {
+    const setLayout = phone ? setPhoneConversationLayoutState : setConversationLayoutState;
+    setLayout(current => ({
+      layout: layout ? { ...layout } : null, ...(size ? { size: { ...size } } : {}), error: current.error,
+    }));
+  }, [phone]);
+
+  const persistConversationLayout = useCallback((layout: WindowRect | null, size: ConversationCanvasSize) => {
+    if (layout) {
+      const error = saveConversationLayout(layout, size, phone ? phoneConversationLayoutKey : undefined);
+      const setLayout = phone ? setPhoneConversationLayoutState : setConversationLayoutState;
+      setLayout(current => ({ ...current, error }));
+    }
+  }, [phone]);
+
   const dispatchCommand = useCallback((command: WorkspaceCommand, trustedBlobHost?: string): boolean => {
     const viewIndex = 'viewId' in command
       ? orderedViews.findIndex((view) => view.id === command.viewId)
@@ -976,8 +993,8 @@ export const Workspace = forwardRef<WorkspaceController, {
         // here, so a new contract operation never breaks the build or silently counts as applied.
         return false;
     }
-  }, [agentViews, arrangeMenu, autoRects, closeView, closedViewIds, conversationLayout, conversationLayoutState.size, focusView, geometry, initialGeometry, isViewOpen, jarvisUpdateTimers, managed, minimiseAll,
-    minimiseView, minimizedViewIds, minimizedViews, openViews, orderedViews, phone, pinnedViewIds, reorder, requestPinChange, restoreView, visibleViews, workspaceViews]);
+  }, [agentViews, arrangeMenu, autoRects, changeConversationLayout, closeView, closedViewIds, conversationLayout, conversationLayoutState.size, focusView, geometry, initialGeometry, isViewOpen, jarvisUpdateTimers, managed, minimiseAll,
+    minimiseView, minimizedViewIds, minimizedViews, openViews, orderedViews, persistConversationLayout, phone, pinnedViewIds, reorder, requestPinChange, restoreView, visibleViews, workspaceViews]);
 
 
   useImperativeHandle(ref, () => ({
@@ -1211,19 +1228,6 @@ export const Workspace = forwardRef<WorkspaceController, {
     }
   }
 
-  function changeConversationLayout(layout: WindowRect | null, size?: ConversationCanvasSize) {
-    setConversationLayoutState(current => ({
-      layout: layout ? { ...layout } : null, ...(size ? { size: { ...size } } : {}), error: current.error,
-    }));
-  }
-
-  function persistConversationLayout(layout: WindowRect | null, size: ConversationCanvasSize) {
-    if (layout) {
-      const error = saveConversationLayout(layout, size);
-      setConversationLayoutState(current => ({ ...current, error }));
-    }
-  }
-
   function currentConversationRect(id: string, bounds: DOMRect): WindowRect | null {
     const element = windowElements.current.get(id);
     if (!element || !bounds.width || !bounds.height) return null;
@@ -1245,7 +1249,7 @@ export const Workspace = forwardRef<WorkspaceController, {
     gestures.current.set(event.pointerId, {
       id, kind: 'conversation', operation, x: event.clientX, y: event.clientY, rect,
       currentRect: rect, startSize: { width: bounds.width, height: bounds.height }, currentSize: { width: bounds.width, height: bounds.height },
-      previous: conversationLayout, previousSize: conversationLayoutState.size, edge,
+      previous: resizeLayoutState.layout, previousSize: resizeLayoutState.size, edge,
     });
     changeConversationLayout(rect, { width: bounds.width, height: bounds.height });
     setActiveGestureId(id);
@@ -1257,8 +1261,9 @@ export const Workspace = forwardRef<WorkspaceController, {
     const bounds = canvas.current?.getBoundingClientRect();
     if (!bounds?.width || !bounds.height) return;
     const size = { width: bounds.width, height: bounds.height };
-    const rect = conversationLayout ? fitConversationLayout(conversationLayout, size, conversationLayoutState.size)
+    const fitted = resizeLayoutState.layout ? fitConversationLayout(resizeLayoutState.layout, size, resizeLayoutState.size)
       : currentConversationRect(id, bounds);
+    const rect = phone && fitted ? { ...fitted, x: 0, y: 1 - fitted.height, width: 1 } : fitted;
     if (!rect) return;
     event.preventDefault();
     const step = event.shiftKey ? 64 : 32;
@@ -1460,6 +1465,10 @@ export const Workspace = forwardRef<WorkspaceController, {
               '--conversation-width': `${currentGeometry.width * conversationSize.width}px`,
               '--conversation-height': `${currentGeometry.height * conversationSize.height}px`,
             } : {}),
+            ...(view.presentation === 'conversation' && phone && phoneConversationLayoutState.layout ? {
+              '--conversation-height': `${fitConversationLayout(phoneConversationLayoutState.layout,
+                conversationSize, phoneConversationLayoutState.size).height * conversationSize.height}px`,
+            } : {}),
           } as CSSProperties;
           const actionPending = pendingActions.has(view.id);
           const pinned = pinnedViewIds.has(view.id);
@@ -1489,6 +1498,16 @@ export const Workspace = forwardRef<WorkspaceController, {
               onPointerDownCapture={(event) => raiseView(event, view.id)}
             >
               <header className="workspace-window-heading">
+                {!maximized && docked && phone && <button className="conversation-resize-handle" type="button"
+                  aria-label="Resize Conversation height"
+                  aria-description="Drag up to expand or down to shrink. Use Up and Down arrow keys; Shift makes larger steps. Home shrinks and End fills available height."
+                  title="Drag to resize conversation"
+                  onPointerDown={event => beginConversationGesture(event, view.id, 'resize')}
+                  onPointerMove={updateGesture} onPointerUp={endGesture} onPointerCancel={endGesture}
+                  onLostPointerCapture={endGesture}
+                  onKeyDown={event => conversationKeyDown(event, view.id, 'resize')}>
+                  <span aria-hidden="true" />
+                </button>}
                 <h3
                   ref={(element) => {
                     if (element) windowHeadings.current.set(view.id, element);
@@ -1680,7 +1699,7 @@ export const Workspace = forwardRef<WorkspaceController, {
           );
         })}
       </div>
-      {conversationLayoutState.error && <p className="conversation-layout-error" role="alert">{conversationLayoutState.error}</p>}
+      {resizeLayoutState.error && <p className="conversation-layout-error" role="alert">{resizeLayoutState.error}</p>}
       {announcement && <p className="workspace-announcement" role="status" aria-live="polite">{announcement}</p>}
     </section>
   );

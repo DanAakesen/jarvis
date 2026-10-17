@@ -39,6 +39,8 @@ describe('production interface copy', () => {
       'Visual inspection is unavailable until the backend is configured.',
       'The ${page} page is not available yet.',
       'No task recipes saved yet.',
+      'Task recipes',
+      'task recipes',
       'No credential status has been recorded yet.',
       'Pull-request links are not reported until the GitHub integration is available.',
       'Select an active project to load release context.',
