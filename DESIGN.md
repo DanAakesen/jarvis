@@ -25,6 +25,15 @@ the summary have 44px targets, shared borderless hover/pressed surfaces and
 visible keyboard focus. Stack each phone count below its icon to fit the
 single-row header at 320px without changing the composer or voice orb.
 
+Local Chromium fixture captures and interaction measurements are in
+`docs/ui/screenshots/p9-119/`: 320×568, 390×844 and 1440×900 in both themes,
+all three modes, two running/one done/three failed jobs, and idle after
+dismissal, with a separate restored window. OS and app reduced motion,
+keyboard focus/return, active Settings and phone-sheet independence were
+checked. Authentication and API data are synthetic; the room uses its WebGL
+fallback. This is not live-provider, hardware-GPU or physical-device evidence;
+Dan's visual acceptance remains pending.
+
 ## Presence colours, Routines and composer clearance (17 October 2026; P9-102, P9-103, P9-98)
 
 Presence uses green, yellow and blue in both themes. P9-119 supersedes the
