@@ -1,5 +1,46 @@
 # Project plan
 
+Integration checkpoint: #883 merged on 17 October at
+`705af7c7c02c3154a646dda66d79790d71af8f54`, with its actual tree matching
+the qualified pipeline correction. This release candidate combines the
+qualified Daily feed source `76eee47f` and fixed chat-origin evidence source
+`6d972cb6` on that main. Their source checks and independent reviews are
+retained evidence, not qualification of this combined tree. One combined
+qualification and normal release replace two consecutive deployments.
+
+The accepted #882 baseline remains backend341/agent109. The later normal
+Deploy39043117488 proved all four component identities could be reused without
+rebuilding or reapplying them, but required chat-capabilities acceptance failed
+with `agent_error`. Its immutable receipt remains `accepted=false`; #820 owns
+the functional follow-through and #880 stays open. This integration does not
+claim to fix that historical failure or complete private Daily acceptance.
+
+## Chat acceptance origin provenance (#820, 17 October 2026)
+
+Retained Deploy39043117488 at705af7c7/treee79dbd60 failed required
+`chat_capabilities=agent_error`; aggregate canary failed, plain approval passed,
+and all four components reused accepted baselinef6530a59/backend341/agent109.
+Exact qualification/readiness/reuse succeeded. This does not demonstrate a
+pipeline defect or identify the historical failure cause.
+
+The bounded source candidate repairs demonstrated evidence loss: the hosted
+SSE client already retains origin codes, but the canary discarded every code
+except `catalogue_unavailable`. Preserve a finite fixed allowlist through the
+existing canary, status reader and acceptance/release artifacts. Unknown origins
+still become `agent_error`; no arbitrary exception/provider text is retained.
+Synthetic checks cover prompt isolation, the real SSE-to-report projection,
+backend/Python allowlist parity, redaction, failed acceptance and unchanged
+producer identities. No prompt, predicate, deadline, retry, model, workflow,
+connection lifecycle (#816), Daily or permission change.
+
+All122 script tests pass locally with synthetic `GITHUB_RUN_ATTEMPT=2`,
+plus scoped Ruff/whitespace checks. Backend tests could not collect locally
+because `vitest` is absent; no dependency graph was restored or substituted.
+Next: normal pinned exact-candidate CI and independent review, then the existing
+main-only release path. This is an evidence-only improvement, not a proven
+historical root fix. #820's original attribution and #880's accepted=false
+release blocker remain open; source qualification is not production acceptance.
+
 ## Pipeline event-order recovery (#880, 17 October 2026)
 
 #882 merged normally atf6530a59 with the verified qualified tree; automatic
@@ -63,6 +104,60 @@ documentation-only CI rerun. #880 stays open through review. Main merge and
 actual release belong to the integration owner, not this builder. No live provider
 reproduction or causal-fix claim for Deploy39032686994 is part of this work;
 its `chat_plain_approval` / generic `agent_error` cause remains unproven.
+
+## Inactive Daily feed tools (17 October 2026; P12-09 / #724)
+
+Bounded source continuation adds optional `DailyData.feeds` / `daily_feed` over
+the retained #725 services: attention/calendar/conflict reads, exact active
+suppression reads, reviewed manual refresh, dismiss, Received and restoration.
+Existing query versions, production default-off composition and nutrition MCP
+allowlist stay unchanged. No new page, schema, grant, schedule or dispatcher.
+
+Native browser approval binds frozen selectors and the actual stored target;
+owner transactions recheck fingerprints and publish the existing refresh only
+after acknowledged new commits. Replays/no-ops stay quiet. All direct feed
+entrypoints explicitly deny the nutrition-only principal.
+
+Synthetic schema/service/native-confirmation, real dispatcher/audit/module,
+relay/agent deadline and isolated SQL regressions are authored. Local npm test
+and build cannot start: this isolated worktree has no Vitest/TypeScript graph.
+Python Ruff passes; selected Python tests cannot collect without OpenTelemetry.
+No restore, substitute graph, SQL image, live provider or manual reproduction was
+used. Exact-head pinned CI and integrated-candidate qualification remain next.
+The coordinator owns integration/release; the implementation owner fixes source
+pipeline failures. Keep #724/#725 open and native/private acceptance gates intact.
+
+Initial pinned CI39038540472 passed all other component jobs and3794backend
+tests; one new dispatcher assertion incorrectly expected root403 for another
+verified human. Add feed-owner validation at the tool boundary and assert the
+existing200/error resource-denial envelope, redacted audit and no service call.
+Keep runner/connector root403 checks. The corrected source needs qualification;
+prior green jobs do not qualify its changed head.
+
+Integrated520c review5558252668 found the180second enclosing feed budget left
+no persistence time after120second approval and60second provider work.
+Correct only Daily feed to210second service/relay and225second agent read below
+unchanged240second ingress; food/unrelated budgets remain intact. Added actual
+native-approval/refresh lifecycle regression at119second approval plus59second
+providers and10second persistence. The corrected head needs qualification; the
+pipeline owner separately owns520c's Python release-state fixture failure and
+the delayed draft-event cancellation race.
+
+Successor801e normal CI39041917082 and all four analyses passed, including the
+near-expiry lifecycle test. Exact-head review5558345536 then identified missing
+write-side suppression capacity:1001st entries poisoned bounded reads/reviewed
+restore. The correction rejects new active entries at1,000 per type under lock,
+retains updates/no-ops and uses exact-key restoration independent of listing.
+Real SQL cases cover both types at1000/1001, unchanged failure notifications,
+owner isolation, restoration/replacement and already oversized known-key recovery.
+The shared service also proves native restore survives listing unavailability.
+The corrected head requires qualification;801e greens are retained history.
+
+Initialf069 qualification passed application checks and234SQL assertions; the
+two new oversized-list controls failed because the existing transaction wrapper
+discarded the explicit safe limit `ToolFailure`. Preserve that known safe failure
+without exposing unknown SQL/provider exceptions, then qualify the successor.
+No review is requested on this superseded base before parent integrates705af7c7.
 
 ## Release diagnosis (17 October 2026; safe CI reason codes)
 

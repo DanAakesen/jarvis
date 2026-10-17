@@ -375,6 +375,39 @@ class ReleaseStateTests(unittest.TestCase):
         self.assertTrue(receipt["accepted"])
         self.assertEqual(receipt["components"]["web"]["origin"]["source"], "d" * 40)
 
+    def test_hosted_failure_origin_is_retained_without_acceptance_or_producer_rewrite(self):
+        results = {key: {"result": "success"} for key in ("plan", "smoke", "acceptance")}
+        results.update({key: {"result": "skipped"} for key in PARTS})
+        prior = previous()
+        for component in prior["components"].values():
+            component["origin"]["source"] = "d" * 40
+        for reason in ("settings_timeout", "capability_instructions_too_large", "error_runtimeerror",
+                       "private_provider_detail"):
+            with self.subTest(reason=reason):
+                report = smoke()
+                next(entry for entry in report["entries"] if entry["id"] == "chat_capabilities").update(
+                    {"status": "down", "reason": reason, "details": {"token": "never-retain"}})
+                code, receipt = self.record_fixture(dict.fromkeys(PARTS, False), results,
+                                                    prior=prior, evidence=report)
+                self.assertEqual(code, 1)
+                self.assertFalse(receipt["accepted"])
+                self.assertEqual(receipt["source"], CONTEXT["source"])
+                self.assertEqual(receipt["tree"], CONTEXT["tree"])
+                self.assertEqual(receipt["run"], CONTEXT["run"])
+                self.assertEqual(receipt["qualification"], {"pull_request": 9, "run": 40})
+                self.assertEqual(receipt["acceptance_evidence"], "retained")
+                expected = "not_reported_or_redacted" if reason == "private_provider_detail" else reason
+                self.assertIn({"id": "chat_capabilities", "status": "down", "reason": expected},
+                              receipt["acceptance"]["entries"])
+                for part, component in receipt["components"].items():
+                    self.assertEqual(component["state"], "reused")
+                    self.assertEqual(component["version"], prior["components"][part]["version"])
+                    self.assertEqual(component["origin"], prior["components"][part]["origin"])
+                self.assertEqual(receipt["components"]["backend"]["revision_origin"],
+                                 prior["components"]["backend"]["revision_origin"])
+                self.assertNotIn("private_provider_detail", json.dumps(receipt))
+                self.assertNotIn("never-retain", json.dumps(receipt))
+
     def test_missing_acceptance_evidence_and_failed_or_cancelled_jobs_block(self):
         results = {key: {"result": "success"} for key in ("plan", *PARTS, "smoke", "acceptance")}
         self.assertEqual(self.record_fixture(dict.fromkeys(PARTS, True), results)[0], 1)

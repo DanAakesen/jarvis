@@ -3132,6 +3132,7 @@ describe('backend-relayed Voice Live WebSocket', () => {
     { outcome: 'error', name: 'greet', timeout: 30_000 },
     { outcome: 'ok', name: 'daily_food_review', timeout: 180_000 },
     { outcome: 'ok', name: 'daily_saved_food', timeout: 180_000 },
+    { outcome: 'ok', name: 'daily_feed', timeout: 210_000 },
     { outcome: 'ok', name: 'daily_food_lookup', timeout: 30_000 },
   ] as const)(
     'publishes the recorded $outcome realtime $name outcome with its exact budget and no private tool data',

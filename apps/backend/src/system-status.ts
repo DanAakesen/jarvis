@@ -51,7 +51,45 @@ const subsystems: readonly SystemStatusSubsystem[] = [
 ];
 
 const cacheTtlMs = 60_000;
-const sharedChatFailureReasons = ['agent_error', 'timeout'] as const;
+export const chatAgentFailureReasons: ReadonlySet<string> = new Set([
+  'backend_unavailable',
+  'catalogue_unavailable',
+  'context_unavailable',
+  'usage_unavailable',
+  'capability_instructions_too_large',
+  'settings_not_json',
+  'settings_invalid',
+  'settings_timeout',
+  'settings_unreachable',
+  'settings_unavailable',
+  'settings_http_401',
+  'settings_http_403',
+  'settings_http_429',
+  'settings_http_500',
+  'settings_http_502',
+  'settings_http_503',
+  'settings_http_504',
+  'response_too_large',
+  'error_runtimeerror',
+  'error_valueerror',
+  'error_typeerror',
+  'error_timeouterror',
+  'error_httpstatuserror',
+  'error_connecterror',
+  'error_readtimeout',
+  'error_connecttimeout',
+  'error_pooltimeout',
+  'error_remoteprotocolerror',
+  'error_ratelimiterror',
+  'error_apistatuserror',
+  'error_apiconnectionerror',
+  'error_apitimeouterror',
+  'error_authenticationerror',
+  'error_permissiondeniederror',
+  'error_badrequesterror',
+  'error_internalservererror',
+]);
+const sharedChatFailureReasons = ['agent_error', 'timeout', ...chatAgentFailureReasons] as const;
 const safeSmokeReasons: Partial<Record<SystemSmokeCheckId, ReadonlySet<string>>> = {
   agent_contract: new Set([
     'Tool count exceeds the agent limit.',
@@ -66,7 +104,7 @@ const safeSmokeReasons: Partial<Record<SystemSmokeCheckId, ReadonlySet<string>>>
     'Agent settings could not be built.',
     'Agent contract could not be checked.',
   ]),
-  chat_canary: new Set(['acceptance_check_failed', ...sharedChatFailureReasons]),
+  chat_canary: new Set(['acceptance_check_failed', 'agent_error', 'timeout']),
   chat_identity: new Set(['catalogue_unavailable', 'identity_reply', ...sharedChatFailureReasons]),
   chat_capabilities: new Set([
     'catalogue_unavailable',

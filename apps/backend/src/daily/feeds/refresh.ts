@@ -1,19 +1,19 @@
 import type { FastifyRequest } from 'fastify';
-import { resolveDailyOwner } from '../owner.js';
+import { resolveDailyFeedOwner } from '../owner.js';
 import { text } from '../nutrition/model.js';
 import { DailyCalendarFeed, timedConflicts, validateCalendarRange, type CalendarRange, type CalendarEvent } from './calendars.js';
 import { DailyGmailFeed } from './gmail.js';
 import { DailyFeedStore, boundedSource, type FeedItem, type SourceAttempt } from './store.js';
 
 export interface RefreshState { runId: string; state: 'running' | 'completed' | 'limited'; sources?: { source: string; status: string; error: string | null }[] }
-/** Awaited manual execution; no source workflow dispatch, scheduler, tools or API routes. */
+/** Awaited manual execution; no source workflow dispatch or scheduler. */
 export class DailyFeedRefresh {
   private readonly running = new Map<string,string>();
   private readonly attempted = new Map<string,number>();
   constructor(private readonly calendars: DailyCalendarFeed, private readonly gmail: DailyGmailFeed,
     private readonly storeFor: (request: FastifyRequest) => DailyFeedStore, private readonly now: () => number = Date.now) {}
   async refresh(request: FastifyRequest, runId: string, range: CalendarRange, explicitIntent: boolean, signal: AbortSignal): Promise<RefreshState> {
-    const owner = resolveDailyOwner(request); text(runId); signal.throwIfAborted();
+    const owner = resolveDailyFeedOwner(request); text(runId); signal.throwIfAborted();
     if (explicitIntent !== true) throw new TypeError('Trusted explicit manual refresh intent required');
     validateCalendarRange(range);
     const store = this.storeFor(request);

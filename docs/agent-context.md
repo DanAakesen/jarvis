@@ -1,5 +1,36 @@
 # Agent context
 
+## Fixed hosted origins in acceptance evidence (#820, 17 October 2026)
+
+The canary now retains only explicitly enumerated `ChatAgentError.code` values
+already emitted by hosted chat. `settings_*` codes identify the settings
+boundary, `capability_instructions_too_large` identifies its existing budget
+validation, and `catalogue_unavailable`, `context_unavailable`,
+`usage_unavailable` and `response_too_large` name their existing boundaries.
+Fixed `error_*` entries retain only known exception-class categories; for
+example, `error_runtimeerror` locates a hosted runtime failure but does not prove
+its exclusive cause. Unknown codes, code-shaped private text and untyped
+exceptions remain `agent_error`, not invented diagnoses.
+
+The existing smoke formatter and immutable acceptance/release artifacts retain
+the same allowlist. No raw response, message, provider body, tool data or new
+field/store is added; existing source/tree/run/component identities remain.
+Required failures still fail. Read pipeline evidence for the exact qualified
+release; do not call smoke/model/provider endpoints to investigate an old run.
+Deploy39043117488's generic capabilities failure and earlier plain-approval/
+GitHub/navigation failures have no established shared cause.
+
+Targeted commands:
+`npm test --workspace @jarvis/backend -- src/core/chat-canary.test.ts src/system-status.test.ts`
+and
+`$env:PYTHONPATH='.github\scripts'; python -m unittest discover -s .github\scripts\tests -v`.
+The local backend command is blocked before collection because `vitest` is
+absent. Do not substitute another checkout's graph or start restore loops;
+normal pinned CI supplies backend lint/test/build qualification. Local Python
+uses3.11.15, not the pinned CI3.12 baseline. All122 script tests pass locally
+with `GITHUB_RUN_ATTEMPT=2`; scoped Ruff and whitespace checks pass. Preserve the app-managed runtime;
+no exposed `/remote` control is available and remote-enabled state is unverified.
+
 ## Ready/draft qualification race (#880, 17 October 2026)
 
 #882 merged with its exact qualified tree as `f6530a59`. Its automatic
@@ -129,6 +160,69 @@ session `/remote` control; `/remote` and `copilot --remote` state remain
 unverified. Preserve host configuration and do not launch a replacement CLI.
 No new Azure access, credentials, roles, resources, private provider traffic,
 Daily activation/import/device changes or interference with Dan's tabs/5173.
+
+## Inactive Daily feed tool checks (17 October 2026; P12-09)
+
+Use synthetic fixtures and existing tooling only. `daily_feed` is installed only
+by explicit `DailyData.feeds`; optional fifth `createDailyData` feed dependencies
+reuse the current pool/change hub and existing Google/semantic adapters without
+calling them during construction. Missing Google configuration refuses refresh;
+missing semantic configuration retains its real independent error. Every feed
+entrypoint denies the nutrition-only connector. No production registration,
+consent/scope/setup, original-source/schema/data, provider, device or activation
+action is authorised.
+
+This fresh isolated worktree has no npm dependency tools. Targeted
+`npm test --workspace @jarvis/backend -- src/daily/feeds/attention.test.ts
+src/daily/feeds/calendars.test.ts src/daily/feeds/refresh.test.ts --maxWorkers=1
+--no-file-parallelism` and `npm run build --workspace @jarvis/backend` fail before
+execution because Vitest/TypeScript are absent. No restore, substitute graph or
+pass is claimed. Python Ruff passes both changed agent files; selected
+`test_jarvis_tools.py` timeout cases cannot collect without OpenTelemetry.
+Normal pinned CI must qualify actual new service/schema/module/audit/native
+confirmation, relay/agent deadlines and isolated feed SQL cases, followed by the
+coordinator's integrated candidate. The implementation owner fixes code failures.
+
+The app-managed runtime exposes no supported existing-session `/remote` control.
+Its state is unverified; no replacement CLI/profile or reconnection is claimed.
+#724/#725 stay open; stored-grant/CalendarList/live-model/provider, private
+reconciliation, physical-device and cutover acceptance remain separate.
+
+Initial pinned CI39038540472 at085ab460 passed all other component jobs and
+3794backend cases, including all22new service/native-confirmation and17schema
+cases, but the new dispatcher test failed its non-owner HTTP403 assertion.
+Root auth intentionally admits verified human identities; resource authorisation
+belongs to the tool/service, and the dispatcher returns the normal200/error
+envelope. Add the same feed-owner guard to the tool boundary so even an injected
+service cannot bypass it. Assert error metadata/redaction and zero service calls
+for non-owners, retaining root403 checks for runner/nutrition-connector roles.
+The original failure remains recorded; the corrected head requires qualification.
+
+Integrated520c's automatic review5558252668 found the180second enclosing
+deadline could not fit a valid120second review plus60seconds of provider work
+and persistence. Only `daily_feed` now uses210second service/relay and225second
+hosted-agent read deadlines below unchanged240second ingress. Food tools retain
+180/210seconds. A deterministic real-native-confirmation/refresh lifecycle test
+approves at119seconds, spends59seconds in provider reads and10seconds persisting,
+then asserts the actual completed attempt at188seconds without cancellation.
+The synthetic test maps AbortSignal deadlines to its controlled clock; production
+timers are unchanged apart from the exact feed budget.
+
+801e CI39041917082 passed all selected checks and CodeQL39041917062 all four
+analyses, but independent review5558345536 found suppression1001 could poison
+bounded reads and restoration. Additions now enforce1,000 active entries per
+type under the existing owner lock; updates/no-ops stay valid. Exact-key
+restoration no longer depends on full listing. Synthetic real-SQL coverage
+tests both exact capacity boundaries and recovery from a seeded oversized set;
+service native review also proves restoration when listing is unavailable.
+No limit increase, schema change, automatic deletion or acceptance waiver.
+
+Initialf069 CI39043061387 passed application checks and234SQL assertions, but
+both new oversized-list controls exposed the feed transaction replacing an
+already sanitised `ToolFailure` limit message with generic persistence failure.
+Preserve known safe `ToolFailure` alongside `ToolRefusal`; unknown exceptions
+remain sanitised. The exact capacity/update/restore assertions before that
+point passed. Keep the initial failure; successor qualification is required.
 
 ## Safe release reason logging (17 October 2026)
 

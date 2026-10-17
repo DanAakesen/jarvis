@@ -1,5 +1,29 @@
 # Decisions
 
+## Preserve fixed hosted error origins in existing acceptance evidence (17 October 2026; #820)
+
+Deploy39043117488 retained `chat_capabilities=agent_error`, accepted=false and
+successful exact qualification/readiness/component reuse. It does not establish
+a pipeline implementation defect or the underlying hosted-turn cause.
+Source tracing demonstrates that `ChatAgentError` preserves the hosted SSE code,
+then the canary collapses all codes except `catalogue_unavailable`.
+
+Preserve an explicit finite allowlist of existing hosted backend/settings and
+exception-class origin codes in the existing per-prompt `reason`. Reuse the
+status sanitizer and smoke/immutable release evidence rather than add fields,
+telemetry services, a workflow or raw-log collection. Code-shaped text alone is
+not trusted: unknown values and non-agent errors retain `agent_error`, and
+assertion reasons cannot masquerade as hosted origins. Keep Python/backend
+allowlists equal with a deterministic regression.
+
+This evidence-only choice preserves statuses, aggregate failure, prompts,
+receipts, deadlines, authentication and nonblocking exceptions. It changes no
+model, settings, retry or connection lifetime and does not absorb #816 or Daily.
+Synthetic fixtures cover fail-closed acceptance and original producer identity;
+normal exact-candidate CI/review and main-only release remain required.
+#820's original historical attribution and #880's failed release disposition
+are not satisfied by this source change or by a later unrelated successful turn.
+
 ## Isolate stale draft events from ready qualification (17 October 2026; #880)
 
 The first integrated #881 ready event admitted CI39041201026, then a delayed
@@ -78,6 +102,38 @@ and backend revision attribution corrections above. Successor exact-candidate CI
 and the integration owner's main-only release remain
 separate gates. Remote-enabled runtime state is not exposed here and is not
 claimed. Private Daily/provider/device/access boundaries remain unchanged.
+
+## Reuse retained feed services through one inactive tool (17 October 2026; P12-09)
+
+Dan requires equivalent tools for retained Daily capabilities. Bind the existing
+snapshot/attention/suppression/manual-refresh services through optional
+`DailyData.feeds`, rather than duplicate Google dispatch, expand the nutrition
+connector or change the strict versioned query-source advertisement.
+Production remains default-off and existing callers retain their signatures.
+
+Prefer the existing browser-only Now approval for visibility changes and manual
+provider/model refresh over model-confirmation booleans or a new action queue.
+Reuse verified current chat/voice context; bind actual target/suppression hashes
+under the existing owner lock so later mail cannot be dismissed by an old
+proposal. Received is Daily visibility, not evidence of physical receipt.
+Return actual run/error/limit states and separate source times; the old store
+does not retain calendar range, so it remains explicitly unknown.
+
+Review5558345536 identified that read bounds alone let suppression1001 poison
+attention/listing and reviewed restoration. Enforce the existing1,000-per-type
+active limit under the owner transaction before additions; keep updates allowed.
+Restore through exact-key lookup/recheck rather than reading the whole set,
+including recovery from already oversized imported evidence. No migration,
+automatic deletion or widened read limit is needed.
+
+Reuse the nutrition commit-notification pattern: publish only after acknowledged
+new commits, keep replay/no-op/failure quiet and isolate listener failure.
+The shared owner resolver intentionally permits nutrition connectors; all feed
+entrypoints therefore explicitly deny that narrower principal. Existing Google
+authentication/token handling is unchanged. No stored-grant guard was present
+at the assigned base; actual CalendarList grant/provider parity stays an OPEN
+#725 acceptance gap, not a claimed preserved implementation. Synthetic source
+qualification does not authorise consent, live data, activation or cutover.
 
 ## Expose safe smoke reason codes through existing CI (17 October 2026)
 

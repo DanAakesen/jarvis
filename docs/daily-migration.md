@@ -197,6 +197,16 @@ core parity/backup/device/cutover gates.
 
 ### [P12-09: Daily API, tool registry & live revisions](https://github.com/DanAakesen/jarvis/issues/724)
 
+17 October bounded feed continuation adds opt-in `daily_feed` over the retained
+#725 snapshot, attention, manual-refresh and suppression services. Reads expose
+independent source freshness and exact restore keys; mutations use actual
+browser Now approval and under-lock target checks. Shared sensitive audit and
+post-commit refresh remain authoritative. The nutrition-only MCP principal is
+denied by every feed entrypoint. Missing Google/model configuration remains
+explicit; no fake adapter, new dispatcher, query-version expansion or provider
+write is introduced. Daily stays off; real grant/provider/private/device
+acceptance remains distinct under #725. #724 and native dependencies stay open.
+
 The next retained lookup slice exposes the existing saved favourite/alias and
 exact history resolver through `lookup_food.savedName`, sharing query DTOs.
 It adds no tool name, write authority, migration or activation.

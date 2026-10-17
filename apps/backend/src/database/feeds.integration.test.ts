@@ -4,7 +4,8 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 import type { FastifyRequest } from 'fastify';
 import { loadDatabaseConfig } from './config.js';
 import { applyMigrations, readMigrations } from './migrations.js';
-import { DailyFeedStore,MAX_SOURCE_BYTES,canonicalFeedRun,type RefreshRun,type FeedItem } from '../daily/feeds/store.js';
+import { DailyFeedStore,MAX_SOURCE_BYTES,canonicalFeedRun,feedRevision,type RefreshRun,type FeedItem } from '../daily/feeds/store.js';
+import { createDailyChanges } from '../daily/revisions.js';
 import { canonicalJson } from '../daily/nutrition/model.js';
 import type { Thread, Order } from '../daily/feeds/attention.js';
 import { DailyFeedRefresh } from '../daily/feeds/refresh.js';
@@ -168,5 +169,86 @@ describe('Daily feed snapshots and suppressions on real isolated SQL Server', ()
     expect(() => DailyFeedStore.forRequest(pool,{ ...request(),principal: { objectId: other } } as FastifyRequest)).toThrow();
     expect(() => DailyFeedStore.forRequest(pool,{ ...request(),runnerPrincipal: { kind: 'jarvis-runner' } } as unknown as FastifyRequest)).toThrow();
     expect((await pool.request().query('SELECT COUNT(*) AS count FROM daily.attention_runs')).recordset[0].count).toBe(0);
+  });
+  it('publishes only acknowledged new feed commits, isolating replay, no-op, failure and listener failure', async () => {
+    const changes = createDailyChanges(); const events: unknown[] = [];
+    changes.subscribe(change => { events.push(change); });
+    changes.subscribe(() => { throw new Error('Synthetic disconnected listener'); });
+    const current = DailyFeedStore.forRequest(pool, request(), () => now, changes);
+    await current.ingest(run('notify'), signal()); await current.ingest(run('notify'), signal());
+    expect(events).toEqual([{ owner, sources: ['daily.feed'] }]);
+    await expect(current.ingest(run('notify', []), signal())).rejects.toThrow('conflicts');
+    expect(await current.suppress('thread', thread.id, true, signal())).toBe(true);
+    expect(await current.suppress('thread', thread.id, true, signal())).toBe(false);
+    expect(await current.clear('thread', 'missing', true, signal())).toBe(false);
+    expect(await current.clear('thread', thread.id, true, signal())).toBe(true);
+    expect(events).toHaveLength(3);
+    expect((await current.attention(signal())).waiting).toHaveLength(1);
+  });
+  it('rechecks native-reviewed targets and exact suppression revisions inside owner transactions', async () => {
+    await store().ingest(run('review-initial', [item(thread), item(order)]), signal());
+    const selected = await store().suppressionTarget('thread', thread.id, signal());
+    const updated = { ...thread, latestMessageId: 'new-message', latestMessageAt: '2026-10-10T10:00:00Z', latestIncomingAt: '2026-10-10T10:00:00Z' };
+    await store().ingest(run('review-new', [item(updated), item(order)], '2026-10-12T12:01:00Z'), signal());
+    await expect(store().suppress('thread', thread.id, true, signal(), feedRevision(selected))).rejects.toThrow('changed');
+    expect(await store().suppressions(signal())).toEqual([]);
+    const reviewedOrder = await store().suppressionTarget('order', order.id, signal());
+    expect(await store().suppress('order', order.id, true, signal(), feedRevision(reviewedOrder))).toBe(true);
+    const saved = (await store().suppressions(signal()))[0]!;
+    expect(saved).toMatchObject({ type: 'order', key: 'synthetic shop:12345', messageId: null });
+    expect(await store(other).suppressions(signal())).toEqual([]);
+    expect(await store().clear('order', order.id, true, signal())).toBe(false);
+    await expect(store().clear('order', saved.key, true, signal(), '0'.repeat(64))).rejects.toThrow('changed');
+    expect(await store().clear('order', saved.key, true, signal(), feedRevision(saved))).toBe(true);
+    await expect(store().clear('order', saved.key, true, signal(), feedRevision(saved))).rejects.toThrow('changed');
+    expect(await store().suppressions(signal())).toEqual([]);
+  });
+  it('does not suppress an old active order update after its merged order became terminal', async () => {
+    const terminal = { ...order, id: 'terminal-update', status: 'delivered', updatedAt: '2026-10-10T10:00:00Z' };
+    await store().ingest(run('terminal-review', [item(order), item(terminal)]), signal());
+    expect((await store().attention(signal())).orders).toEqual([]);
+    await expect(store().suppressionTarget('order', order.id, signal())).rejects.toThrow('active');
+    await expect(store().suppress('order', order.id, true, signal())).rejects.toThrow('active');
+    expect(await store().suppressions(signal())).toEqual([]);
+  });
+  it.each(['thread', 'order'] as const)('bounds %s suppression additions at1000 without blocking exact restoration or updates', async type => {
+    const seed = async (ids: string[]) => {
+      const table = type === 'thread' ? 'gmail_suppressions' : 'order_suppressions';
+      const columns = type === 'thread' ? 'thread_id,suppressed_message_id,suppressed_incoming_at' : 'order_key,suppressed_order_updated_at';
+      const values = type === 'thread' ? 'id,N\'old-message\',@now' : 'id,@now';
+      await pool.request().input('owner', sql.UniqueIdentifier, owner).input('now', sql.NVarChar(64), now)
+        .input('ids', sql.NVarChar(sql.MAX), JSON.stringify(ids))
+        .query(`INSERT daily.${table}(owner_object_id,${columns},suppressed_at,updated_at)
+          SELECT @owner,${values},@now,@now FROM OPENJSON(@ids) WITH (id nvarchar(256) '$');`);
+    };
+    const existingId = type === 'thread' ? thread.id : 'synthetic shop:12345';
+    await seed([existingId, ...Array.from({ length: 999 }, (_, index) => `synthetic-capacity-${index}`)]);
+    const newcomer = type === 'thread' ? { ...thread, id: 'new-thread', threadId: 'new-thread' }
+      : { ...order, id: 'new-order', orderNumber: 'another' };
+    await store().ingest(run('capacity', [item(thread), item(order), item(newcomer)]), signal());
+    const changes = createDailyChanges(); const notify = vi.fn();
+    changes.subscribe(notify);
+    const current = DailyFeedStore.forRequest(pool, request(), () => now, changes);
+    const selected = await current.suppressionTarget(type, newcomer.id, signal());
+    await expect(current.suppress(type, newcomer.id, true, signal(), feedRevision(selected))).rejects.toThrow('capacity');
+    expect(notify).not.toHaveBeenCalled();
+    expect(await current.suppressions(signal())).toHaveLength(1000);
+    expect((await current.attention(signal()))[type === 'thread' ? 'waiting' : 'orders']).toHaveLength(1);
+    const existingProducerId = type === 'thread' ? thread.id : order.id;
+    expect(await current.suppress(type, existingProducerId, true, signal())).toBe(type === 'thread');
+    const saved = await current.suppression(type, existingId, signal());
+    expect(saved?.key).toBe(existingId);
+    expect(await store(other).suppression(type, existingId, signal())).toBeNull();
+    expect(await current.clear(type, existingId, true, signal(), feedRevision(saved!))).toBe(true);
+    expect(await current.suppress(type, newcomer.id, true, signal(), feedRevision(selected))).toBe(true);
+    expect(await current.suppressions(signal())).toHaveLength(1000);
+
+    // A previously imported oversized set must not trap its known-key recovery path.
+    await seed(['synthetic-overflow']);
+    await expect(current.suppressions(signal())).rejects.toThrow('limits');
+    const overflow = await current.suppression(type, 'synthetic-overflow', signal());
+    expect(overflow).not.toBeNull();
+    expect(await current.clear(type, 'synthetic-overflow', true, signal(), feedRevision(overflow!))).toBe(true);
+    expect(await current.suppressions(signal())).toHaveLength(1000);
   });
 });

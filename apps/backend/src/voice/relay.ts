@@ -1723,7 +1723,8 @@ function registerVoiceRoute(
         const signal = AbortSignal.any([
           controller.signal,
           AbortSignal.timeout(
-            call.name === 'daily_food_review' || call.name === 'daily_saved_food' ? 180_000 : 30_000,
+            call.name === 'daily_feed' ? 210_000
+              : call.name === 'daily_food_review' || call.name === 'daily_saved_food' ? 180_000 : 30_000,
           ),
           ...(browserStopController ? [browserStopController.signal] : []),
         ]);
