@@ -1725,7 +1725,7 @@ function registerVoiceRoute(
           controller.signal,
           AbortSignal.timeout(
             call.name === 'daily_feed' ? 210_000
-              : call.name === 'daily_food_review' || call.name === 'daily_saved_food' ? 180_000 : 30_000,
+              : call.name === 'daily_food_review' || call.name === 'daily_saved_food' || call.name === 'daily_nutrition_targets' ? 180_000 : 30_000,
           ),
           ...(browserStopController ? [browserStopController.signal] : []),
         ]);

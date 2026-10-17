@@ -125,6 +125,21 @@ Preference commits refresh favourites only after acknowledgement; unchanged
 and replayed rows do not notify. None of these operations logs eaten food,
 exports Health, activates Daily or proves real client/account/device acceptance.
 
+## Owner nutrition targets
+
+The owner's resting energy burn, daily deficit and protein target are three
+Daily-owned `dbo.settings` rows (global scope, keys from `nutritionTargetKey`).
+`targets.ts` holds the pure fields, ranges, key builder and strict parsers, and
+`targets-store.ts` reads and writes them for the resolved owner. An absent row
+means "needs configuration", not a default: nothing in this directory supplies a
+value. `../routes/nutrition-targets.ts` serves `GET`/`PATCH
+/daily/nutrition-targets` to the signed-in owner only, and
+`../tools/nutrition-targets.ts` exposes `daily_nutrition_targets` (`read`, and
+`set_targets`, which needs the exact browser Now approval). The sixth
+`createDailyModules` argument composes both, only with Daily on and shared data.
+Tests use synthetic values; a real figure never belongs in a fixture, document,
+log or PR text because these are the owner's private health data.
+
 ## Pinned provider contract and evidence limits
 
 An explicit optional Frida argument to `createDailyData(pool, owner, now, frida)`

@@ -41,8 +41,8 @@ loaded, the turn fails before the model is asked.
 If the context snapshot cannot be loaded, the turn also fails before the model
 call rather than answering with missing or stale task status.
 
-`daily_food_review` and `daily_saved_food` have a 210-second response-read
-deadline. Their Now cards explicitly expire after two minutes and each complete backend operation is
+`daily_food_review`, `daily_saved_food` and `daily_nutrition_targets` have a
+210-second response-read deadline. Their Now cards explicitly expire after two minutes and each complete backend operation is
 bounded to three minutes, below Container Apps' 240-second ingress limit.
 The SQL expiry, browser expiry and cancellation timer agree. Existing approvals
 retain their default five minutes. Connect, write and pool timeouts stay
