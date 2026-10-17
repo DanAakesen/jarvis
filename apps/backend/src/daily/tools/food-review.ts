@@ -33,6 +33,7 @@ export function dailyFoodReviewTool(nutrition: InternalNutrition, now: () => num
     inputSchema: foodReviewInputSchema,
     bodyLimit: 96 * 1024,
     sensitive: true,
+    denyOnPhone: true,
     execute: async (raw, request, signal) => {
       signal = AbortSignal.any([signal, AbortSignal.timeout(3 * 60_000)]);
       const owner = resolveDailyOwner(request);

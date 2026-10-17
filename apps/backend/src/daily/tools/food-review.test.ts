@@ -99,6 +99,7 @@ describe('inactive internal food proposal review', () => {
     expect(JSON.stringify(await f.tool.execute(estimate(), f.request, signal()))).not.toContain('must-not-escape');
     expect(f.store.log).toHaveBeenCalledOnce(); expect(f.runConfirmed).toHaveBeenCalledOnce();
     expect(f.tool.sensitive).toBe(true); expect(f.tool.publicAllowedOnPhone).not.toBe(true); expect(f.tool.reflexSafe).not.toBe(true);
+    expect(f.tool.denyOnPhone).toBe(true);
   });
   it('does not write after rejection and releases the pending guard', async () => {
     const f = fixture(); const result = f.tool.execute(estimate(), f.request, signal());

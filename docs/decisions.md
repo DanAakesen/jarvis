@@ -34,6 +34,14 @@ This keeps existing approval lifetimes and unrelated tool deadlines unchanged,
 makes the real food expiry visible, and avoids a new background mutation queue
 or writes that survive cancellation. No infrastructure or paid-resource change.
 
+Further review found the generic phone approval ran before food's own context
+refusal, allowing an impossible five-minute approval to consume the HTTP budget.
+Use an explicit tool capability, `denyOnPhone`, checked by the existing dispatcher
+after active-session validation and before any approval or execution. Set it on
+both internal food tools; do not special-case names or change other phone tools.
+The existing Now UI already displays the actual returned `expiresAt`; no new
+frontend control or hardcoded review duration is needed.
+
 New nutrient/component proposals stay estimates and cannot retain a whole-meal
 verification claim. Preserve unchanged exact nutrient provenance and nulls.
 Existing SQL revision/range locks prevent stale correction/deletion, including

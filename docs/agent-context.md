@@ -38,6 +38,17 @@ Corrective pure review selection passes 16 cases; changed TypeScript ESLint and
 Python Ruff pass. Local HTTP collection lacks `fastify`; Python deadline-test
 collection lacks `opentelemetry`. Neither ran semantic assertions. Do not
 restore or stub either graph; successor normal CI must qualify both corrections.
+Actual ingress-safe `766ffd3f` CI39004516029 passed all ten job entries:
+194 backend files/3698 tests, 11 SQL files/229 tests (19 nutrition), and 730
+Python tests. All four actual CodeQL analyses passed. Exact-head review found
+generic phone approval could precede food's unsupported-session refusal.
+The successor adds `denyOnPhone` before approval, with real HTTP private/public
+denial controls and both actual food metadata assertions. Keep their unchanged
+normal-phone approval/public controls. Local real HTTP collection remains
+unavailable; do not represent preceding green CI as successor qualification.
+Seven changed TypeScript files pass the existing root ESLint with zero warnings.
+The first launcher incorrectly looked for ESLint inside the backend workspace
+and failed before linting; no graph change or restore was needed.
 
 ## Internal Daily direct-intake checks (17 October 2026; P12-09)
 

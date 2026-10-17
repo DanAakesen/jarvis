@@ -1011,6 +1011,8 @@ cancelled, expired or stale reviews cannot mutate intake. Existing canonical
 storage, exact operation/revision replay, tombstones and commit refresh remain
 shared. No Health write, production activation or physical-phone acceptance is
 included; broader conversational and actual client/device gates remain.
+Both internal food tools refuse phone calls before generic approval; an approval
+cannot make their unsupported phone context valid.
 
 P12-05 adds an inactive, explicitly invoked health processor over the existing SQL inbox: metrics/sleep/workouts/detail/minute HR, canonical physical units, Copenhagen dates, exact session/checksum replay and bounded retry/quarantine. Domain changes, ingestion lineage and processed-feed freshness commit together; phone heartbeat stays separate. Empty workout exports cannot erase history, missing values stay unknown, and native nutrition cannot feed back into canonical meals. Owner history/detail reads are bounded and unregistered. No scheduler, source import, live device changes or activation; protected/live parity remains gated.
 

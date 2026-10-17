@@ -4642,6 +4642,11 @@ path in favour of the one-step tool. Production stays off; generic spoken
 approval, photo evidence, complete conversational/client/device parity and
 activation/cutover remain open.
 
+Both internal food tools declare `denyOnPhone`. The existing phone dispatcher
+checks this after active-session validation and before generic confirmation or
+execution; denial wins over the public-phone flag. Other tools retain their
+existing public/approval behaviour. Food's own session checks remain in place.
+
 ### Inactive nutrition MCP adapter (17 October 2026)
 
 An optional third `createDailyModules(true, data, connector)` argument installs

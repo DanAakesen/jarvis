@@ -27,6 +27,9 @@ export async function executePhoneTool<T>({
       !await store?.isActive(sessionId, callerId)) {
     throw new ToolRefusal('This phone session is unavailable.');
   }
+  if (tool.denyOnPhone === true) {
+    throw new ToolRefusal('This tool is unavailable during phone calls. Use chat or browser voice.');
+  }
 
   return withPhoneConfirmationSession(sessionId, async () => {
     if (tool.publicAllowedOnPhone !== true) {

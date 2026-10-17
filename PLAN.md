@@ -33,6 +33,13 @@ uses an explicit two-minute card expiry, three-minute whole-operation bound
 and 210-second agent read limit; other approvals remain five minutes.
 SQL, card and timer share the same lifetime, with no detached mutation queue.
 Fresh pinned qualification and exact-head review remain required.
+Ingress-safe `766ffd3f` passed all ten CI job entries (3698 backend, 229 SQL
+and 730 Python tests) and all four actual CodeQL analyses. Its completed review
+found one remaining pre-execution phone path: generic approval could wait before
+either food tool rejected the unsupported session. The correction adds a
+dispatcher capability that refuses both food tools before approval, preserving
+other phone tools. Real HTTP denial/precedence controls and actual food metadata
+assertions cover the correction; successor qualification remains required.
 Broader conversation/spoken acceptance, actual hosted client/provider/device,
 private reconciliation and cutover remain open. #724 stays open/default-off.
 

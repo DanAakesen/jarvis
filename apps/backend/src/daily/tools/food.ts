@@ -62,13 +62,14 @@ export function foodReceipt(row: Record<string, unknown>, key: string, sourceFin
 export function dailyFoodTool(nutrition: DirectNutrition, now: () => number = Date.now): JarvisTool {
   return {
     name: 'daily_food',
-    description: 'Log intake only from the current verified Dan message. log_favorite derives the saved name/alias from an explicit "Log [my] [favourite] NAME" request; quantities come only from that owned favourite. log_exact derives all values from an explicit label such as "Log yoghurt: 200 kcal, protein 10 g, carbs 20 g". Supply only the operation: no food name, nutrients, IDs, dates or confirmation flags. No extra approval for these direct explicit requests. New photo/portion estimates, conditional/time-qualified requests and unsupported wording are refused. Repeating the same message cannot create another intake. No Health export.',
+    description: 'Log intake only from the current verified Dan message. log_favorite derives the saved name/alias from an explicit "Log [my] [favourite] NAME" request; quantities come only from that owned favourite. log_exact derives all values from an explicit label such as "Log yoghurt: 200 kcal, protein 10 g, carbs 20 g". Supply only the operation: no food name, nutrients, IDs, dates or confirmation flags. No extra approval for these direct explicit requests. New photo/portion estimates, conditional/time-qualified requests and unsupported wording are refused. Repeating the same message cannot create another intake. Active chat/browser voice only; no phone or Health export.',
     inputSchema: {
       type: 'object',
       properties: { operation: { type: 'string', enum: ['log_exact', 'log_favorite'] } },
       required: ['operation'], additionalProperties: false,
     },
     sensitive: true,
+    denyOnPhone: true,
     execute: async (raw, request, signal) => {
       const owner = resolveDailyOwner(request);
       if (request.dailyConnectorPrincipal) throw new ToolRefusal('Use the separate nutrition connector boundary for external clients.');
