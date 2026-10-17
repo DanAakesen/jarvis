@@ -3,6 +3,7 @@ import type { BackgroundJob } from '@jarvis/contracts';
 import { usePresence } from './presence-store';
 import { useJobs, type JobEntry } from './jobs-store';
 import { WorkingCore } from './ToolCallChip';
+import { ShellIcon } from './ShellIcon';
 
 /** Opens (or just reveals) a job's result window; returns false while the window does not exist yet. */
 export type ResultWindowAction = (viewId: string, mode: 'open' | 'park') => boolean;
@@ -58,7 +59,7 @@ export function JobsChip({ backendUrl, getAccessToken, onResult, accountId = nul
   onResult: ResultWindowAction;
   accountId?: string | null;
 }) {
-  const { jobs, history, error, refresh, cancel, dismiss } = useJobs(backendUrl, getAccessToken, accountId);
+  const { jobs, error, refresh, cancel, dismiss } = useJobs(backendUrl, getAccessToken, accountId);
   const { presence } = usePresence(backendUrl, getAccessToken);
   const [openId, setOpenId] = useState<string | null>(null);
   const [showHistory, setShowHistory] = useState(false);
@@ -144,10 +145,12 @@ export function JobsChip({ backendUrl, getAccessToken, onResult, accountId = nul
   }, [openId, open, showList]);
 
   const visible = jobs.filter((job) => job.status === 'running' || job.status === 'done' && waiting.has(job.jobId));
-  if (history.length === 0 && !error) return null;
-  const failures = jobs.filter((job) => job.status === 'failed').length;
+  const outcomes = (['running', 'done', 'failed'] as const).map((status) => ({
+    status, count: jobs.filter((job) => !job.dismissed && job.status === status).length,
+  })).filter(({ count }) => count > 0);
+  const failures = outcomes.find(({ status }) => status === 'failed')?.count ?? 0;
   const needsAttention = Boolean(error) || jobs.some((job) => Boolean(errors[job.jobId]));
-  const historyLabel = needsAttention ? 'Background work · needs attention' : failures > 0 ? `Background work · ${failures} failed` : 'Background work';
+  const summary = outcomes.map(({ status, count }) => `${count} ${status} background ${count === 1 ? 'job' : 'jobs'}`).join(', ');
 
   const closePopover = () => {
     setOpenId(null);
@@ -209,18 +212,26 @@ export function JobsChip({ backendUrl, getAccessToken, onResult, accountId = nul
         })}
       </div>
       <span className="workspace-tab-item job-history-tab" data-selected={showList || open}>
-        <button ref={historyButton} type="button" className="workspace-tab" aria-label={`Show background work${needsAttention ? ': needs attention' : failures ? `: ${failures} failed` : ''}`}
+        <button ref={historyButton} type="button" className="workspace-tab jobs-summary" aria-label={`Show background work${needsAttention ? ': needs attention' : failures ? `: ${failures} failed` : ''}`}
+          aria-description={summary || (needsAttention ? 'Needs attention' : 'Idle')}
+          title={`Background work${needsAttention ? ': needs attention' : ''}${summary ? `: ${summary}` : needsAttention ? '' : ': idle'}`}
           aria-expanded={showList || open} aria-controls={popoverId} onClick={(event) => {
             returnFocus.current = event.currentTarget;
             setOpenId(null);
             setShowHistory(!showList || open);
           }}>
-          {(failures > 0 || needsAttention) && <StatusMark status="failed" />}
-          <span>{historyLabel}</span>
+          {outcomes.map(({ status, count }) => {
+            const label = `${count} ${status} background ${count === 1 ? 'job' : 'jobs'}`;
+            return <span key={status} className="jobs-outcome" data-status={status} role="img" aria-label={label} title={label}>
+              <ShellIcon name={status} /><span aria-hidden="true">{count}</span>
+            </span>;
+          })}
+          {outcomes.length === 0 && !needsAttention && <span className="jobs-outcome" role="img" aria-label="Background work: idle"><ShellIcon name="idle" /></span>}
+          {needsAttention && failures === 0 && <span className="jobs-outcome" data-status="failed" role="img" aria-label="Background work needs attention" title="Background work needs attention"><ShellIcon name="failed" /></span>}
         </button>
       </span>
       <span className="visually-hidden" role="status" aria-live="polite">
-        {history.some((job) => job.status === 'running') ? `${history.filter((job) => job.status === 'running').length} background jobs running` : ''}
+        {jobs.some((job) => job.status === 'running') ? `${jobs.filter((job) => job.status === 'running').length} background jobs running` : ''}
       </span>
       {(peek || showList) && (
         <div ref={popover} tabIndex={-1} id={popoverId} className="jobs-popover" role="group" aria-label={peek ? `${peek.title} details` : 'Background work'}>

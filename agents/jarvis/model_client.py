@@ -29,6 +29,7 @@ from calendar_flow import (
     calendar_batch_matches_request,
     calendar_claim,
     calendar_context,
+    calendar_details_requested,
     calendar_multiple_requested,
     calendar_reply,
     calendar_response_scope,
@@ -86,13 +87,20 @@ Tal som dig selv i første person: "jeg", "mig" og "min/mit"; omtale aldrig dig 
 eller som appen, assistenten, systemet, backend eller agenten. For eksempel: "Jeg undersøger min
 voice relay" — aldrig "Jarvis undersøger...".
 Svar på naturligt dansk med korte, skriftlige svar; brug kun markdown, når det hjælper.
-Brug backendens værktøjer og sikkerhedsregler.""",
+Brug backendens værktøjer og sikkerhedsregler. Når en handling lykkes, bekræft det i én kort
+sætning uden at gentage detaljer, Dan netop har godkendt; detaljerne findes i chatten eller på
+skærmen, og giv dem kun, hvis han beder om dem. Meld fejl, delvise resultater og ubekræftede
+resultater kort og tydeligt, herunder hvad der fejlede og næste skridt; sig aldrig, at en mislykket
+handling er gennemført.""",
     "en": """I am Jarvis, Dan's personal AI assistant for his software factory.
 Speak as yourself in the first person ("I", "me", "my"); never refer to yourself as "Jarvis"
 or as the app, assistant, system, backend or agent. For example: "I am inspecting my voice relay",
 never "Jarvis is inspecting...".
 Reply in clear, natural English, using concise written language and markdown only when it helps.
-Use the tools and safety rules supplied by the backend.""",
+Use the tools and safety rules supplied by the backend. After a successful action, confirm it in one
+short sentence without repeating details Dan just approved; details remain in chat or on screen and
+are provided only if he asks. Report failed, partial or unverified results briefly and plainly,
+including what failed and the next step; never say a failed action is done.""",
 }
 
 CHAT_FORMAT_INSTRUCTIONS = (
@@ -1263,13 +1271,19 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                                 reply = text
                             elif calendar_evidence and (not text or calendar_claim(text)):
                                 name, result = calendar_evidence[-1]
-                                reply = calendar_reply(name, result, danish)
+                                reply = calendar_reply(
+                                    name, result, danish,
+                                    bool(messages and messages[-1].role == "user" and
+                                         calendar_details_requested(messages[-1].content)),
+                                )
                             elif (
                                 calendar_turn or calendar_response_scope(calendar_messages, text)
                             ) and calendar_claim(text):
                                 reply = (
                                     calendar_reply(
-                                        "calendar_get_pending_change", calendar_state, danish
+                                        "calendar_get_pending_change", calendar_state, danish,
+                                        bool(messages and messages[-1].role == "user" and
+                                             calendar_details_requested(messages[-1].content)),
                                     )
                                     if calendar_state is not None else no_calendar_evidence(danish)
                                 )
@@ -1461,7 +1475,11 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                                 ),
                             })
                         else:
-                            yield calendar_reply(name, result, danish)
+                            yield calendar_reply(
+                                name, result, danish,
+                                bool(messages and messages[-1].role == "user" and
+                                     calendar_details_requested(messages[-1].content)),
+                            )
                             if (
                                 multiple_calendar_events and name == "calendar_create_event"
                                 and pending_calendar(result) is not None
