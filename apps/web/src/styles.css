@@ -2535,6 +2535,7 @@ a.task-chip:hover { background: var(--glass-pressed); }
 .jobs-popover:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 .jobs-popover-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-weight: 650; }
 .jobs-history-note { margin: 10px 0; color: var(--text-muted); font-size: var(--type-caption); overflow-wrap: anywhere; }
+.jobs-popover .jobs-history-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .jobs-history-row { display: flex; min-width: 0; align-items: center; gap: 4px; }
 .jobs-history-entry { display: flex; flex: 1; min-width: 0; min-height: 44px; gap: 10px; align-items: start; padding: 10px 6px; border: 0; border-radius: var(--radius-control); background: transparent; color: var(--text); font: inherit; text-align: left; cursor: pointer; }
 .jobs-history-entry > span { display: grid; min-width: 0; gap: 3px; }

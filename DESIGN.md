@@ -127,14 +127,26 @@ this candidate does not imply their changes are integrated or released.
 The header's **Background work** list contains only undismissed jobs and explains
 that research, images, apps and indexing are separate from Factory tasks.
 P11-05 supersedes the earlier Recent jobs view that kept hidden rows visible.
-Dismissing UUID jobs is local to the account/backend and removes the row, never
-cancels work or deletes server history. Keep a stable trigger and explicit empty
+Dismissing finished UUID jobs is account-owned server state (P11-12), not a
+device preference, and removes the row without cancelling work or deleting
+server history. The popover offers Dismiss all finished, groups equivalent
+finished entries with a count, and shows kind, start time and stored reasons.
+Restart interruptions use neutral text and marks, not failure emphasis/counts.
+The P9-119 icon/count header remains unchanged; restart interruptions are excluded
+from its failed count. Keep a stable trigger and explicit empty
 state after the final dismissal; row dismissal focuses the list, while detail
 dismissal and Escape return to the trigger. Cross-tab dismissal of an open run
 returns to the filtered list. Indexing Retry remains explicitly unavailable
 without a supported owned action. A historical interruption is not current
 system health. Preserve borderless tabs and phone-sheet geometry; local fixture
 inspection and live acceptance are separate.
+
+Merged-header Chromium fixtures are in `docs/ui/screenshots/p11-12/merged-*`
+at 390×844 and 1440×900, light and dark, captured with reduced motion.
+Synthetic auth/API data exercised
+grouped and bulk dismissal, running-work retention, updated outcome counts,
+Escape/focus return and reduced motion. These are local browser checks, not
+production-data or physical-device acceptance.
 
 ## Fixed balanced stage rendering (15 October 2026; local)
 
