@@ -1,8 +1,6 @@
 import type { CSSProperties } from 'react';
-import { InputOrbCore } from './InputOrbCore';
-import { LivePhrase } from './ToolCallChip';
 
-export type LoaderVariant = 'core' | 'lines' | 'rows' | 'cards' | 'panel' | 'image' | 'stars' | 'inline';
+export type LoaderVariant = 'text' | 'lines' | 'rows' | 'cards' | 'panel' | 'image' | 'stars' | 'inline';
 
 // Fixed, scattered positions so the star placeholder looks the same on every load.
 const stars = Array.from({ length: 26 }, (_, index) => ({
@@ -12,15 +10,14 @@ const stars = Array.from({ length: 26 }, (_, index) => ({
 }));
 
 /**
- * Loading (Dan, 7–8 October). `core` is the orb's amber brain lighting up, with a rotating phrase under it; it is the
- * default for a page or window loading. Sections inside a page load lazily: the frame is already there and the area shows a
- * glass placeholder in the shape of what is coming, with a slow light passing over it. The label is for screen readers only; inside an element that already
- * announces status, pass `announce={false}`.
+ * Page loading uses text with decorative dots; sections retain glass placeholders.
+ * The label is stable screen-reader text; inside an element that already announces status, pass `announce={false}`.
  */
-export function Loader({ label, variant = 'lines', size = 'block', announce = true, className }: {
+export function Loader({ label, text = 'Loading', variant = 'lines', size = 'block', announce = true, className }: {
   label: string;
+  text?: string;
   variant?: LoaderVariant;
-  /** Only for `core`: centred in the content area, or inline in a line of text. */
+  /** Only for `text`: centred in the content area, or inline in a line of text. */
   size?: 'block' | 'inline';
   announce?: boolean;
   className?: string;
@@ -28,12 +25,10 @@ export function Loader({ label, variant = 'lines', size = 'block', announce = tr
   const status = announce ? { role: 'status', 'aria-live': 'polite' as const } : {};
   const extra = className ? ` ${className}` : '';
   const hidden = <span className="visually-hidden">{label}</span>;
-  if (variant === 'core') {
-    // The status lives on the hidden label only, so the rotating phrase is never read out or counted as status text.
+  if (variant === 'text') {
     return (
       <span className={`loader loader-${size}${extra}`}>
-        <span className="loader-core" aria-hidden="true"><InputOrbCore variant="core" active /></span>
-        {size === 'block' && <span className="loader-phrase"><LivePhrase phase="loading" /></span>}
+        <span aria-hidden="true">{text}<span className="loader-dots"><span>.</span><span>.</span><span>.</span></span></span>
         <span className="visually-hidden" {...status}>{label}</span>
       </span>
     );

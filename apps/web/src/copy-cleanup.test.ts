@@ -61,7 +61,7 @@ describe('production interface copy', () => {
   it('keeps sign-in to its personal greeting and provider-accessible action', () => {
     const signIn = readFileSync('src/pages.tsx', 'utf8');
     expect(signIn).toContain('getSignInGreeting');
-    expect(signIn).toContain('aria-label="Sign in with Microsoft"');
+    expect(signIn).toContain("aria-label={pending ? 'Redirecting' : 'Sign in with Microsoft'}");
     expect(signIn).not.toContain('Jarvis is taking shape');
     expect(signIn).not.toContain('Your personal AI platform starts here.');
     expect(signIn).not.toContain('Not signed in.');

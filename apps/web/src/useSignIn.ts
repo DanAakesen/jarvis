@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { PublicClientApplication } from '@azure/msal-browser';
 import type { PublicConfig } from '../config/public-config';
-import { createAuthClient, restoreProfile, signIn, type UserProfile } from './auth';
+import { createAuthClient, isSignInRedirectPending, restoreProfile, signIn, type UserProfile } from './auth';
 
-export type SignInState = 'checking' | 'signed-out' | 'signing-in' | 'signed-in' | 'error' | 'unavailable';
+export type SignInState = 'checking' | 'signed-out' | 'redirecting' | 'signing-in' | 'signed-in' | 'error' | 'unavailable';
 
 export interface SignInSession {
   state: SignInState;
@@ -17,7 +17,8 @@ export interface SignInSession {
 /** Owns the browser session for the whole shell, so moving between pages never repeats sign-in. */
 export function useSignIn(config: PublicConfig): SignInSession {
   const client = useMemo(() => createAuthClient(config), [config]);
-  const [state, setState] = useState<SignInState>(config.backendUrl ? 'checking' : 'unavailable');
+  const [state, setState] = useState<SignInState>(() =>
+    config.backendUrl ? (isSignInRedirectPending() ? 'signing-in' : 'checking') : 'unavailable');
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [message, setMessage] = useState('');
 
@@ -42,7 +43,7 @@ export function useSignIn(config: PublicConfig): SignInSession {
   }, [client, config]);
 
   const handleSignIn = useCallback(async () => {
-    setState('signing-in');
+    setState('redirecting');
     setMessage('');
     try {
       await signIn(client, config); // The page now navigates to Microsoft sign-in.

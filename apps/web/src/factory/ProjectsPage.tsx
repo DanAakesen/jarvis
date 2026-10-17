@@ -526,7 +526,7 @@ export function ProjectSettingsPage({ backendUrl, getAccessToken }: ProjectsPage
   const disabled = saving || archivePending;
 
   if (visibleState === 'loading') {
-    return <section aria-labelledby="project-settings-heading"><h1 id="project-settings-heading">Project settings</h1><Loader variant="core" label="Loading project settings…" /></section>;
+    return <section aria-labelledby="project-settings-heading"><h1 id="project-settings-heading">Project settings</h1><Loader variant="text" label="Loading project settings…" /></section>;
   }
 
   return (

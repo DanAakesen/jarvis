@@ -6,25 +6,27 @@ import { getSignInGreeting } from './sign-in-greeting';
 
 export function SignInPage({ session }: { session: SignInSession }) {
   const { state, message } = session;
-  if (state === 'checking') {
+  if (state === 'checking' || state === 'signing-in') {
+    const text = state === 'signing-in' ? 'Signing you in' : 'Loading';
     return (
       <section className="signin signin-loading" aria-busy="true">
-        <Loader className="signin-loader" variant="core" size="inline" label="Checking for an existing sign-in…" />
+        <Loader variant="text" size="inline" text={text} label={text} />
       </section>
     );
   }
 
-  const pending = state === 'signing-in';
+  const pending = state === 'redirecting';
   const unavailable = state === 'unavailable';
   return (
     <section className="signin" aria-labelledby="welcome-heading">
       <h1 id="welcome-heading">{getSignInGreeting()}</h1>
       {state === 'error' && <p className="signin-error" role="alert">{message || 'Sign-in failed.'}</p>}
       <button className="signin-button luminous-glass" type="button" onClick={() => { void session.signIn(); }}
-        disabled={pending || unavailable} aria-label="Sign in with Microsoft" aria-busy={pending}
+        disabled={pending || unavailable} aria-label={pending ? 'Redirecting' : 'Sign in with Microsoft'} aria-busy={pending}
         aria-describedby={unavailable ? 'signin-unavailable' : undefined}>
-        {state === 'error' ? 'Retry' : 'Sign in'}
-        {pending && <Loader variant="core" size="inline" announce={false} label="Opening Microsoft sign-in…" />}
+        {pending
+          ? <Loader variant="text" size="inline" announce={false} text="Redirecting" label="Redirecting" />
+          : state === 'error' ? 'Retry' : 'Sign in'}
       </button>
       {unavailable && (
         <span className="visually-hidden" id="signin-unavailable">Sign-in is unavailable until the backend is configured.</span>

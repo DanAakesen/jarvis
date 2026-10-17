@@ -694,7 +694,12 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   client ID and API scope. MSAL stores its cache in session storage; sign-in
   redirects the whole page to Entra (no popup, so embedded browsers and popup
   blockers work) and returns to the registered site root, where
-  `handleRedirectPromise` completes it. It requests only the delegated API scope
+  `handleRedirectPromise` completes it. A non-sensitive per-tab session-storage
+  marker, set just before `loginRedirect` and cleared when redirect handling
+  settles or launch fails, distinguishes returning `Signing you in` from
+  first-visit `Loading`; the outgoing button shows `Redirecting`. The marker
+  controls presentation only, never authentication or authorization.
+  It requests only the delegated API scope
   and sends the access token to `/me`. Cached accounts use silent token
   acquisition through the `/redirect.html` bridge. A missing backend URL disables
   sign-in instead of presenting a false success state.
