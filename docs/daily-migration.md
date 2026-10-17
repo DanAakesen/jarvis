@@ -331,6 +331,17 @@ authoritative budget-backed advice, source reconciliation and physical-device/
 activation/cutover acceptance remain separate unfinished gates, not implicit
 features of this record-browser source slice.
 
+The current tool ledger is partial, not full migration acceptance. Shared
+record/detail/sync and brief reads use `daily_query` plus acknowledged workspace
+GenUI; direct/reviewed intake, saved foods/plans/preferences and reference lookup
+have explicit inactive tools. Personalised suggestions still require an
+authoritative budget/candidate adapter for the existing `suggest` calculation;
+reference lookup is not that adapter. Daily Google-feed/attention/manual-refresh/
+suppression equivalence and stored all-calendar grants remain unestablished,
+not completed by the record browser. Device/export provisioning and real-phone/
+provider acceptance retain their separate approval gates. No UI-only capability
+or generic lookup may be reported as full retained-tool parity.
+
 Gated Jarvis navigation / source contracts; current card deck and complete health / food / workout details. Keep existing shell and voice workflow.
 
 Port Daily/Workouts/Nutrition functionality into the existing Jarvis shell/design system: period selectors, card deck, health/food/workout histories, scan charts, source freshness and loading/error states. Mobile first: readable units/axes/legend, every actual scan point, no overflow at narrow phone widths. No TickTick surfaces. Disabled Daily preserves existing navigation.

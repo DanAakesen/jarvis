@@ -438,8 +438,9 @@ jobs:
             echo
             echo "A disconnected PC bridge is recorded but does not block deployment acceptance."
           } >>"$GITHUB_STEP_SUMMARY"
-          # Ids and statuses only (no details), so a failed gate is diagnosable from the log.
+          # Never dump report/details; the helper prints fixed allowlisted reason codes only.
           jq -r '.entries[] | "smoke \(.id): \(.status)"' "$response"
+          python .github/scripts/smoke_reasons.py "$response"
           if ! jq -e '[.entries[] | select(.id != "pc_bridge" and .id != "chat_identity" and .id != "chat_no_timestamp" and (.status == "down" or .status == "degraded"))] | length == 0' "$response" >/dev/null; then
             echo "::error::A required backend smoke check is degraded or down."
             exit 1
