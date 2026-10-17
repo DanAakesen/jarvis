@@ -38,6 +38,14 @@ const food = {
   operationId: 'synthetic-operation', mealName: 'Synthetic meal', energyKcal: 200,
   captureMethod: 'photo', confidence: 'accurate',
 };
+const savedFavorite = {
+  id: 'synthetic-favorite', favorite_name: 'Synthetic favourite', normalized_name: 'synthetic favourite',
+  meal_name: 'Synthetic meal', meal_type: null, aliases_json: '[]', components_json: '[]', nutrient_provenance_json: '{}',
+  energy_kcal: 200, protein_grams: null, carbohydrates_grams: null, fat_grams: null, fiber_grams: null, confidence: 'accurate',
+  revision: 1n, created_at: '2026-10-16T00:00:00Z', updated_at: '2026-10-16T00:00:00Z',
+  owner_object_id: 'never-expose-owner', private_marker: 'never-expose-marker',
+};
+const savedPlan = { id: 'synthetic-plan', plan_name: 'Synthetic plan', items_json: '[]', revision: 1n, deleted_at: null };
 
 afterEach(async () => {
   await Promise.all(clients.splice(0).map(client => client.close()));
@@ -74,8 +82,13 @@ async function fixture(writesEnabled = true) {
     }),
     correct: vi.fn<Handlers['correct']>().mockResolvedValue({ id: 'synthetic', idempotency_key: 'synthetic-key', revision: 2n }),
     remove: vi.fn<Handlers['remove']>().mockResolvedValue({ id: 'synthetic', idempotency_key: 'synthetic-key', revision: 2n }),
-    favorite: vi.fn<Handlers['favorite']>().mockResolvedValue(undefined),
-    plan: vi.fn<Handlers['plan']>().mockResolvedValue({}),
+    favoriteRecords: vi.fn<Handlers['favoriteRecords']>(async ids => ids.map(id => ({ ...savedFavorite, id }))),
+    preferences: vi.fn<Handlers['preferences']>().mockResolvedValue([]),
+    planRecord: vi.fn<Handlers['planRecord']>().mockResolvedValue(savedPlan),
+    favorite: vi.fn<Handlers['favorite']>().mockResolvedValue(savedFavorite),
+    plan: vi.fn<Handlers['plan']>().mockResolvedValue(savedPlan),
+    removePlan: vi.fn<Handlers['removePlan']>().mockResolvedValue({ ...savedPlan, revision: 2n, deleted_at: '2026-10-16T21:59:00Z' }),
+    feedback: vi.fn<Handlers['feedback']>().mockResolvedValue({ meal_key: savedFavorite.id, preference: 'dislike', revision: 1n }),
   };
   const app = Fastify({ logger: false, genReqId: () => randomUUID() });
   apps.push(app);
@@ -134,11 +147,107 @@ async function fixture(writesEnabled = true) {
 }
 
 describe('inactive hosted nutrition MCP adapter', () => {
+  it('reads real preference revisions, distinguishing absent and cleared records without private columns', async () => {
+    const f = await fixture();
+    vi.mocked(f.nutrition.preferences).mockResolvedValue([
+      { meal_key: 'liked', preference: 'like', revision: 2n, private_marker: 'never-expose-marker' },
+      { meal_key: 'cleared', preference: null, revision: '3' },
+    ]);
+    const { client } = await f.connect('read');
+    const result = await client.callTool({ name: 'read_food_preferences', arguments: { favoriteIds: ['liked', 'missing', 'cleared', 'liked'] } });
+    expect(result.structuredContent).toMatchObject({ records: [
+      { favoriteId: 'liked', status: 'available', revision: '2', preference: 'like' },
+      { favoriteId: 'missing', status: 'not-set', revision: '0', preference: null },
+      { favoriteId: 'cleared', status: 'cleared', revision: '3', preference: null },
+    ] });
+    expect(JSON.stringify(result)).not.toContain('never-expose');
+    expect(f.nutrition.feedback).not.toHaveBeenCalled();
+  });
+
+  const savedChanges = [
+    { handler: 'favorite', change: { operation: 'save_favorite', operationId: 'favorite-operation', expectedRevision: '0',
+      name: 'Synthetic favourite', aliases: ['Synthetic alias'],
+      definition: { mealName: 'Synthetic meal', energyKcal: 200, confidence: 'accurate' } } },
+    { handler: 'plan', change: { operation: 'save_plan', operationId: 'plan-operation', expectedRevision: '0', name: 'Synthetic plan',
+      entries: (['breakfast', 'lunch', 'dinner'] as const).map(slot => ({ slot, favoriteId: savedFavorite.id })) } },
+    { handler: 'removePlan', change: { operation: 'delete_plan', id: savedPlan.id, expectedRevision: '1' } },
+    { handler: 'feedback', change: { operation: 'set_feedback', favoriteId: savedFavorite.id, expectedRevision: '0', preference: 'dislike' } },
+  ] as const;
+  it.each(savedChanges)('native-reviews $change.operation and returns only the actual committed safe receipt', async ({ handler, change }) => {
+    const f = await fixture();
+    const { client, messages } = await f.connect();
+    const result = await client.callTool({ name: 'manage_saved_food', arguments: { change } });
+    expect(result.isError).not.toBe(true);
+    expect(result.structuredContent).toMatchObject({ status: 'committed', operation: change.operation });
+    expect(messages).toHaveLength(1);
+    expect(messages[0]).toContain('Synthetic');
+    expect(f.nutrition[handler]).toHaveBeenCalledOnce();
+    expect(JSON.stringify(result)).not.toContain('never-expose');
+    expect(f.nutrition.log).not.toHaveBeenCalled();
+    expect(f.audit).toHaveBeenLastCalledWith(expect.objectContaining({ tool: 'manage_saved_food', phase: 'ok', outcome: 'ok' }));
+  });
+  it.each(savedChanges)('does not execute declined $change.operation or a read-only caller', async ({ handler, change }) => {
+    const f = await fixture();
+    const declined = await f.connect('write', 'decline');
+    expect((await declined.client.callTool({ name: 'manage_saved_food', arguments: { change } })).isError).toBe(true);
+    const read = await f.connect('read');
+    expect((await read.client.callTool({ name: 'manage_saved_food', arguments: { change } })).isError).toBe(true);
+    expect(f.nutrition[handler]).not.toHaveBeenCalled();
+  });
+  it('binds an owned intake source revision and does not trust model provenance or confirmation', async () => {
+    const f = await fixture();
+    vi.mocked(f.nutrition.intake).mockResolvedValue({ id: 'source', idempotency_key: 'source-key', meal_name: 'Synthetic source',
+      revision: 4n, deleted_at: null, owner_object_id: 'never-expose-owner' });
+    const { client, messages } = await f.connect();
+    const change = { operation: 'save_favorite', operationId: 'source-operation', expectedRevision: '0', name: 'Synthetic source favourite', sourceIdempotencyKey: 'source-key' };
+    expect((await client.callTool({ name: 'manage_saved_food', arguments: { change, userConfirmed: true } })).isError).toBe(true);
+    expect(f.nutrition.favorite).not.toHaveBeenCalled();
+    expect((await client.callTool({ name: 'manage_saved_food', arguments: { change } })).isError).not.toBe(true);
+    expect(f.nutrition.favorite).toHaveBeenCalledWith(expect.objectContaining({ sourceIdempotencyKey: 'source-key' }),
+      expect.objectContaining({ intent: 'save-favorite', expectedRevision: 0n, sourceRevision: 4n, proposalAccepted: true }));
+    expect(messages[0]).toContain('Synthetic source');
+    expect(messages[0]).not.toContain('never-expose');
+  });
+  it('refuses a changed plan source between native display and acceptance instead of saving new undisplayed totals', async () => {
+    const f = await fixture();
+    const { client, messages } = await f.connect();
+    client.setRequestHandler('elicitation/create', async request => {
+      messages.push(request.params.message);
+      vi.mocked(f.nutrition.favoriteRecords).mockResolvedValue([{ ...savedFavorite, energy_kcal: 999, revision: 2n }]);
+      return { action: 'accept', content: { confirm: true } };
+    });
+    const result = await client.callTool({ name: 'manage_saved_food', arguments: { change: savedChanges[1].change } });
+    expect(result.isError).toBe(true);
+    expect(messages[0]).toContain('"energyKcal": 600');
+    expect(f.nutrition.plan).not.toHaveBeenCalled();
+  });
+  it('replays plan deletion using unchanged semantic content, not the deletion timestamp', async () => {
+    const f = await fixture();
+    const { client } = await f.connect();
+    client.setRequestHandler('elicitation/create', async () => {
+      vi.mocked(f.nutrition.planRecord).mockResolvedValue({ ...savedPlan, revision: 2n, deleted_at: '2026-10-16T21:59:00Z' });
+      return { action: 'accept', content: { confirm: true } };
+    });
+    expect((await client.callTool({ name: 'manage_saved_food', arguments: { change: savedChanges[2].change } })).isError).not.toBe(true);
+    expect(f.nutrition.removePlan).toHaveBeenCalledWith(savedPlan.id, 1n, expect.objectContaining({ intent: 'delete-plan' }));
+  });
+  it('refuses invented plan totals, extra authority, unknown sources and missing committed receipts', async () => {
+    const f = await fixture();
+    const { client } = await f.connect();
+    expect((await client.callTool({ name: 'manage_saved_food', arguments: { change: { ...savedChanges[1].change, energyKcal: 1 } } })).isError).toBe(true);
+    vi.mocked(f.nutrition.favoriteRecords).mockRejectedValueOnce(new ToolRefusal('Every saved-food reference must be an owned favourite.'));
+    expect((await client.callTool({ name: 'manage_saved_food', arguments: { change: savedChanges[1].change } })).isError).toBe(true);
+    expect(f.nutrition.plan).not.toHaveBeenCalled();
+    vi.mocked(f.nutrition.favorite).mockResolvedValue({});
+    const result = await client.callTool({ name: 'manage_saved_food', arguments: { change: savedChanges[0].change } });
+    expect(result.isError).toBe(true);
+    expect(JSON.stringify(result)).toContain('may have committed');
+  });
   it('keeps both composition gates off by default and exposes no general Jarvis tools', async () => {
     const f = await fixture(false);
     expect(createDailyModules(false, undefined, f.options)).toEqual([]);
     const { client } = await f.connect();
-    expect((await client.listTools()).tools.map(tool => tool.name).sort()).toEqual(['lookup_food', 'read_nutrition']);
+    expect((await client.listTools()).tools.map(tool => tool.name).sort()).toEqual(['lookup_food', 'read_food_preferences', 'read_nutrition']);
     expect(f.nutrition.log).not.toHaveBeenCalled();
     const metadata = await f.app.inject(dailyMcpMetadataPath);
     expect(metadata.json().scopes_supported).toEqual([`api://${config.auth.apiClientId}/${dailyNutritionScopes.read}`]);

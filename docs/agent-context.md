@@ -268,6 +268,15 @@ audit. Server-to-server only: reject browser Origin, retain shared root CORS,
 and explicitly negotiate modern protocol in synthetic SDK clients.
 Saved-name lookup uses the existing `lookup_food`, owner-bound resolver and
 query DTO projection; preserve original component inputs and deployed 0049.
+The saved-food continuation adds native-reviewed favourite/alias, plan
+save/soft-delete and canonical preference writes plus bounded preference reads.
+Migration 0050 owns the new constrained audit names, target-only revisions and
+null-clear tombstones; never edit deployed 0049. Actual SQL CI must exercise
+source-snapshot rechecks, repeat/stale writes and guarded down/up. Historical
+0043/0049 rollback tests use their applicable ledgers, not a newer manifest.
+Local pure model/record tests ran; migration/application suites currently lack
+`mssql`/Fastify/jose in the existing graph. Do not substitute or restore a second
+graph; exact-head normal CI remains authoritative for those checks.
 
 Historical read continuation: Dan ordered deployment first, then Daily. After #866's
 successful deployment, JarvisPM claimed partial #724 directly in the existing

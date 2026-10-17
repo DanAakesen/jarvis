@@ -1891,11 +1891,15 @@ describe('committed domain schema (groups 1-8)', () => {
   });
 
   it('persists UUID-correlated connector audit without messages and refuses to erase that evidence on rollback', () => withRollbackDatabase(async (rollbackPool, committed) => {
+    for (const migration of committed.filter(migration => migration.name > '0049_daily_connector_audit.sql').reverse()) {
+      await revertMigration(rollbackPool, committed, await readDownMigration(migration.name));
+    }
+    const historical = committed.filter(migration => migration.name <= '0049_daily_connector_audit.sql');
     const down = await readDownMigration('0049_daily_connector_audit.sql');
-    expect(await revertMigration(rollbackPool, committed, down)).toBe(down.name);
+    expect(await revertMigration(rollbackPool, historical, down)).toBe(down.name);
     expect((await rollbackPool.request().query<{ count: number }>(`SELECT COUNT(*) AS count FROM sys.indexes
       WHERE object_id = OBJECT_ID(N'dbo.tool_calls') AND name = N'IX_tool_calls_message_id';`)).recordset[0]?.count).toBe(1);
-    expect(await applyMigrations(rollbackPool, committed)).toEqual([down.name]);
+    expect(await applyMigrations(rollbackPool, historical)).toEqual([down.name]);
     const record = createToolCallStore(rollbackPool).recordDailyMcp;
     if (!record) throw new Error('Connector audit method missing');
     const sessionId = await scalar("INSERT dbo.jarvis_sessions (channel, language) VALUES (N'chat', N'en')", rollbackPool);
@@ -1924,9 +1928,29 @@ describe('committed domain schema (groups 1-8)', () => {
       VALUES (@messageId, NEWID(), N'daily_mcp_log_food', N'{}', N'ok');`)).rejects.toThrow('CK_tool_calls_identity');
     await expect(rollbackPool.request().query(`INSERT dbo.tool_calls (message_id, tool, arguments, outcome)
       VALUES (-1, N'workspace_command', N'{}', N'ok');`)).rejects.toThrow('FOREIGN KEY');
-    await expect(revertMigration(rollbackPool, committed, down)).rejects.toThrow('audit evidence must be retained');
-    expect(await ledger(rollbackPool)).toEqual(committed.map(migration => migration.name));
+    await expect(revertMigration(rollbackPool, historical, down)).rejects.toThrow('audit evidence must be retained');
+    expect(await ledger(rollbackPool)).toEqual(historical.map(migration => migration.name));
     expect((await rollbackPool.request().query<{ count: number }>('SELECT COUNT(*) AS count FROM dbo.tool_calls')).recordset[0]?.count).toBe(2);
+  }));
+
+  it('reverts unused saved-food metadata but retains new constrained audit evidence', () => withRollbackDatabase(async (rollbackPool, committed) => {
+    const down = await readDownMigration('0050_daily_saved_food.sql');
+    expect(await revertMigration(rollbackPool, committed, down)).toBe(down.name);
+    expect(await applyMigrations(rollbackPool, committed)).toEqual([down.name]);
+    const record = createToolCallStore(rollbackPool).recordDailyMcp;
+    if (!record) throw new Error('Connector audit method missing');
+    for (const tool of ['read_food_preferences', 'manage_saved_food'] as const) {
+      await record({ requestId: randomUUID(), tool, phase: 'ok', outcome: 'ok' });
+    }
+    await expect(revertMigration(rollbackPool, committed, down)).rejects.toThrow('audit evidence must be retained');
+    expect((await rollbackPool.request().query('SELECT COUNT(*) AS count FROM dbo.tool_calls')).recordset[0].count).toBe(2);
+  }));
+  it('refuses to erase cleared food-preference revision evidence on rollback', () => withRollbackDatabase(async (rollbackPool, committed) => {
+    await rollbackPool.request().query(`INSERT daily.nutrition_recommendation_feedback(owner_object_id,meal_key,preference,revision,created_at,updated_at)
+      VALUES('11111111-1111-4111-8111-111111111111',N'synthetic',NULL,2,N'2026-10-17',N'2026-10-17');`);
+    await expect(revertMigration(rollbackPool, committed, await readDownMigration('0050_daily_saved_food.sql'))).rejects.toThrow('cannot discard revisions');
+    expect((await rollbackPool.request().query('SELECT revision,preference FROM daily.nutrition_recommendation_feedback')).recordset)
+      .toEqual([{ revision: '2', preference: null }]);
   }));
 
   it('preserves used execution generations and only reverts unused migration 0048', () => withRollbackDatabase(async (rollbackPool, committed) => {

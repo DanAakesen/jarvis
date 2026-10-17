@@ -3,9 +3,10 @@ import type { FastifyRequest } from 'fastify';
 import { setTimeout as delay } from 'node:timers/promises';
 import { resolveDailyOwner } from '../owner.js';
 import { ToolFailure, ToolRefusal } from '../../core/tool-registry.js';
-import { authorizeIntake, canonicalJson, date, favoriteSearchKey, instant, normalizeSearchText, nutrients, plan, suggest, text, writeDefinition, writeMeal, type BudgetContext, type FavoriteAuthority, type FavoriteInput, type IntakeAuthority, type MealInput, type PlanInput, type PlanRequest, type Suggestion } from './model.js';
+import { authorizeIntake, canonicalJson, date, favoriteSearchKey, instant, normalizeSearchText, preparePlan, suggest, text, writeDefinition, writeMeal, type BudgetContext, type FavoriteAuthority, type FavoriteInput, type IntakeAuthority, type MealInput, type PlanRequest, type Suggestion } from './model.js';
 import { dailyQuerySources, type DailySourceId } from '@jarvis/contracts';
 import { createDailyChanges, type DailyChangeSink } from '../revisions.js';
+import { favoriteFingerprint } from '../records.js';
 
 const fields = {
   id: ['id', sql.NVarChar(256)], idempotencyKey: ['idempotency_key', sql.NVarChar(256)],
@@ -163,17 +164,40 @@ export class NutritionStore {
     const last = rows.at(-1);
     return { rows, next: more && last ? { createdAt: last.created_at as string, id: last.id as string } : null };
   }
-  async feedback(mealKey: string, preference: 'like' | 'dislike' | null, signal: AbortSignal): Promise<void> {
+  async feedback(mealKey: string, preference: 'like' | 'dislike' | null, signal: AbortSignal,
+    expectedRevision?: bigint, reviewedFavorite?: string): Promise<Record<string, unknown> | null> {
     text(mealKey); if (preference !== null && preference !== 'like' && preference !== 'dislike') throw new TypeError('Invalid meal preference');
-    await this.transaction(signal, async (transaction) => {
+    if (expectedRevision !== undefined && (typeof expectedRevision !== 'bigint' || expectedRevision < 0n || expectedRevision >= 9223372036854775807n)) throw new TypeError('Invalid feedback revision');
+    return this.transaction(signal, async (transaction) => {
+      if (reviewedFavorite !== undefined) {
+        const favorite = (await this.query(this.request(transaction, signal).input('id', sql.NVarChar(256), mealKey),
+          `SELECT * FROM daily.nutrition_favorites WITH (UPDLOCK,HOLDLOCK) WHERE owner_object_id=@owner AND ${equalKey('id', 'id')};`, signal)).recordset[0];
+        if (!favorite || favoriteFingerprint(favorite) !== reviewedFavorite) throw new ToolRefusal('The reviewed favourite changed. Review it again.');
+      }
+      const current = (await this.query(this.request(transaction, signal).input('key', sql.NVarChar(256), mealKey),
+        'SELECT * FROM daily.nutrition_recommendation_feedback WITH (UPDLOCK,HOLDLOCK) WHERE owner_object_id=@owner AND meal_key=@key;', signal)).recordset[0];
+      if (current && current.meal_key !== mealKey) throw new ToolRefusal('This nutrition key conflicts with an existing exact key.');
+      const currentRevision = current ? BigInt(current.revision as string) : 0n;
+      if (expectedRevision !== undefined && currentRevision !== expectedRevision) {
+        if (currentRevision === expectedRevision + 1n && current?.preference === preference) return current;
+        throw new ToolRefusal('Food preference changed. Read the latest revision before updating it.');
+      }
+      if (current?.preference === preference || !current && preference === null) return current ?? null;
       const now = this.now(); instant(now);
       const request = this.request(transaction, signal).input('key', sql.NVarChar(256), mealKey).input('preference', sql.NVarChar(256), preference).input('now', sql.NVarChar(64), now);
-      await this.query(request, `IF EXISTS(SELECT 1 FROM daily.nutrition_recommendation_feedback WITH (UPDLOCK,HOLDLOCK) WHERE owner_object_id=@owner AND meal_key=@key AND DATALENGTH(meal_key)<>DATALENGTH(@key)) THROW 51001,'Nutrition key conflict',1;
-        IF @preference IS NULL DELETE daily.nutrition_recommendation_feedback WHERE owner_object_id=@owner AND ${equalKey('meal_key', 'key')};
-        ELSE IF EXISTS(SELECT 1 FROM daily.nutrition_recommendation_feedback WITH (UPDLOCK,HOLDLOCK) WHERE owner_object_id=@owner AND meal_key=@key)
-        UPDATE daily.nutrition_recommendation_feedback SET preference=@preference,updated_at=@now WHERE owner_object_id=@owner AND ${equalKey('meal_key', 'key')};
-        ELSE INSERT daily.nutrition_recommendation_feedback(owner_object_id,meal_key,preference,created_at,updated_at) VALUES(@owner,@key,@preference,@now,@now);`, signal);
+      return (await this.query(request, current
+        ? `UPDATE daily.nutrition_recommendation_feedback SET preference=@preference,revision=revision+1,updated_at=@now OUTPUT INSERTED.* WHERE owner_object_id=@owner AND ${equalKey('meal_key', 'key')};`
+        : `INSERT daily.nutrition_recommendation_feedback(owner_object_id,meal_key,preference,created_at,updated_at) OUTPUT INSERTED.* VALUES(@owner,@key,@preference,@now,@now);`, signal)).recordset[0]!;
     });
+  }
+  async preferences(keys: readonly string[], signal: AbortSignal): Promise<Record<string, unknown>[]> {
+    if (!Array.isArray(keys) || keys.length < 1 || keys.length > 50) throw new TypeError('Invalid feedback keys');
+    keys.forEach(key => text(key));
+    const request = this.request(this.pool, signal);
+    const unique = [...new Set(keys)];
+    unique.forEach((key, index) => request.input(`key${index}`, sql.NVarChar(256), key));
+    return (await this.read(request, `SELECT meal_key,preference,revision,created_at,updated_at FROM daily.nutrition_recommendation_feedback WHERE owner_object_id=@owner AND
+      (${unique.map((_, index) => `(${equalKey('meal_key', `key${index}`)})`).join(' OR ')});`, signal)).recordset;
   }
   async disliked(keys: readonly string[], signal: AbortSignal): Promise<Set<string>> {
     if (!Array.isArray(keys) || keys.length > 1000) throw new TypeError('Invalid suggestion keys');
@@ -193,11 +217,14 @@ export class NutritionStore {
   }
 
   /** Exactly one retained source operation key or explicitly accepted definition. */
-  async favorite(input: FavoriteInput, authority: FavoriteAuthority, signal: AbortSignal): Promise<void> {
+  async favorite(input: FavoriteInput, authority: FavoriteAuthority, signal: AbortSignal): Promise<Record<string, unknown>> {
     text(input.id); text(input.name);
     if (Object.keys(input).some((key) => !['id', 'sourceIdempotencyKey', 'definition', 'name', 'aliases'].includes(key)) || !Array.isArray(input.aliases) || input.aliases.length > 30 ||
         Number(input.sourceIdempotencyKey !== undefined) + Number(input.definition !== undefined) !== 1) throw new TypeError('Choose exactly one favourite source');
     if (authority.explicit !== true) throw new ToolRefusal('Explicit intent to save this favourite is required.');
+    for (const value of [authority.expectedRevision, authority.sourceRevision]) {
+      if (value !== undefined && (typeof value !== 'bigint' || value < 0n || value >= 9223372036854775807n)) throw new TypeError('Invalid favourite revision');
+    }
     if (input.sourceIdempotencyKey !== undefined) text(input.sourceIdempotencyKey);
     if (input.definition) {
       const definition = input.definition;
@@ -208,12 +235,13 @@ export class NutritionStore {
     input = structuredClone(input);
     const normalized = normalizeSearchText(input.name);
     const aliases = [...new Set(input.aliases.map((alias) => { normalizeSearchText(alias); return alias; }))];
-    await this.transaction(signal, async (transaction, changed) => {
+    return this.transaction(signal, async (transaction, changed) => {
       const source = input.sourceIdempotencyKey === undefined ? null : (await this.query(this.request(transaction, signal).input('key', sql.NVarChar(256), input.sourceIdempotencyKey),
         `SELECT ${select} FROM daily.nutrition_meals WITH (UPDLOCK,HOLDLOCK) WHERE owner_object_id=@owner AND deleted_at IS NULL AND ${equalKey('idempotency_key', 'key')};`, signal)).recordset[0];
       if (input.sourceIdempotencyKey !== undefined && !source) throw new ToolRefusal('The source intake is unavailable.');
+      if (authority.sourceRevision !== undefined && (!source || BigInt(source.revision as string) !== authority.sourceRevision)) throw new ToolRefusal('The reviewed source intake changed. Review it again.');
       const namespace = await this.favoriteNamespace(transaction, signal);
-      const matches = namespace.filter((row) => favoriteNames(row).slice(0, 2).includes(normalized));
+      const matches = namespace.filter((row) => row.id === input.id || favoriteNames(row).slice(0, 2).includes(normalized));
       if (matches.length > 1) throw new ToolRefusal('The favourite name is ambiguous.');
       const existing = matches[0];
       const favoriteId = existing?.id as string | undefined ?? input.id;
@@ -228,18 +256,32 @@ export class NutritionStore {
       const valuesFromDefinition: Record<string, unknown> = definition ? { meal_name: definition.mealName, meal_type: definition.mealType, components_json: canonicalJson(definition.components),
         energy_kcal: definition.energyKcal, protein_grams: definition.proteinGrams, carbohydrates_grams: definition.carbohydratesGrams, fat_grams: definition.fatGrams,
         fiber_grams: definition.fiberGrams, confidence: definition.confidence, nutrient_provenance_json: canonicalJson(definition.provenance) } : {};
+      const desired = { favorite_name: input.name, normalized_name: normalized, aliases_json: JSON.stringify(aliases),
+        source_meal_id: source?.id ?? null, source_idempotency_key: source?.idempotency_key ?? null,
+        ...Object.fromEntries(['meal_name', 'meal_type', 'components_json', 'energy_kcal', 'protein_grams', 'carbohydrates_grams', 'fat_grams', 'fiber_grams', 'confidence', 'nutrient_provenance_json']
+          .map(column => [column, source ? source[column] : valuesFromDefinition[column]])) };
+      const unchanged = existing && Object.entries(desired).every(([column, value]) => existing[column] === value);
+      if (authority.expectedRevision !== undefined) {
+        const currentRevision = existing ? BigInt(existing.revision as string) : 0n;
+        if (currentRevision !== authority.expectedRevision) {
+          if (existing && unchanged && currentRevision === authority.expectedRevision + 1n) return existing;
+          throw new ToolRefusal('Favourite changed. Read the latest revision before saving it.');
+        }
+      }
+      if (existing && unchanged) return existing;
       for (const column of ['meal_name', 'meal_type', 'components_json', 'energy_kcal', 'protein_grams', 'carbohydrates_grams', 'fat_grams', 'fiber_grams', 'confidence', 'nutrient_provenance_json'] as const) {
         const type = ['energy_kcal', 'protein_grams', 'carbohydrates_grams', 'fat_grams', 'fiber_grams'].includes(column) ? sql.Float : sql.NVarChar(sql.MAX);
         request.input(column, type, source ? source[column] : valuesFromDefinition[column]);
       }
       request.input('mealId', sql.NVarChar(256), source?.id ?? null).input('sourceKey', sql.NVarChar(256), source?.idempotency_key ?? null);
       const values = ['meal_name', 'meal_type', 'components_json', 'energy_kcal', 'protein_grams', 'carbohydrates_grams', 'fat_grams', 'fiber_grams', 'confidence', 'nutrient_provenance_json'];
-      await this.query(request, `IF EXISTS(SELECT 1 FROM daily.nutrition_favorites WHERE owner_object_id=@owner AND id=@id AND DATALENGTH(id)<>DATALENGTH(@id)) THROW 51001,'Nutrition key conflict',1;
+      const saved = (await this.query(request, `IF EXISTS(SELECT 1 FROM daily.nutrition_favorites WHERE owner_object_id=@owner AND id=@id AND DATALENGTH(id)<>DATALENGTH(@id)) THROW 51001,'Nutrition key conflict',1;
         IF EXISTS(SELECT 1 FROM daily.nutrition_favorites WHERE owner_object_id=@owner AND id=@id)
-        UPDATE daily.nutrition_favorites SET favorite_name=@name,normalized_name=@normalized,aliases_json=@aliases,${values.map((c) => `[${c}]=@${c}`).join(',')},source_meal_id=@mealId,source_idempotency_key=@sourceKey,updated_at=@now WHERE owner_object_id=@owner AND ${equalKey('id', 'id')};
+        UPDATE daily.nutrition_favorites SET favorite_name=@name,normalized_name=@normalized,aliases_json=@aliases,${values.map((c) => `[${c}]=@${c}`).join(',')},source_meal_id=@mealId,source_idempotency_key=@sourceKey,revision=revision+1,updated_at=@now OUTPUT INSERTED.* WHERE owner_object_id=@owner AND ${equalKey('id', 'id')};
         ELSE INSERT daily.nutrition_favorites(owner_object_id,id,favorite_name,normalized_name,aliases_json,${values.join(',')},source_meal_id,source_idempotency_key,created_at,updated_at)
-        VALUES(@owner,@id,@name,@normalized,@aliases,${values.map((c) => `@${c}`).join(',')},@mealId,@sourceKey,@now,@now);`, signal);
+        OUTPUT INSERTED.* VALUES(@owner,@id,@name,@normalized,@aliases,${values.map((c) => `@${c}`).join(',')},@mealId,@sourceKey,@now,@now);`, signal)).recordset[0]!;
       changed();
+      return saved;
     }, dailyQuerySources.favorites);
   }
   async findFavorite(name: string, signal: AbortSignal): Promise<Record<string, unknown> | null> {
@@ -274,13 +316,32 @@ export class NutritionStore {
     const more = rows.length > input.limit; if (more) rows.pop();
     return { rows, nextId: more ? rows.at(-1)!.id as string : null };
   }
+  async favoriteRecords(ids: readonly string[], signal: AbortSignal): Promise<Record<string, unknown>[]> {
+    if (!Array.isArray(ids) || ids.length < 1 || ids.length > 50) throw new TypeError('Invalid favourite keys');
+    ids.forEach(id => text(id));
+    const unique = [...new Set(ids)]; const request = this.request(this.pool, signal);
+    unique.forEach((id, index) => request.input(`id${index}`, sql.NVarChar(256), id));
+    const rows = (await this.read(request, `SELECT * FROM daily.nutrition_favorites WHERE owner_object_id=@owner AND
+      (${unique.map((_, index) => `(${equalKey('id', `id${index}`)})`).join(' OR ')});`, signal)).recordset;
+    return unique.map(id => {
+      const row = rows.find(row => row.id === id);
+      if (!row) throw new ToolRefusal('Every saved-food reference must be an owned favourite.');
+      return row;
+    });
+  }
   /** Plans never call log, nutrition_queue or Apple Health export. */
-  async savePlan(input: PlanRequest, expectedRevision: bigint, signal: AbortSignal): Promise<Record<string, unknown>> {
+  async savePlan(input: PlanRequest, expectedRevision: bigint, signal: AbortSignal,
+    reviewedFavorites?: ReadonlyMap<string, string>): Promise<Record<string, unknown>> {
     if (!input || Object.keys(input).some((key) => !['id','name','description','entries'].includes(key)) || !Array.isArray(input.entries) || input.entries.length < 3 || input.entries.length > 50) throw new TypeError('Invalid plan definition');
     text(input.id); text(input.name); if (input.description !== null) text(input.description, 4000);
     for (const entry of input.entries) { if (Object.keys(entry).some((key) => !['slot','favoriteId'].includes(key)) || !['breakfast','lunch','dinner','snack'].includes(entry.slot)) throw new TypeError('Invalid plan slot'); text(entry.favoriteId); }
     for (const slot of ['breakfast','lunch','dinner']) if (input.entries.filter((entry) => entry.slot === slot).length !== 1) throw new TypeError('Plan requires one breakfast, lunch and dinner');
     input = structuredClone(input); if (typeof expectedRevision !== 'bigint' || expectedRevision < 0n || expectedRevision >= 9223372036854775807n) throw new TypeError('Invalid plan revision');
+    const sourceReviews = reviewedFavorites ? new Map(reviewedFavorites) : undefined;
+    if (sourceReviews) {
+      if (sourceReviews.size !== new Set(input.entries.map(entry => entry.favoriteId)).size ||
+          input.entries.some(entry => !/^[a-f0-9]{64}$/u.test(sourceReviews.get(entry.favoriteId) ?? ''))) throw new TypeError('Invalid reviewed plan sources');
+    }
     const normalized = normalizeSearchText(input.name);
     return this.transaction(signal, async (transaction, changed) => {
       const rows = (await this.query(this.request(transaction, signal), `SELECT TOP (1001) * FROM daily.nutrition_meal_plans WITH (UPDLOCK,HOLDLOCK) WHERE owner_object_id=@owner ORDER BY id;`, signal)).recordset;
@@ -288,27 +349,14 @@ export class NutritionStore {
       const existing = rows.filter((row) => row.id === input.id || normalizeSearchText(row.normalized_name as string) === normalized || normalizeSearchText(row.plan_name as string) === normalized);
       if (existing.length > 1) throw new ToolRefusal('Plan name conflicts with another existing plan.');
       const row = existing[0];
-      const items: PlanInput['items'][number][] = [];
       const snapshots = new Map<string, Record<string, unknown>>();
       for (const favoriteId of [...new Set(input.entries.map((entry) => entry.favoriteId))].sort()) {
         const favorite = (await this.query(this.request(transaction, signal).input('id', sql.NVarChar(256), favoriteId),
           `SELECT * FROM daily.nutrition_favorites WITH (UPDLOCK,HOLDLOCK) WHERE owner_object_id=@owner AND ${equalKey('id','id')};`, signal)).recordset[0];
         if (!favorite) throw new ToolRefusal('Every plan slot must reference an owned favourite.'); snapshots.set(favoriteId, favorite);
+        if (sourceReviews && favoriteFingerprint(favorite) !== sourceReviews.get(favoriteId)) throw new ToolRefusal('A reviewed plan favourite changed. Review the plan again.');
       }
-      for (const entry of input.entries) {
-        const favorite = snapshots.get(entry.favoriteId)!;
-        const values = { energyKcal: favorite.energy_kcal as number, proteinGrams: favorite.protein_grams as number | null,
-          carbohydratesGrams: favorite.carbohydrates_grams as number | null, fatGrams: favorite.fat_grams as number | null, fiberGrams: favorite.fiber_grams as number | null };
-        nutrients(values);
-        items.push({ mealKey: entry.favoriteId, name: favorite.meal_name as string, nutrients: values,
-          ...{ slot: entry.slot, favoriteId: entry.favoriteId, components: JSON.parse(favorite.components_json as string), provenance: JSON.parse(favorite.nutrient_provenance_json as string) } });
-      }
-      const totals = {} as Pick<PlanInput,'energyKcal'|'proteinGrams'|'carbohydratesGrams'|'fatGrams'|'fiberGrams'>;
-      for (const key of ['energyKcal','proteinGrams','carbohydratesGrams','fatGrams','fiberGrams'] as const) {
-        const values = items.map((item) => item.nutrients[key]);
-        (totals as Record<string, number | null>)[key] = values.some((value) => value === null) ? null : values.reduce<number>((sum,value) => sum + value!, 0);
-      }
-      plan({ id: row?.id as string | undefined ?? input.id, name: input.name, description: input.description, items, ...totals });
+      const { items, ...totals } = preparePlan(input, [...snapshots.values()]);
       const columns = { plan_name: input.name, normalized_name: normalized, description: input.description, items_json: canonicalJson(items),
         energy_kcal: totals.energyKcal, protein_grams: totals.proteinGrams, carbohydrates_grams: totals.carbohydratesGrams, fat_grams: totals.fatGrams, fiber_grams: totals.fiberGrams };
       if (row) {
@@ -333,6 +381,11 @@ export class NutritionStore {
     const rows = (await this.read(request, 'SELECT TOP (@limit) * FROM daily.nutrition_meal_plans WHERE owner_object_id=@owner AND (@after IS NULL OR id>@after) ORDER BY id;', signal)).recordset;
     const more = rows.length > input.limit; if (more) rows.pop();
     return { rows, nextId: more ? rows.at(-1)!.id as string : null };
+  }
+  async planRecord(id: string, signal: AbortSignal): Promise<Record<string, unknown> | null> {
+    text(id);
+    return (await this.read(this.request(this.pool, signal).input('id', sql.NVarChar(256), id),
+      `SELECT * FROM daily.nutrition_meal_plans WHERE owner_object_id=@owner AND ${equalKey('id', 'id')};`, signal)).recordset[0] ?? null;
   }
   async removePlan(id: string, expectedRevision: bigint, signal: AbortSignal): Promise<Record<string, unknown>> {
     text(id); if (typeof expectedRevision !== 'bigint' || expectedRevision < 1n || expectedRevision >= 9223372036854775807n) throw new TypeError('Invalid plan revision');

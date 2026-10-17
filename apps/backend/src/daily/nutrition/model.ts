@@ -97,10 +97,46 @@ export interface FavoriteInput {
   id: string; name: string; aliases: readonly string[];
   sourceIdempotencyKey?: string; definition?: FoodDefinition;
 }
-export interface FavoriteAuthority { explicit: boolean; estimateAccepted: boolean }
+export interface FavoriteAuthority {
+  explicit: boolean; estimateAccepted: boolean;
+  expectedRevision?: bigint; sourceRevision?: bigint;
+}
 export interface PlanRequest {
   id: string; name: string; description: string | null;
   entries: readonly { slot: 'breakfast' | 'lunch' | 'dinner' | 'snack'; favoriteId: string }[];
+}
+export function preparePlan(input: PlanRequest, favorites: readonly Record<string, unknown>[]): PlanInput {
+  if (!input || Object.keys(input).some(key => !['id', 'name', 'description', 'entries'].includes(key)) ||
+      !Array.isArray(input.entries) || input.entries.length < 3 || input.entries.length > 50) throw new TypeError('Invalid plan definition');
+  text(input.id); text(input.name); if (input.description !== null) text(input.description, 4000);
+  for (const entry of input.entries) {
+    if (Object.keys(entry).some(key => !['slot', 'favoriteId'].includes(key)) ||
+        !['breakfast', 'lunch', 'dinner', 'snack'].includes(entry.slot)) throw new TypeError('Invalid plan slot');
+    text(entry.favoriteId);
+  }
+  for (const slot of ['breakfast', 'lunch', 'dinner']) {
+    if (input.entries.filter(entry => entry.slot === slot).length !== 1) throw new TypeError('Plan requires one breakfast, lunch and dinner');
+  }
+  const items = input.entries.map(entry => {
+    const favorite = favorites.find(row => row.id === entry.favoriteId);
+    if (!favorite) throw new ToolRefusal('Every plan slot must reference an owned favourite.');
+    const values: Nutrients = {
+      energyKcal: favorite.energy_kcal as number, proteinGrams: favorite.protein_grams as number | null,
+      carbohydratesGrams: favorite.carbohydrates_grams as number | null, fatGrams: favorite.fat_grams as number | null,
+      fiberGrams: favorite.fiber_grams as number | null,
+    };
+    nutrients(values);
+    return { mealKey: entry.favoriteId, name: favorite.meal_name as string, nutrients: values,
+      slot: entry.slot, favoriteId: entry.favoriteId, components: JSON.parse(favorite.components_json as string),
+      provenance: JSON.parse(favorite.nutrient_provenance_json as string) };
+  });
+  const sum = (key: keyof Nutrients): number | null => items.some(item => item.nutrients[key] === null)
+    ? null : items.reduce((total, item) => total + item.nutrients[key]!, 0);
+  const result = { id: input.id, name: input.name, description: input.description, items,
+    energyKcal: sum('energyKcal')!, proteinGrams: sum('proteinGrams'), carbohydratesGrams: sum('carbohydratesGrams'),
+    fatGrams: sum('fatGrams'), fiberGrams: sum('fiberGrams') };
+  plan(result);
+  return result;
 }
 /** Occurrence defaults use trusted request time, not a model-selected clock/owner. */
 export function copenhagenDate(occurredAt: string): string {

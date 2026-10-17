@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { createToolCallStore } from './tool-call-store.js';
 
 describe('SQL tool-call store', () => {
-  it('persists connector UUID correlation without a fabricated conversation FK or private arguments', async () => {
+  it.each(['log_food', 'read_food_preferences', 'manage_saved_food'] as const)('persists %s UUID correlation without a fabricated conversation FK or private arguments', async tool => {
     const query = vi.fn(async () => ({ recordset: [] }));
     const input = vi.fn();
     const request = { input, query, cancel: vi.fn() };
@@ -12,10 +12,10 @@ describe('SQL tool-call store', () => {
     const record = createToolCallStore(pool).recordDailyMcp;
     if (!record) throw new Error('Connector audit method missing');
     await record({
-      requestId: '11111111-1111-4111-8111-111111111111', tool: 'log_food', phase: 'awaiting_confirmation', outcome: 'ok',
+      requestId: '11111111-1111-4111-8111-111111111111', tool, phase: 'awaiting_confirmation', outcome: 'ok',
     });
     expect(input).toHaveBeenNthCalledWith(1, 'requestId', sql.UniqueIdentifier, '11111111-1111-4111-8111-111111111111');
-    expect(input).toHaveBeenCalledWith('tool', sql.NVarChar(64), 'daily_mcp_log_food');
+    expect(input).toHaveBeenCalledWith('tool', sql.NVarChar(64), `daily_mcp_${tool}`);
     expect(input).toHaveBeenCalledWith('arguments', sql.NVarChar(sql.MAX), '{"redacted":true}');
     expect(input).toHaveBeenCalledWith('result', sql.NVarChar(sql.MAX), '{"redacted":true,"phase":"awaiting_confirmation"}');
     expect(query).toHaveBeenCalledWith(expect.stringContaining('VALUES (NULL, @requestId'));

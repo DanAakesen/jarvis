@@ -13,8 +13,9 @@ import type { DailyChangeSink } from '../revisions.js';
  */
 export interface NutritionExecution {
   request: FastifyRequest; signal: AbortSignal; requestTime: string;
-  intent: 'lookup' | 'log-intake' | 'correct-intake' | 'delete-intake' | 'save-favorite' | 'save-plan';
+  intent: 'lookup' | 'log-intake' | 'correct-intake' | 'delete-intake' | 'save-favorite' | 'save-plan' | 'delete-plan' | 'set-feedback';
   explicit: boolean; proposalRequired: boolean; proposalAccepted: boolean;
+  expectedRevision?: bigint; sourceRevision?: bigint; reviewedFavorites?: ReadonlyMap<string, string>;
 }
 type LogInput = Parameters<typeof prepareMeal>[0];
 type Changes = Partial<Omit<MealInput,'id'|'idempotencyKey'|'expiresAt'>>;
@@ -41,6 +42,9 @@ export function createNutritionHandlers(pool: sql.ConnectionPool, frida: FridaLo
       return frida.lookup(input, context.signal);
     },
     lookupSaved: async (name: string, context: NutritionExecution) => store(context).lookupSaved(name, context.signal),
+    favoriteRecords: async (ids: readonly string[], context: NutritionExecution) => store(context).favoriteRecords(ids, context.signal),
+    preferences: async (keys: readonly string[], context: NutritionExecution) => store(context).preferences(keys, context.signal),
+    planRecord: async (id: string, context: NutritionExecution) => store(context).planRecord(id, context.signal),
     intake: async (key: string, context: NutritionExecution) => store(context).intake(key, context.signal),
     log: async (input: LogInput, context: NutritionExecution) => {
       requireIntent(context, 'log-intake');
@@ -63,10 +67,21 @@ export function createNutritionHandlers(pool: sql.ConnectionPool, frida: FridaLo
       requireIntent(context, 'delete-intake'); return store(context).remove(key, expectedRevision, context.signal);
     },
     favorite: async (input: FavoriteInput, context: NutritionExecution) => {
-      requireIntent(context, 'save-favorite'); return store(context).favorite(input, { explicit: context.explicit, estimateAccepted: context.proposalAccepted }, context.signal);
+      requireIntent(context, 'save-favorite'); return store(context).favorite(input, {
+        explicit: context.explicit, estimateAccepted: context.proposalAccepted,
+        ...(context.expectedRevision !== undefined ? { expectedRevision: context.expectedRevision } : {}),
+        ...(context.sourceRevision !== undefined ? { sourceRevision: context.sourceRevision } : {}),
+      }, context.signal);
     },
     plan: async (input: PlanRequest, expectedRevision: bigint, context: NutritionExecution) => {
-      requireIntent(context, 'save-plan'); return store(context).savePlan(input, expectedRevision, context.signal);
+      requireIntent(context, 'save-plan'); return store(context).savePlan(input, expectedRevision, context.signal, context.reviewedFavorites);
+    },
+    removePlan: async (id: string, expectedRevision: bigint, context: NutritionExecution) => {
+      requireIntent(context, 'delete-plan'); return store(context).removePlan(id, expectedRevision, context.signal);
+    },
+    feedback: async (key: string, preference: 'like' | 'dislike' | null, expectedRevision: bigint, context: NutritionExecution) => {
+      requireIntent(context, 'set-feedback');
+      return store(context).feedback(key, preference, context.signal, expectedRevision, context.reviewedFavorites?.get(key));
     },
   };
 }
