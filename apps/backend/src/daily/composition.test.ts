@@ -3,12 +3,14 @@ import { dailyQuerySources } from '@jarvis/contracts';
 import type sql from 'mssql';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildApp } from '../app.js';
-import type { TokenVerifier } from '../auth/verify.js';
+import { AuthenticationDenied, type TokenVerifier } from '../auth/verify.js';
 import { loadConfig } from '../config.js';
 import { ConfigurationError } from '../configuration-error.js';
 import { capabilityInstructions } from '../core/capability-instructions.js';
 import { coreModule } from '../core/index.js';
 import { defaultSettings } from '../core/settings.js';
+import type { ToolCallRecord, ToolCallStore } from '../core/tool-calls.js';
+import type { JarvisTool } from '../core/tool-registry.js';
 import type { BackendModule } from '../modules.js';
 import { createRealtimeSessionUpdate } from '../voice/realtime.js';
 import { composeDaily } from './composition.js';
@@ -55,10 +57,30 @@ function composed(ownerObjectId = owner) {
   return { module, touched };
 }
 
-function fixture(daily?: BackendModule) {
-  const app = buildApp(config, undefined, { auth, modules: [coreModule, ...(daily ? [daily] : [])] });
+function fixture(daily?: BackendModule, toolCallStore?: ToolCallStore) {
+  const app = buildApp(config, undefined, {
+    auth, modules: [coreModule, ...(daily ? [daily] : [])], ...(toolCallStore ? { toolCallStore } : {}),
+  });
   apps.push(app);
   return app;
+}
+
+/** Records what each tool throws, because the tool route reports every such error as one generic failure. */
+function observed(daily: BackendModule, thrown: unknown[]): BackendModule {
+  return {
+    ...daily,
+    tools: daily.tools.map((tool): JarvisTool => ({
+      ...tool,
+      execute: async (input, request, signal) => {
+        try {
+          return await tool.execute(input, request, signal);
+        } catch (error) {
+          thrown.push(error);
+          throw error;
+        }
+      },
+    })),
+  };
 }
 
 async function routeTable(app: App) {
@@ -184,7 +206,10 @@ describe('Daily composition', () => {
 
   it('denies even the real owner, on routes and tools, when the composed owner differs', async () => {
     const { module, touched } = composed(other);
-    const app = fixture(module);
+    const thrown: unknown[] = [];
+    const calls: ToolCallRecord[] = [];
+    // A tool route answers 503 before it runs the tool when the app has no call store, so this app gets a minimal one.
+    const app = fixture(observed(module, thrown), { record: async (call) => { calls.push(call); } });
     for (const probe of dailyRoutes.filter(({ url }) => url !== '/daily/capabilities')) {
       expect((await send(app, probe, 'owner')).statusCode, `${probe.method} ${probe.url}`).toBe(403);
     }
@@ -194,8 +219,18 @@ describe('Daily composition', () => {
     ];
     for (const [name, payload] of toolCalls) {
       const response = await app.inject({ method: 'POST', url: `/tools/${name}`, headers: toolHeaders(), payload });
-      expect(response.json(), name).toMatchObject({ outcome: 'error' });
+      expect(response.statusCode, name).toBe(200);
+      expect(response.json(), name).toMatchObject({ tool: name, outcome: 'error', result: { error: 'Tool execution failed' } });
     }
+    // Each tool ran and was denied by the Daily owner check itself, not by some other fault.
+    expect(thrown).toHaveLength(toolCalls.length);
+    for (const error of thrown) {
+      expect(error).toBeInstanceOf(AuthenticationDenied);
+      expect((error as AuthenticationDenied).statusCode).toBe(403);
+    }
+    expect(calls).toMatchObject(toolCalls.map(([tool]) => ({
+      messageId: '42', tool, outcome: 'error', arguments: { redacted: true }, result: { redacted: true },
+    })));
     expect(touched).toEqual([]);
   });
 
