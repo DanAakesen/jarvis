@@ -10,6 +10,16 @@ SQL uses owner-bound parameterized transactions/range locks and at most three at
 
 Plans accept exactly one breakfast/lunch/dinner plus optional snacks (3–50 slots), each referencing an owned favourite. The server resolves and snapshots names/components/nutrients/provenance and sums totals; model totals are rejected. Normalized plan-name reuse preserves its ID and uses optimistic revisions. Unknown macros keep their totals null. Plans never create meals/queue rows. Additive migration 0042 permits null plan macros; 0043 permits confirmed standalone favourite definitions without fabricated source/intake IDs and retains favourite provenance. Writer-locked down scripts refuse to discard unknowns, definitions or provenance, rather than inventing zeros or source references.
 
+The hosted saved-food continuation reuses these handlers for favourites/aliases,
+plan save/soft-delete and canonical like/dislike/clear. Native review displays
+actual source snapshots; trusted revision/fingerprint context is rechecked
+under SQL locks. Shared `preparePlan` generates both review and persisted items
+and totals. Migration 0050 adds target-only favourite/feedback revisions and
+retains null-clear tombstones. Exact repeats return actual rows without another
+update; older conflicting retries refuse. An absent preference's revision 0 is
+only an initial-version sentinel, not a persisted record. The existing optional
+internal feedback call remains available; it does not confer native authority.
+
 ## Pinned provider contract and evidence limits
 
 Coordinator supplied read-only source action contracts at original HEAD `9e193554c9c8c7c23a788ed3d2b0582580b76c0f` and independently verified public Frida DTOs/session/endpoints. The migration deliberately pins release 10 / Frida 5.5 (November 2025), DOI https://doi.org/10.11583/DTU.29500682, dataset version 8 published 19 January 2026. DTU XLSX/ODS data are CC BY 4.0; PDF documentation retains DTU copyright. We use the documented public API, not downloaded dataset bytes, so no binary checksum/export claim is made. Every lookup carries DTU/version/release/DOI attribution and per-100-g edible-food basis.

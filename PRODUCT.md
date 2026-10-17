@@ -977,6 +977,13 @@ parity. Unsupported clients refuse writes; actual ChatGPT compatibility,
 account linking, scopes/grants and mobile acceptance are not established by
 synthetic protocol tests. Production Daily stays off.
 
+The inactive saved-food continuation supports native-reviewed favourite/alias
+saves, server-resolved plan saves/soft deletion and persistent canonical
+favourite likes/dislikes/clears. Reviews show actual source snapshots and plan
+totals; SQL rechecks sources under lock before commit. Real favourite/feedback
+revisions protect retries, including cleared preferences. These operations
+never create intake or Health exports and do not activate the connector.
+
 P12-05 adds an inactive, explicitly invoked health processor over the existing SQL inbox: metrics/sleep/workouts/detail/minute HR, canonical physical units, Copenhagen dates, exact session/checksum replay and bounded retry/quarantine. Domain changes, ingestion lineage and processed-feed freshness commit together; phone heartbeat stays separate. Empty workout exports cannot erase history, missing values stay unknown, and native nutrition cannot feed back into canonical meals. Owner history/detail reads are bounded and unregistered. No scheduler, source import, live device changes or activation; protected/live parity remains gated.
 
 Heart-rate summaries and series must validate declared units consistently. Unsupported rate units quarantine without changing processed freshness; only established legacy summary fields imply BPM when their unit is absent. Missing samples and summaries remain unknown, not inferred.

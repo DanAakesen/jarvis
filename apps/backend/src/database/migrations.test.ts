@@ -13,6 +13,17 @@ async function directory() {
 afterEach(async () => { await Promise.all(directories.splice(0).map((path) => rm(path, { recursive: true }))); });
 
 describe('committed SQL manifest', () => {
+  it('adds saved-food concurrency metadata without rewriting deployed 0049 and protects rollback evidence', async () => {
+    const migration = (await readMigrations()).find(({ name }) => name === '0050_daily_saved_food.sql');
+    expect(migration?.sql).toContain('nutrition_favorites ADD revision bigint NOT NULL');
+    expect(migration?.sql).toContain("EXEC(N'ALTER TABLE daily.nutrition_favorites");
+    expect(migration?.sql).toContain("EXEC(N'ALTER TABLE daily.nutrition_recommendation_feedback");
+    expect(migration?.sql).toContain('nutrition_recommendation_feedback ALTER COLUMN preference nvarchar(256) NULL');
+    expect(migration?.sql).toContain("N'daily_mcp_manage_saved_food'");
+    const down = await readDownMigration('0050_daily_saved_food.sql');
+    expect(down.sql).toContain('TABLOCKX,HOLDLOCK');
+    expect(down.sql).toContain('cannot discard revisions or cleared preferences');
+  });
   it('keeps ordinary audit message identity and adds constrained connector UUID correlation without erasing rollback evidence', async () => {
     const migration = (await readMigrations()).find(({ name }) => name === '0049_daily_connector_audit.sql');
     expect(migration?.sql).toContain('connector_request_id uniqueidentifier NULL');
@@ -115,6 +126,7 @@ describe('committed SQL manifest', () => {
       '0047_daily_health_processing.sql',
       '0048_factory_execution_generation.sql',
       '0049_daily_connector_audit.sql',
+      '0050_daily_saved_food.sql',
     ]);
     for (const migration of migrations) await expect(readDownMigration(migration.name)).resolves.toMatchObject({ name: migration.name });
   });

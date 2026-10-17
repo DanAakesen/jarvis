@@ -13,43 +13,16 @@ import { healthDefinitions } from './health/persistence.js';
 import { SqlHealthProcessor } from './health/processor.js';
 import { NutritionStore } from './nutrition/store.js';
 import { createDailyChanges, type DailyChanges } from './revisions.js';
+import { dailyJson as json, projectDailyRecord as project, projectNutritionRecord } from './records.js';
+export { projectNutritionRecord } from './records.js';
 
 export interface DailyReaders {
   health(request: FastifyRequest): Pick<DailyHealthReadModel, 'history' | 'workoutDetail' | 'heartRate' | 'sync'>;
   nutrition(request: FastifyRequest): Pick<NutritionStore, 'history' | 'favorites' | 'plans'>;
 }
-const mealFields = ['id', 'idempotency_key', 'meal_name', 'meal_type', 'occurred_at', 'meal_date',
-  'energy_kcal', 'protein_grams', 'carbohydrates_grams', 'fat_grams', 'fiber_grams', 'confidence',
-  'capture_method', 'source', 'revision', 'deleted_at', 'created_at', 'updated_at',
-  'components_json', 'nutrient_provenance_json'] as const;
-const favoriteFields = ['id', 'favorite_name', 'normalized_name', 'aliases_json', 'meal_name', 'meal_type',
-  'components_json', 'energy_kcal', 'protein_grams', 'carbohydrates_grams', 'fat_grams', 'fiber_grams',
-  'confidence', 'nutrient_provenance_json', 'source_meal_id', 'source_idempotency_key', 'created_at', 'updated_at'] as const;
-const planFields = ['id', 'plan_name', 'normalized_name', 'description', 'items_json', 'energy_kcal',
-  'protein_grams', 'carbohydrates_grams', 'fat_grams', 'fiber_grams', 'revision', 'deleted_at', 'created_at', 'updated_at'] as const;
 const feedFields = ['feed_kind', 'accepted_evidence_at', 'processed_committed_at', 'metric_rows', 'sleep_rows', 'workout_rows', 'heart_rate_minutes'];
 const inboxFields = ['retained', 'pending', 'quarantined', 'last_accepted_at', 'last_processed_upload_at'];
-const jsonFields = new Set(['components_json', 'nutrient_provenance_json', 'aliases_json', 'items_json']);
 export const dailyResultByteLimit = 768 * 1024;
-
-function json(value: unknown): DailyJson {
-  if (value === null || typeof value === 'string' || typeof value === 'boolean') return value;
-  if (typeof value === 'number' && Number.isFinite(value)) return value;
-  if (typeof value === 'bigint') return value.toString();
-  if (value instanceof Date) return value.toISOString();
-  if (Array.isArray(value)) return value.map(json);
-  if (typeof value === 'object' && value !== null) return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, json(item)]));
-  throw new ToolFailure('Daily data could not be represented safely.');
-}
-function project(row: Record<string, unknown>, fields: readonly string[]): Record<string, DailyJson> {
-  return Object.fromEntries(fields.filter(field => Object.hasOwn(row, field)).map(field => {
-    const value: unknown = jsonFields.has(field) && typeof row[field] === 'string' ? JSON.parse(row[field]) : row[field];
-    return [field, value instanceof Date && field.endsWith('_date') ? value.toISOString().slice(0, 10) : json(value)];
-  }));
-}
-export function projectNutritionRecord(row: Record<string, unknown>, source: 'favorite' | 'history'): Record<string, DailyJson> {
-  return project(row, source === 'favorite' ? favoriteFields : mealFields);
-}
 function latest(values: unknown[]): string | null {
   const times = values.filter(value => value !== null && value !== undefined).map(value => {
     if (!(typeof value === 'string' || value instanceof Date)) throw new ToolFailure('Daily timestamps are unavailable.');
@@ -95,7 +68,7 @@ export class DailyQueryService {
       const page = await nutrition[input.source === sources.favorites ? 'favorites' : 'plans']({
         limit: input.limit ?? 50, ...(input.cursor ? { afterId: input.cursor.id } : {}),
       }, signal);
-      items = page.rows.map(row => input.source === sources.favorites ? projectNutritionRecord(row, 'favorite') : project(row, planFields));
+      items = page.rows.map(row => projectNutritionRecord(row, input.source === sources.favorites ? 'favorite' : 'plan'));
       next = page.nextId === null ? null : { id: page.nextId };
       units = { energy_kcal: 'kcal', '*_grams': 'g' };
     } else {

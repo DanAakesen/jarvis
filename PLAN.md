@@ -1,5 +1,16 @@
 # Project plan
 
+## Retained Daily saved-food writes (17 October 2026; P12-09 / #724)
+
+After deployed #871, implement favourite/alias saves, plan snapshots/save/soft
+deletion and persistent canonical food preferences in one inactive connector
+continuation. Reuse native review and owner-bound SQL, bind displayed source
+values under lock and return real receipts. Additive 0050 protects concurrency,
+clears and the expanded audit allowlist; deployed 0049 stays unchanged.
+Normal exact-head qualification/release remains required. #724 stays open;
+internal trusted-message authority and real client/account/device/cutover
+acceptance are not completed by this slice.
+
 ## Retained Daily saved-food lookup (17 October 2026; P12-09 / #724)
 
 #870's inactive connector is deployed. Continue retained parity by exposing

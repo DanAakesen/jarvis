@@ -6,6 +6,7 @@ import { loadDatabaseConfig } from './config.js';
 import { applyMigrations, readMigrations, readDownMigration, revertMigration } from './migrations.js';
 import { NutritionStore } from '../daily/nutrition/store.js';
 import { type FoodDefinition, type MealInput, type PlanRequest } from '../daily/nutrition/model.js';
+import { favoriteFingerprint } from '../daily/records.js';
 
 const config = loadDatabaseConfig();
 if (!config || process.env.NODE_ENV !== 'test' || config.server !== '127.0.0.1') throw new Error('Nutrition tests require isolated loopback SQL Server');
@@ -25,7 +26,7 @@ const fixture = (id: string): MealInput => ({ id, idempotencyKey: `synthetic-${i
   captureMethod: 'text', confidence: 'accurate', provenance: { energyKcal: { source: 'user-exact', unit: 'kcal' } } });
 beforeAll(async () => {
   await admin.connect(); await admin.request().batch(`CREATE DATABASE [${database}];`); await pool.connect();
-  await applyMigrations(pool, (await readMigrations()).filter(({ name }) => /^004[123]_daily/u.test(name)));
+  await applyMigrations(pool, await readMigrations());
 });
 afterAll(async () => {
   await pool.close();
@@ -143,7 +144,19 @@ describe('inactive nutrition services on real SQL Server', () => {
     expect(await store().findFavorite(input.name, signal())).toMatchObject({ source_meal_id: null, source_idempotency_key: null, energy_kcal: 55, protein_grams: null });
     expect((await store().history({ limit: 100 }, signal())).rows).toHaveLength(before);
     await expect(store().favorite({ ...input, sourceIdempotencyKey: 'synthetic-01' }, { explicit: true, estimateAccepted: false }, signal())).rejects.toThrow('exactly one');
-    await expect(revertMigration(pool, (await readMigrations()).filter(({ name }) => /^004[123]_daily/u.test(name)), await readDownMigration('0043_daily_favorite_definitions.sql'))).rejects.toThrow('cannot discard');
+    const isolated = `${database}_favorite_rollback`; const rollbackPool = new sql.ConnectionPool({ ...config!, database: isolated });
+    try {
+      await admin.request().batch(`CREATE DATABASE [${isolated}];`); await rollbackPool.connect();
+      const migrations = (await readMigrations()).filter(({ name }) => /^004[123]_daily/u.test(name));
+      await applyMigrations(rollbackPool, migrations);
+      await rollbackPool.request().input('owner', sql.UniqueIdentifier, owner).query(`INSERT daily.nutrition_favorites
+        (owner_object_id,id,favorite_name,normalized_name,meal_name,energy_kcal,confidence,source_meal_id,source_idempotency_key,nutrient_provenance_json,created_at,updated_at)
+        VALUES(@owner,N'synthetic',N'Synthetic',N'synthetic',N'Synthetic',55,N'accurate',NULL,NULL,N'{}',N'2026-01-01',N'2026-01-01');`);
+      await expect(revertMigration(rollbackPool, migrations, await readDownMigration('0043_daily_favorite_definitions.sql'))).rejects.toThrow('cannot discard');
+    } finally {
+      await rollbackPool.close();
+      await admin.request().batch(`IF DB_ID(N'${isolated}') IS NOT NULL BEGIN ALTER DATABASE [${isolated}] SET SINGLE_USER WITH ROLLBACK IMMEDIATE; DROP DATABASE [${isolated}]; END;`);
+    }
   });
   it('refuses unknown-plan rollback with the exact isolated applied manifest', async () => {
     const isolated = `${database}_rollback`; const rollbackPool = new sql.ConnectionPool({ ...config!, database: isolated });
@@ -217,5 +230,62 @@ describe('inactive nutrition services on real SQL Server', () => {
       });
       expect(await NutritionStore.forRequest(pool, request(other), now).lookupSaved(mealName, signal())).toBeNull();
     }
+  });
+  it('returns real favourite revisions, replays without notifications and rejects changed reviewed sources under SQL locks', async () => {
+    const notifications: string[] = [];
+    const persistence = NutritionStore.forRequest(pool, request(owner), now, { publish: change => { notifications.push(...change.sources); } });
+    const meal = fixture('saved-write-source');
+    await persistence.log(meal, authority, signal());
+    const favorite = { id: 'saved-write-favorite', name: 'Synthetic saved-write favourite', aliases: [], sourceIdempotencyKey: meal.idempotencyKey };
+    const approved = { explicit: true, estimateAccepted: true, expectedRevision: 0n, sourceRevision: 1n };
+    const saved = await persistence.favorite(favorite, approved, signal());
+    expect(saved).toMatchObject({ id: favorite.id, revision: '1', source_idempotency_key: meal.idempotencyKey, protein_grams: null });
+    expect(await persistence.favorite(favorite, approved, signal())).toEqual(saved);
+    expect(notifications.filter(source => source === 'daily.nutrition.favorites')).toHaveLength(1);
+    const reviewed = new Map([[favorite.id, favoriteFingerprint(saved)]]);
+    await persistence.correct({ ...meal, energyKcal: 200 }, 1n, signal());
+    await expect(persistence.favorite(favorite, { ...approved, expectedRevision: 1n }, signal())).rejects.toThrow('reviewed source intake changed');
+    expect((await persistence.favorite(favorite, { ...approved, expectedRevision: 1n, sourceRevision: 2n }, signal())).revision).toBe('2');
+    const plan: PlanRequest = { id: 'saved-write-plan', name: 'Synthetic saved-write plan', description: null,
+      entries: (['breakfast', 'lunch', 'dinner'] as const).map(slot => ({ slot, favoriteId: favorite.id })) };
+    await expect(persistence.savePlan(plan, 0n, signal(), reviewed)).rejects.toThrow('reviewed plan favourite changed');
+    const sources = await persistence.favoriteRecords([favorite.id, favorite.id], signal());
+    expect(sources).toHaveLength(1);
+    const current = new Map([[favorite.id, favoriteFingerprint(sources[0]!)]]);
+    const result = await persistence.savePlan(plan, 0n, signal(), current);
+    expect(result).toMatchObject({ revision: '1', energy_kcal: 600, protein_grams: null });
+    expect(await persistence.savePlan(plan, 0n, signal(), current)).toEqual(result);
+    expect(notifications.filter(source => source === 'daily.nutrition.plans')).toHaveLength(1);
+    const otherStore = NutritionStore.forRequest(pool, request(other), now);
+    await expect(otherStore.favoriteRecords([favorite.id], signal())).rejects.toThrow('owned favourite');
+    expect(await otherStore.planRecord(plan.id, signal())).toBeNull();
+    expect((await pool.request().query('SELECT COUNT(*) AS count FROM daily.nutrition_queue')).recordset[0].count).toBe(0);
+  });
+  it('retains versioned clears and refuses delayed preference replays after newer intent without losing owner isolation', async () => {
+    const key = 'saved-write-favorite'; const persistence = store();
+    const favorite = (await persistence.favoriteRecords([key], signal()))[0]!;
+    const reviewed = favoriteFingerprint(favorite);
+    expect(await persistence.preferences([key], signal())).toEqual([]);
+    expect((await persistence.feedback(key, 'like', signal(), 0n, reviewed))?.revision).toBe('1');
+    expect((await persistence.feedback(key, 'like', signal(), 0n, reviewed))?.revision).toBe('1');
+    expect(await persistence.feedback(key, null, signal(), 1n, reviewed)).toMatchObject({ preference: null, revision: '2' });
+    await expect(persistence.feedback(key, 'like', signal(), 0n, reviewed)).rejects.toThrow('preference changed');
+    expect((await persistence.feedback(key, null, signal(), 1n, reviewed))?.revision).toBe('2');
+    expect((await persistence.feedback(key, 'dislike', signal(), 2n, reviewed))?.revision).toBe('3');
+    await expect(persistence.feedback(key, null, signal(), 1n, reviewed)).rejects.toThrow('preference changed');
+    expect(await persistence.disliked([key], signal())).toEqual(new Set([key]));
+    expect(await NutritionStore.forRequest(pool, request(other), now).preferences([key], signal())).toEqual([]);
+    await expect(persistence.feedback(key, null, signal(), 3n, '0'.repeat(64))).rejects.toThrow('reviewed favourite changed');
+    expect(await persistence.preferences([key], signal())).toMatchObject([{ meal_key: key, preference: 'dislike', revision: '3' }]);
+  });
+  it('stores the first clear as revision 1 and rejects an older initial like', async () => {
+    const persistence = store(); const key = 'definition';
+    const reviewed = favoriteFingerprint((await persistence.favoriteRecords([key], signal()))[0]!);
+    expect(await persistence.preferences([key], signal())).toEqual([]);
+    const cleared = await persistence.feedback(key, null, signal(), 0n, reviewed);
+    expect(cleared).toMatchObject({ meal_key: key, preference: null, revision: '1' });
+    expect(await persistence.feedback(key, null, signal(), 0n, reviewed)).toEqual(cleared);
+    await expect(persistence.feedback(key, 'like', signal(), 0n, reviewed)).rejects.toThrow('preference changed');
+    expect(await persistence.preferences([key], signal())).toMatchObject([{ preference: null, revision: '1' }]);
   });
 });

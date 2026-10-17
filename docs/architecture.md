@@ -4624,7 +4624,16 @@ Native review on actual ChatGPT is unverified, not an implemented fallback UI.
 Process-local signing keys deliberately invalidate pending proposals after
 restart or replica change; fleet key/lifetime policy requires review before
 activation. All external mutations currently require confirmation, stricter
-than internal exact logging. Favourites/plans are read-only here; complete tool,
+than internal exact logging. `manage_saved_food` adds retained favourite/alias,
+plan save/soft-delete and canonical preference writes; `read_food_preferences`
+is read-only. Shared pure record projection and plan preparation supply both
+native review and persistence. Transactions check the reviewed source intake
+revision or favourite fingerprints under existing locks, so changed sources
+cannot commit undisplayed plan values. Favourite/feedback counters and nullable
+clear tombstones in additive 0050 preserve retries without a new ledger table.
+The same migration expands the constrained audit allowlist and protects
+new evidence on rollback; deployed 0049 stays unchanged.
+Internal trusted-message authority, complete tool/UX,
 OAuth/provider, phone and migration acceptance remain open. See
 [adapter setup, recovery and checks](../apps/backend/src/daily/mcp/README.md).
 

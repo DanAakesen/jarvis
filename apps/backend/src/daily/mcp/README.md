@@ -43,9 +43,24 @@ and report unknown freshness. Missing/ambiguous matches never fall back to
 Frida or create intake; oversized results refuse under the shared read budget.
 Historical names outside the smaller favourite-key domain still receive exact
 history lookup, including full 2000-character and non-Latin names.
-Write-enabled composition additionally exposes `log_food`, `correct_food`
-and `delete_food`; no Apple Health action follows. Favourites/plans remain
-read-only through this adapter.
+`read_food_preferences` reads at most 50 canonical favourite IDs and distinguishes
+missing records (revision 0), stored likes/dislikes and versioned clears.
+Write-enabled composition additionally exposes `log_food`, `correct_food`,
+`delete_food` and `manage_saved_food`; no Apple Health action follows.
+The latter groups favourite/alias saves, owned-favourite plan saves,
+plan soft deletion and like/dislike/clear, not additional intake.
+
+Saved changes carry decimal-string expected revisions (0 for a new record).
+Favourite/plan creates derive IDs from the owner, client, operation and stable
+operation ID; normalized-name reuse still preserves an existing record ID.
+Native review includes actual source intake or resolved plan names/components,
+provenance, quantities and totals. The same shared plan builder runs under SQL
+locks; source revision/fingerprint checks reject races after review.
+Favourite saves return actual stored rows and exact repeats do not update or
+publish again. Preference clears retain a null tombstone and revision, so a
+delayed old like cannot overwrite a newer clear, including a first-operation
+clear of a previously absent preference. Feedback uses canonical owned
+favourite IDs, not aliases or model-created meal keys.
 
 Every external mutation requires native form review of the exact proposal,
 including a photo claiming accurate confidence or an exact-label entry.
@@ -70,7 +85,10 @@ Committed receipts expose only whitelisted fields and stringify revisions.
 and UUID request correlation into the existing audit table, not fabricated
 conversation message IDs. Migration 0049 preserves ordinary message FKs and
 permits message-less rows only for the allowlisted connector tools with UUID
-correlation. Its rollback refuses to erase retained connector audit evidence.
+correlation. Additive 0050 extends its constrained allowlist for the two saved-food
+tools and adds target-only favourite/feedback revisions and nullable clears.
+Deployed 0049 is unchanged. Rollback refuses new audit evidence, used revisions
+or retained clears instead of dropping evidence.
 No second audit table or conversation is created. Missing connector-capable
 audit storage refuses execution. An audit/response failure
 after a write may mean it committed: retry the same operation/key/revision,

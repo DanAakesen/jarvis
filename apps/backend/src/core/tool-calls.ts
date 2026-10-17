@@ -15,7 +15,7 @@ export interface CodexToolUsageCount {
 
 export interface DailyMcpAuditRecord {
   readonly requestId: string;
-  readonly tool: 'read_nutrition' | 'lookup_food' | 'log_food' | 'correct_food' | 'delete_food';
+  readonly tool: 'read_nutrition' | 'lookup_food' | 'log_food' | 'correct_food' | 'delete_food' | 'read_food_preferences' | 'manage_saved_food';
   readonly phase: 'awaiting_confirmation' | ToolCallOutcome;
   readonly outcome: ToolCallOutcome;
 }

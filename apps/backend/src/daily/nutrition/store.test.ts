@@ -79,6 +79,44 @@ describe('nutrition failure/privacy boundaries', () => {
   const sourceRow = { id: '01', idempotency_key: input.idempotencyKey, meal_name: input.mealName, meal_type: null,
     energy_kcal: 100, protein_grams: null, carbohydrates_grams: null, fat_grams: null, fiber_grams: null,
     components_json: '[]', nutrient_provenance_json: '{}', confidence: 'accurate', deleted_at: null };
+  it('refuses a changed source revision while holding the intake lock, before any favourite mutation', async () => {
+    db.query.mockResolvedValueOnce({ recordset: [{ ...sourceRow, revision: '2' }] });
+    await expect(store().favorite({ id: 'favorite', name: 'Synthetic favourite', aliases: [], sourceIdempotencyKey: input.idempotencyKey },
+      { explicit: true, estimateAccepted: true, expectedRevision: 0n, sourceRevision: 1n }, signal())).rejects.toThrow('reviewed source intake changed');
+    expect(db.query).toHaveBeenCalledOnce();
+    expect(db.query).toHaveBeenCalledWith(expect.stringContaining('WITH (UPDLOCK,HOLDLOCK)'));
+    expect(db.rollback).toHaveBeenCalledOnce();
+  });
+  it('returns the real committed favourite on exact replay without another update or invalidation', async () => {
+    const saved = { ...sourceRow, id: 'favorite', favorite_name: 'Synthetic favourite', normalized_name: 'synthetic favourite',
+      aliases_json: '[]', source_meal_id: '01', source_idempotency_key: input.idempotencyKey, revision: '1' };
+    const publish = vi.fn();
+    const persistence = NutritionStore.forRequest({} as sql.ConnectionPool, request, () => '2026-10-12T15:00:00Z', { publish });
+    db.query.mockResolvedValueOnce({ recordset: [{ ...sourceRow, revision: '1' }] }).mockResolvedValueOnce({ recordset: [saved] });
+    expect(await persistence.favorite({ id: 'favorite', name: 'Synthetic favourite', aliases: [], sourceIdempotencyKey: input.idempotencyKey },
+      { explicit: true, estimateAccepted: true, expectedRevision: 0n, sourceRevision: 1n }, signal())).toEqual(saved);
+    expect(db.query).toHaveBeenCalledTimes(2);
+    expect(db.commit).toHaveBeenCalledOnce();
+    expect(publish).not.toHaveBeenCalled();
+  });
+  it('does not replay an old like over a newer clear and retains the clear revision on an exact retry', async () => {
+    const cleared = { meal_key: 'favorite', preference: null, revision: '2' };
+    db.query.mockResolvedValueOnce({ recordset: [cleared] });
+    await expect(store().feedback('favorite', 'like', signal(), 0n)).rejects.toThrow('preference changed');
+    expect(db.query).toHaveBeenCalledOnce();
+    db.query.mockResolvedValueOnce({ recordset: [cleared] });
+    expect(await store().feedback('favorite', null, signal(), 1n)).toEqual(cleared);
+    expect(db.query).toHaveBeenCalledTimes(2);
+  });
+  it('persists an initial clear tombstone so a delayed revision-0 like cannot overwrite it', async () => {
+    const cleared = { meal_key: 'favorite', preference: null, revision: '1' };
+    db.query.mockResolvedValueOnce({ recordset: [] }).mockResolvedValueOnce({ recordset: [cleared] });
+    expect(await store().feedback('favorite', null, signal(), 0n)).toEqual(cleared);
+    expect(db.query).toHaveBeenNthCalledWith(2, expect.stringContaining('INSERT daily.nutrition_recommendation_feedback'));
+    db.query.mockResolvedValueOnce({ recordset: [cleared] });
+    await expect(store().feedback('favorite', 'like', signal(), 0n)).rejects.toThrow('preference changed');
+    expect(db.query).toHaveBeenCalledTimes(3);
+  });
   const collectionMutations = [
     { name: 'favourite', source: dailyQuerySources.favorites, records: [[sourceRow], [], []],
       run: (persistence: NutritionStore) => persistence.favorite({ id: 'favorite', name: 'Synthetic favourite', aliases: [],

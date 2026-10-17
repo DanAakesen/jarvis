@@ -12,6 +12,11 @@ const context = (intent: NutritionExecution['intent']): NutritionExecution => ({
   explicit: true, proposalRequired: false, proposalAccepted: false,
 });
 describe('typed handlers awaiting P12-09 registration', () => {
+  it('requires operation-specific trusted authority for plan deletion and food feedback', async () => {
+    const handlers = createNutritionHandlers({} as sql.ConnectionPool, {} as FridaLookupAdapter);
+    await expect(handlers.removePlan('synthetic', 1n, context('save-plan'))).rejects.toThrow('Explicit authorized intent');
+    await expect(handlers.feedback('synthetic', 'like', 0n, context('save-favorite'))).rejects.toThrow('Explicit authorized intent');
+  });
   it('uses existing Jarvis owner/auth and does not accept model confirmation for photo proposals', async () => {
     const lookup = vi.fn(); const handlers = createNutritionHandlers({} as sql.ConnectionPool, { lookup } as unknown as FridaLookupAdapter);
     await expect(handlers.lookup([], { ...context('lookup'), request: { ...context('lookup').request, principal: { objectId: 'other' } } as unknown as FastifyRequest })).rejects.toThrow();

@@ -12,10 +12,11 @@ import type { AuthConfig } from '../../auth/config.js';
 import type { DailyMcpAuditRecord } from '../../core/tool-calls.js';
 import { ToolFailure, ToolRefusal } from '../../core/tool-registry.js';
 import type { createNutritionHandlers, NutritionExecution } from '../nutrition/handlers.js';
-import { canonicalJson, prepareMeal } from '../nutrition/model.js';
+import { canonicalJson, prepareMeal, preparePlan, type FavoriteInput, type PlanRequest } from '../nutrition/model.js';
 import { resolveDailyOwner } from '../owner.js';
 import { dailyResultByteLimit, projectNutritionRecord, type DailyQueryService } from '../query.js';
 import { dailyMcpMetadataPath, dailyMcpPath } from './paths.js';
+import { favoriteFingerprint, projectDailyRecord } from '../records.js';
 
 export interface DailyMcpOptions {
   auth: Pick<AuthConfig, 'tenantId' | 'apiClientId' | 'dailyConnectorClientId'>;
@@ -74,6 +75,32 @@ const lookupSchema = z.object({
   }).strict()).min(1).max(25).optional(),
   savedName: exactText(2000).optional(),
 }).strict().refine(input => (input.components !== undefined) !== (input.savedName !== undefined));
+const newRevision = z.union([z.literal('0'), revision]);
+const savedChangeSchema = z.object({
+  change: z.discriminatedUnion('operation', [
+    z.object({
+      operation: z.literal('save_favorite'), operationId: exactText(120), expectedRevision: newRevision,
+      name: exactText(), aliases: z.array(exactText()).max(30).default([]),
+      sourceIdempotencyKey: exactText().optional(),
+      definition: z.object({
+        mealName: exactText(2000), mealType: logSchema.shape.mealType,
+        components: logSchema.shape.components, confidence: logSchema.shape.confidence, ...nutrients,
+      }).strict().optional(),
+    }).strict().refine(value => (value.sourceIdempotencyKey !== undefined) !== (value.definition !== undefined)),
+    z.object({
+      operation: z.literal('save_plan'), operationId: exactText(120), expectedRevision: newRevision,
+      name: exactText(), description: exactText(4000).nullable().default(null),
+      entries: z.array(z.object({
+        slot: z.enum(['breakfast', 'lunch', 'dinner', 'snack']), favoriteId: exactText(),
+      }).strict()).min(3).max(50),
+    }).strict(),
+    z.object({ operation: z.literal('delete_plan'), id: exactText(), expectedRevision: revision }).strict(),
+    z.object({
+      operation: z.literal('set_feedback'), favoriteId: exactText(), expectedRevision: newRevision,
+      preference: z.enum(['like', 'dislike']).nullable(),
+    }).strict(),
+  ]),
+}).strict();
 // MCP form schemas exclude additionalProperties; validate returned content strictly.
 const confirmSchema = z.object({ confirm: z.boolean() });
 const pendingSchema = z.object({
@@ -83,7 +110,14 @@ type Pending = z.infer<typeof pendingSchema>;
 type Responses = Parameters<typeof inputResponse>[0];
 
 function response(value: Record<string, unknown>): CallToolResult {
+  if (Buffer.byteLength(JSON.stringify(value)) > dailyResultByteLimit) throw new ToolRefusal('Nutrition response exceeds the shared Daily limit. No complete result is available.');
   return { content: [{ type: 'text', text: JSON.stringify(value) }], structuredContent: value };
+}
+function savedReceipt(row: Record<string, unknown>, operation: string, source: 'favorite' | 'plan'): CallToolResult {
+  if (!row || typeof row.id !== 'string' || !/^[1-9]\d*$/u.test(String(row.revision ?? ''))) {
+    throw new ToolFailure('The saved-food write may have committed, but its receipt is unavailable. Retry the same operation and revision.');
+  }
+  return response({ status: 'committed', operation, record: projectNutritionRecord(row, source) });
 }
 function receipt(row: Record<string, unknown>, operation: string): CallToolResult {
   const revision = String(row.revision ?? '');
@@ -109,7 +143,7 @@ function execution(request: FastifyRequest, signal: AbortSignal, requestTime: st
 }
 async function safe(request: FastifyRequest, operation: DailyMcpAuditRecord['tool'], challenge: string, action: () => Promise<CallToolResult | InputRequiredResult>) {
   const store = request.server.toolCallStore;
-  const mutation = ['log_food', 'correct_food', 'delete_food'].includes(operation);
+  const mutation = ['log_food', 'correct_food', 'delete_food', 'manage_saved_food'].includes(operation);
   if (!store?.recordDailyMcp) return { isError: true, content: [{ type: 'text' as const, text: 'Nutrition audit storage is unavailable. No operation was executed.' }] };
   let result: CallToolResult | InputRequiredResult;
   let outcome: 'ok' | 'refused' | 'error' = 'ok';
@@ -245,7 +279,91 @@ export function dailyMcpRoutes(query: Pick<DailyQueryService, 'query'>, options:
             if (input.components === undefined) throw new ToolRefusal('Supply either savedName or components for food lookup.');
             return response({ ...await options.nutrition.lookup(input.components, readContext) });
           }));
+          server.registerTool('read_food_preferences', {
+            title: 'Read food preferences', description: 'Read current like/dislike/cleared preference and revision for at most 50 exact canonical favourite IDs. Revision 0 means no preference record; it is not an invented persisted revision.',
+            _meta: security(),
+            inputSchema: z.object({ favoriteIds: z.array(exactText()).min(1).max(50) }).strict(),
+            annotations: { readOnlyHint: true, openWorldHint: false, destructiveHint: false },
+          }, async (input, ctx) => safe(request, 'read_food_preferences', challenge(), async () => {
+            authorize(request);
+            const rows = await options.nutrition.preferences(input.favoriteIds, context(now(), 'lookup', ctx.mcpReq.signal));
+            return response({ records: [...new Set(input.favoriteIds)].map(id => {
+              const row = rows.find(row => row.meal_key === id);
+              return { favoriteId: id, status: row ? row.preference === null ? 'cleared' : 'available' : 'not-set',
+                revision: row ? String(row.revision) : '0', preference: row?.preference ?? null };
+            }), provenance: { store: 'daily-sql' } });
+          }));
           if (writes) {
+            server.registerTool('manage_saved_food', {
+              title: 'Manage saved food', description: 'Save favourites/aliases from an owned intake or reviewed definition; save plans from owned favourites; soft-delete plans; or like/dislike/clear a canonical favourite. Always native-review first. Read current revisions (0 for new) and keep operation IDs/expected revisions unchanged on retries. Plans and definitions never log intake or export Health.',
+              _meta: security(true), inputSchema: savedChangeSchema,
+              annotations: { readOnlyHint: false, openWorldHint: false, destructiveHint: true, idempotentHint: true },
+            }, async (input, ctx) => safe(request, 'manage_saved_food', challenge(true), async () => {
+              const owner = authorize(request, true);
+              const state = pendingSchema.safeParse(ctx.mcpReq.requestState());
+              const requestTime = state.success ? state.data.requestTime : now();
+              const readContext = context(requestTime, 'lookup', ctx.mcpReq.signal);
+              const change = input.change;
+              const expectedRevision = BigInt(change.expectedRevision);
+              const identity = (operationId: string) => createHash('sha256').update(`${owner}:${clientId}:${change.operation}:${operationId}`).digest('hex');
+              if (change.operation === 'save_favorite') {
+                const source = change.sourceIdempotencyKey !== undefined ? await options.nutrition.intake(change.sourceIdempotencyKey, readContext) : null;
+                if (change.sourceIdempotencyKey !== undefined && (!source || source.deleted_at !== null)) throw new ToolRefusal('The source intake is unavailable.');
+                const favorite: FavoriteInput = {
+                  id: identity(change.operationId), name: change.name, aliases: change.aliases,
+                  ...(change.sourceIdempotencyKey !== undefined ? { sourceIdempotencyKey: change.sourceIdempotencyKey } : {}),
+                  ...(change.definition ? { definition: { ...change.definition, provenance: { source: 'chatgpt-supplied', independentlyVerified: false } } } : {}),
+                };
+                const pending = await approve('manage_saved_food', {
+                  operation: change.operation, expectedRevision: change.expectedRevision, favorite,
+                  source: source ? projectNutritionRecord(source, 'history') : null,
+                }, ctx.mcpReq.requestState(), ctx.mcpReq.inputResponses, requestTime);
+                if (pending) return pending;
+                return savedReceipt(await options.nutrition.favorite(favorite, {
+                  ...context(requestTime, 'save-favorite', ctx.mcpReq.signal), expectedRevision,
+                  ...(source ? { sourceRevision: BigInt(revision.parse(String(source.revision))) } : {}),
+                }), change.operation, 'favorite');
+              }
+              if (change.operation === 'save_plan') {
+                const plan: PlanRequest = { id: identity(change.operationId), name: change.name, description: change.description, entries: change.entries };
+                const favorites = await options.nutrition.favoriteRecords([...new Set(plan.entries.map(entry => entry.favoriteId))], readContext);
+                const pending = await approve('manage_saved_food', {
+                  operation: change.operation, expectedRevision: change.expectedRevision, plan: preparePlan(plan, favorites),
+                }, ctx.mcpReq.requestState(), ctx.mcpReq.inputResponses, requestTime);
+                if (pending) return pending;
+                return savedReceipt(await options.nutrition.plan(plan, expectedRevision, {
+                  ...context(requestTime, 'save-plan', ctx.mcpReq.signal),
+                  reviewedFavorites: new Map(favorites.map(row => [String(row.id), favoriteFingerprint(row)])),
+                }), change.operation, 'plan');
+              }
+              if (change.operation === 'delete_plan') {
+                const row = await options.nutrition.planRecord(change.id, readContext);
+                if (!row) throw new ToolRefusal('Plan not found.');
+                const snapshot = projectNutritionRecord(row, 'plan');
+                for (const field of ['revision', 'deleted_at', 'created_at', 'updated_at']) delete snapshot[field];
+                const pending = await approve('manage_saved_food', { ...change, plan: snapshot },
+                  ctx.mcpReq.requestState(), ctx.mcpReq.inputResponses, requestTime);
+                if (pending) return pending;
+                return savedReceipt(await options.nutrition.removePlan(change.id, expectedRevision,
+                  context(requestTime, 'delete-plan', ctx.mcpReq.signal)), change.operation, 'plan');
+              }
+              const favorites = await options.nutrition.favoriteRecords([change.favoriteId], readContext);
+              const favorite = favorites[0];
+              if (!favorite) throw new ToolRefusal('Favourite not found.');
+              const pending = await approve('manage_saved_food', {
+                ...change, favorite: projectNutritionRecord(favorite, 'favorite'),
+              }, ctx.mcpReq.requestState(), ctx.mcpReq.inputResponses, requestTime);
+              if (pending) return pending;
+              const row = await options.nutrition.feedback(change.favoriteId, change.preference, expectedRevision, {
+                ...context(requestTime, 'set-feedback', ctx.mcpReq.signal),
+                reviewedFavorites: new Map([[change.favoriteId, favoriteFingerprint(favorite)]]),
+              });
+              if (!row || row.meal_key !== change.favoriteId || !/^[1-9]\d*$/u.test(String(row.revision ?? ''))) {
+                throw new ToolFailure('The preference may have committed, but its receipt is unavailable. Retry the same preference and revision.');
+              }
+              return response({ status: 'committed', operation: change.operation,
+                record: projectDailyRecord(row, ['meal_key', 'preference', 'revision', 'created_at', 'updated_at']) });
+            }));
             server.registerTool('log_food', {
               title: 'Log food', description: 'Log eaten food only after native review. Keep operationId unchanged on retries. Supplied nutrients are not independently verified; no Apple Health export occurs.',
               _meta: security(true),

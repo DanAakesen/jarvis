@@ -146,6 +146,15 @@ The next retained lookup slice exposes the existing saved favourite/alias and
 exact history resolver through `lookup_food.savedName`, sharing query DTOs.
 It adds no tool name, write authority, migration or activation.
 
+The following cohesive saved-food continuation adds retained favourite/alias
+saves, owned-favourite plan snapshots/save/soft-delete and persistent canonical
+likes/dislikes/clears. It uses native review, shared snapshot preparation,
+under-lock source rechecks and real versioned receipts. Additive 0050 protects
+favourite/feedback revisions, clears and new constrained audit names without
+rewriting 0049. No intake, activation or internal message authority follows.
+Exact-head source qualification is required; account/device/private/cutover
+acceptance and #724 remain open.
+
 17 October source continuation: the existing JarvisPM session adds an optional
 [nutrition-only hosted MCP adapter](../apps/backend/src/daily/mcp/README.md).
 It reuses delivered reads and existing typed writers, a separate delegated
