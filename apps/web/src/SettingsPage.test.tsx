@@ -397,6 +397,9 @@ describe('SettingsPage', () => {
     expect(screen.queryByRole('heading', { name: 'New projects' })).toBeNull();
     expect(screen.getByRole('heading', { name: 'Defaults for new projects' })).not.toBeNull();
     expect(screen.getByText('These defaults pre-fill the Add project dialog; every project keeps its own settings and can change them any time.')).not.toBeNull();
+    const policy = screen.getByRole('combobox', { name: 'Policy' });
+    expect(policy.getAttribute('aria-describedby')).toBe('new-project-policy-help');
+    expect(screen.getByText('The policy default only pre-fills projects Jarvis registers later. Every project keeps its own policy and can be changed any time.')).not.toBeNull();
     await user.clear(await screen.findByRole('textbox', { name: 'Owner' }));
     await user.type(screen.getByRole('textbox', { name: 'Owner' }), 'jarvis-org');
     await user.selectOptions(screen.getByRole('combobox', { name: 'Visibility' }), 'public');
