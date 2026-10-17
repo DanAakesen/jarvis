@@ -74,6 +74,15 @@ export function createPushStore(pool: sql.ConnectionPool): PushStore {
         .input('auth', sql.VarChar(32), subscription.auth)
         .query(`SET XACT_ABORT ON;
           BEGIN TRANSACTION;
+          DECLARE @lockResult int;
+          DECLARE @lockResource nvarchar(255) =
+            CONCAT(N'jarvis.push-subscriptions:', LOWER(CONVERT(nvarchar(36), @owner)));
+          EXEC @lockResult = sys.sp_getapplock
+            @Resource = @lockResource,
+            @LockMode = 'Exclusive',
+            @LockOwner = 'Transaction',
+            @LockTimeout = 10000;
+          IF @lockResult < 0 THROW 51001, 'Could not acquire owner push subscription lock', 1;
           DECLARE @subscriptionId uniqueidentifier;
           SELECT @subscriptionId = id
             FROM dbo.push_subscriptions WITH (UPDLOCK, HOLDLOCK)

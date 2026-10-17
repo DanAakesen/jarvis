@@ -192,6 +192,9 @@ describe('committed domain schema (groups 1-8)', () => {
     const firstRow = await store.listSubscriptions(owner);
     await store.upsertSubscription(owner, { ...first, p256dh: makeSubscription('replacement').p256dh });
     expect(await store.listSubscriptions(owner)).toMatchObject([{ id: firstRow[0]!.id, endpoint: first.endpoint }]);
+    await Promise.all(['parallel-1', 'parallel-2'].map((endpoint) =>
+      store.upsertSubscription(owner, makeSubscription(endpoint))));
+    expect(await store.listSubscriptions(owner)).toHaveLength(3);
     await store.recordSubscriptionResult(firstRow[0]!.id, true);
     for (let index = 1; index <= 10; index++) {
       await store.upsertSubscription(owner, makeSubscription(`subscription-${index}`));
