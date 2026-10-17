@@ -12,7 +12,7 @@ def selected(result):
 
 class DeployPlanTests(unittest.TestCase):
     def test_each_area_deploys_only_its_part(self):
-        self.assertEqual(selected(plan("push", ["infra/main.bicep"])), {"infra"})
+        self.assertEqual(selected(plan("push", ["infra/main.bicep"])), {"infra", "backend", "web", "agent"})
         self.assertEqual(selected(plan("push", ["apps/backend/src/app.ts"])), {"backend"})
         self.assertEqual(selected(plan("push", ["db/migrations/0001_init.sql"])), {"backend"})
         self.assertEqual(selected(plan("push", ["apps/web/src/App.tsx"])), {"web"})
@@ -23,19 +23,20 @@ class DeployPlanTests(unittest.TestCase):
         )
 
     def test_bootstrap_ids_also_rebuild_the_web(self):
-        self.assertEqual(selected(plan("push", ["infra/bootstrap.output.json"])), {"infra", "web"})
+        self.assertEqual(selected(plan("push", ["infra/bootstrap.output.json"])), {"infra", "backend", "web", "agent"})
 
-    def test_shared_files_deploy_everything(self):
+    def test_node_shared_files_do_not_redeploy_infrastructure_or_python(self):
         for path in (
             "package.json",
             "package-lock.json",
             "tsconfig.base.json",
-            ".github/workflows/deploy.yml",
-            ".github/workflows/ci.yml",
-            ".github/scripts/deploy_smoke.py",
         ):
             with self.subTest(path=path):
-                self.assertEqual(selected(plan("push", [path])), {"infra", "backend", "web", "agent"})
+                self.assertEqual(selected(plan("push", [path])), {"backend", "web"})
+
+    def test_workflow_checks_do_not_become_application_inputs(self):
+        for path in (".github/workflows/ci.yml", ".github/scripts/deploy_smoke.py"):
+            self.assertEqual(selected(plan("push", [path])), set())
 
     def test_documentation_only_deploys_nothing(self):
         result = plan("push", ["README.md", "docs/architecture-flows.html", "apps/web/README.md", "infra/README.md"])
@@ -47,7 +48,7 @@ class DeployPlanTests(unittest.TestCase):
 
     def test_manual_run_and_unknown_base_deploy_everything(self):
         self.assertEqual(selected(plan("workflow_dispatch", ["README.md"])), {"infra", "backend", "web", "agent"})
-        self.assertEqual(selected(plan("workflow_dispatch", [], superseded=True)), {"infra", "backend", "web", "agent"})
+        self.assertEqual(selected(plan("workflow_dispatch", [], superseded=True)), set())
         self.assertEqual(selected(plan("push", None)), {"infra", "backend", "web", "agent"})
 
     def test_superseded_or_unchanged_push_deploys_nothing(self):

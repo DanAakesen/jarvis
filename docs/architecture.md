@@ -3992,19 +3992,23 @@ Jarvis has its own Codex session, so it never signs Dan out of the ChatGPT app o
 | Where | Does |
 | --- | --- |
 | Sandbox | The agent edits, runs targeted builds and tests, commits, pushes, and opens or updates the PR. |
-| GitHub Actions | Full build and all tests on every PR push; release on merge to `main`; deployments to Azure with OpenID Connect (no stored secrets). |
-| Backend | Receives webhooks, updates task and release records, pushes events to the board, and steers the agent with failed-check logs. |
+| GitHub Actions | Affected-component qualification on ready PRs, full coverage for shared/unknown inputs; exact-tree release on merge to `main`; Azure deployments use existing OpenID Connect. |
+| Coordinator / builder | Coordinator owns intake/backlog, dispatch and integration/conflicts. At most two builders own code, regression tests and their pipeline failure fixes. |
+| Backend | Existing managed-project webhooks and task/release records remain; this repository's pipeline retains content-free failure artifacts linked to its PR/run. |
 
 ```mermaid
 flowchart LR
-    S["Sandbox: agent edits + targeted tests"] -->|push + PR| A["GitHub Actions: full build + all tests"]
+    S["Builder: code + targeted regression tests"] -->|push + PR| A["GitHub Actions: impact + dependency qualification"]
     A -->|webhook: passed| B["Backend: deliver or merge per project policy"]
-    A -->|webhook: failed + log| B2["Backend"] -->|steer with log| S
-    B -->|merge| R["GitHub Actions: release + deploy"]
+    A -->|failed check IDs + exact receipt| S
+    B -->|qualified integration| R["Main: exact-tree qualification + compatible component apply"]
     R -->|webhooks| V["Board: release view"]
 ```
 
 - One release per merge to `main`; no tags.
+- Continuous qualified delivery has no routine human acceptance or batch cutoff.
+  Required failures still block. The coordinator routes bounded pipeline evidence
+  to the existing builder rather than investigating logs or reproducing bugs.
 - Commits are not stored; the release view fetches them from GitHub on demand.
 - Authenticated `GET /factory/projects/:id/releases` returns the active project's bounded persisted release, PR, workflow-run, and deployment records together with an on-demand graph. Refresh fetches the graph again; a GitHub graph failure leaves the persisted records available with `graph: null`. `GET /factory/releases/:id` resolves an existing release activity link to its project.
 - The shared `/tools` registry exposes `list_releases` and `get_release` over those same persisted records, scoped to active managed projects. `get_deployment_status` reads the latest run on the project's default branch whose workflow file is `deploy*.yml` or `deploy*.yaml`; it uses a repository-scoped installation token with `actions:read`, not the webhook cache. The Actions response is limited to 100 runs/1 MiB with a 10-second request deadline. No matching run returns `null`; provider failures are sanitized and the token is never returned.
@@ -4492,23 +4496,65 @@ The deploy script explicitly uses ARM **Incremental** mode. In that mode, resour
 
 ```mermaid
 flowchart LR
-    P["Plan: diff since last successful Deploy run"] --> I["Infra: Bicep deployment jarvis-infra"]
+    Q["Successful exact-tree CI receipt"] --> P["Plan: exact inputs + latest trusted applied receipt"]
+    P --> I["Infra: Bicep deployment jarvis-infra"]
     P --> B["Backend: az acr build, image by digest, Container Apps revision"]
     I --> B --> W["Web: Vite build with backend URL, Static Web Apps upload"]
     B --> A["Agent: ACR image by digest, Foundry hosted-agent version"]
     I --> A
-    B --> S["Smoke: /health, Foundry admin and runtime hosts"]
+    B --> S["Deterministic readiness: health, web, Foundry hosts"]
     A --> S
     I --> S
+    S --> C["Required live conversation acceptance"]
+    C --> E["Immutable applied/accepted/failure evidence"]
 ```
 
-- **Plan:** [`deploy_plan.py`](../.github/scripts/deploy_plan.py) compares the commit with the head of the last successful Deploy run, so a failed or cancelled deploy is retried by the next one. `infra/` → Bicep; `apps/backend/`, `db/` or `.dockerignore` → backend; `apps/web/` (and `infra/bootstrap.output.json`) → web; `agents/jarvis/` → hosted agent. Root `package.json`, the lockfile, `tsconfig.base.json`, `.nvmrc`, any workflow and the `deploy_*` scripts deploy everything; so does a manual run or a missing base. Documentation (`*.md`, `docs/`) never deploys, and a docs-only push does not start a run. A run whose commit is already contained in the last successful deploy is superseded and deploys nothing.
+- **Qualification:** `pipeline_impact.py` selects CI checks and their data/contract
+  consumers. Workflow/shared/unknown changes and unusable bases retain conservative
+  qualification. The always-required script suite and `CI result` reject missing,
+  failed, cancelled or unexpectedly skipped selected checks. `ci-evidence-<attempt>`
+  binds the actual tested merge tree to PR/head, issues and run/attempt. Deploy's
+  read-only plan requires a successful exact-tree receipt from the merged PR
+  before any Azure job; a green badge for a different tree is insufficient.
+- **Plan:** `release_state.py` fingerprints tracked blob paths/modes/content,
+  each component's own deploy-job recipe, shared workflow configuration and
+  release variables (including a non-exported budget-secret input). Backend
+  inputs include contracts, migrations, web's package manifest, feature index
+  and agent presence instructions. Web shares contracts/Node configuration;
+  agent retains its own Python/image inputs. Infrastructure changes invalidate
+  all downstream configuration. Known check-only workflows/scripts do not
+  rebuild applications; unknown runtime inputs fall back to all parts.
+  Ordinary Markdown/docs do not deploy, except the actual backend image input
+  `docs/features.md`. `deploy_plan.py` remains a conservative diff-preview helper,
+  not the production applied-state authority.
+- **Reuse and retries:** the latest completed trusted main-run receipt controls
+  applied state even if its acceptance failed. Immutable artifact ID/checksum,
+  schema, source/run/attempt, ancestry, exact component fingerprints and
+  digest/version shape are verified. Missing/expired/malformed/newer partial
+  evidence cannot be bypassed using an older green receipt. Successful applied
+  components are not rebuilt/redeployed merely because final conversation
+  acceptance failed. A same-run retry keeps original producer attempts; a
+  whole-run retry can use its preceding attempt. Superseded manual or queued
+  source cannot overwrite newer state; superseded receipts carry the newer
+  applied-source horizon forward. Applied versions retain original source
+  identity instead of claiming every component was rebuilt at the new release SHA.
 - **Order:** one deploy at a time in the `jarvis-production-deploy` group, shared with Runner deploy, with `queue: max` and no cancellation, so quick merges deploy one after another.
 - **Infra:** [`deploy_bicep.sh`](../.github/scripts/deploy_bicep.sh) deploys `infra/main.bicep` as the fixed deployment `jarvis-infra`, keeping the running backend image. Later jobs and Runner deploy read its outputs.
 - **Backend:** builds `apps/backend/Dockerfile` in ACR, then updates the Container App to the image digest. On the first deploy the app does not exist yet, so Bicep creates it with that image. The job waits until the new revision is the latest ready revision; the previous revision serves until then.
 - **Agent:** builds `agents/jarvis` in ACR and creates a Foundry hosted-agent version from the image digest with `JARVIS_BACKEND_URL` and the `gpt-5.6-luna` deployment. It routes traffic to the active version, updates the backend's `ENTRA_JARVIS_AGENT_OBJECT_ID` to its instance identity, and waits for backend health. The deploy identity receives Foundry project roles; Dan runs bootstrap once with the reported principal ID to grant `Jarvis.Tools` and persist it for future Bicep deployments.
 - **Web:** builds with `VITE_BACKEND_URL` from the `backendFqdn` output and uploads `apps/web/dist` with the Static Web Apps deployment token (masked, read with the deploy identity). `staticwebapp.config.json` rewrites client routes to `index.html`. The job checks `/` and a deep link.
 - **Smoke:** `/health` must return 200; the backend listens only after its managed-identity SQL connection and migrations succeed. After an infra deploy, [`deploy_smoke.py`](../.github/scripts/deploy_smoke.py) grants the deploy identity Foundry User on the project, requires the administration host's `connections` to include `container-registry` and `application-insights`, and requires the runtime host to stop answering "Project not found" (sessions list of a placeholder agent; creates nothing).
+- **Acceptance/evidence:** deterministic runtime readiness also checks web root
+  and settings. A separate required live-conversation job consumes the existing
+  authenticated smoke endpoint once, without a speculative probe/retry loop.
+  Every fixed smoke ID must appear exactly once; missing/unknown/degraded/down
+  required checks fail closed. Existing PC-bridge, identity and timestamp
+  exceptions remain explicit. `release-evidence-<attempt>` retains applied
+  component versions and readiness/acceptance outcomes separately; raw reports,
+  provider bodies, prompts, tool arguments and logs are not uploaded. Fixed
+  check/reason codes plus qualification PR/issues and exact artifact/run identities
+  let the coordinator route repairs to the existing builder. Missing evidence is
+  visibly unavailable. Historical failed runs stay failed.
 - **Before the first successful deploy:** Dan re-runs `infra/bootstrap.ps1` so the deploy identity trusts the immutable-ID subject (P0-16).
 - **Once after the first deploy:** run `infra/bootstrap.ps1 -WebRedirectUris <Static Web App URL>`, record the backend URL in `apps/web/config.json`, and set `JARVIS_INFRA_DEPLOYMENT_NAME=jarvis-infra` (P0-16). The run summary prints both URLs.
 

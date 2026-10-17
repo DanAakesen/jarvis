@@ -529,10 +529,10 @@ const FLOWS = [
   },
   {
     name: "Deliver",
-    summary: "GitHub Actions runs the full build and all tests on the pull request. The backend reads the result by webhook, stores bounded failing-job logs, and steers the same task through the existing controller. Repairs are bounded; exhaustion or unavailable diagnostics move the task to Needs attention.",
+    summary: "Jarvis repository delivery selects affected checks and dependencies, retaining full coverage for shared or unknown inputs. Exact-tree qualification and content-free failure receipts belong to the existing builder. The responsive coordinator handles backlog, dispatch and integration, not reproduction. Managed-project webhook/controller behavior below remains separate.",
     nodes: [
       { id: "ctx", lane: "github", col: 1, s: "context", from: [[5, "pr"], [7, "pr"]], t: "From 5–8: task branch PR open or created", d: "P3-14 opens or reuses a PR after the task completes only if its branch is ahead of the project default; missing commits or API failures are recorded as Needs attention." },
-      { id: "checks", lane: "actions", col: 2, s: "docs", t: "Full build and all tests in GitHub Actions", d: "Runs on every PR; a managed-project template is available.", ev: "P3-09: copyable PR checks are in templates/github-actions/pr-checks.yml; see the adoption guide.", href: "github-actions-templates.md" },
+      { id: "checks", lane: "actions", col: 2, s: "docs", t: "Qualify affected components and dependencies", d: "Ready PRs retain exact-tree CI receipts; selected failures, cancellations and unexpected skips block. Shared and unknown inputs keep full coverage.", ev: "#880 implementation candidate has synthetic workflow/impact/evidence tests; normal exact-candidate CI remains a separate gate. Managed-project templates retain their own adoption requirements.", href: "agent-context.md" },
       { id: "cancel", lane: "board", col: 2, s: "proven", t: "Cancel task", d: "Available in Ready, Running, or Paused.", ev: "P2-07 web and dispatcher tests cover confirmation, valid states, invocation cancellation, and Foundry session deletion. Live cancellation remains the coordinator's post-merge check." },
       { id: "cinv", lane: "backend", col: 2, s: "proven", t: "Cancel the invocation", d: "Returned cancelled." },
       { id: "cdel", lane: "foundry", col: 2, s: "proven", t: "Delete the session", d: "Nothing keeps running." },
@@ -561,10 +561,10 @@ const FLOWS = [
   },
   {
     name: "Release",
-    summary: "After the merge, GitHub Actions builds, tests and deploys. Webhooks update persisted release records; the project view fetches the Git graph from GitHub on demand.",
+    summary: "Qualified current-main integration flows continuously without routine human sign-off. Deploy requires exact-tree CI, retains compatible applied versions and separates deterministic readiness from required live conversation acceptance. Failed acceptance remains failed; bounded evidence returns to the existing builder.",
     nodes: [
       { id: "ctx", lane: "github", col: 1, s: "context", from: [[9, "merge"]], t: "From 9: merged to main" },
-      { id: "wf", lane: "actions", col: 2, s: "docs", t: "Release workflow", d: "Build, test and upload an artifact on merge to main.", ev: "P3-09: copyable release workflow is in templates/github-actions/release.yml; see the adoption guide.", href: "github-actions-templates.md" },
+      { id: "wf", lane: "actions", col: 2, s: "docs", t: "Verify qualification and compatible inputs", d: "Require successful exact-tree CI; reuse only trusted compatible applied versions with original producer identities.", ev: "#880 implementation candidate; synthetic identity, failure, retry and supersession fixtures are separate from an actual main-only release.", href: "agent-context.md" },
       { id: "deploy", lane: "actions", col: 3, s: "docs", t: "Deploy to Azure with OIDC", d: "Main-only production environment; id-token permission is limited to deploy.", ev: "P3-09 documents the environment-bound Azure federation setup; live Azure use is unverified.", href: "github-actions-templates.md" },
  
       { id: "migrations", lane: "backend", col: 4, s: "proven", t: "Apply pending migrations before listen", d: "Bounded startup, transaction-owned app lock, immutable checksum ledger; failure rolls back and closes the pool.", ev: "Issue #7: real SQL Server CI passed repeat/concurrent startup, rollback, history, lock contention and cancellation. P2-01 (#27) adds groups 4 and 6, checked by the same SQL Server CI. Issue #11 adds the main Deploy workflow, which sets the managed-identity SQL settings in Bicep and requires /health (served only after migrations) on each backend deploy; the first live run is P0-16." },
@@ -573,7 +573,7 @@ const FLOWS = [
       { id: "map", lane: "data", col: 5, s: "proven", t: "Map events into project records", d: "Map PRs, checks, workflow runs, default-branch releases and deployment statuses; correlate release records by project/SHA even when webhooks arrive out of order.", ev: "P3-04 mapper/route/store tests and the SQL Server integration suite cover linked records, duplicate deliveries, and a Release run/deployment arriving before the main push. Local SQL Server tests pass; live test-project delivery remains unverified." },
       { id: "graph", lane: "github", col: 4, s: "proven", t: "Fetch branches and commits", d: "P3-08 fetches a bounded graph with a repository-scoped contents:read token; commits are not persisted." },
       { id: "view", lane: "board", col: 5, s: "proven", t: "Release view", d: "Per-project releases, runs, deployments, and an on-demand horizontal commit graph.", ev: "P3-08 focused API/UI tests and scratch Chromium checks at 390 and 1280 px use mocked GitHub/API data; live Entra, SQL, and GitHub behavior remain unverified." },
-      { id: "fail", lane: "backend", col: 5, s: "assumed", t: "Failed release: Needs attention", d: "Offer a fix task with the failing log." },
+      { id: "fail", lane: "backend", col: 5, s: "docs", t: "Route failure to the existing builder", d: "Retain fixed check/reason codes and exact PR/source/run/artifact identities. Applied and accepted remain separate; no coordinator log archaeology or reproduction campaign.", ev: "#880 extends existing pipeline artifacts, not the managed-project controller or provider access." },
       { id: "ask", lane: "jarvis", col: 6, s: "assumed", t: "Answer release questions", d: "“Is the release out, sir?”" },
     ],
     edges: [

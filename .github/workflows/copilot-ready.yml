@@ -66,4 +66,4 @@ jobs:
           # Events from GITHUB_TOKEN start no workflows, and CI skips drafts (L83),
           # so start CI for the now-ready PR explicitly.
           head_ref=$(gh api "repos/$REPO/pulls/$PR" --jq '.head.ref')
-          gh workflow run ci.yml --repo "$REPO" --ref "$head_ref"
+          gh workflow run ci.yml --repo "$REPO" --ref "$head_ref" -f pr="$PR"
