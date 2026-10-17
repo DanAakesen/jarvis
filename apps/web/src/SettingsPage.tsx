@@ -469,7 +469,7 @@ export function SettingsPage({ backendUrl, getAccessToken, activity, presence, p
       </header>
       {activity && <div className="settings-activity">{activity}</div>}
       {presence}
-      {state === 'loading' && <Loader variant="core" label="Loading settings…" />}
+      {state === 'loading' && <Loader variant="text" label="Loading settings…" />}
       {state === 'error' && (
         <div className="settings-feedback" role="alert">
           <p>{error}</p>

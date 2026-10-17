@@ -316,7 +316,7 @@ export function UsagePage({ backendUrl, getAccessToken }: AreaProps) {
           onChange={setPeriod} />
       </header>
 
-      {currentState.status === 'loading' && <Loader variant="core" label={`Loading usage for ${periods.find(({ value }) => value === period)?.label.toLowerCase()}…`} />}
+      {currentState.status === 'loading' && <Loader variant="text" label={`Loading usage for ${periods.find(({ value }) => value === period)?.label.toLowerCase()}…`} />}
       {currentState.status === 'error' && (
         <div className="usage-feedback" role="alert">
           <p>{currentState.message}</p>

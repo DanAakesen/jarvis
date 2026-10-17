@@ -1,7 +1,7 @@
 import type { PublicClientApplication } from '@azure/msal-browser';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { PublicConfig } from '../config/public-config';
-import { restoreProfile, signIn } from './auth';
+import { isSignInRedirectPending, restoreProfile, signIn } from './auth';
 
 const config: PublicConfig = {
   tenantId: '11111111-1111-4111-8111-111111111111',
@@ -11,7 +11,7 @@ const config: PublicConfig = {
 };
 const account = { homeAccountId: 'account-id' } as never;
 const fetchMock = vi.fn();
-afterEach(() => { vi.unstubAllGlobals(); fetchMock.mockReset(); });
+afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); sessionStorage.clear(); fetchMock.mockReset(); });
 
 function client(overrides: Partial<PublicClientApplication> = {}) {
   return {
@@ -27,7 +27,10 @@ function client(overrides: Partial<PublicClientApplication> = {}) {
 
 describe('web authentication', () => {
   it('redirects the page to Microsoft sign-in for the API scope and returns to the site root', async () => {
-    const msal = client();
+    expect(isSignInRedirectPending()).toBe(false);
+    const msal = client({ loginRedirect: vi.fn(async () => {
+      expect(isSignInRedirectPending()).toBe(true);
+    }) });
 
     await expect(signIn(msal, config)).resolves.toBeUndefined();
 
@@ -42,8 +45,11 @@ describe('web authentication', () => {
     fetchMock.mockResolvedValue(new Response(JSON.stringify({ name: 'Dan Aakesen' }), { status: 200 }));
     vi.stubGlobal('fetch', fetchMock);
     const msal = client({ handleRedirectPromise: vi.fn().mockResolvedValue({ account, accessToken: 'access-token' }) });
+    await signIn(msal, config);
+    expect(isSignInRedirectPending()).toBe(true);
 
     await expect(restoreProfile(msal, config)).resolves.toEqual({ name: 'Dan Aakesen' });
+    expect(isSignInRedirectPending()).toBe(false);
 
     expect(msal.setActiveAccount).toHaveBeenCalledWith(account);
     expect(msal.acquireTokenSilent).not.toHaveBeenCalled();
@@ -64,14 +70,25 @@ describe('web authentication', () => {
     const msal = client({ loginRedirect: vi.fn().mockRejectedValue(new Error('provider-secret detail')) });
 
     await expect(signIn(msal, config)).rejects.toThrow('Microsoft sign-in did not complete. Try again.');
+    expect(isSignInRedirectPending()).toBe(false);
     vi.mocked(msal.loginRedirect).mockRejectedValueOnce(Object.assign(new Error('busy'), { errorCode: 'interaction_in_progress' }));
     await expect(signIn(msal, config)).rejects.toThrow('A previous sign-in is still open in this tab.');
     const returning = client({
       handleRedirectPromise: vi.fn().mockRejectedValue(Object.assign(new Error('x'), { errorCode: 'user_cancelled' })),
     });
+    await signIn(returning, config);
     await expect(restoreProfile(returning, config)).rejects.toThrow('Microsoft sign-in did not complete (user_cancelled). Try again.');
+    expect(isSignInRedirectPending()).toBe(false);
   });
 
+  it('does not block sign-in if session storage is restricted', async () => {
+    vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => { throw new Error('denied'); });
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('denied'); });
+    vi.spyOn(Storage.prototype, 'removeItem').mockImplementation(() => { throw new Error('denied'); });
+    expect(isSignInRedirectPending()).toBe(false);
+    await expect(signIn(client(), config)).resolves.toBeUndefined();
+    await expect(restoreProfile(client(), config)).resolves.toBeNull();
+  });
   it('silently restores a cached account and returns null when no account is cached', async () => {
     fetchMock.mockResolvedValue(new Response(JSON.stringify({ name: 'Dan Aakesen' }), { status: 200 }));
     vi.stubGlobal('fetch', fetchMock);

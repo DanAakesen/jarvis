@@ -1,5 +1,16 @@
 # Decisions
 
+## Use text rather than orbs for loading (17 October 2026; P9-118 / #896)
+
+Dan's issue supersedes the 7–8 October loading-orb rule. Page loading uses
+plain Loading with fixed-width decorative dots; both reduced-motion settings
+show static dots and accessible status stays stable. Sign-in distinguishes
+outgoing Redirecting, returning Signing you in and first-visit Loading using
+a non-sensitive per-tab marker, not an authentication signal. Preserve the
+living stage, input/voice orbs, working cores and glass skeletons.
+Local Chromium fixtures cover both requested sizes/themes and reduced-motion
+mechanisms; Dan's visual acceptance and live Microsoft sign-in remain pending.
+
 ## Compute the suggestion budget from stored active energy and Jarvis-logged meals (17 October 2026; P12-09 / #724)
 
 **Builder decision inside Dan's ruling, not a user-confirmed choice and not
