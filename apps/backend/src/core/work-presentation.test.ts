@@ -346,6 +346,228 @@ describe('best-effort work presentation', () => {
     expect(empty.commands[0]).toMatchObject({ view: { data: { content: 'No upcoming event in the next 60 days.' } } });
   });
 
+  describe('incomplete Google results', () => {
+    type Shown = {
+      view: {
+        renderer: string;
+        title: string;
+        source: Record<string, unknown>;
+        data: { content?: string; items?: { title: string; description?: string }[] };
+      };
+    };
+    const shown = (commands: WorkspaceCommand[]) => commands[0] as unknown as Shown;
+    const note = {
+      moreEvents: 'More events exist than are shown.',
+      noEvents: 'No events were found in the part of the calendar that was searched.',
+      noNextEvent: 'No upcoming event found in the part of your calendar that was searched.',
+      uncertainSlots: 'Calendar results were incomplete, so some of these slots may not be free.',
+      noSlots: 'No free slots were found in the part of the calendar that was searched.',
+      moreSlots: 'More free slots exist than are shown.',
+    };
+    const validView = (commands: WorkspaceCommand[]) => Boolean(commands[0] && 'view' in commands[0] && isGeneratedView(commands[0].view));
+    // The reason is the same static text the view shows; the web chrome does not render it, so the in-view note is the visible signal.
+    const expectPartial = (commands: WorkspaceCommand[], reason: string) => {
+      expect(shown(commands).view.source).toStrictEqual({ id: 'now', status: 'partial', updatedAt: expect.any(String), reason });
+      expect(validView(commands)).toBe(true);
+    };
+    const expectComplete = (commands: WorkspaceCommand[]) => {
+      expect(shown(commands).view.source).toStrictEqual({ id: 'now', status: 'complete', updatedAt: expect.any(String) });
+      expect(validView(commands)).toBe(true);
+    };
+    async function present(tool: string, result: Record<string, unknown>) {
+      const { start, commands } = fixture();
+      start(tool).finish(result, true);
+      await settled();
+      return commands;
+    }
+
+    describe('calendar_find_free_slots', () => {
+      const slot = (index: number) => ({
+        start: '2026-11-12T08:00:00.000Z', end: '2026-11-12T09:00:00.000Z',
+        startLocal: `Slot ${String(index)} starts`, endLocal: `Slot ${String(index)} ends`,
+      });
+      const result = (extra: Record<string, unknown>) => ({
+        timeZone: 'Europe/Copenhagen', durationMinutes: 60, nextPageToken: 'private-page-token', ...extra,
+      });
+
+      it('warns that free time may be wrong and marks the source partial when the events it read were truncated', async () => {
+        const commands = await present('calendar_find_free_slots', result({ truncated: true, slots: [slot(0)] }));
+        expect(shown(commands).view).toMatchObject({
+          renderer: 'text', title: 'Free time',
+          data: { content: `Free 60-minute slots:\nSlot 0 starts to Slot 0 ends\n\n${note.uncertainSlots}` },
+        });
+        expectPartial(commands, note.uncertainSlots);
+        expect(JSON.stringify(commands)).not.toContain('private-');
+      });
+
+      it('shows no note and a complete source when the result is complete', async () => {
+        const commands = await present('calendar_find_free_slots', result({ truncated: false, slots: [slot(0)] }));
+        expect(shown(commands).view.data.content).toBe('Free 60-minute slots:\nSlot 0 starts to Slot 0 ends');
+        expectComplete(commands);
+      });
+
+      it('says more slots exist when it shows only the first 50, and joins both notes for a truncated result', async () => {
+        const slots = Array.from({ length: 60 }, (_, index) => slot(index));
+        const cut = await present('calendar_find_free_slots', result({ truncated: false, slots }));
+        const lines = shown(cut).view.data.content?.split('\n') ?? [];
+        expect(lines).toHaveLength(1 + 50 + 2);
+        expect(lines).toContain('Slot 49 starts to Slot 49 ends');
+        expect(lines).not.toContain('Slot 50 starts to Slot 50 ends');
+        expect(lines[lines.length - 1]).toBe(note.moreSlots);
+        expectPartial(cut, note.moreSlots);
+        const both = await present('calendar_find_free_slots', result({ truncated: true, slots }));
+        expect(shown(both).view.data.content?.endsWith(`\n\n${note.uncertainSlots} ${note.moreSlots}`)).toBe(true);
+        expectPartial(both, `${note.uncertainSlots} ${note.moreSlots}`);
+      });
+
+      it('never claims there are no free slots when the result is incomplete', async () => {
+        const incomplete = await present('calendar_find_free_slots', result({ truncated: true, slots: [] }));
+        expect(shown(incomplete).view.data.content).toBe(note.noSlots);
+        expectPartial(incomplete, note.noSlots);
+        const complete = await present('calendar_find_free_slots', result({ truncated: false, slots: [] }));
+        expect(shown(complete).view.data.content).toBe('No free 60-minute slots found in that period.');
+        expectComplete(complete);
+      });
+    });
+
+    interface MailPresenter {
+      tool: string;
+      key: 'messages' | 'drafts';
+      title: string;
+      none: string;
+      noneIncomplete: string;
+      more: string;
+      row: (index: number) => Record<string, unknown>;
+    }
+    const mailPresenters: MailPresenter[] = [
+      {
+        tool: 'mail_search', key: 'messages', title: 'Mail results', none: 'No matching messages found.',
+        noneIncomplete: 'No matching messages were found in the part of the mailbox that was searched.',
+        more: 'More messages may exist than are shown.',
+        row: (index) => ({ id: `private-id-${String(index)}`, subject: `Subject ${String(index)}`, from: { address: 'a@example.test' }, body: 'private-body' }),
+      },
+      {
+        tool: 'mail_list_drafts', key: 'drafts', title: 'Mail drafts', none: 'No drafts found.',
+        noneIncomplete: 'No drafts were found in the part of the mailbox that was searched.',
+        more: 'More drafts may exist than are shown.',
+        row: (index) => ({ draftId: `private-id-${String(index)}`, subject: `Subject ${String(index)}`, to: 'a@example.test', body: 'private-body' }),
+      },
+    ];
+
+    describe.each(mailPresenters)('$tool', ({ tool, key, title, none, noneIncomplete, more, row }) => {
+      const result = (count: number, truncated?: boolean) => ({
+        [key]: Array.from({ length: count }, (_, index) => row(index)),
+        ...(truncated === undefined ? {} : { truncated }),
+        nextPageToken: 'private-page-token',
+      });
+
+      it('ends a truncated list with a plain note item and marks the source partial', async () => {
+        const commands = await present(tool, result(2, true));
+        const { view } = shown(commands);
+        expect(view).toMatchObject({ renderer: 'list', title });
+        expect(view.data.items?.map((item) => item.title)).toEqual(['Subject 0', 'Subject 1', more]);
+        expect(view.data.items?.[2]).toStrictEqual({ title: more });
+        expectPartial(commands, more);
+        expect(JSON.stringify(commands)).not.toContain('private-');
+      });
+
+      it('shows no note and a complete source when the result is complete', async () => {
+        const commands = await present(tool, result(2, false));
+        expect(shown(commands).view.data.items?.map((item) => item.title)).toEqual(['Subject 0', 'Subject 1']);
+        expectComplete(commands);
+      });
+
+      it('keeps the list within 50 items, the last being the note, when more rows came back than fit', async () => {
+        const commands = await present(tool, result(60));
+        const items = shown(commands).view.data.items ?? [];
+        expect(items).toHaveLength(50);
+        expect(items[48]?.title).toBe('Subject 48');
+        expect(items[49]).toStrictEqual({ title: more });
+        expectPartial(commands, more);
+      });
+
+      it('never says nothing exists when an empty result is incomplete', async () => {
+        const incomplete = await present(tool, result(0, true));
+        expect(shown(incomplete).view).toMatchObject({ renderer: 'text', title, data: { content: noneIncomplete } });
+        expectPartial(incomplete, noneIncomplete);
+        const complete = await present(tool, result(0, false));
+        expect(shown(complete).view.data.content).toBe(none);
+        expectComplete(complete);
+      });
+    });
+
+    describe.each(['calendar_list_events', 'calendar_today_agenda'])('%s', (tool) => {
+      const event = (index: number, subject = `Meeting ${String(index)}`) => ({
+        id: `private-id-${String(index)}`, subject, start: '2026-10-10T08:00:00.000Z', end: '2026-10-10T08:30:00.000Z',
+      });
+      const result = (count: number, truncated: boolean) => ({
+        timeZone: 'UTC', events: Array.from({ length: count }, (_, index) => event(index)), truncated, nextPageToken: 'private-page-token',
+      });
+
+      it('ends a truncated agenda with a note and marks the source partial', async () => {
+        const commands = await present(tool, result(2, true));
+        const content = shown(commands).view.data.content ?? '';
+        expect(content).toContain('08:00–08:30 · Meeting 1');
+        expect(content.endsWith(`\n\n${note.moreEvents}`)).toBe(true);
+        expectPartial(commands, note.moreEvents);
+        expect(JSON.stringify(commands)).not.toContain('private-');
+      });
+
+      it('shows no note and a complete source when the result is complete', async () => {
+        const commands = await present(tool, result(2, false));
+        expect(shown(commands).view.data.content).not.toContain(note.moreEvents);
+        expectComplete(commands);
+      });
+
+      it('never says the calendar is empty when an empty result is incomplete', async () => {
+        const incomplete = await present(tool, result(0, true));
+        expect(shown(incomplete).view.data.content).toBe(note.noEvents);
+        expectPartial(incomplete, note.noEvents);
+        const complete = await present(tool, result(0, false));
+        expect(shown(complete).view.data.content).toBe('No events in this period.');
+        expectComplete(complete);
+      });
+
+      it('stops at a whole event and adds the note when the agenda would exceed the text cap', async () => {
+        const events = Array.from({ length: 100 }, (_, index) => event(index, `${'x'.repeat(190)} ${String(index).padStart(3, '0')}`));
+        const commands = await present(tool, { timeZone: 'UTC', events, truncated: false });
+        const content = shown(commands).view.data.content ?? '';
+        expect(content.length).toBeLessThanOrEqual(10_000);
+        expect(content).toContain(`${'x'.repeat(190)} 000`);
+        expect(content).not.toContain(`${'x'.repeat(190)} 099`);
+        expect(content.endsWith(`\n\n${note.moreEvents}`)).toBe(true);
+        expectPartial(commands, note.moreEvents);
+      });
+    });
+
+    describe('calendar_next_event', () => {
+      const event = { id: 'private-event-id', subject: 'Hotel check-in', start: '2026-11-12T13:00:00.000Z', end: '2026-11-12T14:00:00.000Z' };
+
+      it('says the search was partial when no event was found in an incomplete search', async () => {
+        const commands = await present('calendar_next_event', { timeZone: 'UTC', event: null, truncated: true });
+        expect(shown(commands).view.data.content).toBe(note.noNextEvent);
+        expectPartial(commands, note.noNextEvent);
+      });
+
+      it('keeps the 60-day wording and a complete source for a complete empty search', async () => {
+        const commands = await present('calendar_next_event', { timeZone: 'UTC', event: null, truncated: false });
+        expect(shown(commands).view.data.content).toBe('No upcoming event in the next 60 days.');
+        expectComplete(commands);
+      });
+
+      it('shows no note for a found event, and a note if the tool still reports the result as truncated', async () => {
+        const found = await present('calendar_next_event', { timeZone: 'UTC', event, truncated: false, nextPageToken: 'private-page-token' });
+        expect(shown(found).view.data.content).toContain('13:00–14:00 · Hotel check-in');
+        expect(shown(found).view.data.content).not.toContain(note.moreEvents);
+        expectComplete(found);
+        const flagged = await present('calendar_next_event', { timeZone: 'UTC', event, truncated: true });
+        expect(shown(flagged).view.data.content?.endsWith(`\n\n${note.moreEvents}`)).toBe(true);
+        expectPartial(flagged, note.moreEvents);
+        expect(JSON.stringify([found, flagged])).not.toContain('private-');
+      });
+    });
+  });
+
   it.each([
     ['completed', 'Done.'],
     ['cancelled', 'Cancelled. Nothing was changed.'],

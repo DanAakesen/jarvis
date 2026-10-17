@@ -4,6 +4,7 @@ import {
   htmlArtifactFrameSchema,
   isWorkspaceCommand,
   isWorkspaceSnapshot,
+  workspaceCommandProblems,
   workspaceCommandSchema,
   workspaceDeviceKinds,
   workspaceViewSchema,
@@ -14,7 +15,7 @@ import {
 } from '@jarvis/contracts';
 import type { BackendModule } from '../modules.js';
 import { generatedViewValidationOptions } from './generated-view-validation.js';
-import { toolArgumentRefusal } from './tool-arguments.js';
+import { explainedArgumentsMessage, toolArgumentRefusal } from './tool-arguments.js';
 import { isJarvisToolCall } from './tool-origin.js';
 import { ToolFailure, ToolRefusal } from './tool-registry.js';
 
@@ -438,13 +439,37 @@ export function isWorkspaceReflexOperation(args: Readonly<Record<string, unknown
       args.action === 'open' && args.view === undefined);
 }
 
+const maxExplainedProblemCharacters = 356;
+
+/**
+ * Names what is wrong with a workspace command in value-free words (the contracts explainer never repeats model
+ * input) and says nothing was changed. The schema stage and the command's own validation stage both use it, in chat
+ * and in voice, so the model reads the same refusal wherever the failure is found. The result stays within the 400
+ * characters explainedArgumentsMessage allows, and is undefined when nothing concrete can be named.
+ */
+export function explainWorkspaceCommand(input: unknown, app: FastifyInstance): string | undefined {
+  let text = '';
+  for (const { path, problem } of workspaceCommandProblems(input, generatedViewValidationOptions(app))) {
+    const fragment = `${path}: ${problem}`;
+    const next = text === '' ? fragment : `${text}; ${fragment}`;
+    if (text !== '' && next.length > maxExplainedProblemCharacters) break;
+    text = next;
+  }
+  if (text === '') return undefined;
+  const bounded = text.length > maxExplainedProblemCharacters
+    ? `${text.slice(0, maxExplainedProblemCharacters - 1)}…`
+    : text;
+  return `${bounded.replace(/[.\s]+$/u, '')}. Nothing was changed or shown by this call.`;
+}
+
 export const workspaceCommandTool: BackendModule['tools'][number] = {
   name: 'workspace_command',
   description: 'Target defaults to active: the tab with the latest snapshot, or the first connected tab if none has reported. Use desktop or phone for the latest-reporting tab of that kind, or all to broadcast. An unavailable kind is refused with the connected devices. ' +
     'For window requests, act by intent rather than coordinates: resolve names and "that one" from snapshot titles and front, then use their viewIds. Place a window in a named region; arrange with auto ("tidy up"), side-by-side (left to right; "X right, Y left" uses viewIds [Y, X]), grid, or cascade ("stack"; viewIds are front-to-back, first frontmost—put the desired top window first). On phones, geometry requests focus the named window. Minimise, restore or close everything with minimise-all, restore-all or close-all. Pin or unpin on request; report it applied only when the result confirms storage succeeded, otherwise relay the result. ' +
-    'Show or hide Dan’s conversation transcript, navigate his visible shell page (home, factory board or task/issue, settings section, usage, notes, knowledge, folio, status, daily only when both module and client are enabled), create, update, show, close, minimise, restore, focus, move, resize, or arrange a temporary workspace view, or change its context panel. Use operation session to change the current session, not saved defaults: action language with value da or en, action voice with value end, or action camera with value front, rear or off. The page applies session changes; the backend never requests browser permissions. If the page refuses for missing camera or microphone permission, relay its reason and tell Dan to grant permission in the browser. For readable summaries or dates, reuse the matching existing window or create a text view: {"version":1,"title":"Summary","renderer":"text","source":{"id":"now","status":"complete"},"data":{"format":"plain","content":"Actual returned summary"}}. To show a set of results such as bookings, emails or events, create a clean list view, one item per result with only what Dan needs, never raw JSON or full message bodies: {"commandId":"hotels-1","operation":"create","viewId":"hotels-found","view":{"version":1,"title":"Hotels found","renderer":"list","source":{"id":"now","status":"complete"},"data":{"items":[{"title":"Hotel Alpha","description":"Booked 12 Nov, 3 nights"}]}}}; create and update both need viewId and view. When a command is refused, the reason names the field to fix: correct it and retry once, and say a view was or was not shown only as the result reports. For chart or timeline requests, create a view with renderer chart or timeline; chart data uses kind line, bar or area and 1–5 named series of x/y points, up to 1,000 points total. Timeline views use data.events in the given order; each event needs a title and at or label (or both), with optional description. Use label (1–40 characters) for seasons or periods such as "2009/10"; use at (RFC 3339 date-time or YYYY-MM-DD) for precise dates. Use an HTML view for richer visuals. Conversation visibility is reversible and needs no confirmation. Supply a unique commandId. Navigation section is settings-only; taskId and positive integer issueNumber are factory-only. Success requires a tab to acknowledge applying the command; relay its refusal reason.',
+    'Show or hide Dan’s conversation transcript, navigate his visible shell page (home, factory board or task/issue, settings section, usage, notes, knowledge, folio, status, daily only when both module and client are enabled), create, update, show, close, minimise, restore, focus, move, resize, or arrange a temporary workspace view, or change its context panel. Use operation session to change the current session, not saved defaults: action language with value da or en, action voice with value end, or action camera with value front, rear or off. The page applies session changes; the backend never requests browser permissions. If the page refuses for missing camera or microphone permission, relay its reason and tell Dan to grant permission in the browser. For readable summaries or dates, reuse the matching existing window or create a text view: {"version":1,"title":"Summary","renderer":"text","source":{"id":"now","status":"complete"},"data":{"format":"plain","content":"Actual returned summary"}}. To show a set of results such as bookings, emails or events, create a clean list view, one item per result with only what Dan needs, never raw JSON or full message bodies: {"commandId":"hotels-1","operation":"create","viewId":"hotels-found","view":{"version":1,"title":"Hotels found","renderer":"list","source":{"id":"now","status":"complete"},"data":{"items":[{"title":"Hotel Alpha","description":"Booked 12 Nov, 3 nights"}]}}}; create and update both need viewId and view, and view is a JSON object, never a string of JSON. A create command takes only those (plus commandId and target), so position a new view with a separate place, arrange, move or resize command. When a command is refused, the reason names the field to fix: correct it and retry once, and say a view was or was not shown only as the result reports. For chart or timeline requests, create a view with renderer chart or timeline; chart data uses kind line, bar or area and 1–5 named series of x/y points, up to 1,000 points total. Timeline views use data.events in the given order; each event needs a title and at or label (or both), with optional description. Use label (1–40 characters) for seasons or periods such as "2009/10"; use at (RFC 3339 date-time or YYYY-MM-DD) for precise dates. Use an HTML view for richer visuals. Conversation visibility is reversible and needs no confirmation. Supply a unique commandId. Navigation section is settings-only; taskId and positive integer issueNumber are factory-only. Success requires a tab to acknowledge applying the command; relay its refusal reason.',
   inputSchema: workspaceCommandSchema,
   sensitive: true,
+  explainInvalidInput: explainWorkspaceCommand,
   async execute(input, request, signal) {
     if (request.headers['x-jarvis-smoke'] === 'true') {
       if (typeof input === 'object' && input !== null && !Array.isArray(input) &&
@@ -474,9 +499,14 @@ export const workspaceCommandTool: BackendModule['tools'][number] = {
           schemaPath: missingAction ? '#/required' : '#/properties/action/enum',
           params: missingAction ? { missingProperty: 'action' } : {},
         };
-        throw new ToolRefusal(toolArgumentRefusal(workspaceCommandTool, validationError, request.log).refused);
+        throw new ToolRefusal(toolArgumentRefusal(
+          workspaceCommandTool, validationError, request.log, { input, app: request.server },
+        ).refused);
       }
-      throw new ToolRefusal('The workspace command or generated view is invalid.');
+      throw new ToolRefusal(explainedArgumentsMessage(
+        explainWorkspaceCommand(input, request.server) ??
+        'the workspace command or generated view does not match the contract. Nothing was changed or shown by this call.',
+      ));
     }
     if (input.operation === 'navigate' && input.page === 'daily' &&
         request.server.jarvisTools.get('daily_query')?.moduleId !== 'daily') {
