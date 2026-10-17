@@ -45,6 +45,8 @@ Commit tests use synthetic transaction doubles, not real SQL acceptance.
 
 `sync` distinguishes latest committed upload evidence, actual processing time, inbox pending/quarantine counts and phone heartbeat. Acceptance and heartbeat cannot establish a processed feed timestamp. History uses keyset pages, a maximum 366-day span and 500 rows; list reads omit large JSON detail. Minute HR uses a separate bounded cursor. Exact workout detail is capped at 8 MiB and remains owner-bound. P12-09 supplies public contracts/routes/tools and activation later.
 
+The inactive nutrition suggestion adapter reads only today's `active_energy` metric through `history('metrics', ...)` and takes freshness from `updated_at`; `start_at`/`end_at` are not a reliable last-sample time. It never reads resting, basal or total energy, and the exact metric name and daily-total semantics are not verified against a live export.
+
 ## Checks and remaining gates
 
 Use backend lint/build, `npm test --workspace @jarvis/backend -- src/daily/health src/daily/health-upload src/daily/index.test.ts src/auth/auth.test.ts src/database/migrations.test.ts`, then normal full CI. `health-processing.integration.test.ts` uses only the existing disposable loopback SQL CI fixture: atomic rollback, concurrent/reconstructed processing, lost commit responses, retry exhaustion, owner/keyset isolation, empty exports, historical conflicts and guarded rollback. No production SQL or local SQL image is used. Tests are synthetic; report actual executed evidence on the PR.

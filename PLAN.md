@@ -27,11 +27,12 @@ no core Settings change. All of it stays behind the default-off Daily gate (Dail
 off = Jarvis unchanged) with no production caller yet. Dan enters his own values;
 none is stored in code, tests or documents.
 
-Next, in order: the budget/candidate adapter and a read-only suggest tool
-(allowance = resting burn + active energy so far today - deficit; unknowns
-flagged, never zero), then the Settings section (Daily on only), then the
-default-off composition. No provider, private or device access, live probe, Daily
-activation or acceptance is claimed.
+Next, in order: the Settings section (Daily on only), then the default-off
+composition. The budget/candidate adapter and the read-only
+`daily_nutrition_suggest` tool are the second slice (allowance = resting burn +
+active energy so far today - deficit; unknowns flagged, never zero; only meals
+logged in Jarvis count; saved favourites are the only candidates). No provider,
+private or device access, live probe, Daily activation or acceptance is claimed.
 
 ## On-screen views authority (17 October 2026; P11-09 / #885)
 
