@@ -1,5 +1,35 @@
 # Agent context
 
+## Inactive Daily page checks (17 October 2026)
+
+Use the existing approved x64 Node22.23.3 and pinned single-React graph; do not
+restore or stub missing backend/contract dependencies. From `apps/web`, the
+focused Vitest selection is `daily/presentation`, `daily/client`, `daily/DailyPage`,
+`page-navigation`, `App` and `NowFeedPanel` with native config, one thread and no
+file parallelism. It passed144; a subsequent test-only compiler lint correction
+retained the owner-remount assertions and that case passed again. Web types,
+changed-source web/backend ESLint, capability-instruction15 checks, contract JS
+syntax and whitespace checks pass. Earlier failed harness/lint attempts remain
+evidence, not baseline source failures. Full contracts collection failed before
+assertions because Fastify is absent locally; normal pinned CI must qualify it.
+
+Keep the private default-false App prop, production bootstrap/public configuration
+and all locks unchanged. Browser inspection uses actual App source on an owned
+temporary local fixture with conspicuously synthetic records/auth/API, never
+real login, provider data or the other owner's released5173. Browser viewport/
+touch checks are not physical-iPhone, provider or imported-data proof. Do not
+stop shared Chrome services or other tabs; dispose only owned page/fixture.
+Actual inspection covered1440px desktop/dark and390/320px touch/light/dark,
+native date-picker application with loaded-period/focus readback, cursor paging,
+same-date chart points, workout/detail/heart-rate, separate sync facts, empty/
+503 recovery and403 row clearing. Default-off composition showed no Daily link,
+heading or Daily API requests. No off-origin resources were observed; deliberate
+synthetic503/403 were the recorded console errors. The reduced setting produced
+a0s records transition; OS reduced-motion emulation and physical phone remain
+unverified. Final640px wide table scrolls within a236px region at320px, including
+actual ArrowRight scrolling, without page overflow. Eight page cases passed
+again after that final layout correction.
+
 ## Internal Frida binding checks (17 October 2026; P12-09)
 
 The current source-only continuation registers owner-authenticated
@@ -18,6 +48,16 @@ unchanged external protocol semantics require normal pinned CI. No local
 full-graph pass, restore, stub or live browser/provider proof is claimed.
 Reference lookup uses20seconds, below unchanged ordinary tool deadlines; never
 increase the caller budgets or add approval for this read.
+Actual a8 CI39012012991 passed all10jobs: backend200files/3746tests,
+lookup5/schema9/realHTTP1/composition7/externalMCP34/realVoice173; SQL230 and
+agent732/runner374Python. Four actualCodeQL39012012938 analyses and automatic
+exact-head review6230967513 passed without findings. Global ProjectBoard
+concurrency cancelled a metadata-only job; recover only that job, not source CI.
+After its successful recovery all fresh guards passed: normal #876 merge9334d3ed
+has qualifiedtree6da17b0c. Deploy39012842333 selected backend only, ready0000337,
+health200, actual13/15smokeok with PC bridge down/recurring identity degraded.
+No causal source/auth attribution or extra canary. Receipt6231173591 and #724
+opening matched independent readbacks; this inactive release is finished.
 
 ## Internal Daily saved-food checks (17 October 2026; P12-09)
 

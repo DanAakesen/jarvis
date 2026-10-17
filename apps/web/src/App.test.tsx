@@ -6,7 +6,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from './App';
 import { getSignInGreeting } from './sign-in-greeting';
 import { publishJob } from './jobs-store';
-import { factoryBoardColumnIds, type FactoryBoard, type GeneratedView, type WorkspaceCommand } from '@jarvis/contracts';
+import { dailyQuerySources, factoryBoardColumnIds, isDailyQuery, type DailyQuery, type FactoryBoard, type GeneratedView, type WorkspaceCommand } from '@jarvis/contracts';
+import { dailyFixture, jsonResponse } from './daily/test-support';
 
 const {
   createAuthClient,
@@ -354,10 +355,11 @@ describe('Jarvis routes', () => {
 });
 
 describe('App shell', () => {
-  async function renderSignedIn(path = '/') {
+  async function renderSignedIn(path = '/', dailyEnabled = false) {
     restoreProfile.mockResolvedValue({ name: 'Dan Aakesen' });
-    render(<MemoryRouter initialEntries={[path]}><App config={config} /></MemoryRouter>);
+    const rendered = render(<MemoryRouter initialEntries={[path]}><App config={config} dailyEnabled={dailyEnabled} /></MemoryRouter>);
     await screen.findByRole('navigation', { name: 'Areas' });
+    return rendered;
   }
 
   it('keeps the workspace command stream connected when navigating away from conversation', async () => {
@@ -518,6 +520,94 @@ describe('App shell', () => {
       },
     };
   }
+
+  it.each([false, true])('leaves Daily routes, navigation and requests disabled by default (phone=%s)', async (phone) => {
+    if (phone) vi.stubGlobal('matchMedia', vi.fn((query: string) => ({
+      matches: query.includes('max-width: 700px'),
+      media: query, addEventListener: vi.fn(), removeEventListener: vi.fn(),
+    })));
+    const workspace = streamWorkspaceCommands();
+    await renderSignedIn('/daily');
+    await waitFor(() => expect(activityStream).not.toBeNull());
+    if (phone) fireEvent.click(screen.getByRole('button', { name: 'Menu' }));
+    expect(screen.queryByRole('link', { name: 'Daily' })).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Daily' })).toBeNull();
+    workspace.ready();
+    workspace.publishCommand({ commandId: 'daily-disabled', operation: 'navigate', page: 'daily' });
+    await waitFor(() => expect(workspace.ack('daily-disabled')).toBeTruthy());
+    expect(JSON.parse(String(workspace.ack('daily-disabled')![1]!.body))).toMatchObject({ applied: false });
+    expect(fetchMock.mock.calls.some(([url]) => new URL(String(url)).pathname.startsWith('/daily/'))).toBe(false);
+  });
+
+  it.each([false, true])('uses the same gated Daily page and existing refresh stream (phone=%s)', async (phone) => {
+    if (phone) vi.stubGlobal('matchMedia', vi.fn((query: string) => ({
+      matches: query.includes('max-width: 700px'),
+      media: query, addEventListener: vi.fn(), removeEventListener: vi.fn(),
+    })));
+    const workspace = streamWorkspaceCommands();
+    const respond = fetchMock.getMockImplementation()!;
+    const queries: DailyQuery[] = [];
+    fetchMock.mockImplementation(async (input, init) => {
+      const path = new URL(String(input)).pathname;
+      if (path === '/daily/capabilities') return jsonResponse({ module: 'daily', version: 1, sources: Object.values(dailyQuerySources) });
+      if (path === '/daily/query') {
+        const query: unknown = JSON.parse(String(init?.body));
+        if (!isDailyQuery(query)) throw new Error('Invalid synthetic Daily query');
+        queries.push(query);
+        return jsonResponse(dailyFixture(query, [{ metric_name: 'synthetic_shell_measurement', value: 0, unit: 'kg' }]));
+      }
+      return respond(input, init);
+    });
+    await renderSignedIn('/', true);
+    if (phone) fireEvent.click(screen.getByRole('button', { name: 'Menu' }));
+    const navigation = phone ? screen.getByRole('navigation', { name: 'Pages' }) : screen.getByRole('navigation', { name: 'Areas' });
+    fireEvent.click(within(navigation).getByRole('link', { name: 'Daily' }));
+    await screen.findByText('Synthetic shell measurement');
+    expect(screen.getByRole('heading', { name: 'Daily' })).toBeTruthy();
+    await waitFor(() => expect(activityStream).not.toBeNull());
+    const count = queries.length;
+    workspace.ready();
+    workspace.publishCommand({ commandId: 'daily-current', operation: 'navigate', page: 'daily' });
+    await waitFor(() => expect(workspace.ack('daily-current')).toBeTruthy());
+    expect(JSON.parse(String(workspace.ack('daily-current')![1]!.body))).toMatchObject({ applied: true });
+    await waitFor(() => expect(queries.length).toBeGreaterThan(count));
+    expect(fetchMock.mock.calls.filter(([url]) => new URL(String(url)).pathname === '/now/events')).toHaveLength(1);
+  });
+
+  it('discards cached Daily rows when the rendered signed-in account changes', async () => {
+    restoreProfile.mockResolvedValue({ name: 'Dan Aakesen' });
+    const client = makeAuthClient();
+    createAuthClient.mockReturnValue(client);
+    streamWorkspaceCommands();
+    const respond = fetchMock.getMockImplementation()!;
+    let owner = 'first';
+    fetchMock.mockImplementation(async (input, init) => {
+      const path = new URL(String(input)).pathname;
+      if (path === '/daily/capabilities') return owner === 'first'
+        ? jsonResponse({ module: 'daily', version: 1, sources: Object.values(dailyQuerySources) })
+        : jsonResponse({ error: 'forbidden' }, 403);
+      if (path === '/daily/query') {
+        const query: unknown = JSON.parse(String(init?.body));
+        if (!isDailyQuery(query)) throw new Error('Invalid synthetic Daily query');
+        return jsonResponse(dailyFixture(query, [{ metric_name: 'synthetic_first_owner', value: 1, unit: 'kg' }]));
+      }
+      return respond(input, init);
+    });
+    function AccountHarness() {
+      const [, refresh] = useState(0);
+      return <><button type="button" onClick={() => refresh(value => value + 1)}>Refresh synthetic owner</button>
+        <App config={config} dailyEnabled /></>;
+    }
+    render(<MemoryRouter initialEntries={['/daily']}><AccountHarness /></MemoryRouter>);
+    await screen.findByText('Synthetic first owner');
+    owner = 'second';
+    client.getActiveAccount.mockReturnValue({ homeAccountId: 'second' });
+    client.getAllAccounts.mockReturnValue([{ homeAccountId: 'second' }]);
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh synthetic owner' }));
+    expect(screen.queryByText('Synthetic first owner')).toBeNull();
+    await screen.findByText(/Daily access could not be verified/u);
+    expect(screen.queryByText('Synthetic first owner')).toBeNull();
+  });
 
   it.each([200, 503])('acknowledges a broker pin only after storage replies with status %s', async (status) => {
     let finish!: (response: Response) => void;

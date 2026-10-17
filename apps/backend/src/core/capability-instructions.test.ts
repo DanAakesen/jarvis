@@ -92,6 +92,7 @@ describe('shared navigation capability instructions', () => {
     expect(instructions).toContain('task recipes means "routines"');
     expect(instructions).not.toContain('"knowledge-graph"');
     expect(instructions).toContain('never claim navigation succeeded on send');
+    expect(instructions).toContain('relay refusal reasons');
     expect(instructions).toContain('Only report it applied after the tool succeeds');
     expect(instructions).toContain('"This"/"that" means the focused window');
     expect(instructions).toContain('"Go back" means navigate to view.previous');

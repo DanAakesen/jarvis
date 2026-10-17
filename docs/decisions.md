@@ -1,5 +1,23 @@
 # Decisions
 
+## Prepare the single Daily page without activating migration (17 October 2026)
+
+Continue the confirmed one-page scope under Dan's standing autonomous migration
+mandate while he is unavailable. This is reversible source preparation, not an
+affirmative private-data/provider/activation waiver. Use a trusted default-false
+App composition prop rather than an externally switchable URL/public flag.
+Production bootstrap remains unchanged; both client and backend guard navigation.
+Keep #730 and its native #724/#725 dependencies open.
+
+Reuse the delivered owner-authorised query service, existing Now connection,
+shared controls and ChartView. Preserve every returned observation, unknowns,
+units, provenance and partial coverage; a page of rows is not imported-source
+acceptance. Chat/voice query and general workspace/GenUI tools are the equivalent
+workflow, not a new tool per button. Navigation opens Daily but does not set local
+filters; requested filtered results are shown in an acknowledged shared view.
+Native reviewed writes and all private/export/device/cutover gates are unchanged.
+Local synthetic UI checks do not qualify actual providers or a physical iPhone.
+
 ## Bind public Frida lookup as an optional read capability (17 October 2026; P12-09)
 
 Retained Frida lookup exists in the canonical adapter and external MCP boundary
@@ -16,6 +34,11 @@ No conversation/history/credentials or caller-selected endpoint enter the
 provider interface. No reference result authorises intake. Live-provider
 acceptance remains unverified, and personal suggestions must not invent an
 authoritative remaining budget. This is inactive source integration only.
+Qualified a8 passed its first normal CI, four actual CodeQL analyses and
+automatic source review without findings. #876 merged9334d3ed with the same
+6da17b0c tree; Deploy39012842333 released backend0000337 only. Actual routine
+smoke13/15ok retains PC bridge down and recurring chat identity degraded,
+without attributing either to this source. No live provider proof is implied.
 
 ## Group internal saved-food integration without changing released callers (17 October 2026; P12-09)
 

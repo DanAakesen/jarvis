@@ -964,7 +964,7 @@ test('validates exact current-session actions and values', () => {
 test('validates exact navigation keys, settings sections and bounded factory task/issue selectors', () => {
   const command = { commandId: 'navigate-1', operation: 'navigate' };
   assert.deepEqual(workspaceNavigationPages, [
-    'home', 'factory', 'settings', 'usage', 'notes', 'knowledge', 'folio', 'status',
+    'home', 'factory', 'settings', 'usage', 'notes', 'knowledge', 'folio', 'status', 'daily',
   ]);
   assert.deepEqual(workspaceSettingsSections, [
     'appearance', 'jarvis', 'personality', 'voice', 'presence', 'memory',

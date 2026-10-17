@@ -1,0 +1,152 @@
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { dailyQuerySources as sources, isDailyQuery, type DailyQuery } from '@jarvis/contracts';
+import { DailyPage } from './DailyPage';
+import { DailyRefreshContext } from './refresh';
+import { dailyFixture, jsonResponse } from './test-support';
+
+const token = async () => 'synthetic-fixture';
+const backendUrl = 'http://localhost:3999';
+afterEach(() => { cleanup(); vi.useRealTimers(); vi.unstubAllGlobals(); });
+function fixture(answer?: (query: DailyQuery) => Response | Promise<Response>) {
+  const queries: DailyQuery[] = [];
+  const fetch = vi.fn(async (url: string | URL, init?: RequestInit) => {
+    if (String(url).endsWith('/daily/capabilities')) return jsonResponse({ module: 'daily', version: 1, sources: Object.values(sources) });
+    const input: unknown = JSON.parse(String(init?.body));
+    if (!isDailyQuery(input)) throw new Error('Invalid synthetic query');
+    queries.push(input);
+    if (answer) return answer(input);
+    return jsonResponse(dailyFixture(input));
+  });
+  vi.stubGlobal('fetch', fetch);
+  return { queries, fetch };
+}
+function page(refreshVersion = 0) {
+  return <DailyRefreshContext.Provider value={refreshVersion}><DailyPage backendUrl={backendUrl} getAccessToken={token} /></DailyRefreshContext.Provider>;
+}
+
+describe('inactive single Daily data page', () => {
+  it('browses actual returned values, keeps zero/unknown and every same-date point, and reuses the shared chart', async () => {
+    fixture(query => jsonResponse(dailyFixture(query, [
+      { metric_name: 'synthetic_scan_mass', metric_date: '2026-10-17', value: 0, unit: 'kg' },
+      { metric_name: 'synthetic_scan_mass', metric_date: '2026-10-17', value: 2, unit: 'kg' },
+      { metric_name: 'synthetic_scan_mass', metric_date: '2026-10-17', value: null, unit: 'kg' },
+    ])));
+    const { container } = render(page());
+    const table = await screen.findByRole('table', { name: /Recorded Daily values/u });
+    expect(within(table).getAllByRole('row')).toHaveLength(4);
+    expect(within(table).getByText('0')).toBeTruthy();
+    expect(within(table).getAllByText('Unknown').length).toBeGreaterThan(0);
+    expect(screen.getByText(/Source freshness and completeness are not established/u)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Chart' }));
+    expect(await screen.findByRole('img', { name: /Synthetic scan mass \(kg\)/u })).toBeTruthy();
+    expect(container.querySelectorAll('.chart-bars rect')).toHaveLength(2);
+    expect(screen.getByText(/Other pages are not included/u)).toBeTruthy();
+  });
+  it('applies a period only on request and sends exact returned cursors for next/previous', async () => {
+    const f = fixture(query => jsonResponse(dailyFixture(query, [{ metric_name: 'synthetic', value: 'cursor' in query ? 2 : 1, unit: 'm' }],
+      'startDate' in query && !('cursor' in query) ? { date: query.startDate, key: 'synthetic' } : null)));
+    render(page()); await screen.findByText(/1 record on page 1/u);
+    const before = f.queries.length;
+    fireEvent.change(screen.getByLabelText('From'), { target: { value: '2026-01-01' } });
+    fireEvent.change(screen.getByLabelText('To'), { target: { value: '2026-01-07' } });
+    expect(f.queries).toHaveLength(before);
+    fireEvent.click(screen.getByRole('button', { name: 'Apply period' }));
+    await waitFor(() => expect(f.queries.at(-1)).toMatchObject({ startDate: '2026-01-01', endDate: '2026-01-07' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Next page' }).hasAttribute('disabled')).toBe(false));
+    fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
+    await screen.findByText(/1 record on page 2/u);
+    expect(f.queries.at(-1)).toMatchObject({ cursor: { date: '2026-01-01', key: 'synthetic' } });
+    await waitFor(() => expect(document.activeElement?.id).toBe('daily-records-heading'));
+    fireEvent.click(screen.getByRole('button', { name: 'Previous page' }));
+    await screen.findByText(/1 record on page 1/u);
+    expect(f.queries.at(-1)).not.toHaveProperty('cursor');
+  });
+  it('settles disabled availability honestly without querying records or starting another login', async () => {
+    const fetch = vi.fn().mockImplementation(() => Promise.resolve(jsonResponse({ error: 'disabled' }, 404)));
+    vi.stubGlobal('fetch', fetch); render(page());
+    expect((await screen.findByRole('alert')).textContent).toContain('Daily is not enabled');
+    expect(screen.queryByLabelText('Browse')).toBeNull();
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('button', { name: 'Retry availability' })).toBeTruthy();
+  });
+  it('retains last good evidence after a transient failure but clears it when access is refused', async () => {
+    let status = 200;
+    fixture(query => status === 200 ? jsonResponse(dailyFixture(query, [{ metric_name: 'synthetic_retained', value: 0, unit: 'm' }])) :
+      jsonResponse({ private_detail: 'must-not-escape' }, status));
+    render(page()); await screen.findByText('Synthetic retained');
+    status = 503; fireEvent.click(screen.getByRole('button', { name: 'Refresh records' }));
+    await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('HTTP 503'));
+    expect(screen.getByText('Synthetic retained')).toBeTruthy();
+    expect(screen.getByText(/Previously loaded records remain/u)).toBeTruthy();
+    expect(screen.queryByText('must-not-escape')).toBeNull();
+    status = 403; fireEvent.click(screen.getByRole('button', { name: 'Retry records' }));
+    await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('could not be verified'));
+    expect(screen.queryByText('Synthetic retained')).toBeNull();
+  });
+  it('loads periodless collections without dates and inspects workout detail/heart-rate through the same page', async () => {
+    const f = fixture(query => jsonResponse(dailyFixture(query,
+      query.source === sources.workouts ? [{ id: 'synthetic-workout', workout_date: '2026-10-17', workout_type: 'Synthetic run', duration_seconds: 120 }] :
+        query.source === sources.workout ? [{ id: 'synthetic-workout', detail: { recorded: true } }] :
+          query.source === sources.heartRate ? [{ sample_minute: '2026-10-17T07:00:00Z', avg_value: 80, unit: 'bpm' }] :
+            query.source === sources.favorites ? [{ id: 'synthetic-favourite', favorite_name: 'Synthetic favourite', energy_kcal: 0, protein_grams: null }] : [])));
+    render(page()); await screen.findByLabelText('Browse');
+    fireEvent.change(screen.getByLabelText('Browse'), { target: { value: sources.favorites } });
+    await screen.findByText('Synthetic favourite');
+    expect(screen.queryByLabelText('From')).toBeNull();
+    expect(f.queries.at(-1)).not.toHaveProperty('startDate');
+    fireEvent.change(screen.getByLabelText('Browse'), { target: { value: sources.workouts } });
+    fireEvent.click(await screen.findByRole('button', { name: 'Open workout' }));
+    await screen.findByRole('heading', { name: 'Workout details' });
+    await screen.findByText('synthetic-workout', { exact: true });
+    fireEvent.click(screen.getByRole('button', { name: 'Heart rate samples' }));
+    await screen.findByRole('heading', { name: 'Workout heart rate' });
+    await waitFor(() => expect(f.queries.at(-1)).toMatchObject({ source: sources.heartRate, workoutId: 'synthetic-workout' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Back to workouts' }));
+    await screen.findByText('Synthetic run');
+  });
+  it('refetches on the existing refresh signal without adding a second SSE connection', async () => {
+    const f = fixture();
+    const rendered = render(page()); await screen.findByText(/0 records on page 1/u);
+    const count = f.queries.length;
+    await act(async () => { rendered.rerender(page(1)); });
+    await waitFor(() => expect(f.queries.length).toBeGreaterThan(count));
+    expect(f.fetch.mock.calls.every(([url]) => !String(url).includes('/now'))).toBe(true);
+  });
+  it('ignores an interrupted old source response after switching collections', async () => {
+    let finish!: (response: Response) => void;
+    const held = new Promise<Response>(resolve => { finish = resolve; });
+    const f = fixture(query => query.source === sources.metrics ? held : jsonResponse(dailyFixture(query, [
+      { favorite_name: 'Synthetic current collection', energy_kcal: 0 },
+    ])));
+    render(page());
+    await waitFor(() => expect(f.queries).toHaveLength(1));
+    const old = f.queries[0]!;
+    fireEvent.change(screen.getByLabelText('Browse'), { target: { value: sources.favorites } });
+    await screen.findByText('Synthetic current collection');
+    await act(async () => { finish(jsonResponse(dailyFixture(old, [{ metric_name: 'synthetic_obsolete', value: 99, unit: 'kg' }]))); });
+    expect(screen.queryByText('Synthetic obsolete')).toBeNull();
+    expect(screen.getByText('Synthetic current collection')).toBeTruthy();
+  });
+  it('coalesces refreshes and queues one read rather than overlapping a pending read', async () => {
+    let finish!: (response: Response) => void;
+    const held = new Promise<Response>(resolve => { finish = resolve; });
+    let initial: DailyQuery | undefined;
+    const f = fixture(query => {
+      if (!initial) { initial = query; return held; }
+      return jsonResponse(dailyFixture(query));
+    });
+    const rendered = render(page());
+    await waitFor(() => expect(f.queries).toHaveLength(1));
+    vi.useFakeTimers();
+    rendered.rerender(page(1));
+    fireEvent.focus(window);
+    expect(screen.getByRole('button', { name: 'Refresh records' }).hasAttribute('disabled')).toBe(true);
+    await act(async () => { await vi.advanceTimersByTimeAsync(200); });
+    expect(f.queries).toHaveLength(1);
+    await act(async () => { finish(jsonResponse(dailyFixture(initial!))); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(200); });
+    expect(f.queries).toHaveLength(2);
+    expect(screen.getByText(/0 records on page 1/u)).toBeTruthy();
+  });
+});

@@ -28,12 +28,14 @@ export function NowFeedPanel({
   getAccessToken,
   applyWorkspaceCommand,
   portalHost,
+  onDataRefresh,
 }: {
   client: PublicClientApplication;
   config: PublicConfig;
   getAccessToken: () => Promise<string>;
   applyWorkspaceCommand: (command: WorkspaceCommand, trustedBlobHost?: string, expiresAt?: number, signal?: AbortSignal) => boolean | Promise<SessionCommandResult>;
   portalHost?: HTMLElement | null;
+  onDataRefresh?: () => void;
 }) {
   const { applyRuntimeActivity, clearRuntimeActivities } = useJarvisActivity();
   const [feed, setFeed] = useState<NowFeed>({ status: 'loading' });
@@ -43,6 +45,7 @@ export function NowFeedPanel({
   const [retry, setRetry] = useState(0);
   const refreshRef = useRef<(() => Promise<void>) | null>(null);
   const applyWorkspaceCommandRef = useRef(applyWorkspaceCommand);
+  const onDataRefreshRef = useRef(onDataRefresh);
   const workspace = useContext(WorkspaceCommandContext);
   const [workspaceSession, setWorkspaceSession] = useState<string | null>(null);
   const snapshotQueue = useRef(Promise.resolve());
@@ -62,6 +65,7 @@ export function NowFeedPanel({
   useEffect(() => {
     applyWorkspaceCommandRef.current = applyWorkspaceCommand;
   }, [applyWorkspaceCommand]);
+  useEffect(() => { onDataRefreshRef.current = onDataRefresh; }, [onDataRefresh]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -96,7 +100,7 @@ export function NowFeedPanel({
       void streamNowFeed({
         backendUrl: config.backendUrl,
         getAccessToken,
-        onUpdate: () => { void refresh(); },
+        onUpdate: () => { if (active) { void refresh(); onDataRefreshRef.current?.(); } },
         onStatus: (status) => {
           if (!active) return;
           setStreamStatus(status);
@@ -126,6 +130,7 @@ export function NowFeedPanel({
           workspaceSessionId = sessionId;
           setWorkspaceSession(sessionId);
           trustedBlobHost = blobHost;
+          onDataRefreshRef.current?.();
         },
         onWorkspaceCommand: (command, expiresAt, commandBlobHost) => {
           const commandEpoch = workspaceEpoch;

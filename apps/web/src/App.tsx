@@ -5,7 +5,8 @@ import type { HtmlArtifactFrame, JarvisActivityEvent, WorkspaceCommand, Workspac
 import type { PublicConfig } from '../config/public-config';
 import { useJarvisActivity } from './activity-context';
 import { JarvisActivityProvider } from './activity-provider';
-import { areas } from './areas';
+import { appAreas } from './areas';
+import { DailyRefreshContext } from './daily/refresh';
 import { ContextPanel, ContextPanelProvider } from './ContextPanel';
 import { ConversationIntentProvider } from './ConversationIntentProvider';
 import type { CameraController, ScreenShareController } from './screen-sharing';
@@ -62,7 +63,7 @@ const researchInProgress = (status: string) => status === 'running' || status ==
 const sidebarLimits = { min: 160, max: 420 };
 const contextLimits = { min: 220, max: 560 };
 
-type ShellIconName = 'home' | 'factory' | 'knowledge' | 'usage' | 'status' | 'navigation' | 'screen' | 'camera' | 'context' | 'settings' | 'close' | 'folio';
+type ShellIconName = 'home' | 'factory' | 'knowledge' | 'usage' | 'status' | 'navigation' | 'screen' | 'camera' | 'context' | 'settings' | 'close' | 'folio' | 'daily';
 
 function activityLabel(event: JarvisActivityEvent | null): string {
   if (!event) return 'Jarvis is working';
@@ -97,6 +98,8 @@ function ShellIcon({ name }: { name: ShellIconName }) {
       return <svg {...common}><path d="M4 20V11m5 9V5m5 15v-7m5 7V8" /><path d="M2 21h20" /></svg>;
     case 'status':
       return <svg {...common}><path d="M2 12h4l3-8 5 16 3-8h5" /></svg>;
+    case 'daily':
+      return <svg {...common}><path d="m6.5 6.5 11 11M3 7l4-4m-2 6 4-4m6 14 4-4m-2 6 4-4" /></svg>;
     case 'navigation':
       return <svg {...common}><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M9 4v16m-3-11h1m-1 4h1" /></svg>;
     case 'screen':
@@ -114,29 +117,34 @@ function ShellIcon({ name }: { name: ShellIconName }) {
   }
 }
 
-function Shell({ signedIn, config, session, camera, screenShare }: {
+function Shell({ signedIn, config, session, camera, screenShare, dailyEnabled }: {
   signedIn: boolean;
   config: PublicConfig;
   session: SignInSession;
   camera: CameraController;
   screenShare: ScreenShareController;
+  dailyEnabled: boolean;
 }) {
   return (
     <ConversationIntentProvider>
       <ContextPanelProvider>
-        <ShellLayout signedIn={signedIn} config={config} session={session} camera={camera} screenShare={screenShare} />
+        <ShellLayout signedIn={signedIn} config={config} session={session} camera={camera} screenShare={screenShare} dailyEnabled={dailyEnabled} />
       </ContextPanelProvider>
     </ConversationIntentProvider>
   );
 }
 
-function ShellLayout({ signedIn, config, session, camera, screenShare }: {
+function ShellLayout({ signedIn, config, session, camera, screenShare, dailyEnabled }: {
   signedIn: boolean;
   config: PublicConfig;
   session: SignInSession;
   camera: CameraController;
   screenShare: ScreenShareController;
+  dailyEnabled: boolean;
 }) {
+  const areas = appAreas(dailyEnabled);
+  const [dailyRefresh, setDailyRefresh] = useState(0);
+  const onDailyRefresh = useCallback(() => { if (dailyEnabled) setDailyRefresh(value => value + 1); }, [dailyEnabled]);
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const home = pathname === '/';
@@ -193,7 +201,7 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
   const [windowsSheetOpen, setWindowsSheetOpen] = useState(false);
   const windowCount = openWindows.filter((window) => window.viewId !== conversationViewId).length;
   const [menuOpen, setMenuOpen] = useState(false);
-  const closeMenu = useCallback(() => setMenuOpen(false), []);
+  const closeMenu = useCallback(() => setMenuOpen(false), [setMenuOpen]);
   // Jarvis switching the page Dan is looking at (P9-40): the route changes with the usual page transition, then the
   // named Settings section or task card is scrolled into view and glows once its data has loaded.
   // The Folio pane (P9-25) shares the left sidebar slot with area navigation; only one is open at a time.
@@ -210,7 +218,7 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
     }
     setFolioOpen(false);
     setNavigationOpen(false);
-  }, []);
+  }, [setFolioOpen, setNavigationOpen]);
   const openTaskRef = useRef<(taskId: string) => void>(() => {});
   const conversationWindowRef = useRef<{ open: boolean; setOpen: (open: boolean) => boolean } | null>(null);
   const cancelReveal = useRef<() => void>(() => {});
@@ -218,7 +226,7 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
   const factoryIssueNavigator = useRef<FactoryIssueNavigator | null>(null);
   const issueNavigationAbort = useRef<AbortController | null>(null);
   const navigateTo = useCallback((request: NavigateRequest) => {
-    const target = resolveNavigation(request);
+    const target = resolveNavigation(request, dailyEnabled);
     if (!target.ok) return false;
     if (target.issueNumber !== undefined) return false;
     if (target.pane === 'folio') { setFolioOpen(true); return true; }
@@ -232,7 +240,7 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
     cancelReveal.current();
     cancelReveal.current = revealId ? revealWhenReady(() => document.getElementById(revealId), reduced) : () => {};
     return true;
-  }, [closePagePanels, navigate]);
+  }, [closePagePanels, dailyEnabled, navigate, setFolioOpen]);
   useEffect(() => () => cancelReveal.current(), []);
   useEffect(() => {
     if (pathname !== '/factory/kanban') issueNavigationAbort.current?.abort();
@@ -240,7 +248,7 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
   useEffect(() => () => issueNavigationAbort.current?.abort(), []);
   // What Dan is looking at (P9-43), sent with the snapshot so Jarvis can say "this page" or "that task" correctly.
   const [frontViewId, setFrontViewId] = useState<string | null>(null);
-  const viewPage = pageForPath(pathname);
+  const viewPage = pageForPath(pathname, dailyEnabled);
   const viewSection = useVisibleSettingsSection(signedIn && viewPage === 'settings');
   const viewIssueNumber = useFocusedFactoryIssue(signedIn && viewPage === 'factory');
   const viewTaskId = frontViewId?.startsWith('task-') ? frontViewId.slice(5) : undefined;
@@ -306,7 +314,7 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
   const applyWorkspaceCommand = useCallback((command: WorkspaceCommand, trustedBlobHost?: string, expiresAt?: number, cancelSignal?: AbortSignal): boolean | Promise<SessionCommandResult> => {
     if (command.operation === 'navigate' && command.page === 'factory' && command.issueNumber !== undefined) {
       const { issueNumber, taskId } = command;
-      const target = resolveNavigation(command);
+      const target = resolveNavigation(command, dailyEnabled);
       if (!target.ok) return Promise.resolve({ applied: false, reason: target.reason });
       if (cancelSignal?.aborted || (expiresAt !== undefined && expiresAt <= Date.now() + 250)) {
         return Promise.resolve({ applied: false, reason: 'The issue navigation command expired or was cancelled.' });
@@ -336,7 +344,7 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
     }
     const navigation = readNavigateCommand(command);
     if (navigation) {
-      const target = resolveNavigation(navigation);
+      const target = resolveNavigation(navigation, dailyEnabled);
       if (!target.ok) return false;
       const deadline = Math.min(expiresAt ?? Date.now() + 6000, Date.now() + 6000) - 250;
       if (cancelSignal?.aborted || deadline <= Date.now()) {
@@ -379,7 +387,7 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
     let applied = false;
     flushSync(() => { applied = workspaceCommands.dispatch(command, trustedBlobHost); });
     return applied;
-  }, [navigateTo, workspaceCommands]);
+  }, [dailyEnabled, navigateTo, workspaceCommands]);
   const onVoiceActiveChange = useCallback((active: boolean) => {
     if (active && readVoiceWorkspacePreference().voice.minimizeWindowsOnVoiceStart) {
       workspaceController.current?.minimiseAll();
@@ -689,7 +697,7 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
           </NavLink>
           {areas.map((area) => (
             <NavLink key={area.id} className="rail-link" to={`/${area.path}`} aria-label={area.label} onClick={() => { setFolioOpen(false); setNavigationOpen(area.navigation.length > 1); }}>
-              <ShellIcon name={area.id === 'factory' ? 'factory' : area.id === 'notes' ? 'knowledge' : area.id === 'status' ? 'status' : 'usage'} /><span className="visually-hidden">{area.label}</span>
+              <ShellIcon name={area.id === 'daily' ? 'daily' : area.id === 'factory' ? 'factory' : area.id === 'notes' ? 'knowledge' : area.id === 'status' ? 'status' : 'usage'} /><span className="visually-hidden">{area.label}</span>
             </NavLink>
           ))}
           <button className={`rail-link rail-folio${folioOpen ? ' active' : ''}`} type="button" aria-label="Folio" aria-pressed={folioOpen}
@@ -788,7 +796,7 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
               <NavigationGuardContext.Provider value={navigationGuard}>
                 <FactoryIssueNavigationContext.Provider value={factoryIssueNavigator}>
                   <SettingsActivityHostContext.Provider value={setSettingsActivityHost}>
-                    <Outlet />
+                    <DailyRefreshContext.Provider value={dailyRefresh}><Outlet /></DailyRefreshContext.Provider>
                   </SettingsActivityHostContext.Provider>
                 </FactoryIssueNavigationContext.Provider>
               </NavigationGuardContext.Provider>
@@ -822,6 +830,7 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
                   getAccessToken={getAccessToken}
                   applyWorkspaceCommand={applyWorkspaceCommand}
                   portalHost={settingsActivityHost}
+                  {...(dailyEnabled ? { onDataRefresh: onDailyRefresh } : {})}
                 />
               </div>
             )}
@@ -834,7 +843,7 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
       {signedIn && phone && (
         <>
           <MobileCaption text={workText ?? (working ? activityText : null)} />
-          <MobileMenu open={menuOpen} onClose={closeMenu} onNavigate={closePagePanels} onFolio={() => setFolioOpen(true)} onContext={contextPanel.toggle} />
+          <MobileMenu open={menuOpen} onClose={closeMenu} onNavigate={closePagePanels} onFolio={() => setFolioOpen(true)} onContext={contextPanel.toggle} dailyEnabled={dailyEnabled} />
         </>
       )}
       {signedIn && <ContextPanel closeIcon={<ShellIcon name="close" />} resizeHandle={phone ? undefined : (
@@ -890,10 +899,14 @@ const defaultConfig: PublicConfig = __JARVIS_CONFIG__;
 // The deployed camera protocol accepts upload-only image handles in chat and voice.
 const cameraConversationDeployed = true;
 
-export function App({ config = defaultConfig }: { config?: PublicConfig }) {
+export function App({ config = defaultConfig, dailyEnabled = false }: { config?: PublicConfig; dailyEnabled?: boolean }) {
+  const areas = appAreas(dailyEnabled);
   useGlassLight();
   const session = useSignIn(config);
   const signedIn = session.state === 'signed-in' && session.profile !== null;
+  const dailyAccountKey = dailyEnabled && signedIn
+    ? (session.client.getActiveAccount() ?? session.client.getAllAccounts()[0])?.homeAccountId ?? 'owner'
+    : 'disabled';
   const camera = useCamera(config, session.getAccessToken, cameraConversationDeployed);
   const stopCamera = camera.stop;
   const screenShare = useScreenShare(config, session.getAccessToken);
@@ -929,12 +942,12 @@ export function App({ config = defaultConfig }: { config?: PublicConfig }) {
       <ThemePreferenceProvider key={signedIn ? 'signed-in' : 'signed-out'}
         enabled={signedIn} backendUrl={config.backendUrl} getAccessToken={session.getAccessToken}>
         <Routes>
-          <Route element={<Shell signedIn={signedIn} config={config} session={session} camera={camera} screenShare={screenShare} />}>
+          <Route element={<Shell signedIn={signedIn} config={config} session={session} camera={camera} screenShare={screenShare} dailyEnabled={dailyEnabled} />}>
             <Route element={<RequireSignIn session={session} />}>
               <Route index element={<h1 className="visually-hidden">Welcome, {session.profile?.name ?? ''}</h1>} />
               {areas.map(({ id, path, Component }) => (
                 <Route key={id} path={`${path}/*`} element={
-                  <Component backendUrl={config.backendUrl} getAccessToken={session.getAccessToken} />
+                  <Component key={id === 'daily' ? dailyAccountKey : id} backendUrl={config.backendUrl} getAccessToken={session.getAccessToken} />
                 } />
               ))}
               <Route path="settings" element={<SettingsRoute config={config} session={session} />} />

@@ -3,6 +3,7 @@ import { FactoryArea } from './factory/FactoryArea';
 import { UsagePage } from './usage/UsagePage';
 import { NotesArea } from './notes/NotesArea';
 import { StatusPage } from './status/StatusPage';
+import { DailyPage } from './daily/DailyPage';
 
 export interface AreaProps {
   backendUrl: string | null;
@@ -33,3 +34,11 @@ export const areas: readonly Area[] = [
   { id: 'usage', label: 'Usage', path: 'usage', navigation: [{ label: 'Usage', path: '/usage' }], Component: UsagePage },
   { id: 'status', label: 'Status', path: 'status', navigation: [{ label: 'Status', path: '/status' }], Component: StatusPage },
 ];
+
+const withDaily: readonly Area[] = [
+  { id: 'daily', label: 'Daily', path: 'daily', navigation: [{ label: 'Daily', path: '/daily' }], Component: DailyPage },
+  ...areas,
+];
+
+/** Trusted inactive-source composition; never enabled by a URL or a second login. */
+export function appAreas(dailyEnabled = false): readonly Area[] { return dailyEnabled ? withDaily : areas; }

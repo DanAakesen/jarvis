@@ -4576,6 +4576,30 @@ P8-33 scratch Chromium checks cover the adaptive quality thresholds, compact pho
 The reference lockfile is standalone, outside root workspaces, and contains the prototype's dependencies only. Bundled Three.js/Phosphor notices are retained. Physical/hardware performance, live activity/voice behavior and normal-rate flicker acceptance remain unverified; P8-31 adds no production Three.js dependency.
 ## Daily integration boundary (P12-01)
 
+### Default-off single-page composition (17 October 2026)
+
+`App({ dailyEnabled: false })` retains the released production route/rail/mobile
+destinations. Only trusted explicit composition adds the Daily area; neither a
+URL parameter nor public bootstrap configuration enables it. The reserved shared
+`daily` navigation/readback value grants no access: the backend checks real Daily
+tool composition before delivery and the client refuses when its gate is off.
+
+The enabled page authenticates through the existing token supplier, discovers
+`/daily/capabilities` and reads `/daily/query` using the same source/period/cursor/
+detail DTOs as `daily_query`. Responses are size-bounded and validated against
+the requested source/period, units, provenance and coverage. No new writer,
+calculation service, provider call or login is introduced. Rendered account-key
+changes remount private page state; denied access clears cached rows. Transient
+errors retain explicitly labelled old evidence and its original observation time.
+
+The existing Now stream notifies Daily on data update and workspace readiness;
+callback changes do not reconnect it and disposed streams cannot refresh Daily.
+The page coalesces refocus/visibility/invalidation signals and serializes reads,
+queues at most one follow-up, aborts changed sources and ignores late responses.
+Charts reuse `ChartView` with returned numeric observations and retained units.
+General workspace/GenUI commands present queried results for chat/voice; page
+navigation does not claim to alter local filters. Production remains default-off.
+
 ### Inactive internal direct intake (17 October 2026)
 
 An optional fourth `createDailyModules(true, data, undefined, data.nutrition)`

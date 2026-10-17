@@ -14,12 +14,13 @@ const pages = [
   { to: '/settings', label: 'Settings' },
 ] as const;
 
-export function MobileMenu({ open, onClose, onNavigate, onFolio, onContext }: {
+export function MobileMenu({ open, onClose, onNavigate, onFolio, onContext, dailyEnabled = false }: {
   open: boolean;
   onClose: () => void;
   onNavigate: () => void;
   onFolio: () => void;
   onContext: () => void;
+  dailyEnabled?: boolean;
 }) {
   const sheet = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -40,7 +41,7 @@ export function MobileMenu({ open, onClose, onNavigate, onFolio, onContext }: {
       <div ref={sheet} id="mobile-menu" className="mobile-menu-sheet" role="dialog" aria-modal="true" aria-label="Go to" tabIndex={-1}>
         <span className="mobile-menu-grip" aria-hidden="true" />
         <nav aria-label="Pages">
-          {pages.map((page) => (
+          {(dailyEnabled ? [pages[0], { to: '/daily', label: 'Daily' }, ...pages.slice(1)] : pages).map((page) => (
             <NavLink key={page.to} className="mobile-menu-link" to={page.to} end={'end' in page} onClick={() => { onNavigate(); onClose(); }}>{page.label}</NavLink>
           ))}
         </nav>

@@ -1177,4 +1177,22 @@ confirmed scope; exclusion is not completed acceptance or UI implementation.
 Existing Jarvis styling, accessibility, mobile/browser and protected migration
 gates remain unchanged.
 
+17 October inactive page source: use one shared-shell record browser, not a
+dashboard of invented summaries. A labelled collection selector and applied
+Copenhagen period precede the returned records. Exact opaque cursors, record
+details, source/read-time/coverage labels and separate receipt/processing/phone
+contact evidence make partial data inspectable. Tables retain zero and unknown
+as different states. Optional existing `ChartView` bars represent individual
+numeric observations on the current page, with units and distinct same-date
+points; no client averaging or interpolation. The table remains available.
+
+Reuse the existing glass page surface, secondary actions, field/control radius,
+selected states and focus tokens. Real browser inspection found native grey
+actions and insufficient contrast over the room; shared controls and the
+existing translucent page surface replace them. Retain the phone chat dock and
+shared navigation. Wide record tables scroll within a labelled, keyboard-focusable
+region rather than crushing dates and unknown values into single-character
+columns at320px. This source is default-off and synthetic-browser inspection
+does not establish live records, import completeness or physical-phone acceptance.
+
 Confirmed by Dan for #730/#731/#732/#726: all migrated React/rich UI fully follows the current Jarvis layout and styling. Current DESIGN.md direction, `apps/web/src/styles.css` tokens, shared components, theme/density/motion settings and native phone/workspace patterns are the source of truth. Preserve capabilities and data semantics while restyling/recomposing legacy Daily content; do not carry its navy/plum/card skin, create a second theme or replace the shared shell, voice or window manager. Generated/ad-hoc views receive only safe trusted Jarvis theme context through the existing bridge, without widened permissions. UI issues require full mobile-first real-browser visual acceptance. P12-03 remains backend/schema-only; this records the standing direction, not completed visual work.

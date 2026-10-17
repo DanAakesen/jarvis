@@ -455,7 +455,7 @@ export function isWorkspaceView(value: unknown): value is WorkspaceView;
 export function isWorkspaceSnapshot(value: unknown): value is WorkspaceSnapshot;
 
 export const workspaceNavigationPages: readonly [
-  'home', 'factory', 'settings', 'usage', 'notes', 'knowledge', 'folio', 'status',
+  'home', 'factory', 'settings', 'usage', 'notes', 'knowledge', 'folio', 'status', 'daily',
 ];
 export type WorkspaceNavigationPage = typeof workspaceNavigationPages[number];
 export const workspaceSettingsSections: readonly [
