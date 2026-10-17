@@ -502,6 +502,29 @@ describe('SettingsPage', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it('puts the nutrition section after the projects and outside the settings form, only when it is supplied', async () => {
+    fetchMock.mockResolvedValueOnce(response(settingsResponse()));
+    const view = render(
+      <ThemePreferenceContext.Provider value={themePreference}>
+        <SettingsPage backendUrl={backendUrl} getAccessToken={getAccessToken}
+          projects={<section aria-label="Projects stand-in" />}
+          nutrition={<section aria-label="Nutrition stand-in" />} />
+      </ThemePreferenceContext.Provider>,
+    );
+    const projects = await screen.findByRole('region', { name: 'Projects stand-in' });
+    const nutrition = screen.getByRole('region', { name: 'Nutrition stand-in' });
+    expect(projects.compareDocumentPosition(nutrition) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(nutrition.closest('form')).toBeNull();
+    view.unmount();
+
+    fetchMock.mockResolvedValueOnce(response(settingsResponse()));
+    renderSettingsPage();
+    await screen.findByRole('button', { name: 'Save settings' });
+    expect(screen.queryByRole('region', { name: 'Nutrition stand-in' })).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Nutrition targets' })).toBeNull();
+    expect(fetchMock.mock.calls.every(([url]) => !String(url).includes('/daily/'))).toBe(true);
+  });
+
   it('edits models per role, tuning, research, retrieval and timeouts, and requests a deployment removal', async () => {
     const user = userEvent.setup();
     const role = (model: string) => ({ model, reasoningEffort: 'none' });

@@ -724,7 +724,7 @@ export function createGoogleModule(
     },
     {
       name: 'calendar_create_events',
-      description: 'Prepare 2–10 Google Calendar events together. Use for both/all requested bookings, not repeated single-event stages which replace each other. Display every returned summary; Dan’s later agreement covers exactly this list. Writes are sequential, not atomic; report each result and never replay completed or unverified items.',
+      description: 'Prepare 2–10 Google Calendar events together. Use for both/all requested bookings, not repeated single-event stages which replace each other. Display every returned summary; Dan’s later agreement covers exactly this list. Writes are sequential, not atomic; after full success, confirm briefly with only the count. Report per item only on failure or unverified/not-attempted results, and never replay completed or unverified items.',
       inputSchema: {
         type: 'object',
         properties: { events: { type: 'array', minItems: 2, maxItems: 10, items: createEventSchema } },

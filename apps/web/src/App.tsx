@@ -6,6 +6,7 @@ import type { PublicConfig } from '../config/public-config';
 import { useJarvisActivity } from './activity-context';
 import { JarvisActivityProvider } from './activity-provider';
 import { appAreas } from './areas';
+import { NutritionTargetsSettings } from './daily/NutritionTargetsSettings';
 import { DailyRefreshContext } from './daily/refresh';
 import { ContextPanel, ContextPanelProvider } from './ContextPanel';
 import { ConversationIntentProvider } from './ConversationIntentProvider';
@@ -47,6 +48,7 @@ import { readWorkspaceFrame } from './workspace-frame';
 import { readPageWindows, useReadback } from './window-readback';
 import { readWorkspaceDevice } from './workspace-device';
 import { JobsChip } from './JobsChip';
+import { ShellIcon } from './ShellIcon';
 import { hasRunningJob, useJobs } from './jobs-store';
 import { KnowledgeBackendContext } from './knowledge/knowledge-context';
 import { PresenceChip, PresenceSettings } from './Presence';
@@ -62,8 +64,6 @@ const researchInProgress = (status: string) => status === 'running' || status ==
 
 const sidebarLimits = { min: 160, max: 420 };
 const contextLimits = { min: 220, max: 560 };
-
-type ShellIconName = 'home' | 'factory' | 'knowledge' | 'usage' | 'status' | 'navigation' | 'screen' | 'camera' | 'context' | 'settings' | 'close' | 'folio' | 'daily';
 
 function activityLabel(event: JarvisActivityEvent | null): string {
   if (!event) return 'Jarvis is working';
@@ -82,38 +82,6 @@ function activityLabel(event: JarvisActivityEvent | null): string {
       const detail = event as { type: string; text?: unknown };
       return detail.type === 'work-started' && typeof detail.text === 'string' && detail.text.trim() ? detail.text.trim() : 'Jarvis is working';
     }
-  }
-}
-
-function ShellIcon({ name }: { name: ShellIconName }) {
-  const common = { 'aria-hidden': true as const, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
-  switch (name) {
-    case 'home':
-      return <svg {...common}><path d="m3 10 9-7 9 7" /><path d="M5 9v12h14V9M9 21v-7h6v7" /></svg>;
-    case 'factory':
-      return <svg {...common}><path d="M3 21V9l6 3V8l6 4V5h6v16Z" /><path d="M7 17h1m4 0h1m4 0h1m-10-4h1m4 0h1m4-8h1" /></svg>;
-    case 'knowledge':
-      return <svg {...common}><circle cx="6" cy="7" r="2.2" /><circle cx="17.5" cy="5.5" r="1.8" /><circle cx="12.5" cy="13" r="2.4" /><circle cx="5.5" cy="18" r="1.7" /><circle cx="18.5" cy="18.5" r="2" /><path d="m8 8.3 2.6 3M15.9 6.6l-2.4 4.3M10.4 14.4l-3.4 2.6M14.6 14.4l2.5 2.6M7.9 6.7l7.8-1" /></svg>;
-    case 'usage':
-      return <svg {...common}><path d="M4 20V11m5 9V5m5 15v-7m5 7V8" /><path d="M2 21h20" /></svg>;
-    case 'status':
-      return <svg {...common}><path d="M2 12h4l3-8 5 16 3-8h5" /></svg>;
-    case 'daily':
-      return <svg {...common}><path d="m6.5 6.5 11 11M3 7l4-4m-2 6 4-4m6 14 4-4m-2 6 4-4" /></svg>;
-    case 'navigation':
-      return <svg {...common}><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M9 4v16m-3-11h1m-1 4h1" /></svg>;
-    case 'screen':
-      return <svg {...common}><rect x="3" y="4" width="18" height="13" rx="2" /><path d="M8 21h8m-4-4v4" /></svg>;
-    case 'camera':
-      return <svg {...common}><path d="M4 7h3l2-3h6l2 3h3a2 2 0 0 1 2 2v10H2V9a2 2 0 0 1 2-2Z" /><circle cx="12" cy="12" r="3" /></svg>;
-    case 'context':
-      return <svg {...common}><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M15 4v16" /></svg>;
-    case 'settings':
-      return <svg {...common}><circle cx="12" cy="12" r="3" /><path d="m19.4 15 .1.1a1.7 1.7 0 1 1-2.4 2.4l-.1-.1a1.7 1.7 0 0 0-2.9 1.2v.2a1.7 1.7 0 1 1-3.4 0v-.2A1.7 1.7 0 0 0 8 17.4l-.1.1a1.7 1.7 0 1 1-2.4-2.4l.1-.1A1.7 1.7 0 0 0 4.4 12H4.2a1.7 1.7 0 1 1 0-3.4h.2A1.7 1.7 0 0 0 5.6 5.7l-.1-.1a1.7 1.7 0 1 1 2.4-2.4l.1.1A1.7 1.7 0 0 0 11 2.1v-.2a1.7 1.7 0 1 1 3.4 0v.2a1.7 1.7 0 0 0 2.9 1.2l.1-.1a1.7 1.7 0 1 1 2.4 2.4l-.1.1a1.7 1.7 0 0 0 1.2 2.9h.2a1.7 1.7 0 1 1 0 3.4h-.2a1.7 1.7 0 0 0-1.5 3Z" /></svg>;
-    case 'close':
-      return <svg {...common}><path d="m6 6 12 12M18 6 6 18" /></svg>;
-    case 'folio':
-      return <svg {...common}><rect x="7" y="3" width="13" height="15" rx="2" /><path d="M4 7v12a2 2 0 0 0 2 2h10M11 8h5m-5 4h5" /></svg>;
   }
 }
 
@@ -472,9 +440,8 @@ function ShellLayout({ signedIn, config, session, camera, screenShare, dailyEnab
   const jobsAccountId = signedIn
     ? (session.client.getActiveAccount() ?? session.client.getAllAccounts()[0])?.homeAccountId ?? null
     : null;
-  const { history: backgroundJobs, error: jobsError } = useJobs(signedIn ? config.backendUrl : null, getAccessToken, jobsAccountId);
-  const hasJobsSummary = backgroundJobs.length > 0 || jobsError !== '';
-  const headerEntryCount = windowCount + (hasJobsSummary ? 1 : 0);
+  const { history: backgroundJobs } = useJobs(signedIn ? config.backendUrl : null, getAccessToken, jobsAccountId);
+  const headerEntryCount = windowCount;
   const researchRunning = backgroundJobs.some((job) => job.kind === 'research' && job.status === 'running');
   // The conversation never needs a tab: the chat bar's orb and handle bring it back.
   const hideResearchProgressTab = useCallback((view: WorkspaceView) => view.presentation === 'conversation' || researchRunning && view.content.status === 'generated' &&
@@ -745,14 +712,14 @@ function ShellLayout({ signedIn, config, session, camera, screenShare, dailyEnab
         {/* Open windows live as tabs in the top bar, between the brand and the controls (no breadcrumb). */}
         {signedIn && <div className="window-tabstrip">
         <div ref={setTabsHost} className="window-tabbar" />
-        <JobsChip key={jobsAccountId} accountId={jobsAccountId} backendUrl={config.backendUrl} getAccessToken={session.getAccessToken} onResult={openJobResult} />
         </div>}
+        {signedIn && <JobsChip key={jobsAccountId} accountId={jobsAccountId} backendUrl={config.backendUrl} getAccessToken={session.getAccessToken} onResult={openJobResult} />}
 
         {signedIn && (
           <div className="topbar-actions">
             {phone && headerEntryCount > 0 && (
               <button className="topbar-icon-button mobile-windows-button" type="button" aria-expanded={windowsSheetOpen}
-                aria-label={`${hasJobsSummary ? 'Open windows and jobs' : 'Open windows'}: ${headerEntryCount}`} onClick={() => setWindowsSheetOpen((open) => !open)}>
+                aria-label={`Open windows: ${headerEntryCount}`} onClick={() => setWindowsSheetOpen((open) => !open)}>
                 <span className="mobile-windows-count" aria-hidden="true">{headerEntryCount}</span>
               </button>
             )}
@@ -777,8 +744,8 @@ function ShellLayout({ signedIn, config, session, camera, screenShare, dailyEnab
                 <ShellIcon name="navigation" />
               </button>
             )}
-            <NavLink className="settings-link" to="/settings" aria-label="Settings" onClick={closePagePanels}>
-              <ShellIcon name="settings" /><span className="settings-label">Settings</span>
+            <NavLink className="settings-link" to="/settings" aria-label="Settings" title="Settings" onClick={closePagePanels}>
+              <ShellIcon name="settings" />
             </NavLink>
           </div>
         )}
@@ -861,7 +828,12 @@ function RequireSignIn({ session }: { session: SignInSession }) {
 }
 
 /** Settings with its live panels and a Back action to wherever Dan came from. */
-function SettingsRoute({ config, session }: { config: PublicConfig; session: SignInSession }) {
+function SettingsRoute({ config, session, nutritionKey }: {
+  config: PublicConfig;
+  session: SignInSession;
+  /** Account key for the Daily nutrition targets; null while Daily is off, which renders nothing and asks for nothing. */
+  nutritionKey: string | null;
+}) {
   const navigate = useNavigate();
   const { key } = useLocation();
   const back = useCallback(() => {
@@ -872,6 +844,7 @@ function SettingsRoute({ config, session }: { config: PublicConfig; session: Sig
     <SettingsPage backendUrl={config.backendUrl} getAccessToken={session.getAccessToken} onBack={back}
       presence={<PresenceSettings backendUrl={config.backendUrl} getAccessToken={session.getAccessToken} />}
       projects={<ProjectsPage backendUrl={config.backendUrl} getAccessToken={session.getAccessToken} />}
+      {...(nutritionKey ? { nutrition: <NutritionTargetsSettings key={nutritionKey} backendUrl={config.backendUrl} getAccessToken={session.getAccessToken} /> } : {})}
       memory={<MemorySettings backendUrl={config.backendUrl} getAccessToken={session.getAccessToken} />}
       activity={<SettingsActivity client={session.client} config={config} />} />
   );
@@ -950,7 +923,7 @@ export function App({ config = defaultConfig, dailyEnabled = false }: { config?:
                   <Component key={id === 'daily' ? dailyAccountKey : id} backendUrl={config.backendUrl} getAccessToken={session.getAccessToken} />
                 } />
               ))}
-              <Route path="settings" element={<SettingsRoute config={config} session={session} />} />
+              <Route path="settings" element={<SettingsRoute config={config} session={session} nutritionKey={dailyEnabled ? dailyAccountKey : null} />} />
               <Route path="knowledge/*" element={<Navigate to="/notes" replace />} />
             </Route>
             <Route path="*" element={<NotFoundPage />} />

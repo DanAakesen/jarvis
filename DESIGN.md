@@ -1,9 +1,44 @@
 # Design
 
+## Icon-only header (P9-119)
+
+Settings is a gear only at every width, including phones, with its Settings
+accessible name, native tooltip, active-route state and 44px target. Presence
+uses one person, moon or walking-person icon for Present, Away or On the move;
+the existing green/yellow/blue tokens remain, with darker same-hue strokes in
+light mode for contrast. No top-bar presence dot or visible mode label.
+Accessible names and tooltips identify the mode; switching behaviour is unchanged.
+
+Background work keeps one focusable summary in its existing keyboard position,
+with non-zero running, done and failed icon/count pairs. Spinner, check and
+warning-triangle shapes accompany accent, green and red; exact counts and
+outcomes have accessible names and tooltips. Dismissed and cancelled jobs do
+not count. With no outcomes, show a quiet inbox icon; loading/storage failures
+still have an attention indicator and their existing popover messages.
+Only the running icon rotates, and neither OS nor app reduced-motion mode
+allows that animation. Preserve the popover contents, delivery and dismissal.
+
+The summary remains in the header on phones instead of inside the windows
+sheet; the separate windows button counts windows only. Keep the existing
+individual desktop job tabs and phone window sheet. Settings, presence and
+the summary have 44px targets, shared borderless hover/pressed surfaces and
+visible keyboard focus. Stack each phone count below its icon to fit the
+single-row header at 320px without changing the composer or voice orb.
+
+Local Chromium fixture captures and interaction measurements are in
+`docs/ui/screenshots/p9-119/`: 320×568, 390×844 and 1440×900 in both themes,
+all three modes, two running/one done/three failed jobs, and idle after
+dismissal, with a separate restored window. OS and app reduced motion,
+keyboard focus/return, active Settings and phone-sheet independence were
+checked. Authentication and API data are synthetic; the room uses its WebGL
+fallback. This is not live-provider, hardware-GPU or physical-device evidence;
+Dan's visual acceptance remains pending.
+
 ## Presence colours, Routines and composer clearance (17 October 2026; P9-102, P9-103, P9-98)
 
-Presence uses green, yellow and blue in both themes. Dot shape, size, glow and
-the mode label are unchanged, light dots gain a ring of their own hue so the
+Presence uses green, yellow and blue in both themes. P9-119 supersedes the
+top-bar dot and label below; menu/settings dots retain their shape and glow.
+Light dots gain a ring of their own hue so the
 yellow stays visible on pale glass, and the orb keeps its own colour. Settings
 says Routines. Phone pages end above the composer however tall its draft is, and
 Save settings stays a plain end-of-page row: no sticky bar or new chrome.
@@ -554,6 +589,31 @@ was at least 6.25:1 in light mode and 8.99:1 in dark mode. Screenshots:
 [desktop dark](docs/ui/screenshots/p8-13-theme-settings-desktop-dark.png), and
 [phone dark](docs/ui/screenshots/p8-13-theme-settings-phone-dark.png). Live
 Entra and API/SQL behavior remain unverified.
+
+P12-09 adds a collapsible Nutrition targets section after Projects, only while
+Daily is on: with Daily off nothing renders and no request is made. It follows the
+Routines pattern, with its own form and save beside the action, independent of
+Save settings. The folded header carries a text summary (Needs setup or
+Configured). Three labelled whole-number fields (resting energy burn, daily
+deficit, protein) sit in an auto-fit grid, three across on desktop and stacked on
+a phone, each with a hint and its allowed range. The values are private health
+data, so the fields ship no defaults, placeholders or example figures. A bad entry
+shows a text error after blur (also `aria-invalid`), and a rejected submit moves
+focus to the first invalid field and sends nothing. Save stays disabled until a
+value changes; while saving the form is `aria-busy` and read-only with
+"Saving…". A saved result shows the committed readback, a text status and the
+last-saved date. Failures use distinct page-owned copy (load with Retry, rejected,
+denied, unavailable, unreadable) that never shows server text and keeps the
+entries. Inputs are 44 px tall at 16 px so iOS does not zoom.
+
+Checked in an isolated headless Chromium at 390×844 touch, 320 and 1280×800, in
+light and dark: folded, open, missing, invalid, saving, saved, loading,
+unavailable, load error with recovery, and save rejected or failed. No horizontal
+overflow at 320 or 390; focus rings unclipped; keyboard order is toggle, fields,
+Save, next section; the console was clean. Limits: a mocked `fetch` with synthetic
+figures, no live backend, no 3D stage, header or real sign-in, and
+`prefers-reduced-motion` could not be emulated (the section adds no motion of its
+own). Local runs are not qualification.
 
 ## Projects (P1-10)
 
@@ -1134,7 +1194,7 @@ camera correction. Reduced motion retains solid text without the sweep.
 - **Bubbles (7 October):** no fill; Dan's rim is cool cyan and Jarvis's is bright amber. Jarvis's live bubble has an amber light running round its rim while it works; once done, only the newest reply's rim breathes a soft amber glow. The conversation has no tab (the orb and handle bring it back). The Kanban page no longer has its own "Ask Jarvis" composer; the rail orb is the one way to chat off the home page, and an empty conversation shows no greeting card. Jump to latest is a compact glass pill.
 - **Transparency (7 October):** windows and shell slabs are thinner glass: window blur 8 px and shell blur 6 px (`--glass-blur-window`, `--glass-blur-shell`), lighter tints, and a light veil dims the room only while windows are open. On screens above 1.5× pixel density rims and bubble borders are 1.5 px so they do not fade to half a pixel.
 - **No page bounce:** while signed in the document never scrolls or rubber-bands; only inner lists, windows and the transcript scroll, and they contain their own overscroll.
-- **Loading (revised 12 October):** the chat window exists before messages arrive, with a quiet Loading messages label and line placeholders inside its glass. Loaded, empty and first-load error/Retry states keep that same frame. Refreshes retain existing messages; no chat skeletons float in the room. Phones keep explicit show/hide. A standalone page loading may show the amber core with a rotating phrase; task details use panel placeholders, and Kanban uses card placeholders on first load or a filter change. Live task refreshes and task-control completion keep the board, scroll position and selection mounted. Screen readers hear a steady loading label. Both loader styles wait 140 ms before appearing.
+- **Loading (P9-118, revised 17 October; supersedes the 7–8 October orb-loading rule):** page loading shows immediate plain `Loading` with decorative dots appearing one at a time and deleting one at a time. All three dots retain their width; OS reduced motion and the app's reduced-motion setting show three static dots. Screen readers hear a separate, steady contextual status. Sign-in changes the disabled, busy button to `Redirecting` immediately; a per-tab redirect marker distinguishes returning `Signing you in` from first-visit `Loading`. No loading orb or rotating loading phrase remains. The living stage, voice/input orbs and chat/job working cores are unchanged. The chat window still exists before messages arrive, with its quiet Loading messages label and line placeholders inside its glass. Loaded, empty and first-load error/Retry states keep that frame; refreshes retain messages. Task details retain panel placeholders, and Kanban retains card placeholders on first load or a filter change; skeletons keep their existing 140 ms delay. Live refreshes and task-control completion preserve the board, scroll and selection. Local Chromium fixture evidence in `docs/ui/screenshots/p9-118/` covers 390×844 and 1440×900, light/dark, first visit, Redirecting, Signing you in, Settings Loading and both reduced-motion mechanisms. Animation playback and fixed widths were checked; live Microsoft sign-in, physical devices and hardware WebGL were not verified.
 - **Palette (7 October):** two accents only. Cyan for interaction and calm states (primary buttons, focus, selection, listening, running; done in a paler cyan) and amber for Jarvis working, speaking, attention and paused. Red is kept for errors. Presence is the one exception: its own green, yellow and blue (17 October, P9-102). The background glow uses the same two hues. The knowledge graph keeps four distinct folder colours so notes stay easy to tell apart.
 - **Jarvis navigates (P9-40, prepared 8 October):** when Jarvis is asked to switch pages it changes the route with the normal page transition; a named Settings section, or the card of a task it names, scrolls into view once its data has loaded and glows cyan once. Folio and Status are refused until those pages exist. Applied or refused is reported back to the broker. Wired to `navigate` workspace commands; live once the backend contract (#571) lands.
 - **Folio (P9-25, built 8 October):** a stacked-pages icon on the rail opens the Folio in the left sidebar slot (320 px, same glass hinge) over the current page; area navigation and the Folio share the slot, one at a time. Selecting another page closes the Folio, including the current page, Settings, the brand/home link, phone menu and Jarvis navigation; areas with multiple pages can replace it with their own navigation. Search (debounced) and text-only kind chips (Reports, Apps, Images, Graphs; one at a time, press again to clear) filter the list; Pinned, Today, This week and Earlier group it. A row shows the kind icon, title and time; hover or focus reveals the prompt summary and pin, rename and remove actions (always visible on touch). Clicking reopens through the backend, so the window arrives like any Jarvis window, and the row flashes cyan. Remove asks inline first. Loading uses row placeholders; empty, no-results (with Clear search) and error (with Retry) states are explained. `navigate { page: 'folio' }` opens the pane.

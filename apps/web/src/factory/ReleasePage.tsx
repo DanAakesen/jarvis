@@ -229,7 +229,7 @@ export function ReleasePage({ backendUrl, getAccessToken }: AreaProps) {
     setRequestVersion((current) => current + 1);
   };
   if (!data && loading) {
-    return <section className="release-page" aria-labelledby="release-heading"><h1 id="release-heading">Project releases</h1><Loader variant="core" label="Loading releases…" /></section>;
+    return <section className="release-page" aria-labelledby="release-heading"><h1 id="release-heading">Project releases</h1><Loader variant="text" label="Loading releases…" /></section>;
   }
   if (!data && error) {
     return (
@@ -444,7 +444,7 @@ export function ReleaseRedirectPage({ backendUrl, getAccessToken }: AreaProps) {
     <section className="release-page" aria-labelledby="release-heading">
       <h1 id="release-heading">Opening release</h1>
       {loading
-        ? <Loader variant="core" label="Loading release…" />
+        ? <Loader variant="text" label="Loading release…" />
         : (
           <div className="release-feedback" role="alert">
             <p>{lookup.message}</p>

@@ -187,6 +187,16 @@ describe('Google Calendar and Gmail tools', () => {
         method: 'POST', url: '/fixture/calendar-reply', headers: confirmHeaders('44'), payload: {},
       });
       expect(repeated.json()).toMatchObject({ result: { status: 'none' } });
+      if (state === 'provider-failed') {
+        const receipt = await app.inject({
+          method: 'POST', url: '/tools/calendar_get_pending_change', headers: confirmHeaders('44'),
+          payload: {},
+        });
+        expect(receipt.json()).toMatchObject({
+          result: { lastChange: { status: 'unverified' } },
+        });
+        expect(receipt.json().result.lastChange).not.toHaveProperty('instruction');
+      }
       expect(request).toHaveBeenCalledTimes(state === 'provider-failed' ? 1 : 0);
     },
   );
@@ -471,7 +481,17 @@ describe('Google Calendar and Gmail tools', () => {
       headers: confirmHeaders('43'),
       payload: { confirmationCode: code },
     });
-    expect(confirmed.json()).toMatchObject({ outcome: 'ok', result: { status: 'completed' } });
+    expect(confirmed.json()).toMatchObject({
+      outcome: 'ok',
+      result: {
+        status: 'completed',
+        summary: expect.stringContaining('Private planning meeting'),
+        detail: 'The event was created in Google Calendar.',
+        instruction: expect.stringContaining('without reading the details aloud'),
+      },
+      confirmation: 'The calendar change is done.',
+    });
+    expect(confirmed.json().confirmation).not.toContain('Private planning meeting');
     expect(request).toHaveBeenCalledOnce();
     expect(request.mock.calls[0]?.[0]).toBe('calendar');
     expect(request.mock.calls[0]?.[1]).toBe('/calendars/primary/events');
@@ -540,7 +560,10 @@ describe('Google Calendar and Gmail tools', () => {
       expect(confirmed).toMatchObject({ outcome: 'ok', result: {
         status: 'completed', summary: staged.result.summary,
         items: [{ status: 'completed' }, { status: 'completed' }],
-      } });
+        instruction: expect.stringContaining('without reading the details aloud'),
+      }, confirmation: 'Both are in your calendar.' });
+      expect(confirmed.result.summary).toContain('Synthetic Hotel Alpha');
+      expect(confirmed.result.summary).toContain('Synthetic Hotel Beta');
       expect(request.mock.calls.map((call) => call[2].body)).toEqual([
         {
           summary: hotelEvents[0]!.subject,
@@ -646,6 +669,7 @@ describe('Google Calendar and Gmail tools', () => {
             { status: 'not_attempted' },
           ],
         } });
+        expect(response.result).not.toHaveProperty('instruction');
         expect(response.confirmation).not.toContain('Done:');
         expect(response.result.detail).toContain('1 of 3');
         expect((await confirm()).json().outcome).toBe('refused');
@@ -984,7 +1008,16 @@ describe('Google Calendar and Gmail tools', () => {
       headers: confirmHeaders('43'),
       payload: { confirmationCode: code },
     });
-    expect(confirmed.json()).toMatchObject({ outcome: 'ok', result: { status: 'completed' } });
+    expect(confirmed.json()).toMatchObject({
+      outcome: 'ok',
+      result: {
+        status: 'completed',
+        summary: expect.stringContaining('Private subject'),
+        instruction: expect.stringContaining('without reading the details aloud'),
+      },
+      confirmation: 'Done: mail_confirm_action succeeded.',
+    });
+    expect(confirmed.json().confirmation).not.toContain('Private subject');
     expect(request).toHaveBeenCalledOnce();
     const raw = request.mock.calls[0]?.[2]?.body as { raw: string };
     expect(request.mock.calls[0]?.[0]).toBe('gmail');
@@ -1166,7 +1199,14 @@ describe('Google Calendar and Gmail tools', () => {
       payload: { confirmationCode: code },
     });
 
-    expect(confirmed.json()).toMatchObject({ outcome: 'ok', result: { status: 'completed' } });
+    expect(confirmed.json()).toMatchObject({
+      outcome: 'ok',
+      result: {
+        status: 'completed',
+        summary: expect.stringContaining('Updated subject'),
+        instruction: expect.stringContaining('without reading the details aloud'),
+      },
+    });
     expect(request).toHaveBeenCalledTimes(2);
     expect(request.mock.calls[1]?.[1]).toBe('/users/me/drafts/draft-1');
     expect(request.mock.calls[1]?.[2]).toMatchObject({
@@ -1338,7 +1378,14 @@ describe('Google Calendar and Gmail tools', () => {
       headers: confirmHeaders('43'),
       payload: { confirmationCode: code },
     });
-    expect(confirmed.json()).toMatchObject({ outcome: 'ok', result: { status: 'completed' } });
+    expect(confirmed.json()).toMatchObject({
+      outcome: 'ok',
+      result: {
+        status: 'completed',
+        summary: expect.stringContaining('Meeting'),
+        instruction: expect.stringContaining('without reading the details aloud'),
+      },
+    });
     expect(request).toHaveBeenCalledTimes(2);
     expect(request.mock.calls[1]?.[1]).toBe('/users/me/drafts');
     const draftBody = request.mock.calls[1]?.[2]?.body as {

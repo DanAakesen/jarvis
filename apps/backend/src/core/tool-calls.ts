@@ -33,7 +33,14 @@ export interface ToolCallStore {
 export function confirmToolCall(tool: string, outcome: ToolCallOutcome, result: unknown): string {
   if (outcome === 'ok') {
     if (tool === 'calendar_confirm_change') {
-      const change = result as { status?: unknown; detail?: unknown } | null;
+      const change = result as { status?: unknown; detail?: unknown; items?: unknown } | null;
+      if (change?.status === 'completed') {
+        return Array.isArray(change.items) && change.items.length > 1
+          ? change.items.length === 2
+            ? 'Both are in your calendar.'
+            : `All ${change.items.length} are in your calendar.`
+          : 'The calendar change is done.';
+      }
       if (['completed', 'cancelled', 'partial', 'unverified'].includes(String(change?.status)) &&
           typeof change?.detail === 'string' && change.detail.length <= 1_000) {
         return change.detail;

@@ -57,7 +57,11 @@ describe('pending Google actions', () => {
 
   it.each(['yes', 'approve', 'go ahead', 'do it', ' YES! ', 'Approve.'])('approves calendar with %s only once', async (reply) => {
     const f = fixture();
-    await expect(f.confirm(reply)).resolves.toEqual({ status: 'completed', summary: 'Change.' });
+    await expect(f.confirm(reply)).resolves.toEqual({
+      status: 'completed',
+      summary: 'Change.',
+      instruction: 'The action is done. Confirm it in one short sentence without reading the details aloud; they are on screen.',
+    });
     await expect(f.confirm(reply)).rejects.toMatchObject({ name: 'ToolRefusal' });
     expect(f.execute).toHaveBeenCalledOnce();
   });
@@ -258,7 +262,7 @@ describe('pending Google actions: meaning decided by the interpreter, provenance
 
   it('asks the interpreter about exactly this reply and proposal, and executes only on approve', async () => {
     const f = staged();
-    await expect(f.confirm(fresh())).resolves.toEqual({ status: 'completed', summary });
+    await expect(f.confirm(fresh())).resolves.toMatchObject({ status: 'completed', summary });
     expect(f.execute).toHaveBeenCalledOnce();
     expect(f.decider).toHaveBeenCalledOnce();
     expect(f.decider.mock.calls[0]![0]).toEqual({

@@ -83,7 +83,17 @@ describe('calendar batch module boundary', () => {
     expect((await confirm()).json().outcome).toBe('refused');
     f.reply('yes');
     const result = (await confirm()).json();
-    expect(result).toMatchObject({ outcome: 'ok', result: { status: 'completed' } });
+    expect(result).toMatchObject({
+      outcome: 'ok',
+      result: {
+        status: 'completed',
+        instruction: expect.stringContaining('without reading the details aloud'),
+      },
+      confirmation: count === 2 ? 'Both are in your calendar.' : `All ${count} are in your calendar.`,
+    });
+    expect(result.result.summary).toBe(stage.result.summary);
+    expect(result.result.items.map((item: { summary: string }) => item.summary))
+      .toEqual(stage.result.items.map((item: { summary: string }) => item.summary));
     expect(result.result.items.every((item: { status: string }) => item.status === 'completed')).toBe(true);
     expect(request).toHaveBeenCalledTimes(count);
     expect(JSON.stringify(request.mock.calls)).not.toContain('Changed outside');

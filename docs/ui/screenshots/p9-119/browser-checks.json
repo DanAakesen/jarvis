@@ -1,0 +1,308 @@
+[
+  {
+    "prefix": "320x568-light",
+    "geometry": {
+      "viewport": 320,
+      "scrollWidth": 320,
+      "headerWidth": 320,
+      "controls": [
+        {
+          "name": "Show background work: 3 failed",
+          "x": 74,
+          "right": 136,
+          "y": 4,
+          "width": 62,
+          "height": 44
+        },
+        {
+          "name": "Presence: Present. Change mode",
+          "x": 182,
+          "right": 226,
+          "y": 4,
+          "width": 44,
+          "height": 44
+        },
+        {
+          "name": "Settings",
+          "x": 270,
+          "right": 314,
+          "y": 4,
+          "width": 44,
+          "height": 44
+        }
+      ]
+    },
+    "movingBefore": "matrix(-0.984682, 0.174358, -0.174358, -0.984682, 0, 0)",
+    "movingAfter": "matrix(-0.866473, -0.499224, 0.499224, -0.866473, 0, 0)",
+    "reduced": "none",
+    "appReduced": "none",
+    "popoverBounds": {
+      "x": 26.819564819335938,
+      "y": 88.45797729492188,
+      "width": 266.36085510253906,
+      "height": 431.0840148925781
+    },
+    "restoredFocus": true,
+    "nextTab": "Open windows: 1",
+    "hover": "color(srgb 0.0901961 0.12549 0.164706 / 0.09)",
+    "pressed": "oklab(0.239587 -0.00739603 -0.0220632 / 0.09)",
+    "focus": "solid",
+    "active": "page",
+    "errors": []
+  },
+  {
+    "prefix": "320x568-dark",
+    "geometry": {
+      "viewport": 320,
+      "scrollWidth": 320,
+      "headerWidth": 320,
+      "controls": [
+        {
+          "name": "Show background work: 3 failed",
+          "x": 74,
+          "right": 136,
+          "y": 4,
+          "width": 62,
+          "height": 44
+        },
+        {
+          "name": "Presence: Present. Change mode",
+          "x": 182,
+          "right": 226,
+          "y": 4,
+          "width": 44,
+          "height": 44
+        },
+        {
+          "name": "Settings",
+          "x": 270,
+          "right": 314,
+          "y": 4,
+          "width": 44,
+          "height": 44
+        }
+      ]
+    },
+    "movingBefore": "matrix(-0.866347, -0.499442, 0.499442, -0.866347, 0, 0)",
+    "movingAfter": "matrix(-0.342789, -0.939412, 0.939412, -0.342789, 0, 0)",
+    "reduced": "none",
+    "appReduced": "none",
+    "popoverBounds": {
+      "x": 8.675872802734375,
+      "y": 59.09385681152344,
+      "width": 302.64825439453125,
+      "height": 489.81227111816406
+    },
+    "restoredFocus": true,
+    "nextTab": "Open windows: 1",
+    "hover": "oklab(0.988897 -0.0145972 0.0036453 / 0.0903811)",
+    "pressed": "oklab(0.989411 -0.0142831 0.00391255 / 0.10849)",
+    "focus": "solid",
+    "active": "page",
+    "errors": []
+  },
+  {
+    "prefix": "390x844-light",
+    "geometry": {
+      "viewport": 390,
+      "scrollWidth": 390,
+      "headerWidth": 390,
+      "controls": [
+        {
+          "name": "Show background work: 3 failed",
+          "x": 144,
+          "right": 206,
+          "y": 4,
+          "width": 62,
+          "height": 44
+        },
+        {
+          "name": "Presence: Present. Change mode",
+          "x": 252,
+          "right": 296,
+          "y": 4,
+          "width": 44,
+          "height": 44
+        },
+        {
+          "name": "Settings",
+          "x": 340,
+          "right": 384,
+          "y": 4,
+          "width": 44,
+          "height": 44
+        }
+      ]
+    },
+    "movingBefore": "matrix(-0.423219, -0.906027, 0.906027, -0.423219, 0, 0)",
+    "movingAfter": "matrix(0.086495, -0.996252, 0.996252, 0.086495, 0, 0)",
+    "reduced": "none",
+    "appReduced": "none",
+    "popoverBounds": {
+      "x": 64.10000610351562,
+      "y": 142,
+      "width": 261.79998779296875,
+      "height": 392
+    },
+    "restoredFocus": true,
+    "nextTab": "Open windows: 1",
+    "hover": "color(srgb 0.0901961 0.12549 0.164706 / 0.09)",
+    "pressed": "oklab(0.239587 -0.00739603 -0.0220632 / 0.09)",
+    "focus": "solid",
+    "active": "page",
+    "errors": []
+  },
+  {
+    "prefix": "390x844-dark",
+    "geometry": {
+      "viewport": 390,
+      "scrollWidth": 390,
+      "headerWidth": 390,
+      "controls": [
+        {
+          "name": "Show background work: 3 failed",
+          "x": 144,
+          "right": 206,
+          "y": 4,
+          "width": 62,
+          "height": 44
+        },
+        {
+          "name": "Presence: Present. Change mode",
+          "x": 252,
+          "right": 296,
+          "y": 4,
+          "width": 44,
+          "height": 44
+        },
+        {
+          "name": "Settings",
+          "x": 340,
+          "right": 384,
+          "y": 4,
+          "width": 44,
+          "height": 44
+        }
+      ]
+    },
+    "movingBefore": "matrix(-0.341722, 0.939801, -0.939801, -0.341722, 0, 0)",
+    "movingAfter": "matrix(-0.965662, 0.2598, -0.2598, -0.965662, 0, 0)",
+    "reduced": "none",
+    "appReduced": "none",
+    "popoverBounds": {
+      "x": 31.214935302734375,
+      "y": 92.76033020019531,
+      "width": 327.57012939453125,
+      "height": 490.47935485839844
+    },
+    "restoredFocus": true,
+    "nextTab": "Open windows: 1",
+    "hover": "oklab(0.986847 -0.0158491 0.00258002 / 0.0899317)",
+    "pressed": "oklab(0.98808 -0.0150959 0.00322086 / 0.108429)",
+    "focus": "solid",
+    "active": "page",
+    "errors": []
+  },
+  {
+    "prefix": "1440x900-light",
+    "geometry": {
+      "viewport": 1440,
+      "scrollWidth": 1440,
+      "headerWidth": 1428,
+      "controls": [
+        {
+          "name": "Show background work: 3 failed",
+          "x": 1157.859375,
+          "right": 1284,
+          "y": 7,
+          "width": 126.140625,
+          "height": 44
+        },
+        {
+          "name": "Presence: Present. Change mode",
+          "x": 1294,
+          "right": 1338,
+          "y": 9,
+          "width": 44,
+          "height": 44
+        },
+        {
+          "name": "Settings",
+          "x": 1382,
+          "right": 1426,
+          "y": 9,
+          "width": 44,
+          "height": 44
+        }
+      ]
+    },
+    "movingBefore": "matrix(-0.984702, 0.174245, -0.174245, -0.984702, 0, 0)",
+    "movingAfter": "matrix(-0.906711, -0.421753, 0.421753, -0.906711, 0, 0)",
+    "reduced": "none",
+    "appReduced": "none",
+    "popoverBounds": {
+      "x": 912,
+      "y": 143,
+      "width": 308,
+      "height": 392
+    },
+    "restoredFocus": true,
+    "nextTab": "Presence: On the move. Change mode",
+    "hover": "color(srgb 0.0901961 0.12549 0.164706 / 0.09)",
+    "pressed": "oklab(0.239587 -0.00739603 -0.0220632 / 0.09)",
+    "focus": "solid",
+    "active": "page",
+    "errors": []
+  },
+  {
+    "prefix": "1440x900-dark",
+    "geometry": {
+      "viewport": 1440,
+      "scrollWidth": 1440,
+      "headerWidth": 1428,
+      "controls": [
+        {
+          "name": "Show background work: 3 failed",
+          "x": 1157.859375,
+          "right": 1284,
+          "y": 7,
+          "width": 126.140625,
+          "height": 44
+        },
+        {
+          "name": "Presence: Present. Change mode",
+          "x": 1294,
+          "right": 1338,
+          "y": 9,
+          "width": 44,
+          "height": 44
+        },
+        {
+          "name": "Settings",
+          "x": 1382,
+          "right": 1426,
+          "y": 9,
+          "width": 44,
+          "height": 44
+        }
+      ]
+    },
+    "movingBefore": "matrix(-0.865714, 0.50054, -0.50054, -0.865714, 0, 0)",
+    "movingAfter": "matrix(-0.984946, -0.172863, 0.172863, -0.984946, 0, 0)",
+    "reduced": "none",
+    "appReduced": "none",
+    "popoverBounds": {
+      "x": 912,
+      "y": 143,
+      "width": 308,
+      "height": 392
+    },
+    "restoredFocus": true,
+    "nextTab": "Presence: On the move. Change mode",
+    "hover": "color(srgb 0.952941 1 0.976471 / 0.09)",
+    "pressed": "oklab(0.989432 -0.0142702 0.00392354 / 0.09)",
+    "focus": "solid",
+    "active": "page",
+    "errors": []
+  }
+]

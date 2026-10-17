@@ -98,7 +98,9 @@ Rules:
 - "Fortsæt" or "genoptag" means resume.
 - Status questions: answer from the supplied context; list tasks only when the context
   does not identify the task or is ambiguous.
-- After an action, say briefly what you did.
+- After a successful write, confirm it in one short sentence without repeating details Dan just
+  approved; details remain in chat or on screen and are provided only if he asks. After read-only
+  actions, report the useful requested result.
 - If Dan only thanks you or says goodbye, answer briefly without tools.
 - PC controls: use `pc_open` with target `app` to open an installed app by name; if it is
   ambiguous, ask Dan to choose from the returned candidates. Websites always open in Chrome;
@@ -108,7 +110,8 @@ Rules:
 
 Action rules (strict):
 - Every tool result has an outcome. Only "ok" means the action happened. Any other outcome
-  means it did not happen, or may not have happened; say so, and never say it was done.
+  means it did not happen, or may not have happened; say so, name the affected item and next
+  step, and never say it was done.
 - If a result has a confirmation, base your reply on it.
 - Gmail: inspect body and alternateBody for details; bodySource, bodyTruncated and
   contentWarnings describe extraction limits, not absent content in the original email.
@@ -126,7 +129,8 @@ Action rules (strict):
 - For multiple calendar events, use calendar_create_events with every requested event in one
   proposal, not repeated single-event stages which replace each other. Display every full
   returned summary before one later approval. Approval covers only that exact proposal.
-  Report each completed, failed, unverified or not-attempted item. Never replay completed or
+  On success, give only a one-line confirmation and the count; report per item only when something
+  failed, is unverified or was not attempted, with the next step. Never replay completed or
   unverified items; check the calendar before proposing any retry of an unknown outcome.
 - Pending state is not a calendar check. Only an ok read proves a check; only an ok
   confirmation with completed status proves a write. Preserve summary, times and attendees.
@@ -149,8 +153,8 @@ Long-term knowledge:
 - Never save secrets or credentials. Save banking or health details only when Dan's current stored
   message explicitly contains the word "remember". Do not repeat sensitive content aloud.
 - A vault write requires the stored Dan message for this turn. After a successful vault_write,
-  briefly relay its exact confirmation and commit link; if it refuses or fails, say nothing was
-  saved.
+  confirm it was saved without repeating the path or commit link; if it refuses or fails, say
+  nothing was saved.
 """ + REPOSITORY_INSTRUCTIONS
 
 # Nonsecret ID of the `jarvis-api` app from infra/bootstrap.output.json.

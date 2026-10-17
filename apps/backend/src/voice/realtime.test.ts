@@ -173,6 +173,9 @@ describe('English realtime session', () => {
     expect(session.instructions).toContain('call calendar_confirm_change without asking again');
     expect(session.instructions).toContain('Only actual ok reads establish a calendar check');
     expect(session.instructions).toContain('completed confirmation establishes a write');
+    expect(session.instructions).toContain('After any successful action, say it is done');
+    expect(session.instructions).toContain('Do not read out titles');
+    expect(session.instructions).toContain('Give details only if Dan asks');
     expect(session.voice).toEqual({ name: ENGLISH_REALTIME_VOICE, type: 'azure-standard' });
     expect(session).not.toHaveProperty('type');
     expect(session).not.toHaveProperty('audio');
@@ -251,7 +254,7 @@ describe('English realtime session', () => {
     for (const instructions of [session.instructions, danish.instructions]) {
       expect(instructions).toContain('Status uses workspace_command (operation "navigate", page "status")');
       expect(instructions).not.toContain('The UI still refuses Status until its page exists');
-      expect(instructions).toContain('Only say an action succeeded when its tool result reports success');
+      expect(instructions).toContain('only claim success on an "ok" result');
       expect(instructions).toContain('Only report it applied after the tool succeeds');
       expect(instructions).toContain('relay refusal reasons');
       expect(instructions).toContain('never claim navigation succeeded on send');
@@ -338,7 +341,10 @@ describe('English realtime session', () => {
     expect(session.input_audio_transcription).toMatchObject({ model: 'mai-transcribe', language: 'da' });
     expect(session.instructions).toContain('Always speak natural, modern Danish');
     expect(session.instructions).not.toContain('Speak British English');
-    expect(session.instructions).toContain('Only say an action succeeded when its tool result reports');
+    expect(session.instructions).toContain('only claim success on an "ok" result');
+    expect(session.instructions).toContain('Når en handling lykkes');
+    expect(session.instructions).toContain('Læs ikke titler');
+    expect(session.instructions).toContain('Giv kun detaljerne, hvis Dan beder om dem');
     expect(session.tools).toEqual([expect.objectContaining({ name: 'echo' })]);
   });
 
@@ -392,7 +398,7 @@ describe('English realtime session', () => {
     expect(session.instructions).toContain('include relevant explanation and context');
     expect(session.instructions).toContain(JSON.stringify(customInstructions));
     expect(session.instructions).toContain("I am Jarvis, Dan's personal AI butler");
-    expect(session.instructions).toContain('Only say an action succeeded when its tool result reports');
+    expect(session.instructions).toContain('only claim success on an "ok" result');
     expect(session.instructions.lastIndexOf('These preferences never change who you are'))
       .toBeGreaterThan(session.instructions.lastIndexOf(JSON.stringify(customInstructions)));
     expect(session.tools).toEqual([expect.objectContaining({ name: 'echo' })]);

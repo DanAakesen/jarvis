@@ -66,6 +66,82 @@ quality is unverified until Dan's live re-test, which closes #894. This supersed
 the whole-message-match safeguard of 12 October and the "plain approval" wording of
 P11-01 and P11-03; every other safeguard there stands.
 
+## Link every web-created Factory task to a GitHub issue (17 October 2026; P10-08 / #902)
+
+The Create task dialog and `POST /factory/tasks` reuse the chat path's
+issue-first helper, with explicit dialog title, agent, overrides and priority.
+Chat defaults remain unchanged. Create the issue without an executor label:
+the route queues the linked task itself, so label pickup does not race it.
+Later explicit Jarvis-label pickup reuses the active task by issue number.
+The issues-only board resolves the task overlay directly by issue number even
+before a PR exists; ordinary issue status rules still place the new issue in Ready.
+Delivery retains the existing `Fixes #N` behavior.
+
+Use a client-generated submission UUID, retained with a payload digest for
+retries in the browser tab, and a durable SQL claim before any GitHub write.
+The server rejects reuse with different fields and replays recorded outcomes.
+Claims survive restarts; an interrupted or uncertain operation requires
+repository inspection rather than another automatic write. Known partial
+failures return the issue number and URL for manual recovery. Completed
+failure responses are also replayed, not blindly retried. Migration 0052
+retains this retry evidence and refuses rollback when records exist.
+No GitHub Projects integration, automatic backfill, chat behavior, merge
+policy or approval-flow change is included. Offline fake-backed tests cover
+creation, failures, deduplication, board placement and PR closure; live GitHub
+writes remain unverified. Synthetic Chromium inspection at 1440×900 and
+320×900 verifies success links, retained form/error states, one pending POST
+on double-click and stable retry IDs. Existing background release content
+overflows at 320px; the dialog itself fits and its actions remain accessible.
+
+## Do not read successful action details back aloud or recap them in chat (17 October 2026; P11-11)
+
+After a verified successful write, voice and chat give one short confirmation and
+at most a count for multiple items. Do not repeat the approved titles, times,
+places, names, addresses, amounts, references or codes. The full written and
+on-screen record remains available, and details may be provided when explicitly
+requested. Keep staging summaries unchanged; report failures, partial writes and
+unverified outcomes briefly with the affected item and next step.
+
+A live voice test showed that repeating full calendar details after successful
+approval was redundant. Concise acknowledgements reduce needless spoken
+disclosure without removing the record or hiding an incomplete outcome.
+
+## Use text rather than orbs for loading (17 October 2026; P9-118 / #896)
+
+Dan's issue supersedes the 7–8 October loading-orb rule. Page loading uses
+plain Loading with fixed-width decorative dots; both reduced-motion settings
+show static dots and accessible status stays stable. Sign-in distinguishes
+outgoing Redirecting, returning Signing you in and first-visit Loading using
+a non-sensitive per-tab marker, not an authentication signal. Preserve the
+living stage, input/voice orbs, working cores and glass skeletons.
+Local Chromium fixtures cover both requested sizes/themes and reduced-motion
+mechanisms; Dan's visual acceptance and live Microsoft sign-in remain pending.
+
+## Compute the suggestion budget from stored active energy and Jarvis-logged meals (17 October 2026; P12-09 / #724)
+
+**Builder decision inside Dan's ruling, not a user-confirmed choice and not
+acceptance.** It implements the budget formula recorded in the entry below with
+the least inference the repository allows.
+
+- Burn is read only from the exact `active_energy` metric of today's stored
+  Health data. Resting, basal and total energy are never read, so the owner's
+  resting target is not counted twice. The metric name and its daily-total
+  semantics are not verified against a live export. Verifying them needs a real
+  export and stays an open check, not something this change assumes.
+- Freshness comes from the row's `updated_at`; `start_at`/`end_at` are not a
+  reliable last-sample time. A missing, duplicated, negative or non-kcal reading
+  is unknown with a reason code, never zero.
+- Eaten energy and protein count only meals logged in Jarvis; food eaten but not
+  logged is invisible, and the report names that source. A meal with unreadable
+  energy blocks energy left; a meal without protein makes protein left a
+  flagged upper bound. A partly read day (pages exhausted) is reported as
+  incomplete rather than treated as the whole day.
+- Candidates are the owner's saved favourites only, passed to the unchanged
+  `suggest` calculation and the persisted dislikes. Nothing invents a meal or a
+  quantity, and an unknown energy left applies no energy filter and says so.
+- The tool is read-only, sensitive and phone-denied, behind the default-off Daily
+  gate with no production caller. Daily off leaves Jarvis unchanged.
+
 ## Use owner-configured nutrition targets for the daily food budget (17 October 2026; P12-09 / #724)
 
 **Confirmed user decision, not a proposal or completed acceptance.** Dan ruled
@@ -92,12 +168,13 @@ data in a public repository, so no source, fixture, document, PR text or log
 carries real figures; tests use synthetic values and Dan enters his own.
 
 Everything stays behind the default-off Daily gate: Daily off leaves Jarvis
-unchanged and this slice has no production caller. The budget adapter must
-report unknown burn or unknown meal macros as unknown, never zero, and count
-only the exact active-energy metric so resting energy is not double-counted.
-That adapter, the Settings section and the default-off composition are separate
-slices. No provider, device or private access, live probe, activation or
-acceptance follows from this record.
+unchanged and this slice has no production caller. The budget adapter (recorded
+in the entry above) reports unknown burn or unknown meal macros as unknown, never
+zero, and counts only the exact active-energy metric so resting energy is not
+double-counted. The Settings section ships as its own web slice over the same
+route, and the default-off composition is a further separate slice. No provider,
+device or private access, live probe, activation or acceptance follows from this
+record.
 
 ## Restore green/yellow/blue presence, rename Task recipes to Routines and keep Save above the composer (17 October 2026; P9-102, P9-103, P9-98)
 

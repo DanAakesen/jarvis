@@ -19,6 +19,7 @@ from test_model_client import (
 from calendar_flow import (
     calendar_batch_matches_request,
     calendar_claim,
+    calendar_details_requested,
     calendar_multiple_requested,
     calendar_reply,
     calendar_unsettled_confirmation,
@@ -119,7 +120,8 @@ class CalendarBackend(FakeBackend):
                     return refusal
                 self.pending = None  # Consumption happens before provider execution.
                 payload = {"status": "completed", "detail": "The event was created.",
-                           "summary": SUMMARY}
+                           "summary": SUMMARY,
+                           "instruction": "Confirm briefly without reading details aloud."}
                 if self.fail_confirmation:
                     return httpx.Response(200, json={"outcome": "error",
                                                     "result": {"error": "Provider failed"}})
@@ -179,6 +181,10 @@ class CalendarBatchBackend(CalendarBackend):
                 "items": [{"summary": summary, "status": status, "detail": status}
                           for summary, status in zip(BATCH_SUMMARIES, statuses, strict=True)],
             }
+            if not cancelled and not self.partial:
+                self.last_change["instruction"] = (
+                    "Confirm briefly without reading details aloud."
+                )
             return httpx.Response(200, json={"outcome": "ok", "result": self.last_change})
         if (request.method == "POST" and name == "calendar_get_pending_change"
                 and self.pending is None and self.last_change is not None):
@@ -236,7 +242,10 @@ async def test_staging_then_repeated_yes_executes_once_without_restage_or_approv
         backend.reply = "approve"
         history = [ModelMessage("assistant", staged), ModelMessage("user", "yes")]
         confirmed = await turn(model, history, "43", voice=voice)
-        assert "The event was created." in confirmed and SUMMARY in confirmed
+        assert confirmed == (
+            "Kalenderændringen er gennemført." if voice else "The calendar change is done."
+        )
+        assert SUMMARY not in confirmed
         repeated = await turn(model, [ModelMessage("assistant", confirmed),
                                      ModelMessage("user", "yes")], "44", voice=voice)
         assert "pending calendar change" in repeated or "afventende kalenderændring" in repeated
@@ -327,9 +336,34 @@ def test_success_requires_confirmation_tool_and_pending_requires_code():
     assert pending_calendar({
         "outcome": "ok", "result": {"status": "awaiting_confirmation"}
     }) is None
-    text = calendar_reply("calendar_create_event", {"outcome": "ok", "result": {
+    text = calendar_reply("calendar_confirm_change", {"outcome": "ok", "result": {
         "status": "completed", "detail": "The event was created."}}, False)
-    assert "The event was created" not in text
+    assert text == "The calendar change is done."
+
+
+def test_successful_batch_confirmation_withholds_details_unless_requested():
+    result = {
+        "status": "completed",
+        "summary": "Create 2 calendar events: " + " | ".join(BATCH_SUMMARIES),
+        "detail": "2 of 2 calendar events were created.",
+        "items": [{"summary": summary, "status": "completed", "detail": "created"}
+                  for summary in BATCH_SUMMARIES],
+    }
+    evidence = {"outcome": "ok", "result": result}
+    assert calendar_reply(
+        "calendar_confirm_change", evidence, False
+    ) == "Both are in your calendar."
+    assert calendar_reply(
+        "calendar_confirm_change", evidence, True
+    ) == "Begge er i kalenderen."
+    spoken_on_request = calendar_reply(
+        "calendar_confirm_change", evidence, False, include_details=True
+    )
+    assert all(summary in spoken_on_request for summary in BATCH_SUMMARIES)
+    assert calendar_details_requested("What time was that?")
+    assert calendar_details_requested("Read them to me")
+    assert calendar_details_requested("Læs dem op")
+    assert not calendar_details_requested("Thanks")
 
 
 async def test_calendar_read_can_be_followed_by_staging_in_the_same_turn():
@@ -754,7 +788,9 @@ async def test_contextual_two_hotel_request_refuses_single_then_uses_bound_batch
         confirmed = await turn(model, [
             *history, ModelMessage("assistant", staged), ModelMessage("user", reply),
         ], "43")
-        assert ("No change was made" if reply == "cancel" else "2 of 2") in confirmed
+        assert (
+            "No change was made" if reply == "cancel" else "Both are in your calendar."
+        ) in confirmed
         assert backend.pending is None
         assert backend.calendar_calls == [
             "calendar_get_pending_change", "calendar_create_events",
@@ -878,9 +914,13 @@ async def test_both_hotels_survive_one_later_approval_and_repeated_yes_without_r
         confirmed = await turn(model, [
             *history, ModelMessage("assistant", staged), ModelMessage("user", "Approved"),
         ], "43")
-        assert all(summary in confirmed for summary in BATCH_SUMMARIES)
-        assert ("1 of 2" if partial else "2 of 2") in confirmed
-        assert "unverified" in confirmed if partial else "unverified" not in confirmed
+        if partial:
+            assert "1 of 2" in confirmed and BATCH_SUMMARIES[1] in confirmed
+            assert BATCH_SUMMARIES[0] not in confirmed
+            assert "unverified" in confirmed
+        else:
+            assert confirmed == "Both are in your calendar."
+            assert all(summary not in confirmed for summary in BATCH_SUMMARIES)
         repeated = await turn(model, [
             *history, ModelMessage("assistant", confirmed), ModelMessage("user", "yes"),
         ], "44")
@@ -1193,7 +1233,7 @@ async def test_model_confirmation_cannot_bypass_backend_proposal_origin(
             assert "calendar_confirm_change" not in backend.calendar_calls
             assert backend.pending is not None
         elif source_id == "42":
-            assert "2 of 2" in answer
+            assert "Both are in your calendar." in answer
             assert backend.calendar_calls.count("calendar_confirm_change") == 1
         else:
             # The backend decided the reply approves, but the stage does not belong to this
@@ -1270,7 +1310,7 @@ async def test_steering_preserves_actual_staging_origin_for_later_batch_approval
             ModelMessage("user", "Add both bookings to my calendar", source_message_id="43"),
             ModelMessage("assistant", staged), ModelMessage("user", "yes"),
         ], "44")
-        assert "2 of 2" in confirmed
+        assert "Both are in your calendar." in confirmed
         assert backend.calendar_calls.count("calendar_confirm_change") == 1
     finally:
         current_steering_fetcher.reset(token)
@@ -1375,7 +1415,7 @@ async def test_reported_conversation_completes_both_then_answers_ordinary_follow
             answers.append(answer)
         assert answers[:3] == replies[:3]
         assert all(summary in answers[3] for summary in BATCH_SUMMARIES)
-        assert "2 of 2" in answers[4]
+        assert answers[4] == "Both are in your calendar."
         assert answers[5:] == replies[3:]
         assert all("I have no verified calendar result" not in answer for answer in answers)
         assert backend.calendar_calls.count("calendar_create_events") == 1
@@ -1391,14 +1431,14 @@ WORD_LIST = re.compile(
 )
 
 
-@pytest.mark.parametrize(("reply", "voice"), [
-    ("perfect, go for it", False),
-    ("yes please, book both", False),
-    ("looks good, add them", False),
-    ("ja tak, book dem begge", True),
+@pytest.mark.parametrize(("reply", "voice", "done"), [
+    ("perfect, go for it", False, "The calendar change is done."),
+    ("yes please, book both", False, "The calendar change is done."),
+    ("looks good, add them", False, "The calendar change is done."),
+    ("ja tak, book dem begge", True, "Kalenderændringen er gennemført."),
 ])
 async def test_natural_approval_the_backend_accepted_confirms_without_phrase_matching(
-    reply, voice,
+    reply, voice, done,
 ):
     backend = CalendarBackend(pending=PENDING, strict_reply=True)
     backend.reply = "approve"
@@ -1408,7 +1448,7 @@ async def test_natural_approval_the_backend_accepted_confirms_without_phrase_mat
             ModelMessage("assistant", "Pending calendar approval: " + SUMMARY),
             ModelMessage("user", reply),
         ], voice=voice)
-        assert "The event was created." in text and SUMMARY in text
+        assert done in text and SUMMARY not in text
         assert backend.calendar_calls == ["calendar_get_pending_change", "calendar_confirm_change"]
         assert backend.pending is None
         assert transport.responses.requests == []

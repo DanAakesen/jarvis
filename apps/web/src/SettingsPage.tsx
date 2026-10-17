@@ -278,7 +278,7 @@ function SelectField({
   );
 }
 
-export function SettingsPage({ backendUrl, getAccessToken, activity, presence, projects, memory, onBack }: {
+export function SettingsPage({ backendUrl, getAccessToken, activity, presence, projects, nutrition, memory, onBack }: {
   backendUrl: string | null;
   getAccessToken: () => Promise<string>;
   /** Live operational panels (Now feed, backend sleep) shown above the saved settings. */
@@ -287,6 +287,8 @@ export function SettingsPage({ backendUrl, getAccessToken, activity, presence, p
   presence?: ReactNode;
   /** Project management (managed projects and repositories), shown after the saved settings. */
   projects?: ReactNode;
+  /** Daily nutrition targets, saved on their own; only supplied while Daily is on. */
+  nutrition?: ReactNode;
   /** What Jarvis remembers: browse, correct and forget. */
   memory?: ReactNode;
   /** Leaves Settings for the previous page (or Jarvis when Settings was opened directly). */
@@ -469,7 +471,7 @@ export function SettingsPage({ backendUrl, getAccessToken, activity, presence, p
       </header>
       {activity && <div className="settings-activity">{activity}</div>}
       {presence}
-      {state === 'loading' && <Loader variant="core" label="Loading settings…" />}
+      {state === 'loading' && <Loader variant="text" label="Loading settings…" />}
       {state === 'error' && (
         <div className="settings-feedback" role="alert">
           <p>{error}</p>
@@ -759,6 +761,7 @@ export function SettingsPage({ backendUrl, getAccessToken, activity, presence, p
         </form>
       )}
       {projects}
+      {nutrition}
       {state !== 'ready' && memory && <CollapsibleSection storageKey="settings.memory" id="memory" headingId="memory-settings-heading" title="Memory">{memory}</CollapsibleSection>}
       {backendUrl && <TaskRecipesSettings key={backendUrl} backendUrl={backendUrl} getAccessToken={getAccessToken} />}
       {state === 'ready' && settings && options && (
