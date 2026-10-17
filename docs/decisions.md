@@ -1,5 +1,32 @@
 # Decisions
 
+## Link every web-created Factory task to a GitHub issue (17 October 2026; P10-08 / #902)
+
+The Create task dialog and `POST /factory/tasks` reuse the chat path's
+issue-first helper, with explicit dialog title, agent, overrides and priority.
+Chat defaults remain unchanged. Create the issue without an executor label:
+the route queues the linked task itself, so label pickup does not race it.
+Later explicit Jarvis-label pickup reuses the active task by issue number.
+The issues-only board resolves the task overlay directly by issue number even
+before a PR exists; ordinary issue status rules still place the new issue in Ready.
+Delivery retains the existing `Fixes #N` behavior.
+
+Use a client-generated submission UUID, retained with a payload digest for
+retries in the browser tab, and a durable SQL claim before any GitHub write.
+The server rejects reuse with different fields and replays recorded outcomes.
+Claims survive restarts; an interrupted or uncertain operation requires
+repository inspection rather than another automatic write. Known partial
+failures return the issue number and URL for manual recovery. Completed
+failure responses are also replayed, not blindly retried. Migration 0052
+retains this retry evidence and refuses rollback when records exist.
+No GitHub Projects integration, automatic backfill, chat behavior, merge
+policy or approval-flow change is included. Offline fake-backed tests cover
+creation, failures, deduplication, board placement and PR closure; live GitHub
+writes remain unverified. Synthetic Chromium inspection at 1440×900 and
+320×900 verifies success links, retained form/error states, one pending POST
+on double-click and stable retry IDs. Existing background release content
+overflows at 320px; the dialog itself fits and its actions remain accessible.
+
 ## Do not read successful action details back aloud or recap them in chat (17 October 2026; P11-11)
 
 After a verified successful write, voice and chat give one short confirmation and

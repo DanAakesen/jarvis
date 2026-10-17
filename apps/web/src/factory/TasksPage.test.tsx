@@ -1,4 +1,5 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { webcrypto } from 'node:crypto';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -116,8 +117,25 @@ function renderFactory(path = '/factory/kanban', issueNavigation: { current: Fac
   );
 }
 
+async function openTaskForm(title = 'Add coverage') {
+  await screen.findByRole('article', { name: 'Fix the bug' });
+  fireEvent.click(screen.getByRole('button', { name: 'Create task' }));
+  const dialog = screen.getByRole('dialog', { name: 'Create task' });
+  fireEvent.change(within(dialog).getByRole('textbox', { name: 'Task title' }), { target: { value: title } });
+  fireEvent.change(within(dialog).getByRole('textbox', { name: 'Request' }), { target: { value: 'Cover retries' } });
+  return dialog.querySelector('form')!;
+}
+
+function submittedTasks() {
+  return fetchMock.mock.calls
+    .filter(([input, init]) => String(input).endsWith('/factory/tasks') && init?.method === 'POST')
+    .map(([, init]) => JSON.parse(String(init?.body)) as Record<string, unknown>);
+}
+
 beforeEach(() => {
   localStorage.clear();
+  sessionStorage.clear();
+  vi.stubGlobal('crypto', webcrypto);
   resetFactoryBoardForTests();
   publishFactoryBoardStatus('https://api.example.com', 'connected');
   getAccessToken.mockClear();
@@ -137,7 +155,10 @@ beforeEach(() => {
       });
     }
     if (url.endsWith('/factory/tasks') && method === 'POST') {
-      return response({ ...task, ...JSON.parse(String(init?.body)), id: '43', state: 'Ready' }, 201);
+      return response({
+        ...task, ...JSON.parse(String(init?.body)), id: '43', state: 'Ready',
+        issueUrl: 'https://github.com/DanAakesen/jarvis/issues/108', issueNumber: 108,
+      }, 201);
     }
     return response({ error: 'Unexpected request' }, 500);
   });
@@ -286,7 +307,10 @@ describe('Factory task board', () => {
     await user.type(within(dialog).getByRole('textbox', { name: 'Reasoning override (optional)' }), 'high');
     await user.click(within(dialog).getByRole('button', { name: 'Create task' }));
 
-    expect(await screen.findByText('Task created. Linked issues appear in their GitHub Project column.')).not.toBeNull();
+    const issueLink = await screen.findByRole('link', { name: 'issue #108' });
+    expect(issueLink.getAttribute('href')).toBe('https://github.com/DanAakesen/jarvis/issues/108');
+    expect(issueLink.closest('[role="status"]')?.textContent).toBe('Task created and linked to issue #108');
+    expect(screen.queryByRole('dialog', { name: 'Create task' })).toBeNull();
     const createCall = fetchMock.mock.calls.find(([, init]) => init?.method === 'POST');
     expect(createCall?.[0]).toBe('https://api.example.com/factory/tasks');
     expect(createCall?.[1]?.headers).toMatchObject({ Authorization: ['Bearer', 'test-access-token'].join(' ') });
@@ -297,7 +321,156 @@ describe('Factory task board', () => {
       agent: 'codex',
       modelOverride: 'gpt-5.6',
       reasoningOverride: 'high',
+      submissionId: expect.stringMatching(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i),
     });
+  });
+
+  it.each([
+    [400, { error: 'Choose an active project.' }, 'Choose an active project.'],
+    [502, { message: 'GitHub issue creation failed. Try again.' }, 'GitHub issue creation failed. Try again.'],
+    [503, { error: 'Issue #108 was created, but linking the task failed. Retry to finish linking.' },
+      'Issue #108 was created, but linking the task failed. Retry to finish linking.'],
+  ])('retains the task form and backend error for HTTP %s', async (status, failure, message) => {
+    const defaultFetch = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation((input, init) => init?.method === 'POST'
+      ? Promise.resolve(response(failure, status)) : defaultFetch(input, init));
+    renderFactory();
+    const form = await openTaskForm();
+    fireEvent.submit(form);
+    expect((await screen.findByRole('alert')).textContent).toBe(message);
+    expect(screen.getByRole('dialog', { name: 'Create task' }).contains(form)).toBe(true);
+    expect(screen.getByRole('textbox', { name: 'Task title' })).toHaveProperty('value', 'Add coverage');
+    expect(screen.getByRole('textbox', { name: 'Request' })).toHaveProperty('value', 'Cover retries');
+    expect(screen.queryByRole('link', { name: 'issue #108' })).toBeNull();
+    expect(within(form).getByRole('button', { name: 'Create task' }).hasAttribute('disabled')).toBe(false);
+  });
+
+  it('reuses the submission id after a network failure, dialog dismissal and remount', async () => {
+    const defaultFetch = fetchMock.getMockImplementation()!;
+    let fail = true;
+    fetchMock.mockImplementation((input, init) => {
+      if (init?.method === 'POST' && fail) return Promise.reject(new TypeError('Network unavailable'));
+      return defaultFetch(input, init);
+    });
+    const view = renderFactory();
+    fireEvent.submit(await openTaskForm());
+    expect((await screen.findByRole('alert')).textContent).toBe('Jarvis could not reach the task service. Try again.');
+    const firstId = submittedTasks()[0]!.submissionId;
+    expect(sessionStorage.getItem('jarvis.factory.taskSubmission:https://api.example.com')).not.toContain('Cover retries');
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    fireEvent.submit(await openTaskForm());
+    await screen.findByRole('alert');
+    expect(submittedTasks()[1]!.submissionId).toBe(firstId);
+    view.unmount();
+    renderFactory();
+    fail = false;
+    fireEvent.submit(await openTaskForm());
+    await screen.findByRole('link', { name: 'issue #108' });
+    expect(submittedTasks()[2]!.submissionId).toBe(firstId);
+    expect(sessionStorage.getItem('jarvis.factory.taskSubmission:https://api.example.com')).toBeNull();
+  });
+
+  it('uses a new submission id when the payload changes and after a successful submission', async () => {
+    const defaultFetch = fetchMock.getMockImplementation()!;
+    let fail = true;
+    fetchMock.mockImplementation((input, init) => init?.method === 'POST' && fail
+      ? Promise.resolve(response({ error: 'Try again.' }, 502)) : defaultFetch(input, init));
+    renderFactory();
+    const form = await openTaskForm();
+    fireEvent.submit(form);
+    await screen.findByRole('alert');
+    fireEvent.change(screen.getByRole('textbox', { name: 'Task title' }), { target: { value: 'Edited coverage' } });
+    fail = false;
+    fireEvent.submit(form);
+    await screen.findByRole('link', { name: 'issue #108' });
+    expect(submittedTasks()[1]!.submissionId).not.toBe(submittedTasks()[0]!.submissionId);
+    fireEvent.submit(await openTaskForm('Edited coverage'));
+    await screen.findByRole('link', { name: 'issue #108' });
+    expect(submittedTasks()[2]!.submissionId).not.toBe(submittedTasks()[1]!.submissionId);
+  });
+
+  it.each([false, true])('retains uncertain A across successful B and retries A with its original id (remount: %s)', async (remount) => {
+    const defaultFetch = fetchMock.getMockImplementation()!;
+    let loseResponse = true;
+    fetchMock.mockImplementation((input, init) => {
+      if (init?.method === 'POST' && loseResponse) return Promise.reject(new TypeError('Response lost'));
+      return defaultFetch(input, init);
+    });
+    const view = renderFactory();
+    const form = await openTaskForm('Uncertain A');
+    fireEvent.submit(form);
+    await screen.findByRole('alert');
+    const originalId = submittedTasks()[0]!.submissionId;
+    loseResponse = false;
+    fireEvent.change(screen.getByRole('textbox', { name: 'Task title' }), { target: { value: 'Successful B' } });
+    fireEvent.submit(form);
+    await screen.findByRole('link', { name: 'issue #108' });
+    expect(submittedTasks()[1]!.submissionId).not.toBe(originalId);
+    const stored = JSON.parse(sessionStorage.getItem('jarvis.factory.taskSubmission:https://api.example.com')!);
+    expect(stored).toEqual([{
+      fingerprint: expect.stringMatching(/^[0-9a-f]{64}$/),
+      submissionId: originalId,
+    }]);
+    if (remount) {
+      view.unmount();
+      renderFactory();
+    }
+    fireEvent.submit(await openTaskForm('Uncertain A'));
+    await screen.findByRole('link', { name: 'issue #108' });
+    expect(submittedTasks()[2]!.submissionId).toBe(originalId);
+    expect(sessionStorage.getItem('jarvis.factory.taskSubmission:https://api.example.com')).toBeNull();
+  });
+
+  it('reuses a legacy single-record submission after remount', async () => {
+    const defaultFetch = fetchMock.getMockImplementation()!;
+    let loseResponse = true;
+    fetchMock.mockImplementation((input, init) => init?.method === 'POST' && loseResponse
+      ? Promise.reject(new TypeError('Response lost')) : defaultFetch(input, init));
+    const view = renderFactory();
+    fireEvent.submit(await openTaskForm());
+    await screen.findByRole('alert');
+    const key = 'jarvis.factory.taskSubmission:https://api.example.com';
+    const [legacy] = JSON.parse(sessionStorage.getItem(key)!);
+    sessionStorage.setItem(key, JSON.stringify(legacy));
+    view.unmount();
+    renderFactory();
+    loseResponse = false;
+    fireEvent.submit(await openTaskForm());
+    await screen.findByRole('link', { name: 'issue #108' });
+    expect(submittedTasks()[1]!.submissionId).toBe(submittedTasks()[0]!.submissionId);
+    expect(sessionStorage.getItem(key)).toBeNull();
+  });
+
+  it('synchronously blocks rapid duplicate form submissions while creation is pending', async () => {
+    const defaultFetch = fetchMock.getMockImplementation()!;
+    let finish!: (value: Response) => void;
+    const pending = new Promise<Response>((resolve) => { finish = resolve; });
+    fetchMock.mockImplementation((input, init) => init?.method === 'POST' ? pending : defaultFetch(input, init));
+    renderFactory();
+    const form = await openTaskForm();
+    act(() => {
+      fireEvent.submit(form);
+      fireEvent.submit(form);
+    });
+    await waitFor(() => expect(submittedTasks()).toHaveLength(1));
+    expect(within(form).getByRole('button', { name: 'Creating task…' }).hasAttribute('disabled')).toBe(true);
+    fireEvent.submit(form);
+    expect(submittedTasks()).toHaveLength(1);
+    finish(response({
+      ...task, issueUrl: 'https://github.com/DanAakesen/jarvis/issues/108', issueNumber: 108,
+    }, 201));
+    await screen.findByRole('link', { name: 'issue #108' });
+    expect(submittedTasks()).toHaveLength(1);
+  });
+
+  it('does not report success for a task response missing its linked issue', async () => {
+    const defaultFetch = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation((input, init) => init?.method === 'POST'
+      ? Promise.resolve(response(task, 201)) : defaultFetch(input, init));
+    renderFactory();
+    fireEvent.submit(await openTaskForm());
+    expect((await screen.findByRole('alert')).textContent).toBe('Jarvis returned invalid task data. Try again.');
+    expect(screen.getByRole('dialog', { name: 'Create task' })).not.toBeNull();
   });
 
   it('refreshes canonical placement and activity after a board invalidation', async () => {

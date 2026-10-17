@@ -862,7 +862,8 @@ export function createFactoryBoard(
       record: pullRequestRecords.find((record) => record.number === pullRequest.number),
     }));
     const linkedTask = linkedPullRequests.find(({ record }) => record?.taskId && tasks.has(record.taskId));
-    const task = linkedTask?.record?.taskId ? tasks.get(linkedTask.record.taskId) : undefined;
+    const task = (linkedTask?.record?.taskId ? tasks.get(linkedTask.record.taskId) : undefined) ??
+      taskRecords.find((record) => record.projectId === projectId && record.issueNumber === issue.number);
     const primaryPullRequest = linkedTask ?? linkedPullRequests[0];
     const checks = primaryPullRequest?.record?.checks;
     const card: BoardCard = {
