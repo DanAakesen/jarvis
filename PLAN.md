@@ -15,6 +15,54 @@ with `agent_error`. Its immutable receipt remains `accepted=false`; #820 owns
 the functional follow-through and #880 stays open. This integration does not
 claim to fix that historical failure or complete private Daily acceptance.
 
+## On-screen views authority (17 October 2026; P11-09 / #885)
+
+P0 from Dan's live test (find hotels in Gmail, show them, stage in the calendar,
+confirm): step 1 worked, but Jarvis could not put anything on screen in voice or
+chat, and a raw JSON dump appeared after the Gmail check. Three causes, shipped
+as small PRs:
+
+1. Authority and presentation. A realtime voice tool call runs on the owner's
+   authenticated socket and was refused as a browser caller, so the relay now
+   runs each model-issued call inside an in-process Jarvis-origin scope (owner
+   only; browser, HTTP owner token, reflex and other users unchanged). Voice
+   presentation of Google results shows a clean list or text, never raw JSON or
+   message bodies. Regressions cover voice create/update/arrange/close,
+   browser and non-owner refusal, the scope boundary and each presentation shape.
+2. Specific refusals and model guidance (next). Chat refusals come from
+   generated-view validation returning one generic message; name the field to
+   fix so the model corrects once, and never misdescribe the cause.
+3. Offline end-to-end (after). Fake Gmail/Calendar: find, show view, stage
+   (`awaiting_confirmation`), plain yes, confirm.
+
+No provider call, live probe or replay of Dan's mail. Dan's live re-test closes
+#885; merged source is not acceptance.
+
+## Chat acceptance fix-forward (#820, 17 October 2026)
+
+Three consecutive main deploys failed different chat checks with the bare
+`agent_error`: 39043117488 `chat_capabilities`; 39046081711 `chat_github_read` and
+`chat_navigation`; 39049389385 (`c00818b7`, #816) `chat_navigation` and
+`chat_plain_approval`. No #884 origin code surfaced, the failing set moves
+between builds, and the cause is not established. #816 is not the cause by code
+path: smoke turns never open its coordination client, which an agent test now
+pins.
+
+The candidate adds fixed backend-side failure labels (`agent_*`), separate
+`agent_error_code_missing` / `agent_error_code_unlisted` buckets for hosted error
+events, and one bounded retry of a conversation check that threw, inside the
+unchanged 55-second suite deadline. No model, prompt, assertion, timeout,
+credential, workflow or #816 lifecycle change. Degraded identity/no-timestamp
+reasons stay off HTTP for already-open web clients, so they exist only in
+`system.smoke_check` events. Locally passing: backend chat-agent, chat-canary and
+system-status tests (219, via an uncommitted vitest alias for `voice/relay.ts`),
+smoke-reasons parity tests (11) and pipeline tests (38), plus scoped ESLint, tsc
+and Ruff. The agent regression test is left to CI (`azure.ai.agentserver` is not
+installed locally). Next: normal pinned CI/CodeQL and independent review, then the
+existing main-only release; the next deploy's labelled evidence drives the
+follow-up. #820 and #880 remain open and #884 stays frozen; source qualification
+is not production acceptance.
+
 ## Chat acceptance origin provenance (#820, 17 October 2026)
 
 Retained Deploy39043117488 at705af7c7/treee79dbd60 failed required
@@ -1899,6 +1947,7 @@ issue closure, new PR, push, hosted CI or deployment by this worker.
 A rolling intake phase. When Dan asks Jarvis to change its own code or a project's code, Jarvis drafts the issue, confirms it with Dan and creates it as `P11-NN` (P10-03). Rows are added here as the issues are created.
 | ID | Issue | Task | Acceptance criteria | Depends on | Status |
 | --- | --- | --- | --- | --- | --- |
+| P11-09 | [#885](https://github.com/DanAakesen/jarvis/issues/885) | P0: Jarvis has full control of its own on-screen views in voice and chat | Create, update, arrange and close generated views in voice and chat for the authenticated owner without weakening owner-only authority or accepting model actor claims; no raw JSON on screen; specific machine-usable refusals; regressions for the refused shapes in both paths; offline find/show/stage/confirm test; Dan's live re-test closes it | None | In progress |
 | P11-08 | [#868](https://github.com/DanAakesen/jarvis/issues/868) | Stop Web CI repeating backend checks | Web checks contracts and frontend; dedicated Backend and every other required component/analysis remain green; record actual selection without a speculative speedup claim | None | Complete |
 | P11-06 | [#860](https://github.com/DanAakesen/jarvis/issues/860) | Priority hotfix: stop the mobile composer jumping over chat on focus | One phone viewport dock with chat open, closed or minimised; preserve drafts, reader following and saved desktop geometry through focus, keyboard resize/pan/dismissal and orientation; focused regressions, independent review and normal release gates; native-phone acceptance explicit | None | Not started |
 | P11-05 | [#859](https://github.com/DanAakesen/jarvis/issues/859) | Make header background work understandable and dismissible | Remove dismissed rows immediately and across refresh/reload; distinguish background work from Factory tasks; preserve job records, real status, recovery, scoped visibility, accessible focus and desktop/phone states; cover storage/network failure without private mutations | — | Complete |
@@ -2082,6 +2131,16 @@ issue/dependency state after this source update. Do not invent maintenance/TDEE,
 nutrition-completeness, freshness-expiry or readiness-scale rules to complete an
 excluded feature; existing core validation and evidence gates are not waived.
 
+17 October table reconcile (documentation only): the P12-15 and P12-16 Task and
+Acceptance cells now state Dan's 15 October scope: one mobile-first Daily page in
+the existing shell plus existing on-demand GenUI ([#730](https://github.com/DanAakesen/jarvis/issues/730),
+[#731](https://github.com/DanAakesen/jarvis/issues/731)). P12-08, P12-11 and P12-13
+keep their rows with labels matching their closed issues; coaching automation, the
+widget and football stay excluded. Row positions, task IDs, Issue and Depends-on
+cells and workflow-owned Status cells are unchanged. This records scope; it is not
+implementation, activation or cutover approval, and every backup, parity,
+device/provider and rollback gate stands.
+
 PR #808's review follow-up corrects heart-rate unit validation across summaries and series. Synthetic regressions cover BPM aliases, legacy implicit summaries, missing values and SQL quarantine/readback. Fresh full CI and independent exact-head review remain required; no downstream scope is released.
 
 14 October: #808 merged; its automatic review exposed an unsupported body-fat unit fallthrough. The existing #720 claim continues on `codex/p12-05-body-fat-units` from fresh main for only strict body-fat unit handling and synthetic normalization/SQL regressions. #818's review also found malformed declarations lost before mapping; raw unit checks now precede sanitization and fallback selection. Missing/null/blank-unit semantics and retained evidence stay intact. No next scope or activation; follow-up full CI and independent review are required.
@@ -2103,15 +2162,15 @@ Dan approved P12 on 12 October 2026 and explicitly released only P12-01 for this
 | P12-05 | [#720](https://github.com/DanAakesen/jarvis/issues/720) | Health processor & sync read models | Same export twice = one result; changed payload conflict; empty workout export succeeds; processed freshness is truthful. | P12-03, P12-04 | Complete |
 | P12-06 | [#721](https://github.com/DanAakesen/jarvis/issues/721) | Import, reconcile & shadow comparison | Every inventoried record has an import / exclude decision; IDs / tombstones / owner mapping preserved; sampled calculations reconcile; excluded integration payloads never appear in active reads. | P12-02, P12-03 | Not started |
 | P12-07 | [#722](https://github.com/DanAakesen/jarvis/issues/722) | Nutrition tools, Frida & meal planning | Retry-safe exact-once logging; corrections beyond 7 Days; dislikes excluded; time-aware suggestions. | P12-03 | Complete |
-| P12-08 | [#723](https://github.com/DanAakesen/jarvis/issues/723) | Coaching, recovery & recomp services | UI and assistant share calculations; ≥15% deficits count; no false misses, fabricated averages or already-met step orders. | P12-05, P12-07 | Not started |
+| P12-08 | [#723](https://github.com/DanAakesen/jarvis/issues/723) | Coaching, recovery & recomp services (out of scope) | UI and assistant share calculations; ≥15% deficits count; no false misses, fabricated averages or already-met step orders. | P12-05, P12-07 | Not started |
 | P12-09 | [#724](https://github.com/DanAakesen/jarvis/issues/724) | Daily API, tool registry & live revisions | Daily off leaves existing Jarvis unchanged. Committed domain updates reach chat / UI; reconnect refreshes; sensitive payloads absent from audit logs. | P12-05, P12-07 | In progress |
 | P12-10 | [#725](https://github.com/DanAakesen/jarvis/issues/725) | Google feed, all calendars & attention | Same authenticated owner and account connections; source parity / freshness verified; Calendar / Gmail writes and existing approval behaviour unchanged. | P12-03 | Not started |
-| P12-11 | [#726](https://github.com/DanAakesen/jarvis/issues/726) | Read-only iPhone widget & deep links | Actual iPhone refresh and deep link work; widget cannot write meals or expose broader account access. | P12-09 | Not started |
+| P12-11 | [#726](https://github.com/DanAakesen/jarvis/issues/726) | iPhone widget — cancelled | Actual iPhone refresh and deep link work; widget cannot write meals or expose broader account access. | P12-09 | Not started |
 | P12-12 | [#727](https://github.com/DanAakesen/jarvis/issues/727) | Apple Health nutrition export Shortcut | Real Shortcut exports once; retries do not duplicate nutrition; no ingestion feedback loop. | P12-07 | Not started |
-| P12-13 | [#728](https://github.com/DanAakesen/jarvis/issues/728) | Football preferences & live table behaviour | Current sourced update, timestamped live table first time; second request does not repeat the table unnecessarily. | P12-08 | Not started |
+| P12-13 | [#728](https://github.com/DanAakesen/jarvis/issues/728) | Football preferences & live table behaviour (not planned) | Current sourced update, timestamped live table first time; second request does not repeat the table unnecessarily. | P12-08 | Not started |
 | P12-14 | [#729](https://github.com/DanAakesen/jarvis/issues/729) | Brief history & disabled notification support | Historical briefs accessible; no daily 09:00 / 13:00 / 19:00 schedules silently created. | P12-08, P12-10 | Not started |
-| P12-15 | [#730](https://github.com/DanAakesen/jarvis/issues/730) | Daily, Workouts & Nutrition pages | Phone layouts, period selectors, chart axes / scan points and shared values verified; no removed task integration appears; Daily disabled preserves current navigation. | P12-09, P12-10 | Not started |
-| P12-16 | [#731](https://github.com/DanAakesen/jarvis/issues/731) | Status, Recomp, Review & Ready views | All four short commands show the correct view in one conversation; same sign-in authorizes chat / voice / artifacts; writes update without duplicates. | P12-09 | Not started |
+| P12-15 | [#730](https://github.com/DanAakesen/jarvis/issues/730) | Single Daily page, data browsing & visuals | One gated mobile-first page in the existing shell (side rail and mobile navigation; Daily disabled leaves current navigation unchanged) lets Dan browse retained health, food, workout and scan history himself: periods/filters, inspectable records, correct units/dates/axes, every actual scan point and visible source freshness/coverage. It reads the same owner-authorised sources as P12-16; no separate Workouts/Nutrition pages, card deck, fixed Status/Recomp/Review/Ready views or iPhone widget; new coaching automation and football preferences stay excluded. Current Jarvis styling verified in real narrow-phone and desktop browsers; live, private and physical-device acceptance is recorded separately. | P12-09, P12-10 | Not started |
+| P12-16 | [#731](https://github.com/DanAakesen/jarvis/issues/731) | On-demand Daily GenUI integration | Representative Daily questions in the one existing conversation (chat and voice) produce grounded summaries and visuals on demand through the existing GenUI and workspace/artifact lifecycle, from the same owner-authorised sources and backend calculations as the Daily page; provenance, freshness/coverage, units and missing data stay explicit. Stable artifact IDs refresh without duplicates; one sign-in/owner check covers chat, voice, page and artifacts; generated code gets no credentials or arbitrary backend/network access. No new GenUI engine, extra navigation page, four fixed Status/Recomp/Review/Ready views or widget; fixture tests are kept distinct from live, provider and physical-phone acceptance. | P12-09 | Not started |
 | P12-17 | [#732](https://github.com/DanAakesen/jarvis/issues/732) | End-to-end, mobile & real-iPhone acceptance | Data manifest reconciled; real devices and existing Jarvis workflows pass; SQL availability and reverse-delta rollback verified. Dan reviews cutover evidence. | P12-06, P12-11, P12-12, P12-13, P12-14, P12-15, P12-16 | Not started |
 | P12-18 | [#733](https://github.com/DanAakesen/jarvis/issues/733) | Final delta, cutover & rollback window | Post-switch sync / food / UI pass; window agreed; new Azure writes can be recovered if rollback is needed. | P12-17 | Not started |
 | P12-19 | [#734](https://github.com/DanAakesen/jarvis/issues/734) | Retire legacy and migration-only tooling | Permanent Azure services and original source/data remain; full verified migration, rollback/retention gates met before legacy deprecation or temporary-tool cleanup; no hidden old canonical writer. | P12-18 | Not started |

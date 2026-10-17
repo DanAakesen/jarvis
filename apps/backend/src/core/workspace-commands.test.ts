@@ -1,8 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { FastifyRequest } from 'fastify';
 import { buildApp } from '../app.js';
 import { loadConfig } from '../config.js';
 import { coreModule } from './index.js';
-import { ToolFailure, ToolRefusal } from './tool-registry.js';
+import { runModelToolCall } from './tool-origin.js';
+import { MAX_TOOL_DESCRIPTION_CHARACTERS, ToolFailure, ToolRefusal } from './tool-registry.js';
 import { isWorkspaceReflexOperation, WorkspaceCommandBroker, workspaceCommandTool } from './workspace-commands.js';
 import { workspaceNavigationPages, type WorkspaceCommand } from '@jarvis/contracts';
 import { executeReflexAction, reflexTargets, registerChatReflex, undoPartialReflexAction } from './reflex.js';
@@ -977,5 +979,139 @@ describe('workspace command delivery', () => {
     }, new AbortController().signal)).rejects.toBeInstanceOf(ToolRefusal);
     current.close();
     expect((await Promise.allSettled(queued)).every(({ status }) => status === 'rejected')).toBe(true);
+  });
+});
+
+describe('Jarvis control of its own workspace views', () => {
+  const hotels = {
+    version: 1,
+    title: 'Hotels found',
+    renderer: 'list',
+    source: { id: 'now', status: 'complete' },
+    data: {
+      items: [
+        { title: 'Hotel Alpha', description: 'Booked 12 Nov, 3 nights' },
+        { title: 'Hotel Beta', description: 'Booked 20 Nov, 2 nights' },
+      ],
+    },
+  } as const;
+
+  function autoAckTab(broker: WorkspaceCommandBroker) {
+    const delivered: WorkspaceCommand[] = [];
+    const connection = broker.connect(ownerId, (event, data) => {
+      if (event === 'workspace-command') {
+        delivered.push(data.command);
+        queueMicrotask(() => { broker.acknowledge(ownerId, connection.sessionId, data.command.commandId, true); });
+      }
+      return true;
+    });
+    return { delivered, connection };
+  }
+
+  function directRequest(principal: { objectId: string } | null) {
+    const execute = vi.fn(async () => undefined);
+    const request = {
+      headers: {},
+      log: { info: vi.fn(), warn: vi.fn() },
+      principal,
+      agentPrincipal: null,
+      server: {
+        ownerObjectId: ownerId,
+        jarvisTools: { list: () => [], get: () => undefined },
+        workspaceCommands: { execute },
+      },
+    } as unknown as FastifyRequest;
+    return { request, execute };
+  }
+
+  it('lets Jarvis create, update, arrange and close a clean list view', async () => {
+    const { app, broker } = fixture();
+    const { delivered, connection } = autoAckTab(broker);
+    const send = (payload: Record<string, unknown>) => app.inject({
+      method: 'POST', url: '/tools/workspace_command', headers: agentHeaders, payload,
+    });
+    const created = await send({ commandId: 'hotels-create', operation: 'create', viewId: 'hotels-found', view: hotels });
+    expect(created.json()).toMatchObject({ outcome: 'ok', result: { type: 'generated-view', view: hotels } });
+    const revised = { ...hotels, title: 'Hotels found (3)', data: { items: [...hotels.data.items, { title: 'Hotel Gamma' }] } };
+    expect((await send({
+      commandId: 'hotels-update', operation: 'update', viewId: 'hotels-found', view: revised,
+    })).json()).toMatchObject({ outcome: 'ok', result: { type: 'generated-view', view: revised } });
+    expect((await send({
+      commandId: 'hotels-place', operation: 'place', viewId: 'hotels-found', region: 'left',
+    })).json()).toMatchObject({ outcome: 'ok', result: { applied: true, operation: 'place' } });
+    expect((await send({
+      commandId: 'hotels-arrange', operation: 'arrange', layout: 'side-by-side', viewIds: ['hotels-found', 'tasks'],
+    })).json()).toMatchObject({ outcome: 'ok', result: { applied: true, operation: 'arrange' } });
+    expect((await send({
+      commandId: 'hotels-close', operation: 'close', viewId: 'hotels-found',
+    })).json()).toMatchObject({ outcome: 'ok', result: { applied: true, operation: 'close' } });
+    expect(delivered.map(({ operation }) => operation)).toEqual(['create', 'update', 'place', 'arrange', 'close']);
+    connection.close();
+  });
+
+  it.each([
+    { commandId: 'owner-create', operation: 'create', viewId: 'hotels-found', view: hotels },
+    { commandId: 'owner-update', operation: 'update', viewId: 'hotels-found', view: hotels },
+    { commandId: 'owner-navigate', operation: 'navigate', page: 'settings' },
+    { commandId: 'owner-panel', operation: 'context-panel', action: 'open', view: hotels },
+  ])('keeps $operation Jarvis-only for the owner’s own browser session', async (command) => {
+    const { app, broker } = fixture();
+    const { delivered, connection } = autoAckTab(broker);
+    const response = await app.inject({
+      method: 'POST', url: '/tools/workspace_command',
+      headers: { ...userHeaders, 'x-jarvis-message-id': '101' }, payload: command,
+    });
+    expect(response.json()).toMatchObject({ outcome: 'refused', result: { refused: expect.any(String) } });
+    const refusal = String((response.json() as { result: { refused: string } }).result.refused);
+    expect(refusal).toContain('Creating, updating or navigating views is done by Jarvis');
+    expect(refusal).toContain('Nothing was changed or shown');
+    expect(refusal).not.toMatch(/workspace owner can/i);
+    expect(delivered).toEqual([]);
+    connection.close();
+  });
+
+  it('still lets the signed-in owner control existing windows from the browser', async () => {
+    const { app, broker } = fixture();
+    const { delivered, connection } = autoAckTab(broker);
+    const close = { commandId: 'owner-close', operation: 'close', viewId: 'hotels-found' };
+    const response = await app.inject({
+      method: 'POST', url: '/tools/workspace_command',
+      headers: { ...userHeaders, 'x-jarvis-message-id': '101' }, payload: close,
+    });
+    expect(response.json()).toMatchObject({ outcome: 'ok', result: { applied: true, operation: 'close' } });
+    expect(delivered).toEqual([close]);
+    connection.close();
+  });
+
+  it('treats a model-issued call on the owner’s own request as Jarvis, and nothing else', async () => {
+    const create = { commandId: 'voice-create', operation: 'create', viewId: 'hotels-found', view: hotels };
+    const signal = new AbortController().signal;
+
+    const model = directRequest({ objectId: ownerId });
+    await expect(runModelToolCall(model.request, () => workspaceCommandTool.execute(create, model.request, signal)))
+      .resolves.toMatchObject({ type: 'generated-view', view: hotels });
+    expect(model.execute).toHaveBeenCalledWith(ownerId, create, signal);
+
+    const browser = directRequest({ objectId: ownerId });
+    await expect(workspaceCommandTool.execute(create, browser.request, signal))
+      .rejects.toThrow('Creating, updating or navigating views is done by Jarvis');
+    expect(browser.execute).not.toHaveBeenCalled();
+
+    for (const principal of [{ objectId: 'someone-else' }, null]) {
+      const stranger = directRequest(principal);
+      await expect(runModelToolCall(stranger.request, () =>
+        workspaceCommandTool.execute(create, stranger.request, signal)))
+        .rejects.toThrow('available only to Jarvis and the signed-in workspace owner');
+      expect(stranger.execute).not.toHaveBeenCalled();
+    }
+  });
+
+  it('shows a worked clean-list example and tells the model to retry a refusal once', () => {
+    expect(workspaceCommandTool.description).toContain('create a clean list view');
+    expect(workspaceCommandTool.description).toContain('never raw JSON or full message bodies');
+    expect(workspaceCommandTool.description).toContain('"viewId":"hotels-found"');
+    expect(workspaceCommandTool.description).toContain('create and update both need viewId and view');
+    expect(workspaceCommandTool.description).toContain('correct it and retry once');
+    expect(Array.from(workspaceCommandTool.description).length).toBeLessThanOrEqual(MAX_TOOL_DESCRIPTION_CHARACTERS);
   });
 });

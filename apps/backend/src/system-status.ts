@@ -89,7 +89,32 @@ export const chatAgentFailureReasons: ReadonlySet<string> = new Set([
   'error_badrequesterror',
   'error_internalservererror',
 ]);
-const sharedChatFailureReasons = ['agent_error', 'timeout', ...chatAgentFailureReasons] as const;
+// Assigned by the backend itself while calling or reading the hosted agent; never copied from a payload.
+export const chatAgentInvocationReasons: ReadonlySet<string> = new Set([
+  'agent_auth_unavailable',
+  'agent_request_failed',
+  'agent_http_400',
+  'agent_http_401',
+  'agent_http_403',
+  'agent_http_404',
+  'agent_http_408',
+  'agent_http_409',
+  'agent_http_424',
+  'agent_http_429',
+  'agent_http_500',
+  'agent_http_502',
+  'agent_http_503',
+  'agent_http_504',
+  'agent_http_other',
+  'agent_response_invalid',
+  'agent_stream_failed',
+  'agent_stream_ended',
+  'agent_error_code_missing',
+  'agent_error_code_unlisted',
+]);
+const sharedChatFailureReasons = [
+  'agent_error', 'timeout', ...chatAgentFailureReasons, ...chatAgentInvocationReasons,
+] as const;
 const safeSmokeReasons: Partial<Record<SystemSmokeCheckId, ReadonlySet<string>>> = {
   agent_contract: new Set([
     'Tool count exceeds the agent limit.',
