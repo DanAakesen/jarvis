@@ -1084,7 +1084,11 @@ tool exist only behind the default-off Daily gate (Daily off leaves Jarvis
 unchanged). The suggest tool reports energy and protein left and the saved
 favourites that fit, using the stored active energy and only the meals logged in
 Jarvis, so food eaten but never logged is not counted. The Settings section
-follows, and no activation or acceptance is implied.
+appears only while Daily is on. It shows the three targets as whole-number fields
+with their allowed ranges, saves on its own rather than with Save settings, and
+clears a target when its field is emptied. It ships no defaults, placeholders or
+example figures, and a failed load or save shows page-owned wording, never server
+text. No activation or acceptance is implied.
 
 When an existing Frida adapter is explicitly supplied, owner-authenticated
 `daily_food_lookup` exposes only its public-reference component lookup.

@@ -6,6 +6,7 @@ import type { PublicConfig } from '../config/public-config';
 import { useJarvisActivity } from './activity-context';
 import { JarvisActivityProvider } from './activity-provider';
 import { appAreas } from './areas';
+import { NutritionTargetsSettings } from './daily/NutritionTargetsSettings';
 import { DailyRefreshContext } from './daily/refresh';
 import { ContextPanel, ContextPanelProvider } from './ContextPanel';
 import { ConversationIntentProvider } from './ConversationIntentProvider';
@@ -861,7 +862,12 @@ function RequireSignIn({ session }: { session: SignInSession }) {
 }
 
 /** Settings with its live panels and a Back action to wherever Dan came from. */
-function SettingsRoute({ config, session }: { config: PublicConfig; session: SignInSession }) {
+function SettingsRoute({ config, session, nutritionKey }: {
+  config: PublicConfig;
+  session: SignInSession;
+  /** Account key for the Daily nutrition targets; null while Daily is off, which renders nothing and asks for nothing. */
+  nutritionKey: string | null;
+}) {
   const navigate = useNavigate();
   const { key } = useLocation();
   const back = useCallback(() => {
@@ -872,6 +878,7 @@ function SettingsRoute({ config, session }: { config: PublicConfig; session: Sig
     <SettingsPage backendUrl={config.backendUrl} getAccessToken={session.getAccessToken} onBack={back}
       presence={<PresenceSettings backendUrl={config.backendUrl} getAccessToken={session.getAccessToken} />}
       projects={<ProjectsPage backendUrl={config.backendUrl} getAccessToken={session.getAccessToken} />}
+      {...(nutritionKey ? { nutrition: <NutritionTargetsSettings key={nutritionKey} backendUrl={config.backendUrl} getAccessToken={session.getAccessToken} /> } : {})}
       memory={<MemorySettings backendUrl={config.backendUrl} getAccessToken={session.getAccessToken} />}
       activity={<SettingsActivity client={session.client} config={config} />} />
   );
@@ -950,7 +957,7 @@ export function App({ config = defaultConfig, dailyEnabled = false }: { config?:
                   <Component key={id === 'daily' ? dailyAccountKey : id} backendUrl={config.backendUrl} getAccessToken={session.getAccessToken} />
                 } />
               ))}
-              <Route path="settings" element={<SettingsRoute config={config} session={session} />} />
+              <Route path="settings" element={<SettingsRoute config={config} session={session} nutritionKey={dailyEnabled ? dailyAccountKey : null} />} />
               <Route path="knowledge/*" element={<Navigate to="/notes" replace />} />
             </Route>
             <Route path="*" element={<NotFoundPage />} />
