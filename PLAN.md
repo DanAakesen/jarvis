@@ -1,5 +1,20 @@
 # Project plan
 
+## Pipeline event-order recovery (#880, 17 October 2026)
+
+#882 merged normally atf6530a59 with the verified qualified tree; automatic
+Deploy39041096612 remains distinct runtime evidence and #880 is reopened until
+acceptance completes. #881 integrated520c9ba8 hit an observed pipeline race:
+ready-event CI39041201026 was cancelled by delayed draft-snapshot CI39041201353,
+which then skipped. No Daily source failure was observed.
+
+One cancelled-ready-run recovery,39041201026 attempt2, was admitted without
+overlapping CI or rerunning green CodeQL/review. This builder owns the minimal
+prevention follow-up: isolate draft concurrency, keep ready supersession and
+required gates unchanged, test both admission orders, qualify exact source and
+return the PR/runtime evidence to the integration owner. No extra worker or
+production dispatch.
+
 ## Continuous pipeline delivery (#880, 17 October 2026; implementation candidate)
 
 Operating model 2 is the current focus: the coordinator owns responsive intake,

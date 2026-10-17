@@ -1,5 +1,24 @@
 # Agent context
 
+## Ready/draft qualification race (#880, 17 October 2026)
+
+#882 merged with its exact qualified tree as `f6530a59`. The first automatic
+Deploy39041096612 remains its own applied/readiness/acceptance evidence.
+During #881 integration, ready_for_review at14:32:35Z admitted CI39041201026;
+a delayed synchronize event carrying draft=true admitted39041201353 one second
+later. The shared concurrency key cancelled the ready qualification, then the
+draft snapshot skipped itself. This is a pipeline event-order failure, not an
+observed Daily source failure.
+
+One safe recovery reruns only cancelled ready-event39041201026 attempt2 at
+exact integrated520c9ba8, preserving impact selection and its non-draft
+snapshot. No active CI overlapped; green CodeQL/review were not rerun.
+The bounded correction gives draft snapshots a separate concurrency suffix.
+Ready head updates still supersede older ready qualifications; delayed skipped
+draft runs cannot cancel them in either admission order. The synthetic workflow
+regression and actionlint cover the key; required selection/result gates remain
+unchanged. Normal exact-source qualification/review remains required.
+
 ## Continuous delivery ownership (#880, 17 October 2026)
 
 Dan selected operating model 2. This supersedes the older coordinator-removal,

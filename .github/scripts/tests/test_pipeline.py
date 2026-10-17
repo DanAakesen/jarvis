@@ -449,6 +449,29 @@ class ArtifactTests(unittest.TestCase):
 
 
 class SafeFailureTests(unittest.TestCase):
+    def test_delayed_draft_event_cannot_cancel_ready_qualification(self):
+        source = (ROOT / ".github/workflows/ci.yml").read_text()
+        group = next(line.strip().removeprefix("group: ") for line in source.splitlines()
+                     if line.startswith("  group: "))
+        identity = "${{ github.event.pull_request.number || github.ref }}"
+        draft_lane = (
+            "${{ github.event_name == 'pull_request' && "
+            "github.event.pull_request.draft && '-draft' || '' }}"
+        )
+        self.assertEqual(group, "ci-" + identity + draft_lane)
+
+        def key(draft, number=881):
+            return group.replace(identity, str(number)).replace(draft_lane, "-draft" if draft else "")
+
+        ready, stale_draft = key(False), key(True)
+        self.assertNotEqual(ready, stale_draft)
+        self.assertEqual(ready, key(False))
+        self.assertNotEqual(ready, key(False, 882))
+        # Both admission orders retain different concurrency lanes.
+        for admitted in ((ready, stale_draft), (stale_draft, ready)):
+            self.assertEqual(len(set(admitted)), 2)
+        self.assertIn("cancel-in-progress: ${{ github.event_name == 'pull_request' }}", source)
+
     def test_retained_report_is_complete_fixed_and_content_free(self):
         report = smoke()
         report["entries"][0].update({"status": "down", "reason": "private\n::error::secret",
