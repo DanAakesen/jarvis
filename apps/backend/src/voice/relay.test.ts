@@ -3519,16 +3519,68 @@ describe('calendar confirmation turns', () => {
   });
 
   it.each(['/voice', '/voice/da'].flatMap((path) =>
-    ['pending', 'completed'].flatMap((phase) =>
-      ['Is it raining tomorrow?', 'Did you find my reservation email?',
-        'Have you checked the build status?', 'Is Gmail working now?'].map((question) =>
-        ({ path, phase, question })))))(
-    'does not hijack $question after a $phase calendar turn in $path', async ({ path, phase, question }) => {
-      let pending = true;
-      const state = vi.fn(async () => pending ? {
+    ['Is it raining tomorrow?', 'Did you find my reservation email?',
+      'Have you checked the build status?', 'Is Gmail working now?'].map((question) => ({ path, question }))))(
+    'answers $question normally while a calendar change is still staged in $path', async ({ path, question }) => {
+      const confirm = vi.fn(async () => ({ status: 'completed', summary: 'Synthetic calendar stage.' }));
+      const state = vi.fn(async (_input: unknown, request: FastifyRequest) => ({
         status: 'awaiting_confirmation', confirmationCode: '12345678', summary: 'Synthetic calendar stage.',
-        reply: 'approve',
-      } : { status: 'none', reply: 'approve' });
+        reply: request.jarvisConversationMessage?.text === 'yes' ? 'approve' : null,
+      }));
+      const module: BackendModule = { id: 'calendar-status-isolation', registerRoutes: async () => {}, tools: [
+        { name: 'calendar_get_pending_change', description: 'Pending fixture.',
+          inputSchema: { type: 'object' }, execute: state },
+        { name: 'calendar_confirm_change', description: 'Confirmation fixture.',
+          inputSchema: { type: 'object' }, execute: confirm },
+      ] };
+      let upstream!: WebSocket;
+      const received: Record<string, unknown>[] = [];
+      const upstreamUrl = await echoServer((socket) => {
+        upstream = socket;
+        socket.on('message', (data) => {
+          const event = JSON.parse(data.toString()) as Record<string, unknown>;
+          received.push(event);
+          if (event.type === 'session.update') socket.send(JSON.stringify({ type: 'session.updated' }));
+        });
+      });
+      const connect = (token: string, signal: AbortSignal) => new WebSocket(upstreamUrl, {
+        headers: { Authorization: ['Bearer', token].join(' ') }, signal,
+      });
+      const { app } = appFor(connect, undefined, [], [module], connect);
+      await app.listen({ host: '127.0.0.1', port: 0 });
+      const address = app.server.address() as AddressInfo;
+      await openBrowser(`ws://127.0.0.1:${address.port}${path}`);
+      await vi.waitFor(() => expect(upstream).toBeDefined());
+      const sendTurn = async (id: string, transcript: string) => {
+        const count = received.filter(({ type }) => type === 'response.create').length;
+        upstream.send(JSON.stringify({ type: 'response.done' }));
+        upstream.send(JSON.stringify({ type: 'conversation.item.input_audio_transcription.completed',
+          item_id: id, transcript }));
+        await vi.waitFor(() => expect(received.filter(({ type }) => type === 'response.create')).toHaveLength(count + 1));
+      };
+      await sendTurn('calendar-context', 'Add my calendar reservation.');
+      const resultOnly = () => received.filter((event) => event.type === 'response.create' &&
+        (event.response as Record<string, unknown> | undefined)?.tool_choice === 'none').length;
+      const previousResultOnly = resultOnly();
+      await sendTurn('unrelated-question', question);
+      expect(state).toHaveBeenCalledOnce();
+      expect(confirm).not.toHaveBeenCalled();
+      expect(resultOnly()).toBe(previousResultOnly);
+    },
+  );
+
+  it.each(['/voice', '/voice/da'].flatMap((path) =>
+    ['Is it raining tomorrow?', 'Did you find my reservation email?',
+      'Have you checked the build status?', 'Is Gmail working now?'].map((question) => ({ path, question }))))(
+    'stops consulting calendar state for $question and a later yes once the change is complete in $path',
+    async ({ path, question }) => {
+      let pending = true;
+      const state = vi.fn(async (_input: unknown, request: FastifyRequest) => {
+        const reply = request.jarvisConversationMessage?.text === 'yes' ? 'approve' : null;
+        return pending ? {
+          status: 'awaiting_confirmation', confirmationCode: '12345678', summary: 'Synthetic calendar stage.', reply,
+        } : { status: 'none', reply };
+      });
       const confirm = vi.fn(async () => {
         pending = false;
         return { status: 'completed', summary: 'Synthetic calendar stage.', detail: 'Fixture completed.' };
@@ -3565,19 +3617,80 @@ describe('calendar confirmation turns', () => {
         await vi.waitFor(() => expect(received.filter(({ type }) => type === 'response.create')).toHaveLength(count + 1));
       };
       await sendTurn('calendar-context', 'Add my calendar reservation.');
-      if (phase === 'completed') {
-        await sendTurn('calendar-approval', 'yes');
-        expect(confirm).toHaveBeenCalledOnce();
-      }
+      await sendTurn('calendar-approval', 'yes');
+      expect(confirm).toHaveBeenCalledOnce();
       const previousReads = state.mock.calls.length;
       const resultOnly = () => received.filter((event) => event.type === 'response.create' &&
         (event.response as Record<string, unknown> | undefined)?.tool_choice === 'none').length;
       const previousResultOnly = resultOnly();
       await sendTurn('unrelated-question', question);
       await sendTurn('unrelated-yes', 'yes');
-      expect(state).toHaveBeenCalledTimes(previousReads);
-      expect(confirm).toHaveBeenCalledTimes(phase === 'completed' ? 1 : 0);
+      // Only the first turn after completion is checked, and nothing is relayed; the later yes is not consulted.
+      expect(state).toHaveBeenCalledTimes(previousReads + 1);
+      expect(confirm).toHaveBeenCalledOnce();
       expect(resultOnly()).toBe(previousResultOnly);
     },
   );
+
+  it.each([
+    { path: '/voice', natural: 'yes please, book both', unclear: 'hmm, hold on a second' },
+    { path: '/voice/da', natural: 'ja tak, book dem begge', unclear: 'øh, vent lige lidt' },
+  ])('confirms a natural reply only once the backend judges it an approval in $path', async ({ path, natural, unclear }) => {
+    let pending = true;
+    const summary = 'Create "Reservation" from 2026-11-05T15:00:00Z to 2026-11-06T11:00:00Z (Europe/Copenhagen); attendees: none.';
+    const confirm = vi.fn(async () => {
+      pending = false;
+      return { status: 'completed', detail: 'The event was created.', summary };
+    });
+    const state = vi.fn(async (_input: unknown, request: FastifyRequest) => ({
+      ...(pending ? { status: 'awaiting_confirmation', confirmationCode: '12345678', summary } : { status: 'none' }),
+      reply: request.jarvisConversationMessage?.text === natural ? 'approve' : null,
+    }));
+    const module: BackendModule = {
+      id: 'calendar-natural-approval-test', registerRoutes: async () => {}, tools: [
+        { name: 'calendar_get_pending_change', description: 'Read pending.',
+          inputSchema: { type: 'object' }, execute: state },
+        { name: 'calendar_confirm_change', description: 'Confirm pending.',
+          inputSchema: { type: 'object' }, execute: confirm },
+      ],
+    };
+    let upstream!: WebSocket;
+    const received: Record<string, unknown>[] = [];
+    const upstreamUrl = await echoServer((socket) => {
+      upstream = socket;
+      socket.on('message', (data) => {
+        const event = JSON.parse(data.toString()) as Record<string, unknown>;
+        received.push(event);
+        if (event.type === 'session.update') socket.send(JSON.stringify({ type: 'session.updated' }));
+      });
+    });
+    const connect = (token: string, signal: AbortSignal) => new WebSocket(upstreamUrl, {
+      headers: { Authorization: ['Bearer', token].join(' ') }, signal,
+    });
+    const { app } = appFor(connect, undefined, [], [module], connect);
+    await app.listen({ host: '127.0.0.1', port: 0 });
+    const address = app.server.address() as AddressInfo;
+    await openBrowser(`ws://127.0.0.1:${address.port}${path}`);
+    await vi.waitFor(() => expect(upstream).toBeDefined());
+    const sendTurn = async (id: string, transcript: string) => {
+      const count = received.filter(({ type }) => type === 'response.create').length;
+      upstream.send(JSON.stringify({ type: 'response.done' }));
+      upstream.send(JSON.stringify({ type: 'conversation.item.input_audio_transcription.completed',
+        item_id: id, transcript }));
+      await vi.waitFor(() => expect(received.filter(({ type }) => type === 'response.create')).toHaveLength(count + 1));
+    };
+    const evidence = () => received.filter((event) => event.type === 'conversation.item.create' &&
+      JSON.stringify(event).includes('Actual calendar approval result'));
+    await sendTurn('calendar-request', 'Add my calendar reservation.');
+    // An unclear reply is not judged an approval: nothing changes and the model carries on naturally.
+    await sendTurn('unclear-reply', unclear);
+    expect(confirm).not.toHaveBeenCalled();
+    expect(evidence()).toHaveLength(0);
+    // The conversation stays open, so the answer to the model's natural question is confirmed directly.
+    await sendTurn('natural-approval', natural);
+    expect(confirm).toHaveBeenCalledOnce();
+    expect(confirm).toHaveBeenCalledWith({ confirmationCode: '12345678' }, expect.anything(), expect.anything());
+    expect(evidence()).toHaveLength(1);
+    expect(JSON.stringify(evidence()[0])).toContain('completed');
+  });
 });

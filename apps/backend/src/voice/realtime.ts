@@ -220,15 +220,16 @@ export function calendarTurnContext(previous: boolean, text: string) {
 }
 
 export interface CalendarReplyResolution {
-  /** The actual backend result to relay: set when the turn approved, declined or asked about a staged change. */
+  /** The actual backend result to relay. Absent means the model continues the turn itself. */
   readonly output?: string;
-  /** A calendar change is still staged, so a later turn may answer it. */
-  readonly pending: boolean;
+  /** The next turn may still answer this calendar conversation: a change is staged or evidence was just relayed. */
+  readonly open: boolean;
 }
 
 /**
  * Resolve a turn in a calendar conversation from backend state, never a model-supplied or cached code.
- * A reply that neither approves nor declines the staged change is left to the model to continue naturally.
+ * The backend decides whether Dan's words approve or decline the staged change; a reply that does neither
+ * is left to the model so it can ask one natural question.
  */
 export async function resolveCalendarReply(
   tools: ToolRegistry,
@@ -247,10 +248,11 @@ export async function resolveCalendarReply(
   const action = pending.result;
   const decided = action?.reply === 'approve' || action?.reply === 'decline';
   const statusQuestion = calendarStatusQuestion(text);
-  // Plain approval words and status questions always get the actual state, even when nothing is staged.
+  // A decided reply, a status question or a plain approval word always gets the actual state, even when
+  // nothing is staged, so a repeated yes never invents a second change.
   const direct = decided || statusQuestion || classifyApprovalReply(text) !== undefined;
   if (pending.outcome !== 'ok' || action?.status !== 'awaiting_confirmation') {
-    return { ...(direct ? { output: pendingOutput } : {}), pending: false };
+    return { ...(direct ? { output: pendingOutput } : {}), open: direct };
   }
   if (typeof action.confirmationCode !== 'string' || !/^[0-9]{8}$/u.test(action.confirmationCode) ||
       typeof action.summary !== 'string' || !action.summary.trim()) {
@@ -258,16 +260,16 @@ export async function resolveCalendarReply(
       ...(direct ? { output: toolOutput('calendar_get_pending_change', 'error', {
         failure: 'No valid pending calendar receipt is available. No change was confirmed.',
       }) } : {}),
-      pending: false,
+      open: direct,
     };
   }
-  if (!decided) return { ...(statusQuestion ? { output: pendingOutput } : {}), pending: true };
+  if (!decided) return { ...(statusQuestion ? { output: pendingOutput } : {}), open: true };
   return {
     output: await executeRealtimeToolCall({
       type: 'response.function_call_arguments.done', name: 'calendar_confirm_change',
       call_id: 'calendar-confirm', arguments: JSON.stringify({ confirmationCode: action.confirmationCode }),
     }, tools, request, signal),
-    pending: false,
+    open: true,
   };
 }
 

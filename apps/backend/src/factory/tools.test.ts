@@ -524,7 +524,7 @@ describe('Software Factory Jarvis tools', () => {
     expect(record.mock.calls.map(([call]) => call.outcome)).toEqual(['refused', 'refused', 'refused']);
   });
 
-  it('archives a project only after a plain approval in a later Dan message', async () => {
+  it('archives a project only after a later Dan message approves it', async () => {
     const record = vi.fn<(call: ToolCallRecord) => Promise<void>>(async () => {});
     let latestMessage: ConversationMessage = {
       id: '42',

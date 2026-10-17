@@ -881,8 +881,8 @@ function registerVoiceRoute(
               AbortSignal.any([controller.signal, AbortSignal.timeout(30_000)]), text);
           } finally { delete request.jarvisConversationMessage; }
           if (controller.signal.aborted || endRequested) return;
-          // The conversation stays a calendar one only while a change is still waiting for Dan's answer.
-          calendarConversation = calendarContext.explicit || reply.pending;
+          // Unrelated turns end the calendar conversation once nothing is staged and no evidence was relayed.
+          calendarConversation = calendarContext.explicit || reply.open;
           if (reply.output !== undefined) {
             sendUpstream({ type: 'conversation.item.create', item: {
               type: 'message', role: 'user', content: [{ type: 'input_text',
