@@ -33,17 +33,41 @@ targets (resting energy burn, daily deficit, protein): `GET`/`PATCH
 `daily_nutrition_targets` tool, whose changes need the exact browser Now
 approval. They are Daily-owned `dbo.settings` rows, so there is no migration and
 no core Settings change. All of it stays behind the default-off Daily gate (Daily
-off = Jarvis unchanged) with no production caller yet. Dan enters his own values;
-none is stored in code, tests or documents.
+off = Jarvis unchanged); the default-off composition below is its only caller. Dan
+enters his own values; none is stored in code, tests or documents.
 
 Slices, in order. Second (#899): the budget/candidate adapter and the read-only
 `daily_nutrition_suggest` tool (allowance = resting burn + active energy so far
 today - deficit; unknowns flagged, never zero; only meals logged in Jarvis
-count; saved favourites are the only candidates). Third (this slice): the web
+count; saved favourites are the only candidates). Third (#901): the web
 Settings section, shown only while Daily is on, saving on its own with no
-defaults, placeholders or example figures. Last: the default-off composition. No
-provider, private or device access, live probe, Daily activation or acceptance
-is claimed.
+defaults, placeholders or example figures. Last: the default-off composition,
+next section. No provider, private or device access, live probe, Daily
+activation or acceptance is claimed.
+
+## Default-off Daily composition (17 October 2026; P12-09 / #724)
+
+Dan gave the go for Daily. This is the last invisible slice: one composition
+module, `daily/composition.ts`, behind `JARVIS_DAILY_ENABLED`. Absent or `false`
+is off, exactly `true` is on, and anything else stops startup with a
+configuration error that never echoes the value. No workflow, Bicep,
+infrastructure, environment or deploy file sets it, so Daily is off in every
+environment and a scan test fails if one ever does. Turning it on is a separate
+reviewed change.
+
+Off composes nothing: the route table, tool catalogue, capability instructions,
+voice session tools, health response, startup, jobs and timers stay those of
+Jarvis without Daily, which tests compare against a Daily-free application. On
+composes one owner-bound module over the existing nutrition data: the
+capabilities, query and nutrition-targets routes and six tools (116 of the
+128-tool limit). It adds no MCP connector, Frida lookup, Google or Gmail feed,
+health upload, job or timer. SQL and a UUID owner are required or startup fails;
+a signed-in user who is not that owner, a runner or a connector is refused before
+any SQL, and an agent reaches the targets only through the approved tool. No
+migration, account, consent, grant, secret, RBAC, resource or import is added, and
+no provider, device or private data is read or written.
+
+Next: the visible Daily page (P12-15 / #730).
 
 ## On-screen views authority (17 October 2026; P11-09 / #885)
 
