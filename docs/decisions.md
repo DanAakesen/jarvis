@@ -786,6 +786,28 @@ and returns HTTP 200. The disconnected PC bridge remains a nonblocking warning;
 for native-phone acceptance. A deployed controlled-browser correction does not
 establish the cause or result on Dan's physical iPhone.
 
+## Account-owned background-work dismissal (17 October 2026; P11-12 / #905)
+
+The explicit cross-device requirement supersedes the P11-05 / #859 decision
+below that dismissal is a scoped device preference. Store dismissal separately
+from jobs, keyed by the authenticated owner and UUID. Only the configured owner
+can access these jobs. Dismiss-one and Dismiss all finished never change a job,
+its events, results or lifecycle; running work is not dismissible.
+Keep existing list fields compatible with deployed clients. Import at most
+1,000 validated legacy UUIDs, retain local hides on failure, and remove the
+browser copy only on confirmation.
+
+The popover explains kind, start time and recorded failure reason, and groups
+equivalent finished entries for one dismissal. Derive the neutral wording
+“Interrupted by a restart” from the existing stored restart reason without
+rewriting historical failed rows or changing Status/Usage/audit calculations.
+Do not infer a specific trigger or restart from a generic failure.
+
+Source inspection confirms that embedding runs can start on model changes and
+at startup with missing vectors, and that reconciliation records
+`interrupted by restart`. No stored production rows are available in this
+checkout; the reported cluster's timing and cause remain unverified.
+
 ## Filter header background work instead of retaining hidden rows (16 October 2026)
 
 Dan reported that Recent jobs kept dismissed indexing/research entries visible
@@ -4657,3 +4679,13 @@ provider or persisted-state change is needed.
 This is a local source correction from released `3d3a12ab`, not full #811
 acceptance. PM owns independent review, integration and rendered readback;
 historical 502 causation remains unestablished and #717/#741 stays parked.
+
+## P9-121 — One Projects section (17 October 2026)
+
+Keep the managed-project list, Add project action, and new-project defaults
+inside the existing Projects section and `#projects` anchor. The seven defaults
+remain in the existing page-level Settings save/PATCH; the Projects disclosure
+shows unsaved, pending, confirmed, and failed states with an in-section retry,
+without changing the endpoint or project PATCH contract. Add project previews
+the saved defaults that the backend applies, and each registered project keeps
+its own editable settings.

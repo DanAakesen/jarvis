@@ -42,7 +42,7 @@ const administrator = new sql.ConnectionPool({ ...configuration, database: 'mast
 const pool = new sql.ConnectionPool({ ...configuration, database });
 const core = '0001_core_tables.sql';
 const tablesInSchema = [
-  'activity', 'artifacts', 'background_job_steps', 'background_jobs', 'conversation_attachments',
+  'activity', 'artifacts', 'background_job_dismissals', 'background_job_steps', 'background_jobs', 'conversation_attachments',
   'conversation_summaries', 'credential_status', 'deployment_failure_receipts', 'deployments', 'factory_task_submissions', 'folio_items', 'jarvis_sessions',
   'memories', 'memory_deletions', 'memory_history', 'messages', 'phone_sessions', 'proactive_items', 'projects',
   'pull_requests', 'push_subscriptions', 'push_vapid_keys', 'releases',
