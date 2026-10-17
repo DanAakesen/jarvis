@@ -2116,10 +2116,67 @@ Proposals only; an idea enters a phase only when Dan accepts it into scope.
 
 | Idea | What it does | Trade-off | Add when |
 | --- | --- | --- | --- |
+| [Proactive assistance and iPhone Web Push](docs/proactive-assistance.md) | Reconciles commitments across Gmail, Calendar, vault and Factory; prepares evidence-backed suggestions and optionally alerts the installed iPhone PWA. | Durable scheduling, freshness, privacy, budgets and device acceptance; most runs stay silent. | Dan explicitly accepts a bounded pilot; notification-off and independent Daily gates remain unchanged. Proposal only. |
 | Codex API-key fallback | Runs Codex tasks with an OpenAI API key when the Jarvis Pro login fails or the Pro plan's Codex limits are reached. | Billed per use on top of Pro; keeps tasks running and leaves Dan's own Codex allowance untouched. | Pro limits or login failures block tasks. |
 | Azure Web PubSub for board updates | Replaces server-sent events with a managed push service that holds the browser connections. | Free tier: 20 connections; Standard ≈ 320 DKK/month (list price). | The backend runs several copies at once, or many devices stay connected. |
 | Foundry resilient tasks | Platform-managed recovery of in-progress hosted-agent work after a crash (preview; disabled in the prototype). | Preview; may replace part of the branch-restart recovery. | Crash recovery (P2-10) proves too lossy or complex. |
 | Backend request rate limiting | Limits authenticated and unauthenticated request rates at the root authentication hook (CodeQL `js/missing-rate-limiting` on `apps/backend/src/auth/hook.ts`, raised during P4-01). | A new dependency (for example `@fastify/rate-limit`) and limits that must not throttle Dan or the Jarvis agent; one replica keeps in-memory counters sufficient. | Before the backend URL is public (P0-11), or when abuse or cost appears. |
+
+### Proactive assistance — proposed scope (17 October 2026)
+
+[Design proposal](docs/proactive-assistance.md). The requirements below record
+Dan's desired behavior; they do not accept an architecture, start a phase or
+authorize implementation, activation, resources, permissions or notification
+delivery. Existing notification-off and independent Daily gates remain intact;
+no new coaching/recovery/recomp or widget scope is restored.
+
+**Confirmed requirements**
+
+- Prioritize the canonical vault todo file, where all personal todos belong;
+  mail is lower priority. Desired capabilities include autonomous bounded
+  research/preparation and evidence-backed todo edits that preserve Dan's work.
+  External sends, appointment changes and other actions retain existing gates.
+- Preserve cost optimization and intentional backend sleep. Around 50 DKK/month
+  is a rough incremental-cost reference, not a hard cap or verified estimate.
+- No proactive work or delivery from 22:00 to 07:00 Europe/Copenhagen, including
+  daylight-saving changes; no emergency exception.
+- Keep interests, selected sources and policy editable, with separate freeform
+  relevance guidance that cannot override security. Cover major relevant
+  Microsoft/OpenAI features and external weather/travel/daily-life implications.
+- Maintain rolling weekly context for known whereabouts, travel and todos,
+  planning at most one calendar month ahead with source evidence and uncertainty.
+  Every fresh chat retrieves relevant proactive outcomes, pending commitments
+  and notification state, with detail lookup and no inherited human authority.
+
+**Recommended architecture and open choices**
+
+[Danish architecture discussion document](idea.proactive.html) is a standalone
+HTML version with embedded diagrams and a review checklist. Proposal only.
+
+[Architecture overview and run flow](docs/proactive-diagrams.md) include editable
+Mermaid source and SVG previews for design discussion; they are proposals only.
+
+- Recommended, not accepted: reuse hosted Jarvis, backend, SQL and Blob. Evaluate
+  Foundry Routines first for recurring/one-shot work; no default ACA Job or custom
+  scheduling engine. Add a restricted system-run envelope and durable application
+  run/result/recovery state; dispatch acceptance is not completed work.
+- Evaluate Foundry Memory preview for semantic cross-chat recall, keeping trusted
+  owner scope, authoritative policy, vault todos and SQL outcomes/weekly plans
+  distinct. Avoid bespoke vector memory; Toolbox/connections and Agent Framework
+  are selective options, not automatic integrations or a required rewrite.
+- Reminder preview and AgentServer resilience are optional; Durable Extension
+  requires a demonstrated multistep need. Do not select retiring portal Workflows.
+- Preserve configurable sources/settings/guidance, low-to-medium activity, sleep
+  and confirmed quiet hours. No cadence is selected. Web Push is primary now;
+  future proactive calls remain a delivery extension point, not implementation.
+- Five proof gates: project availability; identity/tool access; accepted-versus-
+  completed recovery; same-owner fresh-chat context; measured sleep/cleanup/cost.
+  Detailed source/cost research stays optional; earlier estimates exclude new
+  Memory/Routines costs and do not price this recommendation or promise 50 DKK.
+- Open choices: exact source access, policy/deduplication and todo review/undo;
+  canonical filename remains unresolved (`task.md` versus reported `Tasks.md`).
+  No resources, credentials, permissions or activation are approved.
+
 ## P12 — Daily migration to Jarvis
 
 17 October continuation: JarvisPM is implementing an inactive, nutrition-only
