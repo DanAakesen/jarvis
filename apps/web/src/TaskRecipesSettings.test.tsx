@@ -48,7 +48,7 @@ describe('TaskRecipesSettings', () => {
     const pending = deferred<Response>();
     fetchMock.mockReturnValueOnce(pending.promise).mockResolvedValueOnce(response());
     renderRecipes();
-    expect(screen.getByText('Loading task recipes…')).not.toBeNull();
+    expect(screen.getByText('Loading routines…')).not.toBeNull();
     expect(screen.getByRole('button', { name: 'Refreshing…' }).hasAttribute('disabled')).toBe(true);
     await act(async () => { pending.resolve(response([pcRecipe, browserRecipe])); });
     expect(await screen.findByText('PC app: notepad')).not.toBeNull();
@@ -62,8 +62,24 @@ describe('TaskRecipesSettings', () => {
       cache: 'no-store',
       headers: { Authorization: `${['Bear', 'er'].join('')} ${await getAccessToken()}` },
     });
-    await user.click(screen.getByRole('button', { name: 'Refresh task recipes' }));
-    expect(await screen.findByText('No saved task recipes.')).not.toBeNull();
+    await user.click(screen.getByRole('button', { name: 'Refresh routines' }));
+    expect(await screen.findByText('No saved routines.')).not.toBeNull();
+  });
+
+  it('is named Routines everywhere the user can see or hear it', async () => {
+    const user = userEvent.setup();
+    fetchMock.mockResolvedValueOnce(response([pcRecipe])).mockResolvedValueOnce(new Response(null, { status: 204 }));
+    const view = renderRecipes();
+    await screen.findByText('open a document');
+    const heading = screen.getByRole('heading', { name: 'Routines' });
+    expect(heading.id).toBe('routines-heading');
+    expect(screen.getByRole('list', { name: 'Saved routines' })).not.toBeNull();
+    const visibleText = [view.container.textContent ?? '', ...[...view.container.querySelectorAll('[aria-label]')]
+      .map((element) => element.getAttribute('aria-label') ?? '')].join('\n');
+    expect(visibleText).not.toMatch(/recipe/i);
+    await user.click(screen.getByRole('button', { name: 'Delete routine: open a document (notepad)' }));
+    expect(await screen.findByText('Routine deleted: open a document.')).not.toBeNull();
+    expect(view.container.textContent ?? '').not.toMatch(/recipe/i);
   });
 
   it('offers recovery for failed loads and rejects malformed data', async () => {
@@ -72,22 +88,22 @@ describe('TaskRecipesSettings', () => {
       .mockResolvedValueOnce(response([{ ...pcRecipe, steps: null }]))
       .mockResolvedValueOnce(response());
     renderRecipes();
-    expect(await screen.findByRole('alert')).toHaveProperty('textContent', 'Could not load task recipes. Try again.');
-    expect(screen.queryByText('No saved task recipes.')).toBeNull();
-    await user.click(screen.getByRole('button', { name: 'Retry task recipes' }));
-    expect(await screen.findByRole('button', { name: 'Retry task recipes' })).not.toBeNull();
-    await user.click(screen.getByRole('button', { name: 'Retry task recipes' }));
-    expect(await screen.findByText('No saved task recipes.')).not.toBeNull();
+    expect(await screen.findByRole('alert')).toHaveProperty('textContent', 'Could not load routines. Try again.');
+    expect(screen.queryByText('No saved routines.')).toBeNull();
+    await user.click(screen.getByRole('button', { name: 'Retry routines' }));
+    expect(await screen.findByRole('button', { name: 'Retry routines' })).not.toBeNull();
+    await user.click(screen.getByRole('button', { name: 'Retry routines' }));
+    expect(await screen.findByText('No saved routines.')).not.toBeNull();
   });
 
-  it('keeps previously loaded recipes visible when a refresh fails', async () => {
+  it('keeps previously loaded routines visible when a refresh fails', async () => {
     const user = userEvent.setup();
     fetchMock.mockResolvedValueOnce(response([pcRecipe])).mockResolvedValueOnce(response([], 503));
     renderRecipes();
     await screen.findByText('open a document');
-    await user.click(screen.getByRole('button', { name: 'Refresh task recipes' }));
+    await user.click(screen.getByRole('button', { name: 'Refresh routines' }));
     expect(await screen.findByRole('alert')).not.toBeNull();
-    expect(screen.getByText('Previously loaded recipes are shown.')).not.toBeNull();
+    expect(screen.getByText('Previously loaded routines are shown.')).not.toBeNull();
     expect(screen.getByText('open a document')).not.toBeNull();
   });
 
@@ -97,31 +113,31 @@ describe('TaskRecipesSettings', () => {
     fetchMock.mockResolvedValueOnce(response([pcRecipe, browserRecipe])).mockReturnValueOnce(pending.promise);
     renderRecipes();
     await screen.findByText('open a document');
-    await user.click(screen.getByRole('button', { name: 'Delete recipe: open a document (notepad)' }));
+    await user.click(screen.getByRole('button', { name: 'Delete routine: open a document (notepad)' }));
     expect(screen.getByText('Deleting…')).not.toBeNull();
-    expect(screen.getByRole('button', { name: 'Refresh task recipes' }).hasAttribute('disabled')).toBe(true);
-    const rows = within(screen.getByRole('list', { name: 'Saved task recipes' }));
+    expect(screen.getByRole('button', { name: 'Refresh routines' }).hasAttribute('disabled')).toBe(true);
+    const rows = within(screen.getByRole('list', { name: 'Saved routines' }));
     expect(rows.getAllByRole('button').every((button) => button.hasAttribute('disabled'))).toBe(true);
     expect(fetchMock.mock.calls[1]?.[0]).toBe('https://api.example.com/recipes/pc%2F1');
     expect(fetchMock.mock.calls[1]?.[1]).toMatchObject({ method: 'DELETE' });
     await act(async () => { pending.resolve(new Response(null, { status: 204 })); });
-    expect(await screen.findByText('Recipe deleted: open a document.')).not.toBeNull();
+    expect(await screen.findByText('Routine deleted: open a document.')).not.toBeNull();
     expect(screen.queryByText('PC app: notepad')).toBeNull();
     expect(screen.getByText('Browser site: example.com')).not.toBeNull();
   });
 
-  it('retains a recipe after delete failure and lets the user retry', async () => {
+  it('retains a routine after delete failure and lets the user retry', async () => {
     const user = userEvent.setup();
     fetchMock.mockResolvedValueOnce(response([pcRecipe]))
       .mockResolvedValueOnce(response([], 500))
       .mockResolvedValueOnce(new Response(null, { status: 204 }));
     renderRecipes();
-    const name = 'Delete recipe: open a document (notepad)';
+    const name = 'Delete routine: open a document (notepad)';
     await user.click(await screen.findByRole('button', { name }));
-    expect(await screen.findByRole('alert')).toHaveProperty('textContent', 'Could not delete this recipe. Try Delete again.');
+    expect(await screen.findByRole('alert')).toHaveProperty('textContent', 'Could not delete this routine. Try Delete again.');
     expect(screen.getByText('open a document')).not.toBeNull();
     await user.click(screen.getByRole('button', { name }));
-    expect(await screen.findByText('No saved task recipes.')).not.toBeNull();
+    expect(await screen.findByText('No saved routines.')).not.toBeNull();
   });
 
   it('aborts an old load and ignores its result after changing the service', async () => {
@@ -151,7 +167,7 @@ describe('TaskRecipesSettings', () => {
     const pending = deferred<Response>();
     fetchMock.mockResolvedValueOnce(response([pcRecipe])).mockReturnValueOnce(pending.promise);
     const view = renderRecipes();
-    await user.click(await screen.findByRole('button', { name: 'Delete recipe: open a document (notepad)' }));
+    await user.click(await screen.findByRole('button', { name: 'Delete routine: open a document (notepad)' }));
     const signal = fetchMock.mock.calls[1]?.[1]?.signal;
     view.unmount();
     expect(signal?.aborted).toBe(true);
@@ -160,8 +176,8 @@ describe('TaskRecipesSettings', () => {
 
   it('explains an unavailable backend without attempting requests', async () => {
     render(<TaskRecipesSettings backendUrl={null} getAccessToken={getAccessToken} />);
-    expect(await screen.findByRole('alert')).toHaveProperty('textContent', 'Task recipes unavailable.');
+    expect(await screen.findByRole('alert')).toHaveProperty('textContent', 'Routines unavailable.');
     expect(fetchMock).not.toHaveBeenCalled();
-    expect(screen.getByRole('button', { name: 'Retry task recipes' }).hasAttribute('disabled')).toBe(true);
+    expect(screen.getByRole('button', { name: 'Retry routines' }).hasAttribute('disabled')).toBe(true);
   });
 });

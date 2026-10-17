@@ -73,12 +73,12 @@ export function TaskRecipesSettings({ backendUrl, getAccessToken }: {
       if (controller.signal.aborted) return;
       setRecipes(summaries);
       setLoaded(true);
-      setMessage('Task recipes refreshed.');
+      setMessage('Routines refreshed.');
     } catch {
       if (!controller.signal.aborted) {
         setError(backendUrl
-          ? 'Could not load task recipes. Try again.'
-          : 'Task recipes unavailable.');
+          ? 'Could not load routines. Try again.'
+          : 'Routines unavailable.');
       }
     } finally {
       if (!controller.signal.aborted) {
@@ -118,9 +118,9 @@ export function TaskRecipesSettings({ backendUrl, getAccessToken }: {
       if (response.status !== 204) throw new Error('Delete failed');
       if (controller.signal.aborted) return;
       setRecipes((current) => current.filter((item) => item.id !== recipe.id));
-      setMessage(`Recipe deleted: ${recipe.goal}.`);
+      setMessage(`Routine deleted: ${recipe.goal}.`);
     } catch {
-      if (!controller.signal.aborted) setError('Could not delete this recipe. Try Delete again.');
+      if (!controller.signal.aborted) setError('Could not delete this routine. Try Delete again.');
     } finally {
       if (!controller.signal.aborted) {
         request.current = null;
@@ -130,21 +130,21 @@ export function TaskRecipesSettings({ backendUrl, getAccessToken }: {
   }
 
   return (
-    <CollapsibleSection storageKey="settings.recipes" headingId="task-recipes-heading" title="Task recipes">
+    <CollapsibleSection storageKey="settings.recipes" headingId="routines-heading" title="Routines">
       <p className="settings-explanation">Typed text and page content are not stored.</p>
       <div className="settings-actions">
         <button className="secondary-button" type="button"
           disabled={loading || deleting !== null || !backendUrl} onClick={() => { void load(); }}>
-          {loading ? <Loader variant="inline" announce={false} label="Refreshing…" /> : error && !loaded ? 'Retry task recipes' : 'Refresh task recipes'}
+          {loading ? <Loader variant="inline" announce={false} label="Refreshing…" /> : error && !loaded ? 'Retry routines' : 'Refresh routines'}
         </button>
       </div>
       <p className="settings-feedback" role={error ? 'alert' : 'status'}>
-        {error || (loading ? <Loader variant="inline" announce={false} label="Loading task recipes…" /> : message)}
+        {error || (loading ? <Loader variant="inline" announce={false} label="Loading routines…" /> : message)}
       </p>
-      {error && loaded && <p className="settings-explanation">Previously loaded recipes are shown.</p>}
-      {loaded && recipes.length === 0 && <p>No saved task recipes.</p>}
+      {error && loaded && <p className="settings-explanation">Previously loaded routines are shown.</p>}
+      {loaded && recipes.length === 0 && <p>No saved routines.</p>}
       {recipes.length > 0 && (
-        <ul className="repository-list" aria-label="Saved task recipes">
+        <ul className="repository-list" aria-label="Saved routines">
           {recipes.map((recipe) => (
             <li className="repository-item" key={recipe.id}>
               <div className="repository-info">
@@ -155,7 +155,7 @@ export function TaskRecipesSettings({ backendUrl, getAccessToken }: {
                 </p>
               </div>
               <button className="secondary-button" type="button"
-                aria-label={`Delete recipe: ${recipe.goal} (${recipe.key})`}
+                aria-label={`Delete routine: ${recipe.goal} (${recipe.key})`}
                 disabled={loading || deleting !== null} onClick={() => { void deleteRecipe(recipe); }}>
                 {deleting === recipe.id ? 'Deleting…' : 'Delete'}
               </button>

@@ -680,6 +680,11 @@
 .app-shell.app-shell[data-phone="true"][data-voice-active="false"]:not(.app-signed-out) .conversation-input {
   pointer-events: auto;
 }
+/* Pages end above the composer however tall its draft, files or errors make it, so a bottom action such as Save settings stays reachable.
+   The nominal dock clearance is the floor, so a one-line composer looks as before. */
+.app-shell.app-shell[data-phone="true"][data-voice-active="false"][data-home="false"]:not(.app-signed-out) .shell-main {
+  padding-bottom: max(calc(var(--dock-space) + 16px), calc(var(--phone-dock-bottom) + var(--conversation-composer-height, 52px) + 16px));
+}
 .app-shell.app-shell[data-phone="true"][data-voice-active="false"]:not(.app-signed-out) .workspace-shell-area {
   position: fixed; z-index: 30;
   top: calc(var(--phone-chat-top, 0px) + env(safe-area-inset-top) + var(--rail-size) + 8px);

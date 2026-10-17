@@ -36,7 +36,7 @@ export const settingsAnchors: Record<string, string> = {
   memory: 'memory',
   coding: 'coding-settings-heading',
   projects: 'projects-heading',
-  routines: 'task-recipes-heading',
+  routines: 'routines-heading',
   credentials: 'credentials-heading',
   backend: 'backend-heading',
 };
