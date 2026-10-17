@@ -66,11 +66,19 @@ export function foodDefinition(input: FoodDefinition): void {
       !input.provenance || Array.isArray(input.provenance) || typeof input.provenance !== 'object' || canonicalJson(input.components).length > 32000 || canonicalJson(input.provenance).length > 16000) throw new TypeError('Invalid food definition');
   nutrients(input);
 }
+/** Valid history names need not fit the smaller favourite search-key domain. */
+export function favoriteSearchKey(value: string): string | null {
+  text(value, 2000);
+  if (value.length > 256) return null;
+  const normalized = value.normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase().replace(/[^a-z0-9]+/gu, ' ').trim();
+  return normalized.length > 0 && normalized.length <= 256 ? normalized : null;
+}
 /** Source-compatible search keys; display names/aliases and stable IDs stay untouched. */
 export function normalizeSearchText(value: string): string {
   text(value);
-  const normalized = value.normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase().replace(/[^a-z0-9]+/gu, ' ').trim();
-  text(normalized); return normalized;
+  const normalized = favoriteSearchKey(value);
+  if (normalized === null) throw new TypeError('Invalid nutrition text');
+  return normalized;
 }
 /** New writes only: imported history is readable without retroactive validation. */
 export function writeDefinition(input: FoodDefinition): void {

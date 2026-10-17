@@ -8,6 +8,9 @@ Use the existing owner-bound favourite/alias-before-history resolver and shared
 query DTO projection, not a second search algorithm or raw SQL-row response.
 Missing/ambiguous/oversized records stay explicit; never fall back to a provider
 or write intake. No migration, permission or confirmation change is required.
+Keep historical names valid through 2000 characters even when they cannot form
+a 256-character favourite key; skip only that impossible favourite match.
+Favourite-key validation and its existing normalization stay unchanged.
 
 ## Isolate the inactive hosted nutrition connector (17 October 2026; P12-09)
 

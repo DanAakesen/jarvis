@@ -205,6 +205,17 @@ describe('inactive hosted nutrition MCP adapter', () => {
     expect(f.nutrition.log).not.toHaveBeenCalled();
   });
 
+  it.each([257, 2000])('preserves a %i-character historical name through the actual protocol', async length => {
+    const f = await fixture();
+    const name = 'x'.repeat(length);
+    vi.mocked(f.nutrition.lookupSaved).mockResolvedValue({ source: 'history', row: { id: 'synthetic-long-name', meal_name: name } });
+    const { client } = await f.connect('read');
+    const result = await client.callTool({ name: 'lookup_food', arguments: { savedName: name } });
+    expect(result.structuredContent).toMatchObject({ match: { source: 'history', record: { meal_name: name } } });
+    expect(f.nutrition.lookupSaved).toHaveBeenCalledWith(name, expect.objectContaining({ intent: 'lookup' }));
+    expect(f.nutrition.lookup).not.toHaveBeenCalled();
+  });
+
   it('requires exactly one lookup mode and rejects owner selectors before reading saved food', async () => {
     const f = await fixture();
     const { client } = await f.connect('read');

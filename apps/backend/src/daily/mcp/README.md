@@ -41,6 +41,8 @@ favourite/alias resolution before an exact historical meal name). Saved matches
 reuse shared query DTO whitelists, preserve stored quantities/nulls/provenance
 and report unknown freshness. Missing/ambiguous matches never fall back to
 Frida or create intake; oversized results refuse under the shared read budget.
+Historical names outside the smaller favourite-key domain still receive exact
+history lookup, including full 2000-character and non-Latin names.
 Write-enabled composition additionally exposes `log_food`, `correct_food`
 and `delete_food`; no Apple Health action follows. Favourites/plans remain
 read-only through this adapter.
