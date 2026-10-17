@@ -259,7 +259,7 @@ async function requestSettings(
 }
 
 function SelectField({
-  id, label, value, options, onChange, disabled = false, form,
+  id, label, value, options, onChange, disabled = false, form, help,
 }: {
   id: string;
   label: string;
@@ -268,24 +268,29 @@ function SelectField({
   onChange: (value: string) => void;
   disabled?: boolean;
   form?: string;
+  help?: string;
 }) {
   return (
     <div className="settings-field">
       <label htmlFor={id}>{label}</label>
-      <select id={id} value={value} disabled={disabled} form={form} onChange={(event) => onChange(event.target.value)}>
+      <select id={id} value={value} disabled={disabled} form={form}
+        aria-describedby={help ? `${id}-help` : undefined} onChange={(event) => onChange(event.target.value)}>
         {options.map((option) => <option key={option} value={option}>{optionLabels[option] ?? option}</option>)}
       </select>
+      {help && <p className="settings-explanation" id={`${id}-help`}>{help}</p>}
     </div>
   );
 }
 
-export function SettingsPage({ backendUrl, getAccessToken, activity, presence, projects, renderProjects, nutrition, memory, onBack }: {
+export function SettingsPage({ backendUrl, getAccessToken, activity, presence, notifications, projects, renderProjects, nutrition, memory, onBack }: {
   backendUrl: string | null;
   getAccessToken: () => Promise<string>;
   /** Live operational panels (Now feed, backend sleep) shown above the saved settings. */
   activity?: ReactNode;
   /** Presence mode and instructions per mode, shown before the saved settings. */
   presence?: ReactNode;
+  /** Optional push opt-in controls, present only when the client feature gate is on. */
+  notifications?: ReactNode;
   /** Project management, rendered with this page's new-project defaults disclosure. */
   projects?: ReactNode;
   renderProjects?: (projectDefaults: ReactNode) => ReactNode;
@@ -514,6 +519,7 @@ export function SettingsPage({ backendUrl, getAccessToken, activity, presence, p
           onChange={(value) => update('newProjects', 'defaultAgent', value as 'codex' | 'copilot')} />
         <SelectField id="new-project-policy" label="Policy" value={settings.newProjects.policy}
           options={options.projectPolicies} disabled={saving} form="settings-form"
+          help="The policy default only pre-fills projects Jarvis registers later. Every project keeps its own policy and can be changed any time."
           onChange={(value) => update('newProjects', 'policy', value as Settings['newProjects']['policy'])} />
         <div className="settings-field settings-number-field">
           <label htmlFor="new-project-max-tasks">New project maximum parallel tasks</label>
@@ -564,6 +570,7 @@ export function SettingsPage({ backendUrl, getAccessToken, activity, presence, p
       </header>
       {activity && <div className="settings-activity">{activity}</div>}
       {presence}
+      {notifications}
       {state === 'loading' && <Loader variant="text" label="Loading settings…" />}
       {state === 'error' && (
         <div className="settings-feedback" role="alert">

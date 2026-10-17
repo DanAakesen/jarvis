@@ -1857,6 +1857,57 @@ operations expire and fail closed after five minutes if Dan does not approve.
 Teams/Bot Service and Speech F0 code is not live-verified because those
 integrations are not part of the personal-tenant deployment.
 
+## Proactive Web Push backend (P13-01, 17 October 2026)
+
+The backend registers the owner-authenticated push routes only when
+`JARVIS_PUSH_ENABLED` is exactly `true`; the default is off. Disabled composition
+does not construct the push store, read or write push tables, create signing keys,
+or send provider requests, and the routes return ordinary 404s. No deployment,
+workflow or infrastructure setting enables this flag.
+
+`push_vapid_keys`, `push_subscriptions` and `proactive_items` are separate SQL
+tables. The store uses the process-owned SQL pool and
+`databaseReadRequest` for retryable reads. Subscriptions are owner-scoped,
+deduplicated by SHA-256 endpoint hash and capped at ten. Test items are durable
+and owner-protected; the first successful item load sets `opened_at`, meaning
+loaded rather than read.
+
+`apps/backend/src/push/webpush.ts` implements P-256 VAPID, ES256 signing and
+RFC 8291 `aes128gcm` encryption with `node:crypto`; no dependency is added. The
+private VAPID key is generated on first use, stored only in SQL and never
+returned. Subscription endpoints are checked against the provider-host allowlist
+before any server-side request. Provider acceptance is recorded as acceptance,
+not display or reading; encrypted push content contains only the version, generic
+title/body and item UUID. Retries are limited to transient provider responses and
+bounded by per-request/overall timeouts.
+
+P13-01 sends only a direct user-requested test. It adds no scheduler or quiet-hour
+guard; every future system-started send must enforce 22:00–07:00
+Europe/Copenhagen with no emergency exception. There is no Teams delivery path.
+The feature remains dark, and actual iPhone delivery is not yet proven.
+
+## Web push delivery (P13-02; default off)
+
+The web build exposes only the boolean result of `VITE_PUSH_ENABLED === "true"`
+through Vite's explicit `define`; its default is false. When enabled, the
+Notifications Settings section prefetches authenticated `GET /push/config` and
+registers the plain `public/sw.js` worker at `/` with worker updates uncached.
+Static Web Apps excludes `/sw.js` from its SPA fallback and sends
+`Cache-Control: no-cache`. The worker does not cache content or provide offline
+behavior; every push displays only the fixed generic Jarvis alert, retaining a
+validated UUID solely as notification data/tag.
+
+The web client calls authenticated `PUT /push/subscription`,
+`DELETE /push/subscription`, and `POST /push/test` through `backendFetch`.
+Notification permission is requested directly from the explicit opt-in action.
+The click handler builds `/proactive/:id` itself from a validated UUID and never
+uses a payload URL. That route calls authenticated `GET /proactive/items/:id`
+and remains inside `RequireSignIn`; the item response and notification reference
+grant no authorization. The sign-in path is stored as a validated same-origin
+session-storage value and consumed after MSAL returns to `/`. P13-02 changes no
+backend, deployment flag, identity or permission configuration; live phone
+permission, lock-screen delivery and tap-through remain unverified.
+
 ## Presence modes (P6-23; replaces P7-02 away mode)
 
 `createAwayModeStore` persists `{ mode, source, changedAt }` as JSON in the
@@ -4902,6 +4953,39 @@ Charts reuse `ChartView` with returned numeric observations and retained units.
 General workspace/GenUI commands present queried results for chat/voice; page
 navigation does not claim to alter local filters. Production remains default-off.
 
+### Daily overview page and build-time switch (18 October 2026)
+
+`DailyHome` (`apps/web/src/daily/`) is now the Daily area. It opens on
+`DailyOverview` and shows the existing `DailyPage` browser for one collection at a
+time: Open moves focus to the browser heading, and Back to overview returns focus
+to that row's Open button. `useDailyCapabilities` reads `GET /daily/capabilities`
+once and hands the exposed sources to the overview and to the browser (as
+`knownSources`), so the browser does not discover them a second time.
+
+`useDailyProbes` reads each exposed collection with one `POST /daily/query` of
+`limit: 1`, over the browser's default last-seven-days period for dated
+collections and with no period for sync evidence, through the same client and
+response validation as the browser. Two reads run at a time because
+`/daily/query` has no concurrency limit of its own and the SQL pool is shared with
+chat. `overview.ts` classifies each result as records, none returned or failed
+(with the shared safe failure sentence). `daily.sync` always returns one summary
+item, so sync evidence counts as records only when that item holds feeds, a
+heartbeat or retained inbox entries. A header refresh, a Retry or the existing
+Daily refresh stream re-reads every collection while settled rows stay visible,
+and returning from the browser reads them again. Aborted and superseded reads are
+ignored. The overview adds no endpoint, DTO, writer, calculation, provider call,
+login or storage.
+
+`main.tsx` passes the build constant `__JARVIS_DAILY_ENABLED__` to
+`App({ dailyEnabled })`. `apps/web/vite.config.ts` loads `VITE_DAILY_ENABLED` by
+name only and `config/daily-switch.ts` parses it: absent or `false` is off, `true`
+is on, and any other value, including an empty one, stops the build or dev server.
+The value is baked into the bundle and is never read from the URL, local storage
+or the public bootstrap response; `App` itself still defaults to off. The switch
+grants no access: the backend composition switch and the owner checks above still
+decide every read. No workflow, Bicep or environment file sets either name in this
+change, and `daily/default-off.test.ts` enforces that.
+
 ### Inactive internal direct intake (17 October 2026)
 
 An optional fourth `createDailyModules(true, data, undefined, data.nutrition)`
@@ -5143,8 +5227,8 @@ runner principal is refused on every Daily route, and an agent is refused on the
 targets route because it reaches targets only through the approved tool.
 
 No workflow, Bicep, infrastructure, environment or deploy file sets
-`JARVIS_DAILY_ENABLED`, or the web switch `VITE_DAILY_ENABLED` reserved for the
-Daily page, so every environment keeps Daily off; `daily/default-off.test.ts`
+`JARVIS_DAILY_ENABLED`, or the web switch `VITE_DAILY_ENABLED` that the Daily
+overview page reads at build time, so every environment keeps Daily off; `daily/default-off.test.ts`
 scans those files for both names. `daily/composition.test.ts` builds real
 applications: it compares a Daily-off one with one built without Daily, shows the
 module adds exactly its three routes and six tools, and checks that

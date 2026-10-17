@@ -21,7 +21,9 @@
 }
 .daily-heading { align-items: flex-start; margin-bottom: var(--space-5); }
 .daily-heading h1 { font-size: var(--type-title); margin: 0; }
+.daily-heading h1:focus-visible { outline: 2px solid var(--focus); outline-offset: 4px; border-radius: var(--radius-control); }
 .daily-heading p { color: var(--text-muted); margin: var(--space-2) 0 0; }
+.daily-heading-actions { display: flex; gap: var(--space-2); flex-wrap: wrap; }
 .daily-page button, .daily-page select, .daily-page input, .daily-page summary {
   min-height: 44px;
   border-radius: var(--radius-control);
@@ -83,11 +85,14 @@
 .daily-facts dt { font-size: var(--type-small); color: var(--text-muted); }
 .daily-facts dd { margin: var(--space-1) 0 0; overflow-wrap: anywhere; }
 .daily-notice, .daily-empty { padding: var(--space-4); background: var(--surface-muted); border-radius: var(--radius-panel); }
+.daily-notice { display: grid; gap: var(--space-3); justify-items: start; }
+.daily-notice p { margin: 0; }
 .daily-contract-details { margin-top: var(--space-4); }
 @media (max-width: 640px) {
   .daily-page { padding: var(--space-3); }
   .daily-records { padding: var(--space-3); }
-  .daily-heading > button { width: 100%; }
+  .daily-heading-actions { width: 100%; }
+  .daily-heading-actions > button { flex: 1 1 140px; }
   .daily-period { width: 100%; }
   .daily-period button { flex: 1 1 100%; }
   .daily-record-details { min-width: 110px; }

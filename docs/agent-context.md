@@ -1,5 +1,24 @@
 # Agent context
 
+## P13-01 Web Push backend (17 October 2026)
+
+`JARVIS_PUSH_ENABLED` enables the authenticated Web Push backend only when its
+value is exactly `true`; unset and all other values leave routes unregistered
+and avoid push-store/database/provider work. Do not set this flag in deployment,
+workflows or infrastructure as part of P13-01. The VAPID private key stays in
+server-side SQL; routes expose only its public half, and test push content is
+generic. No Teams delivery path exists. The user-started test is not subject to
+quiet hours; any future system-started delivery must enforce 22:00–07:00
+Europe/Copenhagen without an emergency exception.
+
+Focused checks:
+`npm test --workspace @jarvis/backend -- --run src/push/validation.test.ts src/push/webpush.test.ts src/push/routes.test.ts src/config.test.ts src/database/migrations.test.ts`,
+`npm run build --workspace @jarvis/backend` and
+`npm run lint --workspace @jarvis/backend`. SQL Server schema/store integration
+uses `npm run test:database --workspace @jarvis/backend -- src/database/schema.integration.test.ts`
+with the isolated loopback test database; do not claim it ran without that
+service. A green local test or build does not establish real iPhone delivery.
+
 ## Chat acceptance failure labels and one bounded retry (#820, 17 October 2026)
 
 Read a failed chat check's safe reason in the acceptance artifact first; never
@@ -349,6 +368,29 @@ unverified. Final640px wide table scrolls within a236px region at320px, includin
 actual ArrowRight scrolling, without page overflow. Eight page cases passed
 again after that final layout correction.
 
+## Daily overview page checks (18 October 2026; P12-15)
+
+The Daily area opens on an overview (`daily/DailyHome`, `DailyOverview`,
+`useDailyProbes`, `overview`) behind the build-time switch `VITE_DAILY_ENABLED`
+(see "Daily switch checks"). From `apps/web`, run
+`npx vitest run src/daily/overview.test.ts src/daily/DailyHome.test.tsx src/daily/DailyPage.test.tsx config/daily-switch.test.ts src/App.test.tsx`,
+then `npx tsc --noEmit` and `npx eslint <changed files> --max-warnings 0`. Run
+one heavy command at a time. A Vitest worker that stalls on start is the pool's own
+start timeout, not a test failure, so retry it once. The tests mock `fetch` with
+synthetic responses and check concurrency (at most two reads), refresh and retry,
+focus movement on Open and Back, the Daily-off navigation and the build switch
+values.
+
+Browser inspection uses a temporary harness page and entry file under `apps/web`
+that mount the real `DailyHome` with the real stylesheet and a synthetic `fetch`
+(not committed; delete both afterwards), served by Vite on a spare port with
+`VITE_DAILY_ENABLED=true` in the shell environment only. Never use another
+session's port or tab, and never real login, records or provider data. The
+harness has no 3D stage, header or MSAL, and OS reduced-motion was not emulated,
+so none of that is claimed. Phone width means 390×844 touch plus 320; also check
+768 and 1280. Local runs and synthetic-browser checks are not qualification: CI is
+the authority, and no live record, physical phone or Daily activation is proved.
+
 ## Internal Frida binding checks (17 October 2026; P12-09)
 
 The current source-only continuation registers owner-authenticated
@@ -469,7 +511,10 @@ and it is off by default **with nothing setting it**: no workflow, Bicep,
 infrastructure, `.env` or deploy file may carry it, and no session sets it for
 an environment. Only the separate, reviewed change that turns Daily on edits the
 deploy files, and it must update the allow-list in `daily/default-off.test.ts` in
-the same change. The web switch `VITE_DAILY_ENABLED` follows the same rule.
+the same change. The web switch `VITE_DAILY_ENABLED` follows the same rule. The Vite
+build and dev server read it by name only: absent or `false` is off, `true` is on,
+and any other value, including an empty one, stops them. Set it only in the
+reviewed enabling change, and never in a local `.env` that is committed.
 
 Check the composition with
 `npm test --workspace @jarvis/backend -- src/config.test.ts src/production-modules.test.ts src/daily/default-off.test.ts src/daily/composition.test.ts`.
@@ -996,6 +1041,16 @@ evidence, not product assets. The 16 October supplied images establish shape
 inconsistency and rejected bevelled tabs, not a replacement visual reference.
 Only repository-local guidance changes belong here; do not modify global
 instructions or `C:\Repo\templates`.
+
+## Push notification feature gate (P13-02; 17 October 2026)
+
+Web push is default-off. The Vite build reads only `VITE_PUSH_ENABLED` in
+addition to its existing explicit backend override and injects enabled only
+when the value is exactly the string `true`. Do not expose arbitrary environment
+variables or set this gate as part of the web implementation. When off, the web
+app registers no worker, requests no push endpoints, renders no Notifications
+section and has no proactive-item route. Physical iOS permission and delivery
+checks happen only after a separate enabling change.
 
 This worktree starts from released/remote main `2823585184d67980c580127f9dbbce97109fa91b`.
 Pinned web dependencies can be restored from an owned copy of the authorised

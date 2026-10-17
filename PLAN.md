@@ -15,6 +15,43 @@ with `agent_error`. Its immutable receipt remains `accepted=false`; #820 owns
 the functional follow-through and #880 stays open. This integration does not
 claim to fix that historical failure or complete private Daily acceptance.
 
+## Visible Daily page (18 October 2026; P12-15 / #730)
+
+Dan, after the invisible Daily slices: "I have no idea what is built and cannot
+see anything." Daily now opens on an overview before any record table. Under
+"What Daily holds today" it lists each retained collection the backend exposes
+(measurements, sleep, workouts, food history, saved favourites, meal plans, brief
+history, sync evidence) with one plain sentence on what it is for. Each row
+shows what a read-only, one-record check found: Has records, None returned
+(which never claims the original source is empty) or Could not read (with Retry).
+Open takes the row into the existing record browser and Back returns. It uses
+only the two existing owner-bound endpoints, `GET /daily/capabilities` and
+`POST /daily/query`, and adds no endpoint, writer, calculation, migration,
+provider call, account, consent, secret or import. Nothing in it is stored,
+estimated or invented.
+
+The page, route and navigation exist only when the web build sets
+`VITE_DAILY_ENABLED` to exactly `true`. It is off by default (a missing value or
+`false` is off; any other value stops the build) and no workflow or Bicep file
+sets it in this change, so every environment keeps the released navigation. Dan
+pre-authorised switching Daily on for his account once the page is live and
+checked; that is the next, separate change (`JARVIS_DAILY_ENABLED` and
+`VITE_DAILY_ENABLED`), not part of this one.
+
+Checked in a real headless Chromium at 390×844 touch (dark and light), 320, 768
+and 1280 px against synthetic responses (details in DESIGN.md). Local runs are not
+qualification, and no live backend, private data, physical phone or acceptance is
+claimed.
+
+## Proactive assistance (17 October 2026; P13-01 / #917)
+
+The first delivery-proof milestone is approved. P13-01 builds the owner-bound
+backend, SQL records and encrypted Web Push path behind the exact-true,
+default-off `JARVIS_PUSH_ENABLED` gate. The parallel web work is P13-02. No
+deployment setting is changed; provider acceptance and local tests do not prove
+that an iPhone displayed the notification. Physical-device delivery remains
+unverified.
+
 ## Owner nutrition targets (17 October 2026; P12-09 / #724)
 
 Dan ruled that the suggestion budget reads owner-entered Settings, not a default,
@@ -58,7 +95,7 @@ any SQL, and an agent reaches the targets only through the approved tool. No
 migration, account, consent, grant, secret, RBAC, resource or import is added, and
 no provider, device or private data is read or written.
 
-Next: the visible Daily page (P12-15 / #730).
+The visible Daily page (P12-15 / #730) is recorded in its own section.
 
 ## On-screen views authority (17 October 2026; P11-09 / #885)
 
@@ -1933,6 +1970,7 @@ Goal: GitHub issues are the single backlog. The Software Factory (worker label `
 | P10-07 | [#793](https://github.com/DanAakesen/jarvis/issues/793) | UI session consumes the canonical GitHub Factory board, replacing the legacy task-state columns | Six ordered Project columns, issue/PR links and real task overlays, local filters, bounded display, Now-stream invalidations/reconnect, stale/error recovery, focused checks and desktop/320px inspection; spot-check live Project placement | P10-04 | Complete |
 | P10-08 | [#902](https://github.com/DanAakesen/jarvis/issues/902) | Web task creation creates and links one GitHub issue | Issue-first creation preserves dialog fields; durable submission claims prevent duplicate issues/tasks; failures identify partial creation; confirmation links to the issue; board overlays work before a PR and delivery includes `Fixes #N`. Offline backend/web checks pass; live GitHub acceptance remains unverified | P10-02 | Complete |
 | P10-09 | [#908](https://github.com/DanAakesen/jarvis/issues/908) | Complete without deployment merges eligible PRs without confirmation and recovers open work after restart | Project-policy selection is approval; App squash merge retains existing safety guards, `deliver_pr` never merges, no-check grace survives restart, startup/minute and policy-change sweeps are idempotent, transient GitHub retries are bounded, refusals remain task events, and Done follows the signed merge webhook | P3-06 | Complete |
+| P10-11 | [#911](https://github.com/DanAakesen/jarvis/issues/911) | Make each project's completion policy visible and immediately changeable | Descriptive two-choice control on project cards, project settings, and Create task; server-confirmed save, pending/error/retry/success states; clearly scoped new-project default; focused tests and responsive keyboard/browser inspection | P9-121, P10-09 | Complete |
 
 P10-07's board shipped in #806. The subsequently requested issue-number
 navigation follow-up shipped in #810 at `b4915164`; Deploy 38479582927 passed.
@@ -2297,6 +2335,18 @@ Dan approved P12 on 12 October 2026 and explicitly released only P12-01 for this
 | P12-17 | [#732](https://github.com/DanAakesen/jarvis/issues/732) | End-to-end, mobile & real-iPhone acceptance | Data manifest reconciled; real devices and existing Jarvis workflows pass; SQL availability and reverse-delta rollback verified. Dan reviews cutover evidence. | P12-06, P12-11, P12-12, P12-13, P12-14, P12-15, P12-16 | Not started |
 | P12-18 | [#733](https://github.com/DanAakesen/jarvis/issues/733) | Final delta, cutover & rollback window | Post-switch sync / food / UI pass; window agreed; new Azure writes can be recovered if rollback is needed. | P12-17 | Not started |
 | P12-19 | [#734](https://github.com/DanAakesen/jarvis/issues/734) | Retire legacy and migration-only tooling | Permanent Azure services and original source/data remain; full verified migration, rollback/retention gates met before legacy deprecation or temporary-tool cleanup; no hidden old canonical writer. | P12-18 | Not started |
+
+## P13 — Proactive assistance
+
+The first milestone is a direct, user-triggered Web Push test linking to a
+durable owner-protected item. P13 is built dark: enabling the backend flag is a
+separate change, the user test is not proactive delivery, and real iPhone
+delivery remains unproven. Teams is not a delivery path.
+
+| ID | Issue | Task | Acceptance criteria | Depends on | Status |
+| --- | --- | --- | --- | --- | --- |
+| P13-01 | [#917](https://github.com/DanAakesen/jarvis/issues/917) | Push delivery proof, backend | Exact-true default-off gate; authenticated owner-scoped subscriptions/items; server-only VAPID key and encrypted generic payload; bounded retry and rate limits; durable item open is owner-only; no Teams, scheduler or activation. Unit, lint and type checks pass; SQL integration runs in CI. Real iPhone delivery remains unproven. | — | Complete |
+| P13-02 | [#919](https://github.com/DanAakesen/jarvis/issues/919) | Push delivery proof: web worker, opt-in and durable item page | Exact-string push gate defaults off; worker always displays generic alerts and opens only validated same-origin item paths; authenticated opt-in/test/off states and owner-protected item page work; deep links return after sign-in. Physical iOS delivery remains a separate acceptance gate. | — | Complete |
 
 ## Factory canonical-status parity (16 October 2026)
 

@@ -349,7 +349,7 @@ stateDiagram-v2
 
 | Policy | Allowed outcome |
 | --- | --- |
-| **Deliver a PR** | Implement, test, push a task branch, and open or update a pull request. Stop at a non-draft PR with green checks, or with no configured checks after a two-minute grace period; mark Done without merging. |
+| **Deliver a pull request** | Implement, test, push a task branch, and open or update a pull request. Stop at a non-draft PR with green checks, or with no configured checks after a two-minute grace period; mark Done without merging. |
 | **Complete without deployment** | Also squash-merge with the GitHub App when checks are green or none are configured after a two-minute grace period, the PR is not a draft, its branch is up to date, and GitHub reports it mergeable. Selecting this policy is approval; no additional confirmation or message is requested. Mark Done after the signed merge webhook is persisted. |
 
 - Merge rules and Done behavior are Dan's choices per project.
@@ -555,6 +555,12 @@ unavailable, including after backend restart.
 
 Jarvis writes bounded text notifications to the Now activity feed. Gated actions appear as browser approval requests with Approve and Reject controls and normally expire after five minutes. Internal food-review cards explicitly expire after two minutes to keep the whole operation inside the hosting request limit; the visible expiry matches persistence and cancellation. Unknown, replayed, rejected, cancelled, expired, or unverified responses never run the action. A pending approval is announced to an active browser voice session; the authenticated Now feed remains the approval channel.
 
+P13-02 adds an optional, default-off web push opt-in for a visible generic alert
+that links to a durable owner-protected item. Notifications never approve an
+action or carry sensitive item text. Opening an item requires the usual
+authenticated session; after sign-in, Jarvis returns to that same-origin item
+path. Provider acceptance is not proof that a phone displayed the notification.
+
 Manual gated actions—including a merge initiated through GitHub tools, deletion, sending mail, calendar changes, repository creation, destructive or externally consequential computer use outside the browser, and anything that spends money—always require Dan's confirmation. The automatic project-policy merge under **Complete without deployment** is distinct: selecting that policy is approval, and its automatic merge asks for no additional confirmation or message. Other gated actions fail closed if Jarvis approval is unavailable or expires. Provider credentials remain server-side; notification content, audio, tokens, and images are not written to logs, task events, or errors.
 
 Personality preferences are validated and persisted in Settings. They apply to new chat and voice sessions; changing or resetting them does not interrupt an active voice session. Reset restores the current British-butler, concise defaults and clears custom instructions. Preferences affect response style only, not Jarvis's identity, available tools, permissions, selected language, model or voice, or truthful reporting of action outcomes.
@@ -700,8 +706,8 @@ It checks free space every 15 seconds; below the configurable threshold it repor
 
 | Data points | Actions |
 | --- | --- |
-| List: every repository of Dan's GitHub account. Managed projects first (name, repository, default agent, policy, tech, running tasks, last release), then the other repositories (name, last push, language) | Edit or archive a managed project; **Manage with Jarvis** registers an existing repository with the configured defaults (tech detected from the repository); **Add project** opens the existing-repository and new-repository actions |
-| Project settings: repository, default branch, default agent, policy, merge rules, sandbox size, tech, max parallel tasks | Save (defaults apply to new tasks; policy changes also re-evaluate open PRs) |
+| List: every repository of Dan's GitHub account. Managed projects first (name, repository, default agent, policy, tech, running tasks, last release), then the other repositories (name, last push, language) | Change the labelled, two-choice completion policy directly on each project card; edit or archive a managed project; **Manage with Jarvis** registers an existing repository with the configured defaults (tech detected from the repository); **Add project** opens the existing-repository and new-repository actions |
+| Project settings: repository, default branch, default agent, completion policy, merge rules, sandbox size, tech, max parallel tasks | Change the completion policy in one choice; the saved policy is confirmed by the server and applies now, including to pull requests already open. Save other project settings for new tasks. |
 
 The project API lists active projects, creates and updates settings, and archives
 without deleting the row or its task history. Repositories use `owner/name`;
@@ -735,7 +741,7 @@ the last-release field is explicitly unavailable rather than inferred.
 | Voice: speech-to-text model, English voice, fixed Danish voice (Jeppe), default language, minimise windows on voice start (off by default) | Change supported preferences; Danish voice is read-only |
 | Coding agents: Codex default model and reasoning; Copilot default model | Change (applies to new tasks) |
 | Global: max parallel tasks; sleep switch | Change |
-| Projects: defaults for new projects (owner, visibility, templates repository, default agent, policy, max parallel tasks, default branch) | Change in the Projects section (pre-fills Add project; applies to new projects) |
+| Projects: defaults for new projects (owner, visibility, templates repository, default agent, policy, max parallel tasks, default branch) | Change in the Projects section. The policy default only pre-fills projects Jarvis registers later; every project keeps its own policy and can be changed any time. |
 | Credentials: name, expiry, last renewal, last check, status (never secret values) | Trigger Codex renewal; open re-seed instructions |
 
 The backend checks Codex daily and renews only when the access token has three
@@ -971,6 +977,17 @@ Dan approved these after a gap audit. They are planned, not built.
 ## GitHub backlog (8 October 2026, P10)
 
 Dan decided that GitHub issues are the single backlog. When Dan asks Jarvis to change code, Jarvis drafts an issue, confirms it with him and creates it; the Software Factory then picks it up with the Codex agent (worker label `Jarvis`), or Copilot when Dan chooses. Factory progress shows on the issue, its pull request uses `Fixes #N`, and the Factory board uses the same columns as the GitHub Project: Backlog, Needs Dan, Ready, In progress, In review, Done. ([#573](https://github.com/DanAakesen/jarvis/issues/573)–[#577](https://github.com/DanAakesen/jarvis/issues/577))
+
+## Proactive Web Push (17 October 2026; P13-01 / #917)
+
+Web Push is an opt-in visible alert for a durable, owner-protected item; it
+carries no private details, performs no silent work and never approves an
+action. The backend defaults off and registers no push routes unless
+`JARVIS_PUSH_ENABLED` is exactly `true`; this milestone does not enable it. The
+user-triggered test is not proactive delivery. Teams is not a delivery option.
+Real iPhone delivery remains unproven until separately observed on the installed
+Home Screen app.
+
 ## Daily migration (approved P12)
 
 Tool parity is an acceptance requirement for every retained Daily capability,
@@ -1113,6 +1130,23 @@ with their allowed ranges, saves on its own rather than with Save settings, and
 clears a target when its field is emptied. It ships no defaults, placeholders or
 example figures, and a failed load or save shows page-owned wording, never server
 text. No activation or acceptance is implied.
+
+The Daily page (P12-15 / #730) opens on an overview so Dan can see what is
+actually stored before he browses it. For each retained collection the backend
+exposes (measurements, sleep, workouts, food history, saved favourites, meal
+plans, brief history and sync evidence) it says in plain English what the
+collection is for, and whether a read-only one-record check found records, found
+none or could not read it. "None returned" never claims the original source is
+empty, and the overview shows no invented counts, totals or estimates. Open goes
+to the existing record browser, which keeps its periods, paging, details, units
+and source/freshness labels. The page uses only the existing owner-authorised
+`/daily/capabilities` and `/daily/query` reads, so it adds no writer, provider,
+device, private-data or consent path. It exists only when the web build switch
+`VITE_DAILY_ENABLED` is exactly `true`; the switch is off by default and this
+change sets it in no environment, so Daily off leaves the released navigation
+unchanged. Switching it on for Dan's account is a separate, reviewed change that
+he pre-authorised once the page is live and checked. No activation or acceptance
+is implied.
 
 When an existing Frida adapter is explicitly supplied, owner-authenticated
 `daily_food_lookup` exposes only its public-reference component lookup.

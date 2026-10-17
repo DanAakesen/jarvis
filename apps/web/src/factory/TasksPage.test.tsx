@@ -28,8 +28,9 @@ vi.mock('../task-events', () => ({
 }));
 
 const project = {
-  id: '7', name: 'Jarvis', default_agent: 'copilot' as const,
-  repo: 'DanAakesen/jarvis', defaultBranch: 'main',
+  id: '7', name: 'Jarvis', default_agent: 'copilot' as const, policy: 'deliver_pr' as const,
+  repo: 'DanAakesen/jarvis', default_branch: 'main', merge_rules: null,
+  sandbox_size: '1x2' as const, tech: 'node', max_parallel_tasks: 1, active: true,
 };
 const projectRelease = {
   project: { id: '7', name: 'Jarvis', repo: 'DanAakesen/jarvis', defaultBranch: 'main' },
@@ -146,6 +147,9 @@ beforeEach(() => {
     const url = String(input);
     const method = init?.method ?? 'GET';
     if (url.endsWith('/factory/projects') && method === 'GET') return response([project]);
+    if (url.endsWith('/factory/projects/7') && method === 'PATCH') {
+      return response({ ...project, ...JSON.parse(String(init?.body)) });
+    }
     if (url.endsWith('/factory/projects/7/releases') && method === 'GET') return response(projectRelease);
     if (url.includes('/factory/board?') && method === 'GET') return response(boardFixture());
     if (url.includes('/factory/tasks/42?') && method === 'GET') {
@@ -323,6 +327,28 @@ describe('Factory task board', () => {
       reasoningOverride: 'high',
       submissionId: expect.stringMatching(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i),
     });
+  });
+
+  it('shows and changes the selected project policy from the Create task dialog', async () => {
+    const user = userEvent.setup();
+    renderFactory();
+    await screen.findByRole('article', { name: 'Fix the bug' });
+    await user.click(screen.getByRole('button', { name: 'Create task' }));
+    const dialog = screen.getByRole('dialog', { name: 'Create task' });
+    const policy = within(dialog).getByRole('group', { name: 'Completion policy for Jarvis' });
+    const deliver = within(policy).getByRole('radio', { name: /Deliver a pull request/ });
+    const complete = within(policy).getByRole('radio', { name: /Complete without deployment/ });
+
+    expect(deliver).toHaveProperty('checked', true);
+    await user.click(complete);
+
+    expect(await within(policy).findByText('Applies now, including pull requests that are already open.', {
+      selector: '[role="status"]',
+    })).not.toBeNull();
+    expect(complete).toHaveProperty('checked', true);
+    const patch = fetchMock.mock.calls.find(([url, init]) =>
+      String(url).endsWith('/factory/projects/7') && init?.method === 'PATCH');
+    expect(JSON.parse(String(patch?.[1]?.body))).toEqual({ policy: 'complete_without_deployment' });
   });
 
   it.each([

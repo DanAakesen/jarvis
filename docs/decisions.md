@@ -1,5 +1,73 @@
 # Decisions
 
+## Open Daily on an overview behind a build-time switch (18 October 2026; P12-15 / #730)
+
+**Builder decision inside Dan's "go with the daily", not an activation and not
+acceptance.** Dan could not see what Daily holds ("I have no idea what is built
+and cannot see anything"), so the page now opens on an overview.
+
+- Overview first. The page lists each retained collection the backend exposes with
+  one plain sentence on what it is for, and a status from a read-only,
+  one-record check: has records, none returned or could not read. It uses only
+  `GET /daily/capabilities` and `POST /daily/query`, so it adds no endpoint,
+  writer, calculation, migration, provider call, account, consent, secret or
+  import.
+- Honest by construction. "None returned" never says the original source is
+  empty, the sync summary alone does not count as records, and the overview shows
+  no count, total or estimate. A failed read says so and offers Retry. A settled
+  result stays visible while the next read runs, except a failure that is being
+  retried.
+- Gentle on the backend. Reads run two at a time because the SQL pool is shared
+  with chat, and the overview does not refresh on window focus.
+- One build-time switch. `VITE_DAILY_ENABLED` is read by the Vite build only:
+  absent or `false` is off, `true` is on, and any other value, including an empty
+  one, stops the build. It is baked into the bundle and never read from the URL,
+  storage or runtime configuration. This change sets it nowhere, and
+  `daily/default-off.test.ts` scans for it.
+- Enabling is a separate change. Dan pre-authorised switching Daily on for his own
+  account: "Yes, switch it on once it's live and checked." That change sets
+  `JARVIS_DAILY_ENABLED` and `VITE_DAILY_ENABLED` after this page has been merged,
+  deployed and checked in a real browser. Rolling back means reverting it or
+  leaving the switches off.
+- Evidence. A headless Chromium check against synthetic responses at phone,
+  small-phone, tablet and desktop widths. It is not live data, a physical phone,
+  provider acceptance or Daily activation.
+
+## Keep the first Web Push proof dark and user-triggered (17 October 2026; P13-01 / #917)
+
+Milestone 1 proves a visible Web Push notification can point to a durable,
+owner-protected item; a push never approves an action or carries private data.
+The feature is disabled unless `JARVIS_PUSH_ENABLED` is exactly `true`; these
+changes do not set it. Disabled startup does not register routes or access push
+storage, signing keys or providers.
+
+The backend generates and stores its VAPID key pair on first use, serving only
+the public key. Keep RFC 8030 delivery, RFC 8291 `aes128gcm` encryption and
+RFC 8292 VAPID in a small `node:crypto` module without a new dependency. Store
+subscriptions and durable items separately from Now/activity. Push text stays
+generic; provider acceptance is not delivery evidence, and `opened_at` means
+loaded, not read. There is no Teams delivery path.
+
+The test send is user-started, so quiet hours do not block it. Do not add the
+22:00–07:00 Europe/Copenhagen guard or an emergency exception now; all later
+system-started sends must pass that guard. Actual iPhone delivery remains an
+unverified physical-device acceptance step.
+
+## Keep web push default-off and notification taps owner-authenticated (17 October 2026; P13-02)
+
+Implement the web half of the delivery proof behind the exact-string
+`VITE_PUSH_ENABLED === "true"` gate; the build default remains off. The service
+worker shows fixed generic text even for malformed pushes and retains only a
+validated UUID for a same-origin item path. It never trusts a payload URL, and
+the item page remains behind the normal sign-in and owner-protected API.
+
+Permission is requested as the first awaited operation in the user's explicit
+opt-in action. The UI distinguishes unsupported, server-off, not-yet-asked,
+denied, on-device, changed-key/lost-subscription and recoverable failure states.
+No backend or deployment flag is changed here. Mocked browser checks are not
+evidence of iOS permission prompts, lock-screen delivery or physical tap-through;
+those require the separate enabling change and device test.
+
 ## Compose Daily only behind one exact server switch (17 October 2026; P12-09 / #724)
 
 **Builder decision inside Dan's "go with the daily", not an activation and not
@@ -4699,3 +4767,15 @@ shows unsaved, pending, confirmed, and failed states with an in-section retry,
 without changing the endpoint or project PATCH contract. Add project previews
 the saved defaults that the backend applies, and each registered project keeps
 its own editable settings.
+
+## P10-11 — Per-project completion policy controls (17 October 2026)
+
+Show the active completion policy as a labelled, descriptive two-choice radio
+group on project cards and project settings, and reuse that group beside the
+project choice in Create task. A choice uses the existing project PATCH; keep
+the saved choice visible until the server confirms the update, disable both
+options while saving, and provide an inline retry on failure. State that the
+change applies now, including to already-open pull requests. The new-project
+policy default is separate: it only pre-fills projects Jarvis registers later,
+and each project keeps its own changeable policy. This is web-only; the PATCH
+contract, default values, and P10-09 merge behavior do not change.

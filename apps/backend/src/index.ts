@@ -127,6 +127,8 @@ import { WorkspacePinStore } from './database/workspace-pin-store.js';
 import { createWeatherModule } from './core/weather.js';
 import { createSystemStatusReader } from './system-status.js';
 import { createProductionModules } from './production-modules.js';
+import { createPushStore } from './database/push-store.js';
+import { registerPushRoutes } from './push/routes.js';
 import { composeDaily } from './daily/composition.js';
 
 try {
@@ -1136,6 +1138,10 @@ try {
     ...(teamsNotifications ? { teamsNotifications } : {}),
     ...(phoneSessionStore ? { phoneSessionStore } : {}),
   });
+  registerPushRoutes(app, config.pushEnabled, () => ({
+    store: createPushStore(database!.pool),
+    publicOrigin: config.staticWebAppOrigin!,
+  }));
   runtime.app = app;
   if (checksLoop || projectPolicyEvaluator) {
     app.addHook('onClose', async () => {

@@ -14,6 +14,8 @@ const {
   isSignInRedirectPending,
   restoreProfile,
   signIn,
+  saveSignInReturnPath,
+  takeSignInReturnPath,
   loadConversationHistory,
   createChatSession,
   sendChatTurn,
@@ -32,6 +34,8 @@ const {
     isSignInRedirectPending: vi.fn(() => false),
     restoreProfile: vi.fn().mockResolvedValue(null),
     signIn: vi.fn(),
+    saveSignInReturnPath: vi.fn(),
+    takeSignInReturnPath: vi.fn<() => string | null>(() => null),
     loadConversationHistory: vi.fn().mockResolvedValue({ messages: [], nextCursor: null }),
     createChatSession: vi.fn(),
     sendChatTurn: vi.fn(),
@@ -46,7 +50,9 @@ const {
     }>,
   };
 });
-vi.mock('./auth', () => ({ createAuthClient, isSignInRedirectPending, restoreProfile, signIn }));
+vi.mock('./auth', () => ({
+  createAuthClient, isSignInRedirectPending, restoreProfile, signIn, saveSignInReturnPath, takeSignInReturnPath,
+}));
 vi.mock('./conversation-history', () => ({
   loadConversationHistory,
   createChatSession,
@@ -93,6 +99,7 @@ beforeEach(() => {
   createAuthClient.mockReturnValue(makeAuthClient());
   restoreProfile.mockResolvedValue(null);
   isSignInRedirectPending.mockReturnValue(false);
+  takeSignInReturnPath.mockReturnValue(null);
   loadConversationHistory.mockResolvedValue({ messages: [], nextCursor: null });
   createChatSession.mockResolvedValue({ id: '41', language: 'da' });
   sendChatTurn.mockResolvedValue({
@@ -107,6 +114,7 @@ beforeEach(() => {
 
 const mediaDevicesDescriptor = Object.getOwnPropertyDescriptor(navigator, 'mediaDevices');
 const permissionsDescriptor = Object.getOwnPropertyDescriptor(navigator, 'permissions');
+const serviceWorkerDescriptor = Object.getOwnPropertyDescriptor(navigator, 'serviceWorker');
 
 function MemoryRouter({ children, initialEntries = ['/'], initialIndex }: { children: ReactNode; initialEntries?: string[]; initialIndex?: number }) {
   const [router] = useState(() => createMemoryRouter([{ path: '*', element: children }], {
@@ -130,6 +138,8 @@ afterEach(() => {
   else Reflect.deleteProperty(navigator, 'mediaDevices');
   if (permissionsDescriptor) Object.defineProperty(navigator, 'permissions', permissionsDescriptor);
   else Reflect.deleteProperty(navigator, 'permissions');
+  if (serviceWorkerDescriptor) Object.defineProperty(navigator, 'serviceWorker', serviceWorkerDescriptor);
+  else Reflect.deleteProperty(navigator, 'serviceWorker');
 });
 
 describe('Jarvis routes', () => {
@@ -383,6 +393,58 @@ describe('App shell', () => {
     return rendered;
   }
 
+  it('keeps push settings, item route, registration and requests absent when the gate is off', async () => {
+    restoreProfile.mockResolvedValue({ name: 'Test User' });
+    const register = vi.fn();
+    Object.defineProperty(navigator, 'serviceWorker', { configurable: true, value: { register } });
+    vi.stubGlobal('PushManager', class {});
+    vi.stubGlobal('Notification', { permission: 'default', requestPermission: vi.fn() });
+
+    const settings = await renderSignedIn('/settings');
+    expect(screen.queryByRole('button', { name: 'Notifications' })).toBeNull();
+    expect(register).not.toHaveBeenCalled();
+    expect(fetchMock.mock.calls.some(([url]) => {
+      const path = new URL(String(url)).pathname;
+      return path.startsWith('/push/') || path.startsWith('/proactive/');
+    })).toBe(false);
+
+    settings.unmount();
+    await renderSignedIn('/proactive/11111111-1111-4111-8111-111111111111');
+    expect(screen.getByRole('heading', { name: 'Page not found' })).not.toBeNull();
+    expect(register).not.toHaveBeenCalled();
+  });
+
+  it('restores the notification deep link after sign-in returns to the site root', async () => {
+    const itemId = '11111111-1111-4111-8111-111111111111';
+    restoreProfile.mockResolvedValue({ name: 'Test User' });
+    takeSignInReturnPath.mockReturnValueOnce(`/proactive/${itemId}`);
+    fetchMock.mockImplementation(async (input) => {
+      const path = new URL(String(input)).pathname;
+      if (path === `/proactive/items/${itemId}`) {
+        return new Response(JSON.stringify({
+          id: itemId, kind: 'test', title: 'Synthetic delivery test',
+          body: 'Generic notification item.', createdAt: '2026-10-17T12:00:00.000Z',
+        }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      }
+      return new Response(JSON.stringify({ state: 'awake' }), { status: 200 });
+    });
+
+    render(<MemoryRouter><App config={config} pushEnabled /></MemoryRouter>);
+    expect(await screen.findByRole('heading', { name: 'Synthetic delivery test' })).not.toBeNull();
+    expect(fetchMock.mock.calls.some(([url]) =>
+      new URL(String(url)).pathname === `/proactive/items/${itemId}`)).toBe(true);
+  });
+
+  it('saves the protected notification path before redirecting a signed-out visitor', async () => {
+    const itemId = '11111111-1111-4111-8111-111111111111';
+    const path = `/proactive/${itemId}?from=notification`;
+    const user = userEvent.setup();
+    render(<MemoryRouter initialEntries={[path]}><App config={config} pushEnabled /></MemoryRouter>);
+    await user.click(await screen.findByRole('button', { name: 'Sign in with Microsoft' }));
+    expect(saveSignInReturnPath).toHaveBeenCalledWith(path);
+    expect(signIn).toHaveBeenCalledOnce();
+  });
+
   it('keeps the workspace command stream connected when navigating away from conversation', async () => {
     const user = userEvent.setup();
     await renderSignedIn();
@@ -583,6 +645,8 @@ describe('App shell', () => {
     if (phone) fireEvent.click(screen.getByRole('button', { name: 'Menu' }));
     const navigation = phone ? screen.getByRole('navigation', { name: 'Pages' }) : screen.getByRole('navigation', { name: 'Areas' });
     fireEvent.click(within(navigation).getByRole('link', { name: 'Daily' }));
+    await screen.findByRole('heading', { name: 'What Daily holds today' });
+    fireEvent.click(await screen.findByRole('button', { name: 'Open Measurements' }));
     await screen.findByText('Synthetic shell measurement');
     expect(screen.getByRole('heading', { name: 'Daily' })).toBeTruthy();
     await waitFor(() => expect(activityStream).not.toBeNull());
@@ -620,6 +684,9 @@ describe('App shell', () => {
         <App config={config} dailyEnabled /></>;
     }
     render(<MemoryRouter initialEntries={['/daily']}><AccountHarness /></MemoryRouter>);
+    await screen.findByText(/^Checked \d+ collections?:/u);
+    expect(screen.getAllByText('Has records').length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole('button', { name: 'Open Measurements' }));
     await screen.findByText('Synthetic first owner');
     owner = 'second';
     client.getActiveAccount.mockReturnValue({ homeAccountId: 'second' });
@@ -628,6 +695,7 @@ describe('App shell', () => {
     expect(screen.queryByText('Synthetic first owner')).toBeNull();
     await screen.findByText(/Daily access could not be verified/u);
     expect(screen.queryByText('Synthetic first owner')).toBeNull();
+    expect(screen.queryByText('Has records')).toBeNull();
   });
 
   it.each([200, 503])('acknowledges a broker pin only after storage replies with status %s', async (status) => {
@@ -1345,7 +1413,9 @@ describe('App shell', () => {
     const original = fetchMock.getMockImplementation()!;
     fetchMock.mockImplementation(async (input, init) => {
       const path = new URL(String(input)).pathname;
-      if (path === '/factory/projects') return new Response(JSON.stringify([{ id: '7', name: 'Jarvis', default_agent: 'copilot' }]));
+      if (path === '/factory/projects') return new Response(JSON.stringify([
+        { id: '7', name: 'Jarvis', default_agent: 'copilot', policy: 'deliver_pr' },
+      ]));
       if (path === '/factory/board') return boardResponse();
       return original(input, init);
     });
