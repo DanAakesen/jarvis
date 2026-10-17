@@ -29,6 +29,14 @@ describe('committed SQL manifest', () => {
     expect(down.sql).toContain('DROP TABLE dbo.background_job_dismissals;');
   });
 
+  it('adds durable owner-scoped push delivery tables and protects rollback evidence', async () => {
+    const migration = (await readMigrations()).find(({ name }) => name === '0054_proactive_push.sql');
+    expect(migration?.sql).toContain('CHECK (id = 1)');
+    expect(migration?.sql).toContain('UX_push_subscriptions_owner_endpoint_hash');
+    expect(migration?.sql).toContain("CHECK (kind = N'test')");
+    expect((await readDownMigration('0054_proactive_push.sql')).sql).toContain('cannot roll back while rows exist');
+  });
+
   it('retains durable task submission claims and refuses to erase retry protection on rollback', async () => {
     const migration = (await readMigrations()).find(({ name }) => name === '0052_factory_task_submissions.sql');
     expect(migration?.sql).toContain('submission_id uniqueidentifier NOT NULL PRIMARY KEY');
@@ -167,6 +175,7 @@ describe('committed SQL manifest', () => {
       '0051_conversation_summaries.sql',
       '0052_factory_task_submissions.sql',
       '0053_background_job_dismissals.sql',
+      '0054_proactive_push.sql',
     ]);
     for (const migration of migrations) await expect(readDownMigration(migration.name)).resolves.toMatchObject({ name: migration.name });
   });

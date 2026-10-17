@@ -15,6 +15,15 @@ with `agent_error`. Its immutable receipt remains `accepted=false`; #820 owns
 the functional follow-through and #880 stays open. This integration does not
 claim to fix that historical failure or complete private Daily acceptance.
 
+## Proactive assistance (17 October 2026; P13-01 / #917)
+
+The first delivery-proof milestone is approved. P13-01 builds the owner-bound
+backend, SQL records and encrypted Web Push path behind the exact-true,
+default-off `JARVIS_PUSH_ENABLED` gate. The parallel web work is P13-02. No
+deployment setting is changed; provider acceptance and local tests do not prove
+that an iPhone displayed the notification. Physical-device delivery remains
+unverified.
+
 ## Owner nutrition targets (17 October 2026; P12-09 / #724)
 
 Dan ruled that the suggestion budget reads owner-entered Settings, not a default,
@@ -2300,8 +2309,14 @@ Dan approved P12 on 12 October 2026 and explicitly released only P12-01 for this
 
 ## P13 — Proactive assistance
 
+The first milestone is a direct, user-triggered Web Push test linking to a
+durable owner-protected item. P13 is built dark: enabling the backend flag is a
+separate change, the user test is not proactive delivery, and real iPhone
+delivery remains unproven. Teams is not a delivery path.
+
 | ID | Issue | Task | Acceptance criteria | Depends on | Status |
 | --- | --- | --- | --- | --- | --- |
+| P13-01 | [#917](https://github.com/DanAakesen/jarvis/issues/917) | Push delivery proof, backend | Exact-true default-off gate; authenticated owner-scoped subscriptions/items; server-only VAPID key and encrypted generic payload; bounded retry and rate limits; durable item open is owner-only; no Teams, scheduler or activation. Unit, lint and type checks pass; SQL integration runs in CI. Real iPhone delivery remains unproven. | — | In progress |
 | P13-02 | [#919](https://github.com/DanAakesen/jarvis/issues/919) | Push delivery proof: web worker, opt-in and durable item page | Exact-string push gate defaults off; worker always displays generic alerts and opens only validated same-origin item paths; authenticated opt-in/test/off states and owner-protected item page work; deep links return after sign-in. Physical iOS delivery remains a separate acceptance gate. | — | Complete |
 
 ## Factory canonical-status parity (16 October 2026)

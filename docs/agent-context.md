@@ -1,5 +1,24 @@
 # Agent context
 
+## P13-01 Web Push backend (17 October 2026)
+
+`JARVIS_PUSH_ENABLED` enables the authenticated Web Push backend only when its
+value is exactly `true`; unset and all other values leave routes unregistered
+and avoid push-store/database/provider work. Do not set this flag in deployment,
+workflows or infrastructure as part of P13-01. The VAPID private key stays in
+server-side SQL; routes expose only its public half, and test push content is
+generic. No Teams delivery path exists. The user-started test is not subject to
+quiet hours; any future system-started delivery must enforce 22:00–07:00
+Europe/Copenhagen without an emergency exception.
+
+Focused checks:
+`npm test --workspace @jarvis/backend -- --run src/push/validation.test.ts src/push/webpush.test.ts src/push/routes.test.ts src/config.test.ts src/database/migrations.test.ts`,
+`npm run build --workspace @jarvis/backend` and
+`npm run lint --workspace @jarvis/backend`. SQL Server schema/store integration
+uses `npm run test:database --workspace @jarvis/backend -- src/database/schema.integration.test.ts`
+with the isolated loopback test database; do not claim it ran without that
+service. A green local test or build does not establish real iPhone delivery.
+
 ## Chat acceptance failure labels and one bounded retry (#820, 17 October 2026)
 
 Read a failed chat check's safe reason in the acceptance artifact first; never
