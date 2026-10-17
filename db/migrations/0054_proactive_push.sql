@@ -8,6 +8,7 @@ CREATE TABLE dbo.push_vapid_keys (
 
 CREATE TABLE dbo.push_subscriptions (
   id uniqueidentifier NOT NULL CONSTRAINT PK_push_subscriptions PRIMARY KEY,
+  insertion_seq bigint IDENTITY(1, 1) NOT NULL,
   owner_object_id uniqueidentifier NOT NULL,
   endpoint_hash char(64) COLLATE Latin1_General_100_BIN2 NOT NULL,
   endpoint nvarchar(2048) NOT NULL,

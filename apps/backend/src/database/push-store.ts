@@ -98,7 +98,7 @@ export function createPushStore(pool: sql.ConnectionPool): PushStore {
           ;WITH ranked AS (
             SELECT id, ROW_NUMBER() OVER (
               ORDER BY CASE WHEN last_accepted_at IS NULL THEN 1 ELSE 0 END,
-                last_accepted_at DESC, created_at DESC, id DESC
+                last_accepted_at DESC, insertion_seq DESC
             ) AS row_number
             FROM dbo.push_subscriptions WITH (UPDLOCK, HOLDLOCK)
             WHERE owner_object_id = @owner
@@ -119,7 +119,7 @@ export function createPushStore(pool: sql.ConnectionPool): PushStore {
         .query<StoredPushSubscription>(`SELECT TOP (10) id, endpoint, p256dh, auth
           FROM dbo.push_subscriptions
           WHERE owner_object_id = @owner
-          ORDER BY created_at, id;`);
+          ORDER BY insertion_seq;`);
       return recordset.map((row) => ({ ...row, id: row.id.toLowerCase() }));
     },
     async removeSubscription(id) {
