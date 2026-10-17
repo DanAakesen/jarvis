@@ -1,5 +1,18 @@
 # Decisions
 
+## Do not read successful action details back aloud or recap them in chat (17 October 2026; P11-11)
+
+After a verified successful write, voice and chat give one short confirmation and
+at most a count for multiple items. Do not repeat the approved titles, times,
+places, names, addresses, amounts, references or codes. The full written and
+on-screen record remains available, and details may be provided when explicitly
+requested. Keep staging summaries unchanged; report failures, partial writes and
+unverified outcomes briefly with the affected item and next step.
+
+A live voice test showed that repeating full calendar details after successful
+approval was redundant. Concise acknowledgements reduce needless spoken
+disclosure without removing the record or hiding an incomplete outcome.
+
 ## Use owner-configured nutrition targets for the daily food budget (17 October 2026; P12-09 / #724)
 
 **Confirmed user decision, not a proposal or completed acceptance.** Dan ruled

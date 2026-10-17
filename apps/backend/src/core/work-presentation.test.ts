@@ -61,7 +61,13 @@ const proposal = { status: 'awaiting_confirmation', summary: proposalSummary, co
 function realtimeFixture(options: Parameters<typeof fixture>[0] = {}) {
   const f = fixture(options);
   const execute = vi.fn(async () => proposal);
-  const confirm = vi.fn(async () => ({ status: 'completed' }));
+  const confirm = vi.fn(async () => ({
+    status: 'completed',
+    summary: proposalSummary,
+    items: [{ status: 'completed' }, { status: 'completed' }],
+    detail: '2 of 2 calendar events were created.',
+    instruction: 'The action is done. Confirm briefly without reading details aloud.',
+  }));
   const tools = createToolRegistry([{
     id: 'voice-preview-test',
     tools: [
@@ -109,6 +115,22 @@ describe('realtime voice work presentation', () => {
       expect(confirm).not.toHaveBeenCalled();
     },
   );
+
+  it('keeps completed action details on screen while returning only a short confirmation', async () => {
+    const { invoke, commands, confirm } = realtimeFixture();
+    const response = await invoke('calendar_confirm_change');
+    expect(response.json()).toMatchObject({
+      outcome: 'ok',
+      result: { summary: proposalSummary, instruction: expect.any(String) },
+      confirmation: 'Both are in your calendar.',
+    });
+    await settled();
+    expect(commands[0]).toMatchObject({
+      operation: 'create', viewId: 'google-101',
+      view: { renderer: 'text', data: { format: 'plain', content: `Done.\n\n${proposalSummary}` } },
+    });
+    expect(confirm).toHaveBeenCalledOnce();
+  });
 
   it.each([{ setting: false }, { mode: 'on_the_move' as const }])(
     'preserves automatic-presentation preferences for %j', async (options) => {

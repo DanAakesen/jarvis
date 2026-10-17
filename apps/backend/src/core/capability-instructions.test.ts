@@ -13,7 +13,11 @@ describe('shared navigation capability instructions', () => {
     expect(instructions).toContain('the Software Factory is how I build and change myself');
     expect(instructions).toContain('I found a bug in my code');
     expect(instructions).toContain('Jeg fandt en fejl i min kode');
-    expect(instructions).toContain('Only say an action succeeded when its tool result reports success');
+    expect(instructions).toContain('Use the backend tools supplied for the requested action');
+    expect(instructions).toContain('only claim success on an "ok" result');
+    expect(instructions).toContain('Successful writes: one short confirmation');
+    expect(instructions).toContain('details stay in chat/on screen, repeated only if asked');
+    expect(instructions).toContain('name the item and next step');
     expect(instructions).toContain('never ask Dan to paste or copy content a tool can get');
     expect(instructions).toContain('name the missing tool permission');
   });
@@ -101,7 +105,7 @@ describe('shared navigation capability instructions', () => {
     expect(instructions).toContain('The Folio is a pane');
     expect(instructions).not.toContain('The UI still refuses Status until its page exists');
     expect(instructions).toContain('Status uses workspace_command (operation "navigate", page "status")');
-    expect(instructions).toContain('Only say an action succeeded when its tool result reports success');
+    expect(instructions).toContain('only claim success on an "ok" result');
     expect(instructions).toContain('never claim navigation succeeded on send');
     expect(instructions).toContain('relay unavailable-device refusals');
     expect(instructions).not.toContain('refuses Folio and Status');
