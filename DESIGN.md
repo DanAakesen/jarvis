@@ -120,6 +120,12 @@ Keep compact desktop controls where useful and at least 44px touch targets.
 Segmented groups wrap at narrow widths; scrolling filter rows retain keyboard
 focus and readable labels. Reuse current motion timing and reduced-motion
 handling; do not animate geometry merely to make controls look busy.
+Project completion policy uses a labelled, two-choice radio group with both
+outcomes explained in plain language. Its checked value changes only after the
+existing project PATCH confirms the choice; pending state disables both choices,
+and failures keep the prior choice with an inline retry. Use the existing
+selected surface and visible focus outline, never a coloured border as the sole
+selection cue.
 `docs/agent-context.md` and the project-local product-ui skill carry this rule
 for future work. Header/job and mobile chat corrections have separate owners;
 this candidate does not imply their changes are integrated or released.
