@@ -42,6 +42,52 @@ afterEach(() => {
 });
 
 describe('job tabs', () => {
+  it('shows only an idle icon with no visible label or zero counts when there are no outcomes', async () => {
+    stubFetch('present');
+    mount();
+    const trigger = screen.getByRole('button', { name: 'Show background work' });
+    expect(trigger.textContent).toBe('');
+    expect(trigger.title).toBe('Background work: idle');
+    expect(screen.getByRole('img', { name: 'Background work: idle' })).not.toBeNull();
+    act(() => publishJob(job({ status: 'cancelled' })));
+    expect(trigger.textContent).toBe('');
+    fireEvent.click(trigger);
+    expect(screen.getByRole('group', { name: 'Background work' })).not.toBeNull();
+  });
+
+  it('counts each undismissed outcome with a distinct icon, accessible name and tooltip', async () => {
+    stubFetch('away', [
+      job(),
+      job({ jobId: '22222222-2222-4222-8222-222222222222', status: 'done', kind: 'embedding' }),
+      job({ jobId: '33333333-3333-4333-8333-333333333333', status: 'failed' }),
+      job({ jobId: '44444444-4444-4444-8444-444444444444', status: 'failed' }),
+      job({ jobId: '55555555-5555-4555-8555-555555555555', status: 'cancelled' }),
+    ]);
+    mount();
+    await screen.findByRole('img', { name: '2 failed background jobs' });
+    const icons = ['1 running background job', '1 done background job', '2 failed background jobs'].map((name) => {
+      const pair = screen.getByRole('img', { name });
+      expect(pair.title).toBe(name);
+      return pair.querySelector('svg')!.innerHTML;
+    });
+    expect(new Set(icons).size).toBe(3);
+    expect(screen.queryByRole('img', { name: 'Background work: idle' })).toBeNull();
+    const trigger = screen.getByRole('button', { name: /Show background work/ });
+    expect(trigger.textContent).toBe('112');
+    fireEvent.click(trigger);
+    fireEvent.click(screen.getByRole('button', { name: /Dismiss .*33333333.*from header/ }));
+    expect(screen.queryByRole('img', { name: '2 failed background jobs' })).toBeNull();
+    expect(screen.getByRole('img', { name: '1 failed background job' })).not.toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /Dismiss .*44444444.*from header/ }));
+    expect(screen.queryByRole('img', { name: /failed background job/ })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /Dismiss .*22222222.*from header/ }));
+    expect(screen.queryByRole('img', { name: /done background job/ })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /Dismiss .*11111111.*from header/ }));
+    expect(screen.queryByRole('img', { name: /running background job/ })).toBeNull();
+    expect(screen.queryByText('1 background jobs running')).toBeNull();
+    expect(screen.getByRole('img', { name: 'Background work: idle' })).not.toBeNull();
+  });
+
   it('removes dismissed entries from the header list across refresh, reload and later events', async () => {
     const failed = job({ status: 'failed', detail: 'The web search timed out.' });
     const completed = job({
@@ -234,6 +280,8 @@ describe('job tabs', () => {
     mount();
     fireEvent.click(await screen.findByRole('button', { name: /Show background work/ }));
     expect(screen.getByRole('alert').textContent).toContain('could not be loaded');
+    expect(screen.getByRole('img', { name: 'Background work needs attention' })).not.toBeNull();
+    expect(screen.queryByRole('img', { name: 'Background work: idle' })).toBeNull();
     act(() => publishJob(job({ step: 2, updatedAt: '2026-10-07T12:00:20.000Z' })));
     fetchMock.mockImplementation(async (input) => new URL(String(input)).pathname === '/jobs' ? json({ jobs: [job()] }) : json({}));
     fireEvent.click(screen.getByRole('button', { name: 'Refresh work' }));

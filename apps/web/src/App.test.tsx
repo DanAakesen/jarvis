@@ -1034,7 +1034,13 @@ describe('App shell', () => {
       'Usage',
       'Status',
     ]);
-    expect(screen.getByRole('link', { name: 'Settings' }).getAttribute('href')).toBe('/settings');
+    const settings = screen.getByRole('link', { name: 'Settings' });
+    expect(settings.getAttribute('href')).toBe('/settings');
+    expect(settings.textContent).toBe('');
+    expect(settings.title).toBe('Settings');
+    fireEvent.click(settings);
+    await screen.findByRole('heading', { name: 'Settings', level: 1 });
+    expect(settings.getAttribute('aria-current')).toBe('page');
   });
 
   it.each(['/notes', '/knowledge', '/knowledge/old'])('publishes canonical Notes snapshots from %s and keeps the rail canonical', async path => {
@@ -1502,14 +1508,14 @@ describe('App shell', () => {
     }));
     const user = userEvent.setup();
     const shell = document.querySelector('.app-shell')!;
-    await user.click(screen.getByRole('button', { name: 'Open windows and jobs: 1' }));
     await user.click(screen.getByRole('button', { name: 'Show background work: 1 failed' }));
-    expect(shell.getAttribute('data-windows-open')).toBe('true');
+    expect(shell.getAttribute('data-windows-open')).toBe('false');
     await user.click(screen.getByRole('button', { name: /Re-embed memory and vault Indexing · failed/ }));
-    expect(shell.getAttribute('data-windows-open')).toBe('true');
+    expect(shell.getAttribute('data-windows-open')).toBe('false');
     await user.click(screen.getByRole('button', { name: 'Dismiss' }));
-    expect(shell.getAttribute('data-windows-open')).toBe('true');
-    expect(screen.getByRole('button', { name: 'Open windows and jobs: 1' })).not.toBeNull();
+    expect(shell.getAttribute('data-windows-open')).toBe('false');
+    expect(screen.queryByRole('button', { name: /Open windows/ })).toBeNull();
+    expect(screen.getByRole('img', { name: 'Background work: idle' })).not.toBeNull();
     await user.click(screen.getByRole('button', { name: 'Show background work' }));
     expect(screen.queryByRole('button', { name: /Re-embed memory and vault Indexing · failed/ })).toBeNull();
     expect(screen.getByText('No background work to show.')).not.toBeNull();
@@ -1520,7 +1526,7 @@ describe('App shell', () => {
       view: { version: 1, title: 'Header fixture report', renderer: 'text', source: { id: 'research', status: 'complete' },
         data: { format: 'plain', content: 'Offline header fixture result' } },
     });
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Open windows and jobs: 2' })).not.toBeNull());
+    await user.click(await screen.findByRole('button', { name: 'Open windows: 1' }));
     expect(shell.getAttribute('data-windows-open')).toBe('true');
     await user.click(screen.getByRole('button', { name: 'Show Header fixture report' }));
     expect(shell.getAttribute('data-windows-open')).toBe('false');
@@ -1528,12 +1534,12 @@ describe('App shell', () => {
     const restore = await screen.findByRole('button', { name: 'Restore Header fixture report' });
     const report = document.querySelector('[data-view-id="header-report"].workspace-window')!;
     expect(report.classList.contains('workspace-window-minimized')).toBe(true);
-    await user.click(screen.getByRole('button', { name: 'Open windows and jobs: 2' }));
+    await user.click(screen.getByRole('button', { name: 'Open windows: 1' }));
     restore.focus();
     await user.keyboard('{Enter}');
     expect(shell.getAttribute('data-windows-open')).toBe('false');
     expect(report.classList.contains('workspace-window-minimized')).toBe(false);
-    await user.click(screen.getByRole('button', { name: 'Open windows and jobs: 2' }));
+    await user.click(screen.getByRole('button', { name: 'Open windows: 1' }));
     expect(shell.getAttribute('data-windows-open')).toBe('true');
     await user.click(screen.getByRole('button', { name: 'Show Header fixture report' }).querySelector('svg')!);
     expect(shell.getAttribute('data-windows-open')).toBe('false');

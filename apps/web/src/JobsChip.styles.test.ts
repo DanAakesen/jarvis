@@ -33,7 +33,17 @@ describe('header job control styling', () => {
     expect(popover).toContain('background: var(--report-surface);');
     expect(styles).toContain('@media (pointer: coarse) { .jobs-action { min-height: 44px; } }');
     expect(styles).toContain('@media (max-width: 900px) { .app-shell[data-phone="false"] .job-tabs .jobs-popover { position: fixed; top: 64px; right: 12px; } }');
-    expect(styles).toContain('.app-shell[data-phone="true"] .job-tabs .jobs-popover { position: static; width: 100%; max-height: min(400px, 45dvh); }');
+    expect(styles).toContain('.app-shell[data-phone="true"] .job-tabs .jobs-popover { position: fixed; top: calc(env(safe-area-inset-top) + var(--rail-size) + 6px);');
     expect(styles).toContain('.jobs-history-entry:focus-visible { outline: 3px solid var(--focus);');
+  });
+
+  it('uses distinct semantic colours, 44px targets and opt-in motion for icon counts', () => {
+    expect(styles).toContain('.jobs-outcome[data-status="running"] { color: var(--primary-action); }');
+    expect(styles).toContain('.jobs-outcome[data-status="done"] { color: var(--presence-present); }');
+    expect(styles).toContain('.jobs-outcome[data-status="failed"] { color: var(--error); }');
+    expect(styles).toContain('.job-tabs .jobs-summary { min-width: 44px; min-height: 44px;');
+    expect(styles).toContain('.presence-chip-trigger { display: inline-flex; width: 44px; min-width: 44px; min-height: 44px;');
+    expect(styles).toContain('.settings-link { width: 44px; min-width: 44px; height: 44px; min-height: 44px;');
+    expect(styles).toContain('@media (prefers-reduced-motion: no-preference) {\n  :root:not([data-motion="reduced"]) .jobs-outcome[data-status="running"] svg { animation: jobs-running');
   });
 });
