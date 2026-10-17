@@ -1,5 +1,28 @@
 # Architecture
 
+## Jarvis-owned workspace views in voice (17 October 2026; P11-09)
+
+`workspace_command` creates, updates and navigates views only for Jarvis. The
+agent identity (chat, phone, Factory) is Jarvis by definition. A realtime voice
+tool call arrives on the signed-in owner's authenticated WebSocket, so the relay
+runs each model-issued call inside `runModelToolCall`, an `AsyncLocalStorage`
+scope in `core/tool-origin.ts`. `isJarvisToolCall` is true only for that exact
+request, inside that scope, for the configured workspace owner. The model, the
+browser and tool arguments cannot set it: the scope exists only in-process, the
+browser cannot inject tool calls, and reflex, sibling and non-owner requests
+never enter it. A browser-origin owner token (including `/tools/*` over HTTP)
+and the reflex path keep the reflex-only set: show, focus, minimise, restore,
+close, resize, place, arrange, pin, and conversation, session, layout or
+context-panel controls without a view. `html_view` create, read and update use
+the same helper. Refusals name who may do what and say nothing was changed or shown.
+
+Voice presentation of Google results shows a bounded list or text only: mail
+subject, sender and date; staged summaries without confirmation codes; plain
+outcome labels; free slots and the next event. An unrecognised result puts
+nothing on screen. It never serialises a raw tool result, so message bodies,
+identifiers and codes stay off screen. No new `source.id`, renderer, tool,
+contract, permission or migration.
+
 ## Realtime voice presentation (16 October 2026; P11-07)
 
 After normal argument validation and pre-execution guards,
