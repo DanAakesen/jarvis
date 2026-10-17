@@ -4654,9 +4654,11 @@ conflict ID pairs, not raw Gmail snapshots or SQL owner fields. The retained
 calendar request range is unavailable, never inferred from event dates.
 
 Mutations share the existing verified-message/session/presence helpers and
-one-time browser-only Now confirmation, with120seconds for review and180seconds
-for the operation. The browser relay allows180seconds and hosted-agent read210,
-below the existing240second ingress; unrelated tool deadlines are unchanged.
+one-time browser-only Now confirmation, with120seconds for review and210seconds
+for the operation. The browser relay allows210seconds and hosted-agent read225,
+below the existing240second ingress. This leaves30seconds of setup/persistence
+headroom beyond the full120second review and60second provider window; food
+review and unrelated tool deadlines are unchanged.
 Frozen target/suppression hashes are rechecked under existing owner SQL locks.
 Manual refresh uses a server-derived message/operation key and the existing
 bounded refresh/cooldown lifecycle. A completed run is an acknowledged attempt,

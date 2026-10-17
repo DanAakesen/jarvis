@@ -132,6 +132,16 @@ service cannot bypass it. Assert error metadata/redaction and zero service calls
 for non-owners, retaining root403 checks for runner/nutrition-connector roles.
 The original failure remains recorded; the corrected head requires qualification.
 
+Integrated520c's automatic review5558252668 found the180second enclosing
+deadline could not fit a valid120second review plus60seconds of provider work
+and persistence. Only `daily_feed` now uses210second service/relay and225second
+hosted-agent read deadlines below unchanged240second ingress. Food tools retain
+180/210seconds. A deterministic real-native-confirmation/refresh lifecycle test
+approves at119seconds, spends59seconds in provider reads and10seconds persisting,
+then asserts the actual completed attempt at188seconds without cancellation.
+The synthetic test maps AbortSignal deadlines to its controlled clock; production
+timers are unchanged apart from the exact feed budget.
+
 ## Safe release reason logging (17 October 2026)
 
 Deploy smoke status lines and the required gate remain unchanged. The standard

@@ -38,7 +38,9 @@ and the external nutrition MCP allowlist do not change.
 
 The four mutating operations require a current verified Dan chat/browser-voice
 session, present mode and one-time browser-only Now approval. Review lasts
-120seconds inside180second operation/relay and210second agent-read budgets.
+120seconds inside210second operation/relay and225second agent-read budgets.
+The full60second provider window plus30seconds of setup/persistence overhead
+fits after near-expiry review; the existing240second ingress is unchanged.
 Exact frozen target/suppression hashes are rechecked under owner SQL locks;
 merged terminal order updates cannot be suppressed through an older active ID.
 Only Daily visibility changes, never Google or the physical order. Manual

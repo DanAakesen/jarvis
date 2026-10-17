@@ -157,6 +157,7 @@ Long-term knowledge:
 DEFAULT_API_CLIENT_ID = "9f751b64-ea0f-484f-bf09-f08276a69e2f"
 REQUEST_TIMEOUT_SECONDS = 30.0
 FOOD_REVIEW_TIMEOUT_SECONDS = 3 * 60 + REQUEST_TIMEOUT_SECONDS
+DAILY_FEED_TIMEOUT_SECONDS = 225.0
 BACKEND_HTTP_TIMEOUT_SECONDS = 10.0
 CATALOGUE_TTL_SECONDS = 60.0
 MAX_RESPONSE_BYTES = 1024 * 1024
@@ -748,7 +749,9 @@ class BackendToolClient:
                 return _error(name, "This phone session is invalid; nothing was done.")
             headers["X-Jarvis-Phone-Session-ID"] = phone_session_id
         try:
-            if name in {"daily_food_review", "daily_saved_food", "daily_feed"}:
+            if name == "daily_feed":
+                read_timeout = DAILY_FEED_TIMEOUT_SECONDS
+            elif name in {"daily_food_review", "daily_saved_food"}:
                 read_timeout = FOOD_REVIEW_TIMEOUT_SECONDS
             elif name == "web_research":
                 read_timeout = self._settings.long_tool_timeout_seconds

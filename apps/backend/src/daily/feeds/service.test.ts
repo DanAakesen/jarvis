@@ -29,7 +29,7 @@ const thread: Thread = { type: 'thread', id: 'thread', threadId: 'thread', title
 const target: FeedItem = { id: thread.id, type: 'thread', title: thread.title, content: thread };
 const suppression: FeedSuppression = { type: 'order', key: 'synthetic:order key', suppressedAt: at.toISOString(),
   messageId: null, incomingAt: null, orderUpdatedAt: '2026-10-15T10:00:00Z' };
-function fixture(configured = true) {
+function fixture(configured = true, now = () => at.getTime()) {
   const confirmations = new Map<string, ConfirmationStatus | 'pending'>();
   const notificationStore: TeamsNotificationStore = {
     getConversation: vi.fn(async () => null), saveConversation: vi.fn(async () => undefined),
@@ -63,7 +63,7 @@ function fixture(configured = true) {
     }),
     clear: vi.fn(async () => true),
   };
-  const refresh = vi.fn(async (_request: FastifyRequest, runId: string): Promise<RefreshState> =>
+  const refresh = vi.fn<DailyFeedRefresh['refresh']>(async (_request: FastifyRequest, runId: string): Promise<RefreshState> =>
     ({ runId, state: 'completed', sources: [{ source: 'Gmail', status: 'error', error: 'semantic-unavailable' }] }));
   const mode = { mode: 'present' };
   const session = { id: 'session', channel: 'voice', startedAt: at, endedAt: null as Date | null };
@@ -73,7 +73,7 @@ function fixture(configured = true) {
       getSession: vi.fn(async () => session), getHistory: vi.fn(async () => ({ messages: [message] })),
     }, awayModeStore: { read: vi.fn(async () => mode) } } } as unknown as FastifyRequest;
   const storeFor = vi.fn(() => store);
-  const tool = dailyFeedTool(new DailyFeedService(storeFor, configured ? { refresh } : undefined, () => at.getTime()));
+  const tool = dailyFeedTool(new DailyFeedService(storeFor, configured ? { refresh } : undefined, now));
   const begin = async (input: unknown, operationSignal = signal()) => {
     const pending = tool.execute(input, request, operationSignal);
     const settled = pending.then(value => ({ value, error: null }), error => ({ value: null, error: error as unknown }));
@@ -164,6 +164,53 @@ describe('inactive shared Daily feed workflow', () => {
     f.store.completed.mockResolvedValueOnce(true);
     expect(await f.tool.execute(payload, f.request, signal())).toMatchObject({ refresh: { runId, state: 'completed', replayed: true } });
     expect(f.refresh).toHaveBeenCalledOnce(); expect(f.notificationStore.createConfirmation).toHaveBeenCalledOnce();
+  });
+  it('allows near-expiry approval plus bounded provider execution and persistence within the enclosing deadline', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(at);
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    const timeout = vi.spyOn(AbortSignal, 'timeout').mockImplementation(milliseconds => {
+      const controller = new AbortController();
+      timers.push(setTimeout(() => controller.abort(new DOMException('Timed out', 'TimeoutError')), milliseconds));
+      return controller.signal;
+    });
+    try {
+      const f = fixture(true, Date.now);
+      const wait = (milliseconds: number) => new Promise<void>(resolve => { timers.push(setTimeout(resolve, milliseconds)); });
+      const ingest = vi.fn(async (_run: unknown, operationSignal: AbortSignal) => {
+        await wait(10_000); operationSignal.throwIfAborted();
+      });
+      const runner = new DailyFeedRefresh({
+        refresh: async (_request: FastifyRequest, _range: unknown, operationSignal: AbortSignal) => {
+          await wait(59_000); operationSignal.throwIfAborted();
+          return { status: 'complete', freshness: 'fresh', events: [], issues: [] };
+        },
+      } as unknown as DailyCalendarFeed, {
+        read: async (_request: FastifyRequest, _capturedAt: string, operationSignal: AbortSignal) => {
+          await wait(59_000); operationSignal.throwIfAborted();
+          return { status: 'ok', threads: [], orders: [] };
+        },
+      } as unknown as DailyGmailFeed, () => ({ completed: async () => false, ingest }) as unknown as DailyFeedStore);
+      f.refresh.mockImplementationOnce((...args) => runner.refresh(...args));
+      const operation = f.tool.execute({ operation: 'refresh', ...range }, f.request, signal());
+      await vi.advanceTimersByTimeAsync(0);
+      const card = f.notifications.pendingBrowserConfirmations()[0]!;
+      expect(card).toBeDefined();
+      expect(timeout).toHaveBeenCalledWith(210_000);
+      await vi.advanceTimersByTimeAsync(119_000);
+      expect(f.refresh).not.toHaveBeenCalled();
+      expect(await f.notifications.resolveBrowserConfirmation(card.id, 'approve')).toBe(true);
+      await vi.advanceTimersByTimeAsync(69_000);
+      expect(await operation).toMatchObject({ refresh: { state: 'completed', sources: [{ status: 'ok' }, { status: 'ok' }] } });
+      expect(ingest).toHaveBeenCalledOnce();
+      expect(ingest.mock.calls[0]![1].aborted).toBe(false);
+      expect(timeout).toHaveBeenCalledWith(60_000);
+      expect(Date.now() - at.getTime()).toBe(188_000);
+    } finally {
+      for (const timer of timers) clearTimeout(timer);
+      timeout.mockRestore();
+      vi.useRealTimers();
+    }
   });
   it.each(['running', 'limited'] as const)('does not call %s a successful fresh snapshot', async state => {
     const f = fixture(); f.refresh.mockImplementationOnce(async (_request, runId) => ({ runId, state }));

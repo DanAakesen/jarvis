@@ -469,7 +469,7 @@ async def test_calls_a_tool_with_identity_and_message_id_and_relays_the_backend_
         ("web_research", 240.0),
         ("daily_food_review", 210.0),
         ("daily_saved_food", 210.0),
-        ("daily_feed", 210.0),
+        ("daily_feed", 225.0),
     ],
 )
 async def test_tool_calls_use_the_configured_default_or_long_timeout(
@@ -639,7 +639,7 @@ async def test_backend_refusals_are_reported_as_errors(status: int, expected: st
         ("create_task", 30.0),
         ("daily_food_review", 210.0),
         ("daily_saved_food", 210.0),
-        ("daily_feed", 210.0),
+        ("daily_feed", 225.0),
     ],
 )
 async def test_long_running_tools_get_a_longer_read_timeout(name: str, read_timeout: float) -> None:

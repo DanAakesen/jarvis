@@ -72,6 +72,15 @@ existing200/error resource-denial envelope, redacted audit and no service call.
 Keep runner/connector root403 checks. The corrected source needs qualification;
 prior green jobs do not qualify its changed head.
 
+Integrated520c review5558252668 found the180second enclosing feed budget left
+no persistence time after120second approval and60second provider work.
+Correct only Daily feed to210second service/relay and225second agent read below
+unchanged240second ingress; food/unrelated budgets remain intact. Added actual
+native-approval/refresh lifecycle regression at119second approval plus59second
+providers and10second persistence. The corrected head needs qualification; the
+pipeline owner separately owns520c's Python release-state fixture failure and
+the delayed draft-event cancellation race.
+
 ## Release diagnosis (17 October 2026; safe CI reason codes)
 
 Continue autonomously without direct Azure or credentials. Both new owned

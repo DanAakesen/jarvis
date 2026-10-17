@@ -56,7 +56,7 @@ export class DailyFeedService {
     if (!parsed.success) throw new ToolRefusal('Choose a bounded Daily feed operation with only its exact selectors; no owner, provider or confirmation flags.');
     const input = structuredClone(parsed.data);
     const read = input.operation === 'read_attention' || input.operation === 'read_suppressions';
-    signal = AbortSignal.any([signal, AbortSignal.timeout(read ? 30_000 : 180_000)]);
+    signal = AbortSignal.any([signal, AbortSignal.timeout(read ? 30_000 : 210_000)]);
     signal.throwIfAborted();
     try {
       const store = this.storeFor(request);
