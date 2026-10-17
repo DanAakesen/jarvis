@@ -553,11 +553,15 @@ non-colour cues described in the current shell guidance below.
 
 Keep the Settings route within the shell's neutral foundation. Use one page
 headline and distinct form sections for Appearance, Jarvis, Voice, Coding agents, Global,
-New projects, and Credentials. New-project controls use the documented defaults
-and the same labelled field grid as the other sections. Two columns make related controls easy to scan on wide screens;
-the form stacks on narrow screens. Save feedback stays beside the save action,
-and loading, recovery, and unavailable actions remain explicit. Credentials show text status, expiry, and last-updated dates without secret
-values; manual renewal and reseed controls remain disabled with an explanation.
+Projects, and Credentials. The Projects section contains the managed-project list,
+the Add project action, then a collapsed “Defaults for new projects” disclosure
+with the seven defaults in the same labelled field grid. Two columns make related
+controls easy to scan on wide screens; the form stacks on narrow screens. Default
+save feedback stays beside those fields, and loading, recovery, and unavailable
+actions remain explicit. Credentials show text status, expiry, and last-updated
+dates without secret values; manual renewal and reseed controls remain disabled
+with an explanation. P9-121's browser fixture screenshots are
+`docs/ui/screenshots/p9-121-fixture-{light,dark}-{phone,desktop}.png`.
 The Voice section includes a labelled “Minimise all windows when starting voice”
 checkbox, off by default, saved with the other settings.
 Routines (the former Task recipes, renamed in P9-103) use a separate Settings section with compact rows showing the app
