@@ -22,7 +22,11 @@ Neither this scope decision nor retained reserved IDs activates Daily or
 releases #724.
 
 Do not invent maintenance/TDEE, nutrition-completeness, elapsed freshness
-expiry or readiness-scale semantics for an excluded feature. Missing new
+expiry or readiness-scale semantics for an excluded feature. The one exception
+is Dan's later, narrow ruling on owner-configured nutrition targets: the
+suggestion allowance is the owner's resting burn plus active energy so far today
+minus the owner's deficit (see the decision log), with no BMR/TDEE estimate and
+no coaching. Missing new
 coaching contracts are not completion gates for retained core work. Existing
 core validation, truthful unknowns/freshness and protected backup/export,
 authoritative-original-source/parity, real-device/provider, final-delta,
@@ -353,9 +357,11 @@ features of this record-browser source slice.
 The current tool ledger is partial, not full migration acceptance. Shared
 record/detail/sync and brief reads use `daily_query` plus acknowledged workspace
 GenUI; direct/reviewed intake, saved foods/plans/preferences and reference lookup
-have explicit inactive tools. Personalised suggestions still require an
-authoritative budget/candidate adapter for the existing `suggest` calculation;
-reference lookup is not that adapter. Daily Google-feed/attention/manual-refresh/
+have explicit inactive tools. The owner's resting-burn, deficit and protein
+targets are stored settings with an inactive `daily_nutrition_targets` tool.
+Personalised suggestions still require the budget/candidate adapter for the
+existing `suggest` calculation, which will read those targets plus stored active
+energy; reference lookup is not that adapter. Daily Google-feed/attention/manual-refresh/
 suppression equivalence and stored all-calendar grants remain unestablished,
 not completed by the record browser. Device/export provisioning and real-phone/
 provider acceptance retain their separate approval gates. No UI-only capability

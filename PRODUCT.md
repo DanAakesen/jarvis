@@ -1069,6 +1069,20 @@ share the bounded 180-second browser relay and 210-second hosted-agent read
 budgets; other tool deadlines remain unchanged. No production activation or
 full client/provider/device acceptance is implied.
 
+Owner-configured nutrition targets feed the personalised suggestion budget:
+resting energy burn, daily deficit and protein target, each a whole number Dan
+enters in Settings or by telling Jarvis; a chat or voice change needs the exact
+browser Now approval. There are no defaults: an unset target shows as needing
+configuration and is never estimated. Allowance today is resting burn plus the
+active energy burned so far today minus the deficit; energy and protein left
+subtract what has been eaten so far, with unknown values flagged rather than
+counted as zero and no projection of the rest of the day. There is no BMR/TDEE
+estimate and no coaching, recovery or recomposition automation. The values are
+private health data and stay out of source, fixtures, documents and logs. The
+stored targets and their approved tool exist only behind the default-off Daily
+gate (Daily off leaves Jarvis unchanged); the budget adapter and Settings
+section follow, and no activation or acceptance is implied.
+
 When an existing Frida adapter is explicitly supplied, owner-authenticated
 `daily_food_lookup` exposes only its public-reference component lookup.
 Keep generic food names, requested grams or explicit unknowns, preparation,

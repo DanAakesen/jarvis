@@ -4915,6 +4915,41 @@ URL or credential enters the provider contract. Sensitive audit and deny-before-
 approval phone policy remain. No new provider implementation, persistence,
 resource or production composition is introduced.
 
+### Owner nutrition targets (17 October 2026)
+
+The personalised suggestion budget uses owner-entered figures, not derived ones:
+resting energy burn (kcal), daily deficit (kcal) and protein target (g). A sixth
+optional `createDailyModules` argument, `nutritionTargets`, is a request-bound
+accessor. It is independent of the earlier factories, needs shared Daily data
+(otherwise construction throws) and composes only when Daily is on, so Daily off
+and every existing composition are unchanged. No production caller exists yet.
+Its presence moves the capabilities stage to `internal-nutrition-rehearsal`.
+
+Each target is one `dbo.settings` row at scope `global` with a Daily-owned,
+owner-namespaced key; an absent row means "needs configuration", never a
+default. There is no migration and no change to the core `Settings` object,
+`/settings` route or `get_settings` tool. A write is one transaction (a MERGE per
+set field, a DELETE per cleared field) that reads the three rows back before
+commit, so the response shows what was committed. Values are whole numbers
+inside fixed ranges that every read returns.
+
+`GET`/`PATCH /daily/nutrition-targets` serve only the signed-in owner: no
+`jarvisAgent` marker, agent and connector principals refused, query strings
+refused, responses `no-store`, and a 1 KiB PATCH body parsed strictly with no
+coercion. The sensitive `daily_nutrition_targets` tool (`read`, `set_targets`) is
+the chat/voice equivalent. Phone is denied, tool audit records `{redacted:true}`,
+and every change needs the exact present-mode browser Now approval (120-second
+card, 180-second operation and voice-relay bound, 210-second hosted-agent read).
+A no-op change returns `unchanged` without approval and a second pending change
+refuses.
+
+This reverses the earlier no-maintenance-maths rule for one formula only (see
+the decision log): allowance = resting burn + active energy so far today -
+deficit. It adds no BMR/TDEE estimate from weight, height or age and no
+coaching. The budget adapter, the Settings section and the default-off
+composition are separate slices. The values are personal health data in a public
+repository: none appears in code, fixtures, documents, logs or audit.
+
 ### Inactive nutrition MCP adapter (17 October 2026)
 
 An optional third `createDailyModules(true, data, connector)` argument installs

@@ -235,7 +235,10 @@ export function plan(input: PlanInput): void {
     if (total === null ? input[key] !== null : !Number.isFinite(total) || input[key] === null || Math.abs(input[key]! - total) > 1e-8 * Math.max(1, total)) throw new TypeError('Plan totals disagree with provided quantities');
   }
 }
-/** Caller supplies the authoritative remaining budget and local clock; no maintenance calculation. */
+/**
+ * The caller supplies the remaining budget and local clock; this function estimates no maintenance.
+ * The owner-configured allowance is derived by that caller (see docs/decisions.md).
+ */
 export function suggest(candidates: readonly Suggestion[], disliked: ReadonlySet<string>, context: BudgetContext): Suggestion[] {
   instant(context.now);
   const clock = /^([01]\d|2[0-3]):([0-5]\d)$/u;
