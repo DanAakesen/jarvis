@@ -349,13 +349,15 @@ export async function startIssueTask(input: {
 export async function createLinkedTaskFromPrompt(input: {
   projectId: string;
   prompt: string;
+  title?: string;
+  priority?: number;
   agent?: 'codex' | 'copilot';
   modelOverride?: string;
   reasoningOverride?: string;
   projects: ProjectStore | null;
   tasks: TaskStore | null;
   github: GitHubIssueClient | null;
-  originMessageId: string;
+  originMessageId?: string;
 }): Promise<
   | { task: TaskRecord; issue: { number: number; url: string } }
   | { kind: 'task-not-created'; issue: { number: number; url: string } }
@@ -364,7 +366,7 @@ export async function createLinkedTaskFromPrompt(input: {
   if (!input.projects || !input.tasks || !input.github) throw new Error('Issue task service unavailable');
   const project = (await input.projects.list()).find(({ id }) => id === input.projectId);
   if (!project) return null;
-  const title = input.prompt.trim().split(/\r?\n/u, 1)[0]?.trim().slice(0, 200) || 'New task';
+  const title = input.title ?? (input.prompt.trim().split(/\r?\n/u, 1)[0]?.trim().slice(0, 200) || 'New task');
   const issue = await input.github.createIssue(project.repo, title, input.prompt);
   let task: TaskRecord | null;
   try {
@@ -373,8 +375,9 @@ export async function createLinkedTaskFromPrompt(input: {
       issueNumber: issue.number,
       title,
       request: input.prompt,
-      source: 'chat',
-      originMessageId: input.originMessageId,
+      source: input.originMessageId === undefined ? 'board' : 'chat',
+      ...(input.originMessageId === undefined ? {} : { originMessageId: input.originMessageId }),
+      ...(input.priority === undefined ? {} : { priority: input.priority }),
       ...(input.agent ? { agent: input.agent } : {}),
       ...(input.modelOverride ? { modelOverride: input.modelOverride } : {}),
       ...(input.reasoningOverride ? { reasoningOverride: input.reasoningOverride } : {}),

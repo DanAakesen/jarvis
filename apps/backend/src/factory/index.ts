@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import type { FastifyReply } from 'fastify';
 import type { BackendModule } from '../modules.js';
 import { ToolRefusal } from '../core/tool-registry.js';
@@ -25,11 +26,14 @@ import { githubAppTools } from './github-app-tools.js';
 import { registerReleaseViewRoutes } from './release-view.js';
 import {
   createJarvisIssue,
+  createLinkedTaskFromPrompt,
   backfillFactoryTaskIssues,
   IssueCreationPartialError,
   IssueDraftValidationError,
   IssueWriteUncertainError,
+  LinkedIssueTaskCreationError,
   startIssueTask,
+  validateIssueDraft,
 } from './issues.js';
 import { registerFactoryBoardRoute } from './board.js';
 
@@ -210,12 +214,13 @@ export const factoryModule: BackendModule = {
       }
     });
 
-    app.post<{ Body: CreateTaskInput }>('/factory/tasks', {
+    app.post<{ Body: CreateTaskInput & { submissionId: string } }>('/factory/tasks', {
       schema: {
         body: {
           type: 'object',
           properties: {
             projectId: idSchema,
+            submissionId: { type: 'string', pattern: '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$' },
             title: { type: 'string', minLength: 1, maxLength: 200 },
             request: { type: 'string', minLength: 1, maxLength: 50_000 },
             agent: { type: 'string', enum: ['codex', 'copilot'] },
@@ -223,21 +228,84 @@ export const factoryModule: BackendModule = {
             reasoningOverride: { type: 'string', minLength: 1, maxLength: 32 },
             priority: { type: 'integer', minimum: -2_147_483_648, maximum: 2_147_483_647 },
           },
-          required: ['projectId', 'title', 'request'],
+          required: ['projectId', 'title', 'request', 'submissionId'],
           additionalProperties: false,
         },
       },
     }, async (request, reply) => {
       const store = app.taskStore;
-      if (!store) return reply.code(503).send({ error: 'Task service unavailable' });
-      if (!isSqlBigInt(request.body.projectId)) return reply.code(400).send({ error: 'Invalid project ID' });
-      const task = await store.create(request.body);
-      if (!task) return reply.code(404).send({ error: 'Active project not found' });
-      const serialized = JSON.stringify(task);
-      if (serialized === undefined || Buffer.byteLength(serialized) > maxResponseBytes) {
-        return reply.code(413).send({ error: 'Response too large' });
+      if (!store?.claimCreation || !store.completeCreation || !app.projectStore || !app.githubIssueClient) {
+        return reply.code(503).send({ error: 'Issue-linked task service unavailable' });
       }
-      return reply.code(201).send(task);
+      if (!isSqlBigInt(request.body.projectId)) return reply.code(400).send({ error: 'Invalid project ID' });
+      try {
+        validateIssueDraft(request.body.title, request.body.request);
+      } catch {
+        return reply.code(400).send({ error: 'Task title or request is invalid or contains a secret' });
+      }
+      const { submissionId, ...input } = request.body;
+      const fingerprint = createHash('sha256').update(JSON.stringify([
+        input.projectId, input.title, input.request, input.agent ?? null,
+        input.modelOverride ?? null, input.reasoningOverride ?? null, input.priority ?? null,
+      ])).digest('hex');
+      let claim;
+      try {
+        claim = await store.claimCreation(submissionId, fingerprint);
+      } catch {
+        request.log.warn('factory.task_submission_claim_failed');
+        return reply.code(503).send({ error: 'Task submission storage is unavailable. No GitHub write was attempted.' });
+      }
+      if (claim.kind === 'existing') {
+        if (claim.fingerprint !== fingerprint) {
+          return reply.code(409).send({ error: 'This submission ID was already used for a different task' });
+        }
+        if (claim.statusCode !== null) return reply.code(claim.statusCode).send(claim.response);
+        return reply.code(409).send({
+          error: 'Task creation is pending or its outcome is uncertain. Check the repository before submitting a new task; retry this submission to check its result.',
+        });
+      }
+      let statusCode: number;
+      let response: Record<string, unknown>;
+      try {
+        const result = await createLinkedTaskFromPrompt({
+          ...input,
+          prompt: input.request,
+          projects: app.projectStore,
+          tasks: store,
+          github: app.githubIssueClient,
+        });
+        if (!result) {
+          statusCode = 404;
+          response = { error: 'Active project not found' };
+        } else if ('kind' in result) {
+          throw new LinkedIssueTaskCreationError(result.issue);
+        } else {
+          statusCode = 201;
+          response = { ...result.task, issueNumber: result.issue.number, issueUrl: result.issue.url };
+        }
+      } catch (error) {
+        statusCode = 502;
+        response = error instanceof LinkedIssueTaskCreationError
+          ? {
+            error: `GitHub issue #${error.issue.number} was created, but its task could not be created. Open the issue to start or recover it; retrying this submission will not create another issue.`,
+            issueNumber: error.issue.number,
+            issueUrl: error.issue.url,
+          }
+          : { error: 'Could not create the GitHub issue. No task was created. Check repository permissions, rate limits, and GitHub availability; check the repository before making a new submission if the outcome is uncertain.' };
+        request.log.warn('factory.linked_task_create_failed');
+      }
+      try {
+        await store.completeCreation(submissionId, statusCode, response);
+      } catch {
+        request.log.warn('factory.task_submission_result_failed');
+        return reply.code(503).send({
+          ...response,
+          error: typeof response.issueNumber === 'number'
+            ? `GitHub issue #${response.issueNumber} was created, but the submission result could not be saved. Check the linked issue and task before making a new submission.`
+            : 'The submission result could not be saved. No task was created; check the repository before making a new submission because the issue creation outcome may be uncertain.',
+        });
+      }
+      return reply.code(statusCode).send(response);
     });
 
     app.get<{ Querystring: TaskListQuery }>('/factory/tasks', {

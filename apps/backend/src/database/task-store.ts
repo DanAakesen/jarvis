@@ -429,6 +429,41 @@ export function createTaskStore(
   eventArchive?: TaskEventArchive,
 ): TaskStore {
   return {
+    async claimCreation(submissionId, fingerprint) {
+      const transaction = new sql.Transaction(pool);
+      await transaction.begin();
+      try {
+        const { recordset } = await new sql.Request(transaction)
+          .input('submissionId', sql.UniqueIdentifier, submissionId)
+          .query<{ fingerprint: string; statusCode: number | null; response: string | null }>(
+            `SELECT fingerprint, status_code AS statusCode, response
+             FROM dbo.factory_task_submissions WITH (UPDLOCK, HOLDLOCK)
+             WHERE submission_id = @submissionId;`);
+        const existing = recordset[0];
+        if (!existing) {
+          await new sql.Request(transaction)
+            .input('submissionId', sql.UniqueIdentifier, submissionId)
+            .input('fingerprint', sql.VarChar(64), fingerprint)
+            .query(`INSERT INTO dbo.factory_task_submissions (submission_id, fingerprint)
+              VALUES (@submissionId, @fingerprint);`);
+        }
+        await transaction.commit();
+        return existing
+          ? { kind: 'existing', ...existing, response: parsePayload(existing.response) }
+          : { kind: 'claimed' };
+      } catch {
+        await rollback(transaction);
+        throw new Error('Task submission storage unavailable');
+      }
+    },
+    async completeCreation(submissionId, statusCode, response) {
+      await pool.request()
+        .input('submissionId', sql.UniqueIdentifier, submissionId)
+        .input('statusCode', sql.Int, statusCode)
+        .input('response', sql.NVarChar(sql.MAX), serializePayload(response))
+        .query(`UPDATE dbo.factory_task_submissions SET status_code = @statusCode, response = @response
+          WHERE submission_id = @submissionId AND status_code IS NULL;`);
+    },
     async create(input: CreateTaskInput) {
       const source = input.source ?? 'board';
       const originMessageId = input.originMessageId;

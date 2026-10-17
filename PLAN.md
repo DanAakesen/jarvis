@@ -1872,6 +1872,8 @@ Declined in the audit (do not file): verbosity and max-output-token settings, no
 | P9-105 | [#800](https://github.com/DanAakesen/jarvis/issues/800) | Conversation memory: rolling summary of older messages instead of the hard 100-message window | Append-only, owner-bound `dbo.conversation_summaries` (migration 0051; the issue's 0046 was taken) records the covered message range, version, model and creation time plus an open-items section for decisions, commitments and open tasks; messages are never rewritten. After a finished reply a single-flight agent task folds not-yet-covered older messages into the previous summary (a first summary reaches back at most 400 messages and logs older history as a gap), and the prompt carries it ahead of a 40-message window (20 without one). Secrets are scrubbed before the model and again before storage, file contents are excluded, and the summary is labelled untrusted background. Cost uses the existing `chat` usage reporting, optional `JARVIS_SUMMARY_MODEL` and setting `global.conversationSummaryDailyLimit` (default 24, 0 to 48, 0 off), enforced in the agent and by a server 429. Any failure keeps the plain window and logs a named `chat.memory_summary_*` event. Each call's whole prompt, carried summary included, stays within 40,000 characters, and an over-cap prompt is refused as `prompt_too_large` before any model call. Offline fake-agent tests over a recorded 331-message fixture keep decisions from messages 1–150 after the window moves and cover incremental update, failure fallback and the cost limit; agent lint and tests pass locally, backend types/tests and SQL integration run in CI only. No UI change. Follow-ups: a dedicated usage/settings model role, deeper backfill, and the post-deploy chat canary and `conversation.reply_failed` check | P9-99 | Complete |
 | P9-115 | [#843](https://github.com/DanAakesen/jarvis/issues/843) | Align shared Status navigation instructions with the shipped page | Remove the stale unavailable-page instruction; require canonical `workspace_command` navigate/status guidance and truthful applied/refused semantics across hosted settings and English/Danish realtime, both automatic-capture values, preserving budget/BMP/tool-parity checks. Source/instruction consistency only; not live, model, or voice acceptance and not attribution of a production turn | P9-40 | Complete |
 
+| P9-119 | [#903](https://github.com/DanAakesen/jarvis/issues/903) | Icon-only navigation: Settings, presence and background-work outcome counts | Web-only gear, distinct green/yellow/blue mode icons and non-zero running/done/failed icon-count pairs; dismissed entries excluded from counts and announcements, idle and error states retained. Existing popover contents, delivery and dismissal unchanged. All 1,105 web tests, final 176 focused tests, lint/build and CodeQL pass locally; independent review found no significant issues (bundled review service unavailable). Chromium fixture matrix at 320×568, 390×844 and 1440×900 in light/dark covers all modes, mixed counts, idle, 44px targets, focus, phone windows and both reduced-motion settings; captures/measurements in `docs/ui/screenshots/p9-119/`. Synthetic auth/API and WebGL fallback only; Dan's visual check remains pending | — | Complete |
+
 #815's guarded merge caught the title bot truncating P9-101 to P9-10.
 The coordinator authorised the coupled normalizer/linked-ID/PLAN-parser
 width and boundary correction with existing-style regressions in the same
@@ -1904,6 +1906,7 @@ Goal: GitHub issues are the single backlog. The Software Factory (worker label `
 | P10-05 | [#577](https://github.com/DanAakesen/jarvis/issues/577) | Backfill issues for existing Factory tasks | Every open Factory task has a linked issue, starting with task 10 | P10-02, P10-03 | Complete |
 | P10-06 | [#603](https://github.com/DanAakesen/jarvis/issues/603) | Factory issue tasks carry trusted issue metadata and delivery reuses PRs cleanly | Prompt includes repository/issue and tells the agent to push its branch without opening a PR; reused drafts gain `Fixes #N` and become ready; policy-evaluation errors are sanitized and do not refuse recorded delivery | P10-02 | Complete |
 | P10-07 | [#793](https://github.com/DanAakesen/jarvis/issues/793) | UI session consumes the canonical GitHub Factory board, replacing the legacy task-state columns | Six ordered Project columns, issue/PR links and real task overlays, local filters, bounded display, Now-stream invalidations/reconnect, stale/error recovery, focused checks and desktop/320px inspection; spot-check live Project placement | P10-04 | Complete |
+| P10-08 | [#902](https://github.com/DanAakesen/jarvis/issues/902) | Web task creation creates and links one GitHub issue | Issue-first creation preserves dialog fields; durable submission claims prevent duplicate issues/tasks; failures identify partial creation; confirmation links to the issue; board overlays work before a PR and delivery includes `Fixes #N`. Offline backend/web checks pass; live GitHub acceptance remains unverified | P10-02 | Complete |
 | P10-09 | [#908](https://github.com/DanAakesen/jarvis/issues/908) | Complete without deployment merges eligible PRs without confirmation and recovers open work after restart | Project-policy selection is approval; App squash merge retains existing safety guards, `deliver_pr` never merges, no-check grace survives restart, startup/minute and policy-change sweeps are idempotent, transient GitHub retries are bounded, refusals remain task events, and Done follows the signed merge webhook | P3-06 | Complete |
 
 P10-07's board shipped in #806. The subsequently requested issue-number
@@ -2114,10 +2117,67 @@ Proposals only; an idea enters a phase only when Dan accepts it into scope.
 
 | Idea | What it does | Trade-off | Add when |
 | --- | --- | --- | --- |
+| [Proactive assistance and iPhone Web Push](docs/proactive-assistance.md) | Reconciles commitments across Gmail, Calendar, vault and Factory; prepares evidence-backed suggestions and optionally alerts the installed iPhone PWA. | Durable scheduling, freshness, privacy, budgets and device acceptance; most runs stay silent. | Dan explicitly accepts a bounded pilot; notification-off and independent Daily gates remain unchanged. Proposal only. |
 | Codex API-key fallback | Runs Codex tasks with an OpenAI API key when the Jarvis Pro login fails or the Pro plan's Codex limits are reached. | Billed per use on top of Pro; keeps tasks running and leaves Dan's own Codex allowance untouched. | Pro limits or login failures block tasks. |
 | Azure Web PubSub for board updates | Replaces server-sent events with a managed push service that holds the browser connections. | Free tier: 20 connections; Standard ≈ 320 DKK/month (list price). | The backend runs several copies at once, or many devices stay connected. |
 | Foundry resilient tasks | Platform-managed recovery of in-progress hosted-agent work after a crash (preview; disabled in the prototype). | Preview; may replace part of the branch-restart recovery. | Crash recovery (P2-10) proves too lossy or complex. |
 | Backend request rate limiting | Limits authenticated and unauthenticated request rates at the root authentication hook (CodeQL `js/missing-rate-limiting` on `apps/backend/src/auth/hook.ts`, raised during P4-01). | A new dependency (for example `@fastify/rate-limit`) and limits that must not throttle Dan or the Jarvis agent; one replica keeps in-memory counters sufficient. | Before the backend URL is public (P0-11), or when abuse or cost appears. |
+
+### Proactive assistance — proposed scope (17 October 2026)
+
+[Design proposal](docs/proactive-assistance.md). The requirements below record
+Dan's desired behavior; they do not accept an architecture, start a phase or
+authorize implementation, activation, resources, permissions or notification
+delivery. Existing notification-off and independent Daily gates remain intact;
+no new coaching/recovery/recomp or widget scope is restored.
+
+**Confirmed requirements**
+
+- Prioritize the canonical vault todo file, where all personal todos belong;
+  mail is lower priority. Desired capabilities include autonomous bounded
+  research/preparation and evidence-backed todo edits that preserve Dan's work.
+  External sends, appointment changes and other actions retain existing gates.
+- Preserve cost optimization and intentional backend sleep. Around 50 DKK/month
+  is a rough incremental-cost reference, not a hard cap or verified estimate.
+- No proactive work or delivery from 22:00 to 07:00 Europe/Copenhagen, including
+  daylight-saving changes; no emergency exception.
+- Keep interests, selected sources and policy editable, with separate freeform
+  relevance guidance that cannot override security. Cover major relevant
+  Microsoft/OpenAI features and external weather/travel/daily-life implications.
+- Maintain rolling weekly context for known whereabouts, travel and todos,
+  planning at most one calendar month ahead with source evidence and uncertainty.
+  Every fresh chat retrieves relevant proactive outcomes, pending commitments
+  and notification state, with detail lookup and no inherited human authority.
+
+**Recommended architecture and open choices**
+
+[Danish architecture discussion document](idea.proactive.html) is a standalone
+HTML version with embedded diagrams and a review checklist. Proposal only.
+
+[Architecture overview and run flow](docs/proactive-diagrams.md) include editable
+Mermaid source and SVG previews for design discussion; they are proposals only.
+
+- Recommended, not accepted: reuse hosted Jarvis, backend, SQL and Blob. Evaluate
+  Foundry Routines first for recurring/one-shot work; no default ACA Job or custom
+  scheduling engine. Add a restricted system-run envelope and durable application
+  run/result/recovery state; dispatch acceptance is not completed work.
+- Evaluate Foundry Memory preview for semantic cross-chat recall, keeping trusted
+  owner scope, authoritative policy, vault todos and SQL outcomes/weekly plans
+  distinct. Avoid bespoke vector memory; Toolbox/connections and Agent Framework
+  are selective options, not automatic integrations or a required rewrite.
+- Reminder preview and AgentServer resilience are optional; Durable Extension
+  requires a demonstrated multistep need. Do not select retiring portal Workflows.
+- Preserve configurable sources/settings/guidance, low-to-medium activity, sleep
+  and confirmed quiet hours. No cadence is selected. Web Push is primary now;
+  future proactive calls remain a delivery extension point, not implementation.
+- Five proof gates: project availability; identity/tool access; accepted-versus-
+  completed recovery; same-owner fresh-chat context; measured sleep/cleanup/cost.
+  Detailed source/cost research stays optional; earlier estimates exclude new
+  Memory/Routines costs and do not price this recommendation or promise 50 DKK.
+- Open choices: exact source access, policy/deduplication and todo review/undo;
+  canonical filename remains unresolved (`task.md` versus reported `Tasks.md`).
+  No resources, credentials, permissions or activation are approved.
+
 ## P12 — Daily migration to Jarvis
 
 17 October continuation: JarvisPM is implementing an inactive, nutrition-only

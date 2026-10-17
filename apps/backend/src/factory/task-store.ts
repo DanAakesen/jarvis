@@ -131,6 +131,11 @@ export interface TaskRuntimeVersion {
 }
 
 export interface TaskStore {
+  claimCreation?(submissionId: string, fingerprint: string): Promise<
+    | { kind: 'claimed' }
+    | { kind: 'existing'; fingerprint: string; statusCode: number | null; response: unknown }
+  >;
+  completeCreation?(submissionId: string, statusCode: number, response: unknown): Promise<void>;
   create(input: CreateTaskInput): Promise<TaskRecord | null>;
   findActiveByIssue?(projectId: string, issueNumber: number): Promise<TaskRecord | null>;
   linkIssueNumberIfUnlinked(taskId: string, issueNumber: number): Promise<number | null>;

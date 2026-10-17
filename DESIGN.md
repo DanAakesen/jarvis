@@ -1,9 +1,44 @@
 # Design
 
+## Icon-only header (P9-119)
+
+Settings is a gear only at every width, including phones, with its Settings
+accessible name, native tooltip, active-route state and 44px target. Presence
+uses one person, moon or walking-person icon for Present, Away or On the move;
+the existing green/yellow/blue tokens remain, with darker same-hue strokes in
+light mode for contrast. No top-bar presence dot or visible mode label.
+Accessible names and tooltips identify the mode; switching behaviour is unchanged.
+
+Background work keeps one focusable summary in its existing keyboard position,
+with non-zero running, done and failed icon/count pairs. Spinner, check and
+warning-triangle shapes accompany accent, green and red; exact counts and
+outcomes have accessible names and tooltips. Dismissed and cancelled jobs do
+not count. With no outcomes, show a quiet inbox icon; loading/storage failures
+still have an attention indicator and their existing popover messages.
+Only the running icon rotates, and neither OS nor app reduced-motion mode
+allows that animation. Preserve the popover contents, delivery and dismissal.
+
+The summary remains in the header on phones instead of inside the windows
+sheet; the separate windows button counts windows only. Keep the existing
+individual desktop job tabs and phone window sheet. Settings, presence and
+the summary have 44px targets, shared borderless hover/pressed surfaces and
+visible keyboard focus. Stack each phone count below its icon to fit the
+single-row header at 320px without changing the composer or voice orb.
+
+Local Chromium fixture captures and interaction measurements are in
+`docs/ui/screenshots/p9-119/`: 320×568, 390×844 and 1440×900 in both themes,
+all three modes, two running/one done/three failed jobs, and idle after
+dismissal, with a separate restored window. OS and app reduced motion,
+keyboard focus/return, active Settings and phone-sheet independence were
+checked. Authentication and API data are synthetic; the room uses its WebGL
+fallback. This is not live-provider, hardware-GPU or physical-device evidence;
+Dan's visual acceptance remains pending.
+
 ## Presence colours, Routines and composer clearance (17 October 2026; P9-102, P9-103, P9-98)
 
-Presence uses green, yellow and blue in both themes. Dot shape, size, glow and
-the mode label are unchanged, light dots gain a ring of their own hue so the
+Presence uses green, yellow and blue in both themes. P9-119 supersedes the
+top-bar dot and label below; menu/settings dots retain their shape and glow.
+Light dots gain a ring of their own hue so the
 yellow stays visible on pale glass, and the orb keeps its own colour. Settings
 says Routines. Phone pages end above the composer however tall its draft is, and
 Save settings stays a plain end-of-page row: no sticky bar or new chrome.

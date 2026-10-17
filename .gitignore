@@ -25,6 +25,7 @@ __pycache__/
 Thumbs.db
 
 # Tool and local test caches
+.scratch-*/
 .npm/
 .uv-cache/
 .mypy_cache/
