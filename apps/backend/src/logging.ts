@@ -37,6 +37,7 @@ const failureEvents = new Set([
   'factory.board_project_lookup_failed', 'factory.board_read_failed', 'factory.board_task_event_failed',
   'factory.board_webhook_update_failed', 'factory.issue_backfill_failed', 'factory.issue_create_failed',
   'factory.issue_executor_handoff_failed', 'factory.release_data_read_failed', 'factory.release_graph_read_failed',
+  'factory.task_submission_claim_failed', 'factory.linked_task_create_failed', 'factory.task_submission_result_failed',
   'factory.release_project_lookup_failed', 'folio.delete_failed', 'folio.open_failed', 'folio.search_failed',
   'folio.update_failed', 'github.delivery_policy_evaluation_failed', 'github.installation_token_failed',
   'github.issue_progress_failed', 'github.issue_start_failed', 'github.repository_list_failed',
