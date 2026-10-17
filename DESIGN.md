@@ -565,11 +565,15 @@ non-colour cues described in the current shell guidance below.
 
 Keep the Settings route within the shell's neutral foundation. Use one page
 headline and distinct form sections for Appearance, Jarvis, Voice, Coding agents, Global,
-New projects, and Credentials. New-project controls use the documented defaults
-and the same labelled field grid as the other sections. Two columns make related controls easy to scan on wide screens;
-the form stacks on narrow screens. Save feedback stays beside the save action,
-and loading, recovery, and unavailable actions remain explicit. Credentials show text status, expiry, and last-updated dates without secret
-values; manual renewal and reseed controls remain disabled with an explanation.
+Projects, and Credentials. The Projects section contains the managed-project list,
+the Add project action, then a collapsed “Defaults for new projects” disclosure
+with the seven defaults in the same labelled field grid. Two columns make related
+controls easy to scan on wide screens; the form stacks on narrow screens. Default
+save feedback stays beside those fields, and loading, recovery, and unavailable
+actions remain explicit. Credentials show text status, expiry, and last-updated
+dates without secret values; manual renewal and reseed controls remain disabled
+with an explanation. P9-121's browser fixture screenshots are
+`docs/ui/screenshots/p9-121-fixture-{light,dark}-{phone,desktop}.png`.
 The Voice section includes a labelled “Minimise all windows when starting voice”
 checkbox, off by default, saved with the other settings.
 Routines (the former Task recipes, renamed in P9-103) use a separate Settings section with compact rows showing the app
@@ -633,9 +637,12 @@ Keep the neutral foundation. The list uses one compact project panel per
 repository, with its settings, running-task count, last-release availability,
 and edit action grouped for scanning. Project settings use labelled form
 sections; save, archive confirmation, loading, retry, conflict, and
-success feedback stay close to the relevant actions. The Projects page has no
-creation form; an empty list points users to New projects defaults in Settings.
-Archive messaging explains
+success feedback stay close to the relevant actions. One Projects section holds
+the managed-project list, Add project action, and a nested collapsed Defaults for
+new projects disclosure. Its seven fields use the existing Settings save form;
+unsaved, pending, confirmed, and failed-save states appear beside the defaults,
+and a failed save can be retried there. The Add project dialog previews the
+server-saved defaults it applies to a new project. Archive messaging explains
 that history remains and the repository stays reserved. Counts refresh manually
 until live updates exist; missing release data is stated, not fabricated.
 Checked in Chromium 154 at 390 and 1280 px with scratch-only auth and API mocks:
@@ -653,6 +660,8 @@ projects and repositories. Chromium 154 checks at 390 and 1280 px exercised
 management without a form and explicit refresh. Neither width overflowed, buttons
 were 44 px high, and there were no browser errors. Live GitHub App, Entra, and
 Azure SQL behavior remains unverified.
+P9-121 keeps the same neutral controls and anchor while grouping project defaults
+with managed projects; no new color, border treatment, or motion is introduced.
 
 ## Task view (P1-08)
 
