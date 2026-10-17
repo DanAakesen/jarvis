@@ -29,11 +29,12 @@ export function dailyFoodReviewTool(nutrition: InternalNutrition, now: () => num
   const pending = new Set<string>();
   return {
     name: 'daily_food_review',
-    description: 'Review an estimated eaten meal, correction or soft deletion using the existing Now approval. Nothing writes until Dan approves the exact displayed proposal. Use daily_food instead for direct exact labels or saved favourites; those must not gain redundant approval. Read the exact owned intake key/current revision before correction/deletion. Nutrient/component proposals remain estimates, never independently verified. Supply no owner, capture method, provenance, confidence or confirmation flags. Present-mode chat/voice only; no phone, Teams, Health export or claim that a spoken yes has approved the Now card.',
+    description: 'Review an estimated eaten meal, correction or soft deletion using the existing Now approval, with a two-minute review window. Nothing writes until Dan approves the exact displayed proposal. Use daily_food instead for direct exact labels or saved favourites; those must not gain redundant approval. Read the exact owned intake key/current revision before correction/deletion. Nutrient/component proposals remain estimates, never independently verified. Supply no owner, capture method, provenance, confidence or confirmation flags. Present-mode chat/voice only; no phone, Teams, Health export or claim that a spoken yes has approved the Now card.',
     inputSchema: foodReviewInputSchema,
     bodyLimit: 96 * 1024,
     sensitive: true,
     execute: async (raw, request, signal) => {
+      signal = AbortSignal.any([signal, AbortSignal.timeout(3 * 60_000)]);
       const owner = resolveDailyOwner(request);
       if (request.dailyConnectorPrincipal) throw new ToolRefusal('Use the separate nutrition connector boundary for external clients.');
       signal.throwIfAborted();
@@ -83,7 +84,7 @@ export function dailyFoodReviewTool(nutrition: InternalNutrition, now: () => num
       const lock = `${owner.toLowerCase()}:${key}`;
       if (pending.has(lock)) throw new ToolRefusal('This food entry is already awaiting review. Resolve that proposal first.');
       if (pending.size >= 10) throw new ToolRefusal('There are too many pending food proposals. Resolve one first.');
-      const operationSignal = AbortSignal.any([signal, AbortSignal.timeout(6 * 60_000)]);
+      const operationSignal = signal;
       const requestTime = new Date(now()).toISOString();
       let after: MealInput | null;
       if (change.operation === 'log_estimate') {
@@ -124,7 +125,7 @@ export function dailyFoodReviewTool(nutrition: InternalNutrition, now: () => num
             throw new ToolFailure('The food change may have committed, but its receipt is unavailable. Read this exact intake before retrying.');
           }
           return { status: 'committed', operation: change.operation, record: projectNutritionRecord(row, 'history') };
-        }, operationSignal, 'browser');
+        }, operationSignal, { channel: 'browser', lifetimeSeconds: 120 });
       } finally { pending.delete(lock); }
     },
   };

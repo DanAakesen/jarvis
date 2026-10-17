@@ -24,10 +24,15 @@ components, including SQL; CodeQL ran all four analyses successfully. Its one
 new real HTTP-schema failure revealed unknown nutrient nulls coerced to zero.
 The correction uses one nullable numeric type and expands null/zero HTTP
 controls. Independent review found the hosted-agent 30-second approval timeout;
-only this tool now receives a 390-second response-read deadline. Corrective
+the first correction gave this tool a 390-second response-read deadline. Corrective
 pure review checks pass 16 cases, changed TypeScript lint and Python Ruff pass.
 Local HTTP/Python collection is blocked by missing Fastify/OpenTelemetry, not
-accepted as a pass. Successor pinned CI and exact-head review remain required.
+accepted as a pass. Corrective5c8da563 passed all ten normal CI job entries,
+but further review identified the real 240-second ingress ceiling. Food now
+uses an explicit two-minute card expiry, three-minute whole-operation bound
+and 210-second agent read limit; other approvals remain five minutes.
+SQL, card and timer share the same lifetime, with no detached mutation queue.
+Fresh pinned qualification and exact-head review remain required.
 Broader conversation/spoken acceptance, actual hosted client/provider/device,
 private reconciliation and cutover remain open. #724 stays open/default-off.
 

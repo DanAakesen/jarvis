@@ -40,11 +40,12 @@ loaded, the turn fails before the model is asked.
 If the context snapshot cannot be loaded, the turn also fails before the model
 call rather than answering with missing or stale task status.
 
-`daily_food_review` alone has a 390-second response-read deadline, covering its
-six-minute backend operation and a 30-second transport margin. This preserves
-the existing five-minute Now approval window instead of cancelling the card
-at the ordinary tool timeout. Connect, write and pool timeouts stay unchanged;
-other tools retain their configured normal or research timeout.
+`daily_food_review` alone has a 210-second response-read deadline. Its Now card
+explicitly expires after two minutes and the complete backend operation is
+bounded to three minutes, below Container Apps' 240-second ingress limit.
+The SQL expiry, browser expiry and cancellation timer agree. Existing approvals
+retain their default five minutes. Connect, write and pool timeouts stay
+unchanged; other tools retain their configured normal or research timeout.
 
 The chat handler is registered with Foundry's `invocations` protocol, not as a
 custom `/chat` route. It accepts an application payload containing the delegated

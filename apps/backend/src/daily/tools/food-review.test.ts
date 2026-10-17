@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { FastifyRequest } from 'fastify';
 import Fastify from 'fastify';
-import type { ConfirmationActionKind } from '../../teams/service.js';
+import type { BrowserConfirmationDelivery, ConfirmationActionKind } from '../../teams/service.js';
 import type { MealInput } from '../nutrition/model.js';
 import { ToolFailure, ToolRefusal } from '../../core/tool-registry.js';
 import { dailyFoodReviewTool } from './food-review.js';
@@ -37,8 +37,8 @@ function fixture() {
   const decision = Promise.withResolvers<'approve' | 'reject'>();
   const staged = Promise.withResolvers<void>();
   const runConfirmed = vi.fn(async <T>(_kind: ConfirmationActionKind, _summary: string, action: () => Promise<T>,
-    operationSignal?: AbortSignal, delivery?: 'browser'): Promise<T> => {
-    expect(delivery).toBe('browser');
+    operationSignal?: AbortSignal, delivery?: BrowserConfirmationDelivery): Promise<T> => {
+    expect(delivery).toEqual({ channel: 'browser', lifetimeSeconds: 120 });
     staged.resolve();
     const answer = await decision.promise;
     operationSignal?.throwIfAborted();
@@ -89,7 +89,7 @@ describe('inactive internal food proposal review', () => {
     const result = f.tool.execute(input, f.request, signal());
     await f.staged;
     expect(f.store.log).not.toHaveBeenCalled();
-    expect(f.runConfirmed.mock.calls[0]![4]).toBe('browser');
+    expect(f.runConfirmed.mock.calls[0]![4]).toEqual({ channel: 'browser', lifetimeSeconds: 120 });
     expect(f.runConfirmed.mock.calls[0]![1]).toContain('"energyKcal": 200');
     input.change.food.energyKcal = 999;
     f.approve();

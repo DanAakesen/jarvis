@@ -12,8 +12,10 @@ before review and again in its exact action callback.
 The optional internal review tool handles estimates, corrections and soft
 deletion against the existing owner/session/message and canonical SQL store.
 Freeze model proposals before display; show actual before/after values and
-dates, reject oversized reviews, serialize pending reviews per target and bound
-them to the existing five-minute approval/six-minute operation lifetimes.
+dates, reject oversized reviews and serialize pending reviews per target.
+Food cards have an explicit two-minute expiry shared by SQL, the visible card
+and timer, with the whole operation bounded to three minutes from entry.
+Existing callers retain the default five-minute confirmation lifetime.
 Native approval is owner-bound and consumed once before the action. Neither
 origin alone, spoken text nor caller confirmation flags are write authority.
 Exact-label and actual saved-favourite direct requests keep their one-step path.
@@ -22,9 +24,15 @@ Initial real HTTP-schema qualification found Ajv converting unknown nutrient
 nulls to zero through a numeric-first union. Generate a single nullable numeric
 type while retaining canonical bounds and strict domain validation. Independent
 review also found that the hosted agent's ordinary 30-second read timeout would
-cancel a pending food approval. Give only `daily_food_review` a fixed 390-second
-read budget, covering the six-minute backend bound and transport margin; do not
-increase general tool deadlines or introduce detached mutation execution.
+cancel a pending food approval. The first 390-second read correction passed
+CI, but a further review identified the actual externally ingressed backend's
+[240-second HTTP ceiling](https://learn.microsoft.com/en-us/azure/container-apps/ingress-overview#http),
+verified against current first-party documentation on 17 October.
+Use an explicit shorter food-card profile and a tool-specific 210-second read
+budget instead of pretending that a longer client deadline bypasses ingress.
+This keeps existing approval lifetimes and unrelated tool deadlines unchanged,
+makes the real food expiry visible, and avoids a new background mutation queue
+or writes that survive cancellation. No infrastructure or paid-resource change.
 
 New nutrient/component proposals stay estimates and cannot retain a whole-meal
 verification claim. Preserve unchanged exact nutrient provenance and nulls.

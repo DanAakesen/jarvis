@@ -407,6 +407,9 @@ describe('inactive nutrition services on real SQL Server', () => {
       const outcome = active.then(value => ({ ok: true as const, value }), error => ({ ok: false as const, error }));
       await vi.waitFor(() => expect(confirmations.pendingBrowserConfirmations()).toHaveLength(1), { timeout: 10000 });
       const confirmation = confirmations.pendingBrowserConfirmations()[0]!;
+      const remaining = Date.parse(confirmation.expiresAt) - Date.now();
+      expect(remaining).toBeGreaterThan(0);
+      expect(remaining).toBeLessThanOrEqual(120_000);
       expect(confirmation.summary).toContain('Nothing has changed');
       expect(send).not.toHaveBeenCalled();
       expect(await confirmations.resolveBrowserConfirmation(confirmation.id, decision)).toBe(true);

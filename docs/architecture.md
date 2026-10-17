@@ -4621,11 +4621,14 @@ browser-only selector. Default current-channel behaviour is unchanged for
 other callers; browser-only never looks up or sends a Teams conversation or
 voice note, even after presence changes. Food requires present mode before
 staging and in the action callback. Existing Now owner-authenticated approval,
-persisted one-time consumption and five-minute expiry supply authority.
-Per-tool pending target keys prevent duplicate concurrent cards; six-minute
-cancellation bounds the operation. No global proposal manager or new table.
-The hosted agent gives only this tool a 390-second response-read deadline
-(operation plus 30 seconds), preserving the five-minute approval window.
+persisted one-time consumption supplies authority. Food cards have an explicit
+120-second lifetime shared by SQL, visible expiry and the service timer;
+default confirmations for all other callers remain five minutes.
+Per-tool pending target keys prevent duplicate concurrent cards; cancellation
+bounds the entire food operation to 180 seconds from execution entry.
+No global proposal manager, detached writer or new table is added.
+The hosted agent gives only this tool a 210-second response-read deadline,
+below the externally ingressed Container App's 240-second HTTP limit.
 Configured research/ordinary deadlines and connection/write/pool limits remain
 unchanged. Generated input uses one number/null nutrient type, not a coercible
 numeric-first union; strict domain validation still follows HTTP validation.

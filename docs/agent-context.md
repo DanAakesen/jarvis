@@ -26,8 +26,14 @@ Initial actual CI39002775817 passed 3691/3692 backend assertions, all other
 components including SQL, and all four CodeQL analyses. The sole new HTTP-schema
 failure exposed unknown nutrient nulls being coerced to zero; single nullable
 numeric types correct the input schema, with explicit null/zero HTTP controls.
-Independent source review identified the hosted-agent approval timeout; the
-tool-specific 390-second read deadline leaves other deadlines unchanged.
+Independent source review identified the hosted-agent approval timeout.
+Corrective5c8da563 CI39003491542 passed all ten job entries, but a fresh review
+then identified the actual 240-second Container Apps ingress ceiling.
+The next correction explicitly uses two-minute food cards (SQL/card/timer),
+a three-minute whole operation and a 210-second agent read deadline. Default
+five-minute confirmations and unrelated tool/connection deadlines stay intact.
+Test custom expiry/consumption/cancellation and invalid lifetime rejection;
+the real SQL workflow checks the visible two-minute lifetime.
 Corrective pure review selection passes 16 cases; changed TypeScript ESLint and
 Python Ruff pass. Local HTTP collection lacks `fastify`; Python deadline-test
 collection lacks `opentelemetry`. Neither ran semantic assertions. Do not

@@ -189,7 +189,7 @@ describe('Teams notification service', () => {
     const away = vi.fn(async () => { throw new Error('Presence routing must not run'); });
     const { service, connector, store } = harness(undefined, away);
     const action = vi.fn(async () => 'committed');
-    const operation = service.runConfirmed('other', 'Review a synthetic meal.', action, undefined, 'browser');
+    const operation = service.runConfirmed('other', 'Review a synthetic meal.', action, undefined, { channel: 'browser' });
     await vi.waitFor(() => expect(service.pendingBrowserConfirmations()).toHaveLength(1));
     const confirmation = service.pendingBrowserConfirmations()[0]!;
     try {
@@ -214,13 +214,47 @@ describe('Teams notification service', () => {
   it('does not execute a rejected browser-only action or fall back to Teams', async () => {
     const { service, connector } = harness();
     const action = vi.fn();
-    const operation = service.runConfirmed('delete', 'Remove a synthetic meal.', action, undefined, 'browser');
+    const operation = service.runConfirmed('delete', 'Remove a synthetic meal.', action, undefined, { channel: 'browser' });
     const rejected = expect(operation).rejects.toThrow('rejected');
     await vi.waitFor(() => expect(service.pendingBrowserConfirmations()).toHaveLength(1));
     expect(await service.resolveBrowserConfirmation(service.pendingBrowserConfirmations()[0]!.id, 'reject')).toBe(true);
     await rejected;
     expect(action).not.toHaveBeenCalled();
     expect(connector.send).not.toHaveBeenCalled();
+  });
+
+  it('uses the same bounded browser expiry in SQL, the visible card and its timer', async () => {
+    vi.useFakeTimers();
+    const { service, store, connector } = harness();
+    const action = vi.fn();
+    const operation = service.runConfirmed('other', 'Review a synthetic meal.', action, undefined,
+      { channel: 'browser', lifetimeSeconds: 120 });
+    const expired = expect(operation).rejects.toThrow('expired');
+    try {
+      await vi.advanceTimersByTimeAsync(0);
+      const confirmation = service.pendingBrowserConfirmations()[0]!;
+      expect(Date.parse(confirmation.expiresAt) - Date.now()).toBe(120_000);
+      expect(store.createConfirmation).toHaveBeenCalledWith(confirmation.id, ownerObjectId, 'browser', 'other', 120);
+      await vi.advanceTimersByTimeAsync(120_001);
+      await expired;
+      expect(service.pendingBrowserConfirmations()).toEqual([]);
+      expect(action).not.toHaveBeenCalled();
+      expect(connector.send).not.toHaveBeenCalled();
+    } finally {
+      for (const confirmation of service.pendingBrowserConfirmations()) {
+        await service.resolveBrowserConfirmation(confirmation.id, 'reject');
+      }
+      await Promise.allSettled([operation, expired]);
+      vi.useRealTimers();
+    }
+  });
+
+  it.each([0, 301, 1.5, NaN])('rejects invalid browser approval lifetime %s before creating a card', async lifetimeSeconds => {
+    const { service, store } = harness();
+    await expect(service.requestConfirmation('other', 'Review a synthetic meal.', undefined,
+      { channel: 'browser', lifetimeSeconds })).rejects.toThrow('valid confirmation');
+    expect(store.createConfirmation).not.toHaveBeenCalled();
+    expect(service.pendingBrowserConfirmations()).toEqual([]);
   });
 
   it('links phone-session approvals to their originating call', async () => {

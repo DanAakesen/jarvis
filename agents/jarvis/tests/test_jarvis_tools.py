@@ -464,7 +464,7 @@ async def test_calls_a_tool_with_identity_and_message_id_and_relays_the_backend_
 
 @pytest.mark.parametrize(
     ("tool", "expected_timeout"),
-    [("create_task", 45.0), ("web_research", 240.0), ("daily_food_review", 390.0)],
+    [("create_task", 45.0), ("web_research", 240.0), ("daily_food_review", 210.0)],
 )
 async def test_tool_calls_use_the_configured_default_or_long_timeout(
     tool: str, expected_timeout: float
@@ -628,7 +628,7 @@ async def test_backend_refusals_are_reported_as_errors(status: int, expected: st
 
 @pytest.mark.parametrize(
     ("name", "read_timeout"),
-    [("web_research", 320.0), ("create_task", 30.0), ("daily_food_review", 390.0)],
+    [("web_research", 320.0), ("create_task", 30.0), ("daily_food_review", 210.0)],
 )
 async def test_long_running_tools_get_a_longer_read_timeout(name: str, read_timeout: float) -> None:
     seen: list[dict[str, float | None]] = []

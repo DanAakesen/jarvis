@@ -533,7 +533,7 @@ unavailable, including after backend restart.
 
 ### Web notifications and confirmations (P6-22)
 
-Jarvis writes bounded text notifications to the Now activity feed. Gated actions appear as browser approval requests with Approve and Reject controls and expire after five minutes. Unknown, replayed, rejected, cancelled, expired, or unverified responses never run the action. A pending approval is announced to an active browser voice session; the authenticated Now feed remains the approval channel.
+Jarvis writes bounded text notifications to the Now activity feed. Gated actions appear as browser approval requests with Approve and Reject controls and normally expire after five minutes. Internal food-review cards explicitly expire after two minutes to keep the whole operation inside the hosting request limit; the visible expiry matches persistence and cancellation. Unknown, replayed, rejected, cancelled, expired, or unverified responses never run the action. A pending approval is announced to an active browser voice session; the authenticated Now feed remains the approval channel.
 
 These actions always require Dan's confirmation: merge, delete, send mail, calendar changes, repository creation, destructive or externally consequential computer use outside the browser, and anything that spends money. The backend fails closed if Jarvis approval is unavailable or expires; it never proceeds without Dan's authenticated approval. Provider credentials remain server-side; notification content, audio, tokens, and images are not written to logs, task events, or errors.
 
@@ -1005,7 +1005,7 @@ macros, occurrence/Copenhagen date and target revision. Model proposals remain
 estimates; approval does not make them independently verified. Direct supported
 exact labels and actual saved favourites are routed back to the one-step tool.
 This initial reviewed path requires a present chat/voice session and a browser
-approval; a spoken "yes" alone is not acceptance. Browser-only delivery prevents
+approval within its displayed two-minute window; a spoken "yes" alone is not acceptance. Browser-only delivery prevents
 meal details being routed into Teams even if presence changes. Rejected,
 cancelled, expired or stale reviews cannot mutate intake. Existing canonical
 storage, exact operation/revision replay, tombstones and commit refresh remain
