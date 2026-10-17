@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { isBackgroundJob, type BackgroundJob } from '@jarvis/contracts';
+import { isBackgroundJob, type BackgroundJob, type BackgroundJobStatus } from '@jarvis/contracts';
 import { buildApp } from '../app.js';
 import { loadConfig } from '../config.js';
 import type { TokenVerifier } from '../auth/verify.js';
@@ -19,6 +19,45 @@ function fixture(objectId = config.auth.ownerObjectId, backgroundJobStore?: Back
   const app = buildApp(config, undefined, { auth, ...(backgroundJobStore ? { backgroundJobStore } : {}) });
   apps.push(app);
   return app;
+}
+
+function dismissalFixture() {
+  const jobs: BackgroundJob[] = (['running', 'done', 'failed', 'cancelled'] as BackgroundJobStatus[]).map((status, index) => ({
+    jobId: `aaaaaaaa-0000-4000-8000-${String(index + 20).padStart(12, '0')}`,
+    kind: 'research',
+    title: `Research: ${status}`,
+    status,
+    step: status === 'done' ? 2 : 1,
+    steps: 2,
+    ...(status === 'done' ? { viewId: 'research-result' } : {}),
+    ...(status === 'failed' ? { detail: 'interrupted by restart' } : {}),
+    startedAt: '2026-10-17T12:00:00.000Z',
+    updatedAt: '2026-10-17T12:01:00.000Z',
+  }));
+  const dismissals = new Map<string, Set<string>>();
+  const store: BackgroundJobStore = {
+    create: vi.fn(async () => true),
+    update: vi.fn(async (job) => job),
+    list: vi.fn(async () => jobs),
+    get: vi.fn(async (id) => {
+      const job = jobs.find((candidate) => candidate.jobId === id);
+      return job ? { details: { job, steps: [], retryable: false } } : null;
+    }),
+    reconcileInterrupted: vi.fn(async () => []),
+    prune: vi.fn(async () => {}),
+    listDismissed: vi.fn(async (owner) => [...dismissals.get(owner.toLowerCase()) ?? []]),
+    dismiss: vi.fn(async (owner, ids, skipRunning = false) => {
+      const selected = jobs.filter((job) => ids ? ids.includes(job.jobId) : job.status !== 'running');
+      const runningJobIds = selected.filter((job) => job.status === 'running').map((job) => job.jobId);
+      if (runningJobIds.length > 0 && !skipRunning) return { dismissedJobIds: [], runningJobIds };
+      const terminal = selected.filter((job) => job.status !== 'running');
+      const dismissed = dismissals.get(owner.toLowerCase()) ?? new Set<string>();
+      for (const job of terminal) dismissed.add(job.jobId);
+      if (terminal.length > 0) dismissals.set(owner.toLowerCase(), dismissed);
+      return { dismissedJobIds: terminal.map((job) => job.jobId), runningJobIds };
+    }),
+  };
+  return { jobs, store, dismissals };
 }
 
 afterEach(async () => {
@@ -52,6 +91,229 @@ describe('background jobs', () => {
 
     time += 31 * 24 * 60 * 60_000;
     expect(await registry.list()).toEqual([]);
+  });
+
+  describe('durable background job dismissal routes', () => {
+    it('hides terminal jobs across app instances without changing raw audit, details, results or interruption status', async () => {
+      const { jobs, store } = dismissalFixture();
+      const snapshot = structuredClone(jobs);
+      const app = fixture(undefined, store);
+      const target = jobs[1]!;
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const response = await app.inject({ method: 'POST', url: `/jobs/${target.jobId.toUpperCase()}/dismiss`, headers });
+        expect(response.statusCode).toBe(200);
+        expect(response.json()).toEqual({ dismissedJobIds: [target.jobId] });
+        expect(response.headers['cache-control']).toBe('no-store');
+      }
+      const restarted = fixture(config.auth.ownerObjectId.toUpperCase(), store);
+      const listed = await restarted.inject({ url: '/jobs', headers });
+      expect(listed.json().jobs).toEqual(jobs.filter((job) => job !== target));
+      expect(listed.json().dismissedJobIds).toEqual([target.jobId]);
+      expect(listed.headers['cache-control']).toBe('no-store');
+      expect(await restarted.backgroundJobs.list()).toEqual(snapshot);
+      expect(await restarted.backgroundJobs.details(target.jobId)).toMatchObject({ details: { job: target } });
+      expect(await restarted.backgroundJobs.visibleSnapshot('00000000-0000-4000-8000-000000000099')).toEqual({
+        jobs: snapshot, dismissedJobIds: [],
+      });
+      expect(jobs).toEqual(snapshot);
+      expect(store.update).not.toHaveBeenCalled();
+    });
+
+    it('excludes owner dismissals from list_jobs and smoke counts while preserving raw get_job and audit reads', async () => {
+      const { jobs, store } = dismissalFixture();
+      const app = fixture(undefined, store);
+      for (const job of jobs.slice(1, 3)) {
+        expect((await app.inject({ method: 'POST', url: `/jobs/${job.jobId}/dismiss`, headers })).statusCode).toBe(200);
+      }
+      const request = { server: app } as unknown as FastifyRequest;
+      const signal = new AbortController().signal;
+      await expect(listJobsTool.execute({}, request, signal)).resolves.toMatchObject({
+        running: [{ jobId: jobs[0]!.jobId, status: 'running' }],
+        finished: [{ jobId: jobs[3]!.jobId, status: 'cancelled' }],
+      });
+      await expect(listJobsTool.execute({}, {
+        server: app, headers: { 'x-jarvis-smoke': 'true' },
+      } as unknown as FastifyRequest, signal)).resolves.toEqual({ runningCount: 1, finishedCount: 1 });
+      await expect(getJobTool.execute({ jobId: jobs[1]!.jobId }, request, signal))
+        .resolves.toMatchObject({ job: { status: 'done', viewId: 'research-result' } });
+      await expect(getJobTool.execute({ jobId: jobs[2]!.jobId }, request, signal))
+        .resolves.toMatchObject({ job: { status: 'failed', detail: 'interrupted by restart' } });
+      expect(await app.backgroundJobs.list()).toEqual(jobs);
+    });
+
+    it('refuses running and missing individual jobs, then dismisses all terminal states idempotently', async () => {
+      const { jobs, store, dismissals } = dismissalFixture();
+      const app = fixture(undefined, store);
+      expect((await app.inject({ method: 'POST', url: `/jobs/${jobs[0]!.jobId}/dismiss`, headers })).statusCode).toBe(409);
+      expect((await app.inject({
+        method: 'POST', url: '/jobs/00000000-0000-4000-8000-000000000099/dismiss', headers,
+      })).statusCode).toBe(404);
+      expect(dismissals.size).toBe(0);
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const response = await app.inject({ method: 'POST', url: '/jobs/dismiss-finished', headers });
+        expect(response.statusCode).toBe(200);
+        expect(response.json()).toEqual({ dismissedJobIds: jobs.slice(1).map((job) => job.jobId) });
+      }
+      expect((await app.inject({ url: '/jobs', headers })).json()).toEqual({
+        jobs: [jobs[0]], dismissedJobIds: jobs.slice(1).map((job) => job.jobId),
+      });
+      expect(await app.backgroundJobs.list()).toHaveLength(4);
+    });
+
+    it('imports only retained terminal IDs, confirms previous dismissals and ignores missing IDs', async () => {
+      const { jobs, store } = dismissalFixture();
+      const app = fixture(undefined, store);
+      const requested = jobs[2]!.jobId;
+      await app.inject({ method: 'POST', url: `/jobs/${requested}/dismiss`, headers });
+      const response = await app.inject({
+        method: 'POST', url: '/jobs/dismissals/import', headers,
+        payload: { jobIds: [requested.toUpperCase(), requested, jobs[3]!.jobId, '00000000-0000-4000-8000-000000000099'] },
+      });
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toEqual({ dismissedJobIds: [requested, jobs[3]!.jobId] });
+      expect(store.dismiss).toHaveBeenLastCalledWith(config.auth.ownerObjectId, [
+        requested, jobs[3]!.jobId, '00000000-0000-4000-8000-000000000099',
+      ], true);
+      const empty = await app.inject({ method: 'POST', url: '/jobs/dismissals/import', headers, payload: { jobIds: [] } });
+      expect(empty.statusCode).toBe(200);
+      expect(empty.json()).toEqual({ dismissedJobIds: [] });
+    });
+
+    it('imports terminal legacy hides while ignoring running IDs so old preferences cannot hide active work', async () => {
+      const { jobs, store } = dismissalFixture();
+      const app = fixture(undefined, store);
+      const response = await app.inject({
+        method: 'POST', url: '/jobs/dismissals/import', headers, payload: { jobIds: [jobs[0]!.jobId, jobs[1]!.jobId] },
+      });
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toEqual({ dismissedJobIds: [jobs[1]!.jobId] });
+      expect((await app.inject({ url: '/jobs', headers })).json().jobs).toContainEqual(jobs[0]);
+      const runningOnly = await app.inject({
+        method: 'POST', url: '/jobs/dismissals/import', headers, payload: { jobIds: [jobs[0]!.jobId] },
+      });
+      expect(runningOnly.statusCode).toBe(200);
+      expect(runningOnly.json()).toEqual({ dismissedJobIds: [] });
+    });
+
+    it.each([
+      null, [], {}, { jobIds: '00000000-0000-4000-8000-000000000020' }, { jobIds: [42] },
+      { jobIds: ['------------------------------------'] }, { jobIds: ['00000000-0000-4000-8000-000000000020 '] },
+      { jobIds: ['00000000-0000-4000-8000-000000000020'], ownerObjectId: config.auth.ownerObjectId },
+      { jobIds: Array.from({ length: 1_001 }, () => '00000000-0000-4000-8000-000000000020') },
+    ])('rejects malformed imports before persistence (%#)', async (payload) => {
+      const { store } = dismissalFixture();
+      const app = fixture(undefined, store);
+      const response = await app.inject({
+        method: 'POST', url: '/jobs/dismissals/import', headers: { ...headers, 'content-type': 'application/json' },
+        payload: JSON.stringify(payload),
+      });
+      expect(response.statusCode).toBe(400);
+      expect(store.dismiss).not.toHaveBeenCalled();
+    });
+
+    it('accepts the 1000-ID limit and rejects malformed individual IDs', async () => {
+      const { jobs, store } = dismissalFixture();
+      const app = fixture(undefined, store);
+      expect((await app.inject({
+        method: 'POST', url: '/jobs/dismissals/import', headers,
+        payload: { jobIds: Array.from({ length: 1_000 }, () => jobs[1]!.jobId) },
+      })).statusCode).toBe(200);
+      expect((await app.inject({ method: 'POST', url: '/jobs/------------------------------------/dismiss', headers })).statusCode).toBe(400);
+    });
+
+    it('requires authentication and the configured owner for every job visibility operation', async () => {
+      const { jobs, store } = dismissalFixture();
+      const app = fixture(undefined, store);
+      const stranger = fixture('00000000-0000-4000-8000-000000000099', store);
+      for (const request of [
+        { method: 'GET' as const, url: '/jobs' },
+        { method: 'POST' as const, url: `/jobs/${jobs[1]!.jobId}/dismiss` },
+        { method: 'POST' as const, url: '/jobs/dismiss-finished' },
+        { method: 'POST' as const, url: '/jobs/dismissals/import', payload: { jobIds: [jobs[1]!.jobId] } },
+      ]) {
+        expect((await app.inject(request)).statusCode).toBe(401);
+        expect([401, 403]).toContain((await stranger.inject({ ...request, headers })).statusCode);
+      }
+      expect(store.dismiss).not.toHaveBeenCalled();
+      expect(store.listDismissed).not.toHaveBeenCalled();
+    });
+
+    it('returns 503 instead of reporting success when durable dismissal is absent or fails', async () => {
+      const { jobs, store } = dismissalFixture();
+      const withoutMethods = { ...store };
+      delete withoutMethods.dismiss;
+      delete withoutMethods.listDismissed;
+      const unavailable = fixture(undefined, withoutMethods);
+      const withoutReads = { ...store };
+      delete withoutReads.listDismissed;
+      const unreadable = fixture(undefined, withoutReads);
+      const absent = fixture();
+      vi.mocked(store.dismiss!).mockRejectedValue(new Error('private SQL connection details'));
+      const failed = fixture(undefined, store);
+      for (const app of [unavailable, unreadable, absent, failed]) {
+        for (const request of [
+          { url: `/jobs/${jobs[1]!.jobId}/dismiss` },
+          { url: '/jobs/dismiss-finished' },
+          { url: '/jobs/dismissals/import', payload: { jobIds: [jobs[1]!.jobId] } },
+        ]) {
+          const response = await app.inject({ method: 'POST', ...request, headers });
+          expect(response.statusCode).toBe(503);
+          expect(response.json()).toEqual({ error: 'Background job dismissal persistence is unavailable' });
+          expect(response.body).not.toContain('private SQL');
+        }
+      }
+    });
+
+    it('returns 503 rather than resurfacing dismissed jobs when durable visibility reads fail', async () => {
+      const { store } = dismissalFixture();
+      vi.mocked(store.listDismissed!).mockRejectedValue(new Error('private SQL connection details'));
+      const response = await fixture(undefined, store).inject({ url: '/jobs', headers });
+      expect(response.statusCode).toBe(503);
+      expect(response.json()).toEqual({ error: 'Background job persistence is unavailable' });
+      expect(response.body).not.toContain('private SQL');
+    });
+
+    it('logs only fixed safe failure messages without SQL errors or private connection details', async () => {
+      const { jobs, store } = dismissalFixture();
+      const privateFailure = new Error('private SQL connection details');
+      vi.mocked(store.listDismissed!).mockRejectedValue(privateFailure);
+      vi.mocked(store.dismiss!).mockRejectedValue(privateFailure);
+      const app = fixture(undefined, store);
+      const logged = vi.fn();
+      app.addHook('onRequest', async (request) => {
+        vi.spyOn(request.log, 'error').mockImplementation(logged);
+      });
+      for (const request of [
+        { method: 'GET' as const, url: '/jobs' },
+        { method: 'POST' as const, url: `/jobs/${jobs[1]!.jobId}/dismiss` },
+        { method: 'POST' as const, url: '/jobs/dismiss-finished' },
+        { method: 'POST' as const, url: '/jobs/dismissals/import', payload: { jobIds: [jobs[1]!.jobId] } },
+      ]) {
+        expect((await app.inject({ ...request, headers })).statusCode).toBe(503);
+      }
+      expect(logged.mock.calls).toEqual([
+        ['Background job visibility read failed'], ['Background job dismissal failed'],
+        ['Background job dismissal failed'], ['Background job dismissal import failed'],
+      ]);
+    });
+
+    it('bounds snapshots and clear-finished acknowledgements without limiting durable dismissal writes', async () => {
+      const { jobs, store } = dismissalFixture();
+      const many = Array.from({ length: 1_005 }, (_, index) => ({
+        ...jobs[1]!, jobId: `bbbbbbbb-0000-4000-8000-${String(index).padStart(12, '0')}`,
+      }));
+      vi.mocked(store.list).mockResolvedValue([...many, ...jobs]);
+      vi.mocked(store.listDismissed!).mockResolvedValue(many.map((job) => job.jobId));
+      const app = fixture(undefined, store);
+      const snapshot = await app.inject({ url: '/jobs', headers });
+      expect(snapshot.json()).toEqual({ jobs, dismissedJobIds: many.slice(0, 1_000).map((job) => job.jobId) });
+      vi.mocked(store.listDismissed!).mockResolvedValue([]);
+      expect((await app.inject({ url: '/jobs', headers })).json().jobs).toHaveLength(1_000);
+      vi.mocked(store.dismiss!).mockResolvedValue({ dismissedJobIds: many.map((job) => job.jobId), runningJobIds: [] });
+      const finished = await app.inject({ method: 'POST', url: '/jobs/dismiss-finished', headers });
+      expect(finished.json().dismissedJobIds).toHaveLength(1_000);
+      expect(store.dismiss).toHaveBeenCalledWith(config.auth.ownerObjectId, undefined, false);
+    });
   });
 
   it('lists and cancels jobs for the owner only', async () => {
