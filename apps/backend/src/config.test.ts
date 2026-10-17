@@ -18,6 +18,10 @@ describe('backend configuration', () => {
       };
     expect(loadConfig(env).pushEnabled).toBe(expected);
   });
+  it('requires an HTTPS web origin when push is enabled', () => {
+    expect(() => loadConfig({ JARVIS_PUSH_ENABLED: 'true' }))
+      .toThrow('STATIC_WEB_APP_ORIGIN is required when JARVIS_PUSH_ENABLED is true');
+  });
 
   it('defaults to the infrastructure port and offline logs', () => {
     expect(loadConfig({})).toEqual({

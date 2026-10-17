@@ -23,7 +23,7 @@ export interface PushStore {
   deleteSubscription(ownerObjectId: string, endpoint: string): Promise<void>;
   listSubscriptions(ownerObjectId: string): Promise<StoredPushSubscription[]>;
   removeSubscription(id: string): Promise<void>;
-  recordSubscriptionResult(id: string, statusCode: number | null, accepted: boolean): Promise<void>;
+  recordSubscriptionResult(id: string, accepted: boolean): Promise<void>;
   createTestItem(ownerObjectId: string): Promise<ProactiveItem>;
   updateItemDelivery(id: string, state: 'accepted' | 'failed', statusCode: number | null): Promise<void>;
   readItem(ownerObjectId: string, id: string): Promise<ProactiveItem | undefined>;
@@ -117,10 +117,9 @@ export function createPushStore(pool: sql.ConnectionPool): PushStore {
       await pool.request().input('id', sql.UniqueIdentifier, id)
         .query('DELETE FROM dbo.push_subscriptions WHERE id = @id;');
     },
-    async recordSubscriptionResult(id, statusCode, accepted) {
+    async recordSubscriptionResult(id, accepted) {
       await pool.request()
         .input('id', sql.UniqueIdentifier, id)
-        .input('statusCode', sql.Int, statusCode)
         .input('accepted', sql.Bit, accepted)
         .query(`UPDATE dbo.push_subscriptions
           SET last_accepted_at = CASE WHEN @accepted = 1 THEN SYSUTCDATETIME() ELSE last_accepted_at END,

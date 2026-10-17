@@ -113,7 +113,7 @@ function createRoutes<Logger extends FastifyBaseLogger>(
       const deliveries = await Promise.all(subscriptions.map(async (subscription) => {
         const result = await send(subscription, payload, keys, dependencies.publicOrigin, 'user_test', transport);
         if (result.removed) await dependencies.store.removeSubscription(subscription.id);
-        else await dependencies.store.recordSubscriptionResult(subscription.id, result.statusCode, result.accepted);
+        else await dependencies.store.recordSubscriptionResult(subscription.id, result.accepted);
         return result;
       }));
       const accepted = deliveries.filter(({ accepted: didAccept }) => didAccept).length;

@@ -60,7 +60,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BackendConfig 
     } catch { /* Report only the setting name, never its value. */ }
     if (!valid) throw new ConfigurationError('STATIC_WEB_APP_ORIGIN must be an HTTPS origin without a path');
   } else if (env.NODE_ENV === 'production' || env.JARVIS_PUSH_ENABLED === 'true') {
-    throw new ConfigurationError('STATIC_WEB_APP_ORIGIN is required in production');
+    throw new ConfigurationError(env.NODE_ENV === 'production'
+      ? 'STATIC_WEB_APP_ORIGIN is required in production'
+      : 'STATIC_WEB_APP_ORIGIN is required when JARVIS_PUSH_ENABLED is true');
   }
 
   const foundryAdminEndpoint = env.FOUNDRY_ADMIN_ENDPOINT;
