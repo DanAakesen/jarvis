@@ -9,9 +9,20 @@ Recover once by rerunning the cancelled non-draft event at exact520c9ba8;
 do not rerun green CodeQL/review, bypass impact selection or claim a Daily fix.
 
 Separate draft snapshots with a concurrency suffix. Ready candidates retain
-their existing supersession group and fail-closed result gate. This surgical
+their existing supersession group and fail-closed result gate. A skipped draft
+aggregate also needs a distinct unqualified check name, because GitHub can
+treat a skipped required-name context as satisfying branch protection.
+The first recovery exposed an attempt-sensitive test fixture: explicitly pin
+the first-attempt case and cover the previous-attempt API shape separately.
+Keep the failed attempt2 evidence; do not relabel it a Daily failure.
+This surgical
 workflow change needs no scheduler, access, dependency or new worker. Synthetic
 admission-order/key coverage and normal exact-candidate qualification apply.
+The full118-case script suite passes locally with GITHUB_RUN_ATTEMPT=2.
+Separately, #882's normal main-only Deploy39041096612 completed successfully:
+its verified immutable receipt records all four parts applied, accepted=true,
+backend341 and agent109. First-baseline acceptance is not proof of a historical
+agent_error cause or a later compatible-reuse/readback path.
 
 ## Use continuous pipeline-led delivery (17 October 2026; #880)
 

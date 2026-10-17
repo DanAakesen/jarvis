@@ -286,12 +286,26 @@ class ReleaseStateTests(unittest.TestCase):
     def test_latest_unknown_receipt_is_not_replaced_with_older_green(self):
         runs = [{"id": number, "status": "completed", "event": "push", "head_branch": "main"}
                 for number in (43, 41)]
-        with (patch("release_state.api", return_value={"workflow_runs": runs}),
+        with (patch.dict(os.environ, {"GITHUB_RUN_ATTEMPT": "1"}),
+              patch("release_state.api", return_value={"workflow_runs": runs}),
               patch("release_state.artifact", return_value=None) as read):
             run, receipt = previous_release(42)
             self.assertEqual(run["id"], 43)
             self.assertIsNone(receipt)
             read.assert_called_once()
+
+    def test_retry_reads_its_previous_attempt_without_using_the_first_attempt_fixture(self):
+        run = {"id": 42, "status": "completed", "head_branch": "main", "run_attempt": 1,
+               "head_sha": CONTEXT["source"]}
+        receipt = previous()
+        with (patch.dict(os.environ, {"GITHUB_RUN_ATTEMPT": "2"}),
+              patch("release_state.api", return_value=run) as request,
+              patch("release_state.artifact", return_value=receipt) as read):
+            actual_run, actual_receipt = previous_release(42)
+        request.assert_called_once_with("/actions/runs/42/attempts/1")
+        read.assert_called_once_with(run, "release-evidence", "release-evidence.json")
+        self.assertEqual(actual_run, run)
+        self.assertEqual(actual_receipt, receipt)
 
     def test_supersession_precedes_manual_reuse_and_qualification(self):
         with tempfile.TemporaryDirectory() as folder:
@@ -471,6 +485,12 @@ class SafeFailureTests(unittest.TestCase):
         for admitted in ((ready, stale_draft), (stale_draft, ready)):
             self.assertEqual(len(set(admitted)), 2)
         self.assertIn("cancel-in-progress: ${{ github.event_name == 'pull_request' }}", source)
+        result_name = (
+            "${{ github.event_name == 'pull_request' && github.event.pull_request.draft "
+            "&& 'Draft CI not qualified' || 'CI result' }}"
+        )
+        self.assertIn("  result:\n    name: " + result_name, source)
+        self.assertNotEqual("Draft CI not qualified", "CI result")
 
     def test_retained_report_is_complete_fixed_and_content_free(self):
         report = smoke()

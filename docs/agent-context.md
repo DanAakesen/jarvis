@@ -2,8 +2,12 @@
 
 ## Ready/draft qualification race (#880, 17 October 2026)
 
-#882 merged with its exact qualified tree as `f6530a59`. The first automatic
-Deploy39041096612 remains its own applied/readiness/acceptance evidence.
+#882 merged with its exact qualified tree as `f6530a59`. Its automatic
+Deploy39041096612 passed all eight jobs; verified receipt12104850448 reports
+all four components applied and accepted=true, backend revision0000341 and
+agent109. All required smoke entries passed; only the existing nonblocking
+PC bridge was down. No historical generic agent_error cause/fix is established.
+This first baseline does not prove subsequent reuse/sensitive readback.
 During #881 integration, ready_for_review at14:32:35Z admitted CI39041201026;
 a delayed synchronize event carrying draft=true admitted39041201353 one second
 later. The shared concurrency key cancelled the ready qualification, then the
@@ -17,7 +21,19 @@ The bounded correction gives draft snapshots a separate concurrency suffix.
 Ready head updates still supersede older ready qualifications; delayed skipped
 draft runs cannot cancel them in either admission order. The synthetic workflow
 regression and actionlint cover the key; required selection/result gates remain
-unchanged. Normal exact-source qualification/review remains required.
+unchanged. Draft snapshots also publish a different, explicitly unqualified
+aggregate check name: a newer skipped draft check cannot satisfy the required
+`CI result` context while the ready qualification runs.
+
+The single #881 recovery exposed one pipeline test-fixture error on attempt2:
+the latest-run fixture implicitly inherited `GITHUB_RUN_ATTEMPT` and mocked the
+wrong API response shape. Pin that fixture to attempt1 and separately exercise
+attempt2's previous-attempt receipt lookup. No production fallback or check
+waiver is added; the whole script suite is checked under a synthetic attempt2.
+All118 cases pass locally with `GITHUB_RUN_ATTEMPT=2`, plus scoped Ruff,
+actionlint and whitespace checks. Normal exact-source qualification/review
+remains required. Daily's subsequent first-attempt green run is not a repair
+receipt for this attempt-sensitive fixture; no second recovery was dispatched.
 
 ## Continuous delivery ownership (#880, 17 October 2026)
 

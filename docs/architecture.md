@@ -4519,7 +4519,8 @@ flowchart LR
   Draft event snapshots use a separate concurrency suffix, so a delayed
   synchronize event with stale draft=true cannot cancel a ready candidate and
   then skip its own checks. Current ready-head updates still cancel obsolete
-  ready qualifications. The #881 ready/synchronize race is retained as failed
+  ready qualifications. Draft aggregates have a distinct unqualified check name,
+  never the branch's required `CI result` context. The #881 ready/synchronize race is retained as failed
   pipeline evidence, not a Daily source failure.
 - **Plan:** `release_state.py` fingerprints tracked blob paths/modes/content,
   each component's own deploy-job recipe, shared workflow configuration and
