@@ -121,8 +121,15 @@ as small PRs:
    Google result the tool reports as truncated, or that the presenter cuts to
    fit, shows a static note in the view and a `partial` source, so free time
    from an incomplete event list is never presented as complete.
-3. Offline end-to-end (after). Fake Gmail/Calendar: find, show view, stage
-   (`awaiting_confirmation`), plain yes, confirm.
+3. Offline end-to-end (PR 3). `apps/backend/src/google/hotel-booking-flow.test.ts`
+   drives in-memory Gmail and Calendar through find, show view, stage
+   (`awaiting_confirmation`), a later plain "yes" and confirm, in chat (the Jarvis
+   agent over `/tools/*`) and in voice (the owner's session inside the relay's
+   call scope, with the relay answering the reply from backend state). It also
+   covers a decline, a confirm attempted by the staging message or a non-approval
+   message being refused with nothing written, a repeated yes writing nothing
+   again, no raw ids, bodies or codes on screen or in the audit record, and the
+   owner's browser being refused while Jarvis creates the same view.
 
 No provider call, live probe or replay of Dan's mail. Dan's live re-test closes
 #885; merged source is not acceptance.
