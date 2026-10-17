@@ -3591,6 +3591,7 @@ Agent configuration (environment variables, no secrets):
 | `JARVIS_API_CLIENT_ID` | Optional `jarvis-api` client ID for the token scope `api://<id>/.default`; defaults to the bootstrap ID |
 | `AZURE_OPENAI_API_KEY` | Optional local model key; without it the agent identity also gets the model token |
 | `AZURE_OPENAI_SYSTEM_PROMPT`, `AZURE_OPENAI_MAX_OUTPUT_TOKENS`, `JARVIS_REASONING_EFFORT`, `LOG_LEVEL` | Optional overrides, as in the prototype |
+| `JARVIS_SUMMARY_MODEL` | Optional (P9-105). Model deployment name for the conversation-summary call; defaults to the chat model. A name, not a secret |
 
 The main Deploy workflow publishes the agent image by digest, creates a hosted
 version with `JARVIS_BACKEND_URL`, and configures the backend with the version's

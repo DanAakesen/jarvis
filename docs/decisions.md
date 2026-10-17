@@ -94,6 +94,31 @@ generated-view validation and is handled in a separate PR (specific refusals,
 model guidance), then an offline find, show, stage, confirm test. Dan's live
 re-test closes #885; source tests are not acceptance.
 
+## Name the failing field in workspace_command refusals and mark incomplete Google results partial (17 October 2026; P11-09)
+
+After the voice fix, Dan's chat test still showed "Workspace command: Refused"
+twice and an answer blaming an "invalid" summary. Ajv names only the top-level
+property for a failure inside `view`, and the hand validators returned one
+generic sentence, so the model could not correct itself and misdescribed the cause.
+
+A refused workspace command now says which field is wrong and why, and that
+nothing was changed or shown, in the same words in chat and voice (`Invalid
+arguments: <field>: <problem>. Nothing was changed or shown by this call. Retry
+with arguments matching the tool schema.`). It uses only static wording,
+enumerations, counts and key names from known property sets, so a refusal never
+echoes a model-supplied value. The `tool.invalid_arguments` log payload and every
+authority check are unchanged. Tools opt in through an optional
+`explainInvalidInput`; when it finds nothing the old message stays. Guidance for
+the model sits in the tool description because the shared capability instructions
+have about 34 code points of headroom. Rejected: deriving hints from Ajv's error
+list (a `oneOf` reports a misleading first-branch error) and relaxing validation
+so the model's guess passes.
+
+From Codex's P1 on #888: a Google result the tool marks truncated, or that the
+presenter cuts to fit, carries a static value-free note in the view and a
+`partial` source with the same reason, because free time computed from an
+incomplete event list can show busy time as free. Dan's live re-test closes #885.
+
 ## Label backend-side chat failures and retry a thrown acceptance check once (17 October 2026; #820)
 
 Three consecutive main deploys failed different chat checks with the bare
@@ -243,6 +268,59 @@ and backend revision attribution corrections above. Successor exact-candidate CI
 and the integration owner's main-only release remain
 separate gates. Remote-enabled runtime state is not exposed here and is not
 claimed. Private Daily/provider/device/access boundaries remain unchanged.
+
+## Keep a rolling, owner-bound conversation summary ahead of a wider window (17 October 2026; P9-105, #800)
+
+Chat history kept only the newest 20 messages, so a decision from message 5 was
+gone by message 40. Dan asked for a rolling summary on 3 October, and his 17
+October priority starts it before #794/#816 settle. Keep messages untouched and
+append versioned summaries to a new owner-bound `dbo.conversation_summaries`
+(migration `0051`; the issue's `0046` was already taken). Each row records the
+message range it covers, its version, the model and the creation time, and the
+backend keeps the newest 200 versions. This is not `core/memory.ts`, which stores
+durable memories.
+
+The agent writes the summary after a finished chat reply (never a smoke or errored
+turn) in one single-flight background task, using the chat model, or
+`JARVIS_SUMMARY_MODEL` when set, and the existing `chat` usage role. Each refresh folds
+the not-yet-covered older messages in order into the previous summary, so earlier
+versions are carried forward rather than rewritten. The model returns two sections,
+`SUMMARY` and `OPEN ITEMS`, which keep decisions, commitments, preferences and open
+tasks. The prompt then carries that summary followed by up to 40 raw messages after
+the covered range, and the newest 20 messages never fold; a refresh starts once 30
+messages are uncovered. Without a summary the window is the old 20 messages.
+
+Secrets and file contents stay out in three places: messages are scrubbed of
+credential shapes and clipped to 1,500 characters before the model sees them; the
+instructions forbid both; and the answer is scrubbed again on the agent and by the
+backend's existing `redactWorkContent`. The summary reaches the model as labelled
+untrusted background, and Jarvis may say it works from a summary of older messages.
+
+Cost is bounded three ways: the setting `global.conversationSummaryDailyLimit`
+(integer 0 to 48, default 24, 0 turns the feature off), a rolling 24-hour attempt
+cap inside the agent, and a server-side 429 once the day's versions reach the
+limit. Each call is one tool-free request with at most 40,000 characters in and
+6,000 tokens out, and its tokens go through `/usage/foundry`. The 40,000 covers the
+whole prompt: the carried summary and open items are charged against it before any new
+message is added, and a prompt still over it is refused as `prompt_too_large` before the
+model is called or an attempt is counted. At the default a long
+chat can fold roughly 240 messages a day; beyond that the summary lags and the
+window is still never worse than before.
+
+Any failure returns the plain window and logs a named, content-free event:
+`chat.memory_summary_failed stage=<fetch|history|summarise|save|schedule|refresh>
+code=<code>`, `chat.memory_summary_skipped reason=<reason>`,
+`chat.memory_summary_gap pages=<n>` and `chat.memory_summary_saved`. A failure pauses
+refresh for 10 minutes; a stale-version conflict or a reached limit does not.
+Both routes are owner-only and run on Dan's delegated token, which the refresh task
+holds in memory for at most about 90 seconds and never logs.
+
+Deferred on purpose: a dedicated usage role and settings model role (they need a
+check-constraint migration and a deploy-order step), history older than the 400
+messages a first summary can reach (logged as a gap), and a forward-cursor history
+API. Verified offline with a fake agent over a recorded 331-message conversation;
+live behaviour is unverified until deploy, and the chat canary and
+`conversation.reply_failed` stay the live checks.
 
 ## Reuse retained feed services through one inactive tool (17 October 2026; P12-09)
 

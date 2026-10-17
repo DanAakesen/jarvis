@@ -41,7 +41,7 @@ const pool = new sql.ConnectionPool({ ...configuration, database });
 const core = '0001_core_tables.sql';
 const tablesInSchema = [
   'activity', 'artifacts', 'background_job_steps', 'background_jobs', 'conversation_attachments',
-  'credential_status', 'deployment_failure_receipts', 'deployments', 'folio_items', 'jarvis_sessions',
+  'conversation_summaries', 'credential_status', 'deployment_failure_receipts', 'deployments', 'folio_items', 'jarvis_sessions',
   'memories', 'memory_deletions', 'memory_history', 'messages', 'phone_sessions', 'projects',
   'pull_requests', 'releases',
   'sandbox_sessions', 'sandbox_turns', 'settings', 'task_event_archives', 'task_events', 'task_status_notifications',
@@ -81,6 +81,15 @@ async function withRollbackDatabase(
       ALTER DATABASE [${name}] SET SINGLE_USER WITH ROLLBACK IMMEDIATE;
       DROP DATABASE [${name}]; END;`);
   }
+}
+
+// Rollback is latest-only, so newer additive migrations are unwound first and returned oldest-first for re-applying.
+async function revertNewerThan(rollbackPool: sql.ConnectionPool, committed: Migration[], name: string): Promise<Migration[]> {
+  const newer = committed.filter((migration) => migration.name > name);
+  for (const migration of [...newer].reverse()) {
+    expect(await revertMigration(rollbackPool, committed, await readDownMigration(migration.name))).toBe(migration.name);
+  }
+  return newer;
 }
 
 function createMemoryArchiveBlobStore() {
@@ -1935,22 +1944,77 @@ describe('committed domain schema (groups 1-8)', () => {
 
   it('reverts unused saved-food metadata but retains new constrained audit evidence', () => withRollbackDatabase(async (rollbackPool, committed) => {
     const down = await readDownMigration('0050_daily_saved_food.sql');
+    const newer = await revertNewerThan(rollbackPool, committed, down.name);
     expect(await revertMigration(rollbackPool, committed, down)).toBe(down.name);
-    expect(await applyMigrations(rollbackPool, committed)).toEqual([down.name]);
+    expect(await applyMigrations(rollbackPool, committed)).toEqual([down.name, ...newer.map((migration) => migration.name)]);
     const record = createToolCallStore(rollbackPool).recordDailyMcp;
     if (!record) throw new Error('Connector audit method missing');
     for (const tool of ['read_food_preferences', 'manage_saved_food'] as const) {
       await record({ requestId: randomUUID(), tool, phase: 'ok', outcome: 'ok' });
     }
+    await revertNewerThan(rollbackPool, committed, down.name);
     await expect(revertMigration(rollbackPool, committed, down)).rejects.toThrow('audit evidence must be retained');
     expect((await rollbackPool.request().query('SELECT COUNT(*) AS count FROM dbo.tool_calls')).recordset[0].count).toBe(2);
   }));
   it('refuses to erase cleared food-preference revision evidence on rollback', () => withRollbackDatabase(async (rollbackPool, committed) => {
     await rollbackPool.request().query(`INSERT daily.nutrition_recommendation_feedback(owner_object_id,meal_key,preference,revision,created_at,updated_at)
       VALUES('11111111-1111-4111-8111-111111111111',N'synthetic',NULL,2,N'2026-10-17',N'2026-10-17');`);
+    await revertNewerThan(rollbackPool, committed, '0050_daily_saved_food.sql');
     await expect(revertMigration(rollbackPool, committed, await readDownMigration('0050_daily_saved_food.sql'))).rejects.toThrow('cannot discard revisions');
     expect((await rollbackPool.request().query('SELECT revision,preference FROM daily.nutrition_recommendation_feedback')).recordset)
       .toEqual([{ revision: '2', preference: null }]);
+  }));
+
+  it('keeps owner-scoped versioned conversation summaries within their constraints and reverts the table (0051)', () => withRollbackDatabase(async (rollbackPool, committed) => {
+    const owner = randomUUID();
+    const otherOwner = randomUUID();
+    const insertSummary = (ownerObjectId: string, version: number, fromId: number, throughId: number, messageCount: number, summary: string) =>
+      rollbackPool.request()
+        .input('owner', sql.UniqueIdentifier, ownerObjectId)
+        .input('version', sql.Int, version)
+        .input('fromId', sql.BigInt, fromId)
+        .input('throughId', sql.BigInt, throughId)
+        .input('messageCount', sql.Int, messageCount)
+        .input('summary', sql.NVarChar(sql.MAX), summary)
+        .query(`INSERT dbo.conversation_summaries
+          (owner_object_id, version, from_message_id, through_message_id, message_count, summary, open_items, model)
+          VALUES (@owner, @version, @fromId, @throughId, @messageCount, @summary, N'', N'summary-model');`);
+    await insertSummary(owner, 1, 1, 10, 10, 'First summary');
+    await insertSummary(owner, 2, 1, 20, 20, 'Second summary');
+    await insertSummary(otherOwner, 1, 1, 5, 5, 'Another owner reuses version 1');
+    await expect(insertSummary(owner, 2, 1, 30, 30, 'Duplicate version')).rejects.toThrow('PK_conversation_summaries');
+    await expect(insertSummary(owner, 0, 1, 2, 2, 'Version zero')).rejects.toThrow('CK_conversation_summaries_version');
+    await expect(insertSummary(owner, 3, 0, 2, 2, 'First id zero')).rejects.toThrow('CK_conversation_summaries_range');
+    await expect(insertSummary(owner, 3, 5, 4, 1, 'Reversed range')).rejects.toThrow('CK_conversation_summaries_range');
+    await expect(insertSummary(owner, 3, 1, 30, 0, 'No messages')).rejects.toThrow('CK_conversation_summaries_message_count');
+    await expect(insertSummary(owner, 3, 1, 30, 30, '')).rejects.toThrow('CK_conversation_summaries_summary');
+    await expect(insertSummary(owner, 3, 1, 30, 30, 'x'.repeat(6001))).rejects.toThrow('CK_conversation_summaries_summary');
+    await insertSummary(owner, 3, 1, 30, 30, 'x'.repeat(6000));
+    const rows = await rollbackPool.request().input('owner', sql.UniqueIdentifier, owner)
+      .query<{ version: number; from_id: string; through_id: string; open_items: string }>(
+        `SELECT version, CONVERT(varchar(20), from_message_id) AS from_id,
+          CONVERT(varchar(20), through_message_id) AS through_id, open_items
+        FROM dbo.conversation_summaries WHERE owner_object_id = @owner ORDER BY version`);
+    expect(rows.recordset).toEqual([
+      { version: 1, from_id: '1', through_id: '10', open_items: '' },
+      { version: 2, from_id: '1', through_id: '20', open_items: '' },
+      { version: 3, from_id: '1', through_id: '30', open_items: '' },
+    ]);
+    const others = await rollbackPool.request().input('owner', sql.UniqueIdentifier, otherOwner)
+      .query<{ count: number }>('SELECT COUNT(*) AS count FROM dbo.conversation_summaries WHERE owner_object_id = @owner');
+    expect(others.recordset[0]?.count).toBe(1);
+    const indexes = await rollbackPool.request().query<{ count: number }>(`SELECT COUNT(*) AS count FROM sys.indexes
+      WHERE object_id = OBJECT_ID(N'dbo.conversation_summaries') AND name = N'IX_conversation_summaries_owner_created';`);
+    expect(indexes.recordset[0]?.count).toBe(1);
+
+    const down = await readDownMigration('0051_conversation_summaries.sql');
+    const newer = await revertNewerThan(rollbackPool, committed, down.name);
+    expect(await revertMigration(rollbackPool, committed, down)).toBe(down.name);
+    const dropped = await rollbackPool.request().query<{ id: number | null }>("SELECT OBJECT_ID(N'dbo.conversation_summaries', N'U') AS id");
+    expect(dropped.recordset[0]?.id).toBeNull();
+    expect(await applyMigrations(rollbackPool, committed)).toEqual([down.name, ...newer.map((migration) => migration.name)]);
+    const restored = await rollbackPool.request().query<{ count: number }>('SELECT COUNT(*) AS count FROM dbo.conversation_summaries');
+    expect(restored.recordset[0]?.count).toBe(0);
   }));
 
   it('preserves used execution generations and only reverts unused migration 0048', () => withRollbackDatabase(async (rollbackPool, committed) => {

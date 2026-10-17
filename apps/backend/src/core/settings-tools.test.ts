@@ -122,6 +122,9 @@ describe('Jarvis settings tools', () => {
         expect.objectContaining({ path: 'voice.defaultLanguage', allowedValues: ['da', 'en'], nowConfirmation: false }),
         expect.objectContaining({ path: 'appearance.radius', type: 'number', minimum: 0, maximum: 24, nowConfirmation: false }),
         expect.objectContaining({ path: 'global.visionDailyBudgetUsd', minimum: 0, maximum: 100, nowConfirmation: true }),
+        expect.objectContaining({
+          path: 'global.conversationSummaryDailyLimit', type: 'integer', minimum: 0, maximum: 48, nowConfirmation: false,
+        }),
         expect.objectContaining({ path: 'personality.modeInstructions.present', type: 'string', maxLength: 2_000 }),
       ]));
       const paths: string[] = fields.map((field: { path: string }) => field.path);

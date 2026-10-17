@@ -50,6 +50,7 @@ import { recordIssueTaskProgress } from './factory/issues.js';
 import { WorkspaceCommandBroker } from './core/workspace-commands.js';
 import type { WorkspaceHtmlArtifactStore } from './database/workspace-html-artifact-store.js';
 import type { ConversationAttachmentStore } from './database/conversation-attachment-store.js';
+import type { ConversationSummaryStore } from './database/conversation-summary-store.js';
 import { startConversationAttachmentCleanupJob } from './core/conversation-attachment-cleanup.js';
 import { createTaskStatusNotificationHandler } from './factory/task-status-notifications.js';
 import type { ModelDeploymentWorkflow } from './core/model-deployments.js';
@@ -91,6 +92,7 @@ export interface BuildAppOptions {
   readonly jarvisActivityHub?: JarvisActivityHub;
   readonly conversationStore?: ConversationStore;
   readonly conversationAttachments?: ConversationAttachmentStore;
+  readonly conversationSummaryStore?: ConversationSummaryStore;
   readonly attachmentVision?: {
     (image: Buffer, contentType: string, signal: AbortSignal): Promise<string>;
   };
@@ -141,6 +143,7 @@ declare module 'fastify' {
     jarvisActivityHub: JarvisActivityHub;
     conversationStore: ConversationStore | null;
     conversationAttachments: ConversationAttachmentStore | null;
+    conversationSummaryStore: ConversationSummaryStore | null;
     attachmentVision: BuildAppOptions['attachmentVision'] | null;
     onConversationSessionEnded: (sessionId: string) => void;
     sandboxHeartbeat: SandboxHeartbeat | null;
@@ -311,6 +314,7 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
   app.decorate('usageStore', options.usageStore ?? null);
   app.decorate('conversationStore', options.conversationStore ?? null);
   app.decorate('conversationAttachments', options.conversationAttachments ?? null);
+  app.decorate('conversationSummaryStore', options.conversationSummaryStore ?? null);
   if (options.conversationAttachments) {
     const store = options.conversationAttachments;
     let stopAttachmentCleanup: (() => void) | undefined;

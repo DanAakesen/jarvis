@@ -1,8 +1,41 @@
-import type { FastifyBaseLogger, FastifySchemaValidationError } from 'fastify';
+import type { FastifyBaseLogger, FastifyInstance, FastifySchemaValidationError } from 'fastify';
 import type { JarvisTool } from './tool-registry.js';
 
 const safeProperty = (value: unknown): string | undefined =>
   typeof value === 'string' && /^[A-Za-z_][A-Za-z0-9_-]{0,63}$/u.test(value) ? value : undefined;
+
+/** What a tool needs to explain a validation failure: the arguments as parsed and the app that owns the tools. */
+export interface ToolArgumentContext {
+  readonly input: unknown;
+  readonly app: FastifyInstance;
+}
+
+const MAX_EXPLANATION_CHARACTERS = 400;
+
+/**
+ * The refusal for a validation failure a tool has explained. Chat, voice and the tool's own second validation
+ * stage all use it, so the model reads the same words wherever the failure was found. It stays within the 500
+ * characters a ToolRefusal allows.
+ */
+export function explainedArgumentsMessage(explanation: string): string {
+  const bounded = explanation.length > MAX_EXPLANATION_CHARACTERS
+    ? `${explanation.slice(0, MAX_EXPLANATION_CHARACTERS - 1)}…`
+    : explanation;
+  return `Invalid arguments: ${bounded} Retry with arguments matching the tool schema.`;
+}
+
+function explainedInput(
+  tool: Pick<JarvisTool, 'explainInvalidInput'>,
+  context: ToolArgumentContext | undefined,
+): string | undefined {
+  if (!context || !tool.explainInvalidInput) return undefined;
+  try {
+    const explanation = tool.explainInvalidInput(context.input, context.app)?.trim();
+    return explanation === '' ? undefined : explanation;
+  } catch {
+    return undefined;
+  }
+}
 
 function schemaInstancePath(error: FastifySchemaValidationError): string | undefined {
   // Only schema-declared properties and array indices; dynamic map keys can contain private input.
@@ -35,9 +68,10 @@ export function unexpectedToolArgument(
 }
 
 export function toolArgumentRefusal(
-  tool: Pick<JarvisTool, 'name' | 'inputSchema'>,
+  tool: Pick<JarvisTool, 'name' | 'inputSchema' | 'explainInvalidInput'>,
   errors: FastifySchemaValidationError | FastifySchemaValidationError[] | undefined,
   log: Pick<FastifyBaseLogger, 'info'>,
+  context?: ToolArgumentContext,
 ): { refused: string } {
   const error = (Array.isArray(errors) ? errors : errors ? [errors] : [])
     .reduce<FastifySchemaValidationError | undefined>((specific, candidate) => {
@@ -65,5 +99,9 @@ export function toolArgumentRefusal(
     tool: tool.name, keyword, ...(knownProperty ? { property: knownProperty } : {}),
     ...(instancePath !== undefined ? { instancePath } : {}),
   }, 'tool.invalid_arguments');
+  // A tool can only explain what its schema stage cannot: never a root unexpected property, which is already named.
+  const rootUnexpectedProperty = keyword === 'additionalProperties' && error?.instancePath === '';
+  const explanation = rootUnexpectedProperty ? undefined : explainedInput(tool, context);
+  if (explanation !== undefined) return { refused: explainedArgumentsMessage(explanation) };
   return { refused: `Invalid arguments: ${detail}.${allowed ? ` Allowed: ${allowed}.` : ''} Retry with arguments matching the tool schema.` };
 }
