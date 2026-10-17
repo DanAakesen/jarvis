@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { FastifyRequest } from 'fastify';
 import Fastify from 'fastify';
-import type { BrowserConfirmationDelivery, ConfirmationActionKind } from '../../teams/service.js';
+import type { BrowserConfirmationDelivery, ConfirmationActionKind } from '../../core/owner-interactions.js';
 import type { MealInput } from '../nutrition/model.js';
 import { ToolFailure, ToolRefusal } from '../../core/tool-registry.js';
 import { dailyFoodReviewTool } from './food-review.js';
@@ -50,7 +50,7 @@ function fixture() {
   const source = { id: '42', sessionId: session.id, role: 'dan' as const, text: 'I ate a portion; please review it.', at, model: null };
   const request = {
     server: { ownerObjectId: owner, conversationStore: { getSession: vi.fn(async () => session) },
-      awayModeStore: { read: vi.fn(async () => mode) }, teamsNotifications: { runConfirmed } },
+      awayModeStore: { read: vi.fn(async () => mode) }, ownerInteractions: { runConfirmed } },
     principal: { objectId: owner }, headers: {}, jarvisConversationMessage: source,
   } as unknown as FastifyRequest;
   const nutrition = vi.fn(() => store);
@@ -130,7 +130,7 @@ describe('inactive internal food proposal review', () => {
   it('refuses non-present, unavailable, stale and phone context before requesting review', async () => {
     for (const modify of [
       (f: ReturnType<typeof fixture>) => { f.mode.mode = 'away'; },
-      (f: ReturnType<typeof fixture>) => { f.request.server.teamsNotifications = undefined; },
+      (f: ReturnType<typeof fixture>) => { f.request.server.ownerInteractions = undefined; },
       (f: ReturnType<typeof fixture>) => { f.session.channel = 'phone'; },
       (f: ReturnType<typeof fixture>) => { f.request.jarvisConversationMessage = { ...f.request.jarvisConversationMessage!, at: new Date(at.getTime() - 600001) }; },
     ]) {

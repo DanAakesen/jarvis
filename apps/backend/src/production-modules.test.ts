@@ -24,7 +24,6 @@ import { createSleepModule } from './operations/sleep.js';
 import { createScreenVisionModule } from './vision/screen.js';
 import { createVisionWatchModule } from './vision/watch.js';
 import { createVoiceRelayModule } from './voice/relay.js';
-import { createAskDanToConfirmTool } from './teams/service.js';
 import { createProductionModules } from './production-modules.js';
 import { createToolRegistry } from './core/tool-registry.js';
 import { checkAgentContract } from './core/agent-contract.js';
@@ -35,11 +34,6 @@ const limits = JSON.parse(readFileSync(
 
 function modulesWithEveryFeature() {
   const frameStore = new FrameStore();
-  const teamsModule = {
-    id: 'teams',
-    tools: [createAskDanToConfirmTool({} as never)],
-    registerRoutes: async () => {},
-  };
   return createProductionModules({
     core: coreModule,
     conversation: createConversationModule(frameStore),
@@ -63,7 +57,6 @@ function modulesWithEveryFeature() {
     screenVision: createScreenVisionModule({} as never, frameStore),
     visionWatch: createVisionWatchModule({} as never),
     voiceRelay: createVoiceRelayModule({} as never),
-    teamsBot: teamsModule,
   });
 }
 
@@ -105,7 +98,7 @@ describe('production tool catalogue', () => {
       'core', 'conversation', 'factory', 'operations', 'task-recipes', 'vault', 'web-research',
       'html-research', 'google', 'github-webhook', 'pc-bridge', 'phone', 'phone-status',
       'browser-agent', 'image-generation', 'html-view', 'weather', 'folio', 'workspace-pins',
-      'screen-vision', 'vision-watch', 'voice', 'teams',
+      'screen-vision', 'vision-watch', 'voice',
     ]);
   });
 

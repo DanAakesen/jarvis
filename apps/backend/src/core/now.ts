@@ -11,7 +11,7 @@ import type { EventHub } from './event-hub.js';
 import type { JarvisActivityHub } from './activity.js';
 import { defaultAwayModeState } from './away-mode.js';
 import { type PresenceMode } from './away-mode.js';
-import type { BrowserConfirmation } from '../teams/service.js';
+import type { BrowserConfirmation } from './owner-interactions.js';
 import { generatedViewValidationOptions } from './generated-view-validation.js';
 import { formatSseEvent, registerSseShutdown, writeSseEvent } from './sse.js';
 
@@ -128,7 +128,7 @@ export function registerNowRoutes(app: FastifyInstance) {
       app.nowFeedStore.read(),
       app.awayModeStore?.read() ?? Promise.resolve(defaultAwayModeState),
     ]);
-    const confirmations = app.teamsNotifications?.pendingBrowserConfirmations() ?? [];
+    const confirmations = app.ownerInteractions?.pendingBrowserConfirmations() ?? [];
     return sendBounded(reply, {
       ...feed,
       awayMode: awayMode.mode !== 'present',
@@ -155,7 +155,7 @@ export function registerNowRoutes(app: FastifyInstance) {
     if (!request.principal || request.principal.objectId.toLowerCase() !== app.ownerObjectId.toLowerCase()) {
       return reply.code(403).send({ error: 'Forbidden' });
     }
-    const service = app.teamsNotifications;
+    const service = app.ownerInteractions;
     if (!service) {
       return reply.code(503).send({ error: 'Confirmation service unavailable' });
     }

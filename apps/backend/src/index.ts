@@ -106,11 +106,8 @@ import { createVisionWatchModule, VisionWatchService } from './vision/watch.js';
 import { createWebResearchModule, runCodexToolResult } from './core/web-research.js';
 import { createHtmlResearchModule } from './core/research.js';
 import { HtmlArtifactStore } from './database/html-artifact-store.js';
-import { createTeamsNotificationStore } from './database/teams-notification-store.js';
-import { createEphemeralAudioStore } from './teams/audio-store.js';
-import { createAzureSpeechSynthesizer } from './teams/speech.js';
-import { createTeamsBotModule, createTeamsConnector } from './teams/bot.js';
-import { createTeamsNotificationService } from './teams/service.js';
+import { createConfirmationStore } from './database/confirmation-store.js';
+import { createOwnerInteractionService } from './core/owner-interactions.js';
 import { createAzureSpeechPartialRecognizerFactory } from './voice/speech-recognizer.js';
 import { createAwayModeStore } from './database/away-mode-store.js';
 import { createPhoneCallModule } from './phone/calls.js';
@@ -131,9 +128,6 @@ import { createProductionModules } from './production-modules.js';
 try {
   const config = loadConfig();
   const databaseConfig = loadDatabaseConfig();
-  if (config.teams && !databaseConfig) {
-    throw new ConfigurationError('SQL is required for Teams conversations and confirmations');
-  }
   const archiveStorageAccount = loadTaskEventArchiveStorageAccount();
   if (databaseConfig && !archiveStorageAccount) {
     throw new ConfigurationError('TASK_EVENT_ARCHIVE_STORAGE_ACCOUNT is required when SQL is configured');
@@ -180,7 +174,8 @@ try {
     onAlert: () => nowEventHub.publish({ type: 'refresh' }),
   }) : undefined;
   const credential = archiveStorageAccount || config.keyVaultUri || config.voiceLiveEndpoint || config.foundryProjectEndpoint ||
-    config.foundryEndpoints || config.foundryAccountResourceId || config.githubAppId || config.googleTimeZone || config.teams || sleepResourceId
+    config.foundryEndpoints || config.foundryAccountResourceId || config.githubAppId || config.googleTimeZone ||
+    config.phone || sleepResourceId
     ? new DefaultAzureCredential(managedIdentityClientId
       ? { managedIdentityClientId }
       : {})
@@ -530,35 +525,16 @@ try {
   const projectStore = database ? createProjectStore(database.pool, trackedRepositories) : undefined;
   const taskStore = database ? createTaskStore(database.pool, eventHub, taskEventArchive) : undefined;
   const taskStatusNotificationStore = database ? createTaskStatusNotificationStore(database.pool) : undefined;
-  const teamsAudioStore = config.teams ? createEphemeralAudioStore() : undefined;
-  const teamsSpeech = config.teams && credential
-    ? createAzureSpeechSynthesizer(
-      config.teams.speechRegion,
-      async (scope, signal) => {
-        const token = await credential.getToken(scope, { abortSignal: signal });
-        if (!token) throw new Error('Speech identity unavailable');
-        return token.token;
-      },
-    )
-    : undefined;
-  const teamsNotifications = database && nowFeedStore
-    ? createTeamsNotificationService({
+  const ownerInteractions = database && nowFeedStore
+    ? createOwnerInteractionService({
       ownerObjectId: config.auth.ownerObjectId,
-      tenantId: config.auth.tenantId,
-      store: createTeamsNotificationStore(database.pool),
-      ...(config.teams && credential && teamsAudioStore ? {
-        publicOrigin: config.teams.audioOrigin,
-        connector: createTeamsConnector(config.teams.botAppId, config.teams.tenantId),
-        audioStore: teamsAudioStore,
-      } : {}),
-      ...(awayModeStore ? { isAway: async () => (await awayModeStore.read()).mode !== 'present' } : {}),
+      store: createConfirmationStore(database.pool),
       onWebNotification: async (kind, text) => {
         if (!nowFeedStore.recordNotification) throw new Error('Now feed notifications are unavailable');
         await nowFeedStore.recordNotification(kind, text);
       },
       onConfirmationsChanged: () => nowEventHub.publish({ type: 'refresh' }),
       onConfirmationPending: () => nowEventHub.publish({ type: 'status', kind: 'approval_pending' }),
-      ...(teamsSpeech ? { speech: teamsSpeech } : {}),
     })
     : undefined;
   const webhookDeliveryStore = database ? createWebhookDeliveryStore(database.pool, alertNotifier) : null;
@@ -571,8 +547,8 @@ try {
       store: createProjectPolicyStore(database.pool),
       tasks: taskStore,
       tokenIssuer: githubAppTokenIssuer,
-      ...(teamsNotifications ? {
-        runConfirmed: (summary, action) => teamsNotifications.runConfirmed('merge', summary, action),
+      ...(ownerInteractions ? {
+        runConfirmed: (summary, action) => ownerInteractions.runConfirmed('merge', summary, action),
       } : {}),
       onConfirmationError: (error) => logger.warn(safeErrorFields(error), 'project_policy.confirmation_failed'),
       onError: (error) => logger.warn(safeErrorFields(error), 'project_policy.recheck_failed'),
@@ -674,9 +650,9 @@ try {
     ...(pcBridgeStatusStore ? {
       onStatusChange: (online, controlPaused) => pcBridgeStatusStore.setStatus(online, controlPaused),
     } : {}),
-    ...(teamsNotifications ? {
+    ...(ownerInteractions ? {
       runConfirmed: (summary, action, signal) =>
-        teamsNotifications.runConfirmed('computer_use', summary, action, signal),
+        ownerInteractions.runConfirmed('computer_use', summary, action, signal),
     } : {}),
     onStatusError: (error) => logger.warn(safeErrorFields(error), 'pc_bridge.status_update_failed'),
   });
@@ -719,13 +695,13 @@ try {
     } : {}),
   });
   const phoneCallModule = config.phone && phoneSessionStore && phoneSecretClient && credential &&
-    config.teams && config.foundryProjectEndpoint
+    config.foundryProjectEndpoint
     ? createPhoneCallModule({
       client: new CallAutomationClient(config.phone.acsEndpoint, credential),
       store: phoneSessionStore,
       ownerObjectId: config.auth.ownerObjectId,
       teamsResourceAccountObjectId: config.phone.teamsResourceAccountObjectId,
-      publicOrigin: config.teams.audioOrigin,
+      publicOrigin: config.phone.publicOrigin,
       getAllowlist: getPhoneAllowlist,
       getToken: async (scope, signal) => {
         const token = await credential.getToken(scope, { abortSignal: signal });
@@ -817,14 +793,6 @@ try {
         : {}),
     })
     : undefined;
-  const teamsBotModule = config.teams && teamsNotifications && teamsAudioStore
-    ? await createTeamsBotModule({
-      clientId: config.teams.botAppId,
-      tenantId: config.teams.tenantId,
-      notificationService: teamsNotifications,
-      audioStore: teamsAudioStore,
-    })
-    : undefined;
   const modules: BackendModule[] = createProductionModules({
     core: coreModule,
     conversation: createConversationModule(frameStore),
@@ -848,7 +816,6 @@ try {
     screenVision: screenVisionModule,
     visionWatch: visionWatchModule,
     voiceRelay: voiceRelayModule,
-    teamsBot: teamsBotModule,
   });
   const budgetAlertStore = alertActivityStore;
   const budgetReader = database && credential && config.monthlyBudgetResourceId
@@ -861,7 +828,7 @@ try {
       },
     })
     : undefined;
-  const modelDeploymentWorkflow = config.foundryAccountResourceId && credential && settingsStore && teamsNotifications
+  const modelDeploymentWorkflow = config.foundryAccountResourceId && credential && settingsStore && ownerInteractions
     ? createModelDeploymentWorkflow({
       catalogue: modelCatalogue,
       settings: settingsStore,
@@ -874,7 +841,7 @@ try {
         },
       }),
       confirm: (actionKind, summary, action, signal) =>
-        teamsNotifications.runConfirmed(actionKind, summary, action, signal),
+        ownerInteractions.runConfirmed(actionKind, summary, action, signal),
       onChanged: () => nowEventHub.publish({ type: 'refresh' }),
     })
     : undefined;
@@ -1128,7 +1095,7 @@ try {
     eventHub,
     nowEventHub,
     ...(conversationAgent ? { conversationAgent } : {}),
-    ...(teamsNotifications ? { teamsNotifications } : {}),
+    ...(ownerInteractions ? { ownerInteractions } : {}),
     ...(phoneSessionStore ? { phoneSessionStore } : {}),
   });
   runtime.app = app;
@@ -1213,7 +1180,7 @@ try {
       }
       logger.info('database.ready');
     }
-    await teamsNotifications?.expirePendingConfirmations();
+    await ownerInteractions?.expirePendingConfirmations();
     if (!stopping) {
       await sandboxHeartbeat?.start();
       dispatcher?.start();

@@ -40,7 +40,7 @@ import type { BackgroundJobStore } from './database/background-job-store.js';
 import type { SandboxHeartbeat } from './factory/heartbeat.js';
 import type { ContainerAppScaler } from './operations/container-app-scale.js';
 import { createSleepModule } from './operations/sleep.js';
-import type { TeamsNotificationService } from './teams/service.js';
+import type { OwnerInteractionService } from './core/owner-interactions.js';
 import type { AwayModeStore } from './core/away-mode.js';
 import type { PhoneSessionStore } from './database/phone-session-store.js';
 import type { TaskStatusNotificationStore } from './database/task-status-notification-store.js';
@@ -101,7 +101,7 @@ export interface BuildAppOptions {
   readonly reflexClassifier?: ReflexClassifier;
   readonly browserAgent?: BrowserAgent;
   readonly containerAppScaler?: ContainerAppScaler | null;
-  readonly teamsNotifications?: TeamsNotificationService | null;
+  readonly ownerInteractions?: OwnerInteractionService | null;
   readonly awayModeStore?: AwayModeStore | null;
   readonly phoneSessionStore?: PhoneSessionStore | null;
   readonly taskStatusNotificationStore?: TaskStatusNotificationStore | null;
@@ -147,7 +147,7 @@ declare module 'fastify' {
     conversationAgent: ConversationAgent | null;
     reflexClassifier: ReflexClassifier | null;
     browserAgent: BrowserAgent | null;
-    teamsNotifications: TeamsNotificationService | null;
+    ownerInteractions: OwnerInteractionService | null;
     awayModeStore: AwayModeStore | null;
     phoneSessionStore: PhoneSessionStore | null;
     taskStatusNotificationStore: TaskStatusNotificationStore | null;
@@ -330,16 +330,13 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
   app.decorate('conversationAgent', options.conversationAgent ?? null);
   app.decorate('reflexClassifier', options.reflexClassifier ?? null);
   app.decorate('browserAgent', options.browserAgent ?? null);
-  app.decorate('teamsNotifications', options.teamsNotifications ?? null);
+  app.decorate('ownerInteractions', options.ownerInteractions ?? null);
   app.decorate('phoneSessionStore', options.phoneSessionStore ?? null);
   app.decorate('taskStatusNotificationStore', options.taskStatusNotificationStore ?? null);
-  const notifyTaskStatus = app.taskStatusNotificationStore && app.taskStore &&
-    app.conversationStore && app.awayModeStore
+  const notifyTaskStatus = app.taskStatusNotificationStore && app.taskStore && app.conversationStore
     ? createTaskStatusNotificationHandler({
       tasks: app.taskStore,
       conversations: app.conversationStore,
-      awayMode: app.awayModeStore,
-      teams: app.teamsNotifications,
       notifications: app.taskStatusNotificationStore,
       onError: () => app.log.warn('task_status_notification.failed'),
     })
@@ -367,15 +364,15 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
     }
     void (async () => {
       let away: boolean;
+      app.nowEventHub.publish({ type: 'refresh' });
       try {
         away = ((await app.awayModeStore?.read())?.mode ?? 'present') !== 'present';
       } catch {
         app.log.warn('away_mode.task_route_failed');
-        return;
+        away = false;
       }
-      if (!away) app.nowEventHub.publish({ type: 'refresh' });
 
-      const handled = await notifyTaskStatus?.(event, away) ?? false;
+      const handled = await notifyTaskStatus?.(event) ?? false;
       if (!away || handled) return;
 
       const payload = event.payload;
@@ -386,9 +383,9 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
         !['Ready', 'Running', 'Paused', 'NeedsAttention', 'Done', 'Cancelled'].includes(nextState)) return;
       try {
         const kind = nextState === 'NeedsAttention' ? 'warning' : nextState === 'Done' ? 'success' : 'info';
-        await app.teamsNotifications?.notify(kind, `Task ${event.taskId} is now ${nextState}.`);
+        await app.ownerInteractions?.notify(kind, `Task ${event.taskId} is now ${nextState}.`);
       } catch {
-        app.log.warn('away_mode.task_notification_failed');
+        app.log.warn('task_status_notification.failed');
       }
     })();
   });
