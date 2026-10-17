@@ -15,6 +15,31 @@ with `agent_error`. Its immutable receipt remains `accepted=false`; #820 owns
 the functional follow-through and #880 stays open. This integration does not
 claim to fix that historical failure or complete private Daily acceptance.
 
+## Chat acceptance fix-forward (#820, 17 October 2026)
+
+Three consecutive main deploys failed different chat checks with the bare
+`agent_error`: 39043117488 `chat_capabilities`; 39046081711 `chat_github_read` and
+`chat_navigation`; 39049389385 (`c00818b7`, #816) `chat_navigation` and
+`chat_plain_approval`. No #884 origin code surfaced, the failing set moves
+between builds, and the cause is not established. #816 is not the cause by code
+path: smoke turns never open its coordination client, which an agent test now
+pins.
+
+The candidate adds fixed backend-side failure labels (`agent_*`), separate
+`agent_error_code_missing` / `agent_error_code_unlisted` buckets for hosted error
+events, and one bounded retry of a conversation check that threw, inside the
+unchanged 55-second suite deadline. No model, prompt, assertion, timeout,
+credential, workflow or #816 lifecycle change. Degraded identity/no-timestamp
+reasons stay off HTTP for already-open web clients, so they exist only in
+`system.smoke_check` events. Locally passing: backend chat-agent, chat-canary and
+system-status tests (219, via an uncommitted vitest alias for `voice/relay.ts`),
+smoke-reasons parity tests (11) and pipeline tests (38), plus scoped ESLint, tsc
+and Ruff. The agent regression test is left to CI (`azure.ai.agentserver` is not
+installed locally). Next: normal pinned CI/CodeQL and independent review, then the
+existing main-only release; the next deploy's labelled evidence drives the
+follow-up. #820 and #880 remain open and #884 stays frozen; source qualification
+is not production acceptance.
+
 ## Chat acceptance origin provenance (#820, 17 October 2026)
 
 Retained Deploy39043117488 at705af7c7/treee79dbd60 failed required

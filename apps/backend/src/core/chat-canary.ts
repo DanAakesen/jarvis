@@ -1,14 +1,22 @@
 import {
   ChatAgentError,
+  ChatAgentInvocationError,
   type ConversationAgent,
   type ConversationAgentToolCall,
 } from './chat-agent.js';
-import { chatAgentFailureReasons, type SystemStatusProbe } from '../system-status.js';
+import {
+  chatAgentFailureReasons,
+  chatAgentInvocationReasons,
+  type SystemStatusProbe,
+} from '../system-status.js';
 import type { SystemSmokeCheckId, SystemStatusValue } from '@jarvis/contracts';
 
 const chatCanaryTimeoutMs = 55_000;
 const chatCanaryCacheMs = 60_000;
 const perPromptTimeoutMs = 25_000;
+// A failed check may run once more, but only while that second attempt still ends inside the suite deadline.
+const retryPhaseTimeoutMs = perPromptTimeoutMs;
+const retryStartLimitMs = chatCanaryTimeoutMs - retryPhaseTimeoutMs - 5_000;
 
 type AcceptanceCheckId =
   | 'chat_identity'
@@ -62,6 +70,42 @@ async function runPrompt(
 
 function result(status: SystemStatusValue, reason?: string): CheckResult {
   return { status, ...(reason && status === 'down' ? { reason } : {}) };
+}
+
+// The reason is always a fixed label; no code, message or payload from the failure is copied into a report.
+function failureReason(error: unknown): string {
+  if (error instanceof ChatAgentInvocationError) {
+    return chatAgentInvocationReasons.has(error.reason) ? error.reason : 'agent_error';
+  }
+  if (error instanceof ChatAgentError) {
+    if (error.code === undefined) return 'agent_error_code_missing';
+    return chatAgentFailureReasons.has(error.code) ? error.code : 'agent_error_code_unlisted';
+  }
+  return error instanceof Error && error.message === 'prompt_timeout' ? 'timeout' : 'agent_error';
+}
+
+// Only a check that threw may run again. A completed reply that fails its assertion, or a timeout, never does.
+function isRetryable(check: CheckResult): boolean {
+  const { reason } = check;
+  return check.status !== 'ok' && reason !== undefined && (
+    reason === 'agent_error' || chatAgentFailureReasons.has(reason) || chatAgentInvocationReasons.has(reason)
+  );
+}
+
+function boundedSignal(parent: AbortSignal, ms: number): { readonly signal: AbortSignal; readonly dispose: () => void } {
+  const controller = new AbortController();
+  const abort = () => controller.abort();
+  const timer = setTimeout(abort, ms);
+  timer.unref?.();
+  if (parent.aborted) abort();
+  else parent.addEventListener('abort', abort, { once: true });
+  return {
+    signal: controller.signal,
+    dispose: () => {
+      clearTimeout(timer);
+      parent.removeEventListener('abort', abort);
+    },
+  };
 }
 
 function callFor(
@@ -172,14 +216,11 @@ async function checkPrompt(
         return failed(id, 'agent_error');
     }
   } catch (error) {
-    return failed(id, error instanceof ChatAgentError && error.code !== undefined &&
-      chatAgentFailureReasons.has(error.code)
-      ? error.code
-      : error instanceof Error && error.message === 'prompt_timeout' ? 'timeout' : 'agent_error');
+    return failed(id, failureReason(error));
   }
 }
 
-async function runSuite(agent: ConversationAgent | undefined): Promise<SuiteResult> {
+async function runSuite(agent: ConversationAgent | undefined, now: () => number): Promise<SuiteResult> {
   const ids = Object.keys(prompts) as AcceptanceCheckId[];
   if (!agent) {
     return Object.fromEntries([
@@ -189,6 +230,7 @@ async function runSuite(agent: ConversationAgent | undefined): Promise<SuiteResu
   }
 
   const controller = new AbortController();
+  const startedAt = now();
   let timeout: ReturnType<typeof setTimeout> | undefined;
   const deadline = new Promise<never>((_resolve, reject) => {
     timeout = setTimeout(() => {
@@ -197,12 +239,25 @@ async function runSuite(agent: ConversationAgent | undefined): Promise<SuiteResu
     }, chatCanaryTimeoutMs);
     timeout.unref?.();
   });
+  const attempt = async (selected: readonly AcceptanceCheckId[], signal: AbortSignal) =>
+    Promise.all(selected.map(async (id) => [id, await checkPrompt(id, agent, signal)] as const));
+  const settle = async (): Promise<Record<AcceptanceCheckId, CheckResult>> => {
+    const entries = Object.fromEntries(await attempt(ids, controller.signal)) as Record<AcceptanceCheckId, CheckResult>;
+    const retryIds = ids.filter((id) => isRetryable(entries[id]));
+    if (retryIds.length === 0 || controller.signal.aborted || now() - startedAt > retryStartLimitMs) return entries;
+    // A second attempt can only turn a failure into a pass; if it fails too, the first failure stands.
+    const retryWindow = boundedSignal(controller.signal, retryPhaseTimeoutMs);
+    try {
+      for (const [id, check] of await attempt(retryIds, retryWindow.signal)) {
+        if (check.status === 'ok') entries[id] = check;
+      }
+    } finally {
+      retryWindow.dispose();
+    }
+    return entries;
+  };
   try {
-    const checks = await Promise.race([
-      Promise.all(ids.map(async (id) => [id, await checkPrompt(id, agent, controller.signal)] as const)),
-      deadline,
-    ]);
-    const entries = Object.fromEntries(checks) as Record<AcceptanceCheckId, CheckResult>;
+    const entries = await Promise.race([settle(), deadline]);
     const hasFailure = ids.some((id) => id !== 'chat_identity' && id !== 'chat_no_timestamp' &&
       entries[id].status !== 'ok');
     return { ...entries, chat_canary: hasFailure ? result('down', 'acceptance_check_failed') : result('ok') };
@@ -226,7 +281,7 @@ export function createChatAcceptanceProbes(
   let pending: Promise<SuiteResult> | undefined;
   const getResult = async (id: SuiteCheckId): Promise<CheckResult> => {
     if (!pending && cached && now() - cachedAt < chatCanaryCacheMs) return cached[id];
-    pending ??= runSuite(agent);
+    pending ??= runSuite(agent, now);
     try {
       cached = await pending;
       cachedAt = now();

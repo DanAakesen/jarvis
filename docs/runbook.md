@@ -48,6 +48,17 @@ repeat it. Use those events for safe warning details instead of broadening the
 wire contract or retrieving raw provider text. The event is diagnostic evidence,
 not an accepted-green release certificate.
 
+A bare `agent_error` now means an unexpected exception that is neither a labelled
+backend-side invocation failure nor a hosted error event (or no agent is
+configured). Backend-side failures report `agent_auth_unavailable`,
+`agent_request_failed`, `agent_http_<status>` (`agent_http_other` for an unlisted
+status), `agent_response_invalid`, `agent_stream_failed` or `agent_stream_ended`;
+a hosted error event without a safe code is `agent_error_code_missing` and one
+with an unlisted code is `agent_error_code_unlisted`. A conversation check that
+threw one of these runs once more before its result is final, so a passing
+artifact may hide a rescued first failure; `system.smoke_check` records only the
+final result. Assertion failures and timeouts are not retried.
+
 The local consolidated #831/#832 recovery trace on main `81580919` found no
 matching exact-format numeric model-round records in the authorised existing
 workspace for 14 October 17:32–17:34 UTC. The failed smoke-only retry therefore
