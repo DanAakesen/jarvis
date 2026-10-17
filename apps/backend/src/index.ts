@@ -14,6 +14,7 @@ import { createSettingsStore } from './database/settings-store.js';
 import { createProjectStore } from './database/project-store.js';
 import { createReleaseViewStore } from './database/release-view-store.js';
 import { createConversationStore } from './database/conversation-store.js';
+import { createConversationSummaryStore } from './database/conversation-summary-store.js';
 import { createPhoneSessionStore } from './database/phone-session-store.js';
 import { createPhoneStatusModule } from './phone/status.js';
 import { createTaskStore } from './database/task-store.js';
@@ -146,6 +147,7 @@ try {
   const logger = createLogger(config, telemetry);
   const database = databaseConfig ? createDatabase(databaseConfig) : undefined;
   const conversationStore = database ? createConversationStore(database.pool) : undefined;
+  const conversationSummaryStore = database ? createConversationSummaryStore(database.pool) : undefined;
   const usageStore = database ? createUsageStore(database.pool) : undefined;
   const memoryStore = database ? createMemoryStore(database.pool) : undefined;
   const settingsStore = database ? createSettingsStore(database.pool) : undefined;
@@ -1068,6 +1070,7 @@ try {
       toolCallStore: createToolCallStore(database.pool),
       settingsStore: settingsStore,
       ...(conversationStore ? { conversationStore } : {}),
+      ...(conversationSummaryStore ? { conversationSummaryStore } : {}),
       ...(taskStatusNotificationStore ? { taskStatusNotificationStore } : {}),
       onConversationSessionEnded: (sessionId: string) => {
         visionWatch?.forgetSession(sessionId);

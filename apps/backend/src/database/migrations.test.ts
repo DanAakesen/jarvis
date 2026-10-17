@@ -13,6 +13,20 @@ async function directory() {
 afterEach(async () => { await Promise.all(directories.splice(0).map((path) => rm(path, { recursive: true }))); });
 
 describe('committed SQL manifest', () => {
+  it('stores versioned owner-scoped conversation summaries with bounded text and a reversible table', async () => {
+    const migration = (await readMigrations()).find(({ name }) => name === '0051_conversation_summaries.sql');
+    expect(migration?.sql).toContain('CREATE TABLE dbo.conversation_summaries');
+    expect(migration?.sql).toContain('summary nvarchar(max) NOT NULL');
+    expect(migration?.sql).toContain('open_items nvarchar(3000) NOT NULL');
+    expect(migration?.sql).toContain('CK_conversation_summaries_summary CHECK (LEN(summary) >= 1 AND LEN(summary) <= 6000)');
+    expect(migration?.sql).toContain('PK_conversation_summaries PRIMARY KEY (owner_object_id, version)');
+    expect(migration?.sql).toContain('CK_conversation_summaries_range CHECK (from_message_id >= 1 AND through_message_id >= from_message_id)');
+    expect(migration?.sql).toContain('IX_conversation_summaries_owner_created');
+    expect(migration?.sql).not.toContain('REFERENCES');
+    await expect(readDownMigration('0051_conversation_summaries.sql')).resolves.toMatchObject({
+      sql: expect.stringContaining('DROP TABLE dbo.conversation_summaries'),
+    });
+  });
   it('adds saved-food concurrency metadata without rewriting deployed 0049 and protects rollback evidence', async () => {
     const migration = (await readMigrations()).find(({ name }) => name === '0050_daily_saved_food.sql');
     expect(migration?.sql).toContain('nutrition_favorites ADD revision bigint NOT NULL');
@@ -127,6 +141,7 @@ describe('committed SQL manifest', () => {
       '0048_factory_execution_generation.sql',
       '0049_daily_connector_audit.sql',
       '0050_daily_saved_food.sql',
+      '0051_conversation_summaries.sql',
     ]);
     for (const migration of migrations) await expect(readDownMigration(migration.name)).resolves.toMatchObject({ name: migration.name });
   });
