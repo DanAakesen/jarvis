@@ -1712,6 +1712,7 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
   .setup-status > div { grid-template-columns: 1fr; gap: 4px; }
   .settings-grid { grid-template-columns: minmax(0, 1fr); gap: 16px; }
   .projects-form-grid { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  .project-defaults-preview { grid-template-columns: minmax(0, 1fr); }
   .settings-section { padding: 22px 0; }
   .project-item, .project-empty { padding: 20px 16px; }
   .project-meta { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 16px; }
@@ -1963,6 +1964,10 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
 .project-dialog h2 { margin: 0; }
 .project-dialog-part { display: grid; gap: var(--space-3); padding: var(--space-4); border: 1px solid color-mix(in srgb, var(--glass-rim-light) 30%, transparent); border-radius: var(--radius-panel); background: var(--glass-hover); }
 .project-dialog-part h3 { margin: 0; font-size: 16px; }
+.project-defaults-preview { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 16px; margin: 0; font-size: 14px; }
+.project-defaults-preview > div { min-width: 0; }
+.project-defaults-preview dt { color: var(--text-muted); font-size: 12px; }
+.project-defaults-preview dd { overflow-wrap: anywhere; }
 .project-dialog-repositories { display: grid; gap: 6px; max-height: 240px; margin: 0; padding: 0; overflow-y: auto; list-style: none; }
 .project-dialog-repositories li { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); padding: 8px 8px 8px 12px; border-radius: var(--radius-control); background: color-mix(in srgb, var(--surface) 40%, transparent); }
 .project-dialog-repositories li > span { display: grid; min-width: 0; }
@@ -2516,6 +2521,7 @@ a.task-chip:hover { background: var(--glass-pressed); }
 .jobs-popover:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 .jobs-popover-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-weight: 650; }
 .jobs-history-note { margin: 10px 0; color: var(--text-muted); font-size: var(--type-caption); overflow-wrap: anywhere; }
+.jobs-popover .jobs-history-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .jobs-history-row { display: flex; min-width: 0; align-items: center; gap: 4px; }
 .jobs-history-entry { display: flex; flex: 1; min-width: 0; min-height: 44px; gap: 10px; align-items: start; padding: 10px 6px; border: 0; border-radius: var(--radius-control); background: transparent; color: var(--text); font: inherit; text-align: left; cursor: pointer; }
 .jobs-history-entry > span { display: grid; min-width: 0; gap: 3px; }

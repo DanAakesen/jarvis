@@ -22,6 +22,7 @@ export async function createTelemetry(connectionString?: string): Promise<Teleme
 }
 
 const failureEvents = new Set([
+  'Background job visibility read failed', 'Background job dismissal failed', 'Background job dismissal import failed',
   'daily.mcp_operation_failed', 'daily.mcp_audit_failed',
   'sandbox_heartbeat.poll_failed', 'sandbox_heartbeat.configuration_missing',
   'budget_alert.check_failed', 'task_event_archive.failed', 'project_policy.confirmation_failed',

@@ -131,14 +131,26 @@ this candidate does not imply their changes are integrated or released.
 The header's **Background work** list contains only undismissed jobs and explains
 that research, images, apps and indexing are separate from Factory tasks.
 P11-05 supersedes the earlier Recent jobs view that kept hidden rows visible.
-Dismissing UUID jobs is local to the account/backend and removes the row, never
-cancels work or deletes server history. Keep a stable trigger and explicit empty
+Dismissing finished UUID jobs is account-owned server state (P11-12), not a
+device preference, and removes the row without cancelling work or deleting
+server history. The popover offers Dismiss all finished, groups equivalent
+finished entries with a count, and shows kind, start time and stored reasons.
+Restart interruptions use neutral text and marks, not failure emphasis/counts.
+The P9-119 icon/count header remains unchanged; restart interruptions are excluded
+from its failed count. Keep a stable trigger and explicit empty
 state after the final dismissal; row dismissal focuses the list, while detail
 dismissal and Escape return to the trigger. Cross-tab dismissal of an open run
 returns to the filtered list. Indexing Retry remains explicitly unavailable
 without a supported owned action. A historical interruption is not current
 system health. Preserve borderless tabs and phone-sheet geometry; local fixture
 inspection and live acceptance are separate.
+
+Merged-header Chromium fixtures are in `docs/ui/screenshots/p11-12/merged-*`
+at 390×844 and 1440×900, light and dark, captured with reduced motion.
+Synthetic auth/API data exercised
+grouped and bulk dismissal, running-work retention, updated outcome counts,
+Escape/focus return and reduced motion. These are local browser checks, not
+production-data or physical-device acceptance.
 
 ## Fixed balanced stage rendering (15 October 2026; local)
 
@@ -524,7 +536,10 @@ non-colour cues described in the current shell guidance below.
   and alert items plus pending browser confirmations. Keep linked titles, times,
   Dismiss, Approve and Reject in its own keyboard-accessible popover. The shell
   feed stays mounted while Settings is closed; releases, running tasks and
-  away-mode changes are not attention.
+  away-mode changes are not attention. Hide the background-work control only
+  when no non-dismissed jobs and no attention items remain; keep it present while
+  its popover is open. Interrupted history stays dismissable and uses a labelled
+  neutral mark when there are no running/done/failed counts.
 - **Away mode (P7-02):** Feed mode changes remain ordinary feed data and do not
   become a color-only header status or an attention item.
   An explicit, visible-browser activity request—not passive feed refresh—returns
@@ -553,11 +568,15 @@ non-colour cues described in the current shell guidance below.
 
 Keep the Settings route within the shell's neutral foundation. Use one page
 headline and distinct form sections for Appearance, Jarvis, Voice, Coding agents, Global,
-New projects, and Credentials. New-project controls use the documented defaults
-and the same labelled field grid as the other sections. Two columns make related controls easy to scan on wide screens;
-the form stacks on narrow screens. Save feedback stays beside the save action,
-and loading, recovery, and unavailable actions remain explicit. Credentials show text status, expiry, and last-updated dates without secret
-values; manual renewal and reseed controls remain disabled with an explanation.
+Projects, and Credentials. The Projects section contains the managed-project list,
+the Add project action, then a collapsed “Defaults for new projects” disclosure
+with the seven defaults in the same labelled field grid. Two columns make related
+controls easy to scan on wide screens; the form stacks on narrow screens. Default
+save feedback stays beside those fields, and loading, recovery, and unavailable
+actions remain explicit. Credentials show text status, expiry, and last-updated
+dates without secret values; manual renewal and reseed controls remain disabled
+with an explanation. P9-121's browser fixture screenshots are
+`docs/ui/screenshots/p9-121-fixture-{light,dark}-{phone,desktop}.png`.
 The Voice section includes a labelled “Minimise all windows when starting voice”
 checkbox, off by default, saved with the other settings.
 Routines (the former Task recipes, renamed in P9-103) use a separate Settings section with compact rows showing the app
@@ -621,9 +640,12 @@ Keep the neutral foundation. The list uses one compact project panel per
 repository, with its settings, running-task count, last-release availability,
 and edit action grouped for scanning. Project settings use labelled form
 sections; save, archive confirmation, loading, retry, conflict, and
-success feedback stay close to the relevant actions. The Projects page has no
-creation form; an empty list points users to New projects defaults in Settings.
-Archive messaging explains
+success feedback stay close to the relevant actions. One Projects section holds
+the managed-project list, Add project action, and a nested collapsed Defaults for
+new projects disclosure. Its seven fields use the existing Settings save form;
+unsaved, pending, confirmed, and failed-save states appear beside the defaults,
+and a failed save can be retried there. The Add project dialog previews the
+server-saved defaults it applies to a new project. Archive messaging explains
 that history remains and the repository stays reserved. Counts refresh manually
 until live updates exist; missing release data is stated, not fabricated.
 Checked in Chromium 154 at 390 and 1280 px with scratch-only auth and API mocks:
@@ -641,6 +663,8 @@ projects and repositories. Chromium 154 checks at 390 and 1280 px exercised
 management without a form and explicit refresh. Neither width overflowed, buttons
 were 44 px high, and there were no browser errors. Live GitHub App, Entra, and
 Azure SQL behavior remains unverified.
+P9-121 keeps the same neutral controls and anchor while grouping project defaults
+with managed projects; no new color, border treatment, or motion is introduced.
 
 ## Task view (P1-08)
 

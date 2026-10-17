@@ -443,10 +443,28 @@ Running jobs have separate accessible Hide controls; undismissed jobs share
 one Background work list instead of creating repeated terminal header tabs.
 P11-05 renders the store's filtered `jobs`, not its raw `history`, for both
 the list and selected details. Raw history remains available to lifecycle and
-phone-summary consumers; saved records and the existing job tools are unchanged.
-UUID-only dismissal preferences are scoped to the authenticated MSAL account
-and backend URL on this device. Closing/hiding does not call Cancel, delete
-SQL records or erase results. Undismissed details still expose original status,
+phone-summary consumers; saved records remain unchanged.
+P11-12 replaces UUID-only device preferences with a separate SQL dismissal
+store keyed by authenticated owner and job UUID. Existing jobs belong to the
+configured backend owner; other accounts cannot list or dismiss them.
+Authenticated dismiss-one, dismiss-finished and bounded UUID-import endpoints
+filter the header's `/jobs` response and `list_jobs` counts without changing raw
+registry, job-detail or health reads, job rows, steps, events or lifecycle.
+Running work cannot be dismissed.
+Visible snapshots and dismissal metadata each return at most 1,000 IDs/rows,
+with running jobs first. SQL filters visibility against the complete owner
+dismissal table, not just that bounded metadata. Bulk writes persist every
+retained terminal dismissal even when the response is bounded. Import success
+means the submitted legacy snapshot was processed; absent, expired and running
+IDs are ignored, not recorded as dismissals. Nonempty dismissal state prevents
+rolling back migration 0053.
+Legacy scoped browser IDs remain hidden locally until the import is confirmed,
+then the local copy is removed. Refresh reconciles the authoritative visible
+window while preserving concurrent live updates. Unknown replayed jobs wait
+for server visibility confirmation, so bounded tombstones cannot resurrect
+older dismissals. Bulk dismissal refreshes that window before reporting success.
+Closing/hiding does not call Cancel, delete SQL records or erase results.
+Undismissed details still expose original status,
 run identity, timestamp, failure reason and saved result. A dismissed selection
 falls back to the list without effect-driven state copying. Empty and error
 states remain distinct, and a stable control preserves focus after the last row.

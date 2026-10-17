@@ -839,7 +839,9 @@ function SettingsRoute({ config, session, nutritionKey }: {
   return (
     <SettingsPage backendUrl={config.backendUrl} getAccessToken={session.getAccessToken} onBack={back}
       presence={<PresenceSettings backendUrl={config.backendUrl} getAccessToken={session.getAccessToken} />}
-      projects={<ProjectsPage backendUrl={config.backendUrl} getAccessToken={session.getAccessToken} />}
+      renderProjects={(projectDefaults) => (
+        <ProjectsPage backendUrl={config.backendUrl} getAccessToken={session.getAccessToken} projectDefaults={projectDefaults} />
+      )}
       {...(nutritionKey ? { nutrition: <NutritionTargetsSettings key={nutritionKey} backendUrl={config.backendUrl} getAccessToken={session.getAccessToken} /> } : {})}
       memory={<MemorySettings backendUrl={config.backendUrl} getAccessToken={session.getAccessToken} />}
     />

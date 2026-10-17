@@ -20,6 +20,16 @@ const project = {
   active: true,
 };
 
+const newProjectDefaults = {
+  owner: 'DanAakesen',
+  visibility: 'private' as const,
+  templatesRepository: 'DanAakesen/templates',
+  defaultAgent: 'copilot' as const,
+  policy: 'deliver_pr' as const,
+  maxParallelTasks: 1,
+  defaultBranch: 'main',
+};
+
 const getAccessToken = vi.fn(async () => 'test-access-token');
 const fetchMock = vi.fn<typeof fetch>();
 let projects: typeof project[];
@@ -67,6 +77,7 @@ beforeEach(() => {
   fetchMock.mockImplementation(async (input, init) => {
     const url = String(input);
     const method = init?.method ?? 'GET';
+    if (url.endsWith('/settings') && method === 'GET') return response({ settings: { newProjects: newProjectDefaults } });
     if (url.endsWith('/factory/tasks?state=Running&limit=100')) {
       return response({ tasks: [{ projectId: '7', state: 'Running' }], limit: 100, offset: 0 });
     }
@@ -121,6 +132,9 @@ describe('Projects page', () => {
     const list = await within(dialog).findByRole('list', { name: 'Repositories you can add' });
     expect(within(list).getByText('DanAakesen/second-project')).not.toBeNull();
     expect(within(list).queryByText('DanAakesen/jarvis')).toBeNull();
+    expect(await within(dialog).findByText('Jarvis pre-fills each new project with these saved defaults. Every project keeps its own settings and can change them any time.')).not.toBeNull();
+    expect(within(dialog).getByText('DanAakesen', { selector: 'dd' })).not.toBeNull();
+    expect(within(dialog).getByText('main', { selector: 'dd' })).not.toBeNull();
     expect(within(dialog).getByRole('button', { name: 'Ask Jarvis to create it' })).toHaveProperty('disabled', true);
 
     await user.click(within(list).getByRole('button', { name: 'Add' }));
@@ -172,6 +186,19 @@ describe('Projects page', () => {
     await user.click(screen.getByRole('button', { name: 'Refresh projects and repositories' }));
     await screen.findByRole('article', { name: 'second-project' });
     expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith('/factory/repositories?refresh=true'))).toBe(true);
+  });
+
+  it('offers Add project from the empty state instead of a defaults link', async () => {
+    const user = userEvent.setup();
+    projects = [];
+    renderFactory();
+
+    expect(await screen.findByRole('heading', { name: 'No managed projects' })).not.toBeNull();
+    expect(screen.getByRole('button', { name: 'Add project' })).not.toBeNull();
+    expect(screen.queryByRole('link', { name: 'New project defaults' })).toBeNull();
+
+    await user.click(screen.getByRole('button', { name: 'Add project' }));
+    expect(await screen.findByRole('dialog', { name: 'Create project' })).not.toBeNull();
   });
 
   it('explains when an existing repository is no longer available to manage', async () => {
