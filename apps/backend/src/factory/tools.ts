@@ -162,7 +162,7 @@ function projectSummary(project: Project) {
 async function currentDanMessage(request: FastifyRequest, operation = 'project archive'): Promise<ConversationMessage> {
   const voiceMessage = request.jarvisConversationMessage;
   if (voiceMessage) {
-    if (request.principal === null || voiceMessage.role !== 'dan') {
+    if (request.principal === null || voiceMessage.role !== 'dan' || !hasSession(voiceMessage)) {
       throw new ToolRefusal(`A verified Dan message is required to confirm this ${operation}.`);
     }
     return voiceMessage;
@@ -174,10 +174,15 @@ async function currentDanMessage(request: FastifyRequest, operation = 'project a
   }
   const page = await request.server.conversationStore.getHistory({ limit: 1 });
   const message = page.messages[0];
-  if (!message || message.id !== id || message.role !== 'dan') {
+  if (!message || message.id !== id || message.role !== 'dan' || !hasSession(message)) {
     throw new ToolRefusal(`A verified Dan message is required to confirm this ${operation}.`);
   }
   return message;
+}
+
+/** An approval is bound to the session that staged it, so a message without one can neither stage nor approve. */
+function hasSession(message: ConversationMessage): boolean {
+  return typeof message.sessionId === 'string' && message.sessionId.length > 0;
 }
 
 function cleanPendingArchives(actions: Map<string, PendingProjectArchive>, now = Date.now()): void {

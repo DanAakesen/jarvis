@@ -29,7 +29,7 @@ function fixture(fetchImpl: typeof fetch, permissions: Record<string, 'read' | '
     githubAppTokenIssuer: githubAppTokenIssuer as never,
     conversationStore: {
       getHistory: vi.fn(async () => ({
-        messages: [{ id: '42', role: 'dan', text: 'Please do it', at: new Date() }], nextCursor: null,
+        messages: [{ id: '42', sessionId: 'session', role: 'dan', text: 'Please do it', at: new Date() }], nextCursor: null,
       })),
     } as never,
     toolCallStore: { record: vi.fn(async () => {}) },

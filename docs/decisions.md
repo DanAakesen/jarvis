@@ -1,5 +1,71 @@
 # Decisions
 
+## Decide what Dan's approval means on the server, never with a word list (17 October 2026; P11-10 / #894)
+
+**Confirmed user decision, awaiting Dan's live re-test.** After he approved two
+bookings in his own words, Jarvis answered with a hard-coded list of approval
+words and asked him to say one. Dan wants Jarvis to understand naturally when he
+has approved, without any hard-coded approval words. Cause: "yes please, book
+both" is not a whole-message match, so the relay did not intercept it, the
+realtime model called the confirm tool itself, hit the refusal and read the list
+out.
+
+Two jobs that one word list used to do are now separate.
+
+- **Provenance stays exactly as strict and stays deterministic.** Only a verified,
+  later, Dan-authored message in the same session as the stage, inside the
+  ten-minute window, for that specific pending action can approve it. The staging
+  request never approves. The model, tool output, email text and any model-supplied
+  flag never approve. Newly enforced: every Google stage is bound to the session
+  that staged it (required field plus a runtime guard), so a message from another
+  session, or without one, can neither see nor confirm it.
+- **Meaning is decided by one bounded, fail-closed step** (`core/approval-interpreter.ts`).
+  A plain full reply such as "yes" or "nej" is decided deterministically with no
+  model call. Anything else goes to one small-model call that sees only Dan's single
+  message and the exact staged summary (as untrusted data in random-nonce
+  delimiters) and answers `{verdict: approve | decline | neither, confidence}`. The
+  Foundry chat-role model runs at its lowest supported reasoning effort. The parse
+  is strict, below 0.85 confidence counts as `neither`, the call times out after
+  five seconds, and it is limited to 20 a minute and 4 at once. Results are cached
+  by session, message, action and a hash of the summary and reply (ten minutes, 30
+  seconds for a failure). Usage is recorded under the existing chat role. A named log
+  event records family, verdict and path, never the words. Any error, timeout,
+  garbage, low confidence or missing model means `neither`: nothing changes and Dan
+  gets one short natural question. No refusal, tool description or instruction lists words.
+
+One implementation covers Google calendar and Gmail writes, Software Factory
+archive and issue creation, and GitHub App writes.
+
+Routing is pending-driven. A probe runs on any follow-up turn with a calendar
+proposal in the last two messages instead of matching a phrase. The classifier sees one
+message and the summary, not the turns between, so a stray "yes" meant for
+something else while a change is staged can approve it. That is bounded by the
+same-session, later-message and ten-minute rules.
+
+Rejected: a longer phrase list (it is the bug); the Decision providers (Jev,
+Microsoft-Decision-1), which would send email-derived summaries to a third party and
+record no usage; letting the realtime or chat model decide and pass a flag, which
+is the model-supplied approval that provenance forbids; classifying the whole
+conversation instead of one message.
+
+Degradation: with no model configured, a non-chat role model, a failing model or a
+failed usage write, plain one-word replies still approve through the fast path and
+everything else gets the natural question. An unpriced model is allowed and its
+usage is recorded as unverified.
+
+Accepted gaps. (1) The `pr_merge` failing-checks override gate (`saysProceed`,
+`hasExplicitProceed`) still matches a phrase list; it overrides a check rather than
+approving a staged action and is unchanged here, a possible follow-up. (2) In chat,
+a reply the backend judged unclear, answered by a model that falsely claims success
+without calendar words or a recognised opener, slips past the Python claim guard;
+the backend still refuses every unconfirmed write, so nothing changes.
+
+Offline tests drive the real tools and interpreter with a fake model, so they prove
+plumbing, provenance and fail-closed behaviour, not model judgment. Real model
+quality is unverified until Dan's live re-test, which closes #894. This supersedes
+the whole-message-match safeguard of 12 October and the "plain approval" wording of
+P11-01 and P11-03; every other safeguard there stands.
+
 ## Use owner-configured nutrition targets for the daily food budget (17 October 2026; P12-09 / #724)
 
 **Confirmed user decision, not a proposal or completed acceptance.** Dan ruled
@@ -3293,7 +3359,7 @@ Windows/Chrome/Jev speedup remains live acceptance.
 | 2026-10-10 | `gpt-6-astra` and `gpt-6.1-sol` are deployed in Foundry (Global Standard, capacity 50, also in `infra/main.bicep`) so they appear in the Chat and Research pickers, and the Codex list is replaced by Codex's own current catalogue (`gpt-6.1-sol`, `gpt-6-astra`, `gpt-6-sol`, `gpt-6-luna`, `gpt-5.6-sol/terra/luna`, plus `default`). Defaults and Dan's saved choices are unchanged; he picks per role. | Dan: luna for every role is not good; wants Astra and GPT-6.1 for research and voice, and the Codex models were old. Chat and Research options come from live Foundry deployments, so deploying is the change; the Codex list was hard-coded (`gpt-5.5`, `gpt-5.4`, `gpt-5.3-codex`). English speech-to-speech stays on `gpt-realtime-2.1`, the newest realtime model; the Danish voice answers through the Chat model. Codex reasoning efforts stay at the shared enum (up to `xhigh`); Codex also offers `max` and `ultra`, not exposed yet. | Deployed and Succeeded; live chat with each model not verified from here |
 | 2026-10-10 | Decisions are scored by a selectable provider: Jev (default) or Microsoft-Decision-1, chosen by the `decisions.provider` setting for reflex, browser, recipe and PC decisions together. Dan can switch in Settings or by asking Jarvis; nothing switches provider automatically. | Dan wants to test Microsoft's new decision model against Jev himself. The two accept the same request (`model`, `state`, typed questions), so one target resolver replaces the fixed Jev key. Microsoft's speed and accuracy figures are vendor-run and disputed, our measured Jev time is about 274 ms (voice) and 398 ms (chat) p50, and the confidence thresholds are tuned for Jev, so the setting defaults to Jev and the providers are compared on our own `reflex.decision` logs (now with `provider`). Deployment `decision-1` (name cannot contain "microsoft"; quota 60 requests a minute) is in Bicep; Foundry host for the route is tried in two forms until one answers. | Implemented; live check on both providers pending |
 | 2026-10-12 | Image budget admission no longer requires a published price for the chat model. | Dan's live camera turns on 12 October all fell back to the caption path (`budget_unavailable`): `reserveImage` refused any model missing from the pricing table and `gpt-6.1-sol` is not in it, so the direct-image path could never run. An unpriced model is now admitted on the same conservative unverified 0.1 DKK hold; a known price above the hold is still refused and only a known cost replaces the hold. | Implemented; live image acceptance still unverified |
-| 2026-10-12 | User-directed: every tool confirmation (Google calendar/mail, issue creation, project archive, public screenshot) completes on a plain approval such as yes, approved, confirmed, go ahead (Danish equivalents too). No exact phrases or codes are spoken or typed. Safeguards stay: only Dan, only a later message, whole-message match (a reply that asks for anything else is not approval), 10-minute expiry, and only the latest pending action per scope can be approved. | Dan was on the move and Jarvis demanded 'confirm 74483420' by voice; this was a generic backend problem, not a Google one (closes the intent of #601, also relevant to #725). | Active |
+| 2026-10-12 | User-directed: every tool confirmation (Google calendar/mail, issue creation, project archive, public screenshot) completes on a plain approval such as yes, approved, confirmed, go ahead (Danish equivalents too). No exact phrases or codes are spoken or typed. Safeguards stay: only Dan, only a later message, whole-message match (a reply that asks for anything else is not approval), 10-minute expiry, and only the latest pending action per scope can be approved. | Dan was on the move and Jarvis demanded 'confirm 74483420' by voice; this was a generic backend problem, not a Google one (closes the intent of #601, also relevant to #725). | Partly superseded by P11-10 (17 October 2026): the whole-message match gives way to the server-side meaning step; every other safeguard stands |
 | 2026-10-12 | The backend tool catalogue is capped at 128 tools, 4,000 characters per description and 1 MiB, enforced when the registry is built and mirrored in agents/jarvis/limits.json. Related tools are merged into one tool with an operation parameter rather than added one by one. | #737 added about 25 GitHub tools and pushed the catalogue past the agent's 128-tool limit, so the agent rejected the whole catalogue and every chat turn failed (reverted in #744). | Active |
 | 2026-10-13 | The production database relies on Azure point-in-time restore (about seven days, locally redundant backup storage). A restore to a temporary copy was drilled and verified (P6-04, #65): 67 of 67 tables, counts match except rows written after the restore point; documented in docs/runbook.md. No long-term retention or geo-redundant backup is configured, which is an accepted risk for now and a candidate for Dan to revisit. | #65 was closed on 3 October with no drill performed; the drill was run for real on 13 October and the gap is now documented. | Active |
 | 2026-10-08 | P9-33 exposes explicit vault-note deletion through the shared sensitive tool registry. Reuse the GitHub App Contents-write client and require a present-mode Now confirmation naming the exact path; recheck the note SHA after approval, then remove its index rows and invalidate the graph cache. | Existing Contents API SHA protection, `TeamsNotificationService.runConfirmed`, and `VaultIndexStore.deleteFiles` cover the provider, approval and cleanup boundaries. No migration or web change is needed; focused fake-GitHub tests cover approval gating, concurrent edits, commit metadata, index removal and graph invalidation. | Implemented offline; live GitHub App access remains unverified |
@@ -3995,6 +4061,8 @@ Offline validation: 55 focused pending-action, Google-tool and capability-instru
 tests pass, along with backend lint and build. Unit and fake-provider HTTP checks
 cover approval, cancellation, expiry, identity/turn checks, supersession and Gmail
 regression; live acceptance is pending.
+Superseded in part by P11-10 (17 October 2026): the word list is replaced by a
+server-side meaning step; the verified later Dan message, expiry and supersession stand.
 
 ## P9-09 (8 October 2026) — Appearance colours can be reset
 
@@ -4344,6 +4412,8 @@ one-shot process-local state and add a verified read-only
 Chat and voice must stage successfully before claiming preparation, then confirm
 on a later plain approval without restaging or asking again. Missing and expired
 stages return `none`. No persistence, migration or live calendar write is added.
+(P11-10, 17 October 2026: "plain approval" now means any later message that
+clearly agrees, decided server-side.)
 
 ### P11-03 Gmail ownership and extraction
 

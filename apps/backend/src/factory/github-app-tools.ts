@@ -53,7 +53,7 @@ interface OperationDefinition {
 
 interface PendingApproval {
   readonly sourceMessageId: string;
-  readonly sourceSessionId?: string;
+  readonly sourceSessionId: string;
   readonly createdAt: number;
   readonly warning?: string;
   readonly explicitProceed?: boolean;
@@ -372,7 +372,8 @@ function text(input: Input, key: string, maxBytes: number, required = false): st
 async function danMessage(request: FastifyRequest): Promise<ConversationMessage> {
   const message = request.jarvisConversationMessage;
   if (message) {
-    if (request.principal === null || message.role !== 'dan' || !/^[1-9]\d{0,18}$/u.test(message.id)) {
+    if (request.principal === null || message.role !== 'dan' || !/^[1-9]\d{0,18}$/u.test(message.id) ||
+        !hasSession(message)) {
       throw new ToolRefusal('I need a verified message from Dan before I can request approval.');
     }
     return message;
@@ -384,10 +385,15 @@ async function danMessage(request: FastifyRequest): Promise<ConversationMessage>
   }
   const page = await request.server.conversationStore.getHistory({ limit: 1 });
   const latest = page.messages[0];
-  if (!latest || latest.id !== id || latest.role !== 'dan') {
+  if (!latest || latest.id !== id || latest.role !== 'dan' || !hasSession(latest)) {
     throw new ToolRefusal('I need a verified message from Dan before I can request approval.');
   }
   return latest;
+}
+
+/** An approval is bound to the session that staged it, so a message without one can neither stage nor approve. */
+function hasSession(message: ConversationMessage): boolean {
+  return typeof message.sessionId === 'string' && message.sessionId.length > 0;
 }
 
 /** A short, bounded description of the staged write for the approval interpreter. Large fields are reported by size. */
@@ -425,12 +431,11 @@ async function approval(
   const pending = actions.get(key);
   // Provenance first: a verified later message in the same session. Only then is its meaning interpreted.
   if (pending && BigInt(message.id) > BigInt(pending.sourceMessageId) &&
-      (pending.sourceSessionId === undefined || message.sessionId === pending.sourceSessionId) &&
+      message.sessionId === pending.sourceSessionId &&
       Number.isFinite(message.at.getTime()) && message.at.getTime() > pending.createdAt) {
     const verdict = await safeDecision(approvalDeciderFor(request), {
       reply: message.text, summary: approvalSummary(tool, repository, input, pending.warning ?? warningText),
-      family: 'github', messageId: message.id,
-      ...(typeof message.sessionId === 'string' ? { sessionId: message.sessionId } : {}), actionKey: key,
+      family: 'github', messageId: message.id, sessionId: message.sessionId, actionKey: key,
     }, signal);
     // Nothing below awaits before the approval is consumed, so only one concurrent call can use it.
     expire();
@@ -450,7 +455,7 @@ async function approval(
     if (actions.size >= maxPendingApprovals) throw new ToolFailure('I have too many pending GitHub approvals; try again shortly.');
     actions.set(key, {
       sourceMessageId: message.id,
-      ...(typeof message.sessionId === 'string' ? { sourceSessionId: message.sessionId } : {}),
+      sourceSessionId: message.sessionId,
       createdAt: now,
       ...(warningText ? { warning: warningText } : {}),
       ...(tool === 'pr_merge' && input.proceedDespiteFailingChecks === true &&
