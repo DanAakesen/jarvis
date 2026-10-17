@@ -15,12 +15,17 @@ Readiness and probabilistic live conversation acceptance are separate required
 results. Missing/unknown required smoke checks fail closed; existing explicit
 nonblocking checks remain so. There is no routine Dan acceptance/batch cutoff.
 
-Local 30 pipeline, seven smoke formatter and 11 planner cases pass, with scoped
+Local 33 pipeline, seven smoke formatter and 11 planner cases pass, with scoped
 Ruff and Actions validation. The validator's sole ignored schema diagnostic is
 the unchanged production `concurrency.queue: max` feature; it is not removed.
 The first full local script run exposed a missing `run_attempt` in a synthetic
 fixture; that fixture was corrected and the narrow cases reran successfully.
-One normal exact-candidate PR CI supplies the full runtime qualification; its
+Initial43aa CI39038876598 passed all12 jobs and all four CodeQL analyses.
+Review found a secret-derived fingerprint; the correction compares sensitive
+budget configuration only in memory through the existing authorised main-only
+identity, never persists a value/hash, and requires successor qualification.
+Verified applied state, not a newer docs-only main commit, controls supersession.
+Normal exact-candidate PR CI supplies the full runtime qualification; its
 actual run/artifact result is retained on #880/PR rather than generating a
 documentation-only CI rerun. #880 stays open through review. Main merge and
 actual release belong to the integration owner, not this builder. No live provider

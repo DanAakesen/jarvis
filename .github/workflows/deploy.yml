@@ -42,6 +42,7 @@ jobs:
     permissions:
       contents: read
       actions: read
+      id-token: write
     outputs:
       infra: ${{ steps.plan.outputs.infra }}
       backend: ${{ steps.plan.outputs.backend }}
@@ -57,12 +58,23 @@ jobs:
         with:
           python-version-file: .python-version
       - name: Require exact qualification and select compatible applied inputs
-        id: plan
+        id: inputs
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_CONFIGURATION: ${{ toJSON(vars) }}
-          RELEASE_BUDGET: ${{ secrets.JARVIS_BUDGET_CONTACT_EMAILS }}
         run: python .github/scripts/release_state.py plan
+      - name: Authenticate only after exact qualification for sensitive input readback
+        if: steps.inputs.outputs.infra == 'false' && steps.inputs.outputs.superseded != 'true'
+        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      - name: Verify sensitive inputs in memory before reusing infrastructure
+        id: plan
+        env:
+          JARVIS_BUDGET_CONTACT_EMAILS: ${{ secrets.JARVIS_BUDGET_CONTACT_EMAILS }}
+        run: python .github/scripts/release_state.py select
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: release-plan-${{ github.run_attempt }}

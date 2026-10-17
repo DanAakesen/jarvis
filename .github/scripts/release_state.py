@@ -7,6 +7,7 @@ import json
 import os
 from pathlib import Path
 import re
+import subprocess
 import sys
 import urllib.error
 import urllib.request
@@ -189,12 +190,7 @@ def prepare() -> None:
         compatible = is_ancestor(horizon, head)
         if superseded:
             applied_head = horizon
-    latest_main = git("rev-parse", "origin/main")
-    if latest_main != head:
-        if not is_ancestor(head, latest_main):
-            raise RuntimeError("Release source is not on current main history")
-        superseded = True
-    configuration = os.environ["RELEASE_CONFIGURATION"] + os.environ.get("RELEASE_BUDGET", "")
+    configuration = os.environ["RELEASE_CONFIGURATION"]
     inputs = fingerprints(head, configuration)
     selected = dict.fromkeys(PARTS, False) if superseded else component_selection(
         inputs, previous, compatible,
@@ -213,12 +209,51 @@ def prepare() -> None:
 
 
 def is_ancestor(base: str, head: str) -> bool:
-    import subprocess
     result = subprocess.run(["git", "merge-base", "--is-ancestor", base, head],
                             capture_output=True, check=False, timeout=60)
     if result.returncode not in {0, 1}:
         raise RuntimeError("Cannot establish deployment ancestry")
     return result.returncode == 0
+
+
+def budget_contacts_match() -> bool:
+    """Compare sensitive configuration in memory; never persist even a hash."""
+    configured = os.environ.get("JARVIS_BUDGET_CONTACT_EMAILS", "")
+    expected = [email.strip() for email in configured.split(",")]
+    if not all(re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", email) for email in expected):
+        raise ValueError("Budget contact configuration unavailable")
+    result = subprocess.run(
+        ["az", "monitor", "action-group", "show", "--name", "jarvis-alerts",
+         "--resource-group", os.environ["RESOURCE_GROUP"],
+         "--subscription", os.environ["SUBSCRIPTION_ID"],
+         "--query", "emailReceivers[].emailAddress", "--output", "json", "--only-show-errors"],
+        capture_output=True, text=True, check=False, timeout=30,
+    )
+    if result.returncode or len(result.stdout) > 65536:
+        raise RuntimeError("Budget contact readback unavailable")
+    actual = json.loads(result.stdout)
+    if not isinstance(actual, list) or not all(isinstance(email, str) for email in actual):
+        raise ValueError("Budget contact readback unavailable")
+    return actual == expected
+
+
+def select() -> None:
+    path = Path("release-plan.json")
+    plan = json.loads(path.read_text(encoding="utf-8"))
+    context = identity()
+    if any(plan.get(key) != context[key] for key in ("source", "tree", "run", "attempt")):
+        raise ValueError("Deployment plan provenance mismatch")
+    if not plan["superseded"] and not plan["selected"]["infra"]:
+        if not budget_contacts_match():
+            plan["selected"] = dict.fromkeys(PARTS, True)
+            print("Sensitive infrastructure configuration changed; re-prove downstream state.")
+        else:
+            print("Sensitive infrastructure configuration matches; no value or hash retained.")
+    path.write_text(json.dumps(plan), encoding="utf-8")
+    with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+        for part in PARTS:
+            output.write(f"{part}={str(plan['selected'][part]).lower()}\n")
+        output.write(f"superseded={str(plan['superseded']).lower()}\n")
 
 
 def record() -> int:
@@ -313,14 +348,18 @@ def record() -> int:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("operation", choices=("plan", "record"))
+    parser.add_argument("operation", choices=("plan", "select", "record"))
     args = parser.parse_args()
     try:
         if args.operation == "plan":
             prepare()
             return 0
+        if args.operation == "select":
+            select()
+            return 0
         return record()
-    except (OSError, ValueError, KeyError, TypeError, RuntimeError, zipfile.BadZipFile) as error:
+    except (OSError, ValueError, KeyError, TypeError, RuntimeError, zipfile.BadZipFile,
+            subprocess.TimeoutExpired) as error:
         code = {
             "No successful exact-tree CI qualification receipt; release is blocked":
                 "exact_qualification_missing",
@@ -330,7 +369,8 @@ def main() -> int:
             "Deployment receipt source mismatch": "prior_source_mismatch",
             "Deployment plan provenance mismatch": "plan_provenance_mismatch",
             "Cannot establish deployment ancestry": "ancestry_unavailable",
-            "Release source is not on current main history": "main_history_mismatch",
+            "Budget contact configuration unavailable": "budget_configuration_unavailable",
+            "Budget contact readback unavailable": "budget_readback_unavailable",
         }.get(str(error), "invalid_or_missing_evidence")
         if args.operation == "record":
             # A failed evidence producer is a failed release, never a cache hit.

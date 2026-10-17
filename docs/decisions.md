@@ -24,6 +24,13 @@ an immutable artifact checksum. Never search past newer missing/failed partial
 state for an older green receipt. Bicep invalidates downstream configuration.
 Manual dispatch honours supersession. Reused artifacts keep original producer
 source/run/attempt; the new release SHA is not falsely stamped onto them.
+The budget-contact secret is never hashed into public/downloadable fingerprints.
+For candidate infrastructure reuse, compare the existing action-group recipients
+in memory after exact qualification using the existing main-only deployment
+identity. Mismatch invalidates downstream state; unavailable readback blocks.
+This avoids a low-entropy secret hash without adding a key, role or manual
+version-marker dependency. Supersession follows verified applied state, not
+an unrelated newer docs-only main commit.
 
 Deterministic code/permission/contracts and runtime readiness remain distinct
 from live model conversation acceptance. All are still required where selected:
@@ -34,8 +41,10 @@ remain nonblocking. Fixed check/status/reason codes are retained, not raw logs,
 reports or provider/tool/user content. Historical failures are not reclassified.
 The old generic `agent_error` has no proven cause.
 
-Status: local implementation candidate with synthetic regressions; normal
-exact-candidate CI/review and the integration owner's main-only release remain
+Status: initial43aa CI39038876598 passed all12 jobs and all four CodeQL
+analyses; review found the secret-derived fingerprint issue, corrected with
+synthetic comparison/redaction fixtures. Successor exact-candidate CI/review
+and the integration owner's main-only release remain
 separate gates. Remote-enabled runtime state is not exposed here and is not
 claimed. Private Daily/provider/device/access boundaries remain unchanged.
 

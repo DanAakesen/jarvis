@@ -4518,7 +4518,13 @@ flowchart LR
   before any Azure job; a green badge for a different tree is insufficient.
 - **Plan:** `release_state.py` fingerprints tracked blob paths/modes/content,
   each component's own deploy-job recipe, shared workflow configuration and
-  release variables (including a non-exported budget-secret input). Backend
+  non-sensitive release variables. It never hashes the budget-contact secret.
+  After exact qualification, a candidate infrastructure reuse performs an
+  in-memory comparison of the existing `jarvis-alerts` email receivers using
+  the same main-only deployment identity. No contact value, salt or derived hash
+  is persisted; mismatch reapplies infrastructure/downstream state, and an
+  unavailable/invalid readback fails closed. No new role or configuration marker
+  is required. Backend
   inputs include contracts, migrations, web's package manifest, feature index
   and agent presence instructions. Web shares contracts/Node configuration;
   agent retains its own Python/image inputs. Infrastructure changes invalidate

@@ -1,4 +1,5 @@
 import copy
+from contextlib import redirect_stdout
 import hashlib
 import io
 import json
@@ -14,7 +15,10 @@ from pipeline_evidence import ci_evidence, dispatched_pull, ownership
 from pipeline_impact import (
     CHECKS, PARTS, checks_for, deploy_parts, fingerprints, require_results, selection, workflow_recipe,
 )
-from release_state import artifact, component_selection, prepare, previous_release, qualify, record
+from release_state import (
+    artifact, budget_contacts_match, component_selection, prepare, previous_release, qualify,
+    record, select,
+)
 from smoke_reasons import CHECK_IDS, report_ok, safe_report
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -173,6 +177,76 @@ class QualificationTests(unittest.TestCase):
 
 
 class ReleaseStateTests(unittest.TestCase):
+    def test_budget_contact_values_are_compared_only_in_memory(self):
+        configured = "synthetic.one@example.test, synthetic.two@example.test"
+        env = {"JARVIS_BUDGET_CONTACT_EMAILS": configured,
+               "RESOURCE_GROUP": "fixture-group", "SUBSCRIPTION_ID": "fixture-subscription"}
+        for actual, expected in (
+            (["synthetic.one@example.test", "synthetic.two@example.test"], True),
+            (["synthetic.changed@example.test"], False),
+            ([], False),
+        ):
+            with (patch.dict(os.environ, env),
+                  patch("release_state.subprocess.run",
+                        return_value=subprocess.CompletedProcess([], 0, json.dumps(actual), ""))):
+                self.assertEqual(budget_contacts_match(), expected)
+        for code, output in ((1, configured), (0, "private-not-json"), (0, "{}")):
+            with (patch.dict(os.environ, env),
+                  patch("release_state.subprocess.run",
+                        return_value=subprocess.CompletedProcess([], code, output, ""))):
+                with self.assertRaises((RuntimeError, ValueError)):
+                    budget_contacts_match()
+        with patch.dict(os.environ, env | {"JARVIS_BUDGET_CONTACT_EMAILS": ""}):
+            with self.assertRaises(ValueError):
+                budget_contacts_match()
+
+    def test_sensitive_input_readback_precedes_infra_reuse_without_persisting_a_hash(self):
+        for matches, superseded in ((True, False), (False, False), (False, True)):
+            with tempfile.TemporaryDirectory() as folder:
+                previous_cwd = os.getcwd()
+                os.chdir(folder)
+                try:
+                    plan = {**CONTEXT, "selected": dict.fromkeys(PARTS, False),
+                            "superseded": superseded}
+                    Path("release-plan.json").write_text(json.dumps(plan))
+                    output = io.StringIO()
+                    with (patch.dict(os.environ, ENV | {"GITHUB_OUTPUT": "output"}),
+                          patch("release_state.identity", return_value=CONTEXT),
+                          patch("release_state.budget_contacts_match", return_value=matches) as read,
+                          redirect_stdout(output)):
+                        select()
+                    saved = json.loads(Path("release-plan.json").read_text())
+                    self.assertEqual(saved["selected"], dict.fromkeys(
+                        PARTS, not matches and not superseded,
+                    ))
+                    self.assertEqual(set(saved), set(plan))
+                    self.assertNotIn("example.test", output.getvalue())
+                    self.assertEqual(read.call_count, 0 if superseded else 1)
+                finally:
+                    os.chdir(previous_cwd)
+
+    def test_prepare_never_includes_sensitive_contact_input_in_fingerprints(self):
+        with tempfile.TemporaryDirectory() as folder:
+            previous_cwd = os.getcwd()
+            os.chdir(folder)
+            try:
+                with (patch.dict(os.environ, ENV | {
+                    "GITHUB_OUTPUT": "output", "RELEASE_BUDGET": "synthetic@example.test",
+                    "JARVIS_BUDGET_CONTACT_EMAILS": "synthetic@example.test",
+                }), patch("release_state.identity", return_value=CONTEXT),
+                      patch("release_state.previous_release", return_value=(None, None)),
+                      patch("release_state.git") as lookup,
+                      patch("release_state.fingerprints", return_value=INPUTS) as fingerprint,
+                      patch("release_state.qualify", return_value={"run": 40})):
+                    prepare()
+                fingerprint.assert_called_once_with(CONTEXT["source"], ENV["RELEASE_CONFIGURATION"])
+                # A newer docs-only main commit has no Deploy run. Only a
+                # verified applied-source horizon can supersede this release.
+                lookup.assert_not_called()
+                self.assertNotIn("synthetic@example.test", Path("release-plan.json").read_text())
+            finally:
+                os.chdir(previous_cwd)
+
     def test_acceptance_failure_does_not_reapply_healthy_exact_inputs(self):
         self.assertEqual(component_selection(INPUTS, previous(), True), dict.fromkeys(PARTS, False))
 
@@ -375,6 +449,16 @@ class SafeFailureTests(unittest.TestCase):
         self.assertNotIn('cat "$response"', deploy)
         self.assertIn("'docs/features.md'", deploy)
         self.assertIn("name: release-plan-${{ needs.plan.outputs.attempt }}", deploy)
+        self.assertNotIn("RELEASE_BUDGET:", deploy)
+        qualification = deploy.index("run: python .github/scripts/release_state.py plan")
+        readback = deploy.index("name: Authenticate only after exact qualification")
+        selection = deploy.index("run: python .github/scripts/release_state.py select")
+        self.assertLess(qualification, readback)
+        self.assertLess(readback, selection)
+        self.assertIn(
+            "if: steps.inputs.outputs.infra == 'false' && steps.inputs.outputs.superseded != 'true'",
+            deploy,
+        )
 
     def test_cli_invalid_inputs_never_echo_payloads(self):
         with tempfile.TemporaryDirectory() as folder:

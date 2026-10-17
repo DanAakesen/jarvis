@@ -46,6 +46,14 @@ wholly green release, controls reuse. Missing/expired/invalid state is not a
 cache hit; a newer unknown/partial state cannot be bypassed with an older green
 receipt. Bicep/configuration changes invalidate downstream application state.
 Superseded source cannot deploy, including manual dispatch.
+Sensitive budget-contact configuration is not hashed into either receipt.
+Only after exact qualification, a candidate infrastructure reuse reads the
+existing `jarvis-alerts` recipients through the same main-only deploy identity
+and compares them in memory with the protected configuration. A mismatch
+reapplies infrastructure and downstream components; missing/invalid readback
+blocks. No value, hash, new secret, role or version marker is retained.
+Supersession uses the verified applied-source horizon, not a newer docs-only
+`main` commit that has no deployment.
 
 For a failed release, hand the existing builder its linked qualification PR,
 source/tree, run/attempt, exact artifact identity and fixed failing check/reason
@@ -58,12 +66,16 @@ the preceding attempt's compatible receipt.
 
 Local checks use the standard library:
 `$env:PYTHONPATH='.github\scripts'; python -m unittest discover -s .github\scripts\tests -v`.
-The 30 new pipeline, seven formatter and 11 planner cases pass locally, as does
+The 33 pipeline, seven formatter and 11 planner cases pass locally, as does
 scoped Ruff. Pinned actionlint 1.7.12 passes after excluding only its unsupported
 schema diagnostic for the already-present `concurrency.queue: max`; the queue
 protection remains unchanged. Initial full local discovery found a missing
 `run_attempt` in one new synthetic fixture; its correction passes the narrow
 suite. Normal CI is the full-runtime authority, not that partial local run.
+Initial exact-head CI39038876598 passed all12 jobs and CodeQL39038876634
+passed all four analyses at43aa1af2. Its review identified the secret-derived
+fingerprint issue above; the correction requires successor normal qualification,
+not reuse of that earlier green receipt. No secret-bearing release ran from it.
 Copilot-ready dispatch passes its existing PR number to CI; the result gate
 checks live ready-PR/head/base identity before emitting qualification evidence.
 Offline Bicep CI pins 0.44.1. Existing local
