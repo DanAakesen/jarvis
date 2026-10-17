@@ -555,6 +555,31 @@ was at least 6.25:1 in light mode and 8.99:1 in dark mode. Screenshots:
 [phone dark](docs/ui/screenshots/p8-13-theme-settings-phone-dark.png). Live
 Entra and API/SQL behavior remain unverified.
 
+P12-09 adds a collapsible Nutrition targets section after Projects, only while
+Daily is on: with Daily off nothing renders and no request is made. It follows the
+Routines pattern, with its own form and save beside the action, independent of
+Save settings. The folded header carries a text summary (Needs setup or
+Configured). Three labelled whole-number fields (resting energy burn, daily
+deficit, protein) sit in an auto-fit grid, three across on desktop and stacked on
+a phone, each with a hint and its allowed range. The values are private health
+data, so the fields ship no defaults, placeholders or example figures. A bad entry
+shows a text error after blur (also `aria-invalid`), and a rejected submit moves
+focus to the first invalid field and sends nothing. Save stays disabled until a
+value changes; while saving the form is `aria-busy` and read-only with
+"Saving…". A saved result shows the committed readback, a text status and the
+last-saved date. Failures use distinct page-owned copy (load with Retry, rejected,
+denied, unavailable, unreadable) that never shows server text and keeps the
+entries. Inputs are 44 px tall at 16 px so iOS does not zoom.
+
+Checked in an isolated headless Chromium at 390×844 touch, 320 and 1280×800, in
+light and dark: folded, open, missing, invalid, saving, saved, loading,
+unavailable, load error with recovery, and save rejected or failed. No horizontal
+overflow at 320 or 390; focus rings unclipped; keyboard order is toggle, fields,
+Save, next section; the console was clean. Limits: a mocked `fetch` with synthetic
+figures, no live backend, no 3D stage, header or real sign-in, and
+`prefers-reduced-motion` could not be emulated (the section adds no motion of its
+own). Local runs are not qualification.
+
 ## Projects (P1-10)
 
 Keep the neutral foundation. The list uses one compact project panel per
