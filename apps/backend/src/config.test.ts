@@ -3,10 +3,31 @@ import { loadConfig } from './config.js';
 import { loadAuthConfig } from './auth/config.js';
 
 describe('backend configuration', () => {
+  it.each([
+    [undefined, false],
+    ['false', false],
+    ['TRUE', false],
+    [' true', false],
+    ['true', true],
+  ])('enables push only for the exact true flag (%j)', (JARVIS_PUSH_ENABLED, expected) => {
+    const env = JARVIS_PUSH_ENABLED === undefined
+      ? {}
+      : {
+        JARVIS_PUSH_ENABLED,
+        ...(JARVIS_PUSH_ENABLED === 'true' ? { STATIC_WEB_APP_ORIGIN: 'https://fixture.azurestaticapps.net' } : {}),
+      };
+    expect(loadConfig(env).pushEnabled).toBe(expected);
+  });
+  it('requires an HTTPS web origin when push is enabled', () => {
+    expect(() => loadConfig({ JARVIS_PUSH_ENABLED: 'true' }))
+      .toThrow('STATIC_WEB_APP_ORIGIN is required when JARVIS_PUSH_ENABLED is true');
+  });
+
   it('defaults to the infrastructure port and offline logs', () => {
     expect(loadConfig({})).toEqual({
       port: 3000, logLevel: 'info', codexToolModel: 'gpt-5.5',
       codexImageModel: 'gpt-5.5',
+      pushEnabled: false,
       auth: loadAuthConfig({}),
     });
   });
@@ -41,6 +62,7 @@ describe('backend configuration', () => {
       foundryRunnerAgentName: 'jarvis-runner-node-1x2',
       codexToolModel: 'gpt-5.5',
       codexImageModel: 'gpt-5.5',
+      pushEnabled: false,
     });
   });
   it('validates the configurable ChatGPT Codex tool model', () => {
@@ -170,6 +192,15 @@ describe('backend configuration', () => {
     ]) {
       expect(() => loadConfig({ JARVIS_MONTHLY_BUDGET_RESOURCE_ID: value }))
         .toThrow('JARVIS_MONTHLY_BUDGET_RESOURCE_ID');
+    }
+  });
+  it('keeps Daily off unless the server switch is exactly true', () => {
+    const baseline = loadConfig({});
+    expect(baseline).not.toHaveProperty('dailyEnabled');
+    expect(loadConfig({ JARVIS_DAILY_ENABLED: 'false' })).toEqual(baseline);
+    expect(loadConfig({ JARVIS_DAILY_ENABLED: 'true' })).toEqual({ ...baseline, dailyEnabled: true });
+    for (const JARVIS_DAILY_ENABLED of ['', 'TRUE', 'True', '1', '0', 'yes', 'on', ' true', 'true ', 'enabled']) {
+      expect(() => loadConfig({ JARVIS_DAILY_ENABLED })).toThrow(/^JARVIS_DAILY_ENABLED must be true or false$/);
     }
   });
   it.each(['', '0', '-1', '65536', '3000.5', ' 3000', 'junk'])('rejects invalid port %j', (PORT) => {

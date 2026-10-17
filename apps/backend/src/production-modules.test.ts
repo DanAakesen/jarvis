@@ -28,12 +28,18 @@ import { createAskDanToConfirmTool } from './teams/service.js';
 import { createProductionModules } from './production-modules.js';
 import { createToolRegistry } from './core/tool-registry.js';
 import { checkAgentContract } from './core/agent-contract.js';
+import { composeDaily } from './daily/composition.js';
 
 const limits = JSON.parse(readFileSync(
   new URL('../../../agents/jarvis/limits.json', import.meta.url), 'utf8',
 )) as { maxTools: number; maxToolDescriptionCharacters: number; maxCatalogueBytes: number };
 
-function modulesWithEveryFeature() {
+const dailyToolNames = [
+  'daily_query', 'daily_food', 'daily_food_review', 'daily_saved_food', 'daily_nutrition_targets', 'daily_nutrition_suggest',
+];
+
+// Daily is composed by default here so the size gates below always cover the largest catalogue the server can run.
+function modulesWithEveryFeature(options: { daily?: boolean } = {}) {
   const frameStore = new FrameStore();
   const teamsModule = {
     id: 'teams',
@@ -63,6 +69,11 @@ function modulesWithEveryFeature() {
     screenVision: createScreenVisionModule({} as never, frameStore),
     visionWatch: createVisionWatchModule({} as never),
     voiceRelay: createVoiceRelayModule({} as never),
+    daily: composeDaily({
+      enabled: options.daily !== false,
+      pool: {} as never,
+      ownerObjectId: '11111111-1111-4111-8111-111111111111',
+    }),
     teamsBot: teamsModule,
   });
 }
@@ -105,8 +116,19 @@ describe('production tool catalogue', () => {
       'core', 'conversation', 'factory', 'operations', 'task-recipes', 'vault', 'web-research',
       'html-research', 'google', 'github-webhook', 'pc-bridge', 'phone', 'phone-status',
       'browser-agent', 'image-generation', 'html-view', 'weather', 'folio', 'workspace-pins',
-      'screen-vision', 'vision-watch', 'voice', 'teams',
+      'screen-vision', 'vision-watch', 'voice', 'daily', 'teams',
     ]);
+  });
+
+  it('leaves the production module list and tool catalogue unchanged when Daily is off', () => {
+    const on = modulesWithEveryFeature();
+    const off = modulesWithEveryFeature({ daily: false });
+    expect(off.map(({ id }) => id)).toEqual(on.map(({ id }) => id).filter((id) => id !== 'daily'));
+    const offNames = createToolRegistry(off).list().map(({ name }) => name);
+    expect(offNames.filter((name) => name.startsWith('daily_'))).toEqual([]);
+    expect(createToolRegistry(on).list().map(({ name }) => name).filter((name) => !dailyToolNames.includes(name)))
+      .toEqual(offNames);
+    expect(on.find(({ id }) => id === 'daily')!.tools.map(({ name }) => name)).toEqual(dailyToolNames);
   });
 
   it('passes the smoke contract with the real all-features composed registry', async () => {

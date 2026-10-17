@@ -2,12 +2,13 @@
 
 ## Status and purpose
 
-17 October 2026 — proposal only, linked from [Ideas](../PLAN.md#ideas).
-The [plan summary](../PLAN.md#proactive-assistance--proposed-scope-17-october-2026)
-separates confirmed desired behavior from open design choices.
-Recording this design does not approve implementation, schedules, permissions,
-resources or delivery. The existing [outbound-notification exclusion](../PRODUCT.md#control-and-reach-7-october-2026-p9)
-and Daily notification-off boundary remain in force until separately changed.
+17 October 2026 — the broader proactive-assistance design remains a proposal.
+The first Web Push delivery-proof milestone was approved separately; P13-01
+implements its backend dark, without deployment activation. The
+[plan summary](../PLAN.md#proactive-assistance--proposed-scope-17-october-2026)
+separates that bounded proof from open design choices. This approval does not
+approve a scheduler, proactive sends, permissions, additional resources or the
+broader proposal. Daily notification-off remains in force.
 
 Jarvis is Dan's Microsoft-first personal platform and a learning/demo project
 for his Microsoft ATS role. The proposed next step is bounded assistance across
@@ -318,8 +319,9 @@ prove delivery on Dan's phone.
 [Notification Hubs browser push](https://learn.microsoft.com/en-us/azure/notification-hubs/browser-push)
 explicitly excludes iOS; do not use it for this PWA path. Native APNs and
 Notification Hubs can be evaluated separately if a native app is later approved.
-The existing Teams bot path is an optional alternative subject to tenant
-permissions and real delivery verification, not a dependency or silent fallback.
+The P13-01 backend and its separately built web client have not yet established
+real iPhone delivery. The feature remains dark until a separate enabling change
+and physical-device acceptance.
 
 ## Optional Microsoft services
 
@@ -335,8 +337,8 @@ compatibility with Jarvis's account. Sources were checked on 17 October 2026.
 
 ## Proposed milestones and open decisions
 
-1. **Tiny delivery proof, only after separate approval.** Use a nonsensitive
-   durable test item on Dan's actual installed iPhone PWA. With the app closed
+1. **Tiny delivery proof, approved 17 October 2026.** Use a nonsensitive durable
+   test item on the installed iPhone PWA. With the app closed
    and phone locked, observe a notification and verify that tapping it opens
    the correct authenticated conversation/item. Test Focus, disabled/revoked
    permission, session expiry, offline/expired delivery and duplicate attempts.
