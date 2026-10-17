@@ -1028,6 +1028,16 @@ share the bounded 180-second browser relay and 210-second hosted-agent read
 budgets; other tool deadlines remain unchanged. No production activation or
 full client/provider/device acceptance is implied.
 
+When an existing Frida adapter is explicitly supplied, owner-authenticated
+`daily_food_lookup` exposes only its public-reference component lookup.
+Keep generic food names, requested grams or explicit unknowns, preparation,
+DTU/version/DOI attribution, retrieved times, incomplete totals and provenance
+intact. Reference results are not verified consumed food or approval for a
+later mutation. No owned history, credentials or raw conversation is sent to a
+provider. Missing provider capability contributes no tool; failures stay
+unavailable rather than falling back to invented nutrition. This read neither
+logs intake nor enables Daily, and does not establish live-provider acceptance.
+
 P12-05 adds an inactive, explicitly invoked health processor over the existing SQL inbox: metrics/sleep/workouts/detail/minute HR, canonical physical units, Copenhagen dates, exact session/checksum replay and bounded retry/quarantine. Domain changes, ingestion lineage and processed-feed freshness commit together; phone heartbeat stays separate. Empty workout exports cannot erase history, missing values stay unknown, and native nutrition cannot feed back into canonical meals. Owner history/detail reads are bounded and unregistered. No scheduler, source import, live device changes or activation; protected/live parity remains gated.
 
 Heart-rate summaries and series must validate declared units consistently. Unsupported rate units quarantine without changing processed freshness; only established legacy summary fields imply BPM when their unit is absent. Missing samples and summaries remain unknown, not inferred.

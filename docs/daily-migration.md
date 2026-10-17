@@ -70,14 +70,20 @@ skipped, ready backend0000335 and active hosted-agent106. Routine smoke14/15ok
 retains the PC bridge warning; chat identity was ok without a causal-fix claim.
 The #724 opening retains remaining internal saved-food/plan/preference/lookup,
 conversational, actual client and private migration acceptance.
-The current local continuation groups those internal saved-food operations in
+Released inactive #875 groups those internal saved-food operations in
 an independently opt-in fifth factory. `daily_saved_food` reads owned matches
 and preferences, and native-reviews favourite/alias saves, server-snapshotted
 plans/soft deletion and canonical like/dislike/clear. Canonical writers,
 source/revision/fingerprint checks and real receipts stay shared; no intake or
 Health write follows. Browser voice and agent wrapper deadlines are explicitly
-aligned with the existing two-minute food approval. This source is not yet
-qualified/released and does not complete conversational or client acceptance.
+aligned with the existing two-minute food approval. Qualified14e and actual
+merge195bc89c share treec12eca94; normal Deploy39010283459 released ready
+backend0000336/active agent107 with14/15smokeok, only existing PC bridge down.
+This does not complete conversational or client acceptance.
+The next local read-only continuation binds the existing Frida adapter through
+an optional owner-bound data capability, preserving default compositions and
+external component validation. It returns public reference/unknown/partial
+evidence only, never intake authority; no live-provider call or proof follows.
 No production activation, private migration, provider/device action or native
 dependency change follows from this source work; #724 remains open.
 

@@ -4668,6 +4668,23 @@ cancellation remains composed. Their hosted-agent read is 210 seconds. The new
 tool denies phone before generic approval and uses the same 120-second browser
 card profile. No activation, provider/device or private-data acceptance follows.
 
+Optional `DailyData.foodLookup` composes `daily_food_lookup` in the same owner
+dispatcher without another module flag or positional module argument.
+`createDailyData` takes an optional existing Frida adapter and binds it behind
+the configured data-owner check; construction makes no provider or SQL request.
+Without the capability, existing read-only and default-off compositions are
+unchanged. Shared component schemas preserve the external MCP contract and
+non-coercing nullable grams/preparation through HTTP validation.
+The tool forwards only bounded generic components to the existing adapter,
+composes a20second abort signal within the ordinary30second voice/default agent
+budgets, and applies the shared response-byte limit without truncation.
+Return the canonical public DTO unchanged, including source attribution,
+cached retrieval times, partial/unknown values and separate matched subtotals;
+`intakeLogged:false` is not write authority. No history, context snapshot, caller
+URL or credential enters the provider contract. Sensitive audit and deny-before-
+approval phone policy remain. No new provider implementation, persistence,
+resource or production composition is introduced.
+
 ### Inactive nutrition MCP adapter (17 October 2026)
 
 An optional third `createDailyModules(true, data, connector)` argument installs

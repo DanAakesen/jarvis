@@ -1,8 +1,30 @@
 # Project plan
 
+## Internal Frida reference lookup (17 October 2026; P12-09 / #724)
+
+The next local batch binds the existing pinned Frida adapter to owner-authorised
+`daily_food_lookup`, only when a provider is explicitly supplied to Daily data.
+Existing module arguments and production/read-only compositions without that
+capability remain unchanged. Shared component validation preserves null amounts;
+public reference results retain attribution, incomplete totals and retrieval
+times without logging intake or claiming acceptance. The adapter/read operation
+is bounded to20seconds within unchanged ordinary agent/voice budgets.
+Pure schema checks pass9 and changed TypeScript lint passes. Real HTTP/tool/data
+owner/composition/relay and existing external-protocol cases await pinned CI;
+no live provider, private data, new account or activation action is included.
+Recommendations still need authoritative remaining-budget data, not model guesses.
+
 ## Internal Daily saved-food integration (17 October 2026; P12-09 / #724)
 
-The current local batch adds sensitive `daily_saved_food`: owned lookup and
+Delivered in #875 / `195bc89c`, matching qualified `14e94a34` tree `c12eca94`.
+First normal CI passed all ten jobs (3729backend/230SQL/732agentPython), four
+actual CodeQL analyses and automatic exact-head review without findings. Normal
+Deploy39010283459 selected backend+agent: ready/healthy backend0000336,
+active Foundry107, routine health200 and14/15smokeok; only the existing PC bridge
+warning remains. Release receipt6230819873 and the #724 opening were read back.
+No qualification rerun, waiver or extra live canary was needed.
+
+This inactive batch adds sensitive `daily_saved_food`: owned lookup and
 preference reads plus browser-reviewed favourite/alias, plan save/soft-delete
 and canonical preference writes. Reuse the delivered store, snapshots, revision
 locks, native authority and commit refresh; direct exact/favourite logging stays
@@ -14,9 +36,8 @@ Full entrypoint tracing found the browser voice relay's separate 30-second
 cap. Both reviewed food tools now receive 180 seconds there, with unchanged
 session cancellation and other tools' budgets, alongside their 210-second agent
 read limit. Real relay controls cover both exceptions and existing outcomes.
-The new pure shared-schema selection passes 10 cases; actual tool/HTTP/SQL,
-compilation and exact-head review/release remain to be qualified in normal CI.
-No next source candidate has been published yet.
+The pure shared-schema selection passed10 cases locally; actual tool/HTTP/SQL,
+compilation and exact-head review/release were subsequently qualified above.
 Daily stays off, original Daily canonical, and all private/client/device and
 export/reconciliation/delta/rollback/cutover gates remain.
 
