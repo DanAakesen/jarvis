@@ -477,9 +477,9 @@ export function ProjectsPage({ backendUrl, getAccessToken, projectDefaults }: Pr
               </ul>
             )}
           </section>
-            </>
-          )}
-          {projectDefaults}
+        </>
+      )}
+      {projectDefaults}
       {projectDialogOpen && backendUrl && (
         <CreateProjectDialog
           backendUrl={backendUrl}
