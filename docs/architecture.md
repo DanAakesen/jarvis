@@ -5001,9 +5001,53 @@ refuses.
 This reverses the earlier no-maintenance-maths rule for one formula only (see
 the decision log): allowance = resting burn + active energy so far today -
 deficit. It adds no BMR/TDEE estimate from weight, height or age and no
-coaching. The budget adapter, the Settings section and the default-off
-composition are separate slices. The values are personal health data in a public
-repository: none appears in code, fixtures, documents, logs or audit.
+coaching. The suggestion adapter below is the second slice; the Settings section
+and the default-off composition are separate slices. The values are personal
+health data in a public repository: none appears in code, fixtures, documents,
+logs or audit.
+
+### Personalised suggestion adapter (17 October 2026)
+
+A seventh optional `createDailyModules` argument, `nutritionSuggestions`
+(`{nutrition, health, now?}`), adds the read-only `daily_nutrition_suggest` tool.
+It needs shared Daily data and the sixth `nutritionTargets` accessor (otherwise
+construction throws) and composes only when Daily is on, so Daily off and every
+existing composition are unchanged. No production caller exists yet. It adds no
+route, migration, write, provider call, job or timer.
+
+One call fixes a single trusted clock reading (the Copenhagen date and time) and
+then reads, in order: the owner's stored targets; today's non-deleted meals from
+the existing nutrition history (at most three pages of 100); today's
+`active_energy` Health metric through the existing `DailyHealthReadModel`
+(at most three pages of 250, stopping once the row is found); and the saved
+favourites (at most three pages of 100). Allowance, energy left and protein left
+use the formula in the decision log. Running out of pages is reported as
+incomplete, never as zero.
+
+The report is null-aware. Each figure carries its inputs and the reason codes that
+make it unknown: an unset target, no active-energy row for today, an unread page,
+a failed health read, a reading that is not a plain kcal number, or a meal whose
+energy is unreadable (which blocks energy left). A meal without a protein value
+does not block protein left: the figure becomes an upper bound and is marked
+`partial`, with the number of such meals. Burn reports its source, unit, sample
+count, the verbatim source range and the stored-at time and age taken from
+`updated_at`; `start_at`/`end_at` are not a last-sample time. Only the exact
+`active_energy` metric is read; resting, basal and total energy never are, so
+resting energy is not counted twice. That name follows the stored metric name and
+is not verified against a live export. Only meals logged in Jarvis count: food
+eaten but never logged is invisible to it, which the report states by naming its
+source (`jarvis-meal-log`).
+
+Candidates are the owner's saved favourites only, so nothing invents a meal or a
+quantity. The existing `suggestions` call applies the unchanged `suggest`
+calculation (energy filter, protein ordering) and the persisted dislikes; an
+unknown energy left applies no energy filter, and the report says which filters
+ran. At most ten matches are returned (default five) with the total match count.
+The tool is sensitive (audit records `{redacted:true}`) and phone-denied, accepts
+only an optional `limit`, resolves the owner before anything else, and stops after
+20 seconds inside the unchanged 30-second agent and voice budgets. Being
+read-only, it joins no approval or relay-budget list, and its model-facing
+description carries no figures.
 
 ### Inactive nutrition MCP adapter (17 October 2026)
 

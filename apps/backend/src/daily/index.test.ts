@@ -9,6 +9,8 @@ import { resolveDailyOwner } from './owner.js';
 import { createDailyChanges } from './revisions.js';
 import type { DailyData, DailyFoodLookup } from './query.js';
 import type { InternalSavedNutrition } from './tools/saved-food.js';
+import { suggest, type BudgetContext, type Suggestion } from './nutrition/model.js';
+import type { NutritionSuggestionSources } from './nutrition/suggestion-adapter.js';
 import { dailyCapabilitiesAccept, dailyQuerySources, dailyQuerySourcesV1 } from '@jarvis/contracts';
 import type { ToolCallRecord } from '../core/tool-calls.js';
 
@@ -188,6 +190,76 @@ describe('Daily integration contract', () => {
     }
     expect((await off.inject({ method: 'PATCH', url: '/daily/nutrition-targets', headers: headers(), payload: { restingKcal: 1750 } })).statusCode).toBe(404);
     expect(targets).not.toHaveBeenCalled();
+  });
+  it('adds the read-only suggestion tool only with the targets accessor and its own sources, behind the same Daily gate', async () => {
+    const data: DailyData = { query: { query: vi.fn() }, changes: createDailyChanges() };
+    // Synthetic placeholders. They are not anyone's real figures.
+    const read = vi.fn(async () => ({ targets: { restingKcal: 1750, deficitKcal: 350, proteinGrams: 110 }, updatedAt: '2026-10-10T08:00:00.000Z' }));
+    const targets = vi.fn(() => ({ read, write: vi.fn() }));
+    const history = vi.fn(async () => ({ rows: [], next: null }));
+    const favorites = vi.fn(async () => ({ rows: [{ id: 'a', favorite_name: 'Synthetic favourite', energy_kcal: 300, protein_grams: 30,
+      carbohydrates_grams: null, fat_grams: null, fiber_grams: null }], nextId: null }));
+    const matches = vi.fn(async (candidates: readonly Suggestion[], context: BudgetContext) => suggest(candidates, new Set(), context));
+    const healthHistory = vi.fn(async () => ({ items: [{ metric_name: 'active_energy', metric_date: '2026-10-17', unit: 'kcal', value: 300,
+      sample_count: 8, start_at: null, end_at: null, updated_at: '2026-10-17T10:00:00.000Z' }], truncated: false, next: null }));
+    const nutrition = vi.fn(() => ({ history, favorites, suggestions: matches }));
+    const health = vi.fn(() => ({ history: healthHistory }));
+    const sources = { nutrition, health, now: () => '2026-10-17T10:30:00.000Z' } as unknown as NutritionSuggestionSources;
+    expect(createDailyModules(false, data, undefined, undefined, undefined, targets, sources)).toEqual([]);
+    expect(() => createDailyModules(true, undefined, undefined, undefined, undefined, targets, sources)).toThrow('shared Daily data');
+    expect(() => createDailyModules(true, data, undefined, undefined, undefined, undefined, sources)).toThrow('require nutrition targets');
+    expect(createDailyModules(true, data, undefined, undefined, undefined, targets)[0]!.tools.map(tool => tool.name)).toEqual(['daily_query', 'daily_nutrition_targets']);
+    const calls: ToolCallRecord[] = [];
+    const app = buildApp(config, undefined, { auth, modules: [coreModule, ...createDailyModules(true, data, undefined, undefined, undefined, targets, sources)],
+      toolCallStore: { record: async call => { calls.push(call); } } });
+    apps.push(app);
+    expect((await app.inject({ url: '/daily/capabilities', headers: headers() })).json()).toMatchObject({
+      stage: 'internal-nutrition-rehearsal', tools: ['daily_query', 'daily_nutrition_targets', 'daily_nutrition_suggest'], pages: [],
+    });
+    for (const access of [targets, nutrition, health]) expect(access).not.toHaveBeenCalled();
+    for (const kind of ['owner', 'agent']) {
+      const response = await app.inject({ method: 'POST', url: '/tools/daily_nutrition_suggest',
+        headers: { ...headers(kind), 'x-jarvis-message-id': '42' }, payload: { limit: 3 } });
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toMatchObject({ outcome: 'ok', result: {
+        status: 'ready', localDate: '2026-10-17', kcal: { state: 'ready', remainingKcal: 1700 },
+        suggestions: [{ favoriteId: 'a', name: 'Synthetic favourite' }],
+      } });
+    }
+    expect(calls).toEqual(expect.arrayContaining([expect.objectContaining({
+      tool: 'daily_nutrition_suggest', outcome: 'ok', arguments: { redacted: true }, result: { redacted: true },
+    })]));
+    expect(JSON.stringify(calls)).not.toContain('Synthetic favourite');
+    // The model cannot choose another owner, date or budget.
+    const owned = await app.inject({ method: 'POST', url: '/tools/daily_nutrition_suggest',
+      headers: { ...headers('agent'), 'x-jarvis-message-id': '42' }, payload: { owner: other } });
+    expect(owned.json()).toMatchObject({ outcome: 'refused' });
+    const deniedOwner = await app.inject({ method: 'POST', url: '/tools/daily_nutrition_suggest',
+      headers: { ...headers('other'), 'x-jarvis-message-id': '42' }, payload: {} });
+    expect(deniedOwner.json()).toMatchObject({ outcome: 'error', result: { error: 'Tool execution failed' } });
+    for (const kind of ['runner', 'connector']) {
+      expect((await app.inject({ method: 'POST', url: '/tools/daily_nutrition_suggest',
+        headers: { ...headers(kind), 'x-jarvis-message-id': '42' }, payload: {} })).statusCode).toBe(403);
+    }
+    expect(read).toHaveBeenCalledTimes(2);
+    expect(healthHistory).toHaveBeenCalledTimes(2);
+    expect(matches).toHaveBeenCalledTimes(2);
+  });
+  it('leaves Jarvis unchanged when Daily is off, even if the suggestion sources are supplied', async () => {
+    const data: DailyData = { query: { query: vi.fn() }, changes: createDailyChanges() };
+    const targets = vi.fn();
+    const nutrition = vi.fn();
+    const health = vi.fn();
+    const sources = { nutrition, health } as unknown as NutritionSuggestionSources;
+    const baseline = buildApp(config, undefined, { auth, modules: [coreModule] });
+    const off = buildApp(config, undefined, { auth, modules: [coreModule, ...createDailyModules(false, data, undefined, undefined, undefined, targets, sources)] });
+    apps.push(baseline, off);
+    expect((await off.inject('/health')).json()).toEqual((await baseline.inject('/health')).json());
+    expect((await off.inject({ url: '/tools', headers: headers() })).json()).toEqual((await baseline.inject({ url: '/tools', headers: headers() })).json());
+    expect((await off.inject({ url: '/daily/capabilities', headers: headers() })).statusCode).toBe(404);
+    expect((await off.inject({ method: 'POST', url: '/tools/daily_nutrition_suggest',
+      headers: { ...headers(), 'x-jarvis-message-id': '42' }, payload: {} })).statusCode).toBe(404);
+    for (const access of [targets, nutrition, health]) expect(access).not.toHaveBeenCalled();
   });
   it('exposes public reference lookup only with an explicit provider capability and never calls it during composition', async () => {
     const foodLookup = vi.fn<DailyFoodLookup>();
