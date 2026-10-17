@@ -795,6 +795,28 @@ and returns HTTP 200. The disconnected PC bridge remains a nonblocking warning;
 for native-phone acceptance. A deployed controlled-browser correction does not
 establish the cause or result on Dan's physical iPhone.
 
+## Account-owned background-work dismissal (17 October 2026; P11-12 / #905)
+
+The explicit cross-device requirement supersedes the P11-05 / #859 decision
+below that dismissal is a scoped device preference. Store dismissal separately
+from jobs, keyed by the authenticated owner and UUID. Only the configured owner
+can access these jobs. Dismiss-one and Dismiss all finished never change a job,
+its events, results or lifecycle; running work is not dismissible.
+Keep existing list fields compatible with deployed clients. Import at most
+1,000 validated legacy UUIDs, retain local hides on failure, and remove the
+browser copy only on confirmation.
+
+The popover explains kind, start time and recorded failure reason, and groups
+equivalent finished entries for one dismissal. Derive the neutral wording
+“Interrupted by a restart” from the existing stored restart reason without
+rewriting historical failed rows or changing Status/Usage/audit calculations.
+Do not infer a specific trigger or restart from a generic failure.
+
+Source inspection confirms that embedding runs can start on model changes and
+at startup with missing vectors, and that reconciliation records
+`interrupted by restart`. No stored production rows are available in this
+checkout; the reported cluster's timing and cause remain unverified.
+
 ## Filter header background work instead of retaining hidden rows (16 October 2026)
 
 Dan reported that Recent jobs kept dismissed indexing/research entries visible
