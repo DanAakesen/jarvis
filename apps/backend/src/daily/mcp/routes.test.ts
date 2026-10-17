@@ -232,12 +232,14 @@ describe('inactive hosted nutrition MCP adapter', () => {
     expect(f.nutrition.intake).not.toHaveBeenCalled();
   });
 
-  it('refuses unsupported native review and unchecked acceptance without executing a write', async () => {
+  it('refuses unsupported native review, unchecked acceptance and extra confirmation fields without executing a write', async () => {
     const f = await fixture();
     const unsupported = await f.connect('write', 'accept', false);
     await expect(unsupported.client.callTool({ name: 'log_food', arguments: food })).rejects.toThrow();
     const { client } = await f.connect();
     client.setRequestHandler('elicitation/create', async () => ({ action: 'accept', content: { confirm: false } }));
+    expect((await client.callTool({ name: 'log_food', arguments: food })).isError).toBe(true);
+    client.setRequestHandler('elicitation/create', async () => ({ action: 'accept', content: { confirm: true, userConfirmed: true } }));
     expect((await client.callTool({ name: 'log_food', arguments: food })).isError).toBe(true);
     expect(f.nutrition.log).not.toHaveBeenCalled();
   });

@@ -73,7 +73,8 @@ const lookupSchema = z.object({
     preparationMethod: exactText(120).nullable(),
   }).strict()).min(1).max(25),
 }).strict();
-const confirmSchema = z.object({ confirm: z.boolean() }).strict();
+// MCP form schemas exclude additionalProperties; validate returned content strictly.
+const confirmSchema = z.object({ confirm: z.boolean() });
 const pendingSchema = z.object({
   owner: z.string(), clientId: z.string(), tool: z.string(), digest: z.string(), requestTime: z.string(),
 }).strict();
@@ -209,7 +210,7 @@ export function dailyMcpRoutes(query: Pick<DailyQueryService, 'query'>, options:
             if (pending.owner !== owner || pending.clientId !== request.dailyConnectorPrincipal?.clientId ||
                 pending.tool !== tool || pending.digest !== digest) throw new ToolRefusal('The proposal changed. Start a new review; nothing was authorised.');
             const answer = inputResponse(responses, 'confirm');
-            if (answer.kind !== 'elicit' || answer.action !== 'accept' || acceptedContent(responses, 'confirm', confirmSchema)?.confirm !== true) {
+            if (answer.kind !== 'elicit' || answer.action !== 'accept' || acceptedContent(responses, 'confirm', confirmSchema.strict())?.confirm !== true) {
               throw new ToolRefusal('The proposal was not accepted. Nothing was changed by this call.');
             }
           };

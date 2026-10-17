@@ -21,6 +21,8 @@ describe('committed SQL manifest', () => {
     const down = await readDownMigration('0049_daily_connector_audit.sql');
     expect(down.sql).toContain('TABLOCKX,HOLDLOCK');
     expect(down.sql).toContain('audit evidence must be retained');
+    expect(down.sql).toContain('DROP INDEX IX_tool_calls_message_id ON dbo.tool_calls');
+    expect(down.sql).toContain('CREATE INDEX IX_tool_calls_message_id ON dbo.tool_calls (message_id)');
   });
   it('adds durable Factory generations without backfilling completion proof and protects rollback', async () => {
     const migration = (await readMigrations()).find(({ name }) => name === '0048_factory_execution_generation.sql');

@@ -32,11 +32,17 @@ as the existing required conversation-message FK. Extend the existing
 tool-call store/table with a separate constrained UUID connector correlation
 (0049), preserving normal audit identity and refusing rollback over retained
 connector rows. Do not invent a conversation or introduce a second audit
-store. Register fixed failure events; raw food/provider diagnostics stay out.
+store. Restore the existing message index around the down script's nullability
+change; SQL Server will not tighten nullability under that index. Register fixed
+failure events; raw food/provider diagnostics stay out.
 Also remove the route's misleading browser-origin allowance: this adapter is
 server-to-server and rejects every Origin rather than broadening shared root
 CORS. Synthetic clients must explicitly negotiate modern protocol; the SDK's
 default legacy connection is deliberately rejected.
+The native form wire grammar cannot express `additionalProperties`; use its
+supported object schema for the question, then strictly validate the returned
+content before accepting `confirm: true`. Do not weaken approval validation or
+fall back to a model-supplied confirmation.
 
 ## Scope Web checks without reducing CI coverage (16 October 2026; P11-08)
 

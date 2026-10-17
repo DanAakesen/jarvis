@@ -1893,6 +1893,8 @@ describe('committed domain schema (groups 1-8)', () => {
   it('persists UUID-correlated connector audit without messages and refuses to erase that evidence on rollback', () => withRollbackDatabase(async (rollbackPool, committed) => {
     const down = await readDownMigration('0049_daily_connector_audit.sql');
     expect(await revertMigration(rollbackPool, committed, down)).toBe(down.name);
+    expect((await rollbackPool.request().query<{ count: number }>(`SELECT COUNT(*) AS count FROM sys.indexes
+      WHERE object_id = OBJECT_ID(N'dbo.tool_calls') AND name = N'IX_tool_calls_message_id';`)).recordset[0]?.count).toBe(1);
     expect(await applyMigrations(rollbackPool, committed)).toEqual([down.name]);
     const record = createToolCallStore(rollbackPool).recordDailyMcp;
     if (!record) throw new Error('Connector audit method missing');
