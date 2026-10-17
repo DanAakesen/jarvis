@@ -7,7 +7,7 @@ without treating missing account/device acceptance as a reason to rebuild or
 park eligible inactive implementation. Use maintained split MCP v2 packages
 inside existing Fastify composition and reuse the existing query service,
 typed nutrition handlers, SQL idempotency/revisions and commit refresh hub.
-No additional persistence, host, model or consent/credential creation is needed.
+No second persistence system, host, model or consent/credential creation is needed.
 
 One separately configured delegated Entra client receives only nutrition
 scopes and a distinct principal restricted by the root hook to the exact MCP
@@ -26,6 +26,17 @@ follows from this source decision. Initial dependency restore failures remain
 failed evidence: one package-download timeout, then stale cached client
 metadata reporting ETARGET; fresh registry metadata reports client 2.3.1.
 Neither result is a compiler/test failure or a successful installation.
+
+Independent review identified that a UUID HTTP request ID cannot be inserted
+as the existing required conversation-message FK. Extend the existing
+tool-call store/table with a separate constrained UUID connector correlation
+(0049), preserving normal audit identity and refusing rollback over retained
+connector rows. Do not invent a conversation or introduce a second audit
+store. Register fixed failure events; raw food/provider diagnostics stay out.
+Also remove the route's misleading browser-origin allowance: this adapter is
+server-to-server and rejects every Origin rather than broadening shared root
+CORS. Synthetic clients must explicitly negotiate modern protocol; the SDK's
+default legacy connection is deliberately rejected.
 
 ## Scope Web checks without reducing CI coverage (16 October 2026; P11-08)
 

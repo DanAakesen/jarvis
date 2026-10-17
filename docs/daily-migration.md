@@ -146,6 +146,9 @@ core parity/backup/device/cutover gates.
 [nutrition-only hosted MCP adapter](../apps/backend/src/daily/mcp/README.md).
 It reuses delivered reads and existing typed writers, a separate delegated
 Entra principal, exact route isolation and native signed proposal review.
+Existing audit storage gets constrained UUID correlation rather than fake
+conversation IDs; no new audit table. Browser Origin requests are unsupported
+and rejected, without broadening shared CORS.
 Production composition/configuration and the write gate remain off. Source
 delivery does not establish a linked, accepted ChatGPT account.
 Modern-protocol/native-review compatibility and complete retained tool parity

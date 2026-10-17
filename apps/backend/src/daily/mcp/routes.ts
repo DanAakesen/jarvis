@@ -9,6 +9,7 @@ import { z } from 'zod';
 import { isDailyQuery } from '@jarvis/contracts';
 import { AuthenticationDenied, dailyNutritionScopes } from '../../auth/verify.js';
 import type { AuthConfig } from '../../auth/config.js';
+import type { DailyMcpAuditRecord } from '../../core/tool-calls.js';
 import { ToolFailure, ToolRefusal } from '../../core/tool-registry.js';
 import type { createNutritionHandlers, NutritionExecution } from '../nutrition/handlers.js';
 import { canonicalJson, prepareMeal } from '../nutrition/model.js';
@@ -104,16 +105,16 @@ function authorize(request: FastifyRequest, write = false): string {
 function execution(request: FastifyRequest, signal: AbortSignal, requestTime: string, intent: NutritionExecution['intent']): NutritionExecution {
   return { request, signal, requestTime, intent, explicit: true, proposalRequired: true, proposalAccepted: true };
 }
-async function safe(request: FastifyRequest, operation: string, challenge: string, action: () => Promise<CallToolResult | InputRequiredResult>) {
+async function safe(request: FastifyRequest, operation: DailyMcpAuditRecord['tool'], challenge: string, action: () => Promise<CallToolResult | InputRequiredResult>) {
   const store = request.server.toolCallStore;
   const mutation = ['log_food', 'correct_food', 'delete_food'].includes(operation);
-  if (!store) return { isError: true, content: [{ type: 'text' as const, text: 'Nutrition audit storage is unavailable. No operation was executed.' }] };
+  if (!store?.recordDailyMcp) return { isError: true, content: [{ type: 'text' as const, text: 'Nutrition audit storage is unavailable. No operation was executed.' }] };
   let result: CallToolResult | InputRequiredResult;
   let outcome: 'ok' | 'refused' | 'error' = 'ok';
   try { result = await action(); }
   catch (error) {
     outcome = error instanceof ToolRefusal || error instanceof AuthenticationDenied || error instanceof TypeError ? 'refused' : 'error';
-    request.log.warn({ operation }, 'Daily MCP operation refused or failed');
+    request.log.warn('daily.mcp_operation_failed');
     const message = error instanceof ToolRefusal || error instanceof ToolFailure ? error.message
       : error instanceof AuthenticationDenied ? 'This nutrition operation is not authorised.'
         : error instanceof TypeError ? 'Invalid nutrition input. No successful write is claimed.'
@@ -125,13 +126,13 @@ async function safe(request: FastifyRequest, operation: string, challenge: strin
     };
   }
   try {
-    await store.record({
-      messageId: request.id, tool: `daily_mcp_${operation}`, arguments: { redacted: true },
-      result: { redacted: true, phase: 'resultType' in result && result.resultType === 'input_required' ? 'awaiting_confirmation' : outcome },
+    await store.recordDailyMcp({
+      requestId: request.id, tool: operation,
+      phase: 'resultType' in result && result.resultType === 'input_required' ? 'awaiting_confirmation' : outcome,
       outcome,
     });
   } catch {
-    request.log.error({ operation }, 'Daily MCP audit failed');
+    request.log.error('daily.mcp_audit_failed');
     return { isError: true, content: [{ type: 'text' as const, text: mutation
       ? 'Nutrition audit failed. A write may have committed; retry the same operation and keys, not a new intake.'
       : 'Nutrition audit failed. The read result is withheld.' }] };
@@ -176,7 +177,7 @@ export function dailyMcpRoutes(query: Pick<DailyQueryService, 'query'>, options:
           throw new AuthenticationDenied(403);
         }
         if (request.headers.host?.toLowerCase() !== resource.host.toLowerCase() ||
-            (request.headers.origin !== undefined && request.headers.origin !== resource.origin && request.headers.origin !== 'https://chatgpt.com') ||
+            request.headers.origin !== undefined ||
             Object.keys(request.query as Record<string, unknown>).length) {
           return reply.code(400).send({ error: 'Invalid nutrition connector request' });
         }
@@ -237,12 +238,15 @@ export function dailyMcpRoutes(query: Pick<DailyQueryService, 'query'>, options:
               const owner = authorize(request, true);
               const state = pendingSchema.safeParse(ctx.mcpReq.requestState());
               const requestTime = state.success ? state.data.requestTime : now();
-              const { operationId, ...definition } = input;
+              const { operationId, occurredAt, mealDate, ...definition } = input;
               const idempotencyKey = `mcp:${clientId}:${operationId}`;
               const saved = await options.nutrition.intake(idempotencyKey, context(requestTime, 'lookup', ctx.mcpReq.signal));
+              if (saved && typeof saved.occurred_at !== 'string') throw new ToolFailure('Stored occurrence is unavailable. Retry the same operation; do not create another intake.');
+              const occurrence = occurredAt ?? saved?.occurred_at;
               const payload = prepareMeal({
                 ...definition,
-                ...(definition.occurredAt === undefined && typeof saved?.occurred_at === 'string' ? { occurredAt: saved.occurred_at } : {}),
+                ...(typeof occurrence === 'string' ? { occurredAt: occurrence } : {}),
+                ...(mealDate !== undefined ? { mealDate } : {}),
                 id: createHash('sha256').update(`${owner}:${idempotencyKey}`).digest('hex'), idempotencyKey,
                 provenance: { source: 'chatgpt-supplied', independentlyVerified: false },
               }, requestTime);
@@ -259,11 +263,23 @@ export function dailyMcpRoutes(query: Pick<DailyQueryService, 'query'>, options:
               const pending = await approve('correct_food', input, ctx.mcpReq.requestState(), ctx.mcpReq.inputResponses);
               if (pending) return pending;
               const parsed = pendingSchema.parse(ctx.mcpReq.requestState());
+              const changes = input.changes;
               return receipt(await options.nutrition.correct({
-                ...input, expectedRevision: BigInt(input.expectedRevision),
+                idempotencyKey: input.idempotencyKey, expectedRevision: BigInt(input.expectedRevision),
                 changes: {
-                  ...input.changes,
-                  ...(Object.keys(input.changes).some(key => key === 'components' || key in nutrients)
+                  ...(changes.mealName !== undefined ? { mealName: changes.mealName } : {}),
+                  ...(changes.mealType !== undefined ? { mealType: changes.mealType } : {}),
+                  ...(changes.components !== undefined ? { components: changes.components } : {}),
+                  ...(changes.occurredAt !== undefined ? { occurredAt: changes.occurredAt } : {}),
+                  ...(changes.mealDate !== undefined ? { mealDate: changes.mealDate } : {}),
+                  ...(changes.captureMethod !== undefined ? { captureMethod: changes.captureMethod } : {}),
+                  ...(changes.confidence !== undefined ? { confidence: changes.confidence } : {}),
+                  ...(changes.energyKcal !== undefined ? { energyKcal: changes.energyKcal } : {}),
+                  ...(changes.proteinGrams !== undefined ? { proteinGrams: changes.proteinGrams } : {}),
+                  ...(changes.carbohydratesGrams !== undefined ? { carbohydratesGrams: changes.carbohydratesGrams } : {}),
+                  ...(changes.fatGrams !== undefined ? { fatGrams: changes.fatGrams } : {}),
+                  ...(changes.fiberGrams !== undefined ? { fiberGrams: changes.fiberGrams } : {}),
+                  ...(Object.keys(changes).some(key => key === 'components' || key in nutrients)
                     ? { provenance: { source: 'chatgpt-supplied', independentlyVerified: false } } : {}),
                 },
               }, context(parsed.requestTime, 'correct-intake', ctx.mcpReq.signal)), 'correct');
@@ -285,7 +301,8 @@ export function dailyMcpRoutes(query: Pick<DailyQueryService, 'query'>, options:
         }, { legacy: 'reject' });
         try {
           reply.hijack();
-          await toNodeHandler(handler)(request.raw, reply.raw, request.body);
+          const incoming = Object.assign(request.raw, { method: request.method, url: request.url });
+          await toNodeHandler(handler)(incoming, reply.raw, request.body);
         } finally {
           request.raw.off('aborted', abort);
           reply.raw.off('close', disconnect);

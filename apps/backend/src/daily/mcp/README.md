@@ -25,8 +25,10 @@ It is not a new login or permission to create an Entra client/scope/grant.
 
 `/.well-known/oauth-protected-resource/daily/mcp` alone is anonymous.
 Metadata/challenges use trusted configuration, not forwarded/caller Host.
-The authenticated route validates Host/Origin, rejects query selectors and
-limits the body to 96 KiB. The current transport accepts modern MCP
+The authenticated route validates Host, rejects all browser Origin requests
+and query selectors, and limits the body to 96 KiB. This is a server-to-server
+connector; the application's existing browser origin/CORS policy is unchanged.
+The current transport accepts modern MCP
 2026-07-28 and rejects legacy versions.
 
 ## Tools and recovery
@@ -57,8 +59,13 @@ owned idempotency keys and decimal-string expected revisions; deletion stays
 soft and old history has no seven-day edit cutoff.
 
 Committed receipts expose only whitelisted fields and stringify revisions.
-Audit records contain redacted operation/outcome, not arguments, meal data
-or tokens. Missing audit storage refuses execution. An audit/response failure
+`createToolCallStore.recordDailyMcp` writes only redacted operation/outcome
+and UUID request correlation into the existing audit table, not fabricated
+conversation message IDs. Migration 0049 preserves ordinary message FKs and
+permits message-less rows only for the allowlisted connector tools with UUID
+correlation. Its rollback refuses to erase retained connector audit evidence.
+No second audit table or conversation is created. Missing connector-capable
+audit storage refuses execution. An audit/response failure
 after a write may mean it committed: retry the same operation/key/revision,
 not a new intake. Existing SQL transactions and post-commit invalidation
 remain authoritative; native review does not assert native Health effects.

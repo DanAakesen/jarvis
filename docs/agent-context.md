@@ -261,6 +261,12 @@ OAuth scope/client/grant, credential provisioning, provider/private operation
 or production Daily enablement is implied. Preserve the other owner's released
 5173 preview and Dan's existing runtime/remote settings.
 
+Connector audit requires the existing SQL store's `recordDailyMcp` method and
+0049's UUID correlation; a generic message-backed sink is insufficient.
+Normal message FKs remain required and rollback refuses retained connector
+audit. Server-to-server only: reject browser Origin, retain shared root CORS,
+and explicitly negotiate modern protocol in synthetic SDK clients.
+
 Historical read continuation: Dan ordered deployment first, then Daily. After #866's
 successful deployment, JarvisPM claimed partial #724 directly in the existing
 local UI session; the historical Daily child is not reassigned. Reuse the

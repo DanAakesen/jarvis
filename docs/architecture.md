@@ -4593,8 +4593,9 @@ exact opt-in MCP route and methods. Foreign owners, mixed broad scopes,
 application identities and other clients' nutrition scopes fail closed.
 Anonymous discovery is limited to the exact metadata route and returns trusted
 configuration; challenge URLs never derive from caller Host. MCP requests
-also enforce the configured Host/allowed Origin, no query selectors and a
-96 KiB body limit.
+also enforce the configured Host, reject every browser Origin and query
+selector, and retain a 96 KiB body limit. This server-to-server boundary
+does not widen the application's existing browser/CORS permissions.
 
 The adapter reuses `DailyQueryService` for bounded nutrition-only reads and
 the existing Frida lookup/typed handlers for log/correct/soft-delete. Server
@@ -4606,8 +4607,13 @@ request state containing only owner/client/purpose/payload digest/trusted time.
 Stable per-client operation keys and stored occurrence retain retry identity
 across confirmation rounds and Copenhagen midnight. Whitelisted committed
 receipts stringify SQL revisions and omit owner/device/internal columns.
-Audit storage records only redacted operation/outcome; its absence refuses
-execution and post-write failure explicitly reports an uncertain commit.
+The existing SQL tool-call store adds `recordDailyMcp` for redacted
+operation/outcome with UUID correlation, not a `dbo.messages` FK. Additive
+0049 keeps normal message-backed audit unchanged and permits a null message
+only for allowlisted connector tools with a non-null connector UUID. Its down
+script refuses retained connector evidence; there is no second audit table or
+fabricated conversation. Missing connector audit refuses execution and
+post-write failure explicitly reports an uncertain commit.
 
 This candidate accepts only modern MCP 2026-07-28; legacy requests are rejected.
 Native review on actual ChatGPT is unverified, not an implemented fallback UI.

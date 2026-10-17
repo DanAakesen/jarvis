@@ -13,6 +13,15 @@ async function directory() {
 afterEach(async () => { await Promise.all(directories.splice(0).map((path) => rm(path, { recursive: true }))); });
 
 describe('committed SQL manifest', () => {
+  it('keeps ordinary audit message identity and adds constrained connector UUID correlation without erasing rollback evidence', async () => {
+    const migration = (await readMigrations()).find(({ name }) => name === '0049_daily_connector_audit.sql');
+    expect(migration?.sql).toContain('connector_request_id uniqueidentifier NULL');
+    expect(migration?.sql).toContain('message_id IS NOT NULL AND connector_request_id IS NULL');
+    expect(migration?.sql).toContain("EXEC(N'ALTER TABLE dbo.tool_calls");
+    const down = await readDownMigration('0049_daily_connector_audit.sql');
+    expect(down.sql).toContain('TABLOCKX,HOLDLOCK');
+    expect(down.sql).toContain('audit evidence must be retained');
+  });
   it('adds durable Factory generations without backfilling completion proof and protects rollback', async () => {
     const migration = (await readMigrations()).find(({ name }) => name === '0048_factory_execution_generation.sql');
     expect(migration?.sql).toContain('ALTER TABLE dbo.tasks ADD execution_generation bigint NOT NULL');
@@ -103,6 +112,7 @@ describe('committed SQL manifest', () => {
       '0046_daily_health_upload_inbox.sql',
       '0047_daily_health_processing.sql',
       '0048_factory_execution_generation.sql',
+      '0049_daily_connector_audit.sql',
     ]);
     for (const migration of migrations) await expect(readDownMigration(migration.name)).resolves.toMatchObject({ name: migration.name });
   });

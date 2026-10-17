@@ -1,4 +1,4 @@
-import { createRemoteJWKSet, jwtVerify, type JWTVerifyGetKey } from 'jose';
+import { createRemoteJWKSet, jwtVerify, type JWTPayload, type JWTVerifyGetKey } from 'jose';
 import type { AuthConfig } from './config.js';
 import { ConfigurationError } from '../configuration-error.js';
 
@@ -67,7 +67,7 @@ export function createTokenVerifier(config: AuthConfig, keys?: JWTVerifyGetKey):
     cacheMaxAge: 600_000,
   });
   return async (token) => {
-    let payload;
+    let payload: JWTPayload;
     try {
       ({ payload } = await jwtVerify(token, jwks, {
         algorithms: ['RS256'], issuer: [issuer, v1Issuer], audience: [config.apiClientId, azureManagementAudience],

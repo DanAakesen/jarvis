@@ -1,11 +1,12 @@
 import Fastify from 'fastify';
+import { randomUUID } from 'node:crypto';
 import { Client, isInputRequiredResult, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { DailyQueryResult } from '@jarvis/contracts';
 import { installAuthentication } from '../../auth/hook.js';
 import { AuthenticationDenied, dailyNutritionScopes } from '../../auth/verify.js';
 import { loadConfig } from '../../config.js';
-import type { ToolCallRecord, ToolCallStore } from '../../core/tool-calls.js';
+import type { DailyMcpAuditRecord, ToolCallStore } from '../../core/tool-calls.js';
 import { ToolRefusal } from '../../core/tool-registry.js';
 import { createDailyModules } from '../index.js';
 import { fridaReference, type FridaLookup } from '../nutrition/frida.js';
@@ -47,7 +48,7 @@ async function fixture(writesEnabled = true) {
   let time = '2026-10-16T21:59:00Z';
   let commits = 0;
   const rows = new Map<string, { input: MealInput; row: Record<string, unknown> }>();
-  const audit = vi.fn<ToolCallStore['record']>().mockResolvedValue(undefined);
+  const audit = vi.fn<NonNullable<ToolCallStore['recordDailyMcp']>>().mockResolvedValue(undefined);
   const query = { query: vi.fn<DailyQueryService['query']>().mockResolvedValue(empty) };
   const nutrition: Handlers = {
     lookup: vi.fn<Handlers['lookup']>().mockResolvedValue(frida),
@@ -76,10 +77,13 @@ async function fixture(writesEnabled = true) {
     favorite: vi.fn<Handlers['favorite']>().mockResolvedValue(undefined),
     plan: vi.fn<Handlers['plan']>().mockResolvedValue({}),
   };
-  const app = Fastify({ logger: false });
+  const app = Fastify({ logger: false, genReqId: () => randomUUID() });
   apps.push(app);
   app.decorate('ownerObjectId', config.auth.ownerObjectId);
-  app.decorate('toolCallStore', { record: audit });
+  app.decorate('toolCallStore', {
+    record: vi.fn<ToolCallStore['record']>().mockRejectedValue(new Error('Conversation audit must not receive connector requests')),
+    recordDailyMcp: audit,
+  });
   installAuthentication(app, config, async token => {
     const kind = token.split('.')[0];
     if (kind === 'owner') return { objectId: config.auth.ownerObjectId, tenantId: config.auth.tenantId, displayName: 'Synthetic' };
@@ -98,6 +102,7 @@ async function fixture(writesEnabled = true) {
     const messages: string[] = [];
     const client = new Client({ name: 'synthetic-nutrition-client', version: '1.0.0' }, {
       capabilities: elicitation ? { elicitation: { form: {} } } : {},
+      versionNegotiation: { mode: 'auto' },
       inputRequired: { autoFulfill: !manual },
     });
     clients.push(client);
@@ -177,7 +182,7 @@ describe('inactive hosted nutrition MCP adapter', () => {
     expect(JSON.stringify(result)).not.toContain('never-expose-this');
     expect(JSON.stringify(result)).not.toContain(config.auth.ownerObjectId);
     expect(JSON.stringify(f.audit.mock.calls)).not.toContain('Synthetic meal');
-    expect(f.audit.mock.calls.map(([call]) => call.result)).toContainEqual({ redacted: true, phase: 'awaiting_confirmation' });
+    expect(f.audit.mock.calls.map(([call]) => call.phase)).toContain('awaiting_confirmation');
   });
 
   it.each(['decline', 'cancel'] as const)('does not persist or repeatedly request approval after %s', async action => {
@@ -211,6 +216,20 @@ describe('inactive hosted nutrition MCP adapter', () => {
     f.app.toolCallStore = null;
     expect((await client.callTool({ name: 'read_nutrition', arguments: { source: 'daily.nutrition.favorites' } })).isError).toBe(true);
     expect(f.query.query).not.toHaveBeenCalled();
+  });
+
+  it('refuses browser Origin requests and a legacy-only audit sink rather than pretending either is supported', async () => {
+    const f = await fixture();
+    const denied = await f.app.inject({
+      method: 'POST', url: dailyMcpPath,
+      headers: { host: 'nutrition.example.test', origin: 'https://chatgpt.com', authorization: 'Bearer write.token.value' }, payload: {},
+    });
+    expect(denied.statusCode).toBe(400);
+    f.app.toolCallStore = { record: vi.fn<ToolCallStore['record']>().mockResolvedValue(undefined) };
+    const { client } = await f.connect();
+    expect((await client.callTool({ name: 'log_food', arguments: food })).isError).toBe(true);
+    expect(f.nutrition.log).not.toHaveBeenCalled();
+    expect(f.nutrition.intake).not.toHaveBeenCalled();
   });
 
   it('refuses unsupported native review and unchecked acceptance without executing a write', async () => {
@@ -284,7 +303,7 @@ describe('inactive hosted nutrition MCP adapter', () => {
   it('reports a possibly committed write when audit fails and keeps the retry operation stable', async () => {
     const f = await fixture();
     const { client } = await f.connect();
-    const records: ToolCallRecord[] = [];
+    const records: DailyMcpAuditRecord[] = [];
     f.audit.mockImplementation(async call => {
       records.push(call);
       if (f.commits()) throw new Error('synthetic private audit failure');
@@ -294,6 +313,6 @@ describe('inactive hosted nutrition MCP adapter', () => {
     expect(JSON.stringify(result)).toContain('may have committed');
     expect(JSON.stringify(result)).not.toContain('synthetic private');
     expect(f.commits()).toBe(1);
-    expect(records.every(call => canonicalJson(call.arguments) === '{"redacted":true}')).toBe(true);
+    expect(records.every(call => Object.keys(call).sort().join(',') === 'outcome,phase,requestId,tool')).toBe(true);
   });
 });
