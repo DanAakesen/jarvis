@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import type { FastifyRequest } from 'fastify';
-import { isGeneratedView, type GeneratedView, type GeneratedViewListItem, type WorkspaceCommand, type WorkspaceSnapshot } from '@jarvis/contracts';
+import {
+  isGeneratedView, type GeneratedView, type GeneratedViewListItem, type GeneratedViewSource, type WorkspaceCommand, type WorkspaceSnapshot,
+} from '@jarvis/contracts';
 import { knowledgeGraphView } from '../vault/index.js';
 import { readSettings } from './settings.js';
 import type { WorkspaceCommandBroker } from './workspace-commands.js';
@@ -40,8 +42,28 @@ function escape(value: string): string {
     .replaceAll('"', '&quot;').replaceAll("'", '&#39;');
 }
 
+/**
+ * Static, value-free notes for a Google result the tool reports as incomplete (truncated) or that the presenter cuts
+ * to fit. They go inside the view and, as the source reason, into a partial source, so an incomplete answer is never
+ * shown as the whole truth. They never repeat anything from the result.
+ */
+const incompleteNotes = {
+  moreEvents: 'More events exist than are shown.',
+  noEvents: 'No events were found in the part of the calendar that was searched.',
+  noNextEvent: 'No upcoming event found in the part of your calendar that was searched.',
+  uncertainSlots: 'Calendar results were incomplete, so some of these slots may not be free.',
+  noSlots: 'No free slots were found in the part of the calendar that was searched.',
+  moreSlots: 'More free slots exist than are shown.',
+  moreMessages: 'More messages may exist than are shown.',
+  noMessages: 'No matching messages were found in the part of the mailbox that was searched.',
+  moreDrafts: 'More drafts may exist than are shown.',
+  noDrafts: 'No drafts were found in the part of the mailbox that was searched.',
+} as const;
+const googleRowLimit = 50;
+const agendaCharacterBudget = 9_000;
+
 /** A readable agenda for calendar_list_events / calendar_next_event results, or undefined for any other shape. */
-function calendarAgenda(value: Record<string, unknown>): string | undefined {
+function calendarAgenda(value: Record<string, unknown>): { text: string; incomplete?: string } | undefined {
   if (!Array.isArray(value.events)) return undefined;
   const zone = typeof value.timeZone === 'string' ? value.timeZone : 'UTC';
   try {
@@ -50,6 +72,8 @@ function calendarAgenda(value: Record<string, unknown>): string | undefined {
     const allDay = new Intl.DateTimeFormat('en-GB', { timeZone: 'UTC', weekday: 'long', day: 'numeric', month: 'long' });
     const lines: string[] = [];
     let heading = '';
+    let used = 0;
+    let cut = false;
     for (const raw of value.events) {
       const event = object(raw);
       const subject = safeText(event.subject, 200) || 'Untitled event';
@@ -70,12 +94,23 @@ function calendarAgenda(value: Record<string, unknown>): string | undefined {
         group = day.format(from);
         label = `${time.format(from)}–${time.format(to)}`;
       }
-      if (group !== heading) { if (lines.length) lines.push(''); lines.push(group); heading = group; }
-      lines.push(`${label} · ${subject}${location ? ` (${location})` : ''}`);
+      const line = `${label} · ${subject}${location ? ` (${location})` : ''}`;
+      const added = group === heading ? [line] : [...(lines.length ? [''] : []), group, line];
+      const size = added.reduce((total, entry) => total + entry.length + 1, 0);
+      // The text view is capped, so stop at a whole event rather than let the cap cut the list and its note.
+      if (used + size > agendaCharacterBudget) { cut = true; break; }
+      used += size;
+      lines.push(...added);
+      heading = group;
     }
-    if (!lines.length) return 'No events in this period.';
-    if (value.truncated === true) lines.push('', 'More events exist than are shown.');
-    return lines.join('\n');
+    const truncated = value.truncated === true || cut;
+    if (!lines.length) {
+      return truncated ? { text: incompleteNotes.noEvents, incomplete: incompleteNotes.noEvents }
+        : { text: 'No events in this period.' };
+    }
+    if (!truncated) return { text: lines.join('\n') };
+    lines.push('', incompleteNotes.moreEvents);
+    return { text: lines.join('\n'), incomplete: incompleteNotes.moreEvents };
   } catch { return undefined; }
 }
 
@@ -97,11 +132,31 @@ function mailReceived(value: unknown): string {
   return date !== undefined && !Number.isNaN(date.getTime()) ? mailDate.format(date) : '';
 }
 
-type GooglePresentation = { title: string; text: string } | { title: string; items: GeneratedViewListItem[] };
+type GooglePresentation =
+  | { title: string; text: string; incomplete?: string }
+  | { title: string; items: GeneratedViewListItem[]; incomplete?: string };
+
+/**
+ * A bounded list of mail rows. When the tool reports the result as truncated, or more rows came back than the list
+ * holds, the last item is a plain note (so the list never exceeds googleRowLimit items) and the presentation is
+ * marked incomplete. An empty incomplete result never claims that nothing exists.
+ */
+function mailList(
+  title: string, rows: readonly unknown[], truncated: boolean, item: (raw: unknown) => GeneratedViewListItem,
+  texts: { none: string; noneIncomplete: string; more: string },
+): GooglePresentation {
+  const incomplete = truncated || rows.length > googleRowLimit;
+  const items = rows.slice(0, incomplete ? googleRowLimit - 1 : googleRowLimit).map(item);
+  if (!items.length) {
+    return incomplete ? { title, text: texts.noneIncomplete, incomplete: texts.noneIncomplete } : { title, text: texts.none };
+  }
+  return incomplete ? { title, items: [...items, { title: texts.more }], incomplete: texts.more } : { title, items };
+}
 
 /**
  * A clean view of a Google tool result, or undefined when it has no readable shape. Raw tool JSON, message
- * bodies and confirmation codes never go on screen; mail rows show only subject, sender and date.
+ * bodies and confirmation codes never go on screen; mail rows show only subject, sender and date. A result the tool
+ * reports as truncated, or that does not fit, carries a static note and an `incomplete` text for the partial source.
  */
 function googlePresentation(tool: string, value: Record<string, unknown>): GooglePresentation | undefined {
   const title = tool.startsWith('mail_') ? 'Mail' : 'Calendar';
@@ -110,40 +165,51 @@ function googlePresentation(tool: string, value: Record<string, unknown>): Googl
   if ((status === 'completed' || status === 'cancelled' || status === 'partial') && typeof value.summary === 'string') {
     return { title, text: `${outcomeLabels[status]}\n\n${value.summary}` };
   }
+  const truncated = value.truncated === true;
   const agenda = calendarAgenda(value);
-  if (agenda !== undefined) return { title, text: agenda };
+  if (agenda !== undefined) return { title, ...agenda };
   if (tool === 'calendar_next_event' && 'event' in value) {
-    const text = value.event === null
-      ? value.truncated === true ? 'No upcoming event found in the part of your calendar that was searched.'
-        : 'No upcoming event in the next 60 days.'
-      : calendarAgenda({ timeZone: value.timeZone, events: [value.event] });
-    return text === undefined ? undefined : { title, text };
+    if (value.event === null) {
+      return truncated ? { title, text: incompleteNotes.noNextEvent, incomplete: incompleteNotes.noNextEvent }
+        : { title, text: 'No upcoming event in the next 60 days.' };
+    }
+    const next = calendarAgenda({ timeZone: value.timeZone, events: [value.event], truncated: value.truncated });
+    return next === undefined ? undefined : { title, ...next };
   }
   if (tool === 'mail_search' && Array.isArray(value.messages)) {
-    const items = value.messages.slice(0, 50).map((raw): GeneratedViewListItem => {
+    return mailList('Mail results', value.messages, truncated, (raw) => {
       const message = object(raw);
       const description = [mailSender(message.from), mailReceived(message.receivedDateTime)].filter(Boolean).join(' · ');
       return { title: safeText(message.subject, 200) || '(no subject)', ...(description ? { description } : {}) };
-    });
-    return items.length ? { title: 'Mail results', items } : { title: 'Mail results', text: 'No matching messages found.' };
+    }, { none: 'No matching messages found.', noneIncomplete: incompleteNotes.noMessages, more: incompleteNotes.moreMessages });
   }
   if (tool === 'mail_list_drafts' && Array.isArray(value.drafts)) {
-    const items = value.drafts.slice(0, 50).map((raw): GeneratedViewListItem => {
+    return mailList('Mail drafts', value.drafts, truncated, (raw) => {
       const draft = object(raw);
       const to = safeText(draft.to, 300);
       return { title: safeText(draft.subject, 200) || '(no subject)', ...(to ? { description: `To ${to}` } : {}) };
-    });
-    return items.length ? { title: 'Mail drafts', items } : { title: 'Mail drafts', text: 'No drafts found.' };
+    }, { none: 'No drafts found.', noneIncomplete: incompleteNotes.noDrafts, more: incompleteNotes.moreDrafts });
   }
   if (tool === 'calendar_find_free_slots' && Array.isArray(value.slots)) {
     const length = Number.isSafeInteger(value.durationMinutes) ? `${String(value.durationMinutes)}-minute ` : '';
-    const lines = value.slots.slice(0, 50).map((raw) => {
+    const lines = value.slots.slice(0, googleRowLimit).map((raw) => {
       const slot = object(raw);
       const from = safeText(slot.startLocal, 60);
       const to = safeText(slot.endLocal, 60);
       return from && to ? `${from} to ${to}` : '';
     }).filter(Boolean);
-    return { title: 'Free time', text: lines.length ? [`Free ${length}slots:`, ...lines].join('\n') : `No free ${length}slots found in that period.` };
+    const cut = value.slots.length > googleRowLimit;
+    if (!lines.length) {
+      return truncated || cut ? { title: 'Free time', text: incompleteNotes.noSlots, incomplete: incompleteNotes.noSlots }
+        : { title: 'Free time', text: `No free ${length}slots found in that period.` };
+    }
+    // Free time is computed from the events the tool read, so an incomplete event list can show busy time as free.
+    const note = [...(truncated ? [incompleteNotes.uncertainSlots] : []), ...(cut ? [incompleteNotes.moreSlots] : [])].join(' ');
+    return {
+      title: 'Free time',
+      text: [`Free ${length}slots:`, ...lines, ...(note ? ['', note] : [])].join('\n'),
+      ...(note ? { incomplete: note } : {}),
+    };
   }
   return undefined;
 }
@@ -282,7 +348,12 @@ function beginWorkPresentation(tool: string, rawInput: unknown, request: Fastify
             }
           } else if (google) {
             const shown = googlePresentation(tool, value);
-            const source = { id: 'now', status: 'complete', updatedAt: new Date().toISOString() } as const;
+            // An incomplete result is a partial source with the same static note as the in-view line.
+            const updatedAt = new Date().toISOString();
+            const incomplete = shown?.incomplete;
+            const source: GeneratedViewSource = incomplete === undefined
+              ? { id: 'now', status: 'complete', updatedAt }
+              : { id: 'now', status: 'partial', updatedAt, reason: incomplete };
             if (shown && 'items' in shown) {
               showView(`google-${turnId}`, { version: 1, title: shown.title, renderer: 'list', source, data: { items: shown.items } });
             } else if (shown) {

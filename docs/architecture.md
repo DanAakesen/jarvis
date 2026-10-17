@@ -23,6 +23,35 @@ nothing on screen. It never serialises a raw tool result, so message bodies,
 identifiers and codes stay off screen. No new `source.id`, renderer, tool,
 contract, permission or migration.
 
+`workspace_command` is validated in two stages and both now explain themselves.
+Fastify's Ajv checks the flat schema first, but for a failure inside `view` it
+can only name the top-level property. The hand validators
+(`isWorkspaceCommand`, `generatedViewValidationOptions`) then enforce what a
+schema cannot: per-operation keys, table rows against columns, registered
+call-tool actions, trusted image hosts, date validity and the size cap.
+`workspaceCommandProblems` in the contracts package locates the first failing
+fields with the same helpers the validators use. `explainWorkspaceCommand`,
+registered as the tool's optional `explainInvalidInput`, turns them into one
+refusal, `Invalid arguments: <field>: <problem>. Nothing was changed or shown by
+this call. Retry with arguments matching the tool schema.`, produced by the Ajv
+stage in `toolArgumentRefusal` and by the tool's own validation. Chat and voice
+therefore return identical text. The text is value-free (static wording,
+enumerations, counts and key names from known property sets, never a
+model-supplied value) and bounded to 400 characters; if the explainer finds
+nothing the old generic message stays. The `tool.invalid_arguments` log payload
+is unchanged, and owner-only authorisation, the operation and the broker are
+untouched. Guidance for the model lives in the `workspace_command` description
+(clean-list example, `view` is an object, create and place are separate
+commands, correct the named field and retry once) because the shared capability
+instructions have almost no budget left.
+
+A Google result the tool reports as truncated, or that the presenter cuts to fit,
+gets a static value-free note inside the view (a trailing line for text, a final
+plain item for lists) and a `partial` source whose reason is the same text.
+Free slots from an incomplete event list say some slots may not be free, and an
+empty incomplete result never claims that nothing exists. The web chrome does not
+render `source.status`, so the in-view note is the visible signal.
+
 ## Realtime voice presentation (16 October 2026; P11-07)
 
 After normal argument validation and pre-execution guards,
