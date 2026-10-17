@@ -43,6 +43,14 @@ scroll within their keyboard-focusable region rather than breaking values into
 tiny columns. Default-off made no Daily API requests. No real account, provider,
 device or imported-source acceptance is claimed.
 
+First normal source CI39021933844 found four forwarded settings/voice assertions
+requiring the existing phrase `relay refusal reasons` after the navigation
+guidance was compacted; 3744 backend cases passed and four failed. Restore that
+wording and add it to the fast pure instruction guard without weakening the
+forwarding assertions or15000-codepoint budget. The first run's web/container/
+SQL and four CodeQL analyses passed; its exact-head source review had no findings.
+The corrected head requires fresh normal qualification before release.
+
 ## Internal Frida reference lookup (17 October 2026; P12-09 / #724)
 
 Delivered in #876 / actual `9334d3ed`, matching qualified `a8d920e2` tree
