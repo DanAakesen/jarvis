@@ -66,6 +66,7 @@ export interface BuildAppOptions {
   readonly healthUpload?: HealthUploadOptions;
   readonly modules?: readonly BackendModule[];
   readonly projectStore?: ProjectStore;
+  readonly projectPolicyChanged?: (projectId: string) => Promise<void>;
   readonly releaseViewStore?: ReleaseViewStore;
   readonly releaseGraphReader?: ReleaseGraphReader;
   readonly projectRepositoryCreator?: RepositoryCreator;
@@ -116,6 +117,7 @@ declare module 'fastify' {
     ownerObjectId: string;
     databaseStatus: () => boolean;
     projectStore: ProjectStore | null;
+    projectPolicyChanged: (projectId: string) => Promise<void>;
     releaseViewStore: ReleaseViewStore | null;
     releaseGraphReader: ReleaseGraphReader | null;
     projectRepositoryCreator: RepositoryCreator | null;
@@ -252,6 +254,7 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
   app.setNotFoundHandler((_request, reply) => reply.code(404).send({ error: 'Not found' }));
   app.decorate('databaseStatus', options.databaseStatus ?? (() => false));
   app.decorate('projectStore', options.projectStore ?? null);
+  app.decorate('projectPolicyChanged', options.projectPolicyChanged ?? (async () => {}));
   app.decorate('releaseViewStore', options.releaseViewStore ?? null);
   app.decorate('releaseGraphReader', options.releaseGraphReader ?? null);
   app.decorate('projectRepositoryCreator', options.projectRepositoryCreator ?? null);

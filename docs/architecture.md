@@ -255,8 +255,8 @@ Both paths still require the same current generation/session/invocation,
 no-start-lease policy gate and ordinary GitHub delivery/policy verification.
 The backend completion event retains the work commit. The SQL policy gate
 compares that commit with the policy candidate's expected PR head while holding
-the task lock, including after deferred approval. A different green PR cannot
-substitute for unpublished current work.
+the task lock. A different green PR cannot substitute for unpublished current
+work.
 Proof identity expressions use explicit `Latin1_General_100_BIN2` comparison.
 JSON inherits the payload column's database-default collation, which can
 differ from the binary Foundry-session column and otherwise fail the gate with
@@ -284,9 +284,9 @@ sleep/dispatcher locks and commits its generation with the start lease.
 Completion proof carries the tracked session's generation, not a newly inferred
 task value. The locked policy gate requires an absent start lease and equality
 between task, session and proof generations, as well as the existing latest
-session/turn identifiers. This gate is shared by Done and approved merge,
-including the callback after deferred approval. Clearing a failed start's lease
-cannot restore the previous proof. No transaction is held across Foundry start.
+session/turn identifiers. This gate is shared by Done and the automatic
+project-policy merge. Clearing a failed start's lease cannot restore the
+previous proof. No transaction is held across Foundry start.
 
 Existing completion events are not backfilled. Existing session generation zero
 can receive fresh runtime verification, but old proof without a generation is
@@ -1811,13 +1811,15 @@ pending, unexpired request. Approval/rejection is a conditional single-use
 transition; the backend consumes an unexpired approval before calling the gated
 operation. Reject, timeout, cancellation, replay, unknown IDs, startup
 orphaning, and unverifiable identity all fail closed. The pending timer is five
-minutes. `runConfirmed` gates repository creation and the automatic squash-merge
-path; future delete, mail, calendar, out-of-browser computer and spend actions
-must use the same gate. Merge work is queued after webhook validation so the
-GitHub request is not held open while Dan responds.
+minutes. `runConfirmed` gates repository creation and other confirmation-required
+operations; future delete, mail, calendar, out-of-browser computer and spend
+actions must use the same gate. The `complete_without_deployment` project-policy
+merge is separate: selecting that policy is approval, so the guarded squash
+merge runs without a browser or Teams confirmation. Merge evaluation follows
+webhook validation and is also recovered by the startup/periodic policy sweep.
 
-The web approval remains visible in Now if voice is not active; the pending
-operation expires and fails closed after five minutes if Dan does not approve.
+Other web approvals remain visible in Now if voice is not active; those pending
+operations expire and fail closed after five minutes if Dan does not approve.
 Teams/Bot Service and Speech F0 code is not live-verified because those
 integrations are not part of the personal-tenant deployment.
 
@@ -4094,7 +4096,7 @@ dismisses historical board failures without deleting activity.
 
 When a task turn completes, P3-14 uses the repository-scoped GitHub App token to verify the task branch, reuse an open PR for the configured base if present, or compare the branch with the default branch and create a PR only when it is ahead. Branch/PR reads happen outside the task policy lock; the backend rechecks that the task is Running under the lock before the bounded PR create, reconciles an ambiguous create response with a matching-PR lookup, and records `pull_request_opened` before releasing it. This serializes the side effect with cancellation without holding the lock across the GitHub preflight. The new PR uses the task title and links to its Jarvis task through the configured Static Web App origin. The backend ends the completed sandbox without marking the task Done; GitHub's signed PR/check webhooks continue the P3-06 policy flow. A missing branch, no new commits, or GitHub API refusal records a clear task event and moves the task to Needs attention. Duplicate completions reuse the PR, including a second lookup after GitHub reports a duplicate create. The GitHub App token stays backend-side.
 
-P3-06 joins the task-linked PR record to its project policy, checks the recorded result against GitHub's current PR and check-run/commit-status APIs, and issues a repository-scoped token through the existing App token issuer. An open PR with no check runs or commit statuses waits two minutes from its recorded open time, then rechecks GitHub; only a still-empty result counts as no CI, and pending or failed records continue to block. `deliver_pr` marks a verified green or no-CI, non-draft PR Done without merging, recording no-CI completion in task activity. `complete_without_deployment` additionally requires the PR base SHA to match the current branch tip and GitHub to report a clean/mergeable PR, then requests a squash merge with the expected head SHA. GitHub enforces the repository's required checks and branch protection at merge time; a refusal is stored as a backend task event. A task-scoped SQL application lock serializes automatic merges with cancellation, and task state is rechecked while the lock is held. On merge acceptance, a task event is committed before releasing the lock; cancellation is refused until the signed merge webhook is persisted. GitHub rate limits remain retryable webhook failures. A successful merge response is not sufficient to mark Done: the backend waits for the signed `pull_request` webhook to persist the merged state, then verifies that state and checks before transitioning the task. Duplicate webhook deliveries re-evaluate the persisted row, so a transient follow-up failure can be retried. Fake-backed tests cover PR creation, both policies, and refusal reasons; live App installation and test-repository acceptance remain unverified.
+P3-06 joins the task-linked PR record to its live project policy, checks the recorded result against GitHub's current PR and check-run/commit-status APIs, and issues a repository-scoped token through the existing App token issuer. An open PR with no check runs or commit statuses waits two minutes from its recorded open time, then rechecks GitHub; only a still-empty result counts as no CI, and pending or failed records continue to block. `deliver_pr` marks a verified green or no-CI, non-draft PR Done without merging, recording no-CI completion in task activity. `complete_without_deployment` additionally requires the PR base SHA to match the current branch tip and GitHub to report a clean/mergeable PR, then immediately requests a squash merge with the expected head SHA; choosing the policy is approval, so this path asks for no confirmation and sends no message. The backend re-evaluates open PRs for active Running/NeedsAttention tasks at startup and every minute, and a project-policy PATCH triggers an immediate project-scoped recheck. This recovers the persisted no-check grace after restart. GitHub enforces the repository's required checks and branch protection at merge time; a refusal is stored as a backend task event and is not repeatedly attempted. Transient GitHub failures receive at most three retries with 1/2/4-minute backoff. A task-scoped SQL application lock serializes automatic merges with cancellation, and task state is rechecked while the lock is held. On merge acceptance, a task event is committed before releasing the lock; cancellation is refused until the signed merge webhook is persisted. A successful merge response is not sufficient to mark Done: the backend waits for the signed `pull_request` webhook to persist the merged state, then verifies that state and checks before transitioning the task. Duplicate webhook deliveries re-evaluate the persisted row, so a transient follow-up failure can be retried. Fake-backed tests cover PR creation, both policies, startup/restart recovery, policy changes, retries and refusal reasons; live App installation and test-repository acceptance remain unverified.
 
 
 **Codex login rules** (Pro login only; no API key):
