@@ -27,11 +27,12 @@ no core Settings change. All of it stays behind the default-off Daily gate (Dail
 off = Jarvis unchanged) with no production caller yet. Dan enters his own values;
 none is stored in code, tests or documents.
 
-Next, in order: the budget/candidate adapter and a read-only suggest tool
-(allowance = resting burn + active energy so far today - deficit; unknowns
-flagged, never zero), then the Settings section (Daily on only), then the
-default-off composition. No provider, private or device access, live probe, Daily
-activation or acceptance is claimed.
+Next, in order: the Settings section (Daily on only), then the default-off
+composition. The budget/candidate adapter and the read-only
+`daily_nutrition_suggest` tool are the second slice (allowance = resting burn +
+active energy so far today - deficit; unknowns flagged, never zero; only meals
+logged in Jarvis count; saved favourites are the only candidates). No provider,
+private or device access, live probe, Daily activation or acceptance is claimed.
 
 ## On-screen views authority (17 October 2026; P11-09 / #885)
 
@@ -47,9 +48,16 @@ as small PRs:
    presentation of Google results shows a clean list or text, never raw JSON or
    message bodies. Regressions cover voice create/update/arrange/close,
    browser and non-owner refusal, the scope boundary and each presentation shape.
-2. Specific refusals and model guidance (next). Chat refusals come from
-   generated-view validation returning one generic message; name the field to
-   fix so the model corrects once, and never misdescribe the cause.
+2. Specific refusals and model guidance (PR 2, with Google truncation
+   honesty). Chat refusals came from generated-view validation returning one
+   generic message; the voice path shares the same validators. A refusal now
+   names the field to fix and says nothing was changed or shown, using only
+   static wording and known key names, so the model corrects once and never
+   misdescribes the cause. Regressions cover the exact refused shapes in chat
+   and voice with identical messages. The same PR closes Codex's P1 on #888: a
+   Google result the tool reports as truncated, or that the presenter cuts to
+   fit, shows a static note in the view and a `partial` source, so free time
+   from an incomplete event list is never presented as complete.
 3. Offline end-to-end (after). Fake Gmail/Calendar: find, show view, stage
    (`awaiting_confirmation`), plain yes, confirm.
 
@@ -1859,6 +1867,7 @@ Declined in the audit (do not file): verbosity and max-output-token settings, no
 | P9-102 | [#798](https://github.com/DanAakesen/jarvis/issues/798) | Presence colours: Present green, Away yellow, On the move blue in both themes | Three tokens per theme; hue and 3:1 contrast on every surface pinned in `styles.test.tsx` (light dots carry a darker ring of their own hue); label, dot shape and the orb are unchanged. Headless-Chrome check at 320, 390 and 1440 in both themes: every mode dot has the expected fill, light dots carry the ring, dark dots do not. The phone top-bar chip hides the label, so colour is its only visible cue there (the accessible name keeps the mode); live acceptance pending | — | Complete |
 | P9-103 | [#797](https://github.com/DanAakesen/jarvis/issues/797) | Rename Task recipes to Routines in Settings | Every visible, announced and tested string says Routines; heading anchor and section key are `routines`; the `/recipes` API alias is unchanged; the copy-cleanup guard rejects "Task recipes". Headless Chrome at 320, 390 and 1440 in both themes shows the Routines heading, Refresh routines and the refreshed message, with no "recipe" text on the page | — | Complete |
 | P9-104 | [#796](https://github.com/DanAakesen/jarvis/issues/796) | Reconcile `docs/features.md` with completed tasks and verified production state | Correct targeted statuses with evidence; count Live/Built not verified/Offline only/Planned; record #787/#791 release, P9-82 chat-image logs with voice check outstanding, P10-04 backend/P10-07 web ownership, and Daily reuse of existing SQL without new infrastructure | — | Complete |
+| P9-105 | [#800](https://github.com/DanAakesen/jarvis/issues/800) | Conversation memory: rolling summary of older messages instead of the hard 100-message window | Append-only, owner-bound `dbo.conversation_summaries` (migration 0051; the issue's 0046 was taken) records the covered message range, version, model and creation time plus an open-items section for decisions, commitments and open tasks; messages are never rewritten. After a finished reply a single-flight agent task folds not-yet-covered older messages into the previous summary (a first summary reaches back at most 400 messages and logs older history as a gap), and the prompt carries it ahead of a 40-message window (20 without one). Secrets are scrubbed before the model and again before storage, file contents are excluded, and the summary is labelled untrusted background. Cost uses the existing `chat` usage reporting, optional `JARVIS_SUMMARY_MODEL` and setting `global.conversationSummaryDailyLimit` (default 24, 0 to 48, 0 off), enforced in the agent and by a server 429. Any failure keeps the plain window and logs a named `chat.memory_summary_*` event. Each call's whole prompt, carried summary included, stays within 40,000 characters, and an over-cap prompt is refused as `prompt_too_large` before any model call. Offline fake-agent tests over a recorded 331-message fixture keep decisions from messages 1–150 after the window moves and cover incremental update, failure fallback and the cost limit; agent lint and tests pass locally, backend types/tests and SQL integration run in CI only. No UI change. Follow-ups: a dedicated usage/settings model role, deeper backfill, and the post-deploy chat canary and `conversation.reply_failed` check | P9-99 | Complete |
 | P9-115 | [#843](https://github.com/DanAakesen/jarvis/issues/843) | Align shared Status navigation instructions with the shipped page | Remove the stale unavailable-page instruction; require canonical `workspace_command` navigate/status guidance and truthful applied/refused semantics across hosted settings and English/Danish realtime, both automatic-capture values, preserving budget/BMP/tool-parity checks. Source/instruction consistency only; not live, model, or voice acceptance and not attribution of a production turn | P9-40 | Complete |
 
 #815's guarded merge caught the title bot truncating P9-101 to P9-10.
@@ -2000,6 +2009,7 @@ P8-02 allocated P8-04 through P8-13 to frontend work in PR #233. Backend tasks t
 
 | ID | Issue | Task | Acceptance criteria | Depends on | Status |
 | --- | --- | --- | --- | --- | --- |
+| P9-117 | [#891](https://github.com/DanAakesen/jarvis/issues/891) | Add a reachable touch resize handle to phone chat | In-window 72×44px grip; shared pointer capture, cancellation, keyboard steps and limits; separate device-local phone height; preserve eight desktop borders, composer toggle and maximise/restore. Unit and Chromium touch checks pass at 320×700 and 390×844 in light/dark; main merged and web lint/build/all 1,096 tests pass. Physical iPhone and Safari acceptance is Dan's, not claimed | — | Complete |
 | P9-26 | [#520](https://github.com/DanAakesen/jarvis/issues/520) | Add backend Calendar event updates for title, paired start/end times, location, attendees, and description, and event deletion; keep the web app unchanged | PATCH only supplied fields; allow clearing location, description, and attendees; encode event IDs; stage update/delete through the existing exact later-message confirmation; redact sensitive audits and cover fake Google requests and invalid partial times | P7-22, P7-28 | Complete |
 | P9-35 | [#529](https://github.com/DanAakesen/jarvis/issues/529) | Rename saved PC/browser recipes to Routines; add API/tool rename and retain one-release aliases; keep the web app unchanged | Use the shared routine contract, migrate legacy settings keys on write, validate names and Dan-only routes, preserve routine IDs and replay steps, and test canonical plus alias tools/routes | P7-35 | Complete |
 | P9-36 | [#530](https://github.com/DanAakesen/jarvis/issues/530) | Use one backend-owned capability and safety prompt for realtime voice and chat, with chat loading it through `/agent/settings` | Share PC/browser, research, background-job, knowledge, and safety guidance; reflect the existing memory-capture setting; preserve the shared tool registry and confirmation behavior; make no web or database changes | P9-01, P9-05, P9-06, P9-10, P9-11, P9-14, P9-30 | Complete |

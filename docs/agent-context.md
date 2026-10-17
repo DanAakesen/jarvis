@@ -433,6 +433,24 @@ tests and lint run locally. Real Fastify route, composition, relay and Python
 agent semantics need the existing pinned CI graph; local Fastify/jose are
 unavailable.
 
+## Nutrition suggestion adapter checks (17 October 2026; P12-09)
+
+`daily_nutrition_suggest` composes only through the seventh `createDailyModules`
+argument, with Daily on, shared data and the targets accessor. Use synthetic
+figures and fake read sources only: the targets, burn and meals are the owner's
+private health data, so no real value belongs in a fixture, document, log or PR
+text, and no check reads or writes real Health, nutrition or settings data.
+Check that Daily off leaves routes, tools and capabilities unchanged, that every
+unknown (unset target, no burn row, unread page, failed health read, a meal
+without a value) is named and leaves its figure null rather than zero, that only
+the exact active-energy metric counts and resting energy is never read, and that
+the tool description carries no digits. The tool is read-only, so it joins no
+approval or relay-budget list; its 20-second bound sits inside the ordinary
+30-second agent and voice budgets. Pure budget and adapter tests and lint run
+locally; the route, composition and tool tests that load Fastify or `jose` need
+the pinned CI graph where those packages are unavailable locally. The
+`active_energy` metric name is not verified against a live export.
+
 ## Internal Daily review checks (17 October 2026; P12-09)
 
 The current inactive continuation registers `daily_food_review` only with the
@@ -3591,6 +3609,7 @@ Agent configuration (environment variables, no secrets):
 | `JARVIS_API_CLIENT_ID` | Optional `jarvis-api` client ID for the token scope `api://<id>/.default`; defaults to the bootstrap ID |
 | `AZURE_OPENAI_API_KEY` | Optional local model key; without it the agent identity also gets the model token |
 | `AZURE_OPENAI_SYSTEM_PROMPT`, `AZURE_OPENAI_MAX_OUTPUT_TOKENS`, `JARVIS_REASONING_EFFORT`, `LOG_LEVEL` | Optional overrides, as in the prototype |
+| `JARVIS_SUMMARY_MODEL` | Optional (P9-105). Model deployment name for the conversation-summary call; defaults to the chat model. A name, not a secret |
 
 The main Deploy workflow publishes the agent image by digest, creates a hosted
 version with `JARVIS_BACKEND_URL`, and configures the backend with the version's

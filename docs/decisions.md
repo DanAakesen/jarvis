@@ -13,6 +13,31 @@ A live voice test showed that repeating full calendar details after successful
 approval was redundant. Concise acknowledgements reduce needless spoken
 disclosure without removing the record or hiding an incomplete outcome.
 
+## Compute the suggestion budget from stored active energy and Jarvis-logged meals (17 October 2026; P12-09 / #724)
+
+**Builder decision inside Dan's ruling, not a user-confirmed choice and not
+acceptance.** It implements the budget formula recorded in the entry below with
+the least inference the repository allows.
+
+- Burn is read only from the exact `active_energy` metric of today's stored
+  Health data. Resting, basal and total energy are never read, so the owner's
+  resting target is not counted twice. The metric name and its daily-total
+  semantics are not verified against a live export. Verifying them needs a real
+  export and stays an open check, not something this change assumes.
+- Freshness comes from the row's `updated_at`; `start_at`/`end_at` are not a
+  reliable last-sample time. A missing, duplicated, negative or non-kcal reading
+  is unknown with a reason code, never zero.
+- Eaten energy and protein count only meals logged in Jarvis; food eaten but not
+  logged is invisible, and the report names that source. A meal with unreadable
+  energy blocks energy left; a meal without protein makes protein left a
+  flagged upper bound. A partly read day (pages exhausted) is reported as
+  incomplete rather than treated as the whole day.
+- Candidates are the owner's saved favourites only, passed to the unchanged
+  `suggest` calculation and the persisted dislikes. Nothing invents a meal or a
+  quantity, and an unknown energy left applies no energy filter and says so.
+- The tool is read-only, sensitive and phone-denied, behind the default-off Daily
+  gate with no production caller. Daily off leaves Jarvis unchanged.
+
 ## Use owner-configured nutrition targets for the daily food budget (17 October 2026; P12-09 / #724)
 
 **Confirmed user decision, not a proposal or completed acceptance.** Dan ruled
@@ -39,10 +64,10 @@ data in a public repository, so no source, fixture, document, PR text or log
 carries real figures; tests use synthetic values and Dan enters his own.
 
 Everything stays behind the default-off Daily gate: Daily off leaves Jarvis
-unchanged and this slice has no production caller. The budget adapter must
-report unknown burn or unknown meal macros as unknown, never zero, and count
-only the exact active-energy metric so resting energy is not double-counted.
-That adapter, the Settings section and the default-off composition are separate
+unchanged and this slice has no production caller. The budget adapter (recorded
+in the entry above) reports unknown burn or unknown meal macros as unknown, never
+zero, and counts only the exact active-energy metric so resting energy is not
+double-counted. The Settings section and the default-off composition are separate
 slices. No provider, device or private access, live probe, activation or
 acceptance follows from this record.
 
@@ -106,6 +131,31 @@ This corrects the demonstrated voice cause. Chat's refusal comes from
 generated-view validation and is handled in a separate PR (specific refusals,
 model guidance), then an offline find, show, stage, confirm test. Dan's live
 re-test closes #885; source tests are not acceptance.
+
+## Name the failing field in workspace_command refusals and mark incomplete Google results partial (17 October 2026; P11-09)
+
+After the voice fix, Dan's chat test still showed "Workspace command: Refused"
+twice and an answer blaming an "invalid" summary. Ajv names only the top-level
+property for a failure inside `view`, and the hand validators returned one
+generic sentence, so the model could not correct itself and misdescribed the cause.
+
+A refused workspace command now says which field is wrong and why, and that
+nothing was changed or shown, in the same words in chat and voice (`Invalid
+arguments: <field>: <problem>. Nothing was changed or shown by this call. Retry
+with arguments matching the tool schema.`). It uses only static wording,
+enumerations, counts and key names from known property sets, so a refusal never
+echoes a model-supplied value. The `tool.invalid_arguments` log payload and every
+authority check are unchanged. Tools opt in through an optional
+`explainInvalidInput`; when it finds nothing the old message stays. Guidance for
+the model sits in the tool description because the shared capability instructions
+have about 34 code points of headroom. Rejected: deriving hints from Ajv's error
+list (a `oneOf` reports a misleading first-branch error) and relaxing validation
+so the model's guess passes.
+
+From Codex's P1 on #888: a Google result the tool marks truncated, or that the
+presenter cuts to fit, carries a static value-free note in the view and a
+`partial` source with the same reason, because free time computed from an
+incomplete event list can show busy time as free. Dan's live re-test closes #885.
 
 ## Label backend-side chat failures and retry a thrown acceptance check once (17 October 2026; #820)
 
@@ -256,6 +306,59 @@ and backend revision attribution corrections above. Successor exact-candidate CI
 and the integration owner's main-only release remain
 separate gates. Remote-enabled runtime state is not exposed here and is not
 claimed. Private Daily/provider/device/access boundaries remain unchanged.
+
+## Keep a rolling, owner-bound conversation summary ahead of a wider window (17 October 2026; P9-105, #800)
+
+Chat history kept only the newest 20 messages, so a decision from message 5 was
+gone by message 40. Dan asked for a rolling summary on 3 October, and his 17
+October priority starts it before #794/#816 settle. Keep messages untouched and
+append versioned summaries to a new owner-bound `dbo.conversation_summaries`
+(migration `0051`; the issue's `0046` was already taken). Each row records the
+message range it covers, its version, the model and the creation time, and the
+backend keeps the newest 200 versions. This is not `core/memory.ts`, which stores
+durable memories.
+
+The agent writes the summary after a finished chat reply (never a smoke or errored
+turn) in one single-flight background task, using the chat model, or
+`JARVIS_SUMMARY_MODEL` when set, and the existing `chat` usage role. Each refresh folds
+the not-yet-covered older messages in order into the previous summary, so earlier
+versions are carried forward rather than rewritten. The model returns two sections,
+`SUMMARY` and `OPEN ITEMS`, which keep decisions, commitments, preferences and open
+tasks. The prompt then carries that summary followed by up to 40 raw messages after
+the covered range, and the newest 20 messages never fold; a refresh starts once 30
+messages are uncovered. Without a summary the window is the old 20 messages.
+
+Secrets and file contents stay out in three places: messages are scrubbed of
+credential shapes and clipped to 1,500 characters before the model sees them; the
+instructions forbid both; and the answer is scrubbed again on the agent and by the
+backend's existing `redactWorkContent`. The summary reaches the model as labelled
+untrusted background, and Jarvis may say it works from a summary of older messages.
+
+Cost is bounded three ways: the setting `global.conversationSummaryDailyLimit`
+(integer 0 to 48, default 24, 0 turns the feature off), a rolling 24-hour attempt
+cap inside the agent, and a server-side 429 once the day's versions reach the
+limit. Each call is one tool-free request with at most 40,000 characters in and
+6,000 tokens out, and its tokens go through `/usage/foundry`. The 40,000 covers the
+whole prompt: the carried summary and open items are charged against it before any new
+message is added, and a prompt still over it is refused as `prompt_too_large` before the
+model is called or an attempt is counted. At the default a long
+chat can fold roughly 240 messages a day; beyond that the summary lags and the
+window is still never worse than before.
+
+Any failure returns the plain window and logs a named, content-free event:
+`chat.memory_summary_failed stage=<fetch|history|summarise|save|schedule|refresh>
+code=<code>`, `chat.memory_summary_skipped reason=<reason>`,
+`chat.memory_summary_gap pages=<n>` and `chat.memory_summary_saved`. A failure pauses
+refresh for 10 minutes; a stale-version conflict or a reached limit does not.
+Both routes are owner-only and run on Dan's delegated token, which the refresh task
+holds in memory for at most about 90 seconds and never logs.
+
+Deferred on purpose: a dedicated usage role and settings model role (they need a
+check-constraint migration and a deploy-order step), history older than the 400
+messages a first summary can reach (logged as a gap), and a forward-cursor history
+API. Verified offline with a fake agent over a recorded 331-message conversation;
+live behaviour is unverified until deploy, and the chat canary and
+`conversation.reply_failed` stay the live checks.
 
 ## Reuse retained feed services through one inactive tool (17 October 2026; P12-09)
 
@@ -593,6 +696,15 @@ proof. The actual qualification and release receipts belong on the integrated
 PR and linked issues; this source checkpoint does not claim a follow-up pass.
 
 ## Mobile composer focus hotfix (16 October 2026)
+
+P9-117 (17 October 2026) retains this desktop/phone ownership boundary: add an
+in-window phone height grip, sharing the existing resize limits and gesture
+handling but saving its preference under `jarvis.conversation-layout.phone.v1`.
+The eight desktop borders were explicitly excluded on phones, not broken
+pointer-event handlers; their outside-edge targets are also unsuitable for
+a full-width dock. Apply only phone height, without enabling desktop placement
+or its composer-anchor path. Physical iPhone and Safari acceptance remains
+Dan's; Chromium touch emulation is not native-device proof.
 
 Confirmed with JarvisPM for P11-06 / #860: suspend desktop manual conversation
 geometry under the existing phone layout policy, preserving its persisted value

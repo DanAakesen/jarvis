@@ -23,6 +23,35 @@ nothing on screen. It never serialises a raw tool result, so message bodies,
 identifiers and codes stay off screen. No new `source.id`, renderer, tool,
 contract, permission or migration.
 
+`workspace_command` is validated in two stages and both now explain themselves.
+Fastify's Ajv checks the flat schema first, but for a failure inside `view` it
+can only name the top-level property. The hand validators
+(`isWorkspaceCommand`, `generatedViewValidationOptions`) then enforce what a
+schema cannot: per-operation keys, table rows against columns, registered
+call-tool actions, trusted image hosts, date validity and the size cap.
+`workspaceCommandProblems` in the contracts package locates the first failing
+fields with the same helpers the validators use. `explainWorkspaceCommand`,
+registered as the tool's optional `explainInvalidInput`, turns them into one
+refusal, `Invalid arguments: <field>: <problem>. Nothing was changed or shown by
+this call. Retry with arguments matching the tool schema.`, produced by the Ajv
+stage in `toolArgumentRefusal` and by the tool's own validation. Chat and voice
+therefore return identical text. The text is value-free (static wording,
+enumerations, counts and key names from known property sets, never a
+model-supplied value) and bounded to 400 characters; if the explainer finds
+nothing the old generic message stays. The `tool.invalid_arguments` log payload
+is unchanged, and owner-only authorisation, the operation and the broker are
+untouched. Guidance for the model lives in the `workspace_command` description
+(clean-list example, `view` is an object, create and place are separate
+commands, correct the named field and retry once) because the shared capability
+instructions have almost no budget left.
+
+A Google result the tool reports as truncated, or that the presenter cuts to fit,
+gets a static value-free note inside the view (a trailing line for text, a final
+plain item for lists) and a `partial` source whose reason is the same text.
+Free slots from an incomplete event list say some slots may not be free, and an
+empty incomplete result never claims that nothing exists. The web chrome does not
+render `source.status`, so the in-view note is the visible signal.
+
 ## Realtime voice presentation (16 October 2026; P11-07)
 
 After normal argument validation and pre-execution guards,
@@ -497,6 +526,13 @@ does not write storage; only completed pointer/keyboard/command changes do.
 Cancelled gestures restore the previous layout, and storage failures surface
 as alerts. Shell state carries the composer anchor and measured height;
 `ConversationHistory` keeps its existing mounted input owner.
+
+P9-117 adds a phone-only heading grip using the same pointer-capture,
+cancel/lost-capture, keyboard and clamping paths. Its validated preference uses
+`jarvis.conversation-layout.phone.v1` through the same storage helpers. Only
+height is applied to the existing bottom-docked phone window; desktop geometry
+and the composer-anchor measurement remain dormant on phones. Viewport fitting
+never writes either preference.
 
 `NoteFolderPicker` uses the existing authenticated `/notes/tree` endpoint,
 with cancellation, bounded response validation and explicit retry/incomplete
@@ -3038,7 +3074,8 @@ the chat handler with the Invocations protocol and returns the application-defin
 text SSE stream. The agent verifies the caller through the backend's `/me` route
 and confirms the exact source message in stored history. The backend history page
 contains the newest 100 messages across sessions in ascending ID order; the agent
-uses at most 20 earlier messages / 32,000 characters, including prior messages
+uses at most 20 earlier messages / 32,000 characters (40 messages after a stored
+conversation summary, see below), including prior messages
 across a language/session switch. Prior Jarvis messages carry a bounded summary
 of audited tool names and outcomes only, never arguments or results. Per-turn
 context telemetry records message count, oldest/newest included IDs, whether the
@@ -3049,6 +3086,31 @@ message. The existing Responses tool loop records calls against Dan's message ID
 using the agent identity. The backend persists only a completed assistant
 response; an interrupted turn leaves Dan's message visible and the UI warns that
 an action may have completed. The browser never receives agent credentials.
+
+**Conversation summary (P9-105).** Older chat messages are folded into an
+append-only, owner-bound summary so decisions survive the window.
+`dbo.conversation_summaries` (migration 0051) holds one row per version with the
+covered message IDs, message count, model and creation time; the backend keeps the
+newest 200 versions and never rewrites messages. `GET/POST /conversation/summary`
+are owner-only user routes on Dan's delegated token (the agent identity gets 403).
+The POST takes a strict seven-key body of at most 64 KiB, redacts it again with
+`redactWorkContent`, answers 409 to a stale `baseVersion`, and answers 429 once the
+24-hour version count reaches `global.conversationSummaryDailyLimit` (default 24,
+0 to 48, 0 turns the feature off). The hosted agent reads the summary in the same
+parallel batch as `/me` and history, capped at 5 seconds. With one stored, the
+prompt carries it as labelled untrusted background followed by up to 40 raw messages
+after its covered range; without one the window stays at 20 messages. After a
+finished chat turn (never a smoke or errored one), a single-flight background task
+in `agents/jarvis/conversation_memory.py` folds the uncovered older messages (at most
+40,000 characters per call, the carried summary included; 1,500 per message; newest 20
+always raw) into the previous summary with one tool-free model call once 30 are
+uncovered, and refuses a prompt still over the cap as `prompt_too_large` before the
+model is called. The call uses the chat
+model, or `JARVIS_SUMMARY_MODEL`, and reports usage as role `chat`. The task holds
+Dan's token in memory for about 90 seconds, never logs it, and scrubs secrets from
+input and output. A first summary pages back at most 400 messages and logs
+`chat.memory_summary_gap`. Any failure keeps the plain window, logs a content-free
+`chat.memory_summary_*` event and pauses refresh for 10 minutes.
 
 P7-23 starts consuming the hosted-agent stream before scheduling the chat reflex.
 Reflex target discovery and Jev classification run concurrently with the reply;
@@ -4939,9 +5001,53 @@ refuses.
 This reverses the earlier no-maintenance-maths rule for one formula only (see
 the decision log): allowance = resting burn + active energy so far today -
 deficit. It adds no BMR/TDEE estimate from weight, height or age and no
-coaching. The budget adapter, the Settings section and the default-off
-composition are separate slices. The values are personal health data in a public
-repository: none appears in code, fixtures, documents, logs or audit.
+coaching. The suggestion adapter below is the second slice; the Settings section
+and the default-off composition are separate slices. The values are personal
+health data in a public repository: none appears in code, fixtures, documents,
+logs or audit.
+
+### Personalised suggestion adapter (17 October 2026)
+
+A seventh optional `createDailyModules` argument, `nutritionSuggestions`
+(`{nutrition, health, now?}`), adds the read-only `daily_nutrition_suggest` tool.
+It needs shared Daily data and the sixth `nutritionTargets` accessor (otherwise
+construction throws) and composes only when Daily is on, so Daily off and every
+existing composition are unchanged. No production caller exists yet. It adds no
+route, migration, write, provider call, job or timer.
+
+One call fixes a single trusted clock reading (the Copenhagen date and time) and
+then reads, in order: the owner's stored targets; today's non-deleted meals from
+the existing nutrition history (at most three pages of 100); today's
+`active_energy` Health metric through the existing `DailyHealthReadModel`
+(at most three pages of 250, stopping once the row is found); and the saved
+favourites (at most three pages of 100). Allowance, energy left and protein left
+use the formula in the decision log. Running out of pages is reported as
+incomplete, never as zero.
+
+The report is null-aware. Each figure carries its inputs and the reason codes that
+make it unknown: an unset target, no active-energy row for today, an unread page,
+a failed health read, a reading that is not a plain kcal number, or a meal whose
+energy is unreadable (which blocks energy left). A meal without a protein value
+does not block protein left: the figure becomes an upper bound and is marked
+`partial`, with the number of such meals. Burn reports its source, unit, sample
+count, the verbatim source range and the stored-at time and age taken from
+`updated_at`; `start_at`/`end_at` are not a last-sample time. Only the exact
+`active_energy` metric is read; resting, basal and total energy never are, so
+resting energy is not counted twice. That name follows the stored metric name and
+is not verified against a live export. Only meals logged in Jarvis count: food
+eaten but never logged is invisible to it, which the report states by naming its
+source (`jarvis-meal-log`).
+
+Candidates are the owner's saved favourites only, so nothing invents a meal or a
+quantity. The existing `suggestions` call applies the unchanged `suggest`
+calculation (energy filter, protein ordering) and the persisted dislikes; an
+unknown energy left applies no energy filter, and the report says which filters
+ran. At most ten matches are returned (default five) with the total match count.
+The tool is sensitive (audit records `{redacted:true}`) and phone-denied, accepts
+only an optional `limit`, resolves the owner before anything else, and stops after
+20 seconds inside the unchanged 30-second agent and voice budgets. Being
+read-only, it joins no approval or relay-budget list, and its model-facing
+description carries no figures.
 
 ### Inactive nutrition MCP adapter (17 October 2026)
 

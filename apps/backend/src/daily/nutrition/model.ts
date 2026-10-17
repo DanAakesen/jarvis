@@ -164,6 +164,11 @@ export function copenhagenDate(occurredAt: string): string {
   const part = (name: string) => parts.find((part) => part.type === name)!.value;
   return `${part('year')}-${part('month')}-${part('day')}`;
 }
+/** The one definition of the local clock that `suggest` verifies against. */
+export function copenhagenTime(at: string): string {
+  instant(at);
+  return new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Copenhagen', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(at));
+}
 export function prepareMeal(input: Omit<MealInput, 'occurredAt' | 'mealDate' | 'expiresAt' | 'proteinGrams' | 'carbohydratesGrams' | 'fatGrams' | 'fiberGrams'> & Partial<Pick<Nutrients,'proteinGrams'|'carbohydratesGrams'|'fatGrams'|'fiberGrams'>> & { occurredAt?: string; mealDate?: string }, requestTime: string): MealInput {
   if (Object.hasOwn(input, 'expiresAt')) throw new TypeError('Meal lifetime is not caller-selected');
   instant(requestTime); const occurredAt = input.occurredAt ?? requestTime; instant(occurredAt);
@@ -237,14 +242,13 @@ export function plan(input: PlanInput): void {
 }
 /**
  * The caller supplies the remaining budget and local clock; this function estimates no maintenance.
- * The owner-configured allowance is derived by that caller (see docs/decisions.md).
+ * The owner-configured allowance is derived by that caller (`../nutrition/budget.ts`; see docs/decisions.md).
  */
 export function suggest(candidates: readonly Suggestion[], disliked: ReadonlySet<string>, context: BudgetContext): Suggestion[] {
   instant(context.now);
   const clock = /^([01]\d|2[0-3]):([0-5]\d)$/u;
   if (!clock.test(context.localTime) || candidates.length > 1000) throw new TypeError('Invalid suggestion context');
-  const authoritativeClock = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Copenhagen', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(context.now));
-  if (context.localTime !== authoritativeClock) throw new TypeError('Suggestion clock disagrees with authoritative time');
+  if (context.localTime !== copenhagenTime(context.now)) throw new TypeError('Suggestion clock disagrees with authoritative time');
   for (const value of [context.remainingKcal, context.remainingProteinGrams]) if (value !== null && (typeof value !== 'number' || !Number.isFinite(value))) throw new TypeError('Invalid remaining budget');
   return candidates.filter((candidate) => {
     text(candidate.mealKey); nutrients(candidate);

@@ -637,6 +637,16 @@ export function isWorkspaceCommand(
   value: unknown,
   options?: { trustedBlobHost?: string; registeredTools?: readonly string[] },
 ): value is WorkspaceCommand;
+/** One concrete reason a workspace command is invalid: a property path and static, value-free text. */
+export interface WorkspaceCommandProblem {
+  readonly path: string;
+  readonly problem: string;
+}
+/** Explains an invalid workspace command in up to three problems; `[]` when nothing concrete is found. */
+export function workspaceCommandProblems(
+  value: unknown,
+  options?: { trustedBlobHost?: string; registeredTools?: readonly string[] },
+): WorkspaceCommandProblem[];
 
 export type BackgroundJobKind = 'research' | 'image' | 'html_app' | 'embedding';
 export type BackgroundJobStatus = 'running' | 'done' | 'failed' | 'cancelled';

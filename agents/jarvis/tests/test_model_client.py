@@ -30,6 +30,7 @@ from model_client import (
     ANTHROPIC_THINKING_BUDGETS,
     CHAT_INSTRUCTIONS,
     AzureOpenAIResponsesClient,
+    SummaryUnavailable,
     anthropic_messages,
     anthropic_resource_from_project_endpoint,
     anthropic_thinking_parameters,
@@ -40,6 +41,7 @@ from model_client import (
     personalize_instructions,
     responses_base_url,
 )
+from model_contract import SummaryCompletion
 from state import ModelMessage, ModelSettings
 
 
@@ -2047,3 +2049,229 @@ async def test_model_requests_use_the_settings_captured_for_each_session() -> No
     assert second["model"] == "gpt-5.4-mini"
     assert second["reasoning"] == {"effort": "high"}
     await model.close()
+
+
+SUMMARY_TEXT = "SUMMARY:\n- (5) Decision: ship on Friday.\nOPEN ITEMS:\nnone"
+
+
+class SummaryResponses:
+    """One non-streaming provider call, as the conversation summary makes it."""
+
+    def __init__(self, reply: Any = None, error: BaseException | None = None) -> None:
+        self.reply = reply
+        self.error = error
+        self.requests: list[dict[str, Any]] = []
+
+    async def create(self, **kwargs: Any) -> Any:
+        self.requests.append(kwargs)
+        if self.error is not None:
+            raise self.error
+        return self.reply
+
+
+class UsageRefusingBackend(FakeBackend):
+    def handle(self, request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/usage/foundry":
+            self.requests.append(request)
+            return httpx.Response(500, json={"error": "Unavailable"})
+        return super().handle(request)
+
+
+def responses_reply(
+    text: str | None = SUMMARY_TEXT, *, status: str = "completed"
+) -> SimpleNamespace:
+    usage = SimpleNamespace(input_tokens=1_200, output_tokens=300)
+    return SimpleNamespace(output_text=text, status=status, usage=usage)
+
+
+def claude_reply(stop_reason: str = "end_turn") -> SimpleNamespace:
+    return SimpleNamespace(
+        content=[
+            FakeItem(type="thinking", thinking="private reasoning"),
+            FakeItem(type="text", text=SUMMARY_TEXT),
+        ],
+        stop_reason=stop_reason,
+        usage=SimpleNamespace(input_tokens=900, output_tokens=250),
+    )
+
+
+def summary_usage(backend: FakeBackend) -> list[dict[str, Any]]:
+    return [
+        json.loads(request.content)
+        for request in backend.requests
+        if request.url.path == "/usage/foundry"
+    ]
+
+
+def summary_client(
+    reply: Any = None,
+    *,
+    error: BaseException | None = None,
+    backend: FakeBackend | None = None,
+) -> tuple[AzureOpenAIResponsesClient, SummaryResponses, FakeBackend]:
+    backend = backend or FakeBackend()
+    model, transport = client([], backend=backend)
+    responses = SummaryResponses(reply, error)
+    transport.responses = responses  # type: ignore[assignment]
+    return model, responses, backend
+
+
+def claude_summary_client(
+    reply: Any = None, *, error: BaseException | None = None
+) -> tuple[AzureOpenAIResponsesClient, SummaryResponses, FakeBackend]:
+    backend = FakeBackend(model_name="claude-sonnet-5-5")
+    model, _ = client([], backend=backend)
+    messages = SummaryResponses(reply, error)
+    model._anthropic_client = SimpleNamespace(messages=messages)  # type: ignore[assignment]
+    return model, messages, backend
+
+
+@pytest.fixture
+def default_summary_model(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("JARVIS_SUMMARY_MODEL", raising=False)
+
+
+@pytest.mark.asyncio
+async def test_the_conversation_summary_is_one_tool_free_call_that_reports_chat_usage(
+    default_summary_model,
+) -> None:
+    model, responses, backend = summary_client(responses_reply())
+
+    completion = await model.summarize_conversation("Write the memory.", "Summarise this.")
+
+    assert completion == SummaryCompletion(SUMMARY_TEXT, "deployment", 1_200, 300)
+    # One plain call: no tools, no streaming, no reasoning, nothing stored at the provider.
+    assert responses.requests == [
+        {
+            "model": "deployment",
+            "instructions": "Write the memory.",
+            "input": [{"role": "user", "content": "Summarise this."}],
+            "max_output_tokens": model_client.SUMMARY_MAX_OUTPUT_TOKENS,
+            "store": False,
+        }
+    ]
+    (usage,) = summary_usage(backend)
+    assert (usage["role"], usage["model"], usage["inputTokens"], usage["outputTokens"]) == (
+        "chat", "deployment", 1_200, 300,
+    )
+    assert str(UUID(usage["eventId"])) == usage["eventId"]
+
+
+@pytest.mark.asyncio
+async def test_a_smaller_summary_model_can_be_chosen_with_one_setting(monkeypatch) -> None:
+    monkeypatch.setenv("JARVIS_SUMMARY_MODEL", " gpt-5.4-mini ")
+    model, responses, backend = summary_client(responses_reply())
+
+    completion = await model.summarize_conversation("Write the memory.", "Summarise this.")
+
+    assert completion.model == "gpt-5.4-mini"
+    assert responses.requests[0]["model"] == "gpt-5.4-mini"
+    assert summary_usage(backend)[0]["model"] == "gpt-5.4-mini"
+
+
+@pytest.mark.asyncio
+async def test_the_conversation_summary_on_a_claude_model_is_one_plain_message_call(
+    default_summary_model,
+) -> None:
+    model, messages, backend = claude_summary_client(claude_reply())
+
+    completion = await model.summarize_conversation("Write the memory.", "Summarise this.")
+
+    assert completion == SummaryCompletion(SUMMARY_TEXT, "claude-sonnet-5-5", 900, 250)
+    assert messages.requests == [
+        {
+            "model": "claude-sonnet-5-5",
+            "system": "Write the memory.",
+            "messages": [{"role": "user", "content": "Summarise this."}],
+            "max_tokens": model_client.SUMMARY_MAX_OUTPUT_TOKENS,
+        }
+    ]
+    (usage,) = summary_usage(backend)
+    assert (usage["role"], usage["model"], usage["inputTokens"], usage["outputTokens"]) == (
+        "chat", "claude-sonnet-5-5", 900, 250,
+    )
+
+
+@pytest.mark.asyncio
+async def test_a_claude_model_without_a_claude_client_fails_before_any_call(
+    default_summary_model,
+) -> None:
+    backend = FakeBackend(model_name="claude-sonnet-5-5")
+    model, transport = client([], backend=backend)
+
+    with pytest.raises(SummaryUnavailable) as caught:
+        await model.summarize_conversation("Write the memory.", "Summarise this.")
+
+    assert caught.value.code == "no_claude_client"
+    assert transport.responses.requests == [] and summary_usage(backend) == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("reply", "code"),
+    [
+        pytest.param(responses_reply(status="incomplete"), "truncated", id="truncated"),
+        pytest.param(responses_reply("  \n"), "empty", id="blank"),
+        pytest.param(responses_reply(None), "empty", id="no-text"),
+    ],
+)
+async def test_an_unusable_answer_raises_a_coded_error_yet_still_reports_the_cost(
+    default_summary_model, reply, code,
+) -> None:
+    model, _, backend = summary_client(reply)
+
+    with pytest.raises(SummaryUnavailable) as caught:
+        await model.summarize_conversation("Write the memory.", "Summarise this.")
+
+    assert caught.value.code == code
+    assert "private" not in str(caught.value)
+    assert len(summary_usage(backend)) == 1
+
+
+@pytest.mark.asyncio
+async def test_a_truncated_claude_answer_raises_yet_still_reports_the_cost(
+    default_summary_model,
+) -> None:
+    model, _, backend = claude_summary_client(claude_reply("max_tokens"))
+
+    with pytest.raises(SummaryUnavailable) as caught:
+        await model.summarize_conversation("Write the memory.", "Summarise this.")
+
+    assert caught.value.code == "truncated"
+    assert len(summary_usage(backend)) == 1
+
+
+@pytest.mark.asyncio
+async def test_a_provider_error_propagates_and_reports_no_usage(default_summary_model) -> None:
+    model, _, backend = summary_client(error=RuntimeError("provider failure"))
+
+    with pytest.raises(RuntimeError, match="provider failure"):
+        await model.summarize_conversation("Write the memory.", "Summarise this.")
+
+    assert summary_usage(backend) == []
+
+
+@pytest.mark.asyncio
+async def test_a_failed_usage_report_never_fails_the_summary(
+    default_summary_model, caplog,
+) -> None:
+    caplog.set_level("WARNING", logger="model_client")
+    backend = UsageRefusingBackend()
+    model, _, _ = summary_client(responses_reply(), backend=backend)
+
+    completion = await model.summarize_conversation("Write the memory.", "Summarise this.")
+
+    assert completion.text == SUMMARY_TEXT
+    assert len(summary_usage(backend)) == 1
+    assert "Foundry model usage was not recorded; error=BackendUnavailable" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_usage_the_provider_did_not_report_is_not_invented(default_summary_model) -> None:
+    reply = SimpleNamespace(output_text=SUMMARY_TEXT, status="completed", usage=None)
+    model, _, backend = summary_client(reply)
+
+    completion = await model.summarize_conversation("Write the memory.", "Summarise this.")
+
+    assert (completion.input_tokens, completion.output_tokens) == (None, None)
+    assert summary_usage(backend) == []

@@ -1,9 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { conversationLayoutKey, fitConversationLayout, readConversationLayout, resizeConversationLayout, saveConversationLayout } from './conversation-layout';
+import { conversationLayoutKey, phoneConversationLayoutKey, fitConversationLayout, readConversationLayout, resizeConversationLayout, saveConversationLayout } from './conversation-layout';
 
 afterEach(() => {
   vi.restoreAllMocks();
   localStorage.removeItem(conversationLayoutKey);
+  localStorage.removeItem(phoneConversationLayoutKey);
 });
 
 describe('conversation layout', () => {
@@ -14,6 +15,16 @@ describe('conversation layout', () => {
     expect(saveConversationLayout(rect)).toBe('');
     expect(readConversationLayout()).toEqual({ layout: rect, error: '' });
     expect(Object.keys(JSON.parse(localStorage.getItem(conversationLayoutKey)!))).toEqual(['x', 'y', 'width', 'height']);
+  });
+  it('validates and saves phone preferences independently of desktop placement', () => {
+    saveConversationLayout(rect, size);
+    const phoneRect = { x: 0, y: .5, width: 1, height: .5 };
+    expect(saveConversationLayout(phoneRect, size, phoneConversationLayoutKey)).toBe('');
+    expect(readConversationLayout(phoneConversationLayoutKey)).toEqual({ layout: phoneRect, size, error: '' });
+    expect(readConversationLayout()).toEqual({ layout: rect, size, error: '' });
+    localStorage.setItem(phoneConversationLayoutKey, '{"height":-1}');
+    expect(readConversationLayout(phoneConversationLayoutKey).error).toContain('could not be read');
+    expect(readConversationLayout()).toEqual({ layout: rect, size, error: '' });
   });
   it.each(['{', 'null', '{"x":0,"y":0,"width":0,"height":1}', '{"x":0.9,"y":0,"width":0.8,"height":0.5}', '{"x":"0","y":0,"width":0.5,"height":0.5}'])('reports invalid saved geometry %s', value => {
     localStorage.setItem(conversationLayoutKey, value);

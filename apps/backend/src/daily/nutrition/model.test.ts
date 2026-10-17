@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { authorizeIntake, canonicalJson, favoriteSearchKey, meal, normalizeSearchText, plan, prepareMeal, resolveNutrients, suggest, writeDefinition, writeMeal, type MealInput, type Suggestion } from './model.js';
+import { authorizeIntake, canonicalJson, copenhagenDate, copenhagenTime, favoriteSearchKey, meal, normalizeSearchText, plan, prepareMeal, resolveNutrients, suggest, writeDefinition, writeMeal, type MealInput, type Suggestion } from './model.js';
 
 export const syntheticMeal: MealInput = {
   id: 'synthetic-01', idempotencyKey: 'synthetic-message-01', mealName: 'Synthetic meal', mealType: null,
@@ -100,5 +100,22 @@ describe('nutrition evidence and budgets', () => {
     expect(suggest([], new Set(), context)).toEqual([]);
     expect(suggest(candidates, new Set(), { ...context, remainingKcal: -10 })).toEqual([]);
     expect(() => suggest(candidates, new Set(), { ...context, localTime: '07:00' })).toThrow('authoritative time');
+  });
+  it('derives one Copenhagen date and clock across summer time, winter time, midnight and the clock change', () => {
+    const cases: readonly [string, string, string][] = [
+      ['2026-07-01T10:30:00.000Z', '2026-07-01', '12:30'],
+      ['2026-01-15T10:30:00.000Z', '2026-01-15', '11:30'],
+      ['2026-10-17T21:59:00.000Z', '2026-10-17', '23:59'],
+      ['2026-10-17T22:00:00.000Z', '2026-10-18', '00:00'],
+      ['2026-10-24T22:30:00.000Z', '2026-10-25', '00:30'],
+      ['2026-10-25T00:30:00.000Z', '2026-10-25', '02:30'],
+      ['2026-10-25T01:30:00.000Z', '2026-10-25', '02:30'],
+      ['2026-12-31T23:30:00.000Z', '2027-01-01', '00:30'],
+    ];
+    for (const [now, localDate, localTime] of cases) {
+      expect([copenhagenDate(now), copenhagenTime(now)]).toEqual([localDate, localTime]);
+      expect(() => suggest([], new Set(), { now, localTime, remainingKcal: null, remainingProteinGrams: null })).not.toThrow();
+    }
+    expect(() => copenhagenTime('2026-10-17')).toThrow('Invalid nutrition timestamp');
   });
 });

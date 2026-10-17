@@ -32,6 +32,7 @@ const failureEvents = new Set([
   'telemetry.close_failed', 'server.shutdown_failed', 'request.failed', 'connection.upgrade_failed',
   'attachment.extraction_failed', 'away_mode.task_notification_failed', 'away_mode.task_route_failed',
   'codex.image_cancel_failed', 'codex.image_session_cleanup_failed', 'conversation_attachments.cleanup_failed',
+  'conversation_summary.read_failed', 'conversation_summary.save_failed',
   'credentials.codex_renewal_failed', 'credentials.copilot_check_failed', 'credentials.github_app_status_failed',
   'factory.board_project_lookup_failed', 'factory.board_read_failed', 'factory.board_task_event_failed',
   'factory.board_webhook_update_failed', 'factory.issue_backfill_failed', 'factory.issue_create_failed',

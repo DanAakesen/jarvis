@@ -350,18 +350,22 @@ existing acknowledged workspace/GenUI commands for requested display. Opening
 Daily does not claim to set its local filters; present the queried subset in a
 shared view instead. Existing direct/reviewed food and saved-food tools retain
 their authority/confirmation rules. Provider/grant completeness, briefs/history,
-authoritative budget-backed advice, source reconciliation and physical-device/
-activation/cutover acceptance remain separate unfinished gates, not implicit
-features of this record-browser source slice.
+source reconciliation and physical-device/activation/cutover acceptance remain
+separate unfinished gates, not implicit features of this record-browser source
+slice. Budget-backed advice has its own inactive source slice (next paragraph)
+and no acceptance.
 
 The current tool ledger is partial, not full migration acceptance. Shared
 record/detail/sync and brief reads use `daily_query` plus acknowledged workspace
 GenUI; direct/reviewed intake, saved foods/plans/preferences and reference lookup
 have explicit inactive tools. The owner's resting-burn, deficit and protein
 targets are stored settings with an inactive `daily_nutrition_targets` tool.
-Personalised suggestions still require the budget/candidate adapter for the
-existing `suggest` calculation, which will read those targets plus stored active
-energy; reference lookup is not that adapter. Daily Google-feed/attention/manual-refresh/
+Personalised suggestions have an inactive source slice: the read-only
+`daily_nutrition_suggest` tool is the budget/candidate adapter for the existing
+`suggest` calculation. It reads those targets, today's stored active energy and
+the meals logged in Jarvis, and offers saved favourites only. It has no
+production caller, no live-export check of the `active_energy` metric name and
+no acceptance; reference lookup is not that adapter. Daily Google-feed/attention/manual-refresh/
 suppression equivalence and stored all-calendar grants remain unestablished,
 not completed by the record browser. Device/export provisioning and real-phone/
 provider acceptance retain their separate approval gates. No UI-only capability
