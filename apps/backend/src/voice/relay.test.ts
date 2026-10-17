@@ -3367,6 +3367,92 @@ describe('backend-relayed Voice Live WebSocket', () => {
     expect(received.filter((event) => event.type === 'session.update')).toHaveLength(1);
     expect(received.some((event) => event.type === 'conversation.item.create')).toBe(false);
   });
+
+  it('lets the voice model create, update, arrange and close its own views for the signed-in owner', async () => {
+    const hotels = {
+      version: 1,
+      title: 'Hotels found',
+      renderer: 'list',
+      source: { id: 'now', status: 'complete' },
+      data: { items: [{ title: 'Hotel Alpha', description: 'Booked 12 Nov, 3 nights' }] },
+    };
+    const calls = [
+      { call_id: 'voice-create', arguments: {
+        commandId: 'voice-hotels-create', operation: 'create', viewId: 'hotels-found', view: hotels,
+      } },
+      { call_id: 'voice-update', arguments: {
+        commandId: 'voice-hotels-update', operation: 'update', viewId: 'hotels-found',
+        view: { ...hotels, title: 'Hotels found (1)' },
+      } },
+      { call_id: 'voice-arrange', arguments: {
+        commandId: 'voice-hotels-arrange', operation: 'arrange', layout: 'side-by-side', viewIds: ['hotels-found', 'tasks'],
+      } },
+      { call_id: 'voice-close', arguments: {
+        commandId: 'voice-hotels-close', operation: 'close', viewId: 'hotels-found',
+      } },
+    ];
+    const outputs = new Map<string, Record<string, unknown>>();
+    let resolveSession: () => void = () => {};
+    let resolveOutputs: () => void = () => {};
+    const sessionSent = new Promise<void>((resolve) => { resolveSession = resolve; });
+    const outputsSent = new Promise<void>((resolve) => { resolveOutputs = resolve; });
+    const upstreamUrl = await echoServer((socket) => {
+      socket.on('message', (data) => {
+        const event = JSON.parse(data.toString()) as Record<string, unknown>;
+        if (event.type === 'session.update') {
+          resolveSession();
+          return;
+        }
+        if (event.type === 'input_audio_buffer.append') {
+          socket.send(JSON.stringify({ type: 'response.created' }));
+          for (const call of calls) {
+            socket.send(JSON.stringify({
+              type: 'response.function_call_arguments.done',
+              call_id: call.call_id,
+              name: 'workspace_command',
+              arguments: JSON.stringify(call.arguments),
+            }));
+          }
+          socket.send(JSON.stringify({ type: 'response.done', response: {} }));
+          return;
+        }
+        const item = event.item as Record<string, unknown> | undefined;
+        if (event.type === 'conversation.item.create' && item?.type === 'function_call_output') {
+          outputs.set(String(item.call_id), JSON.parse(String(item.output)) as Record<string, unknown>);
+          if (outputs.size === calls.length) resolveOutputs();
+          return;
+        }
+        if (event.type === 'response.create') socket.send(JSON.stringify({ type: 'response.done', response: {} }));
+      });
+    });
+    const { app } = appFor((token, signal) => new WebSocket(upstreamUrl, {
+      headers: { Authorization: ['Bearer', token].join(' ') }, signal,
+    }));
+    const delivered: WorkspaceCommand[] = [];
+    const tab = app.workspaceCommands.connect(config.auth.ownerObjectId, (event, data) => {
+      if (event === 'workspace-command') {
+        const command = (data as { command: WorkspaceCommand }).command;
+        delivered.push(command);
+        queueMicrotask(() => {
+          app.workspaceCommands.acknowledge(config.auth.ownerObjectId, tab.sessionId, command.commandId, true);
+        });
+      }
+      return true;
+    });
+    await app.listen({ host: '127.0.0.1', port: 0 });
+    const address = app.server.address() as AddressInfo;
+    const browser = await openBrowser(`ws://127.0.0.1:${address.port}/voice`);
+    await sessionSent;
+    browser.send(JSON.stringify({ type: 'input_audio_buffer.append', audio: 'AQID' }));
+    await outputsSent;
+
+    for (const { call_id: callId } of calls) {
+      expect(outputs.get(callId)).toMatchObject({ tool: 'workspace_command', outcome: 'ok' });
+    }
+    expect(outputs.get('voice-create')).toMatchObject({ result: { type: 'generated-view', view: hotels } });
+    expect(delivered.map(({ operation }) => operation)).toEqual(['create', 'update', 'arrange', 'close']);
+    tab.close();
+  });
 });
 
 describe('calendar confirmation turns', () => {

@@ -141,7 +141,9 @@ describe('system status reader', () => {
           { headers: { 'Content-Type': 'text/event-stream' } },
         )),
       );
-      const reason = code !== undefined && chatAgentFailureReasons.has(code) ? code : 'agent_error';
+      const reason = code === undefined
+        ? 'agent_error_code_missing'
+        : chatAgentFailureReasons.has(code) ? code : 'agent_error_code_unlisted';
       const report = await runChatSmoke(agent);
 
       expectSmokeFailures(report, {

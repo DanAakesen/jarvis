@@ -1,5 +1,37 @@
 # Agent context
 
+## Chat acceptance failure labels and one bounded retry (#820, 17 October 2026)
+
+Read a failed chat check's safe reason in the acceptance artifact first; never
+call smoke, model or provider endpoints to investigate an old run. A bare
+`agent_error` is now an unexpected exception that is neither a labelled
+backend-side failure nor a hosted error event. Backend-side failures report
+`agent_auth_unavailable`, `agent_request_failed`, `agent_http_<status>`
+(`agent_http_other` for an unlisted status), `agent_response_invalid`,
+`agent_stream_failed` or `agent_stream_ended`. A hosted error event without a
+safe code is `agent_error_code_missing`; with an unlisted code,
+`agent_error_code_unlisted`. #884's 36 hosted origin codes are unchanged. Degraded
+identity and no-timestamp reasons appear as `not_reported_or_redacted` in
+artifacts (open web clients accept HTTP reasons only for down checks); read them
+in the `system.smoke_check` events instead.
+
+A conversation check that threw one of these failures runs once more before its
+result is final; assertion failures and timeouts do not. The retry is a
+deliberate gate-tolerance change, not a proven fix, and a rescued first failure
+is not recorded. Remove the retry wave in `runSuite` to revert it. #816's
+coordination client is never opened for smoke turns; the agent test
+`test_smoke_invocations_open_no_coordination_connection` pins that.
+
+Targeted commands:
+`npm test --workspace @jarvis/backend -- src/core/chat-agent.test.ts src/core/chat-canary.test.ts src/system-status.test.ts`,
+`$env:PYTHONPATH='.github\scripts'; python -m unittest discover -s .github\scripts\tests -p "test_smoke_reasons.py" -v`
+and, from `agents/jarvis`, `python -m pytest tests/test_chat_runtime.py -k smoke`.
+Local limits: a fresh worktree cannot restore the backend dependency tree (the
+configured feed lacks `ip-address@10.7.4`), so the three backend files were run
+locally only through an uncommitted vitest alias that stubs `voice/relay.ts`
+(219 tests passed); the agent test cannot import `azure.ai.agentserver` locally
+and is left to CI. Normal pinned CI remains the authority.
+
 ## Fixed hosted origins in acceptance evidence (#820, 17 October 2026)
 
 The canary now retains only explicitly enumerated `ChatAgentError.code` values

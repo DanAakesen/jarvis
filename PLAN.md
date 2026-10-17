@@ -33,6 +33,54 @@ flagged, never zero), then the Settings section (Daily on only), then the
 default-off composition. No provider, private or device access, live probe, Daily
 activation or acceptance is claimed.
 
+## On-screen views authority (17 October 2026; P11-09 / #885)
+
+P0 from Dan's live test (find hotels in Gmail, show them, stage in the calendar,
+confirm): step 1 worked, but Jarvis could not put anything on screen in voice or
+chat, and a raw JSON dump appeared after the Gmail check. Three causes, shipped
+as small PRs:
+
+1. Authority and presentation. A realtime voice tool call runs on the owner's
+   authenticated socket and was refused as a browser caller, so the relay now
+   runs each model-issued call inside an in-process Jarvis-origin scope (owner
+   only; browser, HTTP owner token, reflex and other users unchanged). Voice
+   presentation of Google results shows a clean list or text, never raw JSON or
+   message bodies. Regressions cover voice create/update/arrange/close,
+   browser and non-owner refusal, the scope boundary and each presentation shape.
+2. Specific refusals and model guidance (next). Chat refusals come from
+   generated-view validation returning one generic message; name the field to
+   fix so the model corrects once, and never misdescribe the cause.
+3. Offline end-to-end (after). Fake Gmail/Calendar: find, show view, stage
+   (`awaiting_confirmation`), plain yes, confirm.
+
+No provider call, live probe or replay of Dan's mail. Dan's live re-test closes
+#885; merged source is not acceptance.
+
+## Chat acceptance fix-forward (#820, 17 October 2026)
+
+Three consecutive main deploys failed different chat checks with the bare
+`agent_error`: 39043117488 `chat_capabilities`; 39046081711 `chat_github_read` and
+`chat_navigation`; 39049389385 (`c00818b7`, #816) `chat_navigation` and
+`chat_plain_approval`. No #884 origin code surfaced, the failing set moves
+between builds, and the cause is not established. #816 is not the cause by code
+path: smoke turns never open its coordination client, which an agent test now
+pins.
+
+The candidate adds fixed backend-side failure labels (`agent_*`), separate
+`agent_error_code_missing` / `agent_error_code_unlisted` buckets for hosted error
+events, and one bounded retry of a conversation check that threw, inside the
+unchanged 55-second suite deadline. No model, prompt, assertion, timeout,
+credential, workflow or #816 lifecycle change. Degraded identity/no-timestamp
+reasons stay off HTTP for already-open web clients, so they exist only in
+`system.smoke_check` events. Locally passing: backend chat-agent, chat-canary and
+system-status tests (219, via an uncommitted vitest alias for `voice/relay.ts`),
+smoke-reasons parity tests (11) and pipeline tests (38), plus scoped ESLint, tsc
+and Ruff. The agent regression test is left to CI (`azure.ai.agentserver` is not
+installed locally). Next: normal pinned CI/CodeQL and independent review, then the
+existing main-only release; the next deploy's labelled evidence drives the
+follow-up. #820 and #880 remain open and #884 stays frozen; source qualification
+is not production acceptance.
+
 ## Chat acceptance origin provenance (#820, 17 October 2026)
 
 Retained Deploy39043117488 at705af7c7/treee79dbd60 failed required
@@ -1916,6 +1964,7 @@ issue closure, new PR, push, hosted CI or deployment by this worker.
 A rolling intake phase. When Dan asks Jarvis to change its own code or a project's code, Jarvis drafts the issue, confirms it with Dan and creates it as `P11-NN` (P10-03). Rows are added here as the issues are created.
 | ID | Issue | Task | Acceptance criteria | Depends on | Status |
 | --- | --- | --- | --- | --- | --- |
+| P11-09 | [#885](https://github.com/DanAakesen/jarvis/issues/885) | P0: Jarvis has full control of its own on-screen views in voice and chat | Create, update, arrange and close generated views in voice and chat for the authenticated owner without weakening owner-only authority or accepting model actor claims; no raw JSON on screen; specific machine-usable refusals; regressions for the refused shapes in both paths; offline find/show/stage/confirm test; Dan's live re-test closes it | None | In progress |
 | P11-08 | [#868](https://github.com/DanAakesen/jarvis/issues/868) | Stop Web CI repeating backend checks | Web checks contracts and frontend; dedicated Backend and every other required component/analysis remain green; record actual selection without a speculative speedup claim | None | Complete |
 | P11-06 | [#860](https://github.com/DanAakesen/jarvis/issues/860) | Priority hotfix: stop the mobile composer jumping over chat on focus | One phone viewport dock with chat open, closed or minimised; preserve drafts, reader following and saved desktop geometry through focus, keyboard resize/pan/dismissal and orientation; focused regressions, independent review and normal release gates; native-phone acceptance explicit | None | Not started |
 | P11-05 | [#859](https://github.com/DanAakesen/jarvis/issues/859) | Make header background work understandable and dismissible | Remove dismissed rows immediately and across refresh/reload; distinguish background work from Factory tasks; preserve job records, real status, recovery, scoped visibility, accessible focus and desktop/phone states; cover storage/network failure without private mutations | — | Complete |
