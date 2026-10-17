@@ -40,7 +40,10 @@ export function dailyNutritionSuggestTool(targets: NutritionTargetsAccess, sourc
       const limit = parseLimit(raw);
       const operationSignal = AbortSignal.any([signal, AbortSignal.timeout(20_000)]);
       try {
-        return await readNutritionSuggestions(sources, targets, request, limit, operationSignal);
+        const report = await readNutritionSuggestions(sources, targets, request, limit, operationSignal);
+        // A source can answer after the abort or the deadline; that late report must not look like success.
+        operationSignal.throwIfAborted();
+        return report;
       } catch (error) {
         // An outer abort or deadline passes through untouched; only this tool's own deadline becomes a clear failure.
         if (signal.aborted) throw signal.reason;

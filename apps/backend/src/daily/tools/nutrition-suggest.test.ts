@@ -146,6 +146,32 @@ describe('daily_nutrition_suggest', () => {
     expect(f.suggestions).not.toHaveBeenCalled();
   });
 
+  it('does not report success when the caller aborted while the last read was still answering', async () => {
+    const reason = new Error('caller went away');
+    const controller = new AbortController();
+    const f = fixture({ favourites });
+    f.suggestions.mockImplementationOnce(async (candidates, context) => {
+      controller.abort(reason);
+      return suggest(candidates, new Set(), context);
+    });
+    await expect(f.tool.execute({}, f.request, controller.signal)).rejects.toBe(reason);
+    expect(f.suggestions).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not report success when its own deadline passed while the last read was still answering', async () => {
+    const deadline = new AbortController();
+    vi.spyOn(AbortSignal, 'timeout').mockReturnValue(deadline.signal);
+    const f = fixture({ favourites });
+    f.suggestions.mockImplementationOnce(async (candidates, context) => {
+      deadline.abort(new DOMException('timed out', 'TimeoutError'));
+      return suggest(candidates, new Set(), context);
+    });
+    const failure = await f.tool.execute({}, f.request, signal()).then(() => null, (error: unknown) => error);
+    expect(f.suggestions).toHaveBeenCalledTimes(1);
+    expect(failure).toBeInstanceOf(ToolFailure);
+    expect((failure as ToolFailure).message).toBe('Nutrition suggestions took too long. Try again.');
+  });
+
   it('does not hide other failures', async () => {
     const f = fixture({ favourites });
     f.history.mockRejectedValueOnce(new Error('meal store unavailable'));
