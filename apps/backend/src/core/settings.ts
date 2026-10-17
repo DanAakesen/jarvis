@@ -76,6 +76,7 @@ export interface Settings {
     maxCheckAttempts: number;
     screenShareDailyFrameCap: number;
     visionDailyBudgetUsd: number;
+    conversationSummaryDailyLimit: number;
   };
   newProjects: {
     owner: string;
@@ -154,7 +155,13 @@ export const defaultSettings: Settings = {
     model: defaultRoleModels[role],
     reasoningEffort: 'none',
   }])) as Record<ModelRole, RoleModelSettings>,
-  global: { maxParallelTasks: 1, maxCheckAttempts: 3, screenShareDailyFrameCap: 300, visionDailyBudgetUsd: 1 },
+  global: {
+    maxParallelTasks: 1,
+    maxCheckAttempts: 3,
+    screenShareDailyFrameCap: 300,
+    visionDailyBudgetUsd: 1,
+    conversationSummaryDailyLimit: 24,
+  },
   newProjects: {
     owner: 'DanAakesen',
     visibility: 'private',
@@ -254,6 +261,7 @@ const settingKeys = {
     maxCheckAttempts: 'global.max_check_attempts',
     screenShareDailyFrameCap: 'global.screen_share_daily_frame_cap',
     visionDailyBudgetUsd: 'global.vision_daily_budget_usd',
+    conversationSummaryDailyLimit: 'global.conversation_summary_daily_limit',
   },
   newProjects: {
     owner: 'new_projects.owner',
@@ -408,6 +416,9 @@ function validSetting(
   if (area === 'global' && key === 'visionDailyBudgetUsd') {
     return typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 100;
   }
+  if (area === 'global' && key === 'conversationSummaryDailyLimit') {
+    return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 && value <= 48;
+  }
   if (area === 'newProjects') {
     if (key === 'owner') {
       return typeof value === 'string' && /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$/.test(value);
@@ -544,6 +555,7 @@ const settingsPatchSchema = {
             maxCheckAttempts: { type: 'integer', minimum: 0, maximum: 10 },
             screenShareDailyFrameCap: { type: 'integer', minimum: 1, maximum: 300 },
             visionDailyBudgetUsd: { type: 'number', minimum: 0, maximum: 100 },
+            conversationSummaryDailyLimit: { type: 'integer', minimum: 0, maximum: 48 },
           },
         },
         newProjects: {
@@ -1166,6 +1178,13 @@ export async function registerSettingsRoutes(app: import('fastify').FastifyInsta
       } | undefined)?.settings?.global?.visionDailyBudgetUsd;
       // AJV would otherwise coerce null to zero, unintentionally disabling watch.
       if (budget !== undefined && typeof budget !== 'number') {
+        return reply.code(400).send({ error: 'Invalid setting value' });
+      }
+      const summaryLimit = (request.body as {
+        settings?: { global?: { conversationSummaryDailyLimit?: unknown } };
+      } | undefined)?.settings?.global?.conversationSummaryDailyLimit;
+      // Zero disables summaries, so null, booleans and strings must not coerce to it.
+      if (summaryLimit !== undefined && typeof summaryLimit !== 'number') {
         return reply.code(400).send({ error: 'Invalid setting value' });
       }
       const voice = (request.body as {

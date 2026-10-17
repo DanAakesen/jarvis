@@ -41,6 +41,7 @@ import type { DecisionProviderId } from './decision-provider.js';
 import { normalizeVisualContext, visualContextSchema, persistedVisualContextSchema,
   persistedVisualContext, type VisualContext } from './visual-context.js';
 import type { FrameStore } from '../vision/frame-store.js';
+import { registerConversationSummaryRoutes } from './conversation-summary.js';
 
 const maxSqlBigInt = 9_223_372_036_854_775_807n;
 const chatReflexBudgetMs = 800;
@@ -1158,6 +1159,7 @@ return {
         reply.raw.removeListener('close', abortOnClose);
       }
     });
+    registerConversationSummaryRoutes(app);
   },
 };
 }

@@ -27,6 +27,16 @@ from chat_telemetry import (
     latency_span,
     log_latency,
 )
+from conversation_memory import (
+    MEMORY_FETCH_TIMEOUT_SECONDS,
+    MEMORY_WINDOW_WITH_SUMMARY,
+    current_memory_plan,
+    fetch_summary_state,
+    memory_turns,
+    plan_refresh,
+    schedule_memory_refresh,
+    summary_message_text,
+)
 from jarvis_tools import (
     BACKEND_HTTP_TIMEOUT_SECONDS,
     BackendUnavailable,
@@ -166,6 +176,7 @@ async def load_verified_history(
 ) -> Sequence[ModelMessage] | None:
     backend_url, scope = backend_settings_from_environment()
     headers = {"Authorization": " ".join(("Bear" + "er", token))}
+    current_memory_plan.set(None)
     with latency_span("chat_history_verification"):
         async with httpx.AsyncClient(
             timeout=BACKEND_HTTP_TIMEOUT_SECONDS, follow_redirects=False
@@ -174,12 +185,16 @@ async def load_verified_history(
                 client, backend_url, scope
             )
             current_backend_http_timeout_seconds.set(configured_timeout)
-            profile, response = await asyncio.gather(
+            profile, response, summary_state = await asyncio.gather(
                 client.get(f"{backend_url}/me", headers=headers, timeout=configured_timeout),
                 client.get(
                     f"{backend_url}/conversation/history?limit={MAX_HISTORY_MESSAGES}",
                     headers=headers,
                     timeout=configured_timeout,
+                ),
+                fetch_summary_state(
+                    client, backend_url, headers,
+                    min(configured_timeout, MEMORY_FETCH_TIMEOUT_SECONDS),
                 ),
             )
         if profile.status_code != 200:
@@ -242,15 +257,25 @@ async def load_verified_history(
         ) if latest_visual else ""
         if len(visual_text) > MAX_CONTEXT_CHARACTERS:
             visual_text = ""
+        # A limit of 0 turns the whole feature off, so an old summary is not used either.
+        memory_state = (
+            summary_state
+            if summary_state is not None and summary_state.budget.limit > 0 else None
+        )
+        memory_record = memory_state.record if memory_state is not None else None
+        covered_through = memory_record.through_message_id if memory_record else 0
+        window_size = (
+            MEMORY_WINDOW_WITH_SUMMARY if memory_record else MAX_CONTEXT_MESSAGES
+        ) - (1 if visual_text else 0)
         previous = [
             message for message in messages
             if isinstance(message, dict)
             and isinstance(message.get("id"), str)
             and MESSAGE_ID.fullmatch(message["id"])
-            and int(message["id"]) < int(message_id)
+            and covered_through < int(message["id"]) < int(message_id)
             and message.get("role") in {"dan", "jarvis"}
             and isinstance(message.get("text"), str)
-        ][-(MAX_CONTEXT_MESSAGES - (1 if visual_text else 0)):]
+        ][-window_size:]
         previous_jarvis = next(
             (message for message in reversed(previous) if message["role"] == "jarvis"),
             None,
@@ -276,9 +301,30 @@ async def load_verified_history(
             characters += len(content)
         context_items.reverse()
         context = [item for _, item in context_items]
+        summary_text = summary_message_text(memory_record) if memory_record else ""
+        if summary_text:
+            context.insert(0, ModelMessage("user", summary_text))
         if visual_text:
             context.append(ModelMessage("user", visual_text))
+        if memory_state is not None:
+            current_memory_plan.set(plan_refresh(
+                token=token,
+                backend_url=backend_url,
+                http_timeout=configured_timeout,
+                state=memory_state,
+                turns=memory_turns(
+                    messages,
+                    after=covered_through,
+                    before=int(message_id),
+                    outcome_suffix=_tool_outcome_summary,
+                ),
+                next_cursor=page.get("nextCursor"),
+                outcome_suffix=_tool_outcome_summary,
+            ))
         context_span.set_attribute("context.message_count", len(context))
+        context_span.set_attribute(
+            "context.summary_version", memory_record.version if memory_record else 0
+        )
         context_span.set_attribute(
             "context.oldest_message_id", context_items[0][0] if context_items else ""
         )
@@ -290,7 +336,7 @@ async def load_verified_history(
             previous_jarvis is not None
             and any(message_id == previous_jarvis["id"] for message_id, _ in context_items),
         )
-        context_span.set_attribute("context.total_characters", characters)
+        context_span.set_attribute("context.total_characters", characters + len(summary_text))
         return context
 
 
@@ -561,11 +607,14 @@ def register_chat_invocation(
         phase_timings_token = current_chat_phase_timings.set(phase_timings)
         try:
             current_chat_session_id.set(None)
+            current_memory_plan.set(None)
             history = (
                 () if smoke else await context_loader(match.group(1), message_id, text, language)
             )
             chat_session_id = current_chat_session_id.get()
             current_chat_session_id.set(None)
+            memory_plan = current_memory_plan.get()
+            current_memory_plan.set(None)
         except asyncio.CancelledError:
             raise
         except Exception:
@@ -606,6 +655,7 @@ def register_chat_invocation(
             phase_setter_token = None
             first_delta = True
             visual_emitted = False
+            completed = False
             try:
                 yield ": connected\n\n"
                 current_image = None
@@ -829,6 +879,7 @@ def register_chat_invocation(
                     done["agentTimings"] = phase_timings
                 if smoke:
                     done["smokeToolCalls"] = smoke_calls
+                completed = True
                 yield f"event: done\ndata: {json.dumps(done)}\n\n"
             except asyncio.CancelledError:
                 raise
@@ -842,6 +893,11 @@ def register_chat_invocation(
                     yield f"event: visual\ndata: {json.dumps(visual_result)}\n\n"
                 yield f"event: error\ndata: {json.dumps({'code': code})}\n\n"
             finally:
+                # Only a finished reply may start the summary refresh; it never delays or fails one.
+                if completed and memory_plan is not None:
+                    schedule_memory_refresh(
+                        memory_plan, getattr(model_client, "summarize_conversation", None)
+                    )
                 if steering_fetcher_token is not None:
                     current_steering_fetcher.reset(steering_fetcher_token)
                 if phase_setter_token is not None:

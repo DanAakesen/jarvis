@@ -134,6 +134,7 @@ flowchart LR
         messages
         tool_calls
         activity
+        conversation_summaries
     end
     subgraph PROJ["2 · Projects"]
         projects
@@ -194,7 +195,7 @@ flowchart LR
 
 | # | Group | Supports | Tables |
 | --- | --- | --- | --- |
-| 1 | Jarvis core | The one continuous conversation with Jarvis, settings, the activity feed on the main page | `settings`, `jarvis_sessions`, `messages`, `tool_calls`, `activity` |
+| 1 | Jarvis core | The one continuous conversation with Jarvis, settings, the activity feed on the main page | `settings`, `jarvis_sessions`, `messages`, `tool_calls`, `activity`, `conversation_summaries` |
 | 2 | Projects | Which repositories Jarvis works on and their rules | `projects` |
 | 3 | Tasks and queue | The task view, dispatch, retries, the task's history | `tasks`, `task_events` |
 | 4 | Sandbox | The Foundry sessions that run a task, each turn, files kept in Blob | `sandbox_sessions`, `sandbox_turns`, `artifacts` |
@@ -281,10 +282,22 @@ erDiagram
         datetime dismissed_at "nullable; hidden from the main-page feed"
         string alert_key "nullable; unique per alert condition"
     }
+    conversation_summaries {
+        guid owner_object_id PK "Dan's Entra object ID"
+        int version PK "1, 2, ...; append-only"
+        bigint from_message_id "first message folded in; no foreign key"
+        bigint through_message_id "last message folded in"
+        int message_count
+        string summary "1 to 6,000 characters"
+        string open_items "up to 3,000 characters"
+        string model
+        datetime created_at
+    }
 ```
 
 - **One continuous conversation.** Jarvis has a single thread; each chat or voice sitting is a `jarvis_session` within it. `messages` keeps the complete source record; compaction and generated views do not own durable memory or change conversation retention.
 - P4-03's authenticated conversation API creates and idempotently ends sessions, appends messages only to active sessions, and reads history across sessions. History is paginated by message ID (50 by default, up to 100) and ordered chronologically; it includes session channel/language, voice minutes when recorded, and tool name, outcome, and task ID, not tool arguments or results. The main page reads history; P4-06 sends chat turns through the session turn endpoint, while the authenticated voice relay creates voice sessions, replaces any stored partial transcript with its final text, and stores completed assistant transcripts. No schema migration was needed.
+- P9-105 adds append-only `dbo.conversation_summaries` in migration `0051`, with a paired down batch, so a long chat keeps its decisions after the history window moves. A row is owner-scoped by Dan's Entra object ID and numbered by version. It records the covered `from_message_id` and `through_message_id` (no foreign key: messages are never changed or deleted), `message_count`, a 1 to 6,000 character `summary`, up to 3,000 characters of `open_items` (decisions, commitments, open tasks), the `model` and `created_at`. Text is redacted by the backend and never holds file contents. The backend keeps the newest 200 versions per owner; the 24-hour row count enforces `global.conversationSummaryDailyLimit`, stored in the existing `settings` table as `global.conversation_summary_daily_limit` (integer 0 to 48, default 24, 0 off). The hosted agent reads the newest row and appends the next version through the owner-only `/conversation/summary` routes; see [architecture.md](architecture.md).
 - `tool_calls` records what Jarvis actually did. Spoken confirmations are built from these results (L16).
 - P4-04's agent-only turn context reads up to 20 running tasks and their three latest `task_events` from the existing tables. It selects task status/activity and event type, summary, source, and time; it excludes task requests and event payloads, and clips summaries to 400 characters. No schema or migration change is needed.
 - P7-13's `memories` row is keyed by category and stable key, has one current Dan source message, and optionally stores a 1536-dimensional embedding. `memory_history` keeps each replaced source-linked revision; `memory_deletions` records only the forgotten memory ID, request message ID and deletion time, never deleted content. Forget cascades to revisions but does not remove messages. Chat writes use the existing message ID; voice persists the provider transcript item ID on `messages` and resolves it to Dan's stored transcript before a write. Retrieval joins the current source message and returns bounded source text.
