@@ -27,6 +27,11 @@ through standard Accept, with v1 fallback for new clients on old backends.
 No CORS expansion, new query selector or activation follows. The corrected head
 requires fresh normal qualification.
 
+The compatibility successor's SQL/web checks passed. One new HTTP assertion
+was too literal about Fastify's legal `version="2"` response formatting; assert
+the parsed MIME essence/version instead, and accept both quoted/unquoted v2
+request parameters. The version, source-set and all refusal assertions remain.
+
 ## Inactive single Daily page (17 October 2026; delivered source slice)
 
 Delivered #877 as actual main `fa4e52f9`, matching qualified `db166834` tree

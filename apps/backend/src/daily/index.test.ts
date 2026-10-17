@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { MIMEType } from 'node:util';
 import { buildApp } from '../app.js';
 import { loadConfig } from '../config.js';
 import { coreModule } from '../core/index.js';
@@ -86,10 +87,14 @@ describe('Daily integration contract', () => {
       expect(response.headers['cache-control']).toBe('no-store');
       expect(response.headers.vary).toContain('Accept');
     }
-    const modern = await app.inject({ url: '/daily/capabilities', headers: { ...headers(), accept: dailyCapabilitiesAccept } });
-    expect(modern.statusCode).toBe(200);
-    expect(modern.headers['content-type']).toContain('version=2');
-    expect(modern.json()).toMatchObject({ version: 2, sources: Object.values(dailyQuerySources) });
+    for (const accept of [dailyCapabilitiesAccept, 'application/json; version="2", application/json']) {
+      const modern = await app.inject({ url: '/daily/capabilities', headers: { ...headers(), accept } });
+      expect(modern.statusCode).toBe(200);
+      const type = new MIMEType(String(modern.headers['content-type']));
+      expect(type.essence).toBe('application/json');
+      expect(type.params.get('version')).toBe('2');
+      expect(modern.json()).toMatchObject({ version: 2, sources: Object.values(dailyQuerySources) });
+    }
     expect(query).not.toHaveBeenCalled();
   });
   it('requires an explicit internal store factory rather than enabling writes with read-only data', async () => {

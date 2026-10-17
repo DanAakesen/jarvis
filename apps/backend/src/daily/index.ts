@@ -46,8 +46,10 @@ export function createDailyModules(enabled = false, data?: DailyData, connector?
       }, async (request, reply) => {
         resolveDailyOwner(request);
         reply.header('Cache-Control', 'no-store');
-        const modern = request.headers.accept?.split(',').some(media =>
-          media.toLowerCase().replace(/\s/gu, '') === 'application/json;version=2') ?? false;
+        const modern = request.headers.accept?.split(',').some(media => {
+          const value = media.toLowerCase().replace(/\s/gu, '');
+          return value === 'application/json;version=2' || value === 'application/json;version="2"';
+        }) ?? false;
         const vary = reply.getHeader('Vary');
         reply.header('Vary', [...(Array.isArray(vary) ? vary : vary ? [String(vary)] : []), 'Accept'].join(', '));
         reply.type(modern ? 'application/json;version=2' : 'application/json');
