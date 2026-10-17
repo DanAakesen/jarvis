@@ -36,6 +36,8 @@ export interface BackendConfig {
     acsResourceId: string;
     teamsResourceAccountObjectId: string;
   };
+  /** Present only when JARVIS_DAILY_ENABLED is exactly "true". Absent means Daily is off and Jarvis is unchanged. */
+  dailyEnabled?: true;
   auth: AuthConfig;
 }
 
@@ -206,6 +208,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BackendConfig 
     !/^\/subscriptions\/[\da-f-]+\/resourceGroups\/[a-z\d._()-]+\/providers\/Microsoft\.Consumption\/budgets\/[a-z\d._()-]+$/iu.test(monthlyBudgetResourceId)) {
     throw new ConfigurationError('JARVIS_MONTHLY_BUDGET_RESOURCE_ID must be an Azure budget resource ID');
   }
+  const dailySetting = env.JARVIS_DAILY_ENABLED;
+  if (dailySetting !== undefined && dailySetting !== 'true' && dailySetting !== 'false') {
+    throw new ConfigurationError('JARVIS_DAILY_ENABLED must be true or false');
+  }
   const botAppId = env.TEAMS_BOT_APP_ID;
   const botTenantId = env.TEAMS_BOT_TENANT_ID;
   const teamsAudioOrigin = env.TEAMS_AUDIO_ORIGIN;
@@ -267,6 +273,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BackendConfig 
     ...(monthlyBudgetResourceId === undefined ? {} : { monthlyBudgetResourceId }),
     ...(teams ? { teams } : {}),
     ...(phone ? { phone } : {}),
+    ...(dailySetting === 'true' ? { dailyEnabled: true as const } : {}),
   };
 }
 

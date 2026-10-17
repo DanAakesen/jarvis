@@ -172,6 +172,15 @@ describe('backend configuration', () => {
         .toThrow('JARVIS_MONTHLY_BUDGET_RESOURCE_ID');
     }
   });
+  it('keeps Daily off unless the server switch is exactly true', () => {
+    const baseline = loadConfig({});
+    expect(baseline).not.toHaveProperty('dailyEnabled');
+    expect(loadConfig({ JARVIS_DAILY_ENABLED: 'false' })).toEqual(baseline);
+    expect(loadConfig({ JARVIS_DAILY_ENABLED: 'true' })).toEqual({ ...baseline, dailyEnabled: true });
+    for (const JARVIS_DAILY_ENABLED of ['', 'TRUE', 'True', '1', '0', 'yes', 'on', ' true', 'true ', 'enabled']) {
+      expect(() => loadConfig({ JARVIS_DAILY_ENABLED })).toThrow(/^JARVIS_DAILY_ENABLED must be true or false$/);
+    }
+  });
   it.each(['', '0', '-1', '65536', '3000.5', ' 3000', 'junk'])('rejects invalid port %j', (PORT) => {
     expect(() => loadConfig({ PORT })).toThrow('PORT');
   });
