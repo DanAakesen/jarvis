@@ -457,7 +457,7 @@ dismissal table, not just that bounded metadata. Bulk writes persist every
 retained terminal dismissal even when the response is bounded. Import success
 means the submitted legacy snapshot was processed; absent, expired and running
 IDs are ignored, not recorded as dismissals. Nonempty dismissal state prevents
-rolling back migration 0052.
+rolling back migration 0053.
 Legacy scoped browser IDs remain hidden locally until the import is confirmed,
 then the local copy is removed. Refresh reconciles the authoritative visible
 window while preserving concurrent live updates. Unknown replayed jobs wait
@@ -1535,6 +1535,22 @@ publish content-free started, PR, attention, done and cancelled comments to the
 issue; cancellation also removes the `Jarvis` label. PRs use the issue's task ID
 in their title and include `Fixes #N`. Offline fake-backed tests cover these
 flows; live GitHub issue reads/writes await the P10-01 App permission change.
+
+P10-08 routes web `POST /factory/tasks` through the same issue-first helper,
+using the dialog title and request verbatim and retaining execution overrides.
+Web tasks use `source=board`; chat retains its originating message and existing
+defaults. Issues are created without an executor label to avoid starting a
+second task through label pickup. The board still reads issues only and can
+attach the task overlay by `issue_number` before delivery opens a PR.
+The web route requires a submission UUID. Migration 0052 adds
+`factory_task_submissions`: a short SQL transaction claims each UUID with a
+payload digest under update/range locks before any external write; recorded
+HTTP results replay across retries and restarts. A changed payload conflicts.
+Pending/uncertain claims are not reissued automatically; known partial failure
+responses carry the issue number and URL. The browser stores only the UUID and
+digest in tab session storage, not the request text. Rollback refuses to erase
+submission evidence while records exist. Existing tasks and manual backfill
+are untouched.
 
 P10-03 adds the sensitive `create_issue` and `confirm_create_issue` tools. The
 first stages a draft and the next creates it only after a later stored Dan
@@ -5024,8 +5040,9 @@ refuses.
 This reverses the earlier no-maintenance-maths rule for one formula only (see
 the decision log): allowance = resting burn + active energy so far today -
 deficit. It adds no BMR/TDEE estimate from weight, height or age and no
-coaching. The suggestion adapter below is the second slice; the Settings section
-and the default-off composition are separate slices. The values are personal
+coaching. The suggestion adapter below is the second slice and the web Settings
+section after it the third; the default-off composition is a separate slice.
+The values are personal
 health data in a public repository: none appears in code, fixtures, documents,
 logs or audit.
 
@@ -5071,6 +5088,28 @@ only an optional `limit`, resolves the owner before anything else, and stops aft
 20 seconds inside the unchanged 30-second agent and voice budgets. Being
 read-only, it joins no approval or relay-budget list, and its model-facing
 description carries no figures.
+
+### Nutrition targets Settings section (17 October 2026)
+
+The web client reads and saves the owner's three targets through the same
+`GET`/`PATCH /daily/nutrition-targets` route. `SettingsRoute` hands
+`SettingsPage` a `nutrition` slot only while `App` has `dailyEnabled`, which is
+false unless a caller sets it, so a Daily-off client renders no section and
+makes no request. The section is keyed by the signed-in account, so another
+account never inherits the figures. It sits after Projects and outside the
+settings form: it saves on its own like Routines, and Save settings neither
+includes nor waits for it.
+
+`apps/web/src/daily/nutrition-targets.ts` is the only code that calls the route.
+It sends an authenticated `no-store` GET and a PATCH carrying only the changed
+fields, and parses every reply strictly against the route contract (targets,
+`updatedAt` and the per-field bounds); anything off-contract is a failure, never
+a partial display. The client states no figure of its own: labels, units and
+ranges come from the reply, an unset target is an empty field, a cleared field
+sends `null`, and HTTP failures map to static copy (404 means "not available
+here"), so server text is never shown. A save renders the committed readback the
+route returns rather than the typed draft. Nothing is logged, and the browser
+keeps only the section's open/closed flag.
 
 ### Inactive nutrition MCP adapter (17 October 2026)
 

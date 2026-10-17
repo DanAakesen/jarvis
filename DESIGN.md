@@ -1,9 +1,44 @@
 # Design
 
+## Icon-only header (P9-119)
+
+Settings is a gear only at every width, including phones, with its Settings
+accessible name, native tooltip, active-route state and 44px target. Presence
+uses one person, moon or walking-person icon for Present, Away or On the move;
+the existing green/yellow/blue tokens remain, with darker same-hue strokes in
+light mode for contrast. No top-bar presence dot or visible mode label.
+Accessible names and tooltips identify the mode; switching behaviour is unchanged.
+
+Background work keeps one focusable summary in its existing keyboard position,
+with non-zero running, done and failed icon/count pairs. Spinner, check and
+warning-triangle shapes accompany accent, green and red; exact counts and
+outcomes have accessible names and tooltips. Dismissed and cancelled jobs do
+not count. With no outcomes, show a quiet inbox icon; loading/storage failures
+still have an attention indicator and their existing popover messages.
+Only the running icon rotates, and neither OS nor app reduced-motion mode
+allows that animation. Preserve the popover contents, delivery and dismissal.
+
+The summary remains in the header on phones instead of inside the windows
+sheet; the separate windows button counts windows only. Keep the existing
+individual desktop job tabs and phone window sheet. Settings, presence and
+the summary have 44px targets, shared borderless hover/pressed surfaces and
+visible keyboard focus. Stack each phone count below its icon to fit the
+single-row header at 320px without changing the composer or voice orb.
+
+Local Chromium fixture captures and interaction measurements are in
+`docs/ui/screenshots/p9-119/`: 320×568, 390×844 and 1440×900 in both themes,
+all three modes, two running/one done/three failed jobs, and idle after
+dismissal, with a separate restored window. OS and app reduced motion,
+keyboard focus/return, active Settings and phone-sheet independence were
+checked. Authentication and API data are synthetic; the room uses its WebGL
+fallback. This is not live-provider, hardware-GPU or physical-device evidence;
+Dan's visual acceptance remains pending.
+
 ## Presence colours, Routines and composer clearance (17 October 2026; P9-102, P9-103, P9-98)
 
-Presence uses green, yellow and blue in both themes. Dot shape, size, glow and
-the mode label are unchanged, light dots gain a ring of their own hue so the
+Presence uses green, yellow and blue in both themes. P9-119 supersedes the
+top-bar dot and label below; menu/settings dots retain their shape and glow.
+Light dots gain a ring of their own hue so the
 yellow stays visible on pale glass, and the orb keeps its own colour. Settings
 says Routines. Phone pages end above the composer however tall its draft is, and
 Save settings stays a plain end-of-page row: no sticky bar or new chrome.
@@ -97,13 +132,21 @@ device preference, and removes the row without cancelling work or deleting
 server history. The popover offers Dismiss all finished, groups equivalent
 finished entries with a count, and shows kind, start time and stored reasons.
 Restart interruptions use neutral text and marks, not failure emphasis/counts.
-The header chip styling remains unchanged. Keep a stable trigger and explicit empty
+The P9-119 icon/count header remains unchanged; restart interruptions are excluded
+from its failed count. Keep a stable trigger and explicit empty
 state after the final dismissal; row dismissal focuses the list, while detail
 dismissal and Escape return to the trigger. Cross-tab dismissal of an open run
 returns to the filtered list. Indexing Retry remains explicitly unavailable
 without a supported owned action. A historical interruption is not current
 system health. Preserve borderless tabs and phone-sheet geometry; local fixture
 inspection and live acceptance are separate.
+
+Merged-header Chromium fixtures are in `docs/ui/screenshots/p11-12/merged-*`
+at 390×844 and 1440×900, light and dark, captured with reduced motion.
+Synthetic auth/API data exercised
+grouped and bulk dismissal, running-work retention, updated outcome counts,
+Escape/focus return and reduced motion. These are local browser checks, not
+production-data or physical-device acceptance.
 
 ## Fixed balanced stage rendering (15 October 2026; local)
 
@@ -558,6 +601,31 @@ was at least 6.25:1 in light mode and 8.99:1 in dark mode. Screenshots:
 [desktop dark](docs/ui/screenshots/p8-13-theme-settings-desktop-dark.png), and
 [phone dark](docs/ui/screenshots/p8-13-theme-settings-phone-dark.png). Live
 Entra and API/SQL behavior remain unverified.
+
+P12-09 adds a collapsible Nutrition targets section after Projects, only while
+Daily is on: with Daily off nothing renders and no request is made. It follows the
+Routines pattern, with its own form and save beside the action, independent of
+Save settings. The folded header carries a text summary (Needs setup or
+Configured). Three labelled whole-number fields (resting energy burn, daily
+deficit, protein) sit in an auto-fit grid, three across on desktop and stacked on
+a phone, each with a hint and its allowed range. The values are private health
+data, so the fields ship no defaults, placeholders or example figures. A bad entry
+shows a text error after blur (also `aria-invalid`), and a rejected submit moves
+focus to the first invalid field and sends nothing. Save stays disabled until a
+value changes; while saving the form is `aria-busy` and read-only with
+"Saving…". A saved result shows the committed readback, a text status and the
+last-saved date. Failures use distinct page-owned copy (load with Retry, rejected,
+denied, unavailable, unreadable) that never shows server text and keeps the
+entries. Inputs are 44 px tall at 16 px so iOS does not zoom.
+
+Checked in an isolated headless Chromium at 390×844 touch, 320 and 1280×800, in
+light and dark: folded, open, missing, invalid, saving, saved, loading,
+unavailable, load error with recovery, and save rejected or failed. No horizontal
+overflow at 320 or 390; focus rings unclipped; keyboard order is toggle, fields,
+Save, next section; the console was clean. Limits: a mocked `fetch` with synthetic
+figures, no live backend, no 3D stage, header or real sign-in, and
+`prefers-reduced-motion` could not be emulated (the section adds no motion of its
+own). Local runs are not qualification.
 
 ## Projects (P1-10)
 

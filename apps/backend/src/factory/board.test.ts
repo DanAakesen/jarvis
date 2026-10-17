@@ -93,6 +93,19 @@ function fixture(reader: ReturnType<typeof vi.fn>, options: { modules?: readonly
 }
 
 describe('Factory board', () => {
+  it('shows an unlabelled dialog issue in Ready with its task overlay before a PR exists', () => {
+    const board = createFactoryBoard(project.id, project.repo, {
+      issues: [{ ...sourceIssue, labels: [], worker: null }],
+      pullRequests: [],
+    }, [{ ...task, issueNumber: sourceIssue.number, state: 'Ready', pullRequest: null }], []);
+    expect(board.columns.find(({ id }) => id === 'ready')?.cards).toMatchObject([{
+      issue: { number: sourceIssue.number },
+      task: { id: task.id, state: 'Ready' },
+      pr: null,
+    }]);
+    expect(board.columns.flatMap(({ cards }) => cards)).toHaveLength(1);
+  });
+
   it('reports bounded phase durations without presenting clipped values as exact', () => {
     expect(boardDurationFields(0)).toEqual({ durationMs: 0 });
     expect(boardDurationFields(60_000)).toEqual({ durationMs: 60_000 });

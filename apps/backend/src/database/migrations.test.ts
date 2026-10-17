@@ -14,7 +14,7 @@ afterEach(async () => { await Promise.all(directories.splice(0).map((path) => rm
 
 describe('committed SQL manifest', () => {
   it('stores owner-bound background job dismissals separately from raw jobs with reversible visibility state', async () => {
-    const migration = (await readMigrations()).find(({ name }) => name === '0052_background_job_dismissals.sql');
+    const migration = (await readMigrations()).find(({ name }) => name === '0053_background_job_dismissals.sql');
     expect(migration?.sql).toContain('CREATE TABLE dbo.background_job_dismissals');
     expect(migration?.sql).toContain('owner_object_id uniqueidentifier NOT NULL');
     expect(migration?.sql).toContain('PRIMARY KEY (owner_object_id, job_id)');
@@ -22,13 +22,20 @@ describe('committed SQL manifest', () => {
     expect(migration?.sql).toContain('DEFAULT SYSUTCDATETIME()');
     expect(migration?.sql).toContain('IX_background_job_dismissals_job_id');
     expect(migration?.sql).not.toMatch(/\b(?:UPDATE|DELETE)\b(?! CASCADE)/u);
-    const down = await readDownMigration('0052_background_job_dismissals.sql');
+    const down = await readDownMigration('0053_background_job_dismissals.sql');
     expect(down.sql).toContain('IF EXISTS (SELECT 1 FROM dbo.background_job_dismissals WITH (TABLOCKX,HOLDLOCK))');
     expect(down.sql).toContain('THROW 51000');
     expect(down.sql).toContain('dismissal preferences must be retained');
     expect(down.sql).toContain('DROP TABLE dbo.background_job_dismissals;');
   });
 
+  it('retains durable task submission claims and refuses to erase retry protection on rollback', async () => {
+    const migration = (await readMigrations()).find(({ name }) => name === '0052_factory_task_submissions.sql');
+    expect(migration?.sql).toContain('submission_id uniqueidentifier NOT NULL PRIMARY KEY');
+    expect(migration?.sql).toContain('fingerprint varchar(64) NOT NULL');
+    expect(migration?.sql).toContain('response nvarchar(max) NULL');
+    expect((await readDownMigration('0052_factory_task_submissions.sql')).sql).toContain('THROW 51000');
+  });
   it('stores versioned owner-scoped conversation summaries with bounded text and a reversible table', async () => {
     const migration = (await readMigrations()).find(({ name }) => name === '0051_conversation_summaries.sql');
     expect(migration?.sql).toContain('CREATE TABLE dbo.conversation_summaries');
@@ -158,7 +165,8 @@ describe('committed SQL manifest', () => {
       '0049_daily_connector_audit.sql',
       '0050_daily_saved_food.sql',
       '0051_conversation_summaries.sql',
-      '0052_background_job_dismissals.sql',
+      '0052_factory_task_submissions.sql',
+      '0053_background_job_dismissals.sql',
     ]);
     for (const migration of migrations) await expect(readDownMigration(migration.name)).resolves.toMatchObject({ name: migration.name });
   });

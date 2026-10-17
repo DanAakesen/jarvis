@@ -15,7 +15,7 @@ const admin = new sql.ConnectionPool({ ...configuration, database: 'master' });
 const pool = new sql.ConnectionPool({ ...configuration, database });
 const owner = '11111111-1111-4111-8111-111111111111';
 const other = '22222222-2222-4222-8222-222222222222';
-const migrationName = '0052_background_job_dismissals.sql';
+const migrationName = '0053_background_job_dismissals.sql';
 const store = createBackgroundJobStore(pool);
 let migrations: Migration[];
 let jobs: BackgroundJob[];
