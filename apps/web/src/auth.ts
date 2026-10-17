@@ -9,6 +9,38 @@ export interface UserProfile {
 }
 
 const redirectMarker = 'jarvis.sign-in-redirect';
+const signInReturnPathMarker = 'jarvis.sign-in-return-path';
+
+function sameOriginPath(value: string): string | null {
+  if (!value.startsWith('/') || value.startsWith('//')) return null;
+  try {
+    const url = new URL(value, window.location.origin);
+    if (url.origin !== window.location.origin) return null;
+    return `${url.pathname}${url.search}${url.hash}`;
+  } catch {
+    return null;
+  }
+}
+
+export function saveSignInReturnPath(path: string): void {
+  const safePath = sameOriginPath(path);
+  if (!safePath) return;
+  try {
+    sessionStorage.setItem(signInReturnPathMarker, safePath);
+  } catch {
+    // Storage restrictions must not prevent Microsoft sign-in.
+  }
+}
+
+export function takeSignInReturnPath(): string | null {
+  try {
+    const path = sessionStorage.getItem(signInReturnPathMarker);
+    sessionStorage.removeItem(signInReturnPathMarker);
+    return path ? sameOriginPath(path) : null;
+  } catch {
+    return null;
+  }
+}
 
 export function isSignInRedirectPending(): boolean {
   try {

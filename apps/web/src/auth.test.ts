@@ -1,7 +1,7 @@
 import type { PublicClientApplication } from '@azure/msal-browser';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { PublicConfig } from '../config/public-config';
-import { isSignInRedirectPending, restoreProfile, signIn } from './auth';
+import { isSignInRedirectPending, restoreProfile, saveSignInReturnPath, signIn, takeSignInReturnPath } from './auth';
 
 const config: PublicConfig = {
   tenantId: '11111111-1111-4111-8111-111111111111',
@@ -88,6 +88,16 @@ describe('web authentication', () => {
     expect(isSignInRedirectPending()).toBe(false);
     await expect(signIn(client(), config)).resolves.toBeUndefined();
     await expect(restoreProfile(client(), config)).resolves.toBeNull();
+  });
+  it('retains only a same-origin path for post-sign-in return', () => {
+    saveSignInReturnPath('/proactive/11111111-1111-4111-8111-111111111111?from=notification#item');
+    expect(takeSignInReturnPath()).toBe('/proactive/11111111-1111-4111-8111-111111111111?from=notification#item');
+    expect(takeSignInReturnPath()).toBeNull();
+
+    saveSignInReturnPath('//example.invalid/path');
+    expect(takeSignInReturnPath()).toBeNull();
+    saveSignInReturnPath('https://example.invalid/path');
+    expect(takeSignInReturnPath()).toBeNull();
   });
   it('silently restores a cached account and returns null when no account is cached', async () => {
     fetchMock.mockResolvedValue(new Response(JSON.stringify({ name: 'Dan Aakesen' }), { status: 200 }));

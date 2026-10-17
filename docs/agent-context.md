@@ -1016,6 +1016,16 @@ inconsistency and rejected bevelled tabs, not a replacement visual reference.
 Only repository-local guidance changes belong here; do not modify global
 instructions or `C:\Repo\templates`.
 
+## Push notification feature gate (P13-02; 17 October 2026)
+
+Web push is default-off. The Vite build reads only `VITE_PUSH_ENABLED` in
+addition to its existing explicit backend override and injects enabled only
+when the value is exactly the string `true`. Do not expose arbitrary environment
+variables or set this gate as part of the web implementation. When off, the web
+app registers no worker, requests no push endpoints, renders no Notifications
+section and has no proactive-item route. Physical iOS permission and delivery
+checks happen only after a separate enabling change.
+
 This worktree starts from released/remote main `2823585184d67980c580127f9dbbce97109fa91b`.
 Pinned web dependencies can be restored from an owned copy of the authorised
 offline cache with `npm ci --workspace @jarvis/web --include-workspace-root
