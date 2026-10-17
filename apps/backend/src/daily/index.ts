@@ -8,6 +8,7 @@ import { dailyMcpRoutes, type DailyMcpOptions } from './mcp/routes.js';
 import { dailyFoodTool, type InternalNutrition } from './tools/food.js';
 import { dailyFoodReviewTool } from './tools/food-review.js';
 import { dailySavedFoodTool, type InternalSavedNutrition } from './tools/saved-food.js';
+import { dailyFoodLookupTool } from './tools/food-lookup.js';
 
 /** Trusted server composition flag. Not a request parameter or a production rollout. */
 export function createDailyModules(enabled = false, data?: DailyData, connector?: DailyMcpOptions, internalNutrition?: InternalNutrition, savedNutrition?: InternalSavedNutrition): readonly BackendModule[] {
@@ -16,6 +17,7 @@ export function createDailyModules(enabled = false, data?: DailyData, connector?
   if (internalNutrition && !data) throw new TypeError('Daily food writes require shared Daily data');
   if (savedNutrition && !data) throw new TypeError('Daily saved food requires shared Daily data');
   const tools = data ? [dailyQueryTool(data.query),
+    ...(data.foodLookup ? [dailyFoodLookupTool(data.foodLookup)] : []),
     ...(internalNutrition ? [dailyFoodTool(internalNutrition), dailyFoodReviewTool(internalNutrition)] : []),
     ...(savedNutrition ? [dailySavedFoodTool(savedNutrition)] : []),
   ] : [];

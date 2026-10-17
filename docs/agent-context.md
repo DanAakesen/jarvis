@@ -1,5 +1,24 @@
 # Agent context
 
+## Internal Frida binding checks (17 October 2026; P12-09)
+
+The current source-only continuation registers owner-authenticated
+`daily_food_lookup` only with an explicit `DailyData.foodLookup` capability.
+Optional adapter injection reuses the existing data-owner guard and Frida
+client; neither construction nor ordinary Daily composition contacts a provider.
+No new access/token/credential, live Frida request or private data is authorised.
+Keep real provider/device acceptance separate, including the retained earlier
+cloud CONNECT403 limitation.
+
+Pure lookup-schema checks pass9 on the existing approved Node22/Vitest5 graph;
+changed TypeScript ESLint passes all10 source/test files with zero warnings.
+Actual Fastify/null roundtrip, callback cancellation/budget/size/error,
+data-owner/no-SQL, optional composition, ordinary voice30second control and
+unchanged external protocol semantics require normal pinned CI. No local
+full-graph pass, restore, stub or live browser/provider proof is claimed.
+Reference lookup uses20seconds, below unchanged ordinary tool deadlines; never
+increase the caller budgets or add approval for this read.
+
 ## Internal Daily saved-food checks (17 October 2026; P12-09)
 
 The current source batch groups owned lookup/preferences and four native-reviewed
@@ -29,6 +48,16 @@ check the exact budget, recorded outcome, privacy and session-end cancellation;
 all other tools retain their default. The hosted agent gives both tools210
 seconds below ingress240. Native approval remains120 with shared SQL/card/timer
 expiry; no detached writer or live-account/device acceptance is introduced.
+Actual final14e CI39009675867 passed all10jobs:197backendfiles/3729tests,
+SQL11files/230tests with20nutrition, agent732/runner374Python. Four actual
+CodeQL39009675825 analyses and automatic exact-head review6230639748 passed
+without findings. Normal merge195bc89c has qualifiedtreec12eca94. Automatic
+Deploy39010283459 passed backend+agent/Smoke with infra/web skipped:
+backend0000336 ready/healthy, active Foundry107, health200, actual14/15smokeok
+and only existing PC bridge down. Receipt6230819873 and #724 opening were
+independently read back. No source/semantic failure, qualification rerun or
+waiver; initial local style failures remain above. This finished inactive
+release is not actual food/client/device/provider or activation acceptance.
 
 ## Internal Daily review checks (17 October 2026; P12-09)
 

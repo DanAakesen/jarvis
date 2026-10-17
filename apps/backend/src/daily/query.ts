@@ -12,6 +12,7 @@ import { DailyHealthReadModel } from './health/read-model.js';
 import { healthDefinitions } from './health/persistence.js';
 import { SqlHealthProcessor } from './health/processor.js';
 import { NutritionStore } from './nutrition/store.js';
+import type { FridaLookup, FridaLookupAdapter, LookupComponent } from './nutrition/frida.js';
 import { createDailyChanges, type DailyChanges } from './revisions.js';
 import { dailyJson as json, projectDailyRecord as project, projectNutritionRecord } from './records.js';
 export { projectNutritionRecord } from './records.js';
@@ -132,8 +133,10 @@ export class DailyQueryService {
   }
 }
 
-/** Explicit inactive composition: one pool/owner, no timer, provider, route or production registration. */
-export function createDailyData(pool: sql.ConnectionPool, owner: string, now: () => number = Date.now) {
+export type DailyFoodLookup = (input: readonly LookupComponent[], request: FastifyRequest, signal: AbortSignal) => Promise<FridaLookup>;
+
+/** Explicit inactive composition: no timer, automatic provider request, route or production registration. */
+export function createDailyData(pool: sql.ConnectionPool, owner: string, now: () => number = Date.now, frida?: Pick<FridaLookupAdapter, 'lookup'>) {
   const changes = createDailyChanges();
   const checkOwner = (request: FastifyRequest) => {
     if (resolveDailyOwner(request).toLowerCase() !== owner.toLowerCase()) throw new AuthenticationDenied(403);
@@ -146,13 +149,18 @@ export function createDailyData(pool: sql.ConnectionPool, owner: string, now: ()
     health: request => { checkOwner(request); return DailyHealthReadModel.forRequest(pool, request); },
     nutrition,
   };
+  const foodLookup: DailyFoodLookup | undefined = frida
+    ? async (input, request, signal) => { checkOwner(request); return frida.lookup(input, signal); }
+    : undefined;
   return {
     query: new DailyQueryService(readers, now), changes,
     processor: new SqlHealthProcessor(pool, owner, now, changes),
     nutrition,
+    ...(foodLookup ? { foodLookup } : {}),
   };
 }
 export interface DailyData {
   query: Pick<DailyQueryService, 'query'>;
   changes: DailyChanges;
+  foodLookup?: DailyFoodLookup;
 }

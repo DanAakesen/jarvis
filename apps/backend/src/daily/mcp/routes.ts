@@ -18,6 +18,7 @@ import { dailyResultByteLimit, projectNutritionRecord, type DailyQueryService } 
 import { dailyMcpMetadataPath, dailyMcpPath } from './paths.js';
 import { favoriteFingerprint, projectDailyRecord } from '../records.js';
 import { savedChangeSchema } from '../nutrition/saved-schema.js';
+import { foodLookupComponents } from '../nutrition/lookup-schema.js';
 
 export interface DailyMcpOptions {
   auth: Pick<AuthConfig, 'tenantId' | 'apiClientId' | 'dailyConnectorClientId'>;
@@ -70,10 +71,7 @@ const querySchema = z.object({
   ]).optional(),
 }).strict().refine(isDailyQuery);
 const lookupSchema = z.object({
-  components: z.array(z.object({
-    name: exactText(120), grams: z.number().finite().gt(0).max(5000).nullable(),
-    preparationMethod: exactText(120).nullable(),
-  }).strict()).min(1).max(25).optional(),
+  components: foodLookupComponents.optional(),
   savedName: exactText(2000).optional(),
 }).strict().refine(input => (input.components !== undefined) !== (input.savedName !== undefined));
 // MCP form schemas exclude additionalProperties; validate returned content strictly.

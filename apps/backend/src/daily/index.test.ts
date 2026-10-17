@@ -6,7 +6,7 @@ import type { TokenVerifier } from '../auth/verify.js';
 import { createDailyModules } from './index.js';
 import { resolveDailyOwner } from './owner.js';
 import { createDailyChanges } from './revisions.js';
-import type { DailyData } from './query.js';
+import type { DailyData, DailyFoodLookup } from './query.js';
 import type { InternalSavedNutrition } from './tools/saved-food.js';
 
 const config = { ...loadConfig({}), logLevel: 'silent' as const };
@@ -97,5 +97,16 @@ describe('Daily integration contract', () => {
     const response = await app.inject({ url: '/daily/capabilities', headers: headers() });
     expect(response.json()).toMatchObject({ stage: 'internal-nutrition-rehearsal', tools: ['daily_query', 'daily_saved_food'], pages: [] });
     expect(saved).not.toHaveBeenCalled();
+  });
+  it('exposes public reference lookup only with an explicit provider capability and never calls it during composition', async () => {
+    const foodLookup = vi.fn<DailyFoodLookup>();
+    const data: DailyData = { query: { query: vi.fn() }, changes: createDailyChanges(), foodLookup };
+    expect(createDailyModules(false, data)).toEqual([]);
+    const app = buildApp(config, undefined, { auth, modules: [coreModule, ...createDailyModules(true, data)] });
+    apps.push(app);
+    expect((await app.inject({ url: '/daily/capabilities', headers: headers() })).json()).toMatchObject({
+      stage: 'read-only', tools: ['daily_query', 'daily_food_lookup'], pages: [],
+    });
+    expect(foodLookup).not.toHaveBeenCalled();
   });
 });

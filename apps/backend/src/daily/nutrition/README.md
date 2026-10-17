@@ -127,6 +127,25 @@ exports Health, activates Daily or proves real client/account/device acceptance.
 
 ## Pinned provider contract and evidence limits
 
+An explicit optional Frida argument to `createDailyData(pool, owner, now, frida)`
+adds owner-bound `foodLookup`; `createDailyModules(true, data)` then registers
+read-only `daily_food_lookup` in the existing dispatcher. No adapter means no
+new tool or network request. Existing module/write/MCP arguments stay unchanged.
+Input contains only1-25 generic components with name, positive grams or null,
+and preparationMethod or null. Shared schemas preserve the external MCP form;
+the HTTP shape cannot coerce unknown grams into zero. Caller endpoints,
+credentials, owners and confirmation fields are not accepted.
+
+The tool and existing adapter use20second cancellation within ordinary caller
+budgets; voice retains30seconds, not the reviewed-food exception. Preserve the
+returned DTU5.5/release10/DOI attribution, retrieval time, incomplete totals,
+matched subtotals and unknowns. Reference quantities are not verified eaten food,
+and `confirmationRequired` never supplies native write authority. The shared
+response-byte limit refuses oversized evidence rather than truncating it.
+No SQL request/intake/Health write or refresh results from reference lookup.
+Sensitive audit and unsupported-phone denial remain; this source binding does
+not activate Daily, provision an account or verify a live provider/device.
+
 Coordinator supplied read-only source action contracts at original HEAD `9e193554c9c8c7c23a788ed3d2b0582580b76c0f` and independently verified public Frida DTOs/session/endpoints. The migration deliberately pins release 10 / Frida 5.5 (November 2025), DOI https://doi.org/10.11583/DTU.29500682, dataset version 8 published 19 January 2026. DTU XLSX/ODS data are CC BY 4.0; PDF documentation retains DTU copyright. We use the documented public API, not downloaded dataset bytes, so no binary checksum/export claim is made. Every lookup carries DTU/version/release/DOI attribution and per-100-g edible-food basis.
 
 `FridaLookupAdapter` uses only `https://fcdb.fooddata.dk/api`: anonymous `/antiforgery`, `/food/10` and `/foodParameter/10/{foodId}/consumer`. No borrowed cookie/token or provider credential is used. Coordinator-observed immutable catalogue count 1381 guards against silent truncation, with duplicate/release validation. Nutrient IDs 356 kcal, 218 protein g, 172 available carbohydrates g, 168 fibre g, 141 fat g retain nullable values and source IDs. Inputs are 1–25 components, names/preparation ≤120 characters, grams >0 and ≤5000, with at most three candidates. Matching normalizes Danish ae/oe/aa/accents; a unique exact match or conservative separated token match is selected, otherwise ambiguity is explicit. Unverified preparation has an uncertainty marker, not an invented yield factor. Scale known values by grams/100; incomplete totals stay null and matched subtotals are separately labelled. Every lookup is read-only and confirmation-required.

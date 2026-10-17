@@ -1,5 +1,22 @@
 # Decisions
 
+## Bind public Frida lookup as an optional read capability (17 October 2026; P12-09)
+
+Retained Frida lookup exists in the canonical adapter and external MCP boundary
+but was absent from the internal tool composition. Add an optional data
+capability bound to the configured owner, not a sixth module argument, another
+provider implementation or automatic network call. Existing data and module
+callers remain source-compatible. Shared component validation keeps external
+MCP behaviour and explicit unknown quantities unchanged.
+
+Use the adapter's20second budget inside the existing ordinary30second caller
+path; no approval wait or long-running exception is appropriate for this read.
+Keep attribution, cached retrieval timestamps, unknowns and partial totals.
+No conversation/history/credentials or caller-selected endpoint enter the
+provider interface. No reference result authorises intake. Live-provider
+acceptance remains unverified, and personal suggestions must not invent an
+authoritative remaining budget. This is inactive source integration only.
+
 ## Group internal saved-food integration without changing released callers (17 October 2026; P12-09)
 
 Continue the retained migration with one `daily_saved_food` tool for owned
@@ -19,7 +36,10 @@ Give only the two native-reviewed food tools180seconds at that wrapper; preserve
 session cancellation and other tools. Hosted-agent reads remain210seconds and
 cards120seconds. No extra runtime setting, transport, background mutation queue,
 schema, dependency or production activation is needed. Actual caller/SQL/relay
-qualification and normal release remain pending for this new local source.
+qualification passed first normal CI; #875 merged as195bc89c with the qualified
+c12eca94 tree and Deploy39010283459 released backend0000336/agent107. Actual
+routine smoke14/15ok retains only the existing PC bridge warning. This does not
+complete activation, source/private reconciliation or client/device acceptance.
 
 ## Reuse browser-only Now approval for internal food proposals (17 October 2026; P12-09)
 
