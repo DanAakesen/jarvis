@@ -3,9 +3,9 @@ import { dailyQuerySources as sources, type DailyCursor, type DailyJson, type Da
 import type { AreaProps } from '../areas';
 import { ChartView } from '../ChartView';
 import { Loader } from '../Loader';
-import { DailyReadError, loadDailySources } from './client';
 import { dailyCellValue, dailyColumns, dailyPlots, dailyRequest, dailyRowKey, dailySources, dailyValue, initialDailyPeriod, readable, type Row } from './presentation';
 import { DailyRefreshContext } from './refresh';
+import { useDailyCapabilities } from './useDailyCapabilities';
 import { useDailyQuery } from './useDailyQuery';
 import './daily.css';
 
@@ -59,12 +59,19 @@ function BriefBody({ item }: { item: Row }) {
   </>;
 }
 
-export function DailyPage({ backendUrl, getAccessToken }: AreaProps) {
+/**
+ * The record browser. Used on its own it checks availability itself; the Daily home passes what it already knows
+ * (`knownSources`), the collection the user opened (`initialSource`) and a way back to the overview (`onBack`).
+ */
+export function DailyPage({ backendUrl, getAccessToken, knownSources, initialSource, onBack }: AreaProps & {
+  knownSources?: readonly DailySourceId[];
+  initialSource?: DailySourceId;
+  onBack?: () => void;
+}) {
   const refreshVersion = useContext(DailyRefreshContext);
-  const [capabilityRetry, setCapabilityRetry] = useState(0);
-  const capabilityKey = JSON.stringify([backendUrl, capabilityRetry]);
-  const [capabilities, setCapabilities] = useState<{ key: string; sources?: DailySourceId[]; error?: string }>({ key: capabilityKey });
-  const [source, setSource] = useState<DailySourceId>(sources.metrics);
+  const loaded = useDailyCapabilities(backendUrl, getAccessToken, knownSources === undefined);
+  const current = knownSources ? { sources: knownSources, error: undefined, reload: loaded.reload } : loaded;
+  const [source, setSource] = useState<DailySourceId>(initialSource ?? sources.metrics);
   const [period, setPeriod] = useState(initialDailyPeriod);
   const [draftPeriod, setDraftPeriod] = useState(initialDailyPeriod);
   const [cursors, setCursors] = useState<DailyCursor[]>([]);
@@ -75,18 +82,6 @@ export function DailyPage({ backendUrl, getAccessToken }: AreaProps) {
   const heading = useRef<HTMLHeadingElement>(null);
   const focusAfterLoad = useRef(false);
   const collectionCursors = useRef<DailyCursor[]>([]);
-  useEffect(() => {
-    const controller = new AbortController();
-    void loadDailySources(backendUrl, getAccessToken, controller.signal).then(
-      available => { if (!controller.signal.aborted) setCapabilities({ key: capabilityKey, sources: available }); },
-      error => {
-        if (!controller.signal.aborted) setCapabilities({ key: capabilityKey,
-          error: error instanceof DailyReadError ? error.message : 'Daily availability could not be checked. Retry without changing your data.' });
-      },
-    );
-    return () => controller.abort();
-  }, [backendUrl, getAccessToken, capabilityKey]);
-  const current = capabilities.key === capabilityKey ? capabilities : { key: capabilityKey };
   const available = dailySources.filter(item => current.sources?.includes(item.id));
   const selected = available.find(item => item.id === source) ?? available[0];
   const actualSource = briefId !== null ? sources.brief : workout ? workout.heartRate ? sources.heartRate : sources.workout : selected?.id;
@@ -110,10 +105,13 @@ export function DailyPage({ backendUrl, getAccessToken }: AreaProps) {
   const detailSource = data?.source === sources.workouts ? sources.workout : data?.source === sources.briefs ? sources.brief : null;
   const canOpenRecord = detailSource !== null && current.sources?.includes(detailSource);
   return <section className="daily-page" aria-labelledby="daily-heading">
-    <header className="daily-heading"><div><h1 id="daily-heading">Daily</h1><p>Browse recorded health, food, workouts and historical briefs.</p></div>
-      <button className="secondary-button" type="button" disabled={result.pending || !query} onClick={result.reload}>Refresh records</button>
+    <header className="daily-heading"><div><h1 id="daily-heading" tabIndex={-1}>Daily</h1><p>Browse recorded health, food, workouts and historical briefs.</p></div>
+      <div className="daily-heading-actions">
+        {onBack && <button className="secondary-button" type="button" onClick={onBack}>Back to overview</button>}
+        <button className="secondary-button" type="button" disabled={result.pending || !query} onClick={result.reload}>Refresh records</button>
+      </div>
     </header>
-    {current.error ? <div className="daily-notice" role="alert"><p>{current.error}</p><button className="secondary-button" type="button" onClick={() => setCapabilityRetry(value => value + 1)}>Retry availability</button></div> :
+    {current.error ? <div className="daily-notice" role="alert"><p>{current.error}</p><button className="secondary-button" type="button" onClick={current.reload}>Retry availability</button></div> :
       !current.sources ? <Loader label="Checking Daily availability" variant="rows" /> : <>
         <div className="daily-toolbar">
           <label>Browse<select value={selected?.id ?? ''} disabled={available.length === 0} onChange={event => {
