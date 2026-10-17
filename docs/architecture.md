@@ -443,10 +443,18 @@ Running jobs have separate accessible Hide controls; undismissed jobs share
 one Background work list instead of creating repeated terminal header tabs.
 P11-05 renders the store's filtered `jobs`, not its raw `history`, for both
 the list and selected details. Raw history remains available to lifecycle and
-phone-summary consumers; saved records and the existing job tools are unchanged.
-UUID-only dismissal preferences are scoped to the authenticated MSAL account
-and backend URL on this device. Closing/hiding does not call Cancel, delete
-SQL records or erase results. Undismissed details still expose original status,
+phone-summary consumers; saved records remain unchanged.
+P11-12 replaces UUID-only device preferences with a separate SQL dismissal
+store keyed by authenticated owner and job UUID. Existing jobs belong to the
+configured backend owner; other accounts cannot list or dismiss them.
+Authenticated dismiss-one, dismiss-finished and bounded UUID-import endpoints
+filter the header's `/jobs` response and `list_jobs` counts without changing raw
+registry, job-detail or health reads, job rows, steps, events or lifecycle.
+Running work cannot be dismissed.
+Legacy scoped browser IDs remain hidden locally until the import is confirmed,
+then the local copy is removed. Refresh reconciles server visibility.
+Closing/hiding does not call Cancel, delete SQL records or erase results.
+Undismissed details still expose original status,
 run identity, timestamp, failure reason and saved result. A dismissed selection
 falls back to the list without effect-driven state copying. Empty and error
 states remain distinct, and a stable control preserves focus after the last row.

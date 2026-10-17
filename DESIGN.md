@@ -92,8 +92,12 @@ this candidate does not imply their changes are integrated or released.
 The header's **Background work** list contains only undismissed jobs and explains
 that research, images, apps and indexing are separate from Factory tasks.
 P11-05 supersedes the earlier Recent jobs view that kept hidden rows visible.
-Dismissing UUID jobs is local to the account/backend and removes the row, never
-cancels work or deletes server history. Keep a stable trigger and explicit empty
+Dismissing finished UUID jobs is account-owned server state (P11-12), not a
+device preference, and removes the row without cancelling work or deleting
+server history. The popover offers Dismiss all finished, groups equivalent
+finished entries with a count, and shows kind, start time and stored reasons.
+Restart interruptions use neutral text and marks, not failure emphasis/counts.
+The header chip styling remains unchanged. Keep a stable trigger and explicit empty
 state after the final dismissal; row dismissal focuses the list, while detail
 dismissal and Escape return to the trigger. Cross-tab dismissal of an open run
 returns to the filtered list. Indexing Retry remains explicitly unavailable

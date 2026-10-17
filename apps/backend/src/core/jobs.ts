@@ -12,6 +12,7 @@ import type { JarvisActivityHub } from './activity.js';
 import { ToolRefusal, type JarvisTool } from './tool-registry.js';
 import type {
   BackgroundJobStore,
+  BackgroundJobDismissalResult,
   ResearchJobRetryInput,
   StoredBackgroundJobDetails,
 } from '../database/background-job-store.js';
@@ -185,6 +186,22 @@ export class BackgroundJobRegistry {
     return jobs;
   }
 
+  async visibleSnapshot(ownerObjectId: string): Promise<{ jobs: BackgroundJob[]; dismissedJobIds: string[] }> {
+    const jobs = this.store?.listVisible ? await this.store.listVisible(ownerObjectId) : await this.list();
+    const dismissedJobIds = await this.store?.listDismissed?.(ownerObjectId) ?? [];
+    const dismissed = new Set(dismissedJobIds);
+    const visible = jobs.filter((job) => !dismissed.has(job.jobId))
+      .sort((left, right) => Number(right.status === 'running') - Number(left.status === 'running'));
+    return { jobs: visible.slice(0, 1_000), dismissedJobIds: dismissedJobIds.slice(0, 1_000) };
+  }
+
+  async dismiss(ownerObjectId: string, jobIds?: readonly string[], skipRunning = false): Promise<BackgroundJobDismissalResult> {
+    if (!this.store?.dismiss || !this.store.listDismissed) {
+      throw new Error('Background job dismissal persistence is unavailable');
+    }
+    return this.store.dismiss(ownerObjectId, jobIds, skipRunning);
+  }
+
   async cancel(jobId: string): Promise<'cancelled' | 'not-found' | 'finished' | 'not-cancellable'> {
     const job = (await this.list()).find((candidate) => candidate.jobId === jobId);
     if (!job) return 'not-found';
@@ -236,7 +253,7 @@ export class BackgroundJobRegistry {
   }
 }
 
-const jobIdSchema = { type: 'string', pattern: '^[0-9a-fA-F-]{36}$' };
+const jobIdSchema = { type: 'string', pattern: jobIdPattern.source };
 
 export function registerJobRoutes(app: FastifyInstance): void {
   const isOwner = (objectId: string | undefined) =>
@@ -245,7 +262,72 @@ export function registerJobRoutes(app: FastifyInstance): void {
   app.get('/jobs', async (request, reply) => {
     if (!isOwner(request.principal?.objectId)) return reply.code(403).send({ error: 'Forbidden' });
     reply.header('Cache-Control', 'no-store');
-    return { jobs: await app.backgroundJobs.list() };
+    try {
+      return await app.backgroundJobs.visibleSnapshot(app.ownerObjectId);
+    } catch {
+      request.log.error('Background job visibility read failed');
+      return reply.code(503).send({ error: 'Background job persistence is unavailable' });
+    }
+  });
+
+  const dismiss = async (jobIds?: readonly string[], skipRunning = false) =>
+    app.backgroundJobs.dismiss(app.ownerObjectId, jobIds, skipRunning);
+  const unavailable = { error: 'Background job dismissal persistence is unavailable' };
+
+  app.post<{ Params: { jobId: string } }>('/jobs/:jobId/dismiss', {
+    schema: { params: { type: 'object', properties: { jobId: jobIdSchema }, required: ['jobId'] } },
+  }, async (request, reply) => {
+    if (!isOwner(request.principal?.objectId)) return reply.code(403).send({ error: 'Forbidden' });
+    reply.header('Cache-Control', 'no-store');
+    try {
+      const result = await dismiss([request.params.jobId.toLowerCase()]);
+      if (result.runningJobIds.length > 0) return reply.code(409).send({ error: 'Running jobs cannot be dismissed' });
+      if (result.dismissedJobIds.length === 0) return reply.code(404).send({ error: 'Job not found' });
+      return { dismissedJobIds: result.dismissedJobIds.slice(0, 1_000) };
+    } catch {
+      request.log.error('Background job dismissal failed');
+      return reply.code(503).send(unavailable);
+    }
+  });
+
+  app.post('/jobs/dismiss-finished', async (request, reply) => {
+    if (!isOwner(request.principal?.objectId)) return reply.code(403).send({ error: 'Forbidden' });
+    reply.header('Cache-Control', 'no-store');
+    try {
+      return { dismissedJobIds: (await dismiss()).dismissedJobIds.slice(0, 1_000) };
+    } catch {
+      request.log.error('Background job dismissal failed');
+      return reply.code(503).send(unavailable);
+    }
+  });
+
+  app.post<{ Body: { jobIds: string[] } }>('/jobs/dismissals/import', {
+    preValidation: async (request, reply) => {
+      const body: unknown = request.body;
+      if (typeof body !== 'object' || body === null || Array.isArray(body) ||
+          Object.keys(body).length !== 1 || !('jobIds' in body) || !Array.isArray(body.jobIds) ||
+          body.jobIds.length > 1_000 || body.jobIds.some((id: unknown) => typeof id !== 'string' || !jobIdPattern.test(id))) {
+        return reply.code(400).send({ error: 'Expected up to 1000 background job UUIDs' });
+      }
+    },
+    schema: {
+      body: {
+        type: 'object',
+        required: ['jobIds'],
+        additionalProperties: false,
+        properties: { jobIds: { type: 'array', maxItems: 1_000, items: jobIdSchema } },
+      },
+    },
+  }, async (request, reply) => {
+    if (!isOwner(request.principal?.objectId)) return reply.code(403).send({ error: 'Forbidden' });
+    reply.header('Cache-Control', 'no-store');
+    try {
+      const result = await dismiss([...new Set(request.body.jobIds.map((id) => id.toLowerCase()))], true);
+      return { dismissedJobIds: result.dismissedJobIds.slice(0, 1_000) };
+    } catch {
+      request.log.error('Background job dismissal import failed');
+      return reply.code(503).send(unavailable);
+    }
   });
 
   app.post<{ Params: { jobId: string } }>('/jobs/:jobId/cancel', {

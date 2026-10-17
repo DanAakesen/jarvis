@@ -13,6 +13,22 @@ async function directory() {
 afterEach(async () => { await Promise.all(directories.splice(0).map((path) => rm(path, { recursive: true }))); });
 
 describe('committed SQL manifest', () => {
+  it('stores owner-bound background job dismissals separately from raw jobs with reversible visibility state', async () => {
+    const migration = (await readMigrations()).find(({ name }) => name === '0052_background_job_dismissals.sql');
+    expect(migration?.sql).toContain('CREATE TABLE dbo.background_job_dismissals');
+    expect(migration?.sql).toContain('owner_object_id uniqueidentifier NOT NULL');
+    expect(migration?.sql).toContain('PRIMARY KEY (owner_object_id, job_id)');
+    expect(migration?.sql).toContain('REFERENCES dbo.background_jobs (job_id) ON DELETE CASCADE');
+    expect(migration?.sql).toContain('DEFAULT SYSUTCDATETIME()');
+    expect(migration?.sql).toContain('IX_background_job_dismissals_job_id');
+    expect(migration?.sql).not.toMatch(/\b(?:UPDATE|DELETE)\b(?! CASCADE)/u);
+    const down = await readDownMigration('0052_background_job_dismissals.sql');
+    expect(down.sql).toContain('IF EXISTS (SELECT 1 FROM dbo.background_job_dismissals WITH (TABLOCKX,HOLDLOCK))');
+    expect(down.sql).toContain('THROW 51000');
+    expect(down.sql).toContain('dismissal preferences must be retained');
+    expect(down.sql).toContain('DROP TABLE dbo.background_job_dismissals;');
+  });
+
   it('stores versioned owner-scoped conversation summaries with bounded text and a reversible table', async () => {
     const migration = (await readMigrations()).find(({ name }) => name === '0051_conversation_summaries.sql');
     expect(migration?.sql).toContain('CREATE TABLE dbo.conversation_summaries');
@@ -142,6 +158,7 @@ describe('committed SQL manifest', () => {
       '0049_daily_connector_audit.sql',
       '0050_daily_saved_food.sql',
       '0051_conversation_summaries.sql',
+      '0052_background_job_dismissals.sql',
     ]);
     for (const migration of migrations) await expect(readDownMigration(migration.name)).resolves.toMatchObject({ name: migration.name });
   });

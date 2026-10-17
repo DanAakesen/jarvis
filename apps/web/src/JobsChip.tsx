@@ -7,7 +7,28 @@ import { WorkingCore } from './ToolCallChip';
 /** Opens (or just reveals) a job's result window; returns false while the window does not exist yet. */
 export type ResultWindowAction = (viewId: string, mode: 'open' | 'park') => boolean;
 
-const kindLabel: Record<BackgroundJob['kind'], string> = { research: 'Research', image: 'Image', html_app: 'App', embedding: 'Indexing' };
+const kindLabel: Record<BackgroundJob['kind'], string> = { research: 'Research', image: 'Image', html_app: 'App', embedding: 'Memory re-embed' };
+
+function interrupted(job: JobEntry) {
+  return job.status === 'failed' && (job.detail === 'interrupted by restart' || job.detail === 'Interrupted by a backend restart');
+}
+
+function reason(job: JobEntry) {
+  return interrupted(job) ? 'Interrupted by a restart' : job.detail;
+}
+
+function groupJobs(jobs: readonly JobEntry[]) {
+  const groups = new Map<string, JobEntry[]>();
+  for (const job of jobs) {
+    // Embedding view IDs are backfill markers, not result windows with an Open action.
+    const hasResult = Boolean(job.viewId) && job.kind !== 'embedding';
+    const key = job.status === 'running' || hasResult ? job.jobId : JSON.stringify([job.kind, job.status, reason(job) ?? '']);
+    const group = groups.get(key);
+    if (group) group.push(job);
+    else groups.set(key, [job]);
+  }
+  return [...groups.values()];
+}
 
 function elapsed(from: string, now: number) {
   const seconds = Math.max(0, Math.round((now - Date.parse(from)) / 1000));
@@ -58,7 +79,7 @@ export function JobsChip({ backendUrl, getAccessToken, onResult, accountId = nul
   onResult: ResultWindowAction;
   accountId?: string | null;
 }) {
-  const { jobs, history, error, refresh, cancel, dismiss } = useJobs(backendUrl, getAccessToken, accountId);
+  const { jobs, history, hasDismissedJobs, error, refresh, cancel, dismiss, dismissMany, dismissing, syncingDismissals, headerHiddenJobIds } = useJobs(backendUrl, getAccessToken, accountId);
   const { presence } = usePresence(backendUrl, getAccessToken);
   const [openId, setOpenId] = useState<string | null>(null);
   const [showHistory, setShowHistory] = useState(false);
@@ -70,6 +91,8 @@ export function JobsChip({ backendUrl, getAccessToken, onResult, accountId = nul
   const [waiting, setWaiting] = useState<ReadonlySet<string>>(new Set());
   const [cancelling, setCancelling] = useState<ReadonlySet<string>>(new Set());
   const [refreshing, setRefreshing] = useState(false);
+  const headerScope = JSON.stringify([backendUrl, accountId]);
+  const [hiddenRunning, setHiddenRunning] = useState<{ scope: string; ids: ReadonlySet<string> }>({ scope: headerScope, ids: new Set() });
   const root = useRef<HTMLDivElement>(null);
   const handled = useRef(new Set<string>());
   const deliveries = useRef(new Map<string, number>());
@@ -96,7 +119,7 @@ export function JobsChip({ backendUrl, getAccessToken, onResult, accountId = nul
             if (mode === 'open') {
               const tab = root.current?.querySelector<HTMLElement>(`[data-job-id="${job.jobId}"]`) ?? null;
               window.requestAnimationFrame(() => flyFromChip(tab, viewId));
-              dismiss(job.jobId);
+              void dismiss(job.jobId);
             } else {
               setWaiting((current) => new Set(current).add(job.jobId));
             }
@@ -143,9 +166,12 @@ export function JobsChip({ backendUrl, getAccessToken, onResult, accountId = nul
     if (open || showList) popover.current?.focus();
   }, [openId, open, showList]);
 
-  const visible = jobs.filter((job) => job.status === 'running' || job.status === 'done' && waiting.has(job.jobId));
-  if (history.length === 0 && !error) return null;
-  const failures = jobs.filter((job) => job.status === 'failed').length;
+  const visible = jobs.filter((job) => !(job.status === 'running' && (headerHiddenJobIds.has(job.jobId) || hiddenRunning.scope === headerScope && hiddenRunning.ids.has(job.jobId))) &&
+    (job.status === 'running' || job.status === 'done' && waiting.has(job.jobId)));
+  const groups = groupJobs(jobs);
+  const peekGroup = peek ? groups.find((group) => group.some((job) => job.jobId === peek.jobId)) ?? [peek] : [];
+  if (history.length === 0 && !hasDismissedJobs && !error && !syncingDismissals) return null;
+  const failures = jobs.filter((job) => job.status === 'failed' && !interrupted(job)).length;
   const needsAttention = Boolean(error) || jobs.some((job) => Boolean(errors[job.jobId]));
   const historyLabel = needsAttention ? 'Background work · needs attention' : failures > 0 ? `Background work · ${failures} failed` : 'Background work';
 
@@ -159,7 +185,10 @@ export function JobsChip({ backendUrl, getAccessToken, onResult, accountId = nul
     const tab = root.current?.querySelector<HTMLElement>(`[data-job-id="${job.jobId}"]`);
     const next = tab?.nextElementSibling?.querySelector<HTMLButtonElement>('button') ??
       tab?.previousElementSibling?.querySelector<HTMLButtonElement>('button');
-    dismiss(job.jobId);
+    if (job.status === 'running') setHiddenRunning((current) => ({
+      scope: headerScope, ids: new Set(current.scope === headerScope ? current.ids : []).add(job.jobId),
+    }));
+    else void dismiss(job.jobId);
     setOpenId(null);
     (next ?? historyButton.current)?.focus();
   };
@@ -169,7 +198,7 @@ export function JobsChip({ backendUrl, getAccessToken, onResult, accountId = nul
       setErrors((current) => ({ ...current, [job.jobId]: '' }));
       const tab = root.current?.querySelector<HTMLElement>(`[data-job-id="${job.jobId}"]`) ?? null;
       window.requestAnimationFrame(() => flyFromChip(tab, job.viewId!));
-      dismiss(job.jobId);
+      void dismiss(job.jobId);
       closePopover();
     } else {
       setErrors((current) => ({ ...current, [job.jobId]: 'The saved result window is not available in this workspace.' }));
@@ -232,41 +261,51 @@ export function JobsChip({ backendUrl, getAccessToken, onResult, accountId = nul
           </div>
           {error && <p className="jobs-item-error" role="alert">{error}</p>}
           {showList && !peek && <>
-            <p className="jobs-history-note">Research, images, apps and indexing, separate from Factory tasks. Dismiss hides an entry on this device, not the work or saved record.</p>
-            <button type="button" className="jobs-action" disabled={refreshing} onClick={() => {
-              setRefreshing(true);
-              void refresh().finally(() => setRefreshing(false));
-            }}>{refreshing ? 'Refreshing…' : 'Refresh work'}</button>
-            {jobs.length === 0 && !error && <p className="jobs-history-note" role="status">No background work to show.</p>}
+            <p className="jobs-history-note">Research, images, apps and memory re-embedding, separate from Factory tasks. Dismiss syncs across your devices; it does not delete saved records or results.</p>
+            <div className="jobs-history-actions">
+             <button type="button" className="jobs-action" disabled={refreshing} onClick={() => {
+               setRefreshing(true);
+               void refresh().finally(() => setRefreshing(false));
+             }}>{refreshing ? 'Refreshing…' : 'Refresh work'}</button>
+             <button type="button" className="jobs-action" disabled={dismissing || !jobs.some((job) => job.status !== 'running')} onClick={() => {
+               void dismissMany().then(() => popover.current?.focus());
+             }}>{dismissing ? 'Dismissing…' : 'Dismiss all finished'}</button>
+            </div>
+            {syncingDismissals && <p className="jobs-history-note" role="status">Syncing saved dismissals…</p>}
+            {jobs.length === 0 && !error && !syncingDismissals && <p className="jobs-history-note" role="status">No background work to show.</p>}
             <ul className="jobs-list">
-              {jobs.map((job) => <li key={job.jobId} className="jobs-history-row">
+              {groups.map((group) => {
+                const job = group[0]!;
+                return <li key={job.jobId} className="jobs-history-row">
                 <button type="button" className="jobs-history-entry" title={`Run ${job.jobId}`} onClick={() => { setNow(Date.now()); setShowHistory(false); setOpenId(job.jobId); }}>
-                  {job.status === 'running' ? <ProgressRing value={job.step / Math.max(1, job.steps)} /> : <StatusMark status={job.status} />}
-                  <span><span className="jobs-item-title">{job.title}</span>{' '}
-                    <span className="jobs-item-meta">{kindLabel[job.kind]} · {job.status} · {job.jobId.slice(0, 8)}</span>{' '}
-                    <time className="jobs-item-meta" dateTime={job.startedAt}>{new Date(job.startedAt).toLocaleString()}</time>
+                  {job.status === 'running' ? <ProgressRing value={job.step / Math.max(1, job.steps)} /> : <StatusMark status={interrupted(job) ? 'cancelled' : job.status} />}
+                  <span><span className="jobs-item-title">{job.title}{group.length > 1 ? ` · ${group.length} runs` : ''}</span>{' '}
+                    <span className="jobs-item-meta">{kindLabel[job.kind]} · {interrupted(job) ? 'interrupted' : job.status} · {job.jobId.slice(0, 8)}</span>{' '}
+                    <span className="jobs-item-meta">Started <time dateTime={job.startedAt}>{new Date(job.startedAt).toLocaleString()}</time>{group.length > 1 ? ' · latest run' : ''}</span>
+                    {reason(job) && <span className="jobs-item-detail">{reason(job)}</span>}
                     {errors[job.jobId] && <span className="jobs-item-error">{errors[job.jobId]}</span>}
                   </span>
                 </button>
-                <button type="button" className="workspace-tab-close" aria-label={`Dismiss ${jobLabel(job)} from header`} onClick={() => {
-                  dismiss(job.jobId);
-                  popover.current?.focus();
-                }}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg></button>
-              </li>)}
+                {job.status !== 'running' && <button type="button" className="workspace-tab-close" disabled={dismissing}
+                  aria-label={group.length > 1 ? `Dismiss ${group.length} ${kindLabel[job.kind]} runs` : `Dismiss ${jobLabel(job)} from header`} onClick={() => {
+                  void dismissMany(group.map(({ jobId }) => jobId)).then(() => popover.current?.focus());
+                }}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg></button>}
+              </li>;
+              })}
             </ul>
           </>}
           {peek && <>
-          <div className="jobs-item" data-status={peek.status}>
-            <span className="jobs-item-icon">{peek.status === 'running' ? <WorkingCore /> : <StatusMark status={peek.status} />}</span>
+          <div className="jobs-item" data-status={interrupted(peek) ? 'interrupted' : peek.status}>
+            <span className="jobs-item-icon">{peek.status === 'running' ? <WorkingCore /> : <StatusMark status={interrupted(peek) ? 'cancelled' : peek.status} />}</span>
             <span className="jobs-item-body">
-              <span className="jobs-item-title">{peek.title}</span>
-              <span className="jobs-item-meta">Run {peek.jobId} · <time dateTime={peek.startedAt}>{new Date(peek.startedAt).toLocaleString()}</time></span>
+              <span className="jobs-item-title">{peek.title}{peekGroup.length > 1 ? ` · ${peekGroup.length} runs` : ''}</span>
+              <span className="jobs-item-meta">Run {peek.jobId} · Started <time dateTime={peek.startedAt}>{new Date(peek.startedAt).toLocaleString()}</time></span>
               <span className="jobs-item-meta">
                 {kindLabel[peek.kind]}
-                {peek.status === 'running' ? ` · step ${peek.step} of ${peek.steps}` : peek.status === 'done' ? ' · ready' : peek.status === 'failed' ? ' · failed' : ' · cancelled'}
+                {peek.status === 'running' ? ` · step ${peek.step} of ${peek.steps}` : peek.status === 'done' ? ' · ready' : interrupted(peek) ? ' · interrupted' : peek.status === 'failed' ? ' · failed' : ' · cancelled'}
                 {` · ${elapsed(peek.startedAt, peek.status === 'running' ? now : Date.parse(peek.updatedAt))}`}
               </span>
-              {peek.detail && <span className="jobs-item-detail">{peek.detail}</span>}
+              {reason(peek) && <span className="jobs-item-detail">{reason(peek)}</span>}
               {peek.status === 'failed' && <span className="jobs-item-meta">This is a previous run, not a check of current indexing or service health.</span>}
               {peek.status === 'done' && waiting.has(peek.jobId) && <span className="jobs-item-detail">Waiting here while you are away.</span>}
               {errors[peek.jobId] && <span className="jobs-item-error" role="alert">{errors[peek.jobId]}</span>}
@@ -285,7 +324,11 @@ export function JobsChip({ backendUrl, getAccessToken, onResult, accountId = nul
               {peek.status === 'failed' && (
                 <button type="button" className="jobs-action" disabled aria-describedby={`${popoverId}-retry`}>Retry</button>
               )}
-              {!peek.dismissed && <button type="button" className="jobs-action" onClick={() => { dismiss(peek.jobId); closePopover(); }}>{peek.status === 'running' ? 'Hide from header' : 'Dismiss'}</button>}
+              {peek.status === 'running'
+                ? <button type="button" className="jobs-action" onClick={() => hide(peek)}>Hide from header</button>
+                : <button type="button" className="jobs-action" disabled={dismissing} onClick={() => {
+                  void dismissMany(peekGroup.map(({ jobId }) => jobId)).then((message) => { if (!message) closePopover(); });
+                }}>{dismissing ? 'Dismissing…' : peekGroup.length > 1 ? `Dismiss ${peekGroup.length} runs` : 'Dismiss'}</button>}
             </span>
           </div>
           {peek.status === 'failed' && <p id={`${popoverId}-retry`} className="jobs-history-note">

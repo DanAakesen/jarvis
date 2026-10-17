@@ -620,6 +620,12 @@ of `5b3a5933`.
 
 ## Header dismissal follow-up (16 October 2026; P11-05)
 
+P11-12 supersedes device-only dismissal: the server owns finished-entry
+visibility per owner. Preserve raw lifecycle history; import the old scoped
+UUID preference once, removing it only after server confirmation. A failed
+import keeps the local hides and exposes a retryable error. Header running-work
+Hide remains separate from permanent finished-work Dismiss.
+
 `JobsChip` must render `useJobs().jobs`, not the unfiltered `history`, in its
 Background work list and selected details. The previous implementation saved
 scoped dismissals correctly but retained hidden rows and removed only their

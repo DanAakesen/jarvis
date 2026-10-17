@@ -35,5 +35,9 @@ describe('header job control styling', () => {
     expect(styles).toContain('@media (max-width: 900px) { .app-shell[data-phone="false"] .job-tabs .jobs-popover { position: fixed; top: 64px; right: 12px; } }');
     expect(styles).toContain('.app-shell[data-phone="true"] .job-tabs .jobs-popover { position: static; width: 100%; max-height: min(400px, 45dvh); }');
     expect(styles).toContain('.jobs-history-entry:focus-visible { outline: 3px solid var(--focus);');
+    const actions = styles.match(/\.jobs-popover \.jobs-history-actions\s*\{([^}]+)\}/u)![1]!;
+    expect(actions).toContain('display: flex;');
+    expect(actions).toContain('flex-wrap: wrap;');
+    expect(actions).toContain('gap: 8px;');
   });
 });
