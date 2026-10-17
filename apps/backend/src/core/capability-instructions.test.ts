@@ -86,7 +86,8 @@ describe('shared navigation capability instructions', () => {
     expect(instructions).toContain('Only report it applied after the tool succeeds');
     expect(instructions).toContain('workspace_command with operation "navigate"');
     for (const page of workspaceNavigationPages) expect(instructions).toContain(`"${page}"`);
-    for (const section of workspaceSettingsSections) expect(instructions).toContain(`"${section}"`);
+    for (const section of workspaceSettingsSections.filter((value) => value !== 'backend')) expect(instructions).toContain(`"${section}"`);
+    expect(instructions).not.toContain('or "backend" by name');
     for (const alias of ['Kanban', 'board', 'factory', 'tasks', 'Software Factory', 'Go home', 'back to Jarvis']) {
       expect(instructions).toContain(`"${alias}"`);
     }

@@ -9,14 +9,18 @@ the existing green/yellow/blue tokens remain, with darker same-hue strokes in
 light mode for contrast. No top-bar presence dot or visible mode label.
 Accessible names and tooltips identify the mode; switching behaviour is unchanged.
 
-Background work keeps one focusable summary in its existing keyboard position,
-with non-zero running, done and failed icon/count pairs. Spinner, check and
-warning-triangle shapes accompany accent, green and red; exact counts and
-outcomes have accessible names and tooltips. Dismissed and cancelled jobs do
-not count. With no outcomes, show a quiet inbox icon; loading/storage failures
-still have an attention indicator and their existing popover messages.
-Only the running icon rotates, and neither OS nor app reduced-motion mode
-allows that animation. Preserve the popover contents, delivery and dismissal.
+The header background-work cluster has non-zero running, done, failed and
+attention icon/count pairs. Spinner, check, warning-triangle and bell shapes
+accompany accent, green, red and the existing warning token. Every pair has
+its own accessible count and tooltip. The yellow attention pair counts only
+non-dismissed attention, credential and alert feed items plus pending browser
+confirmations; its own popover keeps links, times, dismissal and approval
+actions. Running, releases/deployments and away-mode changes do not count as
+attention. Dismissed and cancelled jobs do not count. With no counts, hide the
+whole cluster, including idle; the background-work popover remains available
+whenever a background-work pair is present. Only the running icon rotates, and
+neither OS nor app reduced-motion mode allows that animation. Preserve the
+background-work popover contents, delivery and dismissal.
 
 The summary remains in the header on phones instead of inside the windows
 sheet; the separate windows button counts windows only. Keep the existing
@@ -383,7 +387,7 @@ row; Close never wraps onto a second row.
 ## Interactions to design
 
 - **Voice states:** listening, thinking, speaking, interrupted, reconnecting. Show what Jarvis heard. English uses Ryan HD and a British butler persona; action confirmations reflect backend tool results.
-- **Confirmations (P7-02/P7-03):** while away, one Teams Adaptive Card headline names the action, body text gives its bounded summary, and ordinary supporting text states the five-minute expiry. Approve and Reject are explicit, distinct buttons; optional speech is a separate, non-autostarting audio attachment. While present, the Now panel lists expiring requests with the same summary and explicit Approve/Reject buttons. This queue appears only when requests are pending.
+- **Confirmations (P7-02/P7-03/P9-120):** while away, one Teams Adaptive Card headline names the action, body text gives its bounded summary, and ordinary supporting text states the five-minute expiry. Approve and Reject are explicit, distinct buttons; optional speech is a separate, non-autostarting audio attachment. In the web app, pending requests appear in the header attention popover with the same summary and explicit Approve/Reject buttons. This queue appears only when requests are pending.
 - **Language menu:** Danish ↔ English under the shared More menu's Language flyout, reachable from the composer and the voice bar (P8-36).
 - **Task controls:** steer, pause, resume, cancel, recover after a crash, and continue after a completed turn's session expires. Show a clear pending state (for example, "Continuing…" while a fresh session starts).
 - **Sleep switch:** the main page shows configured awake/asleep state (minimum replicas 1/0), pending and failure feedback, and explains a refusal while any task is Ready or Running. Settings links to the main-page control.
@@ -491,8 +495,9 @@ non-colour cues described in the current shell guidance below.
   from elapsed time or replace it with an invented progress indicator.
 
 - **Main page:** P8-05 supersedes the initial wide-column layout with a
-  conversation-first opening screen and a bottom-centred composer. "Now" and
-  Backend remain available through the Activity and backend disclosure.
+  conversation-first opening screen and a bottom-centred composer. Attention is
+  reached from its conditional header icon; Now and Backend are not Settings
+  sections.
 - **Screen sharing (P7-05):** keep the browser-selected share/stop control and
   live sharing status in the conversation workflow, with a separate, explicit
   Look at screen action for chat and voice. Keep the status and Stop action
@@ -515,25 +520,20 @@ non-colour cues described in the current shell guidance below.
 - **Unavailable features:** each data area says what it will show. Each action
   stays visible but disabled, and is linked to that explanation with
   `aria-describedby`. No sample messages, tasks or states are shown.
-- **Activity panel:** Running tasks, Needs attention, Releases and deployments,
-  Credential warnings, Alerts, and the current away/present mode, with an empty
-  state for each activity group. Item titles open their
-  task, release or project. Dismiss shows "Dismissing…", keeps the item and
-  explains a failure, and returns focus to the Now heading after removal.
-  The panel loads its backend snapshot, offers retry when unavailable, and
-  labels reconnecting or unavailable live updates while keeping the last
-  snapshot visible.
-- **Away mode (P7-02):** The Now panel uses a labelled text status for present or
-  away and retains the existing list hierarchy. Mode-change entries appear as
-  ordinary activity rows; no color-only status or separate dashboard treatment.
+- **Header attention (P9-120):** Show only non-dismissed attention, credential
+  and alert items plus pending browser confirmations. Keep linked titles, times,
+  Dismiss, Approve and Reject in its own keyboard-accessible popover. The shell
+  feed stays mounted while Settings is closed; releases, running tasks and
+  away-mode changes are not attention.
+- **Away mode (P7-02):** Feed mode changes remain ordinary feed data and do not
+  become a color-only header status or an attention item.
   An explicit, visible-browser activity request—not passive feed refresh—returns
   Dan to present. Pending browser approvals use the panel's existing list and
   button styles, with visible pending, failure, and recovery feedback.
-- **Alerts (P6-02):** Keep alerts in the existing Now activity panel as a
-  separate, dismissible "Alerts" group; retain the condition title, timestamp,
-  and task/release/project link where one exists. Budget alerts have no invented
-  page or cost estimate. The group uses the shell's existing neutral list and
-  responsive layout; no new palette or alert-only visual language is needed.
+- **Alerts (P6-02/P9-120):** Keep alerts as dismissible attention-popover items;
+  retain the condition title, timestamp, and task/release/project link where one
+  exists. Budget alerts have no invented page or cost estimate. Pair the yellow
+  state with its own bell shape, count and accessible label.
 - **PC bridge browser toggle (P7-18):** Keep Chrome automation in the existing
   tray context menu as an explicit, persistent on/off check item. Its label
   states the current setting; the disabled default must be unmistakable. This is
@@ -836,8 +836,8 @@ The opening is a calm greeting, not an empty card. A floating, translucent
 composer sits at the bottom centre: small voice-start orb on the left,
 auto-growing frameless input, compact DA/EN buttons and an icon-only Send
 action. The input retains its accessible label and Enter/Shift+Enter behavior.
-Screen sharing, Now and backend controls sit under the activity disclosure;
-frame-inspection actions appear when a camera or screen is shared.
+Screen sharing and frame-inspection actions remain in their existing workflows;
+the header attention icon is separate from the composer.
 P8-32 renders the greeting as one sans heading with ordinary supporting copy
 (not a subtitle) on smoky-light glass, placed clear of the orb rings; the
 activity disclosure sits directly below/right of the greeting, clear of the
@@ -851,8 +851,8 @@ devices and under reduced motion. The exact timestamp remains available on the
 time element.
 Messages enter with a short opacity/translation transition; streaming keeps a
 live caret beside readable text. Only a published tool-call state gets the
-running-tool shimmer; thinking is not treated as a tool call. Running Now tasks
-use a restrained sheen, while completed outcomes stay static.
+running-tool shimmer; thinking is not treated as a tool call. Completed
+background-work outcomes stay static.
 
 P8-24 keeps the established body typography for Jarvis's safe Markdown replies;
 inline and fenced code use the shared monospace face and theme-specific code
@@ -1109,7 +1109,7 @@ Dan supplied a reference image and iterated live. Canonical values live in `styl
 - **Docked conversation:** the conversation window is the upper part of the composer: same glass, square inner corners, no gap. Other windows stack above it in both arrangements. A centred grab handle on the composer shows or hides it. Click and keys toggle it; dragging up opens it; dragging down follows the pointer and dismisses it. Opening springs from the composer with a slight overshoot. Collapsing tucks it back down. The handle also reopens a closed conversation and replaces its minimised tab on the Jarvis page. The window's controls float over the transcript, and messages fade out toward the top edge.
 - **Composer:** the same clear glass. Hover and typing show a thin light running around the rim instead of a thick focus ring; reduced motion shows a steady bright rim. The voice orb is a living miniature of the stage orb: a cyan shell with rotating meridians and an amber filament core, which brightens while Jarvis works.
 - **Messages:** uniform 18px radius. Dan's bubble has a glowing amber outline; Jarvis's a cool hairline.
-- **Removed from the Jarvis page:** the Arrange menu and the "Activity, sharing and backend" disclosure. The Now feed and backend sleep live on Settings. Screen sharing is a working top-bar toggle beside the camera.
+- **Removed from the Jarvis page:** the Arrange menu and the "Activity, sharing and backend" disclosure. P9-120 removes Now and Backend from Settings; the shell-owned feed stays mounted and publishes its attention items to the header popover. The `/operations/sleep` API remains unchanged, with no web Settings control. Screen sharing is a working top-bar toggle beside the camera.
 - **Scrollbars:** thin, quiet at rest, cyan while hovered.
 - **Panel width:** a vertical pill handle is centred on the inner edge of the navigation and Context panels. Dragging it, or using the arrow keys on it as a separator (Shift for bigger steps, Home/End for the limits), resizes the panel within 160–420px and 220–560px. Widths are remembered on the device; phones have no handle. Only the panel body scrolls, so the heading and handle stay put.
 - **Handle exit:** hiding the conversation with the composer handle (click or drag down) uses the same top-right fly-off as Close.
@@ -1126,9 +1126,9 @@ Dan supplied a reference image and iterated live. Canonical values live in `styl
 - **Kanban (`/factory/kanban`, first and default in Software Factory; P10-07, 13 October):** reuse the approved glass Task Lens composition with canonical GitHub columns: Backlog, Needs Dan, Ready, In progress, In review, Done. Summary pills count matching issues in In progress, Needs Dan and Done, rather than conflating task and issue state. One actual project is always selected; other filters are local and search waits for a pause in typing. Cards link to the issue and linked PR/checks, show blockers, and add worker/task-state chips plus observed activity, start time, attempts and branch only when supplied. Valid task controls, View details and Open task remain. Snapshot/repository, cached or failed-refresh data and live connection status are written facts; Refresh board gives pending feedback without replacing the board. No task duration is inferred from an overlay lacking finish time. Columns retain their named dots, counts, collapse behavior and existing tint; In progress uses the existing cool tone and In review the existing review/warning tone. Actual Running tasks retain their sheen. Both reduced-motion modes stop the new column pulse. Filtering precedes each explicit 100-card cap.
 - **Release trail (Kanban only):** the project and branch, Build/Deploy/release states as named dots, and up to five recent commits as linked dots on a lit line from oldest to newest. The newest commit glows and pulses. Refresh and Open release are compact pills. Without a selected project a dotted placeholder asks for one. The Tasks page keeps its original bar.
 - **Automatic board refresh (#813, 14 October):** finish an in-flight same-scope read before handling automatic invalidations or reconnection. Coalesce them into one follow-up, retaining updates that arrive during that follow-up. Keep the existing short idle debounce, pending controls, mounted cards/scroll/focus and visible failure/recovery states. Missing-issue and requested-task-link navigation stays loading while that scoped work is pending, including the debounce gap; it uses the existing bounded wait, not an extra read or longer acknowledgement budget. Explicit Refresh/Retry and actual scope changes keep their cancellation semantics. This local correction is supported by controlled fixtures, not an attribution of the original released cancellation storm or production acceptance.
-- **Issue-number navigation (P10-07 follow-up):** retain the selected project, clear interfering local filters, apply an exact `#number` search and unfold the target column. Reuse the existing scroll/glow and reduced-motion behavior, not a new banner or motion system. A task-free issue focuses its real GitHub title link; a linked task retains its foreground task-window focus. Settings' Now panel stays in its existing location while the shell-owned stream remains mounted across page changes.
+- **Issue-number navigation (P10-07 follow-up):** retain the selected project, clear interfering local filters, apply an exact `#number` search and unfold the target column. Reuse the existing scroll/glow and reduced-motion behavior, not a new banner or motion system. A task-free issue focuses its real GitHub title link; a linked task retains its foreground task-window focus. The shell-owned feed remains mounted across page changes and supplies the P9-120 header attention popover.
 - **Current issue context:** keyboard focus inside a visible Factory card identifies that issue in the workspace snapshot. Other focus, a hidden/removed card or another page clears the current selector; a previously foreground task window must not override actual card focus.
-- **Settings:** a centred column of glass section cards with a Back button (to the previous page, or Jarvis when opened directly). The Now and Backend panels sit at the top. Inputs are glass and the save bar floats as a compact pill at the bottom right.
+- **Settings:** a centred column of glass section cards with a Back button (to the previous page, or Jarvis when opened directly). Now and Backend are not Settings sections. Inputs are glass and the save bar floats as a compact pill at the bottom right.
 - **Status (P9-101, 14 October):** a read-only diagnostic page in the existing shell, with its own pulse rail icon and phone-menu entry. Use two glass lists, System checks and Recorded smoke check, rather than decorative metric cards. Each row pairs the reported status dot with text, check time and stale marker; failures explain why. PC connection/pause state stays visible, while safe provider details use working native disclosures. Refresh/Retry stays next to the single Status heading, disables while pending and never runs model canaries. Failed refresh retains explicitly previous evidence. Reuse the shared data-arrival transition; both reduced-motion settings remove the rise. Desktop dark/ordinary-motion and 320px light/touch/reduced-motion browser checks use synthetic API responses, not production acceptance.
 - **Sign-in (revised 7 October):** the room's own orb is the hero and stays clear. A dense glass slab sits low over the floor (where the chat bar lives) with the headline and short copy on the left, the Microsoft button on the right and the status beneath; it stacks on phones. The top bar floats as the same slab as when signed in. The page opens in the right theme from the first frame: a tiny blocking script (`public/theme-boot.js`) applies the theme last used on this device, or the OS theme when none is remembered, before anything paints.
 - **Toasts:** an identical message from two sources (for example an expired sign-in seen by two loaders) appears once.

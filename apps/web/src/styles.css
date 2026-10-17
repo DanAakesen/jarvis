@@ -222,7 +222,6 @@
 }
 :root[data-motion="reduced"] .app-shell::before,
 :root[data-motion="reduced"] .topbar-status-mark,
-:root[data-motion="reduced"] .activity-running::before,
 :root[data-motion="reduced"] .workspace-window-jarvis-updating::after,
 :root[data-motion="reduced"] .more-menu-list,
 :root[data-motion="reduced"] .more-menu-flyout,
@@ -1118,21 +1117,8 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
 .activity-title { font-weight: 600; overflow-wrap: anywhere; }
 .activity-meta { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; margin: 6px 0 0; font-size: 14px; }
 .activity-meta dt { color: var(--text); }
-.now-panel > section { margin-top: var(--space-5); }
-.now-panel > section h3 { margin-bottom: var(--space-3); font-size: var(--type-subsection); }
-.now-panel .activity-list { display: grid; gap: var(--space-2); }
-.now-panel .activity-list > li { position: relative; overflow: hidden; padding: var(--space-4); border: 1px solid var(--rule); border-radius: var(--radius-panel); background: var(--surface-translucent); box-shadow: var(--soft-shadow); }
-.now-panel .activity-list > li + li { border-top: 1px solid var(--rule); }
-.activity-running::before { position: absolute; inset: 0; pointer-events: none; content: ""; background: linear-gradient(110deg, transparent 25%, var(--feedback-sheen) 50%, transparent 75%); background-size: 250% 100%; animation: activity-shimmer calc(var(--motion-panel) * 4) var(--ease-standard) infinite; }
-@keyframes activity-shimmer {
-  from { background-position: 100% 0; }
-  to { background-position: -100% 0; }
-}
 .panel p.error-text { margin-top: 4px; color: var(--error); font-size: 14px; }
 .settings-page form { margin-top: 24px; }
-.settings-activity { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); align-items: start; gap: var(--space-4); margin: var(--space-5) 0 var(--space-6); }
-.settings-activity .now-panel > h2 { margin-top: 0; }
-@media (max-width: 900px) { .settings-activity { grid-template-columns: minmax(0, 1fr); } }
 .settings-section { padding: 26px 0; border-bottom: 1px solid var(--rule); }
 .settings-section:first-child { padding-top: 0; }
 .settings-section h2 { margin-bottom: 18px; }
@@ -1773,7 +1759,7 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
     --motion-state: var(--motion-fade);
     --motion-panel: var(--motion-fade);
   }
-  .app-shell::before, .topbar-status-mark, .activity-running::before, .workspace-window-jarvis-updating::after,
+  .app-shell::before, .topbar-status-mark, .workspace-window-jarvis-updating::after,
   .more-menu-list, .more-menu-flyout, .voice-status-glyph * { animation: none !important; }
   .workspace-tab { animation: none; transition: none; }
   .workspace-window { transition: none; transform: none; }
@@ -1831,7 +1817,7 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
 .settings-back:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 @media (pointer: coarse) { .settings-back { min-height: 44px; } }
 .settings-page form { display: grid; gap: var(--space-4); margin-top: var(--space-4); }
-.settings-section, .settings-activity .panel {
+.settings-section {
   position: relative;
   padding: var(--space-5);
   border: 1px solid color-mix(in srgb, var(--glass-rim-light) 30%, transparent);
@@ -1842,7 +1828,7 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
 }
 .settings-section:first-child { padding-top: var(--space-5); }
 .settings-page > .settings-section { margin-top: var(--space-4); }
-.settings-section h2, .settings-activity .panel > h2 { margin: 0 0 var(--space-4); font-size: 18px; }
+.settings-section h2 { margin: 0 0 var(--space-4); font-size: 18px; }
 .settings-field select, .settings-field input, .settings-field textarea {
   border-color: var(--control-rule);
   border-radius: var(--radius-control);
@@ -1886,7 +1872,7 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
    Living surfaces: glass catches light where the pointer is, pages assemble as they open, and a
    surface Jarvis is acting on glows so Dan can see it change.
    --------------------------------------------------------------------------------------------- */
-:is(.workspace-window, .kanban-column, .kanban-card, .settings-section, .settings-activity .panel, .area-sidebar,
+:is(.workspace-window, .kanban-column, .kanban-card, .settings-section, .area-sidebar,
   .context-panel, .app-topbar, .area-rail, .conversation-input.luminous-glass, .task-release-bar, .signin-button)[data-lit] {
   background-image: radial-gradient(circle 140px at var(--light-x, 50%) var(--light-y, 50%),
     color-mix(in srgb, var(--glass-rim-light) 26%, transparent), transparent 72%);
@@ -2669,6 +2655,7 @@ a.task-chip:hover { background: var(--glass-pressed); }
 .jobs-outcome[data-status="done"] { color: var(--presence-present); }
 :root[data-theme="light"] .jobs-outcome[data-status="done"] { color: color-mix(in srgb, var(--presence-present) 55%, #000); }
 .jobs-outcome[data-status="failed"] { color: var(--error); }
+.jobs-outcome[data-status="attention"] { color: var(--warning); }
 @keyframes jobs-running { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: no-preference) {
   :root:not([data-motion="reduced"]) .jobs-outcome[data-status="running"] svg { animation: jobs-running 1.2s linear infinite; }
@@ -2682,10 +2669,22 @@ a.task-chip:hover { background: var(--glass-pressed); }
 .job-tabs .workspace-tab-item[data-selected="true"]:hover { background: var(--state-selected-hover); }
 .job-tabs .workspace-tab-item[data-selected="true"]:active { background: var(--state-selected-pressed); }
 .job-tabs .jobs-popover { left: auto; right: 0; }
+.job-tabs[hidden] { display: none; }
+.attention-chip { position: relative; display: flex; flex: 0 0 auto; }
+.attention-summary { min-width: 44px; min-height: 44px; justify-content: center; padding-inline: 8px; }
+.attention-summary[aria-expanded="true"] { background: var(--state-selected-bg); color: var(--state-selected-fg); }
+.attention-chip .jobs-popover { left: auto; right: 0; }
+.attention-popover section { margin-top: var(--space-3); }
+.attention-popover h3 { margin-bottom: var(--space-2); font-size: var(--type-subsection); }
+.attention-popover .activity-list { display: grid; gap: 0; }
+.attention-popover .activity-item { align-items: center; }
+.attention-popover .attention-dismiss { flex: 0 0 auto; }
+.attention-popover .workspace-tab-close { min-width: 44px; min-height: 44px; flex: 0 0 44px; }
 @media (max-width: 900px) { .app-shell[data-phone="false"] .job-tabs .jobs-popover { position: fixed; top: 64px; right: 12px; } }
 @media (pointer: coarse) { .job-tabs .workspace-tab { min-height: 44px; } }
 .app-shell[data-phone="true"] .jobs-item { grid-template-columns: 20px minmax(0, 1fr); }
 .app-shell[data-phone="true"] .jobs-item-actions { grid-column: 2; flex-direction: row; flex-wrap: wrap; }
+@media (max-width: 900px) { .app-shell[data-phone="false"] .attention-popover { position: fixed; top: 64px; right: 12px; } }
 
 /* Sharp screens (Dan's 1.9× display, 7 October): hairline rims are drawn finer there, so they get more light and
    bubble rims a quarter-pixel more width to keep the crisp look. */
@@ -2945,6 +2944,8 @@ a.task-chip:hover { background: var(--glass-pressed); }
 .app-shell[data-phone="true"] .job-tabs .jobs-summary { padding-inline: 2px; gap: 2px; }
 .app-shell[data-phone="true"] .jobs-outcome { flex-direction: column; gap: 0; font-size: 11px; line-height: 14px; }
 .app-shell[data-phone="true"] .job-tabs .jobs-popover { position: fixed; top: calc(env(safe-area-inset-top) + var(--rail-size) + 6px); right: 8px; width: calc(100vw - 16px); max-height: min(560px, calc(100dvh - var(--rail-size) - 24px)); }
+.app-shell[data-phone="true"] .attention-popover { position: fixed; top: calc(env(safe-area-inset-top) + var(--rail-size) + 6px); right: 8px; width: calc(100vw - 16px); max-height: min(560px, calc(100dvh - var(--rail-size) - 24px)); }
+.app-shell[data-phone="true"] .attention-summary { padding-inline: 2px; }
 .app-topbar:has(.jobs-summary[aria-expanded="true"], .presence-chip-trigger[aria-expanded="true"]) { z-index: 1200; }
 /* The open windows list is a sheet under the top bar, opened from the count button. */
 .app-shell[data-phone="true"] .window-tabstrip { display: none; }
@@ -3101,8 +3102,6 @@ a.task-chip:hover { background: var(--glass-pressed); }
 .collapsible-section h2.collapsible-heading { margin: 0; font-size: inherit; }
 .settings-page form { gap: 10px; margin-top: 10px; }
 .settings-page > .collapsible-section { margin-top: 10px; }
-.settings-activity { gap: 10px; margin: 16px 0 0; }
-.settings-page > .settings-activity + .collapsible-section { margin-top: 10px; }
 @media (max-width: 700px) { .collapsible-toggle { min-height: 52px; font-size: 17px; } }
 :root[data-motion="reduced"] :is(.collapsible-body, .collapsible-chevron) { transition: none; }
 @media (prefers-reduced-motion: reduce) { :is(.collapsible-body, .collapsible-chevron) { transition: none; } }

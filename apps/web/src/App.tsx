@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { flushSync } from 'react-dom';
 import { Link, Navigate, NavLink, Outlet, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import type { HtmlArtifactFrame, JarvisActivityEvent, WorkspaceCommand, WorkspaceSnapshot, WorkspaceView as LookingAtView, WorkspaceViewLocation } from '@jarvis/contracts';
@@ -30,7 +30,6 @@ import { ConversationWindowContext, conversationViewId } from './conversation-wi
 import type { ConversationPosition } from './conversation-layout';
 import { WorkspaceCommandContext } from './workspace-command-state';
 import { SessionCommandRegistryContext, applySessionCommand, openCameraPreview, createSessionCommandRegistry, type SessionCommandResult } from './session-commands';
-import { BackendSleepControl } from './BackendSleepControl';
 import { VoiceWorkspaceContext } from './voice-workspace-state';
 import { readVoiceWorkspacePreference } from './voice-workspace-preference';
 import { PanelResizeHandle } from './PanelResizeHandle';
@@ -41,7 +40,6 @@ import { InputOrbCore } from './InputOrbCore';
 import { TaskWindowsContext, readTaskWindows, saveTaskWindows, taskWindowViewId, type TaskWindowEntry } from './task-windows';
 import { FactoryIssueNavigationContext, NavigationGuardContext, pageForPath, readConversationCommand, readNavigateCommand, resolveNavigation, revealWhenReady, useFocusedFactoryIssue, useVisibleSettingsSection, waitForFactoryIssue, type FactoryIssueNavigator, type NavigateRequest } from './page-navigation';
 import { FolioPane } from './Folio';
-import { CollapsibleSection } from './CollapsibleSection';
 import { MobileCaption, MobileMenu } from './MobileShell';
 import { flyChat } from './chat-flight';
 import { readWorkspaceFrame } from './workspace-frame';
@@ -50,13 +48,12 @@ import { readWorkspaceDevice } from './workspace-device';
 import { JobsChip } from './JobsChip';
 import { ShellIcon } from './ShellIcon';
 import { hasRunningJob, useJobs } from './jobs-store';
+import type { FeedAttention } from './activity';
 import { KnowledgeBackendContext } from './knowledge/knowledge-context';
 import { PresenceChip, PresenceSettings } from './Presence';
 import { MemorySettings } from './MemorySettings';
 import { createWorkspacePinsClient } from './workspace-pins';
 import { usePhoneChatViewport } from './phone-chat-viewport';
-
-const SettingsActivityHostContext = createContext<((host: HTMLDivElement | null) => void) | null>(null);
 
 /** Interim research progress: 
 unning from P9-46 (#613) on; older backends sent partial for it. */
@@ -129,6 +126,8 @@ function ShellLayout({ signedIn, config, session, camera, screenShare, dailyEnab
   }), []);
   const getAccessToken = session.getAccessToken;
   const { working, latestActivity, workText } = useJarvisActivity();
+  const [attention, setAttention] = useState<FeedAttention | null>(null);
+  const onAttentionChange = useCallback((value: FeedAttention | null) => setAttention(value), []);
   const activityText = activityLabel(latestActivity);
   const navigationToggle = useRef<HTMLButtonElement>(null);
   const workspaceController = useRef<WorkspaceController>(null);
@@ -567,7 +566,6 @@ function ShellLayout({ signedIn, config, session, camera, screenShare, dailyEnab
   const [presenceError, setPresenceError] = useState('');
   const activeArea = areas.find(({ path }) => pathname.startsWith(`/${path}`));
   const settingsActive = pathname.startsWith('/settings');
-  const [settingsActivityHost, setSettingsActivityHost] = useState<HTMLElement | null>(null);
   const areaLabel = settingsActive ? 'Settings' : activeArea?.label ?? 'Jarvis';
   const navigationItems = activeArea?.navigation ?? [{ label: 'Conversation', path: '/' }];
   // The navigation panel only exists for an area with more than one page; otherwise there is nothing to choose.
@@ -713,7 +711,7 @@ function ShellLayout({ signedIn, config, session, camera, screenShare, dailyEnab
         {signedIn && <div className="window-tabstrip">
         <div ref={setTabsHost} className="window-tabbar" />
         </div>}
-        {signedIn && <JobsChip key={jobsAccountId} accountId={jobsAccountId} backendUrl={config.backendUrl} getAccessToken={session.getAccessToken} onResult={openJobResult} />}
+        {signedIn && <JobsChip key={jobsAccountId} accountId={jobsAccountId} backendUrl={config.backendUrl} getAccessToken={session.getAccessToken} onResult={openJobResult} attention={attention} />}
 
         {signedIn && (
           <div className="topbar-actions">
@@ -762,9 +760,7 @@ function ShellLayout({ signedIn, config, session, camera, screenShare, dailyEnab
             <ConversationWindowContext.Provider value={conversationWindow}>
               <NavigationGuardContext.Provider value={navigationGuard}>
                 <FactoryIssueNavigationContext.Provider value={factoryIssueNavigator}>
-                  <SettingsActivityHostContext.Provider value={setSettingsActivityHost}>
-                    <DailyRefreshContext.Provider value={dailyRefresh}><Outlet /></DailyRefreshContext.Provider>
-                  </SettingsActivityHostContext.Provider>
+                  <DailyRefreshContext.Provider value={dailyRefresh}><Outlet /></DailyRefreshContext.Provider>
                 </FactoryIssueNavigationContext.Provider>
               </NavigationGuardContext.Provider>
               {/* The chat stays mounted on every page, so a conversation or voice session survives navigation. */}
@@ -788,7 +784,7 @@ function ShellLayout({ signedIn, config, session, camera, screenShare, dailyEnab
                   hideTab={hideResearchProgressTab} {...(workspacePins ? { pins: workspacePins } : {})} />
               </div>
             )}
-            {/* Keep the broker session alive across routes; only its visible panel moves into Settings. */}
+            {/* Keep the broker session alive across routes; the header consumes its attention data. */}
             {signedIn && (
               <div hidden>
                 <NowFeedPanel
@@ -796,7 +792,7 @@ function ShellLayout({ signedIn, config, session, camera, screenShare, dailyEnab
                   config={config}
                   getAccessToken={getAccessToken}
                   applyWorkspaceCommand={applyWorkspaceCommand}
-                  portalHost={settingsActivityHost}
+                  onAttentionChange={onAttentionChange}
                   {...(dailyEnabled ? { onDataRefresh: onDailyRefresh } : {})}
                 />
               </div>
@@ -846,23 +842,7 @@ function SettingsRoute({ config, session, nutritionKey }: {
       projects={<ProjectsPage backendUrl={config.backendUrl} getAccessToken={session.getAccessToken} />}
       {...(nutritionKey ? { nutrition: <NutritionTargetsSettings key={nutritionKey} backendUrl={config.backendUrl} getAccessToken={session.getAccessToken} /> } : {})}
       memory={<MemorySettings backendUrl={config.backendUrl} getAccessToken={session.getAccessToken} />}
-      activity={<SettingsActivity client={session.client} config={config} />} />
-  );
-}
-
-/** The persistent shell feed renders into this slot; backend sleep remains Settings-owned. */
-function SettingsActivity({ client, config }: {
-  client: SignInSession['client'];
-  config: PublicConfig;
-}) {
-  const registerHost = useContext(SettingsActivityHostContext);
-  return (
-    <>
-      <div id="settings-activity" ref={registerHost} />
-      <CollapsibleSection storageKey="settings.backend" className="panel" headingId="backend-heading" title="Backend">
-        <BackendSleepControl client={client} config={config} />
-      </CollapsibleSection>
-    </>
+    />
   );
 }
 

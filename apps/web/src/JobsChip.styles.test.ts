@@ -41,7 +41,10 @@ describe('header job control styling', () => {
     expect(styles).toContain('.jobs-outcome[data-status="running"] { color: var(--primary-action); }');
     expect(styles).toContain('.jobs-outcome[data-status="done"] { color: var(--presence-present); }');
     expect(styles).toContain('.jobs-outcome[data-status="failed"] { color: var(--error); }');
+    expect(styles).toContain('.jobs-outcome[data-status="attention"] { color: var(--warning); }');
     expect(styles).toContain('.job-tabs .jobs-summary { min-width: 44px; min-height: 44px;');
+    expect(styles).toContain('.attention-summary { min-width: 44px; min-height: 44px;');
+    expect(styles).toContain('.job-tabs[hidden] { display: none; }');
     expect(styles).toContain('.presence-chip-trigger { display: inline-flex; width: 44px; min-width: 44px; min-height: 44px;');
     expect(styles).toContain('.settings-link { width: 44px; min-width: 44px; height: 44px; min-height: 44px;');
     expect(styles).toContain('@media (prefers-reduced-motion: no-preference) {\n  :root:not([data-motion="reduced"]) .jobs-outcome[data-status="running"] svg { animation: jobs-running');

@@ -278,11 +278,9 @@ function SelectField({
   );
 }
 
-export function SettingsPage({ backendUrl, getAccessToken, activity, presence, projects, nutrition, memory, onBack }: {
+export function SettingsPage({ backendUrl, getAccessToken, presence, projects, nutrition, memory, onBack }: {
   backendUrl: string | null;
   getAccessToken: () => Promise<string>;
-  /** Live operational panels (Now feed, backend sleep) shown above the saved settings. */
-  activity?: ReactNode;
   /** Presence mode and instructions per mode, shown before the saved settings. */
   presence?: ReactNode;
   /** Project management (managed projects and repositories), shown after the saved settings. */
@@ -469,7 +467,6 @@ export function SettingsPage({ backendUrl, getAccessToken, activity, presence, p
         )}
         <h1 id="settings-heading">Settings</h1>
       </header>
-      {activity && <div className="settings-activity">{activity}</div>}
       {presence}
       {state === 'loading' && <Loader variant="text" label="Loading settings…" />}
       {state === 'error' && (

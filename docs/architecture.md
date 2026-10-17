@@ -826,8 +826,11 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   snapshot as `page-settings`, `page-knowledge`, `page-notes` and `folio-pane`
   windows. Content is at most 8 KiB and selection 2 KiB per window; old
   snapshots still validate.
-  On non-conversation signed-in routes, the shell keeps the command stream
-  mounted in a hidden Now panel while the workspace controller remains active.
+  On signed-in routes, the shell keeps one command/feed stream mounted in a
+  hidden `NowFeedPanel` while the workspace controller remains active. The feed
+  owner publishes its existing snapshot's attention, credential and alert items
+  plus pending confirmations to the header; it opens no second connection or
+  request. The header popover owns only its interaction state.
   Ordinary renderers use fixed React elements and declarative data. P8-41 adds
   the separate `html-app` renderer for owner-authorized artifacts; generated
   HTML/JS executes only inside its restrictive sandboxed iframe, never in the
@@ -1045,7 +1048,7 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   Natural/manual end, failure, and Escape restore typing; the default-off
   `voice.minimizeWindowsOnVoiceStart` preference is persisted through P8-17 and
   mirrored to device storage for immediate shell reads. P8-14 provides the safe
-  list renderer in the Now panel; generated workspace delivery is provided by
+  list renderer from the shell feed owner; generated workspace delivery is provided by
   P8-15. P8-16 provides typed activity to the top bar, orb and Jarvis-updated
   workspace-window shimmer; speech output including P7-12 announcements follows
   the same observed speaking state. No workspace or activity state is persisted.
@@ -1069,21 +1072,23 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   until release data is connected. Client validation improves form feedback;
   the backend remains authoritative. Live Azure CRUD is not verified by the
   browser-mocked UI check.
-- The main page's "Now" activity panel takes a typed `NowFeed`
+- The shell's persistent `NowFeedPanel` takes a typed `NowFeed`
   (`src/activity.ts`): running tasks (title, project, agent, activity, start
-  time) and activity items (category, title, `activity.link`, time). Only
-  `task:<id>`, `release:<id>` and `project:<id>` links become routes. Dismissal
-  removes an item only after the backend confirms it. P1-13 loads this data
+  time), activity items (category, title, `activity.link`, time) and pending
+  browser confirmations. Only `task:<id>`, `release:<id>` and `project:<id>`
+  links become routes. The header attention popover receives only non-dismissed
+  attention, credential and alert items plus confirmations; running jobs stay in
+  background-work counts, while releases and away-mode changes are not attention.
+  Dismissal removes an item only after the backend confirms it. P1-13 loads data
   from authenticated `GET /now`, persists dismissal through
   `POST /now/activity/:id/dismiss`, and refreshes snapshots from authenticated
-  `/now/events`. The panel identifies unavailable data and reconnecting or
-  unavailable live updates rather than claiming a stale snapshot is current.
+  `/now/events`. The stream remains mounted independently of Settings visibility.
   P8-14 adds `@jarvis/contracts`, a shared version-1 JSON Schema and matching
   TypeScript discriminated union for the P8-18 renderer/action allowlists. The
   authenticated `/tools/:name` boundary validates tagged generated-view results
   against the schema and semantic bounds; `call-tool` actions must name a
   registered tool, and image URLs must use GitHub or the configured task-archive
-  Blob host. The serialized view is capped at 256 KiB. The signed-in Now panel
+  Blob host. The serialized view is capped at 256 KiB. The shell feed owner
   builds a list view from its existing bounded `/now` response and renders
   values through fixed React elements. No generated HTML, JavaScript or CSS is
   interpreted. Views remain ephemeral; live Entra/Azure behavior is unverified.
@@ -1832,8 +1837,9 @@ path; future delete, mail, calendar, out-of-browser computer and spend actions
 must use the same gate. Merge work is queued after webhook validation so the
 GitHub request is not held open while Dan responds.
 
-The web approval remains visible in Now if voice is not active; the pending
-operation expires and fails closed after five minutes if Dan does not approve.
+The web approval remains visible in the header attention popover if voice is not
+active; the pending operation expires and fails closed after five minutes if the
+owner does not approve.
 Teams/Bot Service and Speech F0 code is not live-verified because those
 integrations are not part of the personal-tenant deployment.
 

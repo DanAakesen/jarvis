@@ -2,17 +2,15 @@ import { publishPresenceMode } from './presence-store';
 import { publishJob } from './jobs-store';
 import { publishVoiceWake } from './wake-store';
 import { publishFactoryBoardStatus, publishFactoryBoardUpdate } from './factory-board-store';
-import { useContext, useEffect, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
+import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { PublicClientApplication } from '@azure/msal-browser';
 import { useJarvisActivity } from './activity-context';
 import type { PublicConfig } from '../config/public-config';
 import type { WorkspaceCommand } from '@jarvis/contracts';
-import { ActivityPanel } from './ActivityPanel';
 import { WorkspaceCommandContext } from './workspace-command-state';
 import { isCommandForThisDevice, readWorkspaceDeviceKind } from './workspace-device';
 import type { SessionCommandResult } from './session-commands';
-import type { NowFeed, NowFeedStreamStatus } from './activity';
+import type { FeedAttention, NowFeed, NowFeedStreamStatus } from './activity';
 import {
   dismissNowActivity,
   acknowledgeWorkspaceCommand,
@@ -27,22 +25,21 @@ export function NowFeedPanel({
   config,
   getAccessToken,
   applyWorkspaceCommand,
-  portalHost,
+  onAttentionChange,
   onDataRefresh,
 }: {
   client: PublicClientApplication;
   config: PublicConfig;
   getAccessToken: () => Promise<string>;
   applyWorkspaceCommand: (command: WorkspaceCommand, trustedBlobHost?: string, expiresAt?: number, signal?: AbortSignal) => boolean | Promise<SessionCommandResult>;
-  portalHost?: HTMLElement | null;
+  onAttentionChange?: (attention: FeedAttention | null) => void;
   onDataRefresh?: () => void;
 }) {
   const { applyRuntimeActivity, clearRuntimeActivities } = useJarvisActivity();
   const [feed, setFeed] = useState<NowFeed>({ status: 'loading' });
-  const [streamStatus, setStreamStatus] = useState<NowFeedStreamStatus>(
+  const [, setStreamStatus] = useState<NowFeedStreamStatus>(
     config.backendUrl ? 'connecting' : 'unavailable',
   );
-  const [retry, setRetry] = useState(0);
   const refreshRef = useRef<(() => Promise<void>) | null>(null);
   const applyWorkspaceCommandRef = useRef(applyWorkspaceCommand);
   const onDataRefreshRef = useRef(onDataRefresh);
@@ -208,33 +205,35 @@ export function NowFeedPanel({
       if (config.backendUrl) publishFactoryBoardStatus(config.backendUrl, 'unavailable');
       refreshRef.current = null;
     };
-  }, [applyRuntimeActivity, clearRuntimeActivities, client, config, getAccessToken, retry]);
+  }, [applyRuntimeActivity, clearRuntimeActivities, client, config, getAccessToken]);
 
-  async function dismiss(id: string) {
+  const dismiss = useCallback(async (id: string) => {
     if (!config.backendUrl) throw new Error('Activity dismissal is unavailable.');
     await dismissNowActivity(config.backendUrl, id, getAccessToken);
+    setFeed((current) => current.status === 'ready'
+      ? { ...current, items: current.items.filter((item) => item.id !== id) }
+      : current);
     await refreshRef.current?.();
-  }
+  }, [config.backendUrl, getAccessToken]);
 
-  async function resolveConfirmation(id: string, decision: 'approve' | 'reject') {
+  const resolveConfirmation = useCallback(async (id: string, decision: 'approve' | 'reject') => {
     if (!config.backendUrl) throw new Error('Browser approvals are unavailable.');
     await resolveNowConfirmation(config.backendUrl, id, decision, getAccessToken);
     void refreshRef.current?.();
-  }
+  }, [config.backendUrl, getAccessToken]);
 
-  function retryLoad() {
-    setFeed({ status: 'loading' });
-    setRetry((value) => value + 1);
-  }
+  const attention = useMemo<FeedAttention | null>(() => {
+    if (feed.status !== 'ready') return null;
+    return {
+      items: feed.items.filter((item) =>
+        item.category === 'attention' || item.category === 'credential' || item.category === 'alert'),
+      confirmations: feed.confirmations,
+      ...(config.backendUrl ? { onDismiss: dismiss, onResolveConfirmation: resolveConfirmation } : {}),
+    };
+  }, [config.backendUrl, dismiss, feed, resolveConfirmation]);
 
-  const panel = (
-    <ActivityPanel
-      feed={feed}
-      {...(config.backendUrl ? { onDismiss: dismiss } : {})}
-      {...(config.backendUrl ? { onResolveConfirmation: resolveConfirmation } : {})}
-      onRetry={retryLoad}
-      streamStatus={config.backendUrl ? streamStatus : 'unavailable'}
-    />
-  );
-  return portalHost ? createPortal(panel, portalHost) : panel;
+  useEffect(() => { onAttentionChange?.(attention); }, [attention, onAttentionChange]);
+  useEffect(() => () => onAttentionChange?.(null), [onAttentionChange]);
+
+  return null;
 }

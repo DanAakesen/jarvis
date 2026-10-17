@@ -1,5 +1,24 @@
 # Decisions
 
+## Put attention in a conditional header popover (17 October 2026; P9-120 / #913)
+
+Remove the Now and Backend sections from web Settings. Keep the existing
+shell-owned Now feed, stream, side effects and backend sleep API unchanged.
+Publish only the already-loaded feed items in the attention, credential and
+alert categories, plus pending browser confirmations, to a yellow bell/count
+in the header background-work cluster. Its independent popover retains the
+existing item links, timestamps, dismiss endpoint and confirmation handlers.
+Running tasks stay with background work; releases/deployments and away-mode
+changes are not attention. Hide each count pair at zero and the whole cluster
+when every count is zero, including the former idle icon.
+
+This implements issue #913's request to remove Now and Backend from Settings
+and show attention from its own header icon. Reusing the existing feed snapshot avoids a
+second connection or request; `/operations/sleep` and shared navigation
+contracts remain unchanged. Offline focused UI tests cover the new count,
+popover and unknown web anchor. Live provider behavior and the requested visual
+acceptance remain unverified.
+
 ## Link every web-created Factory task to a GitHub issue (17 October 2026; P10-08 / #902)
 
 The Create task dialog and `POST /factory/tasks` reuse the chat path's
