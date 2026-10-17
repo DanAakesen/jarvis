@@ -636,9 +636,11 @@ P8-34 (#369) implements the approved board/release-bar/right-details composition
 - project-scoped loading and instant local filters (debounced search);
 - compact cards ending in View details and Open task;
 - a commit-trail release bar with project, branch, pipeline states and up to five linked recent commits;
-- Create task and Create project dialogs.
+- Create task and Create project dialogs. Create task first creates one GitHub issue in the selected project's repository (task title and request body), then queues one task linked by issue number, preserving the selected agent, model and reasoning overrides. The confirmation links to that issue.
 
 Create project adds an existing GitHub App repository through the existing manage action. Requests for a new repository go to Jarvis in the conversation. Project management (managed projects, existing repositories, project settings links) lives in Settings → Projects. A task opens as a window over the current page (from Kanban, chat, releases, usage or its address); minimised windows become tabs under the top bar, and open task windows return as tabs after a reload. Off the home page the chat waits as an orb in the rail and pops out over any page. The former Tasks and Projects list addresses redirect to Kanban and Settings. Kanban uses the existing backend board contract; the browser neither copies GitHub status rules nor writes Project status.
+
+GitHub issues remain the board's only backlog; no GitHub Project read or write is involved. A new dialog issue appears in Ready with its task overlay before a PR exists, and delivery includes `Fixes #N`. Submission IDs prevent double clicks and retries from creating another issue or task, including after a backend restart. Issue-create failures create no task; partial failures identify the created issue for recovery. An uncertain write is not automatically repeated. Existing tasks and the manual issue-backfill route are unchanged.
 
 #### Software Factory — task detail
 

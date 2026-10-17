@@ -214,6 +214,17 @@ describe('GitHub task delivery', () => {
     });
   });
 
+  it('adds the closing keyword for a dialog task with an ordinary title', async () => {
+    const api = github();
+    const test = fixture(api.fetch);
+    await test.handler(workspace, { ...task, issueNumber: 8 });
+    const create = api.calls.find((call) => call.method === 'POST');
+    expect(JSON.parse(create?.body ?? '{}')).toMatchObject({
+      title: 'Fix the bug',
+      body: expect.stringMatching(/^Fixes #8\n\n/u),
+    });
+  });
+
   it.each([false, true])('evaluates project policy after releasing the completion gate (existing PR: %s)', async (existing) => {
     const api = github({ existing });
     let gateHeld = false;

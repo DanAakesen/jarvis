@@ -13,6 +13,13 @@ async function directory() {
 afterEach(async () => { await Promise.all(directories.splice(0).map((path) => rm(path, { recursive: true }))); });
 
 describe('committed SQL manifest', () => {
+  it('retains durable task submission claims and refuses to erase retry protection on rollback', async () => {
+    const migration = (await readMigrations()).find(({ name }) => name === '0052_factory_task_submissions.sql');
+    expect(migration?.sql).toContain('submission_id uniqueidentifier NOT NULL PRIMARY KEY');
+    expect(migration?.sql).toContain('fingerprint varchar(64) NOT NULL');
+    expect(migration?.sql).toContain('response nvarchar(max) NULL');
+    expect((await readDownMigration('0052_factory_task_submissions.sql')).sql).toContain('THROW 51000');
+  });
   it('stores versioned owner-scoped conversation summaries with bounded text and a reversible table', async () => {
     const migration = (await readMigrations()).find(({ name }) => name === '0051_conversation_summaries.sql');
     expect(migration?.sql).toContain('CREATE TABLE dbo.conversation_summaries');
@@ -142,6 +149,7 @@ describe('committed SQL manifest', () => {
       '0049_daily_connector_audit.sql',
       '0050_daily_saved_food.sql',
       '0051_conversation_summaries.sql',
+      '0052_factory_task_submissions.sql',
     ]);
     for (const migration of migrations) await expect(readDownMigration(migration.name)).resolves.toMatchObject({ name: migration.name });
   });

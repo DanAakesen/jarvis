@@ -1518,6 +1518,22 @@ issue; cancellation also removes the `Jarvis` label. PRs use the issue's task ID
 in their title and include `Fixes #N`. Offline fake-backed tests cover these
 flows; live GitHub issue reads/writes await the P10-01 App permission change.
 
+P10-08 routes web `POST /factory/tasks` through the same issue-first helper,
+using the dialog title and request verbatim and retaining execution overrides.
+Web tasks use `source=board`; chat retains its originating message and existing
+defaults. Issues are created without an executor label to avoid starting a
+second task through label pickup. The board still reads issues only and can
+attach the task overlay by `issue_number` before delivery opens a PR.
+The web route requires a submission UUID. Migration 0052 adds
+`factory_task_submissions`: a short SQL transaction claims each UUID with a
+payload digest under update/range locks before any external write; recorded
+HTTP results replay across retries and restarts. A changed payload conflicts.
+Pending/uncertain claims are not reissued automatically; known partial failure
+responses carry the issue number and URL. The browser stores only the UUID and
+digest in tab session storage, not the request text. Rollback refuses to erase
+submission evidence while records exist. Existing tasks and manual backfill
+are untouched.
+
 P10-03 adds the sensitive `create_issue` and `confirm_create_issue` tools. The
 first stages a draft and the next creates it only after a later stored Dan
 message is a plain approval (yes, approved, confirmed, go ahead; Danish equivalents work; a reply asking for anything else is not approval). The Dan-only

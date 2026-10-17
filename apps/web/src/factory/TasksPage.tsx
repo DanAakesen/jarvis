@@ -49,6 +49,25 @@ interface TaskFilters {
   search: string;
 }
 
+interface TaskSubmission {
+  fingerprint: string;
+  submissionId: string;
+}
+
+const taskSubmissionKey = 'jarvis.factory.taskSubmission:';
+const submissionIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function readTaskSubmission(key: string): TaskSubmission | null {
+  try {
+    const value: unknown = JSON.parse(sessionStorage.getItem(key) ?? 'null');
+    return isObject(value) && typeof value.fingerprint === 'string' &&
+      typeof value.submissionId === 'string' && submissionIdPattern.test(value.submissionId)
+      ? { fingerprint: value.fingerprint, submissionId: value.submissionId } : null;
+  } catch {
+    return null;
+  }
+}
+
 type PageState = 'loading' | 'ready' | 'error';
 type Props = { backendUrl: string | null; getAccessToken: () => Promise<string> };
 
@@ -128,6 +147,13 @@ async function request(
   }
   if (!response.ok) {
     if (response.status === 401) throw new Error('Your Microsoft sign-in needs attention. Sign in again.');
+    if (method === 'POST' && path === '/factory/tasks') {
+      const failure: unknown = await response.json().catch(() => null);
+      if (isObject(failure)) {
+        const message = typeof failure.message === 'string' ? failure.message : failure.error;
+        if (typeof message === 'string' && message.trim()) throw new Error(message);
+      }
+    }
     if (response.status === 503) throw new Error(`${resource === 'board' ? 'Board' : 'Task'} data could not be loaded. Try again.`);
     throw new Error(`Jarvis could not ${method === 'GET' ? 'load' : 'create'} ${resource} data (HTTP ${response.status}).`);
   }
@@ -248,9 +274,11 @@ export function TasksPage({ backendUrl, getAccessToken }: Props) {
   const [reloadKey, setReloadKey] = useState(0);
   const liveState = useFactoryBoardLiveState();
   const previousLiveState = useRef(liveState);
-  const [notice, setNotice] = useState('');
+  const [notice, setNotice] = useState<string | { issueUrl: string; issueNumber: number } | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [creating, setCreating] = useState(false);
+  const creatingRef = useRef(false);
+  const submissionRef = useRef<TaskSubmission | null>(null);
   const [createError, setCreateError] = useState('');
   const [createProjectId, setCreateProjectId] = useState('');
   const [createAgent, setCreateAgent] = useState<Agent>('copilot');
@@ -456,6 +484,7 @@ export function TasksPage({ backendUrl, getAccessToken }: Props) {
   };
 
   const closeDialog = () => {
+    if (creatingRef.current) return;
     setDialogOpen(false);
     setCreateError('');
     window.setTimeout(() => createButtonRef.current?.focus(), 0);
@@ -463,6 +492,7 @@ export function TasksPage({ backendUrl, getAccessToken }: Props) {
 
   const createTask = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (creatingRef.current) return;
     const form = event.currentTarget;
     const values = new FormData(form);
     const title = String(values.get('title') ?? '').trim();
@@ -474,13 +504,14 @@ export function TasksPage({ backendUrl, getAccessToken }: Props) {
       setCreateError('Enter a project, task title, and request within the stated limits.');
       return;
     }
-    setCreating(true);
-    setCreateError('');
     if (!backendUrl) {
-      setCreating(false);
       setCreateError('Task creation unavailable.');
       return;
     }
+    creatingRef.current = true;
+    setCreating(true);
+    setCreateError('');
+    setNotice(null);
     const body = {
       projectId: createProjectId,
       title,
@@ -491,15 +522,34 @@ export function TasksPage({ backendUrl, getAccessToken }: Props) {
     };
 
     try {
-      const value = await request(backendUrl, getAccessToken, '/factory/tasks', 'POST', body);
-      if (!isTask(value)) throw new Error('Jarvis returned invalid task data. Try again.');
-      setNotice('Task created. Linked issues appear in their GitHub Project column.');
+      const key = `${taskSubmissionKey}${backendUrl.replace(/\/+$/, '')}`;
+      // Persist only the payload digest and retry key, never the task request.
+      const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(body)));
+      const fingerprint = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
+      let submission = submissionRef.current ?? readTaskSubmission(key);
+      if (submission?.fingerprint !== fingerprint) submission = { fingerprint, submissionId: crypto.randomUUID() };
+      submissionRef.current = submission;
+      try { sessionStorage.setItem(key, JSON.stringify(submission)); } catch { /* In-memory retries still work. */ }
+      const value = await request(backendUrl, getAccessToken, '/factory/tasks', 'POST', {
+        ...body, submissionId: submission.submissionId,
+      });
+      if (!isTask(value) || !isObject(value) || typeof value.issueUrl !== 'string' ||
+        !/^https:\/\/github\.com\/[^/]+\/[^/]+\/issues\/[1-9]\d*$/.test(value.issueUrl) ||
+        typeof value.issueNumber !== 'number' || !Number.isSafeInteger(value.issueNumber) || value.issueNumber < 1) {
+        throw new Error('Jarvis returned invalid task data. Try again.');
+      }
+      submissionRef.current = null;
+      try {
+        if (readTaskSubmission(key)?.submissionId === submission.submissionId) sessionStorage.removeItem(key);
+      } catch { /* A completed submission must not block the form if storage is unavailable. */ }
+      setNotice({ issueUrl: value.issueUrl, issueNumber: value.issueNumber });
       setDialogOpen(false);
       setReloadKey((current) => current + 1);
       window.setTimeout(() => createButtonRef.current?.focus(), 0);
     } catch (reason) {
       setCreateError(taskError(reason));
     } finally {
+      creatingRef.current = false;
       setCreating(false);
     }
   };
@@ -618,7 +668,9 @@ export function TasksPage({ backendUrl, getAccessToken }: Props) {
             <button className="secondary-button" type="button" onClick={() => setProjectRetry((value) => value + 1)}>Retry projects</button>
           </div>
         )}
-        {notice && <p className="tasks-feedback" role="status">{notice}</p>}
+        {notice && <p className="tasks-feedback" role="status">{typeof notice === 'string' ? notice : <>Task created and linked to{' '}
+          <a href={notice.issueUrl} target="_blank" rel="noreferrer">issue #{notice.issueNumber}</a></>}
+        </p>}
 
         <section className="kanban-filter-panel" data-open={filtersOpen} aria-label="Search and filters">
         <button className="kanban-filter-toggle" type="button" aria-expanded={filtersOpen} aria-controls="kanban-filter-body"
