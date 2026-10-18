@@ -3614,19 +3614,61 @@ a.task-chip:hover { background: var(--glass-pressed); }
   :is(.primary-button, .secondary-button, .ghost-button, .danger-button, .danger-button--filled,
     .jobs-action, .conversation-history .composer-send, .conversation-latest) { transition: none; }
   :is(.primary-button, .secondary-button, .ghost-button, .danger-button, .danger-button--filled,
-    .jobs-action, .conversation-history .composer-send):active:not(:disabled) { transform: none; }
+    .jobs-action, .conversation-history .composer-send, .conversation-latest):active:not(:disabled) { transform: none; }
   .conversation-latest { animation: none; }
 }
 :root[data-motion="reduced"] :is(.primary-button, .secondary-button, .ghost-button, .danger-button,
   .danger-button--filled, .jobs-action, .conversation-history .composer-send, .conversation-latest) { transition: none; }
 :root[data-motion="reduced"] :is(.primary-button, .secondary-button, .ghost-button, .danger-button,
-  .danger-button--filled, .jobs-action, .conversation-history .composer-send):active:not(:disabled) { transform: none; }
+  .danger-button--filled, .jobs-action, .conversation-history .composer-send, .conversation-latest):active:not(:disabled) { transform: none; }
 :root[data-motion="reduced"] .conversation-latest { animation: none; }
+
+:is(.primary-button, .secondary-button, .ghost-button, .danger-button, .danger-button--filled,
+  .jobs-action, .conversation-history .composer-send, .conversation-latest):focus-visible {
+  box-shadow: 0 0 0 3px var(--page);
+}
 
 @media (prefers-contrast: more) {
   :is(.primary-button, .secondary-button, .ghost-button, .danger-button, .danger-button--filled,
     .jobs-action, .conversation-history .composer-send, .conversation-latest):not(:disabled) {
     background-image: none; border-color: currentColor; box-shadow: none;
+  }
+  :is(.primary-button, .jobs-action-primary, .conversation-history .composer-send):not(:disabled) {
+    background-color: var(--primary-action);
+  }
+  :is(.primary-button, .jobs-action-primary, .conversation-history .composer-send):hover:not(:disabled, [aria-busy="true"]) {
+    background-color: var(--primary-action-hover);
+  }
+  :is(.primary-button, .jobs-action-primary, .conversation-history .composer-send):active:not(:disabled, [aria-busy="true"]) {
+    background-color: color-mix(in srgb, var(--primary-action) 78%, var(--ink-solid));
+  }
+  :is(.secondary-button, .jobs-action:not(.jobs-action-primary), .conversation-latest):not(:disabled) {
+    background-color: color-mix(in srgb, var(--text) 6%, var(--surface));
+  }
+  :is(.secondary-button, .jobs-action:not(.jobs-action-primary), .conversation-latest):hover:not(:disabled, [aria-busy="true"]) {
+    background-color: color-mix(in srgb, var(--text) 12%, var(--surface));
+  }
+  :is(.secondary-button, .jobs-action:not(.jobs-action-primary), .conversation-latest):active:not(:disabled, [aria-busy="true"]) {
+    background-color: color-mix(in srgb, var(--text) 18%, var(--surface));
+  }
+  .ghost-button:not(:disabled) { background-color: transparent; }
+  .ghost-button:hover:not(:disabled, [aria-busy="true"]) { background-color: var(--glass-hover); }
+  .ghost-button:active:not(:disabled, [aria-busy="true"]) { background-color: var(--glass-pressed); }
+  .danger-button:not(:disabled) { background-color: var(--error-surface); }
+  .danger-button:hover:not(:disabled, [aria-busy="true"]) { background-color: var(--error-surface); }
+  .danger-button:active:not(:disabled, [aria-busy="true"]) {
+    background-color: color-mix(in srgb, var(--error-surface) 76%, var(--error));
+  }
+  .danger-button--filled:not(:disabled) { background-color: var(--error); }
+  .danger-button--filled:hover:not(:disabled, [aria-busy="true"]) {
+    background-color: color-mix(in srgb, var(--error) 88%, var(--text));
+  }
+  .danger-button--filled:active:not(:disabled, [aria-busy="true"]) {
+    background-color: color-mix(in srgb, var(--error) 78%, var(--ink-solid));
+  }
+  :is(.primary-button, .secondary-button, .ghost-button, .danger-button, .danger-button--filled,
+    .jobs-action, .conversation-history .composer-send, .conversation-latest):focus-visible {
+    box-shadow: 0 0 0 3px var(--page);
   }
 }
 @media (forced-colors: active) {

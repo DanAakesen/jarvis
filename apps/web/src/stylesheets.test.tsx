@@ -232,7 +232,9 @@ describe('stylesheets', () => {
     const coarseRules: string[] = [];
     postcss.parse(source).walkAtRules('media', (atRule) => {
       if (atRule.params.includes('(pointer: coarse)')) {
-        atRule.walkRules((rule) => coarseRules.push(`${rule.selector} { ${rule.nodes?.map((node) => node.toString()).join('; ')} }`));
+        atRule.walkRules((rule) => {
+          coarseRules.push(`${rule.selector} { ${rule.nodes?.map((node) => node.toString()).join('; ')} }`);
+        });
       }
     });
     expect(coarseRules.some((rule) => rule.includes('.primary-button') && rule.includes('min-height: 44px'))).toBe(true);

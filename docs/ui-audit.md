@@ -276,3 +276,43 @@ skip link. Reduced-motion emulation kept the page content available. These are
 local synthetic Chromium checks, not live-service or human acceptance. Usage,
 Status, Knowledge, Notes, and a separate healthy Factory board view were not
 captured in this bounded screenshot set.
+
+### P14-07 rendered checks (18 October 2026)
+
+Captured the five button variants in rest, hover, pressed, focus-visible,
+disabled and busy states in the scratch gallery at 390×844 (touch) and
+1440×900, light and dark. The gallery also shows Settings save, Factory task
+actions, a danger confirmation, an empty-state action and the chat composer.
+Four actual-app composites add Settings, the Factory board and chat at each
+viewport/theme. All samples use synthetic data:
+
+| View | Light | Dark |
+| --- | --- | --- |
+| Gallery, 1440×900 | [before](ui/p14-07/before-light-desktop.webp) · [after](ui/p14-07/after-light-desktop.webp) | [before](ui/p14-07/before-dark-desktop.webp) · [after](ui/p14-07/after-dark-desktop.webp) |
+| Gallery, 390×844 touch | [before](ui/p14-07/before-light-touch.webp) · [after](ui/p14-07/after-light-touch.webp) | [before](ui/p14-07/before-dark-touch.webp) · [after](ui/p14-07/after-dark-touch.webp) |
+| Actual app composite, 1440×900 | [Settings, Factory and chat](ui/p14-07/after-app-light-desktop.webp) | [Settings, Factory and chat](ui/p14-07/after-app-dark-desktop.webp) |
+| Actual app composite, 390×844 touch | [Settings, Factory and chat](ui/p14-07/after-app-light-touch.webp) | [Settings, Factory and chat](ui/p14-07/after-app-dark-touch.webp) |
+
+Chromium contrast ratios below are the minimum of top and bottom interior
+samples after state transitions settled; the tonal gradients are vertical.
+Busy labels are visually hidden beneath the inline Loader, so there is no
+visible label sample for that state; the accessible name remains unchanged.
+
+| Theme | Primary | Secondary | Ghost | Danger | Filled danger |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Light | 4.63:1 | 12.02:1 | 12.15:1 | 5.53:1 | 5.92:1 |
+| Dark | 6.96:1 | 12.25:1 | 16.13:1 | 6.32:1 | 6.24:1 |
+
+The outer focus outline measured 4.62:1 against the light page and 14.40:1
+against the dark page. The weakest of the two visible focus bands, measured
+against both its page and button, was 4.49:1 in light and 9.25:1 in dark.
+Forced-colours emulation removed gradients and resolved the boundary and focus
+to system colours ([capture](ui/p14-07/forced-colors.webp)). More-contrast
+emulation removed gradients; reduced-motion emulation produced no button
+transition or press transform, while state colours remained. Coarse-pointer
+button targets, including the composer send action, were 44px high (44×44px
+for the send action). No horizontal overflow was found at 320px or at the
+390px app viewport, and Chromium reported no console errors.
+
+These are local synthetic Chromium results, not live-service, physical-device
+or human acceptance.
