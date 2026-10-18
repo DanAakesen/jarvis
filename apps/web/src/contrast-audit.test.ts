@@ -216,7 +216,7 @@ const buttonPairings: Pairing[] = [
     { label: 'Ghost button', foreground: 'var(--text)' },
     { label: 'Danger button', foreground: 'var(--error)' },
   ] as const).flatMap(({ label, foreground }) => {
-    const states = label === 'Secondary button'
+    const states: readonly (readonly [string, string])[] = label === 'Secondary button'
       ? [
         ['rest', 'color-mix(in srgb, var(--text) 6%, var(--surface))'],
         ['hover', 'color-mix(in srgb, var(--text) 12%, var(--surface))'],
@@ -254,7 +254,7 @@ const buttonPairings: Pairing[] = [
     foreground: 'var(--danger-action-text)',
     backgrounds: stops.map((stop, index) => ({
       label: index === 0 ? 'top gradient stop' : 'bottom gradient stop',
-      layers: [`color-mix(in srgb, var(--error) ${stop}, ${mix[index]})`],
+      layers: [`color-mix(in srgb, var(--error) ${stop}, ${mix[index]!})`],
     })),
     threshold: 4.5,
   })),
