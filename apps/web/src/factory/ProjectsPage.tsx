@@ -4,6 +4,7 @@ import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { Modal } from '../Modal';
 import { useConversationIntents } from '../conversation-intents';
 import { Loader } from '../Loader';
+import { StateMessage } from '../StateMessage';
 import { CollapsibleSection } from '../CollapsibleSection';
 
 interface Project {
@@ -367,13 +368,9 @@ export function CompletionPolicyControl({
         </p>
       )}
       {error && (
-        <div className="project-policy-feedback" role="alert">
-          <p>{error}</p>
-          {retryPolicy && (
-            <button className="secondary-button" type="button" disabled={saving}
-              onClick={() => { void save(retryPolicy); }}>Retry policy change</button>
-          )}
-        </div>
+        <StateMessage variant="error" className="project-policy-feedback" message={error}
+          actionLabel={retryPolicy ? 'Retry policy change' : undefined} actionBusy={saving}
+          onAction={retryPolicy ? () => { void save(retryPolicy); } : undefined} />
       )}
       {message && <p className="project-policy-feedback" role="status">{message}</p>}
     </fieldset>
@@ -481,12 +478,10 @@ export function ProjectsPage({ backendUrl, getAccessToken, projectDefaults }: Pr
           <button className="secondary-button" type="button" onClick={retry}>Refresh projects and repositories</button>
         )}
       </div>
-      {visibleState === 'loading' && <Loader variant="rows" label="Loading projects…" />}
+      {visibleState === 'loading' && <StateMessage variant="loading" loaderVariant="rows" message="Loading projects" />}
       {visibleState === 'error' && (
-        <div className="projects-feedback" role="alert">
-          <p>{visibleError}</p>
-          {backendUrl && <button className="secondary-button" type="button" onClick={retry}>Retry</button>}
-        </div>
+        <StateMessage variant="error" className="projects-feedback" message={visibleError}
+          actionLabel={backendUrl ? 'Retry' : undefined} onAction={backendUrl ? retry : undefined} />
       )}
       {visibleState === 'ready' && (
         <>
@@ -495,12 +490,11 @@ export function ProjectsPage({ backendUrl, getAccessToken, projectDefaults }: Pr
           {manageMessage && <p className="projects-feedback" role="status">{manageMessage}</p>}
           {manageError && <p className="projects-feedback" role="alert">{manageError}</p>}
           {projects.length === 0 ? (
-            <section className="project-empty" aria-labelledby="empty-projects-heading">
-              <h3 id="empty-projects-heading">No managed projects</h3>
-              <p>Add a project to manage it with Jarvis.</p>
-              <button className="secondary-button" type="button" disabled={!backendUrl}
-                aria-describedby="project-add-help" onClick={() => setProjectDialogOpen(true)}>Add project</button>
-            </section>
+            <StateMessage variant="empty" className="project-empty"
+              message="No managed projects are available."
+              detail="Add a project to manage it with Jarvis." actionLabel="Add project"
+              actionDisabled={!backendUrl} actionDescribedBy="project-add-help"
+              onAction={() => setProjectDialogOpen(true)} />
           ) : (
             <>
               <ul className="project-list" aria-label="Active projects">
@@ -547,15 +541,13 @@ export function ProjectsPage({ backendUrl, getAccessToken, projectDefaults }: Pr
             {repositoryFetchedAt && (
               <p className="repository-freshness">Repository list refreshed {repositoryDate(repositoryFetchedAt)}.</p>
             )}
-            {repositoryState === 'loading' && <Loader variant="rows" label="Loading existing repositories…" />}
+            {repositoryState === 'loading' && <StateMessage variant="loading" loaderVariant="rows" message="Loading existing repositories" />}
             {repositoryState === 'error' && (
-              <div className="projects-feedback" role="alert">
-                <p>{repositoryError}</p>
-                <button className="secondary-button" type="button" onClick={retry}>Retry repository list</button>
-              </div>
+              <StateMessage variant="error" className="projects-feedback" message={repositoryError}
+                actionLabel="Retry repository list" onAction={retry} />
             )}
             {repositoryState === 'ready' && otherRepositories.length === 0 && (
-              <p className="projects-feedback">No repositories to add.</p>
+              <StateMessage variant="empty" className="projects-feedback" message="No repositories to add." />
             )}
             {otherRepositories.length > 0 && (
               <ul className="repository-list" aria-label="Repositories not managed by Jarvis">
@@ -710,7 +702,7 @@ export function ProjectSettingsPage({ backendUrl, getAccessToken }: ProjectsPage
   const disabled = saving || archivePending;
 
   if (visibleState === 'loading') {
-    return <section aria-labelledby="project-settings-heading"><h1 id="project-settings-heading">Project settings</h1><Loader variant="text" label="Loading project settings…" /></section>;
+    return <section aria-labelledby="project-settings-heading"><h1 id="project-settings-heading">Project settings</h1><StateMessage variant="loading" message="Loading project settings" /></section>;
   }
 
   return (
@@ -718,11 +710,12 @@ export function ProjectSettingsPage({ backendUrl, getAccessToken }: ProjectsPage
       <h1 id="project-settings-heading">Project settings</h1>
       <p>Other project settings apply to new tasks. Completion policy applies now, including pull requests that are already open.</p>
       {visibleState === 'error' ? (
-        <div className="projects-feedback" role="alert">
-          <p>{visibleError}</p>
-          {backendUrl && projectId && !invalidProjectId && <button className="secondary-button" type="button" onClick={() => setRetryKey((value) => value + 1)}>Retry</button>}
+        <>
+          <StateMessage variant="error" className="projects-feedback" message={visibleError}
+            actionLabel={backendUrl && projectId && !invalidProjectId ? 'Retry' : undefined}
+            onAction={backendUrl && projectId && !invalidProjectId ? () => setRetryKey((value) => value + 1) : undefined} />
           <Link className="home-link" to="/settings#projects">Back to projects</Link>
-        </div>
+        </>
       ) : (
         <form className="project-form" noValidate onSubmit={(event) => { void save(event); }}>
           {error && <p className="projects-feedback" role="alert">{error}</p>}

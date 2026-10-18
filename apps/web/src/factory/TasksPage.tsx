@@ -15,6 +15,7 @@ import { TaskReleaseBar } from './TaskReleaseBar';
 import { TaskControls } from './TaskControls';
 import { CompletionPolicyControl, CreateProjectDialog } from './ProjectsPage';
 import { Loader } from '../Loader';
+import { StateMessage } from '../StateMessage';
 
 interface Project {
   id: string;
@@ -693,10 +694,8 @@ export function TasksPage({ backendUrl, getAccessToken }: Props) {
         </header>
         <p id="create-task-help" className={createUnavailable ? 'tasks-help' : 'visually-hidden'}>{createHelp}</p>
         {visibleProjectState === 'error' && (
-          <div className="tasks-feedback" role="alert">
-            <p>{visibleProjectError}</p>
-            <button className="secondary-button" type="button" onClick={() => setProjectRetry((value) => value + 1)}>Retry projects</button>
-          </div>
+          <StateMessage variant="error" className="tasks-feedback" message={visibleProjectError}
+            actionLabel="Retry projects" onAction={() => setProjectRetry((value) => value + 1)} />
         )}
         {notice && <p className="tasks-feedback" role="status">{typeof notice === 'string' ? notice : <>Task created and linked to{' '}
           <a href={notice.issueUrl} target="_blank" rel="noreferrer">issue #{notice.issueNumber}</a></>}
@@ -756,15 +755,14 @@ export function TasksPage({ backendUrl, getAccessToken }: Props) {
 
         <TaskReleaseBar backendUrl={backendUrl} getAccessToken={getAccessToken} projectId={filters.projectId} variant="trail" />
 
-        {visibleTaskState === 'loading' && <Loader variant="cards" label="Loading GitHub board…" />}
+        {visibleTaskState === 'loading' && <StateMessage variant="loading" loaderVariant="cards" message="Loading GitHub board" />}
         {visibleProjectState === 'ready' && projects.length === 0 &&
-          <p className="tasks-feedback">No active projects are available for a GitHub board. Create a project to begin.</p>}
+          <StateMessage variant="empty" className="tasks-feedback"
+            message="No active projects are available for a GitHub board." detail="Create a project to begin." />}
         {visibleTaskState === 'error' && (
-          <div className="tasks-feedback" role="alert">
-            <p>{visibleTaskError}</p>
-            <button className="secondary-button" type="button" disabled={refreshing}
-              onClick={() => setReloadKey((value) => value + 1)}>Retry board</button>
-          </div>
+          <StateMessage variant="error" className="tasks-feedback" message={visibleTaskError}
+            actionLabel="Retry board" actionBusy={refreshing}
+            onAction={() => setReloadKey((value) => value + 1)} />
         )}
         {board && (
           <>
@@ -775,9 +773,13 @@ export function TasksPage({ backendUrl, getAccessToken }: Props) {
             </p>
             <div className="task-live-status kanban-live-status" role="status" aria-live="polite">{liveStatusText}</div>
             {visibleTaskState === 'error' &&
-              <p className="tasks-feedback" role="status">Showing the last loaded board because refresh failed.</p>}
+              <StateMessage variant="partial" className="tasks-feedback"
+                message="Showing the last loaded board because refresh failed."
+                detail="Retry the board to check for the latest issues." />}
             {board.stale &&
-              <p className="tasks-feedback" role="status">GitHub is unavailable. Showing a cached board; placement may be out of date.</p>}
+              <StateMessage variant="partial" className="tasks-feedback"
+                message="Showing a cached board; issue placement may be out of date."
+                detail="GitHub is unavailable. Retry the board to check for current issues." />}
             <div className="task-board kanban-board" role="region" aria-label="Issues by GitHub Project column"
               style={{ '--kanban-columns': columns.map((column) => collapsedColumns.has(column.label) ? '52px' : 'minmax(240px, 1fr)').join(' ') } as CSSProperties}>
               {columns.map((column) => {
@@ -799,7 +801,7 @@ export function TasksPage({ backendUrl, getAccessToken }: Props) {
                     </header>
                     <div id={`${headingId}-cards`} className="kanban-column-body" hidden={collapsedColumns.has(column.label)}>
                     {items.length === 0
-                      ? <p className="task-column-empty">No matching issues.</p>
+                      ? <StateMessage variant="empty" className="task-column-empty" message="No matching issues." />
                       : <ul className="task-card-list">
                         {items.slice(0, maxCardsPerColumn).map((card, index) => (
                           <li key={card.issue.number} style={{ '--i': index } as CSSProperties}>

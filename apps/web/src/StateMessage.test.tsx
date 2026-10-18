@@ -10,7 +10,7 @@ describe('StateMessage', () => {
     const { container } = render(<StateMessage variant="loading" message="Loading settings" />);
     expect(screen.getByRole('status').getAttribute('aria-live')).toBe('polite');
     expect(container.querySelector('.state-message-loader.loader-inline')).not.toBeNull();
-    expect(container.querySelector('.state-message > .visually-hidden')?.textContent).toBe('Loading settings');
+    expect(container.querySelector('.state-message-loading .state-message-copy')?.textContent).toBe('Loading settings');
   });
 
   it('announces empty results politely without adding a heading', () => {
@@ -39,8 +39,9 @@ describe('StateMessage', () => {
   it('keeps the retry name while busy and disables repeat activation', () => {
     const retry = vi.fn();
     render(<StateMessage variant="error" message="The list could not be loaded." actionLabel="Retry list"
+      actionAriaLabel="Retry the list"
       onAction={retry} actionBusy />);
-    const button = screen.getByRole('button', { name: 'Retry list' });
+    const button = screen.getByRole('button', { name: 'Retry the list' });
     expect(button.getAttribute('aria-busy')).toBe('true');
     expect((button as HTMLButtonElement).disabled).toBe(true);
     expect(button.querySelector('.button-loading-indicator .skeleton-inline')).not.toBeNull();

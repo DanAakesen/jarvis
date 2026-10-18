@@ -8,6 +8,7 @@ import { layoutOrder, layoutWindows, type WindowLayout, type WindowPlacement, ty
 import { fitConversationLayout, phoneConversationLayoutKey, readConversationLayout, resizeConversationLayout, saveConversationLayout,
   type ConversationCanvasSize, type ConversationPosition, type ConversationResizeEdge } from './conversation-layout';
 import { Loader } from './Loader';
+import { StateMessage } from './StateMessage';
 import { readElement, useReadback, type WindowReadback } from './window-readback';
 import type { SessionCommand, SessionCommandResult } from './session-commands';
 import type { WorkspacePinsClient } from './workspace-pins';
@@ -1346,20 +1347,27 @@ export const Workspace = forwardRef<WorkspaceController, {
         )}
       </header>
       {openViews.length === 0 ? (
-        <p className="workspace-empty">No views are open.</p>
+        <StateMessage variant="empty" className="workspace-empty" message="No views are open." />
       ) : openViews.length === minimizedViews.length ? (
-        <p className="workspace-empty">All views are minimised.</p>
+        <StateMessage variant="empty" className="workspace-empty" message="All views are minimised." />
       ) : null}
       {pinLoadError && (
-        <div className="workspace-pin-feedback" role="alert">
-          <span>{pinLoadError}</span>
-          <button className="secondary-button" type="button" onClick={() => {
+        <StateMessage variant="error" className="workspace-pin-feedback" message={pinLoadError}
+          actionLabel="Retry pinned windows" onAction={() => {
             setPinLoadError('');
             setPinLoadAttempt((attempt) => attempt + 1);
-          }}>Retry pinned windows</button>
-        </div>
+          }} />
       )}
-      {pinFeedback && <div className="workspace-pin-feedback" role={pinFeedback.tone}>
+      {pinFeedback?.tone === 'alert' ? (
+        <StateMessage variant="error" className="workspace-pin-feedback" message={pinFeedback.message}
+          actionLabel={pinFeedback.retry ? 'Retry pin change' : undefined}
+          onAction={pinFeedback.retry ? () => {
+            const retry = pinFeedback.retry;
+            if (!retry) return;
+            const content = workspaceViews.find((view) => view.id === retry.id)?.content;
+            void requestPinChange(retry.id, retry.pinned, retry.refresh && content?.status === 'generated' ? content.view : undefined);
+          } : undefined} />
+      ) : pinFeedback && <div className="workspace-pin-feedback" role="status">
         <span>{pinFeedback.message}</span>
         {pinFeedback.retry && <button className="secondary-button" type="button" onClick={() => {
           const retry = pinFeedback.retry;
@@ -1628,20 +1636,14 @@ export const Workspace = forwardRef<WorkspaceController, {
                 </div>
               </header>
               <div className={view.presentation === 'conversation' ? 'workspace-conversation-content' : 'workspace-view-content'}>
-                {view.content.status === 'loading' && <Loader variant="lines" label="Loading view…" />}
-                {view.content.status === 'empty' && <p>No content.</p>}
+                {view.content.status === 'loading' && <StateMessage variant="loading" message="Loading view." />}
+                {view.content.status === 'empty' && <StateMessage variant="empty" message="This view has no content." />}
                 {view.content.status === 'error' && (
-                  <>
-                    <p role="alert">{view.content.message}</p>
-                    {view.content.retry && (
-                      <div className="button-group button-group--space-3">
-                        <button className="secondary-button" type="button" disabled={actionPending} aria-busy={actionPending || undefined} aria-label={actionPending ? 'Retrying…' : undefined} onClick={() => { void runAction(view.id, retry, 'Retry requested.'); }}>
-                          <span className="button-label">Retry view</span>
-                          {actionPending && <span className="button-loading-indicator" aria-hidden="true"><Loader variant="inline" announce={false} label="Retrying…" /></span>}
-                        </button>
-                      </div>
-                    )}
-                  </>
+                  <StateMessage variant="error" message={view.content.message}
+                    actionLabel={view.content.retry ? 'Retry view' : undefined} actionBusy={actionPending}
+                    onAction={view.content.retry
+                      ? () => { void runAction(view.id, retry, 'Retry requested.'); }
+                      : undefined} />
                 )}
                 {view.content.status === 'interrupted' && (
                   <>

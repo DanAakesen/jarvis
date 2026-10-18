@@ -142,7 +142,7 @@
 .composer-send svg { width: 18px; height: 18px; stroke-width: 2.2; }
 .composer-status { grid-column: 1 / -1; margin: 0 4px 4px; font-size: var(--type-small); }
 .chat-guidance { margin: 6px 0 0; color: var(--text-muted); font-size: 13px; }
-.chat-error { margin-top: 12px; color: var(--error); font-size: 15px; }
+.chat-error { margin-top: var(--space-3); color: var(--error); font-size: var(--type-small); }
 .chat-status { margin-top: 12px; font-size: 14px; }
 .conversation-actions { min-width: 0; }
 .conversation-input .voice-controls[data-active="false"] { position: relative; }

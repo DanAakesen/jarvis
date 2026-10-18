@@ -1,5 +1,6 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { safeNoteFolder, type NoteTree } from './notes-data';
+import { StateMessage } from '../StateMessage';
 
 interface Folder { path: string; name: string; children: Folder[] }
 const ancestors = (path: string) => path ? path.split('/').map((_, index, segments) => segments.slice(0, index + 1).join('/')) : [];
@@ -166,13 +167,17 @@ export function NoteFolderPicker({ value, onChange, loadFolders, disabled = fals
         {folderEntry('')}
         {rows(tree)}
       </nav>
-      {loading && <p role="status">Loading folders…</p>}
-      {inventory?.truncated && <p role="status">The vault tree is incomplete. Some folders may be missing; your draft is kept.</p>}
-      {error && <div className="notes-folder-error" role="alert"><p>{error}</p>
-        <button className="secondary-button" type="button" disabled={loading || disabled} onClick={() => {
+      {loading && <StateMessage variant="loading" message="Loading folders" />}
+      {inventory?.truncated && <StateMessage variant="partial" message="The vault tree is incomplete."
+        detail="Some folders may be missing; your draft is kept."
+        actionLabel="Retry folders" actionBusy={loading} actionDisabled={disabled}
+        onAction={() => {
           setLoading(true); setError(''); setReload(current => current + 1);
-        }}>Retry folders</button>
-      </div>}
+        }} />}
+      {error && <StateMessage variant="error" className="notes-folder-error" message={error}
+        actionLabel="Retry folders" actionDisabled={disabled} onAction={() => {
+          setLoading(true); setError(''); setReload(current => current + 1);
+        }} />}
       {newFolders.length > 0 && <p className="notes-folder-hint">New folders are added to Obsidian when you save a note inside them.</p>}
     </div>
   </section>;
