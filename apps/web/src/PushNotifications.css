@@ -17,7 +17,6 @@
 .push-notifications .primary-button,
 .push-notifications .secondary-button {
   min-height: 44px;
-  margin: 0;
 }
 .push-notifications .primary-button {
   padding: 0 18px;

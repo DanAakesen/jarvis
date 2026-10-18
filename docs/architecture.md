@@ -2053,15 +2053,30 @@ alphabetical order from the existing composition dependencies. Construction
 does not read data; the registry remains behind the default-off proactive
 composition and no dispatcher is added.
 
-The todo reader resolves exactly one case-insensitive root `task.md` or
-`tasks.md`, then uses only the vault client's `tree` and `read` methods. It
-enforces the vault file-size cap and a 20-second source deadline. `todo-file.ts`
-exports the resolver and unbounded parser for reuse; one sanitizer removes
+The todo source and reminder verifier share `todo-discovery.ts`, reading safe
+Markdown notes recursively under `Personal/` and `Work/` plus the case-insensitive
+root `task.md` or `tasks.md`. Archive path segments and hidden/unsafe paths are
+excluded. Multiple root task files remain ambiguous; a root file is not required
+when scoped notes exist. Discovery uses only the vault client's `tree` and `read`
+methods, retaining parsed tasks by path and blob SHA across scans. Deleted paths
+are evicted after a successful scan; unchanged blobs need no content reads.
+Tree entries retain optional blob sizes for preflight bounds. Scans allow at most
+256 files, 4 MiB total content, 256 KiB per file and four concurrent reads under
+the existing 20-second deadline. Oversized notes, exceeded caps, mismatched SHAs,
+missing reads and other partial failures yield unavailable, never an empty or
+partial success. Unknown sizes reserve the per-file maximum against the budget.
+`todo-file.ts` keeps the root-only writer resolver and shared parser; fenced
+examples/query blocks are ignored. One sanitizer removes
 control characters, HTML and markdown link destinations and caps fact text at
-300 characters. It recognizes explicit `priority:: P1 - High` or
-`priority: P1 - High` task metadata, and exposes only open P1 - High tasks to
-proactive findings and reminders. Missing or lower priorities are excluded. Due
-dates resolve to Copenhagen-local instants. The source returns at most 40 facts,
+300 characters. `⏫`, `priority:: P1 - High` and `priority: P1 - High` qualify as
+high priority; `🔼`, `🔽`, `⏬`, `🔺` and missing priorities do not. `🕒 HH:mm`
+supplies the due time before or after `📅 YYYY-MM-DD`; trailing date/time,
+`due:` and `[due:: …]` remain supported. Clock, priority and Tasks metadata emoji
+and their recognized date, recurrence, ID and completion-action payloads are
+removed from fact text. Due dates resolve to Copenhagen-local instants;
+date-only tasks remain due at 23:59. Only open high-priority tasks become facts,
+deduplicated by normalized text and due instant, retaining explicit-time
+eligibility if any duplicate has a time. The source returns at most 40 facts,
 ordering the 24-hour-before/72-hour-after due window first.
 
 Factory uses `TaskStore.getProactiveSnapshot()`, a bounded, nontransactional
@@ -2172,8 +2187,10 @@ The self-rescheduling, unreferenced ticker reads the earliest pending time once
 at startup. Future or absent work and the Copenhagen quiet window are pure
 in-memory checks; after a due scan it refreshes the wake time once. Errors back
 off five minutes. For due rows it expires late work, applies pause and
-subscription suppression, then resolves and parses the canonical todo file
-again with a 20-second bound. It cancels changed or no-longer-P1-high todos,
+subscription suppression, then verifies the wider task set through shared
+SHA-cached discovery with a 20-second bound. Moving a task between notes or
+duplicating it with the same normalized text and due instant does not change its
+reminder key. It cancels changed or no-longer-P1-high todos,
 retries failed verification twice, and suppresses after a third verification
 failure rather than sending without current priority evidence. It suppresses
 deadline alerts sent within two hours and enforces eight sent reminders per
@@ -6037,3 +6054,54 @@ code-point boundaries, caps the serialized result at 8 KiB and marks it
 in generic tool-call audit records. Raw JSON validation runs before Fastify's
 AJV coercion; failures remain explicit tool refusals/errors. The module exposes
 no item mutation or approval capability.
+
+## Web Daily Nutrition section (18 October 2026; P12-24)
+
+`apps/web/src/daily/sections/nutrition/index.tsx` exports the auto-discovered
+section definition and lazy-loads its content. It requires only
+`daily.nutrition.meals`; the optional `daily.nutrition.days`, favourites and
+plans sources gate their own views. The merged `DailySectionDefinition` and
+`DailySectionProps` are the integration contract; no shared registry, shell
+implementation, backend or contracts are changed. The shell owns the period and
+refresh version, while Nutrition stores its active view and selected date in URL search
+parameters and preserves local inspection state during refresh.
+
+Nutrition reads through the existing Daily clients and `useDailyPages`.
+Library auto-loading is bounded to five pages per source, and filters apply
+only to loaded items. Day totals derive from displayed nondeleted meals rather
+than an independently read aggregate. Pure local helpers handle nullable
+nutrients, Copenhagen dates, target comparisons, chart gaps and Monday-start
+weekly averages. Targets use the existing `loadNutritionTargets` boundary.
+Structured source content is rendered as escaped text, with a bounded fallback.
+All reads retain the existing owner-only authorization; no writer, logging
+endpoint, migration, provider call or production switch is introduced.
+
+## Web Daily Workouts section (18 October 2026; P12-23)
+
+`apps/web/src/daily/sections/workouts/index.tsx` exports the merged
+`DailySectionDefinition` and lazy-loads its component. Existing folder discovery
+gates it solely on `daily.health.workouts`; no registry, shell implementation,
+shared UI, backend or contract changes are needed. Two existing shell-test
+fixtures now explicitly omit that source to keep testing their original
+three-section navigation scenario.
+
+The section uses `daily/ui/useDailyPages` with `autoLoad: true`, `maxPages: 10`
+and `limit: 500`. A local continuation wrapper retains the loaded prefix and
+starts the next bounded batch from the exact returned cursor only on Load more.
+Period/backend/refresh-version changes and focus/visibility refreshes invalidate
+that continuation, so previously loaded prefixes cannot remain silently stale. Pure
+summary helpers handle per-unit observations, null-safe totals, Copenhagen
+calendar buckets and readable type labels. Charts use `DailyChart`; missing
+volume buckets appear in an additional coverage table, never as fabricated zero
+bars. Sorting is confined to loaded rows, with comparisons within each unit.
+
+Following the shell's `useSearchParams` approach, `?workout=<id>` preserves other
+URL parameters. The mounted hidden list retains filter/sort state; focus and
+ancestor scroll offsets are restored on return. A cached opened summary remains
+labelled as a previous read while refreshed paging is incomplete. Detail and
+heart-rate reads are independently capability-gated. The merged workout query
+returns `{ id, detail }`, not the persistence field name `detail_json`; recorded
+JSON reuses Data's escaped `<pre>`/collapsed `<details>` presentation. Heart-rate
+samples are grouped by metric and unit, use elapsed minutes, and retain separate
+average/minimum/maximum series. Existing read clients retain owner authorization,
+cancellation, response bounds and safe failure handling.

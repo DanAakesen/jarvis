@@ -1,4 +1,5 @@
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 type Color = [number, number, number];
@@ -7,7 +8,7 @@ describe('app-wide control contract', () => {
   const source = readFileSync('src/styles.css', 'utf8');
 
   it.each([
-    'primary-button', 'secondary-button', 'settings-back', 'signin-button',
+    'settings-back', 'signin-button',
     'kanban-card-action', 'presence-chip-trigger', 'presence-option', 'presence-mode-card',
     'memory-item', 'modal-close', 'knowledge-reset', 'folio-search', 'folio-kind',
     'folio-action', 'mobile-menu-link', 'kanban-filter-toggle', 'kanban-column-toggle',
@@ -15,6 +16,61 @@ describe('app-wide control contract', () => {
   ])('uses the existing action geometry for .%s', (name) => {
     expect(ruleDeclaration(source, new RegExp(`(?:^|\\n)\\.${name}\\s*\\{([^}]*)\\}`), 'border-radius'))
       .toBe('var(--radius-control)');
+  });
+
+  it('keeps shared button variants on one margin-free, focusable control system', () => {
+    const sharedButtonRule = /\.primary-button, \.secondary-button, \.ghost-button, \.danger-button\s*\{([^}]*)\}/;
+    expect(ruleDeclaration(source, sharedButtonRule, 'min-height')).toBe('44px');
+    expect(ruleDeclaration(source, sharedButtonRule, 'border-radius')).toBe('var(--radius-control)');
+    const buttonStyles = [
+      source,
+      readFileSync('src/proactive.css', 'utf8'),
+      readFileSync('src/PushNotifications.css', 'utf8'),
+      readFileSync('src/ConversationHistory.css', 'utf8'),
+      readFileSync('src/notes/NotesArea.css', 'utf8'),
+    ];
+    for (const styles of buttonStyles) {
+      const buttonRules = [...styles.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+        .filter(([, selectors]) => /\.((primary|secondary|ghost|danger)-button|settings-back|jobs-action|workspace-control|workspace-icon-control|workspace-tab-close|workspace-tab-pin|modal-close|folio-action|release-trail-button|release-trail-open|proactive-text-toggle|history-button)(?![\w-])/.test(selectors!));
+      for (const [, selectors, declarations] of buttonRules) {
+        expect(declarations, selectors).not.toMatch(/(?:^|;)\s*margin(?:-[a-z-]+)?\s*:/);
+        expect(declarations, selectors).not.toMatch(/box-shadow:\s*[^;]*(?:inset|glass-selected-glow)/);
+        if (!selectors!.includes(':focus-visible')) expect(declarations, selectors).not.toMatch(/outline\s*:/);
+      }
+    }
+    expect(source).toContain('.primary-button:focus-visible, .secondary-button:focus-visible, .ghost-button:focus-visible, .danger-button:focus-visible');
+    expect(source).toContain('.workspace-tab-close:focus-visible, .workspace-tab-pin:focus-visible');
+    expect(source).toContain('.primary-button[aria-busy="true"] > .button-label');
+    expect(source).toContain('.primary-button[aria-busy="true"] > .button-loading-indicator');
+    expect(ruleDeclaration(source, /\.button-loading-indicator\s*\{([^}]*)\}/, 'position')).toBe('absolute');
+    expect(source).toContain('@media (pointer: coarse) {\n  :is(.primary-button, .secondary-button, .ghost-button, .danger-button, .settings-back,');
+    expect(source).toContain('button-primary-shadow');
+  });
+
+  it('provides wrapping action groups with consistent responsive button targets', () => {
+    expect(source).toContain('.button-group, .settings-actions, .task-dialog-actions, .action-row');
+    expect(source).toContain('.button-group > .primary-button');
+    expect(source).toContain('.workspace-view-content .task-window-actions, .workspace-view-content .timeline-artifacts { padding-top: var(--space-3); }');
+    expect(source).toContain('@media (max-width: 600px) {\n  .button-group, .settings-actions, .task-dialog-actions, .settings-save');
+    expect(source).toContain('width: 100%; max-width: 100%;');
+  });
+
+  it('does not leave production buttons without a shared class', () => {
+    const unstyled: string[] = [];
+    const visit = (directory: string) => {
+      for (const entry of readdirSync(directory, { withFileTypes: true })) {
+        const path = join(directory, entry.name);
+        if (entry.isDirectory()) visit(path);
+        else if (entry.isFile() && entry.name.endsWith('.tsx') && !entry.name.includes('.test.')) {
+          const content = readFileSync(path, 'utf8');
+          for (const [tag] of content.matchAll(/<button\b[^>]*>/gs)) {
+            if (!/\bclassName\s*=/.test(tag)) unstyled.push(`${path}: ${tag}`);
+          }
+        }
+      }
+    };
+    visit('src');
+    expect(unstyled).toEqual([]);
   });
 
   it('keeps navigation options and form fields on the same geometry, not capsules', () => {
@@ -66,7 +122,7 @@ describe('app-wide control contract', () => {
 
   it('removes decorative control rims without removing neutral field structure or focus', () => {
     for (const selector of [
-      /(?:^|\n)\.secondary-button\s*\{([^}]*)\}/,
+      /\.primary-button, \.secondary-button, \.ghost-button, \.danger-button\s*\{([^}]*)\}/,
       /\.kanban-card-action\s*\{([^}]*)\}/,
       /\.release-trail-button, \.release-trail-open\s*\{([^}]*)\}/,
     ]) expect(ruleDeclaration(source, selector, 'border')).toBe('0');
@@ -77,9 +133,23 @@ describe('app-wide control contract', () => {
     }
     expect(ruleDeclaration(source, /\.knowledge-search\.luminous-glass\s*\{([^}]*)\}/, 'border-color')).toBe('var(--control-rule)');
     expect(ruleDeclaration(source, /\.signin-button\.luminous-glass::before\s*\{([^}]*)\}/, 'content')).toBe('none');
-    expect(source).toContain('.secondary-button:focus-visible { outline: 3px solid var(--focus);');
+    expect(source).toContain('.primary-button:focus-visible, .secondary-button:focus-visible, .ghost-button:focus-visible, .danger-button:focus-visible');
     expect(source).toContain('.knowledge-search:has(input:focus-visible) { outline: 3px solid var(--focus);');
     expect(source).toContain('.folio-search:has(input:focus-visible) { outline: 3px solid var(--focus);');
+  });
+
+  it('draws slim arrowless desktop scrollbars and keeps the glass ring from adding phantom ones', () => {
+    expect(ruleDeclaration(source, /\* \{ (scrollbar-width: thin;[^}]*)\}/, 'scrollbar-width')).toBe('thin');
+    const parts = source.match(/@supports selector\(::-webkit-scrollbar\) \{\s*@media \(pointer: fine\) \{([\s\S]*?)\n {2}\}\n\}/)?.[1] ?? '';
+    expect(parts).toContain('* { scrollbar-width: auto; scrollbar-color: auto; }');
+    // Safari only restyles the hovered thumb when a custom property changes on the scroller.
+    expect(parts).toMatch(/:hover \{\s*scrollbar-color: auto;\s*--scrollbar-hover-sync: ;/);
+    expect(ruleDeclaration(parts, /\n\s*::-webkit-scrollbar-button\s*\{([^}]*)\}/, 'display')).toBe('none');
+    expect(ruleDeclaration(parts, /\n\s*::-webkit-scrollbar-thumb\s*\{([^}]*)\}/, 'border-radius')).toBe('var(--radius-pill)');
+    // The 1px glass ring overhangs its box, so a glass surface that scrolls must drop the ring or stop being the scroller.
+    expect(ruleDeclaration(source, /\.knowledge-results\.luminous-glass::before\s*\{([^}]*)\}/, 'content')).toBe('none');
+    expect(ruleDeclaration(source, /\n\.modal\s*\{([^}]*)\}/, 'overflow')).toBe('visible');
+    expect(ruleDeclaration(source, /\n\.modal\s*\{([^}]*)\}/, 'max-height')).toBe('none');
   });
 
   it('reserves pills for labelled status and genuine switch tracks', () => {
@@ -103,7 +173,8 @@ describe('app-wide control contract', () => {
       expect(ruleDeclaration(source, selector, 'font-weight')).toBe('750');
     }
     expect(source).toContain('.folio-kind, .memory-item, .knowledge-results button,');
-    expect(source).toContain('@media (pointer: coarse) {\n  :is(.usage-segmented button, .advanced-segmented button, .folio-kind, .presence-option,');
+    expect(source).toContain('@media (pointer: coarse) {\n  :is(.primary-button, .secondary-button, .ghost-button, .danger-button, .settings-back,');
+    expect(source).toContain('.knowledge-legend button,');
     expect(source).toContain('.folio-action { width: 44px; height: 44px; }');
     expect(source).toContain('.release-trail-button { width: 44px; min-height: 44px; }');
     expect(source).toContain('.app-shell[data-phone="true"] .knowledge-legend button { min-height: 44px;');
@@ -455,9 +526,9 @@ describe('shared glass tokens', () => {
     expect(source).not.toMatch(/\.workspace-window-actions[^{]*\{[^}]*grid-template-columns/);
     expect(source).toContain('.workspace-window-actions { display: flex; width: auto; flex: 0 0 auto; flex-wrap: nowrap; gap: 4px; }');
     expect(ruleDeclaration(source, /\.workspace-tab-item\s*\{([^}]*)\}/, 'border-radius')).toBe('var(--radius-control)');
-    expect(ruleDeclaration(source, /\.workspace-tab-close, \.workspace-tab-pin\s*\{([^}]*)\}/, 'width')).toBe('32px');
+    expect(ruleDeclaration(source, /\.workspace-tab-close, \.workspace-tab-pin\s*\{([^}]*)\}/, 'width')).toBe('36px');
     expect(source).toContain('.workspace-tab-pin[aria-pressed="true"] svg { transform: none; }');
-    expect(source).toContain('.workspace-tab-close, .workspace-tab-pin { width: 44px; height: 44px; }');
+    expect(source).toContain('.workspace-tab-close, .workspace-tab-pin { width: 44px; min-width: 44px; height: 44px; min-height: 44px; }');
     expect(source).toContain(':root[data-motion="reduced"] .workspace-tab-pin svg { transition: none; }');
     expect(source).toContain('.app-shell[data-phone="true"][data-windows-open="true"] .app-topbar { z-index: 1200; }');
   });

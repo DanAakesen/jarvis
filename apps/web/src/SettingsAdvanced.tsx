@@ -4,6 +4,7 @@ import type { AppearanceChange } from './theme-preference-context';
 import { isModelCatalogue } from '@jarvis/contracts';
 import { backendFetch } from './backend-request';
 import { CollapsibleSection } from './CollapsibleSection';
+import { Loader } from './Loader';
 import {
   bounds, capabilityLabels, effortLabels, effortsFor, modelRoles, researchDepths, roleLabels,
   type MemorySettings, type ModelCatalogue, type ModelRole, type ResearchSettings, type RoleOptions, type RoleSettings,
@@ -210,9 +211,12 @@ function Deployments({ catalogue, error, call, onChanged }: {
               <span className="role-badges">{deployment.capabilities.map((capability) => <span key={capability} className="model-badge">{capabilityLabels[capability] ?? capability}</span>)}</span>
               {confirming === deployment.name ? (
                 <span className="deployment-confirm" role="group" aria-label={`Remove ${deployment.name}`}>
-                  <button className="secondary-button danger-button" type="button" disabled={busy}
+                  <button className="secondary-button danger-button danger-button--filled" type="button" disabled={busy} aria-busy={busy || undefined}
                     onClick={() => { void run(`/models/deployments/${encodeURIComponent(deployment.name)}`, { method: 'DELETE' },
-                      `Removal of ${deployment.name} requested. Approve it in Teams.`); }}>Remove</button>
+                      `Removal of ${deployment.name} requested. Approve it in Teams.`); }}>
+                    <span className="button-label">Remove</span>
+                    {busy && <span className="button-loading-indicator" aria-hidden="true"><Loader variant="inline" announce={false} label="Removing…" /></span>}
+                  </button>
                   <button className="secondary-button" type="button" onClick={() => setConfirming(null)}>Keep</button>
                 </span>
               ) : catalogue.source === 'arm' ? (
@@ -267,7 +271,7 @@ export function ResearchSection({ research, problems, disabled, onChange }: {
       summary={`${depthLabels[research.depth] ?? research.depth} · up to ${research.maxSources} sources`}>
       <div className="advanced-segmented" role="group" aria-label="Research depth">
         {researchDepths.map((depth) => (
-          <button key={depth} type="button" aria-pressed={research.depth === depth} disabled={disabled} onClick={() => onChange('depth', depth)}>
+          <button key={depth} className="ghost-button" type="button" aria-pressed={research.depth === depth} disabled={disabled} onClick={() => onChange('depth', depth)}>
             {depthLabels[depth] ?? depth}
           </button>
         ))}
@@ -339,7 +343,7 @@ function Choice<T extends string>({ label, value, options, disabled, onChange }:
       <span className="advanced-choice-label" id={`${label}-label`}>{label}</span>
       <div className="advanced-segmented" role="group" aria-labelledby={`${label}-label`}>
         {options.map((option) => (
-          <button key={option.value} type="button" aria-pressed={value === option.value} disabled={disabled} onClick={() => onChange(option.value)}>
+          <button key={option.value} className="ghost-button" type="button" aria-pressed={value === option.value} disabled={disabled} onClick={() => onChange(option.value)}>
             {option.label}
           </button>
         ))}

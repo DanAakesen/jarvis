@@ -263,7 +263,7 @@ export function NotesArea({ backendUrl, getAccessToken }: AreaProps) {
               {neighbours.length > 0 && graph && <section>
                 <h4 className="knowledge-note-subheading">Connected notes</h4>
                 <ul className="knowledge-neighbours">{neighbours.map(node => <li key={node.id}>
-                  <button type="button" data-folder={node.folder} disabled={saving} onClick={() => openGraphNote(node, graph)}>
+                  <button className="ghost-button" type="button" data-folder={node.folder} disabled={saving} onClick={() => openGraphNote(node, graph)}>
                     <span className="knowledge-dot" aria-hidden="true" />{node.title}
                   </button>
                 </li>)}</ul>

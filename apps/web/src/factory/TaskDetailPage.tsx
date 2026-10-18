@@ -634,8 +634,9 @@ export function TaskDetailPage({ backendUrl, getAccessToken, taskId, compact = f
                         </ol>
                       )}
                   {hasMoreEvents && (
-                    <button className="secondary-button timeline-more" type="button" onClick={() => void loadMoreEvents()} disabled={loadingEvents}>
-                      {loadingEvents ? <Loader variant="inline" announce={false} label="Loading events…" /> : 'Load more events'}
+                    <button className="secondary-button timeline-more" type="button" onClick={() => void loadMoreEvents()} disabled={loadingEvents} aria-busy={loadingEvents || undefined} aria-label={loadingEvents ? 'Loading events…' : undefined}>
+                      <span className="button-label">Load more events</span>
+                      {loadingEvents && <span className="button-loading-indicator" aria-hidden="true"><Loader variant="inline" announce={false} label="Loading events…" /></span>}
                     </button>
                   )}
                   {eventsError && <p className="chat-error" role="alert">{eventsError}</p>}
@@ -935,8 +936,9 @@ export function TaskDetailPage({ backendUrl, getAccessToken, taskId, compact = f
                   </ol>
                 )}
             {hasMoreEvents && (
-              <button className="secondary-button timeline-more" type="button" onClick={() => void loadMoreEvents()} disabled={loadingEvents}>
-                {loadingEvents ? <Loader variant="inline" announce={false} label="Loading events…" /> : 'Load more events'}
+              <button className="secondary-button timeline-more" type="button" onClick={() => void loadMoreEvents()} disabled={loadingEvents} aria-busy={loadingEvents || undefined} aria-label={loadingEvents ? 'Loading events…' : undefined}>
+                <span className="button-label">Load more events</span>
+                {loadingEvents && <span className="button-loading-indicator" aria-hidden="true"><Loader variant="inline" announce={false} label="Loading events…" /></span>}
               </button>
             )}
             {eventsError && <p className="timeline-error" role="alert">{eventsError}</p>}

@@ -1,7 +1,7 @@
 import type { ConversationStore } from '../core/conversation-store.js';
 import type { PushStore } from '../database/push-store.js';
 import type { createGitHubVaultClient } from '../vault/github-client.js';
-import { MAX_VAULT_FILE_BYTES, parseTodos, resolveTodoFile } from './todo-file.js';
+import { readVaultTodos } from './todo-discovery.js';
 import { detectLanguage } from './language.js';
 import { reminderDedupeKey, reminderKey } from './reminders.js';
 import type { AlertLedgerStore } from './alert-ledger.js';
@@ -35,15 +35,7 @@ function abortable<T>(work: Promise<T>, signal: AbortSignal): Promise<T> {
 async function readTodos(vault: VaultReader, signal: AbortSignal) {
   const timeout = AbortSignal.timeout(verifyTimeoutMs);
   const boundedSignal = AbortSignal.any([signal, timeout]);
-  const read = async () => {
-    const resolved = await resolveTodoFile(vault, boundedSignal);
-    if ('reason' in resolved) throw new Error('Todo file is unavailable');
-    const file = await vault.read(resolved.path, boundedSignal);
-    if (!file) throw new Error('Todo file is unavailable');
-    if (Buffer.byteLength(file.content, 'utf8') > MAX_VAULT_FILE_BYTES) throw new Error('Todo file is too large');
-    return parseTodos(file.content);
-  };
-  return abortable(Promise.resolve().then(read), boundedSignal);
+  return abortable(readVaultTodos(vault, boundedSignal), boundedSignal);
 }
 
 function itemBody(row: ReminderRow, now: Date, language: 'da' | 'en'): string {
