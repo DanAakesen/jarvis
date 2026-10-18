@@ -10,7 +10,7 @@ import type { ModelDeploymentClient } from './model-deployments.js';
 import { fallbackModelCatalogue } from './model-catalog.js';
 import { toModelToolSchema } from '../voice/realtime.js';
 import type { ModelCatalogueReader } from './model-catalog.js';
-import type { TeamsNotificationService } from '../teams/service.js';
+import type { OwnerInteractionService } from './owner-interactions.js';
 
 const config = { ...loadConfig({}), logLevel: 'silent' as const };
 const resourceId = '/subscriptions/12345678-1234-1234-1234-123456789abc/resourceGroups/rg-jarvis/providers/Microsoft.CognitiveServices/accounts/jarvis-prod';
@@ -224,13 +224,13 @@ describe('Foundry model deployment manager', () => {
         _summary: string,
         action: () => Promise<T>,
       ) => action()),
-    } as unknown as TeamsNotificationService;
+    } as unknown as OwnerInteractionService;
     const app = buildApp(config, undefined, {
       modules: [coreModule],
       auth: async () => owner,
       toolCallStore: { record: vi.fn(async () => {}) },
       modelDeploymentWorkflow: baseWorkflow.workflow,
-      teamsNotifications: notification,
+      ownerInteractions: notification,
     });
     apps.push(app);
 
@@ -268,7 +268,7 @@ describe('Foundry model deployment manager', () => {
       modules: [coreModule],
       auth: async () => ({ ...owner, objectId: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa' }),
       modelDeploymentWorkflow: baseWorkflow.workflow,
-      teamsNotifications: notification,
+      ownerInteractions: notification,
     });
     apps.push(denied);
     const deniedResponse = await denied.inject({

@@ -3,8 +3,8 @@ import { buildApp } from '../app.js';
 import { loadConfig } from '../config.js';
 import type { TokenVerifier } from '../auth/verify.js';
 import { FolioItemNotFound, type FolioStore } from '../database/folio-store.js';
-import type { TeamsNotificationStore } from '../database/teams-notification-store.js';
-import { createTeamsNotificationService, type TeamsNotificationService } from '../teams/service.js';
+import type { ConfirmationStore } from '../database/confirmation-store.js';
+import { createOwnerInteractionService, type OwnerInteractionService } from './owner-interactions.js';
 import type { AwayModeStore } from './away-mode.js';
 import type { WorkspaceArtifactStore } from '../database/workspace-artifact-store.js';
 import type { WorkspaceHtmlArtifactStore } from '../database/workspace-html-artifact-store.js';
@@ -27,7 +27,7 @@ const item = {
 const apps: ReturnType<typeof buildApp>[] = [];
 const authorization = (token: string) => ({ authorization: ['Bearer', token].join(' ') });
 
-function fixture(options: { teamsNotifications?: TeamsNotificationService; awayModeStore?: AwayModeStore } = {}) {
+function fixture(options: { ownerInteractions?: OwnerInteractionService; awayModeStore?: AwayModeStore } = {}) {
   const search = vi.fn(async () => [item]);
   const get = vi.fn(async () => ({ item, sourceId }));
   const update = vi.fn(async () => ({ ...item, pinned: true }));
@@ -75,9 +75,9 @@ function approvals() {
       decision === 'approve' ? 'approved' : 'rejected'),
     consumeApproval: vi.fn(async () => true),
     cancelConfirmation: vi.fn(async () => {}),
-  } as unknown as TeamsNotificationStore;
-  return createTeamsNotificationService({
-    ownerObjectId: ownerId, tenantId: config.auth.tenantId, store, isAway: async () => false,
+  } as unknown as ConfirmationStore;
+  return createOwnerInteractionService({
+    ownerObjectId: ownerId, store, onWebNotification: async () => {},
   });
 }
 
@@ -222,7 +222,7 @@ describe('Folio API and Jarvis tools', () => {
   });
 
   it.each(['rename', 'pin', 'unpin', 'delete'])('refuses an unknown id for $action', async (action) => {
-    const data = fixture({ awayModeStore: presence(), teamsNotifications: approvals() });
+    const data = fixture({ awayModeStore: presence(), ownerInteractions: approvals() });
     data.update.mockRejectedValueOnce(new FolioItemNotFound());
     data.get.mockRejectedValueOnce(new FolioItemNotFound());
     const response = await manage(data.app, { id: item.id, action, ...(action === 'rename' ? { title: 'New' } : {}) });
@@ -256,7 +256,7 @@ describe('Folio API and Jarvis tools', () => {
 
   it.each(['approve', 'reject'] as const)('waits for Now %s naming the item before removal', async (decision) => {
     const service = approvals();
-    const data = fixture({ teamsNotifications: service, awayModeStore: presence() });
+    const data = fixture({ ownerInteractions: service, awayModeStore: presence() });
     data.remove.mockImplementationOnce(async () => { data.search.mockResolvedValue([]); });
     const operation = manage(data.app, { query: 'Ignite', action: 'delete' });
     await vi.waitFor(() => expect(service.pendingBrowserConfirmations()).toHaveLength(1));
@@ -283,7 +283,7 @@ describe('Folio API and Jarvis tools', () => {
 
   it.each(['away', 'on_the_move'] as const)('refuses deletion while %s without staging approval', async (mode) => {
     const service = approvals();
-    const data = fixture({ teamsNotifications: service, awayModeStore: presence(mode) });
+    const data = fixture({ ownerInteractions: service, awayModeStore: presence(mode) });
     const response = await manage(data.app, { id: item.id, action: 'delete' });
     expect(response.json().outcome).toBe('refused');
     expect(service.pendingBrowserConfirmations()).toEqual([]);
@@ -294,7 +294,7 @@ describe('Folio API and Jarvis tools', () => {
   it.each(['presence', 'title'] as const)('rechecks $0 after approval and does not delete a changed item', async (change) => {
     const service = approvals();
     const awayModeStore = presence();
-    const data = fixture({ teamsNotifications: service, awayModeStore });
+    const data = fixture({ ownerInteractions: service, awayModeStore });
     const operation = manage(data.app, { id: item.id, action: 'delete' });
     await vi.waitFor(() => expect(service.pendingBrowserConfirmations()).toHaveLength(1));
     if (change === 'presence') vi.mocked(awayModeStore.read).mockResolvedValue({ mode: 'away', source: 'manual', changedAt: null });
@@ -306,7 +306,7 @@ describe('Folio API and Jarvis tools', () => {
 
   it('fails closed when presence or the approval service is unavailable', async () => {
     const service = approvals();
-    const withoutPresence = fixture({ teamsNotifications: service });
+    const withoutPresence = fixture({ ownerInteractions: service });
     expect((await manage(withoutPresence.app, { id: item.id, action: 'delete' })).json().outcome).toBe('refused');
     const withoutApproval = fixture({ awayModeStore: presence() });
     expect((await manage(withoutApproval.app, { id: item.id, action: 'delete' })).json().result.refused)
@@ -314,7 +314,7 @@ describe('Folio API and Jarvis tools', () => {
     expect(withoutApproval.remove).not.toHaveBeenCalled();
     const unavailable = presence();
     vi.mocked(unavailable.read).mockRejectedValue(new Error('private provider detail'));
-    const data = fixture({ teamsNotifications: service, awayModeStore: unavailable });
+    const data = fixture({ ownerInteractions: service, awayModeStore: unavailable });
     const response = await manage(data.app, { id: item.id, action: 'delete' });
     expect(response.json().outcome).toBe('refused');
     expect(response.body).not.toContain('private provider detail');

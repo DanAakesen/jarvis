@@ -1,11 +1,39 @@
 # Agent context
 
+## Web Push is on in production (P13-03; 18 October 2026)
+
+Dan switched Web Push milestone 1 on after the P13-01 backend and the P13-02 web
+client shipped dark. Two lines do it, and the code defaults stay off:
+
+- Backend: `infra/main.bicep` sets `JARVIS_PUSH_ENABLED` to `'true'` in the
+  backend container app's `env`, beside `STATIC_WEB_APP_ORIGIN`.
+- Web: the web job's "Load infrastructure outputs" step in
+  `.github/workflows/deploy.yml` writes `VITE_PUSH_ENABLED=true` to
+  `$GITHUB_ENV` beside `VITE_BACKEND_URL`, so the production build includes the
+  Notifications section and worker.
+
+`apps/backend/src/push/enabled-switch.test.ts` pins both values and fails if any
+other workflow, Dockerfile, package file, web config or Bicep/parameter file
+names either switch, so changing a gate is a reviewed edit to those two files
+and to the pin.
+
+To switch push off, revert the whole P13-03 change, which removes the two gate
+lines and the pin test together, or set both values to `false` and update the pin
+test in the same commit. Reverting only the two lines fails the pin test in CI
+before Deploy can run. Once Deploy has run, the backend registers no push routes,
+so nothing can send, and the web build drops the Notifications section and worker
+registration. The VAPID key pair and stored subscriptions stay in SQL and are
+reused if push is switched on again. No secret, identity or resource is involved.
+
+CI proves the wiring only. Delivery to an iPhone is established by Dan's device
+test on the installed Home Screen app (iOS 16.4 or newer), not by any check here.
+
 ## P13-01 Web Push backend (17 October 2026)
 
 `JARVIS_PUSH_ENABLED` enables the authenticated Web Push backend only when its
 value is exactly `true`; unset and all other values leave routes unregistered
-and avoid push-store/database/provider work. Do not set this flag in deployment,
-workflows or infrastructure as part of P13-01. The VAPID private key stays in
+and avoid push-store/database/provider work. P13-01 itself set no deployment
+value; P13-03 (above) sets it in production. The VAPID private key stays in
 server-side SQL; routes expose only its public half, and test push content is
 generic. No Teams delivery path exists. The user-started test is not subject to
 quiet hours; any future system-started delivery must enforce 22:00–07:00
@@ -530,19 +558,34 @@ locally; the route, composition and tool tests that load Fastify or `jose` need
 the pinned CI graph where those packages are unavailable locally. The
 `active_energy` metric name is not verified against a live export.
 
-## Daily switch checks (17 October 2026; P12-09)
+## Daily switch checks (17 October 2026; P12-09; updated 18 October 2026, P12-15)
 
 The backend composes Daily only when the environment variable
 `JARVIS_DAILY_ENABLED` is exactly `true`. Absent or `false` leaves Jarvis
 unchanged and any other value stops startup. It is a server switch, not a secret,
-and it is off by default **with nothing setting it**: no workflow, Bicep,
-infrastructure, `.env` or deploy file may carry it, and no session sets it for
-an environment. Only the separate, reviewed change that turns Daily on edits the
-deploy files, and it must update the allow-list in `daily/default-off.test.ts` in
-the same change. The web switch `VITE_DAILY_ENABLED` follows the same rule. The Vite
-build and dev server read it by name only: absent or `false` is off, `true` is on,
-and any other value, including an empty one, stops them. Set it only in the
-reviewed enabling change, and never in a local `.env` that is committed.
+and it is off by default in code, so local runs, tests and any other environment
+stay off. Production turns Daily on for the owner in exactly two reviewed files:
+`JARVIS_DAILY_ENABLED: 'true'` in the backend container environment in
+`infra/main.bicep`, and `VITE_DAILY_ENABLED: 'true'` on the web build step of
+`.github/workflows/deploy.yml`. No other workflow, Bicep, infrastructure, `.env`
+or deploy file may mention either name, and no session sets one anywhere else.
+`daily/default-off.test.ts` allows only those two files and checks that each sets
+only its own switch, once, to the exact string `true`; changing the allow-list is
+turning Daily on or off somewhere else and needs its own reviewed change. The Vite
+build and dev server read the web switch by name only: absent or `false` is off,
+`true` is on, and any other value, including an empty one, stops them. Never set
+it in a local `.env` that is committed.
+
+To turn Daily off, revert the whole enabling change, which removes both values and
+the scan test's new expectations together, or set both to `false` and update
+`daily/default-off.test.ts` in the same commit. Reverting only the two values fails
+that test in CI before Deploy can run. Both files are release inputs, so the next
+deploy re-applies infrastructure, backend, web and agent; stored Daily data stays. After a deploy that sets the switches, the owner's
+read-only live check is: `/health` is OK, Daily appears in the side rail and the
+phone menu and opens on "What Daily holds today" with a status on each row (None
+returned is a valid answer before any data exists), and Settings shows the
+Nutrition targets section, empty until Dan enters his own values. None of it needs
+a write, and a failed read is a finding to record.
 
 Check the composition with
 `npm test --workspace @jarvis/backend -- src/config.test.ts src/production-modules.test.ts src/daily/default-off.test.ts src/daily/composition.test.ts`.
@@ -558,7 +601,7 @@ and that the tool count stays inside the 128-tool limit.
 The current inactive continuation registers `daily_food_review` only with the
 explicit internal nutrition factory. Use synthetic owned meals and persisted
 chat/voice metadata. Exercise actual browser-only Now approval: no mutation
-before acceptance, no Teams send even with away routing, one-time consumption,
+before acceptance, browser confirmation in Away as well as Present, one-time consumption,
 rejection/cancellation, changed presence/revision, immutable proposals,
 matching uncertain-result recovery, exact/favourite one-step routing and
 old-history correction/deletion. No live food/Health write or activation.
@@ -1072,13 +1115,14 @@ instructions or `C:\Repo\templates`.
 
 ## Push notification feature gate (P13-02; 17 October 2026)
 
-Web push is default-off. The Vite build reads only `VITE_PUSH_ENABLED` in
+Web push is default-off in code. The Vite build reads only `VITE_PUSH_ENABLED` in
 addition to its existing explicit backend override and injects enabled only
 when the value is exactly the string `true`. Do not expose arbitrary environment
-variables or set this gate as part of the web implementation. When off, the web
-app registers no worker, requests no push endpoints, renders no Notifications
-section and has no proactive-item route. Physical iOS permission and delivery
-checks happen only after a separate enabling change.
+variables. P13-02 did not set the gate; P13-03 sets it in the production deploy
+(see the first section), and CI or local builds stay off unless the variable is
+set. When off, the web app registers no worker, requests no push endpoints,
+renders no Notifications section and has no proactive-item route. Physical iOS
+permission and delivery checks are Dan's device test after P13-03.
 
 This worktree starts from released/remote main `2823585184d67980c580127f9dbbce97109fa91b`.
 Pinned web dependencies can be restored from an owned copy of the authorised
@@ -2430,7 +2474,7 @@ Every task issue ends with the same "Before you start" and "Definition of done" 
 | Bootstrap IDs | [`infra/bootstrap.output.json`](../infra/bootstrap.output.json); also Actions variables in `DanAakesen/jarvis` |
 
 - `infra/main.bicep` deploys into the existing `rg-jarvis`; it does not create the group or bootstrap identities. Run `az bicep build --file infra/main.bicep` and `az bicep lint --file infra/main.bicep` in PRs; the build writes `infra/main.json`, which is generated output and must not be committed. These checks need no Azure access.
-- The 6 October P6-22 decision reflects Dan's personal tenant: no Microsoft 365 or Teams. `infra/bootstrap.ps1` and Bicep no longer register or declare Bot Service, a Teams channel, or the separate Speech F0 resource. The optional backend Teams adapter remains unconfigured; approvals and notifications use the authenticated Now feed, and active English browser voice sessions announce pending approvals and task status. The normal Bicep deployment is incremental, so omission does not delete resources from prior deployments; any Azure cleanup requires separate authorization.
+- P6-22 records that production does not configure Microsoft 365 or Teams; P10-10 removes the backend Teams bot, messaging sender, cards, audio route, and Teams-specific configuration parsing. Away and Present confirmations both wait in the authenticated Now feed, and active English browser voice sessions announce pending approvals and task status. Existing database tables/rows and installed packages remain; no migration, data cleanup, or infra change is made. Any prior Bot/Speech resources or role assignments require separate authorization to clean up.
 - The Bicep deployment must supply `backendIdentityResourceId`, `sqlAdminGroupObjectId` and `foundryNameTimestamp`; `backendImage` is optional (empty skips the backend app, used only before the first backend image exists). The timestamp is fixed at `20261003200000` in `infra/main.parameters.json`, so every deploy updates the existing Foundry account and project in place. Change it only to recover from a deleted account, and then to a fresh value (L2).
 - Bicep sets `BACKEND_CONTAINER_APP_RESOURCE_ID` and grants `id-jarvis-backend` a custom role limited to Container App read/write on that app. The sleep API uses this fixed target and the existing `SQL_MANAGED_IDENTITY_CLIENT_ID` for ARM authentication. Local tests inject the scaler; a local app without an Azure managed identity cannot perform live scaling, and the Bicep build/lint checks do not verify the deployed role.
 - `sqlAdminGroupName` defaults to `jarvis-sql-admins`; the budget defaults to 300 in the subscription billing currency. Deploy requires the `JARVIS_BUDGET_CONTACT_EMAILS` GitHub secret, a comma-separated list including Dan's email. It passes the values through a mode-0600 temporary parameters file to the required Bicep `budgetContactEmails` parameter, then deletes the file. Do not commit email addresses. The first Azure deployment and real resource behavior are verified by Deploy, not by local Bicep build/lint.
@@ -4078,7 +4122,7 @@ chat/realtime model image delivery has been verified.
   gates; it is not a force-rebuild escape hatch.
 - After the first successful deploy only (P0-16): run `./infra/bootstrap.ps1 -WebRedirectUris 'https://<Static Web App host>/redirect.html'` so sign-in works there (the redirect URI is MSAL's redirect bridge page, L63) (existing URIs are kept), set `backendUrl` in `apps/web/config.json` to the backend URL so `npm run dev` signs in, and set the Actions variable `JARVIS_INFRA_DEPLOYMENT_NAME` to `jarvis-infra` (`gh variable set JARVIS_INFRA_DEPLOYMENT_NAME --body jarvis-infra`). The Deploy run summary lists both URLs.
 - No manual infrastructure portal changes.
-- **P6-22 coordinator check after merge:** wait for Deploy to finish; verify Teams settings are absent from the backend and Bicep does not provision Teams Bot or separate Speech F0 resources. In the signed-in Now panel, verify an away task update and a browser approval appear while away, Approve runs only the confirmed test action, Reject does not, and an unanswered approval expires after five minutes. If an English browser voice session is active, verify it announces the pending approval and task status. Any leftover Azure resources from prior deployments require separate cleanup authorization.
+- **P6-22 coordinator check after merge:** wait for Deploy to finish; verify the backend starts with and without legacy Teams environment variables and Bicep does not provision Teams Bot or separate Speech F0 resources. In the signed-in Now panel, verify an away task update and a browser approval appear while away, Approve runs only the confirmed test action, Reject does not, and an unanswered approval expires after five minutes. If an English browser voice session is active, verify it announces the pending approval and task status. Any leftover Azure resources from prior deployments require separate cleanup authorization.
 - Managed-project workflow examples and Azure OIDC adoption steps are in [github-actions-templates.md](github-actions-templates.md). The templates assume npm/Node defaults that adopters must match or customize; no Azure access is available to verify an adopting project's federation or deployment.
 
 ## Documentation rules
