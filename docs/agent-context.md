@@ -689,6 +689,32 @@ so none of that is claimed. Phone width means 390×844 touch plus 320; also chec
 768 and 1280. Local runs and synthetic-browser checks are not qualification: CI is
 the authority, and no live record, physical phone or Daily activation is proved.
 
+## Daily view tool checks (18 October 2026; P12-16)
+
+`daily_show` (`apps/backend/src/daily/tools/show.ts`) and its pure builder
+(`daily/show/views.ts`) show queried Daily data as a table, chart or detail in the
+workspace. From `apps/backend`, run
+`npx vitest run src/daily/show/views.test.ts src/daily/tools/show.test.ts`.
+`composition.test.ts`, `index.test.ts`, `production-modules.test.ts` and
+`routes/query.test.ts` build real Fastify applications or the whole module list, so
+they need the pinned CI graph where those packages are unavailable locally. From
+`apps/web`, run `npx vitest run src/GeneratedViewRenderer.test.tsx src/styles.test.tsx`,
+then `npx tsc --noEmit` and `npx eslint <changed files> --max-warnings 0`. Run one
+heavy command at a time. Every check uses synthetic records and a fake workspace;
+none reads real data, calls a provider or probes a live service. The tool takes no
+new environment variable and its tests need no secret.
+
+Browser inspection follows the harness rules of the overview page section: a
+temporary page under `apps/web` mounts the real `Workspace` window with the real
+stylesheet and real builder output, is served on a spare port and is deleted
+afterwards. Check 390×844 touch in dark and light and 1280×800: no horizontal
+overflow, the source footnote inside the window and legible, whole words and numbers
+in every table cell, and no console errors. The harness has no sign-in, 3D stage or
+navigation rail, and keyboard focus and OS reduced-motion were not exercised, so
+none of that is claimed. Local runs and synthetic-browser checks are not
+qualification: CI is the authority, and no live record, physical phone or
+acceptance is proved.
+
 ## Internal Frida binding checks (17 October 2026; P12-09)
 
 The current source-only continuation registers owner-authenticated
@@ -835,7 +861,7 @@ All of it uses synthetic owners and an untouched stand-in pool; no check reads o
 writes real data or probes a live service. `composition.test.ts` builds real
 Fastify applications, so it needs the pinned CI graph where those packages are
 unavailable locally. Check that Daily off leaves routes, tools, instructions and
-startup unchanged, that Daily on adds exactly the module's routes and six tools,
+startup unchanged, that Daily on adds exactly the module's routes and seven tools,
 and that the tool count stays inside the 128-tool limit.
 
 ## Internal Daily review checks (17 October 2026; P12-09)

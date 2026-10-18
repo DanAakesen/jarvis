@@ -1387,6 +1387,31 @@ private data or real sign-in; the harness has no 3D stage, header or MSAL;
 `prefers-reduced-motion` was not emulated; the Daily-off path is covered by the
 App tests, not the browser. Local runs are not qualification.
 
+18 October on-demand views (P12-16 / #731): when Jarvis shows Daily data on
+request, it reuses the existing generated-view renderer, workspace window and theme.
+There is no Daily renderer, skin or page. Under every table, chart or detail view
+sits one source footnote in the muted caption style (13 px as measured), directly
+below the data and capped at 72 characters wide. It is always visible, never behind
+a disclosure, because the source, the period, the read time and "completeness and
+freshness are not established" are part of the answer. List and text views do not
+render it: they carry their own note in their content, and an empty-read text view
+puts its own read time in its sentence. Table cells keep whole words and numbers,
+never split mid-token; a wider table scrolls inside its own region, and below 700 px
+the cell padding tightens sideways so a narrow table fits a 390 px window without
+clipping its last column.
+
+Checked in a headless Chromium rendering the real workspace window, real stylesheet
+and real builder output. Phone, 390×844 at 3× scale, dark and light: a measurements
+table and chart with a worst-case note, a sleep chart, a workouts table, a sync
+detail and an empty read. Desktop, 1280×800: the measurements table and chart across
+both themes. Seen: no horizontal overflow, the footnote inside the window, whole
+words in every cell, and no console errors or warnings. Inspection also caught two
+defects that are now fixed: table cells splitting values across lines, and an empty
+read showing no read time. Limits: synthetic records; the harness has no sign-in, 3D
+stage or navigation rail; keyboard focus and OS reduced-motion were not exercised;
+wider tables (sleep, meals) scroll sideways at 390 px by design. Local runs are not
+qualification.
+
 Confirmed by Dan for #730/#731/#732/#726: all migrated React/rich UI fully follows the current Jarvis layout and styling. Current DESIGN.md direction, `apps/web/src/styles.css` tokens, shared components, theme/density/motion settings and native phone/workspace patterns are the source of truth. Preserve capabilities and data semantics while restyling/recomposing legacy Daily content; do not carry its navy/plum/card skin, create a second theme or replace the shared shell, voice or window manager. Generated/ad-hoc views receive only safe trusted Jarvis theme context through the existing bridge, without widened permissions. UI issues require full mobile-first real-browser visual acceptance. P12-03 remains backend/schema-only; this records the standing direction, not completed visual work.
 
 ## P14-01 shared surface follow-up (18 October 2026)

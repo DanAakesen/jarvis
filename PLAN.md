@@ -68,6 +68,46 @@ reverting the whole change, scan test included, or setting both switches to
 `false` and updating the scan test in the same commit. Acceptance with Dan's real
 figures, the original Google source and a physical phone stays open.
 
+## On-demand Daily views (18 October 2026; P12-16 / #731)
+
+The overview page shows what Daily holds; this slice lets Dan ask Jarvis to show
+it. One new owner-bound, read-only tool, `daily_show`, reads through the same
+bounded read model as the Daily page and `daily_query`, builds a table, chart or
+detail from the stored values, and publishes it through the existing workspace
+view lifecycle. There is no new endpoint, renderer, page, widget or GenUI engine.
+
+With a workspace tab open Dan can ask for measurements ("show my steps for the
+last two weeks"), sleep ("chart my sleep"), workouts, one workout's heart rate,
+food history, saved favourites, meal plans or sync status. Each request is one page
+(at most 366 days and 200 rows, 100 for meals, favourites and plans); there is no
+paging. Brief history and single-record detail stay with `daily_query`. Nothing is
+calculated or estimated, and a missing value is unknown, never zero. Every table,
+chart and detail carries a footnote with the source, period, read time and "completeness
+and freshness are not established"; an empty read is a plain sentence with its own read
+time. View IDs are stable (for example `daily-workouts-table` and `daily-sync`; a
+measurement or heart-rate view is keyed by what it shows, not by its date window), so
+asking again refreshes the same window rather than opening another. Table cells keep
+whole words and numbers, and a wide table scrolls inside the window.
+
+Gates: the tool is sensitive and phone-denied, works only for the signed-in owner
+the Daily composition resolved (a connector or any other user is refused before
+SQL), and refuses before reading when no workspace tab is connected, pointing Jarvis
+to `daily_query` for a text answer. A 25-second overall deadline sits under the
+agent's 30-second read timeout, so a slow read fails with the tool's own message and
+a late success after the deadline is never reported as success.
+
+It belongs to the Daily composition and follows its switch. With Daily off, Jarvis is
+unchanged; with Daily on, the catalogue holds seven Daily tools instead of six, inside
+the 128-tool limit. It changes no flag and adds no migration, account, consent, grant,
+secret, RBAC, resource or import, and no provider, device or private read or write.
+The reserved Status, Recomp, Review and Ready view IDs stay unused and #723 stays
+withdrawn.
+
+Checked with synthetic data: 45 builder and 82 tool tests, the web renderer tests,
+and a real headless Chromium at 390×844 and 1280×800 (details in DESIGN.md). Local
+runs are not qualification; CI is, and no live data, physical phone or acceptance is
+claimed. Rollback is reverting this change.
+
 ## Proactive assistance (17 October 2026; P13-01 / #917)
 
 The first delivery-proof milestone is approved. P13-01 builds the owner-bound
@@ -120,8 +160,9 @@ Off composes nothing: the route table, tool catalogue, capability instructions,
 voice session tools, health response, startup, jobs and timers stay those of
 Jarvis without Daily, which tests compare against a Daily-free application. On
 composes one owner-bound module over the existing nutrition data: the
-capabilities, query and nutrition-targets routes and six tools (116 of the
-128-tool limit). It adds no MCP connector, Frida lookup, Google or Gmail feed,
+capabilities, query and nutrition-targets routes and six tools (seven since the
+on-demand views of P12-16, inside the 128-tool limit; CI checks the headroom). It
+adds no MCP connector, Frida lookup, Google or Gmail feed,
 health upload, job or timer. SQL and a UUID owner are required or startup fails;
 a signed-in user who is not that owner, a runner or a connector is refused before
 any SQL, and an agent reaches the targets only through the approved tool. No

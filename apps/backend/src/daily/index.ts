@@ -3,6 +3,7 @@ import type { BackendModule } from '../modules.js';
 import { resolveDailyOwner } from './owner.js';
 import type { DailyData } from './query.js';
 import { dailyQueryTool } from './tools/query.js';
+import { dailyShowTool } from './tools/show.js';
 import { dailyQueryRoutes } from './routes/query.js';
 import { dailyMcpRoutes, type DailyMcpOptions } from './mcp/routes.js';
 import { dailyFoodTool, type InternalNutrition } from './tools/food.js';
@@ -25,7 +26,7 @@ export function createDailyModules(enabled = false, data?: DailyData, connector?
   if (nutritionTargets && !data) throw new TypeError('Daily nutrition targets require shared Daily data');
   if (nutritionSuggestions && !data) throw new TypeError('Daily nutrition suggestions require shared Daily data');
   if (nutritionSuggestions && !nutritionTargets) throw new TypeError('Daily nutrition suggestions require nutrition targets');
-  const tools = data ? [dailyQueryTool(data.query),
+  const tools = data ? [dailyQueryTool(data.query), dailyShowTool(data.query),
     ...(data.foodLookup ? [dailyFoodLookupTool(data.foodLookup)] : []),
     ...(data.feeds ? [dailyFeedTool(data.feeds)] : []),
     ...(internalNutrition ? [dailyFoodTool(internalNutrition), dailyFoodReviewTool(internalNutrition)] : []),

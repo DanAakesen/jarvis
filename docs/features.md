@@ -311,7 +311,7 @@ P12-03 adds only the empty owner-bound persistence schema and inactive exact-key
 | SQL health processing, bounded retry/quarantine, owner history/detail and distinct processed/heartbeat freshness | Unregistered backend library | Inactive synthetic implementation; exact-head CI/review and protected/live/device parity pending; no scheduler or activation | P12-05 (#720) |
 | Nutrition/Frida/plans and coaching/recovery/recomp | Both | Planned; gated | P12-07–P12-09 |
 | Existing Google feeds, scoped widget/Shortcut, football and brief history | Both/Phone | Planned; recurring notifications off | P12-10–P12-14 |
-| Daily overview page (what Daily holds today, over the existing record browser) and four native assistant views | Both | Overview page built (read-only, owner-bound) and switched on for the owner's production by the two deployment files, live check pending; assistant views planned | P12-15 (#730), P12-16 (#731) |
+| Daily overview page (what Daily holds today, over the existing record browser) and on-demand Daily views (`daily_show`, no fixed native screens) | Both | Overview page built (read-only, owner-bound) and switched on for the owner's production by the two deployment files, live check pending; `daily_show` built (read-only, owner-bound, same Daily switch, synthetic and headless-browser checked), live check pending | P12-15 (#730), P12-16 (#731) |
 | Parity, physical-phone acceptance, protected cutover/rollback and legacy deprecation | Background/Phone | Planned; evidence gates apply | P12-17–P12-19 |
 
 [Approved scope and existing issue URLs](daily-migration.md). No TickTick integration or original Daily repository/data deletion.

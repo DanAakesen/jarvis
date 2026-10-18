@@ -687,7 +687,9 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
 .workspace-view-content [role="alert"] { color: var(--error); }
 .generated-view-table { max-width: 100%; overflow: auto; }
 .generated-view-table table { width: 100%; border-collapse: collapse; text-align: left; }
-.generated-view-table th, .generated-view-table td { padding: var(--space-2); border-bottom: 1px solid var(--rule); vertical-align: top; }
+/* Cells keep words and numbers whole: a wide table scrolls inside its wrapper instead of splitting a value across lines. */
+.generated-view-table th, .generated-view-table td { padding: var(--space-2); border-bottom: 1px solid var(--rule); vertical-align: top; overflow-wrap: normal; }
+@media (max-width: 700px) { .generated-view-table th, .generated-view-table td { padding-inline: var(--space-1); } }
 .generated-view-details { display: grid; grid-template-columns: minmax(5rem, max-content) minmax(0, 1fr); gap: var(--space-2) var(--space-3); }
 .generated-view-details dd { min-width: 0; margin: 0; overflow-wrap: anywhere; }
 .generated-view-text { white-space: pre-wrap; }
@@ -697,6 +699,8 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
 .generated-view-images figure { min-width: 0; margin: 0; }
 .generated-view-images img { display: block; max-width: 100%; height: auto; }
 .generated-view-images figcaption { margin-top: var(--space-1); font-size: var(--type-small); }
+/* The source note under a table, chart or detail: provenance, read time and coverage. Doubled class to outrank `.workspace-view-content p`. */
+.generated-view-source-note.generated-view-source-note { max-width: 72ch; margin: var(--space-3) 0 0; color: var(--text-muted); font-size: var(--type-caption); line-height: 1.5; }
 .workspace-announcement { min-height: 1.5em; margin-top: var(--space-2); font-size: var(--type-small); }
 .composer label, .choice-group legend { display: block; margin: 20px 0 6px; padding: 0; color: var(--text); font-weight: 600; }
 .choice-group legend { margin-top: 0; }
