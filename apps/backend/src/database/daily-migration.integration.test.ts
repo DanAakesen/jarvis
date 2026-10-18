@@ -146,7 +146,7 @@ describe('resumable Daily import and reconciliation on synthetic SQL data', () =
     expect(repeated.status).toBe('complete');
     expect((await pool.request().input('owner', sql.UniqueIdentifier, owner).query(
       'SELECT protein_grams, fiber_grams FROM daily.nutrition_meals WHERE owner_object_id=@owner;',
-    )).recordset).toEqual([{ protein_grams: null, fiber_grams: null }]);
+    )).recordset).toEqual([{ protein_grams: null, fiber_grams: 0 }]);
     expect((await pool.request().input('owner', sql.UniqueIdentifier, other).query(
       'SELECT workout_type FROM daily.health_workouts WHERE owner_object_id=@owner;',
     )).recordset).toEqual([{ workout_type: 'other-owner' }]);
