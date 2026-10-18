@@ -6134,6 +6134,23 @@ and heart-rate reads; the average line carries its minute minimum–maximum band
 while separate minimum and maximum lines preserve their labels and recorded
 gaps. No backend, contract, persistence, route or authorization boundary changed.
 
+## Web Daily Briefs presentation (18 October 2026; P12-35)
+
+`sections/briefs/BriefsSection.tsx` keeps the existing `useDailyPages` history
+reader (50 records per page, automatic cursor loading up to ten pages) and
+`useDailyQuery` detail reader. Selection remains section-local; row focus returns
+on Back, and moving to a loaded neighbor focuses the reading heading. The history
+groups records by the `YYYY-MM` prefix of their stored start text without date or
+timezone conversion. Count, freshness, unknown status/delivery and cap/error
+states remain explicit.
+
+The detail view presents its stored preview and compact metadata before an
+approximately 65-character reading measure. String body sections render as
+prose; structured values render as readable key/value or bullet lists, with raw
+body JSON behind a native disclosure. Navigation is limited to rows already in
+the loaded history. This is a presentation-only change: query limits, paging,
+refresh, URLs, contracts, backend authorization and dependencies are unchanged.
+
 ## Web Daily Body & sleep section (18 October 2026; P12-25)
 
 `apps/web/src/daily/sections/body-sleep/` is discovered through the existing
