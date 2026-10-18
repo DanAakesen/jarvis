@@ -111,6 +111,7 @@ const typeSpacingAllowlist: AllowlistEntry[] = [
   { file: 'ConversationHistory.css', selector: '.conversation-transcript:has(.conversation-greeting)', property: 'padding', value: 'clamp(var(--space-4), 12vh, var(--space-7)) var(--space-3) var(--space-6)', reason: 'The greeting position interpolates between existing vertical spacing steps as the viewport changes.' },
   { file: 'styles.css', selector: '.shell-main', property: 'padding', value: 'var(--space-6) clamp(var(--space-5), 4vw, var(--space-7)) var(--space-7)', reason: 'The shell gutter interpolates only between existing spacing steps to fit the responsive stage.' },
   { file: 'styles.css', selector: '.app-shell:not(.app-signed-out) :is(.area-rail, .area-sidebar, .context-panel)', property: 'margin', value: 'var(--slab-gap) 0 clamp(var(--space-4), 9vh, var(--space-7))', reason: 'The glass-slab reserve interpolates between existing vertical spacing steps for the available height.' },
+  { file: 'styles.css', selector: '.modal-backdrop', property: 'padding', value: 'max(env(safe-area-inset-top), clamp(var(--space-4), 6dvh, var(--space-7))) max(var(--space-4), env(safe-area-inset-right)) max(var(--space-4), env(safe-area-inset-bottom)) max(var(--space-4), env(safe-area-inset-left))', reason: 'The dialog gutter interpolates between existing spacing steps for the available height and never drops below the device safe areas.' },
 ];
 
 const literalRadiusAllowlist = [

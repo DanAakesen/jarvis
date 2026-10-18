@@ -251,12 +251,12 @@
   .workspace[data-phone="true"] .workspace-window-conversation .workspace-icon-control { width: 44px; min-width: 44px; height: 44px; min-height: 44px; }
   .app-shell[data-voice-active="true"] { --phone-dock-height: var(--voice-bar-height, 60px); }
   .app-shell[data-phone="true"][data-voice-active="true"] { --dock-space: var(--voice-dock-top); }
-  .app-shell[data-phone="true"][data-voice-active="true"] .jarvis-page { z-index: 43; pointer-events: none; }
+  .app-shell[data-phone="true"][data-voice-active="true"] .jarvis-page { z-index: var(--z-voice-controls); pointer-events: none; }
   .app-shell[data-phone="true"][data-voice-active="true"] .conversation-history { display: contents; }
   .app-shell[data-phone="true"][data-voice-active="true"] .conversation-input[data-voice-active="true"] { position: static; width: auto; max-width: none; margin: 0; padding: 0; border: 0; background: transparent; box-shadow: none; backdrop-filter: none; }
   .app-shell[data-phone="true"][data-voice-active="true"] .conversation-input::before,
   .app-shell[data-phone="true"][data-voice-active="true"] .conversation-input::after { content: none; }
-  .app-shell[data-phone="true"][data-voice-active="true"] .voice-controls[data-active="true"] { position: fixed; inset: auto 12px var(--phone-dock-bottom); z-index: 43; display: block; width: auto; height: calc(var(--voice-dock-top) - var(--phone-dock-bottom)); background: transparent; backdrop-filter: none; pointer-events: none; }
+  .app-shell[data-phone="true"][data-voice-active="true"] .voice-controls[data-active="true"] { position: fixed; inset: auto 12px var(--phone-dock-bottom); z-index: var(--z-voice-controls); display: block; width: auto; height: calc(var(--voice-dock-top) - var(--phone-dock-bottom)); background: transparent; backdrop-filter: none; pointer-events: none; }
   .app-shell[data-voice-active="true"] .voice-bar,
   .app-shell[data-voice-active="true"][data-voice-has-windows="true"] .voice-bar { bottom: var(--phone-dock-bottom); left: calc((100vw + env(safe-area-inset-left) - env(safe-area-inset-right)) / 2); width: max-content; max-width: calc(100vw - env(safe-area-inset-left) - env(safe-area-inset-right) - 24px); transform: translateX(-50%); }
   .app-shell[data-phone="true"][data-voice-active="true"] .voice-bar { position: absolute; bottom: 0; left: 50%; pointer-events: auto; }
@@ -265,7 +265,7 @@
   .app-shell[data-phone="true"][data-voice-active="true"] .workspace-guidance,
   .app-shell[data-phone="true"][data-voice-active="true"] .workspace-empty { display: none; }
   .voice-end-control { padding-inline: var(--space-3) var(--space-3); }
-  .app-shell[data-phone="true"][data-voice-active="true"][data-voice-has-windows="true"] .workspace-shell-area:not([hidden]) { position: fixed; z-index: 42; top: calc(env(safe-area-inset-top) + 68px); right: calc(env(safe-area-inset-right) + 12px); bottom: var(--voice-dock-top, calc(var(--phone-dock-bottom) + var(--phone-dock-height) + var(--voice-status-height, 0px) + 20px)); left: calc(env(safe-area-inset-left) + 12px); width: auto; height: auto; overflow: hidden; }
+  .app-shell[data-phone="true"][data-voice-active="true"][data-voice-has-windows="true"] .workspace-shell-area:not([hidden]) { position: fixed; z-index: var(--z-voice-window); top: calc(env(safe-area-inset-top) + 68px); right: calc(env(safe-area-inset-right) + 12px); bottom: var(--voice-dock-top, calc(var(--phone-dock-bottom) + var(--phone-dock-height) + var(--voice-status-height, 0px) + 20px)); left: calc(env(safe-area-inset-left) + 12px); width: auto; height: auto; overflow: hidden; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -300,7 +300,7 @@
 /* Off the home page the chat floats over the page: the bar sits bottom-centre and windows share one overlay layer.
    In the rail state the bar has flown into the rail orb (chat-flight.ts) and stays hidden until it pops out again. */
 .app-shell[data-home="false"]:not(.app-signed-out) .jarvis-page {
-  position: fixed; z-index: 40; right: 16px; bottom: 14px; left: calc(var(--rail-size) + 16px);
+  position: fixed; z-index: var(--z-dock); right: 16px; bottom: 14px; left: calc(var(--rail-size) + 16px);
   width: auto; max-width: var(--chat-width); height: auto; min-height: 0; margin-inline: auto; padding: 0; pointer-events: none;
 }
 .app-shell[data-home="false"] .jarvis-page .conversation-history { flex: 0 0 auto; }
@@ -308,7 +308,7 @@
 .app-shell[data-home="false"] .jarvis-page .conversation-toast { pointer-events: auto; }
 .app-shell[data-chat="rail"] .jarvis-page .conversation-input { visibility: hidden; pointer-events: none; transition: visibility 0s linear .52s; }
 .app-shell[data-home="false"]:not(.app-signed-out) .workspace-shell-area {
-  position: fixed; z-index: 30; top: calc(var(--rail-size) + 44px); right: 16px; bottom: 68px; left: calc(var(--rail-size) + 16px);
+  position: fixed; z-index: var(--z-window); top: calc(var(--rail-size) + 44px); right: 16px; bottom: 68px; left: calc(var(--rail-size) + 16px);
   padding: 0; pointer-events: none;
 }
 .app-shell[data-chat="rail"]:not(.app-signed-out) .workspace-shell-area { bottom: 16px; }
@@ -555,10 +555,10 @@
 /* Voice keeps the shell (Dan, 7 October): on desktop the top bar (tabs and job tabs), rail and panels stay in place
    over the full-screen voice room, and windows float across the room exactly as while typing. */
 @media (width > 700px) and (not ((max-height: 500px) and (pointer: coarse))) {
-  .app-shell.app-shell[data-voice-active="true"] .app-topbar { position: fixed; z-index: 20; top: 0; right: 0; left: 0; display: flex; }
-  .app-shell.app-shell[data-voice-active="true"] .area-rail { position: fixed; z-index: 20; top: var(--rail-size); bottom: var(--slab-gap); left: 0; display: flex; width: var(--rail-size); }
-  .app-shell.app-shell[data-voice-active="true"] .area-sidebar:not([hidden]) { position: fixed; z-index: 19; top: var(--rail-size); bottom: var(--slab-gap); left: var(--rail-size); display: flex; width: var(--sidebar-width, 220px); }
-  .app-shell.app-shell[data-voice-active="true"] .context-panel:not([hidden]) { position: fixed; z-index: 19; top: var(--rail-size); right: 0; bottom: var(--slab-gap); display: flex; width: var(--context-width, 280px); }
+  .app-shell.app-shell[data-voice-active="true"] .app-topbar { position: fixed; z-index: var(--z-chrome); top: 0; right: 0; left: 0; display: flex; }
+  .app-shell.app-shell[data-voice-active="true"] .area-rail { position: fixed; z-index: var(--z-chrome); top: var(--rail-size); bottom: var(--slab-gap); left: 0; display: flex; width: var(--rail-size); }
+  .app-shell.app-shell[data-voice-active="true"] .area-sidebar:not([hidden]) { position: fixed; z-index: var(--z-panel); top: var(--rail-size); bottom: var(--slab-gap); left: var(--rail-size); display: flex; width: var(--sidebar-width, 220px); }
+  .app-shell.app-shell[data-voice-active="true"] .context-panel:not([hidden]) { position: fixed; z-index: var(--z-panel); top: var(--rail-size); right: 0; bottom: var(--slab-gap); display: flex; width: var(--context-width, 280px); }
   .app-shell.app-shell[data-voice-active="true"][data-voice-has-windows="true"] .workspace-shell-area:not([hidden]) {
     top: calc(var(--rail-size) + 12px); right: 16px; bottom: 96px; left: calc(var(--rail-size) + 16px);
     width: auto; height: auto; overflow: visible; pointer-events: none;
@@ -634,7 +634,7 @@
 .workspace-window-conversation .workspace-window-actions { position: relative; z-index: 4; }
 .app-shell[data-voice-active="true"] :is(.conversation-resize-border, .conversation-resize-handle, .workspace-window-conversation .workspace-move-handle) { display: none; }
 .conversation-layout-error {
-  position: fixed; z-index: 1200; right: 16px; bottom: 16px; max-width: min(36ch, calc(100vw - 32px)); margin: 0;
+  position: fixed; z-index: var(--z-toast); right: 16px; bottom: 16px; max-width: min(36ch, calc(100vw - 32px)); margin: 0;
   padding: var(--space-3); border: 1px solid var(--rule); border-radius: var(--radius-panel);
   background: var(--surface-translucent); color: var(--error); font-size: var(--type-small);
 }
@@ -655,7 +655,7 @@
 
 /* Both halves of phone chat use the visible viewport, including keyboard pan and dismissal. */
 .app-shell.app-shell[data-phone="true"][data-voice-active="false"]:not(.app-signed-out) .jarvis-page {
-  position: fixed; z-index: 40;
+  position: fixed; z-index: var(--z-dock);
   top: calc(var(--phone-chat-top, 0px) + var(--phone-chat-height, 100dvh) - var(--phone-dock-bottom) - var(--conversation-composer-height, 52px));
   right: calc(env(safe-area-inset-right) + 8px);
   bottom: auto;
@@ -674,7 +674,7 @@
   padding-bottom: max(calc(var(--dock-space) + var(--space-4)), calc(var(--phone-dock-bottom) + var(--conversation-composer-height, var(--space-7)) + var(--space-4)));
 }
 .app-shell.app-shell[data-phone="true"][data-voice-active="false"]:not(.app-signed-out) .workspace-shell-area {
-  position: fixed; z-index: 30;
+  position: fixed; z-index: var(--z-window);
   top: calc(var(--phone-chat-top, 0px) + env(safe-area-inset-top) + var(--rail-size) + 8px);
   right: calc(env(safe-area-inset-right) + 8px);
   bottom: auto;

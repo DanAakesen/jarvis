@@ -1,5 +1,14 @@
 # Product
 
+## Shared overlays (18 October 2026; P14-09)
+
+Dialogs, sheets and menus use one stacking order without covering modal actions
+with background windows or feedback. Dialogs retain their existing actions,
+trap focus while modal, return focus on close and protect unsaved input from
+accidental Escape/backdrop dismissal. Phone overlays fit the visible viewport
+and scroll internally. Workspace pin errors remain readable in page flow with
+their existing alert and retry action.
+
 ## Voice result previews (16 October 2026; P11-07)
 
 Voice tool results use the existing automatic workspace presentation path.

@@ -1,5 +1,36 @@
 # Design
 
+## Overlays and stacking (P14-09)
+
+18 October 2026.
+
+Overlay surfaces share `--surface`, `--rule`, `--radius-panel` and
+`--panel-shadow`. Dialogs keep one heading and their existing named close
+action above an internally scrolling body. Footer actions reuse existing
+button groups, with secondary actions before the primary in DOM order and
+full-width stacking on phones. Do not restyle buttons or fields here.
+
+The named `--z-*` scale lives only in `apps/web/src/styles.css`: content,
+panels/rail, workspace windows, dock, menus, sheets, modal backdrop/card, toasts,
+then the skip link. Window depth and maximised/Arrange ordering remain local
+to the isolated workspace canvas. Component-local decoration may use -1 or 0–5.
+
+Modal focus enters, stays inside the topmost dialog and returns on close.
+Nested dialogs share scroll locking and background inertness. Escape and
+backdrop dismissal do not discard edited forms or interrupt pending actions;
+explicit existing close/cancel actions remain available. Nonmodal menus retain
+their own keyboard navigation and return focus on dismissal.
+
+Workspace pin errors and retry feedback are portalled into an in-flow host
+before route content, not into the floating window layer. Phone sheets use
+safe-area margins, dynamic viewport bounds and internal scrolling. App and OS
+reduced-motion preferences disable overlay motion.
+
+Enter/exit motion uses existing state/easing tokens. Unmounted dialogs and
+popovers fade inert, ID-free copies; reopening cancels the copy. Persistent
+phone sheets use interruptible discrete display/opacity transitions. Focus and
+action cleanup never wait for animation.
+
 ## Responsive rules (P14-05, 18 October 2026)
 
 Use the shared viewport set in `apps/web/src/styles.css`: phone through 700px,

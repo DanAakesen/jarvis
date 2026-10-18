@@ -4,6 +4,8 @@ import { presenceLabel, presenceModes, usePresence, useDevicePresence, type Pres
 import { StateMessage } from './StateMessage';
 import { CollapsibleSection } from './CollapsibleSection';
 import { ShellIcon } from './ShellIcon';
+import { returnFocusAfterOutsidePress } from './overlay-focus';
+import { useOverlayMotion } from './overlay-motion';
 
 type ModeInstructions = Record<PresenceMode, string>;
 const maxInstruction = 2_000;
@@ -19,12 +21,17 @@ export function PresenceChip({ backendUrl, getAccessToken }: { backendUrl: strin
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
+  const menu = useRef<HTMLDivElement>(null);
+  const menuRef = useOverlayMotion(menu, 'menu');
   const menuId = useId();
 
   useEffect(() => {
     if (!open) return;
     const close = (event: PointerEvent) => {
-      if (!root.current?.contains(event.target as Node)) setOpen(false);
+      if (!root.current?.contains(event.target as Node)) {
+        if (root.current?.contains(document.activeElement)) returnFocusAfterOutsidePress(trigger.current);
+        setOpen(false);
+      }
     };
     document.addEventListener('pointerdown', close);
     return () => document.removeEventListener('pointerdown', close);
@@ -36,6 +43,7 @@ export function PresenceChip({ backendUrl, getAccessToken }: { backendUrl: strin
     <div ref={root} className="presence-chip" style={{ '--tone': current.tone } as CSSProperties} onKeyDown={(event) => {
       if (event.key !== 'Escape' || !open) return;
       event.preventDefault();
+      event.stopPropagation();
       setOpen(false);
       trigger.current?.focus();
     }}>
@@ -44,7 +52,7 @@ export function PresenceChip({ backendUrl, getAccessToken }: { backendUrl: strin
         <ShellIcon name={current.mode} />
       </button>
       {open && (
-        <div id={menuId} className="presence-menu luminous-glass" role="group" aria-label="Presence mode">
+        <div ref={menuRef} id={menuId} className="presence-menu luminous-glass" role="group" aria-label="Presence mode">
           {presenceModes.map(({ mode, label, tone }) => (
             <button key={mode} type="button" className="presence-option" aria-pressed={presence.mode === mode}
               disabled={presence.saving !== null} style={{ '--tone': tone } as CSSProperties}

@@ -727,6 +727,16 @@ Jarvis is one backend with a shared core and one module per area, a static web a
 
 ## Web skeleton and configuration
 
+- `Modal` shares `useModalLifecycle` with mobile navigation and context sheets:
+  topmost focus trapping/return, inert background, nested scroll locks and
+  visual-viewport bounds. Its header, scrolling body and action footer remain
+  inside a body portal; footer submit buttons explicitly target their forms.
+  Stacking roles are `--z-*` tokens in `styles.css`, with dynamic window depth
+  confined to an isolated canvas. `Workspace` portals pin feedback into the
+  shell's in-flow `feedbackHost` before the route outlet; persistence and retry
+  ownership stay in `Workspace`.
+  `overlay-motion.ts` reuses visual-only window ghosts for token-timed exits;
+  copies are inert and hidden from accessibility, and reopening cancels them.
 - P9-77 mounts `NotesArea` at `/notes`, redirecting `/knowledge/*` with replace.
   The existing `KnowledgeGraphView` remains the default, with its search and
   section filters. Notes owns the transient Markdown draft, preview and save
