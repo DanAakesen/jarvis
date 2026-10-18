@@ -2029,6 +2029,41 @@ selects only fixed templates for validated kinds, languages and counts, ignoring
 payload-supplied title/body text. Provider acceptance is recorded per item and
 remains distinct from device display.
 
+## Proactive todo reminders (P13-13; default off)
+
+Composition adds the reminder planner after the P13-12 alert hook only when the
+proactive, push and shared alert gates, vault, reminder store, push store and
+system sender are present. The planner runs for scheduled, catch-up and manual
+checks, but only plans timed todos when the todo source succeeded. It hashes
+normalized text and the due instant for identity, saves only a sanitized,
+80-unit title, inserts at most 20 rows per run and 100 pending rows per owner,
+and removes terminal rows older than 30 days. It never cancels a row based on a
+partial source-fact list.
+
+The owner-scoped `proactive_reminders` table is added by migration 0059, with a
+unique owner/key index and pending-fire and sent-day indexes. Planning inserts
+and retention cleanup share one owner-locked transaction; SQL read paths use
+`databaseReadRequest`. The in-memory store follows the same caps and terminal
+state behavior for tests.
+
+The self-rescheduling, unreferenced ticker reads the earliest pending time once
+at startup. Future or absent work and the Copenhagen quiet window are pure
+in-memory checks; after a due scan it refreshes the wake time once. Errors back
+off five minutes. For due rows it expires late work, applies pause and
+subscription suppression, then resolves and parses the canonical todo file
+again with a 20-second bound. It cancels changed todos, retries failed
+verification twice, and after the third verification failure may send with an
+`unverified` reason. It suppresses deadline alerts sent within two hours and
+enforces eight sent reminders per Copenhagen day.
+
+Each remaining row upserts an idempotent, private `todo` finding with a fixed
+Danish/English body. One generic `proactive_reminder` push is bundled per tick
+through the shared system sender. Push delivery and reminder state are separate
+writes, so a process crash between acceptance and state update can send again;
+a brief overlap of revisions during deployment can also duplicate a reminder
+and is accepted. A todo added after the last check is covered from the next
+check on; "Check now" covers it immediately.
+
 ## Web push delivery (P13-02; default off)
 
 The web build exposes only the boolean result of `VITE_PUSH_ENABLED === "true"`

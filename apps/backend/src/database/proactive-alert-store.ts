@@ -13,6 +13,7 @@ interface AlertRow {
   status: AlertLedgerRow['status'];
   reason: string | null;
   attempts: number;
+  updated_at: Date | string;
 }
 
 function mapRow(row: AlertRow): AlertLedgerRow {
@@ -26,6 +27,7 @@ function mapRow(row: AlertRow): AlertLedgerRow {
     status: row.status,
     reason: row.reason,
     attempts: row.attempts,
+    updatedAt: row.updated_at instanceof Date ? row.updated_at.toISOString() : new Date(row.updated_at).toISOString(),
   };
 }
 
@@ -48,7 +50,7 @@ function writeRequest(pool: sql.ConnectionPool, ownerObjectId: string, input: Al
 }
 
 const outputColumns = `inserted.id, inserted.alert_key, inserted.class, inserted.item_id,
-  inserted.run_id, inserted.day_key, inserted.status, inserted.reason, inserted.attempts`;
+  inserted.run_id, inserted.day_key, inserted.status, inserted.reason, inserted.attempts, inserted.updated_at`;
 
 export function createProactiveAlertStore(pool: sql.ConnectionPool, ownerObjectId: string): AlertLedgerStore {
   const owner = ownerObjectId.toLowerCase();
@@ -57,7 +59,7 @@ export function createProactiveAlertStore(pool: sql.ConnectionPool, ownerObjectI
       const { recordset } = await databaseReadRequest(pool)
         .input('owner', sql.UniqueIdentifier, owner)
         .input('alertKey', sql.Char(32), alertKey)
-        .query<AlertRow>(`SELECT id, alert_key, class, item_id, run_id, day_key, status, reason, attempts
+        .query<AlertRow>(`SELECT id, alert_key, class, item_id, run_id, day_key, status, reason, attempts, updated_at
           FROM dbo.proactive_alerts WHERE owner_object_id = @owner AND alert_key = @alertKey;`);
       return recordset[0] ? mapRow(recordset[0]) : undefined;
     },

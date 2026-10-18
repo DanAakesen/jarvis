@@ -1080,6 +1080,19 @@ a closed Danish/English template table in the worker. The alert switch remains
 default-off alongside the proactive and push switches; per-class controls are not
 part of this slice.
 
+## Proactive todo reminders (18 October 2026; P13-13)
+
+An explicit-time todo gets one generic reminder push about an hour before it is
+due when a proactive check has seen it. Date-only todos remain covered by the
+24-hour deadline alert. Reminders wait through the 22:00–07:00 Copenhagen quiet
+window and are presented as due soon or overdue after 07:00. Each reminder has a
+private Proactive item; todo text is not included in its push or logs. The shared
+proactive, push and alert switches remain default-off, with no new setting or
+web control.
+
+A todo added after the last check is covered from the next check on; "Check
+now" covers it immediately.
+
 ## Proactive web (18 October 2026; P13-10)
 
 The web page and Settings section are independently dark behind

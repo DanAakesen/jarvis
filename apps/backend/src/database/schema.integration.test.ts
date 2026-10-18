@@ -48,7 +48,7 @@ const tablesInSchema = [
   'activity', 'artifacts', 'background_job_dismissals', 'background_job_steps', 'background_jobs', 'conversation_attachments',
   'conversation_summaries', 'credential_status', 'deployment_failure_receipts', 'deployments', 'factory_task_submissions', 'folio_items', 'jarvis_sessions',
   'memories', 'memory_deletions', 'memory_history', 'messages', 'phone_sessions', 'proactive_alerts', 'proactive_items',
-  'proactive_runs', 'proactive_settings', 'proactive_source_status', 'proactive_spend', 'projects',
+  'proactive_reminders', 'proactive_runs', 'proactive_settings', 'proactive_source_status', 'proactive_spend', 'projects',
   'pull_requests', 'push_subscriptions', 'push_vapid_keys', 'releases',
   'sandbox_sessions', 'sandbox_turns', 'settings', 'task_event_archives', 'task_events', 'task_status_notifications',
   'tasks', 'teams_confirmations', 'teams_conversations', 'tool_calls', 'usage', 'vault_chunks', 'vault_links',
@@ -169,13 +169,16 @@ describe('committed domain schema (groups 1-8)', () => {
         N'IX_task_event_archives_task_first_at', N'IX_pull_requests_project_head_sha',
         N'IX_workflow_runs_project_head_sha', N'IX_releases_project_created_at',
         N'IX_deployments_release_id_at', N'IX_messages_at', N'IX_proactive_alerts_owner_day_status',
-        N'UX_activity_alert_key', N'UX_proactive_alerts_owner_alert_key') ORDER BY name`);
+        N'IX_proactive_reminders_owner_day_state', N'IX_proactive_reminders_owner_state_fire_at',
+        N'UX_activity_alert_key', N'UX_proactive_alerts_owner_alert_key', N'UX_proactive_reminders_owner_key') ORDER BY name`);
     expect(recordset.map((row) => row.name)).toEqual([
       'IX_artifacts_task_id_at', 'IX_deployments_release_id_at', 'IX_messages_at',
-      'IX_proactive_alerts_owner_day_status', 'IX_pull_requests_project_head_sha', 'IX_releases_project_created_at', 'IX_sandbox_sessions_task_id_status',
+      'IX_proactive_alerts_owner_day_status', 'IX_proactive_reminders_owner_day_state',
+      'IX_proactive_reminders_owner_state_fire_at', 'IX_pull_requests_project_head_sha',
+      'IX_releases_project_created_at', 'IX_sandbox_sessions_task_id_status',
       'IX_sandbox_turns_sandbox_session_id_started_at', 'IX_task_event_archives_task_first_at',
       'IX_task_events_task_id_at', 'IX_tasks_state_next_attempt_at', 'IX_workflow_runs_project_head_sha',
-      'UX_activity_alert_key', 'UX_proactive_alerts_owner_alert_key',
+      'UX_activity_alert_key', 'UX_proactive_alerts_owner_alert_key', 'UX_proactive_reminders_owner_key',
     ]);
   });
 

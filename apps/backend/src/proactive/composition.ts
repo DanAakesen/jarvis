@@ -13,8 +13,10 @@ import type { PushStore } from '../database/push-store.js';
 import { ConfigurationError } from '../configuration-error.js';
 import { createProactiveStore } from '../database/proactive-store.js';
 import { createProactiveAlertStore } from '../database/proactive-alert-store.js';
+import { createProactiveReminderStore } from '../database/proactive-reminder-store.js';
 import { createMemoryProactiveStore } from './store.js';
 import { createMemoryAlertLedgerStore, type AlertLedgerStore } from './alert-ledger.js';
+import { createMemoryProactiveReminderStore, type ProactiveReminderStore } from './reminder-store.js';
 import { buildSourceRegistry } from './sources/registry.js';
 import { registerProactiveRoutes } from './routes.js';
 import { createProactiveEngine, type ProactiveEngineOptions } from './engine.js';
@@ -22,6 +24,8 @@ import { createFoundryProactiveModel, MAX_PROACTIVE_COMPLETION_TOKENS, MAX_PROAC
 import { createProactiveScheduler } from './scheduler.js';
 import { estimateCost } from './budget.js';
 import { createProactiveAlertHook } from './alerts.js';
+import { createTodoReminderPlanner } from './reminders.js';
+import { createReminderTicker } from './reminder-ticker.js';
 import type { SystemPushOutcome, SystemPushRequest } from './push-delivery.js';
 
 const uuidPattern = /^[\da-f]{8}-(?:[\da-f]{4}-){3}[\da-f]{12}$/iu;
@@ -44,6 +48,7 @@ export interface ProactiveCompositionOptions {
   onFindingsStored?: NonNullable<ProactiveEngineOptions['onFindingsStored']>;
   pushStore?: PushStore;
   alertLedgerStore?: AlertLedgerStore;
+  reminderStore?: ProactiveReminderStore;
   systemPushSender?: (request: SystemPushRequest, signal: AbortSignal) => Promise<SystemPushOutcome>;
   pushEnabled?: boolean;
   todoWritesEnabled?: boolean;
@@ -84,17 +89,50 @@ export function registerProactive<Logger extends FastifyBaseLogger>(
       },
     });
   }
-  const alertHook = options.alertsEnabled === true && options.pushEnabled === true &&
-    options.pushStore !== undefined && options.systemPushSender !== undefined
+  const alertsReady = options.alertsEnabled === true && options.pushEnabled === true &&
+    options.pushStore !== undefined && options.systemPushSender !== undefined;
+  const reminderReady = alertsReady && options.vaultClient !== undefined;
+  const alertLedger = alertsReady
+    ? options.alertLedgerStore ?? (options.pool
+      ? createProactiveAlertStore(options.pool, options.ownerObjectId)
+      : createMemoryAlertLedgerStore(now))
+    : undefined;
+  const alertHook = alertsReady && alertLedger
     ? createProactiveAlertHook({
       store,
-      pushStore: options.pushStore,
+      pushStore: options.pushStore!,
       ownerObjectId: options.ownerObjectId,
-      ledger: options.alertLedgerStore ?? (options.pool
-        ? createProactiveAlertStore(options.pool, options.ownerObjectId)
-        : createMemoryAlertLedgerStore()),
-      send: options.systemPushSender,
+      ledger: alertLedger,
+      send: options.systemPushSender!,
       now,
+      ...(options.logger ? { logger: options.logger } : {}),
+    })
+    : undefined;
+  const reminderStore = reminderReady
+    ? options.reminderStore ?? (options.pool
+      ? createProactiveReminderStore(options.pool, options.ownerObjectId)
+      : createMemoryProactiveReminderStore(options.ownerObjectId))
+    : undefined;
+  const reminderTicker = reminderReady && reminderStore && alertLedger && options.pushStore && options.systemPushSender
+    ? createReminderTicker({
+      store,
+      reminders: reminderStore,
+      vault: options.vaultClient!,
+      pushStore: options.pushStore,
+      ledger: alertLedger,
+      ownerObjectId: options.ownerObjectId,
+      send: options.systemPushSender,
+      ...(options.conversationStore ? { conversationStore: options.conversationStore } : {}),
+      now,
+      ...(options.logger ? { logger: options.logger } : {}),
+    })
+    : undefined;
+  const reminderPlanner = reminderTicker && reminderStore && alertLedger
+    ? createTodoReminderPlanner({
+      store,
+      reminders: reminderStore,
+      now,
+      onPlanned: reminderTicker.considerFireAt,
       ...(options.logger ? { logger: options.logger } : {}),
     })
     : undefined;
@@ -107,6 +145,7 @@ export function registerProactive<Logger extends FastifyBaseLogger>(
     onFindingsStored: [
       ...(options.onFindingsStored ?? []),
       ...(alertHook ? [alertHook] : []),
+      ...(reminderPlanner ? [reminderPlanner] : []),
     ],
   });
   const scheduler = createProactiveScheduler({
@@ -114,8 +153,10 @@ export function registerProactive<Logger extends FastifyBaseLogger>(
   });
   app.addHook('onReady', async () => {
     await scheduler.start();
+    await reminderTicker?.start();
   });
   app.addHook('onClose', async () => {
+    await reminderTicker?.stop();
     await scheduler.stop();
   });
   registerProactiveRoutes(app, {

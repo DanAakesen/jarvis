@@ -15,6 +15,7 @@ const saved = {
   status: 'failed',
   reason: 'provider_unavailable',
   attempts: 2,
+  updated_at: new Date('2026-10-20T08:00:00.000Z'),
 };
 
 function createRequest(query: (statement: string) => Promise<{ recordset: typeof saved[] }>) {
