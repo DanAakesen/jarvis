@@ -1,5 +1,9 @@
-.vault-tasks-page { min-width: 0; height: 100%; overflow: auto; }
-.vault-tasks-content { width: min(900px, 100%); min-height: 100%; margin: 0 auto; padding: 28px clamp(16px, 4vw, 40px) 48px; }
+.vault-tasks-page { min-width: 0; }
+.vault-tasks-content {
+  width: min(900px, 100%); margin: 0 auto; padding: 28px clamp(16px, 4vw, 40px) 40px;
+  border: 1px solid var(--rule); border-radius: var(--radius-panel); background: var(--surface-translucent);
+  backdrop-filter: blur(var(--surface-blur)); box-shadow: var(--panel-shadow);
+}
 .vault-tasks-header { display: flex; min-width: 0; align-items: flex-start; justify-content: space-between; gap: 20px; }
 .vault-tasks-header > div { min-width: 0; }
 .vault-tasks-header h1 { margin: 0; font-size: var(--type-title); line-height: 1.15; }
