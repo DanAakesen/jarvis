@@ -32,9 +32,10 @@ const workouts: Workout[] = [
   { id: 'synthetic-unknown', workout_type: 'new_future_sport', workout_date: '2026-10-15', duration_seconds: null },
 ];
 const samples: Workout[] = [
-  { sample_minute: '2026-10-16T08:00:00Z', metric_name: 'heart_rate', min_value: 90, avg_value: 110, max_value: 130, unit: 'bpm', sample_count: 4 },
-  { sample_minute: '2026-10-16T08:01:00Z', metric_name: 'heart_rate', min_value: 95, avg_value: 115, max_value: 135, unit: 'bpm', sample_count: 4 },
+  { sample_minute: '2026-10-16T08:00:00Z', metric_name: 'heart_rate_data', min_value: 90, avg_value: 110, max_value: 130, unit: 'bpm', sample_count: 4 },
+  { sample_minute: '2026-10-16T08:01:00Z', metric_name: 'heart_rate_data', min_value: 95, avg_value: 115, max_value: 135, unit: 'bpm', sample_count: 4 },
   { sample_minute: '2026-10-16T08:01:00Z', metric_name: 'synthetic_other', min_value: 1, avg_value: 2, max_value: 3, unit: 'count', sample_count: 1 },
+  { sample_minute: '2026-10-16T08:21:00Z', metric_name: 'heart_rate_recovery', min_value: 100, avg_value: 105, max_value: 110, unit: 'bpm', sample_count: 2 },
 ];
 function respond(query: DailyQuery): DailyQueryResult {
   return dailyFixture(query, query.source === sources.workouts ? workouts :
@@ -218,8 +219,12 @@ describe('Workouts section', () => {
     expect(within(chart).queryByRole('table')).toBeNull();
     fireEvent.click(within(chart).getByText('View data table'));
     expect(within(chart).getByRole('table', { name: /Heart rate \(bpm\), elapsed minutes/u })).toBeTruthy();
-    expect(screen.getByLabelText('Metric')).toHaveProperty('value', 'heart_rate');
-    expect(within(screen.getByLabelText('Metric')).getByRole('option', { name: 'Heart rate' })).toHaveProperty('value', 'heart_rate');
+    expect(screen.getByLabelText('Metric')).toHaveProperty('value', 'heart_rate_data');
+    const metric = within(screen.getByLabelText('Metric'));
+    expect(metric.getByRole('option', { name: 'Heart rate' })).toHaveProperty('value', 'heart_rate_data');
+    expect(metric.getByRole('option', { name: 'Heart rate recovery' })).toHaveProperty('value', 'heart_rate_recovery');
+    fireEvent.change(screen.getByLabelText('Metric'), { target: { value: 'heart_rate_recovery' } });
+    expect(screen.getByRole('img', { name: /Heart rate recovery \(bpm\), elapsed minutes/u })).toBeTruthy();
     fireEvent.change(screen.getByLabelText('Metric'), { target: { value: 'synthetic_other' } });
     expect(screen.getByRole('img', { name: /synthetic_other/u })).toBeTruthy();
     fireEvent.click(screen.getByText('Recorded detail'));
