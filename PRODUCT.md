@@ -1013,23 +1013,25 @@ push and send a test. The user-triggered test is not proactive delivery. Teams i
 not a delivery option. Real iPhone delivery remains unproven until separately
 observed on the installed Home Screen app.
 
-## Proactive foundation and read-only sources (18 October 2026; P13-05 / P13-07 / P13-08)
+## Proactive foundation and engine (18 October 2026; P13-05, P13-06)
 
 The backend foundation provides owner-only status, settings, durable finding
 storage and feedback behind `JARVIS_PROACTIVE_ENABLED`, which defaults off.
-Separate todo-write and alert flags also default off. P13-07 adds read-only todo,
-Factory and weather source readers. P13-08 registers bounded read-only Google
-Calendar and Gmail metadata sources and a calendar-derived travel source. Calendar
-reads use a 48-hour window; mail lists at most 15 unread primary-inbox messages
-from the prior two days and reads only selected headers; travel reads up to seven
-calendar days and makes no travel-provider request. The foundation does not
-schedule runs, call a model or send proactive alerts. These changes enable no
-flag, run no source, add no OAuth scope and leave the server entry point unchanged.
+Separate todo-write and alert flags also default off. P13-06 adds the in-process
+scheduler, manual checks and run history, deterministic deadline/clash detection,
+and one bounded, tool-less summary call; sources plug into the existing registry.
+P13-07 adds read-only todo, Factory and weather source readers. Neither slice adds
+a todo writer or proactive alert, and neither enables any flag.
 
 The approved schedule uses 07:00 and 18:00 Europe/Copenhagen slots; scheduled
 work is forbidden from 22:00 to 07:00. The monthly estimate limit defaults to
-100 DKK, warns at 80% and stops at 100%. These are policy boundaries for later
-engine work, not behavior activated by this foundation.
+100 DKK, warns at 80% and stops at 100%, including a conservative request-cost
+pre-check. Idle scheduler ticks do not query SQL. Only the latest missed slot
+can catch up, while under 12 hours old; paused slots are recorded without replay.
+Scheduled checks still running at 22:00 are cancelled. Manual checks ignore quiet
+hours but respect pause, source settings, budget and stored rate limits (one per
+five minutes, six per Copenhagen day). Runs appear in Background work with safe
+plain-language outcomes. None of these flags is enabled by this change.
 
 The todo reader matches exactly one case-insensitive root `task.md` or
 `tasks.md`, never writes, and emits at most 40 sanitized facts. The Factory
@@ -1037,6 +1039,15 @@ reader reports attention/failure and open-PR status plus a running-task count;
 the weather reader uses the saved home location and makes a bounded HTTPS
 forecast request. These source implementations remain dormant until a later
 engine slice invokes them.
+
+## Proactive calendar, mail and travel sources (18 October 2026; P13-08)
+
+P13-08 registers bounded read-only Google Calendar and Gmail metadata sources and
+a calendar-derived travel source. Calendar reads use a 48-hour window; mail lists
+at most 15 unread primary-inbox messages from the prior two days and reads only
+selected headers; travel reads up to seven calendar days and makes no
+travel-provider request. These changes enable no flag, run no source, add no OAuth
+scope and leave the server entry point unchanged.
 
 ## Daily migration (approved P12)
 

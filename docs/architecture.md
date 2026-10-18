@@ -1896,49 +1896,63 @@ guard; every future system-started send must enforce 22:00–07:00
 Europe/Copenhagen with no emergency exception. There is no Teams delivery path.
 Actual iPhone delivery is not yet proven.
 
-## Proactive foundation and sources (P13-05 / P13-08; default off)
+## Proactive foundation and engine (P13-05, P13-06; default off)
 
 `JARVIS_PROACTIVE_ENABLED` gates the owner-bound proactive routes and composition;
 the todo-write and alert capabilities are separately gated. The index contributes
 one guarded registration call with existing providers, stores, token callback,
 clock, logger and the background-job registry. Disabled composition does not
 construct proactive stores, query proactive tables, register routes or start a
-timer. P13-08 adds source implementations to the existing registry; constructing
-them does not read Google, and no schedule, model call or proactive delivery is
-added.
+timer. P13-06 extends this composition without another index registration.
 
 The `proactive` module defines the shared source/item/run contracts, a source
-registry with read-only `calendar`, `mail`, and `travel` sources plus the
-unavailable `x` placeholder, and authenticated status, settings,
+registry with an unavailable `x` placeholder, and authenticated status, settings,
 item-list, item-detail and feedback routes. Status works before any run exists;
 it calculates Copenhagen-local budget month, quiet hours and the next slot and
 returns source states in contract order. Inputs are validated at the route
 boundary. Item detail retains P13-01's `opened_at` meaning: loaded, not read.
 
-The calendar reader reuses the existing primary-calendar view path, expanding
-recurrences and bounding reads to 50 events over two pages. All-day dates resolve
-to Europe/Copenhagen local midnight through the shared DST-aware time helper.
-Calendar facts omit descriptions, conferencing and attendee/organizer addresses.
-Mail searches the primary inbox for unread messages from the last two days and
-reads at most 15 messages, with five concurrent metadata-only requests for
-From/Subject/Date/List-Unsubscribe/Precedence. It never requests body, snippet or
-attachment fields; bulk/newsletter messages are skipped and sender addresses are
-reduced to a display name or domain. Travel reuses the calendar reader over seven
-days and applies exported `TRAVEL_KEYWORDS` and `TRAVEL_ROUTE_PATTERN`
-Danish/English whole-word and airport-route rules; it calls no travel provider
-and excludes starts in the calendar's half-open 48-hour window. All sources
-bound fact text, treat provider text as
-untrusted data, and return stable unavailable reason codes without logging it.
-
 Migration 0055 extends `proactive_items` while preserving test rows, and adds
 owner-scoped settings, runs, source status and estimated-spend tables. SQL stores
 use the existing pool and `databaseReadRequest` for nontransactional reads.
 Finding upserts are deduplicated by owner/key; dismissed findings remain
-dismissed until due/event timing or urgency materially changes. Run claims take
+dismissed until due/event timing changes or urgency escalates to time-critical. Run claims take
 an owner-scoped transaction lock, respect unexpired leases, and use claim
 generations for heartbeat/finish fencing. Startup marks leftover running rows
 interrupted. Migration 0056 adds the `proactive` background-job kind; rollback
 refuses to discard rows of that kind.
+
+The engine owns a self-rescheduling, unreferenced 30-second scheduler. Startup
+reconciles runs once and evaluates the latest Copenhagen slot immediately;
+handled slot keys stay in memory, so idle ticks perform no SQL work. Claims
+serialize through the existing owner lock, including persisted manual rate
+limits. A lease-aware running-run read prevents expired claims from blocking
+manual admission. Paused/all-disabled scheduled slots finish as skipped without a job.
+The owner-only run routes return bounded history and detach manual execution
+after a 202 response containing the running summary.
+
+Each run owns cancellation, a three-minute deadline and 60-second lease
+heartbeats. Enabled registered sources read in parallel with 20-second bounds.
+Quiet hours cancel scheduled/catch-up work, not manual work; generation and
+quiet-hour checks precede item writes and hooks. Detection is pure and shares
+the 24-hour deadline and 48-hour clash constants with future consumers. Language
+uses a narrow SQL read of recent user-message text, never chat history fields;
+chat messages are not model input.
+
+Finding writes also fence the claim inside the SQL transaction by locking the
+owner/run row and checking status, generation and lease. Cancellation cancels
+the active request and rolls back before the engine finalizes the run; a final
+guard check precedes commit dispatch, the write's transaction boundary.
+
+`proactive/model.ts` independently follows the existing Foundry chat-completions
+pattern, with the selected chat role, catalogue validation, no tools, untrusted
+fact data, a 48-KiB request/32-KiB response bound and a 45-second timeout.
+Validated evidence contains labels only. Real response token counts feed both
+estimated proactive spend and global chat-role usage, including rejected output.
+Stable 32-hex content keys exclude run-local refs and urgency. Ordered optional
+`onFindingsStored` hooks receive only this run's stored items and in-memory source
+facts before finish; one hook failure cannot prevent later hooks or change success.
+This slice adds no delivery or todo-writing hook and enables no flag.
 
 ## Proactive read-only sources (P13-07; default off)
 
@@ -1965,6 +1979,28 @@ deadline, redirect refusal and 128-KiB response limit. Missing location is
 unavailable; no fallback location or geocoding is used. All source errors are
 mapped to stable unavailable reason codes. This slice enables no flags and
 starts no source reads.
+
+## Proactive calendar, mail and travel sources (P13-08; default off)
+
+The source registry also constructs the `calendar`, `mail` and `travel` sources
+from the existing Google API client; the `x` placeholder remains unavailable.
+P13-08 adds source implementations to the existing registry; constructing them
+does not read Google, and no schedule, model call or proactive delivery is added.
+
+The calendar reader reuses the existing primary-calendar view path, expanding
+recurrences and bounding reads to 50 events over two pages. All-day dates resolve
+to Europe/Copenhagen local midnight through the shared DST-aware time helper.
+Calendar facts omit descriptions, conferencing and attendee/organizer addresses.
+Mail searches the primary inbox for unread messages from the last two days and
+reads at most 15 messages, with five concurrent metadata-only requests for
+From/Subject/Date/List-Unsubscribe/Precedence. It never requests body, snippet or
+attachment fields; bulk/newsletter messages are skipped and sender addresses are
+reduced to a display name or domain. Travel reuses the calendar reader over seven
+days and applies exported `TRAVEL_KEYWORDS` and `TRAVEL_ROUTE_PATTERN`
+Danish/English whole-word and airport-route rules; it calls no travel provider
+and excludes starts in the calendar's half-open 48-hour window. All sources
+bound fact text, treat provider text as untrusted data, and return stable
+unavailable reason codes without logging it.
 
 ## Web push delivery (P13-02; default off)
 

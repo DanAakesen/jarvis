@@ -43,6 +43,7 @@ function appFor(request: GoogleApiClient['request'], options: {
       id: '1', channel: 'chat', language: 'en', startedAt: new Date(), endedAt: null,
     }),
     getSession: async () => null,
+    readRecentUserMessages: async () => [],
     endSession: async () => true,
     addMessage: async () => null,
     getHistory: async (): Promise<ConversationHistoryPage> => ({ messages: [latest], nextCursor: null }),

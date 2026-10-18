@@ -35,6 +35,7 @@ function fixture(options: {
     getDanMessageIdBySourceItemId: async () => '7',
     getMessageSessionId: async () => '42',
     getLatestDanMessageText: async () => 'Did the build finish?',
+    readRecentUserMessages: async () => [],
     getHistory: async () => ({ messages: [], nextCursor: null }),
     getDanMessagesAfter: async () => [],
   };

@@ -39,6 +39,20 @@ export function dayKey(date: Date): string {
   return localDate(date);
 }
 
+export function copenhagenDayStart(date: Date): Date {
+  const target = Date.parse(`${localDate(date)}T00:00:00Z`);
+  let candidate = target;
+  for (let iteration = 0; iteration < 4; iteration++) {
+    const value = parts(new Date(candidate));
+    const observed = Date.UTC(
+      Number(value.year), Number(value.month) - 1, Number(value.day),
+      Number(value.hour), Number(value.minute),
+    );
+    candidate += target - observed;
+  }
+  return new Date(candidate);
+}
+
 export function copenhagenDateStart(value: string): Date {
   if (!/^\d{4}-\d{2}-\d{2}$/u.test(value)) throw new RangeError('Invalid Copenhagen date');
   const [year, month, day] = value.split('-').map(Number);
