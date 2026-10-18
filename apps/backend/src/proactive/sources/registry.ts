@@ -3,8 +3,12 @@ import type { GoogleApiClient } from '../../google/api-client.js';
 import type { TaskStore } from '../../factory/task-store.js';
 import type { SettingsStore } from '../../core/settings.js';
 import type { createGitHubVaultClient } from '../../vault/github-client.js';
+import { createCalendarSource } from './calendar.js';
 import { createFactorySource } from './factory.js';
+import { createMailSource } from './mail.js';
+import { createNewsSource } from './news.js';
 import { createTodosSource } from './todos.js';
+import { createTravelSource } from './travel.js';
 import { createWeatherSource } from './weather.js';
 
 type VaultClient = ReturnType<typeof createGitHubVaultClient>;
@@ -26,8 +30,12 @@ const xSource: ProactiveSource = {
 
 export function buildSourceRegistry(dependencies: SourceDependencies): ProactiveSource[] {
   const sources: ProactiveSource[] = [
+    createCalendarSource(dependencies.googleApiClient),
     createFactorySource(dependencies.taskStore),
+    createMailSource(dependencies.googleApiClient),
+    createNewsSource(),
     createTodosSource(dependencies.vaultClient),
+    createTravelSource(dependencies.googleApiClient),
     createWeatherSource(dependencies.settingsStore),
   ];
   sources.push(xSource);

@@ -141,6 +141,23 @@ HTTPS Open-Meteo request; it does not geocode or invent a location. All three
 sources return stable unavailable reasons and remain dormant until later engine
 work explicitly reads them.
 
+## Calendar, mail and travel readers (18 October 2026; P13-08)
+
+P13-08 adds source implementations but does not invoke them, schedule work, call a
+model, create a timer or send proactive alerts. Calendar reads the primary
+calendar from now to 48 hours ahead, expands recurrences and uses at most 50
+events in two pages. All-day instants are Europe/Copenhagen local midnights,
+including DST changes; facts exclude attendee/organizer addresses, descriptions
+and conference links. Mail lists at most 15 unread primary-inbox messages from the
+prior two days and requests only From, Subject, Date, List-Unsubscribe and
+Precedence metadata; it never requests bodies, snippets or attachments and skips
+bulk/newsletter mail. Travel reuses calendar data from now to seven days ahead,
+excludes starts inside the calendar's half-open 48-hour range, and uses exported
+`TRAVEL_KEYWORDS` and `TRAVEL_ROUTE_PATTERN` for deterministic English/Danish
+whole words and three-letter airport routes. It has no travel provider or
+disruption data. All sources are read-only, bounded, fail to stable unavailable
+states, and sanitize untrusted text before returning facts.
+
 ## Confirmed web slice (18 October 2026; P13-10)
 
 The Proactive page, full item detail, one Settings section, navigation entry and
@@ -151,6 +168,16 @@ memory-only handling for findings, feed URLs and guidance. Manual check polling
 is visibility-aware and bounded; dismiss/snooze optimistic updates are
 retryable after rollback. The P13-01 item detail remains the route target when
 only Web Push is enabled.
+
+## News feed reader (18 October 2026; P13-09)
+
+P13-09 adds the dark news-source implementation and registry entry, but no
+scheduler or engine call reads it; no model call or proactive send is activated.
+The news adapter defaults to the GitHub changelog and OpenAI news RSS feeds. It
+uses HTTPS only, rejects IP and local hostnames, DNS-pins public answers,
+forbids redirects and non-XML/compressed responses, and caps each read at ten
+seconds and 2 MiB. It rejects DTD/entity declarations and outputs only sanitized
+titles with publication time and feed host. Feed content remains untrusted.
 
 ## Current evidence
 
