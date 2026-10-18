@@ -1892,6 +1892,32 @@ guard; every future system-started send must enforce 22:00–07:00
 Europe/Copenhagen with no emergency exception. There is no Teams delivery path.
 The feature remains dark, and actual iPhone delivery is not yet proven.
 
+## Proactive foundation (P13-05; default off)
+
+`JARVIS_PROACTIVE_ENABLED` gates the owner-bound proactive routes and composition;
+the todo-write and alert capabilities are separately gated. The index contributes
+one guarded registration call with existing providers, stores, token callback,
+clock, logger and the background-job registry. Disabled composition does not
+construct proactive stores, query proactive tables, register routes or start a
+timer. This slice adds no source read, model call or outbound request.
+
+The `proactive` module defines the shared source/item/run contracts, a source
+registry with an unavailable `x` placeholder, and authenticated status, settings,
+item-list, item-detail and feedback routes. Status works before any run exists;
+it calculates Copenhagen-local budget month, quiet hours and the next slot and
+returns source states in contract order. Inputs are validated at the route
+boundary. Item detail retains P13-01's `opened_at` meaning: loaded, not read.
+
+Migration 0055 extends `proactive_items` while preserving test rows, and adds
+owner-scoped settings, runs, source status and estimated-spend tables. SQL stores
+use the existing pool and `databaseReadRequest` for nontransactional reads.
+Finding upserts are deduplicated by owner/key; dismissed findings remain
+dismissed until due/event timing or urgency materially changes. Run claims take
+an owner-scoped transaction lock, respect unexpired leases, and use claim
+generations for heartbeat/finish fencing. Startup marks leftover running rows
+interrupted. Migration 0056 adds the `proactive` background-job kind; rollback
+refuses to discard rows of that kind.
+
 ## Web push delivery (P13-02; default off)
 
 The web build exposes only the boolean result of `VITE_PUSH_ENABLED === "true"`

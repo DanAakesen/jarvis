@@ -75,6 +75,33 @@ The test send is user-started, so quiet hours do not block it. Do not add the
 system-started sends must pass that guard. Actual iPhone delivery remains an
 unverified physical-device acceptance step.
 
+## Keep the proactive foundation dark and bounded (17 October 2026; P13-05)
+
+The server gate `JARVIS_PROACTIVE_ENABLED` and its todo-write and alert
+capability gates are exact-string `true`, default off. The foundation registers
+owner-bound settings, status, item and feedback routes only under the main gate.
+It adds no scheduler, source read, model call, timer or proactive delivery; no
+deployment setting turns a flag on. Status remains available before any run and
+reports each source in a fixed order.
+
+When later engine work is enabled, scheduled slots are 07:00 and 18:00
+Europe/Copenhagen and quiet hours are 22:00–07:00 with no exception. Time
+conversion uses the IANA zone and handles both DST transitions. Catch-up is at
+most once for the latest missed slot, only inside the allowed window and under
+12 hours old. Sleep remains unchanged.
+
+The monthly budget defaults to 100 DKK, warns at 80% and refuses further work
+at 100%; all displayed spend is estimated and unknown model rates use the
+highest known token rates. Findings use the language of recent user messages,
+detected deterministically without a model. Todo writes, when separately
+enabled, are add-only. Alerts are restricted to time-critical deadlines,
+calendar clashes, travel disruptions and the due-soon todo reminder; quiet-hour
+reminders wait until 07:00. Teams is never a proactive channel.
+
+The new `proactive` background-job kind makes future runs visible in the
+existing Background work control. Existing embedding result-window exclusions
+remain specific to embedding jobs.
+
 ## Keep web push default-off and notification taps owner-authenticated (17 October 2026; P13-02)
 
 Implement the web half of the delivery proof behind the exact-string

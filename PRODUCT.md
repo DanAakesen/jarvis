@@ -987,6 +987,19 @@ user-triggered test is not proactive delivery. Teams is not a delivery option.
 Real iPhone delivery remains unproven until separately observed on the installed
 Home Screen app.
 
+## Proactive foundation (17 October 2026; P13-05)
+
+The backend foundation provides owner-only status, settings, durable finding
+storage and feedback behind `JARVIS_PROACTIVE_ENABLED`, which defaults off.
+Separate todo-write and alert flags also default off. The foundation does not
+read sources, schedule runs, call a model or send proactive alerts. Later slices
+add those capabilities without changing the server entry point.
+
+The approved schedule uses 07:00 and 18:00 Europe/Copenhagen slots; scheduled
+work is forbidden from 22:00 to 07:00. The monthly estimate limit defaults to
+100 DKK, warns at 80% and stops at 100%. These are policy boundaries for later
+engine work, not behavior activated by this foundation.
+
 ## Daily migration (approved P12)
 
 Tool parity is an acceptance requirement for every retained Daily capability,

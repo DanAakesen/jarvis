@@ -136,13 +136,7 @@ function createRoutes<Logger extends FastifyBaseLogger>(
       if (!uuidPattern.test(request.params.id)) return reply.code(404).send({ error: 'not_found' });
       const item: ProactiveItem | undefined = await dependencies.store.readItem(owner, request.params.id);
       if (!item) return reply.code(404).send({ error: 'not_found' });
-      return {
-        id: item.id,
-        kind: item.kind,
-        title: item.title,
-        body: item.body,
-        createdAt: item.createdAt,
-      };
+      return item;
     });
   };
 }

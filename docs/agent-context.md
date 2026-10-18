@@ -19,6 +19,26 @@ uses `npm run test:database --workspace @jarvis/backend -- src/database/schema.i
 with the isolated loopback test database; do not claim it ran without that
 service. A green local test or build does not establish real iPhone delivery.
 
+## P13-05 proactive foundation (17 October 2026)
+
+`JARVIS_PROACTIVE_ENABLED`, `JARVIS_PROACTIVE_TODO_WRITES_ENABLED` and
+`JARVIS_PROACTIVE_ALERTS_ENABLED` are independent exact-`true` flags, all off by
+default. The latter two do not activate work unless the main proactive flag is
+on. Do not set any of them in deployment, workflows or infrastructure. This
+foundation registers owner-bound status/settings/items routes only when enabled;
+it adds no scheduler, source read, model call or proactive send.
+
+Focused checks:
+`npm test --workspace @jarvis/backend -- --run src/config.test.ts src/proactive/routes.test.ts src/proactive/store.test.ts src/proactive/time.test.ts src/proactive/budget.test.ts src/proactive/language.test.ts src/proactive/sources/registry.test.ts src/database/migrations.test.ts src/push/routes.test.ts`,
+`npm test --workspace @jarvis/contracts`,
+`npm test --workspace @jarvis/web -- --run src/JobsChip.test.tsx`,
+`npm run build --workspace @jarvis/backend`,
+`npm run build --workspace @jarvis/web`, and lint for both workspaces.
+Proactive SQL contracts are in
+`src/database/schema.integration.test.ts`; run them only with the isolated
+loopback SQL Server fixture via `npm run test:database --workspace @jarvis/backend -- src/database/schema.integration.test.ts`.
+Do not report SQL integration coverage unless that service ran.
+
 ## Chat acceptance failure labels and one bounded retry (#820, 17 October 2026)
 
 Read a failed chat check's safe reason in the acceptance artifact first; never
