@@ -231,7 +231,7 @@ function registerRoutes<Logger extends FastifyBaseLogger>(
         const task = Promise.resolve().then(() => options.run!(claim, controller.signal)).catch(async () => {
           await options.store.runs.finish(claim.run.id, claim.generation, 'failed', 'internal_error', 0, options.now());
         }).catch(() => {
-          app.log.warn({ reason: 'internal_error' }, 'Proactive manual run failed');
+          app.log.warn({ reason: 'internal_error' }, 'proactive.failed');
         }).finally(() => { pendingRuns.delete(task); });
         pendingRuns.set(task, controller);
         return reply;

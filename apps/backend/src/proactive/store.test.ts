@@ -65,6 +65,50 @@ describe('in-memory proactive stores', () => {
     expect(await store.runs.latest()).toMatchObject({ id: replacement!.run.id, status: 'running' });
   });
 
+  it.each(['missing', 'generation', 'expired', 'finished', 'interrupted', 'mismatched'] as const)(
+    'rejects a %s finding guard without inserting or changing findings', async (failure) => {
+      const store = createMemoryProactiveStore();
+      const now = new Date('2026-10-20T05:00:00.000Z');
+      const claimed = (await store.runs.claim({ trigger: 'scheduled', slot: null, now }))!;
+      const existing = await store.items.upsertFinding(finding);
+      if (failure === 'finished') {
+        await store.runs.finish(claimed.run.id, claimed.generation, 'done', null, 0, now);
+      }
+      if (failure === 'interrupted') await store.runs.markInterruptedOnStartup();
+      const guard = {
+        runId: failure === 'missing' ? 'missing' : claimed.run.id,
+        generation: claimed.generation + (failure === 'generation' ? 1 : 0),
+        signal: new AbortController().signal,
+        check: () => {},
+        now: () => new Date(now.getTime() + (failure === 'expired' ? 10 * 60_000 : 0)),
+      };
+      const input = { ...finding, runId: failure === 'mismatched' ? null : guard.runId, title: 'Must not persist' };
+      await expect(store.items.upsertFinding(input, guard)).rejects.toThrow('lease_lost');
+      await expect(store.items.upsertFinding({ ...input, dedupeKey: 'new' }, guard)).rejects.toThrow('lease_lost');
+      expect(await store.items.list('all', 20, now)).toEqual([existing]);
+    },
+  );
+
+  it('checks cancellation and policy immediately before mutation and allows a current guard', async () => {
+    const store = createMemoryProactiveStore();
+    const now = new Date('2026-10-20T05:00:00.000Z');
+    const claimed = (await store.runs.claim({ trigger: 'scheduled', slot: null, now }))!;
+    const controller = new AbortController();
+    const guard = {
+      runId: claimed.run.id, generation: claimed.generation,
+      signal: controller.signal, check: () => {}, now: () => now,
+    };
+    const input = { ...finding, runId: claimed.run.id };
+    await expect(store.items.upsertFinding(input, {
+      ...guard, check: () => { throw new Error('quiet_hours'); },
+    })).rejects.toThrow('quiet_hours');
+    controller.abort(new Error('cancelled'));
+    await expect(store.items.upsertFinding(input, guard)).rejects.toThrow('cancelled');
+    expect(await store.items.list('all', 20, now)).toEqual([]);
+    const saved = await store.items.upsertFinding(input, { ...guard, signal: new AbortController().signal });
+    expect(await store.items.list('all', 20, now)).toEqual([saved]);
+  });
+
   it('marks running jobs interrupted and keeps source/spend state owner-local', async () => {
     const store = createMemoryProactiveStore();
     const now = new Date('2026-10-20T05:00:00.000Z');

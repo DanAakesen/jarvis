@@ -1935,6 +1935,11 @@ the 24-hour deadline and 48-hour clash constants with future consumers. Language
 uses a narrow SQL read of recent user-message text, never chat history fields;
 chat messages are not model input.
 
+Finding writes also fence the claim inside the SQL transaction by locking the
+owner/run row and checking status, generation and lease. Cancellation cancels
+the active request and rolls back before the engine finalizes the run; a final
+guard check precedes commit dispatch, the write's transaction boundary.
+
 `proactive/model.ts` independently follows the existing Foundry chat-completions
 pattern, with the selected chat role, catalogue validation, no tools, untrusted
 fact data, a 48-KiB request/32-KiB response bound and a 45-second timeout.

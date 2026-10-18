@@ -22,6 +22,7 @@ export async function createTelemetry(connectionString?: string): Promise<Teleme
 }
 
 const failureEvents = new Set([
+  'proactive.failed',
   'Background job visibility read failed', 'Background job dismissal failed', 'Background job dismissal import failed',
   'daily.mcp_operation_failed', 'daily.mcp_audit_failed',
   'sandbox_heartbeat.poll_failed', 'sandbox_heartbeat.configuration_missing',
@@ -275,6 +276,15 @@ function safeFields(input: Record<string, unknown>): Record<string, unknown> {
         /^(?:\/(?:[A-Za-z_][A-Za-z0-9_-]{0,63}|\d{1,10}))*$/u.test(input.instancePath)) {
       fields.instancePath = input.instancePath;
     }
+    return fields;
+  }
+  if (input.msg === 'proactive.failed') {
+    const fields: Record<string, unknown> = {};
+    if (typeof input.runId === 'string' && /^[\da-f]{8}-(?:[\da-f]{4}-){3}[\da-f]{12}$/iu.test(input.runId)) {
+      fields.runId = input.runId;
+    }
+    if (typeof input.reason === 'string' &&
+        ['internal_error', 'hook_failed', 'job_update_failed'].includes(input.reason)) fields.reason = input.reason;
     return fields;
   }
   if (typeof input.msg === 'string' && failureEvents.has(input.msg)) {

@@ -79,9 +79,9 @@ function setup(overrides: Partial<ProactiveEngineOptions> = {}) {
     return readSettings();
   });
   const upsert = store.items.upsertFinding.bind(store.items);
-  vi.spyOn(store.items, 'upsertFinding').mockImplementation(async (finding) => {
+  vi.spyOn(store.items, 'upsertFinding').mockImplementation(async (finding, guard) => {
     events.push(`item:${finding.category}`);
-    return upsert(finding);
+    return upsert(finding, guard);
   });
   const record = store.spend.record.bind(store.spend);
   vi.spyOn(store.spend, 'record').mockImplementation(async (input) => {
@@ -191,7 +191,7 @@ describe('proactive engine pipeline', () => {
     expect(fixture.events.slice(-5)).toEqual(['item:prep', 'hook:1', 'hook:2', 'finish', 'job:done']);
     expect(fixture.warn).toHaveBeenCalledExactlyOnceWith({
       runId: (await fixture.store.runs.latest())!.id, reason: 'hook_failed',
-    });
+    }, 'proactive.failed');
     expect(await fixture.store.items.list('all', 20, new Date())).toHaveLength(2);
   });
 
@@ -353,6 +353,82 @@ describe('proactive source failures', () => {
 });
 
 describe('proactive cancellation and leases', () => {
+  it('waits for an interrupted finding write to roll back before finishing a quiet-hours cancellation', async () => {
+    vi.setSystemTime('2026-10-20T19:59:59.000Z');
+    const hook = vi.fn();
+    const fixture = setup({ onFindingsStored: [hook] });
+    const rollbackReleased = deferred<void>();
+    const upsert = vi.mocked(fixture.store.items.upsertFinding).getMockImplementation()!;
+    let cancellationStarted = false;
+    vi.mocked(fixture.store.items.upsertFinding).mockImplementation(async (finding, guard) => {
+      if (!guard) throw new Error('Missing finding write guard');
+      const onAbort = () => { cancellationStarted = true; };
+      guard.signal.addEventListener('abort', onAbort, { once: true });
+      try {
+        await rollbackReleased.promise;
+        guard.check();
+        return await upsert(finding, guard);
+      } finally {
+        guard.signal.removeEventListener('abort', onAbort);
+      }
+    });
+    const claimed = await fixture.claim('scheduled');
+    const running = fixture.engine(claimed);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(fixture.store.items.upsertFinding).toHaveBeenCalledTimes(1);
+    const guard = vi.mocked(fixture.store.items.upsertFinding).mock.calls[0]![1]!;
+    expect(guard).toMatchObject({ runId: claimed.run.id, generation: claimed.generation });
+    expect(guard.now()).toEqual(new Date('2026-10-20T19:59:59.000Z'));
+    expect(guard.signal.aborted).toBe(false);
+    expect(cancellationStarted).toBe(false);
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(cancellationStarted).toBe(true);
+    expect(guard.signal.aborted).toBe(true);
+    expect(() => guard.check()).toThrow('Run aborted');
+    expect(fixture.store.runs.finish).not.toHaveBeenCalled();
+    expect(await fixture.store.runs.latest()).toMatchObject({ status: 'running' });
+    expect(await fixture.store.items.list('all', 20, new Date())).toEqual([]);
+    expect(hook).not.toHaveBeenCalled();
+    expect(fixture.job.done).not.toHaveBeenCalled();
+    expect(fixture.job.fail).not.toHaveBeenCalled();
+    rollbackReleased.resolve();
+    await running;
+    expect(await fixture.store.runs.latest()).toMatchObject({
+      status: 'cancelled', reason: 'quiet_hours', findingCount: 0,
+    });
+    expect(await fixture.store.items.list('all', 20, new Date())).toEqual([]);
+    expect(fixture.store.items.upsertFinding).toHaveBeenCalledTimes(1);
+    expect(fixture.store.runs.finish).toHaveBeenCalledExactlyOnceWith(
+      claimed.run.id, claimed.generation, 'cancelled', 'quiet_hours', 0, new Date('2026-10-20T20:00:00.000Z'),
+    );
+    expect(hook).not.toHaveBeenCalled();
+    expect(fixture.job.fail).toHaveBeenCalledExactlyOnceWith('Stopped for quiet hours');
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('maps a finding-write lease rejection to lease_lost without hooks or stored items', async () => {
+    const hook = vi.fn();
+    const fixture = setup({ onFindingsStored: [hook] });
+    vi.mocked(fixture.store.items.upsertFinding).mockRejectedValueOnce(new Error('lease_lost'));
+    const claimed = await fixture.claim();
+    await fixture.engine(claimed);
+    expect(await fixture.store.runs.latest()).toMatchObject({
+      status: 'failed', reason: 'lease_lost', findingCount: 0,
+    });
+    expect(await fixture.store.items.list('all', 20, new Date())).toEqual([]);
+    expect(fixture.store.items.upsertFinding).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ category: 'deadline', runId: claimed.run.id }),
+      expect.objectContaining({ runId: claimed.run.id, generation: claimed.generation }),
+    );
+    expect(hook).not.toHaveBeenCalled();
+    expect(fixture.store.runs.finish).toHaveBeenCalledExactlyOnceWith(
+      claimed.run.id, claimed.generation, 'failed', 'lease_lost', 0, new Date(NOW),
+    );
+    expect(fixture.job.fail).toHaveBeenCalledExactlyOnceWith('Another run took over');
+    expect(fixture.job.done).not.toHaveBeenCalled();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
   it('checks the generation before storing any findings or running hooks', async () => {
     const hook = vi.fn();
     const fixture = setup({ onFindingsStored: [hook] });
@@ -588,7 +664,7 @@ describe('finding deduplication', () => {
     expect(modelDedupeKey('prep', [{ ...first, dueAt: '2026-10-21T11:00:00.000Z' }, second])).not.toBe(key);
   });
 
-  it('keeps dismissed repeated findings dismissed, but reopens a model finding on urgency escalation', async () => {
+  it('keeps dismissed repeated findings dismissed through noncritical model urgency changes', async () => {
     const fixture = setup();
     fixture.model.summarize.mockImplementation(async (input) => ({
       ...summary(input),
@@ -614,8 +690,35 @@ describe('finding deduplication', () => {
     expect(escalated).toHaveLength(2);
     expect(escalated.find((item) => item.category === 'deadline')).toMatchObject({ state: 'dismissed' });
     expect(escalated.find((item) => item.category === 'prep')).toMatchObject({
-      id: initial.find((item) => item.category === 'prep')!.id, state: 'new', urgency: 'normal',
+      id: initial.find((item) => item.category === 'prep')!.id, state: 'dismissed', urgency: 'normal',
     });
+  });
+
+  it('reopens a dismissed deterministic finding when its urgency escalates to time critical', async () => {
+    const calendar = source('calendar', [
+      fact({
+        kind: 'event', text: 'Planning meeting', dueAt: null,
+        startsAt: '2026-10-22T11:00:00.000Z', endsAt: '2026-10-22T12:00:00.000Z',
+      }),
+      fact({
+        kind: 'event', text: 'Design review', dueAt: null,
+        startsAt: '2026-10-22T11:30:00.000Z', endsAt: '2026-10-22T12:30:00.000Z',
+      }),
+    ]);
+    const fixture = setup({ sources: [calendar] });
+    expect(await fixture.run()).toMatchObject({ status: 'done', findingCount: 2 });
+    const initial = await fixture.store.items.list('all', 20, new Date());
+    const clash = initial.find((item) => item.category === 'clash')!;
+    expect(clash).toMatchObject({ urgency: 'normal', state: 'new' });
+    for (const item of initial) await fixture.store.items.applyFeedback(item.id, 'dismiss');
+    vi.setSystemTime(Date.now() + 2 * 60 * 60_000);
+    expect(await fixture.run()).toMatchObject({ status: 'done', findingCount: 2 });
+    const escalated = await fixture.store.items.list('all', 20, new Date());
+    expect(escalated).toHaveLength(2);
+    expect(escalated.find((item) => item.category === 'clash')).toMatchObject({
+      id: clash.id, urgency: 'time_critical', state: 'new',
+    });
+    expect(escalated.find((item) => item.category === 'prep')).toMatchObject({ state: 'dismissed' });
   });
 });
 

@@ -7,6 +7,7 @@ import {
   sourceLabels,
   type FeedbackAction,
   type FindingInput,
+  type FindingWriteGuard,
   type ProactiveSettingsPatch,
   type ProactiveStore,
 } from '../proactive/store.js';
@@ -232,22 +233,55 @@ export function createProactiveStore(pool: sql.ConnectionPool, ownerObjectId: st
             WHERE id = @id AND owner_object_id = @owner;`);
         return recordset[0] ? mapItem(recordset[0]) : undefined;
       },
-      async upsertFinding(input: FindingInput) {
+      async upsertFinding(input: FindingInput, guard?: FindingWriteGuard) {
         const transaction = new sql.Transaction(pool);
-        await transaction.begin();
+        let activeRequest: sql.Request | undefined;
+        let leaseUntil: number | undefined;
+        const cancel = () => { activeRequest?.cancel(); };
+        const check = () => {
+          guard?.check();
+          guard?.signal.throwIfAborted();
+          if (guard && leaseUntil !== undefined && leaseUntil <= guard.now().getTime()) {
+            throw new Error('lease_lost');
+          }
+        };
+        const query = async <T>(request: sql.Request, statement: string) => {
+          check();
+          activeRequest = request;
+          try { return await request.query<T>(statement); }
+          finally { activeRequest = undefined; }
+        };
+        guard?.signal.addEventListener('abort', cancel);
         try {
+          check();
+          await transaction.begin();
+          if (guard) {
+            const lease = await query<RunRow>(new sql.Request(transaction)
+              .input('owner', sql.UniqueIdentifier, owner)
+              .input('runId', sql.UniqueIdentifier, guard.runId),
+            `SELECT status, claim_generation, lease_until
+              FROM dbo.proactive_runs WITH (UPDLOCK, HOLDLOCK)
+              WHERE owner_object_id = @owner AND id = @runId;`);
+            const run = lease.recordset[0];
+            if (input.runId !== guard.runId || !run || run.status !== 'running' ||
+                Number(run.claim_generation) !== guard.generation || !run.lease_until ||
+                new Date(run.lease_until).getTime() <= guard.now().getTime()) {
+              throw new Error('lease_lost');
+            }
+            leaseUntil = new Date(run.lease_until).getTime();
+          }
           const lockName = `jarvis.proactive.finding:${owner}:${input.dedupeKey}`;
-          const lock = await new sql.Request(transaction)
-            .input('resource', sql.NVarChar(255), lockName.slice(0, 255))
-            .query<{ result: number }>(`DECLARE @result int;
+          const lock = await query<{ result: number }>(new sql.Request(transaction)
+            .input('resource', sql.NVarChar(255), lockName.slice(0, 255)),
+            `DECLARE @result int;
               EXEC @result = sys.sp_getapplock @Resource = @resource, @LockMode = 'Exclusive',
                 @LockOwner = 'Transaction', @LockTimeout = 10000;
               SELECT @result AS result;`);
           if ((lock.recordset[0]?.result ?? -1) < 0) throw new Error('Finding lock was not acquired');
-          const existingResult = await new sql.Request(transaction)
+          const existingResult = await query<ItemRow & { dedupe_key: string }>(new sql.Request(transaction)
             .input('owner', sql.UniqueIdentifier, owner)
-            .input('key', sql.NVarChar(64), input.dedupeKey)
-            .query<(ItemRow & { dedupe_key: string })>(`SELECT TOP (1) ${itemSelect()}, dedupe_key
+            .input('key', sql.NVarChar(64), input.dedupeKey),
+            `SELECT TOP (1) ${itemSelect()}, dedupe_key
               FROM dbo.proactive_items WITH (UPDLOCK, HOLDLOCK)
               WHERE owner_object_id = @owner AND dedupe_key = @key;`);
           const existingRow = existingResult.recordset[0];
@@ -282,25 +316,28 @@ export function createProactiveStore(pool: sql.ConnectionPool, ownerObjectId: st
             .input('runId', sql.UniqueIdentifier, input.runId)
             .input('language', sql.NVarChar(2), input.language);
           const saved = existing
-            ? await request.query<ItemRow>(`UPDATE dbo.proactive_items SET
+            ? await query<ItemRow>(request, `UPDATE dbo.proactive_items SET
                 title = @title, body = @body, category = @category, urgency = @urgency,
                 due_at = @dueAt, evidence_json = @evidence, state = @state,
                 run_id = @runId, language = @language, dedupe_key = @key
               OUTPUT ${itemSelect('inserted')}
               WHERE id = @id AND owner_object_id = @owner;`)
-            : await request.query<ItemRow>(`INSERT dbo.proactive_items
+            : await query<ItemRow>(request, `INSERT dbo.proactive_items
                 (id, owner_object_id, kind, title, body, delivery_state, category, urgency, due_at,
                  evidence_json, state, run_id, language, dedupe_key)
               OUTPUT inserted.${itemSelect().replaceAll(', ', ', inserted.').replaceAll('\n    ', '\n    inserted.')}
               VALUES (@id, @owner, N'finding', @title, @body, N'queued', @category, @urgency, @dueAt,
                 @evidence, @state, @runId, @language, @key);`);
-          await transaction.commit();
           const row = saved.recordset[0];
           if (!row) throw new Error('Finding could not be saved');
+          check();
+          await transaction.commit();
           return mapItem(row);
         } catch (error) {
           try { await transaction.rollback(); } catch { /* Preserve the store failure. */ }
           throw error;
+        } finally {
+          guard?.signal.removeEventListener('abort', cancel);
         }
       },
     },

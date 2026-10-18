@@ -61,7 +61,7 @@ describe('proactive scheduler', () => {
     expect(recover).toHaveBeenCalledOnce();
     expect(run).not.toHaveBeenCalled();
     expect(vi.getTimerCount()).toBe(0);
-    expect(logger.warn).toHaveBeenCalledExactlyOnceWith({ reason: 'internal_error' }, 'Proactive scheduler failed');
+    expect(logger.warn).toHaveBeenCalledExactlyOnceWith({ reason: 'internal_error' }, 'proactive.failed');
     await scheduler.stop();
   });
 

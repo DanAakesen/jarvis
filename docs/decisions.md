@@ -110,6 +110,9 @@ minutes. Deterministic detection remains available when summary generation fails
 Model evidence must reference the bounded input; text, links, urgency and schema
 are validated before persistence. Reported token usage is recorded even when
 output is rejected. Source text is never job or log content.
+Finding persistence checks the claim inside its transaction and participates in
+run cancellation; the engine awaits commit or rollback, not merely an aborted
+wait, before finalizing the run.
 
 Future todo, alert and reminder slices attach ordered `onFindingsStored` hooks
 instead of changing the engine. Hooks receive transient facts and suggested

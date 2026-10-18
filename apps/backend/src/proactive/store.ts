@@ -55,6 +55,14 @@ export interface FindingInput {
   eventEndAt?: string | null;
 }
 
+export interface FindingWriteGuard {
+  runId: string;
+  generation: number;
+  signal: AbortSignal;
+  check: () => void;
+  now: () => Date;
+}
+
 export interface ProactiveSettingsStore {
   read(): Promise<ProactiveSettings>;
   patch(patch: ProactiveSettingsPatch): Promise<ProactiveSettings>;
@@ -63,7 +71,7 @@ export interface ProactiveItemsStore {
   list(state: 'open' | 'all', limit: number, now: Date): Promise<Item[]>;
   get(id: string, markLoaded?: boolean): Promise<Item | undefined>;
   applyFeedback(id: string, action: FeedbackAction, snoozeUntil?: string): Promise<Item | undefined>;
-  upsertFinding(input: FindingInput): Promise<Item>;
+  upsertFinding(input: FindingInput, guard?: FindingWriteGuard): Promise<Item>;
 }
 export interface ProactiveRunsStore {
   claim(input: { trigger: RunSummary['trigger']; slot: string | null; now: Date }): Promise<{ run: RunSummary; generation: number } | null>;
@@ -161,7 +169,7 @@ export function createMemoryProactiveStore(ownerObjectId: string = randomUUID())
         items.set(key, updated);
         return copyItem(updated);
       },
-      async upsertFinding(input) {
+      async upsertFinding(input, guard) {
         if (input.dedupeKey.length > 64) throw new RangeError('Dedupe key exceeds 64 characters');
         const existingId = findings.get(input.dedupeKey);
         const existing = existingId ? items.get(existingId) : undefined;
@@ -185,6 +193,15 @@ export function createMemoryProactiveStore(ownerObjectId: string = randomUUID())
           language: input.language,
           createdAt: existing?.createdAt ?? new Date().toISOString(),
         };
+        if (guard) {
+          guard.check();
+          guard.signal.throwIfAborted();
+          const run = runs.find((entry) => entry.id === guard.runId);
+          if (input.runId !== guard.runId || !run || run.status !== 'running' ||
+              run.generation !== guard.generation || run.leaseUntil <= guard.now().getTime()) {
+            throw new Error('lease_lost');
+          }
+        }
         items.set(item.id, item);
         findings.set(input.dedupeKey, item.id);
         materials.set(item.id, material);

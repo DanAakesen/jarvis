@@ -18,7 +18,7 @@ export function createProactiveScheduler(options: ProactiveSchedulerOptions) {
   const handledSlots = new Set<string>();
 
   function warn() {
-    options.logger?.warn({ reason: 'internal_error' }, 'Proactive scheduler failed');
+    options.logger?.warn({ reason: 'internal_error' }, 'proactive.failed');
   }
 
   async function evaluate() {

@@ -280,6 +280,37 @@ describe('committed domain schema (groups 1-8)', () => {
     })).not.toBeNull();
   }));
 
+  it('fences guarded proactive findings by owner, generation, status and lease expiry', () => withRollbackDatabase(async (rollbackPool) => {
+    const store = createProactiveStore(rollbackPool, randomUUID());
+    const now = new Date('2026-10-20T05:00:00.000Z');
+    const claimed = (await store.runs.claim({ trigger: 'scheduled', slot: null, now }))!;
+    const guard = {
+      runId: claimed.run.id, generation: claimed.generation,
+      signal: new AbortController().signal, check: () => {}, now: () => now,
+    };
+    const finding = {
+      dedupeKey: 'integration:guarded', title: 'Synthetic guarded finding',
+      body: 'Synthetic evidence.', category: 'deadline' as const, urgency: 'normal' as const,
+      dueAt: null, evidence: [], runId: claimed.run.id, language: 'en' as const,
+    };
+    const saved = await store.items.upsertFinding(finding, guard);
+    const update = { ...finding, title: 'Must not persist' };
+    await expect(store.items.upsertFinding(update, {
+      ...guard, generation: guard.generation + 1,
+    })).rejects.toThrow('lease_lost');
+    await expect(store.items.upsertFinding(update, {
+      ...guard, now: () => new Date(now.getTime() + 10 * 60_000),
+    })).rejects.toThrow('lease_lost');
+    const otherOwner = createProactiveStore(rollbackPool, randomUUID());
+    await expect(otherOwner.items.upsertFinding(finding, guard)).rejects.toThrow('lease_lost');
+    expect(await otherOwner.items.list('all', 20, now)).toEqual([]);
+    await store.runs.finish(claimed.run.id, claimed.generation, 'done', null, 1, now);
+    await expect(store.items.upsertFinding(update, guard)).rejects.toThrow('lease_lost');
+    await expect(store.items.upsertFinding({ ...update, dedupeKey: 'integration:blocked' }, guard))
+      .rejects.toThrow('lease_lost');
+    expect(await store.items.list('all', 20, now)).toEqual([saved]);
+  }));
+
   it('persists proactive settings, findings, feedback, leases, source status and estimated spend', () => withRollbackDatabase(async (rollbackPool) => {
     const owner = randomUUID();
     const store = createProactiveStore(rollbackPool, owner);

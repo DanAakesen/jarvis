@@ -58,7 +58,7 @@ export interface ProactiveEngineOptions {
   usageStore?: Pick<UsageStore, 'recordFoundryUsage'>;
   conversationStore?: { readRecentUserMessages(limit?: number): Promise<string[]> };
   now: () => Date;
-  logger?: { warn: (data: { runId: string; reason: string }) => void };
+  logger?: { warn: (data: { runId: string; reason: string }, message: string) => void };
   onFindingsStored?: readonly ((context: FindingsStoredContext) => void | Promise<void>)[];
 }
 
@@ -260,7 +260,15 @@ export function createProactiveEngine(options: ProactiveEngineOptions) {
       const stored: FindingsStoredContext['findings'] = [];
       for (const { suggestedTodo, ...finding } of pending) {
         await current();
-        const item = await abortable(store.items.upsertFinding(finding), controller.signal);
+        let item: Item;
+        try {
+          item = await store.items.upsertFinding(finding, {
+            runId: run.id, generation, signal: controller.signal, check, now,
+          });
+        } catch (error) {
+          if (error instanceof Error && error.message === 'lease_lost') cancel('lease_lost');
+          throw error;
+        }
         findingCount++;
         stored.push({
           itemId: item.id, dedupeKey: finding.dedupeKey, category: finding.category,
@@ -286,7 +294,7 @@ export function createProactiveEngine(options: ProactiveEngineOptions) {
       for (const hook of options.onFindingsStored ?? []) {
         await current();
         try { await abortable(Promise.resolve().then(() => hook(context)), controller.signal); }
-        catch { options.logger?.warn({ runId: run.id, reason: 'hook_failed' }); }
+        catch { options.logger?.warn({ runId: run.id, reason: 'hook_failed' }, 'proactive.failed'); }
         check();
       }
       status = 'done';
@@ -307,7 +315,7 @@ export function createProactiveEngine(options: ProactiveEngineOptions) {
       } catch {
         status = 'failed';
         reason = 'internal_error';
-        options.logger?.warn({ runId: run.id, reason });
+        options.logger?.warn({ runId: run.id, reason }, 'proactive.failed');
       }
       try {
         if (!jobStarted && status !== 'skipped') {
@@ -317,7 +325,7 @@ export function createProactiveEngine(options: ProactiveEngineOptions) {
           if (status === 'done' && reason === null) await job.done('proactive');
           else await job.fail(jobReasons[reason ?? 'internal_error'] ?? jobReasons.internal_error!);
         }
-      } catch { options.logger?.warn({ runId: run.id, reason: 'job_update_failed' }); }
+      } catch { options.logger?.warn({ runId: run.id, reason: 'job_update_failed' }, 'proactive.failed'); }
     }
   };
 }
