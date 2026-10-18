@@ -208,7 +208,7 @@ describe('Workouts section', () => {
     table();
     await openRun();
     expect(screen.getByLabelText('URL').textContent).toContain('workout=synthetic-run');
-    const heartRate = await screen.findByRole('img', { name: /heart_rate \(bpm\), elapsed minutes/u });
+    const heartRate = await screen.findByRole('img', { name: /Heart rate \(bpm\), elapsed minutes/u });
     const chart = heartRate.closest('figure')!;
     expect(chart.querySelector('.daily-chart-range path')).toBeTruthy();
     expect(chart.querySelectorAll('.daily-chart-series')).toHaveLength(3);
@@ -217,8 +217,9 @@ describe('Workouts section', () => {
     expect(within(chart).getByText('Maximum (bpm)')).toBeTruthy();
     expect(within(chart).queryByRole('table')).toBeNull();
     fireEvent.click(within(chart).getByText('View data table'));
-    expect(within(chart).getByRole('table', { name: /heart_rate \(bpm\), elapsed minutes/u })).toBeTruthy();
+    expect(within(chart).getByRole('table', { name: /Heart rate \(bpm\), elapsed minutes/u })).toBeTruthy();
     expect(screen.getByLabelText('Metric')).toHaveProperty('value', 'heart_rate');
+    expect(within(screen.getByLabelText('Metric')).getByRole('option', { name: 'Heart rate' })).toHaveProperty('value', 'heart_rate');
     fireEvent.change(screen.getByLabelText('Metric'), { target: { value: 'synthetic_other' } });
     expect(screen.getByRole('img', { name: /synthetic_other/u })).toBeTruthy();
     fireEvent.click(screen.getByText('Recorded detail'));
@@ -288,6 +289,6 @@ describe('Workouts section', () => {
     expect(await screen.findByText('Synthetic sample failure')).toBeTruthy();
     failed = false;
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
-    expect(await screen.findByRole('img', { name: /heart_rate/u })).toBeTruthy();
+    expect(await screen.findByRole('img', { name: /Heart rate/u })).toBeTruthy();
   });
 });

@@ -85,7 +85,7 @@ export function proteinTargetComparison(rows: readonly Row[], target: number | n
 }
 
 export function groupedMeals(rows: readonly Row[]) {
-  const known = ['breakfast', 'lunch', 'dinner', 'snack'];
+  const known = ['breakfast', 'lunch', 'dinner', 'snack', 'other'];
   const groups = new Map<string, Row[]>();
   for (const row of rows.filter(row => !deleted(row)).sort((a, b) => {
     const first = Date.parse(text(a.occurred_at, ''));
