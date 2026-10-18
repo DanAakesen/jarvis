@@ -47,8 +47,13 @@ claimed.
 
 The first delivery-proof milestone is approved. P13-01 builds the owner-bound
 backend, SQL records and encrypted Web Push path behind the exact-true,
-default-off `JARVIS_PUSH_ENABLED` gate. The parallel web work is P13-02. No
-deployment setting is changed; provider acceptance and local tests do not prove
+default-off `JARVIS_PUSH_ENABLED` gate. The parallel web work is P13-02. Neither
+sets a deployment value. P13-03 (#934, 18 October 2026) enables milestone 1, the
+user-triggered test, in the production deploy by setting `JARVIS_PUSH_ENABLED` in
+`infra/main.bicep` and `VITE_PUSH_ENABLED` in the web build step; the code
+defaults stay off. Proactive milestones 2 to 4 (the silent read-only pilot, the
+todo-write pilot and opt-in alerts) stay dark, and P13-03 adds no scheduler,
+proactive send or Teams path. Provider acceptance and local tests do not prove
 that an iPhone displayed the notification. Physical-device delivery remains
 unverified.
 
@@ -2348,8 +2353,12 @@ Dan approved P12 on 12 October 2026 and explicitly released only P12-01 for this
 
 Proactive assistance is built dark in milestones. Each milestone has its own
 exact-`true`, default-off flag and is enabled by a separate small change, one at
-a time, only after the previous deployment is accepted. The first milestone is
-the push delivery proof; Teams is not used.
+a time, only after the previous deployment is accepted. The first milestone is a
+direct, user-triggered Web Push test linking to a durable owner-protected item.
+P13-01 and P13-02 built it dark; P13-03 (#934) enables it in the production
+deploy, so push milestone 1 is on while the proactive milestones 2 to 4 stay
+dark. The user test is not proactive delivery, and real iPhone delivery remains
+unproven. Teams is not a delivery path.
 
 | ID | Issue | Task | Acceptance criteria | Depends on | Status |
 | --- | --- | --- | --- | --- | --- |

@@ -1,5 +1,28 @@
 # Decisions
 
+## Switch Web Push milestone 1 on in production (18 October 2026; P13-03 / #934)
+
+Dan confirmed turning milestone 1 on: a user-started test notification that opens
+an owner-protected item. His gate was met first: the P13-01 backend (PR #918) and
+the P13-02 web client (PR #920) are merged and deployed, and live acceptance
+passed. This supersedes the "dark" and "default-off" decisions below for
+production only; the code defaults stay off.
+
+Two lines do it. `infra/main.bicep` sets `JARVIS_PUSH_ENABLED` to `'true'` in the
+backend container app, and the web build step in `deploy.yml` sets
+`VITE_PUSH_ENABLED=true`. There is no new parameter, secret, resource,
+dependency or code change: the VAPID key pair is generated on first use and stays
+in SQL. A scan test pins both values and fails if anything else sets either
+switch.
+
+Scope does not grow: no scheduler, no proactive sends and no Teams path. CI does
+not establish iPhone delivery; Dan's Home Screen device test is the acceptance
+step. Rollback is reverting the whole P13-03 change, which removes the two gate
+lines and the pin test together, or setting both values to `false` and updating
+the pin test in the same commit. Reverting only the two lines would fail the pin
+test in CI before Deploy could run. Stored subscriptions and the key stay in SQL
+and, with the routes off, nothing can send to them.
+
 ## Open Daily on an overview behind a build-time switch (18 October 2026; P12-15 / #730)
 
 **Builder decision inside Dan's "go with the daily", not an activation and not
@@ -137,6 +160,33 @@ The test send is user-started, so quiet hours do not block it. Do not add the
 22:00–07:00 Europe/Copenhagen guard or an emergency exception now; all later
 system-started sends must pass that guard. Actual iPhone delivery remains an
 unverified physical-device acceptance step.
+
+## Keep the proactive foundation dark and bounded (17 October 2026; P13-05)
+
+The server gate `JARVIS_PROACTIVE_ENABLED` and its todo-write and alert
+capability gates are exact-string `true`, default off. The foundation registers
+owner-bound settings, status, item and feedback routes only under the main gate.
+It adds no scheduler, source read, model call, timer or proactive delivery; no
+deployment setting turns a flag on. Status remains available before any run and
+reports each source in a fixed order.
+
+When later engine work is enabled, scheduled slots are 07:00 and 18:00
+Europe/Copenhagen and quiet hours are 22:00–07:00 with no exception. Time
+conversion uses the IANA zone and handles both DST transitions. Catch-up is at
+most once for the latest missed slot, only inside the allowed window and under
+12 hours old. Sleep remains unchanged.
+
+The monthly budget defaults to 100 DKK, warns at 80% and refuses further work
+at 100%; all displayed spend is estimated and unknown model rates use the
+highest known token rates. Findings use the language of recent user messages,
+detected deterministically without a model. Todo writes, when separately
+enabled, are add-only. Alerts are restricted to time-critical deadlines,
+calendar clashes, travel disruptions and the due-soon todo reminder; quiet-hour
+reminders wait until 07:00. Teams is never a proactive channel.
+
+The new `proactive` background-job kind makes future runs visible in the
+existing Background work control. Existing embedding result-window exclusions
+remain specific to embedding jobs.
 
 ## Keep web push default-off and notification taps owner-authenticated (17 October 2026; P13-02)
 
