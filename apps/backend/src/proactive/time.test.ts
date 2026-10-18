@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { dayKey, isQuietHour, latestSlotAtOrBefore, localSlotInstant, localTimeLabel, monthKey, nextSlotAfter, slotKey } from './time.js';
+import {
+  copenhagenDateStart, dayKey, isQuietHour, latestSlotAtOrBefore, localSlotInstant,
+  localTimeLabel, monthKey, nextSlotAfter, slotKey,
+} from './time.js';
 
 describe('Copenhagen proactive time', () => {
   it('formats local day, time, quiet window and month on an ordinary day', () => {
@@ -36,6 +39,16 @@ describe('Copenhagen proactive time', () => {
     expect(localSlotInstant('2027-03-28T07:00').getTime() -
       localSlotInstant('2027-03-27T07:00').getTime()).toBe(23 * 60 * 60_000);
     expect(latestSlotAtOrBefore(after).key).toBe('2027-03-28T07:00');
+  });
+
+  it('resolves all-day midnights on both DST transition days', () => {
+    expect(copenhagenDateStart('2026-10-25').toISOString()).toBe('2026-10-24T22:00:00.000Z');
+    expect(copenhagenDateStart('2027-03-28').toISOString()).toBe('2027-03-27T23:00:00.000Z');
+    expect(copenhagenDateStart('2026-10-26').getTime() - copenhagenDateStart('2026-10-25').getTime())
+      .toBe(25 * 60 * 60_000);
+    expect(copenhagenDateStart('2027-03-29').getTime() - copenhagenDateStart('2027-03-28').getTime())
+      .toBe(23 * 60 * 60_000);
+    expect(() => copenhagenDateStart('2027-02-29')).toThrow(RangeError);
   });
 
   it('crosses year and local month boundaries using Copenhagen calendar time', () => {

@@ -26,18 +26,28 @@ service. A green local test or build does not establish real iPhone delivery.
 default. The latter two do not activate work unless the main proactive flag is
 on. Do not set any of them in deployment, workflows or infrastructure. This
 foundation registers owner-bound status/settings/items routes only when enabled;
-it adds no scheduler, source read, model call or proactive send.
+it adds no scheduler, model call or proactive send. P13-08 adds registered
+read-only calendar, metadata-only mail and calendar-derived travel sources, but
+does not invoke them or enable any flag. Calendar facts use Europe/Copenhagen
+midnights and bounded pagination; Gmail reads no body, snippet or attachment;
+travel has no external provider.
 
 Focused checks:
 `npm test --workspace @jarvis/backend -- --run src/config.test.ts src/proactive/routes.test.ts src/proactive/store.test.ts src/proactive/time.test.ts src/proactive/budget.test.ts src/proactive/language.test.ts src/proactive/sources/registry.test.ts src/database/migrations.test.ts src/push/routes.test.ts`,
+`npm test --workspace @jarvis/backend -- --run src/proactive/time.test.ts src/proactive/sources/registry.test.ts src/proactive/sources/calendar-reader.test.ts src/proactive/sources/calendar.test.ts src/proactive/sources/mail.test.ts src/proactive/sources/travel.test.ts src/google/tools.test.ts`,
+`npm run build --workspace @jarvis/backend`, and
+`npm run lint --workspace @jarvis/backend`.
+SQL Server schema/store integration
+uses `npm run test:database --workspace @jarvis/backend -- src/database/schema.integration.test.ts`
+with the isolated loopback test database; do not claim it ran without that
+service.
+
+The P13-05 foundation's remaining focused checks:
 `npm test --workspace @jarvis/contracts`,
 `npm test --workspace @jarvis/web -- --run src/JobsChip.test.tsx`,
-`npm run build --workspace @jarvis/backend`,
 `npm run build --workspace @jarvis/web`, and lint for both workspaces.
-Proactive SQL contracts are in
-`src/database/schema.integration.test.ts`; run them only with the isolated
-loopback SQL Server fixture via `npm run test:database --workspace @jarvis/backend -- src/database/schema.integration.test.ts`.
-Do not report SQL integration coverage unless that service ran.
+Proactive SQL contracts remain in `src/database/schema.integration.test.ts`;
+run them only with the isolated loopback SQL Server fixture above.
 
 ## Chat acceptance failure labels and one bounded retry (#820, 17 October 2026)
 

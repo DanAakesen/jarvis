@@ -1892,21 +1892,39 @@ guard; every future system-started send must enforce 22:00–07:00
 Europe/Copenhagen with no emergency exception. There is no Teams delivery path.
 The feature remains dark, and actual iPhone delivery is not yet proven.
 
-## Proactive foundation (P13-05; default off)
+## Proactive foundation and sources (P13-05 / P13-08; default off)
 
 `JARVIS_PROACTIVE_ENABLED` gates the owner-bound proactive routes and composition;
 the todo-write and alert capabilities are separately gated. The index contributes
 one guarded registration call with existing providers, stores, token callback,
 clock, logger and the background-job registry. Disabled composition does not
 construct proactive stores, query proactive tables, register routes or start a
-timer. This slice adds no source read, model call or outbound request.
+timer. P13-08 adds source implementations to the existing registry; constructing
+them does not read Google, and no schedule, model call or proactive delivery is
+added.
 
 The `proactive` module defines the shared source/item/run contracts, a source
-registry with an unavailable `x` placeholder, and authenticated status, settings,
+registry with read-only `calendar`, `mail`, and `travel` sources plus the
+unavailable `x` placeholder, and authenticated status, settings,
 item-list, item-detail and feedback routes. Status works before any run exists;
 it calculates Copenhagen-local budget month, quiet hours and the next slot and
 returns source states in contract order. Inputs are validated at the route
 boundary. Item detail retains P13-01's `opened_at` meaning: loaded, not read.
+
+The calendar reader reuses the existing primary-calendar view path, expanding
+recurrences and bounding reads to 50 events over two pages. All-day dates resolve
+to Europe/Copenhagen local midnight through the shared DST-aware time helper.
+Calendar facts omit descriptions, conferencing and attendee/organizer addresses.
+Mail searches the primary inbox for unread messages from the last two days and
+reads at most 15 messages, with five concurrent metadata-only requests for
+From/Subject/Date/List-Unsubscribe/Precedence. It never requests body, snippet or
+attachment fields; bulk/newsletter messages are skipped and sender addresses are
+reduced to a display name or domain. Travel reuses the calendar reader over seven
+days and applies exported `TRAVEL_KEYWORDS` and `TRAVEL_ROUTE_PATTERN`
+Danish/English whole-word and airport-route rules; it calls no travel provider
+and excludes starts in the calendar's half-open 48-hour window. All sources
+bound fact text, treat provider text as
+untrusted data, and return stable unavailable reason codes without logging it.
 
 Migration 0055 extends `proactive_items` while preserving test rows, and adds
 owner-scoped settings, runs, source status and estimated-spend tables. SQL stores

@@ -987,13 +987,17 @@ user-triggered test is not proactive delivery. Teams is not a delivery option.
 Real iPhone delivery remains unproven until separately observed on the installed
 Home Screen app.
 
-## Proactive foundation (17 October 2026; P13-05)
+## Proactive foundation and read-only sources (18 October 2026; P13-05 / P13-08)
 
 The backend foundation provides owner-only status, settings, durable finding
 storage and feedback behind `JARVIS_PROACTIVE_ENABLED`, which defaults off.
-Separate todo-write and alert flags also default off. The foundation does not
-read sources, schedule runs, call a model or send proactive alerts. Later slices
-add those capabilities without changing the server entry point.
+Separate todo-write and alert flags also default off. P13-08 registers bounded
+read-only Google Calendar and Gmail metadata sources and a calendar-derived
+travel source. Calendar reads use a 48-hour window; mail lists at most 15 unread
+primary-inbox messages from the prior two days and reads only selected headers;
+travel reads up to seven calendar days and makes no travel-provider request.
+The source registry does not schedule runs, invoke a model or send alerts, and
+this change enables no flag, adds no OAuth scope or changes the server entry point.
 
 The approved schedule uses 07:00 and 18:00 Europe/Copenhagen slots; scheduled
 work is forbidden from 22:00 to 07:00. The monthly estimate limit defaults to

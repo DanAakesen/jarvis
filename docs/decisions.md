@@ -84,6 +84,19 @@ It adds no scheduler, source read, model call, timer or proactive delivery; no
 deployment setting turns a flag on. Status remains available before any run and
 reports each source in a fixed order.
 
+P13-08 adds only read-only, bounded calendar and Gmail-header sources and a
+travel source derived exclusively from the calendar. Calendar uses the existing
+primary-calendar view path, expands recurring instances, and reads at most 50
+events over two pages within 48 hours. Gmail searches at most 15 unread primary
+inbox messages from the last two days and requests only From, Subject, Date,
+List-Unsubscribe and Precedence metadata, with no body, snippet or attachments.
+Travel reads seven calendar days, filters with deterministic exported keywords
+and route syntax, and omits events already inside the calendar window. It makes
+no flight, rail, traffic or disruption-provider request. No OAuth scope,
+consent, secret, cloud setting, flag activation, engine behavior or entry-point
+change accompanies these sources; source text remains untrusted and is never
+logged.
+
 When later engine work is enabled, scheduled slots are 07:00 and 18:00
 Europe/Copenhagen and quiet hours are 22:00–07:00 with no exception. Time
 conversion uses the IANA zone and handles both DST transitions. Catch-up is at

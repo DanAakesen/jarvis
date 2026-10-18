@@ -2,11 +2,12 @@
 
 ## Status and purpose
 
-17 October 2026 — the broader proactive-assistance design remains staged. The
-Web Push delivery proof and the dark P13-05 backend foundation are approved;
-neither enables production work. The scheduler's in-process location and
-operating bounds are settled, but no scheduler, source read, model call or
-proactive send is implemented here. The
+18 October 2026 — the broader proactive-assistance design remains staged. The
+Web Push delivery proof and the dark P13-05 backend foundation are approved.
+P13-08 adds read-only calendar, mail-header and calendar-derived travel sources;
+it does not activate a flag, run a source, schedule work, call a model or send
+proactive alerts. The scheduler's in-process location and operating bounds are
+settled. The
 [plan summary](../PLAN.md#proactive-assistance--proposed-scope-17-october-2026)
 separates these slices from remaining pilot gates. Daily notification-off
 remains in force.
@@ -17,8 +18,23 @@ Dan's confirmed decisions supersede the proposals below. The server flags
 `JARVIS_PROACTIVE_ENABLED`, `JARVIS_PROACTIVE_TODO_WRITES_ENABLED` and
 `JARVIS_PROACTIVE_ALERTS_ENABLED` are exact-`true`, default off; this foundation
 sets none. P13-05 adds contracts, owner-bound routes, operational stores,
-time/language/budget helpers and a background-job kind, but no scheduler, source
-read, model call, timer or proactive send.
+time/language/budget helpers and a background-job kind. P13-08 adds source
+implementations but does not invoke them, schedule work, call a model, create a
+timer or send proactive alerts.
+
+Calendar reads the primary calendar from now to 48 hours ahead, expands
+recurrences and uses at most 50 events in two pages. All-day instants are
+Europe/Copenhagen local midnights, including DST changes; facts exclude
+attendee/organizer addresses, descriptions and conference links. Mail lists at
+most 15 unread primary-inbox messages from the prior two days and requests only
+From, Subject, Date, List-Unsubscribe and Precedence metadata; it never requests
+bodies, snippets or attachments and skips bulk/newsletter mail. Travel reuses
+calendar data from now to seven days ahead, excludes starts inside the
+calendar's half-open 48-hour range, and uses exported `TRAVEL_KEYWORDS` and
+`TRAVEL_ROUTE_PATTERN` for deterministic English/Danish whole words and
+three-letter airport routes. It has no travel provider or disruption data. All
+sources are read-only, bounded, fail to stable
+unavailable states, and sanitize untrusted text before returning facts.
 
 Later scheduled work runs in-process in the backend, which retains its minimum
 one replica. Slots are 07:00 and 18:00 Europe/Copenhagen, computed using the IANA
@@ -396,10 +412,10 @@ compatibility with Jarvis's account. Sources were checked on 17 October 2026.
    controls and inspect usefulness before considering wider domains.
 
 Still open: the exact canonical todo path, allowed edit operations and review/
-undo design; source identities, access/coverage and actual provider costs;
+undo design; other source identities, access/coverage and actual provider costs;
 operational retention; subscription/device lifecycle; durable inbox/conversation
-linkage; and any expansion beyond the confirmed bounded assistance. P13-05 does
-not activate the feature or implement the future scheduler, sources, reasoning,
+linkage; and any expansion beyond the confirmed bounded assistance. P13-05 and
+P13-08 do not activate the feature or implement the future scheduler, reasoning,
 todo writer or alert delivery.
 
 ## Appendix — optional execution, cost and source research
