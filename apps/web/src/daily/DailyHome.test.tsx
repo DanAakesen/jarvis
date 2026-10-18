@@ -174,7 +174,7 @@ describe('Daily overview', () => {
     expect(screen.getByRole('tab', { name: 'Briefs' })).toBeTruthy();
     expect(screen.getByRole('tab', { name: 'Data' })).toBeTruthy();
     expect(screen.queryByRole('tab', { name: 'Workouts' })).toBeNull();
-    expect(screen.queryByRole('tab', { name: 'Nutrition' })).toBeNull();
+    expect(screen.getByRole('tab', { name: 'Nutrition' })).toBeTruthy();
     expect(screen.queryByRole('tab', { name: 'Body & sleep' })).toBeNull();
 
     fireEvent.click(screen.getByRole('tab', { name: 'Data' }));
@@ -197,11 +197,11 @@ describe('Daily overview', () => {
     await waitFor(() => expect(overview.getAttribute('aria-selected')).toBe('true'));
     expect(screen.getByTestId('daily-section-url').textContent).toBe('unknown');
 
+    const nextTab = within(screen.getByRole('tablist', { name: 'Daily sections' })).getAllByRole('tab')[1]!;
     fireEvent.keyDown(overview, { key: 'ArrowRight' });
-    const briefs = screen.getByRole('tab', { name: 'Briefs' });
-    expect(briefs.getAttribute('aria-selected')).toBe('true');
-    expect(screen.getByTestId('daily-section-url').textContent).toBe('briefs');
-    fireEvent.keyDown(briefs, { key: 'End' });
+    expect(nextTab.getAttribute('aria-selected')).toBe('true');
+    expect(screen.getByTestId('daily-section-url').textContent).toBe(nextTab.id.replace('daily-tab-', ''));
+    fireEvent.keyDown(nextTab, { key: 'End' });
     expect(screen.getByRole('tab', { name: 'Data' }).getAttribute('aria-selected')).toBe('true');
     expect(screen.getByTestId('daily-section-url').textContent).toBe('data');
     fireEvent.keyDown(screen.getByRole('tab', { name: 'Data' }), { key: 'Home' });

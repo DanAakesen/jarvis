@@ -1396,7 +1396,21 @@ read-only, returns bounded untrusted finding text, and does not change item stat
 or grant action authority. It remains absent when
 `JARVIS_PROACTIVE_ENABLED` is off.
 
-### Daily page: Workouts (18 October 2026; P12-23)
+## Daily Nutrition day, trend and library (18 October 2026; P12-24)
+
+The owner can browse recorded meals by Copenhagen calendar day inside Daily,
+compare null-aware totals with their own configured targets, follow energy and
+protein over the selected period, and filter loaded favourites and meal plans.
+Nutrition is read-only: logging and corrections stay in chat with the existing
+native approval rules, and the original Daily remains canonical. The section
+requires the meals source; Trend and Library appear only when their respective
+sources are exposed. Unknown values never become zero, partial totals are lower
+bounds, and days without meals remain gaps. The resting-burn-minus-deficit
+comparison is explicitly a baseline before activity, not the full allowance.
+No missing target is estimated. This adds no coaching, recovery, recomposition,
+TickTick integration or permission changes.
+
+## Daily page: Workouts (18 October 2026; P12-23)
 
 The read-only Workouts section now appears when `daily.health.workouts` is
 exposed. Over the shared period it shows loaded workout count, distinct recorded
