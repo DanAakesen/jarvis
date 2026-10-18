@@ -5,7 +5,7 @@
 .daily-briefs > section { display: grid; align-content: start; gap: var(--space-3); min-width: 0; }
 .daily-brief-history { gap: var(--space-4); }
 .daily-brief-month { gap: var(--space-2); }
-.daily-brief-list { display: grid; grid-auto-rows: minmax(8.5rem, 1fr); gap: var(--space-2); margin: 0; padding: 0; list-style: none; }
+.daily-brief-list { display: grid; gap: var(--space-2); margin: 0; padding: 0; list-style: none; }
 .daily-brief-list li { min-width: 0; }
 .daily-briefs .daily-brief-row {
   display: grid;
@@ -14,11 +14,17 @@
   align-content: start;
   gap: var(--space-2);
   width: 100%;
-  height: 100%;
-  min-height: 8rem;
+  min-height: 44px;
+  padding: var(--space-3);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-control);
+  background: var(--surface-translucent);
   text-align: start;
   white-space: normal;
 }
+.daily-briefs .daily-brief-row:hover { background: var(--glass-hover); }
+.daily-briefs .daily-brief-row:active { background: var(--glass-pressed); }
+.daily-briefs .daily-brief-row:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 .daily-brief-date { color: var(--text-muted); font-size: var(--type-small); font-variant-numeric: tabular-nums; }
 .daily-brief-label { font-size: var(--type-body); font-weight: 650; overflow-wrap: anywhere; }
 .daily-brief-chips { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-2); min-width: 0; }

@@ -7,13 +7,13 @@ import DataSection from './DataSection';
 
 vi.mock('../../DailyPage', () => ({
   DailyPage: ({ onBack, onSourceChange, sharedPeriod }: {
-    onBack: () => void;
+    onBack?: () => void;
     onSourceChange: (source: string) => void;
     sharedPeriod: { startDate: string };
   }) => <>
     <span>{sharedPeriod.startDate}</span>
     <button onClick={() => onSourceChange(sources.meals)}>Change source</button>
-    <button onClick={onBack}>Back</button>
+    {onBack && <button onClick={onBack}>Back to overview</button>}
   </>,
 }));
 
@@ -31,9 +31,9 @@ describe('Data section', () => {
       openSource: () => {}, backToOverview, onSourceChange, retryAvailability: () => {},
     }}><DataSection {...props} /></DailySectionNavigationContext.Provider>);
     expect(screen.getByText('2026-10-12')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Back to overview' })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Change source' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Back' }));
     expect(onSourceChange).toHaveBeenCalledWith(sources.meals);
-    expect(backToOverview).toHaveBeenCalledOnce();
+    expect(backToOverview).not.toHaveBeenCalled();
   });
 });

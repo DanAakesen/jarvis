@@ -1721,7 +1721,8 @@ Data uses one kit section header and a collection/refresh toolbar with a compact
 freshness line. Applied-period, processing and completeness evidence stays in
 “Source, units and coverage.” Wide screens use the sticky-first-column kit table;
 below 700px the same records become compact cards with a date/name heading,
-two-field summary and remaining facts. Long table text is ellipsized, with full
+two-field summary and remaining facts; each summary label/value pair stacks and
+wraps so recorded values remain visible. Long table text is ellipsized, with full
 values in a focused, labelled inline detail region. Closing or Escape restores
 focus and scrolls the opener into view. Raw JSON is secondary, behind “Raw record.”
 Null fields read “Not recorded”; recorded zero remains zero and units stay explicit.
@@ -1832,6 +1833,29 @@ contract, persistence or dependency changed. Synthetic browser captures for
 Body and Sleep at 320, 390×844 and 1440×900 in light and dark are in
 `docs/ui/p12-32/`; they show the actual Daily section with synthetic responses,
 not live health records or original-site parity.
+
+## Daily responsive and consistency audit (18 October 2026; P12-36)
+
+The Daily shell and sections keep their content-density differences while
+following shared geometry: spacing uses `--space-*`, headings use the existing
+type hierarchy, statistic tiles use the shared `StatTile` surface/radius, and
+status and category chips retain distinct text-backed meanings. Freshness stays
+next to the records it qualifies. Empty-state wording remains specific to each
+source; Health history links to Settings → Health upload.
+
+At narrow widths, the section and Nutrition view tab strips expose their
+horizontal scroll tracks. Summary tiles use one column on phones and fill the
+last two-column desktop row. Nutrition Day has a deliberate two-row phone
+control layout. Body shortcuts have equal-height buttons and a visible scroller;
+stat notes wrap within tiles. `DailyChart` reserves enough left space for
+formatted y-axis values and reduces categorical tick density when dates would
+overlap. Its SVG labels remain pixel-sized in CSS pixels; no transform scaling
+or new design token was added.
+
+The synthetic responsive matrix, consistency table and before/after captures
+are in [`docs/ui/p12-36/`](docs/ui/p12-36/). Chart labels remain the established
+12px SVG exception to the 13px caption role, pinned by the stylesheet ratchet.
+These checks do not establish live-data or original-site parity.
 
 ## Daily overview and Briefs integration (18 October 2026; P12-26)
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatDate, formatDuration, formatNumber, formatTime, formatUnit } from './formatters';
+import { formatClockTime, formatDate, formatDuration, formatNumber, formatTime, formatUnit } from './formatters';
 
 describe('Daily formatters', () => {
   it('keeps unavailable and invalid measurements unknown', () => {
@@ -20,6 +20,8 @@ describe('Daily formatters', () => {
   it('formats calendar dates and timestamps with a Copenhagen timezone', () => {
     expect(formatDate('2026-10-17')).not.toBe('Unknown');
     expect(formatTime('2026-10-17T07:00:00Z')).not.toBe('Unknown');
+    expect(formatClockTime('2026-10-17T07:00:00Z')).not.toContain('2026');
+    expect(formatClockTime('not-a-date')).toBe('Unknown');
     expect(formatTime('not-a-date')).toBe('Unknown');
   });
 });

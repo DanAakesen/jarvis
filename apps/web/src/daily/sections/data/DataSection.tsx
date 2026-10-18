@@ -8,6 +8,6 @@ export default function DataSection({ backendUrl, getAccessToken, sources, perio
   const navigation = useContext(DailySectionNavigationContext);
   return <DailyPage embedded backendUrl={backendUrl} getAccessToken={getAccessToken} knownSources={sources}
     {...(navigation.initialSource ? { initialSource: navigation.initialSource } : {})} onSourceChange={navigation.onSourceChange}
-    onBack={navigation.backToOverview} sharedPeriod={period} onPeriodChange={onPeriodChange}
+    sharedPeriod={period} onPeriodChange={onPeriodChange}
     availabilityError={navigation.availabilityError} onRetryAvailability={navigation.retryAvailability} />;
 }

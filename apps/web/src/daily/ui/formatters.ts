@@ -44,3 +44,8 @@ export function formatTime(value: string | null | undefined) {
   const date = validDate(value);
   return date ? new Intl.DateTimeFormat(locale(), { timeZone: timezone, dateStyle: 'medium', timeStyle: 'short' }).format(date) : 'Unknown';
 }
+
+export function formatClockTime(value: string | null | undefined) {
+  const date = validDate(value);
+  return date ? new Intl.DateTimeFormat(locale(), { timeZone: timezone, timeStyle: 'short' }).format(date) : 'Unknown';
+}

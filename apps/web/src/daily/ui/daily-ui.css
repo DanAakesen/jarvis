@@ -11,7 +11,7 @@
 .daily-stat-value { margin: var(--space-2) 0 0; font-size: var(--type-subheading); font-weight: 650; overflow-wrap: anywhere; white-space: pre-line; font-variant-numeric: tabular-nums; }
 .daily-stat-tile--compact .daily-stat-value { font-size: var(--type-body); }
 .daily-stat-unit { font-size: var(--type-body); font-weight: 400; }
-.daily-stat-note, .daily-stat-comparison { margin: var(--space-1) 0 0; color: var(--text-muted); font-size: var(--type-small); }
+.daily-stat-note, .daily-stat-comparison { min-width: 0; margin: var(--space-1) 0 0; color: var(--text-muted); font-size: var(--type-small); overflow-wrap: anywhere; }
 .daily-stat-delta { display: flex; align-items: center; gap: var(--space-1); margin: var(--space-2) 0 0; font-size: var(--type-small); }
 .app-shell .daily-stat-delta svg { width: 1em; height: 1em; fill: none; stroke: currentColor; stroke-width: 2; }
 .daily-freshness { margin: 0; color: var(--text-muted); font-size: var(--type-small); font-variant-numeric: tabular-nums; }
@@ -77,8 +77,8 @@
   .daily-data-notes summary, .daily-chart-table summary { min-height: 44px; }
 }
 @media (max-width: 640px) {
-  .app-shell :is(.workouts-stats, .workouts-detail-stats, .nutrition-stats, .body-sleep-stats, .daily-grid):has(> .daily-stat-tile) { display: flex; flex-wrap: wrap; }
-  .app-shell :is(.workouts-stats, .workouts-detail-stats, .nutrition-stats, .body-sleep-stats, .daily-grid) > .daily-stat-tile { flex: 1 1 calc(50% - var(--space-3)); height: auto; }
+  .app-shell :is(.workouts-stats, .workouts-detail-stats, .nutrition-stats, .body-sleep-stats, .daily-grid:not(.daily-summary-grid)):has(> .daily-stat-tile) { display: flex; flex-wrap: wrap; }
+  .app-shell :is(.workouts-stats, .workouts-detail-stats, .nutrition-stats, .body-sleep-stats, .daily-grid:not(.daily-summary-grid)) > .daily-stat-tile { flex: 1 1 calc(50% - var(--space-3)); height: auto; }
 }
 @media (min-width: 900px) {
   .daily-grid--two { grid-template-columns: repeat(2, minmax(0, 1fr)); }

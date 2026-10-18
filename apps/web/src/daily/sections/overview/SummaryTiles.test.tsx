@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
 import { dailyQuerySources as sources, isDailyQuery, type DailyJson, type DailyQuery, type DailySourceId } from '@jarvis/contracts';
 import { DailyRefreshContext } from '../../refresh';
-import { formatDate, formatTime } from '../../ui/formatters';
+import { formatClockTime, formatDate, formatTime } from '../../ui/formatters';
 import { dailyFixture, jsonResponse } from '../../test-support';
 import { overviewPeriods } from './summary';
 import { OverviewSummaryTiles } from './SummaryTiles';
@@ -12,7 +12,7 @@ const token = async () => 'synthetic-fixture';
 const available = [sources.workouts, sources.meals, sources.days, sources.metrics, sources.metricCatalog,
   sources.sleep, sources.briefs, sources.brief];
 const period = overviewPeriods();
-const latestWorkout = { id: 'synthetic-workout-a', workout_date: period.sevenDays.endDate, workout_type: 'running', duration_seconds: 1800 };
+const latestWorkout = { id: 'synthetic-workout-a', workout_date: period.sevenDays.endDate, start_at: `${period.sevenDays.endDate}T07:00:00Z`, workout_type: 'running', duration_seconds: 1800 };
 const earlierWorkout = { id: 'synthetic-workout-b', workout_date: period.thisWeek.startDate, workout_type: 'walking', duration_seconds: 600 };
 const nutritionDay = {
   meal_date: period.sevenDays.endDate, meal_count: 2, energy_kcal: 1200, protein_grams: 80,
@@ -89,6 +89,9 @@ describe('Daily overview summary tiles', () => {
     expect(await screen.findByText('This week: 2 workouts · 40 minutes')).toBeTruthy();
     expect(tile('Workouts').getByText('Running')).toBeTruthy();
     expect(tile('Workouts').getByText(formatDate(period.sevenDays.endDate))).toBeTruthy();
+    expect(tile('Workouts').getByText(`Started ${formatClockTime(latestWorkout.start_at)}`)).toBeTruthy();
+    expect(tile('Workouts').getByText(`Started ${formatClockTime(latestWorkout.start_at)}`).textContent)
+      .not.toContain(formatDate(period.sevenDays.endDate));
     expect(tile('Workouts').getByRole('link', { name: 'Workouts' }).getAttribute('href')).toBe('/?section=workouts');
 
     expect(await tile('Nutrition').findByRole('progressbar')).toBeTruthy();

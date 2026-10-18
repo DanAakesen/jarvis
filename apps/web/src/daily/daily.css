@@ -12,6 +12,7 @@
   border-radius: var(--radius-panel);
   backdrop-filter: blur(var(--surface-blur));
 }
+.daily-page a { display: inline-flex; align-items: center; min-height: 44px; }
 .daily-heading, .daily-records-heading, .daily-pagination, .daily-toolbar, .daily-period, .daily-view-options {
   display: flex;
   align-items: center;
@@ -102,7 +103,17 @@
   .daily-table th, .daily-table td { padding: var(--space-2); }
 }
 .daily-shell > .daily-heading { margin-bottom: var(--space-4); }
-.daily-section-nav { min-width: 0; max-width: 100%; overflow-x: auto; margin-bottom: var(--space-4); }
+.daily-section-nav { position: relative; min-width: 0; max-width: 100%; overflow-x: auto; margin-bottom: var(--space-4); scrollbar-width: none; }
+.daily-section-nav::-webkit-scrollbar { display: none; }
+.daily-section-nav[data-overflow='true']::after {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-end: 0;
+  width: var(--space-5);
+  background: linear-gradient(to right, transparent, var(--surface-translucent));
+  content: '';
+  pointer-events: none;
+}
 .daily-section-tabs { display: flex; width: max-content; min-width: 100%; gap: var(--space-1); }
 .daily-section-tab {
   flex: 0 0 auto;

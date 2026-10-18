@@ -18,6 +18,17 @@
   min-width: 0;
   width: 100%;
 }
+.daily-nutrition > .daily-section-tabs {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--text-muted) transparent;
+}
+.daily-nutrition > .daily-section-tabs::-webkit-scrollbar { height: var(--space-2); }
+.daily-nutrition > .daily-section-tabs::-webkit-scrollbar-thumb { border-radius: var(--radius-pill); background: var(--text-muted); }
+.daily-nutrition > .daily-section-tabs::-webkit-scrollbar-track { background: transparent; }
 .nutrition-meters, .nutrition-charts {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -145,6 +156,9 @@
   margin: 0;
   color: var(--text-muted);
   font-size: var(--type-small);
+}
+@media (max-width: 480px) {
+  .nutrition-controls { display: grid; grid-template-columns: max-content minmax(0, 1fr); }
 }
 @media (min-width: 900px) {
   .nutrition-meters { grid-template-columns: repeat(4, minmax(0, 1fr)); }

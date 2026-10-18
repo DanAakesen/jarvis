@@ -177,6 +177,17 @@ describe('DailyChart', () => {
     expect(disconnect).toHaveBeenCalledOnce();
   });
 
+  it('reserves room for long numeric ticks and avoids overlapping narrow date labels', () => {
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({ width: 236 } as DOMRect);
+    const { container } = render(<DailyChart kind="line" name="Synthetic wide ticks" series={[{
+      name: 'Synthetic value', points: [{ x: '2026-10-17', y: 1200.5 }, { x: '2026-10-18', y: 2400.5 }],
+    }]} />);
+    for (const tick of container.querySelectorAll('.daily-chart-grid text')) {
+      expect(Number(tick.getAttribute('x'))).toBeGreaterThan(tick.textContent!.length * 8);
+    }
+    expect(container.querySelectorAll('.daily-chart-xaxis text')).toHaveLength(1);
+  });
+
   it('measures without ResizeObserver and renders safely on the server', () => {
     vi.stubGlobal('ResizeObserver', undefined);
     vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({ width: 280 } as DOMRect);

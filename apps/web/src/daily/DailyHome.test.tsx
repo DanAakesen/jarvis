@@ -266,7 +266,7 @@ describe('Daily overview', () => {
     expect(consoleError).not.toHaveBeenCalled();
   });
 
-  it('opens one collection in the record browser without another availability request, and Back returns to that row', async () => {
+  it('opens one collection in the record browser without another availability request and returns through the shell tab', async () => {
     const f = fixture();
     render(home());
     await settled();
@@ -276,9 +276,11 @@ describe('Daily overview', () => {
     await waitFor(() => expect(document.activeElement?.id).toBe('daily-heading'));
     await waitFor(() => expect(f.queries.at(-1)).toMatchObject({ source: sources.metrics, limit: 50 }));
     expect(screen.queryByRole('heading', { name: 'What Daily holds today' })).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Back to overview' }));
+    expect(screen.queryByRole('button', { name: 'Back to overview' })).toBeNull();
+    fireEvent.click(screen.getByRole('tab', { name: 'Overview' }));
     await settled();
-    await waitFor(() => expect(document.activeElement).toBe(row('Measurements').getByRole('button', { name: 'Open Measurements' })));
+    expect(screen.getByRole('tab', { name: 'Overview' }).getAttribute('aria-selected')).toBe('true');
+    expect(row('Measurements').getByRole('button', { name: 'Open Measurements' })).toBeTruthy();
     expect(f.capabilityCalls()).toBe(1);
     expect(f.queries.filter(query => !('limit' in query) || query.limit === 1)).toHaveLength(dailySources.length * 2);
   });
