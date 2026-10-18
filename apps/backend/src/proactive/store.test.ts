@@ -14,6 +14,21 @@ const finding = {
 };
 
 describe('in-memory proactive stores', () => {
+  it('lists findings by exact state as well as the Proactive page open/all filters', async () => {
+    const store = createMemoryProactiveStore();
+    const now = new Date('2026-10-20T05:00:00.000Z');
+    const fresh = await store.items.upsertFinding(finding);
+    const viewed = await store.items.upsertFinding({ ...finding, dedupeKey: 'fixture:d2' });
+    const dismissed = await store.items.upsertFinding({ ...finding, dedupeKey: 'fixture:d3' });
+    await store.items.applyFeedback(viewed.id, 'seen');
+    await store.items.applyFeedback(dismissed.id, 'dismiss');
+
+    expect(await store.items.list('new', 10, now)).toMatchObject([{ id: fresh.id, state: 'new' }]);
+    expect(await store.items.list('seen', 10, now)).toMatchObject([{ id: viewed.id, state: 'seen' }]);
+    expect(await store.items.list('open', 10, now)).toHaveLength(2);
+    expect(await store.items.list('all', 10, now)).toHaveLength(3);
+  });
+
   it('enforces stored manual limits atomically, including exact five minutes and the local day boundary', async () => {
     const store = createMemoryProactiveStore();
     const start = Date.parse('2026-10-25T21:00:00Z');

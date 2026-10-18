@@ -28,6 +28,8 @@ import { createProductionModules } from './production-modules.js';
 import { createToolRegistry } from './core/tool-registry.js';
 import { checkAgentContract } from './core/agent-contract.js';
 import { composeDaily } from './daily/composition.js';
+import { createMemoryProactiveStore } from './proactive/store.js';
+import { createProactiveToolsModule } from './proactive/tools.js';
 
 const limits = JSON.parse(readFileSync(
   new URL('../../../agents/jarvis/limits.json', import.meta.url), 'utf8',
@@ -36,9 +38,11 @@ const limits = JSON.parse(readFileSync(
 const dailyToolNames = [
   'daily_query', 'daily_show', 'daily_food', 'daily_food_review', 'daily_saved_food', 'daily_nutrition_targets', 'daily_nutrition_suggest',
 ];
+const proactiveToolNames = ['proactive_recent_items'];
+const proactiveOwner = '11111111-1111-4111-8111-111111111111';
 
 // Daily is composed by default here so the size gates below always cover the largest catalogue the server can run.
-function modulesWithEveryFeature(options: { daily?: boolean } = {}) {
+function modulesWithEveryFeature(options: { daily?: boolean; proactive?: boolean } = {}) {
   const frameStore = new FrameStore();
   return createProductionModules({
     core: coreModule,
@@ -66,7 +70,12 @@ function modulesWithEveryFeature(options: { daily?: boolean } = {}) {
     daily: composeDaily({
       enabled: options.daily !== false,
       pool: {} as never,
-      ownerObjectId: '11111111-1111-4111-8111-111111111111',
+      ownerObjectId: proactiveOwner,
+    }),
+    proactive: createProactiveToolsModule({
+      enabled: options.proactive !== false,
+      ownerObjectId: proactiveOwner,
+      ...(options.proactive === false ? {} : { store: createMemoryProactiveStore(proactiveOwner) }),
     }),
   });
 }
@@ -109,8 +118,21 @@ describe('production tool catalogue', () => {
       'core', 'conversation', 'factory', 'operations', 'task-recipes', 'vault', 'web-research',
       'html-research', 'google', 'github-webhook', 'pc-bridge', 'phone', 'phone-status',
       'browser-agent', 'image-generation', 'html-view', 'weather', 'folio', 'workspace-pins',
-      'screen-vision', 'vision-watch', 'voice', 'daily',
+      'screen-vision', 'vision-watch', 'voice', 'daily', 'proactive',
     ]);
+  });
+
+  it('keeps the catalogue unchanged with proactive off and adds exactly one tool when enabled', () => {
+    const on = modulesWithEveryFeature();
+    const off = modulesWithEveryFeature({ proactive: false });
+    const onNames = createToolRegistry(on).list().map(({ name }) => name);
+    const offNames = createToolRegistry(off).list().map(({ name }) => name);
+
+    expect(offNames).toHaveLength(115);
+    expect(onNames).toHaveLength(116);
+    expect(onNames.filter((name) => !proactiveToolNames.includes(name))).toEqual(offNames);
+    expect(on.find(({ id }) => id === 'proactive')!.tools.map(({ name }) => name)).toEqual(proactiveToolNames);
+    expect(off.some(({ id }) => id === 'proactive')).toBe(false);
   });
 
   it('leaves the production module list and tool catalogue unchanged when Daily is off', () => {
