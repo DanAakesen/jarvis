@@ -56,7 +56,7 @@
   --control-rule: #65747a;
   --disabled-surface: #e9e2d7;
   --disabled-text: #5c564f;
-  --error: #a4262c;
+  --error: #951f25;
   --warning-surface: #f6dfc7;
   --warning-text: #593a16;
   --success-wash: #dcedf1;
@@ -66,7 +66,7 @@
   --primary-action-text: var(--theme-accent-foreground, #ffffff);
   --primary-action-disabled: #66757c;
   --primary-action-disabled-text: #ffffff;
-  --success: #1a7f99;
+  --success: #14697e;
   --state-listening: #14768d;
   --state-thinking: #8a5a1c;
   --state-speaking: #8a5a1c;
@@ -139,11 +139,12 @@
   --message-dan-tint: color-mix(in srgb, var(--glass-edge-warm) 18%, transparent);
   --message-jarvis-tint: color-mix(in srgb, var(--glass-edge-cool) 12%, transparent);
   /* Stage glass: the Jarvis room shows through angled side slabs, the message window and the composer. */
-  --stage-slab: rgb(240 245 247 / 28%);
-  --shell-slab: rgb(240 245 247 / 18%);
-  --board-slab: rgb(240 245 247 / 56%);
-  --stage-glass: rgb(240 245 247 / 14%);
+  --stage-slab: var(--surface-translucent);
+  --shell-slab: var(--surface-translucent);
+  --board-slab: var(--surface-translucent);
+  --stage-glass: var(--surface-translucent);
   --glass-glow-warm: #c98a3a;
+  --chart-series-warm: #985a18;
   --glass-rim-light: rgb(255 255 255 / 70%);
   --slab-shadow: 0 30px 80px rgb(32 37 44 / 18%);
   --shell-tilt: 20deg;
@@ -217,7 +218,7 @@
   --warning: #ffc27a;
   --pending: #8be9ff;
   --pending-surface: #17303d;
-  --error-surface: #3b2023;
+  --error-surface: #321b1e;
   --overlay: rgb(0 0 0 / 72%);
   --stage-background: #030b13;
   --stage-floor: #0b1d29;
@@ -233,11 +234,8 @@
   --stage-orb: var(--theme-accent, #52dcfa);
   --stage-reflector: #526b80;
   --stage-exposure: 1;
-  --stage-slab: rgb(9 16 24 / 18%);
-  --shell-slab: rgb(9 16 24 / 12%);
-  --board-slab: rgb(9 16 24 / 48%);
-  --stage-glass: rgb(9 16 24 / 6%);
   --glass-glow-warm: #ffb45c;
+  --chart-series-warm: #ffb45c;
   --glass-rim-light: rgb(255 255 255 / 34%);
   --slab-shadow: 0 30px 80px rgb(0 0 0 / 50%);
 }
@@ -1027,7 +1025,7 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
 /* Top bar: the same smoked glass as the shell, with quiet rounded controls; selection is a lit surface. */
 .app-topbar {
   border-bottom: 1px solid var(--rule);
-  background: linear-gradient(180deg, var(--stage-slab), color-mix(in srgb, var(--stage-slab) 55%, transparent));
+  background: var(--stage-slab);
   backdrop-filter: blur(var(--glass-blur-shell)) saturate(1.4);
   box-shadow: none;
 }
@@ -1575,6 +1573,13 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
 .kanban-search input:focus-visible, .kanban-select select:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 .kanban-page .task-release-bar { background: var(--board-slab); box-shadow: none; }
 .kanban-live-status { margin: var(--space-2) 0; font-size: var(--type-caption); }
+.kanban-page > .tasks-help, .kanban-page > .kanban-live-status {
+  width: fit-content;
+  max-width: 100%;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-control);
+  background: var(--surface-translucent);
+}
 .kanban-board { margin-top: var(--space-2); }
 .kanban-column {
   position: relative;
@@ -2739,7 +2744,7 @@ a.task-chip:hover { background: var(--glass-pressed); }
 :root[data-motion="reduced"] .jobs-popover { animation: none; }
 /* Knowledge graph (P7-43): Dan's vault as a 3D star cloud. Folder colours are shared by stars, lines, labels and legend. */
 :root, :root[data-theme="dark"] { --graph-people: #4aa8ff; --graph-work: #ffb45c; --graph-personal: #3ddc97; --graph-general: #b69cff; }
-:root[data-theme="light"] { --graph-people: #1f6fd1; --graph-work: #c36f00; --graph-personal: #17885a; --graph-general: #6f4fd6; }
+:root[data-theme="light"] { --graph-people: #1f6acc; --graph-work: #9f5800; --graph-personal: #146d49; --graph-general: #6f4fd6; }
 [data-folder="People"] { --folder: var(--graph-people); }
 [data-folder="Work"] { --folder: var(--graph-work); }
 [data-folder="Personal"] { --folder: var(--graph-personal); }
@@ -3717,6 +3722,10 @@ a.task-chip:hover { background: var(--glass-pressed); }
 }
 
 @media (prefers-contrast: more) {
+  :root, :root[data-theme="light"], :root[data-theme="dark"] {
+    --focus: var(--text);
+    --control-rule: var(--text);
+  }
   :is(.primary-button, .secondary-button, .ghost-button, .danger-button, .danger-button--filled,
     .jobs-action, .conversation-history .composer-send, .conversation-latest):not(:disabled) {
     background-image: none; border-color: currentColor; box-shadow: none;
@@ -3773,6 +3782,35 @@ a.task-chip:hover { background: var(--glass-pressed); }
   :is(.primary-button, .secondary-button, .ghost-button, .danger-button, .danger-button--filled,
     .jobs-action, .conversation-history .composer-send, .conversation-latest):focus-visible {
     outline: 3px solid Highlight; outline-offset: 3px; box-shadow: none;
+  }
+  .app-shell :is(
+    input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]):not([type="hidden"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="image"]),
+    select, textarea
+  ) {
+    border-color: FieldText;
+    background-color: Field;
+    color: FieldText;
+    forced-color-adjust: auto;
+  }
+  .app-shell input:is([type="checkbox"], [type="radio"]):focus-visible,
+  .app-shell input[role="switch"]:focus-visible,
+  .app-shell :is(
+    a, button, summary, input, select, textarea, [tabindex], [role="button"], [role="switch"],
+    .form-control, .conversation-transcript
+  ):focus-visible {
+    outline: 3px solid Highlight;
+    outline-offset: 3px;
+    box-shadow: none;
+  }
+  .app-shell input:is([type="checkbox"], [type="radio"]) { accent-color: Highlight; }
+  .app-shell input[role="switch"] {
+    border: 1px solid ButtonText;
+    background: ButtonFace;
+    forced-color-adjust: auto;
+  }
+  .app-shell input[role="switch"]:checked {
+    border-color: Highlight;
+    background: Highlight;
   }
 }
 
