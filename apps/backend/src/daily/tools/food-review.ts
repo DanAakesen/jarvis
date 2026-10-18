@@ -66,7 +66,7 @@ export function dailyFoodReviewTool(nutrition: InternalNutrition, now: () => num
         }
       }
       await requireFoodReviewPresence(request, signal);
-      const service = request.server.teamsNotifications;
+      const service = request.server.ownerInteractions;
       if (!service) throw new ToolRefusal('Dan’s Now approval service is unavailable. No food was changed.');
       const lock = `${owner.toLowerCase()}:${key}`;
       if (pending.has(lock)) throw new ToolRefusal('This food entry is already awaiting review. Resolve that proposal first.');

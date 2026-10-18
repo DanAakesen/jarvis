@@ -7,7 +7,7 @@ import type { ToolCallRecord, ToolCallStore } from '../core/tool-calls.js';
 import { createRepoAdminRepositoryCreator } from '../credentials/repo-admin.js';
 import type { Project, ProjectStore } from './projects.js';
 import type { TaskEventHub, TaskEventMessage, TaskRecord, TaskStore } from './task-store.js';
-import type { TeamsNotificationService } from '../teams/service.js';
+import type { OwnerInteractionService } from '../core/owner-interactions.js';
 
 const config = { ...loadConfig({}), logLevel: 'silent' as const };
 const repositoryToken = 'repo-admin-test-token-not-for-sandbox';
@@ -118,14 +118,14 @@ it('uses configured defaults and keeps the repository secret out of task and rec
   const toolCalls: ToolCallRecord[] = [];
   const toolCallStore: ToolCallStore = { record: async (call) => { toolCalls.push(call); } };
   const runConfirmed = vi.fn(async (_kind: unknown, _summary: unknown, action: () => Promise<string>) => action());
-  const teamsNotifications = {
+  const ownerInteractions = {
     notify: vi.fn(async () => {}),
     requestConfirmation: vi.fn(async () => {}),
     runConfirmed,
     rememberMessage: vi.fn(async () => {}),
     receiveConfirmation: vi.fn(async () => false),
     expirePendingConfirmations: vi.fn(async () => {}),
-  } as unknown as TeamsNotificationService;
+  } as unknown as OwnerInteractionService;
   const app = buildApp(config, undefined, {
     auth: async () => ({ objectId: config.auth.ownerObjectId, tenantId: config.auth.tenantId }),
     projectRepositoryCreator: createRepoAdminRepositoryCreator(
@@ -137,7 +137,7 @@ it('uses configured defaults and keeps the repository secret out of task and rec
     taskStore,
     settingsStore,
     toolCallStore,
-    teamsNotifications,
+    ownerInteractions,
     eventHub: taskEventHub as TaskEventHub,
   });
   apps.push(app);

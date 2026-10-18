@@ -76,7 +76,7 @@ export function dailyNutritionTargetsTool(targets: NutritionTargetsAccess): Jarv
       if (input.operation === 'read') return present(current);
       const changed = changedNutritionTargets(current.targets, input.patch);
       if (changed.length === 0) return { ...present(current), status: 'unchanged' };
-      const service = request.server.teamsNotifications;
+      const service = request.server.ownerInteractions;
       if (!service) throw new ToolRefusal('Now approval is unavailable. No nutrition target was changed.');
       const lock = owner.toLowerCase();
       if (pending.has(lock)) throw new ToolRefusal('A nutrition-target change is already waiting for approval. Resolve it first.');

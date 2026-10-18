@@ -29,16 +29,11 @@ export interface BackendConfig {
   proactiveEnabled: boolean;
   proactiveTodoWritesEnabled: boolean;
   proactiveAlertsEnabled: boolean;
-  teams?: {
-    botAppId: string;
-    tenantId: string;
-    audioOrigin: string;
-    speechRegion: string;
-  };
   phone?: {
     acsEndpoint: string;
     acsResourceId: string;
     teamsResourceAccountObjectId: string;
+    publicOrigin: string;
   };
   /** Present only when JARVIS_DAILY_ENABLED is exactly "true". Absent means Daily is off and Jarvis is unchanged. */
   dailyEnabled?: true;
@@ -176,10 +171,11 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BackendConfig 
   const phoneEndpoint = env.JARVIS_PHONE_ACS_ENDPOINT;
   const phoneResourceId = env.JARVIS_PHONE_ACS_RESOURCE_ID;
   const teamsResourceAccountObjectId = env.JARVIS_PHONE_TEAMS_RESOURCE_ACCOUNT_OBJECT_ID;
-  const phoneValues = [phoneEndpoint, phoneResourceId, teamsResourceAccountObjectId];
+  const phonePublicOrigin = env.JARVIS_PHONE_PUBLIC_ORIGIN;
+  const phoneValues = [phoneEndpoint, phoneResourceId, teamsResourceAccountObjectId, phonePublicOrigin];
   if (phoneValues.some((value) => value !== undefined) &&
       phoneValues.some((value) => value === undefined)) {
-    throw new ConfigurationError('ACS endpoint, resource ID, and Teams resource-account object ID must be configured together');
+    throw new ConfigurationError('ACS endpoint, resource ID, Teams resource-account object ID, and public origin must be configured together');
   }
   let phone: BackendConfig['phone'];
   if (phoneEndpoint !== undefined && phoneResourceId !== undefined &&
@@ -199,14 +195,21 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BackendConfig 
     if (!/^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/iu.test(teamsResourceAccountObjectId)) {
       throw new ConfigurationError('JARVIS_PHONE_TEAMS_RESOURCE_ACCOUNT_OBJECT_ID must be a UUID');
     }
-    if (!keyVaultUri || !foundryProjectEndpoint || !env.TEAMS_BOT_APP_ID ||
-        !env.ENTRA_PHONE_EVENT_GRID_OBJECT_ID) {
-      throw new ConfigurationError('Phone calling requires Key Vault, the Foundry project, Teams bot, and Event Grid identity configuration');
+    if (!keyVaultUri || !foundryProjectEndpoint || !env.ENTRA_PHONE_EVENT_GRID_OBJECT_ID) {
+      throw new ConfigurationError('Phone calling requires Key Vault, the Foundry project, and Event Grid identity configuration');
+    }
+    let publicOrigin: URL;
+    try { publicOrigin = new URL(phonePublicOrigin!); }
+    catch { throw new ConfigurationError('JARVIS_PHONE_PUBLIC_ORIGIN must be a secure HTTPS origin'); }
+    if (publicOrigin.protocol !== 'https:' || publicOrigin.port || publicOrigin.username || publicOrigin.password ||
+        publicOrigin.pathname !== '/' || publicOrigin.search || publicOrigin.hash) {
+      throw new ConfigurationError('JARVIS_PHONE_PUBLIC_ORIGIN must be a secure HTTPS origin');
     }
     phone = {
       acsEndpoint: endpoint.origin,
       acsResourceId: phoneResourceId.toLowerCase(),
       teamsResourceAccountObjectId: teamsResourceAccountObjectId.toLowerCase(),
+      publicOrigin: publicOrigin.origin,
     };
   }
   const monthlyBudgetResourceId = env.JARVIS_MONTHLY_BUDGET_RESOURCE_ID;
@@ -218,43 +221,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BackendConfig 
   if (dailySetting !== undefined && dailySetting !== 'true' && dailySetting !== 'false') {
     throw new ConfigurationError('JARVIS_DAILY_ENABLED must be true or false');
   }
-  const botAppId = env.TEAMS_BOT_APP_ID;
-  const botTenantId = env.TEAMS_BOT_TENANT_ID;
-  const teamsAudioOrigin = env.TEAMS_AUDIO_ORIGIN;
-  const speechRegion = env.SPEECH_REGION;
-  const teamsSettings = [botAppId, botTenantId, teamsAudioOrigin, speechRegion];
-  const hasTeamsSettings = teamsSettings.some((value) => value !== undefined);
-  if (hasTeamsSettings && teamsSettings.some((value) => value === undefined)) {
-    throw new ConfigurationError('Teams bot, audio origin, and Speech region settings must be configured together');
-  }
   const auth = loadAuthConfig(env);
-  let teams: BackendConfig['teams'];
-  if (hasTeamsSettings) {
-    const uuid = /^[\da-f]{8}(-[\da-f]{4}){3}-[\da-f]{12}$/iu;
-    if (!uuid.test(botAppId!) || !uuid.test(botTenantId!)) {
-      throw new ConfigurationError('TEAMS_BOT_APP_ID and TEAMS_BOT_TENANT_ID must be UUIDs');
-    }
-    if (botTenantId!.toLowerCase() !== auth.tenantId) {
-      throw new ConfigurationError('TEAMS_BOT_TENANT_ID must match ENTRA_TENANT_ID');
-    }
-    let validOrigin = false;
-    try {
-      const url = new URL(teamsAudioOrigin!);
-      validOrigin = url.protocol === 'https:' && url.origin === teamsAudioOrigin;
-    } catch { /* Report only the setting name, never its value. */ }
-    if (!validOrigin) {
-      throw new ConfigurationError('TEAMS_AUDIO_ORIGIN must be an HTTPS origin without a path');
-    }
-    if (!/^[a-z0-9-]{2,64}$/iu.test(speechRegion!)) {
-      throw new ConfigurationError('SPEECH_REGION must be a valid Azure region name');
-    }
-    teams = {
-      botAppId: botAppId!,
-      tenantId: botTenantId!.toLowerCase(),
-      audioOrigin: teamsAudioOrigin!,
-      speechRegion: speechRegion!.toLowerCase(),
-    };
-  }
 
   return {
     auth,
@@ -281,7 +248,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BackendConfig 
     proactiveEnabled: env.JARVIS_PROACTIVE_ENABLED === 'true',
     proactiveTodoWritesEnabled: env.JARVIS_PROACTIVE_TODO_WRITES_ENABLED === 'true',
     proactiveAlertsEnabled: env.JARVIS_PROACTIVE_ALERTS_ENABLED === 'true',
-    ...(teams ? { teams } : {}),
     ...(phone ? { phone } : {}),
     ...(dailySetting === 'true' ? { dailyEnabled: true as const } : {}),
   };

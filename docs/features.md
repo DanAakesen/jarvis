@@ -20,7 +20,7 @@ The complete list of what Jarvis does or will do, for UI design and planning. Ea
 | **Screen** | Used on a page |
 | **Voice/chat** | Used by talking or typing to Jarvis (a Jarvis tool) |
 | **Both** | On a page and by voice/chat |
-| **Phone** | Away from the browser: Teams app or phone |
+| **Phone** | Away from the browser: call Jarvis's Teams resource account or phone |
 | **Background** | Runs without Dan; shows only its effects |
 
 Status as of 14 October 2026.
@@ -63,7 +63,7 @@ this bounded correction.
 | Interrupt and reconnect | Interrupt Jarvis by speaking; voice reconnects automatically | Voice/chat | Main page | Built |  | P5-04 |
 | Language toggle | Switch Danish/English from the shared More → Language menu in the composer and voice bar; during voice the change applies to chat and the next voice session, and the bar says so | Both | Main page, Settings | Built |  | P5-05, P8-36 |
 | Voice transcripts | Read what was said in each voice sitting, with voice minutes | Screen | Main page | Built |  | P5-06 |
-| Phone calling | No production number is verified or available in backend configuration today. When Teams Phone is provisioned, call the number assigned to Jarvis's Teams resource account from Dan's Teams identity; `/phone/status` surfaces module configuration and recent call outcomes. | Phone | Backend `/phone/status` | Offline only; production lacks the ACS, Teams resource-account and Key Vault configuration required by `apps/backend/src/config.ts:168-200` |  | P7-01, P9-22 |
+| Phone calling | No production number is verified or available in backend configuration today. When provisioned, call the number assigned to Jarvis's Teams resource account from Dan's Teams identity; `/phone/status` surfaces module configuration and recent call outcomes. Calling is a voice path; Jarvis sends no Teams chat messages. | Phone | Backend `/phone/status` | Offline only; production lacks the ACS, Teams resource-account, public callback origin and Key Vault configuration required by `apps/backend/src/config.ts:168-205` |  | P7-01, P9-22 |
 | Task context | Jarvis knows running tasks and recent events without asking | Background | — | Built |  | P4-04 |
 | Background jobs | See research and other slow work in the workspace; the Background work header lists undismissed runs separately from Factory tasks, with scoped persistent dismissal and distinct empty/error states; inspect saved status, bounded step history, failure reason and result window; retry failed research through existing tools from its saved topic/depth; interrupted work is marked failed at startup; history and retry inputs last 30 days | Both | Header, `/jobs`, `event: job`, `list_jobs`, `get_job`, `cancel_job`, `retry_job` | P11-05 header correction is a local candidate; SQL Server/live multi-replica behavior unverified |  | P9-14, P9-30, P11-05 |
 | Honest confirmations | Jarvis reports refused or failed actions as such, never as done | Voice/chat | — | Built |  | P4-05 |

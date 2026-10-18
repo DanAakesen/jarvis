@@ -107,7 +107,7 @@ export class DailyFeedService {
           confirmation: 'The Daily refresh attempt was already stored. No new provider reads were made; inspect the latest source statuses for coverage.' };
       }
       await requireDailyReviewPresence(request, signal);
-      const notifications = request.server.teamsNotifications;
+      const notifications = request.server.ownerInteractions;
       if (!notifications) throw new ToolRefusal('Dan\'s Now approval service is unavailable. No Daily feed action was taken.');
       const type = input.operation === 'dismiss_thread' ? 'thread' : input.operation === 'receive_order' ? 'order' : null;
       const target = type && 'id' in input ? await store.suppressionTarget(type, input.id, signal) : null;
