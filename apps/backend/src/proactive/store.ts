@@ -68,7 +68,7 @@ export interface ProactiveSettingsStore {
   patch(patch: ProactiveSettingsPatch): Promise<ProactiveSettings>;
 }
 export interface ProactiveItemsStore {
-  list(state: 'open' | 'all', limit: number, now: Date): Promise<Item[]>;
+  list(state: 'new' | 'seen' | 'open' | 'all', limit: number, now: Date): Promise<Item[]>;
   get(id: string, markLoaded?: boolean): Promise<Item | undefined>;
   applyFeedback(id: string, action: FeedbackAction, snoozeUntil?: string): Promise<Item | undefined>;
   upsertFinding(input: FindingInput, guard?: FindingWriteGuard): Promise<Item>;
@@ -143,9 +143,12 @@ export function createMemoryProactiveStore(ownerObjectId: string = randomUUID())
     },
     items: {
       async list(state, limit, now) {
-        const visible = [...items.values()].filter((item) => state === 'all' ||
-          item.state === 'new' || item.state === 'seen' ||
-          (item.state === 'snoozed' && item.snoozedUntil !== null && Date.parse(item.snoozedUntil) <= now.getTime()));
+        const visible = [...items.values()].filter((item) => {
+          if (state === 'all') return true;
+          if (state === 'new' || state === 'seen') return item.state === state;
+          return item.state === 'new' || item.state === 'seen' ||
+            (item.state === 'snoozed' && item.snoozedUntil !== null && Date.parse(item.snoozedUntil) <= now.getTime());
+        });
         return visible.sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, limit).map(copyItem);
       },
       async get(id) {

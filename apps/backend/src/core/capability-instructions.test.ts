@@ -20,6 +20,8 @@ describe('shared navigation capability instructions', () => {
     expect(instructions).toContain('name the item and next step');
     expect(instructions).toContain('never ask Dan to paste or copy content a tool can get');
     expect(instructions).toContain('name the missing tool permission');
+    expect(instructions).toContain('For questions about what I noticed, found, flagged or reminded, use proactive_recent_items');
+    expect(instructions).toContain("answer in Dan's language");
   });
 
   it('stages calendar changes before requesting approval and recovers real codes across turns', () => {

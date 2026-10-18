@@ -13,6 +13,7 @@ import type { PushRouteDependencies } from '../push/routes.js';
 import { ConfigurationError } from '../configuration-error.js';
 import { createProactiveStore } from '../database/proactive-store.js';
 import { createMemoryProactiveStore } from './store.js';
+import type { ProactiveStore } from './store.js';
 import { buildSourceRegistry } from './sources/registry.js';
 import { registerProactiveRoutes } from './routes.js';
 import { createProactiveEngine, type ProactiveEngineOptions } from './engine.js';
@@ -26,6 +27,7 @@ type GitHubVaultClient = ReturnType<typeof createGitHubVaultClient>;
 export interface ProactiveCompositionOptions {
   enabled: boolean;
   ownerObjectId: string;
+  store?: ProactiveStore;
   pool?: sql.ConnectionPool;
   googleApiClient?: GoogleApiClient;
   vaultClient?: GitHubVaultClient;
@@ -55,9 +57,9 @@ export function registerProactive<Logger extends FastifyBaseLogger>(
     throw new ConfigurationError('The proactive owner must be a UUID');
   }
   const sources = buildSourceRegistry(options);
-  const store = options.pool
+  const store = options.store ?? (options.pool
     ? createProactiveStore(options.pool, options.ownerObjectId)
-    : createMemoryProactiveStore(options.ownerObjectId);
+    : createMemoryProactiveStore(options.ownerObjectId));
   const now = options.now ?? (() => new Date());
   let model: ProactiveModel = {
     async worstCaseDkk() {

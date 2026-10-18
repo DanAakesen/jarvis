@@ -80,6 +80,30 @@ function fixture(options: {
 }
 
 describe('SQL guarded proactive finding writes', () => {
+  it.each(['new', 'seen', 'open', 'all'] as const)('parameterizes item list state %s', async (state) => {
+    const request = {
+      input: vi.fn().mockReturnThis(),
+      query: vi.fn(async (_statement: string) => ({ recordset: [] })),
+    };
+    const store = createProactiveStore({ request: () => request } as unknown as sql.ConnectionPool, owner);
+
+    await expect(store.items.list(state, 5, now)).resolves.toEqual([]);
+
+    expect(request.input).toHaveBeenCalledWith('owner', sql.UniqueIdentifier, owner);
+    expect(request.input).toHaveBeenCalledWith('limit', sql.Int, 5);
+    const statement = request.query.mock.calls[0]![0] as string;
+    if (state === 'new' || state === 'seen') {
+      expect(request.input).toHaveBeenCalledWith('state', sql.NVarChar(16), state);
+      expect(statement).toContain('AND state = @state');
+    } else if (state === 'open') {
+      expect(statement).toContain("state IN (N'new', N'seen')");
+      expect(statement).toContain('snoozed_until <= @now');
+    } else {
+      expect(statement).not.toContain('AND state = @state');
+      expect(statement).not.toContain("OR (state = N'snoozed'");
+    }
+  });
+
   it('locks the owner/run row in the write transaction and commits only a current guard', async () => {
     const { store, guard, transaction, requests, statements } = fixture();
     const remove = vi.spyOn(guard.signal, 'removeEventListener');
