@@ -3,18 +3,13 @@ import sql from 'mssql';
 import { databaseReadRequest } from './wake-retry.js';
 import type { VapidKeyPair } from '../push/webpush.js';
 import type { PushSubscriptionInput } from '../push/validation.js';
+import type { Item } from '../proactive/types.js';
 
 export interface StoredPushSubscription extends PushSubscriptionInput {
   readonly id: string;
 }
 
-export interface ProactiveItem {
-  readonly id: string;
-  readonly kind: 'test';
-  readonly title: string;
-  readonly body: string;
-  readonly createdAt: string;
-}
+export type ProactiveItem = Item;
 
 export interface PushStore {
   readVapidKey(): Promise<VapidKeyPair | undefined>;
@@ -31,18 +26,51 @@ export interface PushStore {
 
 interface ItemRow {
   id: string;
-  kind: 'test';
+  kind: Item['kind'];
   title: string;
   body: string;
+  category: Item['category'];
+  urgency: Item['urgency'];
+  due_at: Date | string | null;
+  evidence_json: string | null;
+  state: Item['state'];
+  snoozed_until: Date | string | null;
+  feedback: Item['feedback'];
+  run_id: string | null;
+  todo_added: boolean;
+  language: Item['language'];
   created_at: Date | string;
 }
 
+const itemColumns = [
+  'id', 'kind', 'title', 'body', 'category', 'urgency', 'due_at', 'evidence_json', 'state',
+  'snoozed_until', 'feedback', 'run_id', 'todo_added', 'language', 'created_at',
+];
+
 function mapItem(row: ItemRow): ProactiveItem {
+  let evidence: Item['evidence'] = [];
+  try {
+    const parsed: unknown = row.evidence_json ? JSON.parse(row.evidence_json) : [];
+    if (Array.isArray(parsed)) evidence = parsed as Item['evidence'];
+    else if (typeof parsed === 'object' && parsed !== null && Array.isArray((parsed as { evidence?: unknown }).evidence)) {
+      evidence = (parsed as { evidence: Item['evidence'] }).evidence;
+    }
+  } catch { /* A malformed legacy value is returned without evidence. */ }
   return {
     id: row.id.toLowerCase(),
     kind: row.kind,
     title: row.title,
     body: row.body,
+    category: row.category,
+    urgency: row.urgency,
+    dueAt: row.due_at === null ? null : row.due_at instanceof Date ? row.due_at.toISOString() : new Date(row.due_at).toISOString(),
+    evidence,
+    state: row.state,
+    snoozedUntil: row.snoozed_until === null ? null : row.snoozed_until instanceof Date ? row.snoozed_until.toISOString() : new Date(row.snoozed_until).toISOString(),
+    feedback: row.feedback,
+    runId: row.run_id?.toLowerCase() ?? null,
+    todoAdded: row.todo_added,
+    language: row.language,
     createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : new Date(row.created_at).toISOString(),
   };
 }
@@ -145,7 +173,7 @@ export function createPushStore(pool: sql.ConnectionPool): PushStore {
         .input('body', sql.NVarChar(500), 'New item')
         .query<ItemRow>(`INSERT dbo.proactive_items
           (id, owner_object_id, kind, title, body, delivery_state)
-          OUTPUT inserted.id, inserted.kind, inserted.title, inserted.body, inserted.created_at
+          OUTPUT ${itemColumns.map((column) => `inserted.${column}`).join(', ')}
           VALUES (@id, @owner, N'test', @title, @body, N'queued');`);
       if (!recordset[0]) throw new Error('Proactive test item was not saved');
       return mapItem(recordset[0]);
@@ -165,7 +193,7 @@ export function createPushStore(pool: sql.ConnectionPool): PushStore {
         .input('id', sql.UniqueIdentifier, id)
         .query<ItemRow>(`UPDATE dbo.proactive_items
           SET opened_at = COALESCE(opened_at, SYSUTCDATETIME())
-          OUTPUT inserted.id, inserted.kind, inserted.title, inserted.body, inserted.created_at
+          OUTPUT ${itemColumns.map((column) => `inserted.${column}`).join(', ')}
           WHERE id = @id AND owner_object_id = @owner;`);
       return recordset[0] ? mapItem(recordset[0]) : undefined;
     },

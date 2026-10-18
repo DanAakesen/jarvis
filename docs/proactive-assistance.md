@@ -2,13 +2,43 @@
 
 ## Status and purpose
 
-17 October 2026 — the broader proactive-assistance design remains a proposal.
-The first Web Push delivery-proof milestone was approved separately; P13-01
-implements its backend dark, without deployment activation. The
+17 October 2026 — the broader proactive-assistance design remains staged. The
+first Web Push delivery-proof milestone was approved separately; P13-01 built
+its backend and P13-02 its web client dark, and P13-03 (18 October 2026)
+switches both on in production. The dark P13-05 backend foundation is approved
+but enables no production work: the scheduler's in-process location and
+operating bounds are settled, but no scheduler, source read, model call or
+proactive send is implemented there. The
 [plan summary](../PLAN.md#proactive-assistance--proposed-scope-17-october-2026)
-separates that bounded proof from open design choices. This approval does not
-approve a scheduler, proactive sends, permissions, additional resources or the
-broader proposal. Daily notification-off remains in force.
+separates these slices from remaining pilot gates. Daily notification-off
+remains in force.
+
+## Confirmed M2 boundaries (17 October 2026; P13-05)
+
+Dan's confirmed decisions supersede the proposals below. The server flags
+`JARVIS_PROACTIVE_ENABLED`, `JARVIS_PROACTIVE_TODO_WRITES_ENABLED` and
+`JARVIS_PROACTIVE_ALERTS_ENABLED` are exact-`true`, default off; this foundation
+sets none. P13-05 adds contracts, owner-bound routes, operational stores,
+time/language/budget helpers and a background-job kind, but no scheduler, source
+read, model call, timer or proactive send.
+
+Later scheduled work runs in-process in the backend, which retains its minimum
+one replica. Slots are 07:00 and 18:00 Europe/Copenhagen, computed using the IANA
+time zone rather than a fixed offset. The quiet window is 22:00–07:00 without
+exceptions. If the backend was down or asleep, the engine may catch up only the
+latest missed slot, once, during the allowed window and only while it is under
+12 hours old. A run still active at 22:00 is cancelled. Sleep behavior is
+unchanged. No Teams message, card, bot or channel is used.
+
+Later reasoning is one tool-less model call per run using the chat model and
+reasoning effort selected in Settings; source content is untrusted data, never
+policy or authority. Todos remain canonical in the vault and any enabled writer
+is add-only. Alerts are limited to a deadline within 24 hours, a calendar clash,
+a travel disruption and a reminder about one hour before a todo is due. A
+reminder that falls in quiet hours waits until 07:00. The monthly estimated
+spend cap is 100 DKK by default, editable in settings, with warning at 80% and a
+hard stop at 100%. Findings and push text use deterministic Danish/English
+detection from the last user chat messages without storing or logging them.
 
 Jarvis is Dan's Microsoft-first personal platform and a learning/demo project
 for his Microsoft ATS role. The proposed next step is bounded assistance across
@@ -320,8 +350,9 @@ prove delivery on Dan's phone.
 explicitly excludes iOS; do not use it for this PWA path. Native APNs and
 Notification Hubs can be evaluated separately if a native app is later approved.
 The P13-01 backend and its separately built web client have not yet established
-real iPhone delivery. The feature remains dark until a separate enabling change
-and physical-device acceptance.
+real iPhone delivery. P13-03 switched them on in production (18 October 2026);
+delivery is established only by physical-device acceptance on the installed Home
+Screen app.
 
 ## Optional Microsoft services
 
@@ -343,15 +374,15 @@ compatibility with Jarvis's account. Sources were checked on 17 October 2026.
    the correct authenticated conversation/item. Test Focus, disabled/revoked
    permission, session expiry, offline/expired delivery and duplicate attempts.
    Record iOS version and observed results separately from provider receipts.
-2. **Silent read-only pilot.** Agree sources, policy, evidence retention and
-   budgets, then review findings inside Jarvis with push disabled. Exercise
+2. **Silent read-only pilot.** Agree source identities, access and evidence
+   retention, then review findings inside Jarvis with push disabled. Exercise
    restart, competing claims, source outages, stale evidence and catch-up.
    Verify that bounded work stops, any woken backend returns to zero when
    otherwise idle, and configured sleep remains unchanged. Retry an uncertain
    execution without duplicating findings or delivery. Start a fresh conversation
    and verify relevant recall plus detail lookup, including failed notifications
    and stale evidence, without granting system text human authority. Measure
-   total compute, SQL, model and supporting-service cost before choosing cadence.
+   total compute, SQL, model and supporting-service cost before activation.
    Test both Copenhagen daylight-saving transitions, the 22:00 cutoff and
    07:00 resumption with no nighttime source/model work, writes or delivery.
    Verify weekly-context refresh and the one-calendar-month planning horizon.
@@ -367,20 +398,21 @@ compatibility with Jarvis's account. Sources were checked on 17 October 2026.
    scope acceptance, enable a small selected class of findings. Keep kill/pause
    controls and inspect usefulness before considering wider domains.
 
-Open decisions: exact canonical todo path, edit operations and review/undo design;
-notification relevance thresholds and duplicate-suppression rules; source identities,
-access/coverage and costs; architecture selection; cadence and catch-up limits;
-cost scenarios and any optional caps; operational retention;
-system-run invocation contract; subscription/device lifecycle; and durable
-inbox/conversation linkage. No milestone is started or accepted by this proposal.
+Still open: the exact canonical todo path, allowed edit operations and review/
+undo design; source identities, access/coverage and actual provider costs;
+operational retention; subscription/device lifecycle; durable inbox/conversation
+linkage; and any expansion beyond the confirmed bounded assistance. P13-05 does
+not activate the feature or implement the future scheduler, sources, reasoning,
+todo writer or alert delivery.
 
 ## Appendix — optional execution, cost and source research
 
-Retained research, not requirements or a selected implementation. Low-to-medium
-usage is sufficient; higher-volume examples are sensitivity analysis only. Source
-choices and detailed provider work are deferred. The core recommendation evaluates Foundry Routines first; these alternatives
-remain research only. Costs below exclude new Memory/Routines charges and do not
-price the recommended direction.
+Retained historical research, not requirements or a selected implementation.
+The routine and Container Apps Job candidates below are superseded by the
+confirmed in-process backend scheduler described above. Low-to-medium usage is
+sufficient; higher-volume examples are sensitivity analysis only. Source choices
+and detailed provider work are deferred. Costs below exclude new Memory/Routines
+charges and do not price the confirmed direction.
 
 
 One previously explored architecture candidate is a [scheduled Container Apps Job](https://learn.microsoft.com/en-us/azure/container-apps/jobs)

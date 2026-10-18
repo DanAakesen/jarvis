@@ -21,3 +21,11 @@ export function foundryTokenCosts(model: string, inputTokens: number, outputToke
     outputUsd: roundCost(outputDkk / DKK_PER_USD),
   };
 }
+
+export function highestFoundryTokenCosts(inputTokens: number, outputTokens: number) {
+  const costs = [...ratesDkkPerMillionTokens.keys()].map((model) => foundryTokenCosts(model, inputTokens, outputTokens)!);
+  return {
+    inputDkk: Math.max(...costs.map(({ inputDkk }) => inputDkk)),
+    outputDkk: Math.max(...costs.map(({ outputDkk }) => outputDkk)),
+  };
+}

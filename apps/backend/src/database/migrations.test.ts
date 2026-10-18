@@ -36,6 +36,24 @@ describe('committed SQL manifest', () => {
     expect(migration?.sql).toContain("CHECK (kind = N'test')");
     expect((await readDownMigration('0054_proactive_push.sql')).sql).toContain('cannot roll back while rows exist');
   });
+  it('adds the proactive operational schema and a reversible proactive job kind', async () => {
+    const foundation = (await readMigrations()).find(({ name }) => name === '0055_proactive_foundation.sql');
+    expect(foundation?.sql).toContain("CHECK (kind IN (N'test', N'finding'))");
+    expect(foundation?.sql).toContain('UX_proactive_items_owner_dedupe_key');
+    expect(foundation?.sql).toContain('CREATE TABLE dbo.proactive_settings');
+    expect(foundation?.sql).toContain('CREATE TABLE dbo.proactive_runs');
+    expect(foundation?.sql).toContain('CREATE TABLE dbo.proactive_source_status');
+    expect(foundation?.sql).toContain('CREATE TABLE dbo.proactive_spend');
+    expect(foundation?.sql).toContain('UX_proactive_runs_owner_slot');
+    expect((await readDownMigration('0055_proactive_foundation.sql')).sql)
+      .toContain('Proactive records are durable evidence');
+
+    const jobs = (await readMigrations()).find(({ name }) => name === '0056_background_job_kind_proactive.sql');
+    expect(jobs?.sql).toContain("N'proactive'");
+    const down = await readDownMigration('0056_background_job_kind_proactive.sql');
+    expect(down.sql).toContain("WHERE kind = N'proactive'");
+    expect(down.sql).toContain('THROW 51000');
+  });
 
   it('retains durable task submission claims and refuses to erase retry protection on rollback', async () => {
     const migration = (await readMigrations()).find(({ name }) => name === '0052_factory_task_submissions.sql');
@@ -176,6 +194,8 @@ describe('committed SQL manifest', () => {
       '0052_factory_task_submissions.sql',
       '0053_background_job_dismissals.sql',
       '0054_proactive_push.sql',
+      '0055_proactive_foundation.sql',
+      '0056_background_job_kind_proactive.sql',
     ]);
     for (const migration of migrations) await expect(readDownMigration(migration.name)).resolves.toMatchObject({ name: migration.name });
   });

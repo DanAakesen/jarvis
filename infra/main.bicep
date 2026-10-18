@@ -755,6 +755,10 @@ resource backendApp 'Microsoft.App/containerApps@2024-03-01' = if (deployBackend
               value: 'https://${staticWebApp.properties.defaultHostname}'
             }
             {
+              name: 'JARVIS_PUSH_ENABLED'
+              value: 'true'
+            }
+            {
               name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
               value: appInsights.properties.ConnectionString
             }
