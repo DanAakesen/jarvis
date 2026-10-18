@@ -175,7 +175,7 @@ describe('Daily overview', () => {
     expect(screen.getByRole('tab', { name: 'Data' })).toBeTruthy();
     expect(screen.queryByRole('tab', { name: 'Workouts' })).toBeNull();
     expect(screen.queryByRole('tab', { name: 'Nutrition' })).toBeNull();
-    expect(screen.queryByRole('tab', { name: 'Body & sleep' })).toBeNull();
+    expect(screen.getByRole('tab', { name: 'Body & sleep' })).toBeTruthy();
 
     fireEvent.click(screen.getByRole('tab', { name: 'Data' }));
     await screen.findByLabelText('Browse');
@@ -198,10 +198,10 @@ describe('Daily overview', () => {
     expect(screen.getByTestId('daily-section-url').textContent).toBe('unknown');
 
     fireEvent.keyDown(overview, { key: 'ArrowRight' });
-    const briefs = screen.getByRole('tab', { name: 'Briefs' });
-    expect(briefs.getAttribute('aria-selected')).toBe('true');
-    expect(screen.getByTestId('daily-section-url').textContent).toBe('briefs');
-    fireEvent.keyDown(briefs, { key: 'End' });
+    const bodySleep = screen.getByRole('tab', { name: 'Body & sleep' });
+    expect(bodySleep.getAttribute('aria-selected')).toBe('true');
+    expect(screen.getByTestId('daily-section-url').textContent).toBe('body-sleep');
+    fireEvent.keyDown(bodySleep, { key: 'End' });
     expect(screen.getByRole('tab', { name: 'Data' }).getAttribute('aria-selected')).toBe('true');
     expect(screen.getByTestId('daily-section-url').textContent).toBe('data');
     fireEvent.keyDown(screen.getByRole('tab', { name: 'Data' }), { key: 'Home' });
