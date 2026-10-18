@@ -10,6 +10,27 @@ const section = (id: string, order: number, requiredSources: DailySectionDefinit
 });
 
 describe('Daily section discovery', () => {
+  it('preserves required-source filtering when no availability predicate is defined', () => {
+    const modules = {
+      './sections/available/index.tsx': { section: section('available', 10, [sources.sleep]) },
+      './sections/unavailable/index.tsx': { section: section('unavailable', 20, [sources.metrics]) },
+    };
+    expect(discoverDailySections(modules, [sources.sleep]).map(item => item.id)).toEqual(['available']);
+  });
+
+  it('requires both required sources and a true availability predicate', () => {
+    const accepts = vi.fn(() => true);
+    const rejects = vi.fn(() => false);
+    const modules = {
+      './sections/accepted/index.tsx': { section: { ...section('accepted', 10, [sources.sleep]), isAvailable: accepts } },
+      './sections/rejected/index.tsx': { section: { ...section('rejected', 20), isAvailable: rejects } },
+      './sections/missing/index.tsx': { section: { ...section('missing', 30, [sources.metrics]), isAvailable: accepts } },
+    };
+    expect(discoverDailySections(modules, [sources.sleep]).map(item => item.id)).toEqual(['accepted']);
+    expect(accepts).toHaveBeenCalledExactlyOnceWith([sources.sleep]);
+    expect(rejects).toHaveBeenCalledExactlyOnceWith([sources.sleep]);
+  });
+
   it('discovers a lazily loaded fixture folder and filters unmet source requirements', async () => {
     const unavailable = section('unavailable', 30, [sources.meals]);
     const loadedFixtureModules = await loadDailySectionModules(fixtureModules);

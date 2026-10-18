@@ -15,6 +15,7 @@ export function discoverDailySections(
   return Object.entries(modules)
     .filter(([path]) => /^\.\/sections\/[^/]+\/index\.tsx$/u.test(path))
     .map(([, module]) => module.section)
-    .filter(section => section.requiredSources.every(source => sources.includes(source)))
+    .filter(section => section.requiredSources.every(source => sources.includes(source)) &&
+      (section.isAvailable?.(sources) ?? true))
     .sort((first, second) => first.order - second.order);
 }
