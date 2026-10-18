@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { copenhagenDayStart } from './time.js';
 import { sourceIds, type Item, type ProactiveSettings, type RunSummary, type SourceId, type SourceStatus } from './types.js';
 
 export const DEFAULT_NEWS_FEEDS = [
@@ -54,6 +55,14 @@ export interface FindingInput {
   eventEndAt?: string | null;
 }
 
+export interface FindingWriteGuard {
+  runId: string;
+  generation: number;
+  signal: AbortSignal;
+  check: () => void;
+  now: () => Date;
+}
+
 export interface ProactiveSettingsStore {
   read(): Promise<ProactiveSettings>;
   patch(patch: ProactiveSettingsPatch): Promise<ProactiveSettings>;
@@ -62,13 +71,14 @@ export interface ProactiveItemsStore {
   list(state: 'open' | 'all', limit: number, now: Date): Promise<Item[]>;
   get(id: string, markLoaded?: boolean): Promise<Item | undefined>;
   applyFeedback(id: string, action: FeedbackAction, snoozeUntil?: string): Promise<Item | undefined>;
-  upsertFinding(input: FindingInput): Promise<Item>;
+  upsertFinding(input: FindingInput, guard?: FindingWriteGuard): Promise<Item>;
 }
 export interface ProactiveRunsStore {
   claim(input: { trigger: RunSummary['trigger']; slot: string | null; now: Date }): Promise<{ run: RunSummary; generation: number } | null>;
   heartbeat(id: string, generation: number, now: Date): Promise<boolean>;
   finish(id: string, generation: number, status: Exclude<RunSummary['status'], 'running'>, reason: string | null, findingCount: number, finishedAt: Date): Promise<boolean>;
   latest(): Promise<RunSummary | null>;
+  running(now: Date): Promise<RunSummary | null>;
   list(limit: number): Promise<RunSummary[]>;
   countManualSince(since: Date): Promise<number>;
   markInterruptedOnStartup(): Promise<number>;
@@ -159,12 +169,13 @@ export function createMemoryProactiveStore(ownerObjectId: string = randomUUID())
         items.set(key, updated);
         return copyItem(updated);
       },
-      async upsertFinding(input) {
+      async upsertFinding(input, guard) {
         if (input.dedupeKey.length > 64) throw new RangeError('Dedupe key exceeds 64 characters');
         const existingId = findings.get(input.dedupeKey);
         const existing = existingId ? items.get(existingId) : undefined;
-        const material = JSON.stringify([input.dueAt, input.eventStartAt ?? null, input.eventEndAt ?? null, input.urgency]);
-        const changed = existing !== undefined && materials.get(existing.id) !== material;
+        const material = JSON.stringify([input.dueAt, input.eventStartAt ?? null, input.eventEndAt ?? null]);
+        const changed = existing !== undefined && (materials.get(existing.id) !== material ||
+          (input.urgency === 'time_critical' && existing.urgency !== 'time_critical'));
         const item: Item = {
           id: existing?.id ?? randomUUID(),
           kind: 'finding',
@@ -182,6 +193,15 @@ export function createMemoryProactiveStore(ownerObjectId: string = randomUUID())
           language: input.language,
           createdAt: existing?.createdAt ?? new Date().toISOString(),
         };
+        if (guard) {
+          guard.check();
+          guard.signal.throwIfAborted();
+          const run = runs.find((entry) => entry.id === guard.runId);
+          if (input.runId !== guard.runId || !run || run.status !== 'running' ||
+              run.generation !== guard.generation || run.leaseUntil <= guard.now().getTime()) {
+            throw new Error('lease_lost');
+          }
+        }
         items.set(item.id, item);
         findings.set(input.dedupeKey, item.id);
         materials.set(item.id, material);
@@ -202,6 +222,11 @@ export function createMemoryProactiveStore(ownerObjectId: string = randomUUID())
         }
         const active = runs.some((run) => run.status === 'running' && run.leaseUntil > now.getTime());
         if (active || (slot !== null && runs.some((run) => run.slot === slot))) return null;
+        if (trigger === 'manual') {
+          const manual = runs.filter((run) => run.trigger === 'manual');
+          if (manual.some((run) => Date.parse(run.startedAt) > now.getTime() - 5 * 60_000) ||
+              manual.filter((run) => Date.parse(run.startedAt) >= copenhagenDayStart(now).getTime()).length >= 6) return null;
+        }
         const run: RunSummary & { generation: number; leaseUntil: number } = {
           id: randomUUID(),
           trigger,
@@ -231,6 +256,10 @@ export function createMemoryProactiveStore(ownerObjectId: string = randomUUID())
       },
       async latest() {
         const run = [...runs].sort((a, b) => b.startedAt.localeCompare(a.startedAt))[0];
+        return run ? runSummary(run) : null;
+      },
+      async running(now) {
+        const run = runs.find((entry) => entry.status === 'running' && entry.leaseUntil > now.getTime());
         return run ? runSummary(run) : null;
       },
       async list(limit) {

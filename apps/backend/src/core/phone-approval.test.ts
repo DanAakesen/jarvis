@@ -59,7 +59,7 @@ async function fixture(active = true, denyOnPhone = false) {
       isActive: vi.fn(async (sessionId: string, callerId: string) =>
         active && sessionId === '42' && callerId === ownerObjectId),
     } as never,
-    teamsNotifications: { requestConfirmation } as never,
+    ownerInteractions: { requestConfirmation } as never,
   });
   apps.push(app);
   return { app, order, executePrivate, executePublic, requestConfirmation };

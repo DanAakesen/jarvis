@@ -342,7 +342,9 @@ export function createBackgroundJobStore(pool: sql.ConnectionPool): BackgroundJo
       await transaction.begin();
       try {
         const { recordset } = await new sql.Request(transaction).query<BackgroundJobRow>(`UPDATE dbo.background_jobs
-          SET status = N'failed', detail = N'interrupted by restart', updated_at = SYSUTCDATETIME()
+          SET status = N'failed',
+            detail = CASE WHEN kind = N'proactive' THEN N'Interrupted by a restart' ELSE N'interrupted by restart' END,
+            updated_at = SYSUTCDATETIME()
           OUTPUT INSERTED.job_id, INSERTED.kind, INSERTED.title, INSERTED.status, INSERTED.step,
             INSERTED.steps, INSERTED.detail, INSERTED.view_id, INSERTED.started_at, INSERTED.updated_at
           WHERE status = N'running';`);

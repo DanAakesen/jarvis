@@ -12,6 +12,33 @@ function fixture(queryResult = { recordset: [], recordsets: [], rowsAffected: []
 }
 
 describe('SQL conversation store', () => {
+  it('reads only bounded recent user chat text, newest first, without other conversation fields', async () => {
+    const { store, input, query } = fixture({
+      recordset: [{ text: 'Latest question' }, { text: 'Earlier question' }],
+      recordsets: [], rowsAffected: [],
+    });
+    await expect(store.readRecentUserMessages()).resolves.toEqual(['Latest question', 'Earlier question']);
+    expect(input).toHaveBeenCalledWith('limit', sql.Int, 5);
+    expect(query.mock.calls[0]?.[0]).toBe(`SELECT TOP (@limit) m.text FROM dbo.messages AS m
+          INNER JOIN dbo.jarvis_sessions AS s ON s.id = m.jarvis_session_id
+          WHERE m.role = N'dan' AND s.channel = N'chat' ORDER BY m.id DESC;`);
+    await store.readRecentUserMessages(20);
+    expect(input).toHaveBeenCalledWith('limit', sql.Int, 20);
+    await expect(fixture().store.readRecentUserMessages()).resolves.toEqual([]);
+  });
+
+  it.each([0, -1, 21, 1.5, Number.NaN, Number.POSITIVE_INFINITY])('refuses invalid recent text limit %s before SQL', async (limit) => {
+    const { store, query } = fixture();
+    await expect(store.readRecentUserMessages(limit)).rejects.toThrow(RangeError);
+    expect(query).not.toHaveBeenCalled();
+  });
+
+  it('propagates recent user text database failures rather than fabricating an empty history', async () => {
+    const { store, query } = fixture();
+    query.mockRejectedValueOnce(new Error('SQL unavailable'));
+    await expect(store.readRecentUserMessages()).rejects.toThrow('SQL unavailable');
+  });
+
   it('restores visual metadata from saved history and drops malformed metadata', async () => {
     const visualContext = { source: 'camera' as const, capturedAt: '2026-10-11T19:30:00Z', description: 'A red mug.' };
     const row = {

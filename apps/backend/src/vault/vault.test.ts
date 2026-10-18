@@ -18,7 +18,7 @@ import { buildApp } from '../app.js';
 import { coreModule } from '../core/index.js';
 import { loadConfig } from '../config.js';
 import type { TokenVerifier } from '../auth/verify.js';
-import type { TeamsNotificationService } from '../teams/service.js';
+import type { OwnerInteractionService } from '../core/owner-interactions.js';
 import { WorkspaceCommandBroker } from '../core/workspace-commands.js';
 import type { Settings } from '../core/settings.js';
 import type { WorkspaceCommand } from '@jarvis/contracts';
@@ -309,7 +309,7 @@ function apiMemoryStore(): { store: MemoryStore; record: MemoryRecord; version: 
 
 function memoryApiApp(
   module: ReturnType<typeof createVaultModule>,
-  options: { auth?: TokenVerifier; teamsNotifications?: TeamsNotificationService } = {},
+  options: { auth?: TokenVerifier; ownerInteractions?: OwnerInteractionService } = {},
 ) {
   const app = buildApp(apiConfig, undefined, {
     modules: [module],
@@ -318,7 +318,7 @@ function memoryApiApp(
       tenantId: apiConfig.auth.tenantId,
       displayName: 'Dan',
     })),
-    ...(options.teamsNotifications ? { teamsNotifications: options.teamsNotifications } : {}),
+    ...(options.ownerInteractions ? { ownerInteractions: options.ownerInteractions } : {}),
   });
   apiApps.push(app);
   return app;
@@ -1250,7 +1250,7 @@ describe('GitHub vault', () => {
         };
       }));
     const app = memoryApiApp(module, {
-      teamsNotifications: { runConfirmed } as unknown as TeamsNotificationService,
+      ownerInteractions: { runConfirmed } as unknown as OwnerInteractionService,
     });
     const graphBefore = await app.inject({ url: '/knowledge/graph', headers: apiAuthorization });
     expect(graphBefore.json().nodes).toHaveLength(1);
@@ -1300,7 +1300,7 @@ describe('GitHub vault', () => {
     const toolRequest = {
       ...request,
       server: {
-        teamsNotifications: { runConfirmed },
+        ownerInteractions: { runConfirmed },
         awayModeStore: null,
       },
     } as unknown as FastifyRequest;
@@ -1315,7 +1315,7 @@ describe('GitHub vault', () => {
     const { github, module } = moduleFor();
     const toolRequest = {
       ...request,
-      server: { teamsNotifications: null, awayModeStore: null },
+      server: { ownerInteractions: null, awayModeStore: null },
     } as unknown as FastifyRequest;
 
     await expect(tool(module, 'vault_delete').execute({ path: '../General/note.md' }, toolRequest, signal()))
@@ -1531,8 +1531,8 @@ describe('GitHub vault', () => {
           try { resolve(await action()); } catch (error) { reject(error); }
         };
       }));
-    const notifications = { runConfirmed } as unknown as TeamsNotificationService;
-    const app = memoryApiApp(module, { teamsNotifications: notifications });
+    const notifications = { runConfirmed } as unknown as OwnerInteractionService;
+    const app = memoryApiApp(module, { ownerInteractions: notifications });
 
     const correction = await app.inject({
       method: 'PATCH', url: `/memory/${id}`, headers: apiAuthorization,
