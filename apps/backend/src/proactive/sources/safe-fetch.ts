@@ -91,8 +91,7 @@ export function isPublicAddress(ip: string): boolean {
     return isPublicAddress([24, 16, 8, 0].map((shift) => (embedded >>> shift) & 0xff).join('.'));
   }
 
-  const nat64Prefix = address >> 32n;
-  if (nat64Prefix === 0x64ff9bn) {
+  if (address >> 96n === 0x64ff9bn) {
     const embedded = Number(address & 0xffffffffn);
     return isPublicAddress([24, 16, 8, 0].map((shift) => (embedded >>> shift) & 0xff).join('.'));
   }
@@ -119,10 +118,16 @@ export function createSafeLookup(resolve: FeedAddressResolver = dnsLookup): Look
         callback(resolverError(), '');
         return;
       }
+      const family = typeof options === 'number' ? options : options.family;
+      const compatible = family ? addresses.filter((entry) => entry.family === family) : addresses;
+      if (compatible.length === 0) {
+        callback(resolverError(), '');
+        return;
+      }
       const all = typeof options === 'object' && options !== null && options.all === true;
-      if (all) callback(null, addresses);
+      if (all) callback(null, compatible);
       else {
-        const first = addresses[0]!;
+        const first = compatible[0]!;
         callback(null, first.address, first.family);
       }
     }).catch(() => callback(resolverError(), ''));
@@ -197,6 +202,7 @@ export async function fetchFeedText(
         });
         response.on('end', () => finish(undefined, Buffer.concat(chunks).toString('utf8')));
         response.on('error', () => finish(new NewsFetchError(signal.aborted ? 'timeout' : 'read_failed')));
+        response.on('aborted', () => finish(new NewsFetchError(signal.aborted ? 'timeout' : 'read_failed')));
       });
       request.setTimeout(NEWS_TIMEOUT_MS, () => fail('timeout'));
       request.on('error', (error: unknown) => {

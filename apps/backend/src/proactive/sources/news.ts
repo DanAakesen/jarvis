@@ -11,6 +11,14 @@ const MAX_ITEMS_TOTAL = 30;
 type FeedFetcher = (url: URL, options: { signal: AbortSignal }) => Promise<string>;
 type FailureReason = NewsFetchFailure | 'invalid_feed';
 
+class InvalidFeedError extends Error {
+  readonly reason = 'invalid_feed';
+
+  constructor() {
+    super('invalid_feed');
+  }
+}
+
 interface FeedItems {
   hostname: string;
   items: ParsedNewsItem[];
@@ -18,7 +26,7 @@ interface FeedItems {
 
 function cleanTitle(value: string): string {
   return value
-    .replace(/\p{Cc}/gu, '')
+    .replace(/\p{Cc}/gu, ' ')
     .replace(/<[^>]*>/gu, ' ')
     .replace(/!?\[([^\]]*)\]\((?:<[^>]*>|[^)]*)\)/gu, '$1')
     .replace(/!?\[([^\]]*)\](?:\[[^\]]*\])?/gu, '$1')
@@ -67,7 +75,7 @@ export function createNewsSource(
           if (!url) throw new NewsFetchError('read_failed');
           const xml = await fetchFeed(url, { signal: context.signal });
           const items = parseFeed(xml, context.now);
-          if (items === null) throw { reason: 'invalid_feed' };
+          if (items === null) throw new InvalidFeedError();
           return { hostname: url.hostname, items };
         }));
 

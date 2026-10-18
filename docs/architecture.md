@@ -1902,11 +1902,32 @@ construct proactive stores, query proactive tables, register routes or start a
 timer. This slice adds no source read, model call or outbound request.
 
 The `proactive` module defines the shared source/item/run contracts, a source
-registry with an unavailable `x` placeholder, and authenticated status, settings,
-item-list, item-detail and feedback routes. Status works before any run exists;
-it calculates Copenhagen-local budget month, quiet hours and the next slot and
-returns source states in contract order. Inputs are validated at the route
-boundary. Item detail retains P13-01's `opened_at` meaning: loaded, not read.
+registry with the dark news source and an unavailable `x` placeholder, and
+authenticated status, settings, item-list, item-detail and feedback routes.
+Status works before any run exists; it calculates Copenhagen-local budget month,
+quiet hours and the next slot and returns source states in contract order.
+Inputs are validated at the route boundary. Item detail retains P13-01's
+`opened_at` meaning: loaded, not read.
+
+### News source (P13-09; dark)
+
+The read-only source parses RSS 2.0 and Atom from at most ten configured feeds.
+Its URL validator permits HTTPS hostnames only, rejects IP literals and local
+hostnames, and removes fragments while retaining queries. Requests use
+`node:https` with a custom DNS lookup that rejects the whole answer set if any
+address is not public and connects only to vetted answers. The fetcher verifies
+TLS certificates, allows no redirects, accepts only XML content types and
+identity encoding, combines the engine abort signal with a ten-second timeout,
+and stops streaming after 2 MiB. Public-address filtering blocks the specified
+non-routable IPv4 ranges and permits only global-unicast IPv6, with embedded
+IPv4 in mapped, NAT64 and 6to4 addresses checked under the same IPv4 rules.
+
+DTD/entity declarations are rejected before XML parsing. The source retains only
+cleaned titles, publication times and feed hostnames; links, descriptions,
+authors, query strings and response bodies are not logged or stored. It selects
+at most eight recent items per feed and 30 total, and exposes partial feed
+failures. The source is registered but no scheduler or engine invokes it in this
+slice; no proactive flag is enabled and no live feed request is made by tests.
 
 Migration 0055 extends `proactive_items` while preserving test rows, and adds
 owner-scoped settings, runs, source status and estimated-spend tables. SQL stores

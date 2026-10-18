@@ -25,16 +25,17 @@ export function validateFeedUrl(value: string): URL | null {
   if (url.protocol !== 'https:' || url.username || url.password || url.port) return null;
 
   const hostname = url.hostname.toLowerCase();
+  const domainHostname = hostname.endsWith('.') ? hostname.slice(0, -1) : hostname;
   const unbracketedHostname = hostname.startsWith('[') && hostname.endsWith(']')
     ? hostname.slice(1, -1)
     : hostname;
   if (hostname.length > 253 || !hostname.includes('.') || !/^[a-z\d.-]+$/u.test(hostname) ||
       isIP(unbracketedHostname) !== 0) return null;
 
-  const labels = hostname.split('.');
+  const labels = domainHostname.split('.');
   const lastLabel = labels.at(-1) ?? '';
-  if (hostname === 'localhost' || /^\d+$/u.test(lastLabel) ||
-      blockedSuffixes.some((suffix) => hostname.endsWith(suffix))) return null;
+  if (domainHostname === 'localhost' || /^\d+$/u.test(lastLabel) ||
+      blockedSuffixes.some((suffix) => domainHostname.endsWith(suffix))) return null;
 
   url.hash = '';
   return url;

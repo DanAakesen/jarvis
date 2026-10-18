@@ -39,6 +39,21 @@ Proactive SQL contracts are in
 loopback SQL Server fixture via `npm run test:database --workspace @jarvis/backend -- src/database/schema.integration.test.ts`.
 Do not report SQL integration coverage unless that service ran.
 
+## P13-09 proactive news source (18 October 2026)
+
+The registry includes a dark RSS/Atom news adapter. It validates configured
+HTTPS feed URLs, pins DNS resolution to public addresses, rejects redirects and
+unsafe XML, and bounds each response to ten seconds and 2 MiB. The source emits
+only sanitized title, publication time and feed host facts. It does not turn on
+any proactive flag or run by itself.
+
+Focused checks:
+`npm test --workspace @jarvis/backend -- --run src/proactive/sources/news-url.test.ts src/proactive/sources/safe-fetch.test.ts src/proactive/sources/news-parse.test.ts src/proactive/sources/news.test.ts src/proactive/sources/registry.test.ts`,
+`npm run build --workspace @jarvis/backend`, and
+`npm run lint --workspace @jarvis/backend`. Tests use mocked HTTPS and injected
+DNS/feed readers only; do not make live feed requests. Do not claim SQL Server
+integration tests ran without the isolated loopback SQL Server fixture.
+
 ## Chat acceptance failure labels and one bounded retry (#820, 17 October 2026)
 
 Read a failed chat check's safe reason in the acceptance artifact first; never

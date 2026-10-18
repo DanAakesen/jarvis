@@ -1000,6 +1000,14 @@ work is forbidden from 22:00 to 07:00. The monthly estimate limit defaults to
 100 DKK, warns at 80% and stops at 100%. These are policy boundaries for later
 engine work, not behavior activated by this foundation.
 
+## Proactive news source (18 October 2026; P13-09)
+
+The backend registry includes a dark, read-only RSS/Atom source for configured
+feeds, defaulting to the GitHub changelog and OpenAI news. It validates hosts, pins HTTPS
+connections to vetted public DNS addresses, rejects redirects and unsafe XML,
+and returns only bounded, sanitized titles. The source does not activate a
+scheduler, model call or proactive delivery; all proactive flags remain off.
+
 ## Daily migration (approved P12)
 
 Tool parity is an acceptance requirement for every retained Daily capability,

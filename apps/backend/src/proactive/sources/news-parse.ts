@@ -59,6 +59,7 @@ export function parseFeed(xml: string, now: Date): ParsedNewsItem[] | null {
   const rss = root.rss;
   if (typeof rss === 'object' && rss !== null && !Array.isArray(rss)) {
     const channel = (rss as Record<string, unknown>).channel;
+    if (channel === '') return [];
     if (typeof channel !== 'object' || channel === null || Array.isArray(channel)) return null;
     return entries((channel as Record<string, unknown>).item, 'title', ['pubDate'], now);
   }

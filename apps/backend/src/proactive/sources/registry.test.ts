@@ -3,10 +3,11 @@ import { buildSourceRegistry } from './registry.js';
 import { defaultProactiveSettings } from '../store.js';
 
 describe('proactive source registry', () => {
-  it('keeps X as a non-throwing provider placeholder', async () => {
-    const [source] = buildSourceRegistry({});
-    expect(source?.id).toBe('x');
-    const result = await source!.read({
+  it('registers the news source alphabetically and keeps X as a non-throwing placeholder', async () => {
+    const sources = buildSourceRegistry({});
+    expect(sources.map(({ id }) => id)).toEqual(['news', 'x']);
+    const source = sources.find(({ id }) => id === 'x')!;
+    const result = await source.read({
       now: new Date('2026-10-20T05:00:00.000Z'),
       signal: new AbortController().signal,
       settings: defaultProactiveSettings(),

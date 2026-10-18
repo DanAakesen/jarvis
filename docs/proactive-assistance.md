@@ -2,12 +2,12 @@
 
 ## Status and purpose
 
-17 October 2026 — the broader proactive-assistance design remains staged. The
-Web Push delivery proof and the dark P13-05 backend foundation are approved;
-neither enables production work. The scheduler's in-process location and
-operating bounds are settled, but no scheduler, source read, model call or
-proactive send is implemented here. The
-[plan summary](../PLAN.md#proactive-assistance--proposed-scope-17-october-2026)
+18 October 2026 — the broader proactive-assistance design remains staged. The
+Web Push delivery proof, dark P13-05 backend foundation and dark P13-09 news
+adapter are implemented; none enables production work. The scheduler's
+in-process location and operating bounds are settled, but no scheduler or
+engine-triggered source read, model call or proactive send is implemented here.
+The [plan summary](../PLAN.md#proactive-assistance--proposed-scope-17-october-2026)
 separates these slices from remaining pilot gates. Daily notification-off
 remains in force.
 
@@ -17,8 +17,15 @@ Dan's confirmed decisions supersede the proposals below. The server flags
 `JARVIS_PROACTIVE_ENABLED`, `JARVIS_PROACTIVE_TODO_WRITES_ENABLED` and
 `JARVIS_PROACTIVE_ALERTS_ENABLED` are exact-`true`, default off; this foundation
 sets none. P13-05 adds contracts, owner-bound routes, operational stores,
-time/language/budget helpers and a background-job kind, but no scheduler, source
-read, model call, timer or proactive send.
+time/language/budget helpers and a background-job kind. P13-09 adds the dark
+news-source implementation and registry entry, but no scheduler or engine call
+reads it; no model call or proactive send is activated.
+
+The news adapter defaults to the GitHub changelog and OpenAI news RSS feeds. It
+uses HTTPS only, rejects IP and local hostnames, DNS-pins public answers,
+forbids redirects and non-XML/compressed responses, and caps each read at ten
+seconds and 2 MiB. It rejects DTD/entity declarations and outputs only sanitized
+titles with publication time and feed host. Feed content remains untrusted.
 
 Later scheduled work runs in-process in the backend, which retains its minimum
 one replica. Slots are 07:00 and 18:00 Europe/Copenhagen, computed using the IANA
@@ -191,7 +198,7 @@ migration is necessary.
 Routine dispatch defaults to agent identity. Creator-identity opt-in does not
 establish delegated-user tool access; verify each backend/tool permission and
 owner binding. Native events currently cover GitHub issues and Teams messages;
-generic feeds and other sources still need configurable intake adapters.
+other external sources still need configurable intake adapters.
 Dispatch has a 30-second HTTP timeout and retries. Acceptance is not completed
 application work: persist application run IDs, deduplicate repeated dispatch,
 track results and reconcile uncertain completion before retrying effects.
@@ -396,11 +403,11 @@ compatibility with Jarvis's account. Sources were checked on 17 October 2026.
    controls and inspect usefulness before considering wider domains.
 
 Still open: the exact canonical todo path, allowed edit operations and review/
-undo design; source identities, access/coverage and actual provider costs;
-operational retention; subscription/device lifecycle; durable inbox/conversation
-linkage; and any expansion beyond the confirmed bounded assistance. P13-05 does
-not activate the feature or implement the future scheduler, sources, reasoning,
-todo writer or alert delivery.
+undo design; remaining non-news source identities/access/coverage and actual
+provider costs; operational retention; subscription/device lifecycle; durable
+inbox/conversation linkage; and any expansion beyond the confirmed bounded
+assistance. P13-05/P13-09 do not activate the feature or implement the future
+scheduler, source orchestration, reasoning, todo writer or alert delivery.
 
 ## Appendix — optional execution, cost and source research
 
