@@ -2,6 +2,7 @@
 .body-sleep h2, .body-sleep h3, .body-sleep p { margin: 0; }
 .body-sleep [role="tabpanel"], .body-sleep-view, .body-sleep-unit { min-width: 0; }
 .body-sleep-view { display: grid; gap: var(--space-4); }
+.body-sleep-view, .body-sleep-unit { grid-template-columns: minmax(0, 1fr); }
 .body-sleep-picker { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) minmax(10rem, .8fr); align-items: end; gap: var(--space-3); }
 .body-sleep-picker label { display: grid; align-content: start; gap: var(--space-2); min-width: 0; }
 .body-sleep-picker input, .body-sleep-picker select { width: 100%; min-width: 0; min-height: 44px; }
@@ -12,11 +13,12 @@
 .body-sleep-picker .daily-custom-period > button { grid-column: 1 / -1; }
 .body-sleep-toolbar { min-width: 0; }
 .body-sleep-shortcuts ul { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: var(--space-2); padding: 0; margin: 0; list-style: none; }
-.body-sleep-shortcuts li { display: grid; align-content: start; justify-items: start; gap: var(--space-1); min-width: 0; }
+.body-sleep-shortcuts li { display: grid; align-content: start; gap: var(--space-1); min-width: 0; }
+.body-sleep-shortcut-content { display: grid; justify-items: start; gap: var(--space-1); width: 100%; min-width: 0; text-align: start; }
 .body-sleep-shortcut-name, .body-sleep-shortcut-date { overflow-wrap: anywhere; }
 .body-sleep-shortcut-name { font-weight: 650; }
-.body-sleep-shortcut-date, .body-sleep-shortcuts li > span { color: var(--text-muted); font-size: var(--type-small); }
-.app-shell .body-sleep-shortcuts .daily-sparkline { width: min(100%, 8rem); }
+.body-sleep-shortcut-pending, .body-sleep-shortcut-state { color: var(--text-muted); font-size: var(--type-small); }
+.app-shell .body-sleep-shortcuts .daily-sparkline { width: min(100%, 8rem); height: 1.25rem; margin-top: 0; }
 .body-sleep-read-state { display: grid; align-content: start; gap: var(--space-2); min-width: 0; }
 .body-sleep-empty { display: grid; justify-items: start; gap: var(--space-2); }
 .body-sleep-empty a { min-height: 44px; align-content: center; }
@@ -24,7 +26,7 @@
 .body-sleep-unit > h3 { overflow-wrap: anywhere; }
 .body-sleep-note, .body-sleep-read-state { color: var(--text-muted); font-size: var(--type-small); overflow-wrap: anywhere; }
 .body-sleep-identifier { display: inline-block; max-width: 100%; overflow-wrap: anywhere; }
-.body-sleep-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); align-items: stretch; gap: var(--space-3); }
+.body-sleep-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); grid-auto-rows: 1fr; align-items: stretch; gap: var(--space-3); }
 .body-sleep-stats .daily-stat-tile { height: 100%; }
 .body-sleep-last-night { display: grid; gap: var(--space-3); }
 .body-sleep-last-value { display: grid; justify-items: start; gap: var(--space-1); }
@@ -49,7 +51,7 @@
 .body-sleep-detail dd { margin: var(--space-1) 0 0; overflow-wrap: anywhere; }
 .body-sleep-nights { display: grid; gap: var(--space-3); min-width: 0; }
 .body-sleep-night-list { display: grid; gap: 0; padding: 0; margin: 0; list-style: none; }
-.body-sleep-night-row { display: grid; gap: var(--space-2); min-width: 0; padding-block: var(--space-3); border-bottom: 1px solid var(--rule); }
+.body-sleep-night-row { display: grid; gap: var(--space-2); min-width: 0; padding-block: var(--space-3); border-block-end: 1px solid var(--rule); }
 .body-sleep-night-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--space-2); min-width: 0; }
 .body-sleep-night-heading > strong { font-variant-numeric: tabular-nums; }
 .body-sleep-stage-chips { display: flex; flex-wrap: wrap; gap: var(--space-2); padding: 0; margin: 0; list-style: none; }
@@ -66,12 +68,16 @@
   .body-sleep-detail dl { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 700px) {
-  .body-sleep-shortcuts ul { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .body-sleep-shortcuts ul { display: flex; max-width: 100%; overflow-x: auto; scroll-snap-type: x proximity; }
+  .body-sleep-shortcuts li { flex: 0 0 min(10rem, 65vw); scroll-snap-align: start; }
   .body-sleep-stage-breakdown ul { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .body-sleep-view .daily-chart-grid text, .body-sleep-view .daily-chart-xaxis text,
+  .body-sleep-view .daily-chart-target text, .body-sleep-view .daily-chart-active-point text {
+    font-size: calc(var(--type-small) * 2);
+  }
 }
 @media (max-width: 359px) {
-  .body-sleep-picker, .body-sleep-stats, .body-sleep-shortcuts ul, .body-sleep-detail dl,
-  .body-sleep-stage-breakdown ul { grid-template-columns: minmax(0, 1fr); }
+  .body-sleep-picker, .body-sleep-detail dl { grid-template-columns: minmax(0, 1fr); }
 }
 @media (pointer: coarse) {
   .body-sleep :is(.body-sleep-table > summary, .body-sleep-empty a) { min-height: 44px; }

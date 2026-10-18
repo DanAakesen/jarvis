@@ -54,7 +54,7 @@ export function DailyHome({ backendUrl, getAccessToken }: AreaProps) {
     });
     observer.observe(element);
     return () => observer.disconnect();
-  }, [activeSection?.usesPeriod]);
+  }, [activeSection?.id, activeSection?.usesPeriod]);
 
   const setSection = (id: string, replace = false) => {
     setSearchParams(previous => {

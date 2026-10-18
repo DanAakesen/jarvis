@@ -6091,6 +6091,27 @@ unit separation and observation-only summaries. The sleep chart is local SVG,
 so shared `DailyChart` line, grouped-bar and area rendering is unchanged.
 Backend, contracts, navigation, mutation paths and refresh transport are unchanged.
 
+## Web Daily Body & sleep presentation (18 October 2026; P12-32)
+
+The existing section now places `DailyPeriodControl` in its Body and Sleep
+toolbars. `DailyHome` omits its outer period slot only while this section is
+active; the same parent-owned period and `onPeriodChange` remain in use. Body
+still reads the catalogue and only the selected metric through `useDailyPages`,
+with the same five-page cap and URL-selected metric. Summaries separate unit
+groups, preserve gaps, and pass recorded daily min/max pairs to `DailyChart`;
+the chart's optional `dataTableContent` slot keeps the full retained-row table
+behind its existing disclosure without changing other consumers. Shortcuts use
+the catalogue's last-date ordering and do not prefetch values.
+
+Sleep still reads the existing sleep query and period. The latest night, stage
+minutes, average/extrema, recorded-night count, series chart, dated list and
+full disclosed table are all derived from the loaded rows. Night selection,
+URL preservation, focus on open and focus return on close remain unchanged.
+The current API projection excludes `source_json`; source labels are displayed
+only when a source field is actually returned. Empty, loading, retry, partial,
+refresh and page-cap behavior remain section-owned. No backend, contract,
+read-model, route or authorization boundary changed.
+
 ## Web Daily Nutrition section (18 October 2026; P12-24)
 
 `apps/web/src/daily/sections/nutrition/index.tsx` exports the auto-discovered

@@ -1,5 +1,24 @@
 # Decisions
 
+## P12-32 — Daily Body & sleep presentation (18 October 2026)
+
+Keep the rebuild presentation-only: Body and Sleep use the existing parent-owned
+period, `?metric=`, `?view=` and `?night=` state, existing `useDailyPages`
+requests and five-page cap. Do not prefetch other metrics to draw shortcut
+sparklines; the catalogue has dates and counts, not values, so an unloaded
+metric is labelled as loading on selection. Do not infer a Sleep source where
+the query projection omits `source_json`. Preserve unknowns, per-unit separation,
+missing-night gaps, refresh state and focus return.
+
+Use the kit's “About this data” disclosure and `DailyChart` data-table disclosure
+instead of visible record-browser status/caveat blocks and tables under every
+chart. The optional `dataTableContent` argument only replaces a chart's
+disclosed generic table for that consumer; existing chart consumers retain the
+default. The period control moves into Body & Sleep while the same period state
+and callback remain in `DailyHome`. Synthetic-only visual captures are in
+`docs/ui/p12-32/`; they do not establish original-site parity or live-data
+acceptance.
+
 ## P12-30 — Daily presentation kit and Workouts (18 October 2026)
 
 Move long retained-data caveats into the native “About this data” disclosure,

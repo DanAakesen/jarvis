@@ -89,17 +89,17 @@ describe('Body & sleep section (synthetic records only)', () => {
   it('searches catalogue names, uses grouped native options and keeps unknown metrics selectable', async () => {
     stub();
     mount();
-    await screen.findByRole('option', { name: /synthetic_other —/ });
+    await screen.findByRole('option', { name: 'synthetic_other' });
     expect(screen.getByRole('group', { name: 'Body composition' })).toBeTruthy();
     expect(screen.getByRole('group', { name: 'Other' })).toBeTruthy();
     await waitFor(() => expect(url()).toContain('metric=body_mass'));
-    fireEvent.change(screen.getByLabelText('Search measurements'), { target: { value: 'synthetic_other' } });
+    fireEvent.change(screen.getByLabelText('Search'), { target: { value: 'synthetic_other' } });
     expect(screen.getByRole('option', { name: /Body mass — current selection/ })).toBeTruthy();
     fireEvent.change(screen.getByLabelText('Measurement'), { target: { value: 'synthetic_other' } });
     await screen.findByRole('img', { name: 'synthetic_other — count' });
     expect(url()).toContain('metric=synthetic_other');
     expect(url()).toContain('keep=retained');
-    fireEvent.change(screen.getByLabelText('Search measurements'), { target: { value: 'NO MATCH' } });
+    fireEvent.change(screen.getByLabelText('Search'), { target: { value: 'NO MATCH' } });
     expect(screen.getByText(/0 measurements match/)).toBeTruthy();
     expect(screen.getByLabelText<HTMLSelectElement>('Measurement').value).toBe('synthetic_other');
   });
@@ -253,13 +253,13 @@ describe('Body & sleep section (synthetic records only)', () => {
     fireEvent.click(within(unit).getByText('View data table'));
     const scroll = within(unit).getByRole('region', { name: /recorded daily rows/ });
     scroll.scrollLeft = 80;
-    fireEvent.change(screen.getByLabelText('Search measurements'), { target: { value: 'synthetic' } });
+    fireEvent.change(screen.getByLabelText('Search'), { target: { value: 'synthetic' } });
     pending = true;
     mounted.update({ refreshVersion: 1 });
     await screen.findByText('Refreshing measurements…');
     expect(screen.getByRole('img', { name: 'synthetic_other — count' })).toBeTruthy();
     expect(scroll.scrollLeft).toBe(80);
-    expect(screen.getByLabelText<HTMLInputElement>('Search measurements').value).toBe('synthetic');
+    expect(screen.getByLabelText<HTMLInputElement>('Search').value).toBe('synthetic');
     await act(async () => { finish.forEach(resolve => resolve()); });
     expect(url()).toContain('metric=synthetic_other');
     expect(url()).toContain('night=2026-10-02');

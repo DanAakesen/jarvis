@@ -1590,6 +1590,33 @@ Synthetic browser captures for the new list and detail presentation are in
 responses, not Microsoft sign-in, live records, physical-device behavior or
 original-site parity.
 
+## Daily Body & sleep presentation (18 October 2026; P12-32)
+
+Body keeps search, metric and period controls together, then presents the
+selected unit as four equal summary tiles and a full-width chart. Latest values
+include a period sparkline and a same-unit first-to-last comparison; recorded
+daily ranges appear as a chart band. Recent metric shortcuts reuse the catalogue
+and switch the existing `?metric=` selection. The catalogue has no value series,
+so shortcuts show a trend only for the selected metric already loaded; selecting
+another metric loads its trend through the existing read path rather than adding
+prefetches.
+
+Sleep leads with the latest night and its recorded stage bar, followed by
+average/extrema/coverage tiles and a multi-series nightly chart. The dated night
+list keeps asleep time, recorded stage minutes and source information together;
+the complete row fields remain in a disclosed table. Unknown asleep values,
+missing stages and missing nights stay unknown. The current Daily read model
+does not return sleep source JSON, so rows without a source field say that source
+information was not provided instead of inferring a device.
+
+Both views keep the existing period, URL, paging, refresh and night-focus
+behavior. Source caveats and the Body recorded identifier are in “About this
+data”; an empty Health history links to Settings → Health upload. No API,
+contract, persistence or dependency changed. Synthetic browser captures for
+Body and Sleep at 320, 390×844 and 1440×900 in light and dark are in
+`docs/ui/p12-32/`; they show the actual Daily section with synthetic responses,
+not live health records or original-site parity.
+
 ## Daily overview and Briefs integration (18 October 2026; P12-26)
 
 The Overview retains its source inventory and adds a responsive tile grid for

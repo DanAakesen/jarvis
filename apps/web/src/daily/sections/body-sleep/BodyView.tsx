@@ -52,15 +52,16 @@ export function BodyView({ backendUrl, getAccessToken, period, onPeriodChange, r
     .slice(0, 5);
   const selectedUnit = units.find(group => group.rows.length > 0) ?? units[0];
   const selectedSummary = selectedUnit ? metricSummary(selectedUnit.rows, period) : null;
-  const shortcutValues = selectedSummary?.days.map(day => day.value) ?? [];
+  const shortcutValuesByDate = new Map(selectedSummary?.days.map(day => [day.date, day.value]) ?? []);
+  const shortcutValues = periodDates(period).map(date => shortcutValuesByDate.get(date) ?? null);
   const latestRead = selected ? records.last ?? catalogue.last : catalogue.last;
   const freshnessPages = selected && records.last ? records : catalogue;
   const recordCount = selected && records.last ? records.items.length : catalogue.items.length;
   return <div className="body-sleep-view">
     <div className="body-sleep-picker">
-      <label>Search measurements
+      <label>Search
         <input type="search" value={search} onChange={event => setSearch(event.target.value)}
-          placeholder="Name or recorded identifier" />
+          placeholder="Metric name or ID" />
       </label>
       <label>Measurement
         <select value={selected} onChange={event => selectMetric(event.target.value)}
@@ -71,7 +72,7 @@ export function BodyView({ backendUrl, getAccessToken, period, onPeriodChange, r
             const entries = filtered.filter(row => metricDisplay(String(row.metric_name)).group === group);
             return entries.length ? <optgroup label={group} key={group}>
               {entries.map(row => <option key={String(row.metric_name)} value={String(row.metric_name)}>
-                {metricDisplay(String(row.metric_name)).label} — {formatDate(typeof row.last_date === 'string' ? row.last_date : null)}, {String(row.day_count)} days
+                {metricDisplay(String(row.metric_name)).label}
               </option>)}
             </optgroup> : null;
           })}
@@ -88,15 +89,18 @@ export function BodyView({ backendUrl, getAccessToken, period, onPeriodChange, r
       <ul>{recent.map(row => {
         const name = String(row.metric_name);
         const current = selected === name;
+        const lastDate = formatDate(typeof row.last_date === 'string' ? row.last_date : null);
         return <li key={name}>
-          <button type="button" className="secondary-button" aria-pressed={current} onClick={() => selectMetric(name)}>
-            <span className="body-sleep-shortcut-name">{metricDisplay(name).label}</span>
-            <span className="body-sleep-shortcut-date">
-              {formatDate(typeof row.last_date === 'string' ? row.last_date : null)}
+          <button type="button" className="secondary-button"
+            aria-label={`${metricDisplay(name).label}, last recorded ${lastDate}, ${current ? 'Selected' : 'Select'}`}
+            aria-pressed={current} onClick={() => selectMetric(name)}>
+            <span className="body-sleep-shortcut-content">
+              <span className="body-sleep-shortcut-name">{metricDisplay(name).label}</span>
+              <span className="body-sleep-shortcut-state">{current ? 'Selected' : 'Select'}</span>
+              {current
+                ? <Sparkline values={shortcutValues} label={`${metricDisplay(name).label} selected-unit trend`} />
+                : <span className="body-sleep-shortcut-pending">Trend loads when selected</span>}
             </span>
-            <Sparkline values={current ? shortcutValues : []}
-              label={current ? `${metricDisplay(name).label} selected-unit trend` : `${metricDisplay(name).label} trend loads when selected`} />
-            <span>{current ? 'Selected' : 'Select'}</span>
           </button>
         </li>;
       })}</ul>
