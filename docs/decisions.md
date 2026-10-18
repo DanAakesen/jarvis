@@ -17,6 +17,20 @@ intercept the Factory Create project action. Persistence, alert copy and retry
 behavior are unchanged. Synthetic browser evidence is not live-provider or
 physical on-screen-keyboard verification.
 
+## Separate read-only vault tasks from Notes (18 October 2026; P13-19 / #1015)
+
+Personal to-dos remain checkbox items in the proactive reader's shared scope:
+recursive `Personal/` and `Work/` notes and the root `task.md` or `tasks.md`,
+excluding hidden paths and Archive segments. Jarvis exposes them in an owner-only
+Tasks view, Notes task-search group, and the read-only tasks kind of `vault_search`.
+The same parser and direct vault read model serve the proactive engine and these
+surfaces. The tool catalogue is at its 120-tool all-features ceiling (the 128-tool
+platform limit minus the required eight-tool headroom), so tasks share
+`vault_search` through a flat `kind` argument instead of adding a tool.
+Jarvis never creates, edits, completes, reorders or deletes the owner's tasks;
+the owner completes them in Obsidian. Software Factory remains the separate
+agent-work board.
+
 ## #1005 Daily v182 API, upload and selected native tools (18 October 2026)
 
 Keep this delivery on the existing backend, SQL pool, owner authentication and

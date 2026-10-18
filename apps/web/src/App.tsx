@@ -671,7 +671,7 @@ function ShellLayout({ signedIn, config, session, camera, screenShare, dailyEnab
           </NavLink>
           {areas.map((area) => (
             <NavLink key={area.id} className="rail-link" to={`/${area.path}`} aria-label={area.label} onClick={() => { setFolioOpen(false); setNavigationOpen(area.navigation.length > 1); }}>
-              <ShellIcon name={area.id === 'daily' ? 'daily' : area.id === 'factory' ? 'factory' : area.id === 'notes' ? 'knowledge' : area.id === 'status' ? 'status' : 'usage'} /><span className="visually-hidden">{area.label}</span>
+              <ShellIcon name={area.id === 'daily' ? 'daily' : area.id === 'factory' ? 'factory' : area.id === 'tasks' ? 'tasks' : area.id === 'notes' ? 'knowledge' : area.id === 'status' ? 'status' : 'usage'} /><span className="visually-hidden">{area.label}</span>
             </NavLink>
           ))}
           <button className={`rail-link rail-folio${folioOpen ? ' active' : ''}`} type="button" aria-label="Folio" aria-pressed={folioOpen}

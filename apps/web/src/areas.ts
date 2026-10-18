@@ -5,6 +5,7 @@ import { NotesArea } from './notes/NotesArea';
 import { StatusPage } from './status/StatusPage';
 import { DailyHome } from './daily/DailyHome';
 import { ProactiveArea } from './ProactiveArea';
+import { TasksArea } from './tasks/TasksArea';
 
 export interface AreaProps {
   backendUrl: string | null;
@@ -32,6 +33,7 @@ export const areas: readonly Area[] = [
     ],
     Component: FactoryArea,
   },
+  { id: 'tasks', label: 'Tasks', path: 'tasks', navigation: [{ label: 'Tasks', path: '/tasks' }], Component: TasksArea },
   { id: 'notes', label: 'Notes', path: 'notes', navigation: [{ label: 'Notes', path: '/notes' }], Component: NotesArea },
   { id: 'usage', label: 'Usage', path: 'usage', navigation: [{ label: 'Usage', path: '/usage' }], Component: UsagePage },
   { id: 'status', label: 'Status', path: 'status', navigation: [{ label: 'Status', path: '/status' }], Component: StatusPage },
