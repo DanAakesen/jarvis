@@ -1393,4 +1393,7 @@ Background work and attention use one opaque popover surface. Daily and Proactiv
 block-level errors pair their alert text with the existing error surface while
 inline field errors stay beside the field. Menu and row actions use the shared
 visible keyboard outline. See [the UI audit](docs/ui-audit.md) for the observed
-variants and remaining workflow-specific layouts.
+variants and remaining workflow-specific layouts. Local synthetic Chromium
+inspection covered the phone and desktop sizes in both themes, plus reduced
+motion. The attention event and healthy Daily/Proactive data states were not
+available in the harness; screenshot captures could not be attached to the PR.
