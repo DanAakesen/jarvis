@@ -13,8 +13,11 @@ import type { PushStore } from '../database/push-store.js';
 import { ConfigurationError } from '../configuration-error.js';
 import { createProactiveStore } from '../database/proactive-store.js';
 import { createProactiveAlertStore } from '../database/proactive-alert-store.js';
+import { createProactiveTodoReceiptStore } from '../database/proactive-todo-store.js';
 import { createProactiveReminderStore } from '../database/proactive-reminder-store.js';
 import { createMemoryProactiveStore } from './store.js';
+import type { ProactiveStore } from './store.js';
+import { createProactiveTodoWriter } from './todo-writer.js';
 import { createMemoryAlertLedgerStore, type AlertLedgerStore } from './alert-ledger.js';
 import { createMemoryProactiveReminderStore, type ProactiveReminderStore } from './reminder-store.js';
 import { buildSourceRegistry } from './sources/registry.js';
@@ -34,6 +37,7 @@ type GitHubVaultClient = ReturnType<typeof createGitHubVaultClient>;
 export interface ProactiveCompositionOptions {
   enabled: boolean;
   ownerObjectId: string;
+  store?: ProactiveStore;
   pool?: sql.ConnectionPool;
   googleApiClient?: GoogleApiClient;
   vaultClient?: GitHubVaultClient;
@@ -66,9 +70,9 @@ export function registerProactive<Logger extends FastifyBaseLogger>(
     throw new ConfigurationError('The proactive owner must be a UUID');
   }
   const sources = buildSourceRegistry(options);
-  const store = options.pool
+  const store = options.store ?? (options.pool
     ? createProactiveStore(options.pool, options.ownerObjectId)
-    : createMemoryProactiveStore(options.ownerObjectId);
+    : createMemoryProactiveStore(options.ownerObjectId));
   const now = options.now ?? (() => new Date());
   let model: ProactiveModel = {
     async worstCaseDkk() {
@@ -89,6 +93,15 @@ export function registerProactive<Logger extends FastifyBaseLogger>(
       },
     });
   }
+  const todoWriter = options.todoWritesEnabled === true && options.vaultClient && options.pool
+    ? createProactiveTodoWriter({
+      vault: options.vaultClient,
+      store,
+      receipts: createProactiveTodoReceiptStore(options.pool, options.ownerObjectId),
+      now,
+      ...(options.logger ? { logger: options.logger } : {}),
+    })
+    : undefined;
   const alertsReady = options.alertsEnabled === true && options.pushEnabled === true &&
     options.pushStore !== undefined && options.systemPushSender !== undefined;
   const reminderReady = alertsReady && options.vaultClient !== undefined;
@@ -136,6 +149,7 @@ export function registerProactive<Logger extends FastifyBaseLogger>(
       ...(options.logger ? { logger: options.logger } : {}),
     })
     : undefined;
+  // Hooks run in order: the time-critical alert goes first, then the database-only reminder planner, so a slow vault write never delays either.
   const run = createProactiveEngine({
     ...options,
     store,
@@ -146,6 +160,7 @@ export function registerProactive<Logger extends FastifyBaseLogger>(
       ...(options.onFindingsStored ?? []),
       ...(alertHook ? [alertHook] : []),
       ...(reminderPlanner ? [reminderPlanner] : []),
+      ...(todoWriter ? [todoWriter] : []),
     ],
   });
   const scheduler = createProactiveScheduler({

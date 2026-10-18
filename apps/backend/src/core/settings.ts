@@ -987,7 +987,7 @@ export function settingsOptionsForCatalogue(catalogue: ModelCatalogue) {
 }
 
 export async function buildAgentSettingsPayload(
-  app: Pick<FastifyInstance, 'settingsStore' | 'modelCatalogue' | 'awayModeStore' | 'projectStore'>,
+  app: Pick<FastifyInstance, 'settingsStore' | 'modelCatalogue' | 'awayModeStore' | 'projectStore' | 'jarvisTools'>,
 ) {
   if (!app.settingsStore) throw new Error('Settings unavailable');
   const catalogue = await app.modelCatalogue.read();
@@ -999,7 +999,10 @@ export async function buildAgentSettingsPayload(
     roles: settings.roles,
     memory: settings.memory,
     research: { timeoutSeconds: settings.research.timeoutSeconds },
-    capabilityInstructions: capabilityInstructions(settings.memory),
+    capabilityInstructions: capabilityInstructions(
+      settings.memory,
+      app.jarvisTools.get('proactive_recent_items') !== undefined,
+    ),
     timeouts: settings.timeouts,
     personality: settings.personality,
     awayMode: presence.mode !== 'present',

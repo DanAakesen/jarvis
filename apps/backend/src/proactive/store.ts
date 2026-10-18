@@ -68,11 +68,12 @@ export interface ProactiveSettingsStore {
   patch(patch: ProactiveSettingsPatch): Promise<ProactiveSettings>;
 }
 export interface ProactiveItemsStore {
-  list(state: 'open' | 'all', limit: number, now: Date): Promise<Item[]>;
+  list(state: 'new' | 'seen' | 'open' | 'all', limit: number, now: Date): Promise<Item[]>;
   get(id: string, markLoaded?: boolean): Promise<Item | undefined>;
   getMany(ids: readonly string[]): Promise<Pick<Item, 'id' | 'state'>[]>;
   applyFeedback(id: string, action: FeedbackAction, snoozeUntil?: string): Promise<Item | undefined>;
   upsertFinding(input: FindingInput, guard?: FindingWriteGuard): Promise<Item>;
+  markTodoAdded(itemIds: readonly string[]): Promise<void>;
 }
 export interface ProactiveRunsStore {
   claim(input: { trigger: RunSummary['trigger']; slot: string | null; now: Date }): Promise<{ run: RunSummary; generation: number } | null>;
@@ -144,9 +145,12 @@ export function createMemoryProactiveStore(ownerObjectId: string = randomUUID())
     },
     items: {
       async list(state, limit, now) {
-        const visible = [...items.values()].filter((item) => state === 'all' ||
-          item.state === 'new' || item.state === 'seen' ||
-          (item.state === 'snoozed' && item.snoozedUntil !== null && Date.parse(item.snoozedUntil) <= now.getTime()));
+        const visible = [...items.values()].filter((item) => {
+          if (state === 'all') return true;
+          if (state === 'new' || state === 'seen') return item.state === state;
+          return item.state === 'new' || item.state === 'seen' ||
+            (item.state === 'snoozed' && item.snoozedUntil !== null && Date.parse(item.snoozedUntil) <= now.getTime());
+        });
         return visible.sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, limit).map(copyItem);
       },
       async get(id) {
@@ -213,6 +217,12 @@ export function createMemoryProactiveStore(ownerObjectId: string = randomUUID())
         findings.set(input.dedupeKey, item.id);
         materials.set(item.id, material);
         return copyItem(item);
+      },
+      async markTodoAdded(itemIds) {
+        for (const id of itemIds) {
+          const item = items.get(id.toLowerCase());
+          if (item) items.set(id.toLowerCase(), { ...item, todoAdded: true });
+        }
       },
     },
     runs: {

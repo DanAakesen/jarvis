@@ -12,6 +12,27 @@ vi.mock('applicationinsights', () => ({
 }));
 
 describe('structured log export', () => {
+  it('exports only code, IDs, counts and duration for proactive todo writer logs', () => {
+    const records: string[] = [];
+    const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
+    const sink = { ...sdk, trackTrace: vi.fn() };
+    const logger = createLogger({ logLevel: 'info' }, sink, output);
+    const runId = '11111111-1111-4111-8111-111111111111';
+    const itemId = '22222222-2222-4222-8222-222222222222';
+    logger.warn({
+      runId, reason: 'todo_added', itemIds: [itemId], count: 1, durationMs: 25,
+      text: 'private todo text', path: 'private/path.md',
+    }, 'proactive.todo_writer');
+    const fields = { runId, reason: 'todo_added', itemIds: [itemId], count: 1, durationMs: 25 };
+    expect(JSON.parse(records[0]!)).toEqual({
+      level: 40, time: expect.any(Number), service: 'jarvis-backend', msg: 'proactive.todo_writer', ...fields,
+    });
+    expect(sink.trackTrace).toHaveBeenLastCalledWith(expect.objectContaining({
+      message: 'proactive.todo_writer', properties: { service: 'jarvis-backend', ...fields },
+    }));
+    expect(records.join('') + JSON.stringify(sink.trackTrace.mock.calls)).not.toContain('private');
+  });
+
   it.each(['internal_error', 'hook_failed', 'job_update_failed', 'private-provider-text'])(
     'exports only allowlisted proactive reason codes and run IDs: %s', (reason) => {
       const records: string[] = [];

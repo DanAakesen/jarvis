@@ -76,11 +76,12 @@ default-off `JARVIS_PUSH_ENABLED` gate. The parallel web work is P13-02. Neither
 sets a deployment value. P13-03 (#934, 18 October 2026) enables milestone 1, the
 user-triggered test, in the production deploy by setting `JARVIS_PUSH_ENABLED` in
 `infra/main.bicep` and `VITE_PUSH_ENABLED` in the web build step; the code
-defaults stay off. Proactive milestones 2 to 4 (the silent read-only pilot, the
-todo-write pilot and opt-in alerts) stay dark, and P13-03 adds no scheduler,
-proactive send or Teams path. Provider acceptance and local tests do not prove
-that an iPhone displayed the notification. Physical-device delivery remains
-unverified.
+defaults stay off. P13-14 (#935, 18 October 2026) enables milestone 2, the silent
+read-only checks, the same way, by setting `JARVIS_PROACTIVE_ENABLED` and
+`VITE_PROACTIVE_ENABLED`. Milestones 3 and 4 (the todo-write pilot and opt-in
+alerts) stay dark, and neither change adds a proactive send or Teams path.
+Provider acceptance and local tests do not prove that an iPhone displayed the
+notification. Physical-device delivery remains unverified.
 
 ## Owner nutrition targets (17 October 2026; P12-09 / #724)
 
@@ -2381,7 +2382,8 @@ exact-`true`, default-off flag and is enabled by a separate small change, one at
 a time, only after the previous deployment is accepted. The first milestone is a
 direct, user-triggered Web Push test linking to a durable owner-protected item.
 P13-01 and P13-02 built it dark; P13-03 (#934) enables it in the production
-deploy, so push milestone 1 is on while the proactive milestones 2 to 4 stay
+deploy, so push milestone 1 is on. P13-14 (#935) enables milestone 2, the
+read-only checks, the same way, while milestones 3 and 4 stay
 dark. The user test is not proactive delivery, and real iPhone delivery remains
 unproven. Teams is not a delivery path.
 
@@ -2397,11 +2399,11 @@ unproven. Teams is not a delivery path.
 | P13-08 | [#928](https://github.com/DanAakesen/jarvis/issues/928) | Proactive sources: calendar, mail and travel (dark) | Fake-client tests cover calendar normalization, mail headers, travel rules, bounds, errors, privacy and prompt-injection fixtures. | P13-05 | Complete |
 | P13-09 | [#929](https://github.com/DanAakesen/jarvis/issues/929) | Proactive source: news (dark) | Fake-only tests cover URL and network safety, bounded fetching and parsing, feed selection, failures and inert prompt-injection content. | P13-05 | Complete |
 | P13-10 | [#930](https://github.com/DanAakesen/jarvis/issues/930) | Proactive web: page, Settings section and Background work entries (dark) | Mocked web tests cover flag states, loading, empty and error states, actions, budget, sources and Background work links; browser checks cover phone and desktop layouts. | P13-05 | Complete |
-| P13-11 | [#931](https://github.com/DanAakesen/jarvis/issues/931) | Proactive todo writer: add-only suggested todos (dark) | Synthetic-data tests cover flag gating, safe add-only writes, conflicts, duplicates, limits and recovery; no existing todo is changed or deleted. | P13-05, P13-06, P13-07 | In progress |
+| P13-11 | [#931](https://github.com/DanAakesen/jarvis/issues/931) | Proactive todo writer: add-only suggested todos (dark) | Synthetic-data tests cover flag gating, safe add-only writes, conflicts, duplicates, limits and recovery; no existing todo is changed or deleted. | P13-05, P13-06, P13-07 | Complete |
 | P13-12 | [#932](https://github.com/DanAakesen/jarvis/issues/932) | Proactive run alerts: time-critical push with a shared sender (dark) | Tests cover gates, alert selection, deduplication, caps, bundled pushes, generic payloads, delivery outcomes, quiet hours and text-free logs. | P13-01, P13-02, P13-05, P13-06 | Complete |
-| P13-13 | [#933](https://github.com/DanAakesen/jarvis/issues/933) | Proactive todo reminders: one hour before a todo is due (dark) | Fake-based tests cover timed-todo planning, quiet-hour holds, limits, re-reads, bundling, expiry, retries and private push payloads. | P13-12, P13-06, P13-07, P13-05 | Not started |
+| P13-13 | [#933](https://github.com/DanAakesen/jarvis/issues/933) | Proactive todo reminders: one hour before a todo is due (dark) | Fake-based tests cover timed-todo planning, quiet-hour holds, limits, re-reads, bundling, expiry, retries and private push payloads. | P13-12, P13-06, P13-07, P13-05 | In progress |
 | P13-14 | [#935](https://github.com/DanAakesen/jarvis/issues/935) | Enable proactive checks | CI is green, including the infrastructure offline build and lint. | P13-03, P13-05 to P13-10 | In progress |
-| P13-15 | [#936](https://github.com/DanAakesen/jarvis/issues/936) | Enable suggested todos, alerts and reminders | CI is green, including the infrastructure offline build and lint. | P13-11 to P13-14 | Not started |
+| P13-15 | [#936](https://github.com/DanAakesen/jarvis/issues/936) | Enable suggested todos, alerts and reminders | CI is green, including the infrastructure offline build and lint. | P13-11 to P13-14 | In progress |
 | P13-16 | [#937](https://github.com/DanAakesen/jarvis/issues/937) | Chat and voice recall of proactive findings | Fake-based tests cover flag gating, owner authorization, validation, bounded results, failures and untrusted item text. | P13-05, P13-06, P13-10 | In progress |
 
 ## P14 — UI unification

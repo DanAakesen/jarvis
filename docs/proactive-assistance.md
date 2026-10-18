@@ -1,6 +1,6 @@
 # Proactive assistance
 
-Status: **Decided; in build, off by default** (17 October 2026).
+Status: **Decided; web push and read-only checks are on in production, todo writes and alerts are off** (17 October 2026; updated 18 October 2026).
 
 The decisions below define the intended behaviour. Each feature stays off until
 its own enabling change follows acceptance of the previous deployment. A push
@@ -66,14 +66,15 @@ Phrases such as "proposal only" describe the state before Dan's decisions.
 18 October 2026 — the broader proactive-assistance design remains staged. The
 first Web Push delivery-proof milestone was approved separately; P13-01 built
 its backend and P13-02 its web client dark, and P13-03 (18 October 2026)
-switches both on in production. The dark P13-05 backend foundation and the
-read-only source implementations (P13-07 onwards, described below) are approved
-but enable no production work: the scheduler's in-process location and
-operating bounds are settled, but no scheduler, source run, model call or
-proactive send is active there. The
+switches both on in production. The P13-05 backend foundation, the read-only
+source implementations (P13-07 onwards, described below) and the P13-10 web
+surface shipped dark. P13-14 (18 October 2026) switches proactive checks,
+milestone 2, on in production, so the in-process scheduler, the source reads and
+one tool-less model call per run are active there. Todo writes and proactive
+alerts and reminders (milestones 3 and 4) stay off, so no proactive push is sent.
+The
 [plan summary](../PLAN.md#proactive-assistance--proposed-scope-17-october-2026)
-separates these slices from remaining pilot gates. P13-10 implements the gated
-web surface without enabling either client or server work. Daily
+separates these slices from remaining pilot gates. Daily
 notification-off remains in force.
 
 ## Confirmed M2 boundaries (18 October 2026; P13-05, P13-06)
@@ -84,7 +85,9 @@ Dan's confirmed decisions supersede the proposals below. The server flags
 sets none. P13-05 adds contracts, owner-bound routes, operational stores,
 time/language/budget helpers and a background-job kind, but no scheduler, source
 read, model call, timer or proactive send. P13-06 extends that foundation with
-the scheduler and run pipeline without enabling any flag.
+the scheduler and run pipeline without enabling any flag. P13-14 later sets only
+`JARVIS_PROACTIVE_ENABLED` (and the web flag) in production; the todo-writes and
+alerts flags stay set nowhere.
 
 Scheduled work runs in-process in the backend, which retains its minimum
 one replica. Slots are 07:00 and 18:00 Europe/Copenhagen, computed using the IANA
@@ -138,8 +141,33 @@ Factory facts are read from a narrow status snapshot containing project/task
 titles, task state, PR state and wait timestamps; it does not read logs, prompts
 or events. Weather reads only the saved home coordinates and makes a bounded
 HTTPS Open-Meteo request; it does not geocode or invent a location. All three
-sources return stable unavailable reasons and remain dormant until later engine
-work explicitly reads them.
+sources return stable unavailable reasons and stay dormant until the engine reads
+them once checks are on (P13-14).
+
+## Suggested-todo writer (18 October 2026; P13-11)
+
+The writer is a dark, separately gated `onFindingsStored` hook. The exact string
+`true` is required for `JARVIS_PROACTIVE_TODO_WRITES_ENABLED`, and the main
+`JARVIS_PROACTIVE_ENABLED` gate must also be on. No workflow, infrastructure or
+environment file sets the writer flag. Existing pause and Todos source settings
+remain controls; scheduled and catch-up work rechecks the 22:00–07:00
+Europe/Copenhagen quiet window, while manual writes may run at any hour.
+
+Only model suggestions outside the `todo` category qualify. The sanitizer strips
+markup, links, URLs, email addresses, control characters, and Tasks metadata,
+then truncates to 200 Unicode code points. Vault safety checks apply only to the
+new text. The line is an unchecked task with an optional Copenhagen due date and
+a 16-hex finding marker. Suggestions go under `## Suggested by Jarvis`, with
+three additions maximum per run and five added receipts per Copenhagen day.
+Existing content is never edited, completed, reordered or deleted.
+
+The existing P13-07 root-file resolver is reused; absent/ambiguous files are
+never created. One commit writes all additions for a run. A conflict triggers a
+fresh read and complete duplicate/marker recheck, with three write attempts
+maximum. Marker recovery records an `added` receipt without rewriting. Added,
+skipped and failed receipts contain IDs, hashes and reason codes only; `added`
+is unique per owner/finding, and two failures settle a finding. The item’s
+`todo_added` bit is set only after a successful commit or marker recovery.
 
 ## Calendar, mail and travel readers (18 October 2026; P13-08)
 
@@ -162,7 +190,7 @@ states, and sanitize untrusted text before returning facts.
 
 The Proactive page, full item detail, one Settings section, navigation entry and
 terminal Background work link are gated by the exact-string web build flag,
-which remains off. The client uses the established owner-authenticated
+which is off by default in code and set in production by P13-14. The client uses the established owner-authenticated
 contract, fixed plain-text reason copy, Copenhagen-local time formatting and
 memory-only handling for findings, feed URLs and guidance. Manual check polling
 is visibility-aware and bounded; dismiss/snooze optimistic updates are
@@ -171,8 +199,9 @@ only Web Push is enabled.
 
 ## News feed reader (18 October 2026; P13-09)
 
-P13-09 adds the dark news-source implementation and registry entry, but no
-scheduler or engine call reads it; no model call or proactive send is activated.
+P13-09 adds the news-source implementation and registry entry. It sets no flag
+and activates no model call or proactive send; once checks are on (P13-14) the
+engine reads it like the other sources.
 The news adapter defaults to the GitHub changelog and OpenAI news RSS feeds. It
 uses HTTPS only, rejects IP and local hostnames, DNS-pins public answers,
 forbids redirects and non-XML/compressed responses, and caps each read at ten
@@ -758,3 +787,10 @@ and [Rejseplanen API 2.0](https://labs.rejseplanen.dk/hc/en-us/articles/21554723
 whose documented noncommercial offer includes 50,000 free calls/month subject
 to access. These are research options, not selected integrations, cadence or
 availability guarantees.
+
+## Chat and voice recall (P13-16; 18 October 2026)
+
+When the existing proactive checks flag is on, chat and voice can retrieve the
+current owner-scoped findings with one read-only tool, using the same item query
+as the Proactive page. Results are bounded and explicitly marked as untrusted
+data; recall does not mark findings seen, approve anything or trigger work.

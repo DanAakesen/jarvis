@@ -592,8 +592,9 @@ Settings adds one separately saved Proactive section for pause, the monthly DKK
 limit, source switches, HTTPS news feeds and low-priority writing guidance.
 Changed fields only are sent. Feed URLs and guidance remain in component state
 and are never written to browser storage, URLs, titles, analytics or logs.
-`VITE_PROACTIVE_ENABLED` is exact-string `true`, defaults off, and grants no
+`VITE_PROACTIVE_ENABLED` is exact-string `true`, defaults off in code, and grants no
 backend access; when off, routes, navigation, settings and requests remain absent.
+Production sets it since P13-14 (18 October 2026).
 The header links terminal proactive Background work entries to the page only
 when the web gate is on.
 
@@ -1032,6 +1033,14 @@ push and send a test. The user-triggered test is not proactive delivery. Teams i
 not a delivery option. Real iPhone delivery remains unproven until separately
 observed on the installed Home Screen app.
 
+Proactive checks (milestone 2) are on in production since P13-14 (18 October
+2026): both `JARVIS_PROACTIVE_ENABLED` and `VITE_PROACTIVE_ENABLED` are set, so the
+07:00 and 18:00 checks run, Check now works, and the Proactive page and its
+Settings section are available. A check only reads sources and stores findings.
+Todo additions and alerts or reminders (milestones 3 and 4) stay off until their
+own switch-on. Whether scheduled checks run is established by Dan's test on the
+deployed app, not by CI.
+
 ## Proactive foundation and engine (18 October 2026; P13-05, P13-06)
 
 The backend foundation provides owner-only status, settings, durable finding
@@ -1039,8 +1048,14 @@ storage and feedback behind `JARVIS_PROACTIVE_ENABLED`, which defaults off.
 Separate todo-write and alert flags also default off. P13-06 adds the in-process
 scheduler, manual checks and run history, deterministic deadline/clash detection,
 and one bounded, tool-less summary call; sources plug into the existing registry.
-P13-07 adds read-only todo, Factory and weather source readers. Neither slice adds
-a todo writer or proactive alert, and neither enables any flag.
+P13-07 adds read-only todo, Factory and weather source readers, without a writer
+or proactive alert. P13-11 adds a
+separate add-only suggested-todo writer behind
+`JARVIS_PROACTIVE_TODO_WRITES_ENABLED`, which is effective only with
+`JARVIS_PROACTIVE_ENABLED`; both remain default-off. It appends sanitized,
+credential-safe suggestions under `Suggested by Jarvis`, never changes existing
+todo lines, and observes the Todos source switch, pause state, quiet hours for
+scheduled work, and per-run/daily caps. Manual writes may run at any hour.
 
 The approved schedule uses 07:00 and 18:00 Europe/Copenhagen slots; scheduled
 work is forbidden from 22:00 to 07:00. The monthly estimate limit defaults to
@@ -1053,11 +1068,13 @@ five minutes, six per Copenhagen day). Runs appear in Background work with safe
 plain-language outcomes. None of these flags is enabled by this change.
 
 The todo reader matches exactly one case-insensitive root `task.md` or
-`tasks.md`, never writes, and emits at most 40 sanitized facts. The Factory
+`tasks.md` and emits at most 40 sanitized facts. The P13-11 writer reuses that
+resolver/parser, writes only to an existing resolved file, and records hashed
+receipts so completed or deleted suggestions are not re-added. The Factory
 reader reports attention/failure and open-PR status plus a running-task count;
 the weather reader uses the saved home location and makes a bounded HTTPS
-forecast request. These source implementations remain dormant until a later
-engine slice invokes them.
+forecast request. Their reads remain governed by the existing proactive engine;
+the todo writer is a separate gated after-storage hook.
 
 ## Proactive calendar, mail and travel sources (18 October 2026; P13-08)
 
@@ -1095,8 +1112,9 @@ now" covers it immediately.
 
 ## Proactive web (18 October 2026; P13-10)
 
-The web page and Settings section are independently dark behind
-`VITE_PROACTIVE_ENABLED === "true"`. They use the shared authenticated HTTP
+The web page and Settings section are independently gated by
+`VITE_PROACTIVE_ENABLED === "true"`, which is off by default in code and set in
+production by P13-14. They use the shared authenticated HTTP
 contract, keep returned item/settings content in memory only, and render all
 model/source text as plain text. Manual check polling is visible-page-only and
 bounded; item actions can be retried after rollback. This web slice does not set
@@ -1104,11 +1122,11 @@ the flag or grant permissions.
 
 ## Proactive news source (18 October 2026; P13-09)
 
-The backend registry includes a dark, read-only RSS/Atom source for configured
+The backend registry includes a read-only RSS/Atom source for configured
 feeds, defaulting to the GitHub changelog and OpenAI news. It validates hosts, pins HTTPS
 connections to vetted public DNS addresses, rejects redirects and unsafe XML,
-and returns only bounded, sanitized titles. The source does not activate a
-scheduler, model call or proactive delivery; all proactive flags remain off.
+and returns only bounded, sanitized titles. The source does not itself activate a
+scheduler, model call or proactive delivery, and this slice sets no proactive flag.
 
 ## Daily migration (approved P12)
 
@@ -1302,3 +1320,11 @@ All migrated React/rich UI must match current Jarvis layout and styling fully, u
 [Approved scope](docs/daily-migration.md), updated by Dan on 15 October 2026, preserves existing Daily health, nutrition, workout/tracking and integration capabilities through one mobile-first Daily page and existing on-demand GenUI in the single assistant conversation: no widget, separate Workouts/Nutrition pages or four mandatory Status/Recomp/Review/Ready views. New P12-08/#723 coaching/recovery/recomp automation is excluded from planned scope and the combined release, not accepted as complete; this does not remove existing capabilities, measurements or retained records. Health sync, nutrition/Frida/history/plans, the scoped optional iPhone Shortcut and existing Google feeds retain their existing gates. Football preferences (#728) are closed as not planned and stay excluded. TickTick stays excluded and recurring notifications stay off. Reuse existing login/session/owner, shell and voice. Core P12-09/#724 API/tools work excludes new coaching and must not require #723 completion; this scope decision does not activate it. Original Daily continues ordinary authorized writes and remains canonical until protected backup/export, authoritative-source/parity, real-device/provider, final-delta, rollback and cutover gates pass; no original source/schema/data deletion or rewrite.
 
 P12-07 adds inactive nutrition services and typed handlers using verified source action semantics. Explicit exact-label/favourite intake needs no redundant confirmation; photo/portion estimates need acceptance of the displayed proposal from trusted Jarvis metadata, never model `userConfirmed`. Exact quantities outrank estimates; nullable unknowns and legacy confidence/capture vocabulary remain intact. Meals persist until soft deletion, with full paged history and revisioned corrections by exact owner-bound idempotency key beyond seven days. Occurrence defaults to trusted request time/Copenhagen date only when absent. Favourites accept one retained source key or confirmed definition; normalized-name reuse updates its ID. Plans resolve owned favourites server-side for one breakfast/lunch/dinner plus optional snacks (3–50 slots), snapshot and sum values without trusting model totals or logging food. Suggestions use authoritative time/remaining budgets and persistent dislikes. Frida pins release 10 / 5.5 with DTU/DOI attribution, supplied public bootstrap/DTO shapes, per-100-g scaling and honest null/provenance/subtotals. Final CI/independent review, live parity and P12-09 integration remain gated; this code activates nothing.
+
+## Chat and voice recall of proactive findings (18 October 2026; P13-16)
+
+When proactive checks are enabled, chat and voice can read the current findings
+through the same owner-bound store query as the Proactive page. The tool is
+read-only, returns bounded untrusted finding text, and does not change item state
+or grant action authority. It remains absent when
+`JARVIS_PROACTIVE_ENABLED` is off.

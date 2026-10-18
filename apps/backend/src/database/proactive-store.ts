@@ -197,8 +197,10 @@ export function createProactiveStore(pool: sql.ConnectionPool, ownerObjectId: st
           .input('owner', sql.UniqueIdentifier, owner)
           .input('limit', sql.Int, limit)
           .input('now', sql.DateTime2, now);
-        const where = state === 'all' ? '' :
-          `AND (state IN (N'new', N'seen') OR (state = N'snoozed' AND snoozed_until <= @now))`;
+        const where = state === 'all' ? '' : state === 'open'
+          ? `AND (state IN (N'new', N'seen') OR (state = N'snoozed' AND snoozed_until <= @now))`
+          : 'AND state = @state';
+        if (state === 'new' || state === 'seen') request.input('state', sql.NVarChar(16), state);
         const { recordset } = await request.query<ItemRow>(`SELECT TOP (@limit) ${itemSelect()}
           FROM dbo.proactive_items WHERE owner_object_id = @owner ${where}
           ORDER BY created_at DESC, id DESC;`);
@@ -353,6 +355,16 @@ export function createProactiveStore(pool: sql.ConnectionPool, ownerObjectId: st
         } finally {
           guard?.signal.removeEventListener('abort', cancel);
         }
+      },
+      async markTodoAdded(itemIds: readonly string[]) {
+        if (itemIds.length === 0) return;
+        await pool.request()
+          .input('owner', sql.UniqueIdentifier, owner)
+          .input('ids', sql.NVarChar(sql.MAX), JSON.stringify(itemIds))
+          .query(`UPDATE item SET todo_added = 1
+            FROM dbo.proactive_items AS item
+            INNER JOIN OPENJSON(@ids) WITH (id uniqueidentifier '$') AS requested ON requested.id = item.id
+            WHERE item.owner_object_id = @owner AND item.kind = N'finding';`);
       },
     },
     runs: {
