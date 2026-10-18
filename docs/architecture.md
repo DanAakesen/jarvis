@@ -5315,6 +5315,24 @@ P8-33 scratch Chromium checks cover the adaptive quality thresholds, compact pho
 The reference lockfile is standalone, outside root workspaces, and contains the prototype's dependencies only. Bundled Three.js/Phosphor notices are retained. Physical/hardware performance, live activity/voice behavior and normal-rate flicker acceptance remain unverified; P8-31 adds no production Three.js dependency.
 ## Daily integration boundary (P12-01)
 
+### Temporary offline migration tooling (18 October 2026; P12-22)
+
+`apps/backend/src/daily/migration/` contains the removable export-bundle
+manifest/reader, table decisions, validator, deterministic synthetic generator
+and standalone CLI. It uses existing backend TypeScript build conventions and
+Node built-ins, with no new dependency, SQL access or network access.
+Production server entrypoints must not import it; it is outside the production
+request path and does not change Daily reads/writes or migrations.
+Validation streams private bytes with bounded buffers and disk-backed digest
+indexes, emits value-free reports, and blocks unruled/unclassified mixed-source
+payloads. Source owner emails never select an identity; legacy credentials
+never become active credentials. Real exports remain encrypted, owner-only and
+outside repositories, agents and GitHub artifacts. This is synthetic evidence,
+not live-schema or data parity. P12-27 reuses the decisions/reader/generator;
+P12-19 removes this temporary directory following its README. See the
+[bundle format](daily-migration-bundle.md) and
+[owner runbook](daily-migration-runbook.md).
+
 ### Inactive shared feed workflow (17 October 2026; P12-09)
 
 The optional fifth `createDailyData(pool, owner, now, frida, feeds)` argument
