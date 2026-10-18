@@ -117,21 +117,30 @@ export function DataRecords({ source, rows, units = {}, onOpenRecord, openLabel 
               {column.label}{unit ? ` (${unit})` : ''}</th>;
           })}<th scope="col">Details</th></tr></thead>
           <tbody>{rows.map((row, index) => <tr key={keys[index]}>
-            {columns.map(column => <td key={column.key} className={typeof row[column.key] === 'number' ? 'daily-record-number' : undefined}>
-              <span className="daily-record-cell">{value(row, column.key)}</span>
-            </td>)}
+            {columns.map((column, columnIndex) => {
+              const cell = <span className="daily-record-cell">{value(row, column.key)}</span>;
+              const className = typeof row[column.key] === 'number' ? 'daily-record-number' : undefined;
+              return columnIndex === 0
+                ? <th key={column.key} scope="row" className={className}>{cell}</th>
+                : <td key={column.key} className={className}>{cell}</td>;
+            })}
             <td>{details(row, index)}</td>
           </tr>)}</tbody>
         </table>
       </ScrollTable>}
-    {active && <section id={`${id}-detail`} ref={panel} className="daily-record-panel" role="region"
-      aria-labelledby={`${id}-title`} tabIndex={-1} onKeyDown={event => { if (event.key === 'Escape') { event.stopPropagation(); close(); } }}>
-      <div className="daily-record-panel-heading"><h3 id={`${id}-title`}>Details for {rowLabel(active, selectedIndex)}</h3>
-        <button className="secondary-button" type="button" onClick={close}>Close details</button></div>
-      <RecordFields source={source} row={active} units={units} />
-      {onOpenRecord && typeof active.id === 'string' && active.id.length > 0 &&
-        <button className="secondary-button" type="button" onClick={() => onOpenRecord(active.id as string)}>{openLabel}</button>}
-      <details><summary>Raw record</summary><pre>{JSON.stringify(active, null, 2)}</pre></details>
-    </section>}
+    <section id={`${id}-detail`} ref={panel} className="daily-record-panel" role="region"
+      aria-labelledby={`${id}-title`} tabIndex={-1} hidden={!active}
+      onKeyDown={event => { if (event.key === 'Escape') { event.stopPropagation(); close(); } }}>
+      <div className="daily-record-panel-heading">
+        <h3 id={`${id}-title`}>{active ? `Details for ${rowLabel(active, selectedIndex)}` : 'Record details'}</h3>
+        {active && <button className="secondary-button" type="button" onClick={close}>Close details</button>}
+      </div>
+      {active && <>
+        <RecordFields source={source} row={active} units={units} />
+        {onOpenRecord && typeof active.id === 'string' && active.id.length > 0 &&
+          <button className="secondary-button" type="button" onClick={() => onOpenRecord(active.id as string)}>{openLabel}</button>}
+        <details><summary>Raw record</summary><pre>{JSON.stringify(active, null, 2)}</pre></details>
+      </>}
+    </section>
   </div>;
 }

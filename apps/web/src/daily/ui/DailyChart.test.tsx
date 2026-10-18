@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { renderToString } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DailyChart } from './DailyChart';
@@ -16,7 +16,10 @@ describe('DailyChart', () => {
     expect(screen.getByRole('img', { name: 'Synthetic daily values' })).toBeTruthy();
     expect(screen.queryByRole('table', { name: 'Synthetic daily values data' })).toBeNull();
     fireEvent.click(screen.getByText('View data table'));
-    expect(screen.getByRole('table', { name: 'Synthetic daily values data' })).toBeTruthy();
+    const table = screen.getByRole('table', { name: 'Synthetic daily values data' });
+    expect(within(table).getByRole('columnheader', { name: 'Series' })).toBeTruthy();
+    expect(within(table).getAllByRole('columnheader')).toHaveLength(5);
+    expect(within(table).getAllByRole('rowheader', { name: 'Synthetic mass' })).toHaveLength(2);
     expect(container.querySelector('svg line')).toBeTruthy();
     expect(container.querySelector('svg path, svg rect')).toBeTruthy();
   });

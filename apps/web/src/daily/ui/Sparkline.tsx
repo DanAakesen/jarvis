@@ -1,7 +1,11 @@
+import { formatNumber } from './formatters';
+
 export function Sparkline({ values, label }: { values: readonly (number | null)[]; label: string }) {
   const known = values.flatMap((value, index) =>
     value !== null && Number.isFinite(value) ? [{ value, index }] : []);
   if (!known.length) return <span className="daily-sparkline-empty">No trend available</span>;
+  const textAlternative = `${label}: ${values.map((value, index) =>
+    `observation ${index + 1}, ${value !== null && Number.isFinite(value) ? formatNumber(value) : 'Not recorded'}`).join('; ')}`;
   const minimum = Math.min(...known.map(point => point.value));
   const maximum = Math.max(...known.map(point => point.value));
   const scale = maximum === minimum ? 1 : maximum - minimum;
@@ -14,7 +18,7 @@ export function Sparkline({ values, label }: { values: readonly (number | null)[
       drawing: true,
     };
   }, { path: '', drawing: false }).path;
-  return <svg className="daily-sparkline" viewBox="0 0 120 32" role="img" aria-label={label}>
+  return <svg className="daily-sparkline" viewBox="0 0 120 32" role="img" aria-label={textAlternative}>
     <path d={path} />
   </svg>;
 }

@@ -39,7 +39,7 @@ describe('Daily presentation kit', () => {
     const { container, rerender } = render(<Sparkline values={[null, Number.NaN]} label="Synthetic trend" />);
     expect(screen.getByText('No trend available')).toBeTruthy();
     rerender(<Sparkline values={[2, null, 5]} label="Synthetic trend" />);
-    expect(screen.getByRole('img', { name: 'Synthetic trend' })).toBeTruthy();
+    expect(screen.getByRole('img', { name: 'Synthetic trend: observation 1, 2; observation 2, Not recorded; observation 3, 5' })).toBeTruthy();
     expect(container.querySelector('path')?.getAttribute('d')).toContain('M4.0');
     expect(container.querySelector('path')?.getAttribute('d')).toContain('M116.0');
   });

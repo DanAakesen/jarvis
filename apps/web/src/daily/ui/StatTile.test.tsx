@@ -23,7 +23,9 @@ describe('StatTile', () => {
     }} sparkline={{ values: [1, null, 3], label: 'Synthetic time trend' }} />);
     expect(container.querySelector('.daily-stat-tile--compact')).toBeTruthy();
     expect(screen.getByText('+2 min')).toBeTruthy();
-    expect(screen.getByRole('img', { name: 'Synthetic time trend' })).toBeTruthy();
+    expect(screen.getByRole('img', {
+      name: 'Synthetic time trend: observation 1, 1; observation 2, Not recorded; observation 3, 3',
+    })).toBeTruthy();
     expect(screen.getByText('a long recorded value that wraps')).toBeTruthy();
     rerender(<StatTile label="Synthetic total" value={10} delta={{ current: 10, previous: null, unit: 'min' }} />);
     expect(screen.getByText('No comparison')).toBeTruthy();
