@@ -198,6 +198,25 @@ describe('GitHub project completion policies', () => {
     expect(test.recordEvent.mock.calls[0]).toEqual(test.recordEvent.mock.calls[1]);
   });
 
+  it('keeps repeated rejected completion blocks subject to durable deduplication after markDone', async () => {
+    const test = fixture(candidate('deliver_pr'));
+    test.transition.mockResolvedValue({ kind: 'invalid-transition' });
+
+    await test.evaluator.handle(mapping);
+    await test.evaluator.handle(mapping);
+
+    expect(test.transition).toHaveBeenCalledTimes(2);
+    expect(test.recordEvent).toHaveBeenCalledTimes(2);
+    expect(test.recordEvent).toHaveBeenCalledWith({
+      taskId: '7',
+      type: 'project_policy_blocked',
+      summary: 'The task changed before policy completion; completion was not applied.',
+      payload: { reason: 'The task changed before policy completion; completion was not applied.' },
+      source: 'backend',
+    });
+    expect(test.recordEvent.mock.calls[0]).toEqual(test.recordEvent.mock.calls[1]);
+  });
+
   it('does not mark Done from a green PR before the current runner completion is verified', async () => {
     const test = fixture(candidate('deliver_pr'), { enforceTokenPermissions: true });
     test.setRunnerCompleted(false);
