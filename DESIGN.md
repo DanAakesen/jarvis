@@ -1450,3 +1450,13 @@ variants and remaining workflow-specific layouts. Local synthetic Chromium
 inspection covered the phone and desktop sizes in both themes, plus reduced
 motion. The attention event and healthy Daily/Proactive data states were not
 available in the harness; screenshot captures could not be attached to the PR.
+
+## Border, radius and surface rules (P14-04, 18 October 2026)
+
+Use `--radius-control`, `--radius-panel`, `--radius-window` and `--radius-pill`
+for their matching roles; reserve `50%` for circles and `0` for square edges.
+Structural separators use a single 1px `--rule` or `--control-rule` border.
+Selected and status states use shared surfaces, text or icons, never a colored
+edge alone. Use real neutral borders instead of inset-shadow borders. Panels,
+popovers, rows and hover states reuse the existing surface roles and
+`--panel-shadow`. Keep exact, reasoned exceptions in the stylesheet ratchet.

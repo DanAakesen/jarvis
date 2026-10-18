@@ -41,10 +41,10 @@
   gap: 6px;
   padding: 8px 16px;
   overflow: auto;
-  color: #fff;
+  color: var(--highlight-solid);
   text-align: center;
   pointer-events: auto;
-  text-shadow: 0 2px 4px #000, 0 0 14px rgb(190 235 255 / 50%);
+  text-shadow: 0 2px 4px var(--ink-solid), 0 0 14px color-mix(in srgb, var(--voice-glow-source) 50%, transparent);
 }
 .voice-status-heading { display: inline-flex; align-items: center; }
 .voice-status-label {
@@ -54,7 +54,7 @@
   letter-spacing: .025em;
   animation: voice-status-arrive var(--motion-state) var(--ease-standard);
 }
-.voice-status-detail { max-width: 44ch; color: #fff; font-size: var(--type-caption); line-height: 1.4; overflow-wrap: anywhere; }
+.voice-status-detail { max-width: 44ch; color: var(--highlight-solid); font-size: var(--type-caption); line-height: 1.4; overflow-wrap: anywhere; }
 @keyframes voice-status-arrive { from { opacity: .5; } to { opacity: 1; } }
 
 .more-menu-note {
