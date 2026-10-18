@@ -1076,8 +1076,12 @@ The parent alone owns the approved combined normal PR/CI/deployment pipeline.
 No new worker, dependency restore, private action or Daily activation follows
 from source integration. Internal patch artifacts may retain historical
 itinerary deletion hunks; do not publish those artifacts or old screenshots.
-Existing protected export/import/device/coaching and physical-phone gates stay
-in force. Earlier lane-specific publication holds describe those earlier stages.
+The old Daily export/import route, including the Sites database-export/preflight
+path, is withdrawn and is not a prerequisite for #1005; do not revive it.
+Source-compatible API/schema work remains required. Device, source-parity and
+physical-phone acceptance remain separate gates. Earlier lane-specific
+publication holds describe those earlier stages and do not override the full
+#1005 scope below.
 
 ## Calendar batch/reply recovery checks (16 October 2026; local candidate)
 
@@ -1294,10 +1298,10 @@ Existing read-only Node/dependency fixtures are qualified alternatives, not
 permission to stub missing modules, weaken checks or install into parent caches.
 
 No food-write route/tool, guessed intent/confirmation, hosted ChatGPT OAuth,
-provider/model call, UI, coaching, widget, private export/import, device
-credential or cutover is released here. #717/draft #741 remains separately
-parked. Source identity/parity and real iPhone/provider acceptance remain
-unverified; the original Daily remains canonical. Stop before commit,
+provider/model call, UI, coaching, widget, device credential or cutover is
+released here. The cancelled #717/#741 export path is not resumed.
+Source identity/parity and real iPhone/provider acceptance remain unverified;
+the original Daily remains canonical. Stop before commit,
 publication, merge or deployment; coordinator owns integrated review/release.
 
 ## Chat format and phone viewport follow-up (16 October 2026; local candidate)
@@ -1839,8 +1843,8 @@ This retains actual prerequisites rather than bypassing dependency gates.
 
 Do not chase or guess maintenance/TDEE, nutrition-completeness,
 freshness-expiry or readiness-scale contracts for the excluded feature.
-Existing core validation/freshness and protected backup/export,
-authoritative-original-source/parity, real-device/provider, final-delta,
+Existing core validation/freshness and source-compatible API/schema and
+historical ingestion, authoritative-original-source/parity, real-device/provider, final-delta,
 rollback and cutover gates remain. The coordinator's read-only original-repo
 identity comparison is not health-schema or data-parity proof; this lane must
 not search that original app. This is a docs-only exact-base handoff: no
@@ -4587,9 +4591,19 @@ cleanup and reduced motion. Captures/report: `docs/ui/screenshots/p8-37-integrat
 These use scratch authentication/API/socket and fake media, not live providers.
 ## DailyDeveloperCloud / P12 execution boundary
 
+**Current cleanup direction, 18 October 2026.** The Sites database-export and
+bundle-import approach (#717/#721/#982) is withdrawn/not planned. PRs #741/#987
+remain closed and unmerged; merged offline P12-22/#968 tooling and dedicated
+format/runbook documentation are removed under #1006. Do not restart builders
+or treat the cancelled issues as migration prerequisites. #1005 is the
+source-contract-first direction for the original Daily API/schema,
+corresponding Jarvis API/SQL schema and supported historical ingestion/replay.
+This cleanup does not change permanent health upload/processing, SQL migrations,
+the source-to-SQL mapping, original Daily or the separate #734 retirement gates.
+
 **Current local exception, 13 October 2026.** Direct human approval supersedes cloud-only execution; use the isolated Jarvis local worktree/branch above and keep both cloud workers idle. #719's inactive SQL design merged in #805, with independent review, full combined-main CI38457298725 and Deploy38456829763/smoke passed. Its external issue closure does not prove live/private/device acceptance. #720 alone is now released for inactive synthetic processing/read models. Migration 0047 was allocated against fetched main; recheck allocation/containment before readiness, rerunning checks when main moves. Neither `index.ts` nor module composition registers a processor, route, flag, scheduler or credential. No Azure access, source edits, real records, secret extraction, new resource/grant, phone change or own merge. The prior PR805-only review-agent approval does not authorize another scope. Historical cloud releases below do not override this boundary.
 
-Run backend lint/build plus health-upload, auth, app, module and migration tests; normal full CI/isolated SQL/container checks remain required. Local `npm ci` encountered a configured mirror 404 and a public-registry TLS handshake failure on the unchanged lockfile: do not disable TLS or change global npm settings to bypass it. Report local checks as blocked unless a supported install succeeds; use normal repository CI, never another project's environment. No local SQL image or production SQL access is approved. Keep all source backup/import/reconciliation, credential delivery, live/device and rollback gates distinct from synthetic code evidence. #717's protected storage credential/preflight is separate and is not transferred locally by the implementation approval.
+Run backend lint/build plus permanent health-upload, auth, app, module and schema tests; normal full CI/isolated SQL/container checks remain required. Local `npm ci` encountered a configured mirror 404 and a public-registry TLS handshake failure on the unchanged lockfile: do not disable TLS or change global npm settings to bypass it. Report local checks as blocked unless a supported install succeeds; use normal repository CI, never another project's environment. No local SQL image or production SQL access is approved. Keep source-contract, historical ingestion/replay, credential delivery, live/device and rollback acceptance distinct from synthetic code evidence. No Sites database-export/import or protected-export credential work remains in scope.
 
 ### Historical cloud handoffs (superseded release instructions)
 
@@ -4597,13 +4611,21 @@ Current release is ONLY #727/P12-12 inactive export on `codex/p12-12-nutrition-e
 
 Current #725 continuation: #746 merged at `93553e9`; only the three feed-boundary corrections are released on `codex/p12-10-feed-boundary-corrections` / draft #754. Validate calendar ranges before any refresh/storage/provider/model work; preserve nonempty-number versus delivery-detail order grouping and full validated SENT-label direction before DTO truncation. Synthetic and isolated SQL regressions/full exact-head CI are required. Keep #754 draft until explicit coordinator readiness release after independent review, Refs #725/open issue/native dependencies, default-off and all consent/model/provider/private/device gates. No #727 dispatch or own merge. The following #746 checkpoint record is historical and does not override this continuation gate.
 
-P12-10 (#725) remains sole released scope on `codex/p12-10-google-feeds` / #746. Verified pure source contracts drive resumable bounded Gmail/calendar retrieval, exact selectors/keys, owner-local snapshots/suppressions and independent manual refresh. Coordinator supplied the existing protected Foundry chat-completions boundary: inactive factory reuses configured endpoint, managed-identity callback, canonical chat settings/catalogue and usage accounting; JSON-object transport has strict local schema/source-date checks, no tools/runner relay/new model role. Missing/failed capability reports unavailable. Scan-generation/cancellation and per-source UTF-8/item bounds cannot promote partial results or lose healthy-source success. Existing calendar.events consent does not establish calendarList access (L125); no broader OAuth/resource/secret authorization. Run `npm test --workspace @jarvis/backend -- src/daily/feeds src/google src/core/tool-registry.test.ts src/modules.test.ts src/auth/auth.test.ts`, backend lint/build and exact-head SQL/full CI/container smoke. Real `feeds.integration.test.ts` uses only isolated loopback SQL CI; local SQL image remains forbidden. Coordinator accepted 895b7c3/full CI 38310725882 as a reviewed inactive intermediate implementation. Mark #746 ready after final documentation/exact-head full CI, retain Refs #725 and keep the issue/native dependencies open. CalendarList owner consent, deployed identity/model and Google/provider parity, protected backup/import/reconciliation and physical-device gates remain unverified; no activation or permission change. #717/#741 stays parked, original Daily canonical. Post one final completion/blocker comment and final answer; no own merge/unsupported messaging.
+P12-10 (#725) remains sole released scope on `codex/p12-10-google-feeds` / #746. Verified pure source contracts drive resumable bounded Gmail/calendar retrieval, exact selectors/keys, owner-local snapshots/suppressions and independent manual refresh. Coordinator supplied the existing protected Foundry chat-completions boundary: inactive factory reuses configured endpoint, managed-identity callback, canonical chat settings/catalogue and usage accounting; JSON-object transport has strict local schema/source-date checks, no tools/runner relay/new model role. Missing/failed capability reports unavailable. Scan-generation/cancellation and per-source UTF-8/item bounds cannot promote partial results or lose healthy-source success. Existing calendar.events consent does not establish calendarList access (L125); no broader OAuth/resource/secret authorization. Run `npm test --workspace @jarvis/backend -- src/daily/feeds src/google src/core/tool-registry.test.ts src/modules.test.ts src/auth/auth.test.ts`, backend lint/build and exact-head SQL/full CI/container smoke. Real `feeds.integration.test.ts` uses only isolated loopback SQL CI; local SQL image remains forbidden. Coordinator accepted 895b7c3/full CI 38310725882 as a reviewed inactive intermediate implementation. Mark #746 ready after final documentation/exact-head full CI, retain Refs #725 and keep the issue/native dependencies open. CalendarList owner consent, deployed identity/model and Google/provider parity, source-compatible Daily ingestion and physical-device gates remain unverified; no activation or permission change. #717/#721/#982 and #741/#987 are cancelled/not planned; #1005 is the source-contract-first direction. Original Daily remains canonical. Post one final completion/blocker comment and final answer; no own merge/unsupported messaging.
 
-P12-07 (#722) is released after closed/merged/deployed #718, on `codex/p12-07-nutrition-services` / draft #743. It owns nutrition services/typed handlers, synthetic SQL tests and narrow migrations 0042/0043; no registration. Coordinator supplied read-only source HEAD `9e193554c9c8c7c23a788ed3d2b0582580b76c0f`, release-10/Frida-5.5 public DOI/DTO evidence and empty bootstrap/header/cookie/array/numeric shape verification at 16:17:51 UTC. Null/missing provenance remains unavailable. Cloud CONNECT returns HTTP 403; never bypass/borrow sessions. Focused checks: `npm test --workspace @jarvis/backend -- src/daily/nutrition/model.test.ts src/daily/nutrition/store.test.ts src/daily/nutrition/frida.test.ts src/daily/nutrition/handlers.test.ts src/daily/index.test.ts src/daily/store/owner-store.test.ts src/database/migrations.test.ts src/modules.test.ts src/auth/auth.test.ts`, lint/build and exact-head Database/full CI (auth needs loopback permission). Latest coordinator gate keeps draft until final checks/independent review; no own merge. No private Daily tools; #717/#741 remains parked and #719 unreleased. No downstream dispatch.
+P12-07 (#722) is released after closed/merged/deployed #718, on `codex/p12-07-nutrition-services` / draft #743. It owns nutrition services/typed handlers, synthetic SQL tests and narrow migrations 0042/0043; no registration. Coordinator supplied read-only source HEAD `9e193554c9c8c7c23a788ed3d2b0582580b76c0f`, release-10/Frida-5.5 public DOI/DTO evidence and empty bootstrap/header/cookie/array/numeric shape verification at 16:17:51 UTC. Null/missing provenance remains unavailable. Cloud CONNECT returns HTTP 403; never bypass/borrow sessions. Focused checks: `npm test --workspace @jarvis/backend -- src/daily/nutrition/model.test.ts src/daily/nutrition/store.test.ts src/daily/nutrition/frida.test.ts src/daily/nutrition/handlers.test.ts src/daily/index.test.ts src/daily/store/owner-store.test.ts src/database/migrations.test.ts src/modules.test.ts src/auth/auth.test.ts`, lint/build and exact-head Database/full CI (auth needs loopback permission). Latest coordinator gate keeps draft until final checks/independent review; no own merge. No private Daily tools; the cancelled #717/#721/#982 export/import path is not a prerequisite; #719 remains unreleased. No downstream dispatch.
 
 Standing authorization: continue approved migration through coordinator dependency/gate releases without another generic approval; never independently dispatch blocked tasks or merge your own PR. For future Daily React/rich UI, read product-ui and current DESIGN.md; use current Jarvis canonical styles.css tokens/components/themes/density/motion and phone/workspace patterns, preserve data/capabilities through restyling, and provide actual mobile-first browser acceptance. No separate Daily skin/theme or replacement shell/voice/window manager; generated view theme context uses the existing trusted bridge without widening permissions. This does not expand #718 beyond backend/schema.
 
-P12-02 (#717) is parked/deferred with draft #741; no resumption without explicit coordinator release. P12-03 (#718) depends only on closed #716 and owns `daily/store`, migration `0041_daily_owner_schema.sql` and synthetic SQL tests. Run `npm test --workspace @jarvis/backend -- src/daily/index.test.ts src/daily/store/owner-store.test.ts src/modules.test.ts src/auth/auth.test.ts`, backend lint/build, and real `npm run test:database --workspace @jarvis/backend` using only the documented loopback SQL fixture or exact-head GitHub Database CI. A local SQL image pull was forbidden; CI must prove the actual DDL and behavior. No private data, live import or source mutation.
+P12-02/#717 is cancelled/not planned; its export approach is not resumed.
+P12-03/#718 owns `daily/store`, migration `0041_daily_owner_schema.sql` and
+synthetic SQL tests. Run `npm test --workspace @jarvis/backend --
+src/daily/index.test.ts src/daily/store/owner-store.test.ts src/modules.test.ts
+src/auth/auth.test.ts`, backend lint/build, and real
+`npm run test:database --workspace @jarvis/backend` using only the documented
+loopback SQL fixture or exact-head GitHub Database CI. A local SQL image pull
+was forbidden; CI must prove the actual DDL and behavior. No private data,
+historical replay or source mutation.
 
 Use the published DailyDeveloperCloud environment, explicitly source `/workspace/.jarvis-tools/activate.sh` before repository commands in every fresh shell, and read environment-owned STARTUP.md/setup-report.md. No automatic BASH_ENV activation. Node 22.23.3/npm 10.9.9/Python 3.12.14; Python components use separate retained .venv environments.
 
@@ -4611,7 +4633,7 @@ Use the published DailyDeveloperCloud environment, explicitly source `/workspace
 
 P12-01 checks: `npm test --workspace @jarvis/contracts`; `npm test --workspace @jarvis/backend -- src/daily/index.test.ts src/modules.test.ts src/auth/auth.test.ts`; affected workspace lint/build. Never disable test isolation or weaken checks. Tests are synthetic; default-off composition leaves current route/tool/navigation registration unchanged. This issue adds no production activation, SQL schema, import or UI page.
 
-Dan approved P12 on 12 October 2026 and explicitly released only P12-01 for this worker. The later [execution authorization](https://github.com/DanAakesen/jarvis/issues/716#issuecomment-6124634183) supersedes the original backlog-only and extra cutover-approval wording: eventual production cutover is pre-authorized only after dependency, parity, reconciliation, backup and rollback gates pass. Original Daily continues ordinary authorized food/health writes and remains running/canonical before cutover. Migration tooling must not alter its application/source code/schema or rewrite its records; final-delta reconciliation accounts for ongoing normal use. Read-only export belongs in the protected migration workflow. Legacy operation may be deprecated only after all in-scope data, features and sync are migrated and verified and rollback is protected; never delete the original repository or data. New secrets/access and unapproved paid resources retain their explicit-confirmation boundaries. This issue performs no cutover or production writes.
+Dan approved P12 on 12 October 2026 and explicitly released only P12-01 for this worker. The later [execution authorization](https://github.com/DanAakesen/jarvis/issues/716#issuecomment-6124634183) supersedes the original backlog-only and extra cutover-approval wording. The source-contract-first API/schema and supported historical ingestion/replay direction is now specified in #1005; the cancelled database-export/bundle-import approach is withdrawn. Original Daily continues ordinary authorized food/health writes and remains running/canonical before any future cutover. This cleanup does not alter its application/source code/schema or records. Any final-delta, cutover or eventual legacy retirement follows its separate reviewed gates; never delete the original repository or data. New secrets/access and unapproved paid resources retain their explicit-confirmation boundaries. This issue performs no cutover or production writes.
 
 No direct Azure access, original Daily checkout/Sites edits, private health/food data/exports or production credentials in coding/public Git. Reuse current login/session/owner and single conversation; no TickTick. Live-provider and physical-iPhone acceptance remain separately verified evidence; main-only release workflows apply.
 
@@ -4836,6 +4858,16 @@ The stylesheet geometry ratchet is part of the web tests:
 `npm test --workspace @jarvis/web -- --run src/stylesheets.test.tsx`.
 It parses every CSS file under `apps/web/src`; new exceptions need an exact
 value and a reason in the allow-list.
+
+## P12-29 Health Auto Export implementation (18 October 2026)
+
+The source-to-Jarvis inventory is `docs/reference/daily-v182/source-to-jarvis-matrix.md`; the complete original contract remains under `docs/reference/daily-v182/`. The Health Auto Export API, owner-created credential lifecycle and restart-safe processor reuse the existing backend, SQL pool and owner authentication. `JARVIS_HEALTH_UPLOAD_ENABLED` defaults false in code; the reviewed backend infrastructure explicitly sets it true, with rollback by setting it false and updating the pin test in the same commit. This does not mean deployment or owner credential issuance occurred. The UI derives the upload endpoint only from configured `backendUrl`; never construct a public URL from forwarded headers or document a guessed live endpoint/token.
+
+`docs/daily-health-ingestion/README.md` records the API shape, request/storage/normalization limits, activation and rollback, plus conservative historical batching instructions: preserve complete metric/date groups; cap ingress at 8 MiB; cap normalized output at 10,000 rows/8 MiB; and remain within the 256 MiB/10,000-row per-owner inbox. These are hard limits, not target batch sizes or proof of complete history. Health Auto Export date-range/chunking controls, settings-screen steps and current app behavior are unverified; do not substitute Health Sync. No synthetic test or local configuration is live phone acceptance.
+
+The owner withdrew the old Daily export/import route for #1005. Keep all selected Daily API/schema/tool changes in that issue and PR; do not revive the withdrawn importer or use real records. The full 16-capability set includes nutrition history/analysis/balance, conversational Status, coach profile, meal preference and recovery; fixed renderers, commitments/orders/experiments, meal plans and Apple Health meal write-back stay excluded. Matrix entries distinguish tested local capability from source-path parity. Three grouped registrations currently cover the nine remaining operations; the exact nine-tool naming request is still a mismatch. A private credential handoff can happen only after deployment and owner creation; no real endpoint/token belongs in this repository.
+
+For this boundary, run backend TypeScript/build, focused `daily/health-upload` and `daily/health` tests, `database/migrations.test.ts`, and web tests for `HealthUploadSettings`/Daily overview. SQL integration tests require the existing isolated loopback SQL Server arrangement used by Database CI; never point them at production. Inspect the Settings panel at desktop and 380 px before claiming visual verification.
 
 ## P13-16 chat and voice recall (18 October 2026)
 

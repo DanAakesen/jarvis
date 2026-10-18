@@ -1,13 +1,33 @@
 # Approved Daily migration to Jarvis
 
-## Offline export tooling status (18 October 2026; P12-22)
+## Withdrawn database export/import approach (18 October 2026)
 
-The [version 1 bundle format](daily-migration-bundle.md) and
-[owner runbook](daily-migration-runbook.md) define offline validation and
-synthetic fixtures only. Real source-schema reconciliation, private export and
-import remain owner-only gates; no production records or cutover are verified.
-The reusable temporary tooling prepares P12-27's importer, not an import here.
-Refs DanAakesen/jarvis#717 and DanAakesen/jarvis#721.
+The owner cancelled the Sites database-export/bundle-import approach. PRs #741
+and #987 remain closed and unmerged; #717, #721 and #982 are not planned.
+Merged P12-22/#968 bundle-validation tooling and its dedicated format/runbook
+documentation were removed under #1006. That synthetic tooling never read or
+moved source records.
+
+The source-contract-first direction is #1005: implement the Jarvis API and SQL
+schema from the original Daily API/schema and support historical ingestion
+through that contract. This is separate from eventual legacy retirement under
+#734. Preserve the original Daily and its data; this cleanup does not switch it
+off, alter its API, or change permanent health ingestion/processing or SQL
+migrations. Keep the [source-to-SQL mapping](daily-schema-mapping.md) as
+implementation evidence, not as an export manifest or bundle-import plan.
+
+## Owner-approved #1005 scope (18 October 2026)
+
+For the sixteen selected source capabilities only, this scope supersedes the
+15 October exclusion below: nutrition history, analysis and calorie balance,
+conversational coach status, profile, meal-preference and recovery-period reads
+and confirmed owner writes are delivered as data-only native tools on the
+existing services. The exclusion still stands for new coaching, recomposition
+and recovery automation, commitments, orders, weekly experiments, meal plans,
+fixed Status renderers and Apple Health meal write-back. The decision is
+recorded in [the decision log](decisions.md) and `PRODUCT.md`, and the
+source-to-Jarvis mapping is in
+[the implementation matrix](reference/daily-v182/source-to-jarvis-matrix.md).
 
 ## Current approved scope (15 October 2026)
 
@@ -37,14 +57,14 @@ suggestion allowance is the owner's resting burn plus active energy so far today
 minus the owner's deficit (see the decision log), with no BMR/TDEE estimate and
 no coaching. Missing new
 coaching contracts are not completion gates for retained core work. Existing
-core validation, truthful unknowns/freshness and protected backup/export,
-authoritative-original-source/parity, real-device/provider, final-delta,
+core validation, truthful unknowns/freshness and source-compatible API/schema,
+historical ingestion, authoritative-source/parity, real-device/provider, final-delta,
 rollback and cutover gates remain unchanged. Scope the acceptance campaign to
 retained capabilities, not removed coaching/widget/fixed-view deliverables.
 Original Daily continues normal authorized use and remains canonical before
 cutover; original source/schema/data and retained records are not changed.
 
-Dan approved P12 on 12 October 2026 and explicitly released only P12-01 for this worker. The later [execution authorization](https://github.com/DanAakesen/jarvis/issues/716#issuecomment-6124634183) supersedes the original backlog-only and extra cutover-approval wording: eventual production cutover is pre-authorized only after dependency, parity, reconciliation, backup and rollback gates pass. Original Daily continues ordinary authorized food/health writes and remains running/canonical before cutover. Migration tooling must not alter its application/source code/schema or rewrite its records; final-delta reconciliation accounts for ongoing normal use. Read-only export belongs in the protected migration workflow. Legacy operation may be deprecated only after all in-scope data, features and sync are migrated and verified and rollback is protected; never delete the original repository or data. New secrets/access and unapproved paid resources retain their explicit-confirmation boundaries. This issue performs no cutover or production writes.
+Dan approved P12 on 12 October 2026 and explicitly released only P12-01 for this worker. The later [execution authorization](https://github.com/DanAakesen/jarvis/issues/716#issuecomment-6124634183) supersedes the original backlog-only and extra cutover-approval wording: any eventual production cutover follows dependency, source-parity, rollback and retention gates. Original Daily continues ordinary authorized food/health writes and remains running/canonical before cutover. The cancelled database-export/import tooling must not alter its application/source code/schema or rewrite records; the source-contract-first API/schema and supported historical ingestion/replay are specified in #1005. Any future final-delta reconciliation accounts for ongoing normal use. Legacy operation may be deprecated only after all in-scope data, features and sync are migrated and verified and rollback is protected; never delete the original repository or data. New secrets/access and unapproved paid resources retain their explicit-confirmation boundaries. This issue performs no cutover or production writes.
 
 ## Integration contract implemented by P12-01
 
@@ -131,15 +151,15 @@ Before downstream engineering, record this approved P12 backlog and its existing
 
 ### [P12-02: Protected export & inventory](https://github.com/DanAakesen/jarvis/issues/717)
 
-**TEMPORARY — migration-only; remove after acceptance/retention gates** · Integration contract & protected inventory
-
-Complete original backup of the 31-table inventory and retained raw objects; manifest separates in-scope migration from excluded source snapshots.
-
-Re-inventory the current Sites D1 schema (31 tables at review) and retained R2 objects. Prove complete, untruncated export; record table counts/checksums and retained-object coverage. Keep real records in encrypted private storage; no credentials, real exports or health fixtures in this public repo. Exporter/staging is temporary.
+**CANCELLED — not planned (18 October 2026).** No Sites database exporter,
+private export inventory, or bundle prerequisite is active. The historical
+source-to-SQL mapping remains in [daily-schema-mapping.md](daily-schema-mapping.md);
+source-contract-first API/schema and supported historical ingestion are tracked
+in #1005.
 
 ### [P12-03: Daily SQL schema & owner mapping](https://github.com/DanAakesen/jarvis/issues/718)
 
-Sequentially released after closed #716; parked #717 is not a dependency. [Explicit source-table/field mapping and reconciliation limits](daily-schema-mapping.md) distinguish supplied schema definitions from live schema/export evidence. P12-03 adds only empty owner-bound SQL tables and an inactive authenticated-owner read boundary; no import, downstream service, device auth, UI or Daily activation.
+Sequentially released after closed #716; #717's cancelled export path is not a prerequisite. [Explicit source-table/field mapping and compatibility limits](daily-schema-mapping.md) preserve supplied schema definitions and source-to-target constraints. P12-03 adds only empty owner-bound SQL tables and an inactive authenticated-owner read boundary; no source records were imported, and no downstream service, device auth, UI or Daily activation follows from this schema work.
 
 **NEW DAILY CAPABILITY — permanent** · Integration contract & protected inventory
 
@@ -175,15 +195,16 @@ Preserve metrics, sleep/wake dates, distinct qualifying workouts, workout detail
 
 ### [P12-06: Import, reconcile & shadow comparison](https://github.com/DanAakesen/jarvis/issues/721)
 
-**TEMPORARY — migration-only; remove after acceptance/retention gates** · Backend & migration rehearsal
-
-Private repeatable migration runner, staging, retained raw objects, SQL integrity and in-scope Daily-to-Azure comparison.
-
-Every exported record has an import or explicit exclusion decision. Import in-scope data, stable IDs, revisions and tombstones; exclude TickTick payloads from active feeds. Copy only retained sanitized raw objects with remaining retention, never fabricate expired originals. Compare read-only Azure results against Sites and prove resumable import and reverse-delta recovery. Importer/staging/comparison tooling is temporary.
+**CANCELLED — not planned (18 October 2026).** No bundle importer, database
+staging or Sites-to-Azure shadow comparison is being delivered. Stable IDs,
+revisions, tombstones, owner mapping and source-specific semantics remain
+relevant to the source-compatible API/schema and historical ingestion work in
+#1005; this cancellation does not authorize data movement or change permanent
+ingestion.
 
 ### [P12-07: Nutrition tools, Frida & meal planning](https://github.com/DanAakesen/jarvis/issues/722)
 
-Released after closed/deployed #718. Draft #743 implements inactive nutrition services/typed handlers from supplied legacy contracts, server-resolved plan snapshots and guarded 0042/0043 migrations. [Boundary and validation](../apps/backend/src/daily/nutrition/README.md) records read-only source/public format evidence. Preserve Frida 5.5/release 10 with DTU/DOI attribution, per-100-g units, nullable nutrients/unavailable provenance and separate incomplete subtotals. Bootstrap is verified empty-body plus public token header/cookie; no session values are borrowed. Cloud CONNECT is blocked with HTTP 403. No live provider success, real import, Apple Health queue or activation. P12-09 owns trusted evidence/confirmation/runtime registration. Final exact-head CI and independent review precede readiness/release; backup/import/live/phone gates stay separate.
+Released after closed/deployed #718. Draft #743 implements inactive nutrition services/typed handlers from supplied legacy contracts, server-resolved plan snapshots and guarded 0042/0043 migrations. [Boundary and validation](../apps/backend/src/daily/nutrition/README.md) records read-only source/public format evidence. Preserve Frida 5.5/release 10 with DTU/DOI attribution, per-100-g units, nullable nutrients/unavailable provenance and separate incomplete subtotals. Bootstrap is verified empty-body plus public token header/cookie; no session values are borrowed. Cloud CONNECT is blocked with HTTP 403. No live provider success, historical replay, Apple Health queue or activation. P12-09 owns trusted evidence/confirmation/runtime registration. Final exact-head CI and independent review precede readiness/release; source-contract, replay/live-provider and phone acceptance remain separate.
 
 **NEW DAILY CAPABILITY — permanent** · Backend & migration rehearsal
 
@@ -244,7 +265,7 @@ Production composition/configuration and the write gate remain off. Source
 delivery does not establish a linked, accepted ChatGPT account.
 Modern-protocol/native-review compatibility and complete retained tool parity
 remain explicit acceptance gaps, alongside real scopes/grants, source/provider,
-phone, protected export/reconciliation and cutover. No access/consent or private
+phone, source-compatible historical ingestion and cutover. No access/consent or private
 operation is performed; #724 stays open and #730 retains its dependencies.
 
 16 October continuation after #866's successful release: the current JarvisPM
@@ -261,7 +282,7 @@ shared read-contract/API/tool and post-commit refresh slice over #720/#722.
 Production composition and all existing data remain unchanged. This does not
 complete #724 or implement its hosted authenticated ChatGPT food-write path.
 Connector authorisation and trusted proposal-acceptance contracts, the one-page
-UI/on-demand GenUI, source/parity, protected export/device and cutover gates
+UI/on-demand GenUI, source-compatible API/replay, source/parity, device and cutover gates
 remain explicit; coaching and widgets stay excluded. Historical task-table
 Status cells are workflow-owned and are not implementation evidence.
 
@@ -283,7 +304,7 @@ activation is released by this documentation change.
 
 After inactive #746 merged, scoped continuation draft #754 corrects caller calendar-range preflight, numberless delivery grouping and SENT-alias direction. No live acceptance or activation is implied. Exact-head synthetic/isolated SQL/full CI and independent review are required; only explicit coordinator release may mark this follow-up ready. Issue/native gates remain open.
 
-Released after closed/deployed #718 and merged #722. [Inactive feed services](../apps/backend/src/daily/feeds/README.md) use coordinator-verified pure consumer/public producer contracts for resumable bounded Gmail/calendar reads, exact selectors, mapped owner-local snapshots/suppressions and manual refresh. The existing protected chat identity/settings/catalogue/usage boundary supplies tool-free JSON extraction with strict local schema and source-timestamp checks; failures remain unavailable, never guessed. Per-source size checks preserve healthy-source success. Consent, deployed-model/live parity/private/phone gates remain open; no new resource/key, OAuth change or activation. Coordinator accepted 895b7c3/full CI 38310725882 for a reviewed inactive intermediate release through #746; final documentation/exact-head CI precede readiness. Refs #725 remains, with the issue open and native dependencies intact. Full acceptance still requires manual CalendarList owner consent, deployed identity/model and Google/provider parity, protected backup/import/reconciliation and physical-device evidence.
+Released after closed/deployed #718 and merged #722. [Inactive feed services](../apps/backend/src/daily/feeds/README.md) use coordinator-verified pure consumer/public producer contracts for resumable bounded Gmail/calendar reads, exact selectors, mapped owner-local snapshots/suppressions and manual refresh. The existing protected chat identity/settings/catalogue/usage boundary supplies tool-free JSON extraction with strict local schema and source-timestamp checks; failures remain unavailable, never guessed. Per-source size checks preserve healthy-source success. Consent, deployed-model/live parity/private/phone gates remain open; no new resource/key, OAuth change or activation. Coordinator accepted 895b7c3/full CI 38310725882 for a reviewed inactive intermediate release through #746; final documentation/exact-head CI precede readiness. Refs #725 remains, with the issue open and native dependencies intact. Full acceptance still requires manual CalendarList owner consent, deployed identity/model and Google/provider parity, source-compatible Daily ingestion and physical-device evidence.
 
 **REUSE EXISTING JARVIS — permanent** · Personal integrations & phone surfaces
 
@@ -443,28 +464,26 @@ or physical-phone/provider acceptance is claimed, and #731 stays open for that.
 
 Parity campaign: shared-user auth / denied-access checks, exact-once writes, four modes, recovery days, phone sync / widget / Shortcut, outage recovery and existing-Jarvis regression tests. Keep useful regression tests permanently.
 
-Verify data manifests, one-user access/denial, retries/exact-once meals, four views in text/voice, recovery exclusions, actual iPhone Health Auto Export, widget/Shortcut, outage/reconnect and existing Jarvis regressions. Confirm SQL capacity/availability and rehearse reverse-delta rollback. Keep production evidence private/redacted and explicitly distinguish browser fixtures from physical-phone/live-provider results. Migration-specific comparison campaign is temporary; useful regression tests remain.
+Verify source-compatible ingestion coverage, one-user access/denial, retries/exact-once meals, current text/voice workflows, actual iPhone Health Auto Export, outage/reconnect and existing Jarvis regressions. Confirm SQL capacity/availability and rehearse authorized rollback. Keep production evidence private/redacted and distinguish browser fixtures from physical-phone/live-provider results. Preserve useful runtime/API/schema tests; the cancelled database comparison campaign is not a prerequisite.
 
 ### [P12-18: Final delta, cutover & rollback window](https://github.com/DanAakesen/jarvis/issues/733)
 
-**TEMPORARY — migration-only.** Final delta, endpoint switch and one canonical Azure writer after all evidence gates. Migration tooling leaves original source code/schema/records untouched; ordinary authorized source writes continue before cutover. Protect a private backup, agreed rollback window and reverse-delta recovery of new Azure writes. No dual canonical food writes. Latest execution authorization governs any older source-freeze/read-only wording.
+**EVENTUAL CUTOVER — separate from this cleanup.** Final delta, endpoint switch and one canonical Azure writer only after the source-compatible ingestion, parity and rollback gates pass. This cleanup leaves original source code/schema/records untouched; ordinary authorized source writes continue. Any future backup and reverse-delta recovery follow their separately approved gates. No dual canonical food writes.
 
 ### [P12-19: Retire legacy and migration-only tooling](https://github.com/DanAakesen/jarvis/issues/734)
 
-**TEMPORARY — migration-only.** Deprecate legacy operation only after complete verified migration and protected rollback/retention gates. Remove temporary export/import/staging/comparison tooling when eligible; preserve permanent ingestion, queues, processors, SQL/Blob, services, regression tests and required backups/evidence. Never delete or modify original repository/data. Credential/access changes still require their normal explicit confirmation.
+**EVENTUAL LEGACY RETIREMENT — #734; not part of this cleanup.** Deprecate legacy operation only after complete verified source-compatible ingestion and separately approved rollback/retention gates. This code cleanup does not switch off or delete the original Daily or its data. Preserve permanent ingestion, queues, processors, SQL, services and regression tests. Credential/access changes still require their normal explicit confirmation.
 
 ## Staged rollout and evidence gates
 
-Standing execution direction: the approved migration proceeds under the coordinator's dependency/gate releases without another generic permission request. The protected #717 export blocker and all evidence/privacy/release gates remain; no worker independently dispatches blocked work or merges its own PR.
+Current direction (18 October 2026): source-contract-first API/schema and supported historical ingestion/replay are specified in #1005. The cancelled #717/#721/#982 database export/import approach is not an active blocker or prerequisite. Remaining source, device/provider, parity, rollback and release acceptance stays explicit; no worker independently dispatches work or merges its own PR.
 
 Standing UI requirement (recorded on #730/#731/#732/#726): every migrated React/rich UI must fully match current Jarvis layout and styling. Current DESIGN.md, canonical `apps/web/src/styles.css` tokens, shared components, themes/density/motion settings and native phone/workspace patterns are authoritative. Preserve capabilities/data semantics while restyling/recomposing legacy Daily visuals; do not carry its separate navy/plum/card skin, add a second theme or replace shell/voice/window management. Generated/ad-hoc views receive safe trusted Jarvis theme context through the existing bridge without widened permissions. Mobile-first real-browser visual acceptance belongs to those UI issues; P12-03 does no frontend implementation.
 
-1. Contract-only/default-off: synthetic tests, unchanged current Jarvis when disabled; no private exports, production writes or actual Daily views.
-2. Private inventory/backup and owner-bound schema/services: protected export is complete and untruncated with counts/checksums/retained-object coverage. Every source record has an import or explicit exclusion decision; no fabricated expired raw objects.
-3. Read-only shadow and bounded synthetic workflows: prove resumability, exact-once confirmed food writes, scope denials, freshness/revisions, recovery dates and parity; original Daily stays canonical, no automatic food dual-writes.
-4. P12-17 acceptance: dependency work completed, reconciled manifests, real iPhone Health Auto Export/widget/Shortcut, live providers, existing Jarvis regression, SQL availability, private backup and rehearsed reverse-delta rollback. Keep live/private evidence protected and redacted; browser fixtures are not physical-device acceptance.
-5. P12-18 cutover: pre-authorization applies only after every gate passes; agree rollback window, recover new Jarvis writes on rollback, confirm one canonical writer and endpoint/sync parity. No original source edits or deletions.
-6. P12-19 legacy deprecation and temporary cleanup only after verified complete migration plus rollback/retention gates. Preserve original source/data and permanent services.
+1. Source contract first: #1005 documents the original API/schema, selected capabilities and source-to-target behavior; documentation is not implementation or replay evidence.
+2. Implement and verify the corresponding owner-bound API/SQL schema and bounded source-compatible ingestion/replay. Keep unknowns explicit and preserve original IDs, units, dates, nulls and retries.
+3. Complete synthetic and appropriate SQL/runtime regressions, then separately verify physical-device/provider behavior, source coverage, SQL availability and rollback evidence. Synthetic fixtures are not live-data or device acceptance.
+4. Any eventual cutover or legacy retirement follows its own approved evidence gates under #733/#734. This cleanup neither changes the original Daily nor replaces those acceptance decisions.
 
 Use normal main-only release workflows; cloud coding agents have no direct Azure access. Real health/food records, exports, credentials and private fixtures never enter public Git or coding environments. Recurring Daily notifications remain off; new schedules require a separate user decision.
 

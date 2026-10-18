@@ -5,7 +5,7 @@
   color: var(--text);
 }
 
-.proactive-page [role="alert"] {
+.proactive-page [role="alert"]:not(.state-message) {
   padding: var(--space-3);
   border: 1px solid var(--rule);
   border-radius: var(--radius-control);
@@ -13,7 +13,7 @@
   color: var(--error);
 }
 
-.proactive-page [role="alert"] p {
+.proactive-page [role="alert"]:not(.state-message) p {
   color: inherit;
 }
 
@@ -367,7 +367,7 @@
   margin-bottom: var(--space-4);
 }
 
-@media (max-width: 600px) {
+@media (max-width: 700px) {
   .proactive-page {
     padding-inline: var(--space-3);
     padding-bottom: max(160px, calc(env(safe-area-inset-bottom) + 144px));

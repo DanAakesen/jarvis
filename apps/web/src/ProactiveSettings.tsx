@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { CollapsibleSection } from './CollapsibleSection';
-import { Loader } from './Loader';
+import { StateMessage } from './StateMessage';
 import { saveSignInReturnPath } from './auth';
 import {
   isProactiveSettings, isRecord, proactiveJson, proactiveRequest, ProactiveRequestError, sourceLabels,
@@ -217,12 +217,11 @@ export function ProactiveSettings({ backendUrl, getAccessToken, signIn }: {
 
   return <CollapsibleSection storageKey="settings.proactive" headingId="proactive-settings-heading"
     title="Proactive" id="proactive-settings" className="proactive-settings" persist={false} initiallyOpen={false}>
-    {view.state === 'loading' && <p role="status"><Loader variant="inline" announce={false} label="Loading proactive settings…" /></p>}
+    {view.state === 'loading' && <StateMessage variant="loading" message="Loading proactive settings." />}
     {view.state === 'unavailable' && <p role="status">Proactive is not turned on for this backend.</p>}
-    {view.state === 'error' && <div role="alert"><p>{view.message}</p>
-      {signInRequired
-        ? <button className="secondary-button" type="button" onClick={beginSignIn}>Sign in again</button>
-        : <button className="secondary-button" type="button" onClick={() => { void load(); }}>Retry</button>}</div>}
+    {view.state === 'error' && <StateMessage variant="error" message={view.message}
+      actionLabel={signInRequired ? 'Sign in again' : 'Retry'}
+      onAction={signInRequired ? beginSignIn : () => { void load(); }} />}
     {view.state === 'loaded' && saved && draft && <>
       {signInRequired && <p role="alert">Your sign-in has expired.
         <button className="secondary-button" type="button" onClick={beginSignIn}>Sign in again</button></p>}

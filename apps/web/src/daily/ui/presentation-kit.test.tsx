@@ -1,0 +1,70 @@
+import { fireEvent, render, screen } from '@testing-library/react';
+import { describe, expect, it } from 'vitest';
+import { DataNotes } from './DataNotes';
+import { DailyGrid, DailyGridItem } from './DailyGrid';
+import { DailySectionHeader } from './DailySectionHeader';
+import { FreshnessLine } from './FreshnessLine';
+import { Meter } from './Meter';
+import { Sparkline } from './Sparkline';
+import { WorkoutGlyph } from './WorkoutGlyph';
+
+describe('Daily presentation kit', () => {
+  it('labels freshness, unknown count, and partial status in text', () => {
+    render(<FreshnessLine observedAt="invalid-date" partial />);
+    expect(screen.getByRole('status').textContent).toContain('at an unknown time');
+    expect(screen.getByRole('status').textContent).toContain('an unknown number of records');
+    expect(screen.getByRole('status').textContent).toContain('partial');
+  });
+
+  it('keeps detailed source notes collapsed behind a native disclosure', () => {
+    render(<DataNotes><p>A long synthetic explanation</p></DataNotes>);
+    expect(screen.getByText('About this data').closest('details')?.open).toBe(false);
+    fireEvent.click(screen.getByText('About this data'));
+    expect(screen.getByText('A long synthetic explanation')).toBeTruthy();
+  });
+
+  it('shows no sparkline for empty observations and gaps for missing samples', () => {
+    const { container, rerender } = render(<Sparkline values={[null, Number.NaN]} label="Synthetic trend" />);
+    expect(screen.getByText('No trend available')).toBeTruthy();
+    rerender(<Sparkline values={[2, null, 5]} label="Synthetic trend" />);
+    expect(screen.getByRole('img', { name: 'Synthetic trend' })).toBeTruthy();
+    expect(container.querySelector('path')?.getAttribute('d')).toContain('M4.0');
+    expect(container.querySelector('path')?.getAttribute('d')).toContain('M116.0');
+  });
+
+  it('explains unknown values and unset targets, and marks partial progress', () => {
+    const { rerender } = render(<Meter label="Synthetic progress" value={null} target={null} unit="min" />);
+    expect(screen.getByText('Value unknown')).toBeTruthy();
+    expect(screen.getByText('Target not set')).toBeTruthy();
+    rerender(<Meter label="Synthetic progress" value={45} target={60} unit="min" partial />);
+    expect(screen.getByRole('progressbar', { name: 'Synthetic progress' }).getAttribute('aria-valuenow')).toBe('45');
+    expect(screen.getByText('Partial value')).toBeTruthy();
+    expect(screen.getByText('45 min')).toBeTruthy();
+  });
+
+  it('keeps the shared header and responsive grid semantics', () => {
+    const { container } = render(<>
+      <DailySectionHeader title="Workouts" actions={<button type="button">Action</button>} />
+      <DailyGrid columns="twelve"><DailyGridItem span={8}>Overview</DailyGridItem><DailyGridItem span={4}>Types</DailyGridItem></DailyGrid>
+    </>);
+    expect(screen.getByRole('heading', { level: 2, name: 'Workouts' })).toBeTruthy();
+    expect(container.querySelector('.daily-grid--twelve .daily-grid-item--8')).toBeTruthy();
+    expect(container.querySelector('.daily-grid--twelve .daily-grid-item--4')).toBeTruthy();
+  });
+
+  it('keeps over-target progress in the accessible range without hiding the recorded total or lower bound', () => {
+    render(<Meter label="Energy intake against baseline allowance" value={2000} target={1700} unit="kcal" partial />);
+    const meter = screen.getByRole('progressbar', { name: 'Energy intake against baseline allowance' });
+    expect(meter.getAttribute('aria-valuenow')).toBe('1700');
+    expect(meter.getAttribute('aria-valuetext')).toBe('2,000 kcal (lower bound) of 1,700 kcal');
+    expect(screen.getByText('2,000 kcal')).toBeTruthy();
+    expect(screen.getByText('Partial value')).toBeTruthy();
+  });
+
+  it('maps workout classes to six decorative glyphs', () => {
+    const kinds = ['running', 'walking', 'cycling', 'swimming', 'strength', 'other'];
+    const { container } = render(<>{kinds.map(kind => <WorkoutGlyph key={kind} type={kind} />)}</>);
+    expect(container.querySelectorAll('.daily-workout-glyph')).toHaveLength(6);
+    for (const kind of kinds) expect(container.querySelector(`[data-kind="${kind}"]`)).toBeTruthy();
+  });
+});

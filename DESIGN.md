@@ -1,5 +1,15 @@
 # Design
 
+## Responsive rules (P14-05, 18 October 2026)
+
+Use the shared viewport set in `apps/web/src/styles.css`: phone through 700px,
+tablet above 700px through 900px, desktop above 900px, and wide from 1200px.
+The 380px narrow-handset exception only tightens chat, voice, metadata and
+camera controls. The 1099px task-board and 720px task-detail container queries
+remain content-scoped because their layout follows allocated component width.
+Daily's 640px and 760px media queries remain outside this pass as its page is
+being built in parallel.
+
 ## Icon-only header (P9-119)
 
 Settings is a gear only at every width, including phones, with its Settings
@@ -118,6 +128,8 @@ supersedes this section's earlier button appearance limits for buttons only;
 other controls keep the restrained surfaces, neutral field boundaries and
 visible keyboard focus described here. No decorative coloured boxes, bevels,
 inset-shadow borders or selected-state glows are added to non-button controls.
+Within action groups, markup order is keyboard and visual order: place the
+primary action last. CSS does not reorder action groups.
 
 Keep compact desktop controls where useful and at least 44px touch targets.
 Segmented groups wrap at narrow widths; scrolling filter rows retain keyboard
@@ -1547,25 +1559,94 @@ composer at 320px. The six JPEG captures cover phone Day in both themes,
 desktop Trend in both themes, Library at 768px light and 320px dark. They are
 synthetic desktop-browser evidence, not live-owner or physical-phone checks.
 
-## Daily Workouts (18 October 2026; P12-23)
+## Daily today dashboard (18 October 2026; P12-33)
 
-Workouts extends the existing Daily section shell, not navigation or a separate
-theme. One section heading leads to a type filter, loaded-row sort, unknown-safe
-statistic strip, recorded-minute volume chart and workout history. Phones use
-stacked items; wider screens use the shared scroll table. Detail keeps the same
-section, with recorded figures, elapsed-minute heart-rate lines and collapsed
-recorded JSON. Average, minimum and maximum lines also differ by stroke pattern.
-All controls retain shared geometry, 44px targets and focus treatment; local CSS
-owns only layout, tabular figures, chart patterns and scroll anchoring.
+Overview now leads with one `DailyGrid` of section-linked workout, nutrition,
+body, sleep and brief cards: one column below 700px, two from 700px and three
+from 1200px. An odd final card spans the tablet row. Cards in the same row share
+height, retain one headline each, and place compact read freshness at the foot.
+Workouts shows its type glyph, latest start/duration and week totals; nutrition
+compares logged energy with the already-loaded resting-burn-minus-deficit
+baseline, with macros in text. Body shows the latest measurement and a same-unit
+sparkline of recorded observations, retaining null gaps. Sleep and briefs keep
+their latest date/time and recorded context. Unknowns and lower bounds stay
+explicit; partial history is not presented as a complete total.
 
-Synthetic-only local Chromium checks covered 320×844, 390×844, 768×900 and
-1440×900 in light and dark, with reduced motion. Exercised type filtering,
-sorting, detail, heart rate, recorded JSON, URL reload, browser Back, unknown ID,
-refresh, loading, empty, error/Retry and capped Load more. Page and Daily viewport
-had no horizontal overflow; Back restored the opened control's focus and exact
-list scroll offset. Six synthetic screenshots are in `docs/ui/p12-23/` (under
-1.5 MB). This checked the actual Daily shell with isolated API fixtures, not
-Microsoft sign-in, a live backend, native devices or original-site parity.
+“What Daily holds today” is a compact collection/state/action strip. Purpose,
+period and read-time notes live in one native “About this data” disclosure.
+Read errors remain beside Retry, and settled empty health probes link to
+Settings, Health upload with the seven-day coverage qualification. Refresh keeps
+the cards and their last values mounted with progress text, including empty
+cards. Embedded Overview shares its Today heading row with Refresh and never
+duplicates the Daily page heading. Existing tokens and button classes are reused;
+no tokens or global styling rules are added.
+
+Ten synthetic-only JPEG captures (about 1.1 MB) are in `docs/ui/p12-33/`:
+populated light/dark at 390×844, 1440×900 and 320×844, plus empty light/dark at
+390×844 and 1440×900. Chromium exercised the real Daily shell with isolated API
+fixtures, including the shell-after-Daily SVG cascade, tablet layout, 200% CSS
+layout zoom, refresh, disclosure keyboard/focus, section links, collection
+Back/retry focus and reduced motion. No horizontal overflow or browser
+console/page errors were observed. These checks do not establish live-data,
+Microsoft sign-in, physical-device or original-site parity.
+
+## Daily presentation kit (18 October 2026; P12-30)
+
+Daily remains inside the existing Jarvis shell and theme. The shared kit keeps
+freshness in one compact text line and moves extended source caveats into the
+native “About this data” disclosure; values retain their unknown, partial and
+lower-bound labels beside the figures they qualify. Compact statistic tiles
+support optional sparklines and comparable signed deltas. The generic meter
+states its value and target in text, including unknown and unset states.
+
+`DailyChart` follows its container, labels every series, preserves missing
+observations as gaps and supports target lines and min–max range bands. Its SVG
+keeps the accessible image label, is keyboard-focusable with arrow-key point
+readout, and has hover/focus feedback. A “View data table” disclosure keeps the
+same chart’s underlying values available without leaving a raw table under every
+visual. Shared grid, header and inline workout-glyph helpers use existing Jarvis
+tokens; no new theme or control geometry is introduced.
+
+Workouts applies the kit with five compact unknown-safe totals, a recorded-time
+sparkline, a responsive volume chart and a type/minutes breakdown. One responsive
+history list replaces the separate desktop table and phone cards; the original
+record fields remain in a “View as table” disclosure. Detail keeps URL selection,
+filtering, sort, paging and focus return, and presents recorded figures, a
+full-width average/minimum/maximum heart-rate chart with its per-minute range band,
+and collapsed source JSON. Incomplete totals, unit separation, missing dates and
+source-completeness caveats remain explicit.
+
+Synthetic browser captures for the new list and detail presentation are in
+`docs/ui/p12-30/`; they show the actual Daily shell with isolated synthetic API
+responses, not Microsoft sign-in, live records, physical-device behavior or
+original-site parity.
+
+## Daily overview and Briefs integration (18 October 2026; P12-26)
+
+The Overview presentation below is superseded by P12-33 above.
+
+The Overview retains its source inventory and adds a responsive tile grid for
+available Daily sections. Each tile has its own loading, empty, retry and
+freshness states; one summary can fail without removing the others. Tile links
+lead to their section, and section-owned helpers provide names, dates and
+null-aware figures. Briefs uses a dated history list and a spaced in-page detail
+view; long text wraps within the available width. Coverage caveats use one
+shared disclosure per view. Phone Nutrition day controls stay together in a
+compact row, while wide tables remain in their own scroll regions. Existing
+buttons and shared geometry are retained. Synthetic automated tests cover the
+new states and interaction fixes. The Overview summary tiles keep each fact's label and value in fixed columns;
+a second value line sits under the first value, never in the label column.
+Synthetic Chromium inspection of the actual
+Daily shell and sections covered Overview, Workouts, Nutrition, Body & sleep,
+Briefs and Data at 320×844, 390×844, 768×900 and 1440×900 in both themes (48
+view/viewport/theme combinations). It also exercised Nutrition Day/Trend/Library,
+Body and Sleep, workout detail and Back focus, Briefs detail and focus return,
+tab arrow navigation, reduced-motion emulation and the responsive scroll-table
+regions. No page overflow, clipped touch controls, heading-count mismatch or
+browser console errors were observed. Ten synthetic-only JPEG captures are in
+`docs/ui/p12-26/` (512 KB total). The two Overview captures are static renders of
+the summary-tile markup against the shipped stylesheets. These checks do not
+establish live-data, original-site or physical-device acceptance.
 
 ## Border, radius and surface rules (P14-04, 18 October 2026)
 
@@ -1600,3 +1681,20 @@ fields retain their intentional editor/search layouts; only the Notes title and
 other surrounding form fields join the shared field look. Daily controls inherit
 the system without changing Daily markup. Buttons and non-field surfaces remain
 owned by their existing P14 work.
+
+## State messages (P14-11, 18 October 2026)
+
+Non-Daily loading, empty, error and partial states use `StateMessage` beside
+`Loader`. Keep the state message to one plain sentence, optional supporting
+detail and at most one useful recovery action; do not add a heading or expose
+raw exception text, identifiers or codes. Loading, empty and partial states use
+polite status announcements; errors use an alert. Recovery actions reuse the
+shared button classes and busy state.
+
+The shared state surface reserves a 10rem minimum block size for loading, empty
+and error states so the page does not jump when they resolve; a partial notice
+sits beside existing content and reserves none. Use the ordinary
+Loader unless the final collection layout is known well enough for a matching
+skeleton. Explain the real empty condition and, for stale, partial or capped
+data, explain how to refresh. Daily retains its existing `DailyState` treatment
+until its separate follow-up.

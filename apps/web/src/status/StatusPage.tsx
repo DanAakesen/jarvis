@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { isSystemSmokeStatus, type SystemStatus, type SystemStatusEntry, type SystemStatusSubsystem, type SystemStatusValue } from '@jarvis/contracts';
 import type { AreaProps } from '../areas';
 import { awaitWithSignal, backendFetch } from '../backend-request';
-import { Loader } from '../Loader';
+import { StateMessage } from '../StateMessage';
 
 const checks: Readonly<Record<SystemStatusSubsystem, string>> = {
   database: 'SQL database',
@@ -59,6 +59,20 @@ function reason(entry: SystemStatusEntry): string | undefined {
     ? undefined : 'The check failed; no further reason was reported.';
   if (entry.status === 'degraded') return 'The check reports degraded status. See its recorded details.';
   return undefined;
+}
+
+function safeErrorMessage(error: string | undefined): string {
+  if (error?.startsWith('Microsoft sign-in needs attention.')) {
+    return 'Microsoft sign-in needs attention. Sign in again to read system status.';
+  }
+  if (error?.startsWith('The backend is not configured.')) {
+    return 'The backend is not configured. System status is unavailable.';
+  }
+  if (error?.startsWith('System status timed out.')) return 'System status timed out. Try again.';
+  if (error?.includes('invalid system status response') || error?.includes('incomplete or invalid')) {
+    return 'The backend returned an invalid system status response.';
+  }
+  return 'System status could not be loaded. Try again.';
 }
 
 function StatusBadge({ value }: { value: SystemStatusValue }) {
@@ -143,11 +157,12 @@ export function StatusPage({ backendUrl, getAccessToken }: AreaProps) {
         {pending ? 'Refreshing status...' : error ? 'Retry status' : 'Refresh status'}
       </button>
     </header>
-    {error && <div className="system-status-feedback" role="alert">
-      <p>{error}</p>
-      {data && <p>Refresh failed. The previous snapshot remains visible; it does not establish current health.</p>}
-    </div>}
-    {!data && pending && <Loader variant="text" label="Loading system status" />}
+    {error && (data
+      ? <StateMessage variant="partial"
+        message="The last status snapshot remains visible."
+        detail="The latest refresh failed; this snapshot does not establish current health. Use Retry status to check again." />
+      : <StateMessage variant="error" className="system-status-feedback" message={safeErrorMessage(error)} />)}
+    {!data && pending && <StateMessage variant="loading" message="Loading system status" />}
     {data && <>
       <p className="system-status-snapshot">
         {error ? 'Previous snapshot' : pending ? 'Refreshing the recorded snapshot' : 'Backend responded with a status snapshot'}.

@@ -78,7 +78,7 @@ describe('Status page', () => {
 
   it.each([
     { status: 401, message: /Microsoft sign-in needs attention/ },
-    { status: 503, message: /HTTP 503/ },
+    { status: 503, message: /System status could not be loaded/ },
   ])('exposes HTTP $status and allows an ordinary status retry', async ({ status, message }) => {
     fetchMock.mockResolvedValueOnce(response({}, status));
     render(<StatusPage backendUrl="https://api.example.com" getAccessToken={getAccessToken} />);
@@ -98,7 +98,7 @@ describe('Status page', () => {
             { ...report, smoke: { checkedAt: report.checkedAt, entries: [] } };
     fetchMock.mockResolvedValue(response(invalid));
     render(<StatusPage backendUrl="https://api.example.com" getAccessToken={getAccessToken} />);
-    expect((await screen.findByRole('alert')).textContent).toMatch(/incomplete or invalid/);
+    expect((await screen.findByRole('alert')).textContent).toMatch(/invalid system status response/);
     expect(screen.queryByRole('listitem', { name: 'SQL database' })).toBeNull();
   });
 
@@ -107,7 +107,8 @@ describe('Status page', () => {
     await screen.findByRole('listitem', { name: 'Google' });
     fetchMock.mockResolvedValueOnce(response({}, 502));
     fireEvent.click(screen.getByRole('button', { name: 'Refresh status' }));
-    expect((await screen.findByRole('alert')).textContent).toContain('previous snapshot remains visible');
+    expect((await screen.findByRole('status')).textContent).toContain('last status snapshot remains visible');
+    expect(screen.queryByText(/HTTP \d+/)).toBeNull();
     expect(screen.getByRole('listitem', { name: 'Google' })).not.toBeNull();
     expect(screen.getByText(/Previous snapshot/)).not.toBeNull();
   });

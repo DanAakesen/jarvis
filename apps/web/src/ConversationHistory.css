@@ -131,7 +131,7 @@
 .conversation-history .composer { display: grid; grid-template-columns: minmax(0, 1fr) auto 36px; align-items: center; gap: var(--space-1); min-width: 0; margin: 0; }
 .conversation-history .composer[hidden] { display: none; }
 .conversation-history .composer label { margin: calc(var(--space-1) * -1); }
-.conversation-history .composer textarea { min-height: 40px; max-height: 160px; padding: var(--space-2) var(--space-1); border: 0; border-radius: 0; background: transparent; resize: none; font-size: var(--type-body); line-height: var(--line-body); }
+.conversation-history .composer textarea { min-height: 44px; max-height: 160px; padding: var(--space-2) var(--space-1); border: 0; border-radius: 0; background: transparent; resize: none; font-size: var(--type-body); line-height: var(--line-body); }
 .conversation-history .composer textarea::placeholder { color: var(--text-muted); opacity: 1; }
 .conversation-history .composer textarea:focus-visible { outline: none; }
 /* The composer send action uses the shared primary treatment with compact icon geometry. */
@@ -179,7 +179,7 @@
 .voice-end-control:disabled { color: var(--disabled-text); cursor: wait; }
 .voice-end-glyph { width: 12px; height: 12px; flex: 0 0 auto; border-radius: 0; background: var(--state-unavailable); }
 .voice-end-control:disabled .voice-end-glyph { background: var(--disabled-text); }
-@media (min-width: 701px) and (not ((max-height: 500px) and (pointer: coarse))) {
+@media (width > 700px) and (not ((max-height: 500px) and (pointer: coarse))) {
 .app-shell[data-voice-active="true"] { position: fixed; inset: 0; display: block; width: 100vw; height: 100vh; height: 100dvh; min-height: 0; overflow: hidden; }
 .app-shell[data-voice-active="true"]::before { animation: aurora-drift var(--motion-ambient) var(--ease-standard) infinite alternate; }
 .app-shell[data-voice-active="true"] .app-topbar,
@@ -220,7 +220,7 @@
 .history-feedback { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-4); }
 .history-error { margin: var(--space-3) 0; }
 
-@media (max-width: 600px) {
+@media (max-width: 700px) {
   .jarvis-page { padding: var(--space-3); }
   .conversation-transcript:has(.conversation-greeting) { padding: 0 var(--space-2) var(--space-6); }
   .conversation-greeting { padding: var(--space-3); }
@@ -236,7 +236,7 @@
   .conversation-history .composer { gap: var(--space-1); }
 }
 
-@media (max-width: 360px) {
+@media (max-width: 380px) {
   .conversation-greeting { padding: var(--space-2); }
   .conversation-greeting h2 { font-size: var(--type-subheading); line-height: var(--line-tight); }
   .conversation-greeting p { margin-top: var(--space-1); font-size: var(--type-caption); line-height: var(--line-tight); }
@@ -277,7 +277,7 @@
   .message-metadata { opacity: 1; }
 }
 
-@media (max-width: 360px) {
+@media (max-width: 380px) {
   .voice-bar { gap: var(--space-1); padding: var(--space-2); }
 }
 @media (hover: none) {
@@ -554,7 +554,7 @@
 :root[data-motion="reduced"] .conversation-message[data-speaker="jarvis"][data-latest]::before { animation: none; opacity: .35; }
 /* Voice keeps the shell (Dan, 7 October): on desktop the top bar (tabs and job tabs), rail and panels stay in place
    over the full-screen voice room, and windows float across the room exactly as while typing. */
-@media (min-width: 701px) and (not ((max-height: 500px) and (pointer: coarse))) {
+@media (width > 700px) and (not ((max-height: 500px) and (pointer: coarse))) {
   .app-shell.app-shell[data-voice-active="true"] .app-topbar { position: fixed; z-index: 20; top: 0; right: 0; left: 0; display: flex; }
   .app-shell.app-shell[data-voice-active="true"] .area-rail { position: fixed; z-index: 20; top: var(--rail-size); bottom: var(--slab-gap); left: 0; display: flex; width: var(--rail-size); }
   .app-shell.app-shell[data-voice-active="true"] .area-sidebar:not([hidden]) { position: fixed; z-index: 19; top: var(--rail-size); bottom: var(--slab-gap); left: var(--rail-size); display: flex; width: var(--sidebar-width, 220px); }

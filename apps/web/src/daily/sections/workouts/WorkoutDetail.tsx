@@ -1,15 +1,16 @@
 import { useState } from 'react';
 import { dailyQuerySources as sources, type DailyJson } from '@jarvis/contracts';
-import type { ChartSeries } from '../../../chart-data';
 import type { DailySectionProps } from '../types';
 import { useDailyQuery } from '../../useDailyQuery';
 import { useWorkoutPages } from './useWorkoutPages';
 import { DailyChart } from '../../ui/DailyChart';
 import { DailyState } from '../../ui/DailyState';
+import { FreshnessLine } from '../../ui/FreshnessLine';
 import { formatTime } from '../../ui/formatters';
 import { numeric, text, typeLabel, type Workout } from './summary';
 import { WorkoutFigures } from './WorkoutFigures';
 import { workoutTime } from './presentation';
+import { WorkoutGlyph } from '../../ui/WorkoutGlyph';
 
 function HeartRate({ row, ...props }: DailySectionProps & { row: Workout }) {
   const [chosenMetric, setChosenMetric] = useState<string | null>(null);
@@ -26,8 +27,8 @@ function HeartRate({ row, ...props }: DailySectionProps & { row: Workout }) {
   return <section className="workouts-heart-rate" aria-labelledby="workouts-heart-rate"
     aria-busy={result.status === 'loading' || result.loadingMore}>
     <h3 id="workouts-heart-rate">Heart rate</h3>
-    <p>X: minutes from {Number.isFinite(recordedStart) ? 'workout start' : 'the first returned sample'}.
-      Lines show the recorded minute average (solid), minimum (dashed) and maximum (dotted); gaps are not zero.</p>
+    {result.last && <FreshnessLine observedAt={result.last.freshness.observedAt} count={result.items.length}
+      partial={result.hasMore || result.error !== null || result.loadingMore} />}
     {groups.length > 1 && <label className="workouts-field">Metric
       <select value={metric} onChange={event => setChosenMetric(event.target.value)}>
         {groups.map(name => <option key={name}>{name}</option>)}
@@ -41,17 +42,24 @@ function HeartRate({ row, ...props }: DailySectionProps & { row: Workout }) {
       {result.capped && <button type="button" className="secondary-button" onClick={result.loadMore}>Load more samples</button>}
     </p>}
     {units.map(unit => {
-      const series: ChartSeries[] = [
-        ['Average', 'avg_value'], ['Minimum', 'min_value'], ['Maximum', 'max_value'],
-      ].map(([name, key]) => ({
-        name: `${name} (${unit})`,
-        points: samples.filter(item => (text(item.unit) ?? 'Unknown unit') === unit).flatMap(item => {
+      const unitSamples = samples.filter(item => (text(item.unit) ?? 'Unknown unit') === unit);
+      const points = unitSamples.flatMap(item => {
           const time = Date.parse(text(item.sample_minute) ?? '');
-          const value = numeric(item[key!]);
-          return Number.isFinite(time) && value !== null ? [{ x: (time - start) / 60_000, y: value }] : [];
-        }),
-      }));
-      return <DailyChart key={unit} kind="line" name={`${metric} (${unit}), elapsed minutes${result.hasMore ? ', loaded samples only' : ''}`} series={series} />;
+          if (!Number.isFinite(time)) return [];
+          return [{
+            x: (time - start) / 60_000,
+            y: numeric(item.avg_value),
+            low: numeric(item.min_value),
+            high: numeric(item.max_value),
+          }];
+        });
+      const series = [
+        { name: `Average (${unit})`, points },
+        { name: `Minimum (${unit})`, points: points.map(point => ({ x: point.x, y: point.low ?? null })) },
+        { name: `Maximum (${unit})`, points: points.map(point => ({ x: point.x, y: point.high ?? null })) },
+      ];
+      return <DailyChart key={unit} kind="line" rangeLabel={`Recorded minimum–maximum (${unit})`}
+        name={`${metric} (${unit}), elapsed minutes${result.hasMore ? ', loaded samples only' : ''}`} series={series} />;
     })}
     {result.status === 'loading' && result.items.length > 0 && <p role="status">Refreshing recorded samples…</p>}
   </section>;
@@ -71,10 +79,17 @@ function RecordedDetail({ workoutId, ...props }: DailySectionProps & { workoutId
 }
 
 export function WorkoutDetail({ row, onBack, ...props }: DailySectionProps & { row: Workout; onBack: () => void }) {
+  const start = workoutTime(row);
+  const end = formatTime(text(row.end_at));
   return <div className="workouts-detail">
     <button type="button" className="secondary-button" onClick={onBack}>Back to workouts</button>
-    <h3 tabIndex={-1} id="workouts-detail-heading">{typeLabel(row)} · {workoutTime(row)}
-      {' to '}{formatTime(text(row.end_at))}</h3>
+    <header className="workouts-detail-heading">
+      <WorkoutGlyph type={text(row.workout_type) ?? text(row.activity_identifier) ?? 'unknown'} />
+      <div>
+        <h3 tabIndex={-1} id="workouts-detail-heading">{typeLabel(row)} · {start}</h3>
+        <p>{start} to {end}</p>
+      </div>
+    </header>
     <WorkoutFigures row={row} />
     {props.sources.includes(sources.heartRate) && <HeartRate {...props} row={row} />}
     {props.sources.includes(sources.workout) && <RecordedDetail {...props} workoutId={String(row.id)} />}

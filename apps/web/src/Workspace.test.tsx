@@ -664,9 +664,9 @@ describe('Workspace', () => {
     swipe(content, -70);
     expect(screen.getByRole('article', { name: 'Sources' })).not.toBeNull();
     expect(document.activeElement).toBe(screen.getByRole('heading', { name: 'Sources' }));
-    swipe(screen.getByText('Loading view…'), -70);
+    swipe(screen.getByText('Loading view.'), -70);
     expect(screen.getByRole('article', { name: 'Sources' })).not.toBeNull();
-    swipe(screen.getByText('Loading view…'), 70);
+    swipe(screen.getByText('Loading view.'), 70);
     expect(screen.getByRole('article', { name: 'Research summary' })).not.toBeNull();
   });
 
@@ -1347,7 +1347,7 @@ describe('Workspace', () => {
     expect(workspaceStyles).toContain('width: min(300px, 100%); min-width: 0; max-width: 100%;');
     const mobile = workspaceStyles.slice(workspaceStyles.indexOf('@media (max-width: 900px)'));
     expect(mobile).toContain('.workspace-window-heading h3 { flex-basis: auto; }');
-    expect(mobile).toContain('.workspace-window-actions { display: flex; width: auto; flex: 0 0 auto; flex-wrap: nowrap; gap: 4px; }');
+    expect(mobile).toContain('.workspace-window-actions { display: flex; width: auto; flex: 0 0 auto; flex-wrap: nowrap; gap: var(--space-1); }');
     expect(workspaceStyles).toContain('.sidebar-close, .workspace-window .workspace-icon-control, .workspace-window .workspace-arrange-menu > summary { width: 44px; min-width: 44px; height: 44px; min-height: 44px; }');
     expect(mobile).toContain('.workspace-arrange-menu > summary { width: 44px; padding: 0; }');
   });
@@ -1379,9 +1379,9 @@ describe('Workspace', () => {
       { id: 'interrupted', title: 'Interrupted view', content: { status: 'interrupted', message: 'Generation stopped. Some results are available.', content: <p>Partial result</p>, resume } },
     ]} />);
 
-    expect(screen.getByText('No content.')).not.toBeNull();
-    expect(screen.getByText('Loading view…').closest('[role="status"]')).not.toBeNull();
-    expect(screen.getByText('The source is unavailable.').getAttribute('role')).toBe('alert');
+    expect(screen.getByText('This view has no content.')).not.toBeNull();
+    expect(screen.getByText('Loading view.').closest('[role="status"]')).not.toBeNull();
+    expect(screen.getByText('The source is unavailable.').closest('[role="alert"]')).not.toBeNull();
     expect(screen.getByText('Partial result')).not.toBeNull();
 
     await user.click(screen.getByRole('button', { name: 'Retry view' }));

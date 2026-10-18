@@ -16,6 +16,7 @@ import type { NutritionSuggestionSources } from './nutrition/suggestion-adapter.
 import type { NutritionTargetsAccess } from './nutrition/targets-store.js';
 import { dailyFoodLookupTool } from './tools/food-lookup.js';
 import { dailyFeedTool } from './tools/feed.js';
+import { dailySourceTools } from './tools/source-tools.js';
 
 /** Trusted server composition flag. Not a request parameter or a production rollout. */
 export function createDailyModules(enabled = false, data?: DailyData, connector?: DailyMcpOptions, internalNutrition?: InternalNutrition, savedNutrition?: InternalSavedNutrition, nutritionTargets?: NutritionTargetsAccess, nutritionSuggestions?: NutritionSuggestionSources): readonly BackendModule[] {
@@ -33,6 +34,7 @@ export function createDailyModules(enabled = false, data?: DailyData, connector?
     ...(savedNutrition ? [dailySavedFoodTool(savedNutrition)] : []),
     ...(nutritionTargets ? [dailyNutritionTargetsTool(nutritionTargets)] : []),
     ...(nutritionTargets && nutritionSuggestions ? [dailyNutritionSuggestTool(nutritionTargets, nutritionSuggestions)] : []),
+    ...(data.health && data.nutrition && data.coach ? dailySourceTools(data, data.nutrition, data.coach) : []),
   ] : [];
   return [{
     id: dailyModuleId,

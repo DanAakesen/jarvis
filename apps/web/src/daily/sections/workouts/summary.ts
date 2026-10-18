@@ -83,7 +83,7 @@ function calendarDate(value: string): Date | null {
   return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value ? date : null;
 }
 
-function workoutDate(input: DailyJson | undefined): string | null {
+export function workoutDate(input: DailyJson | undefined): string | null {
   const value = text(input);
   if (!value) return null;
   if (calendarDate(value)) return value;

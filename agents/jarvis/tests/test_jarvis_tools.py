@@ -470,6 +470,8 @@ async def test_calls_a_tool_with_identity_and_message_id_and_relays_the_backend_
         ("daily_food_review", 210.0),
         ("daily_saved_food", 210.0),
         ("daily_nutrition_targets", 210.0),
+        ("daily_nutrition_history", 210.0),
+        ("daily_coach_status", 210.0),
         ("daily_feed", 225.0),
     ],
 )
@@ -641,6 +643,8 @@ async def test_backend_refusals_are_reported_as_errors(status: int, expected: st
         ("daily_food_review", 210.0),
         ("daily_saved_food", 210.0),
         ("daily_nutrition_targets", 210.0),
+        ("daily_nutrition_history", 210.0),
+        ("daily_coach_status", 210.0),
         ("daily_feed", 225.0),
     ],
 )

@@ -52,7 +52,11 @@ function mount(overrides: Partial<DailySectionProps> = {}, entry = '/daily?secti
   const rendered = render(view(overrides.refreshVersion ?? 0));
   return { ...rendered, refresh: () => rendered.rerender(view(1)) };
 }
-function table() { return screen.getByRole('region', { name: 'Workouts in the loaded rows' }); }
+function table() {
+  const disclosure = screen.getByText('View as table');
+  if (!disclosure.closest('details')?.open) fireEvent.click(disclosure);
+  return screen.getByRole('region', { name: 'Workouts in the loaded rows' });
+}
 async function openRun() {
   const button = (await within(table()).findAllByRole('button', { name: /^Open Running/u }))[0]!;
   fireEvent.click(button);
@@ -92,17 +96,32 @@ describe('Workouts section', () => {
     expect(screen.queryByLabelText('Workout summary')).toBeNull();
   });
 
+  it('shows freshness, a compact overview, type breakdown, and one visible history layout', async () => {
+    mount();
+    expect(await screen.findByRole('list', { name: 'Recorded workout history' })).toBeTruthy();
+    expect(screen.getByText(/3 records/u)).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'By type' })).toBeTruthy();
+    expect(screen.getByRole('img', { name: 'Recorded workout minutes per week' })).toBeTruthy();
+    expect(screen.getAllByText('Not recorded').length).toBeGreaterThan(0);
+    expect(screen.getByText('About this data').closest('details')?.open).toBe(false);
+    expect(screen.queryByRole('region', { name: 'Workouts in the loaded rows' })).toBeNull();
+    table();
+    expect(screen.getByRole('region', { name: 'Workouts in the loaded rows' })).toBeTruthy();
+  });
+
   it('shows errors with a working retry', async () => {
     read.mockRejectedValueOnce(new DailyReadError('Synthetic outage'));
     mount();
     expect(await screen.findByRole('alert')).toHaveProperty('textContent', expect.stringContaining('Synthetic outage'));
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
-    await screen.findByRole('region', { name: 'Workouts in the loaded rows' });
+    await screen.findByRole('list', { name: 'Recorded workout history' });
+    table();
   });
 
   it('sorts only loaded rows and keeps missing values last', async () => {
     mount();
-    await screen.findByRole('region', { name: 'Workouts in the loaded rows' });
+    await screen.findByRole('list', { name: 'Recorded workout history' });
+    table();
     const firstType = () => within(table()).getAllByRole('row')[1]?.textContent;
     expect(firstType()).toContain('Cycling');
     fireEvent.change(screen.getByLabelText('Sort loaded workouts'), { target: { value: 'duration' } });
@@ -112,8 +131,8 @@ describe('Workouts section', () => {
     fireEvent.change(screen.getByLabelText('Sort loaded workouts'), { target: { value: 'energy' } });
     expect(firstType()).toContain('Running');
     expect(within(table()).getAllByRole('row').at(-1)?.textContent).toMatch(/New future sport/iu);
-    expect(within(table()).getAllByLabelText('Unknown').length).toBeGreaterThan(0);
-    expect(within(table()).getByText(/Unknown time/u)).toBeTruthy();
+    expect(within(table()).getAllByLabelText('Not recorded').length).toBeGreaterThan(0);
+    expect(within(table()).getAllByText(/Not recorded/u).length).toBeGreaterThan(0);
   });
 
   it('sorts dates by instants, not the spelling of timezone offsets', async () => {
@@ -122,13 +141,15 @@ describe('Workouts section', () => {
       { id: 'synthetic-utc', workout_type: 'cycling', workout_date: '2026-10-16', start_at: '2026-10-16T09:00:00Z' },
     ]));
     mount();
-    await screen.findByRole('region', { name: 'Workouts in the loaded rows' });
+    await screen.findByRole('list', { name: 'Recorded workout history' });
+    table();
     expect(within(table()).getAllByRole('row')[1]?.textContent).toContain('Cycling');
   });
 
   it('filters both the summary and history, with All and counts first', async () => {
     mount();
-    await screen.findByRole('region', { name: 'Workouts in the loaded rows' });
+    await screen.findByRole('list', { name: 'Recorded workout history' });
+    table();
     expect(within(screen.getByLabelText('Workout type')).getAllByRole('option')[0]?.textContent).toBe('All (3)');
     fireEvent.change(screen.getByLabelText('Workout type'), { target: { value: 'running' } });
     expect(within(table()).queryByText('Cycling')).toBeNull();
@@ -183,10 +204,20 @@ describe('Workouts section', () => {
 
   it('opens URL-backed detail, heart-rate lines, metric selection, and bounded recorded JSON', async () => {
     mount();
-    await screen.findByRole('region', { name: 'Workouts in the loaded rows' });
+    await screen.findByRole('list', { name: 'Recorded workout history' });
+    table();
     await openRun();
     expect(screen.getByLabelText('URL').textContent).toContain('workout=synthetic-run');
-    expect(await screen.findByRole('img', { name: /heart_rate \(bpm\), elapsed minutes/u })).toBeTruthy();
+    const heartRate = await screen.findByRole('img', { name: /heart_rate \(bpm\), elapsed minutes/u });
+    const chart = heartRate.closest('figure')!;
+    expect(chart.querySelector('.daily-chart-range path')).toBeTruthy();
+    expect(chart.querySelectorAll('.daily-chart-series')).toHaveLength(3);
+    expect(within(chart).getByText('Average (bpm)')).toBeTruthy();
+    expect(within(chart).getByText('Minimum (bpm)')).toBeTruthy();
+    expect(within(chart).getByText('Maximum (bpm)')).toBeTruthy();
+    expect(within(chart).queryByRole('table')).toBeNull();
+    fireEvent.click(within(chart).getByText('View data table'));
+    expect(within(chart).getByRole('table', { name: /heart_rate \(bpm\), elapsed minutes/u })).toBeTruthy();
     expect(screen.getByLabelText('Metric')).toHaveProperty('value', 'heart_rate');
     fireEvent.change(screen.getByLabelText('Metric'), { target: { value: 'synthetic_other' } });
     expect(screen.getByRole('img', { name: /synthetic_other/u })).toBeTruthy();
@@ -196,7 +227,8 @@ describe('Workouts section', () => {
 
   it('restores focus and ancestor scroll on Back and on browser Back', async () => {
     mount();
-    await screen.findByRole('region', { name: 'Workouts in the loaded rows' });
+    await screen.findByRole('list', { name: 'Recorded workout history' });
+    table();
     table().scrollTop = 55;
     const button = await openRun();
     fireEvent.click(screen.getByRole('button', { name: 'Back to workouts' }));
@@ -210,7 +242,8 @@ describe('Workouts section', () => {
 
   it('keeps the opened workout through a refresh and reads its sources again', async () => {
     const rendered = mount();
-    await screen.findByRole('region', { name: 'Workouts in the loaded rows' });
+    await screen.findByRole('list', { name: 'Recorded workout history' });
+    table();
     await openRun();
     const before = read.mock.calls.length;
     rendered.refresh();
@@ -241,6 +274,7 @@ describe('Workouts section', () => {
     mount({}, '/daily?section=workouts&workout=synthetic-run');
     await screen.findByRole('heading', { name: /^Running ·/u });
     expect(screen.getAllByText('Loading Daily history').length).toBeGreaterThan(0);
+    await waitFor(() => expect(read.mock.calls.some(call => call[1].source === sources.heartRate)).toBe(true));
     const query = read.mock.calls.find(call => call[1].source === sources.heartRate)![1];
     await act(async () => pending.resolve(dailyFixture(query)));
     expect(await screen.findByText(/No heart-rate samples were returned/u)).toBeTruthy();

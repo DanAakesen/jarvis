@@ -15,6 +15,24 @@ type AllowlistEntry = {
   value?: string;
 };
 
+const legacyStateStyles = [
+  ['styles.css', '.project-empty'],
+  ['styles.css', '.workspace-empty'],
+  ['styles.css', '.task-column-empty'],
+  ['styles.css', '.usage-empty'],
+  ['daily/daily.css', '.daily-empty'],
+  ['styles.css', '.settings-feedback'],
+  ['styles.css', '.projects-feedback'],
+  ['styles.css', '.project-policy-feedback'],
+  ['styles.css', '.task-control-error'],
+  ['styles.css', '.release-feedback'],
+  ['styles.css', '.usage-feedback'],
+  ['ConversationHistory.css', '.conversation-history-error'],
+  ['ConversationHistory.css', '.chat-error'],
+  ['styles.css', '.task-detail-error'],
+  ['styles.css', '.workspace-pin-feedback'],
+] as const;
+
 const sideBorderAllowlist: AllowlistEntry[] = [
   { file: 'styles.css', selector: '.area-rail', property: 'border-right', value: '1px solid var(--rule)', reason: 'Structural separator between the navigation rail and page.' },
   { file: 'styles.css', selector: '.area-sidebar', property: 'border-right', value: '1px solid var(--rule)', reason: 'Structural separator between the sidebar and page.' },
@@ -35,6 +53,9 @@ const sideBorderAllowlist: AllowlistEntry[] = [
   { file: 'styles.css', selector: '.usage-tool-counts', property: 'border-top', value: '1px solid var(--rule)', reason: 'Separates usage tool counts from adjacent content.' },
   { file: 'styles.css', selector: '.usage-tool-counts dl > div', property: 'border-top', value: '1px solid var(--rule)', reason: 'Separates tool-count rows.' },
   { file: 'styles.css', selector: '.usage-table th, .usage-table td', property: 'border-top', value: '1px solid var(--rule)', reason: 'Structural row separators in a usage table.' },
+  { file: 'daily/ui/daily-ui.css', selector: '.daily-chart-legend-mark', property: 'border-top', value: '2px solid currentColor', reason: 'Chart series line marker is paired with the series label.' },
+  { file: 'daily/ui/daily-ui.css', selector: '.daily-chart-legend-mark--area', property: 'border-bottom', value: '2px solid currentColor', reason: 'Area chart legend marker depicts the plotted series.' },
+  { file: 'daily/sections/workouts/workouts.css', selector: '.workouts-history-row', property: 'border-bottom', value: '1px solid var(--rule)', reason: 'Structural separator between workout history rows.' },
   { file: 'styles.css', selector: '.area-sidebar', property: 'border-bottom', value: '1px solid var(--rule)', reason: 'Structural boundary below the sidebar on narrow layouts.' },
   { file: 'styles.css', selector: '.context-panel', property: 'border-bottom', value: '1px solid var(--rule)', reason: 'Structural boundary below the context panel on narrow layouts.' },
   { file: 'styles.css', selector: '.mobile-menu-actions', property: 'border-top', value: '1px solid var(--rule)', reason: 'Separates navigation from menu actions.' },
@@ -62,9 +83,13 @@ const typeSpacingAllowlist: AllowlistEntry[] = [
   { file: 'proactive.css', selector: '.proactive-urgency-icon', property: 'font-size', value: '.9em', reason: 'The urgency glyph scales with its adjacent urgency label.' },
   { file: 'styles.css', selector: '.release-graph-lane text', property: 'font', value: '12px system-ui, sans-serif', reason: 'The SVG release-graph labels retain their pixel-exact chart scale.' },
   { file: 'daily/ui/daily-ui.css', selector: '.daily-chart-grid text', property: 'font', value: '12px var(--font-body)', reason: 'The Daily chart axis labels retain their pixel-exact chart scale.' },
+  { file: 'daily/ui/daily-ui.css', selector: '.daily-chart-xaxis text', property: 'font', value: '12px var(--font-body)', reason: 'The Daily chart axis labels retain their pixel-exact chart scale.' },
+  { file: 'daily/ui/daily-ui.css', selector: '.daily-chart-target text', property: 'font', value: '12px var(--font-body)', reason: 'The Daily chart target label is SVG text sized in viewBox units, so it retains the chart scale.' },
+  { file: 'daily/ui/daily-ui.css', selector: '.daily-chart-active-point text', property: 'font', value: '12px var(--font-body)', reason: 'The Daily chart readout label is SVG text sized in viewBox units, so it retains the chart scale.' },
   { file: 'daily/sections/body-sleep/body-sleep.css', selector: '.body-sleep-axis-label', property: 'font', value: '12px var(--font-body)', reason: 'The Daily chart axis labels retain their pixel-exact chart scale.' },
   { file: 'daily/sections/body-sleep/body-sleep.css', selector: '.body-sleep-stage-mark', property: 'font', value: 'bold 12px var(--font-body)', reason: 'The Daily stage marks retain their pixel-exact chart scale.' },
   { file: 'daily/daily.css', selector: '.daily-page pre', property: 'font', value: 'var(--type-caption)/1.5 var(--font-mono)', reason: 'The ongoing Daily work owns its preformatted text line-height; the type size already uses the shared caption role.' },
+  { file: 'daily/sections/workouts/workouts.css', selector: '.workouts-type-volume', property: 'margin-inline-start', value: 'calc(1.5rem + var(--space-2))', reason: 'The offset is the 1.5rem workout glyph column plus its gap, so the volume bar aligns under the type name.' },
   { file: 'ConversationHistory.css', selector: '.conversation-message.live-turn::before, .conversation-message[data-speaker="jarvis"][data-latest]::before', property: 'padding', value: '1.5px', reason: 'This pseudo-element padding creates the conversation glass rim, not content spacing.' },
   { file: 'ConversationHistory.css', selector: '.visually-hidden', property: 'margin', value: '-1px', reason: 'The one-pixel inset is part of the accessible visually-hidden clipping pattern.' },
   { file: 'ConversationHistory.css', selector: '.conversation-transcript', property: 'padding', value: '0 max(var(--space-1), calc((100% - 760px) / 2)) var(--space-6)', reason: 'The 760px value caps the centered transcript line length; it is not a spacing step.' },
@@ -272,7 +297,22 @@ describe('stylesheets', () => {
       total.spacing += result.spacing;
       return total;
     }, { fontSize: 0, lineHeight: 0, fontShorthand: 0, spacing: 0 });
-    expect(inventory).toEqual({ fontSize: 4, lineHeight: 0, fontShorthand: 5, spacing: 14 });
+    expect(inventory).toEqual({ fontSize: 4, lineHeight: 0, fontShorthand: 8, spacing: 14 });
+  });
+
+  it('keeps legacy state selectors on shared semantic tokens or removes their styles', () => {
+    const sharedStateToken = /var\(--(?:text-muted|error|error-surface|surface(?:-[\w-]+)?|rule|type-(?:body|small|caption)|space-[1-7]|radius-panel)\)/u;
+    for (const [file, selector] of legacyStateStyles) {
+      const root = postcss.parse(readFileSync(join(sourceDirectory, file), 'utf8'), { from: file });
+      const declarations: string[] = [];
+      root.walkRules((rule) => {
+        if (rule.selector.includes(selector)) {
+          rule.walkDecls((declaration) => { declarations.push(declaration.value); });
+        }
+      });
+      if (declarations.length === 0) continue;
+      expect(declarations.some((value) => sharedStateToken.test(value)), `${file}: ${selector}`).toBe(true);
+    }
   });
 
   it('rejects reintroduced stylesheet violations', () => {
