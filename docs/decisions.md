@@ -4999,3 +4999,11 @@ change applies now, including to already-open pull requests. The new-project
 policy default is separate: it only pre-fills projects Jarvis registers later,
 and each project keeps its own changeable policy. This is web-only; the PATCH
 contract, default values, and P10-09 merge behavior do not change.
+
+## P13-16 owner-bound proactive recall (18 October 2026; #937)
+
+Chat and voice use one read-only tool over the same owner-scoped proactive item
+query as the Proactive page. It is composed only behind the existing
+`JARVIS_PROACTIVE_ENABLED` flag, returns only bounded display fields marked as
+untrusted data, and cannot change item state or authorize actions. Reusing the
+page's query keeps both views consistent and avoids creating a second read model.

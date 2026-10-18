@@ -5560,3 +5560,20 @@ P12-07's inactive `daily/nutrition` services/typed handlers use existing server-
 P12-03 adds an inactive module-owned `daily/store` registry and exact-key owner-scoped read boundary using the existing P12-01 owner resolver. The additive `daily` SQL schema is separate from existing `dbo` tables; no service/UI/device/import module or route/tool is registered. Source-to-target compatibility and legacy credential/mixed-source exclusions are documented in [Daily schema mapping](daily-schema-mapping.md). Normal deployment may create only empty tables; protected live reconciliation remains a later gate.
 
 [Migration contract](daily-migration.md) adds `daily/createDailyModules(enabled = false)` to the existing BackendModule pattern. Production composition remains unchanged. Explicit enabled test composition exposes only private `GET /daily/capabilities`, no data/tools/pages; disabled composition contributes nothing. Existing root user/hosted-agent authentication precedes `resolveDailyOwner`, which maps both allowed callers to the server-configured owner and refuses runners/other service identities. Shared contracts reserve four stable native view IDs without changing the renderer/navigation allowlists. Actual services, SQL/device auth, activation wiring and native frontend are downstream P12 work. No new login, dispatcher, voice stack, Azure resource or direct Azure access.
+
+## Chat and voice recall of proactive findings (P13-16; default off)
+
+`index.ts` builds the `proactive` tool module only when the existing
+`JARVIS_PROACTIVE_ENABLED` flag is true. It shares the exact `ProactiveStore`
+instance with `registerProactive`; disabled composition adds no store or tool.
+The single `proactive_recent_items` tool reads through `items.list`, the same
+bounded query used by the Proactive page, with exact `new`, `seen` or `all`
+filters. SQL state filters are parameterized; the store remains owner-scoped.
+Shared chat/voice guidance mentions the tool only when it is in that catalogue.
+
+The result projects only the nine requested item fields, truncates title/body on
+code-point boundaries, caps the serialized result at 8 KiB and marks it
+`untrusted: true`. The tool is sensitive so private item text is not persisted
+in generic tool-call audit records. Raw JSON validation runs before Fastify's
+AJV coercion; failures remain explicit tool refusals/errors. The module exposes
+no item mutation or approval capability.

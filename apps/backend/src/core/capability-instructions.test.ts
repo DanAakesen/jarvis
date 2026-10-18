@@ -20,8 +20,7 @@ describe('shared navigation capability instructions', () => {
     expect(instructions).toContain('name the item and next step');
     expect(instructions).toContain('never ask Dan to paste or copy content a tool can get');
     expect(instructions).toContain('name the missing tool permission');
-    expect(instructions).toContain('For questions about what I noticed, found, flagged or reminded, use proactive_recent_items');
-    expect(instructions).toContain("answer in Dan's language");
+    expect(instructions).not.toContain('proactive_recent_items');
   });
 
   it('stages calendar changes before requesting approval and recovers real codes across turns', () => {
@@ -48,6 +47,13 @@ describe('shared navigation capability instructions', () => {
     expect(instructions).toContain('Inspect body and alternateBody');
     expect(instructions).toContain('Extraction limits do not prove original details absent');
     expect(instructions).toContain('Never guess reservation dates');
+  });
+
+  it('guides proactive recall only when its tool is composed', () => {
+    expect(capabilityInstructions({ automaticCapture: false })).not.toContain('proactive_recent_items');
+    const enabled = capabilityInstructions({ automaticCapture: false }, true);
+    expect(enabled).toContain('For questions about what I noticed, found, flagged or reminded, use proactive_recent_items');
+    expect(enabled).toContain("answer in Dan's language");
   });
 
   it('maps window requests to snapshot-backed intents and reports pin outcomes honestly', () => {
@@ -143,11 +149,15 @@ describe('shared capability instruction budget', () => {
   it.each([true, false])('stays within the headroom budget with automatic capture %s', (automaticCapture) => {
     expect(codePoints(capabilityInstructions({ automaticCapture })))
       .toBeLessThanOrEqual(limits.capabilityInstructionsBudgetCodePoints);
+    expect(codePoints(capabilityInstructions({ automaticCapture }, true)))
+      .toBeLessThanOrEqual(limits.capabilityInstructionsBudgetCodePoints);
   });
 
   it.each([true, false])('keeps built-in mode behavior within the shared headroom budget with automatic capture %s', (automaticCapture) => {
     for (const instructions of Object.values(builtInModeInstructions)) {
       expect(codePoints(capabilityInstructions({ automaticCapture }) + instructions))
+        .toBeLessThanOrEqual(limits.capabilityInstructionsBudgetCodePoints);
+      expect(codePoints(capabilityInstructions({ automaticCapture }, true) + instructions))
         .toBeLessThanOrEqual(limits.capabilityInstructionsBudgetCodePoints);
       expect(instructions.length).toBeLessThanOrEqual(2_000);
     }
@@ -156,6 +166,8 @@ describe('shared capability instruction budget', () => {
   it.each([true, false])('uses only BMP characters so TypeScript and Python count the same with automatic capture %s', (automaticCapture) => {
     const text = capabilityInstructions({ automaticCapture });
     expect(codePoints(text)).toBe(text.length);
+    const enabled = capabilityInstructions({ automaticCapture }, true);
+    expect(codePoints(enabled)).toBe(enabled.length);
   });
 
   it('does not use third-person Jarvis wording in user-facing failures', () => {

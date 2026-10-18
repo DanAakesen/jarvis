@@ -4556,3 +4556,15 @@ run `--server --stdio --no-auto-update`, without `--remote`; this task neither
 relaunches them nor claims in-session `/remote` is enabled. Remote session control
 and original hosted-model/realtime speech/private-account acceptance remain
 unverified.
+
+## P13-16 chat and voice recall (18 October 2026)
+
+`proactive_recent_items` is part of the hosted tool catalogue only when
+`JARVIS_PROACTIVE_ENABLED === true`; this task does not enable the flag. Its
+bounded, sensitive result is marked untrusted and reads the same owner-scoped
+Proactive item query as the web page. It never marks an item seen.
+
+Focused checks:
+`npm test --workspace @jarvis/backend -- --run src/proactive/tools.test.ts src/production-modules.test.ts src/database/proactive-store.test.ts src/proactive/store.test.ts src/core/capability-instructions.test.ts src/tool-parity.test.ts src/voice/realtime.test.ts src/core/settings.test.ts`,
+`npm run build --workspace @jarvis/backend`, and
+`npm run lint --workspace @jarvis/backend`.

@@ -81,9 +81,13 @@ function fixture(options: {
 
 describe('SQL guarded proactive finding writes', () => {
   it.each(['new', 'seen', 'open', 'all'] as const)('parameterizes item list state %s', async (state) => {
+    const statements: string[] = [];
     const request = {
       input: vi.fn().mockReturnThis(),
-      query: vi.fn(async (_statement: string) => ({ recordset: [] })),
+      query: vi.fn(async (statement: string) => {
+        statements.push(statement);
+        return { recordset: [] };
+      }),
     };
     const store = createProactiveStore({ request: () => request } as unknown as sql.ConnectionPool, owner);
 
@@ -91,7 +95,7 @@ describe('SQL guarded proactive finding writes', () => {
 
     expect(request.input).toHaveBeenCalledWith('owner', sql.UniqueIdentifier, owner);
     expect(request.input).toHaveBeenCalledWith('limit', sql.Int, 5);
-    const statement = request.query.mock.calls[0]![0] as string;
+    const statement = statements[0]!;
     if (state === 'new' || state === 'seen') {
       expect(request.input).toHaveBeenCalledWith('state', sql.NVarChar(16), state);
       expect(statement).toContain('AND state = @state');
