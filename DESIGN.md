@@ -1674,6 +1674,36 @@ Synthetic browser captures for the new list and detail presentation are in
 responses, not Microsoft sign-in, live records, physical-device behavior or
 original-site parity.
 
+### Data presentation (18 October 2026; P12-34)
+
+Data uses one kit section header and a collection/refresh toolbar with a compact
+freshness line. Applied-period, processing and completeness evidence stays in
+“Source, units and coverage.” Wide screens use the sticky-first-column kit table;
+below 700px the same records become compact cards with a date/name heading,
+two-field summary and remaining facts. Long table text is ellipsized, with full
+values in a focused, labelled inline detail region. Closing or Escape restores
+focus and scrolls the opener into view. Raw JSON is secondary, behind “Raw record.”
+Null fields read “Not recorded”; recorded zero remains zero and units stay explicit.
+
+The existing observation plots use `DailyChart`, including its legend, keyboard
+readout and disclosed record alternative. No aggregation, interpolation, new
+reads, control geometry or tokens are introduced. Pagination states the page,
+returned count and continuation, with text explaining unavailable directions.
+Sync facts and stored brief fields use unboxed definition grids.
+
+Synthetic actual-App Chromium captures (not live authentication or owner data):
+[desktop light](docs/ui/p12-34/records-1440-light.jpg),
+[desktop dark](docs/ui/p12-34/records-1440-dark.jpg),
+[390px light](docs/ui/p12-34/records-390-light.jpg),
+[390px dark](docs/ui/p12-34/records-390-dark.jpg),
+[320px light](docs/ui/p12-34/records-320-light.jpg),
+[320px dark](docs/ui/p12-34/records-320-dark.jpg),
+[detail light](docs/ui/p12-34/detail-390-light.jpg),
+[detail dark](docs/ui/p12-34/detail-390-dark.jpg),
+[chart light](docs/ui/p12-34/chart-390-light.jpg),
+[chart dark](docs/ui/p12-34/chart-390-dark.jpg), and
+[inspection contact sheet](docs/ui/p12-34/inspection-contact.jpg).
+
 ### Nutrition presentation (18 October 2026; P12-31)
 
 Day puts the date controls and meal freshness before four text-backed meters:

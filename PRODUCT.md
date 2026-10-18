@@ -1336,7 +1336,12 @@ collection is for, and whether a read-only one-record check found records, found
 none or could not read it. "None returned" never claims the original source is
 empty, and the overview shows no invented counts, totals or estimates. Open goes
 to the existing record browser, which keeps its periods, paging, details, units
-and source/freshness labels. The page uses only the existing owner-authorised
+and source/freshness labels. Its Data presentation (P12-34) uses a sticky table
+on wide screens and record cards below 700px. A readable, keyboard-operable
+detail region keeps every field and a secondary raw-record disclosure; closing
+returns focus to the opener. Observation charts keep their unaggregated values,
+with keyboard inspection and a disclosed data alternative. The page uses only
+the existing owner-authorised
 `/daily/capabilities` and `/daily/query` reads, so it adds no writer, provider,
 device, private-data or consent path. It exists only when the web build switch
 `VITE_DAILY_ENABLED` is exactly `true`; the switch is off by default in code, so a

@@ -6,7 +6,9 @@ Keep this audit presentation-only: preserve the existing owner-only reads,
 loaded data, URLs, accessible names, behavior and section ownership. Reuse the
 Daily kit's space/type/surface tokens and shared primitives rather than
 normalizing content-specific empty states, freshness placement or chip meaning.
-Use visible horizontal scrollbars for overflowing Daily and Nutrition tab strips.
+Use a conditional edge fade for the overflowing Daily shell tabs without a
+native scrollbar; keep Nutrition view tabs in their contained horizontal scroll
+region.
 At narrow widths, choose readable controls, equal-height Body shortcuts and
 wrapped stat notes without clipping or fabricating values.
 
@@ -17,6 +19,25 @@ exception and do not add scale-ratchet allowlist entries. Guard table wrappers,
 fixed-width styles, narrow grid rules and stat-note wrapping with existing web
 tests. Synthetic captures and the complete audit matrix live in
 `docs/ui/p12-36/`; they are not live-data or original-site acceptance.
+
+## P12-34 — Daily Data presentation (18 October 2026)
+
+Keep the existing record-browser state machine and reads; replace only its
+presentation with the Daily kit. Use a sticky table at 700px and above and
+compact record cards below it, rather than requiring sideways table reading on
+phones. Put all fields and units in a labelled inline detail region, preserving
+null as “Not recorded” and zero as zero. Keep raw JSON nested and collapsed,
+and return focus to the row control on close or Escape. Workout and brief
+drill-down actions remain available inside the record detail.
+Preserve detail selection across same-query refreshes by record identity,
+including refreshed ordering; recover focus if the selected record disappears.
+
+Keep one freshness line beside the collection picker and Refresh; move loaded
+period, processing time and unknown-completeness evidence to the existing source
+disclosure. Reuse `DailyChart` without changing plot choices or observations.
+State unavailable pagination directions in text. Keep sync facts and brief
+bodies readable without nested panel boxes. No new dependencies, tokens,
+backend behavior, real-data acceptance or original-site cutover follows.
 
 ## P12-32 — Daily Body & sleep presentation (18 October 2026)
 
