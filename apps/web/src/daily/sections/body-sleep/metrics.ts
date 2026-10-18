@@ -45,6 +45,11 @@ export function periodDays(period: DailyPeriod) {
     Date.parse(`${period.startDate}T12:00:00Z`)) / 86_400_000) + 1;
 }
 
+export function periodDates(period: DailyPeriod) {
+  return Array.from({ length: periodDays(period) }, (_, index) =>
+    new Date(Date.parse(`${period.startDate}T12:00:00Z`) + index * 86_400_000).toISOString().slice(0, 10));
+}
+
 export function metricValue(row: Row) {
   const value = finite(row.value);
   return { value: value ?? finite(row.avg_value), average: value === null && finite(row.avg_value) !== null };
@@ -72,9 +77,19 @@ export function metricSummary(rows: readonly Row[], period: DailyPeriod) {
     byDate.set(date, values);
   }
   // Give each recorded day equal weight, even if retained rows share a date.
-  const days = [...byDate].sort(([a], [b]) => a.localeCompare(b)).map(([date, values]) => ({
-    date, value: values.reduce((sum, value) => sum + value, 0) / values.length,
-  }));
+  const days = [...byDate].sort(([a], [b]) => a.localeCompare(b)).map(([date, values]) => {
+    const ranges = rows.flatMap(row => {
+      if (dateOnly(row.metric_date) !== date) return [];
+      const low = finite(row.min_value);
+      const high = finite(row.max_value);
+      return low !== null && high !== null && low <= high ? [{ low, high }] : [];
+    });
+    return {
+      date, value: values.reduce((sum, value) => sum + value, 0) / values.length,
+      low: ranges.length ? Math.min(...ranges.map(range => range.low)) : null,
+      high: ranges.length ? Math.max(...ranges.map(range => range.high)) : null,
+    };
+  });
   const first = days[0] ?? null;
   const latest = days.at(-1) ?? null;
   const minimum = days.reduce<typeof first>((best, day) => !best || day.value < best.value ? day : best, null);

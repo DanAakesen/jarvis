@@ -26,7 +26,7 @@ const metricRows: Row[] = [
 ];
 const sleepRows: Row[] = [
   { sleep_date: '2026-10-02', sleep_start: '2026-10-01T21:30:00Z', sleep_end: '2026-10-02T05:00:00Z',
-    total_sleep_hours: 9, asleep_hours: 7, deep_hours: 1, core_hours: 4, rem_hours: 2, awake_hours: 2, in_bed_hours: 10, segment_count: 15 },
+    total_sleep_hours: 9, asleep_hours: 7, deep_hours: 1, core_hours: 4, rem_hours: 2, awake_hours: 2, in_bed_hours: 10, segment_count: 15, source_json: ['Synthetic health source'] },
   { sleep_date: '2026-10-04', total_sleep_hours: 6, asleep_hours: null },
   { sleep_date: '2026-10-05', asleep_hours: 0, deep_hours: 0, core_hours: null },
 ];
@@ -72,7 +72,7 @@ describe('Body & sleep section (synthetic records only)', () => {
     mount({ sources: [sources.sleep] }, '/daily?view=body&metric=body_mass&keep=yes');
     expect(screen.queryByRole('tab', { name: 'Body' })).toBeNull();
     expect(screen.getByText(/Body is unavailable/)).toBeTruthy();
-    await screen.findByRole('table', { name: /Nightly sleep records/ });
+    await screen.findByRole('heading', { name: 'Nights' });
     expect(fetch.mock.calls.every(([, init]) => JSON.parse(String(init?.body)).source === sources.sleep)).toBe(true);
     expect(url()).toContain('view=sleep');
     expect(url()).toContain('keep=yes');
@@ -89,19 +89,41 @@ describe('Body & sleep section (synthetic records only)', () => {
   it('searches catalogue names, uses grouped native options and keeps unknown metrics selectable', async () => {
     stub();
     mount();
-    await screen.findByRole('option', { name: /synthetic_other —/ });
+    await screen.findByRole('option', { name: 'synthetic_other' });
     expect(screen.getByRole('group', { name: 'Body composition' })).toBeTruthy();
     expect(screen.getByRole('group', { name: 'Other' })).toBeTruthy();
     await waitFor(() => expect(url()).toContain('metric=body_mass'));
-    fireEvent.change(screen.getByLabelText('Search measurements'), { target: { value: 'synthetic_other' } });
+    fireEvent.change(screen.getByLabelText('Search'), { target: { value: 'synthetic_other' } });
     expect(screen.getByRole('option', { name: /Body mass — current selection/ })).toBeTruthy();
     fireEvent.change(screen.getByLabelText('Measurement'), { target: { value: 'synthetic_other' } });
     await screen.findByRole('img', { name: 'synthetic_other — count' });
     expect(url()).toContain('metric=synthetic_other');
     expect(url()).toContain('keep=retained');
-    fireEvent.change(screen.getByLabelText('Search measurements'), { target: { value: 'NO MATCH' } });
+    fireEvent.change(screen.getByLabelText('Search'), { target: { value: 'NO MATCH' } });
     expect(screen.getByText(/0 measurements match/)).toBeTruthy();
     expect(screen.getByLabelText<HTMLSelectElement>('Measurement').value).toBe('synthetic_other');
+  });
+
+  it('keeps period and freshness in the measurement toolbar and makes recent shortcuts keyboard reachable', async () => {
+    const mounted = mount();
+    await screen.findByRole('img', { name: 'Body mass — kg' });
+    expect(screen.getByRole('combobox', { name: 'Period' })).toBeTruthy();
+    expect(mounted.container.querySelectorAll('.daily-freshness')).toHaveLength(1);
+    expect(screen.getByRole('img', { name: 'Body mass selected-unit trend' })).toBeTruthy();
+    const shortcut = screen.getByRole('button', { name: /synthetic_other.*Select/ });
+    shortcut.focus();
+    expect(document.activeElement).toBe(shortcut);
+    fireEvent.click(shortcut);
+    await screen.findByRole('img', { name: 'synthetic_other — count' });
+    expect(url()).toContain('metric=synthetic_other');
+  });
+
+  it('announces empty body history with the Health upload settings link', async () => {
+    stub(query => jsonResponse(dailyFixture(query, [])));
+    mount({}, '/daily?view=body');
+    expect(await screen.findByText('No body measurement records yet.')).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Health upload settings' }).getAttribute('href'))
+      .toBe('/settings#health-upload');
   });
 
   it('splits units, labels average fallback, keeps zero, dates, recorded ranges and newest-first rows', async () => {
@@ -109,16 +131,20 @@ describe('Body & sleep section (synthetic records only)', () => {
     mount();
     await screen.findByRole('img', { name: 'Body mass — kg' });
     expect(screen.getByRole('img', { name: 'Body mass — lb' })).toBeTruthy();
-    fireEvent.click(screen.getByText('Missing values, gaps and units remain explicit.'));
+    fireEvent.click(screen.getByText('About this data'));
     expect(screen.getByText(/units are not converted or combined/u)).toBeTruthy();
+    fireEvent.click(within(screen.getByRole('region', { name: 'Body mass — kg' })).getByText('View data table'));
     const table = screen.getByRole('table', { name: 'Body mass — kg: newest first' });
     const rows = within(table).getAllByRole('row');
     expect(rows[1]?.textContent).toContain('Oct 3');
     expect(rows[2]?.textContent).toContain('Oct 1');
     expect(within(table).getByText('Recorded average (fallback)')).toBeTruthy();
     const kg = screen.getByRole('region', { name: 'Body mass — kg' });
-    expect(within(kg).getByRole('heading', { name: 'Average over 2 days with data' })).toBeTruthy();
-    expect(within(kg).getByText('2 of 7')).toBeTruthy();
+    expect(within(kg).getByRole('heading', { name: 'Average' })).toBeTruthy();
+    expect(within(kg).getByText(/2 of 7 days with numeric values/)).toBeTruthy();
+    expect(within(kg).getByText('+12 kg')).toBeTruthy();
+    expect(within(kg).getByText('Recorded minimum–maximum (kg)')).toBeTruthy();
+    expect(within(screen.getByRole('region', { name: 'Body mass — lb' })).getByText('No comparison')).toBeTruthy();
     expect(within(table).getAllByText('0').length).toBeGreaterThan(0);
     const sourceQuery = JSON.parse(String(vi.mocked(fetch).mock.calls.find(([, init]) =>
       JSON.parse(String(init?.body)).source === sources.metrics)?.[1]?.body));
@@ -152,16 +178,41 @@ describe('Body & sleep section (synthetic records only)', () => {
   it('shows staged, totals-only and partial nights with all table fields and accessible unknowns', async () => {
     stub();
     mount({}, '/daily?view=sleep');
-    const table = await screen.findByRole('table', { name: /Nightly sleep records/ });
-    expect(screen.getByRole('list', { name: 'Sleep stages legend' }).textContent).toContain('1 · Deep');
-    expect(screen.getByRole('list', { name: 'Sleep stages legend' }).textContent).toContain('3 · REM');
-    expect(within(table).getAllByRole('columnheader')).toHaveLength(12);
+    await screen.findByRole('heading', { name: 'Nights' });
+    expect(screen.getByRole('list', { name: 'Sleep and recorded stages by night legend' }).textContent).toContain('Deep (h)');
+    expect(screen.getByRole('list', { name: 'Sleep and recorded stages by night legend' }).textContent).toContain('REM (h)');
+    expect(screen.getByText(/Synthetic health source/)).toBeTruthy();
+    fireEvent.click(screen.getAllByText('View data table').at(-1)!);
+    const table = screen.getByRole('table', { name: /Nightly sleep records/ });
+    expect(within(table).getAllByRole('columnheader')).toHaveLength(11);
     expect(within(table).getAllByText('Unknown').length).toBeGreaterThan(5);
-    expect(screen.getByText(/T: Stages not recorded/)).toBeTruthy();
-    expect(screen.getByText(/marks partial stages/)).toBeTruthy();
-    expect(screen.getByRole('heading', { name: 'Average asleep over 2 nights with data' })).toBeTruthy();
-    expect(screen.getByText('2 of 7')).toBeTruthy();
+    expect(screen.getByText('Stages not recorded')).toBeTruthy();
+    expect(screen.getByText(/Partial stages; unrecorded stages are unknown/)).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Average asleep' })).toBeTruthy();
+    expect(screen.getByText(/2 of 7 nights with asleep data/)).toBeTruthy();
     expect(within(table).getByText('1 Oct 2026, 23:30')).toBeTruthy();
+  });
+
+  it('shows an unrecorded latest night as Not recorded without inventing stage values', async () => {
+    stub(query => jsonResponse(dailyFixture(query, [{
+      sleep_date: '2026-10-06', total_sleep_hours: 8, asleep_hours: null,
+      deep_hours: null, core_hours: null, rem_hours: null, awake_hours: null,
+    }])));
+    mount({}, '/daily?view=sleep');
+    const lastNight = await screen.findByRole('region', { name: 'Body & sleep' });
+    expect(within(lastNight).getByRole('heading', { name: 'Last night' })).toBeTruthy();
+    expect(lastNight.querySelector('.body-sleep-last-value strong')?.textContent).toBe('Not recorded');
+    expect(within(lastNight).getByRole('list', { name: 'Most recent night sleep stages' }).textContent).toContain('Stages not recorded');
+    expect(within(lastNight).getByText('1 of 7')).toBeTruthy();
+  });
+
+  it('supports keyboard inspection of the measurement chart', async () => {
+    stub();
+    mount();
+    const chart = await screen.findByRole('img', { name: 'Body mass — kg' });
+    chart.focus();
+    fireEvent.keyDown(chart, { key: 'ArrowRight' });
+    expect([...document.querySelectorAll('.daily-chart-readout')][0]?.textContent).toContain('Daily value');
   });
 
   it('opens a URL-linked night, focuses detail and returns focus to its row on close', async () => {
@@ -198,15 +249,17 @@ describe('Body & sleep section (synthetic records only)', () => {
     });
     const mounted = mount({}, '/daily?view=body&metric=synthetic_other&night=2026-10-02');
     await screen.findByRole('img', { name: 'synthetic_other — count' });
-    const scroll = screen.getByRole('region', { name: /recorded daily rows/ });
+    const unit = screen.getByRole('region', { name: 'synthetic_other — count' });
+    fireEvent.click(within(unit).getByText('View data table'));
+    const scroll = within(unit).getByRole('region', { name: /recorded daily rows/ });
     scroll.scrollLeft = 80;
-    fireEvent.change(screen.getByLabelText('Search measurements'), { target: { value: 'synthetic' } });
+    fireEvent.change(screen.getByLabelText('Search'), { target: { value: 'synthetic' } });
     pending = true;
     mounted.update({ refreshVersion: 1 });
     await screen.findByText('Refreshing measurements…');
     expect(screen.getByRole('img', { name: 'synthetic_other — count' })).toBeTruthy();
     expect(scroll.scrollLeft).toBe(80);
-    expect(screen.getByLabelText<HTMLInputElement>('Search measurements').value).toBe('synthetic');
+    expect(screen.getByLabelText<HTMLInputElement>('Search').value).toBe('synthetic');
     await act(async () => { finish.forEach(resolve => resolve()); });
     expect(url()).toContain('metric=synthetic_other');
     expect(url()).toContain('night=2026-10-02');
@@ -219,8 +272,8 @@ describe('Body & sleep section (synthetic records only)', () => {
     expect(screen.getByText('Loading Daily history')).toBeTruthy();
     await waitFor(() => expect(resolve).toBeTypeOf('function'));
     await act(async () => { resolve(jsonResponse(dailyFixture({ source: sources.sleep, ...period }, []))); });
-    expect(await screen.findByText(/History appears after an import/)).toBeTruthy();
-    expect(screen.getByText('0 of 7')).toBeTruthy();
+    expect(await screen.findByRole('link', { name: 'Health upload settings' })).toBeTruthy();
+    expect(screen.getByText('No sleep records yet.')).toBeTruthy();
   });
 
   it.each(['body', 'sleep'])('shows %s error with a working view-specific Retry', async view => {
@@ -231,7 +284,7 @@ describe('Body & sleep section (synthetic records only)', () => {
     expect(screen.getByRole('alert').textContent).toContain('503');
     failed = false;
     fireEvent.click(retry);
-    await screen.findByText(/History appears after an import/);
+    await screen.findByRole('link', { name: 'Health upload settings' });
     expect(screen.queryByRole('alert')).toBeNull();
   });
 
@@ -245,7 +298,7 @@ describe('Body & sleep section (synthetic records only)', () => {
     mount({ sources: [sources.sleep] }, '/daily?view=sleep');
     await screen.findByText(/Five-page limit reached/);
     expect(count).toBe(5);
-    expect(screen.getByText(/5 retained records loaded across 5 pages/)).toBeTruthy();
+    expect(screen.getByText(/5 records/)).toBeTruthy();
     const queries = fetch.mock.calls.map(([, init]) => JSON.parse(String(init?.body)));
     expect(queries[0].cursor).toBeUndefined();
     expect(queries[1].cursor).toEqual({ date: '2026-10-01', key: 'synthetic-1' });
@@ -267,7 +320,7 @@ describe('Body & sleep section (synthetic records only)', () => {
     mount({}, '/daily?view=body&metric=synthetic_1');
     await waitFor(() => expect(screen.getAllByText(/Five-page limit reached/)).toHaveLength(2));
     expect(counts).toEqual({ catalogue: 5, measurements: 5 });
-    expect(screen.getByText('5 of 7')).toBeTruthy();
+    expect(screen.getByText(/5 of 7 days with numeric values/)).toBeTruthy();
     expect(url()).toContain('metric=synthetic_1');
   });
 
@@ -277,6 +330,7 @@ describe('Body & sleep section (synthetic records only)', () => {
     mount({ sources: [sources.sleep] }, '/daily?view=sleep');
     await screen.findByRole('alert');
     expect(screen.getByText(/More records remain/)).toBeTruthy();
+    fireEvent.click(screen.getAllByText('View data table').at(-1)!);
     expect(screen.getByRole('table', { name: /Nightly sleep records/ })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Retry sleep' })).toBeTruthy();
   });
@@ -285,7 +339,7 @@ describe('Body & sleep section (synthetic records only)', () => {
     stub(query => jsonResponse(dailyFixture(query, query.source === sources.metricCatalog ? catalogue :
       [{ metric_name: 'body_mass', metric_date: '2026-10-01', value: null, avg_value: null, unit: 'kg' }])));
     mount({}, '/daily?view=body&metric=body_mass');
-    await screen.findByRole('table', { name: 'Body mass — kg: newest first' });
+    await waitFor(() => expect(screen.getAllByText('No recorded values to chart.')).toHaveLength(2));
     expect(screen.getAllByText('No recorded values to chart.').length).toBe(2);
     expect(screen.getAllByText('Unknown').length).toBeGreaterThan(5);
     expect(screen.queryByRole('img')).toBeNull();
@@ -296,6 +350,7 @@ describe('Body & sleep section (synthetic records only)', () => {
       [{ metric_name: 'body_mass', metric_date: '2026-10-01', value: 0, unit: null }])));
     mount({}, '/daily?view=body&metric=body_mass');
     await screen.findByRole('img', { name: 'Body mass — Unit unknown' });
+    fireEvent.click(within(screen.getByRole('region', { name: 'Body mass — Unit unknown' })).getByText('View data table'));
     expect(screen.getByRole('table', { name: 'Body mass — Unit unknown: newest first' })).toBeTruthy();
     expect(screen.getAllByText('Unit unknown').length).toBeGreaterThan(0);
   });
@@ -303,7 +358,7 @@ describe('Body & sleep section (synthetic records only)', () => {
   it('preserves an unavailable linked night until the user closes it', async () => {
     stub();
     mount({}, '/daily?view=sleep&night=2026-09-01');
-    await screen.findByRole('table', { name: /Nightly sleep records/ });
+    await screen.findByRole('heading', { name: 'Nights' });
     expect(screen.getByText(/This night is not in the loaded period/)).toBeTruthy();
     expect(url()).toContain('night=2026-09-01');
     fireEvent.click(screen.getByRole('button', { name: 'Close night detail' }));
