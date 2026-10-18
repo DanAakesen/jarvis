@@ -38,7 +38,7 @@ inventoried to identify route-specific exceptions.
 Compared the pre-change and current app in headless Chromium at 390×844 with
 touch emulation and 1440×900, in light and dark. The isolated Vite/auth harness
 used synthetic settings and project data. Inspected Settings, the empty Factory
-board, the project completion-policy control, Daily and Proactive error states,
+board, the project completion-policy control, Daily and Proactive page/item error states,
 the Background work popover, and the chat composer. Exercised policy save,
 Daily and Proactive retry, popover open, and composer focus. Neither version
 emitted browser console errors. Reduced-motion emulation was also checked: the
