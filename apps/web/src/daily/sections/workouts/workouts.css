@@ -17,7 +17,7 @@
   .workouts-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .workouts-wide { display: none; }
   .workouts-narrow { display: grid; gap: var(--space-4); padding: 0; list-style: none; }
-  .workouts-narrow li { min-width: 0; padding-block: var(--space-3); border-bottom: 1px solid var(--rule); overflow-wrap: anywhere; }
+  .workouts-narrow li { min-width: 0; padding-block: var(--space-3); overflow-wrap: anywhere; }
   .workouts-narrow p { margin-block: 0 var(--space-3); }
   .workouts-narrow dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); }
   .workouts-narrow dt { color: var(--text-muted); font-size: var(--type-small); }
