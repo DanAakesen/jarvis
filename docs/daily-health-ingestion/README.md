@@ -1,6 +1,6 @@
 # Daily health acceptance in the existing backend
 
-Dan directly approved the revised #719 design on 13 October 2026: reuse Jarvis's backend and SQL, with no new Azure resources. Production composition now exists behind the explicit `JARVIS_HEALTH_UPLOAD_ENABLED` switch, whose code default is false and which is deliberately absent from infrastructure. Original Daily remains canonical and unchanged; no endpoint has been deployed, no credential issued, and all local evidence is synthetic.
+Dan directly approved the revised #719 design on 13 October 2026: reuse Jarvis's backend and SQL, with no new Azure resources. Production composition is behind the explicit `JARVIS_HEALTH_UPLOAD_ENABLED` switch; its code default is false and the reviewed backend infrastructure explicitly sets it true. This change has not been deployed, the owner has not created a credential, and all local evidence is synthetic. No production endpoint or private credential handoff is claimed.
 
 ## Acceptance contract
 
@@ -17,7 +17,7 @@ Dan directly approved the revised #719 design on 13 October 2026: reuse Jarvis's
 
 Uploads are at most **8 MiB**; ignored heartbeat bodies are at most **32 KiB**. The SQL inbox has a **256 MiB raw-byte ceiling and 10,000-row ceiling per owner** (a rehearsal caller may lower the byte limit, never raise it). All retained raw rows count, including processed/quarantined rows. Identical retries still work at capacity; new sessions fail closed. This is storage backpressure, not a billing cap or measured production sizing.
 
-**This slice retains raw rows indefinitely within that ceiling and performs no age-based deletion or compaction.** Pending/quarantined evidence must not expire while processing, reconciliation or rollback needs it. Before activation, #720 and protected migration acceptance must establish verified processing and an approved retention/compaction policy; a later reviewed change may compact processed raw bytes while preserving acceptance/checksum/idempotency evidence. No automatic cleanup or source-record deletion is authorized here.
+**This slice retains raw rows indefinitely within that ceiling and performs no age-based deletion or compaction.** Pending/quarantined evidence must not expire while processing, reconciliation or rollback needs it. A later reviewed change may compact processed raw bytes while preserving acceptance/checksum/idempotency evidence. No automatic cleanup or source-record deletion is authorized here.
 
 Maintained rate guards run before the credential lookup/body/SQL work: default 60 requests/client and 120/instance per minute, 512 client buckets plus one instance bucket, eight active requests, 10-second verifier and 30-second acceptance signals. SQL lock acquisition is limited to five seconds; the existing backend pool has a 30-second acquisition bound. Cancellation cancels active queries and rolls back uncommitted work. No automatic database retry is added.
 
@@ -27,9 +27,19 @@ The existing backend does not trust forwarded headers. Behind ingress, clients m
 
 The existing `SqlHealthProcessor` is wired to a bounded worker only in the same default-off production composition. It claims one owner inbox row at a time under the existing owner transaction lock, marks a 45-second processing lease, and recovers expired leases after restart. Accepted, processing, succeeded (`health_ingestions.status`), and quarantined evidence are distinct; SQL acceptance never claims processing success. The worker drains at most ten completed/quarantined rows before a one-second pause, polls idle/retry states every 30 seconds, and wakes after durable acceptance. Retry delays are bounded; exhausted/invalid rows remain quarantined with raw evidence retained.
 
-Existing writes reject older `accepted_at` snapshots from replacing newer per-key rows, and an older workout retry cannot replace newer child details. Empty workout exports do not delete history. This does **not** establish complete-day replacement safety: the original Health Auto Export request has no verified day-completeness marker, and its historical chunking/retry behavior is not established. A later partial chunk accepted after a complete day could still replace supplied day keys. Until a source-compatible completeness contract is proved, do not replay historical uploads across multiple chunks or claim full-day safety. Current hard limits are 8 MiB ingress, 10,000 normalized rows / 8 MiB output, and 256 MiB / 10,000 retained inbox rows per owner. These are ceilings, not recommended batch sizes.
+Existing writes reject older `accepted_at` snapshots from replacing newer per-key rows, and an older workout retry cannot replace newer child details. Empty workout exports do not delete history. This does **not** establish complete-day replacement safety: the original Health Auto Export request has no verified day-completeness marker, and a later partial chunk can replace the values it supplies for a metric/date key.
 
-The pinned source identifies **Health Auto Export**. Do not substitute Health Sync or issue device setup instructions as if the apps were interchangeable. Live exporter version/payload acceptance and historical batching instructions remain unverified.
+### Historical exporter batching guidance
+
+- Keep each source metric/date group intact within one request; never split the values that define one daily snapshot across sessions. Retry only the exact same bytes with the same automation and session identifiers.
+- Keep each original request at or below **8 MiB**. The normalized processor output must remain at or below **10,000 rows and 8 MiB**; the retained inbox ceiling is **256 MiB or 10,000 rows per owner**. These are hard limits, not target batch sizes.
+- Upload only exporter payloads that can preserve complete metric/date groups within all three limits. If the exporter cannot do that, stop instead of splitting an oversized group or sending a partial replacement. A `202` response proves SQL acceptance only, not processing or historical completeness.
+- Processed-feed freshness and aggregate inbox counts do not prove that a particular historical session completed. Do not use them as per-session receipts or as evidence of complete history.
+- The source contract does not establish Health Auto Export's date-range controls, automatic chunking behavior, or settings-screen sequence. Those app-specific steps and the current exporter version remain **unverified**; do not substitute Health Sync or claim a verified phone workflow.
+
+No real historical replay or complete-day guarantee is claimed. Current hard limits are not permission to exceed the source-compatible contract.
+
+The pinned source identifies **Health Auto Export**. Do not substitute Health Sync or issue device setup instructions as if the apps were interchangeable. Live exporter version/payload acceptance and app-specific UI steps remain unverified.
 
 ## Protected device-capability management
 
@@ -39,9 +49,8 @@ Issue is idempotent for the retained handle; revoked records never reactivate. R
 
 ## Readiness and rollback gates
 
-1. Exact-head independent review, normal full CI and isolated SQL tests; keep #719 open for remaining acceptance. Normal main-only deployment may add empty tables, not activate the path.
-2. Approved protected credential custody/delivery, owner/ingress verification, retention/capacity policy and production activation. No new resource, identity, grant, SAS extraction or plaintext credential is implied. The backend activation change, when all gates pass, is to add `{ name: 'JARVIS_HEALTH_UPLOAD_ENABLED', value: 'true' }` to the backend Container App `env` array in `infra/main.bicep`; rollback is remove that entry or set it to `'false'`, then redeploy. This change is not authorized or made in this run.
-3. Synthetic deployed denial/revocation/expiry, byte-exact readback, concurrent retry/conflict, SQL outage/restart, capacity and cancellation checks; then actual Health Auto Export/iPhone acceptance. Coding tests do not prove these.
+1. Exact-head independent review, normal full CI and isolated SQL tests remain required. This PR sets the existing backend flag in `infra/main.bicep` to `'true'` as explicitly authorized; it creates no new resource, identity or grant. Rollback is to set the flag to `'false'` and update the matching pin test in the same change, then redeploy. Stored credential hashes and ingested data remain untouched.
+2. Synthetic deployed denial/revocation/expiry, byte-exact readback, concurrent retry/conflict, SQL outage/restart, capacity and cancellation checks remain unverified, as does actual Health Auto Export/iPhone acceptance. Coding tests do not prove these.
 4. #720 processing/freshness plus complete protected backup, reconciliation, final delta and rollback gates before cutover. The #717 backup destination/preflight is a separate unresolved workflow, not required for this synthetic implementation.
 5. Disable upload composition on failed readiness; preserve all SQL receipts/raw/capabilities. Migration 0046 rollback refuses either nonempty table. Never delete original Daily data or automatically requeue native effects.
 

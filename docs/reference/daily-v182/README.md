@@ -19,9 +19,9 @@ Paths inside these six files refer to the pinned original source, not paths in J
 
 ## Owner-approved Jarvis scope
 
-Tracking issue: [#1005](https://github.com/DanAakesen/jarvis/issues/1005). This section records the completed voice review on 18 October 2026 and supersedes any suggestion to port all 36 tools.
+Tracking issue: [#1005](https://github.com/DanAakesen/jarvis/issues/1005). This section records the completed voice review on 18 October 2026 and is authoritative for the full source/API/schema/tool delivery in this PR; it supersedes any suggestion to port all 36 tools or split off a partial delivery.
 
-- **16 capabilities selected** for implementation as Jarvis native tools, with names adapted to existing conventions and equivalent components reused when verified.
+- **16 capabilities selected** for implementation as Jarvis native tools, with equivalent components reused when verified. The nine remaining operations are currently grouped into three registry tools to retain required catalogue headroom; the requested nine distinct tool names remain an explicit unresolved mismatch.
 - **5 source capabilities** will use Jarvis's ordinary search, item retrieval, tasks, calendar and consolidated status; their actual coverage must be checked, not assumed.
 - **15 source tools excluded** from this port. Full source documentation is retained even for excluded features.
 
@@ -84,4 +84,4 @@ The source agent cross-checked 45 distinct exported route constants plus literal
 
 Documented source discrepancies remain explicit: coach_experiments is present in migrations but absent from schema.ts; nutrition_meals defaults differ between migration-derived DDL and current schema/API inserts.
 
-The source documentation and tool selection are complete. Jarvis implementation, CI/review, deployment, physical-phone acceptance and historical data replay remain separate, uncompleted work. No live health records or credential values were read. Do not execute the reference SQL against production. No new original-Daily work or source-agent restart is needed.
+The source documentation and tool selection are complete. The corresponding Jarvis implementation, schema/API verification, CI/review, deployment, private owner credential handoff, physical-phone acceptance and historical data replay all remain part of #1005 / PR #1008; none is complete by this source handoff alone. No live health records or credential values were read. Do not execute the reference SQL against production. No new original-Daily work or source-agent restart is needed.

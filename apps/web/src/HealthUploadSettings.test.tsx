@@ -27,6 +27,9 @@ describe('Health upload settings', () => {
     expect(document.body.textContent).not.toMatch(/\*{6,}/u);
     expect(screen.getByText(/automation-id/u)).toBeTruthy();
     expect(screen.getByText(/session-id/u)).toBeTruthy();
+    expect(screen.getByText(/Keep each metric\/date group intact in one upload/u)).toBeTruthy();
+    expect(screen.getByText(/8 MiB ingress, 10,000 normalized rows or 8 MiB output/u)).toBeTruthy();
+    expect(screen.queryByText(/batching guidance is not yet qualified/u)).toBeNull();
 
     fireEvent.click(screen.getByRole('button', { name: 'Create credential' }));
     await screen.findByLabelText('One-time bearer token');

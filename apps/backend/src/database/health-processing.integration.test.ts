@@ -9,6 +9,13 @@ import { SqlHealthCapabilities } from '../daily/health-upload/sql-capabilities.j
 import { HealthConflict, HealthUnavailable, sha256, type HealthCapability, type HealthKind } from '../daily/health-upload/contracts.js';
 import { SqlHealthProcessor, processingRetryDelays } from '../daily/health/processor.js';
 import { DailyHealthReadModel } from '../daily/health/read-model.js';
+import { buildApp } from '../app.js';
+import { loadConfig } from '../config.js';
+import { dailySourceTools } from '../daily/tools/source-tools.js';
+import type { NutritionStore } from '../daily/nutrition/store.js';
+import type { DailyCoachStore } from '../daily/coach-store.js';
+import type { FastifyRequest } from 'fastify';
+import { healthUploadLimit } from '../daily/health-upload/contracts.js';
 
 const configuration = loadDatabaseConfig();
 if (!configuration || process.env.NODE_ENV !== 'test' || configuration.server !== '127.0.0.1') throw new Error('Health tests require isolated loopback SQL Server');
@@ -32,6 +39,7 @@ const payload = (qty = 100, workouts = [workout('one'), workout('two')]) => ({ d
 const raw = (value: unknown) => Buffer.from(JSON.stringify(value));
 const tableNames = ['health_workout_heart_rate_minute', 'health_workout_metrics', 'health_workouts', 'health_daily_metrics', 'health_sleep_daily', 'health_sync_feeds', 'health_sync_state', 'health_phone_sync_state', 'health_ingestions', 'health_upload_inbox', 'health_upload_capabilities'] as const;
 const rows = async (table: typeof tableNames[number]) => (await pool.request().query(`SELECT * FROM daily.[${table}]`)).recordset;
+const apps: ReturnType<typeof buildApp>[] = [];
 const inbox = () => rows('health_upload_inbox');
 async function provision(id = owner) {
   const capabilities = new SqlHealthCapabilities(pool, id, now);
@@ -59,6 +67,7 @@ beforeEach(async () => {
   for (const table of tableNames) await pool.request().batch(`DELETE daily.[${table}];`);
 });
 afterAll(async () => {
+  await Promise.all(apps.map(app => app.close()));
   await pool.close();
   if (admin.connected) await admin.request().batch(`IF DB_ID(N'${database}') IS NOT NULL BEGIN ALTER DATABASE [${database}] SET SINGLE_USER WITH ROLLBACK IMMEDIATE; DROP DATABASE [${database}]; END;`);
   await admin.close();
@@ -93,6 +102,100 @@ describe('inactive processor on real isolated SQL Server, synthetic records only
     expect(await capabilities.verify(replacementToken, signal())).toBeNull();
     expect(await capabilities.status(signal())).toMatchObject({ state: 'revoked' });
     expect(await otherCapabilities.status(signal())).toEqual({ state: 'empty', expiresAt: null });
+  });
+  it('proves owner credential → HTTP upload → worker → read model and native summary with replay safeguards', async () => {
+    const backendConfig = loadConfig({});
+    const capabilityStore = new SqlHealthCapabilities(pool, owner, now);
+    const ownerAuth = {
+      authorization: ['Bearer', 'synthetic-owner-jwt'].join(' '),
+    };
+    const foreignAuth = {
+      authorization: ['Bearer', 'synthetic-foreign-jwt'].join(' '),
+    };
+    const instance = buildApp({ ...backendConfig, auth: { ...backendConfig.auth, ownerObjectId: owner } }, undefined, {
+      modules: [],
+      auth: async token => {
+        if (token === 'synthetic-owner-jwt') return { objectId: owner, tenantId: backendConfig.auth.tenantId, displayName: 'Synthetic owner' };
+        if (token === 'synthetic-foreign-jwt') return { objectId: other, tenantId: backendConfig.auth.tenantId, displayName: 'Synthetic foreign owner' };
+        return null;
+      },
+      healthUpload: {
+        enabled: true,
+        buffer: new SqlHealthBuffer(pool, owner, { now }),
+        verifier: capabilityStore.verify,
+      },
+      healthProcessor: processor(),
+      healthCapabilities: capabilityStore,
+    });
+    apps.push(instance);
+    await instance.ready();
+    const credential = await instance.inject({
+      method: 'POST', url: '/api/health/upload-credential', headers: ownerAuth, payload: { action: 'create' },
+    });
+    expect(credential.statusCode).toBe(200);
+    expect(credential.headers['cache-control']).toBe('no-store');
+    const token = credential.json().token as string;
+    expect(token).toMatch(/^[A-Za-z0-9_-]{43,256}$/u);
+
+    const bytes = raw(payload(120, [workout('synthetic-e2e-workout', 120)]));
+    const upload = (bearer: string, sessionId: string, body: Buffer = bytes) => instance.inject({
+      method: 'POST',
+      url: '/api/health/ingest',
+      headers: {
+        authorization: ['Bearer', bearer].join(' '),
+        'content-type': 'application/json',
+        'automation-id': 'synthetic-automation',
+        'session-id': sessionId,
+      },
+      payload: body,
+    });
+
+    expect((await instance.inject({ method: 'GET', url: '/api/health/upload-credential', headers: foreignAuth })).statusCode).toBe(403);
+    expect((await upload('synthetic-invalid-token', 'synthetic-bad-token')).statusCode).toBe(403);
+    const first = await upload(token, 'synthetic-e2e-session');
+    expect(first.statusCode).toBe(202);
+    expect(first.json()).toMatchObject({ status: 'accepted', storage: 'sql', processing: 'not-confirmed', duplicate: false });
+    expect((await upload(token, 'synthetic-e2e-session')).json()).toMatchObject({ duplicate: true });
+    expect((await upload(token, 'synthetic-e2e-session', raw(payload(121)))).statusCode).toBe(409);
+    expect((await upload(token, 'synthetic-oversize', Buffer.alloc(healthUploadLimit + 1, 0x20))).statusCode).toBe(413);
+
+    const foreignCapabilities = new SqlHealthCapabilities(pool, other, now);
+    const foreignOperation = foreignCapabilities.prepare({
+      deviceId: 'synthetic-foreign-phone',
+      permissions: ['health-ingest'],
+      expiresAt: '2099-01-01T00:00:00.000Z',
+    });
+    await foreignCapabilities.create(foreignOperation, signal());
+    const foreignToken = await foreignOperation.useSecret(value => value);
+    expect((await upload(foreignToken, 'synthetic-wrong-owner')).statusCode).toBe(403);
+
+    const request = {
+      server: { ownerObjectId: owner },
+      principal: { objectId: owner },
+    } as unknown as FastifyRequest;
+    const read = readModel();
+    const data = { query: {} as never, changes: {} as never, health: () => read };
+    const sourceTools = dailySourceTools(data, () => ({} as NutritionStore), () => ({} as DailyCoachStore), now);
+    await vi.waitFor(async () => {
+      expect((await read.sync(signal())).inbox).toMatchObject({ accepted: 0, processing: 0, succeeded: 1, quarantined: 0 });
+    }, { timeout: 10_000, interval: 25 });
+    const metricRows = await read.history('metrics', { startDate: '2026-10-13', endDate: '2026-10-13', limit: 100 }, signal());
+    expect(metricRows.items).toEqual(expect.arrayContaining([expect.objectContaining({ metric_name: 'step_count', value: 120 })]));
+    const summary = await sourceTools[0]!.execute({ operation: 'get_health_summary' }, request, signal()) as Record<string, unknown>;
+    expect(summary).toMatchObject({ status: 'available', today: { date: '2026-10-13' } });
+
+    clock = base - 1000;
+    const partial = raw({ data: { metrics: [{ name: 'step_count', units: 'count', data: [{ date: '2026-10-13', qty: 40 }] }], workouts: [] } });
+    expect((await upload(token, 'synthetic-older-partial', partial)).statusCode).toBe(202);
+    await vi.waitFor(async () => {
+      expect((await read.sync(signal())).inbox).toMatchObject({ accepted: 0, processing: 0, succeeded: 2, quarantined: 0 });
+    }, { timeout: 10_000, interval: 25 });
+    const afterReplay = await read.history('metrics', { startDate: '2026-10-13', endDate: '2026-10-13', limit: 100 }, signal());
+    expect(afterReplay.items).toEqual(expect.arrayContaining([expect.objectContaining({ metric_name: 'step_count', value: 120 })]));
+
+    const revoked = await instance.inject({ method: 'POST', url: '/api/health/upload-credential', headers: ownerAuth, payload: { action: 'revoke' } });
+    expect(revoked.statusCode).toBe(200);
+    expect((await upload(token, 'synthetic-revoked')).statusCode).toBe(403);
   });
   it('reports accepted, processing and succeeded inbox states truthfully across a processor restart', async () => {
     const device = await provision();

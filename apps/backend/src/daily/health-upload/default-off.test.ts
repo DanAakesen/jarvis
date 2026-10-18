@@ -1,13 +1,12 @@
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import { loadConfig } from '../../config.js';
 
-const root = fileURLToPath(new URL('../../../../../', import.meta.url));
-
-describe('Health upload remains default-off in deployment', () => {
-  it('does not set the runtime switch in infrastructure or deployment workflows', () => {
-    for (const path of ['infra/main.bicep', '.github/workflows/deploy.yml']) {
-      expect(readFileSync(`${root}/${path}`, 'utf8')).not.toContain('JARVIS_HEALTH_UPLOAD_ENABLED');
-    }
+describe('Health upload remains opt-in in runtime configuration', () => {
+  it('defaults off unless the exact true string is configured', () => {
+    expect(loadConfig({}).healthUploadEnabled).toBe(false);
+    expect(loadConfig({ JARVIS_HEALTH_UPLOAD_ENABLED: 'false' }).healthUploadEnabled).toBe(false);
+    expect(() => loadConfig({ JARVIS_HEALTH_UPLOAD_ENABLED: 'TRUE' }))
+      .toThrow('JARVIS_HEALTH_UPLOAD_ENABLED must be true or false');
+    expect(loadConfig({ JARVIS_HEALTH_UPLOAD_ENABLED: 'true' }).healthUploadEnabled).toBe(true);
   });
 });

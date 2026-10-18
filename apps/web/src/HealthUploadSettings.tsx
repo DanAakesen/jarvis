@@ -101,7 +101,7 @@ export function HealthUploadSettings({ backendUrl, getAccessToken }: {
   };
 
   return <div className="health-upload-settings">
-    <p>Configure Health Auto Export to send the original JSON payload to this Jarvis API. Historical uploads must remain below the documented ingress and normalized-output limits; full historical batching guidance is not yet qualified.</p>
+    <p>Configure Health Auto Export to send the original JSON payload to this Jarvis API. Keep each metric/date group intact in one upload: the source has no completeness marker, so do not split an oversized group. Limits are 8 MiB ingress, 10,000 normalized rows or 8 MiB output, and 256 MiB or 10,000 retained inbox rows per owner. Exporter-specific batching controls are unverified; stop if a complete group cannot fit.</p>
     <dl className="health-upload-contract">
       <div><dt>Request</dt><dd><code>POST</code></dd></div>
       <div><dt>Upload URL</dt><dd><code className="health-upload-url">{endpoint ?? 'Unavailable until the Jarvis API URL is configured'}</code></dd></div>

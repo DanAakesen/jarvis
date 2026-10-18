@@ -1,5 +1,37 @@
 # Decisions
 
+## #1005 Daily v182 API, upload and selected native tools (18 October 2026)
+
+Keep this delivery on the existing backend, SQL pool, owner authentication and
+tool/confirmation flow. Do not create a parallel API, store, auth service, MCP
+runtime, Azure resource, or revive the withdrawn Daily export/import route.
+`JARVIS_HEALTH_UPLOAD_ENABLED` remains false by default in code and is set to
+the exact string `true` in the reviewed backend deployment environment; rollback
+sets that value to `false` and changes the pin test in the same commit. Existing
+credential hashes and accepted data remain untouched by rollback.
+
+The owner creates the upload credential in Settings after deployment. SQL stores
+only its hash; plaintext is revealed once through the owner-authenticated,
+no-store response. The endpoint comes only from configured backend origin, never
+forwarded headers. A private handoff, deployment, and phone acceptance are not
+claimed from source changes or synthetic tests.
+
+Retain all 16 owner-selected Daily v182 capabilities and exclude fixed status
+renderers, coach commitments/orders/experiments, meal plans and Apple Health meal
+write-back. Use the existing owner authorization and confirmation flow for
+writes, and preserve unknown values as unknown. The nine remaining source
+operations are grouped into three native registry tools to retain the enforced
+eight-tool catalogue headroom; this is a pragmatic assumption, but it does not
+meet the explicit request for nine distinct tool names and must remain reported
+as a mismatch rather than described as complete.
+
+Historical batches must preserve complete source metric/date groups, remain
+within 8 MiB ingress, 10,000 normalized rows/8 MiB output and 256 MiB/10,000
+retained inbox rows per owner. These limits do not establish source completeness
+or exporter UI behavior; mark the latter unverified and do not claim replay or
+physical-phone acceptance. Evidence and unresolved field/HTTP differences are
+tracked in `docs/reference/daily-v182/source-to-jarvis-matrix.md`.
+
 ## Discover vault tasks in source notes using native Tasks markers (18 October 2026; P13-18 / #999)
 
 Read safe Markdown notes under `Personal/` and `Work/` recursively, including
