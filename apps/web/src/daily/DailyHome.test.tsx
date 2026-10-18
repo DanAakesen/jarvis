@@ -165,7 +165,7 @@ describe('Daily overview', () => {
     await settled();
   });
   it('shows only implemented sections and keeps the shared period when switching sections', async () => {
-    const f = fixture();
+    const f = fixture({ capabilities: () => capabilityList(Object.values(sources).filter(source => source !== sources.workouts)) });
     render(home());
     await settled();
     expect(screen.getByRole('tab', { name: 'Overview' })).toBeTruthy();
@@ -188,7 +188,7 @@ describe('Daily overview', () => {
   });
 
   it('supports roving tab keys, stores selection in the URL and falls back from an unknown id', async () => {
-    fixture();
+    fixture({ capabilities: () => capabilityList(Object.values(sources).filter(source => source !== sources.workouts)) });
     render(home(0, '/daily?section=unknown'));
     await settled();
     const overview = screen.getByRole('tab', { name: 'Overview' });

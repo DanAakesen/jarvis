@@ -1449,3 +1449,23 @@ variants and remaining workflow-specific layouts. Local synthetic Chromium
 inspection covered the phone and desktop sizes in both themes, plus reduced
 motion. The attention event and healthy Daily/Proactive data states were not
 available in the harness; screenshot captures could not be attached to the PR.
+
+### Daily Workouts (18 October 2026; P12-23)
+
+Workouts extends the existing Daily section shell, not navigation or a separate
+theme. One section heading leads to a type filter, loaded-row sort, unknown-safe
+statistic strip, recorded-minute volume chart and workout history. Phones use
+stacked items; wider screens use the shared scroll table. Detail keeps the same
+section, with recorded figures, elapsed-minute heart-rate lines and collapsed
+recorded JSON. Average, minimum and maximum lines also differ by stroke pattern.
+All controls retain shared geometry, 44px targets and focus treatment; local CSS
+owns only layout, tabular figures, chart patterns and scroll anchoring.
+
+Synthetic-only local Chromium checks covered 320×844, 390×844, 768×900 and
+1440×900 in light and dark, with reduced motion. Exercised type filtering,
+sorting, detail, heart rate, recorded JSON, URL reload, browser Back, unknown ID,
+refresh, loading, empty, error/Retry and capped Load more. Page and Daily viewport
+had no horizontal overflow; Back restored the opened control's focus and exact
+list scroll offset. Six synthetic screenshots are in `docs/ui/p12-23/` (under
+1.5 MB). This checked the actual Daily shell with isolated API fixtures, not
+Microsoft sign-in, a live backend, native devices or original-site parity.

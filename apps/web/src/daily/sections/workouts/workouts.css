@@ -1,0 +1,26 @@
+.workouts-section { min-width: 0; font-variant-numeric: tabular-nums; overflow-anchor: none; }
+.workouts-section h2 { margin-block: 0 var(--space-3); font-size: var(--type-subheading); }
+.workouts-section h3 { overflow-wrap: anywhere; }
+.workouts-section > p { color: var(--text-muted); }
+.workouts-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 170px), 1fr)); gap: var(--space-3); margin-block: var(--space-4); }
+.workouts-stats .daily-stat-value { white-space: pre-line; }
+.workouts-detail { display: grid; gap: var(--space-3); min-width: 0; }
+.workouts-detail > button { justify-self: start; }
+.workouts-coverage { margin-block: var(--space-4); }
+.workouts-field { max-width: 100%; width: fit-content; }
+.workouts-narrow { display: none; }
+.workouts-section .daily-scroll-table td { white-space: normal; overflow-wrap: anywhere; }
+.workouts-section [hidden] { display: none; }
+.workouts-heart-rate .daily-chart-series:nth-last-child(2) path { stroke-dasharray: 6 3; }
+.workouts-heart-rate .daily-chart-series:last-child path { stroke-dasharray: 2 4; }
+@media (max-width: 767px) {
+  .workouts-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .workouts-wide { display: none; }
+  .workouts-narrow { display: grid; gap: var(--space-4); padding: 0; list-style: none; }
+  .workouts-narrow li { min-width: 0; padding-block: var(--space-3); border-bottom: 1px solid var(--rule); overflow-wrap: anywhere; }
+  .workouts-narrow p { margin-block: 0 var(--space-3); }
+  .workouts-narrow dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); }
+  .workouts-narrow dt { color: var(--text-muted); font-size: var(--type-small); }
+  .workouts-narrow dd { margin: var(--space-1) 0 0; }
+  .workouts-section .daily-scroll-table th, .workouts-section .daily-scroll-table td { padding: var(--space-2); white-space: normal; }
+}

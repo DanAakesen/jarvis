@@ -6020,3 +6020,32 @@ code-point boundaries, caps the serialized result at 8 KiB and marks it
 in generic tool-call audit records. Raw JSON validation runs before Fastify's
 AJV coercion; failures remain explicit tool refusals/errors. The module exposes
 no item mutation or approval capability.
+
+### Web Daily Workouts section (18 October 2026; P12-23)
+
+`apps/web/src/daily/sections/workouts/index.tsx` exports the merged
+`DailySectionDefinition` and lazy-loads its component. Existing folder discovery
+gates it solely on `daily.health.workouts`; no registry, shell implementation,
+shared UI, backend or contract changes are needed. Two existing shell-test
+fixtures now explicitly omit that source to keep testing their original
+three-section navigation scenario.
+
+The section uses `daily/ui/useDailyPages` with `autoLoad: true`, `maxPages: 10`
+and `limit: 500`. A local continuation wrapper retains the loaded prefix and
+starts the next bounded batch from the exact returned cursor only on Load more.
+Period/backend/refresh-version changes invalidate that continuation. Pure
+summary helpers handle per-unit observations, null-safe totals, Copenhagen
+calendar buckets and readable type labels. Charts use `DailyChart`; missing
+volume buckets appear in an additional coverage table, never as fabricated zero
+bars. Sorting is confined to loaded rows, with comparisons within each unit.
+
+Following the shell's `useSearchParams` approach, `?workout=<id>` preserves other
+URL parameters. The mounted hidden list retains filter/sort state; focus and
+ancestor scroll offsets are restored on return. A cached opened summary remains
+labelled as a previous read while refreshed paging is incomplete. Detail and
+heart-rate reads are independently capability-gated. The merged workout query
+returns `{ id, detail }`, not the persistence field name `detail_json`; recorded
+JSON reuses Data's escaped `<pre>`/collapsed `<details>` presentation. Heart-rate
+samples are grouped by metric and unit, use elapsed minutes, and retain separate
+average/minimum/maximum series. Existing read clients retain owner authorization,
+cancellation, response bounds and safe failure handling.
