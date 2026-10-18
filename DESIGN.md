@@ -264,6 +264,28 @@ the Pause switch commits immediately. Private feed and guidance values are not
 persisted with disclosure state. The exact-string web flag controls its route,
 navigation, Settings slot and Background work Open link.
 
+## Vault Tasks separate from Notes (P13-19; 18 October 2026)
+
+The Tasks area is a focused, read-only list, not another board or note editor.
+One `Tasks` headline leads the explanatory copy, Refresh and the shared search
+and completed-task controls. Open rows group under Overdue, Today, Upcoming and
+No date; Done appears only when completed tasks are requested. Every row pairs
+its Open/Done glyph with text, shows due date/time and a linked source note, and
+pairs the high-priority icon with its label. Keep rows scannable, text readable
+at narrow widths, and use existing control tokens and button/field systems.
+
+Show vault freshness and truncation near the list. Loading, no-open-tasks,
+no-matches, unavailable and retry states remain explicit; task text is never
+editable from Jarvis. Notes search keeps notes labelled as notes and places
+plain-text snippets below titles; matching open tasks use a separate Tasks
+section above the note results. These links retain the query or source path.
+Synthetic Chromium captures (reduced motion): Tasks [390×844 light](docs/ui/p13-19/tasks-390-light.jpg),
+[390×844 dark](docs/ui/p13-19/tasks-390-dark.jpg), [1440×900 light](docs/ui/p13-19/tasks-1440-light.jpg),
+[1440×900 dark](docs/ui/p13-19/tasks-1440-dark.jpg); Notes search
+[390×844 light](docs/ui/p13-19/notes-390-light.jpg), [390×844 dark](docs/ui/p13-19/notes-390-dark.jpg),
+[1440×900 light](docs/ui/p13-19/notes-1440-light.jpg), [1440×900 dark](docs/ui/p13-19/notes-1440-dark.jpg).
+The fixtures use synthetic vault responses and temporary authentication only.
+
 ## Header tab overflow correction (15 October 2026; combined candidate)
 
 Keep the existing glass header, fixed brand and fixed action group. Tabs

@@ -3480,6 +3480,40 @@ view and focuses it through the existing workspace command broker. The shared
 bounded query text and unique SHA-256 node IDs. This backend issue does not add
 the browser renderer; its UI implementation is a separate session.
 
+### Read-only vault tasks and Notes search (P13-19; 18 October 2026)
+
+`GET /vault/tasks` is owner-only and sets `Cache-Control: no-store`. It reads the
+current vault tree and task-note blobs through the existing GitHub vault client,
+not the potentially stale knowledge index. It shares `inScope`, the contextual
+todo parser, and path/blob-SHA task cache with proactive discovery, so reminders
+and the visible task list use the same definition of a task. Concurrent reads
+coalesce; each request performs at most one tree listing. The shared scope is
+recursive `Personal/` and `Work/`, plus the root `task.md` or `tasks.md`; hidden
+paths and Archive segments remain excluded.
+
+The route accepts `q` (up to 200 characters) and `state` (`open`, default;
+`done`; or `all`), and returns at most 500 matching task rows with source path,
+line, nearest heading, completion, due fields, priority, owner-local `today`,
+`readAt`, total and truncation state. Scans retain the shared 256-file, 4-MiB
+total-content, 256-KiB-per-file, four-concurrent-read and 20-second limits.
+Task text is sanitized and secret-redacted before filtering or returning, and
+never written to logs. Connection, GitHub App/token, missing/ambiguous task
+source, limit, timeout and read failures return stable 503 reason codes rather
+than empty task lists.
+
+The read-only sensitive `vault_search` chat/voice tool serves both reads through a
+flat `kind` argument: `notes` (the default) searches the knowledge index, and
+`tasks` uses the same model and scope as the route, with query, state and
+optional bounded due window, returning at most 40 items. The schema has no
+combinators, so voice schemas stay valid, and no catalogue entry is added: the
+all-features production catalogue is held at 120 tools, leaving the required
+eight-tool headroom below the 128-tool platform limit. Task requests route to
+`kind` tasks; note requests continue through `vault_search` (notes) and
+`vault_read`. The Notes page retains search snippets and fetches
+matching open tasks separately; its task group links to `/tasks?q=...`. Task
+source links use `/notes?note=<path>`, which opens the note in the existing
+Notes read flow. Neither screen nor tool writes or changes task state.
+
 ### New project creation (P3-12)
 
 The `create_project` tool accepts only a repository name and description. It reads
