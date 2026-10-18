@@ -105,17 +105,20 @@ describe('inactive processor on real isolated SQL Server, synthetic records only
   it('proves owner credential → HTTP upload → worker → read model and native summary with replay safeguards', async () => {
     const backendConfig = loadConfig({});
     const capabilityStore = new SqlHealthCapabilities(pool, owner, now);
+    // The authentication hook only forwards tokens shaped like a JWT (three base64url segments).
+    const ownerJwt = 'synthetic.owner.jwt';
+    const foreignJwt = 'synthetic.foreign.jwt';
     const ownerAuth = {
-      authorization: ['Bearer', 'synthetic-owner-jwt'].join(' '),
+      authorization: ['Bearer', ownerJwt].join(' '),
     };
     const foreignAuth = {
-      authorization: ['Bearer', 'synthetic-foreign-jwt'].join(' '),
+      authorization: ['Bearer', foreignJwt].join(' '),
     };
     const instance = buildApp({ ...backendConfig, auth: { ...backendConfig.auth, ownerObjectId: owner } }, undefined, {
       modules: [],
       auth: async token => {
-        if (token === 'synthetic-owner-jwt') return { objectId: owner, tenantId: backendConfig.auth.tenantId, displayName: 'Synthetic owner' };
-        if (token === 'synthetic-foreign-jwt') return { objectId: other, tenantId: backendConfig.auth.tenantId, displayName: 'Synthetic foreign owner' };
+        if (token === ownerJwt) return { objectId: owner, tenantId: backendConfig.auth.tenantId, displayName: 'Synthetic owner' };
+        if (token === foreignJwt) return { objectId: other, tenantId: backendConfig.auth.tenantId, displayName: 'Synthetic foreign owner' };
         return null;
       },
       healthUpload: {
@@ -195,6 +198,9 @@ describe('inactive processor on real isolated SQL Server, synthetic records only
     const revoked = await instance.inject({ method: 'POST', url: '/api/health/upload-credential', headers: ownerAuth, payload: { action: 'revoke' } });
     expect(revoked.statusCode).toBe(200);
     expect((await upload(token, 'synthetic-revoked')).statusCode).toBe(403);
+    // Stop this app's background worker now so it cannot claim rows created by later tests.
+    await instance.close();
+    apps.splice(apps.indexOf(instance), 1);
   });
   it('reports accepted, processing and succeeded inbox states truthfully across a processor restart', async () => {
     const device = await provision();
@@ -394,7 +400,8 @@ describe('inactive processor on real isolated SQL Server, synthetic records only
     const lost = vi.spyOn(sql.Transaction.prototype, 'commit').mockImplementation(async function(this: sql.Transaction) {
       await original.call(this); if (++commits === 2) throw new Error('synthetic-commit-response-lost');
     });
-    try { expect(await processor().processNext(signal())).toMatchObject({ state: 'retry' }); } finally { lost.mockRestore(); }
+    // The retry transaction finds the committed row and reports it processed instead of scheduling a second run.
+    try { expect(await processor().processNext(signal())).toMatchObject({ state: 'processed' }); } finally { lost.mockRestore(); }
     expect((await inbox())[0].processing_status).toBe('processed');
     expect(await processor().processNext(signal())).toEqual({ state: 'idle' });
     expect(await rows('health_ingestions')).toHaveLength(1); expect(await rows('health_workouts')).toHaveLength(2);
@@ -472,7 +479,10 @@ describe('inactive processor on real isolated SQL Server, synthetic records only
     expect((await inbox())[0].processing_attempts).toBe(0);
     const offline = new sql.ConnectionPool({ ...configuration, database });
     try { await expect(new SqlHealthProcessor(offline, owner).processNext(signal())).rejects.toBeInstanceOf(HealthUnavailable); } finally { await offline.close(); }
-    await processor().processNext(signal()); const down = await readDownMigration(filename);
+    await processor().processNext(signal());
+    const down = await readDownMigration(filename);
+    // Only the newest applied migration can be reverted, so the processing-state migration goes first.
+    await revertMigration(pool, await migrations(), await readDownMigration('0060_daily_health_processing_state.sql'));
     await expect(revertMigration(pool, await migrations(), down)).rejects.toThrow('no processing evidence');
     expect((await inbox())[0].processing_status).toBe('processed');
     // Only this synthetic isolated test database is cleaned; no runtime cleanup operation exists.
