@@ -402,6 +402,7 @@ describe('App shell', () => {
 
     const settings = await renderSignedIn('/settings');
     expect(screen.queryByRole('button', { name: 'Notifications' })).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Proactive', level: 2 })).toBeNull();
     expect(register).not.toHaveBeenCalled();
     expect(fetchMock.mock.calls.some(([url]) => {
       const path = new URL(String(url)).pathname;
@@ -412,6 +413,20 @@ describe('App shell', () => {
     await renderSignedIn('/proactive/11111111-1111-4111-8111-111111111111');
     expect(screen.getByRole('heading', { name: 'Page not found' })).not.toBeNull();
     expect(register).not.toHaveBeenCalled();
+  });
+
+  it('adds the Proactive navigation and settings section only with its independent gate', async () => {
+    restoreProfile.mockResolvedValue({ name: 'Test User' });
+    render(<MemoryRouter initialEntries={['/settings']}>
+      <App config={config} pushEnabled={false} proactiveEnabled />
+    </MemoryRouter>);
+    const navigation = await screen.findByRole('navigation', { name: 'Areas' });
+    expect(within(navigation).getByRole('link', { name: 'Proactive' })).not.toBeNull();
+    expect(await screen.findByRole('heading', { name: 'Proactive', level: 2 })).not.toBeNull();
+    await waitFor(() => expect(fetchMock.mock.calls.some(([url]) =>
+      new URL(String(url)).pathname === '/proactive/settings')).toBe(true));
+    expect(fetchMock.mock.calls.some(([url]) =>
+      new URL(String(url)).pathname === '/push/config')).toBe(false);
   });
 
   it('restores the notification deep link after sign-in returns to the site root', async () => {

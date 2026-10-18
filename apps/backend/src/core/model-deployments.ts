@@ -276,15 +276,15 @@ function reportPendingOperation(
   completion: Promise<unknown>,
 ): void {
   void completion.then(async () => {
-    await app.teamsNotifications?.notify('success', `Foundry model deployment ${name} ${verb} request was accepted.`);
+    await app.ownerInteractions?.notify('success', `Foundry model deployment ${name} ${verb} request was accepted.`);
   }, async (error: unknown) => {
     if (error instanceof ToolRefusal) {
-      await app.teamsNotifications?.notify('warning', `Model deployment ${name} was not changed: ${error.message}`)
+      await app.ownerInteractions?.notify('warning', `Model deployment ${name} was not changed: ${error.message}`)
         .catch(() => undefined);
       return;
     }
     app.log.warn('models.deployment_operation_failed');
-    await app.teamsNotifications?.notify('error', 'The model deployment operation failed. No successful change was reported.')
+    await app.ownerInteractions?.notify('error', 'The model deployment operation failed. No successful change was reported.')
       .catch(() => undefined);
   }).catch(() => undefined);
 }
@@ -349,7 +349,7 @@ export function registerModelDeploymentRoutes(app: FastifyInstance): void {
       return reply.code(403).send({ error: 'Forbidden' });
     }
     const workflow = app.modelDeploymentWorkflow;
-    if (!workflow || !app.teamsNotifications) {
+    if (!workflow || !app.ownerInteractions) {
       return reply.code(503).send({ error: 'Model deployment management is unavailable.' });
     }
     try {
@@ -376,7 +376,7 @@ export function registerModelDeploymentRoutes(app: FastifyInstance): void {
       return reply.code(403).send({ error: 'Forbidden' });
     }
     const workflow = app.modelDeploymentWorkflow;
-    if (!workflow || !app.teamsNotifications) {
+    if (!workflow || !app.ownerInteractions) {
       return reply.code(503).send({ error: 'Model deployment management is unavailable.' });
     }
     try {

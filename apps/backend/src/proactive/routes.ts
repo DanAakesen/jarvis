@@ -3,9 +3,9 @@ import type {
   FastifyTypeProviderDefault,
 } from 'fastify';
 import type { IncomingMessage, Server, ServerResponse } from 'node:http';
-import { budgetState } from './budget.js';
-import { monthKey, nextSlotAfter, isQuietHour } from './time.js';
-import { sourceIds, type Item, type SourceId, type SourceStatus } from './types.js';
+import { budgetState, canRunWithinBudget, estimateCost } from './budget.js';
+import { copenhagenDayStart, monthKey, nextSlotAfter, isQuietHour } from './time.js';
+import { sourceIds, type Item, type RunSummary, type SourceId, type SourceStatus } from './types.js';
 import {
   sourceLabels,
   type ProactiveSettingsPatch,
@@ -24,6 +24,8 @@ export interface ProactiveRouteOptions {
   databaseAvailable: boolean;
   registerItemDetail: boolean;
   now: () => Date;
+  run?: (claim: { run: RunSummary; generation: number }, signal?: AbortSignal) => Promise<void>;
+  worstCaseDkk?: () => number | Promise<number>;
 }
 
 function validUrl(value: unknown): value is string {
@@ -112,6 +114,12 @@ function registerRoutes<Logger extends FastifyBaseLogger>(
   options: ProactiveRouteOptions,
 ): FastifyPluginAsync<Record<never, never>, Server, FastifyTypeProviderDefault, Logger> {
   return async (app) => {
+    let manualAdmission: Promise<void> = Promise.resolve();
+    const pendingRuns = new Map<Promise<void>, AbortController>();
+    app.addHook('onClose', async () => {
+      for (const controller of pendingRuns.values()) controller.abort('interrupted_by_restart');
+      await Promise.all(pendingRuns.keys());
+    });
     function owner(request: FastifyRequest, reply: FastifyReply): boolean {
       const caller = request.principal?.objectId;
       if (!caller) {
@@ -165,6 +173,71 @@ function registerRoutes<Logger extends FastifyBaseLogger>(
           alerts: options.alertsEnabled && options.pushEnabled,
         },
       };
+    });
+
+    app.get('/proactive/runs', async (request, reply) => {
+      if (!owner(request, reply)) return;
+      const query = request.query as Record<string, unknown>;
+      const value = query.limit ?? '20';
+      const limit = typeof value === 'string' && /^\d+$/u.test(value) ? Number(value) : Number.NaN;
+      if (Object.keys(query).some((key) => key !== 'limit') ||
+          !Number.isInteger(limit) || limit < 1 || limit > 50) {
+        return reply.code(400).send({ error: 'invalid_request' });
+      }
+      return { runs: await options.store.runs.list(limit) };
+    });
+
+    app.post('/proactive/runs', async (request, reply) => {
+      if (!owner(request, reply)) return;
+      const previous = manualAdmission;
+      let release!: () => void;
+      manualAdmission = new Promise<void>((resolve) => { release = resolve; });
+      await previous;
+      try {
+        const now = options.now();
+        const settings = await options.store.settings.read();
+        if (settings.paused) return reply.code(409).send({ error: 'paused' });
+        if (!Object.values(settings.sources).some(Boolean)) {
+          return reply.code(409).send({ error: 'no_sources' });
+        }
+        const spent = await options.store.spend.monthTotal(monthKey(now));
+        const worstCase = await (options.worstCaseDkk?.() ?? estimateCost('unknown', 100_000, 8_000).estimatedDkk);
+        if (settings.monthlyBudgetDkk === 0 ||
+            !canRunWithinBudget(settings.monthlyBudgetDkk, spent, worstCase)) {
+          return reply.code(409).send({ error: 'budget_exhausted' });
+        }
+        const latest = await options.store.runs.running(now);
+        if (latest?.status === 'running') return reply.code(409).send({ error: 'already_running', run: latest });
+        const [recent, today] = await Promise.all([
+          options.store.runs.countManualSince(new Date(now.getTime() - 5 * 60_000 + 1)),
+          options.store.runs.countManualSince(copenhagenDayStart(now)),
+        ]);
+        if (recent > 0 || today >= 6) return reply.code(429).send({ error: 'rate_limited' });
+        if (!options.run) return reply.code(503).send({ error: 'not_available' });
+        const claim = await options.store.runs.claim({ trigger: 'manual', slot: null, now });
+        if (!claim) {
+          const latest = await options.store.runs.running(now);
+          if (latest?.status !== 'running') {
+            const [recent, today] = await Promise.all([
+              options.store.runs.countManualSince(new Date(now.getTime() - 5 * 60_000 + 1)),
+              options.store.runs.countManualSince(copenhagenDayStart(now)),
+            ]);
+            if (recent > 0 || today >= 6) return reply.code(429).send({ error: 'rate_limited' });
+          }
+          return reply.code(409).send({ error: 'already_running', run: latest });
+        }
+        void reply.code(202).send({ run: claim.run });
+        const controller = new AbortController();
+        const task = Promise.resolve().then(() => options.run!(claim, controller.signal)).catch(async () => {
+          await options.store.runs.finish(claim.run.id, claim.generation, 'failed', 'internal_error', 0, options.now());
+        }).catch(() => {
+          app.log.warn({ reason: 'internal_error' }, 'proactive.failed');
+        }).finally(() => { pendingRuns.delete(task); });
+        pendingRuns.set(task, controller);
+        return reply;
+      } finally {
+        release();
+      }
     });
 
     app.get('/proactive/settings', async (request, reply) => {

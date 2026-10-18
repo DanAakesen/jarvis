@@ -627,9 +627,9 @@ Jarvis is one backend with a shared core and one module per area, a static web a
 | Development tooling | Node.js 22.23.3, npm 10.9.9, TypeScript 6.0.3; Python 3.12.14 baseline (`.python-version`), voice reference container remains on 3.13; MIT licence. Cloud agent environments (P0-14): `copilot-setup-steps.yml` and `scripts/codex-setup.sh` provide the pinned toolchain, then the shared `scripts/setup-dependencies.sh` installs from the lockfiles | Node/npm/Python pinned in P0-01; TypeScript updated in P0-02 for lint compatibility; builds verified, Python production components pending; Copilot setup verified in P0-14, Codex setup pending P0-15 |
 | Web | React/React DOM 19.3.0, React Router 7.18.4, `@azure/msal-browser` 5.24.0, Vite 8.3.2, React plugin 6.1.1; Azure Static Web Apps Free in West Europe | Skeleton and MSAL sign-in implemented; live Entra sign-in and deployment verification remain pending |
 | Backend | Node.js + TypeScript on Azure Container Apps (Consumption): minimum 1 replica, heartbeat poller, sleep switch, `@azure/storage-blob` 12.31.0, `@azure/keyvault-secrets` 4.11.2, and `fflate` 0.8.3 | Health/logging/container skeleton implemented in P0-03; heartbeat polls active sandbox invocations without querying SQL while idle and distinguishes completed-turn expiry from active crashes; P1-12 implements the authenticated sleep API and board control; P6-03 archives old task events and reads them on demand; P2-10 starts fresh recovery sessions; P3-14 opens or reuses an App-token PR after completed task work and leaves policy completion to P3-06; P3-02 reads the GitHub App key through the backend identity; P3-05 stores bounded failed-job logs and steers the task; P6-22 routes approvals and away notifications through the Now feed and browser voice; P7-22 adds Google OAuth-backed Gmail and Calendar tools; P7-02 adds persisted manual away state; live Azure behavior remains unverified |
-| Backend framework | Fastify 5.12.5, @fastify/cors 11.3.0; `@microsoft/teams.apps` and `@microsoft/teams.cards` 2.1.0: schema validation, a plugin per area, SSE support, optional Teams adapter and Adaptive Cards | Skeleton, core/factory module registration and P1-03 projects API implemented; optional Teams module and fake-connector coverage remain in source but are not configured in production |
+| Backend framework | Fastify 5.12.5, @fastify/cors 11.3.0: schema validation, a plugin per area and SSE support | Core/factory module registration and P1-03 projects API implemented; P10-10 removed Teams adapters, cards, messaging routes, and their runtime wiring. Teams SDK packages remain declared but unused. |
 | Database | Azure SQL, free offer: one database `jarvis`; Entra admin is the group `jarvis-sql-admins` (Dan and the backend identity) | Decided |
-| Database access | `mssql` 12.7.2 (`@types/mssql` 12.3.0), Tedious managed identity; immutable SQL migrations under a transaction-owned app lock before backend listen; reviewed down scripts | Implemented in #7; groups 1–3 schema in #15, groups 4 and 6 in #27, group 5 in #42, heartbeat agent routing in #32, `idle_expired` session end reason in #226, group 8 conversation/confirmation state in P7-03, legacy group 9 in P7-13, and the derived vault index in P7-40; deployed heartbeat verification remains open |
+| Database access | `mssql` 12.7.2 (`@types/mssql` 12.3.0), Tedious managed identity; immutable SQL migrations under a transaction-owned app lock before backend listen; reviewed down scripts | Implemented in #7; groups 1–3 schema in #15, groups 4 and 6 in #27, group 5 in #42, heartbeat agent routing in #32, `idle_expired` session end reason in #226, group 8 legacy conversation/confirmation tables retained by P10-10 for browser/phone approval compatibility, legacy group 9 in P7-13, and the derived vault index in P7-40; deployed heartbeat verification remains open |
 | Files | Azure Blob Storage for artifacts, logs, and archived task events | Decided |
 | Secrets | Azure Key Vault (RBAC) | Decided |
 | Images | Azure Container Registry: backend and sandbox images | Decided |
@@ -1586,9 +1586,10 @@ migration or UI; live writes wait for P10-01 and coordinator execution.
 Chat-created tasks retain their originating message ID. Committed Done,
 NeedsAttention, Cancelled, and backend `pull_request_opened` events route a short
 status message with the task ID, outcome, and validated GitHub PR link to that
-conversation. A SQL task/state key prevents repeat delivery across restarts;
-away mode routes through the existing Teams notification service, while active
-voice sessions speak the same status through the existing voice announcer.
+in-app conversation in every presence mode. Away task-state notices use the Now
+feed; task events always refresh the app. A SQL task/state key prevents repeat
+delivery across restarts; active voice sessions speak the same status through
+the existing voice announcer.
 P6-21 adds the following fields to every task in `GET /factory/tasks` and to
 `GET /factory/tasks/:id`, independently of event pagination:
 
@@ -1834,42 +1835,45 @@ socket duplicate headers, `/me` authorization and stalled-provider tests
 establish this offline boundary. No deployed Entra token was obtained; live
 browser sign-in and deployment verification remain #11.
 
-## Web notifications and confirmations (P6-22)
+## Web notifications and confirmations (P6-22, P10-10)
 
-The personal-tenant deployment does not configure Teams or Microsoft 365. Away
-mode remains manual and Graph presence is not read. Optional Teams adapters stay
-in source but are not provisioned or configured by production Bicep.
+Away mode remains manual and Graph presence is not read. P10-10 removes the
+Teams bot, message/card sender, audio-card route, and Teams-specific runtime
+configuration. Teams environment variables are ignored. No health or status
+component depends on Teams.
 
-Away task-state notifications are inserted as alert activity rows in the Now
-feed and trigger authenticated server-sent refreshes. Active English browser
-voice sessions announce task completion/attention and pending approvals without
+Task-state notifications are inserted as alert activity rows in the Now feed
+and trigger authenticated server-sent refreshes. Active English browser voice
+sessions announce task completion/attention and pending approvals without
 speaking task titles or payloads. Browser confirmation summaries/IDs remain in
-the in-memory pending queue; `/now` exposes them to Dan while present or away,
-and `POST /now/confirmations/:id` requires Dan's delegated identity and a
-pending, unexpired request. Approval/rejection is a conditional single-use
-transition; the backend consumes an unexpired approval before calling the gated
-operation. Reject, timeout, cancellation, replay, unknown IDs, startup
-orphaning, and unverifiable identity all fail closed. The pending timer is five
-minutes. `runConfirmed` gates repository creation and other confirmation-required
-operations; future delete, mail, calendar, out-of-browser computer and spend
-actions must use the same gate. The `complete_without_deployment` project-policy
-merge is separate: selecting that policy is approval, so the guarded squash
-merge runs without a browser or Teams confirmation. Merge evaluation follows
-webhook validation and is also recovered by the startup/periodic policy sweep.
+the in-memory pending queue; `/now` exposes them in every presence mode, and
+`POST /now/confirmations/:id` requires the owner's delegated identity and a
+pending, unexpired request. Away changes no approval routing: the same
+authenticated browser confirmation waits in Now as when Present. Approval and
+rejection are conditional single-use transitions; the backend consumes an
+unexpired approval before calling the gated operation. Reject, timeout,
+cancellation, replay, unknown IDs, startup orphaning, and unverifiable identity
+all fail closed. The pending timer is five minutes. `runConfirmed` gates
+repository creation and other confirmation-required operations; future delete,
+mail, calendar, out-of-browser computer and spend actions must use the same
+gate.
 
-Other web approvals remain visible in the header attention popover if voice is
-not active; those pending operations expire and fail closed after five minutes
-if Dan does not approve.
-Teams/Bot Service and Speech F0 code is not live-verified because those
-integrations are not part of the personal-tenant deployment.
+The `complete_without_deployment` project-policy merge is separate: selecting
+that policy is approval, so the guarded squash merge runs without a browser
+confirmation. Merge evaluation follows webhook validation and is also recovered
+by the startup/periodic policy sweep. Other web approvals remain visible in the
+header attention popover if voice is not active; pending operations expire and
+fail closed after five minutes if the owner does not approve. The existing
+`teams_conversations` and `teams_confirmations` tables and rows are retained
+unchanged; only the confirmation table remains in use.
 
 ## Proactive Web Push backend (P13-01, 17 October 2026)
 
 The backend registers the owner-authenticated push routes only when
-`JARVIS_PUSH_ENABLED` is exactly `true`; the default is off. Disabled composition
+`JARVIS_PUSH_ENABLED` is exactly `true`; the code default is off. Disabled composition
 does not construct the push store, read or write push tables, create signing keys,
-or send provider requests, and the routes return ordinary 404s. No deployment,
-workflow or infrastructure setting enables this flag.
+or send provider requests, and the routes return ordinary 404s. Production sets
+the flag in `infra/main.bicep` (P13-03, below).
 
 `push_vapid_keys`, `push_subscriptions` and `proactive_items` are separate SQL
 tables. The store uses the process-owned SQL pool and
@@ -1890,16 +1894,16 @@ bounded by per-request/overall timeouts.
 P13-01 sends only a direct user-requested test. It adds no scheduler or quiet-hour
 guard; every future system-started send must enforce 22:00–07:00
 Europe/Copenhagen with no emergency exception. There is no Teams delivery path.
-The feature remains dark, and actual iPhone delivery is not yet proven.
+Actual iPhone delivery is not yet proven.
 
-## Proactive foundation (P13-05; default off)
+## Proactive foundation and engine (P13-05, P13-06; default off)
 
 `JARVIS_PROACTIVE_ENABLED` gates the owner-bound proactive routes and composition;
 the todo-write and alert capabilities are separately gated. The index contributes
 one guarded registration call with existing providers, stores, token callback,
 clock, logger and the background-job registry. Disabled composition does not
 construct proactive stores, query proactive tables, register routes or start a
-timer. This slice adds no source read, model call or outbound request.
+timer. P13-06 extends this composition without another index registration.
 
 The `proactive` module defines the shared source/item/run contracts, a source
 registry with an unavailable `x` placeholder, and authenticated status, settings,
@@ -1912,11 +1916,69 @@ Migration 0055 extends `proactive_items` while preserving test rows, and adds
 owner-scoped settings, runs, source status and estimated-spend tables. SQL stores
 use the existing pool and `databaseReadRequest` for nontransactional reads.
 Finding upserts are deduplicated by owner/key; dismissed findings remain
-dismissed until due/event timing or urgency materially changes. Run claims take
+dismissed until due/event timing changes or urgency escalates to time-critical. Run claims take
 an owner-scoped transaction lock, respect unexpired leases, and use claim
 generations for heartbeat/finish fencing. Startup marks leftover running rows
 interrupted. Migration 0056 adds the `proactive` background-job kind; rollback
 refuses to discard rows of that kind.
+
+The engine owns a self-rescheduling, unreferenced 30-second scheduler. Startup
+reconciles runs once and evaluates the latest Copenhagen slot immediately;
+handled slot keys stay in memory, so idle ticks perform no SQL work. Claims
+serialize through the existing owner lock, including persisted manual rate
+limits. A lease-aware running-run read prevents expired claims from blocking
+manual admission. Paused/all-disabled scheduled slots finish as skipped without a job.
+The owner-only run routes return bounded history and detach manual execution
+after a 202 response containing the running summary.
+
+Each run owns cancellation, a three-minute deadline and 60-second lease
+heartbeats. Enabled registered sources read in parallel with 20-second bounds.
+Quiet hours cancel scheduled/catch-up work, not manual work; generation and
+quiet-hour checks precede item writes and hooks. Detection is pure and shares
+the 24-hour deadline and 48-hour clash constants with future consumers. Language
+uses a narrow SQL read of recent user-message text, never chat history fields;
+chat messages are not model input.
+
+Finding writes also fence the claim inside the SQL transaction by locking the
+owner/run row and checking status, generation and lease. Cancellation cancels
+the active request and rolls back before the engine finalizes the run; a final
+guard check precedes commit dispatch, the write's transaction boundary.
+
+`proactive/model.ts` independently follows the existing Foundry chat-completions
+pattern, with the selected chat role, catalogue validation, no tools, untrusted
+fact data, a 48-KiB request/32-KiB response bound and a 45-second timeout.
+Validated evidence contains labels only. Real response token counts feed both
+estimated proactive spend and global chat-role usage, including rejected output.
+Stable 32-hex content keys exclude run-local refs and urgency. Ordered optional
+`onFindingsStored` hooks receive only this run's stored items and in-memory source
+facts before finish; one hook failure cannot prevent later hooks or change success.
+This slice adds no delivery or todo-writing hook and enables no flag.
+
+## Proactive read-only sources (P13-07; default off)
+
+The source registry now constructs the Factory, todo and weather readers in
+alphabetical order from the existing composition dependencies. Construction
+does not read data; the registry remains behind the default-off proactive
+composition and no dispatcher is added.
+
+The todo reader resolves exactly one case-insensitive root `task.md` or
+`tasks.md`, then uses only the vault client's `tree` and `read` methods. It
+enforces the vault file-size cap and a 20-second source deadline. `todo-file.ts`
+exports the resolver and unbounded parser for reuse; one sanitizer removes
+control characters, HTML and markdown link destinations and caps fact text at
+300 characters. Due dates resolve to Copenhagen-local instants. The source
+returns at most 40 facts, ordering the 24-hour-before/72-hour-after due window
+first.
+
+Factory uses `TaskStore.getProactiveSnapshot()`, a bounded, nontransactional
+database read through `databaseReadRequest` that returns only task/project
+status fields, open-PR metadata and the running count. It does not query task
+events, prompts or logs. Weather uses the existing settings store for saved
+home coordinates and a direct HTTPS Open-Meteo request with a 15-second
+deadline, redirect refusal and 128-KiB response limit. Missing location is
+unavailable; no fallback location or geocoding is used. All source errors are
+mapped to stable unavailable reason codes. This slice enables no flags and
+starts no source reads.
 
 ## Web push delivery (P13-02; default off)
 
@@ -1939,6 +2001,53 @@ grant no authorization. The sign-in path is stored as a validated same-origin
 session-storage value and consumed after MSAL returns to `/`. P13-02 changes no
 backend, deployment flag, identity or permission configuration; live phone
 permission, lock-screen delivery and tap-through remain unverified.
+
+## Proactive web client (P13-10; default off)
+
+`apps/web/config/proactive-switch.ts` parses only the exact string `true`.
+`vite.config.ts` exposes the resulting boolean as
+`__JARVIS_PROACTIVE_ENABLED__`; `main.tsx` passes it to `App({ proactiveEnabled })`.
+The off-by-default client conditionally registers the Proactive area, full detail
+page, Settings section and terminal proactive-job Open link. The existing
+`/proactive/:id` M1 push route keeps its legacy page when only push is enabled.
+The flag does not enable backend routes or relax owner authentication.
+
+`ProactiveArea` independently loads status, open items and recent runs using
+authenticated `no-store` requests. Status supplies source and estimated-budget
+views. Manual runs poll status every three seconds only while visible, abort on
+unmount/terminal status, and stop after four minutes. Item feedback is optimistic
+with rollback; the detail page records `seen` once for a newly loaded item.
+Settings reads and PATCHes the existing contract, sending only changed fields.
+Item text, feeds and guidance live only in component state, are rendered as text,
+and are not stored in browser persistence or placed in URLs. Recent-run and
+Settings disclosure state is not persisted. The web flag policy test scans
+workflow/environment files to ensure the flag stays unset.
+
+## Web Push production switch (P13-03; 18 October 2026)
+
+Production sets both gates; the code defaults above are unchanged.
+`infra/main.bicep` adds `JARVIS_PUSH_ENABLED` as `'true'` to the backend container
+app environment, beside `STATIC_WEB_APP_ORIGIN`, which an enabled backend
+requires. `config.ts` reads it as `pushEnabled` and `index.ts` hands it to
+`registerPushRoutes`. The Deploy workflow's web job writes `VITE_PUSH_ENABLED=true`
+to `$GITHUB_ENV` beside `VITE_BACKEND_URL`, and Vite's `define` injects the boolean
+into the production bundle.
+
+A change to `infra/main.bicep` re-plans infrastructure, backend, web and agent, so
+the bundle is rebuilt with the gate. The web job needs the backend job, so the
+routes exist before the Notifications section does. The environment change
+creates a new backend revision. No secret, identity, resource, dependency or
+permission is added: the VAPID key pair is still generated on first use and kept
+in SQL. Rollback is reverting the whole P13-03 change, which removes the two gate
+lines and the pin test together, or setting both values to `false` and updating
+the pin test in the same commit; reverting only the two lines fails the pin test
+in CI before Deploy can run. Either way the routes unregister and the
+Notifications section and worker registration drop; stored subscriptions and the
+key stay in SQL, and nothing can send while the routes are off.
+`apps/backend/src/push/enabled-switch.test.ts` pins both values and fails if any
+other workflow, Dockerfile, package file, web config or Bicep/parameter file names
+a switch. CI proves this wiring only; iPhone delivery still needs Dan's device
+test.
 
 ## Presence modes (P6-23; replaces P7-02 away mode)
 
@@ -4538,7 +4647,7 @@ P7-05, P7-08 and P7-38 reuse that Foundry endpoint, backend managed identity and
 
 `createPhoneStatusModule` always registers owner-authenticated `GET /phone/status`. The shared `PhoneStatus` contract reports whether the ACS call module was constructed, whether SQL history is available, and at most 20 recent calls. Each call contains its UTC `startedAt`, elapsed `durationSeconds`, and `in_progress`, `ended`, or `failed` outcome; caller identifiers and call IDs are not returned. `configured` is configuration/readiness for module construction, not a live ACS health check. Call history reuses `dbo.phone_sessions` (`started_at`, `ended_at`, `status` from migration 0017); no migration is needed. If SQL is not configured, the endpoint returns `historyAvailable: false` and an empty list; a history query failure returns 503.
 
-When enabled, incoming Event Grid deliveries go to `/phone/events`; Call Automation posts to `/phone/callback`, and bidirectional audio uses the `/phone/media` WebSocket. The call and media callback URLs use `TEAMS_AUDIO_ORIGIN`. Configuration requires `JARVIS_PHONE_ACS_ENDPOINT`, `JARVIS_PHONE_ACS_RESOURCE_ID`, `JARVIS_PHONE_TEAMS_RESOURCE_ACCOUNT_OBJECT_ID`, `TEAMS_AUDIO_ORIGIN`, Key Vault/Foundry/Teams settings, and the `jarvis-phone-allowlist` secret. Dan can call only by calling the number assigned to that Teams resource account from his Teams identity; both the called resource-account ID and Dan's Entra user ID are checked. A phone number alone is not caller authentication.
+When enabled, incoming Event Grid deliveries go to `/phone/events`; Call Automation posts to `/phone/callback`, and bidirectional audio uses the `/phone/media` WebSocket. The call and media callback URLs use `JARVIS_PHONE_PUBLIC_ORIGIN`, independently of Teams messaging settings. Configuration requires `JARVIS_PHONE_ACS_ENDPOINT`, `JARVIS_PHONE_ACS_RESOURCE_ID`, `JARVIS_PHONE_TEAMS_RESOURCE_ACCOUNT_OBJECT_ID`, `JARVIS_PHONE_PUBLIC_ORIGIN`, Key Vault/Foundry/Event Grid identity settings, and the `jarvis-phone-allowlist` secret. Dan can call only by calling the number assigned to that Teams resource account from his Teams identity; both the called resource-account ID and Dan's Entra user ID are checked. A phone number alone is not caller authentication.
 
 Production calling is dormant: P6-22 decided not to provision Teams in Dan's personal tenant, and the P7-01 decision records that no number was purchased. No phone number or deployed ACS resource ID is present in the repository; Azure CLI/live Azure access was unavailable during P9-22, so the current number, resource assignment, Event Grid subscription, and callback delivery could not be verified. Do not treat this feature as callable until Dan provisions and verifies those external resources.
 
@@ -4664,7 +4773,7 @@ call linkage remain the post-merge P4-09 acceptance check.
 - Calendar creation, movement, updates to title/time/location/attendees/description, deletion, Gmail draft creation/replacement/deletion, message archive/label changes, and sending are staged in process memory for ten minutes. Calendar executes only after a different, later persisted Dan message is a plain approval accepted by the shared approval classifier (for example yes, approved, confirmed, go ahead or ja); no/cancel discards it. A new calendar stage invalidates the previous calendar action, and the confirmation tool must identify the latest action with its returned code. Gmail also uses later plain approval; the returned eight-digit code identifies the pending action for its confirmation tool. Pending actions are one-shot and lost on restart; the Container App remains at one replica. Sensitive Google tool inputs/results are redacted from persistent tool-call records, and external Google error bodies are not returned or logged. Calendar updates PATCH only the supplied fields; empty location, description, and attendee values can clear those fields. Draft replacement requires recipients, subject, and plain-text body; it preserves reply threading and refuses drafts with attachments or CC/BCC recipients. Gmail draft listing is bounded to ten drafts and returns plain-text bodies; archiving removes `INBOX`, and label changes resolve exact Gmail label names or IDs. Confirmed replies create a Gmail draft; Dan sends it from Gmail.
 - [`infra/bootstrap.ps1`](../infra/bootstrap.ps1) creates what the deploy workflows can't create for themselves: the deploy identity (GitHub OIDC, main branch only, trusting both the name-based and the ID-based subject (L50); Contributor and Role Based Access Control Administrator on `rg-jarvis`), the sign-in apps, `id-jarvis-backend`, and `jarvis-sql-admins`. Its IDs are in `infra/bootstrap.output.json` and in the repository's Actions variables.
 - Managed identities between Azure services; GitHub Actions deploys with OpenID Connect.
-- The backend identity has `Foundry User` on the Foundry project for the Danish voice relay, `Cognitive Services User` on the Foundry AIServices account for parallel Azure Speech partial recognition, and account-scoped `Cognitive Services Contributor` for model deployment management. It also retains `Cognitive Services Speech User` on the separate F0 Speech resource used for Teams voice notes.
+- The backend identity has `Foundry User` on the Foundry project for the Danish voice relay, `Cognitive Services User` on the Foundry AIServices account for parallel Azure Speech partial recognition, and account-scoped `Cognitive Services Contributor` for model deployment management. Teams voice-note synthesis was removed by P10-10; any prior F0 Speech resource or role assignment is a separate, approval-gated infrastructure cleanup.
 - P7-10's Microsoft Graph `Files.Read.All` app role is assigned separately by an administrator; Graph Search does not support `Sites.Selected`. The notes tool uses Dan's fixed object ID and the configured folder path, and validates result links before returning snippets.
 - Secrets only in Key Vault; none in code, images, environment variables, or logs.
 
@@ -5015,8 +5124,29 @@ is on, and any other value, including an empty one, stops the build or dev serve
 The value is baked into the bundle and is never read from the URL, local storage
 or the public bootstrap response; `App` itself still defaults to off. The switch
 grants no access: the backend composition switch and the owner checks above still
-decide every read. No workflow, Bicep or environment file sets either name in this
-change, and `daily/default-off.test.ts` enforces that.
+decide every read. Production sets both switches to `true` in exactly two reviewed
+files: `JARVIS_DAILY_ENABLED` in the backend container environment in
+`infra/main.bicep` and `VITE_DAILY_ENABLED` on the web build step of
+`.github/workflows/deploy.yml` (18 October 2026). `daily/default-off.test.ts` allows
+no other configuration file to mention either name.
+
+### Proactive page and web switch (18 October 2026; P13-10)
+
+`VITE_PROACTIVE_ENABLED` is loaded by name only, parsed by
+`config/proactive-switch.ts` as exact-string `true`, and exposed as
+`__JARVIS_PROACTIVE_ENABLED__`. `App` defaults the prop off for tests and
+conditionally registers the Proactive navigation area, Settings node, proactive
+detail client and JobsChip link. A push-only build continues to route
+`/proactive/:id` through the M1 item page.
+
+`proactive-data.ts` validates response shapes and maps reason codes to fixed
+copy; dates use explicit `Europe/Copenhagen` and `da-DK`/`en-GB` formatting.
+The page owns independent status, open-item and run load states; its Earlier
+items disclosure fetches once on demand. Check now owns a cancellable,
+visibility-aware status poll and bounded timeout. The Settings section owns
+drafts and field-level validation, saves changed fields only, and never
+persists its private values or its disclosure state. `proactive-switch.test.ts`
+ensures no workflow or environment file enables the gate.
 
 ### Inactive internal direct intake (17 October 2026)
 
@@ -5058,10 +5188,9 @@ Corrections capture actual owned before-state/revision, retain stable identity
 and recompute Copenhagen dates from occurrence. Changed nutrients/components
 become unverified estimates; unchanged exact provenance and nulls survive.
 
-Review uses actual `TeamsNotificationService.runConfirmed` with a trusted
-browser-only selector. Default current-channel behaviour is unchanged for
-other callers; browser-only never looks up or sends a Teams conversation or
-voice note, even after presence changes. Food requires present mode before
+Review uses the shared app approval service with a trusted browser-only
+selector. Every confirmation is browser-only; no channel lookup or Teams
+message path exists, even after presence changes. Food requires present mode before
 staging and in the action callback. Existing Now owner-authenticated approval,
 persisted one-time consumption supplies authority. Food cards have an explicit
 120-second lifetime shared by SQL, visible expiry and the service timer;
@@ -5258,10 +5387,12 @@ inside the data accessors. Root authentication is unchanged: a connector or
 runner principal is refused on every Daily route, and an agent is refused on the
 targets route because it reaches targets only through the approved tool.
 
-No workflow, Bicep, infrastructure, environment or deploy file sets
-`JARVIS_DAILY_ENABLED`, or the web switch `VITE_DAILY_ENABLED` that the Daily
-overview page reads at build time, so every environment keeps Daily off; `daily/default-off.test.ts`
-scans those files for both names. `daily/composition.test.ts` builds real
+The code default is off. Production sets `JARVIS_DAILY_ENABLED` and the web switch
+`VITE_DAILY_ENABLED` (read at build time by the Daily overview page) in exactly two
+reviewed files, `infra/main.bicep` and the web build step of `deploy.yml`, and every
+other environment stays off. `daily/default-off.test.ts` scans configuration files
+for both names, allows only those two files and checks their literal values.
+`daily/composition.test.ts` builds real
 applications: it compares a Daily-off one with one built without Daily, shows the
 module adds exactly its three routes and six tools, and checks that
 unauthenticated, other-user, runner, connector and mismatched-owner callers are

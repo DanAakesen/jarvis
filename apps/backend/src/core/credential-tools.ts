@@ -25,7 +25,7 @@ export const renewCredentialTool: JarvisTool = {
     const renew = request.server.renewCodexCredential;
     if (!store || !renew) throw new ToolRefusal('Codex login renewal is unavailable.');
 
-    const notifications = request.server.teamsNotifications;
+    const notifications = request.server.ownerInteractions;
     if (!notifications) throw new ToolRefusal('Now confirmation is unavailable; no renewal was started.');
 
     return notifications.runConfirmed('other', 'Renew the Jarvis Codex login.', async () => {

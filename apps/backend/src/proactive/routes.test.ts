@@ -1,10 +1,10 @@
 import Fastify from 'fastify';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { installAuthentication } from '../auth/hook.js';
 import { loadConfig } from '../config.js';
 import type { TokenVerifier, UserPrincipal } from '../auth/verify.js';
 import { createMemoryProactiveStore, DEFAULT_NEWS_FEEDS } from './store.js';
-import { registerProactiveRoutes } from './routes.js';
+import { registerProactiveRoutes, type ProactiveRouteOptions } from './routes.js';
 import { registerProactive } from './composition.js';
 import type { ProactiveCompositionOptions } from './composition.js';
 import { sourceIds } from './types.js';
@@ -21,7 +21,10 @@ const foreign: UserPrincipal = { ...user, objectId: other };
 const tokenVerifier: TokenVerifier = async (token) => token === 'foreign.fixture.signature' ? foreign : user;
 const apps: ReturnType<typeof Fastify>[] = [];
 
-async function appFixture(clock: () => Date = () => new Date('2026-10-20T05:00:00.000Z')) {
+async function appFixture(
+  clock: () => Date = () => new Date('2026-10-20T05:00:00.000Z'),
+  callbacks: Pick<ProactiveRouteOptions, 'run' | 'worstCaseDkk'> = {},
+) {
   const store = createMemoryProactiveStore(owner);
   const app = Fastify({ logger: false });
   apps.push(app);
@@ -35,6 +38,7 @@ async function appFixture(clock: () => Date = () => new Date('2026-10-20T05:00:0
     databaseAvailable: true,
     registerItemDetail: true,
     now: () => new Date(clock()),
+    ...callbacks,
   });
   await app.ready();
   return { app, store };
@@ -219,6 +223,190 @@ describe('proactive routes', () => {
       const response = await app.inject({ method: 'GET', url, headers: { authorization } });
       expect(response.statusCode).toBe(400);
     }
+  });
+});
+
+describe('manual proactive runs', () => {
+  const post = { method: 'POST' as const, url: '/proactive/runs', headers: { authorization } };
+
+  it('enforces owner authorization for run reads and writes', async () => {
+    const { app } = await appFixture();
+    for (const method of ['GET', 'POST'] as const) {
+      expect((await app.inject({ method, url: post.url })).statusCode).toBe(401);
+      expect((await app.inject({
+        method, url: post.url,
+        headers: { authorization: ['Bearer', ['foreign', 'fixture', 'signature'].join('.')].join(' ') },
+      })).statusCode).toBe(403);
+    }
+  });
+
+  it('refuses in paused, all-disabled, budget, running order', async () => {
+    const run = vi.fn(async () => {});
+    const { app, store } = await appFixture(undefined, { run, worstCaseDkk: () => 2 });
+    await store.runs.claim({ trigger: 'manual', slot: null, now: new Date('2026-10-20T05:00:00Z') });
+    await store.settings.patch({
+      paused: true, monthlyBudgetDkk: 0,
+      sources: Object.fromEntries(sourceIds.map((id) => [id, false])),
+    });
+    const expectRefusal = async (error: string, status: number) => {
+      const response = await app.inject(post);
+      expect(response.statusCode).toBe(status);
+      expect(response.json()).toEqual(error === 'already_running' ? { error, run: await store.runs.latest() } : { error });
+    };
+    await expectRefusal('paused', 409);
+    await store.settings.patch({ paused: false });
+    await expectRefusal('no_sources', 409);
+    await store.settings.patch({ sources: { todos: true } });
+    await expectRefusal('budget_exhausted', 409);
+    await store.settings.patch({ monthlyBudgetDkk: 1 });
+    await expectRefusal('budget_exhausted', 409);
+    await store.settings.patch({ monthlyBudgetDkk: 100 });
+    await expectRefusal('already_running', 409);
+    expect(run).not.toHaveBeenCalled();
+  });
+
+  it('includes month spend and worst case in admission and fails closed without a runner', async () => {
+    const { app, store } = await appFixture(undefined, { worstCaseDkk: () => 2 });
+    await store.spend.record({
+      runId: owner, month: '2026-10', inputTokens: 1, outputTokens: 1,
+      estimatedDkk: 99, createdAt: new Date(),
+    });
+    expect((await app.inject(post)).json()).toEqual({ error: 'budget_exhausted' });
+    await store.settings.patch({ monthlyBudgetDkk: 200 });
+    expect((await app.inject(post)).statusCode).toBe(503);
+    expect(await store.runs.list(50)).toEqual([]);
+  });
+
+  it('returns 202 before the pipeline settles, including during quiet hours', async () => {
+    let complete!: () => void;
+    const run = vi.fn(() => new Promise<void>((resolve) => { complete = resolve; }));
+    const { app, store } = await appFixture(() => new Date('2026-10-20T21:00:00Z'), { run, worstCaseDkk: () => 1 });
+    const response = await app.inject(post);
+    expect(response.statusCode).toBe(202);
+    expect(response.json()).toEqual({ run: await store.runs.latest() });
+    expect(run).toHaveBeenCalledOnce();
+    expect((await store.runs.latest())!.status).toBe('running');
+    expect((await app.inject(post)).json()).toEqual({ error: 'already_running', run: await store.runs.latest() });
+    complete();
+  });
+
+  it('accepts a new manual run once an unfinished run reaches its ten-minute lease deadline', async () => {
+    let now = new Date('2026-10-20T05:00:00Z');
+    const run = vi.fn(async () => {});
+    const { app, store } = await appFixture(() => now, { run, worstCaseDkk: () => 1 });
+    const expired = await store.runs.claim({ trigger: 'manual', slot: null, now });
+    now = new Date('2026-10-20T05:09:59.999Z');
+    const active = await app.inject(post);
+    expect(active.statusCode).toBe(409);
+    expect(active.json()).toEqual({ error: 'already_running', run: expired!.run });
+    expect(run).not.toHaveBeenCalled();
+
+    now = new Date('2026-10-20T05:10:00Z');
+    const response = await app.inject(post);
+    expect(response.statusCode).toBe(202);
+    expect(response.json()).toEqual({ run: await store.runs.latest() });
+    expect(response.json().run.id).not.toBe(expired!.run.id);
+    expect(run).toHaveBeenCalledOnce();
+    expect((await store.runs.list(50)).find((entry) => entry.id === expired!.run.id)).toMatchObject({
+      status: 'failed', reason: 'lease_lost',
+    });
+    expect(await store.runs.finish(expired!.run.id, expired!.generation, 'done', null, 0, now)).toBe(false);
+  });
+
+  it('records detached callback failures with the claimed generation', async () => {
+    const { app, store } = await appFixture(undefined, {
+      run: async () => { throw new Error('private provider data'); }, worstCaseDkk: () => 1,
+    });
+    const finish = vi.spyOn(store.runs, 'finish');
+    expect((await app.inject(post)).statusCode).toBe(202);
+    await app.close();
+    expect(await store.runs.latest()).toMatchObject({ status: 'failed', reason: 'internal_error' });
+    expect(finish).toHaveBeenCalledWith(expect.any(String), 1, 'failed', 'internal_error', 0, expect.any(Date));
+  });
+
+  it('aborts and awaits manual work on shutdown without applying quiet cancellation', async () => {
+    let signal: AbortSignal | undefined;
+    const run = vi.fn(async (claim: Parameters<NonNullable<ProactiveRouteOptions['run']>>[0], current?: AbortSignal) => {
+      signal = current;
+      await new Promise<void>((resolve) => current!.addEventListener('abort', () => resolve(), { once: true }));
+      await store.runs.finish(claim.run.id, claim.generation, 'cancelled', String(current!.reason), 0, new Date());
+    });
+    const { app, store } = await appFixture(() => new Date('2026-10-20T21:00:00Z'), { run, worstCaseDkk: () => 1 });
+    expect((await app.inject(post)).statusCode).toBe(202);
+    expect(signal?.aborted).toBe(false);
+    await app.close();
+    expect(signal?.aborted).toBe(true);
+    expect(signal?.reason).toBe('interrupted_by_restart');
+    expect(await store.runs.latest()).toMatchObject({ status: 'cancelled', reason: 'interrupted_by_restart' });
+  });
+
+  it('uses persisted five-minute limits, accepts exact boundary and serializes racing admissions', async () => {
+    let now = new Date('2026-10-20T05:00:00Z');
+    const fixture = await appFixture(() => now, {
+      worstCaseDkk: () => 1,
+      run: async (claim) => { await fixture.store.runs.finish(claim.run.id, claim.generation, 'done', null, 0, now); },
+    });
+    const store = fixture.store;
+    expect((await fixture.app.inject(post)).statusCode).toBe(202);
+    now = new Date('2026-10-20T05:04:59.999Z');
+    expect((await fixture.app.inject(post)).json()).toEqual({ error: 'rate_limited' });
+    now = new Date('2026-10-20T05:05:00Z');
+    const responses = await Promise.all([fixture.app.inject(post), fixture.app.inject(post)]);
+    expect(responses.filter((response) => response.statusCode === 202)).toHaveLength(1);
+    expect(responses.filter((response) => response.statusCode === 429 || response.statusCode === 409)).toHaveLength(1);
+    expect(await store.runs.countManualSince(new Date('2026-10-19T22:00:00Z'))).toBe(2);
+  });
+
+  it.each([
+    ['2026-03-29T12:00:00Z', '2026-03-28T23:00:00Z'],
+    ['2026-10-25T12:00:00Z', '2026-10-24T22:00:00Z'],
+  ])('counts at most six manual runs since Copenhagen midnight on %s', async (instant, midnight) => {
+    const now = new Date(instant);
+    const { app, store } = await appFixture(() => now, { run: async () => {}, worstCaseDkk: () => 1 });
+    const boundary = new Date(midnight);
+    for (let index = -1; index < 6; index++) {
+      const at = new Date(boundary.getTime() + index * 5 * 60_000);
+      const claim = await store.runs.claim({ trigger: 'manual', slot: null, now: at });
+      await store.runs.finish(claim!.run.id, claim!.generation, 'done', null, 0, at);
+    }
+    const count = vi.spyOn(store.runs, 'countManualSince');
+    const response = await app.inject(post);
+    expect(response.statusCode).toBe(429);
+    expect(response.json()).toEqual({ error: 'rate_limited' });
+    expect(count).toHaveBeenCalledWith(boundary);
+  });
+
+  it('handles a claim lost to another caller and lists bounded newest runs', async () => {
+    const { app, store } = await appFixture(undefined, { run: async () => {}, worstCaseDkk: () => 1 });
+    const claim = vi.spyOn(store.runs, 'claim').mockResolvedValueOnce(null);
+    expect((await app.inject(post)).json()).toEqual({ error: 'already_running', run: null });
+    claim.mockRestore();
+    for (let index = 0; index < 3; index++) {
+      const at = new Date(Date.UTC(2026, 9, 19, index));
+      const entry = await store.runs.claim({ trigger: 'manual', slot: null, now: at });
+      await store.runs.finish(entry!.run.id, entry!.generation, 'done', null, 0, at);
+    }
+    const response = await app.inject({ method: 'GET', url: '/proactive/runs?limit=2', headers: { authorization } });
+    expect(response.json().runs).toEqual(await store.runs.list(2));
+    expect(response.json().runs).toHaveLength(2);
+    for (const query of ['limit=0', 'limit=51', 'limit=1.5', 'limit=no', 'extra=1', 'limit=1&limit=2']) {
+      expect((await app.inject({ method: 'GET', url: `/proactive/runs?${query}`, headers: { authorization } })).statusCode).toBe(400);
+    }
+  });
+
+  it('reports a persisted rate refusal when another replica finishes before this claim', async () => {
+    const now = new Date('2026-10-20T05:00:00Z');
+    const { app, store } = await appFixture(() => now, { run: async () => {}, worstCaseDkk: () => 1 });
+    const original = store.runs.claim.bind(store.runs);
+    vi.spyOn(store.runs, 'claim').mockImplementationOnce(async (input) => {
+      const other = await original(input);
+      await store.runs.finish(other!.run.id, other!.generation, 'done', null, 0, now);
+      return original(input);
+    });
+    const response = await app.inject(post);
+    expect(response.statusCode).toBe(429);
+    expect(response.json()).toEqual({ error: 'rate_limited' });
+    expect(await store.runs.list(50)).toHaveLength(1);
   });
 });
 

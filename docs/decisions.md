@@ -1,5 +1,28 @@
 # Decisions
 
+## Switch Web Push milestone 1 on in production (18 October 2026; P13-03 / #934)
+
+Dan confirmed turning milestone 1 on: a user-started test notification that opens
+an owner-protected item. His gate was met first: the P13-01 backend (PR #918) and
+the P13-02 web client (PR #920) are merged and deployed, and live acceptance
+passed. This supersedes the "dark" and "default-off" decisions below for
+production only; the code defaults stay off.
+
+Two lines do it. `infra/main.bicep` sets `JARVIS_PUSH_ENABLED` to `'true'` in the
+backend container app, and the web build step in `deploy.yml` sets
+`VITE_PUSH_ENABLED=true`. There is no new parameter, secret, resource,
+dependency or code change: the VAPID key pair is generated on first use and stays
+in SQL. A scan test pins both values and fails if anything else sets either
+switch.
+
+Scope does not grow: no scheduler, no proactive sends and no Teams path. CI does
+not establish iPhone delivery; Dan's Home Screen device test is the acceptance
+step. Rollback is reverting the whole P13-03 change, which removes the two gate
+lines and the pin test together, or setting both values to `false` and updating
+the pin test in the same commit. Reverting only the two lines would fail the pin
+test in CI before Deploy could run. Stored subscriptions and the key stay in SQL
+and, with the routes off, nothing can send to them.
+
 ## Open Daily on an overview behind a build-time switch (18 October 2026; P12-15 / #730)
 
 **Builder decision inside Dan's "go with the daily", not an activation and not
@@ -32,6 +55,68 @@ and cannot see anything"), so the page now opens on an overview.
 - Evidence. A headless Chromium check against synthetic responses at phone,
   small-phone, tablet and desktop widths. It is not live data, a physical phone,
   provider acceptance or Daily activation.
+
+## Proactive checks use an in-process fixed schedule (17 October 2026; P13 / #926)
+
+Dan chose 07:00 and 18:00 Europe/Copenhagen and a manual “Check now” request at
+any time. On Dan's behalf, the dispatcher chose a small in-process loop and an
+atomic slot claim: the idle loop must not touch the database, which would wake
+serverless SQL, and replicas must not claim the same slot. Dan can change either
+choice.
+
+## Quiet hours and language (17 October 2026; P13 / #926)
+
+Dan decided that proactive work and delivery stop from 22:00 to 07:00
+Europe/Copenhagen, with no emergency exception, and that output follows the
+language of his last chat message. This keeps the quiet window clear without
+restricting interactive requests; quiet hours also apply to manual checks. Dan
+can change either choice.
+
+## Sources are read-only and untrusted (17 October 2026; P13 / #928)
+
+Dan decided that todos, Factory, weather, calendar, mail headers, calendar-derived
+travel and news are read-only sources. Their content is data, never an
+instruction, and system runs inherit no approvals; this prevents source content
+from changing policy or authorising actions. Dan can change this choice.
+
+## Monthly proactive budget (17 October 2026; P13 / #924)
+
+Dan set a 100 DKK monthly hard stop and an 80% warning. The warning leaves room
+to adjust before the limit; spend is an estimate and must be labelled as one so
+it does not imply a settled bill. Dan can change the limit or warning.
+
+## Todos are canonical and add-only (17 October 2026; P13 / #927)
+
+Dan decided the vault todo file is canonical and Jarvis may add todos under its
+own heading, but never edit, complete, reorder or delete existing todos. The
+name remains open (`task.md` or `Tasks.md`); the resolver accepts exactly one
+matching file and never guesses. This protects Dan's entries; Dan can change
+the policy or settle the name.
+
+## Only time-critical findings may buzz the phone (17 October 2026; P13 / #932)
+
+Dan chose alerts only for a deadline within 24 hours, a calendar clash or a
+travel disruption, plus a reminder about an hour before a todo is due. Quiet-hour
+reminders wait until 07:00 and appear as due soon or overdue; each run sends one
+bundled push within daily caps. This limits interruptions; Dan can change it.
+
+## Show every proactive run in Background work (17 October 2026; P13 / #930)
+
+Dan decided every scheduled or manual proactive run appears in the header
+Background work popover, first as running and then done or failed. This makes
+background work and its outcome visible; Dan can change this choice.
+
+## Enable proactive milestones one at a time (17 October 2026; P13 / #939)
+
+Dan chose exact-`true`, default-off flags: push (`JARVIS_PUSH_ENABLED`,
+`VITE_PUSH_ENABLED`), checks (`JARVIS_PROACTIVE_ENABLED`,
+`VITE_PROACTIVE_ENABLED`), todo writes
+(`JARVIS_PROACTIVE_TODO_WRITES_ENABLED`), and alerts/reminders
+(`JARVIS_PROACTIVE_ALERTS_ENABLED`). The order is push (#934), checks (#935),
+then todo writes, alerts and reminders (#936); the dispatcher enables each only
+after the previous deployment is accepted, so rollback stays isolated to that
+milestone. Rollback is switching its flag off or reverting the enabling change.
+Dan chose the staged rollout; the dispatcher owns each switch-on on his behalf.
 
 ## Put attention in a conditional header popover (17 October 2026; P9-120 / #913)
 
@@ -68,14 +153,15 @@ the public key. Keep RFC 8030 delivery, RFC 8291 `aes128gcm` encryption and
 RFC 8292 VAPID in a small `node:crypto` module without a new dependency. Store
 subscriptions and durable items separately from Now/activity. Push text stays
 generic; provider acceptance is not delivery evidence, and `opened_at` means
-loaded, not read. There is no Teams delivery path.
+loaded, not read. Dan decided no Teams messages are ever sent; push is the only
+delivery path, keeping notification and alert delivery on one route.
 
 The test send is user-started, so quiet hours do not block it. Do not add the
 22:00–07:00 Europe/Copenhagen guard or an emergency exception now; all later
 system-started sends must pass that guard. Actual iPhone delivery remains an
 unverified physical-device acceptance step.
 
-## Keep the proactive foundation dark and bounded (17 October 2026; P13-05)
+## Keep the proactive foundation and engine dark and bounded (18 October 2026; P13-05, P13-06)
 
 The server gate `JARVIS_PROACTIVE_ENABLED` and its todo-write and alert
 capability gates are exact-string `true`, default off. The foundation registers
@@ -98,9 +184,60 @@ enabled, are add-only. Alerts are restricted to time-critical deadlines,
 calendar clashes, travel disruptions and the due-soon todo reminder; quiet-hour
 reminders wait until 07:00. Teams is never a proactive channel.
 
-The new `proactive` background-job kind makes future runs visible in the
+The `proactive` background-job kind makes runs visible in the
 existing Background work control. Existing embedding result-window exclusions
 remain specific to embedding jobs.
+
+P13-06 implements these bounds in the existing composition and stores. Slot
+memory, not SQL polling, gates scheduler work; persisted claims and manual rate
+limits serialize under the existing owner lock. The engine limits sources to
+20 seconds each, the tool-less Foundry call to 45 seconds, and the run to three
+minutes. Deterministic detection remains available when summary generation fails.
+Model evidence must reference the bounded input; text, links, urgency and schema
+are validated before persistence. Reported token usage is recorded even when
+output is rejected. Source text is never job or log content.
+Finding persistence checks the claim inside its transaction and participates in
+run cancellation; the engine awaits commit or rollback, not merely an aborted
+wait, before finalizing the run.
+
+Future todo, alert and reminder slices attach ordered `onFindingsStored` hooks
+instead of changing the engine. Hooks receive transient facts and suggested
+todo text only in memory; suggested todo text is not persisted by this slice.
+Hooks run after item upserts and before finish, never after cancellation or
+lease loss, and hook failures are isolated. No flag, source provider or proactive
+send is activated.
+
+## Keep the Proactive web client dark and private (18 October 2026; P13-10)
+
+The web client uses its own exact-string `VITE_PROACTIVE_ENABLED` build gate;
+this slice leaves it off. Route, navigation, Settings and the terminal
+Background work Open link follow that gate. When push alone is enabled, the
+M1 `/proactive/:id` target remains unchanged; with the web gate on it renders
+the full item and links back to the list.
+
+Use the shared authenticated contract, with no new dependency or contract
+change. Keep item text, feed URLs and guidance in memory only; render
+source/model content as plain text and map server reason codes to fixed copy.
+Manual checks are visibility-aware and bounded, and optimistic dismiss/snooze
+roll back with visible retry on failure. These choices do not enable backend
+work, change permissions, or settle outstanding source, todo-write or delivery
+decisions.
+
+## Keep P13-07 sources read-only and dark (18 October 2026)
+
+The todo filename remains unsettled, so the reader resolves exactly one
+case-insensitive root `task.md` or `tasks.md` and fails closed when absent or
+ambiguous. It only calls vault `tree` and `read`; it never creates or mutates a
+note. One shared parser/sanitizer serves todo facts and later todo consumers.
+It preserves task order, removes due markers from sanitized text, resolves local
+due times with the Copenhagen time zone, and prioritizes facts in the
+24-hours-before/72-hours-after window before the 40-fact cap.
+
+Factory reads use a narrow SQL task-status snapshot rather than event histories,
+prompts or logs. Weather uses only saved home coordinates and a bounded HTTPS
+Open-Meteo request; no default location or geocoding is allowed. Each source is
+registered, but no source is invoked and no proactive flag is enabled by this
+slice.
 
 ## Keep web push default-off and notification taps owner-authenticated (17 October 2026; P13-02)
 
@@ -126,7 +263,8 @@ acceptance.** It is the last invisible Daily slice, built under these conditions
   is off, exactly `true` is on, and any other value stops startup with an error
   that does not echo it. The repository ships no value: no workflow, Bicep,
   infrastructure, environment or deploy file sets it, a scan test enforces that,
-  and turning it on is a separate reviewed change.
+  and turning it on is a separate reviewed change (made by the next decision
+  below, for the owner's production only).
 - Off means unchanged. The composition returns no module, validates nothing and
   touches no pool, so the route table, tool catalogue, capability instructions,
   voice session, health response, startup, jobs and timers stay those of Jarvis
@@ -144,6 +282,38 @@ acceptance.** It is the last invisible Daily slice, built under these conditions
 - Unchanged and out of scope: accounts, consent, grants, secrets, RBAC,
   resources, imports, provider, device and private reads or writes, and live
   probes. Rollback is leaving the switch off.
+
+## Switch Daily on for the owner's production (18 October 2026; P12-15 / #730)
+
+**Dan's instruction, not acceptance.** Dan pre-authorised this: "Yes, switch it
+on once it's live and checked", and later "Yes, ship all daily if possible. You
+can take decisions as I would, as good as you can, we can always change it."
+The visible Daily page must be deployed and checked before this change merges.
+
+- Two switches, two reviewed files. `JARVIS_DAILY_ENABLED` is `'true'` in the
+  backend container environment in `infra/main.bicep`; `VITE_DAILY_ENABLED` is
+  `'true'` on the web build step of `.github/workflows/deploy.yml`. The code
+  default stays off, so local runs, tests and every other environment are
+  unchanged. A wrong value is loud, not silent: the backend refuses to start and
+  the web build fails.
+- Scan test. `daily/default-off.test.ts` now allows exactly those two files to
+  mention a switch, and checks that each sets only its own switch, once, to the
+  exact string `true`, with the web switch on the web build step.
+- What turns on is the owner-only nutrition slice and its page: the capabilities,
+  query and nutrition-targets routes, six tools, the "What Daily holds today"
+  overview and the Nutrition targets section in Settings. No MCP connector,
+  Frida lookup, Google or Gmail feed, health upload, job or timer comes with it.
+- Both switches change the release plan, so one deploy applies infrastructure,
+  backend, web and agent together; the backend applies its migrations at start-up
+  as in every deploy. The live check belongs to that deploy, not to this entry.
+- Unchanged: original Daily stays canonical; no import, provider, device or
+  private read or write, no new account, consent, grant, secret, RBAC or
+  resource. Stored-grant and CalendarList parity (#725), physical-phone
+  acceptance and cutover stay unverified and are not claimed.
+- Rollback: revert the whole change, which removes the two values and the scan
+  test's new expectations together, or set both values to `false` and update the
+  scan test in the same commit. Reverting only the two values fails the scan test.
+  The next deploy re-applies all four components. Stored Daily data is not deleted.
 
 ## Link every web-created Factory task to a GitHub issue (17 October 2026; P10-08 / #902)
 
@@ -3473,8 +3643,8 @@ P6-22 (6 October 2026): Jarvis runs in Dan's personal tenant, without Microsoft
 notifications and confirmations through the web app and active browser voice
 sessions; do not provision Teams Bot, Teams channel, or separate Speech F0
 resources in production. This supersedes earlier P7 Teams-call, Graph-presence,
-and Teams-routing choices. Retain optional Teams code only as dormant integration
-code.
+and Teams-routing choices. P10-10 later removes the optional Teams messaging
+implementation entirely; that design is superseded below.
 
 P6-23 (6 October 2026): replace boolean away mode with Present, Away, and On
 the move (`present`, `away`, `on_the_move`), with green, yellow, and blue as the
@@ -3526,6 +3696,7 @@ Windows/Chrome/Jev speedup remains live acceptance.
 
 | Date | Decision | Rationale and evidence | Status |
 | --- | --- | --- | --- |
+| 2026-10-17 | P10-10 (#909): Jarvis never sends Teams messages, cards, notifications, replies, or audio-card notes from any code path or configuration. Remove the bot, sender, card/audio implementation, runtime wiring, and Teams-specific configuration. Away does not change confirmation routing: staged-action and phone approvals wait in the same authenticated browser app as Present; phone call/media code remains. Task status stays in the app and active browser voice updates remain. | The former away confirmation, general notification, voice-note, Teams bot reply, and away task-status paths all reached the removed sender. Browser approvals and Now-only notification delivery continue through `OwnerInteractionService`; existing conversation/confirmation database tables and stored rows are retained without a migration. Regression coverage checks Away approvals, task PR-opened/Done/NeedsAttention/Cancelled events, ignored Teams environment variables, and phone configuration independent of Teams messaging. | Implemented offline; live deployment behavior remains unverified |
 | 2026-10-13 | P9-100 extends the hosted-chat smoke role into seven named acceptance checks while keeping the catalogue at 128 tools. | Reuse existing tools through smoke-only `get_system_health` operations; allow only fixed issue-700 read, bounded job counts, and a Settings navigation refusal. Keep the confirmation scenario in-memory and no-op until an exact later `yes`; persist no chat or tool audit. One 55-second deadline, two model rounds, one tool call and 256 output tokens per round bound runtime and usage. At 10,000 input tokens per round and published GPT-5.6-Luna rates, the conservative list-price estimate is $0.03692; other unpriced deployments remain unverified. No migration, new tool, web change, or root schema combinator (L120/L121). | Implemented with offline tests; deployed model behavior and actual usage require post-deploy confirmation |
 | 2026-10-13 | P9-92 uses the existing hosted-chat invocation path for one backend-identity canary turn, with user history/context, persistence, and model tool execution disabled; catalogue validation remains enabled and usage is labelled `smoke`. | The smoke flag accepts only the fixed canary message. Migration 0045 extends `CK_usage_role`; the paired down batch refuses rollback while smoke usage rows remain so usage attribution is not rewritten or deleted. No tool schema, web surface, or deploy workflow changes. | Implemented and tested offline; deployed hosted-agent/model acceptance remains pending |
 | 2026-10-12 | P9-84 reuses Foundry hosted chat sessions with a deterministic UUIDv5 derived from authenticated owner + Jarvis conversation session, query-only affinity, and one content-free no-affinity retry for HTTP 4xx. Set the deploy-time idle timeout to 3600 seconds; continue loading verified backend history on every invocation. Preserve Dan's selected chat model and reasoning effort. | The issue's 5–10 s first-delta model interval and ~15,000-character prompt do not reveal a time split between prompt processing and reasoning; provider timings report only the aggregate. Fixed-name, bounded `chat.agent_session` and `chat.latency` events provide the next production evidence. No capability instruction or tool schema is changed; a future prompt experiment may remove only proven duplicate prose, preserving capabilities and L120/L121. | Implemented and tested offline; Foundry cold/warm behavior and latency improvement require coordinator verification after deploy |
@@ -3541,7 +3712,7 @@ Windows/Chrome/Jev speedup remains live acceptance.
 | 2026-10-12 | User-directed: every tool confirmation (Google calendar/mail, issue creation, project archive, public screenshot) completes on a plain approval such as yes, approved, confirmed, go ahead (Danish equivalents too). No exact phrases or codes are spoken or typed. Safeguards stay: only Dan, only a later message, whole-message match (a reply that asks for anything else is not approval), 10-minute expiry, and only the latest pending action per scope can be approved. | Dan was on the move and Jarvis demanded 'confirm 74483420' by voice; this was a generic backend problem, not a Google one (closes the intent of #601, also relevant to #725). | Active |
 | 2026-10-12 | The backend tool catalogue is capped at 128 tools, 4,000 characters per description and 1 MiB, enforced when the registry is built and mirrored in agents/jarvis/limits.json. Related tools are merged into one tool with an operation parameter rather than added one by one. | #737 added about 25 GitHub tools and pushed the catalogue past the agent's 128-tool limit, so the agent rejected the whole catalogue and every chat turn failed (reverted in #744). | Active |
 | 2026-10-13 | The production database relies on Azure point-in-time restore (about seven days, locally redundant backup storage). A restore to a temporary copy was drilled and verified (P6-04, #65): 67 of 67 tables, counts match except rows written after the restore point; documented in docs/runbook.md. No long-term retention or geo-redundant backup is configured, which is an accepted risk for now and a candidate for Dan to revisit. | #65 was closed on 3 October with no drill performed; the drill was run for real on 13 October and the gap is now documented. | Active |
-| 2026-10-08 | P9-33 exposes explicit vault-note deletion through the shared sensitive tool registry. Reuse the GitHub App Contents-write client and require a present-mode Now confirmation naming the exact path; recheck the note SHA after approval, then remove its index rows and invalidate the graph cache. | Existing Contents API SHA protection, `TeamsNotificationService.runConfirmed`, and `VaultIndexStore.deleteFiles` cover the provider, approval and cleanup boundaries. No migration or web change is needed; focused fake-GitHub tests cover approval gating, concurrent edits, commit metadata, index removal and graph invalidation. | Implemented offline; live GitHub App access remains unverified |
+| 2026-10-08 | P9-33 exposes explicit vault-note deletion through the shared sensitive tool registry. Reuse the GitHub App Contents-write client and require a present-mode Now confirmation naming the exact path; recheck the note SHA after approval, then remove its index rows and invalidate the graph cache. | Existing Contents API SHA protection, `OwnerInteractionService.runConfirmed`, and `VaultIndexStore.deleteFiles` cover the provider, approval and cleanup boundaries. No migration or web change is needed; focused fake-GitHub tests cover approval gating, concurrent edits, commit metadata, index removal and graph invalidation. | Implemented offline; live GitHub App access remains unverified |
 | 2026-10-08 | P9-31 adds `get_usage` through the existing agent-only tool registry and usage store. Reuse the shared usage period/entry contracts, support the current UTC day, and group spend by role/source and model without hiding estimated or unverified costs. Redact the financial result from durable generic tool-call audit records; add no migration or web changes. | `UsageStore.list` already bounds and groups persisted usage, including active sandbox estimates and cost coverage. Backend tests cover today’s UTC interval, per-area/model aggregation, cost status, tool registration and sensitive audit redaction. | Implemented offline; live provider billing remains unverified |
 | 2026-10-07 | P9-22 exposes owner-authenticated `/phone/status` and a 20-call history through the existing shared contracts and `phone_sessions` table. Keep phone calling dormant unless Dan provisions Teams/ACS and a Teams Phone number; status configuration is not a provider health check. Do not return caller or call IDs, and do not add a migration or web changes. | P6-22 keeps Teams unprovisioned in production; P7-01 records that no phone number was purchased. Backend tests cover owner auth, unavailable history, sanitized failure, bounded history and status mapping. No Azure CLI/live Azure access was available, so current number, ACS resource and callback delivery remain unverified. | Implemented offline; production setup and live callbacks unverified |
 | 2026-10-07 | P9-18 puts `/now/events` event names and payloads plus task-event stream messages in `@jarvis/contracts`, with strict type guards. Route both streams through one typed backend SSE formatter while preserving authentication, replay IDs, heartbeat behavior, and `sseHeaders`; do not add a migration or change the web client. | Existing shared activity, background-job, workspace-command, and task-store contracts supply the payload types. Contract tests cover all Now event names and task-event shapes, and backend tests cover frame formatting and existing stream behavior. | Implemented offline; UI parser migration remains separate |

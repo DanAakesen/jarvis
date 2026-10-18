@@ -31,6 +31,42 @@ afterAll(async () => {
 });
 
 describe('SQL conversation store', () => {
+  it('reads recent user chat text across sessions, excluding voice, phone and assistant messages', async () => {
+    const store = createConversationStore(pool);
+    await expect(store.readRecentUserMessages()).resolves.toEqual([]);
+    const chat = await store.createSession({ channel: 'chat', language: 'da' });
+    const otherChat = await store.createSession({ channel: 'chat', language: 'en' });
+    const voice = await store.createSession({ channel: 'voice', language: 'en' });
+    const phone = await store.createSession({ channel: 'phone', language: 'da' });
+    const fixtureRequest = () => pool.request()
+      .input('chat', sql.BigInt, BigInt(chat.id)).input('otherChat', sql.BigInt, BigInt(otherChat.id))
+      .input('voice', sql.BigInt, BigInt(voice.id)).input('phone', sql.BigInt, BigInt(phone.id));
+    const expected: string[] = [];
+    for (let index = 0; index < 7; index += 1) {
+      const sessionId = index % 2 ? chat.id : otherChat.id;
+      const text = `User ${index}: æøå`;
+      expected.unshift(text);
+      await store.addMessage({ sessionId, role: 'dan', text, model: null });
+      await store.addMessage({ sessionId, role: 'jarvis', text: `Assistant ${index}`, model: 'fixture' });
+    }
+    await store.addMessage({ sessionId: voice.id, role: 'dan', text: 'Excluded voice transcript', model: null });
+    await store.addMessage({ sessionId: phone.id, role: 'dan', text: 'Excluded phone transcript', model: null });
+    // Tied timestamps must not make the newest text nondeterministic.
+    await fixtureRequest()
+      .query(`UPDATE dbo.messages SET at = '2026-10-18T12:00:00'
+        WHERE jarvis_session_id IN (@chat, @otherChat, @voice, @phone);`);
+    await expect(store.readRecentUserMessages()).resolves.toEqual(expected.slice(0, 5));
+    await expect(store.readRecentUserMessages(1)).resolves.toEqual(expected.slice(0, 1));
+    await expect(store.readRecentUserMessages(20)).resolves.toEqual(expected);
+    await expect(store.readRecentUserMessages(21)).rejects.toThrow(RangeError);
+    const count = await fixtureRequest()
+      .query<{ count: number }>('SELECT COUNT(*) AS count FROM dbo.messages WHERE jarvis_session_id IN (@chat, @otherChat, @voice, @phone);');
+    expect(count.recordset[0]?.count).toBe(16);
+    await fixtureRequest()
+      .query(`DELETE FROM dbo.messages WHERE jarvis_session_id IN (@chat, @otherChat, @voice, @phone);
+        DELETE FROM dbo.jarvis_sessions WHERE id IN (@chat, @otherChat, @voice, @phone);`);
+  });
+
   it('retains the last bounded visual result on the existing message without retaining image bytes', async () => {
     const store = createConversationStore(pool);
     const session = await store.createSession({ channel: 'voice', language: 'en' });

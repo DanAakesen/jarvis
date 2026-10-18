@@ -24,7 +24,6 @@ import { createSleepModule } from './operations/sleep.js';
 import { createScreenVisionModule } from './vision/screen.js';
 import { createVisionWatchModule } from './vision/watch.js';
 import { createVoiceRelayModule } from './voice/relay.js';
-import { createAskDanToConfirmTool } from './teams/service.js';
 import { createProductionModules } from './production-modules.js';
 import { createToolRegistry } from './core/tool-registry.js';
 import { checkAgentContract } from './core/agent-contract.js';
@@ -41,11 +40,6 @@ const dailyToolNames = [
 // Daily is composed by default here so the size gates below always cover the largest catalogue the server can run.
 function modulesWithEveryFeature(options: { daily?: boolean } = {}) {
   const frameStore = new FrameStore();
-  const teamsModule = {
-    id: 'teams',
-    tools: [createAskDanToConfirmTool({} as never)],
-    registerRoutes: async () => {},
-  };
   return createProductionModules({
     core: coreModule,
     conversation: createConversationModule(frameStore),
@@ -74,7 +68,6 @@ function modulesWithEveryFeature(options: { daily?: boolean } = {}) {
       pool: {} as never,
       ownerObjectId: '11111111-1111-4111-8111-111111111111',
     }),
-    teamsBot: teamsModule,
   });
 }
 
@@ -116,7 +109,7 @@ describe('production tool catalogue', () => {
       'core', 'conversation', 'factory', 'operations', 'task-recipes', 'vault', 'web-research',
       'html-research', 'google', 'github-webhook', 'pc-bridge', 'phone', 'phone-status',
       'browser-agent', 'image-generation', 'html-view', 'weather', 'folio', 'workspace-pins',
-      'screen-vision', 'vision-watch', 'voice', 'daily', 'teams',
+      'screen-vision', 'vision-watch', 'voice', 'daily',
     ]);
   });
 

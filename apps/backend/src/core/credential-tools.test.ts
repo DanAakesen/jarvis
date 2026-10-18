@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildApp } from '../app.js';
 import { loadConfig } from '../config.js';
 import type { CredentialStatus, CredentialStatusStore } from '../credentials/credential-status.js';
-import type { TeamsNotificationService } from '../teams/service.js';
+import type { OwnerInteractionService } from './owner-interactions.js';
 import type { ToolCallRecord } from './tool-calls.js';
 import { coreModule } from './index.js';
 import { ToolRefusal } from './tool-registry.js';
@@ -59,7 +59,7 @@ function fixture(options: {
       renewCodexCredential: renew,
     }),
     ...(!options.unavailable ? {
-      teamsNotifications: { runConfirmed } as unknown as TeamsNotificationService,
+      ownerInteractions: { runConfirmed } as unknown as OwnerInteractionService,
     } : {}),
     toolCallStore: { record },
   });

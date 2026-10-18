@@ -41,6 +41,7 @@ function fixture(agent: ConversationAgent) {
     })),
     getDanMessageIdBySourceItemId: vi.fn(async () => null),
     getDanMessagesAfter: vi.fn(async () => []),
+    readRecentUserMessages: vi.fn(async () => []),
     getHistory: vi.fn(async () => ({ messages: [], nextCursor: null })),
   };
   const app = buildApp(config, undefined, {

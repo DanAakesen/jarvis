@@ -28,8 +28,6 @@ declare module 'fastify' {
     jarvisRunner?: boolean;
     jarvisPcBridge?: boolean;
     githubWebhook?: boolean;
-    teamsBot?: boolean;
-    teamsAudio?: boolean;
     jarvisPhoneEvents?: boolean;
     jarvisPhoneMedia?: boolean;
     jarvisPhoneCallback?: boolean;
@@ -73,7 +71,6 @@ export function installAuthentication<Logger extends FastifyBaseLogger>(app: Fas
     if (request.routeOptions.config?.jarvisDailyMcpMetadata === true &&
         request.routeOptions.url === dailyMcpMetadataPath && ['GET', 'HEAD'].includes(request.method)) return;
     if (request.routeOptions.config?.githubWebhook === true) return;
-    if (request.routeOptions.config?.teamsBot === true || request.routeOptions.config?.teamsAudio === true) return;
     if (request.method === 'GET' && request.routeOptions.url === '/phone/media' &&
         request.routeOptions.config?.jarvisPhoneMedia === true) return;
     if (request.method === 'POST' && request.routeOptions.url === '/phone/callback' &&

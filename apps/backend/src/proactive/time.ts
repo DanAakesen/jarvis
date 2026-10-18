@@ -39,6 +39,20 @@ export function dayKey(date: Date): string {
   return localDate(date);
 }
 
+export function copenhagenDayStart(date: Date): Date {
+  const target = Date.parse(`${localDate(date)}T00:00:00Z`);
+  let candidate = target;
+  for (let iteration = 0; iteration < 4; iteration++) {
+    const value = parts(new Date(candidate));
+    const observed = Date.UTC(
+      Number(value.year), Number(value.month) - 1, Number(value.day),
+      Number(value.hour), Number(value.minute),
+    );
+    candidate += target - observed;
+  }
+  return new Date(candidate);
+}
+
 export function localTimeLabel(date: Date): string {
   const value = parts(date);
   return `${value.hour}:${value.minute}`;
@@ -74,6 +88,31 @@ export function localSlotInstant(key: string): Date {
   const instant = new Date(candidate);
   if (`${localDate(instant)}T${localTimeLabel(instant)}` !== key) {
     throw new RangeError('Proactive slot does not exist in Copenhagen time');
+  }
+  return instant;
+}
+
+export function localDateTimeInstant(date: string, time: string): Date {
+  if (!/^\d{2}:\d{2}$/u.test(time)) throw new RangeError('Invalid Copenhagen time');
+  const [year, month, day] = dateParts(date);
+  const [hour, minute] = time.split(':').map(Number);
+  if (hour! > 23 || minute! > 59) throw new RangeError('Invalid Copenhagen time');
+  const key = `${date}T${time}`;
+  const target = Date.UTC(year, month - 1, day, hour, minute);
+  let candidate = target;
+  for (let iteration = 0; iteration < 4; iteration += 1) {
+    const value = parts(new Date(candidate));
+    const observed = Date.UTC(
+      Number(value.year), Number(value.month) - 1, Number(value.day),
+      Number(value.hour), Number(value.minute),
+    );
+    const difference = target - observed;
+    if (difference === 0) break;
+    candidate += difference;
+  }
+  const instant = new Date(candidate);
+  if (`${localDate(instant)}T${localTimeLabel(instant)}` !== key) {
+    throw new RangeError('Copenhagen time does not exist');
   }
   return instant;
 }

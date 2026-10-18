@@ -2,10 +2,9 @@ import { describe, expect, it, vi } from 'vitest';
 import { buildApp } from '../app.js';
 import { loadConfig } from '../config.js';
 import type { ConversationStore } from '../core/conversation-store.js';
-import type { AwayModeStore } from '../core/away-mode.js';
 import { createEventHub } from '../core/event-hub.js';
+import type { OwnerInteractionService } from '../core/owner-interactions.js';
 import type { TaskStatusNotificationStore } from '../database/task-status-notification-store.js';
-import type { TeamsNotificationService } from '../teams/service.js';
 import type { TaskEventHub, TaskEventMessage, TaskStore } from './task-store.js';
 import { createTaskStatusNotificationHandler } from './task-status-notifications.js';
 
@@ -24,7 +23,7 @@ function event(type: string, payload: unknown): TaskEventMessage {
   };
 }
 
-function fixture(away = false, persistedKeys = new Set<string>()) {
+function fixture(persistedKeys = new Set<string>()) {
   const task = {
     originMessageId: '11',
     events: [{
@@ -49,8 +48,6 @@ function fixture(away = false, persistedKeys = new Set<string>()) {
     })),
     addMessage: vi.fn(async () => null),
   } as unknown as ConversationStore;
-  const awayMode = { read: vi.fn(async () => ({ mode: away ? 'away' : 'present', source: away ? 'manual' : 'browser', changedAt: null })) } as unknown as AwayModeStore;
-  const teams = { notify: vi.fn(async () => {}) } as unknown as TeamsNotificationService;
   const notifications: TaskStatusNotificationStore = {
     claim: vi.fn(async (taskId, state) => {
       const key = `${taskId}:${state}`;
@@ -62,12 +59,10 @@ function fixture(away = false, persistedKeys = new Set<string>()) {
   const handler = () => createTaskStatusNotificationHandler({
     tasks,
     conversations,
-    awayMode,
-    teams,
     notifications,
     onError: vi.fn(),
   });
-  return { handler, tasks, conversations, awayMode, teams, notifications, persistedKeys };
+  return { handler, tasks, conversations, notifications, persistedKeys };
 }
 
 describe('task status notifications', () => {
@@ -105,15 +100,6 @@ describe('task status notifications', () => {
     expect(test.notifications.claim).toHaveBeenNthCalledWith(2, '42', 'pull_request_opened');
   });
 
-  it('routes away-mode updates through Teams instead of the conversation', async () => {
-    const test = fixture(true);
-
-    await test.handler()(event('state_changed', { from: 'Running', to: 'Done', pullRequestUrl }));
-
-    expect(test.teams.notify).toHaveBeenCalledWith('success', `Task 42 is done (PR: ${pullRequestUrl}).`);
-    expect(test.conversations.addMessage).not.toHaveBeenCalled();
-  });
-
   it('still posts into the originating conversation after its voice session has ended', async () => {
     const test = fixture();
     vi.mocked(test.conversations.getSession).mockResolvedValue({
@@ -135,8 +121,8 @@ describe('task status notifications', () => {
 
   it('deduplicates the task/state key when the handler is recreated after restart', async () => {
     const persistedKeys = new Set<string>();
-    const first = fixture(false, persistedKeys);
-    const second = fixture(false, persistedKeys);
+    const first = fixture(persistedKeys);
+    const second = fixture(persistedKeys);
     const done = event('state_changed', { from: 'Running', to: 'Done', pullRequestUrl });
 
     await first.handler()(done);
@@ -164,11 +150,19 @@ describe('task status notifications', () => {
     } as unknown as ConversationStore;
     const app = buildApp({ ...loadConfig({}), logLevel: 'silent' }, undefined, {
       eventHub,
-      taskStore: { get: vi.fn(async () => ({ originMessageId: '11', events: [] })) } as unknown as TaskStore,
+      taskStore: { get: vi.fn(async () => ({
+        originMessageId: '11',
+        events: [{
+          id: '19',
+          type: 'pull_request_opened',
+          summary: null,
+          payload: { url: pullRequestUrl },
+          payloadTruncated: false,
+          source: 'backend',
+          at: '2026-10-05T00:00:00.000Z',
+        }],
+      })) } as unknown as TaskStore,
       conversationStore: conversations,
-      awayModeStore: {
-        read: vi.fn(async () => ({ mode: 'present', source: 'browser', changedAt: null })),
-      } as unknown as AwayModeStore,
       taskStatusNotificationStore: { claim: vi.fn(async () => true) },
     });
 
@@ -177,8 +171,66 @@ describe('task status notifications', () => {
       await expect(delivered).resolves.toMatchObject({
         sessionId: '5',
         role: 'jarvis',
-        text: 'Task 42 was cancelled.',
+        text: `Task 42 was cancelled (PR: ${pullRequestUrl}).`,
       });
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('keeps Away pull-request and terminal status updates in the app without channel notifications', async () => {
+    const eventHub: TaskEventHub = createEventHub<TaskEventMessage>();
+    const messages: unknown[] = [];
+    const conversations = {
+      getMessageSessionId: vi.fn(async () => '5'),
+      getSession: vi.fn(async () => ({
+        id: '5',
+        channel: 'chat' as const,
+        language: 'en' as const,
+        startedAt: new Date('2026-10-05T00:00:00.000Z'),
+        endedAt: null,
+      })),
+      addMessage: vi.fn(async (message: unknown) => { messages.push(message); return null; }),
+    } as unknown as ConversationStore;
+    const notify = vi.fn(async () => {});
+    const app = buildApp({ ...loadConfig({}), logLevel: 'silent' }, undefined, {
+      eventHub,
+      taskStore: { get: vi.fn(async () => ({
+        originMessageId: '11',
+        events: [{
+          id: '19',
+          type: 'pull_request_opened',
+          summary: null,
+          payload: { url: pullRequestUrl },
+          payloadTruncated: false,
+          source: 'backend',
+          at: '2026-10-05T00:00:00.000Z',
+        }],
+      })) } as unknown as TaskStore,
+      conversationStore: conversations,
+      awayModeStore: {
+        read: vi.fn(async () => ({ mode: 'away', source: 'manual', changedAt: null })),
+      },
+      ownerInteractions: { notify } as unknown as OwnerInteractionService,
+      taskStatusNotificationStore: { claim: vi.fn(async () => true) },
+    });
+    const events = [
+      event('pull_request_opened', { url: pullRequestUrl }),
+      event('state_changed', { from: 'Running', to: 'Done', pullRequestUrl }),
+      event('state_changed', { from: 'Running', to: 'NeedsAttention' }),
+      event('state_changed', { from: 'Running', to: 'Cancelled' }),
+    ];
+
+    try {
+      for (const update of events) eventHub.publish(update);
+      await vi.waitFor(() => expect(messages).toHaveLength(4));
+      expect(messages).toEqual(expect.arrayContaining([
+        expect.objectContaining({ text: `Task 42 opened a pull request (PR: ${pullRequestUrl}).` }),
+        expect.objectContaining({ text: `Task 42 is done (PR: ${pullRequestUrl}).` }),
+        expect.objectContaining({ text: `Task 42 needs attention (PR: ${pullRequestUrl}).` }),
+        expect.objectContaining({ text: `Task 42 was cancelled (PR: ${pullRequestUrl}).` }),
+      ]));
+      expect(notify).not.toHaveBeenCalled();
     } finally {
       await app.close();
     }

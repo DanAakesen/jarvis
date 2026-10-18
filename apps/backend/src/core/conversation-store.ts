@@ -96,6 +96,8 @@ export interface ConversationStore {
   getDanMessageIdBySourceItemId(sourceItemId: string): Promise<string | null>;
   getMessageSessionId?(messageId: string): Promise<string | null>;
   getLatestDanMessageText?(sessionId: string): Promise<string | null>;
+  /** Newest-first user chat text only; defaults to five messages and permits at most twenty. */
+  readRecentUserMessages(limit?: number): Promise<string[]>;
   getHistory(input: {
     readonly limit: number;
     readonly before?: string;
