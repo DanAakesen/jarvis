@@ -53,6 +53,32 @@ export function copenhagenDayStart(date: Date): Date {
   return new Date(candidate);
 }
 
+export function copenhagenDateStart(value: string): Date {
+  if (!/^\d{4}-\d{2}-\d{2}$/u.test(value)) throw new RangeError('Invalid Copenhagen date');
+  const [year, month, day] = value.split('-').map(Number);
+  const targetDate = new Date(0);
+  targetDate.setUTCFullYear(year!, month! - 1, day!);
+  targetDate.setUTCHours(0, 0, 0, 0);
+  if (targetDate.toISOString().slice(0, 10) !== value) throw new RangeError('Invalid Copenhagen date');
+  const target = targetDate.getTime();
+  let candidate = target;
+  for (let iteration = 0; iteration < 4; iteration++) {
+    const represented = parts(new Date(candidate));
+    const local = Date.UTC(
+      Number(represented.year), Number(represented.month) - 1, Number(represented.day),
+      Number(represented.hour), Number(represented.minute),
+    );
+    const adjustment = target - local;
+    candidate += adjustment;
+    if (adjustment === 0) break;
+  }
+  const instant = new Date(candidate);
+  if (`${localDate(instant)}T${localTimeLabel(instant)}` !== `${value}T00:00`) {
+    throw new RangeError('Copenhagen midnight does not exist');
+  }
+  return instant;
+}
+
 export function localTimeLabel(date: Date): string {
   const value = parts(date);
   return `${value.hour}:${value.minute}`;

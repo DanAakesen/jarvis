@@ -1980,6 +1980,28 @@ unavailable; no fallback location or geocoding is used. All source errors are
 mapped to stable unavailable reason codes. This slice enables no flags and
 starts no source reads.
 
+## Proactive calendar, mail and travel sources (P13-08; default off)
+
+The source registry also constructs the `calendar`, `mail` and `travel` sources
+from the existing Google API client; the `x` placeholder remains unavailable.
+P13-08 adds source implementations to the existing registry; constructing them
+does not read Google, and no schedule, model call or proactive delivery is added.
+
+The calendar reader reuses the existing primary-calendar view path, expanding
+recurrences and bounding reads to 50 events over two pages. All-day dates resolve
+to Europe/Copenhagen local midnight through the shared DST-aware time helper.
+Calendar facts omit descriptions, conferencing and attendee/organizer addresses.
+Mail searches the primary inbox for unread messages from the last two days and
+reads at most 15 messages, with five concurrent metadata-only requests for
+From/Subject/Date/List-Unsubscribe/Precedence. It never requests body, snippet or
+attachment fields; bulk/newsletter messages are skipped and sender addresses are
+reduced to a display name or domain. Travel reuses the calendar reader over seven
+days and applies exported `TRAVEL_KEYWORDS` and `TRAVEL_ROUTE_PATTERN`
+Danish/English whole-word and airport-route rules; it calls no travel provider
+and excludes starts in the calendar's half-open 48-hour window. All sources
+bound fact text, treat provider text as untrusted data, and return stable
+unavailable reason codes without logging it.
+
 ## Web push delivery (P13-02; default off)
 
 The web build exposes only the boolean result of `VITE_PUSH_ENABLED === "true"`

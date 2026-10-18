@@ -288,6 +288,21 @@ Open-Meteo request; no default location or geocoding is allowed. Each source is
 registered, but no source is invoked and no proactive flag is enabled by this
 slice.
 
+## Keep P13-08 sources read-only and dark (18 October 2026)
+
+P13-08 adds only read-only, bounded calendar and Gmail-header sources and a
+travel source derived exclusively from the calendar. Calendar uses the existing
+primary-calendar view path, expands recurring instances, and reads at most 50
+events over two pages within 48 hours. Gmail searches at most 15 unread primary
+inbox messages from the last two days and requests only From, Subject, Date,
+List-Unsubscribe and Precedence metadata, with no body, snippet or attachments.
+Travel reads seven calendar days, filters with deterministic exported keywords
+and route syntax, and omits events already inside the calendar window. It makes
+no flight, rail, traffic or disruption-provider request. No OAuth scope,
+consent, secret, cloud setting, flag activation, engine behavior or entry-point
+change accompanies these sources; source text remains untrusted and is never
+logged.
+
 ## Keep web push default-off and notification taps owner-authenticated (17 October 2026; P13-02)
 
 Implement the web half of the delivery proof behind the exact-string

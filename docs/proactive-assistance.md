@@ -140,6 +140,23 @@ HTTPS Open-Meteo request; it does not geocode or invent a location. All three
 sources return stable unavailable reasons and remain dormant until later engine
 work explicitly reads them.
 
+## Calendar, mail and travel readers (18 October 2026; P13-08)
+
+P13-08 adds source implementations but does not invoke them, schedule work, call a
+model, create a timer or send proactive alerts. Calendar reads the primary
+calendar from now to 48 hours ahead, expands recurrences and uses at most 50
+events in two pages. All-day instants are Europe/Copenhagen local midnights,
+including DST changes; facts exclude attendee/organizer addresses, descriptions
+and conference links. Mail lists at most 15 unread primary-inbox messages from the
+prior two days and requests only From, Subject, Date, List-Unsubscribe and
+Precedence metadata; it never requests bodies, snippets or attachments and skips
+bulk/newsletter mail. Travel reuses calendar data from now to seven days ahead,
+excludes starts inside the calendar's half-open 48-hour range, and uses exported
+`TRAVEL_KEYWORDS` and `TRAVEL_ROUTE_PATTERN` for deterministic English/Danish
+whole words and three-letter airport routes. It has no travel provider or
+disruption data. All sources are read-only, bounded, fail to stable unavailable
+states, and sanitize untrusted text before returning facts.
+
 ## Confirmed web slice (18 October 2026; P13-10)
 
 The Proactive page, full item detail, one Settings section, navigation entry and
