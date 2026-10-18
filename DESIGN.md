@@ -1327,4 +1327,43 @@ region rather than crushing dates and unknown values into single-character
 columns at320px. This source is default-off and synthetic-browser inspection
 does not establish live records, import completeness or physical-phone acceptance.
 
+18 October overview first (P12-15 / #730): Dan could not tell what was built, so
+Daily opens on an overview, not a table. Under one h1 and one line of body text,
+"What Daily holds today" lists a row per collection the backend exposes: its name,
+a text status, one plain sentence on what it is for (static copy, no figures),
+whether it is limited to the last seven days (Europe/Copenhagen), the time it was
+read and an Open button. Open takes that collection into the record browser above;
+Back to overview returns with focus on the row just opened. The overview shows no
+counts, totals, averages or charts, because nothing it can read cheaply is one. A
+read-only check of one record decides the status: Has records, None returned
+(older records may exist; this does not prove the original source is empty) or
+Could not read (the safe failure sentence, with Retry beside Open). Status is an
+icon and a word, never colour alone.
+
+Checking is the shared inline text loader inside the status pill. A settled
+result stays visible while the next read runs, so a refresh never blanks the list;
+only a failed row returns to Checking, because it is being retried and should not
+repeat an old error. Availability loading uses the shared rows loader. An
+availability failure is one alert with Retry availability, a backend with no
+browsable collection says so, and Refresh overview exists only while there are
+rows. Reads run two at a time because the backend shares a small SQL pool with
+chat. On a 390 px phone each row is one column, with Open and Retry side by side
+and 44 px tall; from 760 px the actions sit at the right of the row. The page
+reuses the existing Daily layout, the secondary button and the existing colour,
+radius and spacing tokens. The only motion is a short fade when a status changes,
+which reduced motion removes.
+
+Checked in an isolated headless Chromium, rendering the real overview with the
+real stylesheet over a synthetic `fetch`, at 390×844 touch in dark and light, 320
+dark, 768 light and 1280 dark. States seen: every row checking, settled rows, none
+returned, a failed row with Retry and its recovery, availability errors (not
+found, forbidden, unavailable), a backend with no browsable collection, a hanging
+availability request, Open to the browser and Back, a refresh in progress and the
+keyboard focus ring. No horizontal overflow at any of those widths, and Open and
+Retry measured 44 px tall. The console showed only Vite and React development
+notices on the page inspected. Limits: synthetic responses with no live backend,
+private data or real sign-in; the harness has no 3D stage, header or MSAL;
+`prefers-reduced-motion` was not emulated; the Daily-off path is covered by the
+App tests, not the browser. Local runs are not qualification.
+
 Confirmed by Dan for #730/#731/#732/#726: all migrated React/rich UI fully follows the current Jarvis layout and styling. Current DESIGN.md direction, `apps/web/src/styles.css` tokens, shared components, theme/density/motion settings and native phone/workspace patterns are the source of truth. Preserve capabilities and data semantics while restyling/recomposing legacy Daily content; do not carry its navy/plum/card skin, create a second theme or replace the shared shell, voice or window manager. Generated/ad-hoc views receive only safe trusted Jarvis theme context through the existing bridge, without widened permissions. UI issues require full mobile-first real-browser visual acceptance. P12-03 remains backend/schema-only; this records the standing direction, not completed visual work.

@@ -3,7 +3,7 @@ import { FactoryArea } from './factory/FactoryArea';
 import { UsagePage } from './usage/UsagePage';
 import { NotesArea } from './notes/NotesArea';
 import { StatusPage } from './status/StatusPage';
-import { DailyPage } from './daily/DailyPage';
+import { DailyHome } from './daily/DailyHome';
 
 export interface AreaProps {
   backendUrl: string | null;
@@ -36,7 +36,7 @@ export const areas: readonly Area[] = [
 ];
 
 const withDaily: readonly Area[] = [
-  { id: 'daily', label: 'Daily', path: 'daily', navigation: [{ label: 'Daily', path: '/daily' }], Component: DailyPage },
+  { id: 'daily', label: 'Daily', path: 'daily', navigation: [{ label: 'Daily', path: '/daily' }], Component: DailyHome },
   ...areas,
 ];
 

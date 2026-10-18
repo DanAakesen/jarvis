@@ -1143,6 +1143,23 @@ clears a target when its field is emptied. It ships no defaults, placeholders or
 example figures, and a failed load or save shows page-owned wording, never server
 text. No activation or acceptance is implied.
 
+The Daily page (P12-15 / #730) opens on an overview so Dan can see what is
+actually stored before he browses it. For each retained collection the backend
+exposes (measurements, sleep, workouts, food history, saved favourites, meal
+plans, brief history and sync evidence) it says in plain English what the
+collection is for, and whether a read-only one-record check found records, found
+none or could not read it. "None returned" never claims the original source is
+empty, and the overview shows no invented counts, totals or estimates. Open goes
+to the existing record browser, which keeps its periods, paging, details, units
+and source/freshness labels. The page uses only the existing owner-authorised
+`/daily/capabilities` and `/daily/query` reads, so it adds no writer, provider,
+device, private-data or consent path. It exists only when the web build switch
+`VITE_DAILY_ENABLED` is exactly `true`; the switch is off by default and this
+change sets it in no environment, so Daily off leaves the released navigation
+unchanged. Switching it on for Dan's account is a separate, reviewed change that
+he pre-authorised once the page is live and checked. No activation or acceptance
+is implied.
+
 When an existing Frida adapter is explicitly supplied, owner-authenticated
 `daily_food_lookup` exposes only its public-reference component lookup.
 Keep generic food names, requested grams or explicit unknowns, preparation,
