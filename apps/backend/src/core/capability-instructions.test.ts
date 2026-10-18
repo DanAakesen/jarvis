@@ -96,9 +96,13 @@ describe('shared navigation capability instructions', () => {
     for (const page of workspaceNavigationPages) expect(instructions).toContain(`"${page}"`);
     for (const section of workspaceSettingsSections.filter((value) => value !== 'backend')) expect(instructions).toContain(`"${section}"`);
     expect(instructions).not.toContain('or "backend" by name');
-    for (const alias of ['Kanban', 'board', 'factory', 'tasks', 'Software Factory', 'Go home', 'back to Jarvis']) {
+    for (const alias of ['Kanban', 'board', 'factory', 'Software Factory', 'Go home', 'back to Jarvis']) {
       expect(instructions).toContain(`"${alias}"`);
     }
+    expect(instructions).toContain('"My tasks"');
+    expect(instructions).toContain('vault_search with kind tasks');
+    expect(instructions).not.toContain('vault_tasks');
+    expect(instructions).not.toContain('"tasks"');
     expect(instructions).toContain('section is settings-only; taskId and issueNumber are factory-only');
     expect(instructions).toContain('use renew_credential with name "codex-login"');
     expect(instructions).toContain('issueNumber as a positive integer');

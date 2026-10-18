@@ -9,6 +9,16 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
 afterEach(() => { vi.unstubAllGlobals(); });
 
 describe('presence modes', () => {
+  it('returns focus after outside dismissal from a presence option', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => json({ mode: 'present', source: 'dan', changedAt: null })));
+    render(<PresenceChip backendUrl="https://api.example.com" getAccessToken={getAccessToken} />);
+    const trigger = await screen.findByRole('button', { name: 'Presence: Present. Change mode' });
+    fireEvent.click(trigger);
+    screen.getByRole('button', { name: 'Away' }).focus();
+    fireEvent.pointerDown(document.body);
+    expect(screen.queryByRole('group', { name: 'Presence mode' })).toBeNull();
+    expect(document.activeElement).toBe(trigger);
+  });
   it('shows the live mode in the top bar, switches it and follows mode changes made by Jarvis', async () => {
     const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
       if (init?.method === 'PUT') return json({ mode: JSON.parse(String(init.body)).mode, source: 'dan', changedAt: '2026-10-06T20:00:00.000Z' });

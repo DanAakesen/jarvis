@@ -60,7 +60,7 @@
   width: min(420px, calc(100% - 24px));
   box-sizing: border-box;
   margin: 0 auto var(--space-3);
-  padding: 10px 14px;
+  padding: var(--space-3) var(--space-4);
   border-radius: var(--radius-control);
   background: var(--surface-translucent);
   color: var(--text);
@@ -83,7 +83,7 @@
   .app-shell[data-phone="true"][data-voice-active="true"] .jarvis-stage[data-failed="true"]::after {
     top: auto; bottom: var(--jarvis-orb-dock-bottom); width: calc(2 * var(--jarvis-orb-dock-radius)); transform: translateX(-50%);
   }
-  .jarvis-stage-fallback { padding: 8px 10px; }
+  .jarvis-stage-fallback { padding: var(--space-2) var(--space-3); }
 }
 
 /* A calmer room behind glass (Dan, 7 October): while a window or the conversation is open, a soft veil settles over

@@ -241,7 +241,9 @@ describe('Factory task board', () => {
     expect(within(card).getByRole('link', { name: '#42' }).getAttribute('href')).toBe('https://github.com/DanAakesen/jarvis/issues/42');
     expect(within(card).getByText('Updating tests')).not.toBeNull();
     expect(within(card).getByText(/2 attempts/)).not.toBeNull();
-    expect(within(card).getByText('copilot/fix-the-bug')).not.toBeNull();
+    const branch = within(card).getByText('copilot/fix-the-bug');
+    expect(branch.tagName).toBe('CODE');
+    expect(branch.getAttribute('title')).toBe('copilot/fix-the-bug');
 
     await user.selectOptions(screen.getByRole('combobox', { name: 'Agent' }), 'codex');
     expect(screen.getByRole('article', { name: 'Fix the bug' })).toBe(card);
@@ -369,7 +371,9 @@ describe('Factory task board', () => {
     expect(screen.getByRole('textbox', { name: 'Task title' })).toHaveProperty('value', 'Add coverage');
     expect(screen.getByRole('textbox', { name: 'Request' })).toHaveProperty('value', 'Cover retries');
     expect(screen.queryByRole('link', { name: 'issue #108' })).toBeNull();
-    expect(within(form).getByRole('button', { name: 'Create task' }).hasAttribute('disabled')).toBe(false);
+    const submit = within(screen.getByRole('dialog')).getByRole('button', { name: 'Create task' }) as HTMLButtonElement;
+    expect(submit.form).toBe(form);
+    expect(submit.hasAttribute('disabled')).toBe(false);
   });
 
   it('reuses the submission id after a network failure, dialog dismissal and remount', async () => {
@@ -480,7 +484,9 @@ describe('Factory task board', () => {
       fireEvent.submit(form);
     });
     await waitFor(() => expect(submittedTasks()).toHaveLength(1));
-    expect(within(form).getByRole('button', { name: 'Creating task…' }).hasAttribute('disabled')).toBe(true);
+    const submit = screen.getByRole('button', { name: 'Creating task…' }) as HTMLButtonElement;
+    expect(submit.form).toBe(form);
+    expect(submit.hasAttribute('disabled')).toBe(true);
     fireEvent.submit(form);
     expect(submittedTasks()).toHaveLength(1);
     finish(response({

@@ -151,8 +151,12 @@ describe('app-wide control contract', () => {
     expect(nutrition).toContain('min-height: 44px');
     expect(ruleDeclaration(workouts, /\.workouts-detail\s*>\s*h3\s*\{([^}]*)\}/, 'margin')).toBe('0');
     expect(overview).toContain('@media (prefers-reduced-motion: reduce)');
-    expect(ruleDeclaration(overview, /\.daily-summary-facts dt\s*\{([^}]*)\}/, 'grid-column')).toBe('1');
-    expect(ruleDeclaration(overview, /\.daily-summary-facts dd\s*\{([^}]*)\}/, 'grid-column')).toBe('2');
+    expect(ruleDeclaration(overview, /\.daily-summary \.daily-summary-grid\s*\{([^}]*)\}/, 'grid-template-columns')).toBe('minmax(0, 1fr)');
+    expect(overview).toContain('@media (min-width: 700px)');
+    expect(overview).toContain('grid-template-columns: repeat(2, minmax(0, 1fr))');
+    expect(overview).toContain('@media (min-width: 1200px)');
+    expect(overview).toContain('grid-template-columns: repeat(3, minmax(0, 1fr))');
+    expect(ruleDeclaration(overview, /\.daily-summary-tile\s*>\s*\.daily-freshness\s*\{([^}]*)\}/, 'margin-top')).toBe('auto');
     expect(shared).toContain('.daily-coverage-note > summary:focus-visible');
     expect(shared).toContain('min-height: 44px; align-content: center; cursor: pointer');
   });
@@ -223,7 +227,7 @@ describe('app-wide control contract', () => {
     expect(ruleDeclaration(shared, /\.state-message--error\s*\{([^}]*)\}/, 'border')).toBe('1px solid var(--rule)');
   });
 
-  it('keeps action group order in markup and the deployment form gap at 10px', () => {
+  it('keeps action group order in markup and the deployment form row gap on the spacing scale', () => {
     const actionGroups = ['button-group', 'settings-actions', 'task-dialog-actions', 'action-row', 'settings-save'];
     const rules = [...source.matchAll(/([^{}]+)\{([^{}]*)\}/g)];
     for (const [, selectors, declarations] of rules) {
@@ -232,7 +236,7 @@ describe('app-wide control contract', () => {
       }
     }
 
-    expect(ruleDeclaration(source, /\.deployment-add\s*\{([^}]*)\}/, 'row-gap')).toBe('10px');
+    expect(ruleDeclaration(source, /\.deployment-add\s*\{([^}]*)\}/, 'row-gap')).toBe('var(--space-3)');
   });
 
   it('keeps primary actions after sibling controls in shared action groups', () => {
@@ -318,8 +322,10 @@ describe('app-wide control contract', () => {
     expect(ruleDeclaration(parts, /\n\s*::-webkit-scrollbar-thumb\s*\{([^}]*)\}/, 'border-radius')).toBe('var(--radius-pill)');
     // The 1px glass ring overhangs its box, so a glass surface that scrolls must drop the ring or stop being the scroller.
     expect(ruleDeclaration(source, /\.knowledge-results\.luminous-glass::before\s*\{([^}]*)\}/, 'content')).toBe('none');
-    expect(ruleDeclaration(source, /\n\.modal\s*\{([^}]*)\}/, 'overflow')).toBe('visible');
-    expect(ruleDeclaration(source, /\n\.modal\s*\{([^}]*)\}/, 'max-height')).toBe('none');
+    expect(ruleDeclaration(source, /\n\.modal\s*\{([^}]*)\}/, 'overflow')).toBe('hidden');
+    expect(ruleDeclaration(source, /\n\.modal\s*\{([^}]*)\}/, 'max-height')).toBe('100%');
+    expect(ruleDeclaration(source, /\.modal\.luminous-glass::before\s*\{([^}]*)\}/, 'content')).toBe('none');
+    expect(ruleDeclaration(source, /\.modal-body\s*\{([^}]*)\}/, 'overflow')).toBe('auto');
   });
 
   it('reserves pills for labelled status and genuine switch tracks', () => {
@@ -373,7 +379,7 @@ describe('app-wide control contract', () => {
     expect(coarsePointerFields).toContain(':not([type="file"]):not([type="hidden"])');
     expect(coarsePointerFields).toContain('min-height: 44px;');
     expect(coarsePointerFields).toContain('min-height: 120px;');
-    expect(coarsePointerFields).toContain('font-size: 16px;');
+    expect(coarsePointerFields).toContain('font-size: var(--type-body);');
     expect(coarsePointerFields).toContain('.app-shell .composer textarea');
     expect(sharedFields).toMatch(/\.app-shell :is\(\.knowledge-search input, \.folio-search input\)\s*\{\s*min-height: 38px;\s*font: var\(--type-body\)\/var\(--line-body\) var\(--font-body\);/);
     expect(sharedFields).toContain('.form-control');
@@ -519,9 +525,9 @@ describe('shared glass tokens', () => {
       /\.app-shell\.app-shell\[data-phone="true"\]\[data-voice-active="false"\]\[data-home="false"\]:not\(\.app-signed-out\) \.shell-main\s*\{([^}]*)\}/,
       'padding-bottom');
     // Floor: the nominal dock, so a one-line composer looks as before. Growth: the live composer height, set from its measured box.
-    expect(clearance).toBe('max(calc(var(--dock-space) + 16px), calc(var(--phone-dock-bottom) + var(--conversation-composer-height, 52px) + 16px))');
+    expect(clearance).toBe('max(calc(var(--dock-space) + var(--space-4)), calc(var(--phone-dock-bottom) + var(--conversation-composer-height, var(--space-7)) + var(--space-4)))');
     expect(ruleDeclaration(styles, /\.app-shell\[data-phone="true"\]\[data-home="false"\] \.shell-main\s*\{([^}]*)\}/, 'padding-bottom'))
-      .toBe('calc(var(--dock-space) + 16px)');
+      .toBe('calc(var(--dock-space) + var(--space-4))');
     // The settings Save row stays a plain row at the end of the page (Dan, 8 October), so clearance is the fix, not a sticky pill.
     expect(ruleDeclaration(styles, /\.settings-page > \.settings-save\s*\{([^}]*)\}/, 'position')).toBe('static');
   });
@@ -556,7 +562,7 @@ describe('shared glass tokens', () => {
     const voice = readFileSync('src/VoiceControls.css', 'utf8');
     const toasts = readFileSync('src/ConversationToast.css', 'utf8');
     expect(styles).toContain('@media (max-width: 700px), (max-height: 500px) and (pointer: coarse) {\n  :root { --phone-dock-bottom: calc(env(safe-area-inset-bottom) + 16px); }');
-    expect(ruleDeclaration(styles, /\.app-shell\.app-signed-out\s*\{([^}]*)\}/, 'padding')).toBe('env(safe-area-inset-top) calc(env(safe-area-inset-right) + 20px) env(safe-area-inset-bottom) calc(env(safe-area-inset-left) + 20px)');
+    expect(ruleDeclaration(styles, /\.app-shell\.app-signed-out\s*\{([^}]*)\}/, 'padding')).toBe('env(safe-area-inset-top) calc(env(safe-area-inset-right) + var(--space-5)) env(safe-area-inset-bottom) calc(env(safe-area-inset-left) + var(--space-5))');
     expect(ruleDeclaration(styles, /\.app-shell\[data-phone="true"\]\s*\{([^}]*)\}/, '--dock-space')).toBe('calc(68px + var(--phone-dock-bottom))');
     expect(ruleDeclaration(styles, /\.app-shell\[data-phone="true"\]\[data-home="true"\] \.jarvis-page\s*\{([^}]*)\}/, 'padding-bottom')).toBe('var(--phone-dock-bottom)');
     expect(ruleDeclaration(styles, /\.app-shell\[data-phone="true"\]\[data-home="false"\]:not\(\.app-signed-out\) \.jarvis-page\s*\{([^}]*)\}/, 'bottom')).toBe('var(--phone-dock-bottom)');
@@ -647,9 +653,9 @@ describe('shared glass tokens', () => {
 
   it('keeps chat type compact without shrinking the composer or touch resize borders', () => {
     const source = readFileSync('src/ConversationHistory.css', 'utf8');
-    expect(source).toContain('font-size: var(--type-small); line-height: 1.45;');
+    expect(source).toContain('font-size: var(--type-small); line-height: var(--line-prose);');
     expect(source).toContain('.conversation-message :where(p, li, blockquote) { font-size: inherit; line-height: inherit; }');
-    expect(source).toContain('font-size: var(--type-body); line-height: 24px;');
+    expect(source).toContain('font-size: var(--type-body); line-height: var(--line-body);');
     expect(source).toContain('.conversation-resize-corner { width: 44px; height: 44px; }');
     expect(source).toContain('.conversation-resize-border-top { top: -10px; height: 24px;');
     expect(source).not.toContain('.conversation-corner svg');
@@ -688,19 +694,19 @@ describe('shared glass tokens', () => {
     expect(ruleDeclaration(source, /\.html-app-frame\s*\{([^}]*)\}/, 'background')).toBe('var(--report-surface)');
     expect(ruleDeclaration(source, /\.html-app-frame\s*\{([^}]*)\}/, 'border-radius')).toBe('0');
     expect(source).not.toMatch(/\.workspace-window-actions[^{]*\{[^}]*grid-template-columns/);
-    expect(source).toContain('.workspace-window-actions { display: flex; width: auto; flex: 0 0 auto; flex-wrap: nowrap; gap: 4px; }');
+    expect(source).toContain('.workspace-window-actions { display: flex; width: auto; flex: 0 0 auto; flex-wrap: nowrap; gap: var(--space-1); }');
   });
 
   it('gives window tabs compact corners, distinct pin states and touch-sized actions', () => {
     const source = readFileSync('src/styles.css', 'utf8');
     expect(source).not.toMatch(/\.workspace-window-actions[^{]*\{[^}]*grid-template-columns/);
-    expect(source).toContain('.workspace-window-actions { display: flex; width: auto; flex: 0 0 auto; flex-wrap: nowrap; gap: 4px; }');
+    expect(source).toContain('.workspace-window-actions { display: flex; width: auto; flex: 0 0 auto; flex-wrap: nowrap; gap: var(--space-1); }');
     expect(ruleDeclaration(source, /\.workspace-tab-item\s*\{([^}]*)\}/, 'border-radius')).toBe('var(--radius-control)');
     expect(ruleDeclaration(source, /\.workspace-tab-close, \.workspace-tab-pin\s*\{([^}]*)\}/, 'width')).toBe('36px');
     expect(source).toContain('.workspace-tab-pin[aria-pressed="true"] svg { transform: none; }');
     expect(source).toContain('.workspace-tab-close, .workspace-tab-pin { width: 44px; min-width: 44px; height: 44px; min-height: 44px; }');
     expect(source).toContain(':root[data-motion="reduced"] .workspace-tab-pin svg { transition: none; }');
-    expect(source).toContain('.app-shell[data-phone="true"][data-windows-open="true"] .app-topbar { z-index: 1200; }');
+    expect(source).toContain('.app-shell[data-phone="true"][data-windows-open="true"] .app-topbar { z-index: var(--z-menu); }');
   });
 
   it('gives the empty conversation readable glass placement clear of the orb', () => {
@@ -717,7 +723,7 @@ describe('shared glass tokens', () => {
     expect(headingFont).toBe('var(--font-heading)');
     expect(emptyTranscriptLayout).toBe('flex');
     expect(styles).not.toContain('.conversation-overview');
-    expect(styles).toContain('padding: clamp(16px, 12vh, 100px) 12px');
+    expect(styles).toContain('padding: clamp(var(--space-4), 12vh, var(--space-7)) var(--space-3)');
     expect(styles).toContain('@media (max-width: 700px)');
   });
 
@@ -746,7 +752,7 @@ describe('shared glass tokens', () => {
     expect(ruleDeclaration(history, dock, 'inset')).toBe('auto 12px var(--phone-dock-bottom)');
     expect(ruleDeclaration(history, dock, 'height')).toBe('calc(var(--voice-dock-top) - var(--phone-dock-bottom))');
     expect(ruleDeclaration(history, dock, 'pointer-events')).toBe('none');
-    expect(ruleDeclaration(history, dock, 'z-index')).toBe('43');
+    expect(ruleDeclaration(history, dock, 'z-index')).toBe('var(--z-voice-controls)');
     expect(ruleDeclaration(history, dock, 'background')).toBe('transparent');
     expect(ruleDeclaration(history, dock, 'backdrop-filter')).toBe('none');
     expect(history).toContain('@media (width > 700px) and (not ((max-height: 500px) and (pointer: coarse))) {\n.app-shell[data-voice-active="true"]');
@@ -769,7 +775,7 @@ describe('shared glass tokens', () => {
     expect(stageStyles).not.toContain('voice-orb');
     expect(historyStyles).not.toContain('voice-orb');
     expect(historyStyles).not.toContain('.composer-language');
-    expect(historyStyles).toContain('@media (max-width: 380px) {\n  .voice-bar { gap: 4px; padding: 6px; }');
+    expect(historyStyles).toContain('@media (max-width: 380px) {\n  .voice-bar { gap: var(--space-1); padding: var(--space-2); }');
     expect(historyStyles).not.toContain('.voice-bar-status');
     expect(historyStyles).not.toContain('.voice-bar-action');
     expect(ruleDeclaration(historyStyles, /\.voice-end-control\s*\{([^}]*)\}/, 'min-height')).toBe('44px');

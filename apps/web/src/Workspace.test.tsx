@@ -303,6 +303,25 @@ describe('Workspace', () => {
     expect(screen.getByRole('button', { name: 'Pin Live report' }).getAttribute('aria-pressed')).toBe('false');
   });
 
+  it('portals pin failures into the page feedback host and keeps retry working', async () => {
+    const user = userEvent.setup();
+    const pins: WorkspacePinsClient = {
+      load: vi.fn().mockRejectedValueOnce(new Error('Synthetic pin failure')).mockResolvedValue([]),
+      pin: vi.fn(), unpin: vi.fn(),
+    };
+    function Harness() {
+      const [host, setHost] = useState<HTMLDivElement | null>(null);
+      return <><div ref={setHost} data-testid="feedback" /><h1>Current page</h1><div data-testid="overlay"><Workspace views={[]} pins={pins} feedbackHost={host} /></div></>;
+    }
+    render(<Harness />);
+    const alert = await screen.findByRole('alert');
+    expect(screen.getByTestId('feedback').contains(alert)).toBe(true);
+    expect(screen.getByTestId('overlay').contains(alert)).toBe(false);
+    await user.click(within(alert).getByRole('button', { name: 'Retry pinned windows' }));
+    await waitFor(() => expect(screen.queryByRole('alert')).toBeNull());
+    expect(pins.load).toHaveBeenCalledTimes(2);
+  });
+
   it.each(['online', 'visibilitychange'])('recovers failed pin loading on %s without requiring a button click', async event => {
     const pins: WorkspacePinsClient = {
       load: vi.fn().mockRejectedValueOnce(new Error('Connection interrupted.')).mockResolvedValue([]),
@@ -1347,7 +1366,7 @@ describe('Workspace', () => {
     expect(workspaceStyles).toContain('width: min(300px, 100%); min-width: 0; max-width: 100%;');
     const mobile = workspaceStyles.slice(workspaceStyles.indexOf('@media (max-width: 900px)'));
     expect(mobile).toContain('.workspace-window-heading h3 { flex-basis: auto; }');
-    expect(mobile).toContain('.workspace-window-actions { display: flex; width: auto; flex: 0 0 auto; flex-wrap: nowrap; gap: 4px; }');
+    expect(mobile).toContain('.workspace-window-actions { display: flex; width: auto; flex: 0 0 auto; flex-wrap: nowrap; gap: var(--space-1); }');
     expect(workspaceStyles).toContain('.sidebar-close, .workspace-window .workspace-icon-control, .workspace-window .workspace-arrange-menu > summary { width: 44px; min-width: 44px; height: 44px; min-height: 44px; }');
     expect(mobile).toContain('.workspace-arrange-menu > summary { width: 44px; padding: 0; }');
   });
@@ -1356,7 +1375,7 @@ describe('Workspace', () => {
     const user = userEvent.setup();
     render(<Workspace views={views} />);
     const workspaceStyles = readFileSync('src/styles.css', 'utf8');
-    const raisedSelector = workspaceStyles.match(/([^{}]+)\{\s*z-index: 1001;\s*\}/)?.[1]?.trim();
+    const raisedSelector = workspaceStyles.match(/([^{}]+)\{\s*z-index: var\(--z-window-menu\);\s*\}/)?.[1]?.trim();
     expect(raisedSelector).toBe('.workspace-canvas:not(.workspace-canvas-has-maximized) .workspace-window:has(.workspace-arrange-menu[open])');
     const research = screen.getByRole('article', { name: 'Research summary' });
     await user.click(arrangeTrigger(research, 'Research summary'));

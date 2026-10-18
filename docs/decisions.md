@@ -16,6 +16,37 @@ Make shared chart geometry container-width-aware, use matching line-pattern
 legend marks, and fill the last phone statistic row. No new dependency, token,
 backend behavior or original-site cutover is part of this change.
 
+## Share overlay stacking and modal lifecycle (18 October 2026; P14-09 / #992)
+
+Keep the existing React overlays and controls; add no UI library. Name stacking
+roles once in `styles.css`, isolate workspace depth, and share modal focus,
+inert-background, viewport and scroll-lock handling. Keep dialog actions in
+their existing order contract and associate footer submit buttons with their
+original forms. Protect edited forms from implicit dismissal without removing
+explicit cancel/close actions. Keep nonmodal menu keyboard behavior separate.
+Exit copies are inert and hidden from accessibility; persistent sheets become
+inert immediately on close, without waiting for their visual transition.
+
+Portal workspace pin feedback into an in-flow shell host before route content.
+The previous fixed workspace placement overprinted page headings and could
+intercept the Factory Create project action. Persistence, alert copy and retry
+behavior are unchanged. Synthetic browser evidence is not live-provider or
+physical on-screen-keyboard verification.
+
+## Separate read-only vault tasks from Notes (18 October 2026; P13-19 / #1015)
+
+Personal to-dos remain checkbox items in the proactive reader's shared scope:
+recursive `Personal/` and `Work/` notes and the root `task.md` or `tasks.md`,
+excluding hidden paths and Archive segments. Jarvis exposes them in an owner-only
+Tasks view, Notes task-search group, and the read-only tasks kind of `vault_search`.
+The same parser and direct vault read model serve the proactive engine and these
+surfaces. The tool catalogue is at its 120-tool all-features ceiling (the 128-tool
+platform limit minus the required eight-tool headroom), so tasks share
+`vault_search` through a flat `kind` argument instead of adding a tool.
+Jarvis never creates, edits, completes, reorders or deletes the owner's tasks;
+the owner completes them in Obsidian. Software Factory remains the separate
+agent-work board.
+
 ## #1005 Daily v182 API, upload and selected native tools (18 October 2026)
 
 Keep this delivery on the existing backend, SQL pool, owner authentication and
@@ -47,6 +78,29 @@ retained inbox rows per owner. These limits do not establish source completeness
 or exporter UI behavior; mark the latter unverified and do not claim replay or
 physical-phone acceptance. Evidence and unresolved field/HTTP differences are
 tracked in `docs/reference/daily-v182/source-to-jarvis-matrix.md`.
+
+## P12-33 — Daily Overview as a today dashboard (18 October 2026)
+
+Reuse the Daily kit and existing readers rather than create another dashboard
+data layer. Put the latest workout, logged nutrition day, measurement, sleep
+night and brief in one responsive grid; keep each section link, honest state
+and compact read timestamp. Use the already-loaded nutrition baseline only,
+not an invented activity allowance. Null readings remain gaps and different
+measurement units never share a sparkline. Break same-day workout ties by
+recorded start time. Keep meter positions within their accessible range while
+announcing the actual over-target total and any lower-bound qualification.
+
+Replace repeated collection-purpose paragraphs with one “About this data”
+disclosure and compact labelled coverage rows. Errors and Retry stay inline;
+empty health coverage links to Settings upload without claiming that older
+records do not exist. Preserve refresh, probes, query limits, navigation, focus
+return and the live-region summary. Refresh must retain both populated and
+empty cards rather than return them to skeletons. The embedded view has no
+second page heading. This is presentation-only; original Daily remains
+canonical, and Nutrition/Body & sleep section ownership is unchanged.
+
+Synthetic Chromium evidence is saved in `docs/ui/p12-33/`; it verifies local
+fixtures and responsive/keyboard behavior, not live records or physical devices.
 
 ## P12-30 — Daily presentation kit and Workouts (18 October 2026)
 

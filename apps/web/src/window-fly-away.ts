@@ -6,7 +6,7 @@ const prefersReducedMotion = () => (window.matchMedia?.('(prefers-reduced-motion
   document.documentElement.dataset.motion === 'reduced';
 
 /** An inert, fixed-position copy of a window at its current place, used only for exit animations. */
-function createGhost(element: HTMLElement, rect: DOMRect) {
+export function createGhost(element: HTMLElement, rect: DOMRect) {
   const ghost = element.cloneNode(true) as HTMLElement;
   // Live media and embedded documents would restart inside the copy; the exit only needs the surface.
   ghost.querySelectorAll('iframe, video, audio, canvas').forEach((node) => node.remove());
@@ -24,7 +24,7 @@ function createGhost(element: HTMLElement, rect: DOMRect) {
     width: `${rect.width}px`,
     height: `${rect.height}px`,
     margin: '0',
-    zIndex: '2000',
+    zIndex: 'var(--z-window)',
     pointerEvents: 'none',
     translate: 'none',
     scale: 'none',

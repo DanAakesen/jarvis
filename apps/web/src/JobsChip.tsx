@@ -7,6 +7,8 @@ import { WorkingCore } from './ToolCallChip';
 import { ShellIcon } from './ShellIcon';
 import { AttentionPopover } from './AttentionPopover';
 import type { FeedAttention } from './activity';
+import { returnFocusAfterOutsidePress } from './overlay-focus';
+import { useOverlayMotion } from './overlay-motion';
 
 /** Opens (or just reveals) a job's result window; returns false while the window does not exist yet. */
 export type ResultWindowAction = (viewId: string, mode: 'open' | 'park') => boolean;
@@ -104,6 +106,7 @@ export function JobsChip({ backendUrl, getAccessToken, onResult, accountId = nul
   const deliveries = useRef(new Map<string, number>());
   const historyButton = useRef<HTMLButtonElement>(null);
   const popover = useRef<HTMLDivElement>(null);
+  const popoverRef = useOverlayMotion(popover, 'menu');
   const returnFocus = useRef<HTMLButtonElement | null>(null);
   const popoverId = useId();
   const away = presence.status === 'ready' && presence.mode !== 'present';
@@ -162,7 +165,11 @@ export function JobsChip({ backendUrl, getAccessToken, onResult, accountId = nul
     if (!open && !showList) return;
     const tick = window.setInterval(() => setNow(Date.now()), 1000);
     const close = (event: PointerEvent) => {
-      if (!root.current?.contains(event.target as Node)) { setOpenId(null); setShowHistory(false); }
+      if (!root.current?.contains(event.target as Node)) {
+        if (root.current?.contains(document.activeElement)) returnFocusAfterOutsidePress(returnFocus.current?.isConnected ? returnFocus.current : historyButton.current);
+        setOpenId(null);
+        setShowHistory(false);
+      }
     };
     document.addEventListener('pointerdown', close);
     return () => { window.clearInterval(tick); document.removeEventListener('pointerdown', close); };
@@ -276,7 +283,7 @@ export function JobsChip({ backendUrl, getAccessToken, onResult, accountId = nul
         {jobs.some((job) => job.status === 'running') ? `${jobs.filter((job) => job.status === 'running').length} background jobs running` : ''}
       </span>
       {(peek || showList) && (
-        <div ref={popover} tabIndex={-1} id={popoverId} className="jobs-popover" role="group" aria-label={peek ? `${peek.title} details` : 'Background work'}>
+        <div ref={popoverRef} tabIndex={-1} id={popoverId} className="jobs-popover" role="group" aria-label={peek ? `${peek.title} details` : 'Background work'}>
           <div className="jobs-popover-heading">
             {peek ? <button type="button" className="jobs-action" onClick={() => { setOpenId(null); setShowHistory(true); }}>Background work</button> : <span>Background work</span>}
             <button type="button" className="workspace-tab-close" aria-label="Close job details" onClick={closePopover}>

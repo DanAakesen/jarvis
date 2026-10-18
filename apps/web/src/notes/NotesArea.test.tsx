@@ -1,4 +1,5 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { StrictMode } from 'react';
 import userEvent from '@testing-library/user-event';
 import { createMemoryRouter, Link, RouterProvider } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -50,7 +51,7 @@ beforeEach(() => {
 });
 afterEach(() => vi.unstubAllGlobals());
 
-function mount(initialEntries = ['/notes'], initialIndex = initialEntries.length - 1) {
+function mount(initialEntries = ['/notes'], initialIndex = initialEntries.length - 1, strict = false) {
   const guard = { current: false };
   const router = createMemoryRouter([
     { path: '/notes', element: <NavigationGuardContext.Provider value={guard}>
@@ -59,7 +60,8 @@ function mount(initialEntries = ['/notes'], initialIndex = initialEntries.length
     </NavigationGuardContext.Provider> },
     { path: '/other', element: <h1>Other page opened</h1> },
   ], { initialEntries, initialIndex });
-  render(<RouterProvider router={router} />);
+  const app = <RouterProvider router={router} />;
+  render(strict ? <StrictMode>{app}</StrictMode> : app);
   return { router, guard };
 }
 async function openFixture() {
@@ -71,6 +73,15 @@ async function openFixture() {
 const saveCalls = () => fetchMock.mock.calls.filter(([, init]) => init?.method === 'POST' || init?.method === 'PUT');
 
 describe('Notes workflow', () => {
+  it('opens a source note from its vault-task deep link', async () => {
+    mount(['/notes?note=Work%2Ffixture.md'], undefined, true);
+    expect(await screen.findByRole('dialog', { name: 'fixture' })).not.toBeNull();
+    expect(fetchMock.mock.calls.some(([input]) => {
+      const url = new URL(String(input));
+      return url.pathname === '/notes/note' && url.searchParams.get('path') === path;
+    })).toBe(true);
+  });
+
   it('defaults to the original graph, opens its familiar reader and edits only after selecting a note', async () => {
     mount();
     expect(await screen.findByLabelText('Search your knowledge')).not.toBeNull();

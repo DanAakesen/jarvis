@@ -727,6 +727,16 @@ Jarvis is one backend with a shared core and one module per area, a static web a
 
 ## Web skeleton and configuration
 
+- `Modal` shares `useModalLifecycle` with mobile navigation and context sheets:
+  topmost focus trapping/return, inert background, nested scroll locks and
+  visual-viewport bounds. Its header, scrolling body and action footer remain
+  inside a body portal; footer submit buttons explicitly target their forms.
+  Stacking roles are `--z-*` tokens in `styles.css`, with dynamic window depth
+  confined to an isolated canvas. `Workspace` portals pin feedback into the
+  shell's in-flow `feedbackHost` before the route outlet; persistence and retry
+  ownership stay in `Workspace`.
+  `overlay-motion.ts` reuses visual-only window ghosts for token-timed exits;
+  copies are inert and hidden from accessibility, and reopening cancels them.
 - P9-77 mounts `NotesArea` at `/notes`, redirecting `/knowledge/*` with replace.
   The existing `KnowledgeGraphView` remains the default, with its search and
   section filters. Notes owns the transient Markdown draft, preview and save
@@ -3480,6 +3490,40 @@ view and focuses it through the existing workspace command broker. The shared
 bounded query text and unique SHA-256 node IDs. This backend issue does not add
 the browser renderer; its UI implementation is a separate session.
 
+### Read-only vault tasks and Notes search (P13-19; 18 October 2026)
+
+`GET /vault/tasks` is owner-only and sets `Cache-Control: no-store`. It reads the
+current vault tree and task-note blobs through the existing GitHub vault client,
+not the potentially stale knowledge index. It shares `inScope`, the contextual
+todo parser, and path/blob-SHA task cache with proactive discovery, so reminders
+and the visible task list use the same definition of a task. Concurrent reads
+coalesce; each request performs at most one tree listing. The shared scope is
+recursive `Personal/` and `Work/`, plus the root `task.md` or `tasks.md`; hidden
+paths and Archive segments remain excluded.
+
+The route accepts `q` (up to 200 characters) and `state` (`open`, default;
+`done`; or `all`), and returns at most 500 matching task rows with source path,
+line, nearest heading, completion, due fields, priority, owner-local `today`,
+`readAt`, total and truncation state. Scans retain the shared 256-file, 4-MiB
+total-content, 256-KiB-per-file, four-concurrent-read and 20-second limits.
+Task text is sanitized and secret-redacted before filtering or returning, and
+never written to logs. Connection, GitHub App/token, missing/ambiguous task
+source, limit, timeout and read failures return stable 503 reason codes rather
+than empty task lists.
+
+The read-only sensitive `vault_search` chat/voice tool serves both reads through a
+flat `kind` argument: `notes` (the default) searches the knowledge index, and
+`tasks` uses the same model and scope as the route, with query, state and
+optional bounded due window, returning at most 40 items. The schema has no
+combinators, so voice schemas stay valid, and no catalogue entry is added: the
+all-features production catalogue is held at 120 tools, leaving the required
+eight-tool headroom below the 128-tool platform limit. Task requests route to
+`kind` tasks; note requests continue through `vault_search` (notes) and
+`vault_read`. The Notes page retains search snippets and fetches
+matching open tasks separately; its task group links to `/tasks?q=...`. Task
+source links use `/notes?note=<path>`, which opens the note in the existing
+Notes read flow. Neither screen nor tool writes or changes task state.
+
 ### New project creation (P3-12)
 
 The `create_project` tool accepts only a repository name and description. It reads
@@ -6178,6 +6222,27 @@ JSON reuses Data's escaped `<pre>`/collapsed `<details>` presentation. Heart-rat
 samples are grouped by metric and unit, use elapsed minutes, and retain separate
 average/minimum/maximum series. Existing read clients retain owner authorization,
 cancellation, response bounds and safe failure handling.
+
+## Web Daily today dashboard (18 October 2026; P12-33)
+
+Overview composes `DailyGrid`, `FreshnessLine`, `WorkoutGlyph`, `Meter`,
+`Sparkline` and `DataNotes` around the existing section-summary readers.
+Its responsive card layout and compact coverage strip are scoped to
+`daily-overview.css`; shared chart, legend and grid implementations are unchanged.
+Only the newest Body metric/unit group is charted, in chronological observation
+order with null gaps. Latest workouts use their recorded start time to break
+same-day ties. Nutrition uses only its existing target request and day rows;
+pending/failed targets never appear as unset, and nonpositive baselines stay
+text rather than an invalid progress range. The shared meter bounds its ARIA
+position while retaining the actual total and lower-bound text.
+
+Per-source probes, summary queries/limits, refresh signal, concurrency bound,
+section URLs and focus-return ownership remain unchanged. Existing card nodes
+and empty results survive refresh; progress and errors remain visible. One
+overview disclosure holds collection purposes, read times and source caveats,
+while coverage failures retain an inline error and Retry. Settled empty health
+probes provide the Settings upload link, qualified to their seven-day period.
+No backend, contracts, routes, source permissions or dependencies change.
 
 ## Web Daily overview and Briefs integration (18 October 2026; P12-26)
 
