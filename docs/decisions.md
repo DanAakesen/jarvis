@@ -70,6 +70,21 @@ encrypted and owner-only outside the repository, agent environments and
 GitHub artifacts. Synthetic validation is not private migration acceptance.
 Refs DanAakesen/jarvis#717 and DanAakesen/jarvis#721.
 
+## Give asynchronous test waits headroom on loaded CI runners (18 October 2026; fix-main)
+
+Web tests such as the attention popover focus return and the workspace pin
+loading recovery failed intermittently in CI at about 1.0 s, the Testing
+Library `asyncUtilTimeout` default, and passed on rerun with no code change.
+Each assertion was about to hold; a loaded runner had stalled the worker for
+longer than the budget. The web test setup now sets `asyncUtilTimeout` to 4 s,
+and Vitest's `testTimeout` is 15 s so that a wait which does fail reports its
+own assertion rather than a generic 5 s test timeout.
+
+No assertion, retry or skip was added or loosened. A wait whose condition never
+holds still fails, after at most 4 s instead of 1 s. This is a unit-test wait
+budget only; it does not change the release, acceptance-evidence or
+worker-start timeouts recorded elsewhere.
+
 ## Preserve attention dismissals across backend restarts (18 October 2026; P9-123 / #962)
 
 Policy-blocked reasons are de-duplicated transactionally against task event
