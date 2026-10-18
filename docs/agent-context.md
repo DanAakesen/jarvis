@@ -47,14 +47,17 @@ uses `npm run test:database --workspace @jarvis/backend -- src/database/schema.i
 with the isolated loopback test database; do not claim it ran without that
 service. A green local test or build does not establish real iPhone delivery.
 
-## P13-05 proactive foundation (17 October 2026)
+## P13-05/P13-06 proactive foundation and engine (18 October 2026)
 
 `JARVIS_PROACTIVE_ENABLED`, `JARVIS_PROACTIVE_TODO_WRITES_ENABLED` and
 `JARVIS_PROACTIVE_ALERTS_ENABLED` are independent exact-`true` flags, all off by
 default. The latter two do not activate work unless the main proactive flag is
 on. Do not set any of them in deployment, workflows or infrastructure. This
-foundation registers owner-bound status/settings/items routes only when enabled;
-it adds no scheduler, source read, model call or proactive send.
+composition registers owner-bound status/settings/items/run routes and starts
+the in-process scheduler only when enabled. Idle ticks do not query SQL. The
+engine supports fake sources and a fake model; real source adapters and proactive
+sends remain separate slices. No index, workflow or infrastructure activation
+is needed.
 
 Focused checks:
 `npm test --workspace @jarvis/backend -- --run src/config.test.ts src/proactive/routes.test.ts src/proactive/store.test.ts src/proactive/time.test.ts src/proactive/budget.test.ts src/proactive/language.test.ts src/proactive/sources/registry.test.ts src/database/migrations.test.ts src/push/routes.test.ts`,
@@ -62,20 +65,35 @@ Focused checks:
 `npm test --workspace @jarvis/web -- --run src/JobsChip.test.tsx`,
 `npm run build --workspace @jarvis/backend`,
 `npm run build --workspace @jarvis/web`, and lint for both workspaces.
+Engine checks:
+`npm test --workspace @jarvis/backend -- --run src/proactive src/database/conversation-store.test.ts`,
+`npm run build --workspace @jarvis/backend`, and
+`npm run lint --workspace @jarvis/backend`.
 Proactive SQL contracts are in
-`src/database/schema.integration.test.ts`; run them only with the isolated
+`src/database/schema.integration.test.ts` and the narrow conversation reader has
+coverage in `src/database/conversation-store.integration.test.ts`; run them only with the isolated
 loopback SQL Server fixture via `npm run test:database --workspace @jarvis/backend -- src/database/schema.integration.test.ts`.
 Do not report SQL integration coverage unless that service ran.
 
-## P13-07 proactive read-only sources (18 October 2026)
+## P13-10 proactive web client (18 October 2026)
 
-Focused synthetic checks:
-`npm test --workspace @jarvis/backend -- --run src/proactive/todo-file.test.ts src/proactive/sources/todos.test.ts src/proactive/sources/factory.test.ts src/proactive/sources/weather.test.ts src/proactive/sources/registry.test.ts src/proactive/time.test.ts src/database/task-store-proactive.test.ts src/core/weather.test.ts`,
-`npm run build --workspace @jarvis/backend`, and
-`npm run lint --workspace @jarvis/backend`. The backend build is the TypeScript
-check. The SQL snapshot is covered by the isolated database integration suite
-only when its loopback SQL Server fixture is available; do not claim it ran
-otherwise. No source flag is enabled by these checks.
+`VITE_PROACTIVE_ENABLED` is an exact-`true`, default-off build flag. Do not set
+it in a workflow or environment file. Its web-only implementation does not
+change the backend, contracts or authorization. The feature gate test scans the
+repository's environment files and workflow YAML.
+
+Focused web validation:
+`npm test --workspace @jarvis/web -- --run config/proactive-switch.test.ts src/ProactiveArea.test.tsx src/ProactiveSettings.test.tsx src/App.test.tsx src/JobsChip.test.tsx src/ProactiveItemPage.test.tsx`,
+`npm run lint --workspace @jarvis/web`, and
+`npm run build --workspace @jarvis/web`. Run the full web tests with
+`npm test --workspace @jarvis/web`.
+
+For visual inspection, use a scratch-only auth/API fixture and the actual web
+application in Chromium at 390×844 and 1440×900, light and dark. Exercise the
+feature with synthetic responses and reduced motion; never create a production
+auth stub, persist fixture content, or use real personal data. Browser fixtures
+and screenshots belong outside tracked application assets unless explicitly
+approved.
 
 ## P13-09 proactive news source (18 October 2026)
 
@@ -91,6 +109,16 @@ Focused checks:
 `npm run lint --workspace @jarvis/backend`. Tests use mocked HTTPS and injected
 DNS/feed readers only; do not make live feed requests. Do not claim SQL Server
 integration tests ran without the isolated loopback SQL Server fixture.
+
+## P13-07 proactive read-only sources (18 October 2026)
+
+Focused synthetic checks:
+`npm test --workspace @jarvis/backend -- --run src/proactive/todo-file.test.ts src/proactive/sources/todos.test.ts src/proactive/sources/factory.test.ts src/proactive/sources/weather.test.ts src/proactive/sources/registry.test.ts src/proactive/time.test.ts src/database/task-store-proactive.test.ts src/core/weather.test.ts`,
+`npm run build --workspace @jarvis/backend`, and
+`npm run lint --workspace @jarvis/backend`. The backend build is the TypeScript
+check. The SQL snapshot is covered by the isolated database integration suite
+only when its loopback SQL Server fixture is available; do not claim it ran
+otherwise. No source flag is enabled by these checks.
 
 ## Chat acceptance failure labels and one bounded retry (#820, 17 October 2026)
 

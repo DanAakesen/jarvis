@@ -1896,14 +1896,14 @@ guard; every future system-started send must enforce 22:00–07:00
 Europe/Copenhagen with no emergency exception. There is no Teams delivery path.
 Actual iPhone delivery is not yet proven.
 
-## Proactive foundation (P13-05; default off)
+## Proactive foundation and engine (P13-05, P13-06; default off)
 
 `JARVIS_PROACTIVE_ENABLED` gates the owner-bound proactive routes and composition;
 the todo-write and alert capabilities are separately gated. The index contributes
 one guarded registration call with existing providers, stores, token callback,
 clock, logger and the background-job registry. Disabled composition does not
 construct proactive stores, query proactive tables, register routes or start a
-timer. This slice adds no source read, model call or outbound request.
+timer. P13-06 extends this composition without another index registration.
 
 The `proactive` module defines the shared source/item/run contracts, a source
 registry with an unavailable `x` placeholder, and authenticated status, settings,
@@ -1916,11 +1916,43 @@ Migration 0055 extends `proactive_items` while preserving test rows, and adds
 owner-scoped settings, runs, source status and estimated-spend tables. SQL stores
 use the existing pool and `databaseReadRequest` for nontransactional reads.
 Finding upserts are deduplicated by owner/key; dismissed findings remain
-dismissed until due/event timing or urgency materially changes. Run claims take
+dismissed until due/event timing changes or urgency escalates to time-critical. Run claims take
 an owner-scoped transaction lock, respect unexpired leases, and use claim
 generations for heartbeat/finish fencing. Startup marks leftover running rows
 interrupted. Migration 0056 adds the `proactive` background-job kind; rollback
 refuses to discard rows of that kind.
+
+The engine owns a self-rescheduling, unreferenced 30-second scheduler. Startup
+reconciles runs once and evaluates the latest Copenhagen slot immediately;
+handled slot keys stay in memory, so idle ticks perform no SQL work. Claims
+serialize through the existing owner lock, including persisted manual rate
+limits. A lease-aware running-run read prevents expired claims from blocking
+manual admission. Paused/all-disabled scheduled slots finish as skipped without a job.
+The owner-only run routes return bounded history and detach manual execution
+after a 202 response containing the running summary.
+
+Each run owns cancellation, a three-minute deadline and 60-second lease
+heartbeats. Enabled registered sources read in parallel with 20-second bounds.
+Quiet hours cancel scheduled/catch-up work, not manual work; generation and
+quiet-hour checks precede item writes and hooks. Detection is pure and shares
+the 24-hour deadline and 48-hour clash constants with future consumers. Language
+uses a narrow SQL read of recent user-message text, never chat history fields;
+chat messages are not model input.
+
+Finding writes also fence the claim inside the SQL transaction by locking the
+owner/run row and checking status, generation and lease. Cancellation cancels
+the active request and rolls back before the engine finalizes the run; a final
+guard check precedes commit dispatch, the write's transaction boundary.
+
+`proactive/model.ts` independently follows the existing Foundry chat-completions
+pattern, with the selected chat role, catalogue validation, no tools, untrusted
+fact data, a 48-KiB request/32-KiB response bound and a 45-second timeout.
+Validated evidence contains labels only. Real response token counts feed both
+estimated proactive spend and global chat-role usage, including rejected output.
+Stable 32-hex content keys exclude run-local refs and urgency. Ordered optional
+`onFindingsStored` hooks receive only this run's stored items and in-memory source
+facts before finish; one hook failure cannot prevent later hooks or change success.
+This slice adds no delivery or todo-writing hook and enables no flag.
 
 ## Proactive read-only sources (P13-07; default off)
 
@@ -1948,27 +1980,6 @@ unavailable; no fallback location or geocoding is used. All source errors are
 mapped to stable unavailable reason codes. This slice enables no flags and
 starts no source reads.
 
-## Proactive news source (P13-09; default off)
-
-The source registry also constructs the news source, between the Factory and
-todo readers. It parses RSS 2.0 and Atom from at most ten configured feeds. Its
-URL validator permits HTTPS hostnames only, rejects IP literals and local
-hostnames, and removes fragments while retaining queries. Requests use
-`node:https` with a custom DNS lookup that rejects the whole answer set if any
-address is not public and connects only to vetted answers. The fetcher verifies
-TLS certificates, allows no redirects, accepts only XML content types and
-identity encoding, combines the engine abort signal with a ten-second timeout,
-and stops streaming after 2 MiB. Public-address filtering blocks the specified
-non-routable IPv4 ranges and permits only global-unicast IPv6, with embedded
-IPv4 in mapped, NAT64 and 6to4 addresses checked under the same IPv4 rules.
-
-DTD/entity declarations are rejected before XML parsing. The source retains only
-cleaned titles, publication times and feed hostnames; links, descriptions,
-authors, query strings and response bodies are not logged or stored. It selects
-at most eight recent items per feed and 30 total, and exposes partial feed
-failures. The source is registered but no scheduler or engine invokes it in this
-slice; no proactive flag is enabled and no live feed request is made by tests.
-
 ## Web push delivery (P13-02; default off)
 
 The web build exposes only the boolean result of `VITE_PUSH_ENABLED === "true"`
@@ -1990,6 +2001,48 @@ grant no authorization. The sign-in path is stored as a validated same-origin
 session-storage value and consumed after MSAL returns to `/`. P13-02 changes no
 backend, deployment flag, identity or permission configuration; live phone
 permission, lock-screen delivery and tap-through remain unverified.
+
+## Proactive web client (P13-10; default off)
+
+`apps/web/config/proactive-switch.ts` parses only the exact string `true`.
+`vite.config.ts` exposes the resulting boolean as
+`__JARVIS_PROACTIVE_ENABLED__`; `main.tsx` passes it to `App({ proactiveEnabled })`.
+The off-by-default client conditionally registers the Proactive area, full detail
+page, Settings section and terminal proactive-job Open link. The existing
+`/proactive/:id` M1 push route keeps its legacy page when only push is enabled.
+The flag does not enable backend routes or relax owner authentication.
+
+`ProactiveArea` independently loads status, open items and recent runs using
+authenticated `no-store` requests. Status supplies source and estimated-budget
+views. Manual runs poll status every three seconds only while visible, abort on
+unmount/terminal status, and stop after four minutes. Item feedback is optimistic
+with rollback; the detail page records `seen` once for a newly loaded item.
+Settings reads and PATCHes the existing contract, sending only changed fields.
+Item text, feeds and guidance live only in component state, are rendered as text,
+and are not stored in browser persistence or placed in URLs. Recent-run and
+Settings disclosure state is not persisted. The web flag policy test scans
+workflow/environment files to ensure the flag stays unset.
+
+## Proactive news source (P13-09; default off)
+
+The source registry also constructs the news source, between the Factory and
+todo readers. It parses RSS 2.0 and Atom from at most ten configured feeds. Its
+URL validator permits HTTPS hostnames only, rejects IP literals and local
+hostnames, and removes fragments while retaining queries. Requests use
+`node:https` with a custom DNS lookup that rejects the whole answer set if any
+address is not public and connects only to vetted answers. The fetcher verifies
+TLS certificates, allows no redirects, accepts only XML content types and
+identity encoding, combines the engine abort signal with a ten-second timeout,
+and stops streaming after 2 MiB. Public-address filtering blocks the specified
+non-routable IPv4 ranges and permits only global-unicast IPv6, with embedded
+IPv4 in mapped, NAT64 and 6to4 addresses checked under the same IPv4 rules.
+
+DTD/entity declarations are rejected before XML parsing. The source retains only
+cleaned titles, publication times and feed hostnames; links, descriptions,
+authors, query strings and response bodies are not logged or stored. It selects
+at most eight recent items per feed and 30 total, and exposes partial feed
+failures. The source is registered but no scheduler or engine invokes it in this
+slice; no proactive flag is enabled and no live feed request is made by tests.
 
 ## Web Push production switch (P13-03; 18 October 2026)
 
@@ -5097,6 +5150,24 @@ files: `JARVIS_DAILY_ENABLED` in the backend container environment in
 `infra/main.bicep` and `VITE_DAILY_ENABLED` on the web build step of
 `.github/workflows/deploy.yml` (18 October 2026). `daily/default-off.test.ts` allows
 no other configuration file to mention either name.
+
+### Proactive page and web switch (18 October 2026; P13-10)
+
+`VITE_PROACTIVE_ENABLED` is loaded by name only, parsed by
+`config/proactive-switch.ts` as exact-string `true`, and exposed as
+`__JARVIS_PROACTIVE_ENABLED__`. `App` defaults the prop off for tests and
+conditionally registers the Proactive navigation area, Settings node, proactive
+detail client and JobsChip link. A push-only build continues to route
+`/proactive/:id` through the M1 item page.
+
+`proactive-data.ts` validates response shapes and maps reason codes to fixed
+copy; dates use explicit `Europe/Copenhagen` and `da-DK`/`en-GB` formatting.
+The page owns independent status, open-item and run load states; its Earlier
+items disclosure fetches once on demand. Check now owns a cancellable,
+visibility-aware status poll and bounded timeout. The Settings section owns
+drafts and field-level validation, saves changed fields only, and never
+persists its private values or its disclosure state. `proactive-switch.test.ts`
+ensures no workflow or environment file enables the gate.
 
 ### Inactive internal direct intake (17 October 2026)
 

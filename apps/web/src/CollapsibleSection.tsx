@@ -17,7 +17,7 @@ function readOpen(key: string, initiallyOpen: boolean): boolean {
   }
 }
 
-export function CollapsibleSection({ storageKey, title, headingId, summary, id, className, headerAside, toggleRef, initiallyOpen, children }: {
+export function CollapsibleSection({ storageKey, title, headingId, summary, id, className, headerAside, toggleRef, initiallyOpen, persist = true, children }: {
   /** Stable name for remembering the open state, e.g. `settings.voice`. */
   storageKey: string;
   title: string;
@@ -32,16 +32,20 @@ export function CollapsibleSection({ storageKey, title, headingId, summary, id, 
   toggleRef?: Ref<HTMLButtonElement>;
   /** Initial folded state when this section has no saved preference. */
   initiallyOpen?: boolean;
+  /** Sensitive sections can keep fold state in memory without writing a UI preference to storage. */
+  persist?: boolean;
   children: ReactNode;
 }) {
   const generated = useId();
   const heading = headingId ?? `${generated}-heading`;
   const bodyId = `${heading}-body`;
-  const [open, setOpen] = useState(() =>
-    readOpen(storageKey, initiallyOpen ?? typeof window.matchMedia !== 'function'));
+  const [open, setOpen] = useState(() => persist
+    ? readOpen(storageKey, initiallyOpen ?? typeof window.matchMedia !== 'function')
+    : initiallyOpen ?? typeof window.matchMedia !== 'function');
   useEffect(() => {
+    if (!persist) return;
     try { localStorage.setItem(storagePrefix + storageKey, open ? '1' : '0'); } catch { /* storage may be blocked */ }
-  }, [open, storageKey]);
+  }, [open, persist, storageKey]);
   return (
     <section className={`settings-section collapsible-section${className ? ` ${className}` : ''}`} id={id}
       aria-labelledby={heading} data-collapsible="" data-open={open}>

@@ -5,13 +5,14 @@ import { loadEnv } from 'vite';
 import { defineConfig } from 'vitest/config';
 import { parseDailyEnabled } from './config/daily-switch.ts';
 import { createPublicConfig, isPushEnabled } from './config/public-config.ts';
+import { isProactiveEnabled } from './config/proactive-switch.ts';
 
 const repositoryRoot = fileURLToPath(new URL('../../', import.meta.url));
 
 export default defineConfig(({ mode }) => {
   const bootstrap: unknown = JSON.parse(readFileSync(new URL('../../infra/bootstrap.output.json', import.meta.url), 'utf8'));
   const settings: { backendUrl: unknown } = JSON.parse(readFileSync(new URL('./config.json', import.meta.url), 'utf8'));
-  const env = loadEnv(mode, repositoryRoot, ['VITE_BACKEND_URL', 'VITE_DAILY_ENABLED', 'VITE_PUSH_ENABLED']);
+  const env = loadEnv(mode, repositoryRoot, ['VITE_BACKEND_URL', 'VITE_DAILY_ENABLED', 'VITE_PUSH_ENABLED', 'VITE_PROACTIVE_ENABLED']);
   const publicConfig = createPublicConfig(bootstrap, env.VITE_BACKEND_URL ?? settings.backendUrl);
   const dailyEnabled = parseDailyEnabled(env.VITE_DAILY_ENABLED);
 
@@ -24,6 +25,7 @@ export default defineConfig(({ mode }) => {
       __JARVIS_CONFIG__: JSON.stringify(publicConfig),
       __JARVIS_DAILY_ENABLED__: JSON.stringify(dailyEnabled),
       __JARVIS_PUSH_ENABLED__: JSON.stringify(isPushEnabled(env.VITE_PUSH_ENABLED)),
+      __JARVIS_PROACTIVE_ENABLED__: JSON.stringify(isProactiveEnabled(env.VITE_PROACTIVE_ENABLED)),
     },
     server: { host: '0.0.0.0', port: 5173, strictPort: true },
     build: {
