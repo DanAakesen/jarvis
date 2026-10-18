@@ -1,5 +1,20 @@
 # Decisions
 
+## Discover Daily sections from folders (18 October 2026; P12-20 / #964)
+
+Daily keeps one destination and discovers section definitions from
+`sections/*/index.tsx`, not a shared hand-maintained registry. Definitions are
+loaded from the lazy glob's small entry chunks because the tab switcher must
+know each label, order, period behavior and source requirements before a section
+is selected. Each entry lazy-loads its actual content component and queries.
+Required-source filtering prevents dead tabs, and `?section=` preserves the
+selected section across reloads.
+
+One page-owned Copenhagen period is shared only with sections that opt into it.
+The shipped set stays Overview, Briefs and Data; future Workouts, Nutrition and
+Body & sleep folders register without changes to the shell. There is no new API,
+query semantics, navigation destination or generated-view renderer.
+
 ## Fail-closed offline Daily bundles (18 October 2026; P12-22 / #968)
 
 Use a versioned manifest, exact-byte per-table checksums/counts and streamed
