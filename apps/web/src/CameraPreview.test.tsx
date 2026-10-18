@@ -54,7 +54,9 @@ describe('Camera preview', () => {
     render(<CameraPreview camera={controller} />);
     await screen.findByRole('alert');
     expect(screen.queryByText('Live')).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Retry preview' }));
+    const retryPreview = screen.getByRole('button', { name: 'Retry preview' });
+    expect(retryPreview.classList.contains('secondary-button')).toBe(true);
+    fireEvent.click(retryPreview);
     await screen.findByText('Live');
     expect(screen.queryByRole('alert')).toBeNull();
     expect(controller.start).not.toHaveBeenCalled();
@@ -66,7 +68,9 @@ describe('Camera preview', () => {
     expect(screen.getByText('No camera frame available.')).not.toBeNull();
     expect(screen.queryByText('Live')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Look now' })).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Retry camera' }));
+    const retryCamera = screen.getByRole('button', { name: 'Retry camera' });
+    expect(retryCamera.classList.contains('secondary-button')).toBe(true);
+    fireEvent.click(retryCamera);
     expect(controller.start).toHaveBeenCalledOnce();
   });
 });

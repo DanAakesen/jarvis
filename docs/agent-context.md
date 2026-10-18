@@ -1,5 +1,322 @@
 # Agent context
 
+## Suggested todos, alerts and reminders are on in production (P13-15; 18 October 2026)
+
+Dan delegated the decision and switched proactive milestones 3 and 4 on after the
+todo writer (P13-11), alerts (P13-12) and reminders (P13-13) shipped dark. Two
+lines do it, and the code defaults stay off. Both are backend only: there is no
+web flag, parameter, secret, resource or dependency, and `deploy.yml` is unchanged.
+Each is set in `infra/main.bicep` as a backend container app `env` entry with the
+exact value `'true'`, beside the two switches that came before it.
+
+| Flag | Set in | Gates |
+| --- | --- | --- |
+| `JARVIS_PUSH_ENABLED` | `infra/main.bicep`; `VITE_PUSH_ENABLED` in `deploy.yml` | Web Push subscriptions and sends (P13-03) |
+| `JARVIS_PROACTIVE_ENABLED` | `infra/main.bicep`; `VITE_PROACTIVE_ENABLED` in `deploy.yml` | Checks, the Proactive page and its Settings section (P13-14) |
+| `JARVIS_PROACTIVE_TODO_WRITES_ENABLED` | `infra/main.bicep` | Todo additions (milestone 3, P13-15) |
+| `JARVIS_PROACTIVE_ALERTS_ENABLED` | `infra/main.bicep` | Alert and reminder pushes (milestone 4, P13-15) |
+
+Todo additions run only inside an enabled check. Alerts and reminders also need
+push switched on and a subscribed device, and they share the one alert flag.
+
+What now happens, exactly:
+
+- Todos: after a check, Jarvis may add new lines under a `## Suggested by Jarvis`
+  heading in the owner's existing todo file in the vault repository. Each added
+  line ends with a small hidden marker. It never edits, moves or deletes an
+  existing line and never creates the file: if the file is missing it writes
+  nothing, and the Proactive page shows "Todo file not found" for the Todo list
+  source. It adds at most 3 lines per check and 5 per Copenhagen day, in one
+  commit per check, and it follows the pause switch and the Todo list source
+  switch.
+- Alerts: only a time-critical finding (a todo due within 24 hours, or a calendar
+  clash starting within 48 hours) found by the scheduled 07:00 or 18:00 check, or
+  its catch-up, can send a push. At most one push per check and 3 a day, never
+  between 22:00 and 07:00, and never for "Check now". The text is generic and
+  tapping it opens the item. Everything else waits on the Proactive page.
+- Reminders: about one hour before a todo with an explicit time is due, Jarvis
+  sends one push. A date-only todo is covered by the 24-hour deadline alert
+  instead. The push says only "Jarvis" and "New item"; tapping it opens a private
+  Proactive item with the todo title and its due time. At most 8 reminders per
+  Copenhagen day. A reminder that falls in the quiet window is held until 07:00
+  and shown as due soon or overdue. A todo added after the last check is covered
+  from the next check on; "Check now" covers it immediately.
+
+To switch these off:
+
+- No deploy: Settings → Proactive → "Pause proactive checks" stops scheduled
+  checks, todo additions, alerts and reminders, including reminders already
+  planned. The "Todo list" source switch in the same section stops todo additions
+  and stops new reminders from being planned. Settings → Notifications → "Turn
+  off" stops pushes on that device.
+- Deploy: revert the whole P13-15 change (removes the gate lines and the pin test
+  updates together), or set the value(s) to `false` AND update the pin tests in the
+  same commit. To switch one feature off on its own, set only its value to `false`
+  and update only its pin: `todo-writes-default-off.test.ts` for todo additions,
+  `alerts-default-off.test.ts` for alerts and reminders. Removing only a line fails
+  the pin in CI before Deploy can run. Lines Jarvis already added stay in the todo
+  file (it never deletes them), and findings, feedback, settings and send history
+  stay in SQL.
+
+Open point: Dan's 17 October decision in `docs/decisions.md` says quiet hours also
+apply to manual checks, but the shipped engine lets "Check now" run at any hour
+(see the P13-14 section), so the writer can add todo lines on a manual check at
+night. Pushes never go out between 22:00 and 07:00. This change alters neither; a
+stricter rule would be its own code change.
+
+CI proves the wiring only. Whether a todo line is added, and whether an alert or
+reminder push reaches the iPhone, is established by Dan's test on the deployed
+app, not by any check here. Local checks:
+`npm test --workspace @jarvis/backend -- --run src/proactive/todo-writes-default-off.test.ts src/proactive/alerts-default-off.test.ts src/proactive/enabled-switch.test.ts src/push/enabled-switch.test.ts src/daily/default-off.test.ts src/config.test.ts`.
+The Bicep compile and lint (`az bicep build` and `az bicep lint`) run in CI only.
+
+## Proactive checks are on in production (P13-14; 18 October 2026)
+
+Dan switched proactive milestone 2 (read-only checks) on after the P13-05 to
+P13-10 slices shipped dark. Two lines do it, and the code defaults stay off:
+
+- Backend: `infra/main.bicep` sets `JARVIS_PROACTIVE_ENABLED` to `'true'` in the
+  backend container app's `env`, beside `JARVIS_PUSH_ENABLED`.
+- Web: the web job's "Load infrastructure outputs" step in
+  `.github/workflows/deploy.yml` writes `VITE_PROACTIVE_ENABLED=true` to
+  `$GITHUB_ENV` beside `VITE_PUSH_ENABLED`, so the production build includes the
+  Proactive page, its Settings section and the Background work link.
+  `vite.config.ts` reads the flag; `apps/web/config/public-config.ts` does not.
+
+`JARVIS_PROACTIVE_TODO_WRITES_ENABLED` and `JARVIS_PROACTIVE_ALERTS_ENABLED` were
+set nowhere when this change shipped, so a check read sources and stored findings
+but wrote no todo and pushed nothing; P13-15 (the section above) switches
+milestones 3 and 4 on. `apps/backend/src/proactive/enabled-switch.test.ts` pins the
+backend value and fails if its name appears in any other file (the todo-writes and
+alert flags keep their own pins, `todo-writes-default-off.test.ts` and
+`alerts-default-off.test.ts`);
+`apps/web/config/proactive-switch.test.ts` pins the web value and fails if any
+other workflow, Dockerfile, package file, web config or Bicep/parameter file names
+it. Changing a gate is therefore a reviewed edit to those two files and to the pins.
+
+To switch proactive checks off, revert the whole P13-14 change (removes the two
+gate lines and the pin tests together), or set both values to `false` AND update
+the pin tests in the same commit. Removing only the two lines fails the pin tests
+in CI before Deploy can run. Once Deploy has run, the backend registers no
+proactive routes and starts no scheduler, and the web build drops the Proactive
+page and Settings section. Stored findings, feedback and settings stay in SQL and
+are reused if checks are switched on again. No secret, identity, resource or
+dependency is involved.
+
+First-run behaviour: the first scheduled check runs at the next 07:00 or 18:00
+Europe/Copenhagen slot, or as one catch-up when the latest slot is under 12 hours
+old and the clock is outside 22:00 to 07:00. Scheduled work is cancelled at 22:00.
+"Check now" on the Proactive page runs one check at any time, including during
+quiet hours, unless checks are paused, no source is on, the monthly budget is used
+up, a check is already running, or the limits of one manual check per five minutes
+and six per Copenhagen day are reached. (Dan's 17 October decision in
+`docs/decisions.md` says quiet hours also apply to manual checks, but the shipped
+engine and route do not enforce that, as `PRODUCT.md` and #935 state; this change
+alters neither, and a stricter rule would be its own code change.) Spend is an
+estimate; the monthly cap defaults to 100 DKK and Dan can change it in Settings
+(0 to 1,000 DKK). A source that cannot be read, such as a todo file that is not
+found, is reported as unavailable with a reason; that is expected, not a fault.
+
+CI proves the wiring only. Whether a scheduled check runs, what it finds and
+whether each source reads correctly in production is established by Dan's test on
+the deployed app, not by any check here. Local checks:
+`npm test --workspace @jarvis/backend -- --run src/proactive/enabled-switch.test.ts src/push/enabled-switch.test.ts src/daily/default-off.test.ts src/config.test.ts`
+and `npm test --workspace @jarvis/web -- --run config/proactive-switch.test.ts`.
+The Bicep compile and lint (`az bicep build` and `az bicep lint`) run in CI only.
+
+## Web Push is on in production (P13-03; 18 October 2026)
+
+Dan switched Web Push milestone 1 on after the P13-01 backend and the P13-02 web
+client shipped dark. Two lines do it, and the code defaults stay off:
+
+- Backend: `infra/main.bicep` sets `JARVIS_PUSH_ENABLED` to `'true'` in the
+  backend container app's `env`, beside `STATIC_WEB_APP_ORIGIN`.
+- Web: the web job's "Load infrastructure outputs" step in
+  `.github/workflows/deploy.yml` writes `VITE_PUSH_ENABLED=true` to
+  `$GITHUB_ENV` beside `VITE_BACKEND_URL`, so the production build includes the
+  Notifications section and worker.
+
+`apps/backend/src/push/enabled-switch.test.ts` pins both values and fails if any
+other workflow, Dockerfile, package file, web config or Bicep/parameter file
+names either switch, so changing a gate is a reviewed edit to those two files
+and to the pin.
+
+To switch push off, revert the whole P13-03 change, which removes the two gate
+lines and the pin test together, or set both values to `false` and update the pin
+test in the same commit. Reverting only the two lines fails the pin test in CI
+before Deploy can run. Once Deploy has run, the backend registers no push routes,
+so nothing can send, and the web build drops the Notifications section and worker
+registration. The VAPID key pair and stored subscriptions stay in SQL and are
+reused if push is switched on again. No secret, identity or resource is involved.
+
+CI proves the wiring only. Delivery to an iPhone is established by Dan's device
+test on the installed Home Screen app (iOS 16.4 or newer), not by any check here.
+
+## P13-01 Web Push backend (17 October 2026)
+
+`JARVIS_PUSH_ENABLED` enables the authenticated Web Push backend only when its
+value is exactly `true`; unset and all other values leave routes unregistered
+and avoid push-store/database/provider work. P13-01 itself set no deployment
+value; P13-03 (above) sets it in production. The VAPID private key stays in
+server-side SQL; routes expose only its public half, and test push content is
+generic. No Teams delivery path exists. The user-started test is not subject to
+quiet hours; any future system-started delivery must enforce 22:00–07:00
+Europe/Copenhagen without an emergency exception.
+
+Focused checks:
+`npm test --workspace @jarvis/backend -- --run src/push/validation.test.ts src/push/webpush.test.ts src/push/routes.test.ts src/config.test.ts src/database/migrations.test.ts`,
+`npm run build --workspace @jarvis/backend` and
+`npm run lint --workspace @jarvis/backend`. SQL Server schema/store integration
+uses `npm run test:database --workspace @jarvis/backend -- src/database/schema.integration.test.ts`
+with the isolated loopback test database; do not claim it ran without that
+service. A green local test or build does not establish real iPhone delivery.
+
+## P13-05/P13-06 proactive foundation and engine (18 October 2026)
+
+`JARVIS_PROACTIVE_ENABLED`, `JARVIS_PROACTIVE_TODO_WRITES_ENABLED` and
+`JARVIS_PROACTIVE_ALERTS_ENABLED` are independent exact-`true` flags, all off by
+default in code. The latter two do not activate work unless the main proactive flag is
+on. P13-14 and P13-15 (above) set all three in deployment, each only in
+`infra/main.bicep`; do not set them in any other workflow or infrastructure file. This
+composition registers owner-bound status/settings/items/run routes and starts
+the in-process scheduler only when enabled. Idle ticks do not query SQL. The
+engine supports fake sources and a fake model; real source adapters and proactive
+sends remain separate slices. P13-05 and P13-06 themselves needed no index,
+workflow or infrastructure activation.
+
+Focused checks:
+`npm test --workspace @jarvis/backend -- --run src/config.test.ts src/proactive/routes.test.ts src/proactive/store.test.ts src/proactive/time.test.ts src/proactive/budget.test.ts src/proactive/language.test.ts src/proactive/sources/registry.test.ts src/database/migrations.test.ts src/push/routes.test.ts`,
+`npm test --workspace @jarvis/contracts`,
+`npm test --workspace @jarvis/web -- --run src/JobsChip.test.tsx`,
+`npm run build --workspace @jarvis/backend`,
+`npm run build --workspace @jarvis/web`, and lint for both workspaces.
+Engine checks:
+`npm test --workspace @jarvis/backend -- --run src/proactive src/database/conversation-store.test.ts`,
+`npm run build --workspace @jarvis/backend`, and
+`npm run lint --workspace @jarvis/backend`.
+Proactive SQL contracts are in
+`src/database/schema.integration.test.ts` and the narrow conversation reader has
+coverage in `src/database/conversation-store.integration.test.ts`; run them only with the isolated
+loopback SQL Server fixture via `npm run test:database --workspace @jarvis/backend -- src/database/schema.integration.test.ts`.
+Do not report SQL integration coverage unless that service ran.
+
+## P13-12 proactive run alerts (18 October 2026; default off in code, on in production since P13-15)
+
+The alert hook is composed only when the proactive, push and alert flags are all
+on and its push store/sender dependencies exist. It alerts only on scheduled or
+catch-up runs and only for new, time-critical deadline, clash or travel findings.
+The hash-only ledger retries one failed send, settles sent/twice-failed keys and
+counts daily pushes by distinct run bundle. The sender rechecks quiet hours;
+system payloads contain no private text. Since P13-15 only `infra/main.bicep` sets
+the alert switch, and `alerts-default-off.test.ts` pins that.
+
+Focused synthetic checks:
+`npm test --workspace @jarvis/backend -- --run src/proactive/alerts.test.ts src/proactive/composition.test.ts src/proactive/push-delivery.test.ts src/proactive/alerts-default-off.test.ts src/database/proactive-alert-store.test.ts src/database/migrations.test.ts src/push/routes.test.ts src/push/webpush.test.ts`,
+`npm test --workspace @jarvis/web -- --run src/push.test.ts`,
+backend/web builds and lint. SQL Server checks are in
+`src/database/schema.integration.test.ts`; run only with the isolated loopback
+SQL Server fixture using `npm run test:database --workspace @jarvis/backend -- src/database/schema.integration.test.ts`.
+Do not claim the SQL integration tests ran unless that service was available.
+
+## P13-13 proactive todo reminders (18 October 2026; default off in code, on in production since P13-15)
+
+The planner and ticker reuse `JARVIS_PROACTIVE_ALERTS_ENABLED` with the existing
+proactive and push flags and have no setting of their own; P13-15 (the section at
+the top of this file) sets the alert flag in production. The
+planner runs for every trigger after the successful todo read. The ticker is
+constructed only when its vault, reminder store, alert ledger, push store and
+shared sender dependencies are available. It has no database, vault or push
+work while idle or during Copenhagen quiet hours. Reminder titles stay in
+private database rows; pushes and logs contain no todo text.
+
+Focused synthetic checks:
+`npm test --workspace @jarvis/backend -- --run src/proactive/reminders.test.ts src/proactive/composition.test.ts src/proactive/alerts.test.ts src/proactive/push-delivery.test.ts src/database/migrations.test.ts`,
+`npm run build --workspace @jarvis/backend`, and
+`npm run lint --workspace @jarvis/backend`.
+The SQL store integration test is
+`npm run test:database --workspace @jarvis/backend -- src/database/proactive-reminder-store.integration.test.ts`.
+It requires the isolated loopback SQL Server fixture; do not claim it ran unless
+that service was available. A todo added after the last check is covered from
+the next check on; "Check now" covers it immediately.
+
+## P13-10 proactive web client (18 October 2026)
+
+`VITE_PROACTIVE_ENABLED` is an exact-`true` build flag that is off by default in
+code. P13-14 (above) sets it in the production web build only; do not set it in any
+other workflow or environment file. Its web-only implementation does not
+change the backend, contracts or authorization. The feature gate test
+(`config/proactive-switch.test.ts`) scans the repository's configuration files and
+pins that one reviewed setting.
+
+Focused web validation:
+`npm test --workspace @jarvis/web -- --run config/proactive-switch.test.ts src/ProactiveArea.test.tsx src/ProactiveSettings.test.tsx src/App.test.tsx src/JobsChip.test.tsx src/ProactiveItemPage.test.tsx`,
+`npm run lint --workspace @jarvis/web`, and
+`npm run build --workspace @jarvis/web`. Run the full web tests with
+`npm test --workspace @jarvis/web`.
+
+For visual inspection, use a scratch-only auth/API fixture and the actual web
+application in Chromium at 390×844 and 1440×900, light and dark. Exercise the
+feature with synthetic responses and reduced motion; never create a production
+auth stub, persist fixture content, or use real personal data. Browser fixtures
+and screenshots belong outside tracked application assets unless explicitly
+approved.
+
+## P13-09 proactive news source (18 October 2026)
+
+The registry includes a dark RSS/Atom news adapter. It validates configured
+HTTPS feed URLs, pins DNS resolution to public addresses, rejects redirects and
+unsafe XML, and bounds each response to ten seconds and 2 MiB. The source emits
+only sanitized title, publication time and feed host facts. It does not turn on
+any proactive flag or run by itself.
+
+Focused checks:
+`npm test --workspace @jarvis/backend -- --run src/proactive/sources/news-url.test.ts src/proactive/sources/safe-fetch.test.ts src/proactive/sources/news-parse.test.ts src/proactive/sources/news.test.ts src/proactive/sources/registry.test.ts`,
+`npm run build --workspace @jarvis/backend`, and
+`npm run lint --workspace @jarvis/backend`. Tests use mocked HTTPS and injected
+DNS/feed readers only; do not make live feed requests. Do not claim SQL Server
+integration tests ran without the isolated loopback SQL Server fixture.
+
+## P13-07 proactive read-only sources (18 October 2026)
+
+Focused synthetic checks:
+`npm test --workspace @jarvis/backend -- --run src/proactive/todo-file.test.ts src/proactive/sources/todos.test.ts src/proactive/sources/factory.test.ts src/proactive/sources/weather.test.ts src/proactive/sources/registry.test.ts src/proactive/time.test.ts src/database/task-store-proactive.test.ts src/core/weather.test.ts`,
+`npm run build --workspace @jarvis/backend`, and
+`npm run lint --workspace @jarvis/backend`. The backend build is the TypeScript
+check. The SQL snapshot is covered by the isolated database integration suite
+only when its loopback SQL Server fixture is available; do not claim it ran
+otherwise. No source flag is enabled by these checks.
+
+## P13-11 proactive suggested-todo writer (18 October 2026)
+
+The writer is constructed only inside the enabled proactive composition and
+only when `JARVIS_PROACTIVE_TODO_WRITES_ENABLED` is exactly `true`. The flag
+defaults off in code; since P13-15 only `infra/main.bicep` sets it, and
+`src/proactive/todo-writes-default-off.test.ts` pins that. The existing
+pause/Todos switches and independent writer flag are the controls.
+The writer also requires the SQL pool for durable receipt and daily-cap storage.
+The hook reuses the P13-07 resolver/parser, does not create or delete files, and
+logs no suggestion text or vault path. SQL receipts are covered by the isolated
+schema integration suite.
+
+Focused checks:
+`npm test --workspace @jarvis/backend -- --run src/config.test.ts src/logging.test.ts src/logging-source.test.ts src/proactive/todo-lines.test.ts src/proactive/todo-writer.test.ts src/proactive/composition.test.ts src/proactive/todo-writes-default-off.test.ts src/proactive/store.test.ts src/database/proactive-todo-store.test.ts src/database/migrations.test.ts src/vault/vault.test.ts`,
+`npm run build --workspace @jarvis/backend`, and
+`npm run lint --workspace @jarvis/backend`. SQL Server checks use
+`npm run test:database --workspace @jarvis/backend -- src/database/schema.integration.test.ts`
+with the isolated loopback database; do not claim them without that service.
+
+## P13-08 proactive calendar, mail and travel sources (18 October 2026)
+
+P13-08 adds registered read-only calendar, metadata-only mail and
+calendar-derived travel sources, but does not invoke them or enable any flag.
+Calendar facts use Europe/Copenhagen midnights and bounded pagination; Gmail
+reads no body, snippet or attachment; travel has no external provider.
+
+Focused checks:
+`npm test --workspace @jarvis/backend -- --run src/proactive/time.test.ts src/proactive/sources/registry.test.ts src/proactive/sources/calendar-reader.test.ts src/proactive/sources/calendar.test.ts src/proactive/sources/mail.test.ts src/proactive/sources/travel.test.ts src/google/tools.test.ts`,
+`npm run build --workspace @jarvis/backend`, and
+`npm run lint --workspace @jarvis/backend`.
+
 ## Chat acceptance failure labels and one bounded retry (#820, 17 October 2026)
 
 Read a failed chat check's safe reason in the acceptance artifact first; never
@@ -349,6 +666,55 @@ unverified. Final640px wide table scrolls within a236px region at320px, includin
 actual ArrowRight scrolling, without page overflow. Eight page cases passed
 again after that final layout correction.
 
+## Daily overview page checks (18 October 2026; P12-15)
+
+The Daily area opens on an overview (`daily/DailyHome`, `DailyOverview`,
+`useDailyProbes`, `overview`) behind the build-time switch `VITE_DAILY_ENABLED`
+(see "Daily switch checks"). From `apps/web`, run
+`npx vitest run src/daily/overview.test.ts src/daily/DailyHome.test.tsx src/daily/DailyPage.test.tsx config/daily-switch.test.ts src/App.test.tsx`,
+then `npx tsc --noEmit` and `npx eslint <changed files> --max-warnings 0`. Run
+one heavy command at a time. A Vitest worker that stalls on start is the pool's own
+start timeout, not a test failure, so retry it once. The tests mock `fetch` with
+synthetic responses and check concurrency (at most two reads), refresh and retry,
+focus movement on Open and Back, the Daily-off navigation and the build switch
+values.
+
+Browser inspection uses a temporary harness page and entry file under `apps/web`
+that mount the real `DailyHome` with the real stylesheet and a synthetic `fetch`
+(not committed; delete both afterwards), served by Vite on a spare port with
+`VITE_DAILY_ENABLED=true` in the shell environment only. Never use another
+session's port or tab, and never real login, records or provider data. The
+harness has no 3D stage, header or MSAL, and OS reduced-motion was not emulated,
+so none of that is claimed. Phone width means 390×844 touch plus 320; also check
+768 and 1280. Local runs and synthetic-browser checks are not qualification: CI is
+the authority, and no live record, physical phone or Daily activation is proved.
+
+## Daily view tool checks (18 October 2026; P12-16)
+
+`daily_show` (`apps/backend/src/daily/tools/show.ts`) and its pure builder
+(`daily/show/views.ts`) show queried Daily data as a table, chart or detail in the
+workspace. From `apps/backend`, run
+`npx vitest run src/daily/show/views.test.ts src/daily/tools/show.test.ts`.
+`composition.test.ts`, `index.test.ts`, `production-modules.test.ts` and
+`routes/query.test.ts` build real Fastify applications or the whole module list, so
+they need the pinned CI graph where those packages are unavailable locally. From
+`apps/web`, run `npx vitest run src/GeneratedViewRenderer.test.tsx src/styles.test.tsx`,
+then `npx tsc --noEmit` and `npx eslint <changed files> --max-warnings 0`. Run one
+heavy command at a time. Every check uses synthetic records and a fake workspace;
+none reads real data, calls a provider or probes a live service. The tool takes no
+new environment variable and its tests need no secret.
+
+Browser inspection follows the harness rules of the overview page section: a
+temporary page under `apps/web` mounts the real `Workspace` window with the real
+stylesheet and real builder output, is served on a spare port and is deleted
+afterwards. Check 390×844 touch in dark and light and 1280×800: no horizontal
+overflow, the source footnote inside the window and legible, whole words and numbers
+in every table cell, and no console errors. The harness has no sign-in, 3D stage or
+navigation rail, and keyboard focus and OS reduced-motion were not exercised, so
+none of that is claimed. Local runs and synthetic-browser checks are not
+qualification: CI is the authority, and no live record, physical phone or
+acceptance is proved.
+
 ## Internal Frida binding checks (17 October 2026; P12-09)
 
 The current source-only continuation registers owner-authenticated
@@ -460,12 +826,50 @@ locally; the route, composition and tool tests that load Fastify or `jose` need
 the pinned CI graph where those packages are unavailable locally. The
 `active_energy` metric name is not verified against a live export.
 
+## Daily switch checks (17 October 2026; P12-09; updated 18 October 2026, P12-15)
+
+The backend composes Daily only when the environment variable
+`JARVIS_DAILY_ENABLED` is exactly `true`. Absent or `false` leaves Jarvis
+unchanged and any other value stops startup. It is a server switch, not a secret,
+and it is off by default in code, so local runs, tests and any other environment
+stay off. Production turns Daily on for the owner in exactly two reviewed files:
+`JARVIS_DAILY_ENABLED: 'true'` in the backend container environment in
+`infra/main.bicep`, and `VITE_DAILY_ENABLED: 'true'` on the web build step of
+`.github/workflows/deploy.yml`. No other workflow, Bicep, infrastructure, `.env`
+or deploy file may mention either name, and no session sets one anywhere else.
+`daily/default-off.test.ts` allows only those two files and checks that each sets
+only its own switch, once, to the exact string `true`; changing the allow-list is
+turning Daily on or off somewhere else and needs its own reviewed change. The Vite
+build and dev server read the web switch by name only: absent or `false` is off,
+`true` is on, and any other value, including an empty one, stops them. Never set
+it in a local `.env` that is committed.
+
+To turn Daily off, revert the whole enabling change, which removes both values and
+the scan test's new expectations together, or set both to `false` and update
+`daily/default-off.test.ts` in the same commit. Reverting only the two values fails
+that test in CI before Deploy can run. Both files are release inputs, so the next
+deploy re-applies infrastructure, backend, web and agent; stored Daily data stays. After a deploy that sets the switches, the owner's
+read-only live check is: `/health` is OK, Daily appears in the side rail and the
+phone menu and opens on "What Daily holds today" with a status on each row (None
+returned is a valid answer before any data exists), and Settings shows the
+Nutrition targets section, empty until Dan enters his own values. None of it needs
+a write, and a failed read is a finding to record.
+
+Check the composition with
+`npm test --workspace @jarvis/backend -- src/config.test.ts src/production-modules.test.ts src/daily/default-off.test.ts src/daily/composition.test.ts`.
+All of it uses synthetic owners and an untouched stand-in pool; no check reads or
+writes real data or probes a live service. `composition.test.ts` builds real
+Fastify applications, so it needs the pinned CI graph where those packages are
+unavailable locally. Check that Daily off leaves routes, tools, instructions and
+startup unchanged, that Daily on adds exactly the module's routes and seven tools,
+and that the tool count stays inside the 128-tool limit.
+
 ## Internal Daily review checks (17 October 2026; P12-09)
 
 The current inactive continuation registers `daily_food_review` only with the
 explicit internal nutrition factory. Use synthetic owned meals and persisted
 chat/voice metadata. Exercise actual browser-only Now approval: no mutation
-before acceptance, no Teams send even with away routing, one-time consumption,
+before acceptance, browser confirmation in Away as well as Present, one-time consumption,
 rejection/cancellation, changed presence/revision, immutable proposals,
 matching uncertain-result recovery, exact/favourite one-step routing and
 old-history correction/deletion. No live food/Health write or activation.
@@ -628,6 +1032,12 @@ does not update that source. No production source changed after PM's review
 of `5b3a5933`.
 
 ## Header dismissal follow-up (16 October 2026; P11-05)
+
+P11-12 supersedes device-only dismissal: the server owns finished-entry
+visibility per owner. Preserve raw lifecycle history; import the old scoped
+UUID preference once, removing it only after server confirmation. A failed
+import keeps the local hides and exposes a retryable error. Header running-work
+Hide remains separate from permanent finished-work Dismiss.
 
 `JobsChip` must render `useJobs().jobs`, not the unfiltered `history`, in its
 Background work list and selected details. The previous implementation saved
@@ -970,6 +1380,17 @@ evidence, not product assets. The 16 October supplied images establish shape
 inconsistency and rejected bevelled tabs, not a replacement visual reference.
 Only repository-local guidance changes belong here; do not modify global
 instructions or `C:\Repo\templates`.
+
+## Push notification feature gate (P13-02; 17 October 2026)
+
+Web push is default-off in code. The Vite build reads only `VITE_PUSH_ENABLED` in
+addition to its existing explicit backend override and injects enabled only
+when the value is exactly the string `true`. Do not expose arbitrary environment
+variables. P13-02 did not set the gate; P13-03 sets it in the production deploy
+(see the first section), and CI or local builds stay off unless the variable is
+set. When off, the web app registers no worker, requests no push endpoints,
+renders no Notifications section and has no proactive-item route. Physical iOS
+permission and delivery checks are Dan's device test after P13-03.
 
 This worktree starts from released/remote main `2823585184d67980c580127f9dbbce97109fa91b`.
 Pinned web dependencies can be restored from an owned copy of the authorised
@@ -2321,7 +2742,7 @@ Every task issue ends with the same "Before you start" and "Definition of done" 
 | Bootstrap IDs | [`infra/bootstrap.output.json`](../infra/bootstrap.output.json); also Actions variables in `DanAakesen/jarvis` |
 
 - `infra/main.bicep` deploys into the existing `rg-jarvis`; it does not create the group or bootstrap identities. Run `az bicep build --file infra/main.bicep` and `az bicep lint --file infra/main.bicep` in PRs; the build writes `infra/main.json`, which is generated output and must not be committed. These checks need no Azure access.
-- The 6 October P6-22 decision reflects Dan's personal tenant: no Microsoft 365 or Teams. `infra/bootstrap.ps1` and Bicep no longer register or declare Bot Service, a Teams channel, or the separate Speech F0 resource. The optional backend Teams adapter remains unconfigured; approvals and notifications use the authenticated Now feed, and active English browser voice sessions announce pending approvals and task status. The normal Bicep deployment is incremental, so omission does not delete resources from prior deployments; any Azure cleanup requires separate authorization.
+- P6-22 records that production does not configure Microsoft 365 or Teams; P10-10 removes the backend Teams bot, messaging sender, cards, audio route, and Teams-specific configuration parsing. Away and Present confirmations both wait in the authenticated Now feed, and active English browser voice sessions announce pending approvals and task status. Existing database tables/rows and installed packages remain; no migration, data cleanup, or infra change is made. Any prior Bot/Speech resources or role assignments require separate authorization to clean up.
 - The Bicep deployment must supply `backendIdentityResourceId`, `sqlAdminGroupObjectId` and `foundryNameTimestamp`; `backendImage` is optional (empty skips the backend app, used only before the first backend image exists). The timestamp is fixed at `20261003200000` in `infra/main.parameters.json`, so every deploy updates the existing Foundry account and project in place. Change it only to recover from a deleted account, and then to a fresh value (L2).
 - Bicep sets `BACKEND_CONTAINER_APP_RESOURCE_ID` and grants `id-jarvis-backend` a custom role limited to Container App read/write on that app. The sleep API uses this fixed target and the existing `SQL_MANAGED_IDENTITY_CLIENT_ID` for ARM authentication. Local tests inject the scaler; a local app without an Azure managed identity cannot perform live scaling, and the Bicep build/lint checks do not verify the deployed role.
 - `sqlAdminGroupName` defaults to `jarvis-sql-admins`; the budget defaults to 300 in the subscription billing currency. Deploy requires the `JARVIS_BUDGET_CONTACT_EMAILS` GitHub secret, a comma-separated list including Dan's email. It passes the values through a mode-0600 temporary parameters file to the required Bicep `budgetContactEmails` parameter, then deletes the file. Do not commit email addresses. The first Azure deployment and real resource behavior are verified by Deploy, not by local Bicep build/lint.
@@ -3969,7 +4390,7 @@ chat/realtime model image delivery has been verified.
   gates; it is not a force-rebuild escape hatch.
 - After the first successful deploy only (P0-16): run `./infra/bootstrap.ps1 -WebRedirectUris 'https://<Static Web App host>/redirect.html'` so sign-in works there (the redirect URI is MSAL's redirect bridge page, L63) (existing URIs are kept), set `backendUrl` in `apps/web/config.json` to the backend URL so `npm run dev` signs in, and set the Actions variable `JARVIS_INFRA_DEPLOYMENT_NAME` to `jarvis-infra` (`gh variable set JARVIS_INFRA_DEPLOYMENT_NAME --body jarvis-infra`). The Deploy run summary lists both URLs.
 - No manual infrastructure portal changes.
-- **P6-22 coordinator check after merge:** wait for Deploy to finish; verify Teams settings are absent from the backend and Bicep does not provision Teams Bot or separate Speech F0 resources. In the signed-in Now panel, verify an away task update and a browser approval appear while away, Approve runs only the confirmed test action, Reject does not, and an unanswered approval expires after five minutes. If an English browser voice session is active, verify it announces the pending approval and task status. Any leftover Azure resources from prior deployments require separate cleanup authorization.
+- **P6-22 coordinator check after merge:** wait for Deploy to finish; verify the backend starts with and without legacy Teams environment variables and Bicep does not provision Teams Bot or separate Speech F0 resources. In the signed-in Now panel, verify an away task update and a browser approval appear while away, Approve runs only the confirmed test action, Reject does not, and an unanswered approval expires after five minutes. If an English browser voice session is active, verify it announces the pending approval and task status. Any leftover Azure resources from prior deployments require separate cleanup authorization.
 - Managed-project workflow examples and Azure OIDC adoption steps are in [github-actions-templates.md](github-actions-templates.md). The templates assume npm/Node defaults that adopters must match or customize; no Azure access is available to verify an adopting project's federation or deployment.
 
 ## Documentation rules
@@ -4373,3 +4794,31 @@ run `--server --stdio --no-auto-update`, without `--remote`; this task neither
 relaunches them nor claims in-session `/remote` is enabled. Remote session control
 and original hosted-model/realtime speech/private-account acceptance remain
 unverified.
+
+## P14-01 web style audit and checks (18 October 2026)
+
+`apps/web/src/styles.css` owns the shared UI tokens and control/surface forms;
+route CSS owns composition and consumes those roles. The P14-01 variant
+inventory and bounded follow-up are in [`docs/ui-audit.md`](ui-audit.md).
+From the repository root, the local web checks are:
+
+- `npm run build --workspace @jarvis/web` (TypeScript check and Vite build)
+- `npm run lint --workspace @jarvis/web`
+- `npm test --workspace @jarvis/web`
+
+For visible style changes, verify the actual app at 390×844 touch and
+1440×900, in light and dark, then exercise focus, pressed, disabled, loading,
+empty and recovery states. Use only synthetic data in browser evidence. A
+source audit or local test run is not a substitute for rendered acceptance.
+
+## P13-16 chat and voice recall (18 October 2026)
+
+`proactive_recent_items` is part of the hosted tool catalogue only when
+`JARVIS_PROACTIVE_ENABLED === true`; this task does not enable the flag. Its
+bounded, sensitive result is marked untrusted and reads the same owner-scoped
+Proactive item query as the web page. It never marks an item seen.
+
+Focused checks:
+`npm test --workspace @jarvis/backend -- --run src/proactive/tools.test.ts src/production-modules.test.ts src/database/proactive-store.test.ts src/proactive/store.test.ts src/core/capability-instructions.test.ts src/tool-parity.test.ts src/voice/realtime.test.ts src/core/settings.test.ts`,
+`npm run build --workspace @jarvis/backend`, and
+`npm run lint --workspace @jarvis/backend`.

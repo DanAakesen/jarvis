@@ -37,6 +37,33 @@ describe('app-wide control contract', () => {
     }
   });
 
+  it('uses shared panel surfaces and form-field backgrounds in Settings', () => {
+    const settingsSection = /\.settings-section\s*\{\n\s*position:[^;]+;([^}]*)\}/;
+    expect(ruleDeclaration(source, settingsSection, 'border')).toBe('1px solid var(--rule)');
+    expect(ruleDeclaration(source, settingsSection, 'border-radius')).toBe('var(--radius-panel)');
+    expect(ruleDeclaration(source, settingsSection, 'background')).toBe('var(--surface-translucent)');
+    const popover = /\.jobs-popover\s*\{([^}]*)\}/;
+    expect(ruleDeclaration(source, popover, 'border')).toBe('1px solid var(--rule)');
+    expect(ruleDeclaration(source, popover, 'border-radius')).toBe('var(--radius-panel)');
+    expect(ruleDeclaration(source, popover, 'background')).toBe('var(--surface)');
+    expect(ruleDeclaration(source,
+      /\.settings-field select, \.settings-field input, \.settings-field textarea\s*\{\n\s*border-color:[^;]+;([^}]*)\}/,
+      'background-color')).toBe('var(--surface)');
+    expect(ruleDeclaration(source, /\.settings-save\s*\{\n\s*position:[^;]+;([^}]*)\}/, 'border-radius'))
+      .toBe('var(--radius-panel)');
+  });
+
+  it('pairs Daily and Proactive block alerts with the shared error surface', () => {
+    const daily = readFileSync('src/daily/daily.css', 'utf8');
+    const proactive = readFileSync('src/proactive.css', 'utf8');
+    expect(ruleDeclaration(daily, /\.daily-notice\[role="alert"\]\s*\{([^}]*)\}/, 'background'))
+      .toBe('var(--error-surface)');
+    expect(ruleDeclaration(daily, /\.daily-notice\[role="alert"\]\s*\{([^}]*)\}/, 'border')).toBe('1px solid var(--rule)');
+    expect(ruleDeclaration(proactive, /\.proactive-page \[role="alert"\]\s*\{([^}]*)\}/, 'background'))
+      .toBe('var(--error-surface)');
+    expect(ruleDeclaration(proactive, /\.proactive-page \[role="alert"\]\s*\{([^}]*)\}/, 'border')).toBe('1px solid var(--rule)');
+  });
+
   it('removes decorative control rims without removing neutral field structure or focus', () => {
     for (const selector of [
       /(?:^|\n)\.secondary-button\s*\{([^}]*)\}/,
@@ -80,6 +107,23 @@ describe('app-wide control contract', () => {
     expect(source).toContain('.folio-action { width: 44px; height: 44px; }');
     expect(source).toContain('.release-trail-button { width: 44px; min-height: 44px; }');
     expect(source).toContain('.app-shell[data-phone="true"] .knowledge-legend button { min-height: 44px;');
+  });
+});
+
+describe('generated view styling', () => {
+  const source = readFileSync('src/styles.css', 'utf8');
+
+  it('keeps table scrolling and source notes while using shared surface, type, and spacing tokens', () => {
+    expect(ruleDeclaration(source, /\.generated-view-table\s*\{([^}]*)\}/, 'overflow')).toBe('auto');
+    expect(ruleDeclaration(source, /\.generated-view-table th, \.generated-view-table td\s*\{([^}]*)\}/, 'overflow-wrap'))
+      .toBe('normal');
+    expect(ruleDeclaration(source, /\.generated-view-table th\s*\{([^}]*)\}/, 'background')).toBe('var(--surface-muted)');
+    expect(ruleDeclaration(source, /\.generated-view-source-note\.generated-view-source-note\s*\{([^}]*)\}/, 'font-size'))
+      .toBe('var(--type-caption)');
+    expect(ruleDeclaration(source, /\.generated-view-timeline\.generated-view-timeline\s*\{([^}]*)\}/, 'gap'))
+      .toBe('var(--space-4)');
+    expect(ruleDeclaration(source, /\.generated-chart\s*\{([^}]*)\}/, 'gap')).toBe('var(--space-2)');
+    expect(ruleDeclaration(source, /\.generated-chart text\s*\{([^}]*)\}/, 'font-size')).toBe('var(--type-caption)');
   });
 });
 

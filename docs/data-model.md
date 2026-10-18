@@ -679,7 +679,7 @@ request-only context for matching a live Chrome tab. They are excluded from
 conversation transcripts, task events and sensitive tool-call audit payloads;
 the existing `usage` frame/token accounting is the only persisted P7-05 data.
 
-## 8 · Phone notifications
+## 8 · Browser confirmations
 
 ```mermaid
 erDiagram
@@ -700,14 +700,15 @@ erDiagram
    }
 ```
 
-P7-03 stores one validated personal Teams conversation reference for Dan and
-single-use confirmation state bound to his object ID and delivery channel. The
-`conversation_id` value `browser` identifies a present-mode approval; its opaque
-ID and summary remain in the backend's bounded in-memory queue.
-`IX_teams_confirmations_expiry` supports expiry cleanup. Cards and message text
-are not persisted in these tables; voice bytes live only in a bounded in-memory
-store with five-minute links. Startup expires pending confirmations, and an
-approval is atomically consumed before the backend invokes its action.
+The legacy `teams_conversations` table and its rows remain untouched; the
+backend no longer reads or writes them. `teams_confirmations` remains the
+existing persistence for single-use browser approvals and phone-session
+association, bound to the owner's object ID. Its `conversation_id` value
+`browser` identifies the app approval; the opaque ID and summary remain in the
+backend's bounded in-memory queue. `IX_teams_confirmations_expiry` supports
+expiry cleanup. Startup expires pending confirmations, and an approval is
+atomically consumed before the backend invokes its action. P10-10 makes no
+schema changes or data cleanup.
 
 ## Physical schema (groups 1–3)
 

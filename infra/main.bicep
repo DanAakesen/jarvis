@@ -755,6 +755,22 @@ resource backendApp 'Microsoft.App/containerApps@2024-03-01' = if (deployBackend
               value: 'https://${staticWebApp.properties.defaultHostname}'
             }
             {
+              name: 'JARVIS_PUSH_ENABLED'
+              value: 'true'
+            }
+            {
+              name: 'JARVIS_PROACTIVE_ENABLED'
+              value: 'true'
+            }
+            {
+              name: 'JARVIS_PROACTIVE_TODO_WRITES_ENABLED'
+              value: 'true'
+            }
+            {
+              name: 'JARVIS_PROACTIVE_ALERTS_ENABLED'
+              value: 'true'
+            }
+            {
               name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
               value: appInsights.properties.ConnectionString
             }
@@ -821,6 +837,11 @@ resource backendApp 'Microsoft.App/containerApps@2024-03-01' = if (deployBackend
             {
               name: 'JARVIS_CODEX_TOOL_MODEL'
               value: codexToolModel
+            }
+            {
+              // Backend half of the Daily switch; the web half is VITE_DAILY_ENABLED in deploy.yml. To turn Daily off, revert the whole change or set both to 'false' and update daily/default-off.test.ts in the same commit.
+              name: 'JARVIS_DAILY_ENABLED'
+              value: 'true'
             }
             {
               // English voice route; without it /voice is never registered (L102).

@@ -40,6 +40,13 @@ export class VaultWriteConflictError extends Error {
   }
 }
 
+export class VaultFileTooLargeError extends Error {
+  constructor() {
+    super('GitHub file content is not a bounded text note');
+    this.name = 'VaultFileTooLargeError';
+  }
+}
+
 function object(value: unknown): Record<string, unknown> | undefined {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
     ? value as Record<string, unknown>
@@ -87,7 +94,8 @@ function decodeContent(value: unknown): string {
     throw new Error('GitHub file content is invalid');
   }
   const bytes = Buffer.from(encoded, 'base64');
-  if (bytes.length > MAX_VAULT_FILE_BYTES || bytes.includes(0)) {
+  if (bytes.length > MAX_VAULT_FILE_BYTES) throw new VaultFileTooLargeError();
+  if (bytes.includes(0)) {
     throw new Error('GitHub file content is not a bounded text note');
   }
   try {

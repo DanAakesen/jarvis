@@ -20,7 +20,7 @@ import {
 import type { UsageStore } from '../core/usage.js';
 import { ToolFailure, ToolRefusal } from '../core/tool-registry.js';
 import type { BackendModule } from '../modules.js';
-import type { TeamsNotificationService } from '../teams/service.js';
+import type { OwnerInteractionService } from '../core/owner-interactions.js';
 import {
   MAX_VAULT_FILE_BYTES,
   VAULT_BRANCH,
@@ -551,6 +551,10 @@ function assertCaptureIsSafe(source: string, text: string): void {
   if (sensitivePattern.test(`${source}\n${text}`) && !/\bremember\b/iu.test(source)) {
     throw new ToolRefusal('I will not save banking or health details unless Dan explicitly says “remember”. Nothing was written.');
   }
+}
+
+export function isVaultLineSafe(text: string): boolean {
+  return !credentialPattern.test(text) && !secretPattern.test(text) && !sensitivePattern.test(text);
 }
 
 export function createVaultModule(options: {
@@ -1269,7 +1273,7 @@ export function createVaultModule(options: {
           throw new ToolRefusal('The vault deletion request is invalid.');
         }
         const path = validateWritePath(value.path);
-        const service: TeamsNotificationService | null = request.server.teamsNotifications;
+        const service: OwnerInteractionService | null = request.server.ownerInteractions;
         if (!service) {
           throw new ToolRefusal('Dan’s Now approval service is unavailable; the note was not deleted.');
         }
@@ -2094,7 +2098,7 @@ export function createVaultModule(options: {
         }
         const note = await options.client.read(path, signal);
         if (!note) return reply.code(404).send({ error: 'Memory not found' });
-        const service: TeamsNotificationService | null = app.teamsNotifications;
+        const service: OwnerInteractionService | null = app.ownerInteractions;
         if (!service) return reply.code(503).send({ error: 'Web approval unavailable' });
         try {
           if (app.awayModeStore && (await app.awayModeStore.read()).mode !== 'present') {

@@ -109,11 +109,8 @@ import { createVisionWatchModule, VisionWatchService } from './vision/watch.js';
 import { createWebResearchModule, runCodexToolResult } from './core/web-research.js';
 import { createHtmlResearchModule } from './core/research.js';
 import { HtmlArtifactStore } from './database/html-artifact-store.js';
-import { createTeamsNotificationStore } from './database/teams-notification-store.js';
-import { createEphemeralAudioStore } from './teams/audio-store.js';
-import { createAzureSpeechSynthesizer } from './teams/speech.js';
-import { createTeamsBotModule, createTeamsConnector } from './teams/bot.js';
-import { createTeamsNotificationService } from './teams/service.js';
+import { createConfirmationStore } from './database/confirmation-store.js';
+import { createOwnerInteractionService } from './core/owner-interactions.js';
 import { createAzureSpeechPartialRecognizerFactory } from './voice/speech-recognizer.js';
 import { createAwayModeStore } from './database/away-mode-store.js';
 import { createPhoneCallModule } from './phone/calls.js';
@@ -130,13 +127,18 @@ import { WorkspacePinStore } from './database/workspace-pin-store.js';
 import { createWeatherModule } from './core/weather.js';
 import { createSystemStatusReader } from './system-status.js';
 import { createProductionModules } from './production-modules.js';
+import { createPushStore } from './database/push-store.js';
+import { registerPushRoutes } from './push/routes.js';
+import { createSystemPushSender } from './proactive/push-delivery.js';
+import { composeDaily } from './daily/composition.js';
+import { registerProactive } from './proactive/composition.js';
+import { createProactiveStore } from './database/proactive-store.js';
+import { createMemoryProactiveStore } from './proactive/store.js';
+import { createProactiveToolsModule } from './proactive/tools.js';
 
 try {
   const config = loadConfig();
   const databaseConfig = loadDatabaseConfig();
-  if (config.teams && !databaseConfig) {
-    throw new ConfigurationError('SQL is required for Teams conversations and confirmations');
-  }
   const archiveStorageAccount = loadTaskEventArchiveStorageAccount();
   if (databaseConfig && !archiveStorageAccount) {
     throw new ConfigurationError('TASK_EVENT_ARCHIVE_STORAGE_ACCOUNT is required when SQL is configured');
@@ -183,7 +185,8 @@ try {
     onAlert: () => nowEventHub.publish({ type: 'refresh' }),
   }) : undefined;
   const credential = archiveStorageAccount || config.keyVaultUri || config.voiceLiveEndpoint || config.foundryProjectEndpoint ||
-    config.foundryEndpoints || config.foundryAccountResourceId || config.githubAppId || config.googleTimeZone || config.teams || sleepResourceId
+    config.foundryEndpoints || config.foundryAccountResourceId || config.githubAppId || config.googleTimeZone ||
+    config.phone || sleepResourceId
     ? new DefaultAzureCredential(managedIdentityClientId
       ? { managedIdentityClientId }
       : {})
@@ -533,35 +536,16 @@ try {
   const projectStore = database ? createProjectStore(database.pool, trackedRepositories) : undefined;
   const taskStore = database ? createTaskStore(database.pool, eventHub, taskEventArchive) : undefined;
   const taskStatusNotificationStore = database ? createTaskStatusNotificationStore(database.pool) : undefined;
-  const teamsAudioStore = config.teams ? createEphemeralAudioStore() : undefined;
-  const teamsSpeech = config.teams && credential
-    ? createAzureSpeechSynthesizer(
-      config.teams.speechRegion,
-      async (scope, signal) => {
-        const token = await credential.getToken(scope, { abortSignal: signal });
-        if (!token) throw new Error('Speech identity unavailable');
-        return token.token;
-      },
-    )
-    : undefined;
-  const teamsNotifications = database && nowFeedStore
-    ? createTeamsNotificationService({
+  const ownerInteractions = database && nowFeedStore
+    ? createOwnerInteractionService({
       ownerObjectId: config.auth.ownerObjectId,
-      tenantId: config.auth.tenantId,
-      store: createTeamsNotificationStore(database.pool),
-      ...(config.teams && credential && teamsAudioStore ? {
-        publicOrigin: config.teams.audioOrigin,
-        connector: createTeamsConnector(config.teams.botAppId, config.teams.tenantId),
-        audioStore: teamsAudioStore,
-      } : {}),
-      ...(awayModeStore ? { isAway: async () => (await awayModeStore.read()).mode !== 'present' } : {}),
+      store: createConfirmationStore(database.pool),
       onWebNotification: async (kind, text) => {
         if (!nowFeedStore.recordNotification) throw new Error('Now feed notifications are unavailable');
         await nowFeedStore.recordNotification(kind, text);
       },
       onConfirmationsChanged: () => nowEventHub.publish({ type: 'refresh' }),
       onConfirmationPending: () => nowEventHub.publish({ type: 'status', kind: 'approval_pending' }),
-      ...(teamsSpeech ? { speech: teamsSpeech } : {}),
     })
     : undefined;
   const webhookDeliveryStore = database ? createWebhookDeliveryStore(database.pool, alertNotifier) : null;
@@ -574,10 +558,6 @@ try {
       store: createProjectPolicyStore(database.pool),
       tasks: taskStore,
       tokenIssuer: githubAppTokenIssuer,
-      ...(teamsNotifications ? {
-        runConfirmed: (summary, action) => teamsNotifications.runConfirmed('merge', summary, action),
-      } : {}),
-      onConfirmationError: (error) => logger.warn(safeErrorFields(error), 'project_policy.confirmation_failed'),
       onError: (error) => logger.warn(safeErrorFields(error), 'project_policy.recheck_failed'),
     })
     : undefined;
@@ -707,9 +687,9 @@ try {
     ...(pcBridgeStatusStore ? {
       onStatusChange: (online, controlPaused) => pcBridgeStatusStore.setStatus(online, controlPaused),
     } : {}),
-    ...(teamsNotifications ? {
+    ...(ownerInteractions ? {
       runConfirmed: (summary, action, signal) =>
-        teamsNotifications.runConfirmed('computer_use', summary, action, signal),
+        ownerInteractions.runConfirmed('computer_use', summary, action, signal),
     } : {}),
     onStatusError: (error) => logger.warn(safeErrorFields(error), 'pc_bridge.status_update_failed'),
   });
@@ -752,13 +732,13 @@ try {
     } : {}),
   });
   const phoneCallModule = config.phone && phoneSessionStore && phoneSecretClient && credential &&
-    config.teams && config.foundryProjectEndpoint
+    config.foundryProjectEndpoint
     ? createPhoneCallModule({
       client: new CallAutomationClient(config.phone.acsEndpoint, credential),
       store: phoneSessionStore,
       ownerObjectId: config.auth.ownerObjectId,
       teamsResourceAccountObjectId: config.phone.teamsResourceAccountObjectId,
-      publicOrigin: config.teams.audioOrigin,
+      publicOrigin: config.phone.publicOrigin,
       getAllowlist: getPhoneAllowlist,
       getToken: async (scope, signal) => {
         const token = await credential.getToken(scope, { abortSignal: signal });
@@ -850,14 +830,16 @@ try {
         : {}),
     })
     : undefined;
-  const teamsBotModule = config.teams && teamsNotifications && teamsAudioStore
-    ? await createTeamsBotModule({
-      clientId: config.teams.botAppId,
-      tenantId: config.teams.tenantId,
-      notificationService: teamsNotifications,
-      audioStore: teamsAudioStore,
-    })
+  const proactiveStore = config.proactiveEnabled
+    ? database
+      ? createProactiveStore(database.pool, config.auth.ownerObjectId)
+      : createMemoryProactiveStore(config.auth.ownerObjectId)
     : undefined;
+  const proactiveToolsModule = createProactiveToolsModule({
+    enabled: config.proactiveEnabled,
+    ownerObjectId: config.auth.ownerObjectId,
+    ...(proactiveStore ? { store: proactiveStore } : {}),
+  });
   const modules: BackendModule[] = createProductionModules({
     core: coreModule,
     conversation: createConversationModule(frameStore),
@@ -881,7 +863,12 @@ try {
     screenVision: screenVisionModule,
     visionWatch: visionWatchModule,
     voiceRelay: voiceRelayModule,
-    teamsBot: teamsBotModule,
+    daily: composeDaily({
+      enabled: config.dailyEnabled === true,
+      pool: database?.pool,
+      ownerObjectId: config.auth.ownerObjectId,
+    }),
+    proactive: proactiveToolsModule,
   });
   const budgetAlertStore = alertActivityStore;
   const budgetReader = database && credential && config.monthlyBudgetResourceId
@@ -894,7 +881,7 @@ try {
       },
     })
     : undefined;
-  const modelDeploymentWorkflow = config.foundryAccountResourceId && credential && settingsStore && teamsNotifications
+  const modelDeploymentWorkflow = config.foundryAccountResourceId && credential && settingsStore && ownerInteractions
     ? createModelDeploymentWorkflow({
       catalogue: modelCatalogue,
       settings: settingsStore,
@@ -907,7 +894,7 @@ try {
         },
       }),
       confirm: (actionKind, summary, action, signal) =>
-        teamsNotifications.runConfirmed(actionKind, summary, action, signal),
+        ownerInteractions.runConfirmed(actionKind, summary, action, signal),
       onChanged: () => nowEventHub.publish({ type: 'refresh' }),
     })
     : undefined;
@@ -1088,6 +1075,9 @@ try {
     ...(conversationAttachments ? { conversationAttachments } : {}),
     ...(attachmentVision ? { attachmentVision } : {}),
     modules,
+    ...(projectPolicyEvaluator ? {
+      projectPolicyChanged: (projectId: string) => projectPolicyEvaluator.recheckProject(projectId),
+    } : {}),
     systemStatusReader,
     systemSmokeProbes,
     modelCatalogue,
@@ -1162,15 +1152,63 @@ try {
     eventHub,
     nowEventHub,
     ...(conversationAgent ? { conversationAgent } : {}),
-    ...(teamsNotifications ? { teamsNotifications } : {}),
+    ...(ownerInteractions ? { ownerInteractions } : {}),
     ...(phoneSessionStore ? { phoneSessionStore } : {}),
+  });
+  registerPushRoutes(app, config.pushEnabled, () => ({
+    store: createPushStore(database!.pool),
+    publicOrigin: config.staticWebAppOrigin!,
+  }));
+  const alertPushStore = config.proactiveEnabled && config.proactiveAlertsEnabled && config.pushEnabled &&
+      database && config.staticWebAppOrigin
+    ? createPushStore(database.pool)
+    : undefined;
+  const alertPushSender = alertPushStore && config.staticWebAppOrigin
+    ? createSystemPushSender({
+      store: alertPushStore,
+      ownerObjectId: config.auth.ownerObjectId,
+      publicOrigin: config.staticWebAppOrigin,
+      now: () => new Date(),
+      logger,
+    })
+    : undefined;
+  if (config.proactiveEnabled) registerProactive(app, {
+    enabled: config.proactiveEnabled,
+    ownerObjectId: config.auth.ownerObjectId,
+    ...(proactiveStore ? { store: proactiveStore } : {}),
+    ...(database ? { pool: database.pool } : {}),
+    ...(googleApiClient ? { googleApiClient } : {}),
+    ...(vaultClient ? { vaultClient } : {}),
+    ...(settingsStore ? { settingsStore } : {}),
+    modelCatalogue,
+    ...(credential ? {
+      getCredentialToken: async (scope: string, signal?: AbortSignal) => {
+        const token = await credential.getToken(scope, signal ? { abortSignal: signal } : {});
+        return token?.token;
+      },
+    } : {}),
+    ...(config.foundryProjectEndpoint ? { foundryProjectEndpoint: config.foundryProjectEndpoint } : {}),
+    ...(usageStore ? { usageStore } : {}),
+    ...(taskStore ? { taskStore } : {}),
+    backgroundJobs: app.backgroundJobs,
+    ...(conversationStore ? { conversationStore } : {}),
+    ...(alertPushStore ? { pushStore: alertPushStore } : {}),
+    ...(alertPushSender ? { systemPushSender: alertPushSender } : {}),
+    pushEnabled: config.pushEnabled,
+    todoWritesEnabled: config.proactiveTodoWritesEnabled,
+    alertsEnabled: config.proactiveAlertsEnabled,
+    now: () => new Date(),
+    logger,
   });
   runtime.app = app;
   if (checksLoop || projectPolicyEvaluator) {
     app.addHook('onClose', async () => {
       await checksLoop?.stop();
-      projectPolicyEvaluator?.stop();
+      await projectPolicyEvaluator?.stop();
     });
+  }
+  if (projectPolicyEvaluator) {
+    app.addHook('onReady', async () => { projectPolicyEvaluator.start(); });
   }
   if (dispatcher) app.addHook('onClose', async () => { await dispatcher.stop(); });
   if (database) registerDatabase(app, database);
@@ -1247,7 +1285,7 @@ try {
       }
       logger.info('database.ready');
     }
-    await teamsNotifications?.expirePendingConfirmations();
+    await ownerInteractions?.expirePendingConfirmations();
     if (!stopping) {
       await sandboxHeartbeat?.start();
       dispatcher?.start();

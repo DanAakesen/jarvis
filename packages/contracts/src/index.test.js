@@ -1081,6 +1081,7 @@ test('background jobs are bounded and typed', () => {
   };
   assert.equal(isBackgroundJob(job), true);
   assert.equal(isBackgroundJob({ ...job, kind: 'embedding' }), true);
+  assert.equal(isBackgroundJob({ ...job, kind: 'proactive' }), true);
   assert.equal(isBackgroundJob({ ...job, status: 'done', step: 3, viewId: 'research-abc' }), true);
   assert.equal(isBackgroundJob({ ...job, step: 4 }), false);
   assert.equal(isBackgroundJob({ ...job, title: 'x'.repeat(81) }), false);

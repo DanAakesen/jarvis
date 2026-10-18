@@ -22,6 +22,9 @@ export async function createTelemetry(connectionString?: string): Promise<Teleme
 }
 
 const failureEvents = new Set([
+  'proactive.failed',
+  'proactive.todo_writer',
+  'Background job visibility read failed', 'Background job dismissal failed', 'Background job dismissal import failed',
   'daily.mcp_operation_failed', 'daily.mcp_audit_failed',
   'sandbox_heartbeat.poll_failed', 'sandbox_heartbeat.configuration_missing',
   'budget_alert.check_failed', 'task_event_archive.failed', 'project_policy.confirmation_failed',
@@ -274,6 +277,41 @@ function safeFields(input: Record<string, unknown>): Record<string, unknown> {
         /^(?:\/(?:[A-Za-z_][A-Za-z0-9_-]{0,63}|\d{1,10}))*$/u.test(input.instancePath)) {
       fields.instancePath = input.instancePath;
     }
+    return fields;
+  }
+  if (input.msg === 'proactive.failed') {
+    const fields: Record<string, unknown> = {};
+    if (typeof input.runId === 'string' && /^[\da-f]{8}-(?:[\da-f]{4}-){3}[\da-f]{12}$/iu.test(input.runId)) {
+      fields.runId = input.runId;
+    }
+    if (typeof input.reason === 'string' &&
+        ['internal_error', 'hook_failed', 'job_update_failed'].includes(input.reason)) fields.reason = input.reason;
+    return fields;
+  }
+  if (input.msg === 'proactive.todo_writer') {
+    const fields: Record<string, unknown> = {};
+    if (typeof input.runId === 'string' && /^[\da-f]{8}-(?:[\da-f]{4}-){3}[\da-f]{12}$/iu.test(input.runId)) {
+      fields.runId = input.runId;
+    }
+    const reasons = new Set([
+      'run_aborted', 'paused', 'todos_disabled', 'quiet_hours', 'todo_daily_cap', 'todo_run_cap',
+      'settings_unavailable', 'receipt_read_failed', 'receipt_write_failed', 'invalid_text',
+      'unsafe_text', 'duplicate', 'todo_file_missing', 'todo_file_ambiguous',
+      'todo_file_unwritable', 'todo_file_too_large', 'vault_app_not_installed',
+      'vault_write_failed', 'vault_conflict_exhausted', 'vault_unavailable',
+      'todo_added', 'todo_recovered', 'todo_item_update_failed',
+    ]);
+    if (typeof input.reason === 'string' && reasons.has(input.reason)) fields.reason = input.reason;
+    if (Array.isArray(input.itemIds)) {
+      const itemIds = input.itemIds.filter((id): id is string => typeof id === 'string' &&
+        /^[\da-f]{8}-(?:[\da-f]{4}-){3}[\da-f]{12}$/iu.test(id)).slice(0, 20);
+      if (itemIds.length > 0) fields.itemIds = itemIds;
+    }
+    if (typeof input.count === 'number' && Number.isInteger(input.count) && input.count >= 0 && input.count <= 100) {
+      fields.count = input.count;
+    }
+    if (typeof input.durationMs === 'number' && Number.isFinite(input.durationMs) &&
+        input.durationMs >= 0 && input.durationMs <= 180_000) fields.durationMs = input.durationMs;
     return fields;
   }
   if (typeof input.msg === 'string' && failureEvents.has(input.msg)) {

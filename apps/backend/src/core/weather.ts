@@ -71,7 +71,7 @@ function coordinate(value: unknown, minimum: number, maximum: number): value is 
   return finiteNumber(value) && value >= minimum && value <= maximum;
 }
 
-function weatherDescription(code: number): string {
+export function weatherDescription(code: number): string {
   return weatherCodeDescriptions[code] ?? 'Unknown conditions';
 }
 

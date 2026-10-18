@@ -77,6 +77,25 @@ export interface RunningTaskContextSnapshot {
   truncated: boolean;
 }
 
+export interface ProactiveTaskStatus {
+  id: string;
+  projectName: string;
+  projectPolicy: 'deliver_pr' | 'complete_without_deployment';
+  title: string;
+  state: TaskState;
+  createdAt: string;
+  startedAt: string | null;
+  pullRequestState: 'open' | 'closed' | 'merged' | null;
+  pullRequestOpenedAt: string | null;
+  checks: 'pending' | 'passed' | 'failed' | null;
+  latestSessionEndReason: TaskRecord['latestSessionEndReason'];
+}
+
+export interface ProactiveTaskSnapshot {
+  runningCount: number;
+  tasks: ProactiveTaskStatus[];
+}
+
 export interface CreateTaskInput {
   projectId: string;
   title: string;
@@ -146,6 +165,7 @@ export interface TaskStore {
   getActiveRepository(id: string, foundrySessionId: string): Promise<string | null>;
   getEventsAfter(taskId: string, eventId: string, limit: number): Promise<TaskEventMessage[]>;
   getRunningContext(): Promise<RunningTaskContextSnapshot>;
+  getProactiveSnapshot(): Promise<ProactiveTaskSnapshot>;
   transition(
     id: string,
     state: TaskState,

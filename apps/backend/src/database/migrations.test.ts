@@ -13,6 +13,82 @@ async function directory() {
 afterEach(async () => { await Promise.all(directories.splice(0).map((path) => rm(path, { recursive: true }))); });
 
 describe('committed SQL manifest', () => {
+  it('stores owner-bound background job dismissals separately from raw jobs with reversible visibility state', async () => {
+    const migration = (await readMigrations()).find(({ name }) => name === '0053_background_job_dismissals.sql');
+    expect(migration?.sql).toContain('CREATE TABLE dbo.background_job_dismissals');
+    expect(migration?.sql).toContain('owner_object_id uniqueidentifier NOT NULL');
+    expect(migration?.sql).toContain('PRIMARY KEY (owner_object_id, job_id)');
+    expect(migration?.sql).toContain('REFERENCES dbo.background_jobs (job_id) ON DELETE CASCADE');
+    expect(migration?.sql).toContain('DEFAULT SYSUTCDATETIME()');
+    expect(migration?.sql).toContain('IX_background_job_dismissals_job_id');
+    expect(migration?.sql).not.toMatch(/\b(?:UPDATE|DELETE)\b(?! CASCADE)/u);
+    const down = await readDownMigration('0053_background_job_dismissals.sql');
+    expect(down.sql).toContain('IF EXISTS (SELECT 1 FROM dbo.background_job_dismissals WITH (TABLOCKX,HOLDLOCK))');
+    expect(down.sql).toContain('THROW 51000');
+    expect(down.sql).toContain('dismissal preferences must be retained');
+    expect(down.sql).toContain('DROP TABLE dbo.background_job_dismissals;');
+  });
+
+  it('adds durable owner-scoped push delivery tables and protects rollback evidence', async () => {
+    const migration = (await readMigrations()).find(({ name }) => name === '0054_proactive_push.sql');
+    expect(migration?.sql).toContain('CHECK (id = 1)');
+    expect(migration?.sql).toContain('UX_push_subscriptions_owner_endpoint_hash');
+    expect(migration?.sql).toContain("CHECK (kind = N'test')");
+    expect((await readDownMigration('0054_proactive_push.sql')).sql).toContain('cannot roll back while rows exist');
+  });
+  it('adds the proactive operational schema and a reversible proactive job kind', async () => {
+    const foundation = (await readMigrations()).find(({ name }) => name === '0055_proactive_foundation.sql');
+    expect(foundation?.sql).toContain("CHECK (kind IN (N'test', N'finding'))");
+    expect(foundation?.sql).toContain('UX_proactive_items_owner_dedupe_key');
+    expect(foundation?.sql).toContain('CREATE TABLE dbo.proactive_settings');
+    expect(foundation?.sql).toContain('CREATE TABLE dbo.proactive_runs');
+    expect(foundation?.sql).toContain('CREATE TABLE dbo.proactive_source_status');
+    expect(foundation?.sql).toContain('CREATE TABLE dbo.proactive_spend');
+    expect(foundation?.sql).toContain('UX_proactive_runs_owner_slot');
+    expect((await readDownMigration('0055_proactive_foundation.sql')).sql)
+      .toContain('Proactive records are durable evidence');
+
+    const jobs = (await readMigrations()).find(({ name }) => name === '0056_background_job_kind_proactive.sql');
+    expect(jobs?.sql).toContain("N'proactive'");
+    const down = await readDownMigration('0056_background_job_kind_proactive.sql');
+    expect(down.sql).toContain("WHERE kind = N'proactive'");
+    expect(down.sql).toContain('THROW 51000');
+  });
+  it('adds durable suggested-todo receipts with add-once and daily-cap indexes', async () => {
+    const migration = (await readMigrations()).find(({ name }) => name === '0058_proactive_todo_receipts.sql');
+    expect(migration?.sql).toContain('CREATE TABLE dbo.proactive_todo_receipts');
+    expect(migration?.sql).toContain('item_id uniqueidentifier NULL');
+    expect(migration?.sql).toContain('dedupe_key char(32) NOT NULL');
+    expect(migration?.sql).toContain('WHERE status = N\'added\'');
+    expect(migration?.sql).toContain('IX_proactive_todo_receipts_owner_day_status');
+    const down = await readDownMigration('0058_proactive_todo_receipts.sql');
+    expect(down.sql).toContain('Proactive todo receipts are durable evidence');
+    expect(down.sql).toContain('DROP TABLE dbo.proactive_todo_receipts');
+  });
+  it('stores hash-only alert attempts with owner/key idempotency and retains rollback evidence', async () => {
+    const migration = (await readMigrations()).find(({ name }) => name === '0057_proactive_alerts.sql');
+    expect(migration?.sql).toContain('CREATE TABLE dbo.proactive_alerts');
+    expect(migration?.sql).toContain('alert_key char(32) COLLATE Latin1_General_100_BIN2 NOT NULL');
+    expect(migration?.sql).toContain('UNIQUE INDEX UX_proactive_alerts_owner_alert_key');
+    expect(migration?.sql).toContain('IX_proactive_alerts_owner_day_status');
+    expect(migration?.sql).toContain("N'travel_disruption'");
+    expect(migration?.sql).toContain('CK_proactive_alerts_reason');
+    const down = await readDownMigration('0057_proactive_alerts.sql');
+    expect(down.sql).toContain('cannot roll back while rows exist');
+    expect(down.sql).toContain('DROP TABLE dbo.proactive_alerts;');
+  });
+  it('creates the owner-scoped proactive reminder store with its pending and sent indexes', async () => {
+    const migration = (await readMigrations()).find(({ name }) => name === '0059_proactive_reminders.sql');
+    expect(migration?.sql).toContain('CREATE TABLE dbo.proactive_reminders');
+    expect(migration?.sql).toContain('title nvarchar(80) NOT NULL');
+    expect(migration?.sql).toContain("N'pending', N'sent', N'cancelled', N'expired', N'failed', N'suppressed'");
+    expect(migration?.sql).toContain('UX_proactive_reminders_owner_key');
+    expect(migration?.sql).toContain('IX_proactive_reminders_owner_state_fire_at');
+    expect(migration?.sql).toContain('IX_proactive_reminders_owner_day_state');
+    expect((await readDownMigration('0059_proactive_reminders.sql')).sql)
+      .toContain('DROP TABLE dbo.proactive_reminders;');
+  });
+
   it('retains durable task submission claims and refuses to erase retry protection on rollback', async () => {
     const migration = (await readMigrations()).find(({ name }) => name === '0052_factory_task_submissions.sql');
     expect(migration?.sql).toContain('submission_id uniqueidentifier NOT NULL PRIMARY KEY');
@@ -150,6 +226,13 @@ describe('committed SQL manifest', () => {
       '0050_daily_saved_food.sql',
       '0051_conversation_summaries.sql',
       '0052_factory_task_submissions.sql',
+      '0053_background_job_dismissals.sql',
+      '0054_proactive_push.sql',
+      '0055_proactive_foundation.sql',
+      '0056_background_job_kind_proactive.sql',
+      '0057_proactive_alerts.sql',
+      '0058_proactive_todo_receipts.sql',
+      '0059_proactive_reminders.sql',
     ]);
     for (const migration of migrations) await expect(readDownMigration(migration.name)).resolves.toMatchObject({ name: migration.name });
   });

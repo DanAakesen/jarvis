@@ -38,7 +38,7 @@ export const settingsAnchors: Record<string, string> = {
   projects: 'projects-heading',
   routines: 'routines-heading',
   credentials: 'credentials-heading',
-  backend: 'backend-heading',
+  notifications: 'notifications-heading',
 };
 
 export type NavigateTarget =

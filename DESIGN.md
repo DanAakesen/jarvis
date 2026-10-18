@@ -9,14 +9,18 @@ the existing green/yellow/blue tokens remain, with darker same-hue strokes in
 light mode for contrast. No top-bar presence dot or visible mode label.
 Accessible names and tooltips identify the mode; switching behaviour is unchanged.
 
-Background work keeps one focusable summary in its existing keyboard position,
-with non-zero running, done and failed icon/count pairs. Spinner, check and
-warning-triangle shapes accompany accent, green and red; exact counts and
-outcomes have accessible names and tooltips. Dismissed and cancelled jobs do
-not count. With no outcomes, show a quiet inbox icon; loading/storage failures
-still have an attention indicator and their existing popover messages.
-Only the running icon rotates, and neither OS nor app reduced-motion mode
-allows that animation. Preserve the popover contents, delivery and dismissal.
+The header background-work cluster has non-zero running, done, failed and
+attention icon/count pairs. Spinner, check, warning-triangle and bell shapes
+accompany accent, green, red and the existing warning token. Every pair has
+its own accessible count and tooltip. The yellow attention pair counts only
+non-dismissed attention, credential and alert feed items plus pending browser
+confirmations; its own popover keeps links, times, dismissal and approval
+actions. Running, releases/deployments and away-mode changes do not count as
+attention. Dismissed and cancelled jobs do not count. With no counts, hide the
+whole cluster, including idle; the background-work popover remains available
+whenever a background-work pair is present. Only the running icon rotates, and
+neither OS nor app reduced-motion mode allows that animation. Preserve the
+background-work popover contents, delivery and dismissal.
 
 The summary remains in the header on phones instead of inside the windows
 sheet; the separate windows button counts windows only. Keep the existing
@@ -120,21 +124,57 @@ Keep compact desktop controls where useful and at least 44px touch targets.
 Segmented groups wrap at narrow widths; scrolling filter rows retain keyboard
 focus and readable labels. Reuse current motion timing and reduced-motion
 handling; do not animate geometry merely to make controls look busy.
+Project completion policy uses a labelled, two-choice radio group with both
+outcomes explained in plain language. Its checked value changes only after the
+existing project PATCH confirms the choice; pending state disables both choices,
+and failures keep the prior choice with an inline retry. Use the existing
+selected surface and visible focus outline, never a coloured border as the sole
+selection cue.
 `docs/agent-context.md` and the project-local product-ui skill carry this rule
 for future work. Header/job and mobile chat corrections have separate owners;
 this candidate does not imply their changes are integrated or released.
 
+## Gated push notifications (17 October 2026; P13-02)
+
+The Notifications Settings section is its own collapsed-by-default section and
+appears only when the exact-string `VITE_PUSH_ENABLED` build gate is on. It
+reuses the existing section, type, surface, focus, motion and button treatments.
+The section presents unsupported/Home Screen guidance, server-off, permission
+not requested, denied, on-this-device, changed-key/lost-subscription and
+cleanup/error states as plain labelled text with only actions that can work.
+Buttons retain the shared 44px minimum touch target and wrap on narrow screens.
+The item route uses one page headline, readable item text and time, plus
+loading, unavailable, retry and sign-in states. The visual design does not
+imply that provider acceptance proves phone display.
+
+Proactive worker notifications keep the title `Jarvis` and choose body copy only
+from fixed Danish/English templates for a validated kind and count. Payload
+title/body text is ignored; invalid template data keeps the existing generic
+“New item” notification.
+
 The header's **Background work** list contains only undismissed jobs and explains
 that research, images, apps and indexing are separate from Factory tasks.
 P11-05 supersedes the earlier Recent jobs view that kept hidden rows visible.
-Dismissing UUID jobs is local to the account/backend and removes the row, never
-cancels work or deletes server history. Keep a stable trigger and explicit empty
+Dismissing finished UUID jobs is account-owned server state (P11-12), not a
+device preference, and removes the row without cancelling work or deleting
+server history. The popover offers Dismiss all finished, groups equivalent
+finished entries with a count, and shows kind, start time and stored reasons.
+Restart interruptions use neutral text and marks, not failure emphasis/counts.
+The P9-119 icon/count header remains unchanged; restart interruptions are excluded
+from its failed count. Keep a stable trigger and explicit empty
 state after the final dismissal; row dismissal focuses the list, while detail
 dismissal and Escape return to the trigger. Cross-tab dismissal of an open run
 returns to the filtered list. Indexing Retry remains explicitly unavailable
 without a supported owned action. A historical interruption is not current
 system health. Preserve borderless tabs and phone-sheet geometry; local fixture
 inspection and live acceptance are separate.
+
+Merged-header Chromium fixtures are in `docs/ui/screenshots/p11-12/merged-*`
+at 390×844 and 1440×900, light and dark, captured with reduced motion.
+Synthetic auth/API data exercised
+grouped and bulk dismissal, running-work retention, updated outcome counts,
+Escape/focus return and reduced motion. These are local browser checks, not
+production-data or physical-device acceptance.
 
 ## Fixed balanced stage rendering (15 October 2026; local)
 
@@ -153,6 +193,22 @@ The window remains the glass boundary; nested panels keep their surfaces
 without another backdrop blur. Pause the ambient CSS field behind work pages.
 This supersedes the older adaptive-tier and route-only descriptions below;
 historical measurements are not results for this revision.
+
+## Gated Proactive web (18 October 2026; P13-10)
+
+The Proactive page follows the shared smoky-glass surfaces without repeating
+decorative cards. One page headline leads distinct Status, Open items, Sources
+and Budget blocks; Recent checks and Earlier items use native disclosures.
+Urgency and budget states pair words with icons, never colour alone. Finding
+text stays plain, with a clamped expandable body and a separate full-detail
+route. Actions and settings keep visible success/error copy, retry behavior,
+keyboard focus and 44px touch targets. The small-screen layout is phone-first,
+and all state remains readable with reduced motion and in either theme.
+
+The settings slot is a single collapsed Proactive section with its own Save;
+the Pause switch commits immediately. Private feed and guidance values are not
+persisted with disclosure state. The exact-string web flag controls its route,
+navigation, Settings slot and Background work Open link.
 
 ## Header tab overflow correction (15 October 2026; combined candidate)
 
@@ -383,7 +439,7 @@ row; Close never wraps onto a second row.
 ## Interactions to design
 
 - **Voice states:** listening, thinking, speaking, interrupted, reconnecting. Show what Jarvis heard. English uses Ryan HD and a British butler persona; action confirmations reflect backend tool results.
-- **Confirmations (P7-02/P7-03):** while away, one Teams Adaptive Card headline names the action, body text gives its bounded summary, and ordinary supporting text states the five-minute expiry. Approve and Reject are explicit, distinct buttons; optional speech is a separate, non-autostarting audio attachment. While present, the Now panel lists expiring requests with the same summary and explicit Approve/Reject buttons. This queue appears only when requests are pending.
+- **Confirmations (P7-02/P7-03/P9-120, Teams removed by P10-10):** in every presence mode, the header attention popover lists expiring requests with the bounded summary and explicit Approve/Reject buttons. The queue appears only when requests are pending.
 - **Language menu:** Danish ↔ English under the shared More menu's Language flyout, reachable from the composer and the voice bar (P8-36).
 - **Task controls:** steer, pause, resume, cancel, recover after a crash, and continue after a completed turn's session expires. Show a clear pending state (for example, "Continuing…" while a fresh session starts).
 - **Sleep switch:** the main page shows configured awake/asleep state (minimum replicas 1/0), pending and failure feedback, and explains a refusal while any task is Ready or Running. Settings links to the main-page control.
@@ -491,8 +547,9 @@ non-colour cues described in the current shell guidance below.
   from elapsed time or replace it with an invented progress indicator.
 
 - **Main page:** P8-05 supersedes the initial wide-column layout with a
-  conversation-first opening screen and a bottom-centred composer. "Now" and
-  Backend remain available through the Activity and backend disclosure.
+  conversation-first opening screen and a bottom-centred composer. Attention is
+  reached from its conditional header icon; Now and Backend are not Settings
+  sections.
 - **Screen sharing (P7-05):** keep the browser-selected share/stop control and
   live sharing status in the conversation workflow, with a separate, explicit
   Look at screen action for chat and voice. Keep the status and Stop action
@@ -515,25 +572,23 @@ non-colour cues described in the current shell guidance below.
 - **Unavailable features:** each data area says what it will show. Each action
   stays visible but disabled, and is linked to that explanation with
   `aria-describedby`. No sample messages, tasks or states are shown.
-- **Activity panel:** Running tasks, Needs attention, Releases and deployments,
-  Credential warnings, Alerts, and the current away/present mode, with an empty
-  state for each activity group. Item titles open their
-  task, release or project. Dismiss shows "Dismissing…", keeps the item and
-  explains a failure, and returns focus to the Now heading after removal.
-  The panel loads its backend snapshot, offers retry when unavailable, and
-  labels reconnecting or unavailable live updates while keeping the last
-  snapshot visible.
-- **Away mode (P7-02):** The Now panel uses a labelled text status for present or
-  away and retains the existing list hierarchy. Mode-change entries appear as
-  ordinary activity rows; no color-only status or separate dashboard treatment.
+- **Header attention (P9-120):** Show only non-dismissed attention, credential
+  and alert items plus pending browser confirmations. Keep linked titles, times,
+  Dismiss, Approve and Reject in its own keyboard-accessible popover. The shell
+  feed stays mounted while Settings is closed; releases, running tasks and
+  away-mode changes are not attention. Hide the background-work control only
+  when no non-dismissed jobs and no attention items remain; keep it present while
+  its popover is open. Interrupted history stays dismissable and uses a labelled
+  neutral mark when there are no running/done/failed counts.
+- **Away mode (P7-02):** Feed mode changes remain ordinary feed data and do not
+  become a color-only header status or an attention item.
   An explicit, visible-browser activity request—not passive feed refresh—returns
   Dan to present. Pending browser approvals use the panel's existing list and
   button styles, with visible pending, failure, and recovery feedback.
-- **Alerts (P6-02):** Keep alerts in the existing Now activity panel as a
-  separate, dismissible "Alerts" group; retain the condition title, timestamp,
-  and task/release/project link where one exists. Budget alerts have no invented
-  page or cost estimate. The group uses the shell's existing neutral list and
-  responsive layout; no new palette or alert-only visual language is needed.
+- **Alerts (P6-02/P9-120):** Keep alerts as dismissible attention-popover items;
+  retain the condition title, timestamp, and task/release/project link where one
+  exists. Budget alerts have no invented page or cost estimate. Pair the yellow
+  state with its own bell shape, count and accessible label.
 - **PC bridge browser toggle (P7-18):** Keep Chrome automation in the existing
   tray context menu as an explicit, persistent on/off check item. Its label
   states the current setting; the disabled default must be unmistakable. This is
@@ -553,11 +608,15 @@ non-colour cues described in the current shell guidance below.
 
 Keep the Settings route within the shell's neutral foundation. Use one page
 headline and distinct form sections for Appearance, Jarvis, Voice, Coding agents, Global,
-New projects, and Credentials. New-project controls use the documented defaults
-and the same labelled field grid as the other sections. Two columns make related controls easy to scan on wide screens;
-the form stacks on narrow screens. Save feedback stays beside the save action,
-and loading, recovery, and unavailable actions remain explicit. Credentials show text status, expiry, and last-updated dates without secret
-values; manual renewal and reseed controls remain disabled with an explanation.
+Projects, and Credentials. The Projects section contains the managed-project list,
+the Add project action, then a collapsed “Defaults for new projects” disclosure
+with the seven defaults in the same labelled field grid. Two columns make related
+controls easy to scan on wide screens; the form stacks on narrow screens. Default
+save feedback stays beside those fields, and loading, recovery, and unavailable
+actions remain explicit. Credentials show text status, expiry, and last-updated
+dates without secret values; manual renewal and reseed controls remain disabled
+with an explanation. P9-121's browser fixture screenshots are
+`docs/ui/screenshots/p9-121-fixture-{light,dark}-{phone,desktop}.png`.
 The Voice section includes a labelled “Minimise all windows when starting voice”
 checkbox, off by default, saved with the other settings.
 Routines (the former Task recipes, renamed in P9-103) use a separate Settings section with compact rows showing the app
@@ -621,9 +680,12 @@ Keep the neutral foundation. The list uses one compact project panel per
 repository, with its settings, running-task count, last-release availability,
 and edit action grouped for scanning. Project settings use labelled form
 sections; save, archive confirmation, loading, retry, conflict, and
-success feedback stay close to the relevant actions. The Projects page has no
-creation form; an empty list points users to New projects defaults in Settings.
-Archive messaging explains
+success feedback stay close to the relevant actions. One Projects section holds
+the managed-project list, Add project action, and a nested collapsed Defaults for
+new projects disclosure. Its seven fields use the existing Settings save form;
+unsaved, pending, confirmed, and failed-save states appear beside the defaults,
+and a failed save can be retried there. The Add project dialog previews the
+server-saved defaults it applies to a new project. Archive messaging explains
 that history remains and the repository stays reserved. Counts refresh manually
 until live updates exist; missing release data is stated, not fabricated.
 Checked in Chromium 154 at 390 and 1280 px with scratch-only auth and API mocks:
@@ -641,6 +703,8 @@ projects and repositories. Chromium 154 checks at 390 and 1280 px exercised
 management without a form and explicit refresh. Neither width overflowed, buttons
 were 44 px high, and there were no browser errors. Live GitHub App, Entra, and
 Azure SQL behavior remains unverified.
+P9-121 keeps the same neutral controls and anchor while grouping project defaults
+with managed projects; no new color, border treatment, or motion is introduced.
 
 ## Task view (P1-08)
 
@@ -836,8 +900,8 @@ The opening is a calm greeting, not an empty card. A floating, translucent
 composer sits at the bottom centre: small voice-start orb on the left,
 auto-growing frameless input, compact DA/EN buttons and an icon-only Send
 action. The input retains its accessible label and Enter/Shift+Enter behavior.
-Screen sharing, Now and backend controls sit under the activity disclosure;
-frame-inspection actions appear when a camera or screen is shared.
+Screen sharing and frame-inspection actions remain in their existing workflows;
+the header attention icon is separate from the composer.
 P8-32 renders the greeting as one sans heading with ordinary supporting copy
 (not a subtitle) on smoky-light glass, placed clear of the orb rings; the
 activity disclosure sits directly below/right of the greeting, clear of the
@@ -851,8 +915,8 @@ devices and under reduced motion. The exact timestamp remains available on the
 time element.
 Messages enter with a short opacity/translation transition; streaming keeps a
 live caret beside readable text. Only a published tool-call state gets the
-running-tool shimmer; thinking is not treated as a tool call. Running Now tasks
-use a restrained sheen, while completed outcomes stay static.
+running-tool shimmer; thinking is not treated as a tool call. Completed
+background-work outcomes stay static.
 
 P8-24 keeps the established body typography for Jarvis's safe Markdown replies;
 inline and fenced code use the shared monospace face and theme-specific code
@@ -1109,7 +1173,7 @@ Dan supplied a reference image and iterated live. Canonical values live in `styl
 - **Docked conversation:** the conversation window is the upper part of the composer: same glass, square inner corners, no gap. Other windows stack above it in both arrangements. A centred grab handle on the composer shows or hides it. Click and keys toggle it; dragging up opens it; dragging down follows the pointer and dismisses it. Opening springs from the composer with a slight overshoot. Collapsing tucks it back down. The handle also reopens a closed conversation and replaces its minimised tab on the Jarvis page. The window's controls float over the transcript, and messages fade out toward the top edge.
 - **Composer:** the same clear glass. Hover and typing show a thin light running around the rim instead of a thick focus ring; reduced motion shows a steady bright rim. The voice orb is a living miniature of the stage orb: a cyan shell with rotating meridians and an amber filament core, which brightens while Jarvis works.
 - **Messages:** uniform 18px radius. Dan's bubble has a glowing amber outline; Jarvis's a cool hairline.
-- **Removed from the Jarvis page:** the Arrange menu and the "Activity, sharing and backend" disclosure. The Now feed and backend sleep live on Settings. Screen sharing is a working top-bar toggle beside the camera.
+- **Removed from the Jarvis page:** the Arrange menu and the "Activity, sharing and backend" disclosure. P9-120 removes Now and Backend from Settings; the shell-owned feed stays mounted and publishes its attention items to the header popover. The `/operations/sleep` API remains unchanged, with no web Settings control. Screen sharing is a working top-bar toggle beside the camera.
 - **Scrollbars:** thin, quiet at rest, cyan while hovered.
 - **Panel width:** a vertical pill handle is centred on the inner edge of the navigation and Context panels. Dragging it, or using the arrow keys on it as a separator (Shift for bigger steps, Home/End for the limits), resizes the panel within 160–420px and 220–560px. Widths are remembered on the device; phones have no handle. Only the panel body scrolls, so the heading and handle stay put.
 - **Handle exit:** hiding the conversation with the composer handle (click or drag down) uses the same top-right fly-off as Close.
@@ -1126,9 +1190,9 @@ Dan supplied a reference image and iterated live. Canonical values live in `styl
 - **Kanban (`/factory/kanban`, first and default in Software Factory; P10-07, 13 October):** reuse the approved glass Task Lens composition with canonical GitHub columns: Backlog, Needs Dan, Ready, In progress, In review, Done. Summary pills count matching issues in In progress, Needs Dan and Done, rather than conflating task and issue state. One actual project is always selected; other filters are local and search waits for a pause in typing. Cards link to the issue and linked PR/checks, show blockers, and add worker/task-state chips plus observed activity, start time, attempts and branch only when supplied. Valid task controls, View details and Open task remain. Snapshot/repository, cached or failed-refresh data and live connection status are written facts; Refresh board gives pending feedback without replacing the board. No task duration is inferred from an overlay lacking finish time. Columns retain their named dots, counts, collapse behavior and existing tint; In progress uses the existing cool tone and In review the existing review/warning tone. Actual Running tasks retain their sheen. Both reduced-motion modes stop the new column pulse. Filtering precedes each explicit 100-card cap.
 - **Release trail (Kanban only):** the project and branch, Build/Deploy/release states as named dots, and up to five recent commits as linked dots on a lit line from oldest to newest. The newest commit glows and pulses. Refresh and Open release are compact pills. Without a selected project a dotted placeholder asks for one. The Tasks page keeps its original bar.
 - **Automatic board refresh (#813, 14 October):** finish an in-flight same-scope read before handling automatic invalidations or reconnection. Coalesce them into one follow-up, retaining updates that arrive during that follow-up. Keep the existing short idle debounce, pending controls, mounted cards/scroll/focus and visible failure/recovery states. Missing-issue and requested-task-link navigation stays loading while that scoped work is pending, including the debounce gap; it uses the existing bounded wait, not an extra read or longer acknowledgement budget. Explicit Refresh/Retry and actual scope changes keep their cancellation semantics. This local correction is supported by controlled fixtures, not an attribution of the original released cancellation storm or production acceptance.
-- **Issue-number navigation (P10-07 follow-up):** retain the selected project, clear interfering local filters, apply an exact `#number` search and unfold the target column. Reuse the existing scroll/glow and reduced-motion behavior, not a new banner or motion system. A task-free issue focuses its real GitHub title link; a linked task retains its foreground task-window focus. Settings' Now panel stays in its existing location while the shell-owned stream remains mounted across page changes.
+- **Issue-number navigation (P10-07 follow-up):** retain the selected project, clear interfering local filters, apply an exact `#number` search and unfold the target column. Reuse the existing scroll/glow and reduced-motion behavior, not a new banner or motion system. A task-free issue focuses its real GitHub title link; a linked task retains its foreground task-window focus. The shell-owned feed remains mounted across page changes and supplies the P9-120 header attention popover.
 - **Current issue context:** keyboard focus inside a visible Factory card identifies that issue in the workspace snapshot. Other focus, a hidden/removed card or another page clears the current selector; a previously foreground task window must not override actual card focus.
-- **Settings:** a centred column of glass section cards with a Back button (to the previous page, or Jarvis when opened directly). The Now and Backend panels sit at the top. Inputs are glass and the save bar floats as a compact pill at the bottom right.
+- **Settings:** a centred column of glass section cards with a Back button (to the previous page, or Jarvis when opened directly). Now and Backend are not Settings sections. Inputs are glass and the save bar floats as a compact pill at the bottom right.
 - **Status (P9-101, 14 October):** a read-only diagnostic page in the existing shell, with its own pulse rail icon and phone-menu entry. Use two glass lists, System checks and Recorded smoke check, rather than decorative metric cards. Each row pairs the reported status dot with text, check time and stale marker; failures explain why. PC connection/pause state stays visible, while safe provider details use working native disclosures. Refresh/Retry stays next to the single Status heading, disables while pending and never runs model canaries. Failed refresh retains explicitly previous evidence. Reuse the shared data-arrival transition; both reduced-motion settings remove the rise. Desktop dark/ordinary-motion and 320px light/touch/reduced-motion browser checks use synthetic API responses, not production acceptance.
 - **Sign-in (revised 7 October):** the room's own orb is the hero and stays clear. A dense glass slab sits low over the floor (where the chat bar lives) with the headline and short copy on the left, the Microsoft button on the right and the status beneath; it stacks on phones. The top bar floats as the same slab as when signed in. The page opens in the right theme from the first frame: a tiny blocking script (`public/theme-boot.js`) applies the theme last used on this device, or the OS theme when none is remembered, before anything paints.
 - **Toasts:** an identical message from two sources (for example an expired sign-in seen by two loaders) appears once.
@@ -1206,7 +1270,7 @@ camera correction. Reduced motion retains solid text without the sweep.
 - **Kanban space (8 October):** the header pairs Create project and Create task as matched pills (an even two-up on phones, with the summary pills on one scrolling line). Search and filters are one collapsible glass section showing how many filters are active when closed (open by default on desktop, closed on phones). Each column collapses from its title; on wide screens a collapsed column becomes a 52 px strip with its title running down it. Both are remembered on the device.
 - **Collapsible sections (8 October, standing rule):** settings-like pages are an even stack of glass cards that fold to their title (`CollapsibleSection`): the title row is the toggle with a chevron, a folded card shows a one-line summary of its current state (theme, model, presence), and each card remembers on the device whether it was open. Cards start folded. New settings, configuration or detail areas use this component rather than adding long always-open blocks, so pages stay short on a phone. When Jarvis navigates to a section it opens it first.
 - **Usage (8 October):** visual and quiet. A period switch (7 days, 30 days, 90 days, All time); a cost hero with Sandbox time, Tokens, Agent turns and Premium requests tiles; a "Where it goes" card with one stacked bar and a labelled legend (value and share) switchable by project, agent or source; Top tasks as ranked bars; Tool calls today as ranked bars with the Codex research count; and the detailed tables folded under "All usage". Cost is the measure when reported, otherwise the split counts usage records and says so. No daily trend is drawn because the report has no per-day series.
-- **Models and tuning (P9-13, 8 October):** Settings has a Models card: one row per role (Chat, Vision, Research, Voice, Transcription, Embeddings, Codex, Copilot) with a model menu, a reasoning menu limited to the levels that model supports (disabled when it has none), and capability badges from the live catalogue; below it the Foundry deployments with capability badges, Add deployment (model, version, SKU, capacity) and Remove with an inline confirmation, both requested for approval in Teams. When roles are present they replace the older per-area model menus. Voice gains Listening and replies (speech-detection slider, pause and pre-speech padding, longest spoken reply, barge-in switch); new cards for Research (Quick/Standard/Deep, most sources, time limit), Memory and retrieval (match and graph-link sliders, memories per answer, automatic capture) and Timeouts. Out-of-range values are explained under the field and hold Save. Unknown credential names from the backend are listed rather than rejected.
+- **Models and tuning (P9-13, 8 October):** Settings has a Models card: one row per role (Chat, Vision, Research, Voice, Transcription, Embeddings, Codex, Copilot) with a model menu, a reasoning menu limited to the levels that model supports (disabled when it has none), and capability badges from the live catalogue; below it the Foundry deployments with capability badges, Add deployment (model, version, SKU, capacity) and Remove with an inline confirmation through the authenticated Now feed. When roles are present they replace the older per-area model menus. Voice gains Listening and replies (speech-detection slider, pause and pre-speech padding, longest spoken reply, barge-in switch); new cards for Research (Quick/Standard/Deep, most sources, time limit), Memory and retrieval (match and graph-link sliders, memories per answer, automatic capture) and Timeouts. Out-of-range values are explained under the field and hold Save. Unknown credential names from the backend are listed rather than rejected.
 - **Hidden settings (P9-09, 8 October):** Appearance gains Look and feel: Motion (Full, Calm, Reduced), Density, Background, Corner roundness (px) and Room glow (%) sliders, and Accent, Second accent and Surface tint colour pickers labelled "Jarvis default" until changed. Each change applies at once and saves (sliders and colours after a short pause), rolling back if Jarvis refuses it; "Use Jarvis colours" clears custom colours. The disabled "Edit theme variables" button is gone. Global gains Check repair attempts (0–10) and Daily watch budget in USD (0–100, 0 turns watching off). Per-mode instructions already live in Presence.
 - **Credential renewal (P9-19, 8 October):** Credentials are a card per credential: name, a status in words with a tone dot (cyan OK, amber renew soon, red action needed), expiry and last renewal. Cards the backend can renew on request (Codex login today) carry a Renew button that turns to 'Renewing…' while it runs; the result sits on the card (Renewed, busy with a task, or the backend's failure reason) and the card takes the returned status. The disabled renewal and re-seed buttons are gone.
 - **Settings tidy (Dan, 8 October):** One Memory card replaces both Memory and 'Memory and retrieval': the automatic-capture switch, then 'What Jarvis remembers about you' (only memories Jarvis kept from conversations; vault notes stay in Knowledge, so no folders or sync counts), searchable, with a detail pane that opens on selection to correct or forget, then 'How Jarvis recalls' (match, graph links, memories per answer). Global is renamed Limits. Save settings is a plain right-aligned row at the very end of the page, below Projects and Routines, with no floating glass pill. Section headers no longer paint a slab on hover: the title gains a faint cyan glow and the chevron turns cyan and nudges.
@@ -1284,4 +1348,82 @@ region rather than crushing dates and unknown values into single-character
 columns at320px. This source is default-off and synthetic-browser inspection
 does not establish live records, import completeness or physical-phone acceptance.
 
+18 October overview first (P12-15 / #730): Dan could not tell what was built, so
+Daily opens on an overview, not a table. Under one h1 and one line of body text,
+"What Daily holds today" lists a row per collection the backend exposes: its name,
+a text status, one plain sentence on what it is for (static copy, no figures),
+whether it is limited to the last seven days (Europe/Copenhagen), the time it was
+read and an Open button. Open takes that collection into the record browser above;
+Back to overview returns with focus on the row just opened. The overview shows no
+counts, totals, averages or charts, because nothing it can read cheaply is one. A
+read-only check of one record decides the status: Has records, None returned
+(older records may exist; this does not prove the original source is empty) or
+Could not read (the safe failure sentence, with Retry beside Open). Status is an
+icon and a word, never colour alone.
+
+Checking is the shared inline text loader inside the status pill. A settled
+result stays visible while the next read runs, so a refresh never blanks the list;
+only a failed row returns to Checking, because it is being retried and should not
+repeat an old error. Availability loading uses the shared rows loader. An
+availability failure is one alert with Retry availability, a backend with no
+browsable collection says so, and Refresh overview exists only while there are
+rows. Reads run two at a time because the backend shares a small SQL pool with
+chat. On a 390 px phone each row is one column, with Open and Retry side by side
+and 44 px tall; from 760 px the actions sit at the right of the row. The page
+reuses the existing Daily layout, the secondary button and the existing colour,
+radius and spacing tokens. The only motion is a short fade when a status changes,
+which reduced motion removes.
+
+Checked in an isolated headless Chromium, rendering the real overview with the
+real stylesheet over a synthetic `fetch`, at 390×844 touch in dark and light, 320
+dark, 768 light and 1280 dark. States seen: every row checking, settled rows, none
+returned, a failed row with Retry and its recovery, availability errors (not
+found, forbidden, unavailable), a backend with no browsable collection, a hanging
+availability request, Open to the browser and Back, a refresh in progress and the
+keyboard focus ring. No horizontal overflow at any of those widths, and Open and
+Retry measured 44 px tall. The console showed only Vite and React development
+notices on the page inspected. Limits: synthetic responses with no live backend,
+private data or real sign-in; the harness has no 3D stage, header or MSAL;
+`prefers-reduced-motion` was not emulated; the Daily-off path is covered by the
+App tests, not the browser. Local runs are not qualification.
+
+18 October on-demand views (P12-16 / #731): when Jarvis shows Daily data on
+request, it reuses the existing generated-view renderer, workspace window and theme.
+There is no Daily renderer, skin or page. Under every table, chart or detail view
+sits one source footnote in the muted caption style (13 px as measured), directly
+below the data and capped at 72 characters wide. It is always visible, never behind
+a disclosure, because the source, the period, the read time and "completeness and
+freshness are not established" are part of the answer. List and text views do not
+render it: they carry their own note in their content, and an empty-read text view
+puts its own read time in its sentence. Table cells keep whole words and numbers,
+never split mid-token; a wider table scrolls inside its own region, and below 700 px
+the cell padding tightens sideways so a narrow table fits a 390 px window without
+clipping its last column.
+
+Checked in a headless Chromium rendering the real workspace window, real stylesheet
+and real builder output. Phone, 390×844 at 3× scale, dark and light: a measurements
+table and chart with a worst-case note, a sleep chart, a workouts table, a sync
+detail and an empty read. Desktop, 1280×800: the measurements table and chart across
+both themes. Seen: no horizontal overflow, the footnote inside the window, whole
+words in every cell, and no console errors or warnings. Inspection also caught two
+defects that are now fixed: table cells splitting values across lines, and an empty
+read showing no read time. Limits: synthetic records; the harness has no sign-in, 3D
+stage or navigation rail; keyboard focus and OS reduced-motion were not exercised;
+wider tables (sleep, meals) scroll sideways at 390 px by design. Local runs are not
+qualification.
+
 Confirmed by Dan for #730/#731/#732/#726: all migrated React/rich UI fully follows the current Jarvis layout and styling. Current DESIGN.md direction, `apps/web/src/styles.css` tokens, shared components, theme/density/motion settings and native phone/workspace patterns are the source of truth. Preserve capabilities and data semantics while restyling/recomposing legacy Daily content; do not carry its navy/plum/card skin, create a second theme or replace the shared shell, voice or window manager. Generated/ad-hoc views receive only safe trusted Jarvis theme context through the existing bridge, without widened permissions. UI issues require full mobile-first real-browser visual acceptance. P12-03 remains backend/schema-only; this records the standing direction, not completed visual work.
+
+## P14-01 shared surface follow-up (18 October 2026)
+
+The existing design direction and CSS tokens remain canonical; this pass adds no
+theme or UI library. Settings sections and the sticky save bar use the same
+panel surface, neutral boundary and panel radius as equivalent content panels.
+Background work and attention use one opaque popover surface. Daily and Proactive
+block-level errors pair their alert text with the existing error surface while
+inline field errors stay beside the field. Menu and row actions use the shared
+visible keyboard outline. See [the UI audit](docs/ui-audit.md) for the observed
+variants and remaining workflow-specific layouts. Local synthetic Chromium
+inspection covered the phone and desktop sizes in both themes, plus reduced
+motion. The attention event and healthy Daily/Proactive data states were not
+available in the harness; screenshot captures could not be attached to the PR.

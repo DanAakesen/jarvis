@@ -40,7 +40,7 @@ Dan approved P12 on 12 October 2026 and explicitly released only P12-01 for this
 ## Integration contract implemented by P12-01
 
 - Existing Jarvis authentication, session and server-resolved user/owner across pages, meals, chat/voice and artifacts. No second login, copied human password, client-provided owner or replacement shell/dispatcher/voice stack.
-- `apps/backend/src/daily/index.ts` exports `createDailyModules(enabled = false)`. This trusted server composition flag accepts only boolean true; disabled composition is an empty array. Production composition does not import or enable Daily yet. No environment variable, navigation or write activation is added by P12-01.
+- `apps/backend/src/daily/index.ts` exports `createDailyModules(enabled = false)`. This trusted server composition flag accepts only boolean true; disabled composition is an empty array. Production composition does not import or enable Daily yet. No environment variable, navigation or write activation is added by P12-01. (P12-09 later adds the default-off `JARVIS_DAILY_ENABLED` composition described below.)
 - Explicitly enabled contract composition provides only authenticated `GET /daily/capabilities` metadata with no-store caching. It reports contract-only stage, reserved view IDs, and empty implemented page/tool lists. It accepts no query fields or owner parameters and exposes no identity or health record. This is not a Daily data API.
 - `resolveDailyOwner(request)` consumes only existing root-authenticated request principals and `request.server.ownerObjectId`. A matching delegated user or verified hosted Jarvis agent resolves to the same configured owner; the agent's service object ID is never used as a data owner. Coding runners, bridge/event/deploy identities and other users are denied. Device authentication/scopes remain P12-04/P12-11/P12-12, not implemented here.
 - Shared contracts reserve `daily-status`, `daily-recomp`, `daily-review`, `daily-ready` under source/module `daily`, version 1. These are reserved identifiers only, not generated renderer registrations or functioning views; Dan's 15 October scope does not require native views for them, and P12-16 is on-demand GenUI instead.
@@ -348,7 +348,8 @@ and its native open #724/#725 dependencies are not removed.
 Tool parity uses `daily_query` for the same source/period/cursor/detail reads and
 existing acknowledged workspace/GenUI commands for requested display. Opening
 Daily does not claim to set its local filters; present the queried subset in a
-shared view instead. Existing direct/reviewed food and saved-food tools retain
+shared view instead. `daily_show` (P12-16, below) now builds and shows one bounded
+page of that subset itself. Existing direct/reviewed food and saved-food tools retain
 their authority/confirmation rules. Provider/grant completeness, briefs/history,
 source reconciliation and physical-device/activation/cutover acceptance remain
 separate unfinished gates, not implicit features of this record-browser source
@@ -356,20 +357,46 @@ slice. Budget-backed advice has its own inactive source slice (next paragraph)
 and no acceptance.
 
 The current tool ledger is partial, not full migration acceptance. Shared
-record/detail/sync and brief reads use `daily_query` plus acknowledged workspace
-GenUI; direct/reviewed intake, saved foods/plans/preferences and reference lookup
+record/detail/sync and brief reads use `daily_query`, and `daily_show` shows one
+bounded page of the same stored data on screen (P12-16, below);
+direct/reviewed intake, saved foods/plans/preferences and reference lookup
 have explicit inactive tools. The owner's resting-burn, deficit and protein
 targets are stored settings with an inactive `daily_nutrition_targets` tool.
 Personalised suggestions have an inactive source slice: the read-only
 `daily_nutrition_suggest` tool is the budget/candidate adapter for the existing
 `suggest` calculation. It reads those targets, today's stored active energy and
 the meals logged in Jarvis, and offers saved favourites only. It has no
-production caller, no live-export check of the `active_energy` metric name and
+live-export check of the `active_energy` metric name and
 no acceptance; reference lookup is not that adapter. Daily Google-feed/attention/manual-refresh/
 suppression equivalence and stored all-calendar grants remain unestablished,
 not completed by the record browser. Device/export provisioning and real-phone/
 provider acceptance retain their separate approval gates. No UI-only capability
 or generic lookup may be reported as full retained-tool parity.
+
+The default-off composition (`apps/backend/src/daily/composition.ts`) is the only
+production entry to these sources. The backend switch `JARVIS_DAILY_ENABLED` is
+off unless exactly `true`. It is off by default in code; production sets it, with
+the web switch, in exactly two reviewed deployment files (18 October 2026), and a
+scan test allows no other file to mention either. With it off, Jarvis's routes,
+tools, instructions and startup are unchanged. With it on, one owner-bound module
+adds only the capabilities, query and nutrition-targets routes and seven tools
+(the 128-tool limit still holds and CI checks the headroom), fail-closed on the
+owner, with no connector, Google or Gmail feed,
+provider call, upload, job or timer. No parity or acceptance is claimed.
+
+18 October source (P12-15): the page opens on an overview, "What Daily holds
+today". For each collection the backend exposes it says in plain English what the
+collection is for and shows the result of a read-only, one-record check (has
+records, none returned, could not read). Open goes to the record browser above and
+Back returns. It uses only `GET /daily/capabilities` and `POST /daily/query`,
+shows no invented count or estimate, and never treats "none returned" as proof
+that the original source is empty. The page, route and navigation exist only when
+the web build switch `VITE_DAILY_ENABLED` is exactly `true`; it is off by default
+in code, so a build without it keeps the released navigation. Dan pre-authorised
+switching Daily on for his account once the page is live and checked, and the
+production deployment files then set both switches (18 October 2026). No parity,
+real-data or physical-phone/provider acceptance is claimed, and #730 is not
+complete.
 
 One gated Daily destination in the existing Jarvis app (side rail and mobile navigation) for Dan to browse retained health, food, workout and scan history himself, from the same owner-authorised sources as P12-16. Keep existing shell and voice workflow.
 
@@ -382,6 +409,24 @@ Reuse the existing side rail (canonical gym/dumbbell icon), mobile navigation, l
 Owner-authorised, bounded Daily data and capabilities exposed through the existing chat/voice, GenUI and workspace/artifact lifecycle.
 
 When Dan asks for a status, trend, workout detail, nutrition/recomp analysis, readiness or review, Jarvis chooses a data-backed summary or visual on demand. These topics are capabilities, not prebuilt native React screens or exact short-command routes. Reuse the P12-09 source/read-model contracts and backend calculations, coordinate self-service access with the P12-15 page, and keep provenance, freshness/coverage, dates, units, missing-data semantics and bounded payloads explicit; trusted calculations never move into generated code. Reuse stable artifact IDs, same-ID revision refresh, owner-authorised fetch, sandbox validation and the trusted theme bridge; generated content receives no credentials or arbitrary backend/network access. No new GenUI engine, parallel renderer, Daily shell, extra permanent navigation page or widget.
+
+18 October source (P12-16): `daily_show` is the on-demand display tool. It reads
+through the same owner-authorised read model as the page and `daily_query` and
+publishes one bounded page (at most 366 days and 200 rows, no cursor) as a table,
+chart or detail through the existing workspace view lifecycle. Sources are
+measurements, sleep, workouts, one workout's heart rate, food history, favourites,
+meal plans and sync status; brief history and single-record detail stay with
+`daily_query`. It calculates nothing: values are the stored values with their
+units and dates, missing means unknown rather than zero, and a footnote under every
+table, chart and detail names the source, period, read time and that completeness
+and freshness are not established. View IDs are stable and keyed by what is shown,
+so asking again refreshes the same window instead of adding another. The tool is
+sensitive and phone-denied, refuses a connector or a non-owner before SQL, and
+refuses before reading when no workspace tab is connected. The reserved Status,
+Recomp, Review and Ready IDs stay unused. It adds no endpoint, renderer, page,
+widget, migration, account, consent or secret and follows the Daily switch. It is
+checked with synthetic data and a real headless Chromium only: no parity, real-data
+or physical-phone/provider acceptance is claimed, and #731 stays open for that.
 
 ### [P12-17: End-to-end, mobile & real-iPhone acceptance](https://github.com/DanAakesen/jarvis/issues/732)
 

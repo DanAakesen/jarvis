@@ -3,12 +3,56 @@ import { loadConfig } from './config.js';
 import { loadAuthConfig } from './auth/config.js';
 
 describe('backend configuration', () => {
+  it.each([
+    [undefined, false],
+    ['false', false],
+    ['TRUE', false],
+    [' true', false],
+    ['true', true],
+  ])('enables push only for the exact true flag (%j)', (JARVIS_PUSH_ENABLED, expected) => {
+    const env = JARVIS_PUSH_ENABLED === undefined
+      ? {}
+      : {
+        JARVIS_PUSH_ENABLED,
+        ...(JARVIS_PUSH_ENABLED === 'true' ? { STATIC_WEB_APP_ORIGIN: 'https://fixture.azurestaticapps.net' } : {}),
+      };
+    expect(loadConfig(env).pushEnabled).toBe(expected);
+  });
+  it('requires an HTTPS web origin when push is enabled', () => {
+    expect(() => loadConfig({ JARVIS_PUSH_ENABLED: 'true' }))
+      .toThrow('STATIC_WEB_APP_ORIGIN is required when JARVIS_PUSH_ENABLED is true');
+  });
+
   it('defaults to the infrastructure port and offline logs', () => {
     expect(loadConfig({})).toEqual({
       port: 3000, logLevel: 'info', codexToolModel: 'gpt-5.5',
       codexImageModel: 'gpt-5.5',
+      pushEnabled: false,
+      proactiveEnabled: false,
+      proactiveTodoWritesEnabled: false,
+      proactiveAlertsEnabled: false,
       auth: loadAuthConfig({}),
     });
+  });
+  it.each([
+    'JARVIS_PROACTIVE_ENABLED',
+    'JARVIS_PROACTIVE_TODO_WRITES_ENABLED',
+    'JARVIS_PROACTIVE_ALERTS_ENABLED',
+  ])('enables %s only for the exact true string', (flag) => {
+    for (const value of [undefined, 'false', 'TRUE', ' true']) {
+      const config = loadConfig(value === undefined ? {} : { [flag]: value });
+      expect(config).toHaveProperty(flag === 'JARVIS_PROACTIVE_ENABLED'
+        ? 'proactiveEnabled'
+        : flag === 'JARVIS_PROACTIVE_TODO_WRITES_ENABLED'
+          ? 'proactiveTodoWritesEnabled'
+          : 'proactiveAlertsEnabled', false);
+    }
+    const config = loadConfig({ [flag]: 'true' });
+    expect(config).toHaveProperty(flag === 'JARVIS_PROACTIVE_ENABLED'
+      ? 'proactiveEnabled'
+      : flag === 'JARVIS_PROACTIVE_TODO_WRITES_ENABLED'
+        ? 'proactiveTodoWritesEnabled'
+        : 'proactiveAlertsEnabled', true);
   });
   it('does not configure an external OneDrive notes folder', () => {
     expect(loadConfig({ JARVIS_NOTES_FOLDER_PATH: '/obsolete/path' })).not.toHaveProperty('notesFolderPath');
@@ -41,6 +85,10 @@ describe('backend configuration', () => {
       foundryRunnerAgentName: 'jarvis-runner-node-1x2',
       codexToolModel: 'gpt-5.5',
       codexImageModel: 'gpt-5.5',
+      pushEnabled: false,
+      proactiveEnabled: false,
+      proactiveTodoWritesEnabled: false,
+      proactiveAlertsEnabled: false,
     });
   });
   it('validates the configurable ChatGPT Codex tool model', () => {
@@ -87,39 +135,51 @@ describe('backend configuration', () => {
         .toThrow('JARVIS_MEMORY_EMBEDDING_DEPLOYMENT_NAME');
     }
   });
-  it('accepts a complete bot, audio-origin, and Speech F0 configuration', () => {
+  it('ignores Teams settings whether complete, partial, or malformed', () => {
+    const baseline = loadConfig({});
+    expect(loadConfig({
+      TEAMS_BOT_APP_ID: 'not-a-uuid',
+      TEAMS_BOT_TENANT_ID: 'not-a-tenant',
+      TEAMS_AUDIO_ORIGIN: 'http://invalid.example/path',
+      SPEECH_REGION: 'not a region',
+    })).toEqual(baseline);
     expect(loadConfig({
       TEAMS_BOT_APP_ID: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
-      TEAMS_BOT_TENANT_ID: '802efa29-17f2-4a79-8f5f-38f087aed96a',
+      TEAMS_BOT_TENANT_ID: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
       TEAMS_AUDIO_ORIGIN: 'https://jarvis.example',
       SPEECH_REGION: 'westeurope',
-    }).teams).toEqual({
-      botAppId: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
-      tenantId: '802efa29-17f2-4a79-8f5f-38f087aed96a',
-      audioOrigin: 'https://jarvis.example',
-      speechRegion: 'westeurope',
-    });
+    })).toEqual(baseline);
+    expect(baseline).not.toHaveProperty('teams');
   });
-  it('rejects partial, cross-tenant, or unsafe Teams and Speech settings', () => {
-    expect(() => loadConfig({ TEAMS_BOT_APP_ID: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa' }))
-      .toThrow('must be configured together');
-    const complete = {
-      TEAMS_BOT_APP_ID: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
-      TEAMS_BOT_TENANT_ID: '802efa29-17f2-4a79-8f5f-38f087aed96a',
-      TEAMS_AUDIO_ORIGIN: 'https://jarvis.example',
-      SPEECH_REGION: 'westeurope',
-    };
-    expect(() => loadConfig({ ...complete, TEAMS_BOT_TENANT_ID: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa' }))
-      .toThrow('must match ENTRA_TENANT_ID');
-    for (const TEAMS_AUDIO_ORIGIN of [
-      'http://jarvis.example',
-      'https://jarvis.example/',
-      'https://jarvis.example/path',
-      'https://user@jarvis.example',
-    ]) {
-      expect(() => loadConfig({ ...complete, TEAMS_AUDIO_ORIGIN })).toThrow('TEAMS_AUDIO_ORIGIN');
-    }
-    expect(() => loadConfig({ ...complete, SPEECH_REGION: 'https://example.com' })).toThrow('SPEECH_REGION');
+  it('configures phone media independently from Teams messaging settings', () => {
+    const phoneConfig = loadConfig({
+      JARVIS_PHONE_ACS_ENDPOINT: 'https://fixture.communication.azure.com/',
+      JARVIS_PHONE_ACS_RESOURCE_ID:
+        '/subscriptions/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/resourceGroups/rg/providers/Microsoft.Communication/communicationServices/jarvis',
+      JARVIS_PHONE_TEAMS_RESOURCE_ACCOUNT_OBJECT_ID: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+      JARVIS_PHONE_PUBLIC_ORIGIN: 'https://jarvis.example',
+      KEY_VAULT_URI: 'https://fixture.vault.azure.net/',
+      FOUNDRY_PROJECT_ENDPOINT: 'https://resource.services.ai.azure.com/api/projects/jarvis',
+      ENTRA_PHONE_EVENT_GRID_OBJECT_ID: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+    });
+    expect(phoneConfig.phone).toEqual({
+      acsEndpoint: 'https://fixture.communication.azure.com',
+      acsResourceId:
+        '/subscriptions/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/resourcegroups/rg/providers/microsoft.communication/communicationservices/jarvis',
+      teamsResourceAccountObjectId: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+      publicOrigin: 'https://jarvis.example',
+    });
+    expect(phoneConfig).not.toHaveProperty('teams');
+    expect(() => loadConfig({
+      JARVIS_PHONE_ACS_ENDPOINT: 'https://fixture.communication.azure.com/',
+      JARVIS_PHONE_ACS_RESOURCE_ID:
+        '/subscriptions/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/resourceGroups/rg/providers/Microsoft.Communication/communicationServices/jarvis',
+      JARVIS_PHONE_TEAMS_RESOURCE_ACCOUNT_OBJECT_ID: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+      JARVIS_PHONE_PUBLIC_ORIGIN: 'http://jarvis.example',
+      KEY_VAULT_URI: 'https://fixture.vault.azure.net/',
+      FOUNDRY_PROJECT_ENDPOINT: 'https://resource.services.ai.azure.com/api/projects/jarvis',
+      ENTRA_PHONE_EVENT_GRID_OBJECT_ID: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+    })).toThrow('JARVIS_PHONE_PUBLIC_ORIGIN');
   });
   it('accepts a GitHub App ID only with a secure Key Vault origin', () => {
     expect(loadConfig({
@@ -170,6 +230,15 @@ describe('backend configuration', () => {
     ]) {
       expect(() => loadConfig({ JARVIS_MONTHLY_BUDGET_RESOURCE_ID: value }))
         .toThrow('JARVIS_MONTHLY_BUDGET_RESOURCE_ID');
+    }
+  });
+  it('keeps Daily off unless the server switch is exactly true', () => {
+    const baseline = loadConfig({});
+    expect(baseline).not.toHaveProperty('dailyEnabled');
+    expect(loadConfig({ JARVIS_DAILY_ENABLED: 'false' })).toEqual(baseline);
+    expect(loadConfig({ JARVIS_DAILY_ENABLED: 'true' })).toEqual({ ...baseline, dailyEnabled: true });
+    for (const JARVIS_DAILY_ENABLED of ['', 'TRUE', 'True', '1', '0', 'yes', 'on', ' true', 'true ', 'enabled']) {
+      expect(() => loadConfig({ JARVIS_DAILY_ENABLED })).toThrow(/^JARVIS_DAILY_ENABLED must be true or false$/);
     }
   });
   it.each(['', '0', '-1', '65536', '3000.5', ' 3000', 'junk'])('rejects invalid port %j', (PORT) => {

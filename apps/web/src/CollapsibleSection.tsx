@@ -8,17 +8,16 @@ import { useEffect, useId, useState, type ReactNode, type Ref } from 'react';
  */
 const storagePrefix = 'jarvis.sections.';
 
-function readOpen(key: string): boolean {
-  const fallback = typeof window.matchMedia !== 'function';
+function readOpen(key: string, initiallyOpen: boolean): boolean {
   try {
     const stored = localStorage.getItem(storagePrefix + key);
-    return stored === null ? fallback : stored === '1';
+    return stored === null ? initiallyOpen : stored === '1';
   } catch {
-    return fallback;
+    return initiallyOpen;
   }
 }
 
-export function CollapsibleSection({ storageKey, title, headingId, summary, id, className, headerAside, toggleRef, children }: {
+export function CollapsibleSection({ storageKey, title, headingId, summary, id, className, headerAside, toggleRef, initiallyOpen, persist = true, children }: {
   /** Stable name for remembering the open state, e.g. `settings.voice`. */
   storageKey: string;
   title: string;
@@ -31,15 +30,22 @@ export function CollapsibleSection({ storageKey, title, headingId, summary, id, 
   headerAside?: ReactNode;
   /** Lets a section move focus to its title, e.g. after removing the focused item. */
   toggleRef?: Ref<HTMLButtonElement>;
+  /** Initial folded state when this section has no saved preference. */
+  initiallyOpen?: boolean;
+  /** Sensitive sections can keep fold state in memory without writing a UI preference to storage. */
+  persist?: boolean;
   children: ReactNode;
 }) {
   const generated = useId();
   const heading = headingId ?? `${generated}-heading`;
   const bodyId = `${heading}-body`;
-  const [open, setOpen] = useState(() => readOpen(storageKey));
+  const [open, setOpen] = useState(() => persist
+    ? readOpen(storageKey, initiallyOpen ?? typeof window.matchMedia !== 'function')
+    : initiallyOpen ?? typeof window.matchMedia !== 'function');
   useEffect(() => {
+    if (!persist) return;
     try { localStorage.setItem(storagePrefix + storageKey, open ? '1' : '0'); } catch { /* storage may be blocked */ }
-  }, [open, storageKey]);
+  }, [open, persist, storageKey]);
   return (
     <section className={`settings-section collapsible-section${className ? ` ${className}` : ''}`} id={id}
       aria-labelledby={heading} data-collapsible="" data-open={open}>

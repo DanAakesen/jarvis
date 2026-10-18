@@ -23,7 +23,8 @@ export interface ProductionModules {
   readonly screenVision: BackendModule | undefined;
   readonly visionWatch: BackendModule | undefined;
   readonly voiceRelay: BackendModule | undefined;
-  readonly teamsBot: BackendModule | undefined;
+  readonly daily: BackendModule | undefined;
+  readonly proactive?: BackendModule | undefined;
 }
 
 export function createProductionModules(modules: ProductionModules): BackendModule[] {
@@ -50,6 +51,7 @@ export function createProductionModules(modules: ProductionModules): BackendModu
     ...(modules.screenVision ? [modules.screenVision] : []),
     ...(modules.visionWatch ? [modules.visionWatch] : []),
     ...(modules.voiceRelay ? [modules.voiceRelay] : []),
-    ...(modules.teamsBot ? [modules.teamsBot] : []),
+    ...(modules.daily ? [modules.daily] : []),
+    ...(modules.proactive ? [modules.proactive] : []),
   ];
 }

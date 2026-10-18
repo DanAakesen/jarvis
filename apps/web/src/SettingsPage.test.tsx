@@ -1,7 +1,9 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { MemoryRouter } from 'react-router-dom';
 import { SettingsPage } from './SettingsPage';
+import { ProjectsPage } from './factory/ProjectsPage';
 import { ThemePreferenceContext, type ThemeMode, type ThemePreference } from './theme-preference-context';
 
 const settings = {
@@ -86,7 +88,13 @@ function settingsResponse(current: typeof settings & { global: typeof settings.g
 function renderSettingsPage(url: string | null = backendUrl) {
   return render(
     <ThemePreferenceContext.Provider value={themePreference}>
-      <SettingsPage backendUrl={url} getAccessToken={getAccessToken} />
+      <SettingsPage backendUrl={url} getAccessToken={getAccessToken}
+        renderProjects={(projectDefaults) => (
+          <section aria-labelledby="test-projects-heading">
+            <h2 id="test-projects-heading">Projects</h2>
+            {projectDefaults}
+          </section>
+        )} />
     </ThemePreferenceContext.Provider>,
   );
 }
@@ -364,7 +372,7 @@ describe('SettingsPage', () => {
     expect(document.body.textContent).not.toContain('SECRET');
   });
 
-  it('saves New projects defaults', async () => {
+  it('keeps one Projects heading and shows defaults save failure with retry', async () => {
     const user = userEvent.setup();
     const updated = {
       ...settings,
@@ -378,9 +386,20 @@ describe('SettingsPage', () => {
         defaultBranch: 'develop',
       },
     };
-    fetchMock.mockResolvedValueOnce(response(settingsResponse())).mockResolvedValueOnce(response(settingsResponse(updated)));
+    let resolveRetry!: (value: Response) => void;
+    const retrySave = new Promise<Response>((resolve) => { resolveRetry = resolve; });
+    fetchMock.mockResolvedValueOnce(response(settingsResponse()))
+      .mockResolvedValueOnce(response({ error: 'Internal server error' }, 500))
+      .mockReturnValueOnce(retrySave);
     renderSettingsPage();
 
+    expect(await screen.findByRole('heading', { name: 'Projects', level: 2 })).not.toBeNull();
+    expect(screen.queryByRole('heading', { name: 'New projects' })).toBeNull();
+    expect(screen.getByRole('heading', { name: 'Defaults for new projects' })).not.toBeNull();
+    expect(screen.getByText('These defaults pre-fill the Add project dialog; every project keeps its own settings and can change them any time.')).not.toBeNull();
+    const policy = screen.getByRole('combobox', { name: 'Policy' });
+    expect(policy.getAttribute('aria-describedby')).toBe('new-project-policy-help');
+    expect(screen.getByText('The policy default only pre-fills projects Jarvis registers later. Every project keeps its own policy and can be changed any time.')).not.toBeNull();
     await user.clear(await screen.findByRole('textbox', { name: 'Owner' }));
     await user.type(screen.getByRole('textbox', { name: 'Owner' }), 'jarvis-org');
     await user.selectOptions(screen.getByRole('combobox', { name: 'Visibility' }), 'public');
@@ -392,11 +411,70 @@ describe('SettingsPage', () => {
     await user.type(screen.getByRole('spinbutton', { name: 'New project maximum parallel tasks' }), '2');
     await user.clear(screen.getByRole('textbox', { name: 'Default branch' }));
     await user.type(screen.getByRole('textbox', { name: 'Default branch' }), 'develop');
-    await user.click(screen.getByRole('button', { name: 'Save settings' }));
+    const defaults = screen.getByRole('region', { name: 'Defaults for new projects' });
+    await user.click(within(defaults).getByRole('button', { name: 'Save settings' }));
 
-    expect(await screen.findByText(/Saved\. These are defaults for new sessions and tasks/)).not.toBeNull();
+    expect((await within(defaults).findByRole('alert')).textContent).toMatch(/could not save settings \(HTTP 500\)/);
+    expect(within(defaults).getByRole('textbox', { name: 'Owner' })).toHaveProperty('value', 'jarvis-org');
+    await user.click(within(defaults).getByRole('button', { name: 'Retry save' }));
+    expect(await within(defaults).findByText('Saving project defaults…')).not.toBeNull();
+    expect(within(defaults).queryByText('Project defaults saved.')).toBeNull();
+    resolveRetry(response(settingsResponse(updated)));
+    expect(await within(defaults).findByText('Project defaults saved.')).not.toBeNull();
     const [, request] = fetchMock.mock.calls[1]!;
     expect(JSON.parse(String(request?.body))).toEqual({ settings: { newProjects: updated.newProjects } });
+  });
+
+  it('nests the collapsed defaults disclosure under the existing Projects anchor', async () => {
+    const user = userEvent.setup();
+    const originalMatchMedia = window.matchMedia;
+    Object.defineProperty(window, 'matchMedia', {
+      configurable: true,
+      value: () => ({ matches: false, media: '', onchange: null, addListener: vi.fn(), removeListener: vi.fn(),
+        addEventListener: vi.fn(), removeEventListener: vi.fn(), dispatchEvent: vi.fn() }),
+    });
+    fetchMock.mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.endsWith('/settings')) return response(settingsResponse());
+      if (url.endsWith('/factory/projects')) return response([]);
+      if (url.includes('/factory/repositories')) return response({ repositories: [], fetchedAt: '2026-10-04T09:00:00.000Z' });
+      if (url.includes('/factory/tasks')) return response({ tasks: [] });
+      return response({ error: 'Unexpected request' }, 500);
+    });
+    const view = render(
+      <ThemePreferenceContext.Provider value={themePreference}>
+        <MemoryRouter initialEntries={['/settings']}>
+          <SettingsPage backendUrl={backendUrl} getAccessToken={getAccessToken}
+            renderProjects={(projectDefaults) => (
+              <ProjectsPage backendUrl={backendUrl} getAccessToken={getAccessToken} projectDefaults={projectDefaults} />
+            )} />
+        </MemoryRouter>
+      </ThemePreferenceContext.Provider>,
+    );
+
+    try {
+      const projects = await screen.findByRole('region', { name: 'Projects' });
+      expect(projects.id).toBe('projects');
+      expect(screen.getAllByRole('heading', { name: 'Projects', level: 2 })).toHaveLength(1);
+      expect(screen.queryByRole('heading', { name: 'New projects' })).toBeNull();
+      await user.click(within(projects).getByRole('button', { name: 'Projects' }));
+
+      const defaults = within(projects).getByRole('region', { name: 'Defaults for new projects' });
+      const disclosure = within(defaults).getByRole('button', { name: 'Defaults for new projects' });
+      expect(disclosure.getAttribute('aria-expanded')).toBe('false');
+      await user.click(disclosure);
+      expect(within(defaults).getByRole('textbox', { name: 'Owner' })).not.toBeNull();
+      expect(within(defaults).getByRole('combobox', { name: 'Visibility' })).not.toBeNull();
+      expect(within(defaults).getByRole('textbox', { name: 'Templates repository (owner/name)' })).not.toBeNull();
+      expect(within(defaults).getByRole('combobox', { name: 'Default agent' })).not.toBeNull();
+      expect(within(defaults).getByRole('combobox', { name: 'Policy' })).not.toBeNull();
+      expect(within(defaults).getByRole('spinbutton', { name: 'New project maximum parallel tasks' })).not.toBeNull();
+      expect(within(defaults).getByRole('textbox', { name: 'Default branch' })).not.toBeNull();
+    } finally {
+      view.unmount();
+      if (originalMatchMedia) Object.defineProperty(window, 'matchMedia', { configurable: true, value: originalMatchMedia });
+      else Object.defineProperty(window, 'matchMedia', { configurable: true, value: undefined });
+    }
   });
 
   it('defaults voice window minimisation off and persists a changed preference', async () => {
@@ -468,7 +546,7 @@ describe('SettingsPage', () => {
     fetchMock.mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce(response(settingsResponse()));
     renderSettingsPage();
 
-    expect(await screen.findByRole('alert')).not.toBeNull();
+    expect((await screen.findAllByRole('alert')).length).toBeGreaterThan(0);
     await user.click(screen.getByRole('button', { name: 'Retry' }));
     expect(await screen.findByRole('combobox', { name: 'Reasoning effort' })).not.toBeNull();
     expect(fetchMock).toHaveBeenCalledTimes(2);
@@ -497,7 +575,7 @@ describe('SettingsPage', () => {
   it('settles into a visible unavailable state without a backend URL', async () => {
     renderSettingsPage(null);
 
-    expect((await screen.findByRole('alert')).textContent).toMatch(/Settings unavailable/);
+    expect((await screen.findAllByRole('alert'))[0]!.textContent).toMatch(/Settings unavailable/);
     expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull();
     expect(fetchMock).not.toHaveBeenCalled();
   });

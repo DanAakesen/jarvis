@@ -48,11 +48,11 @@
 }
 .voice-status-heading { display: inline-flex; align-items: center; }
 .voice-status-label {
-  font-size: 17px;
+  font-size: var(--type-lead);
   font-weight: 650;
   line-height: 1.25;
   letter-spacing: .025em;
-  animation: voice-status-arrive 260ms var(--ease-standard);
+  animation: voice-status-arrive var(--motion-state) var(--ease-standard);
 }
 .voice-status-detail { max-width: 44ch; color: #fff; font-size: var(--type-caption); line-height: 1.4; overflow-wrap: anywhere; }
 @keyframes voice-status-arrive { from { opacity: .5; } to { opacity: 1; } }

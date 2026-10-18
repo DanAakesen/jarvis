@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildApp } from '../app.js';
 import { loadConfig } from '../config.js';
-import type { TeamsNotificationService } from '../teams/service.js';
+import type { OwnerInteractionService } from './owner-interactions.js';
 import type { ToolCallRecord } from './tool-calls.js';
 import { flattenSettings, type SettingsStore } from './settings.js';
 import { ToolRefusal } from './tool-registry.js';
@@ -16,7 +16,7 @@ const headers = {
 };
 const apps: ReturnType<typeof buildApp>[] = [];
 
-function fixture(options: { teamsNotifications?: TeamsNotificationService; catalogue?: ModelCatalogue } = {}) {
+function fixture(options: { ownerInteractions?: OwnerInteractionService; catalogue?: ModelCatalogue } = {}) {
   const values: Record<string, unknown> = {};
   const settingsStore: SettingsStore = {
     read: vi.fn(async () => ({ ...values })),
@@ -38,7 +38,7 @@ function fixture(options: { teamsNotifications?: TeamsNotificationService; catal
     conversationStore: {
       getDanMessageIdBySourceItemId: vi.fn(async () => '43'),
     } as never,
-    ...(options.teamsNotifications ? { teamsNotifications: options.teamsNotifications } : {}),
+    ...(options.ownerInteractions ? { ownerInteractions: options.ownerInteractions } : {}),
   });
   apps.push(app);
   return { app, settingsStore, values, record };
@@ -191,7 +191,7 @@ describe('Jarvis settings tools', () => {
     it('validates reasoning against the proposed model rather than the current model', async () => {
       const runConfirmed = vi.fn(async (_kind: string, _summary: string, action: () => Promise<unknown>) => action());
       const { app, values } = fixture({
-        teamsNotifications: { runConfirmed } as unknown as TeamsNotificationService,
+        ownerInteractions: { runConfirmed } as unknown as OwnerInteractionService,
       });
       const response = await app.inject({
         method: 'POST', url: '/tools/update_settings', headers,
@@ -208,7 +208,7 @@ describe('Jarvis settings tools', () => {
       return action();
     });
     const { app, settingsStore, values } = fixture({
-      teamsNotifications: { runConfirmed } as unknown as TeamsNotificationService,
+      ownerInteractions: { runConfirmed } as unknown as OwnerInteractionService,
     });
     const pending = app.inject({
       method: 'POST',
@@ -267,7 +267,7 @@ describe('Jarvis settings tools', () => {
   it('does not write a model change when Dan rejects Now confirmation', async () => {
     const runConfirmed = vi.fn(async () => { throw new ToolRefusal('Dan rejected the request.'); });
     const { app, settingsStore } = fixture({
-      teamsNotifications: { runConfirmed } as unknown as TeamsNotificationService,
+      ownerInteractions: { runConfirmed } as unknown as OwnerInteractionService,
     });
     const response = await app.inject({
       method: 'POST',

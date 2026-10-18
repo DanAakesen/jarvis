@@ -3,11 +3,13 @@ import { FactoryArea } from './factory/FactoryArea';
 import { UsagePage } from './usage/UsagePage';
 import { NotesArea } from './notes/NotesArea';
 import { StatusPage } from './status/StatusPage';
-import { DailyPage } from './daily/DailyPage';
+import { DailyHome } from './daily/DailyHome';
+import { ProactiveArea } from './ProactiveArea';
 
 export interface AreaProps {
   backendUrl: string | null;
   getAccessToken: () => Promise<string>;
+  signIn?: () => Promise<void>;
 }
 
 export interface Area {
@@ -36,9 +38,20 @@ export const areas: readonly Area[] = [
 ];
 
 const withDaily: readonly Area[] = [
-  { id: 'daily', label: 'Daily', path: 'daily', navigation: [{ label: 'Daily', path: '/daily' }], Component: DailyPage },
+  { id: 'daily', label: 'Daily', path: 'daily', navigation: [{ label: 'Daily', path: '/daily' }], Component: DailyHome },
   ...areas,
 ];
 
+const proactiveArea: Area = {
+  id: 'proactive',
+  label: 'Proactive',
+  path: 'proactive',
+  navigation: [{ label: 'Proactive', path: '/proactive' }],
+  Component: ProactiveArea,
+};
+
 /** Trusted inactive-source composition; never enabled by a URL or a second login. */
-export function appAreas(dailyEnabled = false): readonly Area[] { return dailyEnabled ? withDaily : areas; }
+export function appAreas(dailyEnabled = false, proactiveEnabled = false): readonly Area[] {
+  const base = dailyEnabled ? withDaily : areas;
+  return proactiveEnabled ? [base[0]!, proactiveArea, ...base.slice(1)] : base;
+}

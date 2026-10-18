@@ -181,7 +181,7 @@ export function dailySavedFoodTool(nutrition: InternalSavedNutrition, now: () =>
         ...details, units: { energy: 'kcal', macros: 'g', unknown: null },
       }, null, 2)}`;
       if (summary.length > 4000) throw new ToolRefusal('This saved-food proposal is too large to review safely. Use a smaller change.');
-      const service = request.server.teamsNotifications;
+      const service = request.server.ownerInteractions;
       if (!service) throw new ToolRefusal('Now approval is unavailable. No saved food was changed.');
       const lock = `${owner.toLowerCase()}:${target}`;
       if (pending.has(lock) || pending.size >= 10) throw new ToolRefusal('This saved-food target is already pending, or the review queue is full. Resolve the existing reviews first.');

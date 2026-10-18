@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useId, useState, type FormEvent, type ReactNode } from 'react';
 import { backendFetch } from '../backend-request';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { Modal } from '../Modal';
@@ -45,9 +45,20 @@ interface RepositoryListing {
   fetchedAt: string;
 }
 
+interface NewProjectDefaults {
+  owner: string;
+  visibility: 'private' | 'public';
+  templatesRepository: string;
+  defaultAgent: 'codex' | 'copilot';
+  policy: 'deliver_pr' | 'complete_without_deployment';
+  maxParallelTasks: number;
+  defaultBranch: string;
+}
+
 type ProjectFields = Omit<Project, 'id' | 'active'>;
 type LoadState = 'loading' | 'ready' | 'error';
 type ProjectsPageProps = { backendUrl: string | null; getAccessToken: () => Promise<string> };
+type ProjectsPageViewProps = ProjectsPageProps & { projectDefaults?: ReactNode };
 
 const projectIdPattern = /^[1-9]\d{0,18}$/;
 const maxProjectId = 9_223_372_036_854_775_807n;
@@ -194,6 +205,47 @@ function isExistingRepository(value: unknown): value is ExistingRepository {
     (value.language === null || (typeof value.language === 'string' && value.language.length <= 100));
 }
 
+function isNewProjectDefaults(value: unknown): value is NewProjectDefaults {
+  return isObject(value) && typeof value.owner === 'string' &&
+    (value.visibility === 'private' || value.visibility === 'public') &&
+    typeof value.templatesRepository === 'string' &&
+    (value.defaultAgent === 'codex' || value.defaultAgent === 'copilot') &&
+    (value.policy === 'deliver_pr' || value.policy === 'complete_without_deployment') &&
+    typeof value.maxParallelTasks === 'number' && Number.isSafeInteger(value.maxParallelTasks) &&
+    value.maxParallelTasks >= 1 && value.maxParallelTasks <= 100 &&
+    typeof value.defaultBranch === 'string';
+}
+
+async function loadNewProjectDefaults(
+  backendUrl: string,
+  getAccessToken: () => Promise<string>,
+): Promise<NewProjectDefaults> {
+  let response: Response;
+  try {
+    const bearerScheme = ['Bear', 'er'].join('');
+    response = await backendFetch(`${backendUrl}/settings`, {
+      headers: { Authorization: `${bearerScheme} ${await getAccessToken()}` },
+    });
+  } catch (cause) {
+    if (cause instanceof Error && cause.message === 'Your Microsoft sign-in needs attention. Sign in again.') throw cause;
+    throw new Error('Project defaults could not be loaded. Try again.', { cause });
+  }
+  if (!response.ok) {
+    if (response.status === 401) throw new Error('Your Microsoft sign-in needs attention. Sign in again.');
+    throw new Error(`Project defaults could not be loaded (HTTP ${response.status}). Try again.`);
+  }
+  let value: unknown;
+  try {
+    value = await response.json();
+  } catch (cause) {
+    throw new Error('Jarvis returned invalid project defaults. Try again.', { cause });
+  }
+  if (!isObject(value) || !isObject(value.settings) || !isNewProjectDefaults(value.settings.newProjects)) {
+    throw new Error('Jarvis returned invalid project defaults. Try again.');
+  }
+  return value.settings.newProjects;
+}
+
 async function loadRepositories(
   backendUrl: string,
   getAccessToken: () => Promise<string>,
@@ -229,11 +281,110 @@ function policyLabel(policy: Project['policy']): string {
   return policy === 'deliver_pr' ? 'Deliver a pull request' : 'Complete without deployment';
 }
 
+const policyChoices: { value: Project['policy']; label: string; description: string }[] = [
+  {
+    value: 'deliver_pr',
+    label: 'Deliver a pull request',
+    description: 'Jarvis opens a pull request and stops. You merge it.',
+  },
+  {
+    value: 'complete_without_deployment',
+    label: 'Complete without deployment',
+    description: 'Jarvis opens a pull request and squash-merges it automatically once checks pass. It never deploys.',
+  },
+];
+
+export function CompletionPolicyControl({
+  projectId, projectName, policy, backendUrl, getAccessToken, onSaved,
+}: ProjectsPageProps & {
+  projectId: string;
+  projectName: string;
+  policy: Project['policy'];
+  onSaved: (project: Project) => void;
+}) {
+  const id = useId();
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [message, setMessage] = useState('');
+  const [retryPolicy, setRetryPolicy] = useState<Project['policy'] | null>(null);
+  const disabled = saving || !backendUrl;
+
+  const save = async (nextPolicy: Project['policy']) => {
+    if (!backendUrl || saving || nextPolicy === policy) return;
+    setSaving(true);
+    setError('');
+    setMessage('');
+    try {
+      const result = await request(
+        backendUrl,
+        getAccessToken,
+        `/factory/projects/${projectId}`,
+        'PATCH',
+        { policy: nextPolicy },
+      );
+      if (!isProject(result) || !result.active || result.id !== projectId || result.policy !== nextPolicy) {
+        throw new Error('Jarvis returned invalid project data. Try again.');
+      }
+      onSaved(result);
+      setRetryPolicy(null);
+      setMessage('Saved.');
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Project policy could not be saved. Try again.');
+      setRetryPolicy(nextPolicy);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <fieldset className="project-policy-control" disabled={disabled} aria-busy={saving}
+      aria-describedby={`${id}-applies${saving || !backendUrl ? ` ${id}-disabled` : ''}`}>
+      <legend>Completion policy for {projectName}</legend>
+      <p className="project-policy-applies" id={`${id}-applies`}>
+        Applies now, including pull requests that are already open.
+      </p>
+      <div className="project-policy-choices">
+        {policyChoices.map((choice) => (
+          <label className="project-policy-choice" key={choice.value}>
+            <input
+              type="radio"
+              name={`completion-policy-${id}`}
+              value={choice.value}
+              checked={policy === choice.value}
+              disabled={disabled}
+              onChange={() => { void save(choice.value); }}
+            />
+            <span>
+              <strong>{choice.label}</strong>
+              <span>{choice.description}</span>
+            </span>
+          </label>
+        ))}
+      </div>
+      {(saving || !backendUrl) && (
+        <p className="project-policy-disabled" id={`${id}-disabled`} role={saving ? 'status' : undefined}>
+          {saving ? 'Saving policy… Choices are disabled until Jarvis confirms.' : 'Policy changes are unavailable because the project service is unavailable.'}
+        </p>
+      )}
+      {error && (
+        <div className="project-policy-feedback" role="alert">
+          <p>{error}</p>
+          {retryPolicy && (
+            <button className="secondary-button" type="button" disabled={saving}
+              onClick={() => { void save(retryPolicy); }}>Retry policy change</button>
+          )}
+        </div>
+      )}
+      {message && <p className="project-policy-feedback" role="status">{message}</p>}
+    </fieldset>
+  );
+}
+
 function repositoryDate(value: string): string {
   return new Date(value).toLocaleString();
 }
 
-export function ProjectsPage({ backendUrl, getAccessToken }: ProjectsPageProps) {
+export function ProjectsPage({ backendUrl, getAccessToken, projectDefaults }: ProjectsPageViewProps) {
   const [state, setState] = useState<LoadState>(backendUrl ? 'loading' : 'error');
   const [projects, setProjects] = useState<Project[]>([]);
   const [repositories, setRepositories] = useState<ExistingRepository[]>([]);
@@ -246,6 +397,7 @@ export function ProjectsPage({ backendUrl, getAccessToken }: ProjectsPageProps) 
   const [manageError, setManageError] = useState('');
   const [manageMessage, setManageMessage] = useState('');
   const [managingRepository, setManagingRepository] = useState('');
+  const [projectDialogOpen, setProjectDialogOpen] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   const [settledRequestKey, setSettledRequestKey] = useState('');
   const location = useLocation();
@@ -345,32 +497,51 @@ export function ProjectsPage({ backendUrl, getAccessToken }: ProjectsPageProps) 
           {projects.length === 0 ? (
             <section className="project-empty" aria-labelledby="empty-projects-heading">
               <h3 id="empty-projects-heading">No managed projects</h3>
-              <Link className="home-link" to="/settings">New project defaults</Link>
+              <p>Add a project to manage it with Jarvis.</p>
+              <button className="secondary-button" type="button" disabled={!backendUrl}
+                aria-describedby="project-add-help" onClick={() => setProjectDialogOpen(true)}>Add project</button>
             </section>
           ) : (
-            <ul className="project-list" aria-label="Active projects">
-              {projects.map((project) => (
-                <li key={project.id}>
-                  <article className="project-item" aria-labelledby={`project-${project.id}-name`}>
-                    <div className="project-title-row">
-                      <h3 id={`project-${project.id}-name`}>
-                        <Link to={`/factory/projects/${project.id}`}>{project.name}</Link>
-                      </h3>
-                      <Link className="secondary-button project-edit-link" to={`/factory/projects/${project.id}`}>Edit settings</Link>
-                    </div>
-                    <dl className="project-meta">
-                      <div><dt>Repository</dt><dd><code>{project.repo}</code></dd></div>
-                      <div><dt>Default agent</dt><dd>{project.default_agent === 'codex' ? 'Codex' : 'Copilot'}</dd></div>
-                      <div><dt>Policy</dt><dd>{policyLabel(project.policy)}</dd></div>
-                      <div><dt>Tech</dt><dd><code>{project.tech}</code></dd></div>
-                      <div><dt>Running tasks</dt><dd>{taskError ? 'Unavailable' : runningCounts[project.id] ?? 0}</dd></div>
-                      <div><dt>Last release</dt><dd><Link to={`/factory/projects/${project.id}/releases`}>View releases</Link></dd></div>
-                    </dl>
-                  </article>
-                </li>
-              ))}
-            </ul>
+            <>
+              <ul className="project-list" aria-label="Active projects">
+                {projects.map((project) => (
+                  <li key={project.id}>
+                    <article className="project-item" aria-labelledby={`project-${project.id}-name`}>
+                      <div className="project-title-row">
+                        <h3 id={`project-${project.id}-name`}>
+                          <Link to={`/factory/projects/${project.id}`}>{project.name}</Link>
+                        </h3>
+                        <Link className="secondary-button project-edit-link" to={`/factory/projects/${project.id}`}>Edit settings</Link>
+                      </div>
+                      <dl className="project-meta">
+                        <div><dt>Repository</dt><dd><code>{project.repo}</code></dd></div>
+                        <div><dt>Default agent</dt><dd>{project.default_agent === 'codex' ? 'Codex' : 'Copilot'}</dd></div>
+                        <div><dt>Tech</dt><dd><code>{project.tech}</code></dd></div>
+                        <div><dt>Running tasks</dt><dd>{taskError ? 'Unavailable' : runningCounts[project.id] ?? 0}</dd></div>
+                        <div><dt>Last release</dt><dd><Link to={`/factory/projects/${project.id}/releases`}>View releases</Link></dd></div>
+                      </dl>
+                      <CompletionPolicyControl
+                        projectId={project.id}
+                        projectName={project.name}
+                        policy={project.policy}
+                        backendUrl={backendUrl}
+                        getAccessToken={getAccessToken}
+                        onSaved={(updated) => setProjects((current) =>
+                          current.map((item) => item.id === updated.id ? updated : item))}
+                      />
+                    </article>
+                  </li>
+                ))}
+              </ul>
+              <div className="projects-toolbar">
+                <button className="secondary-button" type="button" disabled={!backendUrl}
+                  aria-describedby="project-add-help" onClick={() => setProjectDialogOpen(true)}>Add project</button>
+              </div>
+            </>
           )}
+          <p className="visually-hidden" id="project-add-help">
+            {backendUrl ? 'Add an existing repository or ask Jarvis to start a new one.' : 'Add project is disabled because the project service is unavailable.'}
+          </p>
           <section className="existing-repositories" aria-labelledby="existing-repositories-heading">
             <h3 id="existing-repositories-heading">Existing repositories</h3>
             {repositoryFetchedAt && (
@@ -414,6 +585,19 @@ export function ProjectsPage({ backendUrl, getAccessToken }: ProjectsPageProps) 
             )}
           </section>
         </>
+      )}
+      {projectDefaults}
+      {projectDialogOpen && backendUrl && (
+        <CreateProjectDialog
+          backendUrl={backendUrl}
+          getAccessToken={getAccessToken}
+          onClose={() => setProjectDialogOpen(false)}
+          onAdded={(repository) => {
+            setProjectDialogOpen(false);
+            setManageMessage(`Added ${repository} as a project.`);
+            retry();
+          }}
+        />
       )}
     </CollapsibleSection>
   );
@@ -532,7 +716,7 @@ export function ProjectSettingsPage({ backendUrl, getAccessToken }: ProjectsPage
   return (
     <section className="project-settings-page" aria-labelledby="project-settings-heading">
       <h1 id="project-settings-heading">Project settings</h1>
-      <p>Applies to new tasks only.</p>
+      <p>Other project settings apply to new tasks. Completion policy applies now, including pull requests that are already open.</p>
       {visibleState === 'error' ? (
         <div className="projects-feedback" role="alert">
           <p>{visibleError}</p>
@@ -543,6 +727,18 @@ export function ProjectSettingsPage({ backendUrl, getAccessToken }: ProjectsPage
         <form className="project-form" noValidate onSubmit={(event) => { void save(event); }}>
           {error && <p className="projects-feedback" role="alert">{error}</p>}
           {validationError && <p className="projects-feedback" role="alert">{validationError}</p>}
+          <CompletionPolicyControl
+            projectId={projectId!}
+            projectName={values.name}
+            policy={values.policy as Project['policy']}
+            backendUrl={backendUrl}
+            getAccessToken={getAccessToken}
+            onSaved={(updated) => {
+              const nextValues = toProjectValues(updated);
+              setValues(nextValues);
+              setSavedValues(nextValues);
+            }}
+          />
           <section className="settings-section" aria-labelledby="project-repository-heading">
             <h2 id="project-repository-heading">Repository</h2>
             <div className="projects-form-grid">
@@ -578,15 +774,6 @@ export function ProjectSettingsPage({ backendUrl, getAccessToken }: ProjectsPage
                   <option value="">Choose an agent</option>
                   <option value="codex">Codex</option>
                   <option value="copilot">Copilot</option>
-                </select>
-              </div>
-              <div className="settings-field">
-                <label htmlFor="project-policy">Policy</label>
-                <select id="project-policy" value={values.policy} required disabled={disabled}
-                  onChange={(event) => update('policy', event.target.value)}>
-                  <option value="">Choose a policy</option>
-                  <option value="deliver_pr">Deliver a pull request</option>
-                  <option value="complete_without_deployment">Complete without deployment</option>
                 </select>
               </div>
               <div className="settings-field">
@@ -663,6 +850,10 @@ export function CreateProjectDialog({ backendUrl, getAccessToken, onClose, onAdd
   const [managing, setManaging] = useState('');
   const [manageError, setManageError] = useState('');
   const [idea, setIdea] = useState('');
+  const [defaults, setDefaults] = useState<NewProjectDefaults | null>(null);
+  const [defaultsState, setDefaultsState] = useState<LoadState>(backendUrl ? 'loading' : 'error');
+  const [defaultsError, setDefaultsError] = useState(backendUrl ? '' : 'Project defaults unavailable.');
+  const [defaultsReloadKey, setDefaultsReloadKey] = useState(0);
   const conversationIntents = useConversationIntents();
   const navigate = useNavigate();
 
@@ -684,6 +875,27 @@ export function CreateProjectDialog({ backendUrl, getAccessToken, onClose, onAdd
       });
     return () => { active = false; };
   }, [backendUrl, getAccessToken, reloadKey]);
+
+  useEffect(() => {
+    let active = true;
+    if (!backendUrl) return () => { active = false; };
+    void loadNewProjectDefaults(backendUrl, getAccessToken).then((value) => {
+      if (!active) return;
+      setDefaults(value);
+      setDefaultsState('ready');
+    }).catch((cause: unknown) => {
+      if (!active) return;
+      setDefaultsError(cause instanceof Error ? cause.message : 'Project defaults could not be loaded. Try again.');
+      setDefaultsState('error');
+    });
+    return () => { active = false; };
+  }, [backendUrl, defaultsReloadKey, getAccessToken]);
+
+  const retryDefaults = () => {
+    setDefaultsState('loading');
+    setDefaultsError('');
+    setDefaultsReloadKey((value) => value + 1);
+  };
 
   const manage = async (repository: ExistingRepository) => {
     if (!backendUrl || managing) return;
@@ -740,6 +952,28 @@ export function CreateProjectDialog({ backendUrl, getAccessToken, onClose, onAdd
         </section>
         <form className="project-dialog-part task-create-form" onSubmit={askJarvis}>
           <h3>Start a new repository</h3>
+          <p className="settings-explanation">
+            The policy default only pre-fills projects Jarvis registers later. Every project keeps its own policy and can be changed any time.
+          </p>
+          {defaultsState === 'loading' && <Loader variant="inline" label="Loading project defaults…" />}
+          {defaultsState === 'error' && (
+            <div className="tasks-feedback" role="alert">
+              <p>{defaultsError}</p>
+              {backendUrl && <button className="secondary-button" type="button"
+                onClick={retryDefaults}>Retry defaults</button>}
+            </div>
+          )}
+          {defaultsState === 'ready' && defaults && (
+            <dl className="project-defaults-preview" aria-label="Saved defaults for new projects">
+              <div><dt>Owner</dt><dd>{defaults.owner}</dd></div>
+              <div><dt>Visibility</dt><dd>{defaults.visibility}</dd></div>
+              <div><dt>Templates repository</dt><dd>{defaults.templatesRepository}</dd></div>
+              <div><dt>Default agent</dt><dd>{defaults.defaultAgent === 'codex' ? 'Codex' : 'Copilot'}</dd></div>
+              <div><dt>Policy</dt><dd>{policyLabel(defaults.policy)}</dd></div>
+              <div><dt>Maximum parallel tasks</dt><dd>{defaults.maxParallelTasks}</dd></div>
+              <div><dt>Default branch</dt><dd>{defaults.defaultBranch}</dd></div>
+            </dl>
+          )}
           <div className="task-form-field">
             <label htmlFor="new-project-idea">What should Jarvis build?</label>
             <textarea id="new-project-idea" rows={3} maxLength={2_000} value={idea} onChange={(event) => setIdea(event.target.value)} />

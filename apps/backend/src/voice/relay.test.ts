@@ -102,6 +102,7 @@ function appFor(
     })),
     setVisualContext: vi.fn(async () => true),
     getHistory: vi.fn(async () => ({ messages: [], nextCursor: null })),
+    readRecentUserMessages: vi.fn(async () => []),
   } satisfies ConversationStore,
   settingsStore?: SettingsStore,
   reflexClassifier?: ReflexClassifier,

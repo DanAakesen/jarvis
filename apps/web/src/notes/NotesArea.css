@@ -56,10 +56,10 @@
 .notes-preview { overflow-wrap: anywhere; }
 .notes-preview:focus-visible { outline: 3px solid var(--focus); outline-offset: -3px; }
 .notes-preview pre, .notes-comparison pre { max-width: 100%; overflow: auto; }
-.notes-conflict { display: grid; gap: 14px; padding: 12px; border-radius: 10px; background: var(--warning-surface); color: var(--warning-text); }
+.notes-conflict { display: grid; gap: 14px; padding: 12px; border: 1px solid var(--rule); border-radius: var(--radius-panel); background: var(--warning-surface); color: var(--warning-text); }
 .notes-comparison { display: grid; gap: 14px; }
 .notes-comparison h3 { margin: 0 0 8px; }
-.notes-comparison pre { padding: 12px; margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; background: var(--surface-muted); color: var(--text); border-radius: 8px; max-height: 300px; }
+.notes-comparison pre { padding: 12px; margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; background: var(--surface-muted); color: var(--text); border: 1px solid var(--rule); border-radius: var(--radius-control); max-height: 300px; }
 .notes-comparison button { justify-self: start; min-height: 44px; }
 @media (max-width: 700px), (max-height: 500px) and (pointer: coarse) {
   .notes-page .knowledge-search, .notes-page .knowledge-results { width: calc(100% - 16px); }

@@ -467,29 +467,31 @@ describe('dispatcher SQL coordination', () => {
   });
 
   it.each(['pending', 'failed', 'replacement-completed'] as const)(
-    'does not execute a deferred merge approval released while replacement start is %s',
+    'does not merge after replacement start becomes %s during evaluation',
     async (scenario) => {
       const { events, tasks, sessions, policy, task } = await completedRecoveryFixture();
-      const owner = `approval-generation-${randomUUID()}`;
+      const owner = `recovery-generation-${randomUUID()}`;
       const project: PolicyPullRequest = {
         taskId: task.id, taskState: 'NeedsAttention', repository: 'DanAakesen/jarvis-test-target',
         policy: 'complete_without_deployment', number: 42, state: 'open', checks: 'passed',
         headSha: 'a'.repeat(40), openedAt: new Date().toISOString(),
       };
-      let releaseApproval!: () => void;
-      let ready!: () => void;
-      let finished!: () => void;
-      const approval = new Promise<void>((resolve) => { releaseApproval = resolve; });
-      const readyPromise = new Promise<void>((resolve) => { ready = resolve; });
-      const finishedPromise = new Promise<void>((resolve) => { finished = resolve; });
+      let releasePullRequestRead!: () => void;
+      let reachedPullRequestRead!: () => void;
+      const pullRequestRead = new Promise<void>((resolve) => { releasePullRequestRead = resolve; });
+      const reachedPullRequestReadPromise = new Promise<void>((resolve) => { reachedPullRequestRead = resolve; });
       const issue = vi.fn(async () => 'synthetic-write-token');
       const fetch = vi.fn<typeof globalThis.fetch>(async (input, init) => {
         if ((init?.method ?? 'GET') !== 'GET') throw new Error('Unexpected synthetic GitHub write');
         const url = String(input);
-        if (url.endsWith('/pulls/42')) return new Response(JSON.stringify({
-          state: 'open', merged: false, draft: false, head: { sha: project.headSha },
-          base: { ref: 'main', sha: 'b'.repeat(40) }, mergeable: true, mergeable_state: 'clean',
-        }));
+        if (url.endsWith('/pulls/42')) {
+          reachedPullRequestRead();
+          await pullRequestRead;
+          return new Response(JSON.stringify({
+            state: 'open', merged: false, draft: false, head: { sha: project.headSha },
+            base: { ref: 'main', sha: 'b'.repeat(40) }, mergeable: true, mergeable_state: 'clean',
+          }));
+        }
         if (url.endsWith('/check-runs?per_page=100')) return new Response(JSON.stringify({
           total_count: 1, check_runs: [{
             id: 1, name: 'CI', app: { id: 12 }, status: 'completed', conclusion: 'success',
@@ -507,24 +509,19 @@ describe('dispatcher SQL coordination', () => {
           issueForRepositoryRead: readToken, issueForContentsWrite: issue,
           issueForIssuesWrite: issue,
         },
-        async runConfirmed<T>(_summary: string, action: () => Promise<T>): Promise<T> {
-          ready();
-          await approval;
-          try { return await action(); }
-          finally { finished(); }
-        },
       });
+      let evaluation: Promise<void> | undefined;
       try {
-        await evaluator.handle({
+        evaluation = evaluator.handle({
           kind: 'pull_request', repository: project.repository, number: 42, branch: `jarvis/task-${task.id}`,
           headSha: project.headSha, state: 'open', openedAt: project.openedAt, mergedAt: null,
         });
-        await readyPromise;
+        await reachedPullRequestReadPromise;
         const recovery = await createTaskRecoveryStore(pool, events).claimRecovery(task.id, owner, 120);
         if (recovery.kind !== 'claimed') throw new Error(`Recovery not claimed: ${recovery.kind}`);
         if (scenario === 'failed') await sessions.failStart(owner, recovery.task, null, 'recovery_start_failed');
         if (scenario === 'replacement-completed') {
-          const accepted = { sessionId: `approval-session-${randomUUID()}`, invocationId: `approval-${randomUUID()}` };
+          const accepted = { sessionId: `replacement-session-${randomUUID()}`, invocationId: `replacement-${randomUUID()}` };
           const sandboxSessionId = await sessions.recordStarted(owner, recovery.task, 'jarvis-runner-base-1x2', accepted);
           await tasks.recordEvent({
             taskId: task.id, type: 'completed', source: 'runner', payload: { invocationId: accepted.invocationId },
@@ -539,12 +536,13 @@ describe('dispatcher SQL coordination', () => {
           await expect(policy.withActiveTask(task.id, async () => 'new work', 'c'.repeat(40)))
             .resolves.toEqual({ kind: 'active', value: 'new work' });
         }
-        releaseApproval();
-        await finishedPromise;
+        releasePullRequestRead();
+        await evaluation;
         expect(issue).not.toHaveBeenCalled();
         expect(fetch.mock.calls.some(([, init]) => init?.method === 'PUT')).toBe(false);
       } finally {
-        releaseApproval();
+        releasePullRequestRead();
+        await evaluation?.catch(() => {});
         await sessions.endTaskSessions(task.id, 'Cancelled');
         await tasks.transition(task.id, 'Cancelled');
       }

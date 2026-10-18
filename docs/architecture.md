@@ -336,8 +336,8 @@ Both paths still require the same current generation/session/invocation,
 no-start-lease policy gate and ordinary GitHub delivery/policy verification.
 The backend completion event retains the work commit. The SQL policy gate
 compares that commit with the policy candidate's expected PR head while holding
-the task lock, including after deferred approval. A different green PR cannot
-substitute for unpublished current work.
+the task lock. A different green PR cannot substitute for unpublished current
+work.
 Proof identity expressions use explicit `Latin1_General_100_BIN2` comparison.
 JSON inherits the payload column's database-default collation, which can
 differ from the binary Foundry-session column and otherwise fail the gate with
@@ -365,9 +365,9 @@ sleep/dispatcher locks and commits its generation with the start lease.
 Completion proof carries the tracked session's generation, not a newly inferred
 task value. The locked policy gate requires an absent start lease and equality
 between task, session and proof generations, as well as the existing latest
-session/turn identifiers. This gate is shared by Done and approved merge,
-including the callback after deferred approval. Clearing a failed start's lease
-cannot restore the previous proof. No transaction is held across Foundry start.
+session/turn identifiers. This gate is shared by Done and the automatic
+project-policy merge. Clearing a failed start's lease cannot restore the
+previous proof. No transaction is held across Foundry start.
 
 Existing completion events are not backfilled. Existing session generation zero
 can receive fresh runtime verification, but old proof without a generation is
@@ -524,10 +524,28 @@ Running jobs have separate accessible Hide controls; undismissed jobs share
 one Background work list instead of creating repeated terminal header tabs.
 P11-05 renders the store's filtered `jobs`, not its raw `history`, for both
 the list and selected details. Raw history remains available to lifecycle and
-phone-summary consumers; saved records and the existing job tools are unchanged.
-UUID-only dismissal preferences are scoped to the authenticated MSAL account
-and backend URL on this device. Closing/hiding does not call Cancel, delete
-SQL records or erase results. Undismissed details still expose original status,
+phone-summary consumers; saved records remain unchanged.
+P11-12 replaces UUID-only device preferences with a separate SQL dismissal
+store keyed by authenticated owner and job UUID. Existing jobs belong to the
+configured backend owner; other accounts cannot list or dismiss them.
+Authenticated dismiss-one, dismiss-finished and bounded UUID-import endpoints
+filter the header's `/jobs` response and `list_jobs` counts without changing raw
+registry, job-detail or health reads, job rows, steps, events or lifecycle.
+Running work cannot be dismissed.
+Visible snapshots and dismissal metadata each return at most 1,000 IDs/rows,
+with running jobs first. SQL filters visibility against the complete owner
+dismissal table, not just that bounded metadata. Bulk writes persist every
+retained terminal dismissal even when the response is bounded. Import success
+means the submitted legacy snapshot was processed; absent, expired and running
+IDs are ignored, not recorded as dismissals. Nonempty dismissal state prevents
+rolling back migration 0053.
+Legacy scoped browser IDs remain hidden locally until the import is confirmed,
+then the local copy is removed. Refresh reconciles the authoritative visible
+window while preserving concurrent live updates. Unknown replayed jobs wait
+for server visibility confirmation, so bounded tombstones cannot resurrect
+older dismissals. Bulk dismissal refreshes that window before reporting success.
+Closing/hiding does not call Cancel, delete SQL records or erase results.
+Undismissed details still expose original status,
 run identity, timestamp, failure reason and saved result. A dismissed selection
 falls back to the list without effect-driven state copying. Empty and error
 states remain distinct, and a stable control preserves focus after the last row.
@@ -690,9 +708,9 @@ Jarvis is one backend with a shared core and one module per area, a static web a
 | Development tooling | Node.js 22.23.3, npm 10.9.9, TypeScript 6.0.3; Python 3.12.14 baseline (`.python-version`), voice reference container remains on 3.13; MIT licence. Cloud agent environments (P0-14): `copilot-setup-steps.yml` and `scripts/codex-setup.sh` provide the pinned toolchain, then the shared `scripts/setup-dependencies.sh` installs from the lockfiles | Node/npm/Python pinned in P0-01; TypeScript updated in P0-02 for lint compatibility; builds verified, Python production components pending; Copilot setup verified in P0-14, Codex setup pending P0-15 |
 | Web | React/React DOM 19.3.0, React Router 7.18.4, `@azure/msal-browser` 5.24.0, Vite 8.3.2, React plugin 6.1.1; Azure Static Web Apps Free in West Europe | Skeleton and MSAL sign-in implemented; live Entra sign-in and deployment verification remain pending |
 | Backend | Node.js + TypeScript on Azure Container Apps (Consumption): minimum 1 replica, heartbeat poller, sleep switch, `@azure/storage-blob` 12.31.0, `@azure/keyvault-secrets` 4.11.2, and `fflate` 0.8.3 | Health/logging/container skeleton implemented in P0-03; heartbeat polls active sandbox invocations without querying SQL while idle and distinguishes completed-turn expiry from active crashes; P1-12 implements the authenticated sleep API and board control; P6-03 archives old task events and reads them on demand; P2-10 starts fresh recovery sessions; P3-14 opens or reuses an App-token PR after completed task work and leaves policy completion to P3-06; P3-02 reads the GitHub App key through the backend identity; P3-05 stores bounded failed-job logs and steers the task; P6-22 routes approvals and away notifications through the Now feed and browser voice; P7-22 adds Google OAuth-backed Gmail and Calendar tools; P7-02 adds persisted manual away state; live Azure behavior remains unverified |
-| Backend framework | Fastify 5.12.5, @fastify/cors 11.3.0; `@microsoft/teams.apps` and `@microsoft/teams.cards` 2.1.0: schema validation, a plugin per area, SSE support, optional Teams adapter and Adaptive Cards | Skeleton, core/factory module registration and P1-03 projects API implemented; optional Teams module and fake-connector coverage remain in source but are not configured in production |
+| Backend framework | Fastify 5.12.5, @fastify/cors 11.3.0: schema validation, a plugin per area and SSE support | Core/factory module registration and P1-03 projects API implemented; P10-10 removed Teams adapters, cards, messaging routes, and their runtime wiring. Teams SDK packages remain declared but unused. |
 | Database | Azure SQL, free offer: one database `jarvis`; Entra admin is the group `jarvis-sql-admins` (Dan and the backend identity) | Decided |
-| Database access | `mssql` 12.7.2 (`@types/mssql` 12.3.0), Tedious managed identity; immutable SQL migrations under a transaction-owned app lock before backend listen; reviewed down scripts | Implemented in #7; groups 1–3 schema in #15, groups 4 and 6 in #27, group 5 in #42, heartbeat agent routing in #32, `idle_expired` session end reason in #226, group 8 conversation/confirmation state in P7-03, legacy group 9 in P7-13, and the derived vault index in P7-40; deployed heartbeat verification remains open |
+| Database access | `mssql` 12.7.2 (`@types/mssql` 12.3.0), Tedious managed identity; immutable SQL migrations under a transaction-owned app lock before backend listen; reviewed down scripts | Implemented in #7; groups 1–3 schema in #15, groups 4 and 6 in #27, group 5 in #42, heartbeat agent routing in #32, `idle_expired` session end reason in #226, group 8 legacy conversation/confirmation tables retained by P10-10 for browser/phone approval compatibility, legacy group 9 in P7-13, and the derived vault index in P7-40; deployed heartbeat verification remains open |
 | Files | Azure Blob Storage for artifacts, logs, and archived task events | Decided |
 | Secrets | Azure Key Vault (RBAC) | Decided |
 | Images | Azure Container Registry: backend and sandbox images | Decided |
@@ -907,8 +925,11 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   snapshot as `page-settings`, `page-knowledge`, `page-notes` and `folio-pane`
   windows. Content is at most 8 KiB and selection 2 KiB per window; old
   snapshots still validate.
-  On non-conversation signed-in routes, the shell keeps the command stream
-  mounted in a hidden Now panel while the workspace controller remains active.
+  On signed-in routes, the shell keeps one command/feed stream mounted in a
+  hidden `NowFeedPanel` while the workspace controller remains active. The feed
+  owner publishes its existing snapshot's attention, credential and alert items
+  plus pending confirmations to the header; it opens no second connection or
+  request. The header popover owns only its interaction state.
   Ordinary renderers use fixed React elements and declarative data. P8-41 adds
   the separate `html-app` renderer for owner-authorized artifacts; generated
   HTML/JS executes only inside its restrictive sandboxed iframe, never in the
@@ -1126,7 +1147,7 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   Natural/manual end, failure, and Escape restore typing; the default-off
   `voice.minimizeWindowsOnVoiceStart` preference is persisted through P8-17 and
   mirrored to device storage for immediate shell reads. P8-14 provides the safe
-  list renderer in the Now panel; generated workspace delivery is provided by
+  list renderer from the shell feed owner; generated workspace delivery is provided by
   P8-15. P8-16 provides typed activity to the top bar, orb and Jarvis-updated
   workspace-window shimmer; speech output including P7-12 announcements follows
   the same observed speaking state. No workspace or activity state is persisted.
@@ -1150,21 +1171,23 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   until release data is connected. Client validation improves form feedback;
   the backend remains authoritative. Live Azure CRUD is not verified by the
   browser-mocked UI check.
-- The main page's "Now" activity panel takes a typed `NowFeed`
+- The shell's persistent `NowFeedPanel` takes a typed `NowFeed`
   (`src/activity.ts`): running tasks (title, project, agent, activity, start
-  time) and activity items (category, title, `activity.link`, time). Only
-  `task:<id>`, `release:<id>` and `project:<id>` links become routes. Dismissal
-  removes an item only after the backend confirms it. P1-13 loads this data
+  time), activity items (category, title, `activity.link`, time) and pending
+  browser confirmations. Only `task:<id>`, `release:<id>` and `project:<id>`
+  links become routes. The header attention popover receives only non-dismissed
+  attention, credential and alert items plus confirmations; running jobs stay in
+  background-work counts, while releases and away-mode changes are not attention.
+  Dismissal removes an item only after the backend confirms it. P1-13 loads data
   from authenticated `GET /now`, persists dismissal through
   `POST /now/activity/:id/dismiss`, and refreshes snapshots from authenticated
-  `/now/events`. The panel identifies unavailable data and reconnecting or
-  unavailable live updates rather than claiming a stale snapshot is current.
+  `/now/events`. The stream remains mounted independently of Settings visibility.
   P8-14 adds `@jarvis/contracts`, a shared version-1 JSON Schema and matching
   TypeScript discriminated union for the P8-18 renderer/action allowlists. The
   authenticated `/tools/:name` boundary validates tagged generated-view results
   against the schema and semantic bounds; `call-tool` actions must name a
   registered tool, and image URLs must use GitHub or the configured task-archive
-  Blob host. The serialized view is capped at 256 KiB. The signed-in Now panel
+  Blob host. The serialized view is capped at 256 KiB. The shell feed owner
   builds a list view from its existing bounded `/now` response and renders
   values through fixed React elements. No generated HTML, JavaScript or CSS is
   interpreted. Views remain ephemeral; live Entra/Azure behavior is unverified.
@@ -1646,9 +1669,10 @@ migration or UI; live writes wait for P10-01 and coordinator execution.
 Chat-created tasks retain their originating message ID. Committed Done,
 NeedsAttention, Cancelled, and backend `pull_request_opened` events route a short
 status message with the task ID, outcome, and validated GitHub PR link to that
-conversation. A SQL task/state key prevents repeat delivery across restarts;
-away mode routes through the existing Teams notification service, while active
-voice sessions speak the same status through the existing voice announcer.
+in-app conversation in every presence mode. Away task-state notices use the Now
+feed; task events always refresh the app. A SQL task/state key prevents repeat
+delivery across restarts; active voice sessions speak the same status through
+the existing voice announcer.
 P6-21 adds the following fields to every task in `GET /factory/tasks` and to
 `GET /factory/tasks/:id`, independently of event pagination:
 
@@ -1894,31 +1918,440 @@ socket duplicate headers, `/me` authorization and stalled-provider tests
 establish this offline boundary. No deployed Entra token was obtained; live
 browser sign-in and deployment verification remain #11.
 
-## Web notifications and confirmations (P6-22)
+## Web notifications and confirmations (P6-22, P10-10)
 
-The personal-tenant deployment does not configure Teams or Microsoft 365. Away
-mode remains manual and Graph presence is not read. Optional Teams adapters stay
-in source but are not provisioned or configured by production Bicep.
+Away mode remains manual and Graph presence is not read. P10-10 removes the
+Teams bot, message/card sender, audio-card route, and Teams-specific runtime
+configuration. Teams environment variables are ignored. No health or status
+component depends on Teams.
 
-Away task-state notifications are inserted as alert activity rows in the Now
-feed and trigger authenticated server-sent refreshes. Active English browser
-voice sessions announce task completion/attention and pending approvals without
+Task-state notifications are inserted as alert activity rows in the Now feed
+and trigger authenticated server-sent refreshes. Active English browser voice
+sessions announce task completion/attention and pending approvals without
 speaking task titles or payloads. Browser confirmation summaries/IDs remain in
-the in-memory pending queue; `/now` exposes them to Dan while present or away,
-and `POST /now/confirmations/:id` requires Dan's delegated identity and a
-pending, unexpired request. Approval/rejection is a conditional single-use
-transition; the backend consumes an unexpired approval before calling the gated
-operation. Reject, timeout, cancellation, replay, unknown IDs, startup
-orphaning, and unverifiable identity all fail closed. The pending timer is five
-minutes. `runConfirmed` gates repository creation and the automatic squash-merge
-path; future delete, mail, calendar, out-of-browser computer and spend actions
-must use the same gate. Merge work is queued after webhook validation so the
-GitHub request is not held open while Dan responds.
+the in-memory pending queue; `/now` exposes them in every presence mode, and
+`POST /now/confirmations/:id` requires the owner's delegated identity and a
+pending, unexpired request. Away changes no approval routing: the same
+authenticated browser confirmation waits in Now as when Present. Approval and
+rejection are conditional single-use transitions; the backend consumes an
+unexpired approval before calling the gated operation. Reject, timeout,
+cancellation, replay, unknown IDs, startup orphaning, and unverifiable identity
+all fail closed. The pending timer is five minutes. `runConfirmed` gates
+repository creation and other confirmation-required operations; future delete,
+mail, calendar, out-of-browser computer and spend actions must use the same
+gate.
 
-The web approval remains visible in Now if voice is not active; the pending
-operation expires and fails closed after five minutes if Dan does not approve.
-Teams/Bot Service and Speech F0 code is not live-verified because those
-integrations are not part of the personal-tenant deployment.
+The `complete_without_deployment` project-policy merge is separate: selecting
+that policy is approval, so the guarded squash merge runs without a browser
+confirmation. Merge evaluation follows webhook validation and is also recovered
+by the startup/periodic policy sweep. Other web approvals remain visible in the
+header attention popover if voice is not active; pending operations expire and
+fail closed after five minutes if the owner does not approve. The existing
+`teams_conversations` and `teams_confirmations` tables and rows are retained
+unchanged; only the confirmation table remains in use.
+
+## Proactive Web Push backend (P13-01, 17 October 2026)
+
+The backend registers the owner-authenticated push routes only when
+`JARVIS_PUSH_ENABLED` is exactly `true`; the code default is off. Disabled composition
+does not construct the push store, read or write push tables, create signing keys,
+or send provider requests, and the routes return ordinary 404s. Production sets
+the flag in `infra/main.bicep` (P13-03, below).
+
+`push_vapid_keys`, `push_subscriptions` and `proactive_items` are separate SQL
+tables. The store uses the process-owned SQL pool and
+`databaseReadRequest` for retryable reads. Subscriptions are owner-scoped,
+deduplicated by SHA-256 endpoint hash and capped at ten. Test items are durable
+and owner-protected; the first successful item load sets `opened_at`, meaning
+loaded rather than read.
+
+`apps/backend/src/push/webpush.ts` implements P-256 VAPID, ES256 signing and
+RFC 8291 `aes128gcm` encryption with `node:crypto`; no dependency is added. The
+private VAPID key is generated on first use, stored only in SQL and never
+returned. Subscription endpoints are checked against the provider-host allowlist
+before any server-side request. Provider acceptance is recorded as acceptance,
+not display or reading; encrypted push content contains only the version, generic
+title/body and item UUID. Retries are limited to transient provider responses and
+bounded by per-request/overall timeouts.
+
+P13-01 sends only a direct user-requested test. It adds no scheduler or quiet-hour
+guard; every future system-started send must enforce 22:00–07:00
+Europe/Copenhagen with no emergency exception. There is no Teams delivery path.
+Actual iPhone delivery is not yet proven.
+
+## Proactive foundation and engine (P13-05, P13-06; default off)
+
+`JARVIS_PROACTIVE_ENABLED` gates the owner-bound proactive routes and composition;
+the todo-write and alert capabilities are separately gated. The index contributes
+one guarded registration call with existing providers, stores, token callback,
+clock, logger and the background-job registry. Disabled composition does not
+construct proactive stores, query proactive tables, register routes or start a
+timer. P13-06 extends this composition without another index registration.
+
+The `proactive` module defines the shared source/item/run contracts, a source
+registry with an unavailable `x` placeholder, and authenticated status, settings,
+item-list, item-detail and feedback routes. Status works before any run exists;
+it calculates Copenhagen-local budget month, quiet hours and the next slot and
+returns source states in contract order. Inputs are validated at the route
+boundary. Item detail retains P13-01's `opened_at` meaning: loaded, not read.
+
+Migration 0055 extends `proactive_items` while preserving test rows, and adds
+owner-scoped settings, runs, source status and estimated-spend tables. SQL stores
+use the existing pool and `databaseReadRequest` for nontransactional reads.
+Finding upserts are deduplicated by owner/key; dismissed findings remain
+dismissed until due/event timing changes or urgency escalates to time-critical. Run claims take
+an owner-scoped transaction lock, respect unexpired leases, and use claim
+generations for heartbeat/finish fencing. Startup marks leftover running rows
+interrupted. Migration 0056 adds the `proactive` background-job kind; rollback
+refuses to discard rows of that kind.
+
+The engine owns a self-rescheduling, unreferenced 30-second scheduler. Startup
+reconciles runs once and evaluates the latest Copenhagen slot immediately;
+handled slot keys stay in memory, so idle ticks perform no SQL work. Claims
+serialize through the existing owner lock, including persisted manual rate
+limits. A lease-aware running-run read prevents expired claims from blocking
+manual admission. Paused/all-disabled scheduled slots finish as skipped without a job.
+The owner-only run routes return bounded history and detach manual execution
+after a 202 response containing the running summary.
+
+Each run owns cancellation, a three-minute deadline and 60-second lease
+heartbeats. Enabled registered sources read in parallel with 20-second bounds.
+Quiet hours cancel scheduled/catch-up work, not manual work; generation and
+quiet-hour checks precede item writes and hooks. Detection is pure and shares
+the 24-hour deadline and 48-hour clash constants with future consumers. Language
+uses a narrow SQL read of recent user-message text, never chat history fields;
+chat messages are not model input.
+
+Finding writes also fence the claim inside the SQL transaction by locking the
+owner/run row and checking status, generation and lease. Cancellation cancels
+the active request and rolls back before the engine finalizes the run; a final
+guard check precedes commit dispatch, the write's transaction boundary.
+
+`proactive/model.ts` independently follows the existing Foundry chat-completions
+pattern, with the selected chat role, catalogue validation, no tools, untrusted
+fact data, a 48-KiB request/32-KiB response bound and a 45-second timeout.
+Validated evidence contains labels only. Real response token counts feed both
+estimated proactive spend and global chat-role usage, including rejected output.
+Stable 32-hex content keys exclude run-local refs and urgency. Ordered optional
+`onFindingsStored` hooks receive only this run's stored items and in-memory source
+facts before finish; one hook failure cannot prevent later hooks or change success.
+This slice adds no delivery or todo-writing hook and enables no flag.
+
+## Proactive read-only sources (P13-07; default off)
+
+The source registry now constructs the Factory, todo and weather readers in
+alphabetical order from the existing composition dependencies. Construction
+does not read data; the registry remains behind the default-off proactive
+composition and no dispatcher is added.
+
+The todo reader resolves exactly one case-insensitive root `task.md` or
+`tasks.md`, then uses only the vault client's `tree` and `read` methods. It
+enforces the vault file-size cap and a 20-second source deadline. `todo-file.ts`
+exports the resolver and unbounded parser for reuse; one sanitizer removes
+control characters, HTML and markdown link destinations and caps fact text at
+300 characters. Due dates resolve to Copenhagen-local instants. The source
+returns at most 40 facts, ordering the 24-hour-before/72-hour-after due window
+first.
+
+Factory uses `TaskStore.getProactiveSnapshot()`, a bounded, nontransactional
+database read through `databaseReadRequest` that returns only task/project
+status fields, open-PR metadata and the running count. It does not query task
+events, prompts or logs. Weather uses the existing settings store for saved
+home coordinates and a direct HTTPS Open-Meteo request with a 15-second
+deadline, redirect refusal and 128-KiB response limit. Missing location is
+unavailable; no fallback location or geocoding is used. All source errors are
+mapped to stable unavailable reason codes. This slice enables no flags and
+starts no source reads.
+
+## Proactive suggested-todo writer (P13-11; default off in code, on in production since P13-15)
+
+The writer is appended to the existing ordered `onFindingsStored` hooks only
+when proactive composition is enabled and
+`JARVIS_PROACTIVE_TODO_WRITES_ENABLED` is exactly `true`. It reads the persisted
+pause/Todos source settings and receipt counts before any vault call. Manual runs
+may write at any hour; scheduled and catch-up runs recheck the Copenhagen quiet
+window. Per-run and per-Copenhagen-day limits are three and five additions.
+
+Only model findings with a suggested todo and a non-`todo` category qualify.
+Suggestions are reduced to one plain-text line, bounded to 200 Unicode code
+points, checked by the vault's existing credential/secret/sensitive-data
+patterns, and compared against every parsed task and Jarvis marker before
+writing. The shared P13-07 resolver selects one existing root file; the writer
+uses only `tree`, `read`, and a single `write` per successful run. It never
+creates or deletes a note. Writes preserve the original bytes, BOM and line
+ending, append below `## Suggested by Jarvis`, and retry a write conflict at most
+twice using freshly-read content and SHA.
+
+Migration 0058 adds `proactive_todo_receipts`, retaining item/run IDs, a 32-hex
+finding key, Copenhagen date, outcome/reason codes and commit SHA, but no todo
+text. The filtered owner/key index prevents a finding from being marked added
+twice; the owner/day/status index supports the daily cap. Successful commits
+record added receipts and set `proactive_items.todo_added`; marker recovery
+repairs a lost receipt. Two failed attempts settle a finding. Hook and receipt
+failures are isolated from run completion, and diagnostics contain only IDs,
+counts, durations and reason codes.
+
+## Proactive calendar, mail and travel sources (P13-08; default off)
+
+The source registry also constructs the `calendar`, `mail` and `travel` sources
+from the existing Google API client; the `x` placeholder remains unavailable.
+P13-08 adds source implementations to the existing registry; constructing them
+does not read Google, and no schedule, model call or proactive delivery is added.
+
+The calendar reader reuses the existing primary-calendar view path, expanding
+recurrences and bounding reads to 50 events over two pages. All-day dates resolve
+to Europe/Copenhagen local midnight through the shared DST-aware time helper.
+Calendar facts omit descriptions, conferencing and attendee/organizer addresses.
+Mail searches the primary inbox for unread messages from the last two days and
+reads at most 15 messages, with five concurrent metadata-only requests for
+From/Subject/Date/List-Unsubscribe/Precedence. It never requests body, snippet or
+attachment fields; bulk/newsletter messages are skipped and sender addresses are
+reduced to a display name or domain. Travel reuses the calendar reader over seven
+days and applies exported `TRAVEL_KEYWORDS` and `TRAVEL_ROUTE_PATTERN`
+Danish/English whole-word and airport-route rules; it calls no travel provider
+and excludes starts in the calendar's half-open 48-hour window. All sources
+bound fact text, treat provider text as untrusted data, and return stable
+unavailable reason codes without logging it.
+
+## Proactive run alerts and shared push sender (P13-12; default off in code, on in production since P13-15)
+
+Composition appends the alert hook only when proactive, push and alert gates are
+all exactly enabled and both push-store and sender dependencies exist. It runs
+after finding persistence and ignores manual runs, paused settings, aborted runs
+and the live Copenhagen quiet window. Only time-critical deadline, clash and
+travel categories qualify. Candidates sort by due time (missing last) and
+dedupe key; a fresh owner-scoped state read immediately before delivery excludes
+items no longer new.
+
+`proactive_alerts` stores only IDs, a 32-hex SHA-256 alert key, class, Copenhagen
+day, status, attempt count and reason code. Its owner/key unique index fences
+duplicates; a failed first attempt can retry once, while sent or twice-failed keys
+settle. The daily safety cap counts distinct sent run bundles, so a push containing
+several finding rows consumes one slot. The additive 0057 migration has a
+data-preserving down script.
+
+`proactive/push-delivery.ts` is shared by the user test route and system sender
+for lazy VAPID key loading and subscription delivery/removal. System payloads keep
+the generic M1 title/body and add only the most urgent item UUID, kind, count and
+language. Alert pushes use one-hour TTL/high urgency; reminders use 30-minute
+TTL/high urgency; user tests retain the original five-minute/normal headers.
+System sends are rejected inside quiet hours at the sender boundary. The worker
+selects only fixed templates for validated kinds, languages and counts, ignoring
+payload-supplied title/body text. Provider acceptance is recorded per item and
+remains distinct from device display.
+
+## Proactive todo reminders (P13-13; default off in code, on in production since P13-15)
+
+Composition adds the reminder planner after the P13-12 alert hook only when the
+proactive, push and shared alert gates, vault, reminder store, push store and
+system sender are present. The planner runs for scheduled, catch-up and manual
+checks, but only plans timed todos when the todo source succeeded. It hashes
+normalized text and the due instant for identity, saves only a sanitized,
+80-unit title, inserts at most 20 rows per run and 100 pending rows per owner,
+and removes terminal rows older than 30 days. It never cancels a row based on a
+partial source-fact list.
+
+The owner-scoped `proactive_reminders` table is added by migration 0059, with a
+unique owner/key index and pending-fire and sent-day indexes. Planning inserts
+and retention cleanup share one owner-locked transaction; SQL read paths use
+`databaseReadRequest`. The in-memory store follows the same caps and terminal
+state behavior for tests.
+
+The self-rescheduling, unreferenced ticker reads the earliest pending time once
+at startup. Future or absent work and the Copenhagen quiet window are pure
+in-memory checks; after a due scan it refreshes the wake time once. Errors back
+off five minutes. For due rows it expires late work, applies pause and
+subscription suppression, then resolves and parses the canonical todo file
+again with a 20-second bound. It cancels changed todos, retries failed
+verification twice, and after the third verification failure may send with an
+`unverified` reason. It suppresses deadline alerts sent within two hours and
+enforces eight sent reminders per Copenhagen day.
+
+Each remaining row upserts an idempotent, private `todo` finding with a fixed
+Danish/English body. One generic `proactive_reminder` push is bundled per tick
+through the shared system sender. Push delivery and reminder state are separate
+writes, so a process crash between acceptance and state update can send again;
+a brief overlap of revisions during deployment can also duplicate a reminder
+and is accepted. A todo added after the last check is covered from the next
+check on; "Check now" covers it immediately.
+
+## Web push delivery (P13-02; default off)
+
+The web build exposes only the boolean result of `VITE_PUSH_ENABLED === "true"`
+through Vite's explicit `define`; its default is false. When enabled, the
+Notifications Settings section prefetches authenticated `GET /push/config` and
+registers the plain `public/sw.js` worker at `/` with worker updates uncached.
+Static Web Apps excludes `/sw.js` from its SPA fallback and sends
+`Cache-Control: no-cache`. The worker does not cache content or provide offline
+behavior; pushes display fixed Jarvis text, retaining a validated UUID solely as
+notification data/tag. P13-12 and later proactive reminders select closed,
+localized templates from validated `kind`, `lang` and `count`; every other
+payload displays the existing generic text and untrusted title/body fields are
+ignored.
+
+The web client calls authenticated `PUT /push/subscription`,
+`DELETE /push/subscription`, and `POST /push/test` through `backendFetch`.
+Notification permission is requested directly from the explicit opt-in action.
+The click handler builds `/proactive/:id` itself from a validated UUID and never
+uses a payload URL. That route calls authenticated `GET /proactive/items/:id`
+and remains inside `RequireSignIn`; the item response and notification reference
+grant no authorization. The sign-in path is stored as a validated same-origin
+session-storage value and consumed after MSAL returns to `/`. P13-02 changes no
+backend, deployment flag, identity or permission configuration; live phone
+permission, lock-screen delivery and tap-through remain unverified.
+
+## Proactive web client (P13-10; default off)
+
+`apps/web/config/proactive-switch.ts` parses only the exact string `true`.
+`vite.config.ts` exposes the resulting boolean as
+`__JARVIS_PROACTIVE_ENABLED__`; `main.tsx` passes it to `App({ proactiveEnabled })`.
+The off-by-default client conditionally registers the Proactive area, full detail
+page, Settings section and terminal proactive-job Open link. The existing
+`/proactive/:id` M1 push route keeps its legacy page when only push is enabled.
+The flag does not enable backend routes or relax owner authentication.
+
+`ProactiveArea` independently loads status, open items and recent runs using
+authenticated `no-store` requests. Status supplies source and estimated-budget
+views. Manual runs poll status every three seconds only while visible, abort on
+unmount/terminal status, and stop after four minutes. Item feedback is optimistic
+with rollback; the detail page records `seen` once for a newly loaded item.
+Settings reads and PATCHes the existing contract, sending only changed fields.
+Item text, feeds and guidance live only in component state, are rendered as text,
+and are not stored in browser persistence or placed in URLs. Recent-run and
+Settings disclosure state is not persisted. The web flag policy test
+(`config/proactive-switch.test.ts`) scans the repository's configuration files and
+pins the one reviewed production setting (P13-14, below).
+
+## Proactive news source (P13-09; default off)
+
+The source registry also constructs the news source, between the Factory and
+todo readers. It parses RSS 2.0 and Atom from at most ten configured feeds. Its
+URL validator permits HTTPS hostnames only, rejects IP literals and local
+hostnames, and removes fragments while retaining queries. Requests use
+`node:https` with a custom DNS lookup that rejects the whole answer set if any
+address is not public and connects only to vetted answers. The fetcher verifies
+TLS certificates, allows no redirects, accepts only XML content types and
+identity encoding, combines the engine abort signal with a ten-second timeout,
+and stops streaming after 2 MiB. Public-address filtering blocks the specified
+non-routable IPv4 ranges and permits only global-unicast IPv6, with embedded
+IPv4 in mapped, NAT64 and 6to4 addresses checked under the same IPv4 rules.
+
+DTD/entity declarations are rejected before XML parsing. The source retains only
+cleaned titles, publication times and feed hostnames; links, descriptions,
+authors, query strings and response bodies are not logged or stored. It selects
+at most eight recent items per feed and 30 total, and exposes partial feed
+failures. The source is registered but no scheduler or engine invokes it in this
+slice; no proactive flag is enabled and no live feed request is made by tests.
+
+## Web Push production switch (P13-03; 18 October 2026)
+
+Production sets both gates; the code defaults above are unchanged.
+`infra/main.bicep` adds `JARVIS_PUSH_ENABLED` as `'true'` to the backend container
+app environment, beside `STATIC_WEB_APP_ORIGIN`, which an enabled backend
+requires. `config.ts` reads it as `pushEnabled` and `index.ts` hands it to
+`registerPushRoutes`. The Deploy workflow's web job writes `VITE_PUSH_ENABLED=true`
+to `$GITHUB_ENV` beside `VITE_BACKEND_URL`, and Vite's `define` injects the boolean
+into the production bundle.
+
+A change to `infra/main.bicep` re-plans infrastructure, backend, web and agent, so
+the bundle is rebuilt with the gate. The web job needs the backend job, so the
+routes exist before the Notifications section does. The environment change
+creates a new backend revision. No secret, identity, resource, dependency or
+permission is added: the VAPID key pair is still generated on first use and kept
+in SQL. Rollback is reverting the whole P13-03 change, which removes the two gate
+lines and the pin test together, or setting both values to `false` and updating
+the pin test in the same commit; reverting only the two lines fails the pin test
+in CI before Deploy can run. Either way the routes unregister and the
+Notifications section and worker registration drop; stored subscriptions and the
+key stay in SQL, and nothing can send while the routes are off.
+`apps/backend/src/push/enabled-switch.test.ts` pins both values and fails if any
+other workflow, Dockerfile, package file, web config or Bicep/parameter file names
+a switch. CI proves this wiring only; iPhone delivery still needs Dan's device
+test.
+
+## Proactive production switch (P13-14; 18 October 2026)
+
+Production sets both gates for milestone 2, the read-only checks; the code
+defaults above are unchanged. `infra/main.bicep` adds `JARVIS_PROACTIVE_ENABLED` as
+`'true'` to the backend container app environment, beside `JARVIS_PUSH_ENABLED`.
+`config.ts` reads it as `proactiveEnabled`, and `index.ts` calls `registerProactive`
+only then. That composition builds the source registry, the findings store (SQL
+when the pool exists, otherwise in memory), the engine with the Foundry model (a
+`model_unavailable` stub when no model can be built), the owner-bound `/proactive`
+routes and the in-process scheduler, which starts on `onReady` and stops on
+`onClose`. Startup cannot newly fail: the owner object ID the routes need is
+already validated as a UUID when auth configuration loads.
+
+The Deploy workflow's web job writes `VITE_PROACTIVE_ENABLED=true` to `$GITHUB_ENV`
+beside `VITE_BACKEND_URL` and `VITE_PUSH_ENABLED`, and Vite's `define` injects
+`__JARVIS_PROACTIVE_ENABLED__` into the production bundle. `vite.config.ts` reads the
+flag; `apps/web/config/public-config.ts` carries only the push configuration. With
+both web flags on, `/proactive/:id` opens the full item detail page rather than the
+M1 push item page.
+
+`JARVIS_PROACTIVE_TODO_WRITES_ENABLED` and `JARVIS_PROACTIVE_ALERTS_ENABLED` were
+set nowhere when this change shipped (milestones 3 and 4 came with P13-15, below),
+so a check read its sources, stored findings and recorded its Background work
+entry; it wrote no todo and sent no push. A change to `infra/main.bicep` re-plans infrastructure, backend, web and agent,
+as for P13-03, so one Deploy carries the new backend revision and the rebuilt
+bundle; the web job needs the backend job, so the routes exist before the page does.
+No secret, identity, resource, dependency or permission is added.
+
+Rollback is to revert the whole P13-14 change (removes the two gate lines and the
+pin tests together), or to set both values to `false` AND update the pin tests in
+the same commit; removing only the two lines fails the pin tests in CI before Deploy
+can run. Either way the routes and scheduler are not registered, and the Proactive
+page, Settings section and Background work link drop out of the web build. Stored
+findings, feedback and settings stay in SQL. `apps/backend/src/proactive/enabled-switch.test.ts`
+pins the backend value and fails if its name appears in another file (the todo-writes
+and alert flags keep their own pins, `todo-writes-default-off.test.ts` and
+`alerts-default-off.test.ts`); `apps/web/config/proactive-switch.test.ts`
+pins the web value and fails if any other workflow, Dockerfile, package file, web
+config or Bicep/parameter file names it. CI proves this wiring only; whether
+scheduled and manual checks run in production is for Dan's test on the deployed app.
+
+## Proactive todo, alert and reminder production switch (P13-15; 18 October 2026)
+
+Production sets the two backend gates for milestones 3 and 4; the code defaults
+above are unchanged. `infra/main.bicep` adds `JARVIS_PROACTIVE_TODO_WRITES_ENABLED`
+and `JARVIS_PROACTIVE_ALERTS_ENABLED`, each `'true'`, to the backend container app
+environment, beside `JARVIS_PUSH_ENABLED` and `JARVIS_PROACTIVE_ENABLED`. `config.ts`
+reads them as `proactiveTodoWritesEnabled` and `proactiveAlertsEnabled`. The
+composition P13-14 turned on then appends the todo writer hook (P13-11) when the
+todo-writes flag is on and the SQL pool and vault client exist, and the alert hook
+(P13-12) when the alert and push flags are on and the push store and sender exist.
+The reminder planner and ticker (P13-13) ride the alert flag, so they add no flag of
+their own. There is no web flag: the Proactive page and its Settings section already
+show what these hooks produce, so `deploy.yml` and the web build are unchanged.
+
+At runtime, after each check the writer may append new lines under
+`## Suggested by Jarvis` in the one existing todo file: add-only, never creating,
+editing or deleting, at most three per run and five per Copenhagen day, in one vault
+commit per run. A scheduled or catch-up run may send one generic alert push for a
+new, time-critical deadline or clash finding: at most one per check and three per
+Copenhagen day, and never in the 22:00 to 07:00 quiet window, which is enforced in
+the hook and again at the sender. Reminders send one generic push about an hour
+before a todo with an explicit time is due (at most eight per Copenhagen day), and
+a reminder due in the quiet window is held until 07:00. The pause switch and the
+Todo list source switch are read before any vault call. Pause also suppresses
+reminders already planned, while the source switch only stops new ones being
+planned. A device turns its own pushes off in Settings. As with P13-03 and
+P13-14, a change to `infra/main.bicep` re-plans infrastructure, backend, web and
+agent, so one Deploy carries the new backend revision. No secret, identity,
+resource, dependency or permission is added.
+
+Rollback is to revert the whole P13-15 change (removes the gate lines and the pin
+test updates together), or to set the value(s) to `false` AND update the pin tests in
+the same commit; removing only a line fails the pin tests in CI before Deploy can
+run. One feature can be switched off on its own the same way: set only its value to
+`false` and update only its pin (`todo-writes-default-off.test.ts` for todo
+additions, `alerts-default-off.test.ts` for alerts and reminders). Either way the
+hook is not composed; lines already added to the todo file stay, and findings,
+feedback, settings and send history stay in SQL. Each pin names its flag once, in
+`infra/main.bicep`, with the exact value `'true'`, and `config.test.ts` keeps proving
+both default off in code. CI proves this wiring only; whether a todo line is added
+and whether an alert or reminder push reaches a device is for Dan's test on the
+deployed app.
 
 ## Presence modes (P6-23; replaces P7-02 away mode)
 
@@ -4193,7 +4626,7 @@ dismisses historical board failures without deleting activity.
 
 When a task turn completes, P3-14 uses the repository-scoped GitHub App token to verify the task branch, reuse an open PR for the configured base if present, or compare the branch with the default branch and create a PR only when it is ahead. Branch/PR reads happen outside the task policy lock; the backend rechecks that the task is Running under the lock before the bounded PR create, reconciles an ambiguous create response with a matching-PR lookup, and records `pull_request_opened` before releasing it. This serializes the side effect with cancellation without holding the lock across the GitHub preflight. The new PR uses the task title and links to its Jarvis task through the configured Static Web App origin. The backend ends the completed sandbox without marking the task Done; GitHub's signed PR/check webhooks continue the P3-06 policy flow. A missing branch, no new commits, or GitHub API refusal records a clear task event and moves the task to Needs attention. Duplicate completions reuse the PR, including a second lookup after GitHub reports a duplicate create. The GitHub App token stays backend-side.
 
-P3-06 joins the task-linked PR record to its project policy, checks the recorded result against GitHub's current PR and check-run/commit-status APIs, and issues a repository-scoped token through the existing App token issuer. An open PR with no check runs or commit statuses waits two minutes from its recorded open time, then rechecks GitHub; only a still-empty result counts as no CI, and pending or failed records continue to block. `deliver_pr` marks a verified green or no-CI, non-draft PR Done without merging, recording no-CI completion in task activity. `complete_without_deployment` additionally requires the PR base SHA to match the current branch tip and GitHub to report a clean/mergeable PR, then requests a squash merge with the expected head SHA. GitHub enforces the repository's required checks and branch protection at merge time; a refusal is stored as a backend task event. A task-scoped SQL application lock serializes automatic merges with cancellation, and task state is rechecked while the lock is held. On merge acceptance, a task event is committed before releasing the lock; cancellation is refused until the signed merge webhook is persisted. GitHub rate limits remain retryable webhook failures. A successful merge response is not sufficient to mark Done: the backend waits for the signed `pull_request` webhook to persist the merged state, then verifies that state and checks before transitioning the task. Duplicate webhook deliveries re-evaluate the persisted row, so a transient follow-up failure can be retried. Fake-backed tests cover PR creation, both policies, and refusal reasons; live App installation and test-repository acceptance remain unverified.
+P3-06 joins the task-linked PR record to its live project policy, checks the recorded result against GitHub's current PR and check-run/commit-status APIs, and issues a repository-scoped token through the existing App token issuer. An open PR with no check runs or commit statuses waits two minutes from its recorded open time, then rechecks GitHub; only a still-empty result counts as no CI, and pending or failed records continue to block. `deliver_pr` marks a verified green or no-CI, non-draft PR Done without merging, recording no-CI completion in task activity. `complete_without_deployment` additionally requires the PR base SHA to match the current branch tip and GitHub to report a clean/mergeable PR, then immediately requests a squash merge with the expected head SHA; choosing the policy is approval, so this path asks for no confirmation and sends no message. The backend re-evaluates open PRs for active Running/NeedsAttention tasks at startup and every minute, and a project-policy PATCH triggers an immediate project-scoped recheck. This recovers the persisted no-check grace after restart. GitHub enforces the repository's required checks and branch protection at merge time; a refusal is stored as a backend task event and is not repeatedly attempted. Transient GitHub failures receive at most three retries with 1/2/4-minute backoff. A task-scoped SQL application lock serializes automatic merges with cancellation, and task state is rechecked while the lock is held. On merge acceptance, a task event is committed before releasing the lock; cancellation is refused until the signed merge webhook is persisted. A successful merge response is not sufficient to mark Done: the backend waits for the signed `pull_request` webhook to persist the merged state, then verifies that state and checks before transitioning the task. Duplicate webhook deliveries re-evaluate the persisted row, so a transient follow-up failure can be retried. Fake-backed tests cover PR creation, both policies, startup/restart recovery, policy changes, retries and refusal reasons; live App installation and test-repository acceptance remain unverified.
 
 
 **Codex login rules** (Pro login only; no API key):
@@ -4518,7 +4951,7 @@ P7-05, P7-08 and P7-38 reuse that Foundry endpoint, backend managed identity and
 
 `createPhoneStatusModule` always registers owner-authenticated `GET /phone/status`. The shared `PhoneStatus` contract reports whether the ACS call module was constructed, whether SQL history is available, and at most 20 recent calls. Each call contains its UTC `startedAt`, elapsed `durationSeconds`, and `in_progress`, `ended`, or `failed` outcome; caller identifiers and call IDs are not returned. `configured` is configuration/readiness for module construction, not a live ACS health check. Call history reuses `dbo.phone_sessions` (`started_at`, `ended_at`, `status` from migration 0017); no migration is needed. If SQL is not configured, the endpoint returns `historyAvailable: false` and an empty list; a history query failure returns 503.
 
-When enabled, incoming Event Grid deliveries go to `/phone/events`; Call Automation posts to `/phone/callback`, and bidirectional audio uses the `/phone/media` WebSocket. The call and media callback URLs use `TEAMS_AUDIO_ORIGIN`. Configuration requires `JARVIS_PHONE_ACS_ENDPOINT`, `JARVIS_PHONE_ACS_RESOURCE_ID`, `JARVIS_PHONE_TEAMS_RESOURCE_ACCOUNT_OBJECT_ID`, `TEAMS_AUDIO_ORIGIN`, Key Vault/Foundry/Teams settings, and the `jarvis-phone-allowlist` secret. Dan can call only by calling the number assigned to that Teams resource account from his Teams identity; both the called resource-account ID and Dan's Entra user ID are checked. A phone number alone is not caller authentication.
+When enabled, incoming Event Grid deliveries go to `/phone/events`; Call Automation posts to `/phone/callback`, and bidirectional audio uses the `/phone/media` WebSocket. The call and media callback URLs use `JARVIS_PHONE_PUBLIC_ORIGIN`, independently of Teams messaging settings. Configuration requires `JARVIS_PHONE_ACS_ENDPOINT`, `JARVIS_PHONE_ACS_RESOURCE_ID`, `JARVIS_PHONE_TEAMS_RESOURCE_ACCOUNT_OBJECT_ID`, `JARVIS_PHONE_PUBLIC_ORIGIN`, Key Vault/Foundry/Event Grid identity settings, and the `jarvis-phone-allowlist` secret. Dan can call only by calling the number assigned to that Teams resource account from his Teams identity; both the called resource-account ID and Dan's Entra user ID are checked. A phone number alone is not caller authentication.
 
 Production calling is dormant: P6-22 decided not to provision Teams in Dan's personal tenant, and the P7-01 decision records that no number was purchased. No phone number or deployed ACS resource ID is present in the repository; Azure CLI/live Azure access was unavailable during P9-22, so the current number, resource assignment, Event Grid subscription, and callback delivery could not be verified. Do not treat this feature as callable until Dan provisions and verifies those external resources.
 
@@ -4644,7 +5077,7 @@ call linkage remain the post-merge P4-09 acceptance check.
 - Calendar creation, movement, updates to title/time/location/attendees/description, deletion, Gmail draft creation/replacement/deletion, message archive/label changes, and sending are staged in process memory for ten minutes. Calendar executes only after a different, later persisted Dan message from the staging session clearly approves it, as decided by the shared approval interpreter (a plain reply such as yes or ja takes the fast path; anything else gets one bounded model call that fails closed); a decline discards it, and an unclear reply leaves it pending while Jarvis asks one short question. A new calendar stage invalidates the previous calendar action, and the confirmation tool must identify the latest action with its returned code. Gmail uses the same approval; the returned eight-digit code identifies the pending action for its confirmation tool. Pending actions are one-shot and lost on restart; the Container App remains at one replica. Sensitive Google tool inputs/results are redacted from persistent tool-call records, and external Google error bodies are not returned or logged. Calendar updates PATCH only the supplied fields; empty location, description, and attendee values can clear those fields. Draft replacement requires recipients, subject, and plain-text body; it preserves reply threading and refuses drafts with attachments or CC/BCC recipients. Gmail draft listing is bounded to ten drafts and returns plain-text bodies; archiving removes `INBOX`, and label changes resolve exact Gmail label names or IDs. Confirmed replies create a Gmail draft; Dan sends it from Gmail.
 - [`infra/bootstrap.ps1`](../infra/bootstrap.ps1) creates what the deploy workflows can't create for themselves: the deploy identity (GitHub OIDC, main branch only, trusting both the name-based and the ID-based subject (L50); Contributor and Role Based Access Control Administrator on `rg-jarvis`), the sign-in apps, `id-jarvis-backend`, and `jarvis-sql-admins`. Its IDs are in `infra/bootstrap.output.json` and in the repository's Actions variables.
 - Managed identities between Azure services; GitHub Actions deploys with OpenID Connect.
-- The backend identity has `Foundry User` on the Foundry project for the Danish voice relay, `Cognitive Services User` on the Foundry AIServices account for parallel Azure Speech partial recognition, and account-scoped `Cognitive Services Contributor` for model deployment management. It also retains `Cognitive Services Speech User` on the separate F0 Speech resource used for Teams voice notes.
+- The backend identity has `Foundry User` on the Foundry project for the Danish voice relay, `Cognitive Services User` on the Foundry AIServices account for parallel Azure Speech partial recognition, and account-scoped `Cognitive Services Contributor` for model deployment management. Teams voice-note synthesis was removed by P10-10; any prior F0 Speech resource or role assignment is a separate, approval-gated infrastructure cleanup.
 - P7-10's Microsoft Graph `Files.Read.All` app role is assigned separately by an administrator; Graph Search does not support `Sites.Selected`. The notes tool uses Dan's fixed object ID and the configured folder path, and validates result links before returning snippets.
 - Secrets only in Key Vault; none in code, images, environment variables, or logs.
 
@@ -4965,6 +5398,113 @@ Charts reuse `ChartView` with returned numeric observations and retained units.
 General workspace/GenUI commands present queried results for chat/voice; page
 navigation does not claim to alter local filters. Production remains default-off.
 
+### Daily overview page and build-time switch (18 October 2026)
+
+`DailyHome` (`apps/web/src/daily/`) is now the Daily area. It opens on
+`DailyOverview` and shows the existing `DailyPage` browser for one collection at a
+time: Open moves focus to the browser heading, and Back to overview returns focus
+to that row's Open button. `useDailyCapabilities` reads `GET /daily/capabilities`
+once and hands the exposed sources to the overview and to the browser (as
+`knownSources`), so the browser does not discover them a second time.
+
+`useDailyProbes` reads each exposed collection with one `POST /daily/query` of
+`limit: 1`, over the browser's default last-seven-days period for dated
+collections and with no period for sync evidence, through the same client and
+response validation as the browser. Two reads run at a time because
+`/daily/query` has no concurrency limit of its own and the SQL pool is shared with
+chat. `overview.ts` classifies each result as records, none returned or failed
+(with the shared safe failure sentence). `daily.sync` always returns one summary
+item, so sync evidence counts as records only when that item holds feeds, a
+heartbeat or retained inbox entries. A header refresh, a Retry or the existing
+Daily refresh stream re-reads every collection while settled rows stay visible,
+and returning from the browser reads them again. Aborted and superseded reads are
+ignored. The overview adds no endpoint, DTO, writer, calculation, provider call,
+login or storage.
+
+`main.tsx` passes the build constant `__JARVIS_DAILY_ENABLED__` to
+`App({ dailyEnabled })`. `apps/web/vite.config.ts` loads `VITE_DAILY_ENABLED` by
+name only and `config/daily-switch.ts` parses it: absent or `false` is off, `true`
+is on, and any other value, including an empty one, stops the build or dev server.
+The value is baked into the bundle and is never read from the URL, local storage
+or the public bootstrap response; `App` itself still defaults to off. The switch
+grants no access: the backend composition switch and the owner checks above still
+decide every read. Production sets both switches to `true` in exactly two reviewed
+files: `JARVIS_DAILY_ENABLED` in the backend container environment in
+`infra/main.bicep` and `VITE_DAILY_ENABLED` on the web build step of
+`.github/workflows/deploy.yml` (18 October 2026). `daily/default-off.test.ts` allows
+no other configuration file to mention either name.
+
+### On-demand Daily views (18 October 2026; P12-16)
+
+`dailyShowTool(data.query)` (`apps/backend/src/daily/tools/show.ts`) is the seventh
+tool of the Daily composition, registered by `createDailyModules` right after
+`dailyQueryTool`. It adds no route, endpoint, DTO, table, migration, renderer, job
+or secret. It is `sensitive` and `denyOnPhone` with a 2 KiB body limit.
+
+One call runs in this order. `resolveDailyOwner` gives the composed owner, and a
+connector principal is refused as on the Daily routes. A pure parser checks
+`source`, `startDate`, `endDate`, `workoutId`, `metric`, `display` and `limit`;
+its refusals use static wording and never echo input, and a cursor, brief history
+or single-record read is refused toward `daily_query`. The tool refuses before
+reading when `workspaceCommands.isConnected(owner)` is false. One
+`service.query` page then runs over the read model behind `POST /daily/query`
+(at most 366 days and 200 rows, 100 for meals, favourites and plans). The pure
+`buildDailyView` (`apps/backend/src/daily/show/views.ts`) turns it into a view, and
+the tool publishes it through the workspace view lifecycle: `update` first, `create`
+when the view does not exist yet, and for a refresh a best-effort foreground `show`.
+The receipt says whether the view was created or refreshed.
+
+`buildDailyView` maps stored rows onto the existing `table`, `chart`, `detail` and
+`text` generated-view contracts and calculates nothing: values and units pass
+through, nulls stay unknown and number formatting is locale-free. Views are bounded
+(200 shown rows, a 240 KiB view budget, 2,000-character cells, 200-character titles).
+Each carries a `source` reason with the provenance, the period, `Read <date, time>
+Copenhagen time.`, the latest-record or last-processed stamp where the source has
+one, and "Completeness and freshness are not established." View IDs are
+`daily-<source>-<table|chart>` or `daily-sync`. A measurement view filtered to one
+metric adds the form and a short digest of the metric name; a heart-rate view is
+keyed by its rendered form and workout, not by its date window, so asking again
+refreshes the same view. Only sleep hours, one measurement or heart rate can be
+drawn as a chart, and any other chart request becomes a table with a note. An empty
+read becomes a `text` view carrying its own read time.
+
+The tool answers within 25 seconds overall, under the agent's 30-second default
+read timeout for tools without a longer budget, so the model sees the tool's own
+failure rather than a transport timeout. The foreground `show` is limited to 3
+seconds and is best-effort. The abort signal is rechecked after every await, so a
+read or publish that finishes after the deadline is a failure, never a success;
+an outer abort passes through unchanged.
+
+On the web, `GeneratedViewRenderer` renders `source.reason` as a footnote
+(`SourceNote`) under `table`, `detail` and `chart` views, while `list` and `text`
+views carry their own note. The stylesheet keeps table cells' words whole
+(`overflow-wrap: normal`, scrolling inside the existing wrapper) and tightens cell
+padding below 700 px. The iframe sandbox, bridge and CSP are unchanged, and
+generated content still gets no credentials, backend or network access.
+
+`show/views.test.ts` and `tools/show.test.ts` use synthetic rows and a fake
+workspace. `composition.test.ts` and `production-modules.test.ts` pin the
+seven-tool list, and `composition.test.ts` proves a mismatched owner is denied on
+the routes and on the tools with no SQL touched.
+
+### Proactive page and web switch (18 October 2026; P13-10)
+
+`VITE_PROACTIVE_ENABLED` is loaded by name only, parsed by
+`config/proactive-switch.ts` as exact-string `true`, and exposed as
+`__JARVIS_PROACTIVE_ENABLED__`. `App` defaults the prop off for tests and
+conditionally registers the Proactive navigation area, Settings node, proactive
+detail client and JobsChip link. A push-only build continues to route
+`/proactive/:id` through the M1 item page.
+
+`proactive-data.ts` validates response shapes and maps reason codes to fixed
+copy; dates use explicit `Europe/Copenhagen` and `da-DK`/`en-GB` formatting.
+The page owns independent status, open-item and run load states; its Earlier
+items disclosure fetches once on demand. Check now owns a cancellable,
+visibility-aware status poll and bounded timeout. The Settings section owns
+drafts and field-level validation, saves changed fields only, and never
+persists its private values or its disclosure state. `proactive-switch.test.ts`
+pins the production web build as the only place that sets the gate (P13-14).
+
 ### Inactive internal direct intake (17 October 2026)
 
 An optional fourth `createDailyModules(true, data, undefined, data.nutrition)`
@@ -5005,10 +5545,9 @@ Corrections capture actual owned before-state/revision, retain stable identity
 and recompute Copenhagen dates from occurrence. Changed nutrients/components
 become unverified estimates; unchanged exact provenance and nulls survive.
 
-Review uses actual `TeamsNotificationService.runConfirmed` with a trusted
-browser-only selector. Default current-channel behaviour is unchanged for
-other callers; browser-only never looks up or sends a Teams conversation or
-voice note, even after presence changes. Food requires present mode before
+Review uses the shared app approval service with a trusted browser-only
+selector. Every confirmation is browser-only; no channel lookup or Teams
+message path exists, even after presence changes. Food requires present mode before
 staging and in the action callback. Existing Now owner-authenticated approval,
 persisted one-time consumption supplies authority. Food cards have an explicit
 120-second lifetime shared by SQL, visible expiry and the service timer;
@@ -5081,7 +5620,8 @@ resting energy burn (kcal), daily deficit (kcal) and protein target (g). A sixth
 optional `createDailyModules` argument, `nutritionTargets`, is a request-bound
 accessor. It is independent of the earlier factories, needs shared Daily data
 (otherwise construction throws) and composes only when Daily is on, so Daily off
-and every existing composition are unchanged. No production caller exists yet.
+and every existing composition are unchanged. Only the default-off Daily
+composition below calls it.
 Its presence moves the capabilities stage to `internal-nutrition-rehearsal`.
 
 Each target is one `dbo.settings` row at scope `global` with a Daily-owned,
@@ -5106,7 +5646,7 @@ This reverses the earlier no-maintenance-maths rule for one formula only (see
 the decision log): allowance = resting burn + active energy so far today -
 deficit. It adds no BMR/TDEE estimate from weight, height or age and no
 coaching. The suggestion adapter below is the second slice and the web Settings
-section after it the third; the default-off composition is a separate slice.
+section after it the third; the default-off composition is the last.
 The values are personal
 health data in a public repository: none appears in code, fixtures, documents,
 logs or audit.
@@ -5117,7 +5657,8 @@ A seventh optional `createDailyModules` argument, `nutritionSuggestions`
 (`{nutrition, health, now?}`), adds the read-only `daily_nutrition_suggest` tool.
 It needs shared Daily data and the sixth `nutritionTargets` accessor (otherwise
 construction throws) and composes only when Daily is on, so Daily off and every
-existing composition are unchanged. No production caller exists yet. It adds no
+existing composition are unchanged. Only the default-off Daily composition below
+calls it. It adds no
 route, migration, write, provider call, job or timer.
 
 One call fixes a single trusted clock reading (the Copenhagen date and time) and
@@ -5175,6 +5716,44 @@ sends `null`, and HTTP failures map to static copy (404 means "not available
 here"), so server text is never shown. A save renders the committed readback the
 route returns rather than the typed draft. Nothing is logged, and the browser
 keeps only the section's open/closed flag.
+
+### Default-off Daily composition (17 October 2026)
+
+`apps/backend/src/daily/composition.ts` is the only production entry to Daily.
+`index.ts` calls `composeDaily({ enabled, pool, ownerObjectId })` once, and
+`createProductionModules` places the result between the voice relay and the Teams
+bot; `app.ts` is untouched. `enabled` is `config.dailyEnabled === true`, which
+`loadConfig` sets only when `JARVIS_DAILY_ENABLED` is exactly `true`. Absent and
+`false` are off; any other value is a `ConfigurationError` that never echoes it.
+With the switch off the function returns `undefined` before it validates anything
+or reads the pool, so the module list, route table, tool catalogue, capability
+instructions, voice session tools, startup, background jobs and timers are those
+of Jarvis without Daily.
+
+With the switch on it needs the shared SQL pool and a UUID owner (otherwise
+startup fails), builds `createDailyData(pool, owner)` and returns the module of
+`createDailyModules` for the nutrition rehearsal: `GET /daily/capabilities`,
+`POST /daily/query`, `GET`/`PATCH /daily/nutrition-targets` and seven tools
+(`daily_query`, `daily_show`, `daily_food`, `daily_food_review`, `daily_saved_food`,
+`daily_nutrition_targets`, `daily_nutrition_suggest`), which stay inside the
+catalogue's 128-tool limit (CI checks the headroom). The connector, Frida lookup, feeds and health-upload
+arguments are left out, so the module has no MCP route, provider call, Google or
+Gmail read, job or timer. The targets and health accessors also compare the
+resolved owner with the composed owner and refuse a mismatch, on top of the check
+inside the data accessors. Root authentication is unchanged: a connector or
+runner principal is refused on every Daily route, and an agent is refused on the
+targets route because it reaches targets only through the approved tool.
+
+The code default is off. Production sets `JARVIS_DAILY_ENABLED` and the web switch
+`VITE_DAILY_ENABLED` (read at build time by the Daily overview page) in exactly two
+reviewed files, `infra/main.bicep` and the web build step of `deploy.yml`, and every
+other environment stays off. `daily/default-off.test.ts` scans configuration files
+for both names, allows only those two files and checks their literal values.
+`daily/composition.test.ts` builds real
+applications: it compares a Daily-off one with one built without Daily, shows the
+module adds exactly its three routes and seven tools, and checks that
+unauthenticated, other-user, runner, connector and mismatched-owner callers are
+refused before any SQL.
 
 ### Inactive nutrition MCP adapter (17 October 2026)
 
@@ -5338,3 +5917,31 @@ P12-07's inactive `daily/nutrition` services/typed handlers use existing server-
 P12-03 adds an inactive module-owned `daily/store` registry and exact-key owner-scoped read boundary using the existing P12-01 owner resolver. The additive `daily` SQL schema is separate from existing `dbo` tables; no service/UI/device/import module or route/tool is registered. Source-to-target compatibility and legacy credential/mixed-source exclusions are documented in [Daily schema mapping](daily-schema-mapping.md). Normal deployment may create only empty tables; protected live reconciliation remains a later gate.
 
 [Migration contract](daily-migration.md) adds `daily/createDailyModules(enabled = false)` to the existing BackendModule pattern. Production composition remains unchanged. Explicit enabled test composition exposes only private `GET /daily/capabilities`, no data/tools/pages; disabled composition contributes nothing. Existing root user/hosted-agent authentication precedes `resolveDailyOwner`, which maps both allowed callers to the server-configured owner and refuses runners/other service identities. Shared contracts reserve four stable native view IDs without changing the renderer/navigation allowlists. Actual services, SQL/device auth, activation wiring and native frontend are downstream P12 work. No new login, dispatcher, voice stack, Azure resource or direct Azure access.
+
+## Web UI style ownership (18 October 2026; P14-01)
+
+The React web app owns presentation in `apps/web/src`. `styles.css` is the
+shared owner for theme-aware color, type, spacing, radius, focus, motion,
+buttons, shell surfaces and common overlays. Route stylesheets such as
+`daily/daily.css` and `proactive.css` own page layout and workflow states while
+consuming those shared roles. Shared UI refinements do not change route
+registration, data ownership, API contracts or backend behavior; the reviewed
+variants and remaining component-specific layouts are listed in
+[`docs/ui-audit.md`](ui-audit.md).
+
+## Chat and voice recall of proactive findings (P13-16; default off)
+
+`index.ts` builds the `proactive` tool module only when the existing
+`JARVIS_PROACTIVE_ENABLED` flag is true. It shares the exact `ProactiveStore`
+instance with `registerProactive`; disabled composition adds no store or tool.
+The single `proactive_recent_items` tool reads through `items.list`, the same
+bounded query used by the Proactive page, with exact `new`, `seen` or `all`
+filters. SQL state filters are parameterized; the store remains owner-scoped.
+Shared chat/voice guidance mentions the tool only when it is in that catalogue.
+
+The result projects only the nine requested item fields, truncates title/body on
+code-point boundaries, caps the serialized result at 8 KiB and marks it
+`untrusted: true`. The tool is sensitive so private item text is not persisted
+in generic tool-call audit records. Raw JSON validation runs before Fastify's
+AJV coercion; failures remain explicit tool refusals/errors. The module exposes
+no item mutation or approval capability.

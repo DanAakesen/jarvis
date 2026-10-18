@@ -18,6 +18,21 @@ export function createProjectPolicyStore(pool: sql.ConnectionPool): ProjectPolic
           WHERE p.repo = @repository AND pr.number = @number;`);
       return recordset[0] ?? null;
     },
+    async listOpenPullRequests(projectId) {
+      const request = databaseReadRequest(pool);
+      if (projectId !== undefined) request.input('projectId', sql.BigInt, BigInt(projectId));
+      const projectFilter = projectId === undefined ? '' : ' AND p.id = @projectId';
+      const { recordset } = await request.query<PolicyPullRequest>(`SELECT CONVERT(varchar(19), t.id) AS taskId,
+        t.state AS taskState, p.repo AS repository, p.policy, pr.number, pr.state, pr.checks,
+        pr.head_sha AS headSha, CONVERT(varchar(23), pr.opened_at, 126) + 'Z' AS openedAt
+        FROM dbo.pull_requests AS pr
+        INNER JOIN dbo.projects AS p ON p.id = pr.project_id
+        INNER JOIN dbo.tasks AS t ON t.id = pr.task_id
+        WHERE p.active = 1 AND p.policy = N'complete_without_deployment' AND pr.state = N'open'
+          AND t.state IN (N'Running', N'NeedsAttention')${projectFilter}
+        ORDER BY t.id, pr.number;`);
+      return recordset;
+    },
     async withActiveTask<T>(taskId: string, operation: () => Promise<T>, expectedHeadSha: string) {
       if (typeof expectedHeadSha !== 'string' || !/^[\da-f]{40}$/iu.test(expectedHeadSha)) {
         return { kind: 'awaiting_runner' as const };

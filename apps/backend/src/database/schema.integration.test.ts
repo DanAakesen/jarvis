@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from 'node:crypto';
+import { createECDH, createHash, randomUUID } from 'node:crypto';
 import sql from 'mssql';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { loadDatabaseConfig } from './config.js';
@@ -29,6 +29,12 @@ import { ProjectConflictError } from '../factory/projects.js';
 import { createEventHub } from '../core/event-hub.js';
 import type { TaskEventMessage } from '../factory/task-store.js';
 import { mapGithubWebhook } from '../github/webhook-mapping.js';
+import { createPushStore } from './push-store.js';
+import { createProactiveStore } from './proactive-store.js';
+import { createProactiveAlertStore } from './proactive-alert-store.js';
+import { createProactiveTodoReceiptStore } from './proactive-todo-store.js';
+import { generateVapidKeyPair } from '../push/webpush.js';
+import { defaultProactiveSettings } from '../proactive/store.js';
 
 const configuration = loadDatabaseConfig();
 if (!configuration || process.env.NODE_ENV !== 'test' || configuration.server !== '127.0.0.1') {
@@ -40,10 +46,11 @@ const administrator = new sql.ConnectionPool({ ...configuration, database: 'mast
 const pool = new sql.ConnectionPool({ ...configuration, database });
 const core = '0001_core_tables.sql';
 const tablesInSchema = [
-  'activity', 'artifacts', 'background_job_steps', 'background_jobs', 'conversation_attachments',
+  'activity', 'artifacts', 'background_job_dismissals', 'background_job_steps', 'background_jobs', 'conversation_attachments',
   'conversation_summaries', 'credential_status', 'deployment_failure_receipts', 'deployments', 'factory_task_submissions', 'folio_items', 'jarvis_sessions',
-  'memories', 'memory_deletions', 'memory_history', 'messages', 'phone_sessions', 'projects',
-  'pull_requests', 'releases',
+  'memories', 'memory_deletions', 'memory_history', 'messages', 'phone_sessions', 'proactive_alerts', 'proactive_items',
+  'proactive_reminders', 'proactive_runs', 'proactive_settings', 'proactive_source_status', 'proactive_spend', 'proactive_todo_receipts', 'projects',
+  'pull_requests', 'push_subscriptions', 'push_vapid_keys', 'releases',
   'sandbox_sessions', 'sandbox_turns', 'settings', 'task_event_archives', 'task_events', 'task_status_notifications',
   'tasks', 'teams_confirmations', 'teams_conversations', 'tool_calls', 'usage', 'vault_chunks', 'vault_links',
   'webhook_deliveries', 'workflow_runs', 'workspace_artifacts',
@@ -162,15 +169,339 @@ describe('committed domain schema (groups 1-8)', () => {
         N'IX_sandbox_turns_sandbox_session_id_started_at', N'IX_artifacts_task_id_at',
         N'IX_task_event_archives_task_first_at', N'IX_pull_requests_project_head_sha',
         N'IX_workflow_runs_project_head_sha', N'IX_releases_project_created_at',
-        N'IX_deployments_release_id_at', N'IX_messages_at', N'UX_activity_alert_key') ORDER BY name`);
+        N'IX_deployments_release_id_at', N'IX_messages_at', N'IX_proactive_alerts_owner_day_status',
+        N'IX_proactive_reminders_owner_day_state', N'IX_proactive_reminders_owner_state_fire_at',
+        N'UX_activity_alert_key', N'UX_proactive_alerts_owner_alert_key', N'UX_proactive_reminders_owner_key') ORDER BY name`);
     expect(recordset.map((row) => row.name)).toEqual([
       'IX_artifacts_task_id_at', 'IX_deployments_release_id_at', 'IX_messages_at',
-      'IX_pull_requests_project_head_sha', 'IX_releases_project_created_at', 'IX_sandbox_sessions_task_id_status',
+      'IX_proactive_alerts_owner_day_status', 'IX_proactive_reminders_owner_day_state',
+      'IX_proactive_reminders_owner_state_fire_at', 'IX_pull_requests_project_head_sha',
+      'IX_releases_project_created_at', 'IX_sandbox_sessions_task_id_status',
       'IX_sandbox_turns_sandbox_session_id_started_at', 'IX_task_event_archives_task_first_at',
       'IX_task_events_task_id_at', 'IX_tasks_state_next_attempt_at', 'IX_workflow_runs_project_head_sha',
-      'UX_activity_alert_key',
+      'UX_activity_alert_key', 'UX_proactive_alerts_owner_alert_key', 'UX_proactive_reminders_owner_key',
     ]);
   });
+
+  it('stores owner-scoped push subscriptions idempotently, caps them, and opens durable items once', async () => {
+    const store = createPushStore(pool);
+    const owner = randomUUID();
+    const otherOwner = randomUUID();
+    const makeSubscription = (endpoint: string) => {
+      const ecdh = createECDH('prime256v1');
+      ecdh.generateKeys();
+      return {
+        endpoint: `https://web.push.apple.com/device/${endpoint}`,
+        p256dh: ecdh.getPublicKey(undefined, 'uncompressed').toString('base64url'),
+        auth: Buffer.alloc(16, 7).toString('base64url'),
+      };
+    };
+    const first = makeSubscription('first');
+    await store.upsertSubscription(owner, first);
+    const firstRow = await store.listSubscriptions(owner);
+    await store.upsertSubscription(owner, { ...first, p256dh: makeSubscription('replacement').p256dh });
+    expect(await store.listSubscriptions(owner)).toMatchObject([{ id: firstRow[0]!.id, endpoint: first.endpoint }]);
+    await Promise.all(['parallel-1', 'parallel-2'].map((endpoint) =>
+      store.upsertSubscription(owner, makeSubscription(endpoint))));
+    expect(await store.listSubscriptions(owner)).toHaveLength(3);
+    await store.recordSubscriptionResult(firstRow[0]!.id, true);
+    for (let index = 1; index <= 10; index++) {
+      await store.upsertSubscription(owner, makeSubscription(`subscription-${index}`));
+    }
+    const capped = await store.listSubscriptions(owner);
+    expect(capped).toHaveLength(10);
+    expect(capped.map(({ endpoint }) => endpoint)).toContain(first.endpoint);
+    expect(capped.map(({ endpoint }) => endpoint)).not.toContain(makeSubscription('subscription-1').endpoint);
+    await store.upsertSubscription(otherOwner, first);
+    expect(await store.listSubscriptions(otherOwner)).toHaveLength(1);
+    await store.deleteSubscription(owner, first.endpoint);
+    await store.deleteSubscription(owner, first.endpoint);
+    expect((await store.listSubscriptions(owner)).some(({ endpoint }) => endpoint === first.endpoint)).toBe(false);
+
+    const keys = [generateVapidKeyPair(), generateVapidKeyPair()];
+    await Promise.allSettled(keys.map((candidate) => store.insertVapidKey(candidate)));
+    const persistedKeys = await store.readVapidKey();
+    expect(keys).toContainEqual(persistedKeys);
+    expect((await pool.request().query<{ count: number }>(
+      'SELECT COUNT(*) AS count FROM dbo.push_vapid_keys')).recordset[0]?.count).toBe(1);
+
+    const item = await store.createTestItem(owner);
+    await store.updateItemDelivery(item.id, 'accepted', 201);
+    const delivery = await pool.request()
+      .input('id', sql.UniqueIdentifier, item.id)
+      .query<{ delivery_state: string; delivery_status_code: number | null; delivered_at: Date | null }>(
+        'SELECT delivery_state, delivery_status_code, delivered_at FROM dbo.proactive_items WHERE id = @id;');
+    expect(delivery.recordset[0]).toEqual({ delivery_state: 'accepted', delivery_status_code: 201, delivered_at: null });
+    expect(await store.readItem(otherOwner, item.id)).toBeUndefined();
+    const firstRead = await store.readItem(owner, item.id);
+    const opened = await pool.request()
+      .input('id', sql.UniqueIdentifier, item.id)
+      .query<{ opened_at: Date }>('SELECT opened_at FROM dbo.proactive_items WHERE id = @id;');
+    const firstOpenedAt = opened.recordset[0]?.opened_at;
+    expect(firstRead).toMatchObject({ id: item.id, kind: 'test', title: 'Jarvis', body: 'New item' });
+    expect(firstOpenedAt).toBeInstanceOf(Date);
+    await store.readItem(owner, item.id);
+    const openedAgain = await pool.request()
+      .input('id', sql.UniqueIdentifier, item.id)
+      .query<{ opened_at: Date }>('SELECT opened_at FROM dbo.proactive_items WHERE id = @id;');
+    expect(openedAgain.recordset[0]?.opened_at).toEqual(firstOpenedAt);
+  });
+
+  it('recovers proactive background jobs with the fixed visible restart reason', () => withRollbackDatabase(async (rollbackPool) => {
+    const store = createBackgroundJobStore(rollbackPool);
+    const jobId = randomUUID();
+    const at = new Date().toISOString();
+    await store.create({
+      jobId, kind: 'proactive', title: 'Proactive check (manual)', status: 'running',
+      step: 0, steps: 1, startedAt: at, updatedAt: at,
+    });
+    expect(await store.reconcileInterrupted()).toContainEqual(expect.objectContaining({
+      jobId, kind: 'proactive', status: 'failed', detail: 'Interrupted by a restart',
+    }));
+  }));
+
+  it('serializes persisted proactive manual limits across stores and resets at Copenhagen midnight', () => withRollbackDatabase(async (rollbackPool) => {
+    const owner = randomUUID();
+    const first = createProactiveStore(rollbackPool, owner);
+    const second = createProactiveStore(rollbackPool, owner);
+    const start = Date.parse('2026-10-25T21:00:00Z');
+    for (let index = 0; index < 6; index++) {
+      const now = new Date(start + index * 5 * 60_000);
+      const claims = await Promise.all([
+        first.runs.claim({ trigger: 'manual', slot: null, now }),
+        second.runs.claim({ trigger: 'manual', slot: null, now }),
+      ]);
+      expect(claims.filter(Boolean)).toHaveLength(1);
+      const claimed = claims.find(Boolean)!;
+      await first.runs.finish(claimed.run.id, claimed.generation, 'done', null, 0, now);
+      expect(await second.runs.claim({
+        trigger: 'manual', slot: null, now: new Date(now.getTime() + 5 * 60_000 - 1),
+      })).toBeNull();
+    }
+    expect(await second.runs.claim({
+      trigger: 'manual', slot: null, now: new Date(start + 30 * 60_000),
+    })).toBeNull();
+    expect(await second.runs.claim({
+      trigger: 'manual', slot: null, now: new Date('2026-10-25T23:00:00Z'),
+    })).not.toBeNull();
+  }));
+
+  it('fences guarded proactive findings by owner, generation, status and lease expiry', () => withRollbackDatabase(async (rollbackPool) => {
+    const store = createProactiveStore(rollbackPool, randomUUID());
+    const now = new Date('2026-10-20T05:00:00.000Z');
+    const claimed = (await store.runs.claim({ trigger: 'scheduled', slot: null, now }))!;
+    const guard = {
+      runId: claimed.run.id, generation: claimed.generation,
+      signal: new AbortController().signal, check: () => {}, now: () => now,
+    };
+    const finding = {
+      dedupeKey: 'integration:guarded', title: 'Synthetic guarded finding',
+      body: 'Synthetic evidence.', category: 'deadline' as const, urgency: 'normal' as const,
+      dueAt: null, evidence: [], runId: claimed.run.id, language: 'en' as const,
+    };
+    const saved = await store.items.upsertFinding(finding, guard);
+    const update = { ...finding, title: 'Must not persist' };
+    await expect(store.items.upsertFinding(update, {
+      ...guard, generation: guard.generation + 1,
+    })).rejects.toThrow('lease_lost');
+    await expect(store.items.upsertFinding(update, {
+      ...guard, now: () => new Date(now.getTime() + 10 * 60_000),
+    })).rejects.toThrow('lease_lost');
+    const otherOwner = createProactiveStore(rollbackPool, randomUUID());
+    await expect(otherOwner.items.upsertFinding(finding, guard)).rejects.toThrow('lease_lost');
+    expect(await otherOwner.items.list('all', 20, now)).toEqual([]);
+    await store.runs.finish(claimed.run.id, claimed.generation, 'done', null, 1, now);
+    await expect(store.items.upsertFinding(update, guard)).rejects.toThrow('lease_lost');
+    await expect(store.items.upsertFinding({ ...update, dedupeKey: 'integration:blocked' }, guard))
+      .rejects.toThrow('lease_lost');
+    expect(await store.items.list('all', 20, now)).toEqual([saved]);
+  }));
+
+  it('re-reads item state in owner scope without returning item text', () => withRollbackDatabase(async (rollbackPool) => {
+    const owner = randomUUID();
+    const otherOwner = randomUUID();
+    const store = createProactiveStore(rollbackPool, owner);
+    const item = await store.items.upsertFinding({
+      dedupeKey: 'integration:get-many-state',
+      title: 'Synthetic private title',
+      body: 'Synthetic private body.',
+      category: 'deadline',
+      urgency: 'time_critical',
+      dueAt: null,
+      evidence: [],
+      runId: null,
+      language: 'en',
+    });
+    await store.items.applyFeedback(item.id, 'seen');
+    expect(await store.items.getMany([item.id, randomUUID()])).toEqual([{ id: item.id, state: 'seen' }]);
+    expect(await createProactiveStore(rollbackPool, otherOwner).items.getMany([item.id])).toEqual([]);
+  }));
+
+  it('persists proactive settings, findings, feedback, leases, source status and estimated spend', () => withRollbackDatabase(async (rollbackPool) => {
+    const owner = randomUUID();
+    const store = createProactiveStore(rollbackPool, owner);
+    const now = new Date('2026-10-20T05:00:00.000Z');
+    expect(await store.settings.read()).toEqual(defaultProactiveSettings());
+    expect(await store.settings.patch({
+      paused: true,
+      monthlyBudgetDkk: 275,
+      sources: { calendar: false },
+      newsFeeds: ['https://example.test/rss.xml'],
+      guidance: 'Synthetic integration setting.',
+    })).toMatchObject({
+      paused: true, monthlyBudgetDkk: 275, sources: { calendar: false },
+      newsFeeds: ['https://example.test/rss.xml'], guidance: 'Synthetic integration setting.',
+    });
+
+    const finding = {
+      dedupeKey: 'integration:deadline-1',
+      title: 'Synthetic calendar deadline',
+      body: 'A synthetic deadline is approaching.',
+      category: 'deadline' as const,
+      urgency: 'normal' as const,
+      dueAt: '2026-10-20T12:00:00.000Z',
+      evidence: [{ source: 'calendar' as const, label: 'Calendar', observedAt: now.toISOString() }],
+      runId: null,
+      language: 'en' as const,
+    };
+    const first = await store.items.upsertFinding(finding);
+    expect(first).toMatchObject({ kind: 'finding', state: 'new', dueAt: finding.dueAt, evidence: finding.evidence });
+    expect(await store.items.getMany([first.id, randomUUID()])).toEqual([{ id: first.id, state: 'new' }]);
+    expect((await store.items.applyFeedback(first.id, 'dismiss'))?.state).toBe('dismissed');
+    expect((await store.items.upsertFinding({ ...finding, title: 'Updated synthetic title' })).state).toBe('dismissed');
+    expect((await store.items.upsertFinding({ ...finding, urgency: 'fyi' })).state).toBe('dismissed');
+    expect((await store.items.upsertFinding(finding)).state).toBe('dismissed');
+    const changed = await store.items.upsertFinding({ ...finding, urgency: 'time_critical' });
+    expect(changed).toMatchObject({ id: first.id, state: 'new', urgency: 'time_critical' });
+    await store.items.applyFeedback(changed.id, 'snooze', '2026-10-20T06:00:00.000Z');
+    expect(await store.items.list('open', 20, now)).toEqual([]);
+    expect(await store.items.list('open', 20, new Date('2026-10-20T06:00:00.000Z'))).toHaveLength(1);
+    expect(await store.items.get(changed.id, true)).toMatchObject({
+      ...changed, state: 'snoozed', snoozedUntil: '2026-10-20T06:00:00.000Z',
+    });
+
+    const slot = '2026-10-20T07:00';
+    const competing = await Promise.all([
+      store.runs.claim({ trigger: 'scheduled', slot, now }),
+      store.runs.claim({ trigger: 'scheduled', slot, now }),
+    ]);
+    expect(competing.filter(Boolean)).toHaveLength(1);
+    const firstClaim = competing.find(Boolean)!;
+    expect(await store.runs.running(now)).toEqual(firstClaim.run);
+    expect(await store.runs.claim({ trigger: 'manual', slot: null, now })).toBeNull();
+    const later = new Date(now.getTime() + 10 * 60_000);
+    expect(await store.runs.running(later)).toBeNull();
+    const nextClaim = await store.runs.claim({ trigger: 'manual', slot: null, now: later });
+    expect(nextClaim).not.toBeNull();
+    expect(await store.runs.heartbeat(firstClaim.run.id, firstClaim.generation, later)).toBe(false);
+    expect(await store.runs.finish(firstClaim.run.id, firstClaim.generation, 'done', null, 1, later)).toBe(false);
+    expect(await store.runs.finish(nextClaim!.run.id, nextClaim!.generation, 'done', null, 1, later)).toBe(true);
+    expect(await store.runs.running(later)).toBeNull();
+    expect(await store.runs.countManualSince(now)).toBe(1);
+    expect(await store.runs.claim({ trigger: 'manual', slot: null, now: new Date(later.getTime() + 1_000) })).toBeNull();
+    const interrupted = await store.runs.claim({ trigger: 'manual', slot: null, now: new Date(later.getTime() + 5 * 60_000) });
+    expect(await store.runs.markInterruptedOnStartup()).toBe(1);
+    expect(await store.runs.finish(interrupted!.run.id, interrupted!.generation, 'done', null, 0, later)).toBe(false);
+    expect(await store.runs.latest()).toMatchObject({ status: 'failed', reason: 'interrupted_by_restart' });
+    expect(await store.runs.list(10)).toHaveLength(3);
+
+    await store.sources.upsert({
+      id: 'calendar', label: 'Calendar', enabled: true, state: 'unavailable',
+      reason: 'not_connected', observedAt: now.toISOString(),
+    });
+    expect(await store.sources.list()).toMatchObject([
+      { id: 'calendar', state: 'unavailable', reason: 'not_connected', observedAt: now.toISOString() },
+    ]);
+    await store.spend.record({
+      runId: nextClaim!.run.id,
+      month: '2026-10',
+      inputTokens: 100,
+      outputTokens: 25,
+      estimatedDkk: 1.2345,
+      createdAt: now,
+    });
+    expect(await store.spend.monthTotal('2026-10')).toBe(1.2345);
+    expect(await store.spend.monthTotal('2026-11')).toBe(0);
+  }));
+
+  it('persists add-only todo receipts, enforces the unique added key, and preserves todo-added findings', () => withRollbackDatabase(async (rollbackPool) => {
+    const owner = randomUUID();
+    const store = createProactiveStore(rollbackPool, owner);
+    const receipts = createProactiveTodoReceiptStore(rollbackPool, owner);
+    const finding = {
+      dedupeKey: '0123456789abcdef0123456789abcdef',
+      title: 'Synthetic suggested todo finding',
+      body: 'Synthetic evidence.',
+      category: 'suggestion' as const,
+      urgency: 'normal' as const,
+      dueAt: null,
+      evidence: [],
+      runId: null,
+      language: 'en' as const,
+    };
+    const item = await store.items.upsertFinding(finding);
+    await store.items.markTodoAdded([item.id]);
+    expect(await store.items.get(item.id)).toMatchObject({ todoAdded: true });
+    expect(await store.items.upsertFinding({ ...finding, title: 'Updated synthetic finding' }))
+      .toMatchObject({ id: item.id, todoAdded: true });
+
+    const receipt = {
+      itemId: item.id,
+      dedupeKey: finding.dedupeKey,
+      dayKey: '2026-10-18',
+      runId: randomUUID(),
+      status: 'added' as const,
+      reason: null,
+      commitSha: 'a'.repeat(40),
+    };
+    const outcomes = await Promise.all([receipts.insert(receipt), receipts.insert(receipt)]);
+    expect(outcomes.filter(Boolean)).toHaveLength(1);
+    expect(await receipts.countAdded('2026-10-18')).toBe(1);
+    expect(await receipts.list([finding.dedupeKey])).toEqual([{
+      dedupeKey: finding.dedupeKey, added: true, skipped: false, failedAttempts: 0,
+    }]);
+
+    await receipts.insert({ ...receipt, dedupeKey: '1123456789abcdef0123456789abcdef', status: 'failed', reason: 'vault_write_failed', commitSha: null });
+    await receipts.insert({ ...receipt, dedupeKey: '1123456789abcdef0123456789abcdef', status: 'failed', reason: 'vault_write_failed', commitSha: null });
+    expect(await receipts.list(['1123456789abcdef0123456789abcdef'])).toMatchObject([
+      { failedAttempts: 2, added: false, skipped: false },
+    ]);
+  }));
+
+  it('persists owner-scoped alert ledger attempts and Copenhagen daily sent counts', () => withRollbackDatabase(async (rollbackPool) => {
+    const owner = randomUUID();
+    const otherOwner = randomUUID();
+    const item = await createProactiveStore(rollbackPool, owner).items.upsertFinding({
+      dedupeKey: 'integration:alert-ledger',
+      title: 'Synthetic alert finding',
+      body: 'Synthetic alert body.',
+      category: 'deadline',
+      urgency: 'time_critical',
+      dueAt: '2026-10-20T12:00:00.000Z',
+      evidence: [],
+      runId: null,
+      language: 'en',
+    });
+    const ledger = createProactiveAlertStore(rollbackPool, owner);
+    const base = {
+      alertKey: '0123456789abcdef0123456789abcdef',
+      class: 'deadline_24h' as const,
+      itemId: item.id,
+      runId: randomUUID(),
+      dayKey: '2026-10-20',
+      status: 'failed' as const,
+      reason: 'provider_unavailable',
+    };
+    expect(await ledger.get(base.alertKey)).toBeUndefined();
+    expect(await ledger.upsert(base)).toMatchObject({ attempts: 1, status: 'failed' });
+    expect(await ledger.upsert(base)).toMatchObject({ attempts: 2, status: 'failed' });
+    expect(await ledger.countSent(base.dayKey)).toBe(0);
+    expect(await createProactiveAlertStore(rollbackPool, otherOwner).get(base.alertKey)).toBeUndefined();
+    const sent = await ledger.upsert({ ...base, status: 'sent', reason: null });
+    expect(sent).toMatchObject({ attempts: 3, status: 'sent', dayKey: base.dayKey });
+    expect(await ledger.countSent(base.dayKey)).toBe(1);
+    expect(await ledger.get(base.alertKey)).toEqual(sent);
+  }));
 
   it('revises HTML artifacts atomically, retains every version and leaves Folio/pins intact', async () => {
     const owner = randomUUID();

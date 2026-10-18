@@ -307,7 +307,7 @@ function gmailDraftHasAttachments(value: unknown): boolean {
   return Array.isArray(part.parts) && part.parts.some(gmailDraftHasAttachments);
 }
 
-function gmailHeaders(payload: Record<string, unknown>): Record<string, string> {
+export function gmailHeaders(payload: Record<string, unknown>): Record<string, string> {
   const headers = object(payload.payload)?.headers;
   if (!Array.isArray(headers)) return {};
   return Object.fromEntries(headers.flatMap((header) => {
@@ -381,7 +381,7 @@ async function currentDanMessage(request: FastifyRequest): Promise<ConversationM
   return message;
 }
 
-function calendarViewPath(
+export function calendarViewPath(
   start: Date,
   end: Date,
   maxResults = 50,

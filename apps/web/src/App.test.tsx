@@ -14,6 +14,8 @@ const {
   isSignInRedirectPending,
   restoreProfile,
   signIn,
+  saveSignInReturnPath,
+  takeSignInReturnPath,
   loadConversationHistory,
   createChatSession,
   sendChatTurn,
@@ -32,6 +34,8 @@ const {
     isSignInRedirectPending: vi.fn(() => false),
     restoreProfile: vi.fn().mockResolvedValue(null),
     signIn: vi.fn(),
+    saveSignInReturnPath: vi.fn(),
+    takeSignInReturnPath: vi.fn<() => string | null>(() => null),
     loadConversationHistory: vi.fn().mockResolvedValue({ messages: [], nextCursor: null }),
     createChatSession: vi.fn(),
     sendChatTurn: vi.fn(),
@@ -46,7 +50,9 @@ const {
     }>,
   };
 });
-vi.mock('./auth', () => ({ createAuthClient, isSignInRedirectPending, restoreProfile, signIn }));
+vi.mock('./auth', () => ({
+  createAuthClient, isSignInRedirectPending, restoreProfile, signIn, saveSignInReturnPath, takeSignInReturnPath,
+}));
 vi.mock('./conversation-history', () => ({
   loadConversationHistory,
   createChatSession,
@@ -93,6 +99,7 @@ beforeEach(() => {
   createAuthClient.mockReturnValue(makeAuthClient());
   restoreProfile.mockResolvedValue(null);
   isSignInRedirectPending.mockReturnValue(false);
+  takeSignInReturnPath.mockReturnValue(null);
   loadConversationHistory.mockResolvedValue({ messages: [], nextCursor: null });
   createChatSession.mockResolvedValue({ id: '41', language: 'da' });
   sendChatTurn.mockResolvedValue({
@@ -107,6 +114,7 @@ beforeEach(() => {
 
 const mediaDevicesDescriptor = Object.getOwnPropertyDescriptor(navigator, 'mediaDevices');
 const permissionsDescriptor = Object.getOwnPropertyDescriptor(navigator, 'permissions');
+const serviceWorkerDescriptor = Object.getOwnPropertyDescriptor(navigator, 'serviceWorker');
 
 function MemoryRouter({ children, initialEntries = ['/'], initialIndex }: { children: ReactNode; initialEntries?: string[]; initialIndex?: number }) {
   const [router] = useState(() => createMemoryRouter([{ path: '*', element: children }], {
@@ -130,6 +138,8 @@ afterEach(() => {
   else Reflect.deleteProperty(navigator, 'mediaDevices');
   if (permissionsDescriptor) Object.defineProperty(navigator, 'permissions', permissionsDescriptor);
   else Reflect.deleteProperty(navigator, 'permissions');
+  if (serviceWorkerDescriptor) Object.defineProperty(navigator, 'serviceWorker', serviceWorkerDescriptor);
+  else Reflect.deleteProperty(navigator, 'serviceWorker');
 });
 
 describe('Jarvis routes', () => {
@@ -383,6 +393,73 @@ describe('App shell', () => {
     return rendered;
   }
 
+  it('keeps push settings, item route, registration and requests absent when the gate is off', async () => {
+    restoreProfile.mockResolvedValue({ name: 'Test User' });
+    const register = vi.fn();
+    Object.defineProperty(navigator, 'serviceWorker', { configurable: true, value: { register } });
+    vi.stubGlobal('PushManager', class {});
+    vi.stubGlobal('Notification', { permission: 'default', requestPermission: vi.fn() });
+
+    const settings = await renderSignedIn('/settings');
+    expect(screen.queryByRole('button', { name: 'Notifications' })).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Proactive', level: 2 })).toBeNull();
+    expect(register).not.toHaveBeenCalled();
+    expect(fetchMock.mock.calls.some(([url]) => {
+      const path = new URL(String(url)).pathname;
+      return path.startsWith('/push/') || path.startsWith('/proactive/');
+    })).toBe(false);
+
+    settings.unmount();
+    await renderSignedIn('/proactive/11111111-1111-4111-8111-111111111111');
+    expect(screen.getByRole('heading', { name: 'Page not found' })).not.toBeNull();
+    expect(register).not.toHaveBeenCalled();
+  });
+
+  it('adds the Proactive navigation and settings section only with its independent gate', async () => {
+    restoreProfile.mockResolvedValue({ name: 'Test User' });
+    render(<MemoryRouter initialEntries={['/settings']}>
+      <App config={config} pushEnabled={false} proactiveEnabled />
+    </MemoryRouter>);
+    const navigation = await screen.findByRole('navigation', { name: 'Areas' });
+    expect(within(navigation).getByRole('link', { name: 'Proactive' })).not.toBeNull();
+    expect(await screen.findByRole('heading', { name: 'Proactive', level: 2 })).not.toBeNull();
+    await waitFor(() => expect(fetchMock.mock.calls.some(([url]) =>
+      new URL(String(url)).pathname === '/proactive/settings')).toBe(true));
+    expect(fetchMock.mock.calls.some(([url]) =>
+      new URL(String(url)).pathname === '/push/config')).toBe(false);
+  });
+
+  it('restores the notification deep link after sign-in returns to the site root', async () => {
+    const itemId = '11111111-1111-4111-8111-111111111111';
+    restoreProfile.mockResolvedValue({ name: 'Test User' });
+    takeSignInReturnPath.mockReturnValueOnce(`/proactive/${itemId}`);
+    fetchMock.mockImplementation(async (input) => {
+      const path = new URL(String(input)).pathname;
+      if (path === `/proactive/items/${itemId}`) {
+        return new Response(JSON.stringify({
+          id: itemId, kind: 'test', title: 'Synthetic delivery test',
+          body: 'Generic notification item.', createdAt: '2026-10-17T12:00:00.000Z',
+        }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      }
+      return new Response(JSON.stringify({ state: 'awake' }), { status: 200 });
+    });
+
+    render(<MemoryRouter><App config={config} pushEnabled /></MemoryRouter>);
+    expect(await screen.findByRole('heading', { name: 'Synthetic delivery test' })).not.toBeNull();
+    expect(fetchMock.mock.calls.some(([url]) =>
+      new URL(String(url)).pathname === `/proactive/items/${itemId}`)).toBe(true);
+  });
+
+  it('saves the protected notification path before redirecting a signed-out visitor', async () => {
+    const itemId = '11111111-1111-4111-8111-111111111111';
+    const path = `/proactive/${itemId}?from=notification`;
+    const user = userEvent.setup();
+    render(<MemoryRouter initialEntries={[path]}><App config={config} pushEnabled /></MemoryRouter>);
+    await user.click(await screen.findByRole('button', { name: 'Sign in with Microsoft' }));
+    expect(saveSignInReturnPath).toHaveBeenCalledWith(path);
+    expect(signIn).toHaveBeenCalledOnce();
+  });
+
   it('keeps the workspace command stream connected when navigating away from conversation', async () => {
     const user = userEvent.setup();
     await renderSignedIn();
@@ -437,8 +514,7 @@ describe('App shell', () => {
     resolveFeed(new Response(JSON.stringify({
       awayMode: false, confirmations: [], updatedAt: '2026-10-04T00:00:00.000Z', running: [], items: [],
     })));
-    await screen.findByText('No tasks are running.');
-    expect(screen.queryByText('Waking Jarvis…')).toBeNull();
+    await waitFor(() => expect(screen.queryByText('Waking Jarvis…')).toBeNull());
   });
 
   it('keeps phone voice on the current page and leaves header controls available through entry and exit', async () => {
@@ -583,6 +659,8 @@ describe('App shell', () => {
     if (phone) fireEvent.click(screen.getByRole('button', { name: 'Menu' }));
     const navigation = phone ? screen.getByRole('navigation', { name: 'Pages' }) : screen.getByRole('navigation', { name: 'Areas' });
     fireEvent.click(within(navigation).getByRole('link', { name: 'Daily' }));
+    await screen.findByRole('heading', { name: 'What Daily holds today' });
+    fireEvent.click(await screen.findByRole('button', { name: 'Open Measurements' }));
     await screen.findByText('Synthetic shell measurement');
     expect(screen.getByRole('heading', { name: 'Daily' })).toBeTruthy();
     await waitFor(() => expect(activityStream).not.toBeNull());
@@ -620,6 +698,9 @@ describe('App shell', () => {
         <App config={config} dailyEnabled /></>;
     }
     render(<MemoryRouter initialEntries={['/daily']}><AccountHarness /></MemoryRouter>);
+    await screen.findByText(/^Checked \d+ collections?:/u);
+    expect(screen.getAllByText('Has records').length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole('button', { name: 'Open Measurements' }));
     await screen.findByText('Synthetic first owner');
     owner = 'second';
     client.getActiveAccount.mockReturnValue({ homeAccountId: 'second' });
@@ -628,6 +709,7 @@ describe('App shell', () => {
     expect(screen.queryByText('Synthetic first owner')).toBeNull();
     await screen.findByText(/Daily access could not be verified/u);
     expect(screen.queryByText('Synthetic first owner')).toBeNull();
+    expect(screen.queryByText('Has records')).toBeNull();
   });
 
   it.each([200, 503])('acknowledges a broker pin only after storage replies with status %s', async (status) => {
@@ -1345,7 +1427,9 @@ describe('App shell', () => {
     const original = fetchMock.getMockImplementation()!;
     fetchMock.mockImplementation(async (input, init) => {
       const path = new URL(String(input)).pathname;
-      if (path === '/factory/projects') return new Response(JSON.stringify([{ id: '7', name: 'Jarvis', default_agent: 'copilot' }]));
+      if (path === '/factory/projects') return new Response(JSON.stringify([
+        { id: '7', name: 'Jarvis', default_agent: 'copilot', policy: 'deliver_pr' },
+      ]));
       if (path === '/factory/board') return boardResponse();
       return original(input, init);
     });
@@ -1488,6 +1572,26 @@ describe('App shell', () => {
     expect(screen.queryByText('Open windows appear here.')).toBeNull();
   });
 
+  it('hides empty phone background work after reload with server-filtered dismissals', async () => {
+    vi.stubGlobal('matchMedia', vi.fn((query: string) => ({
+      matches: query.includes('max-width: 700px'),
+      media: query, addEventListener: vi.fn(), removeEventListener: vi.fn(),
+    })));
+    streamWorkspaceCommands();
+    const respond = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation((input, init) => new URL(String(input)).pathname === '/jobs'
+      ? Promise.resolve(new Response(JSON.stringify({ jobs: [], dismissedJobIds: ['11111111-1111-4111-8111-111111111111'] })))
+      : respond(input, init));
+    localStorage.clear();
+    await renderSignedIn();
+    expect(screen.queryByRole('button', { name: /Open windows/ })).toBeNull();
+    expect(document.querySelector('.app-shell')!.getAttribute('data-windows-open')).toBe('false');
+    await waitFor(() => expect(document.querySelector('.job-tabs')).toHaveProperty('hidden', true));
+    expect(screen.queryByRole('button', { name: 'Show background work' })).toBeNull();
+    expect(document.querySelector('.app-shell')!.getAttribute('data-windows-open')).toBe('false');
+    expect(screen.queryByRole('button', { name: /Open windows/ })).toBeNull();
+  });
+
   it('keeps phone job-only history reachable and open, without changing artifact restore behaviour', async () => {
     vi.stubGlobal('matchMedia', vi.fn((query: string) => ({
       matches: query.includes('max-width: 700px'),
@@ -1495,31 +1599,42 @@ describe('App shell', () => {
     })));
     const stream = streamWorkspaceCommands();
     const respond = fetchMock.getMockImplementation()!;
-    fetchMock.mockImplementation((input, init) => new URL(String(input)).pathname === '/jobs'
-      ? Promise.resolve(new Response(JSON.stringify({ jobs: [] })))
-      : respond(input, init));
+    const jobId = '11111111-1111-4111-8111-111111111111';
+    let dismissed = false;
+    let serverHasJob = false;
+    const historicalJob = {
+      jobId, kind: 'embedding', title: 'Re-embed memory and vault', status: 'failed', step: 1, steps: 2,
+      detail: 'interrupted by restart', startedAt: '2026-10-16T08:00:00.000Z', updatedAt: '2026-10-16T08:05:07.000Z',
+    };
+    fetchMock.mockImplementation((input, init) => {
+      const path = new URL(String(input)).pathname;
+      if (path === '/jobs') return Promise.resolve(new Response(JSON.stringify({
+        jobs: serverHasJob && !dismissed ? [historicalJob] : [], dismissedJobIds: dismissed ? [jobId] : [],
+      })));
+      if (path === `/jobs/${jobId}/dismiss` && init?.method === 'POST') {
+        dismissed = true;
+        return Promise.resolve(new Response(JSON.stringify({ dismissedJobIds: [jobId] })));
+      }
+      return respond(input, init);
+    });
     await renderSignedIn();
     await waitFor(() => expect(activityStream).not.toBeNull());
     expect(screen.queryByRole('button', { name: /Open windows/ })).toBeNull();
-    act(() => publishJob({
-      jobId: '11111111-1111-4111-8111-111111111111', kind: 'embedding',
-      title: 'Re-embed memory and vault', status: 'failed', step: 1, steps: 2,
-      detail: 'interrupted by restart', startedAt: '2026-10-16T08:00:00.000Z', updatedAt: '2026-10-16T08:05:07.000Z',
-    }));
+    serverHasJob = true;
+    act(() => publishJob(historicalJob));
     const user = userEvent.setup();
     const shell = document.querySelector('.app-shell')!;
-    await user.click(screen.getByRole('button', { name: 'Show background work: 1 failed' }));
+    await user.click(await screen.findByRole('button', { name: 'Show background work' }));
     expect(shell.getAttribute('data-windows-open')).toBe('false');
-    await user.click(screen.getByRole('button', { name: /Re-embed memory and vault Indexing · failed/ }));
+    await user.click(screen.getByRole('button', { name: /Re-embed memory and vault Memory re-embed · interrupted/ }));
     expect(shell.getAttribute('data-windows-open')).toBe('false');
     await user.click(screen.getByRole('button', { name: 'Dismiss' }));
+    await waitFor(() => expect(screen.queryByRole('group', { name: 'Re-embed memory and vault details' })).toBeNull());
+    expect(fetchMock).toHaveBeenCalledWith(`https://api.example.com/jobs/${jobId}/dismiss`, expect.objectContaining({ method: 'POST' }));
     expect(shell.getAttribute('data-windows-open')).toBe('false');
     expect(screen.queryByRole('button', { name: /Open windows/ })).toBeNull();
-    expect(screen.getByRole('img', { name: 'Background work: idle' })).not.toBeNull();
-    await user.click(screen.getByRole('button', { name: 'Show background work' }));
-    expect(screen.queryByRole('button', { name: /Re-embed memory and vault Indexing · failed/ })).toBeNull();
-    expect(screen.getByText('No background work to show.')).not.toBeNull();
-    await user.click(screen.getByRole('button', { name: 'Close job details' }));
+    expect(screen.queryByRole('img', { name: 'Background work: idle' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Show background work/ })).toBeNull();
     stream.ready();
     stream.publishCommand({
       commandId: 'create-header-fixture', operation: 'create', viewId: 'header-report',
@@ -1809,30 +1924,21 @@ describe('App shell', () => {
     expect(screen.getByText(/Your browser asks for microphone access when voice starts/)).not.toBeNull();
   });
 
-  it('shows the Now feed and backend sleep on Settings', async () => {
-    let resolveFeed!: (response: Response) => void;
-    const pendingFeed = new Promise<Response>((resolve) => { resolveFeed = resolve; });
+  it('keeps the feed running without exposing Now or Backend sections in Settings', async () => {
+    const pendingFeed = new Promise<Response>(() => {});
     fetchMock.mockImplementation(async (input) => {
       if (new URL(String(input)).pathname === '/now') return pendingFeed;
-      return new Response(JSON.stringify({ state: 'awake' }), {
+      return new Response(JSON.stringify({}), {
         status: 200, headers: { 'Content-Type': 'application/json' },
       });
     });
     await renderSignedIn('/settings');
 
-    for (const name of ['Now', 'Backend']) {
-      expect(await screen.findByRole('heading', { level: 2, name })).not.toBeNull();
-    }
-    expect(screen.getByText(/Loading current activity/)).not.toBeNull();
-    resolveFeed(new Response(JSON.stringify({
-      awayMode: false, confirmations: [], updatedAt: '2026-10-04T00:00:00.000Z', running: [], items: [],
-    }), {
-      status: 200, headers: { 'Content-Type': 'application/json' },
-    }));
-    expect(await screen.findByText('No tasks are running.')).not.toBeNull();
-    expect(await screen.findByText('The backend is awake.')).not.toBeNull();
-    expect(screen.getByRole('button', { name: 'Put the backend to sleep' })).toHaveProperty('disabled', false);
-    expect(document.querySelectorAll('.now-panel')).toHaveLength(1);
+    expect(await screen.findByRole('heading', { level: 1, name: 'Settings' })).not.toBeNull();
+    expect(screen.queryByRole('heading', { level: 2, name: 'Now' })).toBeNull();
+    expect(screen.queryByRole('heading', { level: 2, name: 'Backend' })).toBeNull();
+    expect(fetchMock.mock.calls.filter(([url]) => new URL(String(url)).pathname === '/now')).toHaveLength(1);
+    expect(fetchMock.mock.calls.some(([url]) => new URL(String(url)).pathname === '/operations/sleep')).toBe(false);
   });
 
   it('keeps Nutrition targets out of Settings while Daily is off', async () => {
@@ -1869,7 +1975,7 @@ describe('App shell', () => {
     expect(read?.[1]).toMatchObject({ method: 'GET', headers: { Authorization: expect.any(String) } });
   });
 
-  it('renders bounded Now data as an allowlisted generated view after sign-in', async () => {
+  it('shows feed attention in the header without mounting the old Now panel', async () => {
     fetchMock.mockImplementation(async (input) => {
       const path = new URL(String(input)).pathname;
       if (path === '/now') {
@@ -1881,7 +1987,10 @@ describe('App shell', () => {
             id: '42', title: '<script>window.compromised = true</script>', project: 'Jarvis',
             agent: 'copilot', activity: 'Running tests', startedAt: '2026-10-03T23:00:00.000Z',
           }],
-          items: [],
+          items: [{
+            id: '8', category: 'attention', title: '<script>window.compromised = true</script>',
+            link: 'task:43', at: '2026-10-03T23:30:00.000Z',
+          }],
         }), { status: 200, headers: { 'Content-Type': 'application/json' } });
       }
       if (path === '/now/events') return new Response(null, { status: 404 });
@@ -1891,10 +2000,13 @@ describe('App shell', () => {
     });
     await renderSignedIn('/settings');
 
-    const title = await screen.findByRole('link', { name: '<script>window.compromised = true</script>' });
-    expect(title.getAttribute('href')).toBe('/factory/tasks/42');
+    const trigger = await screen.findByRole('button', { name: '1 item needs attention' });
+    await userEvent.setup().click(trigger);
+    const title = screen.getByRole('link', { name: '<script>window.compromised = true</script>' });
+    expect(title.getAttribute('href')).toBe('/factory/tasks/43');
     expect(document.querySelector('script')).toBeNull();
-    expect(screen.getByText('Running tests')).not.toBeNull();
+    expect(screen.queryByText('Running tests')).toBeNull();
+    expect(screen.queryByRole('heading', { level: 2, name: 'Now' })).toBeNull();
     expect(fetchMock).toHaveBeenCalledWith(
       'https://api.example.com/now',
       expect.objectContaining({ headers: expect.objectContaining({ Authorization: expect.any(String) }) }),

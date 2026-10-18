@@ -12,6 +12,65 @@ vi.mock('applicationinsights', () => ({
 }));
 
 describe('structured log export', () => {
+  it('exports only code, IDs, counts and duration for proactive todo writer logs', () => {
+    const records: string[] = [];
+    const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
+    const sink = { ...sdk, trackTrace: vi.fn() };
+    const logger = createLogger({ logLevel: 'info' }, sink, output);
+    const runId = '11111111-1111-4111-8111-111111111111';
+    const itemId = '22222222-2222-4222-8222-222222222222';
+    logger.warn({
+      runId, reason: 'todo_added', itemIds: [itemId], count: 1, durationMs: 25,
+      text: 'private todo text', path: 'private/path.md',
+    }, 'proactive.todo_writer');
+    const fields = { runId, reason: 'todo_added', itemIds: [itemId], count: 1, durationMs: 25 };
+    expect(JSON.parse(records[0]!)).toEqual({
+      level: 40, time: expect.any(Number), service: 'jarvis-backend', msg: 'proactive.todo_writer', ...fields,
+    });
+    expect(sink.trackTrace).toHaveBeenLastCalledWith(expect.objectContaining({
+      message: 'proactive.todo_writer', properties: { service: 'jarvis-backend', ...fields },
+    }));
+    expect(records.join('') + JSON.stringify(sink.trackTrace.mock.calls)).not.toContain('private');
+  });
+
+  it.each(['internal_error', 'hook_failed', 'job_update_failed', 'private-provider-text'])(
+    'exports only allowlisted proactive reason codes and run IDs: %s', (reason) => {
+      const records: string[] = [];
+      const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
+      const sink = { ...sdk, trackTrace: vi.fn() };
+      const logger = createLogger({ logLevel: 'info' }, sink, output);
+      const runId = '11111111-1111-4111-8111-111111111111';
+      logger.warn({ runId, reason, text: 'private-source', title: 'private-title', guidance: 'private-guidance' }, 'proactive.failed');
+      const fields = { runId, ...(reason.startsWith('private') ? {} : { reason }) };
+      expect(JSON.parse(records[0]!)).toEqual({
+        level: 40, time: expect.any(Number), service: 'jarvis-backend', msg: 'proactive.failed', ...fields,
+      });
+      expect(sink.trackTrace).toHaveBeenLastCalledWith(expect.objectContaining({
+        message: 'proactive.failed', properties: { service: 'jarvis-backend', ...fields },
+      }));
+      expect(records.join('') + JSON.stringify(sink.trackTrace.mock.calls)).not.toContain('private');
+    },
+  );
+
+  it.each([
+    'Background job visibility read failed',
+    'Background job dismissal failed',
+    'Background job dismissal import failed',
+  ])('exports the registered job failure without private diagnostics: %s', (event) => {
+    const records: string[] = [];
+    const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
+    const sink = { ...sdk, trackTrace: vi.fn() };
+    const logger = createLogger({ logLevel: 'info' }, sink, output);
+    logger.error({ err: new Error('private-database-error'), jobId: 'private-job-id' }, event);
+    expect(JSON.parse(records[0]!)).toEqual({
+      level: 50, time: expect.any(Number), service: 'jarvis-backend', msg: event,
+    });
+    expect(sink.trackTrace).toHaveBeenLastCalledWith(expect.objectContaining({
+      message: event, properties: { service: 'jarvis-backend' },
+    }));
+    expect(records.join('') + JSON.stringify(sink.trackTrace.mock.calls)).not.toContain('private');
+  });
+
   it.each([
     ['chat_identity', 'degraded', 'identity_reply'],
     ['chat_no_timestamp', 'degraded', 'capture_time_invented'],

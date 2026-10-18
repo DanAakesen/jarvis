@@ -4,7 +4,7 @@ import { loadConfig } from '../config.js';
 import type { ToolCallRecord } from './tool-calls.js';
 import { flattenSettings, type SettingsStore } from './settings.js';
 import { coreModule } from './index.js';
-import type { TeamsNotificationService } from '../teams/service.js';
+import type { OwnerInteractionService } from './owner-interactions.js';
 
 const config = { ...loadConfig({}), logLevel: 'silent' as const };
 const headers = {
@@ -32,7 +32,7 @@ function fixture() {
     }),
     settingsStore,
     toolCallStore: { record },
-    teamsNotifications: { runConfirmed } as unknown as TeamsNotificationService,
+    ownerInteractions: { runConfirmed } as unknown as OwnerInteractionService,
   });
   apps.push(app);
   return { app, settingsStore, values, record, runConfirmed };

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { FastifyRequest } from 'fastify';
-import type { BrowserConfirmationDelivery, ConfirmationActionKind } from '../../teams/service.js';
+import type { BrowserConfirmationDelivery, ConfirmationActionKind } from '../../core/owner-interactions.js';
 import { ToolFailure, ToolRefusal } from '../../core/tool-registry.js';
 import { prepareMeal, preparePlan, normalizeSearchText, type FavoriteInput, type FavoriteAuthority, type PlanRequest } from '../nutrition/model.js';
 import { dailySavedFoodTool } from './saved-food.js';
@@ -88,7 +88,7 @@ function fixture() {
   const source = { id: '42', sessionId: 'session', role: 'dan' as const, text: 'Review this synthetic saved food.', model: null, at };
   const request = { principal: { objectId: owner }, headers: {}, jarvisConversationMessage: source,
     server: { ownerObjectId: owner, conversationStore: { getSession: async () => session },
-      awayModeStore: { read: async () => mode }, teamsNotifications: { runConfirmed } } } as unknown as FastifyRequest;
+      awayModeStore: { read: async () => mode }, ownerInteractions: { runConfirmed } } } as unknown as FastifyRequest;
   const tool = dailySavedFoodTool(() => store, () => at.getTime());
   const begin = async (input: unknown, operationSignal = signal()) => {
     const active = tool.execute(input, request, operationSignal);
