@@ -1,22 +1,87 @@
 .daily-state { display: grid; gap: var(--space-2); }
 .daily-state p { margin: 0; }
 .daily-state-freshness { color: var(--text-muted); font-size: var(--type-small); }
-.daily-stat-tile { min-width: 0; padding: var(--space-3); border: 1px solid var(--rule); border-radius: var(--radius-panel); background: var(--surface-translucent); }
+.daily-coverage-note { min-width: 0; }
+.daily-coverage-note > summary { min-height: 44px; align-content: center; cursor: pointer; overflow-wrap: anywhere; }
+.daily-coverage-note > summary:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.daily-coverage-note-content { display: grid; gap: var(--space-2); min-width: 0; padding-block: var(--space-2); color: var(--text-muted); font-size: var(--type-small); overflow-wrap: anywhere; }
+.daily-stat-tile { display: grid; align-content: start; min-width: 0; height: 100%; padding: var(--space-3); border: 1px solid var(--rule); border-radius: var(--radius-panel); background: var(--surface-translucent); }
+.daily-stat-tile--compact { padding: var(--space-2) var(--space-3); }
 .daily-stat-tile h3 { margin: 0; color: var(--text-muted); font-size: var(--type-small); font-weight: 500; }
-.daily-stat-value { margin: var(--space-2) 0 0; font-size: var(--type-subheading); font-weight: 650; overflow-wrap: anywhere; }
+.daily-stat-value { margin: var(--space-2) 0 0; font-size: var(--type-subheading); font-weight: 650; overflow-wrap: anywhere; white-space: pre-line; font-variant-numeric: tabular-nums; }
+.daily-stat-tile--compact .daily-stat-value { font-size: var(--type-body); }
 .daily-stat-unit { font-size: var(--type-body); font-weight: 400; }
 .daily-stat-note, .daily-stat-comparison { margin: var(--space-1) 0 0; color: var(--text-muted); font-size: var(--type-small); }
+.daily-stat-delta { display: flex; align-items: center; gap: var(--space-1); margin: var(--space-2) 0 0; font-size: var(--type-small); }
+.app-shell .daily-stat-delta svg { width: 1em; height: 1em; fill: none; stroke: currentColor; stroke-width: 2; }
+.daily-freshness { margin: 0; color: var(--text-muted); font-size: var(--type-small); font-variant-numeric: tabular-nums; }
+.daily-data-notes { min-width: 0; }
+.daily-data-notes summary, .daily-chart-table summary { min-height: 44px; align-content: center; cursor: pointer; }
+.daily-data-notes > div { display: grid; gap: var(--space-2); padding-block: var(--space-2); color: var(--text-muted); }
+.daily-data-notes p { margin: 0; }
 .daily-chart { min-width: 0; margin: var(--space-3) 0; }
-.daily-chart svg { display: block; max-width: 100%; height: auto; overflow: visible; }
+.daily-chart > figcaption { margin-bottom: var(--space-2); font-weight: 600; }
+/* Daily svg sizing must out-rank the shell's `.app-shell svg` icon size, whatever the stylesheet order. */
+.app-shell .daily-chart svg { display: block; width: 100%; max-width: 100%; height: auto; overflow: visible; }
+.daily-chart > svg:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; border-radius: var(--radius-control); }
 .daily-chart-grid line { stroke: var(--rule); stroke-width: 1; }
 .daily-chart-grid text { fill: var(--text-muted); font: 12px var(--font-body); }
+.daily-chart-xaxis text { fill: var(--text-muted); font: 12px var(--font-body); }
 .daily-chart-line { fill: none; stroke: currentColor; stroke-width: 2; }
 .daily-chart-area { fill: currentColor; opacity: .16; }
 .daily-chart-series circle { fill: currentColor; }
-.daily-chart-bars rect { rx: 2px; }
+.daily-chart-range path { fill: currentColor; opacity: .16; }
+.daily-chart-target line { stroke: var(--text-muted); stroke-width: 1.5; stroke-dasharray: 6 4; }
+.daily-chart-target text { fill: var(--text-muted); font: 12px var(--font-body); }
+.daily-chart-bars path { opacity: .82; }
+.daily-chart-series[data-series-index="1"] .daily-chart-line { stroke-dasharray: 6 3; }
+.daily-chart-series[data-series-index="2"] .daily-chart-line { stroke-dasharray: 2 4; }
+.daily-chart-active-point circle { fill: var(--surface); stroke: var(--focus); stroke-width: 2; }
+.daily-chart-active-point text { fill: var(--text); font: 12px var(--font-body); }
+.daily-chart-legend { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-4); padding: 0; margin: var(--space-2) 0; list-style: none; font-size: var(--type-small); }
+.daily-chart-legend li { display: inline-flex; align-items: center; gap: var(--space-2); }
+.daily-chart-legend-mark { display: inline-block; width: 1.4rem; height: 0; border-top: 2px solid currentColor; }
+.daily-chart-legend-mark--bar { height: .75rem; width: .75rem; border: 0; border-radius: var(--radius-control); background: currentColor; }
+.daily-chart-legend-mark--area { height: .75rem; border: 0; border-bottom: 2px solid currentColor; background: color-mix(in srgb, currentColor 16%, transparent); }
+.daily-chart-legend-range { width: 1.4rem; height: .75rem; border-radius: var(--radius-control); background: var(--text-muted); opacity: .22; }
+.daily-chart-readout { min-height: 1.4em; margin: var(--space-1) 0; color: var(--text-muted); font-size: var(--type-small); font-variant-numeric: tabular-nums; }
+.daily-chart-table { margin-top: var(--space-2); }
+.app-shell .daily-sparkline { display: block; width: min(100%, 8rem); height: 2rem; margin-top: var(--space-2); overflow: visible; }
+.daily-sparkline path { fill: none; stroke: var(--focus); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.daily-sparkline-empty { display: block; margin-top: var(--space-2); color: var(--text-muted); font-size: var(--type-small); }
+.daily-meter { display: grid; gap: var(--space-2); min-width: 0; }
+.daily-meter-label, .daily-meter-values, .daily-meter-note { margin: 0; }
+.daily-meter-values { display: flex; justify-content: space-between; flex-wrap: wrap; gap: var(--space-2); font-size: var(--type-small); font-variant-numeric: tabular-nums; }
+.daily-meter-note { color: var(--text-muted); font-size: var(--type-small); }
+.daily-meter-track { height: .75rem; overflow: hidden; border-radius: var(--radius-pill); background: var(--surface); }
+.daily-meter-track span { display: block; height: 100%; border-radius: inherit; background: var(--focus); }
+.daily-meter-track--unknown span { width: 35%; background: repeating-linear-gradient(135deg, var(--text-muted) 0 3px, transparent 3px 6px); }
+.daily-section-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--space-3); }
+.daily-section-header h2 { margin: 0; }
+.daily-section-actions { display: flex; align-items: center; gap: var(--space-2); }
+.daily-grid { display: grid; min-width: 0; gap: var(--space-4); }
+.daily-grid--two { grid-template-columns: minmax(0, 1fr); }
+.daily-grid--twelve { grid-template-columns: minmax(0, 1fr); }
+.daily-grid-item { min-width: 0; }
+.daily-grid-item--8, .daily-grid-item--4 { grid-column: auto; }
+.app-shell .daily-workout-glyph { flex: 0 0 auto; width: 1.5rem; height: 1.5rem; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .daily-scroll-table { max-width: 100%; overflow: auto; outline-offset: 2px; }
 .daily-scroll-table:focus-visible { outline: 2px solid var(--focus); }
 .daily-scroll-table table { width: 100%; border-collapse: collapse; }
 .daily-scroll-table th, .daily-scroll-table td { padding: var(--space-2) var(--space-3); text-align: start; border-bottom: 1px solid var(--rule); white-space: nowrap; word-break: normal; }
 .daily-scroll-table-sticky tr > :first-child { position: sticky; inset-inline-start: 0; background: var(--surface); }
 .daily-scroll-table caption { text-align: start; padding: var(--space-2) var(--space-3); }
+@media (pointer: coarse) {
+  .daily-data-notes summary, .daily-chart-table summary { min-height: 44px; }
+}
+@media (min-width: 900px) {
+  .daily-grid--two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (min-width: 1200px) {
+  .daily-grid--twelve { grid-template-columns: repeat(12, minmax(0, 1fr)); }
+  .daily-grid-item--8 { grid-column: span 8; }
+  .daily-grid-item--4 { grid-column: span 4; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .daily-meter-track span { transition: none; }
+}

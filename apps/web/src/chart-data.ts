@@ -1,7 +1,7 @@
 // Scales for generated chart views (P8-14 `chart`): numeric x values plot on a linear axis, anything else is a
 // category in first-seen order. Y always includes zero so bars and areas start from a real baseline.
 
-export type ChartPoint = { x: number | string; y: number };
+export type ChartPoint = { x: number | string; y: number; low?: number | null; high?: number | null };
 export type ChartSeries = { name: string; points: ChartPoint[] };
 
 export interface ChartLayout {
@@ -32,7 +32,11 @@ export function chartLayout(series: readonly ChartSeries[], forceCategorical = f
     }
   }
   const xs = categorical ? [0, Math.max(0, categories.length - 1)] : points.map((point) => point.x as number);
-  const ys = points.map((point) => point.y);
+  const ys = points.flatMap((point) => [
+    point.y,
+    ...(point.low == null ? [] : [point.low]),
+    ...(point.high == null ? [] : [point.high]),
+  ]);
   // Bars and areas need a zero baseline; lines read better fitted to their data.
   let yMin = includeZero ? Math.min(0, ...ys) : Math.min(...ys);
   let yMax = includeZero ? Math.max(0, ...ys) : Math.max(...ys);

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { backendFetch } from './backend-request';
 import { Loader } from './Loader';
+import { StateMessage } from './StateMessage';
 
 // Only memories Jarvis keeps from conversations are shown here; vault notes live in Knowledge (Dan, 8 October).
 // The memory API files them under General and lists them before vault notes (docs/architecture.md, P7-40/P7-42).
@@ -219,15 +220,12 @@ export function MemorySettings({ backendUrl, getAccessToken }: { backendUrl: str
           </div>
           <div className="memory-browser">
             <div className="memory-results">
-              {list.status === 'loading' && <Loader variant="rows" label="Loading memories…" />}
-              {list.status === 'error' && (
-                <div className="settings-feedback" role="alert">
-                  <p>{list.message}</p>
-                  <button className="secondary-button" type="button" onClick={() => { setList({ status: 'loading' }); setReload((value) => value + 1); }}>Retry</button>
-                </div>
-              )}
+              {list.status === 'loading' && <StateMessage variant="loading" loaderVariant="rows" message="Loading memories" />}
+              {list.status === 'error' && <StateMessage variant="error" className="settings-feedback" message="Memories could not be loaded."
+                actionLabel="Retry" onAction={() => { setList({ status: 'loading' }); setReload((value) => value + 1); }} />}
               {list.status === 'ready' && list.value.length === 0 && (
-                <p className="settings-explanation">{debounced ? 'Nothing matches this search.' : 'No memories.'}</p>
+                <StateMessage variant="empty" className="settings-explanation"
+                  message={debounced ? 'Nothing matches this search.' : 'No memories have been recorded.'} />
               )}
               {list.status === 'ready' && list.value.length > 0 && (
                 <ul className="memory-list" aria-label="Memories">
@@ -244,8 +242,8 @@ export function MemorySettings({ backendUrl, getAccessToken }: { backendUrl: str
             </div>
             {detail && (
               <div className="memory-detail" aria-live="polite">
-                {detail.status === 'loading' && <Loader variant="lines" label="Opening memory…" />}
-                {detail.status === 'error' && <p className="settings-validation-error" role="alert">{detail.message}</p>}
+                {detail.status === 'loading' && <StateMessage variant="loading" loaderVariant="lines" message="Opening memory" />}
+                {detail.status === 'error' && <StateMessage variant="error" className="settings-validation-error" message="This memory could not be opened." />}
                 {current && (
                   <>
                     <p className="memory-item-meta">Remembered {formatDate(current.updatedAt)}</p>

@@ -32,6 +32,36 @@ or exporter UI behavior; mark the latter unverified and do not claim replay or
 physical-phone acceptance. Evidence and unresolved field/HTTP differences are
 tracked in `docs/reference/daily-v182/source-to-jarvis-matrix.md`.
 
+## P12-30 — Daily presentation kit and Workouts (18 October 2026)
+
+Move long retained-data caveats into the native “About this data” disclosure,
+but keep partial/lower-bound meaning beside the displayed value and keep unknown
+distinct from zero. Keep every chart’s raw values available through a disclosure
+attached to that chart rather than rendering a table below every visualization.
+Charts retain responsive geometry, direct series labels, explicit data gaps and
+keyboard point inspection. Workouts uses the shared kit in one responsive
+history list with a disclosed table; URL, paging, sorting, filtering and focus
+return stay owned by the existing section. These are presentation changes only;
+the original Daily remains canonical and no new data reads or dependencies are
+introduced.
+
+Daily svg sizing rules must out-rank the shell’s `.app-shell svg` icon size
+(specificity 0,1,1, emitted after the Daily stylesheets in the production
+bundle); an equal or lower specificity rule silently loses and the chart
+collapses to a 21px sliver. Prefix such rules with `.app-shell` (or size the svg
+inline); `svg-cascade.test.ts` enforces this for every Daily stylesheet.
+
+## Share non-Daily loading, empty, error and partial states (18 October 2026; P14-11 / #994)
+
+Use one `StateMessage` component around the existing Loader for non-Daily
+loading, empty, error and partial states. Keep one plain sentence, optional
+detail, and at most one shared-button recovery action. Loading, empty and
+partial states announce politely; errors use alerts. Reserve a 10rem minimum
+block size for loading, empty and error states (partial notices reserve none),
+use skeletons only for known final layouts, and keep error copy
+free of raw exception text, identifiers and codes. Daily retains `DailyState`
+until its separate follow-up; this avoids crossing the parallel page boundary.
+
 ## Consolidate web viewport breakpoints (18 October 2026; P14-05 / #973)
 
 Use one non-Daily viewport set: phone through 700px, tablet above 700px through
@@ -5601,3 +5631,17 @@ and gate heart rate and recorded detail independently by capabilities. Render
 the merged `{ id, detail }` result using Data's existing escaped JSON pattern.
 Synthetic-only browser evidence is under `docs/ui/p12-23/`; live original-site
 parity remains unverified and original Daily stays canonical.
+
+## P12-26 — Daily overview summaries and integration audit (18 October 2026)
+
+Use independently loaded Overview tiles for each exposed section, importing
+the same pure date, display and calculation helpers as the section views.
+Keep the inventory, hide summaries when their required source is absent, and
+isolate failures and retries per tile. Retain the existing Briefs source and
+replace its generic presentation with a history/detail workflow. Share a
+two-request abort-aware queue across Daily query, capability and Nutrition
+target calls so rapid section changes do not create unbounded reads. Preserve
+unknown and partial semantics, owner-only access and original Daily as
+canonical. The integration audit corrected raw chart-series labels, repeated
+coverage copy, narrow Nutrition navigation and workout-detail spacing; no
+backend, contract, navigation or write-path changes are included.

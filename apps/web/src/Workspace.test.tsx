@@ -664,9 +664,9 @@ describe('Workspace', () => {
     swipe(content, -70);
     expect(screen.getByRole('article', { name: 'Sources' })).not.toBeNull();
     expect(document.activeElement).toBe(screen.getByRole('heading', { name: 'Sources' }));
-    swipe(screen.getByText('Loading view…'), -70);
+    swipe(screen.getByText('Loading view.'), -70);
     expect(screen.getByRole('article', { name: 'Sources' })).not.toBeNull();
-    swipe(screen.getByText('Loading view…'), 70);
+    swipe(screen.getByText('Loading view.'), 70);
     expect(screen.getByRole('article', { name: 'Research summary' })).not.toBeNull();
   });
 
@@ -1379,9 +1379,9 @@ describe('Workspace', () => {
       { id: 'interrupted', title: 'Interrupted view', content: { status: 'interrupted', message: 'Generation stopped. Some results are available.', content: <p>Partial result</p>, resume } },
     ]} />);
 
-    expect(screen.getByText('No content.')).not.toBeNull();
-    expect(screen.getByText('Loading view…').closest('[role="status"]')).not.toBeNull();
-    expect(screen.getByText('The source is unavailable.').getAttribute('role')).toBe('alert');
+    expect(screen.getByText('This view has no content.')).not.toBeNull();
+    expect(screen.getByText('Loading view.').closest('[role="status"]')).not.toBeNull();
+    expect(screen.getByText('The source is unavailable.').closest('[role="alert"]')).not.toBeNull();
     expect(screen.getByText('Partial result')).not.toBeNull();
 
     await user.click(screen.getByRole('button', { name: 'Retry view' }));

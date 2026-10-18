@@ -1559,25 +1559,61 @@ composer at 320px. The six JPEG captures cover phone Day in both themes,
 desktop Trend in both themes, Library at 768px light and 320px dark. They are
 synthetic desktop-browser evidence, not live-owner or physical-phone checks.
 
-## Daily Workouts (18 October 2026; P12-23)
+## Daily presentation kit (18 October 2026; P12-30)
 
-Workouts extends the existing Daily section shell, not navigation or a separate
-theme. One section heading leads to a type filter, loaded-row sort, unknown-safe
-statistic strip, recorded-minute volume chart and workout history. Phones use
-stacked items; wider screens use the shared scroll table. Detail keeps the same
-section, with recorded figures, elapsed-minute heart-rate lines and collapsed
-recorded JSON. Average, minimum and maximum lines also differ by stroke pattern.
-All controls retain shared geometry, 44px targets and focus treatment; local CSS
-owns only layout, tabular figures, chart patterns and scroll anchoring.
+Daily remains inside the existing Jarvis shell and theme. The shared kit keeps
+freshness in one compact text line and moves extended source caveats into the
+native “About this data” disclosure; values retain their unknown, partial and
+lower-bound labels beside the figures they qualify. Compact statistic tiles
+support optional sparklines and comparable signed deltas. The generic meter
+states its value and target in text, including unknown and unset states.
 
-Synthetic-only local Chromium checks covered 320×844, 390×844, 768×900 and
-1440×900 in light and dark, with reduced motion. Exercised type filtering,
-sorting, detail, heart rate, recorded JSON, URL reload, browser Back, unknown ID,
-refresh, loading, empty, error/Retry and capped Load more. Page and Daily viewport
-had no horizontal overflow; Back restored the opened control's focus and exact
-list scroll offset. Six synthetic screenshots are in `docs/ui/p12-23/` (under
-1.5 MB). This checked the actual Daily shell with isolated API fixtures, not
-Microsoft sign-in, a live backend, native devices or original-site parity.
+`DailyChart` follows its container, labels every series, preserves missing
+observations as gaps and supports target lines and min–max range bands. Its SVG
+keeps the accessible image label, is keyboard-focusable with arrow-key point
+readout, and has hover/focus feedback. A “View data table” disclosure keeps the
+same chart’s underlying values available without leaving a raw table under every
+visual. Shared grid, header and inline workout-glyph helpers use existing Jarvis
+tokens; no new theme or control geometry is introduced.
+
+Workouts applies the kit with five compact unknown-safe totals, a recorded-time
+sparkline, a responsive volume chart and a type/minutes breakdown. One responsive
+history list replaces the separate desktop table and phone cards; the original
+record fields remain in a “View as table” disclosure. Detail keeps URL selection,
+filtering, sort, paging and focus return, and presents recorded figures, a
+full-width average/minimum/maximum heart-rate chart with its per-minute range band,
+and collapsed source JSON. Incomplete totals, unit separation, missing dates and
+source-completeness caveats remain explicit.
+
+Synthetic browser captures for the new list and detail presentation are in
+`docs/ui/p12-30/`; they show the actual Daily shell with isolated synthetic API
+responses, not Microsoft sign-in, live records, physical-device behavior or
+original-site parity.
+
+## Daily overview and Briefs integration (18 October 2026; P12-26)
+
+The Overview retains its source inventory and adds a responsive tile grid for
+available Daily sections. Each tile has its own loading, empty, retry and
+freshness states; one summary can fail without removing the others. Tile links
+lead to their section, and section-owned helpers provide names, dates and
+null-aware figures. Briefs uses a dated history list and a spaced in-page detail
+view; long text wraps within the available width. Coverage caveats use one
+shared disclosure per view. Phone Nutrition day controls stay together in a
+compact row, while wide tables remain in their own scroll regions. Existing
+buttons and shared geometry are retained. Synthetic automated tests cover the
+new states and interaction fixes. The Overview summary tiles keep each fact's label and value in fixed columns;
+a second value line sits under the first value, never in the label column.
+Synthetic Chromium inspection of the actual
+Daily shell and sections covered Overview, Workouts, Nutrition, Body & sleep,
+Briefs and Data at 320×844, 390×844, 768×900 and 1440×900 in both themes (48
+view/viewport/theme combinations). It also exercised Nutrition Day/Trend/Library,
+Body and Sleep, workout detail and Back focus, Briefs detail and focus return,
+tab arrow navigation, reduced-motion emulation and the responsive scroll-table
+regions. No page overflow, clipped touch controls, heading-count mismatch or
+browser console errors were observed. Ten synthetic-only JPEG captures are in
+`docs/ui/p12-26/` (512 KB total). The two Overview captures are static renders of
+the summary-tile markup against the shipped stylesheets. These checks do not
+establish live-data, original-site or physical-device acceptance.
 
 ## Border, radius and surface rules (P14-04, 18 October 2026)
 
@@ -1612,3 +1648,20 @@ fields retain their intentional editor/search layouts; only the Notes title and
 other surrounding form fields join the shared field look. Daily controls inherit
 the system without changing Daily markup. Buttons and non-field surfaces remain
 owned by their existing P14 work.
+
+## State messages (P14-11, 18 October 2026)
+
+Non-Daily loading, empty, error and partial states use `StateMessage` beside
+`Loader`. Keep the state message to one plain sentence, optional supporting
+detail and at most one useful recovery action; do not add a heading or expose
+raw exception text, identifiers or codes. Loading, empty and partial states use
+polite status announcements; errors use an alert. Recovery actions reuse the
+shared button classes and busy state.
+
+The shared state surface reserves a 10rem minimum block size for loading, empty
+and error states so the page does not jump when they resolve; a partial notice
+sits beside existing content and reserves none. Use the ordinary
+Loader unless the final collection layout is known well enough for a matching
+skeleton. Explain the real empty condition and, for stale, partial or capped
+data, explain how to refresh. Daily retains its existing `DailyState` treatment
+until its separate follow-up.

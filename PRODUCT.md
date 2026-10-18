@@ -1458,3 +1458,17 @@ reload and refresh retain the selected ID; returning to history restores focus
 and scroll. Logging and corrections stay in chat. Original Daily remains
 canonical; no coaching, recovery, recomp, TickTick or new writer is introduced.
 Synthetic browser checks do not establish live-data or original-site acceptance.
+
+## Daily overview and Briefs integration (18 October 2026; P12-26)
+
+The overview keeps its existing “What Daily holds” inventory and adds
+independently loaded, section-linked summaries for exposed workout, nutrition,
+body measurement, sleep and Briefs sources. Summaries reuse each section's date,
+label and calculation helpers; unknown values stay unknown, while empty recent
+periods say so explicitly. A failed source can be retried without hiding other
+tiles. Briefs provides a dated history and readable, in-page detail using the
+existing brief records. Shared disclosures keep source-coverage caveats
+available without repeating long paragraphs. Daily reads, including capabilities
+and nutrition targets, share a two-request concurrency bound and abort queued
+work when its view is left. Original Daily remains canonical; no source,
+permission, writer, coaching, recovery, recomp or TickTick behavior is added.

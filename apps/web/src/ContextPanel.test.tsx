@@ -83,7 +83,7 @@ describe('ContextPanel', () => {
     renderPanel();
 
     await user.click(screen.getByRole('button', { name: 'Jarvis loads context' }));
-    expect(screen.getByRole('status').textContent).toBe('Loading contextual information…');
+    expect(screen.getByRole('status').querySelector('.state-message-copy')?.textContent).toBe('Loading contextual information…');
 
     await user.click(screen.getByRole('button', { name: 'Jarvis reports a context error' }));
     expect(screen.getByRole('alert').textContent).toBe('The context could not be loaded.');

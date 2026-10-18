@@ -15,6 +15,24 @@ type AllowlistEntry = {
   value?: string;
 };
 
+const legacyStateStyles = [
+  ['styles.css', '.project-empty'],
+  ['styles.css', '.workspace-empty'],
+  ['styles.css', '.task-column-empty'],
+  ['styles.css', '.usage-empty'],
+  ['daily/daily.css', '.daily-empty'],
+  ['styles.css', '.settings-feedback'],
+  ['styles.css', '.projects-feedback'],
+  ['styles.css', '.project-policy-feedback'],
+  ['styles.css', '.task-control-error'],
+  ['styles.css', '.release-feedback'],
+  ['styles.css', '.usage-feedback'],
+  ['ConversationHistory.css', '.conversation-history-error'],
+  ['ConversationHistory.css', '.chat-error'],
+  ['styles.css', '.task-detail-error'],
+  ['styles.css', '.workspace-pin-feedback'],
+] as const;
+
 const sideBorderAllowlist: AllowlistEntry[] = [
   { file: 'styles.css', selector: '.area-rail', property: 'border-right', value: '1px solid var(--rule)', reason: 'Structural separator between the navigation rail and page.' },
   { file: 'styles.css', selector: '.area-sidebar', property: 'border-right', value: '1px solid var(--rule)', reason: 'Structural separator between the sidebar and page.' },
@@ -35,6 +53,9 @@ const sideBorderAllowlist: AllowlistEntry[] = [
   { file: 'styles.css', selector: '.usage-tool-counts', property: 'border-top', value: '1px solid var(--rule)', reason: 'Separates usage tool counts from adjacent content.' },
   { file: 'styles.css', selector: '.usage-tool-counts dl > div', property: 'border-top', value: '1px solid var(--rule)', reason: 'Separates tool-count rows.' },
   { file: 'styles.css', selector: '.usage-table th, .usage-table td', property: 'border-top', value: '1px solid var(--rule)', reason: 'Structural row separators in a usage table.' },
+  { file: 'daily/ui/daily-ui.css', selector: '.daily-chart-legend-mark', property: 'border-top', value: '2px solid currentColor', reason: 'Chart series line marker is paired with the series label.' },
+  { file: 'daily/ui/daily-ui.css', selector: '.daily-chart-legend-mark--area', property: 'border-bottom', value: '2px solid currentColor', reason: 'Area chart legend marker depicts the plotted series.' },
+  { file: 'daily/sections/workouts/workouts.css', selector: '.workouts-history-row', property: 'border-bottom', value: '1px solid var(--rule)', reason: 'Structural separator between workout history rows.' },
   { file: 'styles.css', selector: '.area-sidebar', property: 'border-bottom', value: '1px solid var(--rule)', reason: 'Structural boundary below the sidebar on narrow layouts.' },
   { file: 'styles.css', selector: '.context-panel', property: 'border-bottom', value: '1px solid var(--rule)', reason: 'Structural boundary below the context panel on narrow layouts.' },
   { file: 'styles.css', selector: '.mobile-menu-actions', property: 'border-top', value: '1px solid var(--rule)', reason: 'Separates navigation from menu actions.' },
@@ -183,6 +204,21 @@ describe('stylesheets', () => {
 
   it.each(stylesheets)('%s follows the shared geometry and surface rules', (file) => {
     expect(stylesheetViolations(file, readFileSync(join(sourceDirectory, file), 'utf8'))).toEqual([]);
+  });
+
+  it('keeps legacy state selectors on shared semantic tokens or removes their styles', () => {
+    const sharedStateToken = /var\(--(?:text-muted|error|error-surface|surface(?:-[\w-]+)?|rule|type-(?:body|small|caption)|space-[1-7]|radius-panel)\)/u;
+    for (const [file, selector] of legacyStateStyles) {
+      const root = postcss.parse(readFileSync(join(sourceDirectory, file), 'utf8'), { from: file });
+      const declarations: string[] = [];
+      root.walkRules((rule) => {
+        if (rule.selector.includes(selector)) {
+          rule.walkDecls((declaration) => { declarations.push(declaration.value); });
+        }
+      });
+      if (declarations.length === 0) continue;
+      expect(declarations.some((value) => sharedStateToken.test(value)), `${file}: ${selector}`).toBe(true);
+    }
   });
 
   it('rejects reintroduced stylesheet violations', () => {

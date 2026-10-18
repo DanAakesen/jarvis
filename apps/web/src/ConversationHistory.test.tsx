@@ -429,8 +429,8 @@ describe('ConversationHistory', () => {
     loadConversationHistory.mockReturnValue(new Promise((done) => { resolve = done; }));
     renderConversation();
 
-    expect(screen.getByRole('status').textContent).toBe('Loading conversation history…');
-    expect(screen.getByRole('status').classList.contains('skeleton-lines')).toBe(true);
+    expect(screen.getByRole('status').textContent).toContain('Loading conversation history.');
+    expect(document.querySelector('.conversation-loading .skeleton-lines')).not.toBeNull();
     expect(document.querySelector('.loader-core')).toBeNull();
     resolve?.({ messages: [], nextCursor: null });
     expect(await screen.findByRole('heading', { name: 'What’s on your mind?' })).not.toBeNull();
@@ -451,7 +451,7 @@ describe('ConversationHistory', () => {
     );
     expect(setAvailable).toHaveBeenLastCalledWith(true);
     expect(host.querySelector('.skeleton-lines')).not.toBeNull();
-    expect(host.textContent).toContain('Loading messages...');
+    expect(host.textContent).toContain('Loading conversation history.');
     expect(screen.getByLabelText('Conversation history').getAttribute('aria-busy')).toBe('true');
     expect(document.querySelector('.conversation-dock .skeleton-lines')).toBeNull();
     expect(screen.getByRole('textbox', { name: 'Message Jarvis' })).not.toBeNull();
