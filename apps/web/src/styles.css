@@ -691,7 +691,7 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
 .workspace-resize-edge-right { right: 0; top: 60px; bottom: 24px; width: 12px; cursor: ew-resize; }
 .workspace-resize-edge-bottom { bottom: 0; left: 12px; right: 24px; height: 12px; cursor: ns-resize; }
 .workspace-resize-edge-corner { bottom: 0; right: 0; width: 24px; height: 24px; cursor: nwse-resize; }
-.workspace-resize-edge-corner::after { position: absolute; right: 7px; bottom: 7px; width: 7px; height: 7px; border-right: 2px solid var(--text-muted); border-bottom: 2px solid var(--text-muted); content: ""; }
+.workspace-resize-edge-corner::after { position: absolute; right: 7px; bottom: 7px; width: 7px; height: 7px; border-right: 1px solid var(--rule); border-bottom: 1px solid var(--rule); content: ""; }
 .workspace-view-content { min-width: 0; min-height: 0; flex: 1; overflow: auto; overflow-wrap: anywhere; }
 .workspace-view-content p { font-size: var(--type-small); }
 .workspace-view-content .secondary-button { margin-top: var(--space-3); }
