@@ -101,8 +101,7 @@ beforeAll(async () => {
   await admin.connect();
   await admin.request().batch(`CREATE DATABASE [${database}];`);
   await pool.connect();
-  const dailyMigrations = (await readMigrations()).filter(({ name }) => /^00(4[1-9]|50)_/.test(name));
-  await applyMigrations(pool, dailyMigrations);
+  await applyMigrations(pool, await readMigrations());
 });
 
 afterAll(async () => {
