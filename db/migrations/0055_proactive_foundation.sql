@@ -22,8 +22,8 @@ ALTER TABLE dbo.proactive_items ADD
   CONSTRAINT CK_proactive_items_feedback CHECK (feedback IS NULL OR feedback IN (N'useful', N'wrong')),
   CONSTRAINT CK_proactive_items_language CHECK (language IS NULL OR language IN (N'da', N'en')),
   CONSTRAINT CK_proactive_items_dedupe_key CHECK (dedupe_key IS NULL OR LEN(dedupe_key) <= 64);
-CREATE UNIQUE INDEX UX_proactive_items_owner_dedupe_key
-  ON dbo.proactive_items (owner_object_id, dedupe_key) WHERE dedupe_key IS NOT NULL;
+EXEC(N'CREATE UNIQUE INDEX UX_proactive_items_owner_dedupe_key
+  ON dbo.proactive_items (owner_object_id, dedupe_key) WHERE dedupe_key IS NOT NULL;');
 
 CREATE TABLE dbo.proactive_settings (
   owner_object_id uniqueidentifier NOT NULL CONSTRAINT PK_proactive_settings PRIMARY KEY,

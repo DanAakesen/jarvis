@@ -58,9 +58,10 @@ function parseSettingsPatch(value: unknown): ProactiveSettingsPatch | undefined 
       if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) return undefined;
       const source = entry as Record<string, unknown>;
       if (Object.keys(source).length !== 2 || Object.keys(source).some((key) => !['id', 'enabled'].includes(key)) ||
-          typeof source.id !== 'string' || !sourceIds.includes(source.id as SourceId) || typeof source.enabled !== 'boolean' ||
-          Object.hasOwn(selected, source.id)) return undefined;
-      selected[source.id as SourceId] = source.enabled;
+          typeof source.id !== 'string' || typeof source.enabled !== 'boolean') return undefined;
+      const id = sourceIds.find((candidate) => candidate === source.id);
+      if (id === undefined || Object.hasOwn(selected, id)) return undefined;
+      selected[id] = source.enabled;
     }
     patch.sources = selected;
   }
