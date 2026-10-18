@@ -1354,6 +1354,17 @@ All migrated React/rich UI must match current Jarvis layout and styling fully, u
 
 P12-07 adds inactive nutrition services and typed handlers using verified source action semantics. Explicit exact-label/favourite intake needs no redundant confirmation; photo/portion estimates need acceptance of the displayed proposal from trusted Jarvis metadata, never model `userConfirmed`. Exact quantities outrank estimates; nullable unknowns and legacy confidence/capture vocabulary remain intact. Meals persist until soft deletion, with full paged history and revisioned corrections by exact owner-bound idempotency key beyond seven days. Occurrence defaults to trusted request time/Copenhagen date only when absent. Favourites accept one retained source key or confirmed definition; normalized-name reuse updates its ID. Plans resolve owned favourites server-side for one breakfast/lunch/dinner plus optional snacks (3–50 slots), snapshot and sum values without trusting model totals or logging food. Suggestions use authoritative time/remaining budgets and persistent dislikes. Frida pins release 10 / 5.5 with DTU/DOI attribution, supplied public bootstrap/DTO shapes, per-100-g scaling and honest null/provenance/subtotals. Final CI/independent review, live parity and P12-09 integration remain gated; this code activates nothing.
 
+## App-wide visual consistency (18 October 2026; P14-01)
+
+The web app keeps one existing Jarvis visual system across the shell, chat,
+Settings, Factory, Daily, Proactive, dialogs and header popovers. Equivalent
+controls and surfaces reuse the shared geometry, neutral structure, typography,
+focus, theme and state treatments in `apps/web/src/styles.css`; route styles
+may arrange workflow-specific content but do not create a second theme. This is
+a presentation-only consistency pass: routes, data, and product behavior stay
+unchanged. The requested project-policy success announcement is “Saved.”; its
+standing applicability hint remains alongside the control.
+
 ## Chat and voice recall of proactive findings (18 October 2026; P13-16)
 
 When proactive checks are enabled, chat and voice can read the current findings

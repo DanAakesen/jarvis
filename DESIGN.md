@@ -1413,3 +1413,17 @@ wider tables (sleep, meals) scroll sideways at 390 px by design. Local runs are 
 qualification.
 
 Confirmed by Dan for #730/#731/#732/#726: all migrated React/rich UI fully follows the current Jarvis layout and styling. Current DESIGN.md direction, `apps/web/src/styles.css` tokens, shared components, theme/density/motion settings and native phone/workspace patterns are the source of truth. Preserve capabilities and data semantics while restyling/recomposing legacy Daily content; do not carry its navy/plum/card skin, create a second theme or replace the shared shell, voice or window manager. Generated/ad-hoc views receive only safe trusted Jarvis theme context through the existing bridge, without widened permissions. UI issues require full mobile-first real-browser visual acceptance. P12-03 remains backend/schema-only; this records the standing direction, not completed visual work.
+
+## P14-01 shared surface follow-up (18 October 2026)
+
+The existing design direction and CSS tokens remain canonical; this pass adds no
+theme or UI library. Settings sections and the sticky save bar use the same
+panel surface, neutral boundary and panel radius as equivalent content panels.
+Background work and attention use one opaque popover surface. Daily and Proactive
+block-level errors pair their alert text with the existing error surface while
+inline field errors stay beside the field. Menu and row actions use the shared
+visible keyboard outline. See [the UI audit](docs/ui-audit.md) for the observed
+variants and remaining workflow-specific layouts. Local synthetic Chromium
+inspection covered the phone and desktop sizes in both themes, plus reduced
+motion. The attention event and healthy Daily/Proactive data states were not
+available in the harness; screenshot captures could not be attached to the PR.

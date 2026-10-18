@@ -29,8 +29,11 @@ describe('header job control styling', () => {
     const popover = styles.match(/\.jobs-popover\s*\{([^}]+)\}/u)![1]!;
     expect(popover).toContain('overflow-y: auto;');
     expect(popover).toContain('max-height: min(560px, calc(100dvh - 120px));');
-    expect(popover).toContain('border: 0;');
-    expect(popover).toContain('background: var(--report-surface);');
+    expect(popover).toContain('border: 1px solid var(--rule);');
+    expect(popover).toContain('border-radius: var(--radius-panel);');
+    expect(popover).toContain('background: var(--surface);');
+    expect(popover).toContain('box-shadow: var(--panel-shadow);');
+    expect(styles).not.toContain('.jobs-chip-trigger');
     expect(styles).toContain('@media (pointer: coarse) { .jobs-action { min-height: 44px; } }');
     expect(styles).toContain('@media (max-width: 900px) { .app-shell[data-phone="false"] .job-tabs .jobs-popover { position: fixed; top: 64px; right: 12px; } }');
     expect(styles).toContain('.app-shell[data-phone="true"] .job-tabs .jobs-popover { position: fixed; top: calc(env(safe-area-inset-top) + var(--rail-size) + 6px);');

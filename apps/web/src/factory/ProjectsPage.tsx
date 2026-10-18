@@ -327,7 +327,7 @@ export function CompletionPolicyControl({
       }
       onSaved(result);
       setRetryPolicy(null);
-      setMessage('Applies now, including pull requests that are already open.');
+      setMessage('Saved.');
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Project policy could not be saved. Try again.');
       setRetryPolicy(nextPolicy);

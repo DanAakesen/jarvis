@@ -4795,6 +4795,22 @@ relaunches them nor claims in-session `/remote` is enabled. Remote session contr
 and original hosted-model/realtime speech/private-account acceptance remain
 unverified.
 
+## P14-01 web style audit and checks (18 October 2026)
+
+`apps/web/src/styles.css` owns the shared UI tokens and control/surface forms;
+route CSS owns composition and consumes those roles. The P14-01 variant
+inventory and bounded follow-up are in [`docs/ui-audit.md`](ui-audit.md).
+From the repository root, the local web checks are:
+
+- `npm run build --workspace @jarvis/web` (TypeScript check and Vite build)
+- `npm run lint --workspace @jarvis/web`
+- `npm test --workspace @jarvis/web`
+
+For visible style changes, verify the actual app at 390×844 touch and
+1440×900, in light and dark, then exercise focus, pressed, disabled, loading,
+empty and recovery states. Use only synthetic data in browser evidence. A
+source audit or local test run is not a substitute for rendered acceptance.
+
 ## P13-16 chat and voice recall (18 October 2026)
 
 `proactive_recent_items` is part of the hosted tool catalogue only when
