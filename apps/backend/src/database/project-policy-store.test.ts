@@ -6,7 +6,7 @@ import { createEventHub } from '../core/event-hub.js';
 import type { RecordTaskEventInput, TaskEventMessage } from '../factory/task-store.js';
 
 vi.mock('mssql', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('mssql')>();
+  const actual = await importOriginal<{ default: typeof sql }>();
   class FakeTransaction {
     constructor(readonly parent: {
       query: (text: string, inputs: Map<string, unknown>) => Promise<unknown>;
@@ -26,7 +26,7 @@ vi.mock('mssql', async (importOriginal) => {
 });
 
 function fakePool(recordset: unknown[] = []) {
-  const query = vi.fn(async () => ({ recordset }));
+  const query = vi.fn<(text: string) => Promise<{ recordset: unknown[] }>>(async () => ({ recordset }));
   const input = vi.fn();
   const request = { input, query };
   input.mockReturnValue(request);
