@@ -2432,13 +2432,22 @@ Dan approved P12 on 12 October 2026 and explicitly released only P12-01 for this
 | P12-27 | [#982](https://github.com/DanAakesen/jarvis/issues/982) | Resumable Daily importer (cancelled; not planned) | No database-bundle importer or reconciliation tool was merged or delivered. The cancelled approach is superseded by #1005's source-contract-first API/schema and supported historical ingestion/replay direction. | P12-22, P12-03 | Not started |
 | P12-28 | [#976](https://github.com/DanAakesen/jarvis/issues/976) | Shared paging hook for Daily sections | `useDailyPages` follows cursors with a cap, aborts on change, keeps items while reloading and never claims completeness; tested; no existing behaviour changes. | — | Complete |
 | P12-29 | [#1005](https://github.com/DanAakesen/jarvis/issues/1005) | Port selected Daily v182 source contract into Jarvis | Map all 31 tables, 19 paths and 36 tools; verify selected field/behavior reuse; deliver source-compatible API/schema and all 16 selected native tools; qualify owner-authenticated synthetic HTTP→SQL→worker→read-model/tool proof, retry/revocation/partial replay, and rollback; enable only the reviewed Health Auto Export flag and provide private owner credential handoff after deployment; document bounded historical batching and app-specific unknowns; no real-data replay. | P12-03, P12-04, P12-05, P12-07, P12-09 | Complete |
+| P12-30 | [#1017](https://github.com/DanAakesen/jarvis/issues/1017) | Daily presentation kit and Workouts redesign | A shared Daily presentation kit (states, tiles, a container-aware chart, a scrollable table, freshness and coverage notes) and a Workouts section rebuilt on it; each kit piece unit-tested and existing Workouts behaviour kept; synthetic screenshots at 320, 390 and 1440px in light and dark; no horizontal overflow. | P12-23, P12-28 | Complete |
+| P12-31 | [#1019](https://github.com/DanAakesen/jarvis/issues/1019) | Rebuild the Daily Nutrition section on the presentation kit | Day, Trend and Library rebuilt on the kit with null-aware totals, missing targets and partial pages shown honestly; existing behaviour and focus-return coverage kept; synthetic screenshots at 320, 390 and 1440px in light and dark. | P12-24, P12-30 | Complete |
+| P12-32 | [#1020](https://github.com/DanAakesen/jarvis/issues/1020) | Rebuild the Daily Body and sleep section on the presentation kit | Body and Sleep rebuilt on the kit: per-unit charts that fit their container, honest unknown, partial and empty states, nightly stages; existing selection, period and paging behaviour kept; synthetic screenshots at 320, 390 and 1440px in light and dark. | P12-25, P12-30 | Complete |
+| P12-33 | [#1022](https://github.com/DanAakesen/jarvis/issues/1022) | Rebuild the Daily Overview as a today dashboard | Independent cards with their own loading, empty, failed (with Retry), partial and populated states, a coverage strip and an embedded mode; existing refresh, retry and live-region behaviour kept; synthetic screenshots at 320, 390 and 1440px in light and dark. | P12-26, P12-30 | Complete |
+| P12-34 | [#1025](https://github.com/DanAakesen/jarvis/issues/1025) | Rebuild the Daily Data section on the presentation kit | Records browsed in a readable explorer on the kit: toolbar and freshness line, a scrollable table that becomes a card list on phones, a readable record detail with the raw JSON behind a disclosure, the kit chart view and paging; no horizontal overflow at 320px; synthetic screenshots. | P12-20, P12-30 | In progress |
+| P12-35 | [#1026](https://github.com/DanAakesen/jarvis/issues/1026) | Rebuild the Daily Briefs section on the presentation kit | Brief history grouped by month with a comfortable reading view, compact metadata, the raw brief behind a disclosure, newer and older navigation and an empty state; no horizontal overflow at 320px; synthetic screenshots. | P12-26, P12-30 | Complete |
+| P12-36 | [#1029](https://github.com/DanAakesen/jarvis/issues/1029) | Audit and polish the whole Daily page for responsive, overflow and consistency defects | A committed audit table across six widths in light and dark for every section; each listed defect fixed or recorded as not reproducing; no horizontal overflow at 320px, no clipped chart labels and touch targets of 44px or more on coarse pointers; guard tests that need no layout measurement. | P12-31, P12-32, P12-33 | In progress |
 
 18 October 2026, owner direct instruction: build the Daily page so workouts,
 nutrition and body data can be browsed like the original site, and implement
 historical health/nutrition ingestion from the original source API/schema.
 P12-20 to P12-28 build the page (shell, read-model additions, paging hook, then
 the Workouts, Nutrition and Body & sleep sections in parallel, then the Overview
-integration). The owner withdrew the Sites database-export/bundle-import path;
+integration). P12-30 to P12-36 rebuild every section on one presentation kit and
+then audit the whole page for responsive, overflow and consistency defects. The
+owner withdrew the Sites database-export/bundle-import path;
 the synthetic P12-22 validator is removed and P12-27 importer work is cancelled.
 #1005 is the source-contract-first direction. This cleanup reads or changes no
 real source records.
@@ -2474,6 +2483,9 @@ unproven. Teams is not a delivery path.
 | P13-14 | [#935](https://github.com/DanAakesen/jarvis/issues/935) | Enable proactive checks | CI is green, including the infrastructure offline build and lint. | P13-03, P13-05 to P13-10 | In progress |
 | P13-15 | [#936](https://github.com/DanAakesen/jarvis/issues/936) | Enable suggested todos, alerts and reminders | CI is green, including the infrastructure offline build and lint. | P13-11 to P13-14 | In progress |
 | P13-16 | [#937](https://github.com/DanAakesen/jarvis/issues/937) | Chat and voice recall of proactive findings | Fake-based tests cover flag gating, owner authorization, validation, bounded results, failures and untrusted item text. | P13-05, P13-06, P13-10 | Complete |
+| P13-17 | [#996](https://github.com/DanAakesen/jarvis/issues/996) | Notify only for P1 - High vault tasks | Only open vault tasks marked P1 - High produce proactive todo findings, reminders and alerts, including manual checks; the priority is re-checked when a reminder is due and an unverifiable priority suppresses it; fake-based tests cover the filter and the failure path. | P13-13 | Complete |
+| P13-18 | [#999](https://github.com/DanAakesen/jarvis/issues/999) | Read vault tasks from Personal and Work notes using Obsidian Tasks markers | Open tasks in every safe note under `Personal/` and `Work/` (not `Archive/`) and the root task file reach reminders and findings; `⏫` counts as P1 - High and `🕒 HH:mm` is read before or after the date; scans are bounded and memoised, and a failed scan is unavailable, never empty; fake-based tests cover discovery, markers and re-fire identity. | P13-17 | Complete |
+| P13-19 | [#1015](https://github.com/DanAakesen/jarvis/issues/1015) | Vault tasks view and tool, separate from notes | A read-only, owner-only Tasks page and a tasks kind in the vault search tool keep tasks apart from notes; Notes search shows snippets and a separate Tasks group; no mutation controls; backend, web and tool tests; synthetic screenshots at 390x844 and 1440x900 in light and dark. | P13-18 | Complete |
 
 ## P14 — UI unification
 
@@ -2487,12 +2499,22 @@ when the backlog is near empty.
 | P14-03 | [#969](https://github.com/DanAakesen/jarvis/issues/969) | Refined button system | One button hierarchy with all states, sizes and groups; no baked-in margin; measured before and after at 390x844 and 1440x900 in light and dark; stylesheet ratchet tests. | P14-02 | Complete |
 | P14-04 | [#971](https://github.com/DanAakesen/jarvis/issues/971) | Consistent borders, radii, shadows and surfaces | Token-only radii and surfaces, every side border classified, a ratchet test with a reasoned allow-list; before and after evidence. | P14-02 | Complete |
 | P14-05 | [#973](https://github.com/DanAakesen/jarvis/issues/973) | Responsive and overflow audit and fixes | Scripted probe at 320, 375, 390, 768, 1024, 1440 and 844x390; one documented breakpoint set; defects fixed at the root; regression tests. | P14-02 | Complete |
+| P14-07 | [#990](https://github.com/DanAakesen/jarvis/issues/990) | Redesign the primary and secondary button look | Primary and secondary buttons visibly differ from the flat fill in light and dark with every state, contrast and forced-colours handled; before and after screenshots, guard tests and an updated design contract. | P14-03 | Complete |
+| P14-08 | [#991](https://github.com/DanAakesen/jarvis/issues/991) | One form-control system | One rule set for text inputs, selects, textareas, checkboxes, radios, switches and segmented choices with all states, 16px minimum on touch and guard tests; before and after screenshots. | P14-04 | Complete |
+| P14-09 | [#992](https://github.com/DanAakesen/jarvis/issues/992) | Unified dialogs, popovers and overlay stacking | One overlay anatomy and stacking order with focus entry, trap and return, Escape and outside-press behaviour and no overlap or overflow at 320px and 390px; guard tests and screenshots. | P14-04, P14-05 | Complete |
+| P14-10 | [#993](https://github.com/DanAakesen/jarvis/issues/993) | Type and spacing scale across the app | One type and spacing scale on every page, a ratchet that fails on new raw values, and 200 percent zoom and 320px captures without clipping; before and after screenshots. | P14-04, P14-05 | Complete |
+| P14-11 | [#994](https://github.com/DanAakesen/jarvis/issues/994) | Consistent loading, empty and error states | Loading, empty, error and partial states share one pattern with announced roles, retry with a busy state and no layout jump; tests and screenshots. | P14-05 | Complete |
+| P14-12 | [#995](https://github.com/DanAakesen/jarvis/issues/995) | Contrast and theme audit | A committed contrast table for every text, control and focus pairing in light and dark; each pairing meets its threshold or sits on a reasoned allow-list; a unit test fails when a token drops below its threshold. | P14-07, P14-08, P14-09, P14-10, P14-11 | In progress |
+| P14-13 | [#1002](https://github.com/DanAakesen/jarvis/issues/1002) | Align action-group tab order with the visual order | In every action-group container the primary action is last in the markup, so Tab, DOM and visual order agree on desktop and in the stacked layout; the stylesheet no longer reorders action groups; the deployment form keeps its 10px field gap; a source guard fails when a primary button precedes a sibling. | P14-03 | Complete |
 
 18 October 2026, owner direct instruction: buttons look basic, and borders, radii
 and responsive behaviour still differ between surfaces. P14-03 to P14-05 are
 measured passes (before and after) over the shared button system, the surface
 rules and the responsive behaviour. They run in parallel and share
-`apps/web/src/styles.css`, so they merge one at a time.
+`apps/web/src/styles.css`, so they merge one at a time. P14-07 to P14-12 follow
+once the first passes land: the button look, form controls, overlays, type and
+spacing, state messages, then a closing contrast audit. P14-13 is the
+focus-order follow-up from the P14-03 review.
 
 ## Factory canonical-status parity (16 October 2026)
 
