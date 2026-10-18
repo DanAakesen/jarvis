@@ -27,6 +27,38 @@ describe('todo file resolver', () => {
 });
 
 describe('todo parser', () => {
+  it.each([
+    ['🕒 14:00 ⏫ 📅 2031-04-09', true, true, '2031-04-09T12:00:00.000Z'],
+    ['⏫ 📅 2031-04-09 🕒 14:00', true, true, '2031-04-09T12:00:00.000Z'],
+    ['⏫ 📅 2031-04-09', true, false, '2031-04-09T21:59:00.000Z'],
+    ['🔼 📅 2031-04-09', false, false, '2031-04-09T21:59:00.000Z'],
+    ['🔽 📅 2031-04-09', false, false, '2031-04-09T21:59:00.000Z'],
+    ['⏬ 📅 2031-04-09', false, false, '2031-04-09T21:59:00.000Z'],
+    ['🔺 📅 2031-04-09', false, false, '2031-04-09T21:59:00.000Z'],
+    ['📅 2031-04-09', false, false, '2031-04-09T21:59:00.000Z'],
+    ['📅 2031-04-09 14:00', false, true, '2031-04-09T12:00:00.000Z'],
+    ['[priority:: P1 - High] [due:: 2031-04-09 14:00]', true, true, '2031-04-09T12:00:00.000Z'],
+    ['🕒 14:00 ⏫ due: 2031-04-09', true, true, '2031-04-09T12:00:00.000Z'],
+  ])('parses native and legacy task markers: %s', (markers, highPriority, dueHasTime, dueAt) => {
+    expect(parseTodos(`- [ ] Synthetic task ${markers}`)).toEqual([
+      { text: 'Synthetic task', done: false, highPriority, dueHasTime, dueAt },
+    ]);
+  });
+
+  it('strips Tasks metadata emoji and ignores fenced examples and query blocks', () => {
+    expect(parseTodos([
+      '```tasks',
+      '- [ ] Synthetic example ⏫',
+      '```',
+      '~~~markdown',
+      '- [ ] Synthetic other example ⏫',
+      '~~~',
+      '- [ ] Synthetic metadata ⏳🛫➕✅❌🔁🏁🆔⛔',
+    ].join('\n'))).toEqual([
+      { text: 'Synthetic metadata', dueAt: null, dueHasTime: false, done: false, highPriority: false },
+    ]);
+  });
+
   it('parses the supported due markers, local times, done items, and nested lines in file order', () => {
     const todos = parseTodos([
       '\uFEFF- [ ] Emoji 📅 2026-10-30 14:30',

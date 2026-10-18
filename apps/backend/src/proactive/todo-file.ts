@@ -16,6 +16,8 @@ const dueMarkerPattern = /(?:📅\s*|\[due::\s*|\bdue:\s*)(\d{4}-\d{2}-\d{2})(?:
 const dueMarkersPattern = /(?:📅\s*|\[due::\s*|\bdue:\s*)(\d{4}-\d{2}-\d{2})(?:(?:\s+|T)(\d{2}:\d{2}))?\]?/giu;
 const highPriorityPattern = /\bpriority\s*::?\s*P1\s*-\s*High\b/iu;
 const priorityMarkersPattern = /\s*\[\s*priority\s*::?\s*[^\]]*\]|\s+\bpriority\s*::?.*$/iu;
+const timeMarkerPattern = /🕒\s*(\d{2}:\d{2})/u;
+export const taskMetadata = /[📅⏳🛫➕✅❌🔁🏁⏫🔼🔽⏬🔺🆔⛔🕒]/gu;
 
 export function sanitizeFactText(value: string): string {
   const withoutControls = value.replace(/\p{Cc}/gu, '');
@@ -49,21 +51,34 @@ function dueDate(date: string, time: string | undefined): string | null {
 export function parseTodos(content: string): ParsedTodo[] {
   const lines = content.replace(/^\uFEFF/u, '').split(/\r?\n/u);
   const todos: ParsedTodo[] = [];
+  let fence: string | undefined;
   for (const line of lines) {
+    const delimiter = /^ {0,3}(`{3,}|~{3,})/u.exec(line)?.[1];
+    if (delimiter) {
+      if (!fence) fence = delimiter;
+      else if (delimiter[0] === fence[0] && delimiter.length >= fence.length) fence = undefined;
+      continue;
+    }
+    if (fence) continue;
     const task = /^\s*[-*]\s+\[([ xX])\]\s*(.*)$/u.exec(line);
     if (!task) continue;
     const rawText = task[2] ?? '';
     const dueMarker = dueMarkerPattern.exec(rawText);
+    const time = timeMarkerPattern.exec(rawText)?.[1] ?? dueMarker?.[2];
     const dueAt = dueMarker
-      ? dueDate(dueMarker[1]!, dueMarker[2])
+      ? dueDate(dueMarker[1]!, time)
       : null;
-    const text = sanitizeFactText(rawText.replace(dueMarkersPattern, ' ').replace(priorityMarkersPattern, ' '));
+    const text = sanitizeFactText(rawText
+      .replace(dueMarkersPattern, ' ')
+      .replace(/🕒\s*\d{2}:\d{2}/gu, ' ')
+      .replace(priorityMarkersPattern, ' ')
+      .replace(taskMetadata, ' '));
     todos.push({
       text,
       dueAt,
-      dueHasTime: dueMarker?.[2] !== undefined && dueAt !== null,
+      dueHasTime: time !== undefined && dueAt !== null,
       done: task[1]!.toLowerCase() === 'x',
-      highPriority: highPriorityPattern.test(rawText),
+      highPriority: rawText.includes('⏫') || highPriorityPattern.test(rawText),
     });
   }
   return todos;

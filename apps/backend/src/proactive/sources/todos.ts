@@ -1,7 +1,8 @@
 import type { createGitHubVaultClient } from '../../vault/github-client.js';
-import { MAX_VAULT_FILE_BYTES, VaultFileTooLargeError } from '../../vault/github-client.js';
+import { VaultFileTooLargeError } from '../../vault/github-client.js';
 import type { ProactiveSource, SourceContext, SourceResult } from '../types.js';
-import { parseTodos, resolveTodoFile } from '../todo-file.js';
+import { readVaultTodos, TodoDiscoveryError } from '../todo-discovery.js';
+import { normaliseFactText } from '../detect.js';
 
 type VaultReader = Pick<ReturnType<typeof createGitHubVaultClient>, 'tree' | 'read'>;
 const sourceTimeoutMs = 20_000;
@@ -25,20 +26,15 @@ export function createTodosSource(vaultClient?: VaultReader): ProactiveSource {
       const timeoutId = setTimeout(() => timeout.abort(), sourceTimeoutMs);
       const sourceSignal = AbortSignal.any([signal, timeout.signal]);
       try {
-        const resolved = await resolveTodoFile(vaultClient, sourceSignal);
-        if ('reason' in resolved) return unavailable(now, resolved.reason);
-        const file = await vaultClient.read(resolved.path, sourceSignal);
-        if (!file) return unavailable(now, 'read_failed');
-        if (Buffer.byteLength(file.content, 'utf8') > MAX_VAULT_FILE_BYTES) {
-          return unavailable(now, 'too_large');
-        }
-
-        const todos = parseTodos(file.content);
-        const open = todos.flatMap((todo, index) => todo.done || !todo.highPriority ? [] : [{
-          todo,
-          index,
-          dueTime: todo.dueAt === null ? null : Date.parse(todo.dueAt),
-        }]);
+        const todos = await readVaultTodos(vaultClient, sourceSignal);
+        const seen = new Set<string>();
+        const open = todos.flatMap((todo, index) => {
+          if (todo.done || !todo.highPriority) return [];
+          const key = JSON.stringify([normaliseFactText(todo.text), todo.dueAt]);
+          if (seen.has(key)) return [];
+          seen.add(key);
+          return [{ todo, index, dueTime: todo.dueAt === null ? null : Date.parse(todo.dueAt) }];
+        });
         const windowStart = now.getTime() - todoWindowBeforeMs;
         const windowEnd = now.getTime() + todoWindowAfterMs;
         const dueWindow = open
@@ -65,6 +61,7 @@ export function createTodosSource(vaultClient?: VaultReader): ProactiveSource {
           })),
         };
       } catch (error) {
+        if (error instanceof TodoDiscoveryError) return unavailable(now, error.reason);
         if (error instanceof VaultFileTooLargeError) return unavailable(now, 'too_large');
         const timedOut = error instanceof Error && error.name === 'TimeoutError';
         return unavailable(now, timeout.signal.aborted || signal.aborted || timedOut ? 'timeout' : 'read_failed');

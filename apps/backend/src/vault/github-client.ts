@@ -12,6 +12,7 @@ const tokenLifetimeMs = 50 * 60 * 1000;
 export interface VaultTreeFile {
   readonly path: string;
   readonly sha: string;
+  readonly size?: number;
 }
 
 export interface VaultFile {
@@ -173,7 +174,11 @@ export function createGitHubVaultClient(options: {
         const item = object(entry);
         return typeof item?.path === 'string' && typeof item.sha === 'string' &&
           /^[\da-f]{40}$/iu.test(item.sha) && item.type === 'blob' && item.mode === '100644'
-          ? [{ path: item.path, sha: item.sha.toLowerCase() }]
+          ? [{
+            path: item.path,
+            sha: item.sha.toLowerCase(),
+            ...(Number.isSafeInteger(item.size) && (item.size as number) >= 0 ? { size: item.size as number } : {}),
+          }]
           : [];
       });
     },

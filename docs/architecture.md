@@ -2053,15 +2053,28 @@ alphabetical order from the existing composition dependencies. Construction
 does not read data; the registry remains behind the default-off proactive
 composition and no dispatcher is added.
 
-The todo reader resolves exactly one case-insensitive root `task.md` or
-`tasks.md`, then uses only the vault client's `tree` and `read` methods. It
-enforces the vault file-size cap and a 20-second source deadline. `todo-file.ts`
-exports the resolver and unbounded parser for reuse; one sanitizer removes
+The todo source and reminder verifier share `todo-discovery.ts`, reading safe
+Markdown notes recursively under `Personal/` and `Work/` plus the case-insensitive
+root `task.md` or `tasks.md`. Archive path segments and hidden/unsafe paths are
+excluded. Multiple root task files remain ambiguous; a root file is not required
+when scoped notes exist. Discovery uses only the vault client's `tree` and `read`
+methods, retaining parsed tasks by path and blob SHA across scans. Deleted paths
+are evicted after a successful scan; unchanged blobs need no content reads.
+Tree entries retain optional blob sizes for preflight bounds. Scans allow at most
+256 files, 4 MiB total content, 256 KiB per file and four concurrent reads under
+the existing 20-second deadline. Oversized notes, exceeded caps, mismatched SHAs,
+missing reads and other partial failures yield unavailable, never an empty or
+partial success. Unknown sizes reserve the per-file maximum against the budget.
+`todo-file.ts` keeps the root-only writer resolver and shared parser; fenced
+examples/query blocks are ignored. One sanitizer removes
 control characters, HTML and markdown link destinations and caps fact text at
-300 characters. It recognizes explicit `priority:: P1 - High` or
-`priority: P1 - High` task metadata, and exposes only open P1 - High tasks to
-proactive findings and reminders. Missing or lower priorities are excluded. Due
-dates resolve to Copenhagen-local instants. The source returns at most 40 facts,
+300 characters. `⏫`, `priority:: P1 - High` and `priority: P1 - High` qualify as
+high priority; `🔼`, `🔽`, `⏬`, `🔺` and missing priorities do not. `🕒 HH:mm`
+supplies the due time before or after `📅 YYYY-MM-DD`; trailing date/time,
+`due:` and `[due:: …]` remain supported. Clock, priority and Tasks metadata emoji
+are removed from fact text. Due dates resolve to Copenhagen-local instants;
+date-only tasks remain due at 23:59. Only open high-priority tasks become facts,
+deduplicated by normalized text and due instant. The source returns at most 40 facts,
 ordering the 24-hour-before/72-hour-after due window first.
 
 Factory uses `TaskStore.getProactiveSnapshot()`, a bounded, nontransactional
@@ -2172,8 +2185,10 @@ The self-rescheduling, unreferenced ticker reads the earliest pending time once
 at startup. Future or absent work and the Copenhagen quiet window are pure
 in-memory checks; after a due scan it refreshes the wake time once. Errors back
 off five minutes. For due rows it expires late work, applies pause and
-subscription suppression, then resolves and parses the canonical todo file
-again with a 20-second bound. It cancels changed or no-longer-P1-high todos,
+subscription suppression, then verifies the wider task set through shared
+SHA-cached discovery with a 20-second bound. Moving a task between notes or
+duplicating it with the same normalized text and due instant does not change its
+reminder key. It cancels changed or no-longer-P1-high todos,
 retries failed verification twice, and suppresses after a third verification
 failure rather than sending without current priority evidence. It suppresses
 deadline alerts sent within two hours and enforces eight sent reminders per
