@@ -360,6 +360,7 @@
 @media (max-width: 600px) {
   .proactive-page {
     padding-inline: var(--space-3);
+    padding-bottom: max(160px, calc(env(safe-area-inset-bottom) + 144px));
   }
 
   .proactive-item-actions {
