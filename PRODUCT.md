@@ -977,15 +977,28 @@ Dan approved these after a gap audit. They are planned, not built.
 
 Dan decided that GitHub issues are the single backlog. When Dan asks Jarvis to change code, Jarvis drafts an issue, confirms it with him and creates it; the Software Factory then picks it up with the Codex agent (worker label `Jarvis`), or Copilot when Dan chooses. Factory progress shows on the issue, its pull request uses `Fixes #N`, and the Factory board uses the same columns as the GitHub Project: Backlog, Needs Dan, Ready, In progress, In review, Done. ([#573](https://github.com/DanAakesen/jarvis/issues/573)–[#577](https://github.com/DanAakesen/jarvis/issues/577))
 
-## Proactive Web Push (17 October 2026; P13-01 / #917)
+## Proactive assistance (17 October 2026; P13)
 
-Web Push is an opt-in visible alert for a durable, owner-protected item; it
-carries no private details, performs no silent work and never approves an
-action. The backend defaults off and registers no push routes unless
-`JARVIS_PUSH_ENABLED` is exactly `true`; this milestone does not enable it. The
-user-triggered test is not proactive delivery. Teams is not a delivery option.
-Real iPhone delivery remains unproven until separately observed on the installed
-Home Screen app.
+- Run checks at 07:00 and 18:00 Europe/Copenhagen, with a manual “Check now.”
+  Do no proactive work or delivery from 22:00 to 07:00; there is no emergency
+  exception, and interactive requests remain available.
+- Read todos, Factory, weather, calendar, mail headers, calendar-derived travel
+  and news. Treat all source content as untrusted data, never as instructions.
+- Use the vault todo file as canonical. Jarvis may add new todos under its own
+  heading; it never edits, completes, reorders or deletes Dan's todos.
+- Push only for deadlines within 24 hours, calendar clashes, travel disruptions
+  and reminders about an hour before a todo is due. Hold a quiet-hour reminder
+  until 07:00 and show it as due soon or overdue. Bundle at most one push per
+  run and enforce daily caps. Teams is not used.
+- Cap estimated spend at 100 DKK per Copenhagen month, warn at 80%, and label
+  spend as an estimate.
+- Show every scheduled, catch-up or manual run in the header Background work
+  popover as running, then done or failed.
+- Write findings and push text in the language of Dan's last chat message.
+- Keep every milestone off by default and enable one at a time, only after the
+  previous deployment is accepted.
+- Real-device iPhone delivery remains unverified until observed in the
+  installed Home Screen app.
 
 ## Daily migration (approved P12)
 

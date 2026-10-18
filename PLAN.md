@@ -2346,15 +2346,38 @@ Dan approved P12 on 12 October 2026 and explicitly released only P12-01 for this
 
 ## P13 — Proactive assistance
 
-The first milestone is a direct, user-triggered Web Push test linking to a
-durable owner-protected item. P13 is built dark: enabling the backend flag is a
-separate change, the user test is not proactive delivery, and real iPhone
-delivery remains unproven. Teams is not a delivery path.
+Proactive assistance is built dark in milestones. Each milestone has its own
+exact-`true`, default-off flag and is enabled by a separate small change, one at
+a time, only after the previous deployment is accepted. The first milestone is
+the push delivery proof; Teams is not used.
 
 | ID | Issue | Task | Acceptance criteria | Depends on | Status |
 | --- | --- | --- | --- | --- | --- |
 | P13-01 | [#917](https://github.com/DanAakesen/jarvis/issues/917) | Push delivery proof, backend | Exact-true default-off gate; authenticated owner-scoped subscriptions/items; server-only VAPID key and encrypted generic payload; bounded retry and rate limits; durable item open is owner-only; no Teams, scheduler or activation. Unit, lint and type checks pass; SQL integration runs in CI. Real iPhone delivery remains unproven. | — | Complete |
 | P13-02 | [#919](https://github.com/DanAakesen/jarvis/issues/919) | Push delivery proof: web worker, opt-in and durable item page | Exact-string push gate defaults off; worker always displays generic alerts and opens only validated same-origin item paths; authenticated opt-in/test/off states and owner-protected item page work; deep links return after sign-in. Physical iOS delivery remains a separate acceptance gate. | — | Complete |
+| P13-03 | [#934](https://github.com/DanAakesen/jarvis/issues/934) | Enable web push | CI is green, including the infrastructure offline build and lint. | P13-01, P13-02 | Not started |
+| P13-04 | [#939](https://github.com/DanAakesen/jarvis/issues/939) | Record the proactive decisions and plan (docs only) | `PLAN.md` has exactly the P13-03 to P13-16 rows, each linked to its issue, with non-empty task, acceptance criteria and dependencies, and status `Not started`. | none | Not started |
+| P13-05 | [#924](https://github.com/DanAakesen/jarvis/issues/924) | Proactive foundation: flags, settings, findings store, status route, time and language helpers (dark) | Unit tests with a fake clock and in-memory stores cover the flag matrix, route gating, owner authorization, settings validation, feedback state, time boundaries, budget, language and job visibility. | P13-01, P13-02 | Not started |
+| P13-06 | [#926](https://github.com/DanAakesen/jarvis/issues/926) | Proactive engine: scheduler, run pipeline, detection, budget and job visibility (dark) | Fake-clock tests cover scheduling, quiet hours, catch-up, exclusive slot claims, the run pipeline, budget, detection and job visibility. | P13-05 | Not started |
+| P13-07 | [#927](https://github.com/DanAakesen/jarvis/issues/927) | Proactive sources: todo file, Factory and weather (dark) | Fake-based tests cover the todo resolver and parser, ordering and bounds, Factory and weather sources, time zones, and prove the todo source never writes. | P13-05 | Not started |
+| P13-08 | [#928](https://github.com/DanAakesen/jarvis/issues/928) | Proactive sources: calendar, mail and travel (dark) | Fake-client tests cover calendar normalization, mail headers, travel rules, bounds, errors, privacy and prompt-injection fixtures. | P13-05 | Not started |
+| P13-09 | [#929](https://github.com/DanAakesen/jarvis/issues/929) | Proactive source: news (dark) | Fake-only tests cover URL and network safety, bounded fetching and parsing, feed selection, failures and inert prompt-injection content. | P13-05 | Not started |
+| P13-10 | [#930](https://github.com/DanAakesen/jarvis/issues/930) | Proactive web: page, Settings section and Background work entries (dark) | Mocked web tests cover flag states, loading, empty and error states, actions, budget, sources and Background work links; browser checks cover phone and desktop layouts. | P13-05 | Not started |
+| P13-11 | [#931](https://github.com/DanAakesen/jarvis/issues/931) | Proactive todo writer: add-only suggested todos (dark) | Synthetic-data tests cover flag gating, safe add-only writes, conflicts, duplicates, limits and recovery; no existing todo is changed or deleted. | P13-06, P13-07 | Not started |
+| P13-12 | [#932](https://github.com/DanAakesen/jarvis/issues/932) | Proactive run alerts: time-critical push with a shared sender (dark) | Tests cover gates, alert selection, deduplication, caps, bundled pushes, generic payloads, delivery outcomes, quiet hours and text-free logs. | P13-01, P13-02, P13-05, P13-06 | Not started |
+| P13-13 | [#933](https://github.com/DanAakesen/jarvis/issues/933) | Proactive todo reminders: one hour before a todo is due (dark) | Fake-based tests cover timed-todo planning, quiet-hour holds, limits, re-reads, bundling, expiry, retries and private push payloads. | P13-05, P13-06, P13-07, P13-12 | Not started |
+| P13-14 | [#935](https://github.com/DanAakesen/jarvis/issues/935) | Enable proactive checks | CI is green, including the infrastructure offline build and lint. | P13-03, P13-05 to P13-10 | Not started |
+| P13-15 | [#936](https://github.com/DanAakesen/jarvis/issues/936) | Enable suggested todos, alerts and reminders | CI is green, including the infrastructure offline build and lint. | P13-11 to P13-14 | Not started |
+| P13-16 | [#937](https://github.com/DanAakesen/jarvis/issues/937) | Chat and voice recall of proactive findings | Fake-based tests cover flag gating, owner authorization, validation, bounded results, failures and untrusted item text. | P13-05, P13-06, P13-10 | Not started |
+
+## P14 — UI unification
+
+One pass over backgrounds, buttons, borders, text and small refinements, run
+when the backlog is near empty.
+
+| ID | Issue | Task | Acceptance criteria | Depends on | Status |
+| --- | --- | --- | --- | --- | --- |
+| P14-01 | [#938](https://github.com/DanAakesen/jarvis/issues/938) | Unify UI styles and add small refinements | Inspect changed surfaces before and after in a real browser at 390x844 and 1440x900, in light and dark, and exercise the changed controls and states. | none | Not started |
 
 ## Factory canonical-status parity (16 October 2026)
 
