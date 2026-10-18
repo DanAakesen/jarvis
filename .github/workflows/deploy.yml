@@ -367,6 +367,7 @@ jobs:
           [[ -n "$fqdn" ]] || { echo "::error::No backend URL: the backend has not been deployed yet."; exit 1; }
           {
             echo "VITE_BACKEND_URL=https://$fqdn"
+            echo "VITE_PUSH_ENABLED=true"
             echo "STATIC_WEB_APP=$(jq -er .staticWebAppName.value "$RUNNER_TEMP/infra-outputs.json")"
             echo "STATIC_WEB_APP_HOST=$(jq -er .staticWebAppHostname.value "$RUNNER_TEMP/infra-outputs.json")"
           } >>"$GITHUB_ENV"
