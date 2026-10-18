@@ -56,6 +56,68 @@ and cannot see anything"), so the page now opens on an overview.
   small-phone, tablet and desktop widths. It is not live data, a physical phone,
   provider acceptance or Daily activation.
 
+## Proactive checks use an in-process fixed schedule (17 October 2026; P13 / #926)
+
+Dan chose 07:00 and 18:00 Europe/Copenhagen and a manual “Check now” request at
+any time. On Dan's behalf, the dispatcher chose a small in-process loop and an
+atomic slot claim: the idle loop must not touch the database, which would wake
+serverless SQL, and replicas must not claim the same slot. Dan can change either
+choice.
+
+## Quiet hours and language (17 October 2026; P13 / #926)
+
+Dan decided that proactive work and delivery stop from 22:00 to 07:00
+Europe/Copenhagen, with no emergency exception, and that output follows the
+language of his last chat message. This keeps the quiet window clear without
+restricting interactive requests; quiet hours also apply to manual checks. Dan
+can change either choice.
+
+## Sources are read-only and untrusted (17 October 2026; P13 / #928)
+
+Dan decided that todos, Factory, weather, calendar, mail headers, calendar-derived
+travel and news are read-only sources. Their content is data, never an
+instruction, and system runs inherit no approvals; this prevents source content
+from changing policy or authorising actions. Dan can change this choice.
+
+## Monthly proactive budget (17 October 2026; P13 / #924)
+
+Dan set a 100 DKK monthly hard stop and an 80% warning. The warning leaves room
+to adjust before the limit; spend is an estimate and must be labelled as one so
+it does not imply a settled bill. Dan can change the limit or warning.
+
+## Todos are canonical and add-only (17 October 2026; P13 / #927)
+
+Dan decided the vault todo file is canonical and Jarvis may add todos under its
+own heading, but never edit, complete, reorder or delete existing todos. The
+name remains open (`task.md` or `Tasks.md`); the resolver accepts exactly one
+matching file and never guesses. This protects Dan's entries; Dan can change
+the policy or settle the name.
+
+## Only time-critical findings may buzz the phone (17 October 2026; P13 / #932)
+
+Dan chose alerts only for a deadline within 24 hours, a calendar clash or a
+travel disruption, plus a reminder about an hour before a todo is due. Quiet-hour
+reminders wait until 07:00 and appear as due soon or overdue; each run sends one
+bundled push within daily caps. This limits interruptions; Dan can change it.
+
+## Show every proactive run in Background work (17 October 2026; P13 / #930)
+
+Dan decided every scheduled or manual proactive run appears in the header
+Background work popover, first as running and then done or failed. This makes
+background work and its outcome visible; Dan can change this choice.
+
+## Enable proactive milestones one at a time (17 October 2026; P13 / #939)
+
+Dan chose exact-`true`, default-off flags: push (`JARVIS_PUSH_ENABLED`,
+`VITE_PUSH_ENABLED`), checks (`JARVIS_PROACTIVE_ENABLED`,
+`VITE_PROACTIVE_ENABLED`), todo writes
+(`JARVIS_PROACTIVE_TODO_WRITES_ENABLED`), and alerts/reminders
+(`JARVIS_PROACTIVE_ALERTS_ENABLED`). The order is push (#934), checks (#935),
+then todo writes, alerts and reminders (#936); the dispatcher enables each only
+after the previous deployment is accepted, so rollback stays isolated to that
+milestone. Rollback is switching its flag off or reverting the enabling change.
+Dan chose the staged rollout; the dispatcher owns each switch-on on his behalf.
+
 ## Put attention in a conditional header popover (17 October 2026; P9-120 / #913)
 
 Remove the Now and Backend sections from web Settings. Keep the existing
@@ -91,7 +153,8 @@ the public key. Keep RFC 8030 delivery, RFC 8291 `aes128gcm` encryption and
 RFC 8292 VAPID in a small `node:crypto` module without a new dependency. Store
 subscriptions and durable items separately from Now/activity. Push text stays
 generic; provider acceptance is not delivery evidence, and `opened_at` means
-loaded, not read. There is no Teams delivery path.
+loaded, not read. Dan decided no Teams messages are ever sent; push is the only
+delivery path, keeping notification and alert delivery on one route.
 
 The test send is user-started, so quiet hours do not block it. Do not add the
 22:00–07:00 Europe/Copenhagen guard or an emergency exception now; all later
