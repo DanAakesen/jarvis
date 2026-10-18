@@ -1,5 +1,31 @@
 # Design
 
+## Colour and contrast (P14-12)
+
+18 October 2026.
+
+Keep semantic colors in the shared tokens in `apps/web/src/styles.css`, not in
+individual screens. Text-bearing stage glass uses the paired
+`--surface-translucent` token so contrast remains stable over the moving room;
+the top bar uses that full surface rather than fading to an under-contrasted
+gradient stop. A chart-specific warm series token keeps data marks separate
+from decorative amber glow. Preserve the existing palette character with the
+smallest token changes documented in `docs/ui/p14-12/contrast-table.json`.
+
+Use 4.5:1 for normal text and 3:1 for large text and meaningful non-text marks.
+Disabled controls remain legible and visually distinct. Status meaning never
+depends on hue alone: retain text and icon labels, `aria-current` and weight for
+selection, explicit “New” text, and patterned chart series with legends and
+accessible value tables. Low-opacity chart fills are secondary to the readable
+series marks and data tables; structural `--rule` is not a control boundary.
+
+Both themes keep the same control, state and layout coverage. Theme-only
+selectors adjust palette treatments; the dark-only `.app-shell::before`
+animation is decorative room ambience, not a semantic state. System
+`prefers-contrast: more` strengthens focus and control boundaries. Forced
+colours use system field, button and highlight colors so fills and focus remain
+visible. System reduced motion stops the active voice-status glyph animation.
+
 ## Overlays and stacking (P14-09)
 
 18 October 2026.

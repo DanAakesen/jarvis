@@ -5,6 +5,58 @@ treatments selected from the existing Jarvis design system. The shared source
 of truth is `apps/web/src/styles.css`; route stylesheets own workflow layout,
 not parallel palettes or control systems.
 
+## Colour and contrast (P14-12, 18 October 2026)
+
+The contrast ratchet reads the canonical tokens and measures 197 labeled
+pairings in light and dark against both black and white stage extremes. It
+covers body, muted, caption and placeholder text; links; status and selected
+states; button variants and states; fields, boundaries and focus; Daily and
+generated chart marks and text; graph marks; and disabled controls. Normal text
+uses a 4.5:1 threshold; large text and meaningful non-text use 3:1. The complete
+before/after results, thresholds, disposition, both backdrop ratios, and all
+16 changed-token values and ratios are in
+[`contrast-table.json`](ui/p14-12/contrast-table.json). Run the measurement with
+`P14_CONTRAST_REPORT=1 npm test --workspace @jarvis/web -- --run src/contrast-audit.test.ts`.
+
+The original token matrix had 102 unallowlisted failing measurements. After
+token-level fixes, none remain. The 28 below-threshold measurements are
+reasoned exceptions: low-opacity chart area/range fills have readable series
+marks, labels and accessible value tables; `--rule` separates content and is
+not used as a control boundary. Disabled text and surfaces are checked for
+legibility and distinction from enabled controls.
+
+| Pairing changed | Before | After |
+| --- | ---: | ---: |
+| Light success text on its wash | 3.84:1 | 5.20:1 |
+| Light danger button, pressed | 4.19:1 | 4.74:1 |
+| Dark danger button, pressed | 4.29:1 | 4.62:1 |
+| Light Daily warm-series line | 2.23:1 | 4.20:1 |
+| Light Daily warm-series bar at 82% | 1.92:1 | 3.15:1 |
+| Light Knowledge graph Work mark on stage floor | 2.24:1 | 3.23:1 |
+
+The four text-bearing stage surfaces now alias `--surface-translucent` (92%
+light, 90% dark); the top bar no longer fades to a low-contrast stop. The light
+graph People, Work and Personal tokens are darkened only enough to reach 3:1.
+The new `--chart-series-warm` is a chart role: light changes from decorative
+amber `#c98a3a` to `#985a18`; dark retains `#ffb45c`.
+
+The pairing list is identical in both themes. Explicit theme-only rules change
+colors for light presence indicators and the done icon; the dark-only
+`.app-shell::before` rule animates decorative ambience and changes neither
+layout nor state coverage. `prefers-contrast: more` strengthens focus and
+control boundaries, while forced-colors maps fields, focus, switches and
+native choices to system colors. Chromium emulation verified both modes at
+390×844 and 1440×900. System reduced motion now disables the active voice
+status glyph animation, guarded by the contrast test.
+
+Status, error, selected, new and chart states retain a second cue: readable
+labels and icons, semantic state text, selected weight and `aria-current`, and
+series patterns/legends/tables. Existing permission tests cover synthetic
+camera and microphone denial; no physical camera, microphone or connected
+voice session was used. Keyboard scrolling of wide generated tables remains
+open follow-up. Synthetic browser screenshots and emulation details are
+indexed in [`screenshots.md`](ui/p14-12/screenshots.md).
+
 ## Surface coverage
 
 The audit covered the shared shell, desktop rail and mobile navigation, header
@@ -146,8 +198,9 @@ checks, not live-backend or human acceptance.
 
 - Physical camera output, microphone input, and a connected voice session were
   not verified; no real media device was used.
-- Keyboard scrolling of a wide generated table and reduced-motion behavior for
-  an active voice status were not verified.
+- Keyboard scrolling of a wide generated table was not verified.
+- P14-12 adds a `prefers-reduced-motion` rule and a unit guard for the active
+  voice-status glyph. A connected voice session was not run in Chromium.
 
 ## Pass 3: responsive and overflow (18 October 2026; P14-05)
 
