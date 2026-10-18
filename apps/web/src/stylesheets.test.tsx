@@ -118,7 +118,8 @@ function stylesheetViolations(file: string, source: string): string[] {
 
   root.walkDecls((declaration) => {
     const property = declaration.prop.toLowerCase();
-    const selector = declaration.parent.type === 'rule' ? declaration.parent.selector : '';
+    const parent = declaration.parent;
+    const selector = parent && 'selector' in parent && typeof parent.selector === 'string' ? parent.selector : '';
     const value = normalize(declaration.value);
     const location = `${file}:${declaration.source?.start?.line ?? 1} ${selector} ${property}`;
 
