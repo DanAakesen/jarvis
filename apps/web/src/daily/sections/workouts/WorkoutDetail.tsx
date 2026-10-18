@@ -11,6 +11,7 @@ import { numeric, text, typeLabel, type Workout } from './summary';
 import { WorkoutFigures } from './WorkoutFigures';
 import { workoutTime } from './presentation';
 import { WorkoutGlyph } from '../../ui/WorkoutGlyph';
+import { metricDisplay } from '../body-sleep/metrics';
 
 function HeartRate({ row, ...props }: DailySectionProps & { row: Workout }) {
   const [chosenMetric, setChosenMetric] = useState<string | null>(null);
@@ -31,7 +32,7 @@ function HeartRate({ row, ...props }: DailySectionProps & { row: Workout }) {
       partial={result.hasMore || result.error !== null || result.loadingMore} />}
     {groups.length > 1 && <label className="workouts-field">Metric
       <select value={metric} onChange={event => setChosenMetric(event.target.value)}>
-        {groups.map(name => <option key={name}>{name}</option>)}
+        {groups.map(name => <option key={name} value={name}>{metricDisplay(name).label}</option>)}
       </select>
     </label>}
     {(result.status === 'loading' || result.status === 'idle') && result.items.length === 0 && <DailyState status="loading" />}
@@ -59,7 +60,7 @@ function HeartRate({ row, ...props }: DailySectionProps & { row: Workout }) {
         { name: `Maximum (${unit})`, points: points.map(point => ({ x: point.x, y: point.high ?? null })) },
       ];
       return <DailyChart key={unit} kind="line" rangeLabel={`Recorded minimum–maximum (${unit})`}
-        name={`${metric} (${unit}), elapsed minutes${result.hasMore ? ', loaded samples only' : ''}`} series={series} />;
+        name={`${metricDisplay(metric ?? 'Unknown metric').label} (${unit}), elapsed minutes${result.hasMore ? ', loaded samples only' : ''}`} series={series} />;
     })}
     {result.status === 'loading' && result.items.length > 0 && <p role="status">Refreshing recorded samples…</p>}
   </section>;

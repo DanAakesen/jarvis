@@ -8,6 +8,8 @@ describe('Body measurements (synthetic)', () => {
     expect(metricDisplay('body_mass')).toEqual({ label: 'Body mass', group: 'Body composition' });
     expect(metricDisplay('step_count').group).toBe('Activity');
     expect(metricDisplay('heart_rate_variability_sdnn').group).toBe('Heart');
+    expect(metricDisplay('heart_rate_data')).toEqual({ label: 'Heart rate', group: 'Heart' });
+    expect(metricDisplay('heart_rate_recovery')).toEqual({ label: 'Heart rate recovery', group: 'Heart' });
     expect(metricDisplay('synthetic_NEW_metric')).toEqual({ label: 'synthetic_NEW_metric', group: 'Other' });
     expect(metricDisplay('__proto__')).toEqual({ label: '__proto__', group: 'Other' });
   });

@@ -20,6 +20,8 @@ const names: Record<string, { label: string; group: Group }> = {
   distance_walking_running: { label: 'Walking and running distance', group: 'Activity' },
   apple_exercise_time: { label: 'Exercise time', group: 'Activity' },
   heart_rate: { label: 'Heart rate', group: 'Heart' },
+  heart_rate_data: { label: 'Heart rate', group: 'Heart' },
+  heart_rate_recovery: { label: 'Heart rate recovery', group: 'Heart' },
   resting_heart_rate: { label: 'Resting heart rate', group: 'Heart' },
   walking_heart_rate_average: { label: 'Walking heart rate', group: 'Heart' },
   heart_rate_variability_sdnn: { label: 'Heart rate variability (SDNN)', group: 'Heart' },

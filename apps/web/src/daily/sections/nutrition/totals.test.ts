@@ -44,6 +44,16 @@ describe('nutrition totals', () => {
     expect(groups.map(([group]) => group)).toEqual(['Other', 'After training', 'Evening meal']);
     expect(groups.find(([group]) => group === 'After training')?.[1].map(row => row.id)).toEqual(['synthetic-9001', 'synthetic-9004']);
   });
+  it('labels a recorded other type like the missing-type group and keeps it after the standard meals', () => {
+    const groups = groupedMeals([
+      meal({ id: 'synthetic-9001', meal_type: 'other' }),
+      meal({ id: 'synthetic-9002', meal_type: 'snack' }),
+      meal({ id: 'synthetic-9003', meal_type: null }),
+      meal({ id: 'synthetic-9004', meal_type: 'OTHER' }),
+    ]);
+    expect(groups.map(([group]) => group)).toEqual(['Snack', 'Other']);
+    expect(groups[1]?.[1].map(row => row.id)).toEqual(['synthetic-9001', 'synthetic-9003', 'synthetic-9004']);
+  });
   it.each([
     [null, null, null], [9001, null, null], [null, 9002, null], [9003, 9001, 2],
   ])('requires both resting %s and deficit %s; protein is independent', (resting, deficit, expected) => {
