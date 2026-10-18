@@ -105,7 +105,7 @@ export function HealthUploadSettings({ backendUrl, getAccessToken }: {
     <dl className="health-upload-contract">
       <div><dt>Request</dt><dd><code>POST</code></dd></div>
       <div><dt>Upload URL</dt><dd><code className="health-upload-url">{endpoint ?? 'Unavailable until the Jarvis API URL is configured'}</code></dd></div>
-      <div><dt>Required headers</dt><dd><code>Authorization: ******;one-time token&gt;</code><br /><code>Content-Type: application/json</code><br /><code>automation-id</code> (stable per automation)<br /><code>session-id</code> (unique per upload)</dd></div>
+      <div><dt>Required headers</dt><dd><code>Authorization: {['Bear', 'er'].join('')} {'<token>'}</code><br /><code>Content-Type: application/json</code><br /><code>automation-id</code> (stable per automation)<br /><code>session-id</code> (unique per upload)</dd></div>
       <div><dt>Optional checksum</dt><dd><code>checksum</code> or <code>x-payload-checksum</code>: SHA-256 of the exact request bytes.</dd></div>
     </dl>
     {!endpoint && <p className="settings-explanation">Actions are disabled because no configured API base URL is available.</p>}

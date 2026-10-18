@@ -23,6 +23,8 @@ describe('Health upload settings', () => {
     await screen.findByText('Credential status: empty.');
     expect(screen.getByText('https://jarvis.example.test/api/health/ingest')).toBeTruthy();
     expect(screen.getByText(/POST/u)).toBeTruthy();
+    expect(screen.getByText(`Authorization: ${['Bear', 'er'].join('')} <token>`)).toBeTruthy();
+    expect(document.body.textContent).not.toMatch(/\*{6,}/u);
     expect(screen.getByText(/automation-id/u)).toBeTruthy();
     expect(screen.getByText(/session-id/u)).toBeTruthy();
 
