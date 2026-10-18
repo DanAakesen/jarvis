@@ -38,7 +38,10 @@ describe('app-wide control contract', () => {
         if (!selectors!.includes(':focus-visible')) expect(declarations, selectors).not.toMatch(/outline\s*:/);
       }
     }
-    expect(source).toContain('.primary-button:focus-visible, .secondary-button:focus-visible, .ghost-button:focus-visible, .danger-button:focus-visible');
+    expect(source).toContain('.primary-button:focus-visible');
+    expect(source).toContain('.secondary-button:focus-visible');
+    expect(source).toContain('.ghost-button:focus-visible');
+    expect(source).toContain('.danger-button--filled:focus-visible');
     expect(source).toContain('.workspace-tab-close:focus-visible, .workspace-tab-pin:focus-visible');
     expect(source).toContain('.primary-button[aria-busy="true"] > .button-label');
     expect(source).toContain('.primary-button[aria-busy="true"] > .button-loading-indicator');
@@ -122,10 +125,13 @@ describe('app-wide control contract', () => {
 
   it('removes decorative control rims without removing neutral field structure or focus', () => {
     for (const selector of [
-      /\.primary-button, \.secondary-button, \.ghost-button, \.danger-button\s*\{([^}]*)\}/,
       /\.kanban-card-action\s*\{([^}]*)\}/,
       /\.release-trail-button, \.release-trail-open\s*\{([^}]*)\}/,
     ]) expect(ruleDeclaration(source, selector, 'border')).toBe('0');
+    expect(ruleDeclaration(source, /\.primary-button, \.secondary-button, \.ghost-button, \.danger-button\s*\{([^}]*)\}/, 'border'))
+      .toBe('1px solid transparent');
+    expect(source).toContain('border-color: color-mix(in srgb, var(--primary-action) 54%, var(--highlight-solid));');
+    expect(source).toContain('border-color: var(--control-rule); background: color-mix(in srgb, var(--text) 6%, var(--surface)); color: var(--text);');
     const controlRule = /([^{}]+)\{([^{}]*)\}/g;
     for (const [, selectors, declarations] of source.matchAll(controlRule)) {
       if (!/(?:settings-back|signin-button|kanban-card-action|release-trail-button|release-trail-open|presence-mode-card|memory-item|knowledge-reset|knowledge-legend|usage-segmented|advanced-segmented)/.test(selectors!)) continue;
@@ -133,7 +139,8 @@ describe('app-wide control contract', () => {
     }
     expect(ruleDeclaration(source, /\.knowledge-search\.luminous-glass\s*\{([^}]*)\}/, 'border-color')).toBe('var(--control-rule)');
     expect(ruleDeclaration(source, /\.signin-button\.luminous-glass::before\s*\{([^}]*)\}/, 'content')).toBe('none');
-    expect(source).toContain('.primary-button:focus-visible, .secondary-button:focus-visible, .ghost-button:focus-visible, .danger-button:focus-visible');
+    expect(source).toContain('.primary-button:focus-visible');
+    expect(source).toContain('.danger-button--filled:focus-visible');
     expect(source).toContain('.knowledge-search:has(input:focus-visible) { outline: 3px solid var(--focus);');
     expect(source).toContain('.folio-search:has(input:focus-visible) { outline: 3px solid var(--focus);');
   });

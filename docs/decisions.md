@@ -3,17 +3,37 @@
 ## Use one refined button hierarchy across the web app (18 October 2026; P14-03 / #969)
 
 Keep the existing class names and route behavior while making button intent
-visible in the shared stylesheet. Primary remains the existing primary fill;
-secondary is a distinct neutral surface, ghost is quiet, danger is low
-emphasis, and confirmed destructive actions use the filled danger modifier.
-All variants use the existing control radius, focus outline and semantic
-surface/state tokens; no decorative control rim or new palette is introduced.
+visible in the shared stylesheet. This decision's flat primary fill and lack of
+button rims are superseded by P14-07 below; its hierarchy, route behavior,
+control radius, semantic state tokens, and no-new-palette constraints remain.
 
 Buttons no longer carry layout margins. Shared action groups own spacing,
 wrapping, phone stacking and primary-last ordering. Busy controls keep their
 disabled state and accessible name while the shared inline Loader overlays a
 label that still reserves the button's width. This is a presentation-only
 change, not a change to actions, confirmation boundaries or API behavior.
+
+## Redesign primary and secondary button surfaces (18 October 2026; P14-07 / #990)
+
+Dan's direct instruction on 18 October 2026 authorizes a button-only appearance
+change, superseding the flat primary fill and no-glow constraints in Shared
+control geometry and P14-03. Primary and filled danger use token-based tonal
+gradients, a real tinted border and one calm accent-colored shadow; hover
+strengthens the shadow and pressed state darkens the fill. Secondary and
+unfilled danger use visibly bounded tinted surfaces, while ghost stays
+text-only. Focus uses a two-band ring so its inner page-colored separator
+contrasts with the button and the outer `--focus` outline contrasts with the
+page. More-contrast and forced-color modes remove decorative gradients/glows;
+reduced motion removes state transitions and press movement.
+
+The composer send and Factory job “Open” controls retain their specialized
+classes and dimensions but share primary styling and states. Factory task
+creation and Settings save were already shared; the Factory “Create project”
+action now keeps shared secondary styling. “Jump to latest” stays a contextual
+utility with a surfaced neutral boundary and shared radius/focus. The voice orb
+remains specialized because it represents voice-mode entry rather than a
+primary action. Button behavior, handlers, accessible names, routes, size
+system, action-group spacing and confirmation boundaries are unchanged.
 
 ## Notify only on P1 - High vault tasks (18 October 2026; #996)
 

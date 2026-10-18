@@ -82,6 +82,11 @@ decorative coloured boxes, bevels or inset-shadow control borders. Preserve
 semantic status chips, necessary neutral structure, accessible selected and
 disabled states, visible keyboard focus and usable touch targets. Reuse the
 existing visual direction; no replacement theme or control framework is needed.
+Dan's direct instruction of 18 October 2026 supersedes the earlier button
+appearance limits for buttons only: shared primary actions may use a token-based
+tonal gradient, visible rim and restrained accent glow, with equally clear
+secondary, ghost and danger treatments. Other controls retain the shared
+geometry and surface constraints.
 See `DESIGN.md` for the contract and `docs/agent-context.md` for consumed guidance.
 
 ## One balanced 3D stage budget (15 October 2026; local)

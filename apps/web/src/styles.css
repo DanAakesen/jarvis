@@ -59,7 +59,13 @@
   --surface-blur: 16px;
   --soft-shadow: 0 2px 8px rgb(32 37 44 / 6%), 0 20px 50px rgb(32 37 44 / 4%);
   --panel-shadow: 0 1px 2px rgb(32 37 44 / 5%), 0 18px 48px rgb(32 37 44 / 5%);
-  --button-primary-shadow: 0 2px 4px rgb(32 37 44 / 14%);
+  --button-primary-shadow:
+    0 2px 4px color-mix(in srgb, var(--primary-action) 28%, transparent),
+    0 4px 12px color-mix(in srgb, var(--primary-action) 16%, transparent);
+  --button-danger-shadow:
+    0 2px 4px color-mix(in srgb, var(--error) 28%, transparent),
+    0 4px 12px color-mix(in srgb, var(--error) 16%, transparent);
+  --danger-action-text: var(--highlight-solid);
   --dialog-shadow: 0 20px 64px rgb(32 37 44 / 22%);
   --success-surface: #e3f2f5;
   --warning: #835000;
@@ -180,7 +186,7 @@
   --surface-blur: 24px;
   --soft-shadow: 0 22px 70px rgb(0 0 0 / 30%);
   --panel-shadow: 0 16px 46px rgb(0 0 0 / 26%);
-  --button-primary-shadow: 0 2px 6px rgb(0 0 0 / 34%);
+  --danger-action-text: var(--ink-solid);
   --dialog-shadow: 0 20px 64px rgb(0 0 0 / 62%);
   --success-surface: #14323d;
   --warning: #ffc27a;
@@ -505,44 +511,101 @@ dd { margin: 0; color: var(--text-muted); overflow-wrap: anywhere; }
 .home-link:hover { color: var(--focus); }
 .primary-button, .secondary-button, .ghost-button, .danger-button {
   display: inline-flex; max-width: 100%; min-width: 0; min-height: 44px; align-items: center; justify-content: center;
-  gap: var(--space-2); padding: 8px 16px; border: 0; border-radius: var(--radius-control); font: inherit;
+  gap: var(--space-2); padding: 8px 16px; border: 1px solid transparent; border-radius: var(--radius-control); font: inherit;
   font-weight: 650; line-height: 1.25; text-align: center; white-space: normal; overflow-wrap: anywhere;
-  cursor: pointer; transition: background-color var(--motion-press) var(--ease-standard), color var(--motion-press) var(--ease-standard),
+  cursor: pointer; transition: background var(--motion-press) var(--ease-standard), border-color var(--motion-press) var(--ease-standard),
+    box-shadow var(--motion-press) var(--ease-standard), color var(--motion-press) var(--ease-standard),
     transform var(--motion-press) var(--ease-standard);
 }
-.primary-button { padding-inline: 18px; background: var(--primary-action); color: var(--primary-action-text); box-shadow: var(--button-primary-shadow); }
-.primary-button:hover:not(:disabled, [aria-busy="true"]) { background: var(--primary-action-hover); }
-.primary-button:active:not(:disabled, [aria-busy="true"]) { transform: translateY(1px); }
-.secondary-button { background: color-mix(in srgb, var(--text) 8%, var(--surface)); color: var(--text); }
-.secondary-button:hover:not(:disabled, [aria-busy="true"]) { background: color-mix(in srgb, var(--text) 14%, var(--surface)); }
-.secondary-button:active:not(:disabled, [aria-busy="true"]) { background: color-mix(in srgb, var(--text) 18%, var(--surface)); transform: translateY(1px); }
+.primary-button, .jobs-action-primary, .conversation-history .composer-send {
+  border-color: color-mix(in srgb, var(--primary-action) 54%, var(--highlight-solid));
+  background: linear-gradient(180deg, color-mix(in srgb, var(--primary-action) 93%, var(--highlight-solid)),
+    color-mix(in srgb, var(--primary-action) 94%, var(--ink-solid)));
+  color: var(--primary-action-text); box-shadow: var(--button-primary-shadow);
+}
+.primary-button:hover:not(:disabled, [aria-busy="true"]),
+.jobs-action-primary:hover:not(:disabled, [aria-busy="true"]),
+.conversation-history .composer-send:hover:not(:disabled, [aria-busy="true"]) {
+  border-color: color-mix(in srgb, var(--primary-action-hover) 48%, var(--highlight-solid));
+  background: linear-gradient(180deg, color-mix(in srgb, var(--primary-action-hover) 94%, var(--highlight-solid)),
+    color-mix(in srgb, var(--primary-action-hover) 92%, var(--ink-solid)));
+  box-shadow: 0 3px 8px color-mix(in srgb, var(--primary-action) 40%, transparent),
+    0 0 18px color-mix(in srgb, var(--primary-action) 28%, transparent);
+}
+.primary-button:active:not(:disabled, [aria-busy="true"]),
+.jobs-action-primary:active:not(:disabled, [aria-busy="true"]),
+.conversation-history .composer-send:active:not(:disabled, [aria-busy="true"]) {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--primary-action) 84%, var(--ink-solid)),
+    color-mix(in srgb, var(--primary-action) 78%, var(--ink-solid)));
+  transform: translateY(1px);
+}
+.secondary-button, .jobs-action:not(.jobs-action-primary) {
+  border-color: var(--control-rule); background: color-mix(in srgb, var(--text) 6%, var(--surface)); color: var(--text);
+}
+.secondary-button:hover:not(:disabled, [aria-busy="true"]),
+.jobs-action:not(.jobs-action-primary):hover:not(:disabled, [aria-busy="true"]) {
+  background: color-mix(in srgb, var(--text) 12%, var(--surface));
+}
+.secondary-button:active:not(:disabled, [aria-busy="true"]),
+.jobs-action:not(.jobs-action-primary):active:not(:disabled, [aria-busy="true"]) {
+  background: color-mix(in srgb, var(--text) 18%, var(--surface)); transform: translateY(1px);
+}
 .ghost-button { background: transparent; color: var(--text); }
 .ghost-button:hover:not(:disabled, [aria-busy="true"]) { background: var(--glass-hover); }
 .ghost-button:active:not(:disabled, [aria-busy="true"]) { background: var(--glass-pressed); transform: translateY(1px); }
-.danger-button { background: color-mix(in srgb, var(--error-surface) 72%, var(--surface)); color: var(--error); }
+.danger-button {
+  border-color: color-mix(in srgb, var(--error) 42%, var(--surface));
+  background: color-mix(in srgb, var(--error-surface) 72%, var(--surface)); color: var(--error);
+}
 .danger-button:hover:not(:disabled, [aria-busy="true"]) { background: var(--error-surface); }
-.danger-button:active:not(:disabled, [aria-busy="true"]) { background: color-mix(in srgb, var(--error-surface) 76%, var(--error)); transform: translateY(1px); }
-.danger-button--filled { background: var(--error); color: var(--page); box-shadow: var(--button-primary-shadow); }
-.danger-button--filled:hover:not(:disabled, [aria-busy="true"]) { background: color-mix(in srgb, var(--error) 88%, var(--text)); }
-.danger-button--filled:active:not(:disabled, [aria-busy="true"]) { transform: translateY(1px); }
-.primary-button:focus-visible, .secondary-button:focus-visible, .ghost-button:focus-visible, .danger-button:focus-visible {
-  outline: 3px solid var(--focus); outline-offset: 3px;
+.danger-button:active:not(:disabled, [aria-busy="true"]) {
+  background: color-mix(in srgb, var(--error-surface) 76%, var(--error)); transform: translateY(1px);
+}
+.danger-button--filled {
+  border-color: color-mix(in srgb, var(--error) 52%, var(--highlight-solid));
+  background: linear-gradient(180deg, color-mix(in srgb, var(--error) 93%, var(--highlight-solid)),
+    color-mix(in srgb, var(--error) 94%, var(--ink-solid)));
+  color: var(--danger-action-text); box-shadow: var(--button-danger-shadow);
+}
+.danger-button--filled:hover:not(:disabled, [aria-busy="true"]) {
+  border-color: color-mix(in srgb, var(--error) 44%, var(--highlight-solid));
+  background: linear-gradient(180deg, color-mix(in srgb, var(--error) 88%, var(--highlight-solid)),
+    color-mix(in srgb, var(--error) 90%, var(--ink-solid)));
+  box-shadow: 0 3px 8px color-mix(in srgb, var(--error) 40%, transparent),
+    0 0 18px color-mix(in srgb, var(--error) 28%, transparent);
+}
+.danger-button--filled:active:not(:disabled, [aria-busy="true"]) {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--error) 84%, var(--ink-solid)),
+    color-mix(in srgb, var(--error) 78%, var(--ink-solid)));
+  transform: translateY(1px);
+}
+.primary-button:focus-visible, .secondary-button:focus-visible, .ghost-button:focus-visible,
+.danger-button:focus-visible, .danger-button--filled:focus-visible, .jobs-action:focus-visible,
+.conversation-history .composer-send:focus-visible {
+  outline: 3px solid var(--focus); outline-offset: 3px; box-shadow: 0 0 0 3px var(--page);
 }
 .primary-button:disabled, .secondary-button:disabled, .ghost-button:disabled, .danger-button:disabled {
-  background: var(--disabled-surface); color: var(--disabled-text); box-shadow: none; cursor: not-allowed;
+  border-color: var(--control-rule); background: var(--disabled-surface); color: var(--disabled-text); box-shadow: none; cursor: not-allowed;
 }
-.primary-button:disabled { background: var(--primary-action-disabled); color: var(--primary-action-disabled-text); }
+.primary-button:disabled, .jobs-action-primary:disabled, .conversation-history .composer-send:disabled {
+  border-color: color-mix(in srgb, var(--primary-action-disabled) 55%, var(--highlight-solid));
+  background: var(--primary-action-disabled); color: var(--primary-action-disabled-text);
+}
 .danger-button--filled:disabled { background: var(--disabled-surface); color: var(--disabled-text); }
-.primary-button[aria-busy="true"], .secondary-button[aria-busy="true"], .ghost-button[aria-busy="true"], .danger-button[aria-busy="true"] {
+.primary-button[aria-busy="true"], .secondary-button[aria-busy="true"], .ghost-button[aria-busy="true"],
+.danger-button[aria-busy="true"], .danger-button--filled[aria-busy="true"] {
   position: relative; display: inline-grid; grid-template-columns: auto; grid-template-rows: auto; place-items: center; cursor: progress;
 }
 .primary-button[aria-busy="true"] > .button-label, .secondary-button[aria-busy="true"] > .button-label,
-.ghost-button[aria-busy="true"] > .button-label, .danger-button[aria-busy="true"] > .button-label { grid-area: 1 / 1; }
+.ghost-button[aria-busy="true"] > .button-label, .danger-button[aria-busy="true"] > .button-label,
+.danger-button--filled[aria-busy="true"] > .button-label { grid-area: 1 / 1; }
 .primary-button[aria-busy="true"] > .button-label, .secondary-button[aria-busy="true"] > .button-label,
-.ghost-button[aria-busy="true"] > .button-label, .danger-button[aria-busy="true"] > .button-label { opacity: 0; }
+.ghost-button[aria-busy="true"] > .button-label, .danger-button[aria-busy="true"] > .button-label,
+.danger-button--filled[aria-busy="true"] > .button-label { opacity: 0; }
 .button-loading-indicator { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; pointer-events: none; }
 .primary-button[aria-busy="true"] > .button-loading-indicator, .secondary-button[aria-busy="true"] > .button-loading-indicator,
-.ghost-button[aria-busy="true"] > .button-loading-indicator, .danger-button[aria-busy="true"] > .button-loading-indicator {
+.ghost-button[aria-busy="true"] > .button-loading-indicator, .danger-button[aria-busy="true"] > .button-loading-indicator,
+.danger-button--filled[aria-busy="true"] > .button-loading-indicator {
   display: inline-flex; align-items: center; justify-content: center;
 }
 .primary-button > svg, .secondary-button > svg, .ghost-button > svg, .danger-button > svg {
@@ -2041,10 +2104,8 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
    --------------------------------------------------------------------------------------------- */
 .kanban-header { justify-content: flex-start; }
 .kanban-header .kanban-create-project { margin-left: auto; }
-.kanban-header .primary-button.kanban-create { box-shadow: none; }
 .kanban-header .kanban-create-project svg { width: 18px; height: 18px; }
-.kanban-create-project { display: inline-flex; align-items: center; gap: var(--space-2); min-height: 44px; background: var(--glass-hover); }
-.kanban-create-project:hover:not(:disabled) { background: var(--glass-pressed); }
+.kanban-create-project { display: inline-flex; align-items: center; gap: var(--space-2); min-height: 44px; }
 .project-dialog { display: grid; gap: var(--space-4); background: var(--surface); }
 .project-dialog h2 { margin: 0; }
 .project-dialog-part { display: grid; gap: var(--space-3); padding: var(--space-4); border: 1px solid color-mix(in srgb, var(--glass-rim-light) 30%, transparent); border-radius: var(--radius-panel); background: var(--glass-hover); }
@@ -2611,13 +2672,18 @@ a.task-chip:hover { background: var(--glass-pressed); }
 .jobs-item[data-status="failed"] .jobs-item-detail { color: var(--warning-text); }
 .jobs-item-error { color: var(--error); font-size: 12.5px; }
 .jobs-item-actions { display: flex; flex-direction: column; gap: 4px; }
-.jobs-action { display: inline-flex; min-height: 36px; max-width: 100%; align-items: center; justify-content: center; gap: var(--space-1); padding: 6px 12px; border: 0; border-radius: var(--radius-control); background: color-mix(in srgb, var(--text) 8%, var(--surface)); color: var(--text); font: inherit; font-size: 12.5px; font-weight: 650; line-height: 1.25; text-align: center; white-space: normal; overflow-wrap: anywhere; cursor: pointer; transition: background-color var(--motion-press) var(--ease-standard), transform var(--motion-press) var(--ease-standard); }
-.jobs-action:hover:not(:disabled) { background: color-mix(in srgb, var(--text) 14%, var(--surface)); }
-.jobs-action:active:not(:disabled) { background: color-mix(in srgb, var(--text) 18%, var(--surface)); transform: translateY(1px); }
-.jobs-action:disabled { background: var(--disabled-surface); color: var(--disabled-text); cursor: not-allowed; }
-.jobs-action:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
-.jobs-action-primary { background: var(--primary-action); color: var(--primary-action-text); box-shadow: var(--button-primary-shadow); }
-.jobs-action-primary:is(:hover, :active):not(:disabled) { background: var(--primary-action-hover); }
+.jobs-action {
+  display: inline-flex; min-height: 36px; max-width: 100%; align-items: center; justify-content: center; gap: var(--space-1);
+  padding: 6px 12px; border-width: 1px; border-style: solid; border-radius: var(--radius-control); font: inherit;
+  font-size: 12.5px; font-weight: 650; line-height: 1.25; text-align: center; white-space: normal;
+  overflow-wrap: anywhere; cursor: pointer;
+  transition: background var(--motion-press) var(--ease-standard), border-color var(--motion-press) var(--ease-standard),
+    box-shadow var(--motion-press) var(--ease-standard), transform var(--motion-press) var(--ease-standard);
+}
+.jobs-action:hover:not(:disabled, .jobs-action-primary) { background: color-mix(in srgb, var(--text) 12%, var(--surface)); }
+.jobs-action:active:not(:disabled, .jobs-action-primary) { background: color-mix(in srgb, var(--text) 18%, var(--surface)); transform: translateY(1px); }
+.jobs-action:disabled:not(.jobs-action-primary) { background: var(--disabled-surface); color: var(--disabled-text); cursor: not-allowed; }
+.jobs-action-primary { font-size: 12.5px; padding: 6px 12px; }
 @media (pointer: coarse) { .jobs-action { min-height: 44px; } }
 @media (prefers-reduced-motion: reduce) { .jobs-popover { animation: none; } .jobs-ring-value { transition: none; } }
 :root[data-motion="reduced"] .jobs-popover { animation: none; }
@@ -3379,6 +3445,8 @@ a.task-chip:hover { background: var(--glass-pressed); }
   :is(.primary-button, .secondary-button, .ghost-button, .danger-button, .settings-back,
     .jobs-action, .workspace-control, .workspace-tab-close, .workspace-tab-pin, .modal-close,
     .folio-action, .release-trail-button, .release-trail-open) { min-height: 44px; }
+  :is(.jobs-action-primary, .conversation-history .composer-send) { min-height: 44px; }
+  .conversation-history .composer-send { width: 44px; height: 44px; }
   :is(.workspace-tab-close, .workspace-tab-pin, .modal-close, .folio-action) {
     width: 44px; min-width: 44px; height: 44px; min-height: 44px;
   }
@@ -3541,3 +3609,39 @@ a.task-chip:hover { background: var(--glass-pressed); }
 }
 :root[data-motion="reduced"] .app-shell .workspace-canvas-layered .workspace-window:not(.workspace-window-conversation) { transition: none; }
 @media (prefers-reduced-motion: reduce) { .app-shell .workspace-canvas-layered .workspace-window:not(.workspace-window-conversation) { transition: none; } }
+
+@media (prefers-reduced-motion: reduce) {
+  :is(.primary-button, .secondary-button, .ghost-button, .danger-button, .danger-button--filled,
+    .jobs-action, .conversation-history .composer-send, .conversation-latest) { transition: none; }
+  :is(.primary-button, .secondary-button, .ghost-button, .danger-button, .danger-button--filled,
+    .jobs-action, .conversation-history .composer-send):active:not(:disabled) { transform: none; }
+  .conversation-latest { animation: none; }
+}
+:root[data-motion="reduced"] :is(.primary-button, .secondary-button, .ghost-button, .danger-button,
+  .danger-button--filled, .jobs-action, .conversation-history .composer-send, .conversation-latest) { transition: none; }
+:root[data-motion="reduced"] :is(.primary-button, .secondary-button, .ghost-button, .danger-button,
+  .danger-button--filled, .jobs-action, .conversation-history .composer-send):active:not(:disabled) { transform: none; }
+:root[data-motion="reduced"] .conversation-latest { animation: none; }
+
+@media (prefers-contrast: more) {
+  :is(.primary-button, .secondary-button, .ghost-button, .danger-button, .danger-button--filled,
+    .jobs-action, .conversation-history .composer-send, .conversation-latest):not(:disabled) {
+    background-image: none; border-color: currentColor; box-shadow: none;
+  }
+}
+@media (forced-colors: active) {
+  :is(.primary-button, .secondary-button, .ghost-button, .danger-button, .danger-button--filled,
+    .jobs-action, .conversation-history .composer-send, .conversation-latest):not(:disabled) {
+    border-color: ButtonText; background: ButtonFace; background-image: none; color: ButtonText;
+    box-shadow: none; forced-color-adjust: auto;
+  }
+  :is(.primary-button, .secondary-button, .ghost-button, .danger-button, .danger-button--filled,
+    .jobs-action, .conversation-history .composer-send, .conversation-latest):disabled {
+    border-color: GrayText; background: ButtonFace; background-image: none; color: GrayText;
+    box-shadow: none; forced-color-adjust: auto;
+  }
+  :is(.primary-button, .secondary-button, .ghost-button, .danger-button, .danger-button--filled,
+    .jobs-action, .conversation-history .composer-send, .conversation-latest):focus-visible {
+    outline: 3px solid Highlight; outline-offset: 3px; box-shadow: none;
+  }
+}
