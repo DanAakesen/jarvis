@@ -7,6 +7,7 @@ import { DailyChart } from '../../ui/DailyChart';
 import { ScrollTable } from '../../ui/ScrollTable';
 import { StatTile } from '../../ui/StatTile';
 import { DailyCoverageNote } from '../../ui/DailyCoverageNote';
+import { DailySectionHeader } from '../../ui/DailySectionHeader';
 import { FreshnessLine } from '../../ui/FreshnessLine';
 import { Sparkline } from '../../ui/Sparkline';
 import { formatDate, formatNumber } from '../../ui/formatters';
@@ -58,7 +59,7 @@ export function BodyView({ backendUrl, getAccessToken, period, onPeriodChange, r
   const freshnessPages = selected && records.last ? records : catalogue;
   const recordCount = selected && records.last ? records.items.length : catalogue.items.length;
   return <div className="body-sleep-view">
-    <div className="body-sleep-picker">
+    <DailySectionHeader controls={<div className="body-sleep-picker">
       <label>Search
         <input type="search" value={search} onChange={event => setSearch(event.target.value)}
           placeholder="Metric name or ID" />
@@ -79,9 +80,14 @@ export function BodyView({ backendUrl, getAccessToken, period, onPeriodChange, r
         </select>
       </label>
       <DailyPeriodControl period={period} onPeriodChange={onPeriodChange} />
-    </div>
-    {latestRead && <FreshnessLine observedAt={latestRead.freshness.observedAt} count={recordCount}
+    </div>}
+    freshness={latestRead && <FreshnessLine observedAt={latestRead.freshness.observedAt} count={recordCount}
       partial={freshnessPages.hasMore || freshnessPages.loadingMore || freshnessPages.error !== null} />}
+    aboutData={selected && <DailyCoverageNote summary="About this data">
+      <p>Recorded identifier: <code className="body-sleep-identifier">{selected}</code></p>
+      <p>Missing values, gaps and units remain explicit. Daily values use the recorded average only as a labelled fallback. Missing days are not zero or interpolated. Each recorded unit group has its own summary and chart; units are not converted or combined.</p>
+      <p>Summaries use one value per day, averaging retained observations when a date repeats. Minimum and maximum refer to daily values; recorded ranges remain in the data table. Readings no more than 3 calendar days apart connect; wider gaps remain disconnected. Coverage and freshness are not established by returned records.</p>
+    </DailyCoverageNote>} />
     {search && <p role="status">{filtered.length} measurements match. The current selection stays available.</p>}
     <ReadState pages={catalogue} name="catalogue" />
     {selected && <ReadState pages={records} name="measurements" />}
@@ -106,11 +112,6 @@ export function BodyView({ backendUrl, getAccessToken, period, onPeriodChange, r
       })}</ul>
     </nav>}
     {selected && <>
-      <DailyCoverageNote summary="About this data">
-        <p>Recorded identifier: <code className="body-sleep-identifier">{selected}</code></p>
-        <p>Missing values, gaps and units remain explicit. Daily values use the recorded average only as a labelled fallback. Missing days are not zero or interpolated. Each recorded unit group has its own summary and chart; units are not converted or combined.</p>
-        <p>Summaries use one value per day, averaging retained observations when a date repeats. Minimum and maximum refer to daily values; recorded ranges remain in the data table, and date gaps break trend lines. Coverage and freshness are not established by returned records.</p>
-      </DailyCoverageNote>
       {records.status === 'ready' && records.items.length === 0 && <HealthEmptyState name="body measurement" />}
       {records.items.length > 0 && units.map(group => <MetricUnit key={JSON.stringify(group.unit)} name={metricDisplay(selected).label}
         unit={group.unit} rows={group.rows} period={period} />)}
@@ -126,17 +127,7 @@ function MetricUnit({ name, unit, rows, period }: {
   const unitLabel = unit ?? 'Unit unknown';
   const chartName = `${name} — ${unitLabel}`;
   const sorted = [...rows].sort((a, b) => String(b.metric_date).localeCompare(String(a.metric_date)));
-  const segments: typeof summary.days[] = [];
-  for (const day of summary.days) {
-    const current = segments.at(-1);
-    const previous = current?.at(-1);
-    if (current && previous && Date.parse(day.date) - Date.parse(previous.date) === 86_400_000) current.push(day);
-    else segments.push([day]);
-  }
-  const series = segments.map((segment, index) => ({
-    name: segments.length > 1 ? `Daily value, segment ${index + 1}` : 'Daily value',
-    points: segment.map(day => ({ x: day.date, y: day.value, low: day.low, high: day.high })),
-  }));
+  const series = [{ name: 'Daily value', points: summary.days.map(day => ({ x: day.date, y: day.value, low: day.low, high: day.high })) }];
   const hasRanges = summary.days.some(day => day.low !== null && day.high !== null);
   const days = periodDates(period);
   const values = new Map(summary.days.map(day => [day.date, day.value]));
@@ -156,7 +147,9 @@ function MetricUnit({ name, unit, rows, period }: {
       <StatTile label="Maximum" value={summary.maximum?.value} unit={unit ?? ''}
         note={summary.maximum ? formatDate(summary.maximum.date) : 'No numeric days recorded'} />
     </div>
-    <DailyChart kind="line" name={chartName} {...(hasRanges ? { rangeLabel: `Recorded minimum–maximum (${unitLabel})` } : {})}
+    <DailyChart kind="line" name={chartName} maxGapDays={3}
+      description="Lines connect recorded readings no more than 3 calendar days apart; wider gaps remain disconnected. Missing values are not interpolated."
+      {...(hasRanges ? { rangeLabel: `Recorded minimum–maximum (${unitLabel})` } : {})}
       series={series} dataTable={
         <ScrollTable label={`${chartName} recorded daily rows`}>
           <table><caption>{chartName}: newest first</caption>

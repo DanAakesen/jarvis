@@ -1,6 +1,7 @@
 import { dailyQuerySources as sources, isDailyQuery, type DailyCursor, type DailyJson, type DailyQuery, type DailySourceId } from '@jarvis/contracts';
 import type { ChartSeries } from '../chart-data';
 import { isDailyPeriod } from './period';
+import { dailyLocale, formatDate, formatNumber, formatTime } from './ui/formatters';
 
 /** `purpose` is static plain-English copy for the overview: what the collection is for, never a figure. */
 export const dailySources: readonly { id: DailySourceId; label: string; dated: boolean; purpose: string }[] = [
@@ -22,16 +23,16 @@ export const dailySources: readonly { id: DailySourceId; label: string; dated: b
     purpose: 'Whether your phone is sending health data: when it last made contact, and how many uploads are waiting or set aside.' },
 ];
 export type Row = Record<string, DailyJson>;
-export interface Column { key: string; label: string; unit?: string }
+export interface Column { key: string; label: string; unit?: string; numeric?: boolean }
 const columns: Record<DailySourceId, readonly Column[]> = {
-  [sources.metrics]: [{ key: 'metric_date', label: 'Date' }, { key: 'metric_name', label: 'Measurement' }, { key: 'value', label: 'Value' }, { key: 'avg_value', label: 'Average' }, { key: 'unit', label: 'Unit' }],
-  [sources.metricCatalog]: [{ key: 'metric_name', label: 'Measurement' }, { key: 'units', label: 'Units' }, { key: 'first_date', label: 'First date' }, { key: 'last_date', label: 'Last date' }, { key: 'day_count', label: 'Days measured' }],
+  [sources.metrics]: [{ key: 'metric_date', label: 'Date' }, { key: 'metric_name', label: 'Measurement' }, { key: 'value', label: 'Value', numeric: true }, { key: 'avg_value', label: 'Average', numeric: true }, { key: 'unit', label: 'Unit' }],
+  [sources.metricCatalog]: [{ key: 'metric_name', label: 'Measurement' }, { key: 'units', label: 'Units' }, { key: 'first_date', label: 'First date' }, { key: 'last_date', label: 'Last date' }, { key: 'day_count', label: 'Days measured', numeric: true }],
   [sources.sleep]: [{ key: 'sleep_date', label: 'Date' }, { key: 'asleep_hours', label: 'Asleep', unit: 'h' }, { key: 'total_sleep_hours', label: 'Total sleep', unit: 'h' }, { key: 'in_bed_hours', label: 'In bed', unit: 'h' }],
   [sources.workouts]: [{ key: 'workout_date', label: 'Date' }, { key: 'workout_type', label: 'Workout' }, { key: 'duration_seconds', label: 'Duration', unit: 's' }, { key: 'avg_heart_rate', label: 'Average heart rate', unit: 'bpm' }],
   [sources.workout]: [{ key: 'id', label: 'Workout ID' }],
-  [sources.heartRate]: [{ key: 'sample_minute', label: 'Minute' }, { key: 'min_value', label: 'Minimum' }, { key: 'avg_value', label: 'Average' }, { key: 'max_value', label: 'Maximum' }, { key: 'unit', label: 'Unit' }],
+  [sources.heartRate]: [{ key: 'sample_minute', label: 'Minute' }, { key: 'min_value', label: 'Minimum', numeric: true }, { key: 'avg_value', label: 'Average', numeric: true }, { key: 'max_value', label: 'Maximum', numeric: true }, { key: 'unit', label: 'Unit' }],
   [sources.meals]: [{ key: 'meal_date', label: 'Date' }, { key: 'meal_name', label: 'Food' }, { key: 'energy_kcal', label: 'Energy', unit: 'kcal' }, { key: 'confidence', label: 'Confidence' }],
-  [sources.days]: [{ key: 'meal_date', label: 'Date' }, { key: 'meal_count', label: 'Meals' }, { key: 'energy_kcal', label: 'Energy', unit: 'kcal' }, { key: 'protein_grams', label: 'Protein', unit: 'g' }, { key: 'carbohydrates_grams', label: 'Carbohydrates', unit: 'g' }, { key: 'fat_grams', label: 'Fat', unit: 'g' }, { key: 'fiber_grams', label: 'Fiber', unit: 'g' }, { key: 'unknown_nutrients', label: 'Unknown nutrients' }, { key: 'partial_nutrients', label: 'Partial nutrients' }],
+  [sources.days]: [{ key: 'meal_date', label: 'Date' }, { key: 'meal_count', label: 'Meals', numeric: true }, { key: 'energy_kcal', label: 'Energy', unit: 'kcal' }, { key: 'protein_grams', label: 'Protein', unit: 'g' }, { key: 'carbohydrates_grams', label: 'Carbohydrates', unit: 'g' }, { key: 'fat_grams', label: 'Fat', unit: 'g' }, { key: 'fiber_grams', label: 'Fiber', unit: 'g' }, { key: 'unknown_nutrients', label: 'Unknown nutrients' }, { key: 'partial_nutrients', label: 'Partial nutrients' }],
   [sources.favorites]: [{ key: 'favorite_name', label: 'Favourite' }, { key: 'aliases_json', label: 'Aliases' }, { key: 'energy_kcal', label: 'Energy', unit: 'kcal' }, { key: 'confidence', label: 'Confidence' }],
   [sources.plans]: [{ key: 'plan_name', label: 'Plan' }, { key: 'energy_kcal', label: 'Energy', unit: 'kcal' }, { key: 'protein_grams', label: 'Protein', unit: 'g' }, { key: 'revision', label: 'Revision' }],
   [sources.briefs]: [{ key: 'started_at', label: 'Started as recorded' }, { key: 'trigger', label: 'Trigger' }, { key: 'status', label: 'Historical status' }, { key: 'delivery_status', label: 'Historical delivery' }],
@@ -39,10 +40,9 @@ const columns: Record<DailySourceId, readonly Column[]> = {
   [sources.sync]: [{ key: 'feed_kind', label: 'Feed' }, { key: 'accepted_evidence_at', label: 'Accepted' }, { key: 'processed_committed_at', label: 'Processed' }],
 };
 export function dailyColumns(source: DailySourceId) { return columns[source]; }
+// A column that carries a unit or is flagged numeric holds quantities even when a page records none of them.
+export function isNumericColumn(column: Column) { return column.numeric ?? column.unit !== undefined; }
 const calendar = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Copenhagen', year: 'numeric', month: '2-digit', day: '2-digit' });
-const recordedDate = new Intl.DateTimeFormat(undefined, { timeZone: 'UTC', dateStyle: 'medium' });
-const recordedTime = new Intl.DateTimeFormat(undefined, { timeZone: 'Europe/Copenhagen', dateStyle: 'medium', timeStyle: 'short' });
-const chartTime = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Copenhagen', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
 export function initialDailyPeriod(now = new Date()) {
   const parts = Object.fromEntries(calendar.formatToParts(now).map(part => [part.type, part.value]));
   const endDate = `${parts.year}-${parts.month}-${parts.day}`;
@@ -62,13 +62,13 @@ export function readable(value: string) {
   const text = value.replace(/_/gu, ' ');
   return text.charAt(0).toUpperCase() + text.slice(1);
 }
-export function dailyValue(value: DailyJson | undefined): string {
+export function dailyValue(value: DailyJson | undefined, locale = dailyLocale()): string {
   if (value === undefined || value === null) return 'Unknown';
-  if (typeof value === 'number') return value.toLocaleString(undefined, { maximumFractionDigits: 3 });
+  if (typeof value === 'number') return formatNumber(value, 3, locale);
   if (typeof value === 'boolean') return value ? 'Yes' : 'No';
   if (typeof value === 'string') {
-    if (/^\d{4}-\d{2}-\d{2}$/u.test(value) && Number.isFinite(Date.parse(value))) return recordedDate.format(new Date(`${value}T12:00:00Z`));
-    if (/^\d{4}-\d{2}-\d{2}T/u.test(value) && Number.isFinite(Date.parse(value))) return recordedTime.format(new Date(value));
+    if (/^\d{4}-\d{2}-\d{2}$/u.test(value) && Number.isFinite(Date.parse(value))) return formatDate(value, locale);
+    if (/^\d{4}-\d{2}-\d{2}T/u.test(value) && Number.isFinite(Date.parse(value))) return formatTime(value, locale);
     return value;
   }
   if (Array.isArray(value) && value.every(item => typeof item === 'string')) return value.length ? value.join(', ') : 'None';
@@ -87,7 +87,7 @@ export function dailyRowKey(row: Row, source: DailySourceId, ordinal: number) {
   return `${source}:${ordinal}`;
 }
 export interface DailyPlot { id: string; label: string; unit: string; series: ChartSeries[] }
-export function dailyPlots(source: DailySourceId, rows: readonly Row[]): DailyPlot[] {
+export function dailyPlots(source: DailySourceId, rows: readonly Row[], locale = dailyLocale()): DailyPlot[] {
   const groups = new Map<string, { label: string; unit: string; points: ChartSeries['points'] }>();
   rows.forEach((row, index) => {
     const fields = source === sources.metrics ? ['value', 'avg_value'] : source === sources.sleep ? ['asleep_hours', 'total_sleep_hours'] :
@@ -103,7 +103,7 @@ export function dailyPlots(source: DailySourceId, rows: readonly Row[]): DailyPl
       const date = row.metric_date ?? row.sleep_date ?? row.sample_minute;
       // Observation ordinals keep same-date points distinct; bars never imply interpolation over missing values.
       const axisLabel = source === sources.heartRate && typeof date === 'string' && Number.isFinite(Date.parse(date))
-        ? chartTime.format(new Date(date)).replace(',', '') : dailyValue(date);
+        ? formatTime(date, locale) : dailyValue(date, locale);
       group.points.push({ x: `${index + 1}: ${axisLabel}`, y: value });
       groups.set(id, group);
     }

@@ -10,6 +10,7 @@ import { DailyState } from './ui/DailyState';
 import { DailyChart } from './ui/DailyChart';
 import { DailySectionHeader } from './ui/DailySectionHeader';
 import { FreshnessLine } from './ui/FreshnessLine';
+import { DataNotes } from './ui/DataNotes';
 import { formatDate } from './ui/formatters';
 import { DataRecords as Records, RecordFields } from './sections/data/DataRecords';
 import './ui/daily-ui.css';
@@ -109,10 +110,9 @@ export function DailyPage({ backendUrl, getAccessToken, knownSources, initialSou
       </header>
       : null}
     <DailySectionHeader title={title} headingId="daily-records-heading" headingRef={heading}
-      actions={embedded && onBack ? <button className="secondary-button" type="button" aria-label="Back to overview" onClick={onBack}>Overview</button> : undefined} />
-    {current.error ? <div className="daily-notice" role="alert"><p>{current.error}</p><button className="secondary-button" type="button" onClick={current.reload}>Retry availability</button></div> :
-      !current.sources ? <Loader label="Checking Daily availability" variant="rows" /> : <>
-        {available.length > 0 && <div className="daily-toolbar">
+      actions={embedded && onBack ? <button className="secondary-button" type="button" aria-label="Back to overview" onClick={onBack}>Overview</button> : undefined}
+      controls={available.length > 0 && <>
+        <div className="daily-toolbar">
           <label>Browse<select aria-label="Browse" value={selected?.id ?? ''} disabled={available.length === 0} onChange={event => {
             const selected = available.find(item => item.id === event.target.value); if (selected) changeSource(selected.id);
           }}>
@@ -120,14 +120,22 @@ export function DailyPage({ backendUrl, getAccessToken, knownSources, initialSou
             {available.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}
           </select></label>
           <button className="secondary-button" type="button" aria-label="Refresh records" disabled={result.pending || !query} onClick={result.reload}>Refresh</button>
-          {data && <FreshnessLine observedAt={data.freshness.observedAt} count={data.coverage.returned} partial={data.coverage.hasMore} />}
           {selected?.dated && !workout && sharedPeriod === undefined && <form className="daily-period" onSubmit={applyPeriod}>
             <label>From<input type="date" value={draftPeriod.startDate} onChange={event => setDraftPeriod(value => ({ ...value, startDate: event.target.value }))} /></label>
             <label>To<input type="date" value={draftPeriod.endDate} onChange={event => setDraftPeriod(value => ({ ...value, endDate: event.target.value }))} /></label>
             <button className="secondary-button" type="submit" disabled={!draftValid || !dirtyPeriod}>Apply period</button>
           </form>}
-        </div>}
-        {selected?.dated && !workout && sharedPeriod === undefined && <p className="daily-meta">Periods use Europe/Copenhagen. Edit the dates, then Apply period. The evidence below names the period actually loaded.</p>}
+        </div>
+        {selected?.dated && !workout && sharedPeriod === undefined &&
+          <p className="daily-meta">Periods use Europe/Copenhagen. Edit the dates, then Apply period. The evidence below names the period actually loaded.</p>}
+      </>}
+      freshness={data && <FreshnessLine observedAt={data.freshness.observedAt} count={data.coverage.returned} partial={data.coverage.hasMore} />}
+      aboutData={<DataNotes>
+        <p>Retained records are read-only. Missing values are shown as not recorded, never as zero.</p>
+        <p>Charts and tables include only the currently returned collection and page. Source, units and coverage details stay available below.</p>
+      </DataNotes>} />
+    {current.error ? <div className="daily-notice" role="alert"><p>{current.error}</p><button className="secondary-button" type="button" onClick={current.reload}>Retry availability</button></div> :
+      !current.sources ? <Loader label="Checking Daily availability" variant="rows" /> : <>
         {(actualSource === sources.briefs || actualSource === sources.brief) && <p className="daily-meta">Historical records only, not current health or a new delivery. Timestamps stay exactly as stored; their timezone is not inferred. History uses stored start-text order, then exact ID, descending.</p>}
         {available.length === 0 && <><DailyState status="empty" emptyMessage="This backend has not exposed a browsable Daily collection." /><a href="/settings#health-upload">Settings, Health upload</a></>}
         {selected?.dated && !workout && sharedPeriod === undefined && !draftValid && <p className="error-text" role="alert">Choose valid start and end dates in chronological order.</p>}
@@ -152,8 +160,8 @@ export function DailyPage({ backendUrl, getAccessToken, knownSources, initialSou
               data.source === sources.sync ? <SyncEvidence item={data.items[0]!} /> : <>
                 {plots.length > 0 && <div className="daily-view-options">
                   <div className="daily-view-switch" role="group" aria-label="Record presentation">
-                    <button className="secondary-button" type="button" aria-pressed={view === 'table'} onClick={() => setView('table')}>Table</button>
-                    <button className="secondary-button" type="button" aria-pressed={view === 'chart'} onClick={() => setView('chart')}>Chart</button>
+                    <button className="daily-section-tab" type="button" aria-pressed={view === 'table'} onClick={() => setView('table')}>Table</button>
+                    <button className="daily-section-tab" type="button" aria-pressed={view === 'chart'} onClick={() => setView('chart')}>Chart</button>
                   </div>
                   {view === 'chart' && <label>Recorded measure<select aria-label="Recorded measure" value={plot?.id ?? ''} onChange={event => setPlotId(event.target.value)}>
                     {plots.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}

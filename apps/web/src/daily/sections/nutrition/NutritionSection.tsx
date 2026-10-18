@@ -7,6 +7,7 @@ import { copenhagenDate, isDailyPeriod } from '../../period';
 import { DailyChart } from '../../ui/DailyChart';
 import { DailyCoverageNote } from '../../ui/DailyCoverageNote';
 import { DataNotes } from '../../ui/DataNotes';
+import { DailySectionHeader } from '../../ui/DailySectionHeader';
 import { DailyState } from '../../ui/DailyState';
 import { FreshnessLine } from '../../ui/FreshnessLine';
 import { Meter } from '../../ui/Meter';
@@ -123,7 +124,7 @@ function Day({ props, date, setDate, days, targets }: {
   const previous = knownDays.filter(day => day < date).at(-1);
   const next = knownDays.find(day => day > date);
   return <div className="nutrition-block">
-    <div className="nutrition-controls">
+    <DailySectionHeader controls={<div className="nutrition-controls">
       <button type="button" className="secondary-button" aria-label={`Previous day, ${dateStep(date, -1)}`} onClick={() => setDate(dateStep(date, -1))}>Previous</button>
       <label>Meal date <input aria-label="Meal date" type="date" value={date} max={today}
         onChange={event => {
@@ -132,13 +133,21 @@ function Day({ props, date, setDate, days, targets }: {
         }} /></label>
       <button type="button" className="secondary-button" aria-label={`Next day, ${dateStep(date, 1)}`} disabled={date >= today} onClick={() => setDate(dateStep(date, 1))}>Next</button>
       <button type="button" className="secondary-button" aria-label={`Today, ${today}`} disabled={date === today} onClick={() => setDate(today)}>Today</button>
-    </div>
+    </div>}
+    freshness={result.data && <FreshnessLine observedAt={result.data.freshness.observedAt} count={active.length}
+      recordLabel="meals" partial={result.data.coverage.hasMore} />}
+    aboutData={result.data && <DataNotes>
+      <p>Totals use displayed non-deleted meals only; unknown nutrient values are not zero. Partial totals are lower bounds.</p>
+      {result.data.coverage.hasMore && <p>This page is partial; nutrient totals are lower bounds.</p>}
+      {result.data.coverage.hasMore &&
+        <p>Showing {result.data.coverage.returned} meals from the first page, up to 100. Totals use displayed non-deleted meals only; unknown nutrient values are not zero.</p>
+      }
+      <BaselineNote state={targets.state} />
+    </DataNotes>} />
     <div className="nutrition-block nutrition-day-content">
     {result.pending && <DailyState status="loading" />}
     {result.error && <DailyState status="error" message={result.error} onRetry={result.reload} />}
     {result.data && <>
-      <FreshnessLine observedAt={result.data.freshness.observedAt} count={active.length}
-        recordLabel="meals" partial={result.data.coverage.hasMore} />
       <div className="nutrition-meters">{macros.map(nutrient => {
         const total = sumNutrient(rows, nutrient.key);
         const target = nutrient.key === 'energy_kcal' ? targets.state ? targetBaseline(targets.state.targets) : null
@@ -162,14 +171,6 @@ function Day({ props, date, setDate, days, targets }: {
             .map(nutrient => <p key={nutrient.key}>{nutrient.label}: Not recorded</p>)}</div>
         </details>}
       <Targets {...targets} />
-      <DataNotes>
-        <p>Totals use displayed non-deleted meals only; unknown nutrient values are not zero. Partial totals are lower bounds.</p>
-        {result.data.coverage.hasMore && <p>This page is partial; nutrient totals are lower bounds.</p>}
-        {result.data.coverage.hasMore &&
-        <p>Showing {result.data.coverage.returned} meals from the first page, up to 100. Totals use displayed non-deleted meals only; unknown nutrient values are not zero.</p>
-        }
-        <BaselineNote state={targets.state} />
-      </DataNotes>
       {!active.length && <div>
         <p>No meals recorded for this day. That does not prove nothing was eaten.</p>
         <p><Link to="/settings#health-upload">Open Health upload in Settings</Link></p>
@@ -324,12 +325,12 @@ export default function NutritionSection(props: DailySectionProps) {
     document.getElementById(`nutrition-tab-${availableTabs[next]}`)?.focus();
   }
   return <section className="daily-nutrition" aria-labelledby="nutrition-heading">
-    <h2 id="nutrition-heading">Nutrition</h2>
-    <div className="daily-section-tabs" role="tablist" aria-label="Nutrition views" onKeyDown={onTabKeyDown}>
-      {availableTabs.map(tab => <button type="button" className="daily-section-tab" role="tab" key={tab}
-        id={`nutrition-tab-${tab}`} aria-controls="nutrition-panel" aria-selected={tab === activeView}
-        tabIndex={tab === activeView ? 0 : -1} onClick={() => update(tab)}>{tab[0]!.toUpperCase() + tab.slice(1)}</button>)}
-    </div>
+    <DailySectionHeader title="Nutrition" headingId="nutrition-heading" headingTabIndex={null}
+      controls={<div className="daily-section-tabs" role="tablist" aria-label="Nutrition views" onKeyDown={onTabKeyDown}>
+        {availableTabs.map(tab => <button type="button" className="daily-section-tab" role="tab" key={tab}
+          id={`nutrition-tab-${tab}`} aria-controls="nutrition-panel" aria-selected={tab === activeView}
+          tabIndex={tab === activeView ? 0 : -1} onClick={() => update(tab)}>{tab[0]!.toUpperCase() + tab.slice(1)}</button>)}
+      </div>} />
     <div role="tabpanel" id="nutrition-panel" aria-labelledby={`nutrition-tab-${activeView}`} className="nutrition-block">
       {activeView === 'day' && <Day props={props} date={date} setDate={setDate} days={days} targets={targetProps} />}
       {activeView === 'trend' && <><Targets {...targetProps} /><Trend days={days} select={setDate} targets={targetResult.state} period={props.period} /></>}

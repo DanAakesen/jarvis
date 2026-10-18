@@ -1,5 +1,28 @@
 # Architecture
 
+## Daily visual QA presentation changes (18 October 2026; P12-38)
+
+P12-38 changes only the Daily web presentation. `DailySectionHeader` emits the
+shared title (with any navigation action beside it), control, freshness and
+data-note slots in a consistent order; the embedded Overview button stays ahead
+of the section controls in document and tab order. Section controls retain
+their existing elements, URL state, labels and keyboard
+semantics. The Table/Chart buttons reuse the Daily pill-tab styling without
+changing their labelled button-group or `aria-pressed` contract. Data record
+cells take numeric alignment from the column schema (`Column.numeric`, or a
+declared unit) with observed numeric values as a fallback, so an all-missing
+page keeps its alignment; row/card detail actions use the shared secondary
+button.
+
+`ui/formatters.ts` is the single Daily display-locale source, including saved
+nutrition-target timestamps and sleep times; its formatter functions accept an
+explicit locale for deterministic tests. The Body chart still consumes only the
+existing per-unit daily summaries: it now sends one series per metric/unit to
+`DailyChart`, with a three-calendar-day maximum connecting interval. Wider date
+gaps create a new line segment; each recorded value remains a point and no
+missing value is filled. The limit is included in the chart description.
+Routes, reads, contracts, data ownership and persisted data are unchanged.
+
 ## Daily accessibility and keyboard audit (18 October 2026; P12-37)
 
 Daily remains a presentation-only client over its existing owner-authenticated

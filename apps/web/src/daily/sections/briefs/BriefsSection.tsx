@@ -151,12 +151,13 @@ export default function BriefsSection(props: DailySectionProps) {
   const loadedCount = history.items.length;
 
   return <section className="daily-briefs" aria-labelledby="briefs-heading">
-    <DailySectionHeader title="Briefs" headingId="briefs-heading" />
-    <FreshnessLine {...(history.first ? { observedAt: history.first.freshness.observedAt } : {})}
-      count={loadedCount} recordLabel="briefs" partial={history.hasMore || history.error !== null} />
-    <DailyCoverageNote summary="Past briefs—not current health or a new delivery.">
+    <DailySectionHeader title="Briefs" headingId="briefs-heading"
+      freshness={<FreshnessLine {...(history.first ? { observedAt: history.first.freshness.observedAt } : {})}
+        count={loadedCount} recordLabel="briefs" partial={history.hasMore || history.error !== null} />}
+      aboutData={<DailyCoverageNote summary="About this data">
       <p>Stored timestamps are displayed by their recorded date. No timezone is inferred.</p>
-    </DailyCoverageNote>
+      <p>Past briefs—not current health or a new delivery.</p>
+    </DailyCoverageNote>} />
     <section className="daily-brief-history" aria-label="Brief history" hidden={selectedId !== null}
       aria-busy={history.status === 'loading' || history.loadingMore}>
       {(history.status === 'idle' || history.status === 'loading' || history.loadingMore) && loadedCount === 0 &&

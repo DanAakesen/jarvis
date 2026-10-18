@@ -40,6 +40,33 @@ describe('DailyChart', () => {
     expect(container.querySelector('.daily-chart-range path')).toBeTruthy();
   });
 
+  it('keeps one legend item and every recorded point for readings every second day', () => {
+    const points = Array.from({ length: 7 }, (_, index) => ({
+      x: `2026-10-${String(index * 2 + 1).padStart(2, '0')}`, y: 60 + index,
+    }));
+    const { container } = render(<DailyChart kind="line" name="Synthetic body mass"
+      description="Readings no more than 3 calendar days apart are connected; wider gaps remain disconnected. Values are not interpolated."
+      maxGapDays={3} series={[{ name: 'Daily value', points }]} />);
+    const figure = screen.getByRole('img', { name: 'Synthetic body mass' }).closest('figure')!;
+    expect(within(figure).getByText(/Readings no more than 3 calendar days apart/u)).toBeTruthy();
+    expect(within(figure).getAllByRole('listitem')).toHaveLength(1);
+    expect(figure.querySelectorAll('.daily-chart-series circle')).toHaveLength(7);
+    expect(container.querySelector('.daily-chart-line')?.getAttribute('d')?.match(/M/gu)).toHaveLength(1);
+    expect(container.querySelector('.daily-chart-line')?.getAttribute('d')?.match(/L/gu)).toHaveLength(6);
+  });
+
+  it('breaks the line across gaps wider than the stated calendar-day limit', () => {
+    const { container } = render(<DailyChart kind="line" name="Synthetic sparse values" maxGapDays={3}
+      series={[{ name: 'Daily value', points: [
+        { x: '2026-10-01', y: 10 }, { x: '2026-10-03', y: 12 }, { x: '2026-10-10', y: 14 },
+      ] }]} />);
+    expect(container.querySelectorAll('.daily-chart-line')).toHaveLength(1);
+    expect(container.querySelectorAll('.daily-chart-series circle')).toHaveLength(3);
+    expect(container.querySelector('.daily-chart-line')?.getAttribute('d')?.match(/M/gu)).toHaveLength(2);
+    expect(container.querySelector('.daily-chart-line')?.getAttribute('d')?.match(/L/gu)).toHaveLength(1);
+    expect(screen.getAllByRole('listitem')).toHaveLength(1);
+  });
+
   it.each([
     ['categorical', ['day1', 'day2', 'day3']],
     ['numeric', [0, 10, 20]],

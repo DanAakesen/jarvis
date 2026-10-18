@@ -249,28 +249,8 @@ export default function WorkoutsSection(props: DailySectionProps) {
   };
 
   return <section className="workouts-section" aria-labelledby="workouts-heading">
-    <DailySectionHeader title="Workouts" headingId="workouts-heading" headingRef={heading} actions={<DataNotes>
-      <p>Recorded activity only. Logging and corrections stay in chat. Original Daily remains canonical.</p>
-      <p>Active days count distinct recorded workout_date values; missing dates are excluded. Total time, distance and energy use recorded values only. Missing measurements are not treated as zero.</p>
-      <p>Distance and energy totals stay grouped by stored unit. Values without a unit are listed individually, not summed. Incomplete loaded totals are lower bounds.</p>
-      <p>Volume groups dates into Monday-start weeks or calendar months in Europe/Copenhagen. Missing durations are excluded from recorded minutes, not treated as zero.</p>
-      <p>Filtering and sorting apply only to loaded rows. Distance and energy sort within each stored unit. Returned records do not establish source completeness or freshness.</p>
-      <p>Heart-rate samples show recorded minute averages, minima and maxima from workout start or the first returned sample. Gaps are not zero. Recorded JSON remains the source detail.</p>
-    </DataNotes>} />
-    {result.last && <FreshnessLine observedAt={result.last.freshness.observedAt} count={result.items.length}
-      partial={partial || result.last.status === 'partial'} />}
-    {selected && row && <WorkoutDetail key={String(row.id)} {...props} row={row} onBack={back} />}
-    {selected && row && !loadedRow && <p role="status">
-      This workout’s summary is from the previous read while the refreshed period is incomplete.
-    </p>}
-    {selected && !row && <>
-      <button type="button" className="secondary-button" onClick={back}>Back to workouts</button>
-      {result.status === 'loading' || result.status === 'idle' || result.loadingMore || result.hasMore && !result.capped && !result.error
-        ? <DailyState status="loading" />
-        : <p role="status">Workout not found in the loaded period.</p>}
-    </>}
-    <div ref={list} hidden={selected !== null} aria-busy={result.status === 'loading' || result.loadingMore}>
-      <div className="daily-toolbar">
+    <DailySectionHeader title="Workouts" headingId="workouts-heading" headingRef={heading}
+      controls={!selected && <div className="daily-toolbar">
         <label>Workout type
           <select value={filter} onChange={event => setFilter(event.target.value)}>
             <option value="">All ({result.items.length})</option>
@@ -285,7 +265,28 @@ export default function WorkoutsSection(props: DailySectionProps) {
             <option value="distance">Distance, by unit then highest</option><option value="energy">Active energy, by unit then highest</option>
           </select>
         </label>
-      </div>
+      </div>}
+      freshness={result.last && <FreshnessLine observedAt={result.last.freshness.observedAt} count={result.items.length}
+        partial={partial || result.last.status === 'partial'} />}
+      aboutData={<DataNotes>
+      <p>Recorded activity only. Logging and corrections stay in chat. Original Daily remains canonical.</p>
+      <p>Active days count distinct recorded workout_date values; missing dates are excluded. Total time, distance and energy use recorded values only. Missing measurements are not treated as zero.</p>
+      <p>Distance and energy totals stay grouped by stored unit. Values without a unit are listed individually, not summed. Incomplete loaded totals are lower bounds.</p>
+      <p>Volume groups dates into Monday-start weeks or calendar months in Europe/Copenhagen. Missing durations are excluded from recorded minutes, not treated as zero.</p>
+      <p>Filtering and sorting apply only to loaded rows. Distance and energy sort within each stored unit. Returned records do not establish source completeness or freshness.</p>
+      <p>Heart-rate samples show recorded minute averages, minima and maxima from workout start or the first returned sample. Gaps are not zero. Recorded JSON remains the source detail.</p>
+    </DataNotes>} />
+    {selected && row && <WorkoutDetail key={String(row.id)} {...props} row={row} onBack={back} />}
+    {selected && row && !loadedRow && <p role="status">
+      This workout’s summary is from the previous read while the refreshed period is incomplete.
+    </p>}
+    {selected && !row && <>
+      <button type="button" className="secondary-button" onClick={back}>Back to workouts</button>
+      {result.status === 'loading' || result.status === 'idle' || result.loadingMore || result.hasMore && !result.capped && !result.error
+        ? <DailyState status="loading" />
+        : <p role="status">Workout not found in the loaded period.</p>}
+    </>}
+    <div ref={list} hidden={selected !== null} aria-busy={result.status === 'loading' || result.loadingMore}>
       {(result.status === 'idle' || result.status === 'loading') && result.items.length === 0 && <DailyState status="loading" />}
       {result.items.length > 0 && <>
         <WorkoutSummary rows={filtered} partial={partial} period={props.period} />

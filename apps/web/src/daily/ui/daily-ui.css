@@ -59,6 +59,7 @@
 .daily-meter-track span { display: block; height: 100%; border-radius: inherit; background: var(--focus); }
 .daily-meter-track--unknown span { width: 35%; background: repeating-linear-gradient(135deg, var(--text-muted) 0 3px, transparent 3px 6px); }
 .daily-section-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--space-3); }
+.daily-section-header-content { flex: 1 1 auto; min-width: 0; }
 .daily-section-header h2 { margin: 0; }
 .daily-section-actions { display: flex; align-items: center; gap: var(--space-2); }
 .daily-grid { display: grid; min-width: 0; gap: var(--space-4); }

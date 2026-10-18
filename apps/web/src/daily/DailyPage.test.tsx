@@ -67,6 +67,9 @@ describe('inactive single Daily data page', () => {
     expect(within(table).getAllByText('Not recorded').length).toBeGreaterThan(0);
     expect(screen.getByText(/Source freshness and completeness are not established/u)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Chart' }));
+    const presentation = screen.getByRole('group', { name: 'Record presentation' });
+    expect(within(presentation).getByRole('button', { name: 'Chart' }).classList.contains('daily-section-tab')).toBe(true);
+    expect(within(presentation).getByRole('button', { name: 'Chart' }).getAttribute('aria-pressed')).toBe('true');
     expect(await screen.findByRole('img', { name: /Synthetic scan mass \(kg\)/u })).toBeTruthy();
     expect(container.querySelectorAll('.daily-chart-bars path')).toHaveLength(2);
     expect(screen.getByText(/Other pages are not included/u)).toBeTruthy();

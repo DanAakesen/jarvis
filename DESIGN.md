@@ -1,5 +1,26 @@
 # Design
 
+## Daily visual QA pass (P12-38, 18 October 2026)
+
+Use the shared `DailySectionHeader` slot order throughout Daily: section title
+(with any navigation action, such as Overview, beside it), period and other
+filters, freshness, then “About this data.” Reordering must not change heading
+levels, accessible names, control roles or keyboard order.
+Data’s Table/Chart choice uses the same borderless selected pill as other Daily
+segmented controls while retaining its labelled button group and pressed states.
+Details actions use the secondary button treatment. A column is numeric when its
+schema says so (it declares a unit or is flagged numeric), even if the loaded page
+records no values, so missing values in a numeric column share the column’s numeric
+alignment.
+
+All displayed Daily dates and times use `dailyLocale()` and the formatters in
+`apps/web/src/daily/ui/formatters.ts`; dated values retain the established
+Europe/Copenhagen timezone. Body charts keep one “Daily value” series and one
+legend entry per metric/unit. They connect actual readings at most three
+calendar days apart, break the line across wider gaps, show every recorded
+reading as a point and never interpolate. The chart text alternative states
+this connection rule and the absence of interpolation.
+
 ## Daily accessibility and keyboard audit (P12-37, 18 October 2026)
 
 Keep the Daily section navigation and nested view switches as named tablists

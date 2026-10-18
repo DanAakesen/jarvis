@@ -5,6 +5,7 @@ import { DataRecords } from './DataRecords';
 import { DailyPage } from '../../DailyPage';
 import { dailyFixture, jsonResponse } from '../../test-support';
 import { DailyRefreshContext } from '../../refresh';
+import { dailyLocale, formatDate } from '../../ui/formatters';
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 const row = { meal_date: '2026-10-17', meal_name: 'Synthetic lunch with a long recorded description',
@@ -16,11 +17,12 @@ describe('Daily Data records', () => {
     const table = screen.getByRole('table');
     expect(container.querySelector('.daily-scroll-table-sticky')).toBeTruthy();
     expect(within(table).getByRole('columnheader', { name: 'Energy (kcal)' })).toBeTruthy();
-    const rowHeader = within(table).getByRole('rowheader', { name: 'Oct 17, 2026' });
+    const rowHeader = within(table).getByRole('rowheader', { name: formatDate('2026-10-17', dailyLocale()) });
     expect(rowHeader.classList.contains('daily-record-row-header')).toBe(true);
     expect(within(table).getByText('0').closest('td')?.className).toBe('daily-record-number');
     expect(screen.queryByRole('region', { name: /Details for/u })).toBeNull();
     const opener = screen.getByRole('button', { name: /Details for/u });
+    expect(opener.classList.contains('secondary-button')).toBe(true);
     const detailPanel = document.getElementById(opener.getAttribute('aria-controls')!);
     expect(opener.getAttribute('aria-expanded')).toBe('false');
     expect(detailPanel?.hidden).toBe(true);
@@ -50,6 +52,43 @@ describe('Daily Data records', () => {
     expect(document.activeElement).toBe(opener);
   });
 
+  it('aligns missing values with the numeric column and renders Details as a secondary control', () => {
+    const { container } = render(<DataRecords source={sources.meals} rows={[
+      row, { ...row, meal_date: '2026-10-16', confidence: 0 },
+    ]} />);
+    const table = screen.getByRole('table');
+    const confidence = within(table).getByRole('columnheader', { name: 'Confidence' });
+    expect(confidence.classList.contains('daily-record-number')).toBe(true);
+    const missing = within(table).getAllByText('Not recorded').find(element => element.closest('td'));
+    expect(missing?.closest('td')?.classList.contains('daily-record-number')).toBe(true);
+    expect(container.querySelector('tbody .secondary-button')).toBeTruthy();
+  });
+
+  it('aligns unit-bearing columns and their Not recorded cells with the numbers even when a page records none', () => {
+    render(<DataRecords source={sources.sleep} rows={[
+      { sleep_date: '2026-10-17', asleep_hours: null, total_sleep_hours: null, in_bed_hours: null },
+    ]} />);
+    const table = screen.getByRole('table');
+    for (const name of ['Asleep (h)', 'Total sleep (h)', 'In bed (h)']) {
+      expect(within(table).getByRole('columnheader', { name }).classList.contains('daily-record-number')).toBe(true);
+    }
+    const missing = within(table).getAllByText('Not recorded').map(element => element.closest('td'));
+    expect(missing).toHaveLength(3);
+    expect(missing.every(cell => cell?.classList.contains('daily-record-number'))).toBe(true);
+    expect(within(table).getByRole('columnheader', { name: 'Date' }).classList.contains('daily-record-number')).toBe(false);
+  });
+
+  it('aligns unit-less numeric columns by schema and keeps text columns left-aligned when every value is missing', () => {
+    const { rerender } = render(<DataRecords source={sources.days} rows={[
+      { meal_date: '2026-10-17', meal_count: null, energy_kcal: null, unknown_nutrients: [], partial_nutrients: [] },
+    ]} />);
+    expect(screen.getByRole('columnheader', { name: 'Meals' }).classList.contains('daily-record-number')).toBe(true);
+    expect(screen.getByRole('columnheader', { name: 'Unknown nutrients' }).classList.contains('daily-record-number')).toBe(false);
+    rerender(<DataRecords source={sources.meals} rows={[{ ...row, confidence: null }]} />);
+    expect(screen.getByRole('columnheader', { name: 'Confidence' }).classList.contains('daily-record-number')).toBe(false);
+    expect(screen.getByRole('columnheader', { name: 'Energy (kcal)' }).classList.contains('daily-record-number')).toBe(true);
+  });
+
   it('replaces the table with phone cards and responds to the 700px breakpoint', () => {
     let phone = true;
     let change = () => {};
@@ -63,6 +102,7 @@ describe('Daily Data records', () => {
     expect(cards.querySelector('.daily-record-summary')?.textContent).toContain('Energy: 0 kcal');
     expect(cards.querySelector('dt')?.textContent).toBe('Confidence');
     expect(within(cards).getByText('Not recorded')).toBeTruthy();
+    expect(within(cards).getByRole('button', { name: /Details for/u }).classList.contains('secondary-button')).toBe(true);
     act(() => { phone = false; change(); });
     expect(screen.getByRole('table')).toBeTruthy();
     expect(screen.queryByRole('list', { name: 'Daily records' })).toBeNull();
@@ -158,6 +198,23 @@ describe('Daily Data records', () => {
     expect(screen.getByRole('link', { name: 'Settings, Health upload' }).getAttribute('href')).toBe('/settings#health-upload');
     expect(screen.queryByRole('combobox')).toBeNull();
     expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('keeps the embedded Overview button beside the heading and ahead of the record controls in document order', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => jsonResponse(dailyFixture(JSON.parse(String(init.body)), [row]))));
+    const onBack = vi.fn();
+    render(<DailyPage embedded onBack={onBack} backendUrl="http://localhost" getAccessToken={async () => 'synthetic'}
+      knownSources={[sources.meals, sources.sleep]} initialSource={sources.meals} />);
+    await screen.findByRole('table');
+    const overview = screen.getByRole('button', { name: 'Back to overview' });
+    const heading = screen.getByRole('heading', { level: 2 });
+    expect(overview.closest('header.daily-section-header')?.contains(heading)).toBe(true);
+    expect(heading.compareDocumentPosition(overview) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    for (const control of [screen.getByLabelText('Browse'), screen.getByRole('button', { name: 'Refresh records' })]) {
+      expect(overview.compareDocumentPosition(control) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    }
+    fireEvent.click(overview);
+    expect(onBack).toHaveBeenCalledTimes(1);
   });
 
   it('settles loading into an error with Retry, then an honest empty state', async () => {

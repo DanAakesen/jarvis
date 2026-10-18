@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { dailyQuerySources as sources, isDailyQuery } from '@jarvis/contracts';
 import { dailyCellValue, dailyColumns, dailyPlots, dailyRequest, dailyRowKey, dailySources, dailyValue, initialDailyPeriod } from './presentation';
+import { formatTime } from './ui/formatters';
 
 describe('retained Daily record presentation', () => {
   it('chooses Copenhagen calendar days across UTC midnight and year boundaries', () => {
@@ -21,6 +22,14 @@ describe('retained Daily record presentation', () => {
     expect(dailyValue(0)).toBe('0');
     expect(dailyValue(false)).toBe('No');
     expect(dailyValue([])).toBe('None');
+  });
+  it('formats the same instant through the shared locale source in both locale conventions', () => {
+    const instant = '2026-10-18T08:30:00Z';
+    for (const locale of ['en-US', 'en-GB']) {
+      expect(dailyValue(instant, locale)).toBe(formatTime(instant, locale));
+    }
+    expect(dailyValue(instant, 'en-US')).toBe('Oct 18, 2026, 10:30 AM');
+    expect(dailyValue(instant, 'en-GB')).toBe('18 Oct 2026, 10:30');
   });
   it('keeps historical brief timestamps verbatim and uses exact stored-text cursors without guessed periods', () => {
     const period = { startDate: '2026-10-01', endDate: '2026-10-07' };
@@ -56,9 +65,12 @@ describe('retained Daily record presentation', () => {
       { sample_minute: '2026-10-17T07:00:00Z', avg_value: 80, unit: 'bpm' },
       { sample_minute: '2026-10-17T07:01:00Z', avg_value: null, unit: 'bpm' },
       { sample_minute: '2026-10-17T07:02:00Z', avg_value: 0, unit: 'bpm' },
-    ]);
+    ], 'en-US');
     expect(plot!.series[0]!.points.map(point => point.y)).toEqual([80, 0]);
-    expect(plot!.series[0]!.points[0]!.x).toContain('09:00');
+    expect(plot!.series[0]!.points[0]!.x).toBe('1: Oct 17, 2026, 9:00 AM');
+    expect(dailyPlots(sources.heartRate, [
+      { sample_minute: '2026-10-17T07:00:00Z', avg_value: 80, unit: 'bpm' },
+    ], 'en-GB')[0]!.series[0]!.points[0]!.x).toBe('1: 17 Oct 2026, 09:00');
     expect(dailyColumns(sources.sleep).find(column => column.key === 'asleep_hours')?.unit).toBe('h');
   });
 });
