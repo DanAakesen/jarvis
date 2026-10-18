@@ -9,6 +9,7 @@ import { formatDate, formatDuration, formatNumber } from '../../ui/formatters';
 import { dateOnly, type Row as MetricRow } from '../body-sleep/metrics';
 import { type Row as SleepRow } from '../body-sleep/metrics';
 import { targetBaseline, text, type Row as NutritionRow } from '../nutrition/totals';
+import { briefLabel } from '../briefs/label';
 import { type Workout, typeLabel } from '../workouts/summary';
 import { latestNutritionDay, latestSleepNight, nutritionSummaryValues, overviewPeriods, recentMeasurements,
   sleepSummaryValues, workoutOverview } from './summary';
@@ -161,7 +162,7 @@ function BriefsTile({ backendUrl, getAccessToken, refreshVersion }: {
   const latest = pages.items[0];
   return <SummaryTile title="Briefs" section="briefs" pages={pages} emptyMessage="No briefs returned">
     {latest && <>
-      <p>{text(latest.title) ?? text(latest.kind) ?? 'Unknown'}</p>
+      <p>{briefLabel(latest)}</p>
       <p>{formatDate(text(latest.started_at, ''))}</p>
     </>}
   </SummaryTile>;

@@ -12,7 +12,7 @@ const props: DailySectionProps = {
   onPeriodChange: () => {}, refreshVersion: 0,
 };
 const brief = {
-  id: 'synthetic-brief-1', title: 'Synthetic brief title', kind: 'daily', started_at: '2026-10-18T08:00:00',
+  id: 'synthetic-brief-1', started_at: '2026-10-18T08:00:00',
   status: 'completed', delivery_status: 'not_requested', trigger: 'scheduled',
   body_json: { sections: [{ title: 'Overview', text: 'Synthetic brief body.' }, { heading: 'Next', content: 'A second section.' }] },
 };
@@ -36,13 +36,13 @@ describe('Briefs section', () => {
     const queries = fixture();
     render(<MemoryRouter><BriefsSection {...props} /></MemoryRouter>);
     expect(await screen.findByRole('heading', { level: 2, name: 'Briefs' })).toBeTruthy();
-    expect(await screen.findByRole('heading', { level: 4, name: 'Synthetic brief title' })).toBeTruthy();
+    expect(await screen.findByRole('heading', { level: 4, name: 'Scheduled brief' })).toBeTruthy();
     expect(screen.getByText('Status: completed · Delivery: not_requested')).toBeTruthy();
     expect(screen.getByText('2026-10-18')).toBeTruthy();
 
     const opener = screen.getByRole('button', { name: 'Open brief' });
     fireEvent.click(opener);
-    const detailHeading = await screen.findByRole('heading', { level: 3, name: 'Synthetic brief title' });
+    const detailHeading = await screen.findByRole('heading', { level: 3, name: 'Scheduled brief' });
     await waitFor(() => expect(document.activeElement).toBe(detailHeading));
     expect(screen.getByRole('heading', { level: 4, name: 'Overview' })).toBeTruthy();
     expect(screen.getByText('Synthetic brief body.')).toBeTruthy();

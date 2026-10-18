@@ -6,11 +6,8 @@ import { useDailyPages } from '../../ui/useDailyPages';
 import { useDailyQuery } from '../../useDailyQuery';
 import { text, type Row } from '../nutrition/totals';
 import type { DailySectionProps } from '../types';
+import { briefLabel } from './label';
 import './briefs.css';
-
-function briefTitle(item: Row) {
-  return text(item.title) ?? text(item.kind) ?? 'Unknown';
-}
 
 function briefDate(value: DailyJson | undefined) {
   const stored = text(value);
@@ -97,7 +94,7 @@ export default function BriefsSection(props: DailySectionProps) {
             const startedAt = text(row.started_at);
             return <li key={id ?? `brief-${index}`}>
               <article>
-                <h4>{briefTitle(row)}</h4>
+                <h4>{briefLabel(row)}</h4>
                 <p><time dateTime={startedAt ?? undefined}>{briefDate(row.started_at)}</time></p>
                 <p>Status: {displayStored(row.status)} · Delivery: {displayStored(row.delivery_status)}</p>
                 {id
@@ -117,7 +114,7 @@ export default function BriefsSection(props: DailySectionProps) {
     {selectedId !== null && <section className="daily-brief-detail" aria-labelledby="brief-detail-heading">
         <div className="daily-brief-detail-heading">
           <h3 id="brief-detail-heading" ref={detailHeading} tabIndex={-1}>
-            {item ? briefTitle(item) : 'Brief details'}
+            {item ? briefLabel(item) : 'Brief details'}
           </h3>
           <button className="secondary-button" type="button" onClick={() => setSelectedId(null)}>Back to brief history</button>
         </div>

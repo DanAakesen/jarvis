@@ -30,7 +30,7 @@ const summaryRows: Partial<Record<DailySourceId, Record<string, DailyJson>[]>> =
   ],
   [sources.sleep]: [{ sleep_date: period.sevenDays.endDate, total_sleep_hours: 8, asleep_hours: 7, deep_hours: 1 }],
   [sources.briefs]: [{
-    id: 'synthetic-brief-a', title: 'Synthetic latest brief', started_at: '2026-10-18T07:00:00',
+    id: 'synthetic-brief-a', trigger: 'scheduled', started_at: '2026-10-18T07:00:00',
     status: 'completed', delivery_status: 'not_requested',
   }],
 };
@@ -98,7 +98,7 @@ describe('Daily overview summary tiles', () => {
     expect(tile('Sleep').getByText(/Total: 8 h · Asleep: 7 h/u)).toBeTruthy();
     expect(tile('Sleep').getByText(/Deep: 1 h/u)).toBeTruthy();
     expect(tile('Sleep').getByRole('link', { name: 'Sleep' }).getAttribute('href')).toBe('/?section=body-sleep');
-    expect(tile('Briefs').getByText('Synthetic latest brief')).toBeTruthy();
+    expect(tile('Briefs').getByText('Scheduled brief')).toBeTruthy();
     expect(tile('Briefs').getByRole('link', { name: 'Briefs' }).getAttribute('href')).toBe('/?section=briefs');
     expect(screen.getAllByText(/^Read /u)).toHaveLength(5);
     expect(f.queries.some(query => query.source === sources.days &&
