@@ -2459,7 +2459,7 @@ when the backlog is near empty.
 | ID | Issue | Task | Acceptance criteria | Depends on | Status |
 | --- | --- | --- | --- | --- | --- |
 | P14-01 | [#938](https://github.com/DanAakesen/jarvis/issues/938) | Unify UI styles and add small refinements | Inspect changed surfaces before and after in a real browser at 390x844 and 1440x900, in light and dark, and exercise the changed controls and states. | Other in-flight web pull requests: Daily page, Proactive page and Settings section, attention icon, per-project policy control | Complete |
-| P14-02 | [#957](https://github.com/DanAakesen/jarvis/issues/957) | Finish the UI unification on the remaining surfaces | Audit and unify the deferred surfaces with existing tokens; inspect synthetic before/after states at 390x844 and 1440x900, in light and dark. | PR #953: defer GeneratedViewRenderer until its footnote and table-scroll changes are integrated | In progress |
+| P14-02 | [#957](https://github.com/DanAakesen/jarvis/issues/957) | Finish the UI unification on the remaining surfaces | Audit and unify the deferred surfaces with existing tokens; inspect synthetic before/after states at 390x844 and 1440x900, in light and dark. | PR #953: defer GeneratedViewRenderer until its footnote and table-scroll changes are integrated | Complete |
 
 ## Factory canonical-status parity (16 October 2026)
 
