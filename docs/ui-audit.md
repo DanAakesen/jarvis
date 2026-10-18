@@ -33,6 +33,25 @@ inventoried to identify route-specific exceptions.
 | Error banner and inline error | `styles.css`: `.settings-feedback`, `.projects-feedback`, `.project-policy-feedback`, `.task-control-error`, `.release-feedback`, `.usage-feedback`; `ConversationHistory.css`: `.conversation-history-error`, `.chat-error`; `daily/daily.css`: `.daily-notice[role="alert"]`; `proactive.css`: `[role="alert"]`; `JobsChip.tsx`: `.jobs-item-error` | Keep field/action-local failures inline in the error text role. Block-level Daily and Proactive alerts use `--error-surface`, `--error` and neutral structure; retain their `role="alert"` and retry action. Do not encode error meaning in border colour alone. |
 | Loading state | `Loader.tsx` variants `dots`, `rows`, and `orb`; `ConversationHistory.css`: `.conversation-loading`; `styles.css`: `.task-window-loading`; Daily and Proactive pending states | Reuse `Loader` for page/collection loading and concise status text for background refreshes. Preserve the existing content while refreshing where the workflow already supports it; reduced motion never hides essential state. |
 
+## Rendered checks
+
+Compared the pre-change and current app in headless Chromium at 390×844 with
+touch emulation and 1440×900, in light and dark. The isolated Vite/auth harness
+used synthetic settings and project data. Inspected Settings, the empty Factory
+board, the project completion-policy control, Daily and Proactive error states,
+the Background work popover, and the chat composer. Exercised policy save,
+Daily and Proactive retry, popover open, and composer focus. Neither version
+emitted browser console errors. Reduced-motion emulation was also checked: the
+Background work popover animation resolves to `none` and Settings content
+remains available.
+
+The Daily and Proactive APIs intentionally returned synthetic 503 responses,
+so only their error and retry states were verified, not healthy-data states.
+The attention popover could not be opened because the harness had no synthetic
+attention event; its shared popover surface is used by the inspected Background
+work popover. Screenshots were captured locally but could not be attached to the
+PR with the available tools. No live backend or real sign-in was used.
+
 ## Bounded follow-up
 
 The app has more than 40 independently styled route and component surfaces, so
@@ -45,6 +64,6 @@ task-detail histories, or embedded generated views. Their workflow-specific
 geometry and behavior were not changed; they remain candidates for a separate
 visual review rather than being folded into this bounded patch.
 
-The code audit is not rendered-browser acceptance. Before/after screenshots
-and the 390×844 / 1440×900 light/dark interaction matrix remain separate
-acceptance evidence.
+This is local rendered evidence, not live or human acceptance. Before/after
+screenshots remain unattached; the uninspected attention popover and healthy
+Daily/Proactive data states are also open visual follow-up.
