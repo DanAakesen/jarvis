@@ -282,7 +282,7 @@ function SelectField({
   );
 }
 
-export function SettingsPage({ backendUrl, getAccessToken, presence, notifications, projects, renderProjects, nutrition, memory, onBack }: {
+export function SettingsPage({ backendUrl, getAccessToken, presence, notifications, projects, renderProjects, nutrition, proactive, memory, onBack }: {
   backendUrl: string | null;
   getAccessToken: () => Promise<string>;
   /** Presence mode and instructions per mode, shown before the saved settings. */
@@ -294,6 +294,8 @@ export function SettingsPage({ backendUrl, getAccessToken, presence, notificatio
   renderProjects?: (projectDefaults: ReactNode) => ReactNode;
   /** Daily nutrition targets, saved on their own; only supplied while Daily is on. */
   nutrition?: ReactNode;
+  /** Proactive settings, supplied only while the independent web feature gate is on. */
+  proactive?: ReactNode;
   /** What Jarvis remembers: browse, correct and forget. */
   memory?: ReactNode;
   /** Leaves Settings for the previous page (or Jarvis when Settings was opened directly). */
@@ -824,6 +826,7 @@ export function SettingsPage({ backendUrl, getAccessToken, presence, notificatio
       )}
       {renderProjects ? renderProjects(projectDefaults) : projects}
       {nutrition}
+      {proactive}
       {state !== 'ready' && memory && <CollapsibleSection storageKey="settings.memory" id="memory" headingId="memory-settings-heading" title="Memory">{memory}</CollapsibleSection>}
       {backendUrl && <TaskRecipesSettings key={backendUrl} backendUrl={backendUrl} getAccessToken={getAccessToken} />}
       {state === 'ready' && settings && options && (

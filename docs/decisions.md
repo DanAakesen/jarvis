@@ -207,6 +207,34 @@ Hooks run after item upserts and before finish, never after cancellation or
 lease loss, and hook failures are isolated. No flag, source provider or proactive
 send is activated.
 
+## Keep the Proactive web client dark and private (18 October 2026; P13-10)
+
+The web client uses its own exact-string `VITE_PROACTIVE_ENABLED` build gate;
+this slice leaves it off. Route, navigation, Settings and the terminal
+Background work Open link follow that gate. When push alone is enabled, the
+M1 `/proactive/:id` target remains unchanged; with the web gate on it renders
+the full item and links back to the list.
+
+Use the shared authenticated contract, with no new dependency or contract
+change. Keep item text, feed URLs and guidance in memory only; render
+source/model content as plain text and map server reason codes to fixed copy.
+Manual checks are visibility-aware and bounded, and optimistic dismiss/snooze
+roll back with visible retry on failure. These choices do not enable backend
+work, change permissions, or settle outstanding source, todo-write or delivery
+decisions.
+
+## Keep news reads dark, public-address-pinned and content-minimal (18 October 2026; P13-09)
+
+The registry's news source is a read-only RSS 2.0/Atom adapter over editable
+settings, defaulting to the GitHub changelog and OpenAI news. It can only use
+validated HTTPS hostnames and public DNS answers; mixed public/private DNS
+answers, redirects, non-XML responses, compressed bodies, oversized responses,
+and DTD/entity declarations fail closed. Per-feed work is limited to ten
+seconds and 2 MiB. Facts contain only sanitized, bounded titles, publication
+times, and the host; feed URLs, query strings and source payloads are never
+logged. The source remains dark: this change registers it without scheduling a
+read or enabling any proactive flag.
+
 ## Keep P13-07 sources read-only and dark (18 October 2026)
 
 The todo filename remains unsettled, so the reader resolves exactly one
@@ -233,6 +261,21 @@ codes and identifiers, never todo text. Pause/Todos settings, quiet hours for
 scheduled work, and the three-per-run/five-per-day caps are enforced before
 vault access. The independent exact-`true` writer flag remains off, and the
 main proactive flag is still required.
+
+## Keep P13-08 sources read-only and dark (18 October 2026)
+
+P13-08 adds only read-only, bounded calendar and Gmail-header sources and a
+travel source derived exclusively from the calendar. Calendar uses the existing
+primary-calendar view path, expands recurring instances, and reads at most 50
+events over two pages within 48 hours. Gmail searches at most 15 unread primary
+inbox messages from the last two days and requests only From, Subject, Date,
+List-Unsubscribe and Precedence metadata, with no body, snippet or attachments.
+Travel reads seven calendar days, filters with deterministic exported keywords
+and route syntax, and omits events already inside the calendar window. It makes
+no flight, rail, traffic or disruption-provider request. No OAuth scope,
+consent, secret, cloud setting, flag activation, engine behavior or entry-point
+change accompanies these sources; source text remains untrusted and is never
+logged.
 
 ## Keep web push default-off and notification taps owner-authenticated (17 October 2026; P13-02)
 

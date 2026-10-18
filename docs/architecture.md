@@ -2008,6 +2008,28 @@ repairs a lost receipt. Two failed attempts settle a finding. Hook and receipt
 failures are isolated from run completion, and diagnostics contain only IDs,
 counts, durations and reason codes.
 
+## Proactive calendar, mail and travel sources (P13-08; default off)
+
+The source registry also constructs the `calendar`, `mail` and `travel` sources
+from the existing Google API client; the `x` placeholder remains unavailable.
+P13-08 adds source implementations to the existing registry; constructing them
+does not read Google, and no schedule, model call or proactive delivery is added.
+
+The calendar reader reuses the existing primary-calendar view path, expanding
+recurrences and bounding reads to 50 events over two pages. All-day dates resolve
+to Europe/Copenhagen local midnight through the shared DST-aware time helper.
+Calendar facts omit descriptions, conferencing and attendee/organizer addresses.
+Mail searches the primary inbox for unread messages from the last two days and
+reads at most 15 messages, with five concurrent metadata-only requests for
+From/Subject/Date/List-Unsubscribe/Precedence. It never requests body, snippet or
+attachment fields; bulk/newsletter messages are skipped and sender addresses are
+reduced to a display name or domain. Travel reuses the calendar reader over seven
+days and applies exported `TRAVEL_KEYWORDS` and `TRAVEL_ROUTE_PATTERN`
+Danish/English whole-word and airport-route rules; it calls no travel provider
+and excludes starts in the calendar's half-open 48-hour window. All sources
+bound fact text, treat provider text as untrusted data, and return stable
+unavailable reason codes without logging it.
+
 ## Web push delivery (P13-02; default off)
 
 The web build exposes only the boolean result of `VITE_PUSH_ENABLED === "true"`
@@ -2029,6 +2051,48 @@ grant no authorization. The sign-in path is stored as a validated same-origin
 session-storage value and consumed after MSAL returns to `/`. P13-02 changes no
 backend, deployment flag, identity or permission configuration; live phone
 permission, lock-screen delivery and tap-through remain unverified.
+
+## Proactive web client (P13-10; default off)
+
+`apps/web/config/proactive-switch.ts` parses only the exact string `true`.
+`vite.config.ts` exposes the resulting boolean as
+`__JARVIS_PROACTIVE_ENABLED__`; `main.tsx` passes it to `App({ proactiveEnabled })`.
+The off-by-default client conditionally registers the Proactive area, full detail
+page, Settings section and terminal proactive-job Open link. The existing
+`/proactive/:id` M1 push route keeps its legacy page when only push is enabled.
+The flag does not enable backend routes or relax owner authentication.
+
+`ProactiveArea` independently loads status, open items and recent runs using
+authenticated `no-store` requests. Status supplies source and estimated-budget
+views. Manual runs poll status every three seconds only while visible, abort on
+unmount/terminal status, and stop after four minutes. Item feedback is optimistic
+with rollback; the detail page records `seen` once for a newly loaded item.
+Settings reads and PATCHes the existing contract, sending only changed fields.
+Item text, feeds and guidance live only in component state, are rendered as text,
+and are not stored in browser persistence or placed in URLs. Recent-run and
+Settings disclosure state is not persisted. The web flag policy test scans
+workflow/environment files to ensure the flag stays unset.
+
+## Proactive news source (P13-09; default off)
+
+The source registry also constructs the news source, between the Factory and
+todo readers. It parses RSS 2.0 and Atom from at most ten configured feeds. Its
+URL validator permits HTTPS hostnames only, rejects IP literals and local
+hostnames, and removes fragments while retaining queries. Requests use
+`node:https` with a custom DNS lookup that rejects the whole answer set if any
+address is not public and connects only to vetted answers. The fetcher verifies
+TLS certificates, allows no redirects, accepts only XML content types and
+identity encoding, combines the engine abort signal with a ten-second timeout,
+and stops streaming after 2 MiB. Public-address filtering blocks the specified
+non-routable IPv4 ranges and permits only global-unicast IPv6, with embedded
+IPv4 in mapped, NAT64 and 6to4 addresses checked under the same IPv4 rules.
+
+DTD/entity declarations are rejected before XML parsing. The source retains only
+cleaned titles, publication times and feed hostnames; links, descriptions,
+authors, query strings and response bodies are not logged or stored. It selects
+at most eight recent items per feed and 30 total, and exposes partial feed
+failures. The source is registered but no scheduler or engine invokes it in this
+slice; no proactive flag is enabled and no live feed request is made by tests.
 
 ## Web Push production switch (P13-03; 18 October 2026)
 
@@ -5136,6 +5200,24 @@ files: `JARVIS_DAILY_ENABLED` in the backend container environment in
 `infra/main.bicep` and `VITE_DAILY_ENABLED` on the web build step of
 `.github/workflows/deploy.yml` (18 October 2026). `daily/default-off.test.ts` allows
 no other configuration file to mention either name.
+
+### Proactive page and web switch (18 October 2026; P13-10)
+
+`VITE_PROACTIVE_ENABLED` is loaded by name only, parsed by
+`config/proactive-switch.ts` as exact-string `true`, and exposed as
+`__JARVIS_PROACTIVE_ENABLED__`. `App` defaults the prop off for tests and
+conditionally registers the Proactive navigation area, Settings node, proactive
+detail client and JobsChip link. A push-only build continues to route
+`/proactive/:id` through the M1 item page.
+
+`proactive-data.ts` validates response shapes and maps reason codes to fixed
+copy; dates use explicit `Europe/Copenhagen` and `da-DK`/`en-GB` formatting.
+The page owns independent status, open-item and run load states; its Earlier
+items disclosure fetches once on demand. Check now owns a cancellable,
+visibility-aware status poll and bounded timeout. The Settings section owns
+drafts and field-level validation, saves changed fields only, and never
+persists its private values or its disclosure state. `proactive-switch.test.ts`
+ensures no workflow or environment file enables the gate.
 
 ### Inactive internal direct intake (17 October 2026)
 
