@@ -37,6 +37,22 @@ describe('app-wide control contract', () => {
     }
   });
 
+  it('uses shared panel surfaces and form-field backgrounds in Settings', () => {
+    const settingsSection = /\.settings-section\s*\{\n\s*position:[^;]+;([^}]*)\}/;
+    expect(ruleDeclaration(source, settingsSection, 'border')).toBe('1px solid var(--rule)');
+    expect(ruleDeclaration(source, settingsSection, 'border-radius')).toBe('var(--radius-panel)');
+    expect(ruleDeclaration(source, settingsSection, 'background')).toBe('var(--surface-translucent)');
+    const popover = /\.jobs-popover\s*\{([^}]*)\}/;
+    expect(ruleDeclaration(source, popover, 'border')).toBe('1px solid var(--rule)');
+    expect(ruleDeclaration(source, popover, 'border-radius')).toBe('var(--radius-panel)');
+    expect(ruleDeclaration(source, popover, 'background')).toBe('var(--surface)');
+    expect(ruleDeclaration(source,
+      /\.settings-field select, \.settings-field input, \.settings-field textarea\s*\{\n\s*border-color:[^;]+;([^}]*)\}/,
+      'background-color')).toBe('var(--surface)');
+    expect(ruleDeclaration(source, /\.settings-save\s*\{\n\s*position:[^;]+;([^}]*)\}/, 'border-radius'))
+      .toBe('var(--radius-panel)');
+  });
+
   it('removes decorative control rims without removing neutral field structure or focus', () => {
     for (const selector of [
       /(?:^|\n)\.secondary-button\s*\{([^}]*)\}/,
