@@ -636,6 +636,7 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
 .workspace-tab:hover { background: var(--glass-hover); }
 .workspace-tab:active { transform: scale(.98); }
 .workspace-tab:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.workspace-tab-close:focus-visible, .workspace-tab-pin:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 @keyframes workspace-tab-enter {
   from { opacity: 0; transform: translateY(6px) scale(.98); }
   to { opacity: 1; transform: translateY(0) scale(1); }

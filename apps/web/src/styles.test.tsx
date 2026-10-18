@@ -39,6 +39,7 @@ describe('app-wide control contract', () => {
       }
     }
     expect(source).toContain('.primary-button:focus-visible, .secondary-button:focus-visible, .ghost-button:focus-visible, .danger-button:focus-visible');
+    expect(source).toContain('.workspace-tab-close:focus-visible, .workspace-tab-pin:focus-visible');
     expect(source).toContain('.primary-button[aria-busy="true"] > .button-label');
     expect(source).toContain('.primary-button[aria-busy="true"] > .button-loading-indicator');
     expect(ruleDeclaration(source, /\.button-loading-indicator\s*\{([^}]*)\}/, 'position')).toBe('absolute');
