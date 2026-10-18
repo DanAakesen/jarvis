@@ -164,6 +164,59 @@ function fixture(
 }
 
 describe('GitHub project completion policies', () => {
+  it('delegates repeated reasons to durable storage instead of suppressing them in the evaluator', async () => {
+    const test = fixture({ ...candidate(), checks: 'failed' });
+
+    await test.evaluator.handle(mapping);
+    await test.evaluator.handle(mapping);
+
+    expect(test.recordEvent).toHaveBeenCalledTimes(2);
+    expect(test.recordEvent.mock.calls[0]).toEqual(test.recordEvent.mock.calls[1]);
+  });
+
+  it('does not hide the same reason after a state change in the same evaluator', async () => {
+    const test = fixture({ ...candidate(), checks: 'failed' });
+    await test.evaluator.handle(mapping);
+    await test.transition('7', 'NeedsAttention');
+    test.setCandidate({ ...candidate(), taskState: 'NeedsAttention', checks: 'failed' });
+
+    await test.evaluator.handle(mapping);
+
+    expect(test.recordEvent).toHaveBeenCalledTimes(2);
+    expect(test.recordEvent.mock.calls[0]).toEqual(test.recordEvent.mock.calls[1]);
+  });
+
+  it('keeps the repeated awaiting-runner block subject to durable deduplication after markDone', async () => {
+    const test = fixture(candidate('deliver_pr'));
+    test.setRunnerCompleted(false);
+
+    await test.evaluator.handle(mapping);
+    await test.evaluator.handle(mapping);
+
+    expect(test.transition).not.toHaveBeenCalled();
+    expect(test.recordEvent).toHaveBeenCalledTimes(2);
+    expect(test.recordEvent.mock.calls[0]).toEqual(test.recordEvent.mock.calls[1]);
+  });
+
+  it('keeps repeated rejected completion blocks subject to durable deduplication after markDone', async () => {
+    const test = fixture(candidate('deliver_pr'));
+    test.transition.mockResolvedValue({ kind: 'invalid-transition' });
+
+    await test.evaluator.handle(mapping);
+    await test.evaluator.handle(mapping);
+
+    expect(test.transition).toHaveBeenCalledTimes(2);
+    expect(test.recordEvent).toHaveBeenCalledTimes(2);
+    expect(test.recordEvent).toHaveBeenCalledWith({
+      taskId: '7',
+      type: 'project_policy_blocked',
+      summary: 'The task changed before policy completion; completion was not applied.',
+      payload: { reason: 'The task changed before policy completion; completion was not applied.' },
+      source: 'backend',
+    });
+    expect(test.recordEvent.mock.calls[0]).toEqual(test.recordEvent.mock.calls[1]);
+  });
+
   it('does not mark Done from a green PR before the current runner completion is verified', async () => {
     const test = fixture(candidate('deliver_pr'), { enforceTokenPermissions: true });
     test.setRunnerCompleted(false);

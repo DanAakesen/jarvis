@@ -35,6 +35,10 @@ import { createProactiveAlertStore } from './proactive-alert-store.js';
 import { createProactiveTodoReceiptStore } from './proactive-todo-store.js';
 import { generateVapidKeyPair } from '../push/webpush.js';
 import { defaultProactiveSettings } from '../proactive/store.js';
+import { createProjectPolicyEvaluator } from '../github/project-policy.js';
+import type { GitHubAppTokenIssuer } from '../github-app.js';
+import { createProjectPolicyStore } from './project-policy-store.js';
+import { createPcBridgeStatusStore } from './pc-bridge-status-store.js';
 
 const configuration = loadDatabaseConfig();
 if (!configuration || process.env.NODE_ENV !== 'test' || configuration.server !== '127.0.0.1') {
@@ -1058,6 +1062,112 @@ describe('committed domain schema (groups 1-8)', () => {
     expect(await store.dismiss(String(releaseId))).toBe(true);
     expect((await store.read()).items.some((item) => item.id === String(releaseId))).toBe(false);
     expect(await store.dismiss('9223372036854775807')).toBe(false);
+  });
+
+  it('keeps a dismissed policy reason dismissed across engine restarts and concurrent evaluations', async () => {
+    const projectId = await scalar(`INSERT dbo.projects
+      (name, repo, default_branch, default_agent, policy, sandbox_size, tech)
+      VALUES (N'Restart policy fixture', N'DanAakesen/restart-${randomUUID().slice(0, 8)}', N'main',
+        N'copilot', N'complete_without_deployment', N'1x2', N'node')`);
+    const tasks = createTaskStore(pool, createEventHub<TaskEventMessage>());
+    const task = await tasks.create({ projectId: String(projectId), title: 'Restart policy task', request: 'Run' });
+    if (!task) throw new Error('Restart policy task was not created');
+    expect((await tasks.transition(task.id, 'Running')).kind).toBe('ok');
+    expect((await tasks.transition(task.id, 'NeedsAttention')).kind).toBe('ok');
+    await pool.request().query(`INSERT dbo.pull_requests
+      (task_id, project_id, number, branch, head_sha, state, checks, opened_at)
+      VALUES (${task.id}, ${projectId}, 42, N'jarvis/task-${task.id}', N'${'a'.repeat(40)}',
+        N'open', N'failed', SYSUTCDATETIME());`);
+    const errors: unknown[] = [];
+    const engine = () => createProjectPolicyEvaluator({
+      store: createProjectPolicyStore(pool),
+      tasks: createTaskStore(pool, createEventHub<TaskEventMessage>()),
+      tokenIssuer: { issueForRepositoryRead: async () => 'fixture' } as unknown as GitHubAppTokenIssuer,
+      fetch: vi.fn(async () => new Response('{}')),
+      onError: (error) => errors.push(error),
+    });
+    const counts = async () => (await pool.request().query(`SELECT
+      (SELECT COUNT(*) FROM dbo.task_events WHERE task_id = ${task.id}) AS events,
+      (SELECT COUNT(*) FROM dbo.activity WHERE link = N'task:${task.id}') AS activity;`)).recordset[0];
+    const feed = createNowFeedStore(pool);
+    const first = engine();
+    await first.recheckProject(String(projectId));
+    await first.stop();
+    const latest = (await feed.read()).items.find((item) => item.link === `task:${task.id}`);
+    expect(latest).toMatchObject({ title: 'Recorded GitHub checks are not green.' });
+    if (!latest) throw new Error('Restart policy activity was not created');
+    expect(await feed.dismiss(latest.id)).toBe(true);
+    const originalCounts = await counts();
+    const restarted = engine();
+    const overlapping = engine();
+    try {
+      await Promise.all([
+        restarted.recheckProject(String(projectId)),
+        overlapping.recheckProject(String(projectId)),
+      ]);
+      expect(await counts()).toEqual(originalCounts);
+      expect((await feed.read()).items.some((item) => item.link === `task:${task.id}`)).toBe(false);
+      expect((await pool.request().query(`SELECT dismissed_at FROM dbo.activity
+        WHERE id = ${latest.id};`)).recordset[0]?.dismissed_at).toBeInstanceOf(Date);
+
+      await pool.request().query(`UPDATE dbo.pull_requests SET checks = N'pending' WHERE task_id = ${task.id};`);
+      await Promise.all([
+        restarted.recheckProject(String(projectId)),
+        overlapping.recheckProject(String(projectId)),
+      ]);
+      expect(await counts()).toEqual({ events: originalCounts.events + 1, activity: originalCounts.activity + 1 });
+      const changed = (await feed.read()).items.find((item) => item.link === `task:${task.id}`);
+      expect(changed).toMatchObject({ title: 'GitHub pull request state could not be verified.' });
+      if (!changed) throw new Error('Changed policy activity was not created');
+      expect(await feed.dismiss(changed.id)).toBe(true);
+      expect((await tasks.transition(task.id, 'Running')).kind).toBe('ok');
+      expect((await tasks.transition(task.id, 'NeedsAttention')).kind).toBe('ok');
+      const beforeRecheck = await counts();
+      await Promise.all([
+        restarted.recheckProject(String(projectId)),
+        overlapping.recheckProject(String(projectId)),
+      ]);
+      expect(await counts()).toEqual({ events: beforeRecheck.events + 1, activity: beforeRecheck.activity + 1 });
+      expect((await feed.read()).items).toContainEqual(expect.objectContaining({
+        link: `task:${task.id}`, title: 'GitHub pull request state could not be verified.',
+      }));
+      expect(errors).toEqual([]);
+    } finally {
+      await restarted.stop();
+      await overlapping.stop();
+    }
+  });
+
+  it('preserves dismissed bridge status on identical concurrent writes and raises real changes', async () => {
+    const changed = vi.fn();
+    const first = createPcBridgeStatusStore(pool, changed);
+    const restarted = createPcBridgeStatusStore(pool, changed);
+    await first.setStatus(false);
+    const status = async () => (await pool.request().query(`SELECT
+      CONVERT(varchar(19), id) AS id, title, at, dismissed_at
+      FROM dbo.activity WHERE alert_key = N'pc_bridge_status';`)).recordset[0];
+    const initial = await status();
+    const feed = createNowFeedStore(pool);
+    expect(await feed.dismiss(initial.id)).toBe(true);
+    const dismissed = await status();
+    await Promise.all([first.setStatus(false), restarted.setStatus(false)]);
+    expect(await status()).toEqual(dismissed);
+    expect((await feed.read()).items.some((item) => item.id === initial.id)).toBe(false);
+    await restarted.setStatus(true);
+    expect(await status()).toMatchObject({
+      id: initial.id, title: 'Local PC bridge is online — Jarvis control is active', dismissed_at: null,
+    });
+    expect((await feed.read()).items.some((item) => item.id === initial.id)).toBe(true);
+    await feed.dismiss(initial.id);
+    await first.setStatus(true, true);
+    expect(await status()).toMatchObject({
+      id: initial.id, title: 'Local PC bridge is online — Jarvis control is paused', dismissed_at: null,
+    });
+    await feed.dismiss(initial.id);
+    await restarted.setStatus(false);
+    expect(await status()).toMatchObject({
+      id: initial.id, title: 'Local PC bridge is offline', dismissed_at: null,
+    });
   });
 
   it('records each alert condition once and returns it in the Now feed', async () => {
