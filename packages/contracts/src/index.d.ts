@@ -12,17 +12,23 @@ export const dailyQuerySources: Readonly<{
   meals: 'daily.nutrition.meals'; favorites: 'daily.nutrition.favorites';
   plans: 'daily.nutrition.plans'; sync: 'daily.sync';
   briefs: 'daily.briefs.history'; brief: 'daily.briefs.detail';
+  metricCatalog: 'daily.health.metric-catalog'; days: 'daily.nutrition.days';
 }>;
 export type DailySourceId = typeof dailyQuerySources[keyof typeof dailyQuerySources];
-export const dailyQuerySourcesV1: readonly Exclude<DailySourceId, 'daily.briefs.history' | 'daily.briefs.detail'>[];
-export const dailyCapabilitiesVersion: 2;
-export const dailyCapabilitiesAccept: 'application/json;version=2, application/json';
-export type DailyCursor = { date: string; key: string } | { minute: string; metric: string } | { createdAt: string; id: string } | { id: string } | { startedAt: string; id: string };
+export const dailyQuerySourcesV1: readonly Exclude<DailySourceId, 'daily.briefs.history' | 'daily.briefs.detail' | 'daily.health.metric-catalog' | 'daily.nutrition.days'>[];
+export const dailyQuerySourcesV2: readonly Exclude<DailySourceId, 'daily.health.metric-catalog' | 'daily.nutrition.days'>[];
+export const dailyQuerySourcesV3: readonly DailySourceId[];
+export const dailyCapabilitiesVersion: 3;
+export const dailyCapabilitiesAccept: 'application/json;version=3, application/json;version=2, application/json';
+export type DailyCursor = { date: string; key: string } | { key: string } | { date: string } | { minute: string; metric: string } | { createdAt: string; id: string } | { id: string } | { startedAt: string; id: string };
 export type DailyQuery =
-  | { source: 'daily.health.metrics' | 'daily.health.sleep' | 'daily.health.workouts'; startDate: string; endDate: string; limit?: number; cursor?: { date: string; key: string } }
+  | { source: 'daily.health.metrics'; startDate: string; endDate: string; metric?: string; limit?: number; cursor?: { date: string; key: string } }
+  | { source: 'daily.health.metric-catalog'; startDate: string; endDate: string; limit?: number; cursor?: { key: string } }
+  | { source: 'daily.health.sleep' | 'daily.health.workouts'; startDate: string; endDate: string; limit?: number; cursor?: { date: string; key: string } }
   | { source: 'daily.health.heart-rate'; workoutId: string; limit?: number; cursor?: { minute: string; metric: string } }
   | { source: 'daily.health.workout'; workoutId: string }
   | { source: 'daily.nutrition.meals'; startDate: string; endDate: string; limit?: number; cursor?: { createdAt: string; id: string } }
+  | { source: 'daily.nutrition.days'; startDate: string; endDate: string; limit?: number; cursor?: { date: string } }
   // Separate discriminants preserve narrowing after collection sources are excluded.
   | { source: 'daily.nutrition.favorites'; limit?: number; cursor?: { id: string } }
   | { source: 'daily.nutrition.plans'; limit?: number; cursor?: { id: string } }
@@ -37,7 +43,7 @@ export interface DailyQueryResult {
   status: 'available' | 'empty' | 'partial';
   units: Readonly<Record<string, string>>;
   provenance: {
-    store: 'daily-sql'; detail: 'retained-record'; calculations: 'existing-read-model';
+    store: 'daily-sql'; detail: 'retained-record'; calculations: 'existing-read-model' | 'derived-from-retained-meals';
     consistency: 'independent-committed-reads';
   };
   freshness: {

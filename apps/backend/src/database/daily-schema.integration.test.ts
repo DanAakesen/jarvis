@@ -7,7 +7,9 @@ import { applyMigrations, readMigrations, readDownMigration, revertMigration } f
 import { DailyOwnerStore } from '../daily/store/owner-store.js';
 import { dailyTables } from '../daily/store/schema.js';
 import { DailyBriefReadModel } from '../daily/briefs/read-model.js';
+import { DailyHealthReadModel } from '../daily/health/read-model.js';
 import { DailyQueryService, dailyResultByteLimit } from '../daily/query.js';
+import { NutritionStore } from '../daily/nutrition/store.js';
 import { dailyQueryTool } from '../daily/tools/query.js';
 import { dailyQuerySources as sources } from '@jarvis/contracts';
 
@@ -143,6 +145,95 @@ describe('Daily SQL owner schema on real SQL Server', () => {
     await expect(reader.detail('oversized', signal())).rejects.toThrow('read budget');
     const bytes = (await pool.request().query<{ bytes: string }>("SELECT DATALENGTH(body_json) AS bytes FROM daily.briefing_runs WHERE id=N'oversized'")).recordset[0]!.bytes;
     expect(BigInt(bytes)).toBeGreaterThan(BigInt(dailyResultByteLimit) * 2n);
+  });
+
+  it('filters metrics and pages the owner-scoped metric catalogue and non-deleted daily nutrition totals', async () => {
+    const insertMetric = async (ownerId: string, name: string, date: string, unit: string, value: number) =>
+      pool.request().input('owner', sql.UniqueIdentifier, ownerId).input('name', sql.NVarChar(256), name)
+        .input('date', sql.Date, new Date(`${date}T00:00:00Z`)).input('unit', sql.NVarChar(256), unit)
+        .input('value', sql.Float, value).input('updated', sql.NVarChar(64), `${date}T12:00:00.000Z`)
+        .query(`INSERT daily.health_daily_metrics(owner_object_id,metric_name,metric_date,unit,value,ingestion_id,updated_at)
+          VALUES(@owner,@name,@date,@unit,@value,N'synthetic-read-model',@updated);`);
+    await insertMetric(owner, 'weight', '2026-02-01', 'kg', 70);
+    await insertMetric(owner, 'weight', '2026-02-02', 'lb', 154);
+    await insertMetric(owner, 'weight', '2026-02-03', 'oz', 2469);
+    await insertMetric(owner, 'weight', '2026-02-04', 'stone', 11);
+    await insertMetric(owner, 'weight', '2026-02-05', 'g', 70000);
+    await insertMetric(owner, 'weight', '2026-02-06', 'cm', 170);
+    await insertMetric(owner, 'steps', '2026-02-01', 'count', 1000);
+    await insertMetric(other, 'weight', '2026-02-01', 'foreign-unit', 11);
+
+    const insertMeal = async (ownerId: string, id: string, day: string, nutrients: {
+      energy: number; protein: number | null; carbohydrates: number | null; fat: number | null; fiber: number | null;
+    }, deletedAt: string | null = null) => {
+      const stamp = `${day}T12:00:00.000Z`;
+      await pool.request().input('owner', sql.UniqueIdentifier, ownerId).input('id', sql.NVarChar(256), id)
+        .input('key', sql.NVarChar(256), `synthetic-${id}`).input('day', sql.Date, new Date(`${day}T00:00:00Z`))
+        .input('occurred', sql.NVarChar(64), stamp).input('energy', sql.Float, nutrients.energy)
+        .input('protein', sql.Float, nutrients.protein).input('carbohydrates', sql.Float, nutrients.carbohydrates)
+        .input('fat', sql.Float, nutrients.fat).input('fiber', sql.Float, nutrients.fiber)
+        .input('deleted', sql.NVarChar(64), deletedAt).input('stamp', sql.NVarChar(64), stamp)
+        .query(`INSERT daily.nutrition_meals(owner_object_id,id,idempotency_key,meal_name,occurred_at,meal_date,
+          energy_kcal,protein_grams,carbohydrates_grams,fat_grams,fiber_grams,confidence,capture_method,
+          deleted_at,created_at,expires_at,updated_at)
+          VALUES(@owner,@id,@key,N'Synthetic meal',@occurred,@day,@energy,@protein,@carbohydrates,@fat,@fiber,
+            N'synthetic',N'text',@deleted,@stamp,N'2027-02-01T00:00:00.000Z',@stamp);`);
+    };
+    await insertMeal(owner, 'day-one-a', '2026-02-01', { energy: 100, protein: null, carbohydrates: 20, fat: 3, fiber: null });
+    await insertMeal(owner, 'day-one-b', '2026-02-01', { energy: 200, protein: null, carbohydrates: null, fat: 4, fiber: 1 });
+    await insertMeal(owner, 'day-one-deleted', '2026-02-01', { energy: 900, protein: 90, carbohydrates: 90, fat: 90, fiber: 90 }, '2026-02-02T00:00:00.000Z');
+    await insertMeal(owner, 'day-two', '2026-02-02', { energy: 0, protein: null, carbohydrates: null, fat: null, fiber: null });
+    await insertMeal(owner, 'day-three', '2026-02-03', { energy: 250, protein: 10, carbohydrates: 30, fat: 5, fiber: 2 });
+    await insertMeal(other, 'foreign-day', '2026-02-01', { energy: 999, protein: 999, carbohydrates: 999, fat: 999, fiber: 999 });
+
+    const service = new DailyQueryService({
+      health: request => DailyHealthReadModel.forRequest(pool, request),
+      nutrition: request => NutritionStore.forRequest(pool, request),
+      briefs: () => { throw new Error('No brief read is expected'); },
+    }, () => Date.parse('2026-02-04T00:00:00Z'));
+    const period = { startDate: '2026-02-01', endDate: '2026-02-04' };
+    const metricPeriod = { startDate: '2026-02-01', endDate: '2026-02-07' };
+    const metrics = await service.query({ source: sources.metrics, ...metricPeriod, metric: 'weight' }, requestFor(owner), signal());
+    expect(metrics.items).toHaveLength(6);
+    expect(metrics.items.every(row => row.metric_name === 'weight')).toBe(true);
+    expect(metrics.items.some(row => row.unit === 'foreign-unit')).toBe(false);
+
+    const catalogFirst = await service.query({ source: sources.metricCatalog, ...metricPeriod, limit: 1 }, requestFor(owner), signal());
+    expect(catalogFirst.items[0]).toMatchObject({ metric_name: 'steps', units: ['count'], first_date: '2026-02-01' });
+    expect(catalogFirst.coverage).toMatchObject({ hasMore: true, next: { key: 'steps' } });
+    const catalogSecond = await service.query({ source: sources.metricCatalog, ...metricPeriod, limit: 1,
+      cursor: catalogFirst.coverage.next! as { key: string } }, requestFor(owner), signal());
+    expect(catalogSecond.items).toEqual([expect.objectContaining({
+      metric_name: 'weight', units: ['cm', 'g', 'kg', 'lb', 'oz'], day_count: 6,
+    })]);
+    expect(catalogSecond.coverage).toMatchObject({ hasMore: false, next: null });
+
+    let after: { date: string } | null = null;
+    const totals: Record<string, unknown>[] = [];
+    do {
+      const page = await service.query({ source: sources.days, ...period, limit: 1, ...(after ? { cursor: after } : {}) }, requestFor(owner), signal());
+      totals.push(...page.items);
+      after = page.coverage.next as { date: string } | null;
+    } while (after);
+    expect(totals).toHaveLength(3);
+    expect(totals[0]).toMatchObject({
+      meal_date: '2026-02-01', meal_count: 2, energy_kcal: 300, protein_grams: null,
+      carbohydrates_grams: 20, fat_grams: 7, fiber_grams: 1,
+      unknown_nutrients: ['protein_grams'], partial_nutrients: ['carbohydrates_grams', 'fiber_grams'],
+    });
+    expect(totals[1]).toMatchObject({
+      meal_date: '2026-02-02', meal_count: 1, energy_kcal: 0, protein_grams: null,
+      unknown_nutrients: ['protein_grams', 'carbohydrates_grams', 'fat_grams', 'fiber_grams'],
+      partial_nutrients: [],
+    });
+    expect(totals[2]).toMatchObject({
+      meal_date: '2026-02-03', meal_count: 1, energy_kcal: 250, protein_grams: 10,
+      carbohydrates_grams: 30, fat_grams: 5, fiber_grams: 2,
+      unknown_nutrients: [], partial_nutrients: [],
+    });
+    expect(totals.map(row => row.meal_date)).not.toContain('2026-02-04');
+    expect(JSON.stringify(totals)).not.toContain('999');
+    expect(JSON.stringify(totals)).not.toContain('900');
   });
 
   it('refuses destructive down migration while any Daily record exists', async () => {

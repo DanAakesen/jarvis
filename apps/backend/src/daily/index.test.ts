@@ -11,7 +11,7 @@ import type { DailyData, DailyFoodLookup } from './query.js';
 import type { InternalSavedNutrition } from './tools/saved-food.js';
 import { suggest, type BudgetContext, type Suggestion } from './nutrition/model.js';
 import type { NutritionSuggestionSources } from './nutrition/suggestion-adapter.js';
-import { dailyCapabilitiesAccept, dailyQuerySources, dailyQuerySourcesV1 } from '@jarvis/contracts';
+import { dailyCapabilitiesAccept, dailyQuerySources, dailyQuerySourcesV1, dailyQuerySourcesV2, dailyQuerySourcesV3, dailyViewIds } from '@jarvis/contracts';
 import type { ToolCallRecord } from '../core/tool-calls.js';
 
 const config = { ...loadConfig({}), logLevel: 'silent' as const };
@@ -79,26 +79,35 @@ describe('Daily integration contract', () => {
       expect((await app.inject({ url: `/daily/capabilities?${field}=${other}`, headers: headers() })).statusCode).toBe(400);
     }
   });
-  it('keeps legacy capability consumers on the exact v1 set and advertises briefs only on explicit v2 negotiation', async () => {
+  it('pins byte-identical v1/v2 capability bodies and offers new sources only to v3 clients', async () => {
     const query = vi.fn();
     const data: DailyData = { query: { query }, changes: createDailyChanges() };
     const app = buildApp(config, undefined, { auth, modules: [coreModule, ...createDailyModules(true, data)] });
     apps.push(app);
-    for (const accept of [undefined, 'application/json']) {
+    const responseBody = (version: number, sources: readonly string[]) => JSON.stringify({
+      module: 'daily', version, stage: 'read-only', reservedViewIds: dailyViewIds,
+      pages: [], tools: ['daily_query', 'daily_show'], sources,
+      refresh: { event: 'now', refetchOn: ['connect', 'reconnect', 'refocus'], revision: 'query-content-sha256' },
+    });
+    for (const accept of [undefined, 'application/json', 'application/json;version=4']) {
       const response = await app.inject({ url: '/daily/capabilities', headers: { ...headers(), ...(accept ? { accept } : {}) } });
-      expect(response.json()).toMatchObject({ version: 1, sources: dailyQuerySourcesV1 });
-      expect(response.json().sources).not.toContain(dailyQuerySources.briefs);
-      expect(response.json().sources).not.toContain(dailyQuerySources.brief);
+      expect(response.body).toBe(responseBody(1, dailyQuerySourcesV1));
       expect(response.headers['cache-control']).toBe('no-store');
       expect(response.headers.vary).toContain('Accept');
     }
-    for (const accept of [dailyCapabilitiesAccept, 'application/json; version="2", application/json']) {
+    const v2 = await app.inject({ url: '/daily/capabilities', headers: { ...headers(), accept: 'application/json; version="2", application/json' } });
+    expect(v2.statusCode).toBe(200);
+    expect(v2.body).toBe(responseBody(2, dailyQuerySourcesV2));
+    expect(new MIMEType(String(v2.headers['content-type'])).params.get('version')).toBe('2');
+    expect(dailyQuerySourcesV2).not.toContain(dailyQuerySources.metricCatalog);
+    expect(dailyQuerySourcesV2).not.toContain(dailyQuerySources.days);
+    for (const accept of [dailyCapabilitiesAccept, 'application/json;version="3", application/json']) {
       const modern = await app.inject({ url: '/daily/capabilities', headers: { ...headers(), accept } });
       expect(modern.statusCode).toBe(200);
       const type = new MIMEType(String(modern.headers['content-type']));
       expect(type.essence).toBe('application/json');
-      expect(type.params.get('version')).toBe('2');
-      expect(modern.json()).toMatchObject({ version: 2, sources: Object.values(dailyQuerySources) });
+      expect(type.params.get('version')).toBe('3');
+      expect(modern.json()).toMatchObject({ version: 3, sources: dailyQuerySourcesV3 });
     }
     expect(query).not.toHaveBeenCalled();
   });

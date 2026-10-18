@@ -5834,13 +5834,27 @@ Fingerprint serialization uses the bounded read DTO, not nutrition's per-write
 node/depth budget; supported full pages and retained nested JSON stay readable.
 The response byte budget includes the final 64-byte revision before hashing.
 
-Favourites and meal plans add two source IDs to the existing version-1 contract.
-They have no calendar period and reuse the store's ID-keyset pages, limited to
-100 rows. DTOs decode retained aliases/plan items and preserve snapshots, unknown
-macros, revisions and tombstones without counting plans as intake. The same
-768 KiB bound, owner checks, sensitive audit, content fingerprint and unknown
-completeness/freshness semantics apply. No SQL schema or production registration
-changes.
+Capability negotiation preserves the exact v1 nine-source and v2 eleven-source
+advertisements. Version 2 remains opt-in for established brief history/detail;
+version 3 adds only `daily.health.metric-catalog` and `daily.nutrition.days`.
+Unversioned/unknown clients still receive v1. The web client requests v3 but
+validates each response against its version's source allowlist.
+
+`daily.health.metrics` accepts an optional exact `metric` name while preserving
+its date/name keyset order. The owner-scoped metric catalogue groups retained
+daily measurements by exact name for a bounded 366-day period, sorts its
+distinct non-null units (at most five), and pages names with a key cursor;
+default/max page sizes are 100/500. Nutrition days groups only retained,
+non-deleted meals by Copenhagen calendar date. It returns SQL sums, meal count,
+unknown nutrients (no values in any meal) and partial nutrients (a lower-bound
+sum over some but not all meals); null sums stay null, deleted records do not
+contribute, and empty dates are never emitted. Date cursors page at most 400
+days (default 50). Both additions use parameterized, owner-filtered
+`TOP(@limit + 1)` reads through `DailyQueryService`, preserve the 30-second and
+768 KiB limits and add no table, index or migration. Nutrition-day provenance
+identifies totals as derived from retained meals; completeness and freshness
+remain unknown. The generated-view tool may display either source, while the
+Daily Overview's collection rows and visible page layout remain unchanged.
 
 `createDailyData` shares one process-local change hub between the existing
 explicit health processor and owner-bound nutrition store. Optional handler
@@ -5865,7 +5879,7 @@ revision fingerprints an exact query result, not a durable/global ordering
 token or an atomic snapshot across separate page/freshness reads. Future page
 and GenUI consumers refetch on existing `now` events, connect/reconnect and
 refocus, so missed process-local notifications are recovered from SQL.
-No frontend consumer is implemented by this backend slice.
+No new visible frontend layout is implemented by this backend slice.
 
 This does not complete #724's hosted authenticated ChatGPT food-client path:
 restricted connector OAuth/consumer policy and trusted nutrition

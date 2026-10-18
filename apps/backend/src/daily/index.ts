@@ -1,4 +1,4 @@
-import { dailyContractVersion, dailyCapabilitiesVersion, dailyModuleId, dailyViewIds, dailyQuerySources, dailyQuerySourcesV1 } from '@jarvis/contracts';
+import { dailyContractVersion, dailyCapabilitiesVersion, dailyModuleId, dailyViewIds, dailyQuerySourcesV1, dailyQuerySourcesV2, dailyQuerySourcesV3 } from '@jarvis/contracts';
 import type { BackendModule } from '../modules.js';
 import { resolveDailyOwner } from './owner.js';
 import type { DailyData } from './query.js';
@@ -60,16 +60,19 @@ export function createDailyModules(enabled = false, data?: DailyData, connector?
       }, async (request, reply) => {
         resolveDailyOwner(request);
         reply.header('Cache-Control', 'no-store');
-        const modern = request.headers.accept?.split(',').some(media => {
+        const accepted = request.headers.accept?.split(',').map(media => {
           const value = media.toLowerCase().replace(/\s/gu, '');
-          return value === 'application/json;version=2' || value === 'application/json;version="2"';
-        }) ?? false;
+          return value;
+        }) ?? [];
+        const hasVersion = (version: number) => accepted.includes(`application/json;version=${version}`) ||
+          accepted.includes(`application/json;version="${version}"`);
+        const version = hasVersion(dailyCapabilitiesVersion) ? dailyCapabilitiesVersion : hasVersion(2) ? 2 : dailyContractVersion;
         const vary = reply.getHeader('Vary');
         reply.header('Vary', [...(Array.isArray(vary) ? vary : vary ? [String(vary)] : []), 'Accept'].join(', '));
-        reply.type(modern ? 'application/json;version=2' : 'application/json');
+        reply.type(version > dailyContractVersion ? `application/json;version=${version}` : 'application/json');
         return {
           module: dailyModuleId,
-          version: modern ? dailyCapabilitiesVersion : dailyContractVersion,
+          version,
           stage: internalNutrition || savedNutrition || nutritionTargets ? 'internal-nutrition-rehearsal' : data?.feeds ? 'feed-rehearsal' : connector ? 'connector-rehearsal' : data ? 'read-only' : 'contract-only',
           reservedViewIds: dailyViewIds,
           // Reserved view IDs do not advertise unfinished functionality as available.
@@ -77,7 +80,7 @@ export function createDailyModules(enabled = false, data?: DailyData, connector?
           tools: tools.map(tool => tool.name),
           ...(connector ? { connector: { transport: 'streamable-http', path: '/daily/mcp', writes: connector.writesEnabled === true } } : {}),
           ...(data ? {
-            sources: modern ? Object.values(dailyQuerySources) : dailyQuerySourcesV1,
+            sources: version === 1 ? dailyQuerySourcesV1 : version === 2 ? dailyQuerySourcesV2 : dailyQuerySourcesV3,
             refresh: { event: 'now', refetchOn: ['connect', 'reconnect', 'refocus'], revision: 'query-content-sha256' },
           } : {}),
         };

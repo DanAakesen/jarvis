@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { dailyViewIds, dailyModuleId, dailyContractVersion, dailyQuerySources, dailyQuerySourcesV1, dailyCapabilitiesVersion, dailyCapabilitiesAccept, dailyQuerySchema, isDailyQuery } from './index.js';
+import { dailyViewIds, dailyModuleId, dailyContractVersion, dailyQuerySources, dailyQuerySourcesV1, dailyQuerySourcesV2, dailyQuerySourcesV3, dailyCapabilitiesVersion, dailyCapabilitiesAccept, dailyQuerySchema, isDailyQuery } from './index.js';
 
 test('Daily reserves four distinct stable view IDs without registering renderers', () => {
   assert.equal(dailyModuleId, 'daily');
@@ -12,9 +12,9 @@ test('Daily reserves four distinct stable view IDs without registering renderers
   assert.ok(Object.isFrozen(dailyViewIds));
 });
 
-test('capability v2 is explicit and the immutable legacy advertisement remains the original nine sources', () => {
-  assert.equal(dailyCapabilitiesVersion, 2);
-  assert.equal(dailyCapabilitiesAccept, 'application/json;version=2, application/json');
+test('capability v1/v2 source lists remain fixed while v3 adds the Daily read models', () => {
+  assert.equal(dailyCapabilitiesVersion, 3);
+  assert.equal(dailyCapabilitiesAccept, 'application/json;version=3, application/json;version=2, application/json');
   assert.deepEqual(dailyQuerySourcesV1, [
     'daily.health.metrics', 'daily.health.sleep', 'daily.health.workouts', 'daily.health.workout',
     'daily.health.heart-rate', 'daily.nutrition.meals', 'daily.nutrition.favorites', 'daily.nutrition.plans', 'daily.sync',
@@ -22,6 +22,52 @@ test('capability v2 is explicit and the immutable legacy advertisement remains t
   assert.ok(Object.isFrozen(dailyQuerySourcesV1));
   assert.ok(!dailyQuerySourcesV1.includes(dailyQuerySources.briefs));
   assert.ok(!dailyQuerySourcesV1.includes(dailyQuerySources.brief));
+  assert.deepEqual(dailyQuerySourcesV2, [
+    ...dailyQuerySourcesV1, 'daily.briefs.history', 'daily.briefs.detail',
+  ]);
+  assert.deepEqual(dailyQuerySourcesV3, [
+    ...dailyQuerySourcesV2, 'daily.health.metric-catalog', 'daily.nutrition.days',
+  ]);
+  assert.ok(Object.isFrozen(dailyQuerySourcesV2));
+  assert.ok(Object.isFrozen(dailyQuerySourcesV3));
+});
+
+test('metric filters and metric catalogue queries validate their exact selector and key cursor', () => {
+  const metrics = { source: dailyQuerySources.metrics, startDate: '2026-01-01', endDate: '2026-12-31' };
+  const catalog = { source: dailyQuerySources.metricCatalog, startDate: '2026-01-01', endDate: '2026-12-31' };
+  assert.equal(isDailyQuery({ ...metrics, metric: 'body_mass' }), true);
+  assert.equal(isDailyQuery({ ...metrics, metric: 'x'.repeat(256), limit: 1, cursor: { date: '2026-06-01', key: 'body_mass' } }), true);
+  for (const metric of ['', ' padded', 'padded ', 'x'.repeat(257), 'bad\nname', null]) {
+    assert.equal(isDailyQuery({ ...metrics, metric }), false);
+  }
+  assert.equal(isDailyQuery({ ...metrics, limit: 501 }), false);
+  assert.equal(isDailyQuery({ ...metrics, owner: 'foreign' }), false);
+  assert.equal(isDailyQuery({ ...metrics, cursor: { date: '2026-06-01', key: 'body_mass', owner: 'foreign' } }), false);
+
+  for (const limit of [1, 500]) assert.equal(isDailyQuery({ ...catalog, limit }), true);
+  assert.equal(isDailyQuery({ ...catalog, cursor: { key: 'body_mass' } }), true);
+  for (const query of [
+    { ...catalog, startDate: '2026-02-30' }, { ...catalog, endDate: '2026-01-03', startDate: '2025-01-01' },
+    { ...catalog, limit: 0 }, { ...catalog, limit: 501 }, { ...catalog, cursor: {} },
+    { ...catalog, cursor: { key: '' } }, { ...catalog, cursor: { key: 'x'.repeat(257) } },
+    { ...catalog, cursor: { key: 'body_mass', owner: 'foreign' } }, { ...catalog, unknown: true },
+  ]) assert.equal(isDailyQuery(query), false, JSON.stringify(query));
+  assert.equal(isDailyQuery({ ...catalog, startDate: '2025-01-01', endDate: '2026-01-02' }), true);
+  assert.equal(isDailyQuery({ ...catalog, startDate: '2025-01-01', endDate: '2026-01-03' }), false);
+});
+
+test('per-day nutrition queries validate their date cursor and 400-row page bound', () => {
+  const days = { source: dailyQuerySources.days, startDate: '2026-01-01', endDate: '2026-12-31' };
+  for (const limit of [1, 400]) assert.equal(isDailyQuery({ ...days, limit }), true);
+  assert.equal(isDailyQuery({ ...days, cursor: { date: '2026-06-01' } }), true);
+  for (const query of [
+    { ...days, startDate: '2026-02-30' }, { ...days, endDate: '2026-01-03', startDate: '2025-01-01' },
+    { ...days, limit: 0 }, { ...days, limit: 401 }, { ...days, cursor: {} },
+    { ...days, cursor: { date: '2027-01-01' } }, { ...days, cursor: { date: '2026-06-01', key: 'meal' } },
+    { ...days, extra: true },
+  ]) assert.equal(isDailyQuery(query), false, JSON.stringify(query));
+  assert.equal(isDailyQuery({ ...days, startDate: '2025-01-01', endDate: '2026-01-02' }), true);
+  assert.equal(isDailyQuery({ ...days, startDate: '2025-01-01', endDate: '2026-01-03' }), false);
 });
 
 for (const source of [dailyQuerySources.favorites, dailyQuerySources.plans]) {

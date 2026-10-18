@@ -42,6 +42,7 @@ function same(row: Record<string, unknown>, input: MealInput): boolean {
   });
 }
 export interface HistoryPage { rows: Record<string, unknown>[]; next: { createdAt: string; id: string } | null }
+export interface DaysPage { rows: Record<string, unknown>[]; next: { date: string } | null }
 
 /** No production registration. Construct only after existing Jarvis authentication. */
 export class NutritionStore {
@@ -173,6 +174,51 @@ export class NutritionStore {
     const more = rows.length > input.limit; if (more) rows.pop();
     const last = rows.at(-1);
     return { rows, next: more && last ? { createdAt: last.created_at as string, id: last.id as string } : null };
+  }
+  async days(input: { from: string; to: string; limit: number; after?: { date: string } }, signal: AbortSignal): Promise<DaysPage> {
+    if (!Number.isInteger(input.limit) || input.limit < 1 || input.limit > 400 ||
+        Object.keys(input).some(key => !['from', 'to', 'limit', 'after'].includes(key))) throw new TypeError('Invalid nutrition day page');
+    date(input.from); date(input.to);
+    if (input.from > input.to || Date.parse(input.to) - Date.parse(input.from) > 366 * 86_400_000) throw new TypeError('Invalid nutrition day range');
+    if (input.after) {
+      date(input.after.date);
+      if (input.after.date < input.from || input.after.date > input.to) throw new TypeError('Invalid nutrition day cursor');
+    }
+    const rows = (await this.read(this.request(this.pool, signal)
+      .input('from', sql.Date, new Date(`${input.from}T00:00:00Z`))
+      .input('to', sql.Date, new Date(`${input.to}T00:00:00Z`))
+      .input('limit', sql.Int, input.limit)
+      .input('afterDate', sql.Date, input.after ? new Date(`${input.after.date}T00:00:00Z`) : null),
+    `SELECT TOP (@limit + 1) meal_date,COUNT(*) AS meal_count,
+        SUM(energy_kcal) AS energy_kcal,SUM(protein_grams) AS protein_grams,
+        SUM(carbohydrates_grams) AS carbohydrates_grams,SUM(fat_grams) AS fat_grams,
+        SUM(fiber_grams) AS fiber_grams,
+        COUNT(energy_kcal) AS energy_count,COUNT(protein_grams) AS protein_count,
+        COUNT(carbohydrates_grams) AS carbohydrates_count,COUNT(fat_grams) AS fat_count,
+        COUNT(fiber_grams) AS fiber_count,MAX(updated_at) AS latest_updated_at
+      FROM daily.nutrition_meals WHERE owner_object_id=@owner AND deleted_at IS NULL
+        AND meal_date BETWEEN @from AND @to AND (@afterDate IS NULL OR meal_date>@afterDate)
+      GROUP BY meal_date ORDER BY meal_date;`, signal)).recordset;
+    const more = rows.length > input.limit;
+    const page = rows.slice(0, input.limit).map(row => {
+      const nutrientCounts = [
+        ['energy_kcal', 'energy_count'], ['protein_grams', 'protein_count'],
+        ['carbohydrates_grams', 'carbohydrates_count'], ['fat_grams', 'fat_count'],
+        ['fiber_grams', 'fiber_count'],
+      ] as const;
+      const unknown = nutrientCounts.filter(([, count]) => row[count] === 0).map(([nutrient]) => nutrient);
+      const partial = nutrientCounts.filter(([, count]) => Number(row[count]) > 0 && Number(row[count]) < Number(row.meal_count))
+        .map(([nutrient]) => nutrient);
+      return {
+        meal_date: row.meal_date, meal_count: row.meal_count, energy_kcal: row.energy_kcal,
+        protein_grams: row.protein_grams, carbohydrates_grams: row.carbohydrates_grams,
+        fat_grams: row.fat_grams, fiber_grams: row.fiber_grams,
+        unknown_nutrients: unknown, partial_nutrients: partial, latest_updated_at: row.latest_updated_at,
+      };
+    });
+    const last = page.at(-1);
+    const key = (value: unknown) => value instanceof Date ? value.toISOString().slice(0, 10) : String(value);
+    return { rows: page, next: more && last ? { date: key(last.meal_date) } : null };
   }
   async feedback(mealKey: string, preference: 'like' | 'dislike' | null, signal: AbortSignal,
     expectedRevision?: bigint, reviewedFavorite?: string): Promise<Record<string, unknown>> {
