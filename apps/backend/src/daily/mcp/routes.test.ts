@@ -283,6 +283,33 @@ describe('inactive hosted nutrition MCP adapter', () => {
     expect(f.query.query).toHaveBeenCalledOnce();
   });
 
+  it('exposes the shared per-day totals through the nutrition-only connector read schema', async () => {
+    const f = await fixture();
+    const { client } = await f.connect('read');
+    const query = {
+      source: 'daily.nutrition.days', startDate: '2026-10-01', endDate: '2026-10-07',
+      limit: 400, cursor: { date: '2026-10-03' },
+    } as const;
+    const result: DailyQueryResult = {
+      ...empty, source: 'daily.nutrition.days', period: {
+        startDate: query.startDate, endDate: query.endDate, timeZone: 'Europe/Copenhagen' as const,
+      },
+      items: [{ meal_date: '2026-10-04', meal_count: 2, energy_kcal: 240, protein_grams: null,
+        carbohydrates_grams: 30, fat_grams: 8, fiber_grams: null,
+        unknown_nutrients: ['protein_grams', 'fiber_grams'], partial_nutrients: ['carbohydrates_grams'],
+        latest_updated_at: '2026-10-04T12:00:00Z' }],
+      provenance: { ...empty.provenance, calculations: 'derived-from-retained-meals' as const },
+      units: { energy_kcal: 'kcal', '*_grams': 'g' }, status: 'available',
+      freshness: { ...empty.freshness, latestReturnedRecordUpdatedAt: '2026-10-04T12:00:00Z' },
+      coverage: { returned: 1, hasMore: false, next: null, sourceCompleteness: 'unknown' },
+      revision: 'b'.repeat(64),
+    };
+    vi.mocked(f.query.query).mockResolvedValueOnce(result);
+    const response = await client.callTool({ name: 'read_nutrition', arguments: query });
+    expect(response.structuredContent).toEqual(result);
+    expect(f.query.query).toHaveBeenCalledWith(query, expect.anything(), expect.any(AbortSignal));
+  });
+
   it.each(['favorite', 'history'] as const)('returns the shared safe %s DTO for an owner-bound saved name without a provider call or write', async source => {
     const f = await fixture();
     vi.mocked(f.nutrition.lookupSaved).mockResolvedValue({

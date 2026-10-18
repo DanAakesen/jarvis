@@ -124,6 +124,31 @@ quality is unverified until Dan's live re-test, which closes #894. This supersed
 the whole-message-match safeguard of 12 October and the "plain approval" wording of
 P11-01 and P11-03; every other safeguard there stands.
 
+## Version Daily read-model additions without changing the page (18 October 2026; P12-21 / #966)
+
+The owner-fixed source names and shapes are implemented additively through the
+existing `DailyQueryService`. Capability v1 and v2 responses keep their original
+source lists and serialized capability response bodies; only an explicit
+version-3 Accept negotiation advertises the new source IDs in Daily
+capabilities. The web client requests v3 but validates each version against its
+own allowlist.
+
+Metric filtering is exact by retained metric name. The catalogue aggregates
+only retained health measurements inside the requested period and exposes at
+most five sorted non-null units per metric. Per-day nutrition totals aggregate
+only retained, non-deleted meals: all-null nutrient sums stay null, partial
+totals are marked lower bounds, and dates without meals remain absent. These
+totals are derived evidence, not retained source records. Completeness and
+freshness remain unknown.
+
+Both reads reuse the current owner authorization, SQL connection and query
+limits. No table, index, migration, refresh event or visible Daily Overview
+row/layout is added; a measured query-plan need would be reviewed separately
+before changing indexes. The existing generated-view tool can render these
+version-3 results, and the nutrition-only MCP connector exposes per-day reads
+under its existing read scope. No real health/food data, activation or change
+to original Daily is included.
+
 ## Show Daily data on demand through the existing workspace (18 October 2026; P12-16 / #731)
 
 **Builder decision inside Dan's "ship all daily if possible. You can take decisions
@@ -5345,6 +5370,18 @@ announcement is the concise “Saved.” while its standing applicability hint
 remains visible and the success stays announced with `role="status"`. The
 bounded code audit and follow-up surfaces are recorded in
 [`docs/ui-audit.md`](ui-audit.md); browser acceptance remains separate evidence.
+
+## P14-04 — Ratchet shared borders, radii and surfaces (18 October 2026)
+
+Keep the existing radius and surface tokens as the only shared geometry system.
+Retain only structural 1px neutral side borders, represent selection through
+shared surfaces, and replace inset-shadow pseudo-borders with real boundaries
+or no boundary. A PostCSS ratchet in the existing web tests scans every
+stylesheet; its exact-value exceptions carry reasons for the P14-03-owned
+buttons and genuine circular voice control. No dependency or theme was added.
+The Pass 3 audit records measured counts, classifications, exceptions and
+synthetic before/after Chromium evidence; this does not claim live-service or
+human acceptance.
 
 ## P13-16 owner-bound proactive recall (18 October 2026; #937)
 

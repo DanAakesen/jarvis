@@ -33,9 +33,11 @@ The current transport accepts modern MCP
 
 ## Tools and recovery
 
-`read_nutrition` shares bounded meal/favourite/plan queries, provenance,
-unknown values and freshness with existing Daily reads. Definitions/plans are
-not eaten meals. `lookup_food` accepts exactly one of its original `components`
+`read_nutrition` shares bounded meal-history, per-day totals, favourite and
+plan queries with the same Daily query service. Per-day totals are derived only
+from retained non-deleted meals, keep all-null nutrients unknown, and mark
+partially known nutrients as lower bounds; their date cursor pages at most 400
+days. Definitions/plans are not eaten meals. `lookup_food` accepts exactly one of its original `components`
 input (the pinned public Frida adapter) or `savedName` (existing owner-bound
 favourite/alias resolution before an exact historical meal name). Saved matches
 reuse shared query DTO whitelists, preserve stored quantities/nulls/provenance
