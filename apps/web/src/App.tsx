@@ -55,7 +55,8 @@ import { MemorySettings } from './MemorySettings';
 import { createWorkspacePinsClient } from './workspace-pins';
 import { usePhoneChatViewport } from './phone-chat-viewport';
 import { PushNotifications } from './PushNotifications';
-import { ProactiveItemPage } from './ProactiveItemPage';
+import { ProactiveItemPage } from './ProactiveArea';
+import { ProactiveSettings } from './ProactiveSettings';
 import { takeSignInReturnPath } from './auth';
 
 /** Interim research progress: 
@@ -85,32 +86,35 @@ function activityLabel(event: JarvisActivityEvent | null): string {
   }
 }
 
-function Shell({ signedIn, config, session, camera, screenShare, dailyEnabled }: {
+function Shell({ signedIn, config, session, camera, screenShare, dailyEnabled, proactiveEnabled }: {
   signedIn: boolean;
   config: PublicConfig;
   session: SignInSession;
   camera: CameraController;
   screenShare: ScreenShareController;
   dailyEnabled: boolean;
+  proactiveEnabled: boolean;
 }) {
   return (
     <ConversationIntentProvider>
       <ContextPanelProvider>
-        <ShellLayout signedIn={signedIn} config={config} session={session} camera={camera} screenShare={screenShare} dailyEnabled={dailyEnabled} />
+        <ShellLayout signedIn={signedIn} config={config} session={session} camera={camera} screenShare={screenShare}
+          dailyEnabled={dailyEnabled} proactiveEnabled={proactiveEnabled} />
       </ContextPanelProvider>
     </ConversationIntentProvider>
   );
 }
 
-function ShellLayout({ signedIn, config, session, camera, screenShare, dailyEnabled }: {
+function ShellLayout({ signedIn, config, session, camera, screenShare, dailyEnabled, proactiveEnabled }: {
   signedIn: boolean;
   config: PublicConfig;
   session: SignInSession;
   camera: CameraController;
   screenShare: ScreenShareController;
   dailyEnabled: boolean;
+  proactiveEnabled: boolean;
 }) {
-  const areas = appAreas(dailyEnabled);
+  const areas = appAreas(dailyEnabled, proactiveEnabled);
   const [dailyRefresh, setDailyRefresh] = useState(0);
   const onDailyRefresh = useCallback(() => { if (dailyEnabled) setDailyRefresh(value => value + 1); }, [dailyEnabled]);
   const { pathname } = useLocation();
@@ -714,7 +718,8 @@ function ShellLayout({ signedIn, config, session, camera, screenShare, dailyEnab
         {signedIn && <div className="window-tabstrip">
         <div ref={setTabsHost} className="window-tabbar" />
         </div>}
-        {signedIn && <JobsChip key={jobsAccountId} accountId={jobsAccountId} backendUrl={config.backendUrl} getAccessToken={session.getAccessToken} onResult={openJobResult} attention={attention} />}
+        {signedIn && <JobsChip key={jobsAccountId} accountId={jobsAccountId} backendUrl={config.backendUrl} getAccessToken={session.getAccessToken}
+          onResult={openJobResult} attention={attention} proactiveEnabled={proactiveEnabled} />}
 
         {signedIn && (
           <div className="topbar-actions">
@@ -827,10 +832,11 @@ function RequireSignIn({ session }: { session: SignInSession }) {
 }
 
 /** Settings with its live panels and a Back action to wherever Dan came from. */
-function SettingsRoute({ config, session, nutritionKey, pushEnabled }: {
+function SettingsRoute({ config, session, nutritionKey, pushEnabled, proactiveEnabled }: {
   config: PublicConfig;
   session: SignInSession;
   pushEnabled: boolean;
+  proactiveEnabled: boolean;
   /** Account key for the Daily nutrition targets; null while Daily is off, which renders nothing and asks for nothing. */
   nutritionKey: string | null;
 }) {
@@ -848,6 +854,7 @@ function SettingsRoute({ config, session, nutritionKey, pushEnabled }: {
         <ProjectsPage backendUrl={config.backendUrl} getAccessToken={session.getAccessToken} projectDefaults={projectDefaults} />
       )}
       {...(nutritionKey ? { nutrition: <NutritionTargetsSettings key={nutritionKey} backendUrl={config.backendUrl} getAccessToken={session.getAccessToken} /> } : {})}
+      {...(proactiveEnabled ? { proactive: <ProactiveSettings backendUrl={config.backendUrl} getAccessToken={session.getAccessToken} /> } : {})}
       memory={<MemorySettings backendUrl={config.backendUrl} getAccessToken={session.getAccessToken} />}
     />
   );
@@ -859,12 +866,14 @@ const defaultConfig: PublicConfig = __JARVIS_CONFIG__;
 // The deployed camera protocol accepts upload-only image handles in chat and voice.
 const cameraConversationDeployed = true;
 
-export function App({ config = defaultConfig, dailyEnabled = false, pushEnabled = __JARVIS_PUSH_ENABLED__ }: {
+export function App({ config = defaultConfig, dailyEnabled = false, pushEnabled = __JARVIS_PUSH_ENABLED__,
+  proactiveEnabled = __JARVIS_PROACTIVE_ENABLED__ }: {
   config?: PublicConfig;
   dailyEnabled?: boolean;
   pushEnabled?: boolean;
+  proactiveEnabled?: boolean;
 }) {
-  const areas = appAreas(dailyEnabled);
+  const areas = appAreas(dailyEnabled, proactiveEnabled);
   useGlassLight();
   const session = useSignIn(config);
   const location = useLocation();
@@ -914,19 +923,21 @@ export function App({ config = defaultConfig, dailyEnabled = false, pushEnabled 
       <ThemePreferenceProvider key={signedIn ? 'signed-in' : 'signed-out'}
         enabled={signedIn} backendUrl={config.backendUrl} getAccessToken={session.getAccessToken}>
         <Routes>
-          <Route element={<Shell signedIn={signedIn} config={config} session={session} camera={camera} screenShare={screenShare} dailyEnabled={dailyEnabled} />}>
+          <Route element={<Shell signedIn={signedIn} config={config} session={session} camera={camera} screenShare={screenShare}
+            dailyEnabled={dailyEnabled} proactiveEnabled={proactiveEnabled} />}>
             <Route element={<RequireSignIn session={session} />}>
               <Route index element={<h1 className="visually-hidden">Welcome, {session.profile?.name ?? ''}</h1>} />
               {areas.map(({ id, path, Component }) => (
                 <Route key={id} path={`${path}/*`} element={
-                  <Component key={id === 'daily' ? dailyAccountKey : id} backendUrl={config.backendUrl} getAccessToken={session.getAccessToken} />
+                  <Component key={id === 'daily' ? dailyAccountKey : id} backendUrl={config.backendUrl}
+                    getAccessToken={session.getAccessToken} signIn={session.signIn} />
                 } />
               ))}
               <Route path="settings" element={<SettingsRoute config={config} session={session}
-                nutritionKey={dailyEnabled ? dailyAccountKey : null} pushEnabled={pushEnabled} />} />
-              {pushEnabled && <Route path="proactive/:id" element={
+                nutritionKey={dailyEnabled ? dailyAccountKey : null} pushEnabled={pushEnabled} proactiveEnabled={proactiveEnabled} />} />
+              {(pushEnabled || proactiveEnabled) && <Route path="proactive/:id" element={
                 <ProactiveItemPage backendUrl={config.backendUrl} getAccessToken={session.getAccessToken}
-                  signIn={session.signIn} />
+                  signIn={session.signIn} proactiveEnabled={proactiveEnabled} />
               } />}
               <Route path="knowledge/*" element={<Navigate to="/notes" replace />} />
             </Route>
