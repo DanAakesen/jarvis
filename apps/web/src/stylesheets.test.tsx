@@ -79,6 +79,11 @@ const typeSpacingAllowlist: AllowlistEntry[] = [
   { file: 'proactive.css', selector: '.proactive-page', property: 'padding-bottom', value: 'max(160px, calc(env(safe-area-inset-bottom) + 144px))', reason: 'The fixed lower reserve keeps Proactive content clear of the phone dock and voice controls.' },
   { file: 'styles.css', selector: '.workspace-window.luminous-glass:not(.workspace-window-conversation)::before', property: 'padding', value: '1px', reason: 'This pseudo-element padding creates a workspace glass rim, not content spacing.' },
   { file: 'styles.css', selector: '.folio-item:hover .folio-title, .folio-item:focus-within .folio-title', property: 'margin-right', value: '100px', reason: 'This reserve keeps the Folio title clear of its inline hover/focus actions.' },
+  { file: 'ConversationHistory.css', selector: '.jarvis-page', property: 'padding', value: 'var(--space-5) clamp(var(--space-3), 3vw, var(--space-7))', reason: 'The shell gutter interpolates only between existing spacing steps to fit the responsive stage.' },
+  { file: 'ConversationHistory.css', selector: '.app-shell[data-voice-active="false"] .shell-main:is([data-home="true"] > *) .workspace-shell-area', property: 'padding', value: 'var(--space-4) clamp(var(--space-3), 3vw, var(--space-7)) 0', reason: 'The workspace shell gutter interpolates only between existing spacing steps to fit the responsive stage.' },
+  { file: 'ConversationHistory.css', selector: '.conversation-transcript:has(.conversation-greeting)', property: 'padding', value: 'clamp(var(--space-4), 12vh, var(--space-7)) var(--space-3) var(--space-6)', reason: 'The greeting position interpolates between existing vertical spacing steps as the viewport changes.' },
+  { file: 'styles.css', selector: '.shell-main', property: 'padding', value: 'var(--space-6) clamp(var(--space-5), 4vw, var(--space-7)) var(--space-7)', reason: 'The shell gutter interpolates only between existing spacing steps to fit the responsive stage.' },
+  { file: 'styles.css', selector: '.app-shell:not(.app-signed-out) :is(.area-rail, .area-sidebar, .context-panel)', property: 'margin', value: 'var(--slab-gap) 0 clamp(var(--space-4), 9vh, var(--space-7))', reason: 'The glass-slab reserve interpolates between existing vertical spacing steps for the available height.' },
 ];
 
 const literalRadiusAllowlist = [
@@ -190,10 +195,10 @@ function stylesheetViolations(file: string, source: string): string[] {
     }
 
     const isSpacing = /^(?:margin(?:-[\w-]+)?|padding(?:-[\w-]+)?|gap|row-gap|column-gap)$/u.test(property);
-    const hasNonzeroPixelSpacing = isSpacing
-      && [...value.matchAll(/(-?(?:\d+\.?\d*|\.\d+))px/giu)]
+    const hasNonzeroDimensionSpacing = isSpacing
+      && [...value.matchAll(/(-?(?:\d+\.?\d*|\.\d+))(?:px|rem|em|%|vw|vh|svh|dvh|lvh|ch|ex|pt|cm|mm|in|pc)\b/giu)]
         .some(([, amount]) => Number.parseFloat(amount ?? '0') !== 0);
-    if (hasNonzeroPixelSpacing && !matchesAllowlist(typeSpacingAllowlist, file, selector, property, value)) {
+    if (hasNonzeroDimensionSpacing && !matchesAllowlist(typeSpacingAllowlist, file, selector, property, value)) {
       violations.push(`${location}: spacing must use a --space-* role or a reasoned exception`);
     }
   });
@@ -287,8 +292,8 @@ describe('stylesheets', () => {
   });
 
   it('rejects raw type, line-height and spacing values unless exactly reasoned', () => {
-    const css = '.probe { font-size: 16px; line-height: 1.4; gap: 8px; }';
-    expect(stylesheetViolations('probe.css', css)).toHaveLength(3);
+    const css = '.probe { font-size: 16px; line-height: 1.4; gap: 8px; padding-inline: 1rem; }';
+    expect(stylesheetViolations('probe.css', css)).toHaveLength(4);
     expect(stylesheetViolations('probe.css', '.probe { font: 12px/1.5 Arial; }')).toHaveLength(1);
     expect(stylesheetViolations('probe.css', '.probe { font: var(--type-body)/var(--line-body) var(--font-body); }')).toEqual([]);
     expect(stylesheetViolations('ConversationHistory.css', '.markdown-content pre { font-size: .9em; }')).toEqual([]);

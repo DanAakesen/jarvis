@@ -837,7 +837,7 @@ export function TasksPage({ backendUrl, getAccessToken }: Props) {
                                 </p>
                                 <p className="kanban-meta">
                                   <KanbanIcon name="branch" />
-                                  {card.task.branch ? <code>{card.task.branch}</code> : <span className="kanban-muted">Branch not reported</span>}
+                                  {card.task.branch ? <code title={card.task.branch}>{card.task.branch}</code> : <span className="kanban-muted">Branch not reported</span>}
                                 </p>
                               <TaskControls
                                 backendUrl={backendUrl}

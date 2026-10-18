@@ -241,7 +241,9 @@ describe('Factory task board', () => {
     expect(within(card).getByRole('link', { name: '#42' }).getAttribute('href')).toBe('https://github.com/DanAakesen/jarvis/issues/42');
     expect(within(card).getByText('Updating tests')).not.toBeNull();
     expect(within(card).getByText(/2 attempts/)).not.toBeNull();
-    expect(within(card).getByText('copilot/fix-the-bug')).not.toBeNull();
+    const branch = within(card).getByText('copilot/fix-the-bug');
+    expect(branch.tagName).toBe('CODE');
+    expect(branch.getAttribute('title')).toBe('copilot/fix-the-bug');
 
     await user.selectOptions(screen.getByRole('combobox', { name: 'Agent' }), 'codex');
     expect(screen.getByRole('article', { name: 'Fix the bug' })).toBe(card);

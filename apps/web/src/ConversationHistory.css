@@ -108,9 +108,9 @@
 .markdown-content > :first-child { margin-top: 0; }
 .markdown-content > :last-child { margin-bottom: 0; }
 .markdown-content p { margin: var(--space-2) 0; color: inherit; white-space: normal; }
-.markdown-content ul, .markdown-content ol { margin: var(--space-2) 0; padding-left: 1.4em; }
+.markdown-content ul, .markdown-content ol { margin: var(--space-2) 0; padding-left: var(--space-5); }
 .markdown-content li + li { margin-top: var(--space-1); }
-.markdown-content :not(pre) > code { padding: .12em .35em; border-radius: var(--radius-control); background: var(--code-surface); font-family: var(--font-mono); font-size: .9em; }
+.markdown-content :not(pre) > code { padding: var(--space-1); border-radius: var(--radius-control); background: var(--code-surface); font-family: var(--font-mono); font-size: .9em; }
 .markdown-content pre { max-width: 100%; margin: var(--space-3) 0; padding: var(--space-3) var(--space-4); overflow-x: auto; border-radius: var(--radius-control); background: var(--code-surface); color: var(--text); font-size: .9em; line-height: var(--line-prose); }
 .markdown-content pre code { font-family: var(--font-mono); font-size: inherit; white-space: pre; }
 .markdown-content a { text-decoration-thickness: .08em; text-underline-offset: .2em; }

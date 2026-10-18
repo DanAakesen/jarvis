@@ -1525,7 +1525,7 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
 .task-create-form { display: grid; gap: var(--space-4); }
 .task-dialog-actions { gap: var(--space-3); }
 /* Kanban: the task board as glass columns and inset glass cards in the shared stage-glass language. */
-.kanban-header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-3); margin-bottom: var(--space-4); }
+.kanban-header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-3); margin-bottom: var(--space-5); }
 .kanban-header h1 { margin: 0; }
 .kanban-create { display: inline-flex; align-items: center; gap: var(--space-2); }
 .kanban-create svg { width: 18px; height: 18px; }
@@ -1967,7 +1967,7 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
    Settings: a centred column of glass section cards, a Back control and a floating save bar.
    --------------------------------------------------------------------------------------------- */
 .settings-page { max-width: 980px; margin: 0 auto; }
-.settings-header { display: flex; align-items: center; gap: var(--space-3); margin-bottom: var(--space-4); }
+.settings-header { display: flex; align-items: center; gap: var(--space-3); margin-bottom: var(--space-5); }
 .settings-header h1 { margin: 0; }
 .settings-back {
   display: inline-flex;
@@ -2572,7 +2572,7 @@ a.task-chip:hover { background: var(--glass-pressed); }
    Close with the X, Escape or a click outside. */
 .modal-backdrop {
   position: fixed; z-index: 3000; inset: 0; display: grid; align-items: start; justify-items: center;
-  overflow-y: auto; padding: clamp(var(--space-7), 10vh, var(--space-7)) var(--space-4) var(--space-6);
+  overflow-y: auto; padding: var(--space-7) var(--space-4) var(--space-6);
   background: color-mix(in srgb, var(--stage-background) 45%, transparent); backdrop-filter: blur(6px);
   animation: modal-fade var(--motion-state) var(--ease-standard);
 }
@@ -3283,6 +3283,7 @@ a.task-chip:hover { background: var(--glass-pressed); }
 .usage-page { display: grid; gap: var(--space-4); }
 .status-page { display: grid; gap: var(--space-4); min-width: 0; }
 .system-status-header, .system-status-row-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--space-3); }
+.system-status-header { margin-bottom: var(--space-2); }
 .system-status-header h1, .system-status-panel h2 { margin: 0; }
 .system-status-panel, .usage-hero, .usage-card, .usage-details, .usage-empty {
   min-width: 0; border: 1px solid var(--rule); border-radius: var(--radius-panel); background: var(--surface-translucent);
@@ -3291,6 +3292,7 @@ a.task-chip:hover { background: var(--glass-pressed); }
 .system-status-panel { padding: var(--space-5); }
 .system-status-panel h2 { font-size: var(--type-lead); }
 .system-status-note, .system-status-snapshot, .system-status-reason { margin: var(--space-3) 0; font-size: var(--type-small); overflow-wrap: anywhere; }
+.system-status-snapshot { margin: 0; }
 .system-status-note, .system-status-time { color: var(--text-muted); }
 .system-status-feedback { padding: var(--space-4); border: 1px solid var(--rule); border-radius: var(--radius-panel); background: var(--error-surface); color: var(--text); }
 .system-status-feedback > p:first-child { color: var(--error); font-weight: 600; }
@@ -3322,9 +3324,9 @@ a.task-chip:hover { background: var(--glass-pressed); }
   .system-status-panel { padding: var(--space-4); }
   .system-status-details dl > div { grid-template-columns: minmax(0, 1fr); gap: var(--space-1); }
 }
-.usage-header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-3); }
+.usage-header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-3); margin-bottom: var(--space-2); }
 .usage-header h1 { margin: 0; }
-.usage-results { display: grid; gap: var(--space-4); }
+.usage-results { display: grid; gap: var(--space-4); margin-top: 0; }
 .usage-segmented { display: inline-flex; max-width: 100%; flex-wrap: wrap; gap: var(--space-1); padding: var(--space-1); border-radius: var(--radius-control); background: color-mix(in srgb, var(--text) 6%, transparent); }
 .usage-segmented button { min-height: 36px; padding: 0 var(--space-3); border: 0; border-radius: var(--radius-control); background: transparent; color: var(--text-muted);
   font: inherit; font-size: var(--type-small); font-weight: 600; cursor: pointer; transition: background-color var(--motion-press) var(--ease-standard), color var(--motion-press) var(--ease-standard); }
