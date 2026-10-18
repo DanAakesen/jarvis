@@ -59,6 +59,49 @@ describe('PC bridge status store', () => {
     expect(onChanged).toHaveBeenCalledTimes(2);
   });
 
+  it('locks existence independently of the conditional update, including across store instances', async () => {
+    transactionEvents.values.length = 0;
+    const query = vi.fn()
+      .mockResolvedValueOnce({ rowsAffected: [1] })
+      .mockResolvedValueOnce({ rowsAffected: [0] });
+    const onChanged = vi.fn();
+    const pool = { query } as unknown as sql.ConnectionPool;
+    const firstRevision = createPcBridgeStatusStore(pool, onChanged);
+    const secondRevision = createPcBridgeStatusStore(pool, onChanged);
+
+    await Promise.all([firstRevision.setStatus(true), secondRevision.setStatus(true)]);
+
+    expect(query).toHaveBeenCalledTimes(2);
+    for (const [statement] of query.mock.calls) {
+      expect(statement).toMatch(/IF EXISTS \(\s*SELECT 1 FROM dbo\.activity WITH \(UPDLOCK, HOLDLOCK\)/u);
+      expect(statement).toContain("WHERE alert_key = N'pc_bridge_status' AND title <> @title;");
+      expect(statement).toMatch(/ELSE\s*INSERT dbo\.activity/u);
+      expect(statement).not.toContain('@@ROWCOUNT');
+    }
+    expect(onChanged).toHaveBeenCalledOnce();
+    expect(transactionEvents.values.filter((event) => event.startsWith('begin:'))).toEqual([
+      `begin:${sql.ISOLATION_LEVEL.SERIALIZABLE}`, `begin:${sql.ISOLATION_LEVEL.SERIALIZABLE}`,
+    ]);
+  });
+
+  it('does not publish an identical persisted status but publishes genuine changes after commit', async () => {
+    transactionEvents.values.length = 0;
+    const query = vi.fn()
+      .mockResolvedValueOnce({ rowsAffected: [0] })
+      .mockResolvedValueOnce({ rowsAffected: [1] });
+    const onChanged = vi.fn(() => {
+      expect(transactionEvents.values.at(-1)).toBe('commit');
+    });
+    const store = createPcBridgeStatusStore({ query } as unknown as sql.ConnectionPool, onChanged);
+
+    await store.setStatus(true);
+    expect(onChanged).not.toHaveBeenCalled();
+    await store.setStatus(true, true);
+    expect(query.mock.calls[1]?.[0]).toContain('SET title = @title, at = SYSUTCDATETIME(), dismissed_at = NULL');
+    expect(JSON.stringify(query.mock.calls[1]?.[1])).toContain('Jarvis control is paused');
+    expect(onChanged).toHaveBeenCalledOnce();
+  });
+
   it('continues with the next status after a failed write', async () => {
     transactionEvents.values.length = 0;
     const query = vi.fn()

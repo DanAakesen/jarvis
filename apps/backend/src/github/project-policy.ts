@@ -246,7 +246,6 @@ export function createProjectPolicyEvaluator({
   const pendingEvaluations = new Set<string>();
   const acceptedMerges = new Set<string>();
   const refusedMerges = new Set<string>();
-  const lastReasons = new Map<string, string>();
   const retries = new Map<string, { attempts: number; nextAttemptAt: number }>();
   const noChecksRechecks = new Map<string, ReturnType<typeof setTimeout>>();
   let stopped = false;
@@ -293,7 +292,6 @@ export function createProjectPolicyEvaluator({
   }
 
   async function recordReason(taskId: string, reason: string): Promise<void> {
-    if (lastReasons.get(taskId) === reason) return;
     await tasks.recordEvent({
       taskId,
       type: 'project_policy_blocked',
@@ -301,11 +299,6 @@ export function createProjectPolicyEvaluator({
       payload: { reason },
       source: 'backend',
     });
-    lastReasons.set(taskId, reason);
-  }
-
-  function clearReason(taskId: string): void {
-    lastReasons.delete(taskId);
   }
 
   async function markDone(candidate: PolicyPullRequest, withoutChecks = false): Promise<void> {
@@ -314,7 +307,6 @@ export function createProjectPolicyEvaluator({
       return tasks.transition(candidate.taskId, 'Done', true);
     }, candidate.headSha);
     clearNoChecksRecheck(candidate);
-    clearReason(candidate.taskId);
     if (result.kind === 'awaiting_runner') {
       await recordReason(candidate.taskId, 'Runner completion has not been verified for the current task session; policy completion is waiting.');
       return;
@@ -374,7 +366,6 @@ export function createProjectPolicyEvaluator({
         await recordReason(candidate.taskId, 'GitHub did not confirm the squash merge.');
       } else {
         acceptedMerges.add(key);
-        clearReason(candidate.taskId);
       }
     } catch (error) {
       const transient = mergeAttempted && transientGithubError(error);
