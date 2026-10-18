@@ -175,7 +175,7 @@ describe('Daily overview', () => {
     expect(screen.getByRole('tab', { name: 'Data' })).toBeTruthy();
     expect(screen.queryByRole('tab', { name: 'Workouts' })).toBeNull();
     expect(screen.getByRole('tab', { name: 'Nutrition' })).toBeTruthy();
-    expect(screen.queryByRole('tab', { name: 'Body & sleep' })).toBeNull();
+    expect(screen.getByRole('tab', { name: 'Body & sleep' })).toBeTruthy();
 
     fireEvent.click(screen.getByRole('tab', { name: 'Data' }));
     await screen.findByLabelText('Browse');

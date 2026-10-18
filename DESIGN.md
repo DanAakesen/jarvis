@@ -1475,6 +1475,27 @@ inspection covered the phone and desktop sizes in both themes, plus reduced
 motion. The attention event and healthy Daily/Proactive data states were not
 available in the harness; screenshot captures could not be attached to the PR.
 
+## Daily Body & sleep (18 October 2026; P12-25)
+
+Reuse the Daily shell, shared controls, statistic tiles, chart and scroll-table
+patterns. One section heading precedes a keyboard-operated Body/Sleep tab list.
+A labelled search and native metric selector keep catalogue browsing usable on
+narrow screens; unknown metric names remain visible. Each unit has its own
+trend and daily table, with explicit daily-average fallback and observed-day
+coverage. Sleep uses a section-local stacked SVG with a text legend and the full
+night table: unknown stages are never presented as recorded zeroes, and a
+total-only night is labelled “Stages not recorded”. Night details stay in-page
+and return focus to their opening control. Route CSS owns spacing and responsive
+layout, not a second control geometry or theme.
+
+Synthetic Chromium inspection covered 320px, 390×844, 768px and 1440×900 in
+light and dark, including keyboard tabs, metric selection, refresh scroll
+retention, night detail/focus return and reduced motion. No horizontal page
+overflow was observed; controls met 44px targets and metric switching retained
+layout position. Six synthetic-only captures are in `docs/ui/p12-25/`
+(1,351,644 bytes combined). These checks do not verify live sign-in, private
+records, import completeness or a physical phone.
+
 ## Daily Nutrition (18 October 2026; P12-24)
 
 Nutrition stays within the existing Daily surface and shared control geometry.
