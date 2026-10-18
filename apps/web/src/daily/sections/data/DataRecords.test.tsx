@@ -16,7 +16,8 @@ describe('Daily Data records', () => {
     const table = screen.getByRole('table');
     expect(container.querySelector('.daily-scroll-table-sticky')).toBeTruthy();
     expect(within(table).getByRole('columnheader', { name: 'Energy (kcal)' })).toBeTruthy();
-    expect(within(table).getByRole('rowheader', { name: 'Oct 17, 2026' })).toBeTruthy();
+    const rowHeader = within(table).getByRole('rowheader', { name: 'Oct 17, 2026' });
+    expect(rowHeader.classList.contains('daily-record-row-header')).toBe(true);
     expect(within(table).getByText('0').closest('td')?.className).toBe('daily-record-number');
     expect(screen.queryByRole('region', { name: /Details for/u })).toBeNull();
     const opener = screen.getByRole('button', { name: /Details for/u });

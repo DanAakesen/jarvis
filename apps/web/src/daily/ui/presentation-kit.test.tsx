@@ -10,10 +10,13 @@ import { WorkoutGlyph } from './WorkoutGlyph';
 
 describe('Daily presentation kit', () => {
   it('labels freshness, unknown count, and partial status in text', () => {
-    render(<FreshnessLine observedAt="invalid-date" partial />);
-    expect(screen.getByRole('status').textContent).toContain('at an unknown time');
-    expect(screen.getByRole('status').textContent).toContain('an unknown number of records');
-    expect(screen.getByRole('status').textContent).toContain('partial');
+    const view = render(<FreshnessLine observedAt="invalid-date" partial />);
+    const status = screen.getByRole('status');
+    expect(status.textContent).toContain('at an unknown time');
+    expect(status.textContent).toContain('an unknown number of records');
+    expect(status.textContent).toContain('partial');
+    view.rerender(<FreshnessLine observedAt="invalid-date" partial />);
+    expect(screen.getByRole('status')).toBe(status);
   });
 
   it.each([[1, '1 meal'], [2, '2 meals'], [null, 'an unknown number of meals']] as const)(

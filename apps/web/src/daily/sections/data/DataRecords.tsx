@@ -121,7 +121,8 @@ export function DataRecords({ source, rows, units = {}, onOpenRecord, openLabel 
               const cell = <span className="daily-record-cell">{value(row, column.key)}</span>;
               const className = typeof row[column.key] === 'number' ? 'daily-record-number' : undefined;
               return columnIndex === 0
-                ? <th key={column.key} scope="row" className={className}>{cell}</th>
+                ? <th key={column.key} scope="row"
+                  className={`daily-record-row-header${className ? ` ${className}` : ''}`}>{cell}</th>
                 : <td key={column.key} className={className}>{cell}</td>;
             })}
             <td>{details(row, index)}</td>

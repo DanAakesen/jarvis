@@ -5,6 +5,29 @@ treatments selected from the existing Jarvis design system. The shared source
 of truth is `apps/web/src/styles.css`; route stylesheets own workflow layout,
 not parallel palettes or control systems.
 
+## Daily accessibility and keyboard audit (18 October 2026; P12-37)
+
+The Daily keyboard, focus, naming, state-announcement and table/chart semantics
+were audited across the shell, each section and the shared Daily kit. Three
+confirmed defects were corrected: sparklines now expose ordered observations
+and explicit missing points in their image name; record tables use row headers;
+and closed record-detail triggers retain a valid hidden `aria-controls` target.
+Other reviewed controls retain their existing names and behavior. Tests guard
+roving tab navigation, period keyboard order, record focus return, table/chart
+semantics, live-region roles and reduced motion.
+
+Synthetic Chromium checks covered 390×844 and 1440×900 in light/dark and
+320×844 in light. All six sections were reached using the section tab strip;
+workout/brief details, Nutrition views, Body view/measurement, record details,
+Escape focus return, Data chart choice and the scroll region were exercised.
+The Body measurement/chart check re-entered the synthetic page at its `view=body`
+URL after the nested-tab keyboard check to avoid an unsettled fixture transition.
+The runs reported a visible 3px focus outline, no document-width overflow and no
+console/page errors. The browser used scratch-only auth and synthetic responses;
+no physical screen-reader speech, physical-device output or live records were
+verified. The full matrix and named-role evidence are in
+[`ui/p12-37/audit.md`](ui/p12-37/audit.md).
+
 ## Surface coverage
 
 The audit covered the shared shell, desktop rail and mobile navigation, header
