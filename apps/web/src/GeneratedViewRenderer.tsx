@@ -1,4 +1,4 @@
-import { isGeneratedView, type GeneratedView } from '@jarvis/contracts';
+import { isGeneratedView, type GeneratedView, type GeneratedViewSource } from '@jarvis/contracts';
 import { Fragment } from 'react';
 import { Link } from 'react-router-dom';
 import { KnowledgeGraphWindow } from './knowledge/KnowledgeGraphView';
@@ -12,6 +12,15 @@ function ViewAction({ view, title }: { view: GeneratedView; title: string }) {
   if (!action) return <span>{title}</span>;
   if (action.type === 'open-route') return <Link className="activity-title" to={action.route}>{title}</Link>;
   return <a className="activity-title" href={action.url} rel="noreferrer" target="_blank">{title}</a>;
+}
+
+/**
+ * A table, chart or detail has no prose of its own, so its source note (provenance, read time, coverage) sits beneath it.
+ * List and text views already carry their own note in the content, so they never get a second copy here.
+ */
+function SourceNote({ source }: { source: GeneratedViewSource }) {
+  const note = source.reason?.trim();
+  return note ? <p className="generated-view-source-note">{note}</p> : null;
 }
 
 type TimelineEvent = { at?: string; label?: string; title: string; description?: string };
@@ -49,16 +58,19 @@ export function GeneratedViewRenderer({  view,
       return <KnowledgeGraphWindow query={view.data.query} highlight={view.data.highlight} />;
     case 'table':
       return (
-        <div className="generated-view-table">
-          <table aria-label={view.title}>
-            <thead><tr>{view.data.columns.map((column) => <th key={column} scope="col">{column}</th>)}</tr></thead>
-            <tbody>
-              {view.data.rows.map((row, index) => (
-                <tr key={index}>{row.map((cell, cellIndex) => <td key={cellIndex}>{cell === null ? '—' : String(cell)}</td>)}</tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <>
+          <div className="generated-view-table">
+            <table aria-label={view.title}>
+              <thead><tr>{view.data.columns.map((column) => <th key={column} scope="col">{column}</th>)}</tr></thead>
+              <tbody>
+                {view.data.rows.map((row, index) => (
+                  <tr key={index}>{row.map((cell, cellIndex) => <td key={cellIndex}>{cell === null ? '—' : String(cell)}</td>)}</tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <SourceNote source={view.source} />
+        </>
       );
     case 'list':
       return (
@@ -84,11 +96,14 @@ export function GeneratedViewRenderer({  view,
       );
     case 'detail':
       return (
-        <dl className="generated-view-details">
-          {view.data.fields.map(({ label, value }, index) => (
-            <Fragment key={`${label}-${index}`}><dt>{label}</dt><dd>{value}</dd></Fragment>
-          ))}
-        </dl>
+        <>
+          <dl className="generated-view-details">
+            {view.data.fields.map(({ label, value }, index) => (
+              <Fragment key={`${label}-${index}`}><dt>{label}</dt><dd>{value}</dd></Fragment>
+            ))}
+          </dl>
+          <SourceNote source={view.source} />
+        </>
       );
     case 'text':
       return <p className="generated-view-text">{view.data.content}</p>;
@@ -108,7 +123,12 @@ export function GeneratedViewRenderer({  view,
         </ol>
       );
     case 'chart':
-      return <ChartView kind={view.data.kind} series={view.data.series} title={view.title} />;
+      return (
+        <>
+          <ChartView kind={view.data.kind} series={view.data.series} title={view.title} />
+          <SourceNote source={view.source} />
+        </>
+      );
     case 'task-card':
       return (
         <dl className="generated-view-details">

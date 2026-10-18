@@ -35,7 +35,7 @@ const limits = JSON.parse(readFileSync(
 )) as { maxTools: number; maxToolDescriptionCharacters: number; maxCatalogueBytes: number };
 
 const dailyToolNames = [
-  'daily_query', 'daily_food', 'daily_food_review', 'daily_saved_food', 'daily_nutrition_targets', 'daily_nutrition_suggest',
+  'daily_query', 'daily_show', 'daily_food', 'daily_food_review', 'daily_saved_food', 'daily_nutrition_targets', 'daily_nutrition_suggest',
 ];
 
 // Daily is composed by default here so the size gates below always cover the largest catalogue the server can run.

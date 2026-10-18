@@ -37,3 +37,61 @@ describe('GeneratedViewRenderer timeline', () => {
     expect(screen.getByRole('table', { name: 'Revenue values', hidden: true }).querySelectorAll('tbody tr')).toHaveLength(4);
   });
 });
+
+describe('GeneratedViewRenderer source note', () => {
+  const reason = 'Retained Daily records, 1–16 Oct 2026 (Copenhagen dates). Read 17 Oct 2026, 09:00 Copenhagen time. '
+    + 'Completeness and freshness are not established. Unknown means no value was recorded, not zero.';
+  const source = { id: 'now', status: 'partial', updatedAt: '2026-10-17T07:00:00.000Z', reason };
+  const content = {
+    table: { renderer: 'table', data: { columns: ['Day', 'Value'], rows: [['2026-10-16', 7.25], ['2026-10-15', null]] } },
+    chart: { renderer: 'chart', data: { kind: 'bar', series: [{ name: 'Synthetic', points: [{ x: '2026-10-15', y: 61.5 }, { x: '2026-10-16', y: 62 }] }] } },
+    detail: { renderer: 'detail', data: { fields: [{ label: 'Latest', value: 'Synthetic' }] } },
+  };
+  const make = (renderer: keyof typeof content, overrides: object = {}) => (
+    { version: 1, title: 'Synthetic view', source, ...content[renderer], ...overrides } as unknown as GeneratedView
+  );
+
+  it.each(['table', 'chart', 'detail'] as const)('puts the note directly beneath a %s view', (renderer) => {
+    const { container } = render(<GeneratedViewRenderer view={make(renderer)} />);
+    const note = container.querySelector('.generated-view-source-note');
+    expect(note?.tagName).toBe('P');
+    expect(note?.textContent).toBe(reason);
+    expect(container.children).toHaveLength(2);
+    expect(container.lastElementChild).toBe(note);
+  });
+
+  it.each(['table', 'chart', 'detail'] as const)('adds nothing to a %s view without a reason or with a blank one', (renderer) => {
+    for (const noted of [{ id: 'now', status: 'complete' }, { ...source, reason: '   ' }]) {
+      const { container, unmount } = render(<GeneratedViewRenderer view={make(renderer, { source: noted })} />);
+      expect(container.querySelector('.generated-view-source-note')).toBeNull();
+      expect(container.children).toHaveLength(1);
+      unmount();
+    }
+  });
+
+  it('trims the note and keeps its text as plain text', () => {
+    const view = make('detail', { source: { ...source, reason: '  Read <b>now</b>.  ' } });
+    const { container } = render(<GeneratedViewRenderer view={view} />);
+    expect(container.querySelector('.generated-view-source-note')?.textContent).toBe('Read <b>now</b>.');
+    expect(container.querySelector('.generated-view-source-note b')).toBeNull();
+  });
+
+  it('never repeats the note on list and text views, which already carry their own', () => {
+    const own = 'Calendar results were incomplete, so some of these slots may not be free.';
+    const noted = { id: 'now', status: 'partial', updatedAt: source.updatedAt, reason: own };
+    const list = { version: 1, title: 'Free time', renderer: 'list', source: noted, data: { items: [{ title: own }] } };
+    const text = { version: 1, title: 'Free time', renderer: 'text', source: noted, data: { format: 'plain', content: own } };
+    for (const view of [list, text]) {
+      const { container, unmount } = render(<GeneratedViewRenderer view={view as unknown as GeneratedView} />);
+      expect(screen.getAllByText(own)).toHaveLength(1);
+      expect(container.querySelector('.generated-view-source-note')).toBeNull();
+      unmount();
+    }
+  });
+
+  it('shows nothing for an invalid view, note or not', () => {
+    const { container } = render(<GeneratedViewRenderer view={make('table', { data: { columns: [], rows: [] } })} />);
+    expect(screen.getByRole('alert').textContent).toBe('This generated view is invalid.');
+    expect(container.querySelector('.generated-view-source-note')).toBeNull();
+  });
+});
