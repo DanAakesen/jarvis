@@ -22,7 +22,11 @@ export function workoutOverview(rows: readonly Workout[], period: { startDate: s
     const date = workoutDate(row.workout_date) ?? workoutDate(row.start_at);
     return date && date >= period.startDate && date <= period.endDate ? [{ row, date }] : [];
   });
-  const latest = [...dated].sort((a, b) => b.date.localeCompare(a.date))[0] ?? null;
+  const startedAt = (row: Workout) => {
+    const value = typeof row.start_at === 'string' ? Date.parse(row.start_at) : Number.NaN;
+    return Number.isFinite(value) ? value : 0;
+  };
+  const latest = [...dated].sort((a, b) => b.date.localeCompare(a.date) || startedAt(b.row) - startedAt(a.row))[0] ?? null;
   const week = dated.filter(item => item.date >= weekPeriod.startDate && item.date <= weekPeriod.endDate).map(item => item.row);
   return { latest, week: summarizeWorkouts(week) };
 }
@@ -57,7 +61,7 @@ export function recentMeasurements(rows: readonly MetricRow[], limit = 3) {
       const latest = readings[0] ?? null;
       const previous = readings[1] ?? null;
       return {
-        name: group.name, label: group.label, unit: group.unit, latest, previous,
+        name: group.name, label: group.label, unit: group.unit, latest, previous, readings: [...readings].reverse(),
         change: latest?.value !== null && latest?.value !== undefined && previous?.value !== null && previous?.value !== undefined
           ? latest.value - previous.value : null,
       };
