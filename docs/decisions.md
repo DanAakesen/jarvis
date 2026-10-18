@@ -15,6 +15,15 @@ disabled state and accessible name while the shared inline Loader overlays a
 label that still reserves the button's width. This is a presentation-only
 change, not a change to actions, confirmation boundaries or API behavior.
 
+## Notify only on P1 - High vault tasks (18 October 2026; #996)
+
+Proactive todo findings and reminders are eligible only for open vault tasks
+explicitly marked `priority:: P1 - High` or `priority: P1 - High`. Missing and
+lower priority values are not notification-worthy. Re-check priority at reminder
+delivery; if the vault cannot establish the current priority after bounded
+retries, suppress rather than send an unverified reminder. This reuses the
+existing parser, proactive sources and reminder lifecycle without a migration.
+
 ## Discover Daily sections from folders (18 October 2026; P12-20 / #964)
 
 Daily keeps one destination and discovers section definitions from

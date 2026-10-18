@@ -24,8 +24,9 @@ afterEach(() => vi.useRealTimers());
 
 describe('proactive todos source', () => {
   it('prioritizes the 24-hour-before through 72-hour-after window and caps facts at 40', async () => {
-    const overdue = Array.from({ length: 50 }, (_, index) => `- [ ] Old ${index} due: 2026-08-01`).join('\n');
-    const source = createTodosSource(vault(`${overdue}\n- [ ] Due tomorrow 📅 2026-10-21`));
+    const overdue = Array.from({ length: 50 }, (_, index) =>
+      `- [ ] Old ${index} due: 2026-08-01 [priority:: P1 - High]`).join('\n');
+    const source = createTodosSource(vault(`${overdue}\n- [ ] Due tomorrow 📅 2026-10-21 [priority:: P1 - High]`));
     const result = await source.read(context());
 
     expect(result.state).toBe('ok');
@@ -44,7 +45,7 @@ describe('proactive todos source', () => {
   it('keeps the soonest 40 when more than 40 due todos fall inside the priority window', async () => {
     const tasks = Array.from({ length: 42 }, (_, index) => {
       const minute = String(index).padStart(2, '0');
-      return `- [ ] Window ${minute} 📅 2026-10-21 14:${minute}`;
+      return `- [ ] Window ${minute} 📅 2026-10-21 14:${minute} [priority:: P1 - High]`;
     }).reverse().join('\n');
     const result = await createTodosSource(vault(tasks)).read(context());
 
@@ -61,6 +62,23 @@ describe('proactive todos source', () => {
     const done = await createTodosSource(vault('- [x] completed')).read(context());
     expect(empty).toMatchObject({ state: 'ok', facts: [] });
     expect(done).toMatchObject({ state: 'ok', facts: [] });
+  });
+
+  it('returns notification facts only for open P1 - High tasks', async () => {
+    const content = [
+      '- [ ] Highest [priority:: P1 - High] 📅 2026-10-21 14:00',
+      '- [ ] Lower [priority:: P2 - Medium] 📅 2026-10-21 14:00',
+      '- [ ] Unprioritized 📅 2026-10-21 14:00',
+      '- [x] Completed [priority:: P1 - High] 📅 2026-10-21 14:00',
+    ].join('\n');
+    const result = await createTodosSource(vault(content)).read(context());
+
+    expect(result.facts).toHaveLength(1);
+    expect(result.facts[0]).toMatchObject({
+      ref: 'todo:1',
+      kind: 'todo',
+      text: 'Highest',
+    });
   });
 
   it('maps missing dependencies, missing or ambiguous files, size errors, read failures and timeouts', async () => {
