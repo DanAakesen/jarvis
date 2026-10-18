@@ -1685,10 +1685,11 @@ describe('committed domain schema (groups 1-8)', () => {
     expect(claimedAgain).toMatchObject({ kind: 'claimed', task: { taskId: task.id, attemptCount: 1 } });
     if (claimedAgain.kind !== 'claimed') throw new Error('Retry was not dispatchable');
     await dispatcher.failStart('retry-again', claimedAgain.task, null, 'credential_unavailable');
-    const sessionId = await scalar(`INSERT dbo.sandbox_sessions
-      (task_id, foundry_session_id, agent_version, size, image, status, ended_at, end_reason)
+    const sessionId = await scalar(`DECLARE @sessionAt datetime2(7) = SYSUTCDATETIME();
+      INSERT dbo.sandbox_sessions
+      (task_id, foundry_session_id, agent_version, size, image, status, started_at, ended_at, end_reason)
       VALUES (${task.id}, N'retry-${randomUUID()}', N'1', N'1x2', N'node', N'Ended',
-        SYSUTCDATETIME(), N'crashed')`);
+        @sessionAt, @sessionAt, N'crashed')`);
     expect((await store.retry(task.id)).kind).toBe('invalid-transition');
     await pool.request().query(`DELETE dbo.sandbox_sessions WHERE id = ${sessionId};`);
     await pool.request().query(`UPDATE dbo.tasks SET attempt_count = 0 WHERE id = ${task.id};`);

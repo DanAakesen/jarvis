@@ -80,13 +80,15 @@ async function completedRecoveryFixture() {
     .input('invocationId', sql.NVarChar(255), invocationId)
     .query<{ id: string }>(`UPDATE dbo.tasks SET branch = CONCAT(N'jarvis/task-', id) WHERE id = @taskId;
       DECLARE @session TABLE (id bigint);
+      DECLARE @sessionAt datetime2(7) = SYSUTCDATETIME();
       INSERT dbo.sandbox_sessions
-        (task_id, foundry_session_id, agent_version, agent_name, size, image, status, end_reason, ended_at)
+        (task_id, foundry_session_id, agent_version, agent_name, size, image, status, started_at, end_reason, ended_at)
       OUTPUT inserted.id INTO @session
       VALUES (@taskId, @foundrySessionId, N'fixture', N'jarvis-runner-base-1x2',
-        N'1x2', N'fixture', N'Ended', N'done', SYSUTCDATETIME());
-      INSERT dbo.sandbox_turns (sandbox_session_id, invocation_id, mode, acp_session_id, status, ended_at)
-      SELECT id, @invocationId, N'task', N'fixture', N'completed', SYSUTCDATETIME() FROM @session;
+        N'1x2', N'fixture', N'Ended', @sessionAt, N'done', @sessionAt);
+      DECLARE @turnAt datetime2(7) = SYSUTCDATETIME();
+      INSERT dbo.sandbox_turns (sandbox_session_id, invocation_id, mode, acp_session_id, status, started_at, ended_at)
+      SELECT id, @invocationId, N'task', N'fixture', N'completed', @turnAt, @turnAt FROM @session;
       SELECT CAST(id AS varchar(19)) AS id FROM @session;`);
   const sandboxSessionId = inserted.recordset[0]?.id;
   if (!sandboxSessionId) throw new Error('Completed recovery fixture was not inserted');
@@ -825,17 +827,19 @@ describe('dispatcher SQL coordination', () => {
         .input('taskId', sql.BigInt, BigInt(task.id))
         .input('status', sql.NVarChar(8), sessionStatus)
         .input('foundrySessionId', sql.NVarChar(255), `finishing-${sessionStatus}-${randomUUID()}`)
-        .query<{ id: string }>(`INSERT dbo.sandbox_sessions
-        (task_id, foundry_session_id, agent_version, agent_name, size, image, status, ended_at, end_reason)
+        .query<{ id: string }>(`DECLARE @sessionAt datetime2(7) = SYSUTCDATETIME();
+        INSERT dbo.sandbox_sessions
+        (task_id, foundry_session_id, agent_version, agent_name, size, image, status, started_at, ended_at, end_reason)
         OUTPUT CAST(inserted.id AS varchar(19)) AS id
         VALUES (@taskId, @foundrySessionId, N'1', N'jarvis-runner-base-1x2', N'1x2', N'fixture', @status,
-          CASE WHEN @status = N'Ended' THEN SYSUTCDATETIME() ELSE NULL END,
+          @sessionAt, CASE WHEN @status = N'Ended' THEN @sessionAt ELSE NULL END,
           CASE WHEN @status = N'Ended' THEN N'done' ELSE NULL END);`);
       const sessionId = session.recordset[0]!.id;
       await pool.request()
         .input('sessionId', sql.BigInt, BigInt(sessionId))
-        .query(`INSERT dbo.sandbox_turns (sandbox_session_id, invocation_id, mode, acp_session_id, status, ended_at)
-        VALUES (@sessionId, N'finishing-invocation', N'task', N'fixture-acp', N'completed', SYSUTCDATETIME());`);
+        .query(`DECLARE @turnAt datetime2(7) = SYSUTCDATETIME();
+        INSERT dbo.sandbox_turns (sandbox_session_id, invocation_id, mode, acp_session_id, status, started_at, ended_at)
+        VALUES (@sessionId, N'finishing-invocation', N'task', N'fixture-acp', N'completed', @turnAt, @turnAt);`);
       const cancel = vi.fn();
       const deleteSession = vi.fn(async () => {});
       const dispatcher = new TaskDispatcher(store, taskStore, settings(), () => ({
@@ -966,10 +970,11 @@ describe('dispatcher SQL coordination', () => {
         .input('foundrySessionId', sql.NVarChar(255), foundrySessionId)
         .input('invocationId', sql.NVarChar(255), invocationId)
         .input('status', sql.NVarChar(16), turnStatus)
-        .query(`INSERT dbo.sandbox_turns (sandbox_session_id, invocation_id, mode, acp_session_id, status,
+        .query(`DECLARE @turnAt datetime2(7) = SYSUTCDATETIME();
+          INSERT dbo.sandbox_turns (sandbox_session_id, invocation_id, mode, acp_session_id, status, started_at,
             ended_at)
           VALUES (@sandboxSessionId, @invocationId, N'task', @foundrySessionId, @status,
-            CASE WHEN @status = N'completed' THEN SYSUTCDATETIME() ELSE NULL END);`);
+            @turnAt, CASE WHEN @status = N'completed' THEN @turnAt ELSE NULL END);`);
       return { sandboxSessionId, foundrySessionId, invocationId };
     };
     const addRunningInvocation = async (
@@ -1131,8 +1136,9 @@ describe('dispatcher SQL coordination', () => {
       .input('sandboxSessionId', sql.BigInt, BigInt(sandboxSessionId))
       .input('foundrySessionId', sql.NVarChar(255), foundrySessionId)
       .input('invocationId', sql.NVarChar(255), invocationId)
-      .query(`INSERT dbo.sandbox_turns (sandbox_session_id, invocation_id, mode, acp_session_id, status, ended_at)
-        VALUES (@sandboxSessionId, @invocationId, N'task', @foundrySessionId, N'completed', SYSUTCDATETIME());`);
+      .query(`DECLARE @turnAt datetime2(7) = SYSUTCDATETIME();
+        INSERT dbo.sandbox_turns (sandbox_session_id, invocation_id, mode, acp_session_id, status, started_at, ended_at)
+        VALUES (@sandboxSessionId, @invocationId, N'task', @foundrySessionId, N'completed', @turnAt, @turnAt);`);
 
     const startTask = vi.fn(async () => ({
       invocationId: `waiting-${randomUUID()}`,
