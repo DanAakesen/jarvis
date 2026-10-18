@@ -62,12 +62,13 @@ const correctionSchema = removeSchema.extend({
   }).strict().refine(value => Object.keys(value).length > 0),
 }).strict();
 const querySchema = z.object({
-  source: z.enum(['daily.nutrition.meals', 'daily.nutrition.favorites', 'daily.nutrition.plans']),
+  source: z.enum(['daily.nutrition.meals', 'daily.nutrition.days', 'daily.nutrition.favorites', 'daily.nutrition.plans']),
   startDate: z.iso.date().optional(), endDate: z.iso.date().optional(),
-  limit: z.number().int().min(1).max(100).optional(),
+  limit: z.number().int().min(1).max(400).optional(),
   cursor: z.union([
     z.object({ id: exactText() }).strict(),
     z.object({ createdAt: z.iso.datetime({ offset: true }), id: exactText() }).strict(),
+    z.object({ date: z.iso.date() }).strict(),
   ]).optional(),
 }).strict().refine(isDailyQuery);
 const lookupSchema = z.object({
@@ -223,7 +224,7 @@ export function dailyMcpRoutes(query: Pick<DailyQueryService, 'query'>, options:
             }
           };
           server.registerTool('read_nutrition', {
-            title: 'Read nutrition', description: 'Read bounded meal history, saved favourites or meal plans. Definitions and plans are not eaten meals.',
+            title: 'Read nutrition', description: 'Read bounded meal history, per-day totals derived from retained non-deleted meals, saved favourites or meal plans. Nutrients missing from every meal are unknown; partial totals are lower bounds. Definitions and plans are not eaten meals.',
             _meta: security(),
             inputSchema: querySchema, annotations: { readOnlyHint: true, openWorldHint: false, destructiveHint: false },
           }, async (input, ctx) => safe(request, 'read_nutrition', challenge(), async () => {

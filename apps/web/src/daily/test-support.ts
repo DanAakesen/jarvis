@@ -1,3 +1,4 @@
+import { dailyQuerySources } from '@jarvis/contracts';
 import type { DailyCursor, DailyJson, DailyQuery, DailyQueryResult } from '@jarvis/contracts';
 
 export function dailyFixture(query: DailyQuery, items: Record<string, DailyJson>[] = [], next: DailyCursor | null = null): DailyQueryResult {
@@ -9,7 +10,7 @@ export function dailyFixture(query: DailyQuery, items: Record<string, DailyJson>
       query.source === 'daily.health.sleep' ? { '*_hours': 'h' } :
         query.source === 'daily.health.workouts' ? { duration_seconds: 's', '*_unit': 'retained per-record unit', '*_heart_rate': 'bpm' } :
           { unit: 'retained per-record unit' },
-    provenance: { store: 'daily-sql', detail: 'retained-record', calculations: 'existing-read-model', consistency: 'independent-committed-reads' },
+    provenance: { store: 'daily-sql', detail: 'retained-record', calculations: query.source === dailyQuerySources.days ? 'derived-from-retained-meals' : 'existing-read-model', consistency: 'independent-committed-reads' },
     freshness: { observedAt: '2026-10-17T07:00:00Z', sourceProcessedCommittedAt: null, latestReturnedRecordUpdatedAt: null, staleness: 'unknown' },
     coverage: { returned: items.length, hasMore: next !== null, next, sourceCompleteness: 'unknown' },
     revision: 'a'.repeat(64),
