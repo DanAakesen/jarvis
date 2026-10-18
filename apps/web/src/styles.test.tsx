@@ -84,7 +84,7 @@ describe('app-wide control contract', () => {
 
   it('draws slim arrowless desktop scrollbars and keeps the glass ring from adding phantom ones', () => {
     expect(ruleDeclaration(source, /\* \{ (scrollbar-width: thin;[^}]*)\}/, 'scrollbar-width')).toBe('thin');
-    const parts = source.match(/@supports selector\(::-webkit-scrollbar\) \{\s*@media \(pointer: fine\) \{([\s\S]*?)\n  \}\n\}/)?.[1] ?? '';
+    const parts = source.match(/@supports selector\(::-webkit-scrollbar\) \{\s*@media \(pointer: fine\) \{([\s\S]*?)\n {2}\}\n\}/)?.[1] ?? '';
     expect(parts).toContain('* { scrollbar-width: auto; scrollbar-color: auto; }');
     expect(ruleDeclaration(parts, /\n\s*::-webkit-scrollbar-button\s*\{([^}]*)\}/, 'display')).toBe('none');
     expect(ruleDeclaration(parts, /\n\s*::-webkit-scrollbar-thumb\s*\{([^}]*)\}/, 'border-radius')).toBe('var(--radius-pill)');
