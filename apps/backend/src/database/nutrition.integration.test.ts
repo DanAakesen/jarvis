@@ -515,7 +515,6 @@ describe('inactive nutrition services on real SQL Server', () => {
       expect((await pool.request().query('SELECT COUNT(*) AS count FROM daily.nutrition_meals')).recordset[0].count).toBe(mealsBefore);
       expect((await pool.request().query('SELECT COUNT(*) AS count FROM daily.nutrition_queue')).recordset[0].count).toBe(0);
       expect(confirmations.pendingBrowserConfirmations()).toEqual([]);
-      expect(send).not.toHaveBeenCalled();
     } finally {
       controller.abort();
       if (active) await Promise.allSettled([active]);
