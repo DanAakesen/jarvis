@@ -67,6 +67,26 @@ two minutes for reconnection before recording offline, and shutdown records
 nothing. Live socket status remains immediate. This separates restart noise from
 real attention changes without hiding an offline bridge indefinitely.
 
+## Draw slim desktop scrollbars and keep glass rings off scrolling surfaces (18 October 2026; fix-main)
+
+`.luminous-glass::before` is a 1px ring drawn at `inset: -1px`. Inside a scrolling
+container that overhang counts as scrollable overflow, so the Notes search results
+and every modal showed vertical and horizontal scrollbars even when their content
+fitted. A glass surface that scrolls now drops the ring (`.knowledge-results` keeps
+a hairline border instead) or stops being the scroller (`.modal` no longer sets
+`overflow`; a card taller than the viewport scrolls with its backdrop).
+
+Chromium and Safari add arrow buttons to the standard thin scrollbar and ignore
+`::-webkit-scrollbar` while `scrollbar-width` or `scrollbar-color` is set. With a
+fine pointer the standard properties are therefore reset and the bar is built from
+its parts: 10px wide, no arrow buttons, transparent track and a pill thumb that
+lights cyan while the main scroll surfaces or the thumb are hovered. Touch screens
+and Firefox keep the standard thin overlay bars. The Notes reader keeps its
+stronger resting thumb, and the deliberately hidden scrollbars (tab strips, job
+tabs, kanban pulse, phone legend) are unchanged. `styles.test.tsx` pins the
+approach. Checked in headless Edge before and after, in dark and light themes, and
+with phone emulation; not checked on a physical phone.
+
 ## Decide what Dan's approval means on the server, never with a word list (17 October 2026; P11-10 / #894)
 
 **Confirmed user decision, awaiting Dan's live re-test.** After he approved two
