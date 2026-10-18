@@ -119,12 +119,14 @@ export function NotesArea({ backendUrl, getAccessToken }: AreaProps) {
   useEffect(() => {
     if (!queryNote) { openedQueryNote.current = null; return; }
     if (!client || openedQueryNote.current === queryNote) return;
-    openedQueryNote.current = queryNote;
-    const title = queryNote.split('/').at(-1)?.replace(/\.md$/iu, '').replace(/[-_]/gu, ' ') || 'Vault note';
-    const open = () => { void openNote(queryNote, title); };
-    if (dirty || saving) setPendingChange(() => open);
-    else open();
-  }, [client, dirty, openNote, queryNote, saving]);
+    const timer = window.setTimeout(() => {
+      if (openedQueryNote.current === queryNote) return;
+      openedQueryNote.current = queryNote;
+      const title = queryNote.split('/').at(-1)?.replace(/\.md$/iu, '').replace(/[-_]/gu, ' ') || 'Vault note';
+      void openNote(queryNote, title);
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [client, openNote, queryNote]);
   const save = async () => {
     if (!client || !editor || savePending.current || !dirty || editor.revisionMissing || conflict) return;
     if (!safeNotePath(editor.path)) { setError('Give your note a title with letters or numbers and a short, safe location before saving.'); return; }

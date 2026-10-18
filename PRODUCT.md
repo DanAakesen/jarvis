@@ -643,6 +643,22 @@ pinning is available, and Close for unpinned windows. Crowded tabs remain
 scrollable; phone window-list actions remain reachable above content windows.
 Persistent-pin semantics are still part of the unfinished P8-42 implementation.
 
+#### Vault tasks and Notes (P13-19; 18 October 2026)
+
+Personal to-dos and notes are separate concepts. The `/tasks` page reads native
+Obsidian checkbox items from the shared proactive scope: `Personal/` and `Work/`
+notes plus the root `task.md` or `tasks.md` dashboard. It groups open tasks by
+Overdue, Today, Upcoming and No date; completed tasks are opt-in. Search filters
+task text, and each task links to its source note. Jarvis never creates, edits,
+completes, reorders or deletes these tasks; Dan completes them in Obsidian.
+Agent work remains on the Software Factory board.
+
+Notes remains a notes surface. Search shows the matching plain-text snippet under
+each note title and, when open tasks match, a separate Tasks result group linking
+to `/tasks?q=...`. In chat and voice, task/to-do/reminder requests use the
+read-only `vault_tasks` tool; note searches use `vault_search` and `vault_read`.
+All reads are owner-only and treat vault content as untrusted data.
+
 #### Software Factory — task view
 
 | Data points | Actions |

@@ -1,5 +1,16 @@
 # Decisions
 
+## Separate read-only vault tasks from Notes (18 October 2026; P13-19 / #1015)
+
+Personal to-dos remain checkbox items in the proactive reader's shared scope:
+recursive `Personal/` and `Work/` notes and the root `task.md` or `tasks.md`,
+excluding hidden paths and Archive segments. Jarvis exposes them in an owner-only
+Tasks view, Notes task-search group, and read-only `vault_tasks` tool. The same
+parser and direct vault read model serve the proactive engine and these surfaces.
+Jarvis never creates, edits, completes, reorders or deletes the owner's tasks;
+the owner completes them in Obsidian. Software Factory remains the separate
+agent-work board.
+
 ## Consolidate web viewport breakpoints (18 October 2026; P14-05 / #973)
 
 Use one non-Daily viewport set: phone through 700px, tablet above 700px through

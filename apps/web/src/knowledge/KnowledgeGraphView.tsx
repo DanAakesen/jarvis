@@ -158,16 +158,23 @@ export function KnowledgeGraphView({ backendUrl, getAccessToken, initialQuery = 
   useEffect(() => {
     if (!graph) return;
     const trimmed = query.trim();
-    setSearching(false);
-    setNoteSnippets({});
-    setTaskSearch({ result: null, error: '' });
     // Jarvis's own search result stands for the query it sent; Dan's own typing searches afresh.
     if (external.highlight.length && trimmed === external.query.trim()) {
-      const timer = window.setTimeout(() => setHits(external.highlight.filter((id) => nodesById.has(id))), 0);
+      const timer = window.setTimeout(() => {
+        setSearching(false);
+        setNoteSnippets({});
+        setTaskSearch({ result: null, error: '' });
+        setHits(external.highlight.filter((id) => nodesById.has(id)));
+      }, 0);
       return () => window.clearTimeout(timer);
     }
     const local = trimmed ? matchTitles(graph, trimmed) : [];
-    const timer = window.setTimeout(() => setHits(local), 0);
+    const timer = window.setTimeout(() => {
+      setSearching(false);
+      setNoteSnippets({});
+      setTaskSearch({ result: null, error: '' });
+      setHits(local);
+    }, 0);
     if (!trimmed || !backendUrl || graph.sample) return () => window.clearTimeout(timer);
     const controller = new AbortController();
     const remote = window.setTimeout(() => {
