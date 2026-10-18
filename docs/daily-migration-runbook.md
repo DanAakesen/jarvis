@@ -11,8 +11,9 @@ Only synthetic bundles may enter a coding-agent environment.
    and encrypted private storage outside this repository and outside every
    coding-agent environment. Keep exports, reports, temporary storage and
    private notes there. Never upload them to GitHub, Actions artifacts, PRs,
-   chat, logs or fixtures. Ensure sufficient private temporary disk space for
-   digest indexes and protect the host's temporary directory.
+   chat, logs or fixtures. Ensure private temporary disk space for digest
+   indexes, a verified copy of bundle table files and reconciliation sort runs;
+   protect the host's temporary directory.
    **Expected:** a private destination and recovery copy, not a repository file.
 
 2. **Owner-only — establish the real source inventory.** With access to the
@@ -111,8 +112,10 @@ Only synthetic bundles may enter a coding-agent environment.
    a pass. Rerun on a fresh immutable bundle and retain failed evidence
    privately.
    After an abrupt process termination, inspect the private report directory
-   and remove stale `.daily-index-*` scratch directories privately; normal
-   completion/failure cleans them up.
+   and remove stale `.daily-index-*` scratch directories and
+   `daily-import-validation-*` directories in the host temporary directory
+   privately. The latter may contain source rows. Normal completion/failure
+   cleans them up.
    **Expected:** explained warnings, no errors or blocked tables, and source
    inventory evidence that agrees with the bundle. A pass alone cannot
    establish that the original source query was complete.
@@ -191,8 +194,8 @@ Only synthetic bundles may enter a coding-agent environment.
 14. **Owner-only — retain evidence and stop.** Privately retain the bundle and
    manifest hashes, validation/import/reconcile reports, state/checkpoint
    directory, owner rulings, protected workflow evidence and backup/recovery
-   notes. Keep every item outside this repository, agent environments and
-   GitHub artifacts.
+   notes. Remove stale private temporary snapshots after a crash. Keep every
+   item outside this repository, agent environments and GitHub artifacts.
    **Expected:** no real import is claimed by this issue. No real data,
    export, ruling, credential or report was used or produced here. Final delta,
    rollback and cutover remain separate owner-only gates.

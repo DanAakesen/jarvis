@@ -20,6 +20,7 @@ import { isImportableRow, validateBundle } from './validate.js';
 export const IMPORT_CONFLICT_EXIT_CODE = 3;
 const STATE_FILE = '.daily-import-state.json';
 const LOCK_FILE = '.daily-import.lock';
+const MAX_STATE_BYTES = 64 * 1024 * 1024;
 const MAX_ATTEMPTS = 3;
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../../../..');
 const textKeyMetadata = (table: DailyTable, column: string) =>
@@ -202,9 +203,15 @@ async function readManifest(bundle: string): Promise<{ manifest: Manifest; diges
   const reader = await BundleReader.create(bundle, 262144);
   try {
     const bytes: Buffer[] = [];
-    for await (const chunk of reader.chunks('manifest.json')) bytes.push(Buffer.from(chunk));
+    let size = 0;
+    for await (const chunk of reader.chunks('manifest.json')) {
+      size += chunk.length;
+      if (size > 262144) throw new Error('validation-failed');
+      bytes.push(Buffer.from(chunk));
+    }
     const content = Buffer.concat(bytes);
-    return { manifest: parseManifest(JSON.parse(content.toString('utf8'))), digest: sha256(content) };
+    const text = new TextDecoder('utf-8', { fatal: true }).decode(content);
+    return { manifest: parseManifest(JSON.parse(text)), digest: sha256(content) };
   } finally { await reader.close(); }
 }
 
@@ -215,11 +222,63 @@ export function selectedTables(tables: readonly string[] | undefined): DailyTabl
   return IMPORT_ORDER.filter(table => tables.includes(table));
 }
 
-async function preflight(bundle: string, workspace: string): Promise<Manifest> {
+async function preflight(bundle: string, workspace: string): Promise<{ manifest: Manifest; digest: string }> {
   const report = await validateBundle({ bundle, reportDir: workspace });
   if (!report.valid || Object.values(report.tables).some(table => table.blocked)) throw new Error('validation-failed');
-  const { manifest } = await readManifest(bundle);
-  return manifest;
+  const { manifest, digest } = await readManifest(bundle);
+  if (report.manifestSha256 !== digest) throw new Error('validation-failed');
+  return { manifest, digest };
+}
+
+async function snapshotValidatedTables(
+  bundle: string,
+  directory: string,
+  manifest: Manifest,
+  manifestDigest: string,
+): Promise<BundleReader> {
+  const destination = join(directory, 'validated-bundle');
+  await mkdir(destination, { mode: 0o700 });
+  const source = await BundleReader.create(bundle, 1024 * 1024);
+  let sourceClosed = false;
+  const closeSource = async () => {
+    if (sourceClosed) return;
+    sourceClosed = true;
+    await source.close();
+  };
+  const copy = async (file: string, expectedDigest: string, maximumBytes?: number): Promise<number> => {
+    const staging = join(destination, file);
+    const output = await open(staging, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600);
+    const hash = createHash('sha256');
+    let bytes = 0;
+    try {
+      for await (const chunk of source.chunks(file)) {
+        bytes += chunk.length;
+        if (maximumBytes !== undefined && bytes > maximumBytes) throw new Error('validation-failed');
+        hash.update(chunk);
+        await output.writeFile(chunk);
+      }
+      await output.sync();
+    } finally { await output.close(); }
+    if (hash.digest('hex') !== expectedDigest) throw new Error('validation-failed');
+    return bytes;
+  };
+  try {
+    await copy('manifest.json', manifestDigest, 262144);
+    for (const [table, metadata] of Object.entries(manifest.tables)) {
+      await copy(metadata.file, metadata.sha256);
+      const counter = await BundleReader.create(destination, 1024 * 1024);
+      try {
+        const actual = await counter.lines(metadata.file, async () => undefined);
+        if (actual.rows !== metadata.rowCount || actual.sha256 !== metadata.sha256) throw new Error('validation-failed');
+      } finally { await counter.close(); }
+      if (!Object.hasOwn(decisions, table)) throw new Error('validation-failed');
+    }
+    await closeSource();
+    return await BundleReader.create(destination, 1024 * 1024);
+  } catch (error) {
+    await closeSource().catch(() => undefined);
+    throw error;
+  }
 }
 
 export async function acquireState(stateDirectory: string, manifestDigest: string, batchSize: number): Promise<{
@@ -254,15 +313,27 @@ export async function acquireState(stateDirectory: string, manifestDigest: strin
     }
     await unlink(lockPath);
   } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
-  const lock = await open(lockPath, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600);
-  await lock.writeFile(JSON.stringify({ pid: process.pid }));
-  await lock.close();
+  let lock: Awaited<ReturnType<typeof open>>;
+  try { lock = await open(lockPath, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600); }
+  catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'EEXIST') throw new Error('state-running', { cause: error });
+    throw error;
+  }
+  try { await lock.writeFile(JSON.stringify({ pid: process.pid })); await lock.close(); }
+  catch (error) {
+    await lock.close().catch(() => undefined);
+    await unlink(lockPath).catch(() => undefined);
+    throw error;
+  }
   const release = async () => { await unlink(lockPath).catch((error: NodeJS.ErrnoException) => { if (error.code !== 'ENOENT') throw error; }); };
   let checkpoint: ImportCheckpoint = { version: 1, manifestDigest, batchSize, tables: {} };
   const statePath = join(directory, STATE_FILE);
   try {
     const info = await lstat(statePath);
-    if (!info.isFile() || info.isSymbolicLink() || info.nlink !== 1) throw new Error('state-invalid');
+    if (!info.isFile() || info.isSymbolicLink() || info.nlink !== 1 || info.size > MAX_STATE_BYTES
+      || (info.mode & 0o077) !== 0 || (typeof process.getuid === 'function' && info.uid !== process.getuid())) {
+      throw new Error('state-invalid');
+    }
     checkpoint = JSON.parse(await readFile(statePath, 'utf8')) as ImportCheckpoint;
     if (checkpoint.version !== 1 || checkpoint.manifestDigest !== manifestDigest || checkpoint.batchSize !== batchSize
       || !checkpoint.tables || typeof checkpoint.tables !== 'object'
@@ -281,19 +352,24 @@ export async function writeCheckpoint(directory: string, checkpoint: ImportCheck
   const destination = join(directory, STATE_FILE);
   try {
     const info = await lstat(destination);
-    if (!info.isFile() || info.isSymbolicLink() || info.nlink !== 1) throw new Error('state-invalid');
+    if (!info.isFile() || info.isSymbolicLink() || info.nlink !== 1 || info.size > MAX_STATE_BYTES
+      || (info.mode & 0o077) !== 0 || (typeof process.getuid === 'function' && info.uid !== process.getuid())) {
+      throw new Error('state-invalid');
+    }
   } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
   const staging = join(directory, `.checkpoint-${randomUUID()}`);
   try {
+    const contents = `${JSON.stringify(checkpoint)}\n`;
+    if (Buffer.byteLength(contents) > MAX_STATE_BYTES) throw new Error('state-too-large');
     const handle = await open(staging, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600);
-    try { await handle.writeFile(`${JSON.stringify(checkpoint)}\n`); await handle.sync(); } finally { await handle.close(); }
+    try { await handle.writeFile(contents); await handle.sync(); } finally { await handle.close(); }
     await rename(staging, destination);
   } finally { await unlink(staging).catch((error: NodeJS.ErrnoException) => { if (error.code !== 'ENOENT') throw error; }); }
 }
 
 function validateCheckpointTable(table: DailyTable, checkpoint: TableCheckpoint | undefined): TableCheckpoint {
-  if (!checkpoint) return { complete: false, batches: [] };
-  if (typeof checkpoint !== 'object' || typeof checkpoint.complete !== 'boolean' || !Array.isArray(checkpoint.batches)
+  if (checkpoint === undefined) return { complete: false, batches: [] };
+  if (!checkpoint || typeof checkpoint !== 'object' || typeof checkpoint.complete !== 'boolean' || !Array.isArray(checkpoint.batches)
     || Object.keys(checkpoint).some(key => !['complete', 'batches'].includes(key))) throw new Error('state-invalid');
   const countKeys: (keyof BatchCounts)[] = [
     'sourceRows', 'importableRows', 'excludedRows', 'inserted', 'skipped', 'conflicts',
@@ -399,10 +475,10 @@ async function processBatch(
   rows: PreparedRow[],
   execute: boolean,
 ): Promise<BatchCounts> {
-  const result = emptyCounts();
-  result.sourceRows = rows.length;
-  result.importableRows = rows.length;
-  const evaluate = async (transaction?: Transaction): Promise<void> => {
+  const evaluate = async (transaction?: Transaction): Promise<BatchCounts> => {
+    const result = emptyCounts();
+    result.sourceRows = rows.length;
+    result.importableRows = rows.length;
     for (const row of rows) {
       const status = await rowStatus(pool, transaction, table, owner, row, execute);
       if (status === 'insert') {
@@ -412,15 +488,19 @@ async function processBatch(
       } else if (execute) result.conflicts++;
       else result.wouldConflict++;
     }
+    return result;
   };
-  if (!execute) { await evaluate(); return result; }
-  await retryTransient(async () => {
+  if (!execute) return evaluate();
+  return retryTransient(async () => {
     const transaction = new sql.Transaction(pool);
     await transaction.begin();
-    try { await evaluate(transaction); await transaction.commit(); }
+    try {
+      const result = await evaluate(transaction);
+      await transaction.commit();
+      return result;
+    }
     catch (error) { await transaction.rollback().catch(() => undefined); throw error; }
   });
-  return result;
 }
 
 function makeTableReport(): MigrationTableReport {
@@ -518,7 +598,7 @@ async function* mergeRuns(paths: readonly string[], table: DailyTable, orderColu
 
 async function writeSortedRun(path: string, rows: readonly SourceRow[]): Promise<void> {
   const handle = await open(path, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600);
-  try { for (const row of rows) await handle.write(`${row.line}\n`); } finally { await handle.close(); }
+  try { for (const row of rows) await handle.writeFile(`${row.line}\n`); } finally { await handle.close(); }
 }
 
 async function* sortedSourceRows(
@@ -561,7 +641,7 @@ async function* sortedSourceRows(
         const group = runs.slice(offset, offset + 32);
         const path = join(directory, `merge-${sequence++}`);
         const handle = await open(path, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600);
-        try { for await (const row of mergeRuns(group, table, orderColumns)) await handle.write(`${row.line}\n`); }
+        try { for await (const row of mergeRuns(group, table, orderColumns)) await handle.writeFile(`${row.line}\n`); }
         finally { await handle.close(); }
         merged.push(path);
         await Promise.all(group.map(run => unlink(run)));
@@ -835,10 +915,9 @@ async function loadProgressReport(
 async function createImportContext(bundle: string): Promise<ImportContext> {
   const workspace = await mkdtemp(join(tmpdir(), 'daily-import-validation-'));
   try {
-    const manifest = await preflight(bundle, workspace);
-    const data = await readManifest(bundle);
-    const reader = await BundleReader.create(bundle, 1024 * 1024);
-    return { workspace, manifest, digest: data.digest, reader };
+    const { manifest, digest } = await preflight(bundle, workspace);
+    const reader = await snapshotValidatedTables(bundle, workspace, manifest, digest);
+    return { workspace, manifest, digest, reader };
   } catch (error) { await rm(workspace, { recursive: true, force: true }); throw error; }
 }
 
@@ -858,9 +937,10 @@ export async function importBundle(
   };
   try {
     const owner = assertConfiguredOwner(options.ownerObjectId, configuredOwner);
+    if (isWithin(resolve(options.bundle), resolve(options.stateDir))) throw new Error('state-location-invalid');
     state = await acquireState(options.stateDir, context.digest, options.batchSize ?? 500);
-    if (!pool.connected) await pool.connect();
-    await verifyLiveSchema(pool, tables);
+    if (!pool.connected) await retryTransient(() => pool.connect());
+    await verifyLiveSchema(pool, IMPORT_ORDER);
     for (const table of tables) {
       const tableReport = makeTableReport();
       report.tables[table] = tableReport;
@@ -894,9 +974,16 @@ export async function reconcileBundle(
   };
   try {
     const owner = assertConfiguredOwner(options.ownerObjectId, configuredOwner);
-    if (!pool.connected) await pool.connect();
-    await verifyLiveSchema(pool, tables);
+    if (!pool.connected) await retryTransient(() => pool.connect());
+    await verifyLiveSchema(pool, IMPORT_ORDER);
     for (const table of tables) {
+      if (context.manifest.rulings?.[table]?.decision === 'exclude') {
+        const tableReport = makeTableReport();
+        tableReport.sourceSha256 = sha256('');
+        tableReport.excludedRows = context.manifest.tables[table]?.rowCount ?? 0;
+        report.tables[table] = tableReport;
+        continue;
+      }
       const different = await retryTransient(() => reconcileTable(
         pool, owner, context, table, options.batchSize ?? 500, tableReport => { report.tables[table] = tableReport; },
       ));

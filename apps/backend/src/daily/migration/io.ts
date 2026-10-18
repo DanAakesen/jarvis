@@ -70,14 +70,19 @@ export class BundleReader {
     } finally { await handle.close(); }
   }
   async boundedJson(path: string, limit: number): Promise<unknown> {
+    return (await this.boundedJsonWithHash(path, limit)).value;
+  }
+  async boundedJsonWithHash(path: string, limit: number): Promise<{ value: unknown; sha256: string }> {
     const chunks: Buffer[] = [];
+    const hash = createHash('sha256');
     let size = 0;
     for await (const chunk of this.chunks(path)) {
       size += chunk.length;
       if (size > limit) fail('manifest-too-large');
+      hash.update(chunk);
       chunks.push(Buffer.from(chunk));
     }
-    return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(Buffer.concat(chunks)));
+    return { value: JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(Buffer.concat(chunks))), sha256: hash.digest('hex') };
   }
   async lines(path: string, consume: (line: string) => Promise<void>): Promise<{ rows: number; bytes: number; sha256: string }> {
     const hash = createHash('sha256');

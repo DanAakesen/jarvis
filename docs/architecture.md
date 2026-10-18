@@ -5334,10 +5334,12 @@ against the registry, writes each batch transactionally, and resumes from
 atomic count/digest-only checkpoints outside the repository. It skips identical
 rows and never overwrites conflicts. Reconciliation streams owner-scoped rows
 in key order and reports canonical checksums, counts and truncated digests only.
-Real exports, state, reports and temporary sort data remain private and outside
-repositories, agents and GitHub artifacts. Synthetic tests do not establish
-live-schema/data parity; no real import or reconciliation has been run. P12-19
-removes this temporary directory and its related SQL test following its README.
+Import/reconcile create a verified table snapshot and temporary sort data under
+the host temp directory. Real exports, state, reports, snapshots and sort data
+remain private and outside repositories, agents and GitHub artifacts. Synthetic
+tests do not establish live-schema/data parity; no real import or reconciliation
+has been run. P12-19 removes this temporary directory and its related SQL test
+following its README.
 See the
 [bundle format](daily-migration-bundle.md) and
 [owner runbook](daily-migration-runbook.md).

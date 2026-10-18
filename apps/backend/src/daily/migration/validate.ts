@@ -25,6 +25,7 @@ export interface TableReport {
 export interface ValidationReport {
   formatVersion: 1;
   valid: boolean;
+  manifestSha256: string | null;
   errors: Counts;
   tables: Record<string, TableReport>;
   unknownTables: { count: number; digest: string | null };
@@ -237,7 +238,7 @@ async function validate(options: ValidateOptions): Promise<ValidationReport> {
   const bundlePath = resolve(options.bundle), reportPath = resolve(options.reportDir);
   if (reportPath === bundlePath || reportPath.startsWith(`${bundlePath.endsWith(sep) ? bundlePath : bundlePath + sep}`)) fail('report-location-invalid');
   const report: ValidationReport = {
-    formatVersion: 1, valid: false, errors: {}, tables: {}, unknownTables: { count: 0, digest: null },
+    formatVersion: 1, valid: false, manifestSha256: null, errors: {}, tables: {}, unknownTables: { count: 0, digest: null },
     objects: { count: 0, bytes: 0, expired: 0, verified: 0, errors: {}, sha256: null },
     totals: { sourceRows: 0, errors: 0, warnings: 0, blockedTables: 0 },
   };
@@ -250,7 +251,9 @@ async function validate(options: ValidateOptions): Promise<ValidationReport> {
     const now = options.now === undefined ? Date.now() : Date.parse(options.now);
     const lineLimit = Math.min(1024 * 1024, Math.floor(budget / 8));
     reader = await BundleReader.create(options.bundle, lineLimit);
-    const manifest = parseManifest(await reader.boundedJson('manifest.json', Math.min(262144, Math.floor(budget / 2))));
+    const manifestFile = await reader.boundedJsonWithHash('manifest.json', Math.min(262144, Math.floor(budget / 2)));
+    report.manifestSha256 = manifestFile.sha256;
+    const manifest = parseManifest(manifestFile.value);
     index = await DiskIndex.create(output);
     const allowedFiles = new Set(['manifest.json', ...Object.values(manifest.tables).map(t => t.file),
       ...(manifest.objects ? ['objects.ndjson', 'objects'] : [])]);

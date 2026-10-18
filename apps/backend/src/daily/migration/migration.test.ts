@@ -109,8 +109,9 @@ describe('source decisions and SQL metadata', () => {
 
 describe('strict manifest runtime boundary', () => {
   it('accepts v1 and rejects each malformed envelope without echoed values', async () => {
-    const { manifest } = await fixture();
+    const { manifest, report, options } = await fixture();
     expect(parseManifest(manifest)).toEqual(manifest);
+    expect(report.manifestSha256).toBe(sha256(await readFile(join(options.bundle, 'manifest.json'))));
     const invalid: unknown[] = [null, [], {}, { ...manifest, formatVersion: 2 }, { ...manifest, extra: SYNTHETIC_SENTINEL },
       { ...manifest, createdAt: SYNTHETIC_SENTINEL }, { ...manifest, exporter: { name: 'SYNTHETIC', version: '1', extra: true } },
       { ...manifest, tables: { a: { file: 'a.ndjson', rowCount: -1, sha256: 'bad', complete: true, columns: [] } } },

@@ -101,13 +101,13 @@ describe('dry-run import', () => {
     await mkdir(stateDir, { mode: 0o700 });
     await generateBundle({ bundle, seed: 22 });
     const statements: string[] = [];
-    const rows = [
-      { TABLE_NAME: 'health_workouts', COLUMN_NAME: 'owner_object_id', DATA_TYPE: 'uniqueidentifier', CHARACTER_MAXIMUM_LENGTH: null },
-      ...dailyTables.health_workouts.columns.map(column => ({
-        TABLE_NAME: 'health_workouts', COLUMN_NAME: column, DATA_TYPE: columnTypes.health_workouts[column]!,
-        CHARACTER_MAXIMUM_LENGTH: column === 'id' ? 256 : null,
+    const rows = Object.entries(dailyTables).flatMap(([table, definition]) => [
+      { TABLE_NAME: table, COLUMN_NAME: 'owner_object_id', DATA_TYPE: 'uniqueidentifier', CHARACTER_MAXIMUM_LENGTH: null },
+      ...definition.columns.map(column => ({
+        TABLE_NAME: table, COLUMN_NAME: column, DATA_TYPE: columnTypes[table as keyof typeof dailyTables][column]!,
+        CHARACTER_MAXIMUM_LENGTH: (definition.keyTypes as Record<string, { type: string; maxLength?: number }>)[column]?.maxLength ?? null,
       })),
-    ];
+    ]);
     const fakePool = {
       connected: true,
       request: () => ({

@@ -124,7 +124,8 @@ so output cannot truncate a source inode through an existing hard link.
 Reports `validation-report.json` and `validation-summary.md` contain only fixed
 table names/decisions, stable codes, counts, booleans and hashes. Unknown names,
 column names, raw keys, row values, exporter/schema text, ruling prose, paths and
-exception details are never echoed. CLI prints only static help/status/errors.
+exception details are never echoed. CLI prints static help/status/errors and
+digest-only import/reconciliation reports.
 Reported key/unknown-identifier evidence digests are truncated to 24 hex
 characters. File/integrity checksums and private disk-membership digests retain
 the full 64-character SHA-256.
@@ -139,6 +140,12 @@ against the backend's configured Daily owner, and checks target column types
 against the registry. It connects only to the configured target SQL database;
 credentials are not CLI arguments. `--tables` accepts a comma-separated subset
 and is always reordered by the registry's parent-before-child order.
+
+Import and reconciliation copy the manifest-bound source tables to a private
+verified snapshot under the host temporary directory; reconciliation also
+creates sorted temporary runs. Protect the temporary directory and reserve disk
+space for the table files and sort runs. Remove stale `daily-import-validation-*`
+directories privately after a crash because they can contain source rows.
 
 An import requires an absolute `--state-dir` outside this repository. Keep it
 private and outside the bundle. Its atomic checkpoint contains only the
