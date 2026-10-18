@@ -222,22 +222,24 @@ export default function BriefsSection(props: DailySectionProps) {
       <p className="daily-brief-announcement" role="status" aria-live="polite">
         Showing {displayedItem ? `${briefLabel(displayedItem)}, ${briefDate(displayedItem.started_at)}` : 'brief details'}.
       </p>
-      <div className="daily-brief-navigation" aria-label="Navigate loaded briefs">
+      <nav className="daily-brief-navigation" aria-label="Navigate loaded briefs">
         <div>
           <button className="secondary-button" type="button" disabled={!newerRecord}
+            {...(!newerRecord ? { 'aria-describedby': 'daily-brief-newer-reason' } : {})}
             onClick={() => newerRecord && setSelectedId(text(newerRecord.id, ''))}>Newer brief</button>
-          {!newerRecord && <span>{newerNeighbor
+          {!newerRecord && <span id="daily-brief-newer-reason">{newerNeighbor
             ? 'The newer brief cannot be opened because it has no recorded identifier.'
             : 'No newer brief is loaded.'}</span>}
         </div>
         <div>
           <button className="secondary-button" type="button" disabled={!olderRecord}
+            {...(!olderRecord ? { 'aria-describedby': 'daily-brief-older-reason' } : {})}
             onClick={() => olderRecord && setSelectedId(text(olderRecord.id, ''))}>Older brief</button>
-          {!olderRecord && <span>{olderNeighbor
+          {!olderRecord && <span id="daily-brief-older-reason">{olderNeighbor
             ? 'The older brief cannot be opened because it has no recorded identifier.'
             : 'No older brief is loaded.'}</span>}
         </div>
-      </div>
+      </nav>
       {detail.pending && !detail.data && <DailyState status="loading" />}
       {detail.error && <DailyState status="error" message={detail.error} retryLabel="Retry brief details" onRetry={detail.reload} />}
       {detail.data && !item && <DailyState status="empty" emptyMessage="No brief details were returned for this record." />}
