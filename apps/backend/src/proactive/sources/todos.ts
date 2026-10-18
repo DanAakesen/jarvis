@@ -34,7 +34,7 @@ export function createTodosSource(vaultClient?: VaultReader): ProactiveSource {
         }
 
         const todos = parseTodos(file.content);
-        const open = todos.flatMap((todo, index) => todo.done ? [] : [{
+        const open = todos.flatMap((todo, index) => todo.done || !todo.highPriority ? [] : [{
           todo,
           index,
           dueTime: todo.dueAt === null ? null : Date.parse(todo.dueAt),

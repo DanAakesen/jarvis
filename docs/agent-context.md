@@ -227,10 +227,13 @@ planner runs for every trigger after the successful todo read. The ticker is
 constructed only when its vault, reminder store, alert ledger, push store and
 shared sender dependencies are available. It has no database, vault or push
 work while idle or during Copenhagen quiet hours. Reminder titles stay in
-private database rows; pushes and logs contain no todo text.
+private database rows; pushes and logs contain no todo text. Only open tasks with
+the explicit `priority:: P1 - High` or `priority: P1 - High` marker are eligible
+for task findings and reminders. The ticker cancels tasks that are no longer
+high-priority and suppresses after repeated vault-verification failures.
 
 Focused synthetic checks:
-`npm test --workspace @jarvis/backend -- --run src/proactive/reminders.test.ts src/proactive/composition.test.ts src/proactive/alerts.test.ts src/proactive/push-delivery.test.ts src/database/migrations.test.ts`,
+`npm test --workspace @jarvis/backend -- --run src/proactive/todo-file.test.ts src/proactive/sources/todos.test.ts src/proactive/reminders.test.ts src/proactive/composition.test.ts src/proactive/alerts.test.ts src/proactive/push-delivery.test.ts src/database/migrations.test.ts`,
 `npm run build --workspace @jarvis/backend`, and
 `npm run lint --workspace @jarvis/backend`.
 The SQL store integration test is
