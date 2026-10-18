@@ -30,7 +30,9 @@ import { createEventHub } from '../core/event-hub.js';
 import type { TaskEventMessage } from '../factory/task-store.js';
 import { mapGithubWebhook } from '../github/webhook-mapping.js';
 import { createPushStore } from './push-store.js';
+import { createProactiveStore } from './proactive-store.js';
 import { generateVapidKeyPair } from '../push/webpush.js';
+import { defaultProactiveSettings } from '../proactive/store.js';
 
 const configuration = loadDatabaseConfig();
 if (!configuration || process.env.NODE_ENV !== 'test' || configuration.server !== '127.0.0.1') {
@@ -44,7 +46,8 @@ const core = '0001_core_tables.sql';
 const tablesInSchema = [
   'activity', 'artifacts', 'background_job_dismissals', 'background_job_steps', 'background_jobs', 'conversation_attachments',
   'conversation_summaries', 'credential_status', 'deployment_failure_receipts', 'deployments', 'factory_task_submissions', 'folio_items', 'jarvis_sessions',
-  'memories', 'memory_deletions', 'memory_history', 'messages', 'phone_sessions', 'proactive_items', 'projects',
+  'memories', 'memory_deletions', 'memory_history', 'messages', 'phone_sessions', 'proactive_items',
+  'proactive_runs', 'proactive_settings', 'proactive_source_status', 'proactive_spend', 'projects',
   'pull_requests', 'push_subscriptions', 'push_vapid_keys', 'releases',
   'sandbox_sessions', 'sandbox_turns', 'settings', 'task_event_archives', 'task_events', 'task_status_notifications',
   'tasks', 'teams_confirmations', 'teams_conversations', 'tool_calls', 'usage', 'vault_chunks', 'vault_links',
@@ -237,6 +240,86 @@ describe('committed domain schema (groups 1-8)', () => {
       .query<{ opened_at: Date }>('SELECT opened_at FROM dbo.proactive_items WHERE id = @id;');
     expect(openedAgain.recordset[0]?.opened_at).toEqual(firstOpenedAt);
   });
+
+  it('persists proactive settings, findings, feedback, leases, source status and estimated spend', () => withRollbackDatabase(async (rollbackPool) => {
+    const owner = randomUUID();
+    const store = createProactiveStore(rollbackPool, owner);
+    const now = new Date('2026-10-20T05:00:00.000Z');
+    expect(await store.settings.read()).toEqual(defaultProactiveSettings());
+    expect(await store.settings.patch({
+      paused: true,
+      monthlyBudgetDkk: 275,
+      sources: { calendar: false },
+      newsFeeds: ['https://example.test/rss.xml'],
+      guidance: 'Synthetic integration setting.',
+    })).toMatchObject({
+      paused: true, monthlyBudgetDkk: 275, sources: { calendar: false },
+      newsFeeds: ['https://example.test/rss.xml'], guidance: 'Synthetic integration setting.',
+    });
+
+    const finding = {
+      dedupeKey: 'integration:deadline-1',
+      title: 'Synthetic calendar deadline',
+      body: 'A synthetic deadline is approaching.',
+      category: 'deadline' as const,
+      urgency: 'normal' as const,
+      dueAt: '2026-10-20T12:00:00.000Z',
+      evidence: [{ source: 'calendar' as const, label: 'Calendar', observedAt: now.toISOString() }],
+      runId: null,
+      language: 'en' as const,
+    };
+    const first = await store.items.upsertFinding(finding);
+    expect(first).toMatchObject({ kind: 'finding', state: 'new', dueAt: finding.dueAt, evidence: finding.evidence });
+    expect((await store.items.applyFeedback(first.id, 'dismiss'))?.state).toBe('dismissed');
+    expect((await store.items.upsertFinding({ ...finding, title: 'Updated synthetic title' })).state).toBe('dismissed');
+    const changed = await store.items.upsertFinding({ ...finding, urgency: 'time_critical' });
+    expect(changed).toMatchObject({ id: first.id, state: 'new', urgency: 'time_critical' });
+    await store.items.applyFeedback(changed.id, 'snooze', '2026-10-20T06:00:00.000Z');
+    expect(await store.items.list('open', 20, now)).toEqual([]);
+    expect(await store.items.list('open', 20, new Date('2026-10-20T06:00:00.000Z'))).toHaveLength(1);
+    expect(await store.items.get(changed.id, true)).toMatchObject({
+      ...changed, state: 'snoozed', snoozedUntil: '2026-10-20T06:00:00.000Z',
+    });
+
+    const slot = '2026-10-20T07:00';
+    const competing = await Promise.all([
+      store.runs.claim({ trigger: 'scheduled', slot, now }),
+      store.runs.claim({ trigger: 'scheduled', slot, now }),
+    ]);
+    expect(competing.filter(Boolean)).toHaveLength(1);
+    const firstClaim = competing.find(Boolean)!;
+    expect(await store.runs.claim({ trigger: 'manual', slot: null, now })).toBeNull();
+    const later = new Date(now.getTime() + 10 * 60_000);
+    const nextClaim = await store.runs.claim({ trigger: 'manual', slot: null, now: later });
+    expect(nextClaim).not.toBeNull();
+    expect(await store.runs.heartbeat(firstClaim.run.id, firstClaim.generation, later)).toBe(false);
+    expect(await store.runs.finish(firstClaim.run.id, firstClaim.generation, 'done', null, 1, later)).toBe(false);
+    expect(await store.runs.finish(nextClaim!.run.id, nextClaim!.generation, 'done', null, 1, later)).toBe(true);
+    expect(await store.runs.countManualSince(now)).toBe(1);
+    const interrupted = await store.runs.claim({ trigger: 'manual', slot: null, now: new Date(later.getTime() + 1_000) });
+    expect(await store.runs.markInterruptedOnStartup()).toBe(1);
+    expect(await store.runs.finish(interrupted!.run.id, interrupted!.generation, 'done', null, 0, later)).toBe(false);
+    expect(await store.runs.latest()).toMatchObject({ status: 'failed', reason: 'interrupted_by_restart' });
+    expect(await store.runs.list(10)).toHaveLength(3);
+
+    await store.sources.upsert({
+      id: 'calendar', label: 'Calendar', enabled: true, state: 'unavailable',
+      reason: 'not_connected', observedAt: now.toISOString(),
+    });
+    expect(await store.sources.list()).toMatchObject([
+      { id: 'calendar', state: 'unavailable', reason: 'not_connected', observedAt: now.toISOString() },
+    ]);
+    await store.spend.record({
+      runId: nextClaim!.run.id,
+      month: '2026-10',
+      inputTokens: 100,
+      outputTokens: 25,
+      estimatedDkk: 1.2345,
+      createdAt: now,
+    });
+    expect(await store.spend.monthTotal('2026-10')).toBe(1.2345);
+    expect(await store.spend.monthTotal('2026-11')).toBe(0);
+  }));
 
   it('revises HTML artifacts atomically, retains every version and leaves Folio/pins intact', async () => {
     const owner = randomUUID();
