@@ -3,9 +3,9 @@ import { buildSourceRegistry } from './registry.js';
 import { defaultProactiveSettings } from '../store.js';
 
 describe('proactive source registry', () => {
-  it('registers the new sources in alphabetical order and keeps X as a placeholder', async () => {
+  it('registers the sources alphabetically and keeps X as a non-throwing placeholder', async () => {
     const sources = buildSourceRegistry({});
-    expect(sources.map(({ id }) => id)).toEqual(['factory', 'todos', 'weather', 'x']);
+    expect(sources.map(({ id }) => id)).toEqual(['calendar', 'factory', 'mail', 'news', 'todos', 'travel', 'weather', 'x']);
     const source = sources.at(-1);
     expect(source?.id).toBe('x');
     const result = await source!.read({
@@ -22,14 +22,20 @@ describe('proactive source registry', () => {
     });
   });
 
-  it('reports unavailable when a new source dependency is not connected', async () => {
+  it('reports unavailable when a source dependency is not connected', async () => {
     const sources = buildSourceRegistry({});
-    for (const source of sources.filter(({ id }) => ['factory', 'todos', 'weather'].includes(id))) {
-      await expect(source.read({
-        now: new Date('2026-10-20T05:00:00.000Z'),
-        signal: new AbortController().signal,
-        settings: defaultProactiveSettings(),
-      })).resolves.toMatchObject({ state: 'unavailable', reason: 'not_connected', facts: [] });
+    const context = {
+      now: new Date('2026-10-20T05:00:00.000Z'),
+      signal: new AbortController().signal,
+      settings: defaultProactiveSettings(),
+    };
+    for (const id of ['calendar', 'factory', 'mail', 'todos', 'travel', 'weather'] as const) {
+      await expect(sources.find((source) => source.id === id)!.read(context)).resolves.toMatchObject({
+        source: id,
+        state: 'unavailable',
+        reason: 'not_connected',
+        facts: [],
+      });
     }
   });
 });

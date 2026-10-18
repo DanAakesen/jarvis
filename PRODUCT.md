@@ -1059,6 +1059,27 @@ the weather reader uses the saved home location and makes a bounded HTTPS
 forecast request. These source implementations remain dormant until a later
 engine slice invokes them.
 
+## Proactive calendar, mail and travel sources (18 October 2026; P13-08)
+
+P13-08 registers bounded read-only Google Calendar and Gmail metadata sources and
+a calendar-derived travel source. Calendar reads use a 48-hour window; mail lists
+at most 15 unread primary-inbox messages from the prior two days and reads only
+selected headers; travel reads up to seven calendar days and makes no
+travel-provider request. These changes enable no flag, run no source, add no OAuth
+scope and leave the server entry point unchanged.
+
+## Proactive run alerts (18 October 2026; P13-12)
+
+Only scheduled and catch-up checks can notify for a new, time-critical deadline
+within 24 hours or calendar clash; travel disruption keeps a typed category for a
+future provider. Eligible items share one generic push, capped at three accepted
+bundles per Copenhagen day. Manual checks, paused settings, quiet hours, cancelled
+runs, missing subscriptions, and findings already seen, snoozed or dismissed do
+not alert. Push payloads contain no finding text; notification wording comes from
+a closed Danish/English template table in the worker. The alert switch remains
+default-off alongside the proactive and push switches; per-class controls are not
+part of this slice.
+
 ## Proactive web (18 October 2026; P13-10)
 
 The web page and Settings section are independently dark behind
@@ -1067,6 +1088,14 @@ contract, keep returned item/settings content in memory only, and render all
 model/source text as plain text. Manual check polling is visible-page-only and
 bounded; item actions can be retried after rollback. This web slice does not set
 the flag or grant permissions.
+
+## Proactive news source (18 October 2026; P13-09)
+
+The backend registry includes a dark, read-only RSS/Atom source for configured
+feeds, defaulting to the GitHub changelog and OpenAI news. It validates hosts, pins HTTPS
+connections to vetted public DNS addresses, rejects redirects and unsafe XML,
+and returns only bounded, sanitized titles. The source does not activate a
+scheduler, model call or proactive delivery; all proactive flags remain off.
 
 ## Daily migration (approved P12)
 

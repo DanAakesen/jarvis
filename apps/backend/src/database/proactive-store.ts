@@ -217,6 +217,20 @@ export function createProactiveStore(pool: sql.ConnectionPool, ownerObjectId: st
         const { recordset } = await request.query<ItemRow>(query);
         return recordset[0] ? mapItem(recordset[0]) : undefined;
       },
+      async getMany(ids) {
+        const uniqueIds = [...new Set(ids.map((id) => id.toLowerCase()))];
+        if (uniqueIds.length === 0) return [];
+        const request = databaseReadRequest(pool).input('owner', sql.UniqueIdentifier, owner);
+        const parameters = uniqueIds.map((id, index) => {
+          const name = `item${index}`;
+          request.input(name, sql.UniqueIdentifier, id);
+          return `@${name}`;
+        });
+        const { recordset } = await request.query<{ id: string; state: Item['state'] }>(`
+          SELECT id, state FROM dbo.proactive_items
+          WHERE owner_object_id = @owner AND id IN (${parameters.join(', ')});`);
+        return recordset.map((row) => ({ id: row.id.toLowerCase(), state: row.state }));
+      },
       async applyFeedback(id, action: FeedbackAction, snoozeUntil) {
         const { recordset } = await pool.request()
           .input('owner', sql.UniqueIdentifier, owner)

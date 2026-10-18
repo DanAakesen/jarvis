@@ -100,6 +100,14 @@ travel disruption, plus a reminder about an hour before a todo is due. Quiet-hou
 reminders wait until 07:00 and appear as due soon or overdue; each run sends one
 bundled push within daily caps. This limits interruptions; Dan can change it.
 
+P13-12 implements only scheduled/catch-up time-critical run alerts. The bundle
+contains only the most urgent item ID, kind, count and language; the worker uses
+fixed localized copy, never payload title/body text. A maximum of three sent
+bundles is counted per Copenhagen day, and an item alerts once per class/key
+unless its first send failed, in which case it may retry once. Manual checks,
+paused settings, quiet hours and non-new items do not notify. No per-class
+settings are added now; Dan may choose per-class toggles as a later addition.
+
 ## Show every proactive run in Background work (17 October 2026; P13 / #930)
 
 Dan decided every scheduled or manual proactive run appears in the header
@@ -223,6 +231,18 @@ roll back with visible retry on failure. These choices do not enable backend
 work, change permissions, or settle outstanding source, todo-write or delivery
 decisions.
 
+## Keep news reads dark, public-address-pinned and content-minimal (18 October 2026; P13-09)
+
+The registry's news source is a read-only RSS 2.0/Atom adapter over editable
+settings, defaulting to the GitHub changelog and OpenAI news. It can only use
+validated HTTPS hostnames and public DNS answers; mixed public/private DNS
+answers, redirects, non-XML responses, compressed bodies, oversized responses,
+and DTD/entity declarations fail closed. Per-feed work is limited to ten
+seconds and 2 MiB. Facts contain only sanitized, bounded titles, publication
+times, and the host; feed URLs, query strings and source payloads are never
+logged. The source remains dark: this change registers it without scheduling a
+read or enabling any proactive flag.
+
 ## Keep P13-07 sources read-only and dark (18 October 2026)
 
 The todo filename remains unsettled, so the reader resolves exactly one
@@ -238,6 +258,21 @@ prompts or logs. Weather uses only saved home coordinates and a bounded HTTPS
 Open-Meteo request; no default location or geocoding is allowed. Each source is
 registered, but no source is invoked and no proactive flag is enabled by this
 slice.
+
+## Keep P13-08 sources read-only and dark (18 October 2026)
+
+P13-08 adds only read-only, bounded calendar and Gmail-header sources and a
+travel source derived exclusively from the calendar. Calendar uses the existing
+primary-calendar view path, expands recurring instances, and reads at most 50
+events over two pages within 48 hours. Gmail searches at most 15 unread primary
+inbox messages from the last two days and requests only From, Subject, Date,
+List-Unsubscribe and Precedence metadata, with no body, snippet or attachments.
+Travel reads seven calendar days, filters with deterministic exported keywords
+and route syntax, and omits events already inside the calendar window. It makes
+no flight, rail, traffic or disruption-provider request. No OAuth scope,
+consent, secret, cloud setting, flag activation, engine behavior or entry-point
+change accompanies these sources; source text remains untrusted and is never
+logged.
 
 ## Keep web push default-off and notification taps owner-authenticated (17 October 2026; P13-02)
 

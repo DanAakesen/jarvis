@@ -1980,6 +1980,55 @@ unavailable; no fallback location or geocoding is used. All source errors are
 mapped to stable unavailable reason codes. This slice enables no flags and
 starts no source reads.
 
+## Proactive calendar, mail and travel sources (P13-08; default off)
+
+The source registry also constructs the `calendar`, `mail` and `travel` sources
+from the existing Google API client; the `x` placeholder remains unavailable.
+P13-08 adds source implementations to the existing registry; constructing them
+does not read Google, and no schedule, model call or proactive delivery is added.
+
+The calendar reader reuses the existing primary-calendar view path, expanding
+recurrences and bounding reads to 50 events over two pages. All-day dates resolve
+to Europe/Copenhagen local midnight through the shared DST-aware time helper.
+Calendar facts omit descriptions, conferencing and attendee/organizer addresses.
+Mail searches the primary inbox for unread messages from the last two days and
+reads at most 15 messages, with five concurrent metadata-only requests for
+From/Subject/Date/List-Unsubscribe/Precedence. It never requests body, snippet or
+attachment fields; bulk/newsletter messages are skipped and sender addresses are
+reduced to a display name or domain. Travel reuses the calendar reader over seven
+days and applies exported `TRAVEL_KEYWORDS` and `TRAVEL_ROUTE_PATTERN`
+Danish/English whole-word and airport-route rules; it calls no travel provider
+and excludes starts in the calendar's half-open 48-hour window. All sources
+bound fact text, treat provider text as untrusted data, and return stable
+unavailable reason codes without logging it.
+
+## Proactive run alerts and shared push sender (P13-12; default off)
+
+Composition appends the alert hook only when proactive, push and alert gates are
+all exactly enabled and both push-store and sender dependencies exist. It runs
+after finding persistence and ignores manual runs, paused settings, aborted runs
+and the live Copenhagen quiet window. Only time-critical deadline, clash and
+travel categories qualify. Candidates sort by due time (missing last) and
+dedupe key; a fresh owner-scoped state read immediately before delivery excludes
+items no longer new.
+
+`proactive_alerts` stores only IDs, a 32-hex SHA-256 alert key, class, Copenhagen
+day, status, attempt count and reason code. Its owner/key unique index fences
+duplicates; a failed first attempt can retry once, while sent or twice-failed keys
+settle. The daily safety cap counts distinct sent run bundles, so a push containing
+several finding rows consumes one slot. The additive 0057 migration has a
+data-preserving down script.
+
+`proactive/push-delivery.ts` is shared by the user test route and system sender
+for lazy VAPID key loading and subscription delivery/removal. System payloads keep
+the generic M1 title/body and add only the most urgent item UUID, kind, count and
+language. Alert pushes use one-hour TTL/high urgency; reminders use 30-minute
+TTL/high urgency; user tests retain the original five-minute/normal headers.
+System sends are rejected inside quiet hours at the sender boundary. The worker
+selects only fixed templates for validated kinds, languages and counts, ignoring
+payload-supplied title/body text. Provider acceptance is recorded per item and
+remains distinct from device display.
+
 ## Web push delivery (P13-02; default off)
 
 The web build exposes only the boolean result of `VITE_PUSH_ENABLED === "true"`
@@ -1988,8 +2037,11 @@ Notifications Settings section prefetches authenticated `GET /push/config` and
 registers the plain `public/sw.js` worker at `/` with worker updates uncached.
 Static Web Apps excludes `/sw.js` from its SPA fallback and sends
 `Cache-Control: no-cache`. The worker does not cache content or provide offline
-behavior; every push displays only the fixed generic Jarvis alert, retaining a
-validated UUID solely as notification data/tag.
+behavior; pushes display fixed Jarvis text, retaining a validated UUID solely as
+notification data/tag. P13-12 and later proactive reminders select closed,
+localized templates from validated `kind`, `lang` and `count`; every other
+payload displays the existing generic text and untrusted title/body fields are
+ignored.
 
 The web client calls authenticated `PUT /push/subscription`,
 `DELETE /push/subscription`, and `POST /push/test` through `backendFetch`.
@@ -2022,6 +2074,27 @@ Item text, feeds and guidance live only in component state, are rendered as text
 and are not stored in browser persistence or placed in URLs. Recent-run and
 Settings disclosure state is not persisted. The web flag policy test scans
 workflow/environment files to ensure the flag stays unset.
+
+## Proactive news source (P13-09; default off)
+
+The source registry also constructs the news source, between the Factory and
+todo readers. It parses RSS 2.0 and Atom from at most ten configured feeds. Its
+URL validator permits HTTPS hostnames only, rejects IP literals and local
+hostnames, and removes fragments while retaining queries. Requests use
+`node:https` with a custom DNS lookup that rejects the whole answer set if any
+address is not public and connects only to vetted answers. The fetcher verifies
+TLS certificates, allows no redirects, accepts only XML content types and
+identity encoding, combines the engine abort signal with a ten-second timeout,
+and stops streaming after 2 MiB. Public-address filtering blocks the specified
+non-routable IPv4 ranges and permits only global-unicast IPv6, with embedded
+IPv4 in mapped, NAT64 and 6to4 addresses checked under the same IPv4 rules.
+
+DTD/entity declarations are rejected before XML parsing. The source retains only
+cleaned titles, publication times and feed hostnames; links, descriptions,
+authors, query strings and response bodies are not logged or stored. It selects
+at most eight recent items per feed and 30 total, and exposes partial feed
+failures. The source is registered but no scheduler or engine invokes it in this
+slice; no proactive flag is enabled and no live feed request is made by tests.
 
 ## Web Push production switch (P13-03; 18 October 2026)
 

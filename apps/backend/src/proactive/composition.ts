@@ -9,17 +9,21 @@ import type { TaskStore } from '../factory/task-store.js';
 import type { BackgroundJobRegistry } from '../core/jobs.js';
 import type { ConversationStore } from '../core/conversation-store.js';
 import type { createGitHubVaultClient } from '../vault/github-client.js';
-import type { PushRouteDependencies } from '../push/routes.js';
+import type { PushStore } from '../database/push-store.js';
 import { ConfigurationError } from '../configuration-error.js';
 import { createProactiveStore } from '../database/proactive-store.js';
+import { createProactiveAlertStore } from '../database/proactive-alert-store.js';
 import { createMemoryProactiveStore } from './store.js';
 import type { ProactiveStore } from './store.js';
+import { createMemoryAlertLedgerStore, type AlertLedgerStore } from './alert-ledger.js';
 import { buildSourceRegistry } from './sources/registry.js';
 import { registerProactiveRoutes } from './routes.js';
 import { createProactiveEngine, type ProactiveEngineOptions } from './engine.js';
 import { createFoundryProactiveModel, MAX_PROACTIVE_COMPLETION_TOKENS, MAX_PROACTIVE_REQUEST_BYTES, type ProactiveModel } from './model.js';
 import { createProactiveScheduler } from './scheduler.js';
 import { estimateCost } from './budget.js';
+import { createProactiveAlertHook } from './alerts.js';
+import type { SystemPushOutcome, SystemPushRequest } from './push-delivery.js';
 
 const uuidPattern = /^[\da-f]{8}-(?:[\da-f]{4}-){3}[\da-f]{12}$/iu;
 type GitHubVaultClient = ReturnType<typeof createGitHubVaultClient>;
@@ -40,7 +44,9 @@ export interface ProactiveCompositionOptions {
   backgroundJobs?: BackgroundJobRegistry;
   conversationStore?: Pick<ConversationStore, 'readRecentUserMessages'>;
   onFindingsStored?: NonNullable<ProactiveEngineOptions['onFindingsStored']>;
-  pushSender?: PushRouteDependencies['send'];
+  pushStore?: PushStore;
+  alertLedgerStore?: AlertLedgerStore;
+  systemPushSender?: (request: SystemPushRequest, signal: AbortSignal) => Promise<SystemPushOutcome>;
   pushEnabled?: boolean;
   todoWritesEnabled?: boolean;
   alertsEnabled?: boolean;
@@ -80,7 +86,31 @@ export function registerProactive<Logger extends FastifyBaseLogger>(
       },
     });
   }
-  const run = createProactiveEngine({ ...options, store, sources, model, now });
+  const alertHook = options.alertsEnabled === true && options.pushEnabled === true &&
+    options.pushStore !== undefined && options.systemPushSender !== undefined
+    ? createProactiveAlertHook({
+      store,
+      pushStore: options.pushStore,
+      ownerObjectId: options.ownerObjectId,
+      ledger: options.alertLedgerStore ?? (options.pool
+        ? createProactiveAlertStore(options.pool, options.ownerObjectId)
+        : createMemoryAlertLedgerStore()),
+      send: options.systemPushSender,
+      now,
+      ...(options.logger ? { logger: options.logger } : {}),
+    })
+    : undefined;
+  const run = createProactiveEngine({
+    ...options,
+    store,
+    sources,
+    model,
+    now,
+    onFindingsStored: [
+      ...(options.onFindingsStored ?? []),
+      ...(alertHook ? [alertHook] : []),
+    ],
+  });
   const scheduler = createProactiveScheduler({
     store, now, run, ...(options.logger ? { logger: options.logger } : {}),
   });
