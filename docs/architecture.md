@@ -6051,6 +6051,27 @@ in generic tool-call audit records. Raw JSON validation runs before Fastify's
 AJV coercion; failures remain explicit tool refusals/errors. The module exposes
 no item mutation or approval capability.
 
+## Web Daily presentation kit and Workouts (18 October 2026; P12-30)
+
+`apps/web/src/daily/ui/` owns the shared presentation primitives. Freshness and
+source caveats are separate compact-line and disclosure components. Statistic
+tiles accept optional compact, sparkline and delta presentation; `Meter`,
+`DailyGrid`, `DailySectionHeader`, `WorkoutGlyph` and `Sparkline` add no data
+requests. `DailyChart` keeps its existing `ChartSeries` consumer contract and
+adds Daily-local nullable points, responsive SVG geometry, range/target marks,
+series labels, keyboard point inspection and a chart-local table disclosure.
+The separate GenUI chart-data API remains numeric and source-compatible.
+
+Workouts still reads through `useWorkoutPages`/`useDailyPages`, with unchanged
+source gates, ten-page automatic cap, exact cursor continuation, loaded-row
+filter/sort and `?workout=` selection. The presentation uses one responsive
+history list and a disclosed table alternative. The overview derives type counts
+and known duration bars only from the currently loaded/filtered records and keeps
+unit totals separate. Detail keeps the existing capability-gated recorded JSON
+and heart-rate reads; the average line carries its minute minimum–maximum band,
+while separate minimum and maximum lines preserve their labels and recorded
+gaps. No backend, contract, persistence, route or authorization boundary changed.
+
 ## Web Daily Body & sleep section (18 October 2026; P12-25)
 
 `apps/web/src/daily/sections/body-sleep/` is discovered through the existing

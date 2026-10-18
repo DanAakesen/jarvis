@@ -45,7 +45,7 @@
 }
 .daily-status[data-tone='records'] { --status-tone: var(--success); }
 .daily-status[data-tone='failed'] { --status-tone: var(--error); }
-.daily-status svg { width: 16px; height: 16px; flex: none; color: var(--status-tone); }
+.app-shell .daily-status svg { width: 16px; height: 16px; flex: none; color: var(--status-tone); }
 .daily-overview-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 .daily-overview-actions > button { flex: 1 1 140px; }
 /* aria-disabled keeps focus on a busy control, so it needs its own disabled look. */

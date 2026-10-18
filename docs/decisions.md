@@ -1,5 +1,24 @@
 # Decisions
 
+## P12-30 — Daily presentation kit and Workouts (18 October 2026)
+
+Move long retained-data caveats into the native “About this data” disclosure,
+but keep partial/lower-bound meaning beside the displayed value and keep unknown
+distinct from zero. Keep every chart’s raw values available through a disclosure
+attached to that chart rather than rendering a table below every visualization.
+Charts retain responsive geometry, direct series labels, explicit data gaps and
+keyboard point inspection. Workouts uses the shared kit in one responsive
+history list with a disclosed table; URL, paging, sorting, filtering and focus
+return stay owned by the existing section. These are presentation changes only;
+the original Daily remains canonical and no new data reads or dependencies are
+introduced.
+
+Daily svg sizing rules must out-rank the shell’s `.app-shell svg` icon size
+(specificity 0,1,1, emitted after the Daily stylesheets in the production
+bundle); an equal or lower specificity rule silently loses and the chart
+collapses to a 21px sliver. Prefix such rules with `.app-shell` (or size the svg
+inline); `svg-cascade.test.ts` enforces this for every Daily stylesheet.
+
 ## Share non-Daily loading, empty, error and partial states (18 October 2026; P14-11 / #994)
 
 Use one `StateMessage` component around the existing Loader for non-Daily

@@ -2,20 +2,24 @@ import { formatDuration } from '../../ui/formatters';
 import { StatTile } from '../../ui/StatTile';
 import { numeric, text, type Workout } from './summary';
 import { measurement, setting } from './presentation';
+import { DailyGrid } from '../../ui/DailyGrid';
 
 export function UnknownCell({ value }: { value: string | null }) {
-  return value === null || value === 'Unknown' ? <span aria-label="Unknown">—</span> : <>{value}</>;
+  return value === null || value === 'Unknown' ? <span aria-label="Not recorded">Not recorded</span> : <>{value}</>;
 }
 
 export function WorkoutFigures({ row }: { row: Workout }) {
-  return <div className="workouts-stats">
-    <StatTile label="Duration" value={formatDuration(numeric(row.duration_seconds))} />
-    <StatTile label="Distance" value={measurement(row.distance_value, row.distance_unit)} />
-    <StatTile label="Active energy" value={measurement(row.active_energy_value, row.active_energy_unit)} />
-    <StatTile label="Total energy" value={measurement(row.total_energy_value, row.total_energy_unit)} />
-    <StatTile label="Average heart rate" value={numeric(row.avg_heart_rate)} unit="bpm" note="Recorded average for this workout." />
-    <StatTile label="Maximum heart rate" value={numeric(row.max_heart_rate)} unit="bpm" />
-    <StatTile label="Environment" value={setting(row.is_indoor)} />
-    <StatTile label="Source" value={text(row.source_name)} />
-  </div>;
+  const duration = numeric(row.duration_seconds);
+  const average = numeric(row.avg_heart_rate);
+  const maximum = numeric(row.max_heart_rate);
+  return <DailyGrid columns="two" className="workouts-detail-stats">
+    <StatTile compact label="Duration" value={duration === null ? 'Not recorded' : formatDuration(duration)} />
+    <StatTile compact label="Distance" value={measurement(row.distance_value, row.distance_unit) ?? 'Not recorded'} />
+    <StatTile compact label="Active energy" value={measurement(row.active_energy_value, row.active_energy_unit) ?? 'Not recorded'} />
+    <StatTile compact label="Total energy" value={measurement(row.total_energy_value, row.total_energy_unit) ?? 'Not recorded'} />
+    <StatTile compact label="Average heart rate" value={average ?? 'Not recorded'} {...(average === null ? {} : { unit: 'bpm' })} />
+    <StatTile compact label="Maximum heart rate" value={maximum ?? 'Not recorded'} {...(maximum === null ? {} : { unit: 'bpm' })} />
+    <StatTile compact label="Environment" value={setting(row.is_indoor) ?? 'Not recorded'} />
+    <StatTile compact label="Source" value={text(row.source_name) ?? 'Not recorded'} />
+  </DailyGrid>;
 }
