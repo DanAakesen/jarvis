@@ -992,13 +992,20 @@ Home Screen app.
 The backend foundation provides owner-only status, settings, durable finding
 storage and feedback behind `JARVIS_PROACTIVE_ENABLED`, which defaults off.
 Separate todo-write and alert flags also default off. The foundation does not
-read sources, schedule runs, call a model or send proactive alerts. Later slices
-add those capabilities without changing the server entry point.
+schedule runs, call a model or send proactive alerts. P13-07 adds read-only todo,
+Factory and weather source readers, but does not run them or enable any flag.
 
 The approved schedule uses 07:00 and 18:00 Europe/Copenhagen slots; scheduled
 work is forbidden from 22:00 to 07:00. The monthly estimate limit defaults to
 100 DKK, warns at 80% and stops at 100%. These are policy boundaries for later
 engine work, not behavior activated by this foundation.
+
+The todo reader matches exactly one case-insensitive root `task.md` or
+`tasks.md`, never writes, and emits at most 40 sanitized facts. The Factory
+reader reports attention/failure and open-PR status plus a running-task count;
+the weather reader uses the saved home location and makes a bounded HTTPS
+forecast request. These source implementations remain dormant until a later
+engine slice invokes them.
 
 ## Daily migration (approved P12)
 

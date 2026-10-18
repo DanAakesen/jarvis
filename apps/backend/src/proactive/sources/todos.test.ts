@@ -41,6 +41,21 @@ describe('proactive todos source', () => {
     expect(result.facts.every(({ text }) => text.length <= 300)).toBe(true);
   });
 
+  it('keeps the soonest 40 when more than 40 due todos fall inside the priority window', async () => {
+    const tasks = Array.from({ length: 42 }, (_, index) => {
+      const minute = String(index).padStart(2, '0');
+      return `- [ ] Window ${minute} 📅 2026-10-21 14:${minute}`;
+    }).reverse().join('\n');
+    const result = await createTodosSource(vault(tasks)).read(context());
+
+    expect(result.facts).toHaveLength(40);
+    expect(result.facts[0]?.text).toBe('Window 00');
+    expect(result.facts.at(-1)?.text).toBe('Window 39');
+    expect(result.facts.map(({ dueAt }) => dueAt)).toEqual(
+      [...result.facts.map(({ dueAt }) => dueAt)].sort(),
+    );
+  });
+
   it('returns an empty successful result for an empty or fully completed file', async () => {
     const empty = await createTodosSource(vault('')).read(context());
     const done = await createTodosSource(vault('- [x] completed')).read(context());
@@ -66,6 +81,12 @@ describe('proactive todos source', () => {
     ]);
     await expect(createTodosSource(ambiguous).read(context())).resolves.toMatchObject({
       state: 'unavailable', reason: 'todo_file_ambiguous', facts: [],
+    });
+
+    const failedTree = vault();
+    failedTree.tree.mockRejectedValue(new Error('synthetic'));
+    await expect(createTodosSource(failedTree).read(context())).resolves.toMatchObject({
+      state: 'unavailable', reason: 'read_failed', facts: [],
     });
 
     const oversized = vault('x'.repeat(MAX_VAULT_FILE_BYTES + 1));

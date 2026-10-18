@@ -39,6 +39,16 @@ Proactive SQL contracts are in
 loopback SQL Server fixture via `npm run test:database --workspace @jarvis/backend -- src/database/schema.integration.test.ts`.
 Do not report SQL integration coverage unless that service ran.
 
+## P13-07 proactive read-only sources (18 October 2026)
+
+Focused synthetic checks:
+`npm test --workspace @jarvis/backend -- --run src/proactive/todo-file.test.ts src/proactive/sources/todos.test.ts src/proactive/sources/factory.test.ts src/proactive/sources/weather.test.ts src/proactive/sources/registry.test.ts src/proactive/time.test.ts src/database/task-store-proactive.test.ts src/core/weather.test.ts`,
+`npm run build --workspace @jarvis/backend`, and
+`npm run lint --workspace @jarvis/backend`. The backend build is the TypeScript
+check. The SQL snapshot is covered by the isolated database integration suite
+only when its loopback SQL Server fixture is available; do not claim it ran
+otherwise. No source flag is enabled by these checks.
+
 ## Chat acceptance failure labels and one bounded retry (#820, 17 October 2026)
 
 Read a failed chat check's safe reason in the acceptance artifact first; never

@@ -102,6 +102,22 @@ The new `proactive` background-job kind makes future runs visible in the
 existing Background work control. Existing embedding result-window exclusions
 remain specific to embedding jobs.
 
+## Keep P13-07 sources read-only and dark (18 October 2026)
+
+The todo filename remains unsettled, so the reader resolves exactly one
+case-insensitive root `task.md` or `tasks.md` and fails closed when absent or
+ambiguous. It only calls vault `tree` and `read`; it never creates or mutates a
+note. One shared parser/sanitizer serves todo facts and later todo consumers.
+It preserves task order, removes due markers from sanitized text, resolves local
+due times with the Copenhagen time zone, and prioritizes facts in the
+24-hours-before/72-hours-after window before the 40-fact cap.
+
+Factory reads use a narrow SQL task-status snapshot rather than event histories,
+prompts or logs. Weather uses only saved home coordinates and a bounded HTTPS
+Open-Meteo request; no default location or geocoding is allowed. Each source is
+registered, but no source is invoked and no proactive flag is enabled by this
+slice.
+
 ## Keep web push default-off and notification taps owner-authenticated (17 October 2026; P13-02)
 
 Implement the web half of the delivery proof behind the exact-string

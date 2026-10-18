@@ -2,11 +2,11 @@
 
 ## Status and purpose
 
-17 October 2026 — the broader proactive-assistance design remains staged. The
-Web Push delivery proof and the dark P13-05 backend foundation are approved;
-neither enables production work. The scheduler's in-process location and
-operating bounds are settled, but no scheduler, source read, model call or
-proactive send is implemented here. The
+18 October 2026 — the broader proactive-assistance design remains staged. The
+Web Push delivery proof, the dark P13-05 backend foundation and P13-07's
+read-only source implementations are approved; none enables production work.
+The scheduler's in-process location and operating bounds are settled, but no
+source run, model call or proactive send is active. The
 [plan summary](../PLAN.md#proactive-assistance--proposed-scope-17-october-2026)
 separates these slices from remaining pilot gates. Daily notification-off
 remains in force.
@@ -19,6 +19,23 @@ Dan's confirmed decisions supersede the proposals below. The server flags
 sets none. P13-05 adds contracts, owner-bound routes, operational stores,
 time/language/budget helpers and a background-job kind, but no scheduler, source
 read, model call, timer or proactive send.
+
+## Read-only source readers (18 October 2026; P13-07)
+
+P13-07 registers three sources without invoking them or enabling any flag. Todos
+resolve a single case-insensitive root `task.md` or `tasks.md`; missing or
+ambiguous matches are unavailable, and the reader never writes. The shared
+parser handles open and completed markdown tasks, strips untrusted markup and
+link destinations, bounds fact text to 300 characters, and resolves due dates
+in Europe/Copenhagen. At most 40 todo facts are returned, prioritizing deadlines
+within the 24-hours-before/72-hours-after window.
+
+Factory facts are read from a narrow status snapshot containing project/task
+titles, task state, PR state and wait timestamps; it does not read logs, prompts
+or events. Weather reads only the saved home coordinates and makes a bounded
+HTTPS Open-Meteo request; it does not geocode or invent a location. All three
+sources return stable unavailable reasons and remain dormant until later engine
+work explicitly reads them.
 
 Later scheduled work runs in-process in the backend, which retains its minimum
 one replica. Slots are 07:00 and 18:00 Europe/Copenhagen, computed using the IANA
@@ -62,11 +79,11 @@ live Azure, account, provider or iPhone acceptance.
 
 ## Proposed scope and pilot
 
-- Prioritize Dan's canonical vault todo file: he wants all personal todos there.
-  Its exact case-sensitive path remains unverified: Dan said `task.md`, while
-  an earlier reported root listing used `Tasks.md`. Verify the actual file
-  before any integration or write; do not guess, create a replacement or merge
-  files automatically. Calendar and Factory status supply supporting context.
+- Prioritize the canonical vault todo file. Its exact name remains unresolved;
+  the reader recognizes only one root-level `task.md` or `tasks.md`, without
+  regard to case, and reports missing or ambiguous matches rather than guessing.
+  It never creates, writes or merges files. Calendar and Factory status supply
+  supporting context.
   Mail is lower priority because Dan already checks it himself. Use existing
   authorized reads without enabling inactive Daily feed composition.
 - Look beyond connected personal data: weather, travel and daily-life changes
@@ -94,10 +111,11 @@ live Azure, account, provider or iPhone acceptance.
 
 ## Canonical todos and bounded edits
 
-The verified vault todo file is canonical for Dan's todos. SQL holds derived
-todo references/status snapshots plus operational runs, evidence, policy and
-delivery state; it must not become a competing editable todo list. Reconcile
-from the latest vault revision before planning or suggesting a change.
+The root-level vault todo file selected by the P13-07 resolver is canonical for
+todos. SQL holds derived todo references/status snapshots plus operational runs,
+evidence, policy and delivery state; it must not become a competing editable
+todo list. Reconcile from the latest vault revision before planning or
+suggesting a change.
 
 For a future enabled writer, constrain edits to that verified file and the
 agreed todo operations. Bind each patch to source evidence and the exact file
@@ -399,8 +417,9 @@ Still open: the exact canonical todo path, allowed edit operations and review/
 undo design; source identities, access/coverage and actual provider costs;
 operational retention; subscription/device lifecycle; durable inbox/conversation
 linkage; and any expansion beyond the confirmed bounded assistance. P13-05 does
-not activate the feature or implement the future scheduler, sources, reasoning,
-todo writer or alert delivery.
+not activate the feature or implement the future scheduler, source invocations,
+reasoning, todo writer or alert delivery; P13-07 supplies only dormant read-only
+source implementations.
 
 ## Appendix — optional execution, cost and source research
 
