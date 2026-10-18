@@ -18,9 +18,11 @@ export function formatDuration(seconds: number | null | undefined) {
   const totalMinutes = Math.floor(seconds / 60);
   const hours = Math.floor(totalMinutes / 60);
   const minutes = totalMinutes % 60;
-  if (hours > 0) return `${formatNumber(hours, 0)} hr${hours === 1 ? '' : 's'}${minutes ? ` ${formatNumber(minutes, 0)} min` : ''}`;
-  if (totalMinutes > 0) return `${formatNumber(totalMinutes, 0)} min`;
-  return `${formatNumber(Math.floor(seconds), 0)} sec`;
+  const unit = (value: number, name: 'hour' | 'minute' | 'second') =>
+    new Intl.NumberFormat(locale(), { style: 'unit', unit: name, unitDisplay: 'short', maximumFractionDigits: 0 }).format(value);
+  if (hours > 0) return `${unit(hours, 'hour')}${minutes ? ` ${unit(minutes, 'minute')}` : ''}`;
+  if (totalMinutes > 0) return unit(totalMinutes, 'minute');
+  return unit(Math.floor(seconds), 'second');
 }
 
 function validDate(value: string | null | undefined) {

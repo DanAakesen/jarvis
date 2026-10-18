@@ -1,5 +1,6 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { MemoryRouter, useSearchParams } from 'react-router-dom';
 import { dailyQuerySources as sources, isDailyQuery, type DailyJson, type DailyQuery, type DailySourceId } from '@jarvis/contracts';
 import { DailyHome } from './DailyHome';
 import { dailySources } from './presentation';
@@ -8,7 +9,7 @@ import { dailyFixture, jsonResponse } from './test-support';
 
 const token = async () => 'synthetic-fixture';
 const backendUrl = 'http://localhost:3999';
-afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); window.history.replaceState({}, '', '/'); });
 
 const records: Partial<Record<DailySourceId, Record<string, DailyJson>>> = {
   [sources.metrics]: { metric_name: 'synthetic_scan_mass', metric_date: '2026-10-17', value: 2, unit: 'kg' },
@@ -44,8 +45,15 @@ function fixture({ capabilities = () => capabilityList(), answer = query => json
   vi.stubGlobal('fetch', fetch);
   return { queries, fetch, capabilityCalls: () => fetch.mock.calls.filter(([url]) => String(url).endsWith('/daily/capabilities')).length };
 }
-function home(refreshVersion = 0) {
-  return <DailyRefreshContext.Provider value={refreshVersion}><DailyHome backendUrl={backendUrl} getAccessToken={token} /></DailyRefreshContext.Provider>;
+function SectionUrlProbe() {
+  const [params] = useSearchParams();
+  return <output data-testid="daily-section-url">{params.get('section') ?? 'no section parameter'}</output>;
+}
+function home(refreshVersion = 0, initialPath = '/daily') {
+  return <MemoryRouter initialEntries={[initialPath]}>
+    <DailyRefreshContext.Provider value={refreshVersion}><DailyHome backendUrl={backendUrl} getAccessToken={token} /></DailyRefreshContext.Provider>
+    <SectionUrlProbe />
+  </MemoryRouter>;
 }
 const settled = () => screen.findByText(/^Checked \d+ collections?:/u);
 function row(name: string) {
@@ -156,6 +164,48 @@ describe('Daily overview', () => {
     await waitFor(() => expect(f.queries).toHaveLength(dailySources.length * 2));
     await settled();
   });
+  it('shows only implemented sections and keeps the shared period when switching sections', async () => {
+    const f = fixture();
+    render(home());
+    await settled();
+    expect(screen.getByRole('tab', { name: 'Overview' })).toBeTruthy();
+    expect(screen.getByRole('tab', { name: 'Briefs' })).toBeTruthy();
+    expect(screen.getByRole('tab', { name: 'Data' })).toBeTruthy();
+    expect(screen.queryByRole('tab', { name: 'Workouts' })).toBeNull();
+    expect(screen.queryByRole('tab', { name: 'Nutrition' })).toBeNull();
+    expect(screen.queryByRole('tab', { name: 'Body & sleep' })).toBeNull();
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Data' }));
+    await screen.findByLabelText('Browse');
+    fireEvent.change(screen.getByLabelText('Period'), { target: { value: '30' } });
+    await waitFor(() => expect(f.queries.at(-1)).toMatchObject({ source: sources.metrics }));
+    expect((screen.getByLabelText('Period') as HTMLSelectElement).value).toBe('30');
+    fireEvent.click(screen.getByRole('tab', { name: 'Briefs' }));
+    await screen.findByRole('heading', { name: 'Brief history' });
+    fireEvent.click(screen.getByRole('tab', { name: 'Data' }));
+    await screen.findByLabelText('Browse');
+    expect((screen.getByLabelText('Period') as HTMLSelectElement).value).toBe('30');
+  });
+
+  it('supports roving tab keys, stores selection in the URL and falls back from an unknown id', async () => {
+    fixture();
+    render(home(0, '/daily?section=unknown'));
+    await settled();
+    const overview = screen.getByRole('tab', { name: 'Overview' });
+    await waitFor(() => expect(overview.getAttribute('aria-selected')).toBe('true'));
+    expect(screen.getByTestId('daily-section-url').textContent).toBe('unknown');
+
+    fireEvent.keyDown(overview, { key: 'ArrowRight' });
+    const briefs = screen.getByRole('tab', { name: 'Briefs' });
+    expect(briefs.getAttribute('aria-selected')).toBe('true');
+    expect(screen.getByTestId('daily-section-url').textContent).toBe('briefs');
+    fireEvent.keyDown(briefs, { key: 'End' });
+    expect(screen.getByRole('tab', { name: 'Data' }).getAttribute('aria-selected')).toBe('true');
+    expect(screen.getByTestId('daily-section-url').textContent).toBe('data');
+    fireEvent.keyDown(screen.getByRole('tab', { name: 'Data' }), { key: 'Home' });
+    expect(screen.getByRole('tab', { name: 'Overview' }).getAttribute('aria-selected')).toBe('true');
+  });
+
   it('opens one collection in the record browser without another availability request, and Back returns to that row', async () => {
     const f = fixture();
     render(home());

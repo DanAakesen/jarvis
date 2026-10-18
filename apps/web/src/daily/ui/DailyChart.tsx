@@ -12,6 +12,9 @@ export function DailyChart({ kind, name, series }: {
   name: string;
   series: readonly ChartSeries[];
 }) {
+  if (!series.some(entry => entry.points.length > 0)) {
+    return <figure className="daily-chart"><figcaption>{name}</figcaption><p>No recorded values to chart.</p></figure>;
+  }
   const layout = chartLayout([...series], kind === 'bar', kind !== 'line');
   const plotWidth = width - margin.left - margin.right;
   const plotHeight = height - margin.top - margin.bottom;
@@ -39,7 +42,7 @@ export function DailyChart({ kind, name, series }: {
             </rect>;
           })}
         </g>;
-        const points = [...entry.points].sort((a, b) => String(a.x).localeCompare(String(b.x)));
+        const points = layout.categorical ? entry.points : [...entry.points].sort((a, b) => Number(a.x) - Number(b.x));
         const line = points.map((point, index) => `${index ? 'L' : 'M'}${px(point).toFixed(1)},${py(point.y).toFixed(1)}`).join(' ');
         const first = points[0];
         const last = points.at(-1);
@@ -56,7 +59,7 @@ export function DailyChart({ kind, name, series }: {
     <ScrollTable label={`${name} data`}>
       <table>
         <caption>{name} data</caption>
-        <thead><tr><th scope="col">Series</th><th scope="col">Date</th><th scope="col">Value</th></tr></thead>
+        <thead><tr><th scope="col">Series</th><th scope="col">X</th><th scope="col">Value</th></tr></thead>
         <tbody>{series.flatMap(entry => entry.points.map((point, index) =>
           <tr key={`${entry.name}-${index}`}><th scope="row">{entry.name}</th><td>{String(point.x)}</td><td>{formatNumber(point.y)}</td></tr>))}</tbody>
       </table>

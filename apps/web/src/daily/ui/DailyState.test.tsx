@@ -21,7 +21,7 @@ describe('DailyState', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
     expect(retry).toHaveBeenCalledOnce();
 
-    render(<DailyState status="partial" returned={3} onLoadMore={loadMore}
+    render(<DailyState status="partial" coverage={{ returned: 3, hasMore: true }} onLoadMore={loadMore}
       freshness={{ observedAt: '2026-10-17T07:00:00Z' }} />);
     expect(screen.getByText(/Showing the first 3/u)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Load more' }));

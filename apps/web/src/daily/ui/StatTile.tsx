@@ -8,7 +8,8 @@ export function StatTile({ label, value, unit, note, comparison }: {
   note?: ReactNode;
   comparison?: ReactNode;
 }) {
-  const known = value !== null && value !== undefined;
+  const known = value !== null && value !== undefined &&
+    (typeof value !== 'number' || Number.isFinite(value)) && (typeof value !== 'string' || value.length > 0);
   const display = typeof value === 'number' ? formatNumber(value) : value || 'Unknown';
   return <article className="daily-stat-tile">
     <h3>{label}</h3>

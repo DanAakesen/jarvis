@@ -1302,6 +1302,16 @@ production deployment files then set it together with the backend switch (18
 October 2026). Acceptance with real data, a physical phone and the original source
 stays open.
 
+18 October 2026 (P12-20 / #964): Daily keeps that single destination and now has
+one page heading, a section switcher and an active section. The shipped sections
+are Overview, Briefs and Data; Overview still opens a collection in the existing
+browser, and Briefs reuses its history and detail. Unavailable section
+capabilities do not create dead tabs. Data uses one shared Europe/Copenhagen
+period (Last 7, 30 or 90 days, This year, or a validated custom range of at most
+366 calendar days), retained while switching sections and in the URL. New
+Workouts, Nutrition and Body & sleep views remain follow-up work; there are no
+separate navigation destinations, widget, coaching/recovery/recomp or TickTick.
+
 On-demand Daily views (P12-16 / #731) let Dan ask Jarvis in chat or voice to show
 what Daily holds, and the answer appears as a table, chart or detail in the existing
 workspace window instead of a fixed native screen. The `daily_show` tool covers

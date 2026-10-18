@@ -11,8 +11,9 @@ describe('StatTile', () => {
     expect(screen.getByText('No change')).toBeTruthy();
   });
 
-  it.each([null, undefined])('renders unavailable values as Unknown instead of a blank or zero', value => {
+  it.each([null, undefined, Number.NaN, ''])('renders unavailable values as Unknown instead of a blank or zero', value => {
     render(<StatTile label="Synthetic value" value={value} unit="kg" />);
     expect(screen.getByText('Unknown')).toBeTruthy();
+    expect(screen.queryByText('kg')).toBeNull();
   });
 });

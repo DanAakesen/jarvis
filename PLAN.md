@@ -2420,6 +2420,7 @@ Dan approved P12 on 12 October 2026 and explicitly released only P12-01 for this
 | P12-17 | [#732](https://github.com/DanAakesen/jarvis/issues/732) | End-to-end, mobile & real-iPhone acceptance | Data manifest reconciled; real devices and existing Jarvis workflows pass; SQL availability and reverse-delta rollback verified. Dan reviews cutover evidence. | P12-06, P12-11, P12-12, P12-13, P12-14, P12-15, P12-16 | Not started |
 | P12-18 | [#733](https://github.com/DanAakesen/jarvis/issues/733) | Final delta, cutover & rollback window | Post-switch sync / food / UI pass; window agreed; new Azure writes can be recovered if rollback is needed. | P12-17 | Not started |
 | P12-19 | [#734](https://github.com/DanAakesen/jarvis/issues/734) | Retire legacy and migration-only tooling | Permanent Azure services and original source/data remain; full verified migration, rollback/retention gates met before legacy deprecation or temporary-tool cleanup; no hidden old canonical writer. | P12-18 | Not started |
+| P12-20 | [#964](https://github.com/DanAakesen/jarvis/issues/964) | Daily section shell & shared building blocks | One page with Overview, Briefs and Data; folder-discovered sections and capability-gated tabs; shared validated Copenhagen period; tested accessible state, statistic, chart, table and formatter building blocks; Workouts, Nutrition and Body & sleep remain follow-up sections. | P12-15 | In progress |
 
 ## P13 — Proactive assistance
 
