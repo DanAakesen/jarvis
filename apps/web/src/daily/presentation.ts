@@ -1,5 +1,6 @@
 import { dailyQuerySources as sources, isDailyQuery, type DailyCursor, type DailyJson, type DailyQuery, type DailySourceId } from '@jarvis/contracts';
 import type { ChartSeries } from '../chart-data';
+import { isDailyPeriod } from './period';
 
 /** `purpose` is static plain-English copy for the overview: what the collection is for, never a figure. */
 export const dailySources: readonly { id: DailySourceId; label: string; dated: boolean; purpose: string }[] = [
@@ -49,6 +50,7 @@ export function initialDailyPeriod(now = new Date()) {
   return { startDate: start.toISOString().slice(0, 10), endDate };
 }
 export function dailyRequest(source: DailySourceId, period: { startDate: string; endDate: string }, cursor?: DailyCursor, recordId?: string): DailyQuery | null {
+  if ([sources.metrics, sources.sleep, sources.workouts, sources.meals].some(id => id === source) && !isDailyPeriod(period)) return null;
   const value = source === sources.sync ? { source } : source === sources.workout ? { source, workoutId: recordId } :
     source === sources.brief ? { source, briefId: recordId } :
     source === sources.heartRate ? { source, workoutId: recordId, limit: 50, ...(cursor ? { cursor } : {}) } :
