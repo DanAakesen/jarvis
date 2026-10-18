@@ -147,6 +147,11 @@ The item route uses one page headline, readable item text and time, plus
 loading, unavailable, retry and sign-in states. The visual design does not
 imply that provider acceptance proves phone display.
 
+Proactive worker notifications keep the title `Jarvis` and choose body copy only
+from fixed Danish/English templates for a validated kind and count. Payload
+title/body text is ignored; invalid template data keeps the existing generic
+“New item” notification.
+
 The header's **Background work** list contains only undismissed jobs and explains
 that research, images, apps and indexing are separate from Factory tasks.
 P11-05 supersedes the earlier Recent jobs view that kept hidden rows visible.

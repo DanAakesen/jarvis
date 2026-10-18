@@ -2,6 +2,7 @@ import type { IncomingMessage, Server, ServerResponse } from 'node:http';
 import type { FastifyBaseLogger, FastifyInstance, FastifyPluginAsync, FastifyTypeProviderDefault } from 'fastify';
 import type { PushStore, ProactiveItem, StoredPushSubscription } from '../database/push-store.js';
 import { generateVapidKeyPair, sendWebPush, type PushSendOrigin, type VapidKeyPair, type WebPushResult, type WebPushTransport } from './webpush.js';
+import { createVapidKeyLoader, deliverToSubscriptions } from '../proactive/push-delivery.js';
 import { validatePushEndpoint, validatePushSubscription } from './validation.js';
 
 const uuidPattern = /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/iu;
@@ -37,29 +38,7 @@ function createRoutes<Logger extends FastifyBaseLogger>(
   const send = dependencies.send ?? sendWebPush;
   const getKeys = dependencies.generateKeys ?? generateVapidKeyPair;
   const testTimes = new Map<string, number[]>();
-  let keyPromise: Promise<VapidKeyPair> | undefined;
-
-  const vapidKeys = (): Promise<VapidKeyPair> => {
-    if (keyPromise) return keyPromise;
-    const pending = (async () => {
-      const stored = await dependencies.store.readVapidKey();
-      if (stored) return stored;
-      const generated = getKeys();
-      try {
-        await dependencies.store.insertVapidKey(generated);
-      } catch {
-        // A concurrent process may have inserted the singleton key first.
-      }
-      const winner = await dependencies.store.readVapidKey();
-      if (!winner) throw new Error('Push signing key is unavailable');
-      return winner;
-    })().catch((error: unknown) => {
-      if (keyPromise === pending) keyPromise = undefined;
-      throw error;
-    });
-    keyPromise = pending;
-    return pending;
-  };
+  const vapidKeys = createVapidKeyLoader(dependencies.store, getKeys);
 
   function claimTest(owner: string): boolean {
     const timestamp = now();
@@ -110,12 +89,16 @@ function createRoutes<Logger extends FastifyBaseLogger>(
         body: 'New item',
         itemId: item.id,
       }));
-      const deliveries = await Promise.all(subscriptions.map(async (subscription) => {
-        const result = await send(subscription, payload, keys, dependencies.publicOrigin, 'user_test', transport);
-        if (result.removed) await dependencies.store.removeSubscription(subscription.id);
-        else await dependencies.store.recordSubscriptionResult(subscription.id, result.accepted);
-        return result;
-      }));
+      const deliveries = await deliverToSubscriptions({
+        store: dependencies.store,
+        subscriptions,
+        payload,
+        keys,
+        publicOrigin: dependencies.publicOrigin,
+        origin: 'user_test',
+        transport,
+        send,
+      });
       const accepted = deliveries.filter(({ accepted: didAccept }) => didAccept).length;
       const statusCode = deliveries.find(({ accepted: didAccept }) => didAccept)?.statusCode ??
         deliveries.find(({ statusCode: status }) => status !== null)?.statusCode ?? null;

@@ -28,7 +28,7 @@ export interface WebPushResult {
   readonly removed: boolean;
 }
 
-export type PushSendOrigin = 'user_test';
+export type PushSendOrigin = 'user_test' | 'proactive_alert' | 'proactive_reminder';
 
 export interface WebPushTransport {
   readonly fetch: typeof fetch;
@@ -142,14 +142,19 @@ export async function sendWebPush(
   publicOrigin: string,
   origin: PushSendOrigin,
   transport: WebPushTransport = { fetch, now: Date.now, sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)) },
+  signal?: AbortSignal,
 ): Promise<WebPushResult> {
-  void origin;
+  const headers = origin === 'proactive_alert'
+    ? { TTL: '3600', Urgency: 'high' }
+    : origin === 'proactive_reminder'
+      ? { TTL: '1800', Urgency: 'high' }
+      : { TTL: '300', Urgency: 'normal' };
   const deadline = transport.now() + 20_000;
   let statusCode: number | null = null;
   let attempted = 0;
   for (let attempt = 0; attempt < 3; attempt++) {
     const remaining = deadline - transport.now();
-    if (remaining <= 0) break;
+    if (remaining <= 0 || signal?.aborted) break;
     let response: Response;
     try {
       attempted++;
@@ -157,15 +162,16 @@ export async function sendWebPush(
         method: 'POST',
         headers: {
           Authorization: createVapidAuthorization(subscription.endpoint, publicOrigin, keys, transport.now()),
-          TTL: '300',
-          Urgency: 'normal',
+          ...headers,
           'Content-Encoding': 'aes128gcm',
           'Content-Type': 'application/octet-stream',
         },
         body: encryptWebPushPayload(subscription, payload),
         credentials: 'omit',
         redirect: 'error',
-        signal: AbortSignal.timeout(Math.min(10_000, remaining)),
+        signal: signal
+          ? AbortSignal.any([signal, AbortSignal.timeout(Math.min(10_000, remaining))])
+          : AbortSignal.timeout(Math.min(10_000, remaining)),
       });
     } catch {
       return { attempted, accepted: false, statusCode: null, removed: false };

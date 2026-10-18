@@ -41,10 +41,10 @@ function createWorker(clients: Record<string, unknown> = {}) {
 }
 
 describe('push service worker', () => {
-  it('always shows a generic notification for valid, empty and malformed payloads', async () => {
+  it('shows a generic notification for payloads without valid templates and malformed data', async () => {
     const { showNotification, dispatch, settle } = createWorker();
-    dispatch('push', { data: { json: () => ({ itemId }) } });
-    dispatch('push', { data: { json: () => ({}) } });
+    dispatch('push', { data: { json: () => ({ itemId, title: 'Private title', body: 'Private body' }) } });
+    dispatch('push', { data: { json: () => ({ itemId: 'https://example.invalid/path', kind: 'unknown', lang: 'en', count: 1 }) } });
     dispatch('push', { data: { json: () => { throw new SyntaxError('bad JSON'); } } });
     dispatch('push');
     await settle();
@@ -57,6 +57,49 @@ describe('push service worker', () => {
       expect(call[0]).toBe('Jarvis');
       expect(call[1]).toMatchObject({ body: 'New item', tag: 'jarvis', data: {} });
     }
+  });
+
+  it.each([
+    ['alert', 'da', 1, '1 tidskritisk ting kræver din opmærksomhed'],
+    ['alert', 'da', 2, '2 tidskritiske ting kræver din opmærksomhed'],
+    ['alert', 'en', 1, '1 time-critical item needs you'],
+    ['alert', 'en', 2, '2 time-critical items need you'],
+    ['due_soon', 'da', 1, 'En todo forfalder inden for en time'],
+    ['due_soon', 'da', 2, '2 todos forfalder inden for en time'],
+    ['due_soon', 'en', 1, 'A todo is due within the hour'],
+    ['due_soon', 'en', 2, '2 todos are due within the hour'],
+    ['overdue', 'da', 1, 'En todo er forfalden'],
+    ['overdue', 'da', 2, '2 todos er forfaldne'],
+    ['overdue', 'en', 1, 'A todo is overdue'],
+    ['overdue', 'en', 2, '2 todos are overdue'],
+    ['mixed', 'da', 2, '2 todos kræver din opmærksomhed'],
+    ['mixed', 'en', 2, '2 todos need your attention'],
+  ] as const)('uses a fixed %s/%s message for count %i', async (kind, lang, count, body) => {
+    const { showNotification, dispatch, settle } = createWorker();
+    dispatch('push', { data: { json: () => ({ itemId, kind, lang, count, body: 'Synthetic secret text' }) } });
+    await settle();
+    expect(showNotification).toHaveBeenCalledWith('Jarvis', {
+      body, tag: itemId, data: { itemId },
+    });
+    expect(JSON.stringify(showNotification.mock.calls)).not.toContain('Synthetic secret text');
+  });
+
+  it.each([0, 100, 1.5, '2', Number.NaN, undefined])('uses generic text for invalid count %s', async (count) => {
+    const { showNotification, dispatch, settle } = createWorker();
+    dispatch('push', { data: { json: () => ({ itemId, kind: 'alert', lang: 'en', ...(count === undefined ? {} : { count }) }) } });
+    await settle();
+    expect(showNotification).toHaveBeenCalledWith('Jarvis', { body: 'New item', tag: itemId, data: { itemId } });
+  });
+
+  it.each([
+    { kind: 'unknown', lang: 'en', count: 1 },
+    { kind: 'alert', lang: 'unknown', count: 1 },
+    { kind: 'mixed', lang: 'en', count: 1 },
+  ])('uses generic text for invalid template input %#', async (invalid) => {
+    const { showNotification, dispatch, settle } = createWorker();
+    dispatch('push', { data: { json: () => ({ itemId, ...invalid }) } });
+    await settle();
+    expect(showNotification).toHaveBeenCalledWith('Jarvis', { body: 'New item', tag: itemId, data: { itemId } });
   });
 
   it('navigates and focuses an existing same-origin window only for a valid item id', async () => {

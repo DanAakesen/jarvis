@@ -1980,6 +1980,33 @@ unavailable; no fallback location or geocoding is used. All source errors are
 mapped to stable unavailable reason codes. This slice enables no flags and
 starts no source reads.
 
+## Proactive run alerts and shared push sender (P13-12; default off)
+
+Composition appends the alert hook only when proactive, push and alert gates are
+all exactly enabled and both push-store and sender dependencies exist. It runs
+after finding persistence and ignores manual runs, paused settings, aborted runs
+and the live Copenhagen quiet window. Only time-critical deadline, clash and
+travel categories qualify. Candidates sort by due time (missing last) and
+dedupe key; a fresh owner-scoped state read immediately before delivery excludes
+items no longer new.
+
+`proactive_alerts` stores only IDs, a 32-hex SHA-256 alert key, class, Copenhagen
+day, status, attempt count and reason code. Its owner/key unique index fences
+duplicates; a failed first attempt can retry once, while sent or twice-failed keys
+settle. The daily safety cap counts distinct sent run bundles, so a push containing
+several finding rows consumes one slot. The additive 0057 migration has a
+data-preserving down script.
+
+`proactive/push-delivery.ts` is shared by the user test route and system sender
+for lazy VAPID key loading and subscription delivery/removal. System payloads keep
+the generic M1 title/body and add only the most urgent item UUID, kind, count and
+language. Alert pushes use one-hour TTL/high urgency; reminders use 30-minute
+TTL/high urgency; user tests retain the original five-minute/normal headers.
+System sends are rejected inside quiet hours at the sender boundary. The worker
+selects only fixed templates for validated kinds, languages and counts, ignoring
+payload-supplied title/body text. Provider acceptance is recorded per item and
+remains distinct from device display.
+
 ## Web push delivery (P13-02; default off)
 
 The web build exposes only the boolean result of `VITE_PUSH_ENABLED === "true"`
@@ -1988,8 +2015,11 @@ Notifications Settings section prefetches authenticated `GET /push/config` and
 registers the plain `public/sw.js` worker at `/` with worker updates uncached.
 Static Web Apps excludes `/sw.js` from its SPA fallback and sends
 `Cache-Control: no-cache`. The worker does not cache content or provide offline
-behavior; every push displays only the fixed generic Jarvis alert, retaining a
-validated UUID solely as notification data/tag.
+behavior; pushes display fixed Jarvis text, retaining a validated UUID solely as
+notification data/tag. P13-12 and later proactive reminders select closed,
+localized templates from validated `kind`, `lang` and `count`; every other
+payload displays the existing generic text and untrusted title/body fields are
+ignored.
 
 The web client calls authenticated `PUT /push/subscription`,
 `DELETE /push/subscription`, and `POST /push/test` through `backendFetch`.

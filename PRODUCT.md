@@ -1040,6 +1040,18 @@ the weather reader uses the saved home location and makes a bounded HTTPS
 forecast request. These source implementations remain dormant until a later
 engine slice invokes them.
 
+## Proactive run alerts (18 October 2026; P13-12)
+
+Only scheduled and catch-up checks can notify for a new, time-critical deadline
+within 24 hours or calendar clash; travel disruption keeps a typed category for a
+future provider. Eligible items share one generic push, capped at three accepted
+bundles per Copenhagen day. Manual checks, paused settings, quiet hours, cancelled
+runs, missing subscriptions, and findings already seen, snoozed or dismissed do
+not alert. Push payloads contain no finding text; notification wording comes from
+a closed Danish/English template table in the worker. The alert switch remains
+default-off alongside the proactive and push switches; per-class controls are not
+part of this slice.
+
 ## Daily migration (approved P12)
 
 Tool parity is an acceptance requirement for every retained Daily capability,
