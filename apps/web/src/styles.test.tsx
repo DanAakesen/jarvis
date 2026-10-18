@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 type Color = [number, number, number];
@@ -64,6 +64,53 @@ describe('app-wide control contract', () => {
     expect(ruleDeclaration(proactive, /\.proactive-page \[role="alert"\]\s*\{([^}]*)\}/, 'border')).toBe('1px solid var(--rule)');
   });
 
+  it('keeps action group order in markup and the deployment form gap at 10px', () => {
+    const actionGroups = ['button-group', 'settings-actions', 'task-dialog-actions', 'action-row'];
+    const rules = [...source.matchAll(/([^{}]+)\{([^{}]*)\}/g)];
+    for (const [, selectors, declarations] of rules) {
+      if (actionGroups.some((name) => selectors!.includes(`.${name}`))) {
+        expect(declarations).not.toMatch(/(?:^|;)\s*order\s*:/);
+      }
+    }
+
+    const deploymentRules = rules
+      .filter(([, selectors]) => selectors!.includes('.deployment-add'))
+      .map(([, , declarations]) => declarations!);
+    const gaps = deploymentRules.flatMap((declarations) =>
+      [...declarations.matchAll(/(?:^|;)\s*gap\s*:\s*([^;]+)/g)].map(([, value]) => value!.trim()));
+    expect(gaps).toEqual(['10px']);
+    expect(deploymentRules.join(';')).not.toMatch(/(?:^|;)\s*(?:row-gap|column-gap)\s*:/);
+    expect(ruleDeclaration(source, /\.deployment-add \.primary-button\s*\{([^}]*)\}/, 'margin')).toBe('0');
+  });
+
+  it('keeps primary buttons after sibling buttons in shared action groups', () => {
+    const classes = new Set(['button-group', 'settings-actions', 'task-dialog-actions', 'action-row']);
+    const sourceFiles = readdirSync('src', { recursive: true })
+      .filter((file): file is string => typeof file === 'string' && file.endsWith('.tsx'));
+    const violations: string[] = [];
+
+    for (const file of sourceFiles) {
+      const component = readFileSync(`src/${file}`, 'utf8');
+      const groupOpenings = /<div\b[^>]*className=(?:"([^"]*)"|{`([^`]*)`})[^>]*>/g;
+      for (const match of component.matchAll(groupOpenings)) {
+        const groupClasses = (match[1] ?? match[2] ?? '').split(/\s+/);
+        if (!groupClasses.some((name) => classes.has(name))) continue;
+
+        const start = match.index! + match[0].length;
+        const close = matchingDivClose(component, match.index!, match[0].length);
+        const buttons = [...component.slice(start, close).matchAll(/<button\b[^>]*>/g)];
+        if (buttons.length < 2) continue;
+
+        const primaryIndex = buttons.findIndex(([button]) => /className=(?:"[^"]*\bprimary-button\b[^"]*"|{[^}]*\bprimary-button\b[^}]*})/.test(button));
+        if (primaryIndex !== -1 && primaryIndex !== buttons.length - 1) {
+          violations.push(`${file}: primary button precedes another button in .${groupClasses.find((name) => classes.has(name))}`);
+        }
+      }
+    }
+
+    expect(violations).toEqual([]);
+  });
+
   it('removes decorative control rims without removing neutral field structure or focus', () => {
     for (const selector of [
       /(?:^|\n)\.secondary-button\s*\{([^}]*)\}/,
@@ -81,6 +128,22 @@ describe('app-wide control contract', () => {
     expect(source).toContain('.knowledge-search:has(input:focus-visible) { outline: 3px solid var(--focus);');
     expect(source).toContain('.folio-search:has(input:focus-visible) { outline: 3px solid var(--focus);');
   });
+
+  function matchingDivClose(source: string, openingIndex: number, openingLength: number): number {
+    const tags = /<\/?div\b[^>]*>/g;
+    tags.lastIndex = openingIndex + openingLength;
+    let depth = 1;
+    for (const match of source.matchAll(tags)) {
+      const tag = match[0];
+      if (tag.startsWith('</')) {
+        depth -= 1;
+        if (depth === 0) return match.index!;
+      } else if (!tag.endsWith('/>')) {
+        depth += 1;
+      }
+    }
+    throw new Error(`No closing div for opening at ${openingIndex} (${openingLength} characters)`);
+  }
 
   it('reserves pills for labelled status and genuine switch tracks', () => {
     expect(ruleDeclaration(source, /\.task-chip, \.task-state-chip\s*\{([^}]*)\}/, 'border-radius')).toBe('var(--radius-pill)');

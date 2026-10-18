@@ -628,10 +628,10 @@ export function TasksPage({ backendUrl, getAccessToken }: Props) {
           </div>
           {createError && <p className="tasks-feedback" role="alert">{createError}</p>}
           <div className="task-dialog-actions">
+            <button className="secondary-button" type="button" onClick={closeDialog} disabled={creating}>Cancel</button>
             <button className="primary-button" type="submit" disabled={creating || !backendUrl}>
               {creating ? 'Creating task…' : 'Create task'}
             </button>
-            <button className="secondary-button" type="button" onClick={closeDialog} disabled={creating}>Cancel</button>
           </div>
         </form>
     </Modal>

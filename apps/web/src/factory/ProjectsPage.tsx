@@ -820,11 +820,11 @@ export function ProjectSettingsPage({ backendUrl, getAccessToken }: ProjectsPage
               <div className="project-archive-confirm" role="group" aria-label="Confirm project archive">
                 <p>Archive {values.name || 'this project'}?</p>
                 <div className="settings-actions">
+                  <button className="secondary-button" type="button" disabled={disabled}
+                    onClick={() => setShowArchiveConfirmation(false)}>Cancel archive</button>
                   <button className="primary-button" type="button" disabled={disabled} onClick={() => { void archive(); }}>
                     {archivePending ? 'Archiving…' : 'Confirm archive'}
                   </button>
-                  <button className="secondary-button" type="button" disabled={disabled}
-                    onClick={() => setShowArchiveConfirmation(false)}>Cancel archive</button>
                 </div>
               </div>
             )}

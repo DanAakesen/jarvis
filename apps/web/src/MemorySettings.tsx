@@ -268,10 +268,10 @@ export function MemorySettings({ backendUrl, getAccessToken }: { backendUrl: str
                       <h3 id={`${ids}-forget`}>Forget this memory?</h3>
                       <p>Jarvis forgets it straight away; it cannot be restored.</p>
                       <div className="settings-actions">
+                        <button className="secondary-button" type="button" onClick={() => setConfirmForget(false)}>Keep it</button>
                         <button className="primary-button memory-forget-confirm" type="button" disabled={busy !== ''} onClick={() => { void forget(); }}>
                           {busy === 'forgetting' ? 'Forgetting…' : 'Forget memory'}
                         </button>
-                        <button className="secondary-button" type="button" onClick={() => setConfirmForget(false)}>Keep it</button>
                       </div>
                     </dialog>
                   </>

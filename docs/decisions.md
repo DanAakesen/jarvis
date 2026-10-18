@@ -5392,6 +5392,18 @@ The Pass 3 audit records measured counts, classifications, exceptions and
 synthetic before/after Chromium evidence; this does not claim live-service or
 human acceptance.
 
+## P14-13 — Keep action focus order in markup (18 October 2026)
+
+Place each action group's primary action last in markup so keyboard traversal
+matches the displayed order at desktop and narrow widths. Confirmation groups
+keep the safe Cancel/Keep action first. Do not use CSS `order` to rearrange
+action groups. Preserve the deployment form's 10px grid gap across breakpoints;
+reset its primary button's inherited top margin instead of widening the gap.
+The TSX source guard and CSS contract tests enforce these rules. This checkout
+already had a 10px `.deployment-add` gap and no action-group `order` rules; the
+change records those contracts and restores the deployment button's margin-free
+behavior. Local browser/layout acceptance remains a separate verification.
+
 ## P13-16 owner-bound proactive recall (18 October 2026; #937)
 
 Chat and voice use one read-only tool over the same owner-scoped proactive item

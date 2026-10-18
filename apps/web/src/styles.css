@@ -3268,6 +3268,7 @@ a.task-chip:hover { background: var(--glass-pressed); }
 .danger-button { color: var(--error); }
 .deployment-add { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)) auto; align-items: end; gap: 10px; padding: 12px; border-radius: 14px;
   background: color-mix(in srgb, var(--glass-edge-cool) 6%, transparent); }
+.deployment-add .primary-button { margin: 0; }
 .advanced-group { display: grid; gap: 12px; margin-top: 18px; }
 .advanced-field input[type="number"] { width: 100%; }
 .advanced-number { display: flex; align-items: center; gap: 8px; }

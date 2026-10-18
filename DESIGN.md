@@ -119,6 +119,8 @@ roles, stronger weight and accessible state. No decorative coloured boxes,
 bevels, inset-shadow borders or glowing control outlines, including on hover.
 Neutral field boundaries and real panel/list structure remain; keyboard focus
 uses the existing visible focus outline rather than a permanent accent rim.
+Within action groups, markup order is keyboard and visual order: place the
+primary action last. CSS does not reorder action groups.
 
 Keep compact desktop controls where useful and at least 44px touch targets.
 Segmented groups wrap at narrow widths; scrolling filter rows retain keyboard
