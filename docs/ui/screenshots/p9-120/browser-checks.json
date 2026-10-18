@@ -1,0 +1,2212 @@
+{
+  "captures": [
+    {
+      "type": "capture",
+      "state": "zero",
+      "width": 320,
+      "height": 568,
+      "theme": "light",
+      "viewportWidth": 320,
+      "documentWidth": 320,
+      "headerWidth": 320,
+      "clusterHidden": true,
+      "warning": "#835000"
+    },
+    {
+      "type": "capture",
+      "state": "attention",
+      "width": 320,
+      "height": 568,
+      "theme": "light",
+      "viewportWidth": 320,
+      "documentWidth": 320,
+      "headerWidth": 320,
+      "clusterHidden": false,
+      "warning": "#835000"
+    },
+    {
+      "type": "capture",
+      "state": "mixed",
+      "width": 320,
+      "height": 568,
+      "theme": "light",
+      "viewportWidth": 320,
+      "documentWidth": 320,
+      "headerWidth": 320,
+      "clusterHidden": false,
+      "warning": "#835000"
+    },
+    {
+      "type": "capture",
+      "state": "open",
+      "width": 320,
+      "height": 568,
+      "theme": "light",
+      "viewportWidth": 320,
+      "documentWidth": 320,
+      "headerWidth": 320,
+      "clusterHidden": false,
+      "warning": "#835000"
+    },
+    {
+      "type": "keyboard",
+      "width": 320,
+      "height": 568,
+      "theme": "light",
+      "tabReached": true,
+      "enterOpened": true,
+      "escapeRestoredFocus": true
+    },
+    {
+      "type": "dismiss-flow",
+      "firstCount": 1,
+      "iconDisappearsAfterLast": true,
+      "endpointCalls": {
+        "201": 1,
+        "202": 1
+      }
+    },
+    {
+      "type": "confirmation-flow",
+      "handlerCalled": true,
+      "decision": "reject"
+    },
+    {
+      "type": "capture",
+      "state": "zero",
+      "width": 320,
+      "height": 568,
+      "theme": "dark",
+      "viewportWidth": 320,
+      "documentWidth": 320,
+      "headerWidth": 320,
+      "clusterHidden": true,
+      "warning": "#ffc27a"
+    },
+    {
+      "type": "capture",
+      "state": "attention",
+      "width": 320,
+      "height": 568,
+      "theme": "dark",
+      "viewportWidth": 320,
+      "documentWidth": 320,
+      "headerWidth": 320,
+      "clusterHidden": false,
+      "warning": "#ffc27a"
+    },
+    {
+      "type": "capture",
+      "state": "mixed",
+      "width": 320,
+      "height": 568,
+      "theme": "dark",
+      "viewportWidth": 320,
+      "documentWidth": 320,
+      "headerWidth": 320,
+      "clusterHidden": false,
+      "warning": "#ffc27a"
+    },
+    {
+      "type": "capture",
+      "state": "open",
+      "width": 320,
+      "height": 568,
+      "theme": "dark",
+      "viewportWidth": 320,
+      "documentWidth": 320,
+      "headerWidth": 320,
+      "clusterHidden": false,
+      "warning": "#ffc27a"
+    },
+    {
+      "type": "capture",
+      "state": "zero",
+      "width": 390,
+      "height": 844,
+      "theme": "light",
+      "viewportWidth": 390,
+      "documentWidth": 390,
+      "headerWidth": 390,
+      "clusterHidden": true,
+      "warning": "#835000"
+    },
+    {
+      "type": "capture",
+      "state": "attention",
+      "width": 390,
+      "height": 844,
+      "theme": "light",
+      "viewportWidth": 390,
+      "documentWidth": 390,
+      "headerWidth": 390,
+      "clusterHidden": false,
+      "warning": "#835000"
+    },
+    {
+      "type": "capture",
+      "state": "mixed",
+      "width": 390,
+      "height": 844,
+      "theme": "light",
+      "viewportWidth": 390,
+      "documentWidth": 390,
+      "headerWidth": 390,
+      "clusterHidden": false,
+      "warning": "#835000"
+    },
+    {
+      "type": "capture",
+      "state": "open",
+      "width": 390,
+      "height": 844,
+      "theme": "light",
+      "viewportWidth": 390,
+      "documentWidth": 390,
+      "headerWidth": 390,
+      "clusterHidden": false,
+      "warning": "#835000"
+    },
+    {
+      "type": "capture",
+      "state": "zero",
+      "width": 390,
+      "height": 844,
+      "theme": "dark",
+      "viewportWidth": 390,
+      "documentWidth": 390,
+      "headerWidth": 390,
+      "clusterHidden": true,
+      "warning": "#ffc27a"
+    },
+    {
+      "type": "capture",
+      "state": "attention",
+      "width": 390,
+      "height": 844,
+      "theme": "dark",
+      "viewportWidth": 390,
+      "documentWidth": 390,
+      "headerWidth": 390,
+      "clusterHidden": false,
+      "warning": "#ffc27a"
+    },
+    {
+      "type": "capture",
+      "state": "mixed",
+      "width": 390,
+      "height": 844,
+      "theme": "dark",
+      "viewportWidth": 390,
+      "documentWidth": 390,
+      "headerWidth": 390,
+      "clusterHidden": false,
+      "warning": "#ffc27a"
+    },
+    {
+      "type": "capture",
+      "state": "open",
+      "width": 390,
+      "height": 844,
+      "theme": "dark",
+      "viewportWidth": 390,
+      "documentWidth": 390,
+      "headerWidth": 390,
+      "clusterHidden": false,
+      "warning": "#ffc27a"
+    },
+    {
+      "type": "capture",
+      "state": "zero",
+      "width": 1440,
+      "height": 900,
+      "theme": "light",
+      "viewportWidth": 1440,
+      "documentWidth": 1440,
+      "headerWidth": 1428,
+      "clusterHidden": true,
+      "warning": "#835000"
+    },
+    {
+      "type": "capture",
+      "state": "attention",
+      "width": 1440,
+      "height": 900,
+      "theme": "light",
+      "viewportWidth": 1440,
+      "documentWidth": 1440,
+      "headerWidth": 1428,
+      "clusterHidden": false,
+      "warning": "#835000"
+    },
+    {
+      "type": "capture",
+      "state": "mixed",
+      "width": 1440,
+      "height": 900,
+      "theme": "light",
+      "viewportWidth": 1440,
+      "documentWidth": 1440,
+      "headerWidth": 1428,
+      "clusterHidden": false,
+      "warning": "#835000"
+    },
+    {
+      "type": "capture",
+      "state": "open",
+      "width": 1440,
+      "height": 900,
+      "theme": "light",
+      "viewportWidth": 1440,
+      "documentWidth": 1440,
+      "headerWidth": 1428,
+      "clusterHidden": false,
+      "warning": "#835000"
+    },
+    {
+      "type": "capture",
+      "state": "zero",
+      "width": 1440,
+      "height": 900,
+      "theme": "dark",
+      "viewportWidth": 1440,
+      "documentWidth": 1440,
+      "headerWidth": 1428,
+      "clusterHidden": true,
+      "warning": "#ffc27a"
+    },
+    {
+      "type": "capture",
+      "state": "attention",
+      "width": 1440,
+      "height": 900,
+      "theme": "dark",
+      "viewportWidth": 1440,
+      "documentWidth": 1440,
+      "headerWidth": 1428,
+      "clusterHidden": false,
+      "warning": "#ffc27a"
+    },
+    {
+      "type": "capture",
+      "state": "mixed",
+      "width": 1440,
+      "height": 900,
+      "theme": "dark",
+      "viewportWidth": 1440,
+      "documentWidth": 1440,
+      "headerWidth": 1428,
+      "clusterHidden": false,
+      "warning": "#ffc27a"
+    },
+    {
+      "type": "capture",
+      "state": "open",
+      "width": 1440,
+      "height": 900,
+      "theme": "dark",
+      "viewportWidth": 1440,
+      "documentWidth": 1440,
+      "headerWidth": 1428,
+      "clusterHidden": false,
+      "warning": "#ffc27a"
+    }
+  ],
+  "requests": [
+    {
+      "scenario": "zero",
+      "method": "GET",
+      "path": "/presence"
+    },
+    {
+      "scenario": "zero",
+      "method": "GET",
+      "path": "/conversation/history"
+    },
+    {
+      "scenario": "zero",
+      "method": "GET",
+      "path": "/settings"
+    },
+    {
+      "scenario": "zero",
+      "method": "GET",
+      "path": "/conversation/history"
+    },
+    {
+      "scenario": "zero",
+      "method": "GET",
+      "path": "/workspace/pins"
+    },
+    {
+      "scenario": "zero",
+      "method": "GET",
+      "path": "/now"
+    },
+    {
+      "scenario": "zero",
+      "method": "GET",
+      "path": "/now/events"
+    },
+    {
+      "scenario": "zero",
+      "method": "POST",
+      "path": "/now/present"
+    },
+    {
+      "scenario": "zero",
+      "method": "GET",
+      "path": "/settings"
+    },
+    {
+      "scenario": "zero",
+      "method": "GET",
+      "path": "/jobs"
+    },
+    {
+      "scenario": "zero",
+      "method": "GET",
+      "path": "/database/status"
+    },
+    {
+      "scenario": "zero",
+      "method": "PUT",
+      "path": "/presence"
+    },
+    {
+      "scenario": "zero",
+      "method": "GET",
+      "path": "/now"
+    },
+    {
+      "scenario": "attention",
+      "method": "GET",
+      "path": "/presence"
+    },
+    {
+      "scenario": "attention",
+      "method": "GET",
+      "path": "/conversation/history"
+    },
+    {
+      "scenario": "attention",
+      "method": "GET",
+      "path": "/settings"
+    },
+    {
+      "scenario": "attention",
+      "method": "GET",
+      "path": "/conversation/history"
+    },
+    {
+      "scenario": "attention",
+      "method": "GET",
+      "path": "/workspace/pins"
+    },
+    {
+      "scenario": "attention",
+      "method": "GET",
+      "path": "/now"
+    },
+    {
+      "scenario": "attention",
+      "method": "GET",
+      "path": "/now/events"
+    },
+    {
+      "scenario": "attention",
+      "method": "POST",
+      "path": "/now/present"
+    },
+    {
+      "scenario": "attention",
+      "method": "GET",
+      "path": "/settings"
+    },
+    {
+      "scenario": "attention",
+      "method": "GET",
+      "path": "/jobs"
+    },
+    {
+      "scenario": "attention",
+      "method": "GET",
+      "path": "/database/status"
+    },
+    {
+      "scenario": "attention",
+      "method": "GET",
+      "path": "/now"
+    },
+    {
+      "scenario": "attention",
+      "method": "GET",
+      "path": "/database/status"
+    },
+    {
+      "scenario": "attention",
+      "method": "PUT",
+      "path": "/presence"
+    },
+    {
+      "scenario": "mixed",
+      "method": "GET",
+      "path": "/presence"
+    },
+    {
+      "scenario": "mixed",
+      "method": "GET",
+      "path": "/conversation/history"
+    },
+    {
+      "scenario": "mixed",
+      "method": "GET",
+      "path": "/settings"
+    },
+    {
+      "scenario": "mixed",
+      "method": "GET",
+      "path": "/conversation/history"
+    },
+    {
+      "scenario": "mixed",
+      "method": "GET",
+      "path": "/workspace/pins"
+    },
+    {
+      "scenario": "mixed",
+      "method": "GET",
+      "path": "/now"
+    },
+    {
+      "scenario": "mixed",
+      "method": "GET",
+      "path": "/now/events"
+    },
+    {
+      "scenario": "mixed",
+      "method": "POST",
+      "path": "/now/present"
+    },
+    {
+      "scenario": "mixed",
+      "method": "GET",
+      "path": "/settings"
+    },
+    {
+      "scenario": "mixed",
+      "method": "GET",
+      "path": "/jobs"
+    },
+    {
+      "scenario": "mixed",
+      "method": "GET",
+      "path": "/database/status"
+    },
+    {
+      "scenario": "mixed",
+      "method": "GET",
+      "path": "/now"
+    },
+    {
+      "scenario": "mixed",
+      "method": "GET",
+      "path": "/database/status"
+    },
+    {
+      "scenario": "mixed",
+      "method": "PUT",
+      "path": "/presence"
+    },
+    {
+      "scenario": "open",
+      "method": "GET",
+      "path": "/presence"
+    },
+    {
+      "scenario": "open",
+      "method": "GET",
+      "path": "/conversation/history"
+    },
+    {
+      "scenario": "open",
+      "method": "GET",
+      "path": "/settings"
+    },
+    {
+      "scenario": "open",
+      "method": "GET",
+      "path": "/conversation/history"
+    },
+    {
+      "scenario": "open",
+      "method": "GET",
+      "path": "/workspace/pins"
+    },
+    {
+      "scenario": "open",
+      "method": "GET",
+      "path": "/now"
+    },
+    {
+      "scenario": "open",
+      "method": "POST",
+      "path": "/now/present"
+    },
+    {
+      "scenario": "open",
+      "method": "GET",
+      "path": "/now/events"
+    },
+    {
+      "scenario": "open",
+      "method": "GET",
+      "path": "/settings"
+    },
+    {
+      "scenario": "open",
+      "method": "GET",
+      "path": "/jobs"
+    },
+    {
+      "scenario": "open",
+      "method": "GET",
+      "path": "/database/status"
+    },
+    {
+      "scenario": "open",
+      "method": "GET",
+      "path": "/now"
+    },
+    {
+      "scenario": "open",
+      "method": "GET",
+      "path": "/database/status"
+    },
+    {
+      "scenario": "open",
+      "method": "PUT",
+      "path": "/presence"
+    },
+    {
+      "scenario": "attention",
+      "method": "GET",
+      "path": "/presence"
+    },
+    {
+      "scenario": "attention",
+      "method": "GET",
+      "path": "/conversation/history"
+    },
+    {
+      "scenario": "attention",
+      "method": "GET",
+      "path": "/settings"
+    },
+    {
+      "scenario": "attention",
+      "method": "GET",
+      "path": "/conversation/history"
+    },
+    {
+      "scenario": "attention",
+      "method": "GET",
+      "path": "/workspace/pins"
+    },
+    {
+      "scenario": "attention",
+      "method": "GET",
+      "path": "/now"
+    },
+    {
+      "scenario": "attention",
+      "method": "GET",
+      "path": "/now/events"
+    },
+    {
+      "scenario": "attention",
+      "method": "POST",
+      "path": "/now/present"
+    },
+    {
+      "scenario": "attention",
+      "method": "GET",
+      "path": "/settings"
+    },
+    {
+      "scenario": "attention",
+      "method": "GET",
+      "path": "/jobs"
+    },
+    {
+      "scenario": "attention",
+      "method": "GET",
+      "path": "/database/status"
+    },
+    {
+      "scenario": "attention",
+      "method": "GET",
+      "path": "/now"
+    },
+    {
+      "scenario": "attention",
+      "method": "GET",
+      "path": "/database/status"
+    },
+    {
+      "scenario": "attention",
+      "method": "PUT",
+      "path": "/presence"
+    },
+    {
+      "scenario": "dismiss",
+      "method": "GET",
+      "path": "/presence"
+    },
+    {
+      "scenario": "dismiss",
+      "method": "GET",
+      "path": "/conversation/history"
+    },
+    {
+      "scenario": "dismiss",
+      "method": "GET",
+      "path": "/settings"
+    },
+    {
+      "scenario": "dismiss",
+      "method": "GET",
+      "path": "/conversation/history"
+    },
+    {
+      "scenario": "dismiss",
+      "method": "GET",
+      "path": "/workspace/pins"
+    },
+    {
+      "scenario": "dismiss",
+      "method": "GET",
+      "path": "/now"
+    },
+    {
+      "scenario": "dismiss",
+      "method": "GET",
+      "path": "/now/events"
+    },
+    {
+      "scenario": "dismiss",
+      "method": "POST",
+      "path": "/now/present"
+    },
+    {
+      "scenario": "dismiss",
+      "method": "GET",
+      "path": "/settings"
+    },
+    {
+      "scenario": "dismiss",
+      "method": "GET",
+      "path": "/jobs"
+    },
+    {
+      "scenario": "dismiss",
+      "method": "GET",
+      "path": "/database/status"
+    },
+    {
+      "scenario": "dismiss",
+      "method": "GET",
+      "path": "/now"
+    },
+    {
+      "scenario": "dismiss",
+      "method": "GET",
+      "path": "/database/status"
+    },
+    {
+      "scenario": "dismiss",
+      "method": "PUT",
+      "path": "/presence"
+    },
+    {
+      "scenario": "dismiss",
+      "method": "POST",
+      "path": "/now/activity/201/dismiss"
+    },
+    {
+      "scenario": "dismiss",
+      "method": "GET",
+      "path": "/database/status"
+    },
+    {
+      "scenario": "dismiss",
+      "method": "GET",
+      "path": "/now"
+    },
+    {
+      "scenario": "dismiss",
+      "method": "GET",
+      "path": "/database/status"
+    },
+    {
+      "scenario": "dismiss",
+      "method": "POST",
+      "path": "/now/activity/202/dismiss"
+    },
+    {
+      "scenario": "dismiss",
+      "method": "GET",
+      "path": "/database/status"
+    },
+    {
+      "scenario": "dismiss",
+      "method": "GET",
+      "path": "/now"
+    },
+    {
+      "scenario": "dismiss",
+      "method": "GET",
+      "path": "/database/status"
+    },
+    {
+      "scenario": "open",
+      "method": "GET",
+      "path": "/presence"
+    },
+    {
+      "scenario": "open",
+      "method": "GET",
+      "path": "/conversation/history"
+    },
+    {
+      "scenario": "open",
+      "method": "GET",
+      "path": "/settings"
+    },
+    {
+      "scenario": "open",
+      "method": "GET",
+      "path": "/conversation/history"
+    },
+    {
+      "scenario": "open",
+      "method": "GET",
+      "path": "/workspace/pins"
+    },
+    {
+      "scenario": "open",
+      "method": "GET",
+      "path": "/now"
+    },
+    {
+      "scenario": "open",
+      "method": "GET",
+      "path": "/now/events"
+    },
+    {
+      "scenario": "open",
+      "method": "POST",
+      "path": "/now/present"
+    },
+    {
+      "scenario": "open",
+      "method": "GET",
+      "path": "/settings"
+    },
+    {
+      "scenario": "open",
+      "method": "GET",
+      "path": "/jobs"
+    },
+    {
+      "scenario": "open",
+      "method": "GET",
+      "path": "/database/status"
+    },
+    {
+      "scenario": "open",
+      "method": "GET",
+      "path": "/now"
+    },
+    {
+      "scenario": "open",
+      "method": "GET",
+      "path": "/database/status"
+    },
+    {
+      "scenario": "open",
+      "method": "PUT",
+      "path": "/presence"
+    },
+    {
+      "scenario": "open",
+      "method": "POST",
+      "path": "/now/confirmations/BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"
+    },
+    {
+      "scenario": "open",
+      "method": "GET",
+      "path": "/database/status"
+    },
+    {
+      "scenario": "open",
+      "method": "GET",
+      "path": "/now"
+    },
+    {
+      "scenario": "open",
+      "method": "GET",
+      "path": "/database/status"
+    },
+    {
+      "scenario": "zero",
+      "method": "GET",
+      "path": "/presence"
+    },
+    {
+      "scenario": "zero",
+      "method": "GET",
+      "path": "/conversation/history"
+    },
+    {
+      "scenario": "zero",
+      "method": "GET",
+      "path": "/settings"
+    },
+    {
+      "scenario": "zero",
+      "method": "GET",
+      "path": "/conversation/history"
+    },
+    {
+      "scenario": "zero",
+      "method": "GET",
+      "path": "/workspace/pins"
+    },
+    {
+      "scenario": "zero",
+      "method": "GET",
+      "path": "/now"
+    },
+    {
+      "scenario": "zero",
+      "method": "GET",
+      "path": "/now/events"
+    },
+    {
+      "scenario": "zero",
+      "method": "POST",
+      "path": "/now/present"
+    },
+    {
+      "scenario": "zero",
+      "method": "GET",
+      "path": "/settings"
+    },
+    {
+      "scenario": "zero",
+      "method": "GET",
+      "path": "/jobs"
+    },
+    {
+      "scenario": "zero",
+      "method": "GET",
+      "path": "/database/status"
+    },
+    {
+      "scenario": "zero",
+      "method": "GET",
+      "path": "/now"
+    },
+    {
+      "scenario": "zero",
+      "method": "GET",
+      "path": "/database/status"
+    },
+    {
+      "scenario": "zero",
+      "method": "PUT",
+      "path": "/presence"
+    },
+    {
+      "scenario": "attention",
+      "method": "GET",
+      "path": "/presence"
+    },
+    {
+      "scenario": "attention",
+      "method": "GET",
+      "path": "/conversation/history"
+    },
+    {
+      "scenario": "attention",
+      "method": "GET",
+      "path": "/settings"
+    },
+    {
+      "scenario": "attention",
+      "method": "GET",
+      "path": "/conversation/history"
+    },
+    {
+      "scenario": "attention",
+      "method": "GET",
+      "path": "/workspace/pins"
+    },
+    {
+      "scenario": "attention",
+      "method": "GET",
+      "path": "/now"
+    },
+    {
+      "scenario": "attention",
+      "method": "GET",
+      "path": "/now/events"
+    },
+    {
+      "scenario": "attention",
+      "method": "POST",
+      "path": "/now/present"
+    },
+    {
+      "scenario": "attention",
+      "method": "GET",
+      "path": "/settings"
+    },
+    {
+      "scenario": "attention",
+      "method": "GET",
+      "path": "/jobs"
+    },
+    {
+      "scenario": "attention",
+      "method": "GET",
+      "path": "/database/status"
+    },
+    {
+      "scenario": "attention",
+      "method": "GET",
+      "path": "/now"
+    },
+    {
+      "scenario": "attention",
+      "method": "GET",
+      "path": "/database/status"
+    },
+    {
+      "scenario": "attention",
+      "method": "PUT",
+      "path": "/presence"
+    },
+    {
+      "scenario": "mixed",
+      "method": "GET",
+      "path": "/presence"
+    },
+    {
+      "scenario": "mixed",
+      "method": "GET",
+      "path": "/conversation/history"
+    },
+    {
+      "scenario": "mixed",
+      "method": "GET",
+      "path": "/settings"
+    },
+    {
+      "scenario": "mixed",
+      "method": "GET",
+      "path": "/conversation/history"
+    },
+    {
+      "scenario": "mixed",
+      "method": "GET",
+      "path": "/workspace/pins"
+    },
+    {
+      "scenario": "mixed",
+      "method": "GET",
+      "path": "/now"
+    },
+    {
+      "scenario": "mixed",
+      "method": "GET",
+      "path": "/now/events"
+    },
+    {
+      "scenario": "mixed",
+      "method": "POST",
+      "path": "/now/present"
+    },
+    {
+      "scenario": "mixed",
+      "method": "GET",
+      "path": "/settings"
+    },
+    {
+      "scenario": "mixed",
+      "method": "GET",
+      "path": "/jobs"
+    },
+    {
+      "scenario": "mixed",
+      "method": "GET",
+      "path": "/database/status"
+    },
+    {
+      "scenario": "mixed",
+      "method": "GET",
+      "path": "/now"
+    },
+    {
+      "scenario": "mixed",
+      "method": "GET",
+      "path": "/database/status"
+    },
+    {
+      "scenario": "mixed",
+      "method": "PUT",
+      "path": "/presence"
+    },
+    {
+      "scenario": "open",
+      "method": "GET",
+      "path": "/presence"
+    },
+    {
+      "scenario": "open",
+      "method": "GET",
+      "path": "/conversation/history"
+    },
+    {
+      "scenario": "open",
+      "method": "GET",
+      "path": "/settings"
+    },
+    {
+      "scenario": "open",
+      "method": "GET",
+      "path": "/conversation/history"
+    },
+    {
+      "scenario": "open",
+      "method": "GET",
+      "path": "/workspace/pins"
+    },
+    {
+      "scenario": "open",
+      "method": "GET",
+      "path": "/now"
+    },
+    {
+      "scenario": "open",
+      "method": "GET",
+      "path": "/now/events"
+    },
+    {
+      "scenario": "open",
+      "method": "POST",
+      "path": "/now/present"
+    },
+    {
+      "scenario": "open",
+      "method": "GET",
+      "path": "/settings"
+    },
+    {
+      "scenario": "open",
+      "method": "GET",
+      "path": "/jobs"
+    },
+    {
+      "scenario": "open",
+      "method": "GET",
+      "path": "/database/status"
+    },
+    {
+      "scenario": "open",
+      "method": "GET",
+      "path": "/now"
+    },
+    {
+      "scenario": "open",
+      "method": "GET",
+      "path": "/database/status"
+    },
+    {
+      "scenario": "open",
+      "method": "PUT",
+      "path": "/presence"
+    },
+    {
+      "scenario": "zero",
+      "method": "GET",
+      "path": "/presence"
+    },
+    {
+      "scenario": "zero",
+      "method": "GET",
+      "path": "/conversation/history"
+    },
+    {
+      "scenario": "zero",
+      "method": "GET",
+      "path": "/settings"
+    },
+    {
+      "scenario": "zero",
+      "method": "GET",
+      "path": "/conversation/history"
+    },
+    {
+      "scenario": "zero",
+      "method": "GET",
+      "path": "/workspace/pins"
+    },
+    {
+      "scenario": "zero",
+      "method": "GET",
+      "path": "/now"
+    },
+    {
+      "scenario": "zero",
+      "method": "GET",
+      "path": "/now/events"
+    },
+    {
+      "scenario": "zero",
+      "method": "POST",
+      "path": "/now/present"
+    },
+    {
+      "scenario": "zero",
+      "method": "GET",
+      "path": "/settings"
+    },
+    {
+      "scenario": "zero",
+      "method": "GET",
+      "path": "/jobs"
+    },
+    {
+      "scenario": "zero",
+      "method": "GET",
+      "path": "/database/status"
+    },
+    {
+      "scenario": "zero",
+      "method": "GET",
+      "path": "/now"
+    },
+    {
+      "scenario": "zero",
+      "method": "PUT",
+      "path": "/presence"
+    },
+    {
+      "scenario": "attention",
+      "method": "GET",
+      "path": "/presence"
+    },
+    {
+      "scenario": "attention",
+      "method": "GET",
+      "path": "/conversation/history"
+    },
+    {
+      "scenario": "attention",
+      "method": "GET",
+      "path": "/settings"
+    },
+    {
+      "scenario": "attention",
+      "method": "GET",
+      "path": "/conversation/history"
+    },
+    {
+      "scenario": "attention",
+      "method": "GET",
+      "path": "/workspace/pins"
+    },
+    {
+      "scenario": "attention",
+      "method": "POST",
+      "path": "/now/present"
+    },
+    {
+      "scenario": "attention",
+      "method": "GET",
+      "path": "/now"
+    },
+    {
+      "scenario": "attention",
+      "method": "GET",
+      "path": "/now/events"
+    },
+    {
+      "scenario": "attention",
+      "method": "GET",
+      "path": "/settings"
+    },
+    {
+      "scenario": "attention",
+      "method": "GET",
+      "path": "/jobs"
+    },
+    {
+      "scenario": "attention",
+      "method": "GET",
+      "path": "/database/status"
+    },
+    {
+      "scenario": "attention",
+      "method": "GET",
+      "path": "/now"
+    },
+    {
+      "scenario": "attention",
+      "method": "GET",
+      "path": "/database/status"
+    },
+    {
+      "scenario": "attention",
+      "method": "PUT",
+      "path": "/presence"
+    },
+    {
+      "scenario": "mixed",
+      "method": "GET",
+      "path": "/presence"
+    },
+    {
+      "scenario": "mixed",
+      "method": "GET",
+      "path": "/conversation/history"
+    },
+    {
+      "scenario": "mixed",
+      "method": "GET",
+      "path": "/settings"
+    },
+    {
+      "scenario": "mixed",
+      "method": "GET",
+      "path": "/conversation/history"
+    },
+    {
+      "scenario": "mixed",
+      "method": "GET",
+      "path": "/workspace/pins"
+    },
+    {
+      "scenario": "mixed",
+      "method": "GET",
+      "path": "/now"
+    },
+    {
+      "scenario": "mixed",
+      "method": "GET",
+      "path": "/now/events"
+    },
+    {
+      "scenario": "mixed",
+      "method": "POST",
+      "path": "/now/present"
+    },
+    {
+      "scenario": "mixed",
+      "method": "GET",
+      "path": "/settings"
+    },
+    {
+      "scenario": "mixed",
+      "method": "GET",
+      "path": "/jobs"
+    },
+    {
+      "scenario": "mixed",
+      "method": "GET",
+      "path": "/database/status"
+    },
+    {
+      "scenario": "mixed",
+      "method": "GET",
+      "path": "/now"
+    },
+    {
+      "scenario": "mixed",
+      "method": "PUT",
+      "path": "/presence"
+    },
+    {
+      "scenario": "open",
+      "method": "GET",
+      "path": "/presence"
+    },
+    {
+      "scenario": "open",
+      "method": "GET",
+      "path": "/conversation/history"
+    },
+    {
+      "scenario": "open",
+      "method": "GET",
+      "path": "/settings"
+    },
+    {
+      "scenario": "open",
+      "method": "GET",
+      "path": "/conversation/history"
+    },
+    {
+      "scenario": "open",
+      "method": "GET",
+      "path": "/workspace/pins"
+    },
+    {
+      "scenario": "open",
+      "method": "GET",
+      "path": "/now"
+    },
+    {
+      "scenario": "open",
+      "method": "GET",
+      "path": "/now/events"
+    },
+    {
+      "scenario": "open",
+      "method": "POST",
+      "path": "/now/present"
+    },
+    {
+      "scenario": "open",
+      "method": "GET",
+      "path": "/settings"
+    },
+    {
+      "scenario": "open",
+      "method": "GET",
+      "path": "/jobs"
+    },
+    {
+      "scenario": "open",
+      "method": "GET",
+      "path": "/database/status"
+    },
+    {
+      "scenario": "open",
+      "method": "GET",
+      "path": "/now"
+    },
+    {
+      "scenario": "open",
+      "method": "GET",
+      "path": "/database/status"
+    },
+    {
+      "scenario": "open",
+      "method": "PUT",
+      "path": "/presence"
+    },
+    {
+      "scenario": "zero",
+      "method": "GET",
+      "path": "/presence"
+    },
+    {
+      "scenario": "zero",
+      "method": "GET",
+      "path": "/conversation/history"
+    },
+    {
+      "scenario": "zero",
+      "method": "GET",
+      "path": "/settings"
+    },
+    {
+      "scenario": "zero",
+      "method": "GET",
+      "path": "/conversation/history"
+    },
+    {
+      "scenario": "zero",
+      "method": "GET",
+      "path": "/workspace/pins"
+    },
+    {
+      "scenario": "zero",
+      "method": "GET",
+      "path": "/now"
+    },
+    {
+      "scenario": "zero",
+      "method": "GET",
+      "path": "/now/events"
+    },
+    {
+      "scenario": "zero",
+      "method": "POST",
+      "path": "/now/present"
+    },
+    {
+      "scenario": "zero",
+      "method": "GET",
+      "path": "/settings"
+    },
+    {
+      "scenario": "zero",
+      "method": "GET",
+      "path": "/jobs"
+    },
+    {
+      "scenario": "zero",
+      "method": "GET",
+      "path": "/database/status"
+    },
+    {
+      "scenario": "zero",
+      "method": "GET",
+      "path": "/now"
+    },
+    {
+      "scenario": "zero",
+      "method": "GET",
+      "path": "/database/status"
+    },
+    {
+      "scenario": "zero",
+      "method": "PUT",
+      "path": "/presence"
+    },
+    {
+      "scenario": "attention",
+      "method": "GET",
+      "path": "/presence"
+    },
+    {
+      "scenario": "attention",
+      "method": "GET",
+      "path": "/conversation/history"
+    },
+    {
+      "scenario": "attention",
+      "method": "GET",
+      "path": "/settings"
+    },
+    {
+      "scenario": "attention",
+      "method": "GET",
+      "path": "/conversation/history"
+    },
+    {
+      "scenario": "attention",
+      "method": "GET",
+      "path": "/workspace/pins"
+    },
+    {
+      "scenario": "attention",
+      "method": "GET",
+      "path": "/now"
+    },
+    {
+      "scenario": "attention",
+      "method": "GET",
+      "path": "/now/events"
+    },
+    {
+      "scenario": "attention",
+      "method": "POST",
+      "path": "/now/present"
+    },
+    {
+      "scenario": "attention",
+      "method": "GET",
+      "path": "/settings"
+    },
+    {
+      "scenario": "attention",
+      "method": "GET",
+      "path": "/jobs"
+    },
+    {
+      "scenario": "attention",
+      "method": "GET",
+      "path": "/database/status"
+    },
+    {
+      "scenario": "attention",
+      "method": "GET",
+      "path": "/now"
+    },
+    {
+      "scenario": "attention",
+      "method": "GET",
+      "path": "/database/status"
+    },
+    {
+      "scenario": "attention",
+      "method": "PUT",
+      "path": "/presence"
+    },
+    {
+      "scenario": "mixed",
+      "method": "GET",
+      "path": "/presence"
+    },
+    {
+      "scenario": "mixed",
+      "method": "GET",
+      "path": "/conversation/history"
+    },
+    {
+      "scenario": "mixed",
+      "method": "GET",
+      "path": "/settings"
+    },
+    {
+      "scenario": "mixed",
+      "method": "GET",
+      "path": "/conversation/history"
+    },
+    {
+      "scenario": "mixed",
+      "method": "GET",
+      "path": "/workspace/pins"
+    },
+    {
+      "scenario": "mixed",
+      "method": "GET",
+      "path": "/now"
+    },
+    {
+      "scenario": "mixed",
+      "method": "GET",
+      "path": "/now/events"
+    },
+    {
+      "scenario": "mixed",
+      "method": "POST",
+      "path": "/now/present"
+    },
+    {
+      "scenario": "mixed",
+      "method": "GET",
+      "path": "/settings"
+    },
+    {
+      "scenario": "mixed",
+      "method": "GET",
+      "path": "/jobs"
+    },
+    {
+      "scenario": "mixed",
+      "method": "GET",
+      "path": "/database/status"
+    },
+    {
+      "scenario": "mixed",
+      "method": "GET",
+      "path": "/now"
+    },
+    {
+      "scenario": "mixed",
+      "method": "GET",
+      "path": "/database/status"
+    },
+    {
+      "scenario": "mixed",
+      "method": "PUT",
+      "path": "/presence"
+    },
+    {
+      "scenario": "open",
+      "method": "GET",
+      "path": "/presence"
+    },
+    {
+      "scenario": "open",
+      "method": "GET",
+      "path": "/conversation/history"
+    },
+    {
+      "scenario": "open",
+      "method": "GET",
+      "path": "/settings"
+    },
+    {
+      "scenario": "open",
+      "method": "GET",
+      "path": "/conversation/history"
+    },
+    {
+      "scenario": "open",
+      "method": "GET",
+      "path": "/workspace/pins"
+    },
+    {
+      "scenario": "open",
+      "method": "GET",
+      "path": "/now"
+    },
+    {
+      "scenario": "open",
+      "method": "GET",
+      "path": "/now/events"
+    },
+    {
+      "scenario": "open",
+      "method": "POST",
+      "path": "/now/present"
+    },
+    {
+      "scenario": "open",
+      "method": "GET",
+      "path": "/settings"
+    },
+    {
+      "scenario": "open",
+      "method": "GET",
+      "path": "/jobs"
+    },
+    {
+      "scenario": "open",
+      "method": "GET",
+      "path": "/database/status"
+    },
+    {
+      "scenario": "open",
+      "method": "GET",
+      "path": "/now"
+    },
+    {
+      "scenario": "open",
+      "method": "GET",
+      "path": "/database/status"
+    },
+    {
+      "scenario": "open",
+      "method": "PUT",
+      "path": "/presence"
+    },
+    {
+      "scenario": "zero",
+      "method": "GET",
+      "path": "/presence"
+    },
+    {
+      "scenario": "zero",
+      "method": "GET",
+      "path": "/conversation/history"
+    },
+    {
+      "scenario": "zero",
+      "method": "GET",
+      "path": "/settings"
+    },
+    {
+      "scenario": "zero",
+      "method": "GET",
+      "path": "/conversation/history"
+    },
+    {
+      "scenario": "zero",
+      "method": "GET",
+      "path": "/workspace/pins"
+    },
+    {
+      "scenario": "zero",
+      "method": "GET",
+      "path": "/now"
+    },
+    {
+      "scenario": "zero",
+      "method": "POST",
+      "path": "/now/present"
+    },
+    {
+      "scenario": "zero",
+      "method": "GET",
+      "path": "/now/events"
+    },
+    {
+      "scenario": "zero",
+      "method": "GET",
+      "path": "/settings"
+    },
+    {
+      "scenario": "zero",
+      "method": "GET",
+      "path": "/jobs"
+    },
+    {
+      "scenario": "zero",
+      "method": "GET",
+      "path": "/database/status"
+    },
+    {
+      "scenario": "zero",
+      "method": "GET",
+      "path": "/now"
+    },
+    {
+      "scenario": "zero",
+      "method": "GET",
+      "path": "/database/status"
+    },
+    {
+      "scenario": "attention",
+      "method": "GET",
+      "path": "/presence"
+    },
+    {
+      "scenario": "attention",
+      "method": "GET",
+      "path": "/conversation/history"
+    },
+    {
+      "scenario": "attention",
+      "method": "GET",
+      "path": "/settings"
+    },
+    {
+      "scenario": "attention",
+      "method": "GET",
+      "path": "/conversation/history"
+    },
+    {
+      "scenario": "attention",
+      "method": "GET",
+      "path": "/workspace/pins"
+    },
+    {
+      "scenario": "attention",
+      "method": "GET",
+      "path": "/now"
+    },
+    {
+      "scenario": "attention",
+      "method": "GET",
+      "path": "/now/events"
+    },
+    {
+      "scenario": "attention",
+      "method": "POST",
+      "path": "/now/present"
+    },
+    {
+      "scenario": "attention",
+      "method": "GET",
+      "path": "/settings"
+    },
+    {
+      "scenario": "attention",
+      "method": "GET",
+      "path": "/jobs"
+    },
+    {
+      "scenario": "attention",
+      "method": "GET",
+      "path": "/database/status"
+    },
+    {
+      "scenario": "attention",
+      "method": "GET",
+      "path": "/now"
+    },
+    {
+      "scenario": "attention",
+      "method": "GET",
+      "path": "/database/status"
+    },
+    {
+      "scenario": "mixed",
+      "method": "GET",
+      "path": "/presence"
+    },
+    {
+      "scenario": "mixed",
+      "method": "GET",
+      "path": "/conversation/history"
+    },
+    {
+      "scenario": "mixed",
+      "method": "GET",
+      "path": "/settings"
+    },
+    {
+      "scenario": "mixed",
+      "method": "GET",
+      "path": "/conversation/history"
+    },
+    {
+      "scenario": "mixed",
+      "method": "GET",
+      "path": "/workspace/pins"
+    },
+    {
+      "scenario": "mixed",
+      "method": "GET",
+      "path": "/now"
+    },
+    {
+      "scenario": "mixed",
+      "method": "GET",
+      "path": "/now/events"
+    },
+    {
+      "scenario": "mixed",
+      "method": "POST",
+      "path": "/now/present"
+    },
+    {
+      "scenario": "mixed",
+      "method": "GET",
+      "path": "/settings"
+    },
+    {
+      "scenario": "mixed",
+      "method": "GET",
+      "path": "/jobs"
+    },
+    {
+      "scenario": "mixed",
+      "method": "GET",
+      "path": "/database/status"
+    },
+    {
+      "scenario": "mixed",
+      "method": "GET",
+      "path": "/now"
+    },
+    {
+      "scenario": "mixed",
+      "method": "GET",
+      "path": "/database/status"
+    },
+    {
+      "scenario": "open",
+      "method": "GET",
+      "path": "/presence"
+    },
+    {
+      "scenario": "open",
+      "method": "GET",
+      "path": "/conversation/history"
+    },
+    {
+      "scenario": "open",
+      "method": "GET",
+      "path": "/settings"
+    },
+    {
+      "scenario": "open",
+      "method": "GET",
+      "path": "/conversation/history"
+    },
+    {
+      "scenario": "open",
+      "method": "GET",
+      "path": "/workspace/pins"
+    },
+    {
+      "scenario": "open",
+      "method": "GET",
+      "path": "/now"
+    },
+    {
+      "scenario": "open",
+      "method": "POST",
+      "path": "/now/present"
+    },
+    {
+      "scenario": "open",
+      "method": "GET",
+      "path": "/now/events"
+    },
+    {
+      "scenario": "open",
+      "method": "GET",
+      "path": "/settings"
+    },
+    {
+      "scenario": "open",
+      "method": "GET",
+      "path": "/jobs"
+    },
+    {
+      "scenario": "open",
+      "method": "GET",
+      "path": "/database/status"
+    },
+    {
+      "scenario": "open",
+      "method": "GET",
+      "path": "/now"
+    },
+    {
+      "scenario": "open",
+      "method": "GET",
+      "path": "/database/status"
+    },
+    {
+      "scenario": "zero",
+      "method": "GET",
+      "path": "/presence"
+    },
+    {
+      "scenario": "zero",
+      "method": "GET",
+      "path": "/conversation/history"
+    },
+    {
+      "scenario": "zero",
+      "method": "GET",
+      "path": "/settings"
+    },
+    {
+      "scenario": "zero",
+      "method": "GET",
+      "path": "/conversation/history"
+    },
+    {
+      "scenario": "zero",
+      "method": "GET",
+      "path": "/workspace/pins"
+    },
+    {
+      "scenario": "zero",
+      "method": "GET",
+      "path": "/now"
+    },
+    {
+      "scenario": "zero",
+      "method": "GET",
+      "path": "/now/events"
+    },
+    {
+      "scenario": "zero",
+      "method": "POST",
+      "path": "/now/present"
+    },
+    {
+      "scenario": "zero",
+      "method": "GET",
+      "path": "/settings"
+    },
+    {
+      "scenario": "zero",
+      "method": "GET",
+      "path": "/jobs"
+    },
+    {
+      "scenario": "zero",
+      "method": "GET",
+      "path": "/database/status"
+    },
+    {
+      "scenario": "zero",
+      "method": "GET",
+      "path": "/now"
+    },
+    {
+      "scenario": "zero",
+      "method": "GET",
+      "path": "/database/status"
+    },
+    {
+      "scenario": "attention",
+      "method": "GET",
+      "path": "/presence"
+    },
+    {
+      "scenario": "attention",
+      "method": "GET",
+      "path": "/conversation/history"
+    },
+    {
+      "scenario": "attention",
+      "method": "GET",
+      "path": "/settings"
+    },
+    {
+      "scenario": "attention",
+      "method": "GET",
+      "path": "/conversation/history"
+    },
+    {
+      "scenario": "attention",
+      "method": "GET",
+      "path": "/workspace/pins"
+    },
+    {
+      "scenario": "attention",
+      "method": "POST",
+      "path": "/now/present"
+    },
+    {
+      "scenario": "attention",
+      "method": "GET",
+      "path": "/now"
+    },
+    {
+      "scenario": "attention",
+      "method": "GET",
+      "path": "/now/events"
+    },
+    {
+      "scenario": "attention",
+      "method": "GET",
+      "path": "/settings"
+    },
+    {
+      "scenario": "attention",
+      "method": "GET",
+      "path": "/jobs"
+    },
+    {
+      "scenario": "attention",
+      "method": "GET",
+      "path": "/database/status"
+    },
+    {
+      "scenario": "attention",
+      "method": "GET",
+      "path": "/now"
+    },
+    {
+      "scenario": "attention",
+      "method": "GET",
+      "path": "/database/status"
+    },
+    {
+      "scenario": "mixed",
+      "method": "GET",
+      "path": "/presence"
+    },
+    {
+      "scenario": "mixed",
+      "method": "GET",
+      "path": "/conversation/history"
+    },
+    {
+      "scenario": "mixed",
+      "method": "GET",
+      "path": "/settings"
+    },
+    {
+      "scenario": "mixed",
+      "method": "GET",
+      "path": "/conversation/history"
+    },
+    {
+      "scenario": "mixed",
+      "method": "POST",
+      "path": "/now/present"
+    },
+    {
+      "scenario": "mixed",
+      "method": "GET",
+      "path": "/workspace/pins"
+    },
+    {
+      "scenario": "mixed",
+      "method": "GET",
+      "path": "/now"
+    },
+    {
+      "scenario": "mixed",
+      "method": "GET",
+      "path": "/now/events"
+    },
+    {
+      "scenario": "mixed",
+      "method": "GET",
+      "path": "/settings"
+    },
+    {
+      "scenario": "mixed",
+      "method": "GET",
+      "path": "/jobs"
+    },
+    {
+      "scenario": "mixed",
+      "method": "GET",
+      "path": "/database/status"
+    },
+    {
+      "scenario": "mixed",
+      "method": "GET",
+      "path": "/now"
+    },
+    {
+      "scenario": "mixed",
+      "method": "GET",
+      "path": "/database/status"
+    },
+    {
+      "scenario": "open",
+      "method": "GET",
+      "path": "/presence"
+    },
+    {
+      "scenario": "open",
+      "method": "GET",
+      "path": "/conversation/history"
+    },
+    {
+      "scenario": "open",
+      "method": "GET",
+      "path": "/settings"
+    },
+    {
+      "scenario": "open",
+      "method": "GET",
+      "path": "/conversation/history"
+    },
+    {
+      "scenario": "open",
+      "method": "GET",
+      "path": "/workspace/pins"
+    },
+    {
+      "scenario": "open",
+      "method": "POST",
+      "path": "/now/present"
+    },
+    {
+      "scenario": "open",
+      "method": "GET",
+      "path": "/now"
+    },
+    {
+      "scenario": "open",
+      "method": "GET",
+      "path": "/now/events"
+    },
+    {
+      "scenario": "open",
+      "method": "GET",
+      "path": "/settings"
+    },
+    {
+      "scenario": "open",
+      "method": "GET",
+      "path": "/jobs"
+    },
+    {
+      "scenario": "open",
+      "method": "GET",
+      "path": "/database/status"
+    },
+    {
+      "scenario": "open",
+      "method": "GET",
+      "path": "/now"
+    },
+    {
+      "scenario": "open",
+      "method": "GET",
+      "path": "/database/status"
+    }
+  ]
+}
