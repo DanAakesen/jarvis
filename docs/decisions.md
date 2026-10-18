@@ -1,5 +1,18 @@
 # Decisions
 
+## P12-30 — Daily presentation kit and Workouts (18 October 2026)
+
+Move long retained-data caveats into the native “About this data” disclosure,
+but keep partial/lower-bound meaning beside the displayed value and keep unknown
+distinct from zero. Keep every chart’s raw values available through a disclosure
+attached to that chart rather than rendering a table below every visualization.
+Charts retain responsive geometry, direct series labels, explicit data gaps and
+keyboard point inspection. Workouts uses the shared kit in one responsive
+history list with a disclosed table; URL, paging, sorting, filtering and focus
+return stay owned by the existing section. These are presentation changes only;
+the original Daily remains canonical and no new data reads or dependencies are
+introduced.
+
 ## Consolidate web viewport breakpoints (18 October 2026; P14-05 / #973)
 
 Use one non-Daily viewport set: phone through 700px, tablet above 700px through

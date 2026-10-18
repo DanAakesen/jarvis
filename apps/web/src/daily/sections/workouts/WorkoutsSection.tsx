@@ -121,11 +121,8 @@ function WorkoutTable({ rows, onOpen }: { rows: Workout[]; onOpen: (row: Workout
   const open = (row: Workout) => text(row.id) ? <button type="button" className="secondary-button"
     data-workout-id={String(row.id)} onClick={event => onOpen(row, event.currentTarget)}
     aria-label={`Open ${typeLabel(row)}, ${workoutTime(row)}`}>Open</button> : <span>Detail unavailable: unknown id</span>;
-  return <details className="workouts-view-table">
-    <summary onClick={event => {
-      const details = event.currentTarget.parentElement;
-      setTableOpen(!(details instanceof HTMLDetailsElement && details.open));
-    }}>View as table</summary>
+  return <details className="workouts-view-table" open={tableOpen}>
+    <summary onClick={() => setTableOpen(open => !open)}>View as table</summary>
     {tableOpen && <ScrollTable label="Workouts in the loaded rows">
       <table><caption>Recorded workouts; unknown values are not zero</caption>
         <thead><tr>{['Date and time', 'Type', 'Duration', 'Distance', 'Active energy', 'Average HR (bpm)', 'Maximum HR (bpm)', 'Environment', 'Source', 'Detail']
@@ -148,20 +145,21 @@ function WorkoutTable({ rows, onOpen }: { rows: Workout[]; onOpen: (row: Workout
 function WorkoutList({ rows, onOpen }: { rows: Workout[]; onOpen: (row: Workout, button: HTMLButtonElement) => void }) {
   const open = (row: Workout) => text(row.id) ? <button type="button" className="secondary-button"
     data-workout-id={String(row.id)} onClick={event => onOpen(row, event.currentTarget)}
-    aria-label={`Open ${typeLabel(row)}, ${workoutTime(row)}`}>Open</button> : <span>Detail unavailable: unknown id</span>;
+    aria-label={`Open ${typeLabel(row)}, ${workoutTime(row) === 'Unknown' ? 'Not recorded' : workoutTime(row)}`}>Open</button> : <span>Detail unavailable: unknown id</span>;
   return <>
     <ul className="workouts-history" aria-label="Recorded workout history">
       {rows.map((row, index) => {
         const time = workoutTime(row);
         const average = numeric(row.avg_heart_rate);
         const maximum = numeric(row.max_heart_rate);
+        const duration = numeric(row.duration_seconds);
         return <li className="workouts-history-row" key={text(row.id) ?? `unknown-${index}`}>
           <div className="workouts-history-heading">
             <WorkoutGlyph type={workoutType(row)} />
-            <div><strong className="workouts-type-name" title={typeLabel(row)}>{typeLabel(row)}</strong><span>{time}</span></div>
+            <div><strong className="workouts-type-name" title={typeLabel(row)}>{typeLabel(row)}</strong><span>{time === 'Unknown' ? 'Not recorded' : time}</span></div>
           </div>
           <div className="workouts-history-values">
-            <span><small>Duration</small>{numeric(row.duration_seconds) === null ? 'Not recorded' : formatDuration(numeric(row.duration_seconds))}</span>
+            <span><small>Duration</small>{duration === null || duration < 0 ? 'Not recorded' : formatDuration(duration)}</span>
             <span><small>Distance</small>{measurement(row.distance_value, row.distance_unit) ?? 'Not recorded'}</span>
             <span><small>Energy</small>{measurement(row.active_energy_value, row.active_energy_unit) ?? 'Not recorded'}</span>
             <span><small>Average HR</small>{average === null ? 'Not recorded' : `${formatNumber(average)} bpm`}</span>

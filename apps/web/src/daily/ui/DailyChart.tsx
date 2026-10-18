@@ -172,11 +172,8 @@ export function DailyChart({ kind, name, series, target, rangeLabel }: {
     <p className="daily-chart-readout" aria-live="polite" role="status">
       {readout ? `${series[readout.seriesIndex]?.name}, ${label(readout.point)}` : 'Focus chart and use arrow keys to inspect recorded values.'}
     </p>
-    <details className="daily-chart-table">
-      <summary onClick={event => {
-        const details = event.currentTarget.parentElement;
-        setTableOpen(!(details instanceof HTMLDetailsElement && details.open));
-      }}>View data table</summary>
+    <details className="daily-chart-table" open={tableOpen}>
+      <summary onClick={() => setTableOpen(open => !open)}>View data table</summary>
       {tableOpen && <ScrollTable label={`${name} data`}>
         <table>
           <caption>{name} data</caption>
