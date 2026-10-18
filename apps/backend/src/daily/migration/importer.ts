@@ -1,7 +1,7 @@
 import { constants } from 'node:fs';
 import { createReadStream } from 'node:fs';
 import { createHash, randomUUID } from 'node:crypto';
-import { mkdir, open, lstat, mkdtemp, readFile, readdir, rename, rm, unlink } from 'node:fs/promises';
+import { mkdir, open, lstat, mkdtemp, readdir, rename, rm, unlink } from 'node:fs/promises';
 import { createInterface } from 'node:readline';
 import { tmpdir } from 'node:os';
 import { dirname, isAbsolute, join, resolve, sep } from 'node:path';
@@ -281,6 +281,42 @@ async function snapshotValidatedTables(
   }
 }
 
+// The next two helpers check the open descriptor rather than the path, so the file cannot be swapped between check and read.
+async function readLockPid(lockPath: string): Promise<number | undefined> {
+  let handle: Awaited<ReturnType<typeof open>>;
+  try { handle = await open(lockPath, constants.O_RDONLY | constants.O_NOFOLLOW); }
+  catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined;
+    throw new Error('state-running', { cause: error });
+  }
+  try {
+    const info = await handle.stat();
+    if (!info.isFile() || info.nlink !== 1) throw new Error('state-running');
+    let lock: unknown;
+    try { lock = JSON.parse(await handle.readFile('utf8')); } catch { throw new Error('state-running'); }
+    const pid = typeof lock === 'object' && lock !== null ? (lock as { pid?: unknown }).pid : undefined;
+    if (typeof pid !== 'number' || !Number.isSafeInteger(pid) || pid < 1) throw new Error('state-running');
+    return pid;
+  } finally { await handle.close(); }
+}
+
+async function readPrivateState(statePath: string): Promise<string> {
+  let handle: Awaited<ReturnType<typeof open>>;
+  try { handle = await open(statePath, constants.O_RDONLY | constants.O_NOFOLLOW); }
+  catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ELOOP') throw new Error('state-invalid', { cause: error });
+    throw error;
+  }
+  try {
+    const info = await handle.stat();
+    if (!info.isFile() || info.nlink !== 1 || info.size > MAX_STATE_BYTES
+      || (info.mode & 0o077) !== 0 || (typeof process.getuid === 'function' && info.uid !== process.getuid())) {
+      throw new Error('state-invalid');
+    }
+    return await handle.readFile('utf8');
+  } finally { await handle.close(); }
+}
+
 export async function acquireState(stateDirectory: string, manifestDigest: string, batchSize: number): Promise<{
   directory: string; checkpoint: ImportCheckpoint; release: () => Promise<void>;
 }> {
@@ -301,18 +337,14 @@ export async function acquireState(stateDirectory: string, manifestDigest: strin
     } else if (![STATE_FILE, LOCK_FILE].includes(name)) throw new Error('state-unknown');
   }
   const lockPath = join(directory, LOCK_FILE);
-  try {
-    const info = await lstat(lockPath);
-    if (!info.isFile() || info.isSymbolicLink() || info.nlink !== 1) throw new Error('state-running');
-    let lock: { pid?: unknown } | undefined;
-    try { lock = JSON.parse(await readFile(lockPath, 'utf8')) as { pid?: unknown }; } catch { throw new Error('state-running'); }
-    if (typeof lock.pid !== 'number' || !Number.isSafeInteger(lock.pid) || lock.pid < 1) throw new Error('state-running');
-    try { process.kill(lock.pid, 0); throw new Error('state-running'); }
+  const recordedPid = await readLockPid(lockPath);
+  if (recordedPid !== undefined) {
+    try { process.kill(recordedPid, 0); throw new Error('state-running'); }
     catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ESRCH') throw error;
     }
-    await unlink(lockPath);
-  } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
+    await unlink(lockPath).catch((error: NodeJS.ErrnoException) => { if (error.code !== 'ENOENT') throw error; });
+  }
   let lock: Awaited<ReturnType<typeof open>>;
   try { lock = await open(lockPath, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600); }
   catch (error) {
@@ -329,12 +361,7 @@ export async function acquireState(stateDirectory: string, manifestDigest: strin
   let checkpoint: ImportCheckpoint = { version: 1, manifestDigest, batchSize, tables: {} };
   const statePath = join(directory, STATE_FILE);
   try {
-    const info = await lstat(statePath);
-    if (!info.isFile() || info.isSymbolicLink() || info.nlink !== 1 || info.size > MAX_STATE_BYTES
-      || (info.mode & 0o077) !== 0 || (typeof process.getuid === 'function' && info.uid !== process.getuid())) {
-      throw new Error('state-invalid');
-    }
-    checkpoint = JSON.parse(await readFile(statePath, 'utf8')) as ImportCheckpoint;
+    checkpoint = JSON.parse(await readPrivateState(statePath)) as ImportCheckpoint;
     if (checkpoint.version !== 1 || checkpoint.manifestDigest !== manifestDigest || checkpoint.batchSize !== batchSize
       || !checkpoint.tables || typeof checkpoint.tables !== 'object'
       || Object.keys(checkpoint).some(key => !['version', 'manifestDigest', 'batchSize', 'tables'].includes(key))
