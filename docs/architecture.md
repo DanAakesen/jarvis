@@ -6160,6 +6160,27 @@ samples are grouped by metric and unit, use elapsed minutes, and retain separate
 average/minimum/maximum series. Existing read clients retain owner authorization,
 cancellation, response bounds and safe failure handling.
 
+## Web Daily today dashboard (18 October 2026; P12-33)
+
+Overview composes `DailyGrid`, `FreshnessLine`, `WorkoutGlyph`, `Meter`,
+`Sparkline` and `DataNotes` around the existing section-summary readers.
+Its responsive card layout and compact coverage strip are scoped to
+`daily-overview.css`; shared chart, legend and grid implementations are unchanged.
+Only the newest Body metric/unit group is charted, in chronological observation
+order with null gaps. Latest workouts use their recorded start time to break
+same-day ties. Nutrition uses only its existing target request and day rows;
+pending/failed targets never appear as unset, and nonpositive baselines stay
+text rather than an invalid progress range. The shared meter bounds its ARIA
+position while retaining the actual total and lower-bound text.
+
+Per-source probes, summary queries/limits, refresh signal, concurrency bound,
+section URLs and focus-return ownership remain unchanged. Existing card nodes
+and empty results survive refresh; progress and errors remain visible. One
+overview disclosure holds collection purposes, read times and source caveats,
+while coverage failures retain an inline error and Retry. Settled empty health
+probes provide the Settings upload link, qualified to their seven-day period.
+No backend, contracts, routes, source permissions or dependencies change.
+
 ## Web Daily overview and Briefs integration (18 October 2026; P12-26)
 
 `sections/overview/summary.ts` composes the sections' pure helpers for recent

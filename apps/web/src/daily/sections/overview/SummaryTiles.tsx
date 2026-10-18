@@ -5,12 +5,17 @@ import { Loader } from '../../../Loader';
 import { loadNutritionTargets, nutritionTargetsFailureMessage, NutritionTargetsError, type NutritionTargetsState } from '../../nutrition-targets';
 import { useDailyPages, type DailyPages } from '../../ui/useDailyPages';
 import { DailyState } from '../../ui/DailyState';
-import { formatDate, formatDuration, formatNumber } from '../../ui/formatters';
+import { DailyGrid } from '../../ui/DailyGrid';
+import { FreshnessLine } from '../../ui/FreshnessLine';
+import { Meter } from '../../ui/Meter';
+import { Sparkline } from '../../ui/Sparkline';
+import { WorkoutGlyph } from '../../ui/WorkoutGlyph';
+import { formatDate, formatDuration, formatNumber, formatTime } from '../../ui/formatters';
 import { dateOnly, type Row as MetricRow } from '../body-sleep/metrics';
 import { type Row as SleepRow } from '../body-sleep/metrics';
-import { targetBaseline, text, type Row as NutritionRow } from '../nutrition/totals';
+import { sumNutrient, targetBaseline, text, type Row as NutritionRow } from '../nutrition/totals';
 import { briefLabel } from '../briefs/label';
-import { type Workout, typeLabel } from '../workouts/summary';
+import { type Workout, typeLabel, workoutType } from '../workouts/summary';
 import { latestNutritionDay, latestSleepNight, nutritionSummaryValues, overviewPeriods, recentMeasurements,
   sleepSummaryValues, workoutOverview } from './summary';
 
@@ -31,19 +36,20 @@ function SummaryTile({ title, section, pages, children, emptyMessage }: {
 }) {
   const hasItems = pages.items.length > 0;
   return <article className="daily-stat-tile daily-summary-tile" aria-busy={pages.status === 'loading' || pages.loadingMore || undefined}>
-    <h4><Link to={`?section=${sections[section]}`}>{title}</Link></h4>
-    {pages.status === 'loading' && !hasItems
+    <h3><Link to={`?section=${sections[section]}`}>{title}</Link></h3>
+    {pages.status === 'loading' && !pages.first
       ? <Loader label={`Loading ${title.toLowerCase()} summary`} variant="rows" />
       : pages.status === 'error' && !hasItems
         ? <DailyState status="error" message={pages.error ?? 'Daily history could not be loaded.'} onRetry={pages.reload} />
-        : pages.status === 'ready' && !hasItems
+        : pages.first && !hasItems
           ? <DailyState status="empty" emptyMessage={emptyMessage} />
           : children}
-    {pages.status === 'loading' && hasItems && <p role="status">Refreshing this summary…</p>}
+    {pages.status === 'loading' && pages.first && <p role="status">Refreshing this summary…</p>}
     {pages.error && hasItems && <DailyState status="error" message={pages.error} onRetry={pages.reload} />}
     {pages.hasMore && <DailyState status="partial" coverage={{ returned: pages.items.length, hasMore: true }}
       {...(!pages.capped && !pages.loadingMore ? { onLoadMore: pages.loadMore } : {})} />}
-    {pages.first && <DailyState status="ready" freshness={pages.first.freshness} />}
+    {pages.first && <FreshnessLine observedAt={pages.first.freshness.observedAt}
+      count={pages.items.length} partial={pages.hasMore || pages.error !== null} />}
   </article>;
 }
 
@@ -57,13 +63,15 @@ function WorkoutsTile({ backendUrl, getAccessToken, refreshVersion, period }: {
   const summary = workoutOverview(pages.items as Workout[], period.thirtyDays, period.thisWeek);
   const latest = summary.latest?.row;
   return <SummaryTile title="Workouts" section="workouts" pages={pages} emptyMessage="No workout in the last 30 days">
-    {latest && <dl className="daily-summary-facts">
-      <div><dt>Most recent</dt><dd>{typeLabel(latest)}</dd></div>
-      <div><dt>Date</dt><dd>{formatDate(summary.latest?.date)}</dd></div>
-      <div><dt>Duration</dt><dd>{formatDuration(typeof latest.duration_seconds === 'number' ? latest.duration_seconds : null)}</dd></div>
-    </dl>}
+    {latest ? <>
+      <p className="daily-stat-value daily-summary-workout"><WorkoutGlyph type={workoutType(latest)} />{typeLabel(latest)}</p>
+      <p>{formatDuration(typeof latest.duration_seconds === 'number' ? latest.duration_seconds : null)}
+        {pages.hasMore ? ' · Partial history' : ''}</p>
+      <p className="daily-meta">Started {formatTime(typeof latest.start_at === 'string' ? latest.start_at : null)}</p>
+      <p className="daily-meta">{formatDate(summary.latest?.date)}</p>
+    </> : <p>Latest workout: Unknown</p>}
     <p>This week: {formatNumber(summary.week.count)} workouts · {formatNumber(summary.week.durationSeconds === null
-      ? null : summary.week.durationSeconds / 60)} minutes</p>
+      ? null : summary.week.durationSeconds / 60)} minutes{pages.hasMore || summary.week.missingDuration > 0 ? ' (partial)' : ''}</p>
     {summary.week.missingDuration > 0 && <p>{summary.week.missingDuration} workouts have unknown duration.</p>}
   </SummaryTile>;
 }
@@ -103,12 +111,20 @@ function NutritionTile({ backendUrl, getAccessToken, refreshVersion, period }: {
   const proteinTarget = currentTargetResult?.state?.targets.proteinGrams ?? null;
   return <SummaryTile title="Nutrition" section="nutrition" pages={pages} emptyMessage="No meals recorded in the last 7 days">
     {latest && values && <>
-      <p>Latest day with meals: {formatDate(text(latest.meal_date, ''))}</p>
-      <p>Energy: {formatNumber(values.energy.value)} kcal{partial('energy_kcal') ? ' (lower bound)' : ''}.</p>
-      <p>Protein: {formatNumber(values.protein.value)} g{partial('protein_grams') ? ' (lower bound)' : ''}.</p>
-      {baseline !== null && <p>Resting burn minus deficit (before activity): {formatNumber(baseline)} kcal baseline allowance.</p>}
-      {proteinTarget !== null && <p>Protein: {formatNumber(values.protein.value)} g of {formatNumber(proteinTarget)} g target.</p>}
+      <p className="daily-meta">{latestKey === period.sevenDays.endDate ? 'Today' : `Latest day with meals: ${formatDate(latestKey)}`}</p>
+      <p className="daily-stat-value">Energy: {formatNumber(values.energy.value)} kcal{partial('energy_kcal') ? ' (lower bound)' : ''}</p>
+      {currentTargetResult?.state && (baseline === null || baseline > 0
+        ? <Meter label="Energy intake against baseline allowance" value={values.energy.value}
+          target={baseline} unit="kcal" partial={partial('energy_kcal')} />
+        : <p>Resting burn minus deficit (before activity): {formatNumber(baseline)} kcal baseline allowance.</p>)}
+      <p className="daily-summary-macros">
+        <span>Protein: {formatNumber(values.protein.value)} g{partial('protein_grams') ? ' (lower bound)' : ''}.</span>
+        <span>Carbohydrate: {formatNumber(sumNutrient([latest], 'carbohydrates_grams').value)} g{partial('carbohydrates_grams') ? ' (lower bound)' : ''}.</span>
+        <span>Fat: {formatNumber(sumNutrient([latest], 'fat_grams').value)} g{partial('fat_grams') ? ' (lower bound)' : ''}.</span>
+      </p>
+      {proteinTarget !== null && <p className="daily-meta">Protein target: {formatNumber(proteinTarget)} g</p>}
     </>}
+    {!latest && <p>No meals recorded in the last 7 days</p>}
     {latestKey && !currentTargetResult && <Loader label="Loading nutrition targets" variant="inline" />}
     {currentTargetResult?.error && <div role="alert"><p>{currentTargetResult.error}</p>
       <button className="secondary-button" type="button" onClick={() => setTargetAttempt(attempt => attempt + 1)}>Retry targets</button>
@@ -126,13 +142,14 @@ function BodyTile({ backendUrl, getAccessToken, refreshVersion, period }: {
   }, refreshVersion, { autoLoad: true, maxPages: 5 });
   const measurements = recentMeasurements(pages.items as MetricRow[]);
   return <SummaryTile title="Body" section="body" pages={pages} emptyMessage="No measurements returned in the last 30 days">
-    {measurements.length > 0
-      ? <dl className="daily-summary-facts">{measurements.map(item => <div key={`${item.name}:${item.unit ?? ''}`}>
-        <dt>{item.label}</dt>
-        <dd>{formatNumber(item.latest?.value)} {item.unit ?? 'Unknown unit'} · {formatDate(item.latest?.date)}</dd>
-        <dd>Change since previous: {formatNumber(item.change)}{item.unit ? ` ${item.unit}` : ''}</dd>
-      </div>)}</dl>
-      : <p>Unknown</p>}
+    {measurements[0] ? <>
+      <p className="daily-stat-value">{formatNumber(measurements[0].latest?.value)} {measurements[0].unit ?? 'Unknown unit'}
+        {pages.hasMore ? ' (partial history)' : ''}</p>
+      <p>{measurements[0].label} · {formatDate(measurements[0].latest?.date)}</p>
+      <Sparkline values={measurements[0].readings.map(reading => reading.value)}
+        label={`${measurements[0].label} (${measurements[0].unit ?? 'unknown unit'}), recorded observations over the last 30 days; gaps are unknown`} />
+      <p>Change since previous: {formatNumber(measurements[0].change)}{measurements[0].unit ? ` ${measurements[0].unit}` : ''}</p>
+    </> : <p className="daily-stat-value">Unknown</p>}
   </SummaryTile>;
 }
 
@@ -147,10 +164,12 @@ function SleepTile({ backendUrl, getAccessToken, refreshVersion, period }: {
   const summary = latest ? sleepSummaryValues(latest) : null;
   return <SummaryTile title="Sleep" section="sleep" pages={pages} emptyMessage="No sleep recorded in the last 7 days">
     {latest && summary && <>
+      <p className="daily-stat-value">{formatNumber(summary.asleep)} h asleep{pages.hasMore ? ' (partial history)' : ''}</p>
       <p>Latest night: {formatDate(dateOnly(latest.sleep_date))}</p>
-      <p>Total: {formatNumber(summary.total)} h · Asleep: {formatNumber(summary.asleep)} h</p>
+      <p>Total: {formatNumber(summary.total)} h</p>
       <p>{summary.stages.length ? summary.stages.map(stage => `${stage.label}: ${formatNumber(stage.value)} h`).join(' · ') : 'Stages: Unknown'}</p>
     </>}
+    {!latest && <p>Latest night: Unknown</p>}
   </SummaryTile>;
 }
 
@@ -162,8 +181,9 @@ function BriefsTile({ backendUrl, getAccessToken, refreshVersion }: {
   const latest = pages.items[0];
   return <SummaryTile title="Briefs" section="briefs" pages={pages} emptyMessage="No briefs returned">
     {latest && <>
-      <p>{briefLabel(latest)}</p>
-      <p>{formatDate(text(latest.started_at, ''))}</p>
+      <p className="daily-stat-value">{briefLabel(latest)}{pages.hasMore ? ' (partial history)' : ''}</p>
+      <p>{formatTime(text(latest.started_at, ''))}</p>
+      <p>Trigger: {text(latest.trigger, 'Unknown')}</p>
     </>}
   </SummaryTile>;
 }
@@ -173,9 +193,8 @@ export function OverviewSummaryTiles({ backendUrl, getAccessToken, refreshVersio
   available: readonly DailySourceId[];
 }) {
   const period = overviewPeriods();
-  return <section className="daily-summary" aria-label="Recent summaries">
-    <h3>Recent summaries</h3>
-    <div className="daily-summary-grid">
+  return <section className="daily-summary" aria-label="Today summaries">
+    <DailyGrid className="daily-summary-grid">
       {available.includes(sources.workouts) && <WorkoutsTile {...{ backendUrl, getAccessToken, refreshVersion, period }} />}
       {available.includes(sources.days) && available.includes(sources.meals) &&
         <NutritionTile {...{ backendUrl, getAccessToken, refreshVersion, period }} />}
@@ -184,6 +203,6 @@ export function OverviewSummaryTiles({ backendUrl, getAccessToken, refreshVersio
       {available.includes(sources.sleep) && <SleepTile {...{ backendUrl, getAccessToken, refreshVersion, period }} />}
       {available.includes(sources.briefs) && available.includes(sources.brief) &&
         <BriefsTile backendUrl={backendUrl} getAccessToken={getAccessToken} refreshVersion={refreshVersion} />}
-    </div>
+    </DailyGrid>
   </section>;
 }

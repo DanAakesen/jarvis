@@ -32,6 +32,29 @@ or exporter UI behavior; mark the latter unverified and do not claim replay or
 physical-phone acceptance. Evidence and unresolved field/HTTP differences are
 tracked in `docs/reference/daily-v182/source-to-jarvis-matrix.md`.
 
+## P12-33 — Daily Overview as a today dashboard (18 October 2026)
+
+Reuse the Daily kit and existing readers rather than create another dashboard
+data layer. Put the latest workout, logged nutrition day, measurement, sleep
+night and brief in one responsive grid; keep each section link, honest state
+and compact read timestamp. Use the already-loaded nutrition baseline only,
+not an invented activity allowance. Null readings remain gaps and different
+measurement units never share a sparkline. Break same-day workout ties by
+recorded start time. Keep meter positions within their accessible range while
+announcing the actual over-target total and any lower-bound qualification.
+
+Replace repeated collection-purpose paragraphs with one “About this data”
+disclosure and compact labelled coverage rows. Errors and Retry stay inline;
+empty health coverage links to Settings upload without claiming that older
+records do not exist. Preserve refresh, probes, query limits, navigation, focus
+return and the live-region summary. Refresh must retain both populated and
+empty cards rather than return them to skeletons. The embedded view has no
+second page heading. This is presentation-only; original Daily remains
+canonical, and Nutrition/Body & sleep section ownership is unchanged.
+
+Synthetic Chromium evidence is saved in `docs/ui/p12-33/`; it verifies local
+fixtures and responsive/keyboard behavior, not live records or physical devices.
+
 ## P12-30 — Daily presentation kit and Workouts (18 October 2026)
 
 Move long retained-data caveats into the native “About this data” disclosure,
