@@ -1,5 +1,15 @@
 # Decisions
 
+## Share non-Daily loading, empty, error and partial states (18 October 2026; P14-11 / #994)
+
+Use one `StateMessage` component around the existing Loader for non-Daily
+loading, empty, error and partial states. Keep one plain sentence, optional
+detail, and at most one shared-button recovery action. Loading, empty and
+partial states announce politely; errors use alerts. Reserve a 10rem minimum
+block size, use skeletons only for known final layouts, and keep error copy
+free of raw exception text, identifiers and codes. Daily retains `DailyState`
+until its separate follow-up; this avoids crossing the parallel page boundary.
+
 ## Discover vault tasks in source notes using native Tasks markers (18 October 2026; P13-18 / #999)
 
 Read safe Markdown notes under `Personal/` and `Work/` recursively, including

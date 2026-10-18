@@ -578,7 +578,7 @@ export function TaskDetailPage({ backendUrl, getAccessToken, taskId, compact = f
                   {task.originMessageId && (
                     <div className="task-origin">
                       {sourceMessageLoading
-                        ? <Loader variant="lines" label="Loading the conversation message…" />
+                        ? <StateMessage variant="loading" loaderVariant="lines" message="Loading the conversation message" />
                         : sourceMessage
                           ? <>
                             <blockquote className="task-origin-message">{sourceMessage.text}</blockquote>

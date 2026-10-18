@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { fetchReleaseView } from './release-data';
 import type { ReleaseView } from './release-data';
 import { Loader } from '../Loader';
+import { StateMessage } from '../StateMessage';
 
 const idPattern = /^[1-9]\d{0,18}$/u;
 const releaseStatuses = ['building', 'deploying', 'released', 'failed'];
@@ -157,18 +158,13 @@ export function TaskReleaseBar({
   if (!currentView) {
     return (
       <section className={variant === 'trail' ? 'release-trail release-trail-empty' : 'task-release-bar'} aria-label="Project release context">
-        <p role={currentResult?.status === 'error' ? 'alert' : 'status'}>
-          {currentResult?.status === 'error'
-            ? currentResult.message
-            : !backendUrl
-              ? 'Release data unavailable.'
-              : <Loader variant="inline" announce={false} label="Loading project release context…" />}
-        </p>
-        {currentResult?.status === 'error' && backendUrl && (
-          <button className="secondary-button" type="button" onClick={() => setRefreshKey((key) => key + 1)}>
-            Retry release data
-          </button>
-        )}
+        {currentResult?.status === 'error'
+          ? <StateMessage variant="error" message="Release data could not be loaded."
+            actionLabel={backendUrl ? 'Retry release data' : undefined}
+            onAction={backendUrl ? () => setRefreshKey((key) => key + 1) : undefined} />
+          : !backendUrl
+            ? <StateMessage variant="error" message="Release data is unavailable." />
+            : <StateMessage variant="loading" message="Loading project release context." />}
       </section>
     );
   }

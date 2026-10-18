@@ -137,7 +137,7 @@ function ConversationImageArtifact({
   }, [artifactId, client, config]);
 
   if (unavailable) return <span role="status">Generated image is unavailable.</span>;
-  if (!url) return <Loader variant="image" label="Loading generated image…" />;
+  if (!url) return <StateMessage variant="loading" loaderVariant="image" message="Loading generated image" />;
   return (
     <figure className="message-artifact">
       <img src={url} alt="Generated image" loading="lazy" />

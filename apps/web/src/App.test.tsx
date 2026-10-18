@@ -259,7 +259,7 @@ describe('Jarvis routes', () => {
     loadConversationHistory.mockReturnValueOnce(new Promise(done => { resolve = done; }));
     render(<MemoryRouter><App config={config} /></MemoryRouter>);
     const chat = await screen.findByRole('article', { name: 'Conversation' });
-    expect(within(chat).getByText('Loading messages...')).not.toBeNull();
+    expect(within(chat).getByText('Loading conversation history.')).not.toBeNull();
     expect(within(chat).getByLabelText('Conversation history').getAttribute('aria-busy')).toBe('true');
     await act(async () => { resolve({ messages: [], nextCursor: null }); });
     expect(screen.getByRole('article', { name: 'Conversation' })).toBe(chat);

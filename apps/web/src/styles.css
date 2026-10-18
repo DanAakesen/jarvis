@@ -2881,7 +2881,7 @@ a.task-chip:hover { background: var(--glass-pressed); }
   justify-items: start;
   gap: var(--space-2);
   min-width: 0;
-  min-block-size: 7.5rem;
+  min-block-size: 10rem;
   padding-block: var(--space-3);
   color: var(--text-muted);
   font-size: var(--type-small);

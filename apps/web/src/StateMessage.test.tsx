@@ -51,7 +51,7 @@ describe('StateMessage', () => {
 
   it('reserves space and relies on the reduced-motion-aware Loader without adding state motion', () => {
     expect(styles).toContain('.state-message {');
-    expect(styles).toContain('min-block-size: 7.5rem;');
+    expect(styles).toContain('min-block-size: 10rem;');
     expect(styles).toContain(':root[data-motion="reduced"] .loader-dots > span { animation: none; }');
     expect(styles).toContain('@media (prefers-reduced-motion: reduce) { .loader .loader-dots > span { animation: none; } }');
     expect(styles).not.toMatch(/state-message[^{}]*animation|animation[^{}]*state-message/u);

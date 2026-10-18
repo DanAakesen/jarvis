@@ -920,14 +920,11 @@ export function CreateProjectDialog({ backendUrl, getAccessToken, onClose, onAdd
     <Modal title="Create project" titleId="create-project-heading" onClose={onClose} busy={!!managing} className="task-dialog project-dialog">
         <section className="project-dialog-part" aria-labelledby="project-existing-heading">
           <h3 id="project-existing-heading">From an existing repository</h3>
-          {state === 'loading' && <Loader variant="rows" label="Loading repositories…" />}
-          {state === 'error' && (
-            <div className="tasks-feedback" role="alert">
-              <p>{error}</p>
-              {backendUrl && <button className="secondary-button" type="button" onClick={() => { setState('loading'); setReloadKey((value) => value + 1); }}>Retry</button>}
-            </div>
-          )}
-          {state === 'ready' && repositories.length === 0 && <p>No repositories to add.</p>}
+          {state === 'loading' && <StateMessage variant="loading" loaderVariant="rows" message="Loading repositories" />}
+          {state === 'error' && <StateMessage variant="error" className="tasks-feedback" message={error}
+            actionLabel={backendUrl ? 'Retry' : undefined}
+            onAction={backendUrl ? () => { setState('loading'); setReloadKey((value) => value + 1); } : undefined} />}
+          {state === 'ready' && repositories.length === 0 && <StateMessage variant="empty" message="No repositories to add." />}
           {state === 'ready' && repositories.length > 0 && (
             <ul className="project-dialog-repositories" aria-label="Repositories you can add">
               {repositories.map((repository) => (
@@ -951,14 +948,9 @@ export function CreateProjectDialog({ backendUrl, getAccessToken, onClose, onAdd
           <p className="settings-explanation">
             The policy default only pre-fills projects Jarvis registers later. Every project keeps its own policy and can be changed any time.
           </p>
-          {defaultsState === 'loading' && <Loader variant="inline" label="Loading project defaults…" />}
-          {defaultsState === 'error' && (
-            <div className="tasks-feedback" role="alert">
-              <p>{defaultsError}</p>
-              {backendUrl && <button className="secondary-button" type="button"
-                onClick={retryDefaults}>Retry defaults</button>}
-            </div>
-          )}
+          {defaultsState === 'loading' && <StateMessage variant="loading" message="Loading project defaults" />}
+          {defaultsState === 'error' && <StateMessage variant="error" className="tasks-feedback" message={defaultsError}
+            actionLabel={backendUrl ? 'Retry defaults' : undefined} onAction={backendUrl ? retryDefaults : undefined} />}
           {defaultsState === 'ready' && defaults && (
             <dl className="project-defaults-preview" aria-label="Saved defaults for new projects">
               <div><dt>Owner</dt><dd>{defaults.owner}</dd></div>
