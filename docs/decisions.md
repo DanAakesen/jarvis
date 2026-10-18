@@ -15,6 +15,18 @@ The shipped set stays Overview, Briefs and Data; future Workouts, Nutrition and
 Body & sleep folders register without changes to the shell. There is no new API,
 query semantics, navigation destination or generated-view renderer.
 
+## Preserve attention dismissals across backend restarts (18 October 2026; P9-123 / #962)
+
+Policy-blocked reasons are de-duplicated transactionally against task event
+history, including overlapping backend revisions. The same reason is recorded
+again only after a task state change; a different reason is recorded immediately.
+No existing rows are migrated or removed, and feed selection is unchanged.
+
+PC bridge persistence changes only when the status title changes. Startup allows
+two minutes for reconnection before recording offline, and shutdown records
+nothing. Live socket status remains immediate. This separates restart noise from
+real attention changes without hiding an offline bridge indefinitely.
+
 ## Decide what Dan's approval means on the server, never with a word list (17 October 2026; P11-10 / #894)
 
 **Confirmed user decision, awaiting Dan's live re-test.** After he approved two

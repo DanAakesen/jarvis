@@ -1030,12 +1030,29 @@ export function createTaskStore(
       try {
         let currentState: TaskState | undefined;
         const isQuestion = event.source === 'runner' && event.type === 'session_question';
-        if (event.type === 'disk_low' || isQuestion) {
+        const isPolicyBlocked = event.source === 'backend' && event.type === 'project_policy_blocked';
+        if (event.type === 'disk_low' || isQuestion || isPolicyBlocked || event.type === 'state_changed') {
           const task = await new sql.Request(transaction)
             .input('taskId', sql.BigInt, BigInt(event.taskId))
             .query<{ state: TaskState }>(
               'SELECT state FROM dbo.tasks WITH (UPDLOCK, ROWLOCK) WHERE id = @taskId;');
           currentState = task.recordset[0]?.state;
+        }
+        if (isPolicyBlocked) {
+          const latest = await new sql.Request(transaction)
+            .input('taskId', sql.BigInt, BigInt(event.taskId))
+            .query<InsertedEventRow>(`SELECT TOP (1) CAST(id AS varchar(19)) AS id, type,
+              summary, payload, source, at FROM dbo.task_events
+              WHERE task_id = @taskId AND (type = N'state_changed'
+                OR (type = N'project_policy_blocked' AND source = N'backend'))
+              ORDER BY id DESC;`);
+          const previous = latest.recordset[0];
+          const reason = record(parsePayload(payload))?.reason;
+          if (previous?.type === 'project_policy_blocked' && typeof reason === 'string' &&
+              record(parsePayload(previous.payload))?.reason === reason) {
+            await transaction.commit();
+            return toTaskEvent(previous, event.taskId);
+          }
         }
         const publishedEvent = await insertTaskEvent(transaction, event, payload);
         await recordRunnerUsage(transaction, event, event.payload);
@@ -1051,7 +1068,8 @@ export function createTaskStore(
                 AND turn.status = N'running';`);
         }
         let stateChangedEvent: TaskEventMessage | undefined;
-        if (currentState === 'Running' || (isQuestion && currentState === 'PauseRequested')) {
+        if (((event.type === 'disk_low' || isQuestion) && currentState === 'Running') ||
+            (isQuestion && currentState === 'PauseRequested')) {
           await new sql.Request(transaction)
             .input('taskId', sql.BigInt, BigInt(event.taskId))
             .input('currentState', sql.NVarChar(32), currentState)

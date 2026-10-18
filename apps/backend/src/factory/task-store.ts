@@ -176,7 +176,7 @@ export interface TaskStore {
     expectedRuntime?: TaskRuntimeVersion,
   ): Promise<TaskTransitionResult>;
   withNoActiveTasks<T>(operation: () => Promise<T>): Promise<ActiveTaskGuardResult<T>>;
-  /** Persist the timeline and activity entries atomically, then publish the committed event. */
+  /** Persist timeline/activity atomically, then publish. Unchanged policy blocks return the existing event without publishing. */
   recordEvent(event: RecordTaskEventInput): Promise<TaskEventMessage>;
 }
 

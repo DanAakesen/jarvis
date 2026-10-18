@@ -1798,6 +1798,15 @@ default Dan-only authentication. Offline API and SQL Server integration tests
 cover the contracts; deployed Entra, SQL and streaming behavior remain
 unverified.
 
+P9-123 keeps dismissed attention stable across backend restarts without changing
+the feed query or dismissal route. Policy-blocked events are persisted only when
+the reason changes or a task state-change event follows the previous blocked
+reason. Identical PC bridge status titles leave the existing activity timestamp
+and dismissal untouched; a real online/offline or control-state change raises
+the alert again. Bridge startup waits two minutes before persisting offline if
+no client attaches, and shutdown does not persist offline. Live bridge status
+still reflects the socket immediately, independently of this persistence grace.
+
 P8-16 adds `jarvis-activity` SSE frames to that existing owner-authenticated
 stream. A strict shared contract permits only an activity ID, `chat`/`voice`
 source, state, and—for tool calls only—a tool name and `ok`/`refused`/`error`
@@ -4628,6 +4637,14 @@ When a task turn completes, P3-14 uses the repository-scoped GitHub App token to
 
 P3-06 joins the task-linked PR record to its live project policy, checks the recorded result against GitHub's current PR and check-run/commit-status APIs, and issues a repository-scoped token through the existing App token issuer. An open PR with no check runs or commit statuses waits two minutes from its recorded open time, then rechecks GitHub; only a still-empty result counts as no CI, and pending or failed records continue to block. `deliver_pr` marks a verified green or no-CI, non-draft PR Done without merging, recording no-CI completion in task activity. `complete_without_deployment` additionally requires the PR base SHA to match the current branch tip and GitHub to report a clean/mergeable PR, then immediately requests a squash merge with the expected head SHA; choosing the policy is approval, so this path asks for no confirmation and sends no message. The backend re-evaluates open PRs for active Running/NeedsAttention tasks at startup and every minute, and a project-policy PATCH triggers an immediate project-scoped recheck. This recovers the persisted no-check grace after restart. GitHub enforces the repository's required checks and branch protection at merge time; a refusal is stored as a backend task event and is not repeatedly attempted. Transient GitHub failures receive at most three retries with 1/2/4-minute backoff. A task-scoped SQL application lock serializes automatic merges with cancellation, and task state is rechecked while the lock is held. On merge acceptance, a task event is committed before releasing the lock; cancellation is refused until the signed merge webhook is persisted. A successful merge response is not sufficient to mark Done: the backend waits for the signed `pull_request` webhook to persist the merged state, then verifies that state and checks before transitioning the task. Duplicate webhook deliveries re-evaluate the persisted row, so a transient follow-up failure can be retried. Fake-backed tests cover PR creation, both policies, startup/restart recovery, policy changes, retries and refusal reasons; live App installation and test-repository acceptance remain unverified.
 
+
+P9-123 checks the latest persisted `project_policy_blocked` reason and any
+subsequent `state_changed` event in the same transaction as the event/activity
+insert. Concurrent backend revisions serialize this check and write for a task.
+An unchanged reason with no intervening state change creates neither row and
+publishes no task event. A new reason, or the same reason after a state change,
+is recorded normally. Completion-wait reasons use the same database authority,
+not a process-local cache cleared on each completion attempt.
 
 **Codex login rules** (Pro login only; no API key):
 

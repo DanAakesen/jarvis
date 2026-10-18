@@ -32,6 +32,7 @@ import {
 const MAX_MESSAGE_BYTES = 128 * 1024;
 const MAX_CAPTURE_RESPONSE_BYTES = 1_050_000;
 const DEFAULT_TIMEOUT_MS = 15_000;
+export const DEFAULT_STARTUP_GRACE_MS = 2 * 60_000;
 export const PC_BRIDGE_SUBPROTOCOL = 'jarvis.pc.v1';
 const idPattern = /^[\da-f]{8}-[\da-f]{4}-4[\da-f]{3}-[89ab][\da-f]{3}-[\da-f]{12}$/iu;
 const controlActions = new Set<PcCommand['name']>([
@@ -204,6 +205,7 @@ type BrowserActionRequest =
 
 export interface PcBridgeConnectionOptions {
   readonly timeoutMs?: number;
+  readonly startupGraceMs?: number;
   readonly onStatusChange?: (online: boolean, controlPaused?: boolean) => void | Promise<void>;
   readonly onStatusError?: (error: unknown) => void;
 }
@@ -245,21 +247,34 @@ export class PcBridgeConnection {
   private readonly activeVoiceSessions = new Set<string>();
   private statusUpdate = Promise.resolve();
   private readonly timeoutMs: number;
+  private startupTimer: NodeJS.Timeout | undefined;
+  private closed = false;
 
   constructor(private readonly options: PcBridgeConnectionOptions = {}) {
     this.timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   }
 
   initialize(): void {
-    this.setStatus(false);
+    if (this.closed || this.status !== undefined || this.startupTimer) return;
+    this.startupTimer = setTimeout(() => {
+      this.startupTimer = undefined;
+      if (!this.closed && !this.socket) this.setStatus(false);
+    }, this.options.startupGraceMs ?? DEFAULT_STARTUP_GRACE_MS);
+    this.startupTimer.unref();
   }
 
   attach(socket: WebSocket, onWakeWord?: (at: string) => void): void {
+    if (this.closed) {
+      socket.close(1001, 'Backend shutting down');
+      return;
+    }
     if (this.socket?.readyState === WebSocket.OPEN || this.socket?.readyState === WebSocket.CONNECTING) {
       socket.close(1008, 'Bridge already connected');
       return;
     }
 
+    clearTimeout(this.startupTimer);
+    this.startupTimer = undefined;
     this.socket = socket;
     this.onWakeWord = onWakeWord;
     this.wakeWordListening = false;
@@ -286,11 +301,13 @@ export class PcBridgeConnection {
   }
 
   async close(): Promise<void> {
+    this.closed = true;
+    clearTimeout(this.startupTimer);
+    this.startupTimer = undefined;
     const socket = this.socket;
     this.socket = undefined;
     if (socket && socket.readyState === WebSocket.OPEN) socket.close(1001, 'Backend shutting down');
     this.rejectPending(new Error('PC bridge disconnected'));
-    this.setStatus(false);
     await this.statusUpdate;
   }
 
@@ -788,6 +805,8 @@ export function createPcBridgeModule(options: PcBridgeModuleOptions = {}): PcBri
       }] : []),
     ],
     registerRoutes: async (app) => {
+      // Run before the WebSocket plugin closes clients and emits disconnects.
+      app.addHook('preClose', async () => { await bridge.close(); });
       await app.register(websocket, {
         options: {
           maxPayload: MAX_CAPTURE_RESPONSE_BYTES,

@@ -6,10 +6,11 @@ import { buildApp } from '../app.js';
 import { loadConfig } from '../config.js';
 import { coreModule } from '../core/index.js';
 import { createLogger } from '../logging.js';
-import type { BackendModule } from '../modules.js';
 import { fallbackModelCatalogue, type ModelCatalogueReader } from '../core/model-catalog.js';
 import type { SettingsStore } from '../core/settings.js';
-import { createPcBridgeModule, PC_BRIDGE_SUBPROTOCOL } from './bridge.js';
+import {
+  createPcBridgeModule, DEFAULT_STARTUP_GRACE_MS, PC_BRIDGE_SUBPROTOCOL, PcBridgeConnection,
+} from './bridge.js';
 import type { PcActOptions, PcActPlanner, PcActVisionModel } from './pc-act.js';
 
 const config = { ...loadConfig({}), logLevel: 'silent' as const };
@@ -41,6 +42,7 @@ afterEach(async () => {
 
 function fixture(options: {
   timeoutMs?: number;
+  startupGraceMs?: number;
   logLevel?: 'info' | 'silent';
   onStatusChange?: (online: boolean) => void;
   pcActPlanner?: PcActPlanner;
@@ -53,7 +55,7 @@ function fixture(options: {
   const records: string[] = [];
   const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
   const record = vi.fn(async () => {});
-  const module: BackendModule = createPcBridgeModule(options);
+  const module = createPcBridgeModule(options);
   const auth: TokenVerifier = async (token) => {
     if (token === bridgeToken) {
       return { kind: 'jarvis-pc-bridge', objectId: config.auth.ownerObjectId, tenantId: config.auth.tenantId };
@@ -75,7 +77,7 @@ function fixture(options: {
     ...(options.modelCatalogue ? { modelCatalogue: options.modelCatalogue } : {}),
   });
   apps.push(app);
-  return { app, record, records };
+  return { app, record, records, connection: module.connection };
 }
 
 async function listen(app: ReturnType<typeof buildApp>): Promise<string> {
@@ -111,6 +113,72 @@ async function callTool(
 }
 
 describe('authenticated PC bridge protocol', () => {
+  it('waits through the default startup grace before persisting offline', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const onStatusChange = vi.fn();
+    const { app, connection } = fixture({ onStatusChange });
+    await app.ready();
+
+    expect(DEFAULT_STARTUP_GRACE_MS).toBe(2 * 60_000);
+    expect(connection.readStatus().connected).toBe(false);
+    expect(onStatusChange).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(DEFAULT_STARTUP_GRACE_MS - 1);
+    expect(onStatusChange).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(onStatusChange).toHaveBeenCalledExactlyOnceWith(false, false);
+    await vi.advanceTimersByTimeAsync(DEFAULT_STARTUP_GRACE_MS);
+    expect(onStatusChange).toHaveBeenCalledOnce();
+  });
+
+  it('cancels a configurable startup grace when a live socket attaches', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    let finishStatusWrite!: () => void;
+    const statusWrite = new Promise<void>((resolve) => { finishStatusWrite = resolve; });
+    const onStatusChange = vi.fn(() => statusWrite);
+    const { app, connection } = fixture({ onStatusChange, startupGraceMs: 5_000 });
+    const url = await listen(app);
+    await vi.advanceTimersByTimeAsync(4_999);
+    expect(onStatusChange).not.toHaveBeenCalled();
+    const bridge = await connectBridge(url);
+
+    expect(connection.readStatus()).toMatchObject({ connected: true, controlPaused: false });
+    expect(onStatusChange).toHaveBeenCalledExactlyOnceWith(true, false);
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(onStatusChange).toHaveBeenCalledOnce();
+    finishStatusWrite();
+    const disconnected = new Promise<void>((resolve) => bridge.once('close', () => resolve()));
+    bridge.close();
+    await disconnected;
+    expect(connection.readStatus().connected).toBe(false);
+    expect(onStatusChange.mock.calls).toEqual([[true, false], [false, false]]);
+  });
+
+  it('cancels startup offline on shutdown without persisting a status', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const onStatusChange = vi.fn();
+    const { app } = fixture({ onStatusChange, startupGraceMs: 5_000 });
+    await app.ready();
+    await app.close();
+    await vi.advanceTimersByTimeAsync(10_000);
+
+    expect(onStatusChange).not.toHaveBeenCalled();
+  });
+
+  it('does not persist offline when backend shutdown closes an attached socket', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const onStatusChange = vi.fn();
+    const { app, connection } = fixture({ onStatusChange, startupGraceMs: 5_000 });
+    const bridge = await connectBridge(await listen(app));
+    expect(onStatusChange).toHaveBeenCalledExactlyOnceWith(true, false);
+    const disconnected = new Promise<void>((resolve) => bridge.once('close', () => resolve()));
+
+    await app.close();
+    await disconnected;
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(connection.readStatus().connected).toBe(false);
+    expect(onStatusChange).toHaveBeenCalledExactlyOnceWith(true, false);
+  });
+
   it('reads clipboard text only through a sensitive current-message tool and redacts secrets', async () => {
     const { app, record, records } = fixture({ logLevel: 'info' });
     const url = await listen(app);
@@ -274,7 +342,7 @@ describe('authenticated PC bridge protocol', () => {
     expect(commands[3]).toMatchObject({ command: 'uia_snapshot', arguments: {} });
     expect(new Set(commands.map(({ id }) => id)).size).toBe(4);
     expect(record).toHaveBeenCalledTimes(2);
-    expect(statuses).toEqual([false, true]);
+    expect(statuses).toEqual([true]);
   });
 
   it('opens repo folders and files through VS Code and refuses paths outside C:\\Repo', async () => {
@@ -1050,23 +1118,26 @@ describe('authenticated PC bridge protocol', () => {
     const resumedAction = await callTool(app, 'pc_open', { target: 'app', value: 'vscode' });
     expect(resumedAction.json()).toMatchObject({ outcome: 'ok', result: { opened: true } });
     expect(commands.map(({ command }) => command)).toEqual(['uia_snapshot', 'uia_snapshot', 'open_app']);
-    expect(statuses).toEqual([[false, false], [true, false], [true, true], [true, false]]);
+    expect(statuses).toEqual([[true, false], [true, true], [true, false]]);
   });
 
-  it('waits for the final status write before backend shutdown completes', async () => {
+  it('waits for an existing status write without adding a shutdown write', async () => {
     let finishStatusWrite!: () => void;
     const statusWrite = new Promise<void>((resolve) => { finishStatusWrite = resolve; });
     const statuses: boolean[] = [];
-    const { app } = fixture({
+    const connection = new PcBridgeConnection({
+      startupGraceMs: 1,
       onStatusChange: (online) => {
         statuses.push(online);
         if (!online) return statusWrite;
       },
     });
-    await app.ready();
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    connection.initialize();
+    await vi.advanceTimersByTimeAsync(1);
 
     let closed = false;
-    const closing = app.close().then(() => { closed = true; });
+    const closing = connection.close().then(() => { closed = true; });
     await Promise.resolve();
     expect(closed).toBe(false);
     finishStatusWrite();
