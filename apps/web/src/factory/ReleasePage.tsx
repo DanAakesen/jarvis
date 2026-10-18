@@ -4,7 +4,7 @@ import { TaskWindowLink } from '../TaskWindowLink';
 import { backendFetch } from '../backend-request';
 import type { AreaProps } from '../areas';
 import { fetchReleaseView } from './release-data';
-import { Loader } from '../Loader';
+import { StateMessage } from '../StateMessage';
 import type {
   Deployment, DeploymentStatus, GitGraph, PullRequest, Release, ReleaseView, WorkflowRun,
 } from './release-data';
@@ -112,7 +112,7 @@ function GraphLegend() {
 
 function GitGraphView({ graph, data }: { graph: GitGraph; data: ReleaseView }) {
   if (graph.branches.length === 0) {
-    return <p className="release-feedback">No branches or commits were returned by GitHub.</p>;
+    return <StateMessage variant="empty" className="release-feedback" message="No branches or commits were returned by GitHub." />;
   }
   const positions = new Map(graph.commits.map((commit, index) => [commit.sha, index]));
   const width = Math.max(720, 188 + graph.commits.length * 64);
@@ -229,16 +229,14 @@ export function ReleasePage({ backendUrl, getAccessToken }: AreaProps) {
     setRequestVersion((current) => current + 1);
   };
   if (!data && loading) {
-    return <section className="release-page" aria-labelledby="release-heading"><h1 id="release-heading">Project releases</h1><Loader variant="text" label="Loading releases…" /></section>;
+    return <section className="release-page" aria-labelledby="release-heading"><h1 id="release-heading">Project releases</h1><StateMessage variant="loading" message="Loading releases" /></section>;
   }
   if (!data && error) {
     return (
       <section className="release-page" aria-labelledby="release-heading">
         <h1 id="release-heading">Project releases</h1>
-        <div className="release-feedback" role="alert">
-          <p>{error}</p>
-          <button className="secondary-button" type="button" onClick={refresh}>Retry</button>
-        </div>
+        <StateMessage variant="error" className="release-feedback" message={error}
+          actionLabel="Retry" onAction={refresh} />
         <Link className="home-link" to="/settings#projects">Back to projects</Link>
       </section>
     );
@@ -270,7 +268,9 @@ export function ReleasePage({ backendUrl, getAccessToken }: AreaProps) {
           {refreshing ? 'Refreshing…' : 'Refresh releases and graph'}
         </button>
       </div>
-      {error && <p className="release-feedback" role="status">{error} Showing the last loaded records.</p>}
+      {error && <StateMessage variant="partial" className="release-feedback"
+        message="The latest refresh failed."
+        detail="Showing the last loaded records; use Refresh releases and graph to try again." />}
 
       <section className="release-section" aria-labelledby="graph-heading">
         <div className="release-section-heading">
@@ -280,7 +280,9 @@ export function ReleasePage({ backendUrl, getAccessToken }: AreaProps) {
           {data.graph && <p className="release-freshness">Fetched {formatDate(data.graph.fetchedAt)}</p>}
         </div>
         {!data.graph
-          ? <p className="release-feedback" role="status">The GitHub graph is unavailable. Release records are still shown; refresh to try again.</p>
+          ? <StateMessage variant="partial" className="release-feedback"
+            message="Release records are still shown without the GitHub graph."
+            detail="Refresh releases and graph to try again." />
           : <GitGraphView graph={data.graph} data={data} />}
       </section>
 
@@ -320,7 +322,7 @@ export function ReleasePage({ backendUrl, getAccessToken }: AreaProps) {
       <section className="release-section" aria-labelledby="releases-heading">
         <h2 id="releases-heading">Releases</h2>
         {data.releases.length === 0
-          ? <p className="release-feedback">No releases recorded.</p>
+          ? <StateMessage variant="empty" className="release-feedback" message="No releases have been recorded." />
           : (
             <ul className="release-record-list">
               {data.releases.map((release) => (
@@ -354,7 +356,7 @@ export function ReleasePage({ backendUrl, getAccessToken }: AreaProps) {
       <section className="release-section" aria-labelledby="runs-heading">
         <h2 id="runs-heading">Workflow runs</h2>
         {data.workflowRuns.length === 0
-          ? <p className="release-feedback">No workflow runs have been recorded for this project.</p>
+          ? <StateMessage variant="empty" className="release-feedback" message="No workflow runs have been recorded for this project." />
           : (
             <ul className="release-run-list">
               {data.workflowRuns.map((run) => (
@@ -382,7 +384,7 @@ export function ReleasePage({ backendUrl, getAccessToken }: AreaProps) {
       <section className="release-section" aria-labelledby="deployments-heading">
         <h2 id="deployments-heading">Deployments</h2>
         {data.deployments.length === 0
-          ? <p className="release-feedback">No deployments have been recorded for this project.</p>
+          ? <StateMessage variant="empty" className="release-feedback" message="No deployments have been recorded for this project." />
           : (
             <ul className="release-deployment-list">
               {data.deployments.map((deployment) => {
@@ -446,15 +448,13 @@ export function ReleaseRedirectPage({ backendUrl, getAccessToken }: AreaProps) {
     <section className="release-page" aria-labelledby="release-heading">
       <h1 id="release-heading">Opening release</h1>
       {loading
-        ? <Loader variant="text" label="Loading release…" />
+        ? <StateMessage variant="loading" message="Loading release" />
         : (
-          <div className="release-feedback" role="alert">
-            <p>{lookup.message}</p>
-            <button className="secondary-button" type="button" onClick={() => {
+          <StateMessage variant="error" className="release-feedback" message={lookup.message ?? 'This release could not be opened.'}
+            actionLabel="Retry" onAction={() => {
               setLookup({ releaseId: releaseId ?? null, status: 'loading' });
               setRequestVersion((current) => current + 1);
-            }}>Retry</button>
-          </div>
+            }} />
         )}
       <Link className="home-link" to="/settings#projects">Back to projects</Link>
     </section>

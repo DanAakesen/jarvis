@@ -6,8 +6,8 @@ import {
 } from './knowledge-data';
 import type { KnowledgeScene } from './knowledge-scene';
 import { useKnowledgeBackend } from './knowledge-context';
-import { Loader } from '../Loader';
 import { loadVaultTasks, VaultTasksUnavailable, vaultTaskRecovery, type VaultTaskRead } from '../tasks/tasks-data';
+import { StateMessage } from '../StateMessage';
 
 type Load = { status: 'loading' } | { status: 'unavailable' } | { status: 'error'; message: string } | { status: 'ready'; graph: KnowledgeGraph };
 
@@ -235,19 +235,18 @@ export function KnowledgeGraphView({ backendUrl, getAccessToken, initialQuery = 
   return (
     <section className="knowledge" data-compact={compact || undefined} data-nodes={graph?.nodes.length} data-edges={graph?.edges.length} data-links={graph?.edges.filter((edge) => edge.type === 'link').length} data-similar={graph?.edges.filter((edge) => edge.type === 'similar').length} aria-label="Knowledge graph">
       <div ref={host} className="knowledge-stage" aria-hidden="true" />
-      {load.status === 'loading' && <Loader variant="text" className="knowledge-loader" label="Mapping your knowledge…" />}
+      {load.status === 'loading' && <StateMessage variant="loading" className="knowledge-loader" message="Mapping your knowledge" />}
       {load.status === 'error' && (
-        <div className="knowledge-status" role="alert">
-          <p>{load.message}</p>
-          <button className="secondary-button" type="button" onClick={() => { setLoad({ status: 'loading' }); setReload((value) => value + 1); }}>Retry</button>
-        </div>
+        <StateMessage variant="error" className="knowledge-status" message={load.message}
+          actionLabel="Retry" onAction={() => { setLoad({ status: 'loading' }); setReload((value) => value + 1); }} />
       )}
       {load.status === 'unavailable' && (
-        <div className="knowledge-status" role="status">
-          <p>The knowledge graph is unavailable.</p>
-        </div>
+        <StateMessage variant="empty" className="knowledge-status" message="The knowledge graph is unavailable." />
       )}
-      {sceneFailed && graph && <p className="knowledge-status" role="status">The 3D view is unavailable. Search remains available.</p>}
+      {sceneFailed && graph && <StateMessage variant="partial" className="knowledge-status"
+        message="Search remains available." detail="The 3D view is unavailable." />}
+      {graph && graph.nodes.length === 0 && <StateMessage variant="empty" className="knowledge-status"
+        message="No knowledge notes are available." detail="Add notes to the vault to build the knowledge graph." />}
 
       {(graph || searchAction) && <div className="knowledge-search luminous-glass">
         <label className="visually-hidden" htmlFor={`${ids}-query`}>Search your knowledge</label>
@@ -263,6 +262,8 @@ export function KnowledgeGraphView({ backendUrl, getAccessToken, initialQuery = 
         )}
         {searchAction}
       </div>}
+      {graph && query.trim() && !searching && hits.length === 0 &&
+        <StateMessage variant="empty" className="knowledge-status" message="No notes match this search." />}
       {graph && (
         <>
           {labels.map((label) => {
@@ -341,10 +342,10 @@ export function KnowledgeGraphView({ backendUrl, getAccessToken, initialQuery = 
               </header>
               <KnowledgeNoteReader key={selected.id}>
                 <p className="knowledge-note-meta">{selected.folder} · {selected.path}</p>
-                {!currentNote ? <Loader variant="lines" label="Opening the note…" />
-                    : currentNote.error ? <p role="alert">{currentNote.error}</p>
+                {!currentNote ? <StateMessage variant="loading" loaderVariant="lines" message="Opening the note" />
+                    : currentNote.error ? <StateMessage variant="error" message={currentNote.error} />
                       : currentNote.value!.content ? <MarkdownContent source={currentNote.value!.content} />
-                        : <p>This note is empty.</p>}
+                        : <StateMessage variant="empty" message="This note is empty." />}
                 {currentNote?.value?.githubUrl && <a className="knowledge-note-link" href={currentNote.value.githubUrl} target="_blank" rel="noreferrer">Open in GitHub</a>}
                 {neighbours.length > 0 && (
                   <>
@@ -369,6 +370,6 @@ export function KnowledgeGraphView({ backendUrl, getAccessToken, initialQuery = 
 /** The `knowledge-graph` window Jarvis opens with `show_knowledge`: the same cloud with its matches lit. */
 export function KnowledgeGraphWindow({ query, highlight }: { query: string; highlight: readonly string[] }) {
   const backend = useKnowledgeBackend();
-  if (!backend) return <p role="status">The knowledge graph is unavailable in this view.</p>;
+  if (!backend) return <StateMessage variant="empty" message="The knowledge graph is unavailable in this view." />;
   return <KnowledgeGraphView backendUrl={backend.backendUrl} getAccessToken={backend.getAccessToken} initialQuery={query} initialHighlight={highlight} compact />;
 }

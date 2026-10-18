@@ -109,7 +109,8 @@ describe('Body & sleep section (synthetic records only)', () => {
     mount();
     await screen.findByRole('img', { name: 'Body mass — kg' });
     expect(screen.getByRole('img', { name: 'Body mass — lb' })).toBeTruthy();
-    expect(screen.getByText(/Multiple units stay separate/)).toBeTruthy();
+    fireEvent.click(screen.getByText('Missing values, gaps and units remain explicit.'));
+    expect(screen.getByText(/units are not converted or combined/u)).toBeTruthy();
     const table = screen.getByRole('table', { name: 'Body mass — kg: newest first' });
     const rows = within(table).getAllByRole('row');
     expect(rows[1]?.textContent).toContain('Oct 3');

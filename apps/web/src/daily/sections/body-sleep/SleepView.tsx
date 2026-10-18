@@ -4,6 +4,7 @@ import { useSearchParams } from 'react-router-dom';
 import type { DailySectionProps } from '../types';
 import { ScrollTable } from '../../ui/ScrollTable';
 import { StatTile } from '../../ui/StatTile';
+import { DailyCoverageNote } from '../../ui/DailyCoverageNote';
 import { formatDate, formatNumber } from '../../ui/formatters';
 import { useDailyPages } from '../../ui/useDailyPages';
 import { dateOnly, type Row } from './metrics';
@@ -41,9 +42,12 @@ export function SleepView({ backendUrl, getAccessToken, period, refreshVersion }
   });
   return <div className="body-sleep-view">
     <ReadState pages={pages} name="sleep" />
+    <DailyCoverageNote summary="Only recorded sleep values are summarized.">
+      <p>Unknown stages and missing nights are not zero. Total sleep never substitutes for unknown asleep time. Returned records do not establish source completeness or freshness.</p>
+    </DailyCoverageNote>
     <div className="body-sleep-stats">
       <StatTile label={`Average asleep over ${summary.count} nights with data`} value={summary.average} unit="h"
-        note="Recorded asleep hours only; totals never substitute for unknown time asleep" />
+      />
       <StatTile label="Longest night asleep" value={summary.longest?.value} unit="h"
         note={summary.longest ? formatDate(summary.longest.date) : undefined} />
       <StatTile label="Shortest night asleep" value={summary.shortest?.value} unit="h"
