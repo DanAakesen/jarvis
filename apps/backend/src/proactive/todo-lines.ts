@@ -1,15 +1,15 @@
 import { dayKey } from './time.js';
-import { parseTodos } from './todo-file.js';
+import { parseTodos, taskMetadata } from './todo-file.js';
 
 const taskLinePattern = /^\s*(?:(?:>\s*)*)(?:[-*+]\s+|\d+[.)]\s+)\[([ xX])\]\s*(.*)$/u;
 const markerPattern = /<!--\s*jarvis:p:([a-f\d]{16})\s*-->/giu;
-const taskMetadata = /[📅⏳🛫➕✅❌🔁🏁⏫🔼🔽⏬🔺🆔⛔]/gu;
 
 export function sanitiseTodoText(value: string): string {
   const oneLine = value.replace(/[\t\n\r\f\v]/gu, ' ').replace(/[\p{Cc}\p{Cf}]/gu, '');
   const withoutComments = oneLine.replace(/<!--[\s\S]*?(?:-->|$)/gu, ' ');
   const withoutLinks = withoutComments.replace(/!?\[([^\]]*)\]\((?:<[^>]*>|[^)]*)\)/gu, '$1');
   const withoutMetadata = withoutLinks
+    .replace(/🕒\s*\d{2}:\d{2}/gu, ' ')
     .replace(/(?:📅|\bdue::?)\s*(?:\[[^\]]*\]|\d{4}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2})?|\S+)?/giu, ' ')
     .replace(/\bmailto:[^\s]+/giu, ' ')
     .replace(/(?<![\p{L}\p{N}._%+-])[\p{L}\p{N}._%+-]+@[\p{L}\p{N}.-]+\.[\p{L}]{2,}(?![\p{L}\p{N}-])/gu, ' ')

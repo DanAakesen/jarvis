@@ -144,7 +144,7 @@ function noteDirectory(path: string): string {
   return directory === '.' ? '' : directory;
 }
 
-function isVaultNotePath(path: string): boolean {
+export function isVaultNotePath(path: string): boolean {
   try {
     return validatePath(path) === path && !shouldRedact(path);
   } catch {
