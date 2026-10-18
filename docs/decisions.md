@@ -17,8 +17,11 @@ switch.
 
 Scope does not grow: no scheduler, no proactive sends and no Teams path. CI does
 not establish iPhone delivery; Dan's Home Screen device test is the acceptance
-step. Rollback is reverting this change. Stored subscriptions and the key stay in
-SQL and, with the routes off, nothing can send to them.
+step. Rollback is reverting the whole P13-03 change, which removes the two gate
+lines and the pin test together, or setting both values to `false` and updating
+the pin test in the same commit. Reverting only the two lines would fail the pin
+test in CI before Deploy could run. Stored subscriptions and the key stay in SQL
+and, with the routes off, nothing can send to them.
 
 ## Open Daily on an overview behind a build-time switch (18 October 2026; P12-15 / #730)
 

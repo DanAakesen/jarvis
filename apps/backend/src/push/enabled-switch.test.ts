@@ -47,7 +47,9 @@ describe('Web Push is switched on in exactly the two reviewed deployment files (
       const names = read(file).match(pushSwitch);
       if (names) mentions[file] = names;
     }
-    // Switching push off again is a revert of these two lines; any further place that sets a switch is a reviewed change.
+    // Switching push off means reverting all of P13-03 (both lines and this test together), or setting both values to
+    // false and updating this pin in the same commit. Reverting only the two lines fails here, as does naming a switch
+    // in any other file.
     expect(mentions).toEqual({
       '.github/workflows/deploy.yml': ['VITE_PUSH_ENABLED'],
       'infra/main.bicep': ['JARVIS_PUSH_ENABLED'],

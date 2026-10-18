@@ -1929,9 +1929,12 @@ the bundle is rebuilt with the gate. The web job needs the backend job, so the
 routes exist before the Notifications section does. The environment change
 creates a new backend revision. No secret, identity, resource, dependency or
 permission is added: the VAPID key pair is still generated on first use and kept
-in SQL. Rollback is reverting the two lines, which unregisters the routes and
-drops the Notifications section and worker registration; stored subscriptions and
-the key stay in SQL, and nothing can send while the routes are off.
+in SQL. Rollback is reverting the whole P13-03 change, which removes the two gate
+lines and the pin test together, or setting both values to `false` and updating
+the pin test in the same commit; reverting only the two lines fails the pin test
+in CI before Deploy can run. Either way the routes unregister and the
+Notifications section and worker registration drop; stored subscriptions and the
+key stay in SQL, and nothing can send while the routes are off.
 `apps/backend/src/push/enabled-switch.test.ts` pins both values and fails if any
 other workflow, Dockerfile, package file, web config or Bicep/parameter file names
 a switch. CI proves this wiring only; iPhone delivery still needs Dan's device

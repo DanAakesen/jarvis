@@ -14,13 +14,16 @@ client shipped dark. Two lines do it, and the code defaults stay off:
 
 `apps/backend/src/push/enabled-switch.test.ts` pins both values and fails if any
 other workflow, Dockerfile, package file, web config or Bicep/parameter file
-names either switch, so changing a gate is a reviewed edit to those two files.
+names either switch, so changing a gate is a reviewed edit to those two files
+and to the pin.
 
-To switch push off, revert those two lines and let Deploy run. The backend then
-registers no push routes, so nothing can send, and the web build drops the
-Notifications section and worker registration. The VAPID key pair and stored
-subscriptions stay in SQL and are reused if push is switched on again. No
-secret, identity or resource is involved.
+To switch push off, revert the whole P13-03 change, which removes the two gate
+lines and the pin test together, or set both values to `false` and update the pin
+test in the same commit. Reverting only the two lines fails the pin test in CI
+before Deploy can run. Once Deploy has run, the backend registers no push routes,
+so nothing can send, and the web build drops the Notifications section and worker
+registration. The VAPID key pair and stored subscriptions stay in SQL and are
+reused if push is switched on again. No secret, identity or resource is involved.
 
 CI proves the wiring only. Delivery to an iPhone is established by Dan's device
 test on the installed Home Screen app (iOS 16.4 or newer), not by any check here.
