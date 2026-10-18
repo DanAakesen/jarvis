@@ -77,8 +77,11 @@
   .body-sleep-shortcuts ul::-webkit-scrollbar-track { background: transparent; }
   .body-sleep-stage-breakdown ul { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+@media (max-width: 520px) {
+  .body-sleep-picker { grid-template-columns: minmax(0, 1fr); }
+}
 @media (max-width: 359px) {
-  .body-sleep-picker, .body-sleep-detail dl { grid-template-columns: minmax(0, 1fr); }
+  .body-sleep-detail dl { grid-template-columns: minmax(0, 1fr); }
 }
 @media (pointer: coarse) {
   .body-sleep :is(.body-sleep-table > summary, .body-sleep-empty a) { min-height: 44px; }

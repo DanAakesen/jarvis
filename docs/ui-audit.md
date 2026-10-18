@@ -97,6 +97,34 @@ request, and every tab at 1440 px had equal padding. The data is synthetic.
 No live records, physical device or human review were involved, and the section
 tab focus rings were not re-inspected in this pass.
 
+## Field clearance (P12-40, 19 October 2026)
+
+A states pass over Daily (empty, loading and error at 390 and 1440 px) found one
+more defect in Body & sleep: at phone widths the Search placeholder and the
+Measurement select text were clipped, and the select's arrow was drawn over the
+last letters. The cause was global, not Daily-specific. The shared field rule's
+`:is()` list takes the specificity of its most specific entry (the input type
+exclusions), so its `padding` shorthand out-ranked every per-control
+`padding-left` and `padding-right`. Arrow and icon clearance written that way
+was never applied.
+
+| # | View | Change |
+| --- | --- | --- |
+| 1 | Every select inside the shared field containers (Settings, Tasks filters, Usage, Role controls, Kanban, Notes, Daily) | Long option text ran under the CSS arrow. Clearance is now the `--field-padding-end` custom property (`--space-6`) that the shared padding consumes, and the selected text ends in an ellipsis before the arrow. |
+| 2 | Tasks board search | The magnifier overlapped the placeholder and typed text. Clearance is the `--field-padding-start` custom property (`--space-7`). |
+| 3 | Body & sleep picker, 520 px and narrower | Search, Measurement and Period shared two columns of about 160 px at 390 px. The controls now stack in one column; two columns remain from 521 to 900 px. |
+
+Rendered checks with the headless Edge harness covered the Body picker with a
+filtered-out selection at 390, 540, 600 and 768 px, the Data, Workouts and
+Nutrition selects at 390 px, and the Tasks search and project select from the
+shared stylesheet on a static page. A run of the committed change over Body,
+Sleep and Workouts at 320, 390, 768 and 1440 px (measured in light, rendered in
+light and dark, plus the empty state) found no horizontal overflow, no element
+wider than its container, no text clipped by an ellipsis and no Daily touch
+target under 44 px. The data is synthetic; no live records, physical device or
+human review were involved. Tests guard the custom properties and the stacked
+picker.
+
 ## Colour and contrast (P14-12, 18 October 2026)
 
 The contrast ratchet reads the canonical tokens and measures 197 shared-token
