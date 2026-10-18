@@ -393,6 +393,29 @@ unverified. Final640px wide table scrolls within a236px region at320px, includin
 actual ArrowRight scrolling, without page overflow. Eight page cases passed
 again after that final layout correction.
 
+## Daily overview page checks (18 October 2026; P12-15)
+
+The Daily area opens on an overview (`daily/DailyHome`, `DailyOverview`,
+`useDailyProbes`, `overview`) behind the build-time switch `VITE_DAILY_ENABLED`
+(see "Daily switch checks"). From `apps/web`, run
+`npx vitest run src/daily/overview.test.ts src/daily/DailyHome.test.tsx src/daily/DailyPage.test.tsx config/daily-switch.test.ts src/App.test.tsx`,
+then `npx tsc --noEmit` and `npx eslint <changed files> --max-warnings 0`. Run
+one heavy command at a time. A Vitest worker that stalls on start is the pool's own
+start timeout, not a test failure, so retry it once. The tests mock `fetch` with
+synthetic responses and check concurrency (at most two reads), refresh and retry,
+focus movement on Open and Back, the Daily-off navigation and the build switch
+values.
+
+Browser inspection uses a temporary harness page and entry file under `apps/web`
+that mount the real `DailyHome` with the real stylesheet and a synthetic `fetch`
+(not committed; delete both afterwards), served by Vite on a spare port with
+`VITE_DAILY_ENABLED=true` in the shell environment only. Never use another
+session's port or tab, and never real login, records or provider data. The
+harness has no 3D stage, header or MSAL, and OS reduced-motion was not emulated,
+so none of that is claimed. Phone width means 390×844 touch plus 320; also check
+768 and 1280. Local runs and synthetic-browser checks are not qualification: CI is
+the authority, and no live record, physical phone or Daily activation is proved.
+
 ## Internal Frida binding checks (17 October 2026; P12-09)
 
 The current source-only continuation registers owner-authenticated
@@ -513,7 +536,10 @@ and it is off by default **with nothing setting it**: no workflow, Bicep,
 infrastructure, `.env` or deploy file may carry it, and no session sets it for
 an environment. Only the separate, reviewed change that turns Daily on edits the
 deploy files, and it must update the allow-list in `daily/default-off.test.ts` in
-the same change. The web switch `VITE_DAILY_ENABLED` follows the same rule.
+the same change. The web switch `VITE_DAILY_ENABLED` follows the same rule. The Vite
+build and dev server read it by name only: absent or `false` is off, `true` is on,
+and any other value, including an empty one, stops them. Set it only in the
+reviewed enabling change, and never in a local `.env` that is committed.
 
 Check the composition with
 `npm test --workspace @jarvis/backend -- src/config.test.ts src/production-modules.test.ts src/daily/default-off.test.ts src/daily/composition.test.ts`.

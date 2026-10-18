@@ -644,6 +644,8 @@ describe('App shell', () => {
     if (phone) fireEvent.click(screen.getByRole('button', { name: 'Menu' }));
     const navigation = phone ? screen.getByRole('navigation', { name: 'Pages' }) : screen.getByRole('navigation', { name: 'Areas' });
     fireEvent.click(within(navigation).getByRole('link', { name: 'Daily' }));
+    await screen.findByRole('heading', { name: 'What Daily holds today' });
+    fireEvent.click(await screen.findByRole('button', { name: 'Open Measurements' }));
     await screen.findByText('Synthetic shell measurement');
     expect(screen.getByRole('heading', { name: 'Daily' })).toBeTruthy();
     await waitFor(() => expect(activityStream).not.toBeNull());
@@ -681,6 +683,9 @@ describe('App shell', () => {
         <App config={config} dailyEnabled /></>;
     }
     render(<MemoryRouter initialEntries={['/daily']}><AccountHarness /></MemoryRouter>);
+    await screen.findByText(/^Checked \d+ collections?:/u);
+    expect(screen.getAllByText('Has records').length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole('button', { name: 'Open Measurements' }));
     await screen.findByText('Synthetic first owner');
     owner = 'second';
     client.getActiveAccount.mockReturnValue({ homeAccountId: 'second' });
@@ -689,6 +694,7 @@ describe('App shell', () => {
     expect(screen.queryByText('Synthetic first owner')).toBeNull();
     await screen.findByText(/Daily access could not be verified/u);
     expect(screen.queryByText('Synthetic first owner')).toBeNull();
+    expect(screen.queryByText('Has records')).toBeNull();
   });
 
   it.each([200, 503])('acknowledges a broker pin only after storage replies with status %s', async (status) => {

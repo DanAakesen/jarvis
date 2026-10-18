@@ -20,6 +20,39 @@ not establish iPhone delivery; Dan's Home Screen device test is the acceptance
 step. Rollback is reverting this change. Stored subscriptions and the key stay in
 SQL and, with the routes off, nothing can send to them.
 
+## Open Daily on an overview behind a build-time switch (18 October 2026; P12-15 / #730)
+
+**Builder decision inside Dan's "go with the daily", not an activation and not
+acceptance.** Dan could not see what Daily holds ("I have no idea what is built
+and cannot see anything"), so the page now opens on an overview.
+
+- Overview first. The page lists each retained collection the backend exposes with
+  one plain sentence on what it is for, and a status from a read-only,
+  one-record check: has records, none returned or could not read. It uses only
+  `GET /daily/capabilities` and `POST /daily/query`, so it adds no endpoint,
+  writer, calculation, migration, provider call, account, consent, secret or
+  import.
+- Honest by construction. "None returned" never says the original source is
+  empty, the sync summary alone does not count as records, and the overview shows
+  no count, total or estimate. A failed read says so and offers Retry. A settled
+  result stays visible while the next read runs, except a failure that is being
+  retried.
+- Gentle on the backend. Reads run two at a time because the SQL pool is shared
+  with chat, and the overview does not refresh on window focus.
+- One build-time switch. `VITE_DAILY_ENABLED` is read by the Vite build only:
+  absent or `false` is off, `true` is on, and any other value, including an empty
+  one, stops the build. It is baked into the bundle and never read from the URL,
+  storage or runtime configuration. This change sets it nowhere, and
+  `daily/default-off.test.ts` scans for it.
+- Enabling is a separate change. Dan pre-authorised switching Daily on for his own
+  account: "Yes, switch it on once it's live and checked." That change sets
+  `JARVIS_DAILY_ENABLED` and `VITE_DAILY_ENABLED` after this page has been merged,
+  deployed and checked in a real browser. Rolling back means reverting it or
+  leaving the switches off.
+- Evidence. A headless Chromium check against synthetic responses at phone,
+  small-phone, tablet and desktop widths. It is not live data, a physical phone,
+  provider acceptance or Daily activation.
+
 ## Put attention in a conditional header popover (17 October 2026; P9-120 / #913)
 
 Remove the Now and Backend sections from web Settings. Keep the existing
