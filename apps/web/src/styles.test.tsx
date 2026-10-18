@@ -53,6 +53,17 @@ describe('app-wide control contract', () => {
       .toBe('var(--radius-panel)');
   });
 
+  it('pairs Daily and Proactive block alerts with the shared error surface', () => {
+    const daily = readFileSync('src/daily/daily.css', 'utf8');
+    const proactive = readFileSync('src/proactive.css', 'utf8');
+    expect(ruleDeclaration(daily, /\.daily-notice\[role="alert"\]\s*\{([^}]*)\}/, 'background'))
+      .toBe('var(--error-surface)');
+    expect(ruleDeclaration(daily, /\.daily-notice\[role="alert"\]\s*\{([^}]*)\}/, 'border')).toBe('1px solid var(--rule)');
+    expect(ruleDeclaration(proactive, /\.proactive-page \[role="alert"\]\s*\{([^}]*)\}/, 'background'))
+      .toBe('var(--error-surface)');
+    expect(ruleDeclaration(proactive, /\.proactive-page \[role="alert"\]\s*\{([^}]*)\}/, 'border')).toBe('1px solid var(--rule)');
+  });
+
   it('removes decorative control rims without removing neutral field structure or focus', () => {
     for (const selector of [
       /(?:^|\n)\.secondary-button\s*\{([^}]*)\}/,
