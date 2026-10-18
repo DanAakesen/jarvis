@@ -29,6 +29,46 @@ no physical screen-reader speech, physical-device output or live records were
 verified. The full matrix and named-role evidence are in
 [`ui/p12-37/audit.md`](ui/p12-37/audit.md).
 
+## Daily visual QA pass (18 October 2026; P12-39)
+
+A rendered pass over every Daily section on main (`3dde6be3`) used synthetic
+fixtures at 320, 390, 768 and 1440 px in light and dark. It found no horizontal
+overflow, failed request or render error, and 21 layout and consistency
+defects. P12-39 corrects the 14 stylesheet-level defects below. The other
+seven are structural or data-presentation changes (section header order, one
+date-locale source, the Data row action and view switch, numeric cell
+alignment, workout type glyphs and the sparse-data chart legend) tracked in
+P12-38.
+
+| # | View | Change |
+| --- | --- | --- |
+| 1 | Section tab strip, phones | The selected tab was scrolled out of view, so on Briefs and Data no tab looked selected. The strip now scrolls to centre the selected tab. Only the strip scrolls, instantly on first paint, while availability loads and under reduced motion. Centring moves the strip, so the edge fade became a mask driven by scroll position; as a pseudo-element it would have scrolled over the tabs. |
+| 2 | Section tab strip, 481 px and wider | The 88 px minimum width padded short labels unevenly. Tabs now size to their label with a 44 px minimum. |
+| 3 | Body & sleep stat tiles | Tiles in one row had different heights. They now stretch to the row height. |
+| 4 | Sleep and Brief detail | Three headings used the section size. They now use `--type-subsection`. |
+| 5 | Nutrition heading | The heading's bottom margin sat on top of the grid gap. The margin is zeroed. |
+| 6 | Nutrition Day, open meal | The disclosure body used body type and browser-default list margins. It now uses the small type role and a tight rhythm. |
+| 7 | Nutrition Day, other nutrients | A lone tile was content-width and left-aligned. The tiles follow the meter grid (two columns, four from 900 px; an odd final tile fills its row). |
+| 8 | Nutrition Day date row | Previous, Next and Today were 44 px tall beside a 38 px field on fine pointers. They now match the field; coarse pointers keep 44 px. |
+| 9 | Nutrition Day meal summary and group subtotal | Title, time and macro text had three left edges, and the subtotal wrapped at the paragraph maximum width. The macro text aligns to the title edge and the subtotal lifts the maximum width. |
+| 10 | Briefs month | The month heading sat about 2 px above its first row. The month block is now a grid, so its gap applies. |
+| 11 | Brief detail | "Back to brief history" stretched to the full width. It is content-width, as "Back to workouts" is. |
+| 12 | Overview tiles | A tile mixed three line sizes. Its secondary lines share the small size. |
+| 13 | Daily links | The Body and Sleep tile links were under 44 px wide. Daily links have a 44 px minimum width, as they have for height. |
+| 14 | Workouts list, 320 px | "High-intensity interval training" was ellipsised. The type name now wraps. |
+
+Behaviour, copy, routes and accessible names are unchanged. Tests guard the
+tab centring (including the instant moves), the scroll-driven edge flags and
+the mask rules, alongside the existing stylesheet ratchets.
+
+The headless Edge harness rendered the changed sections on the branch at 320,
+390 and 1440 px in light and dark and measured them again. It found no document
+or main-element overflow, no Daily touch target under 44 px at widths up to
+768 px, no text clipped by an ellipsis, no alert or error notice and no failed
+request, and every tab at 1440 px had equal padding. The data is synthetic.
+No live records, physical device or human review were involved, and the section
+tab focus rings were not re-inspected in this pass.
+
 ## Colour and contrast (P14-12, 18 October 2026)
 
 The contrast ratchet reads the canonical tokens and measures 197 shared-token

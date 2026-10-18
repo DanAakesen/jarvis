@@ -4,7 +4,7 @@
 .daily-briefs h3 { font-size: var(--type-subsection); }
 .daily-briefs > section { display: grid; align-content: start; gap: var(--space-3); min-width: 0; }
 .daily-brief-history { gap: var(--space-4); }
-.daily-brief-month { gap: var(--space-2); }
+.daily-brief-month { display: grid; gap: var(--space-2); min-width: 0; }
 .daily-brief-list { display: grid; gap: var(--space-2); margin: 0; padding: 0; list-style: none; }
 .daily-brief-list li { min-width: 0; }
 .daily-briefs .daily-brief-row {
@@ -43,7 +43,8 @@
 .daily-brief-coverage { display: grid; justify-items: start; gap: var(--space-2); }
 .daily-brief-empty { display: grid; gap: var(--space-2); }
 .daily-brief-detail { gap: var(--space-3); }
-.daily-brief-detail h3 { font-size: var(--type-subheading); overflow-wrap: anywhere; }
+.daily-brief-detail > .secondary-button { justify-self: start; }
+.daily-brief-detail h3 { font-size: var(--type-subsection); overflow-wrap: anywhere; }
 .daily-brief-detail h3:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
 .daily-brief-announcement {
   position: absolute;

@@ -12,7 +12,7 @@
   border-radius: var(--radius-panel);
   backdrop-filter: blur(var(--surface-blur));
 }
-.daily-page a { display: inline-flex; align-items: center; min-height: 44px; }
+.daily-page a { display: inline-flex; align-items: center; min-width: 44px; min-height: 44px; }
 .daily-heading, .daily-records-heading, .daily-pagination, .daily-toolbar, .daily-period, .daily-view-options {
   display: flex;
   align-items: center;
@@ -105,19 +105,23 @@
 .daily-shell > .daily-heading { margin-bottom: var(--space-4); }
 .daily-section-nav { position: relative; min-width: 0; max-width: 100%; overflow-x: auto; margin-bottom: var(--space-4); scrollbar-width: none; }
 .daily-section-nav::-webkit-scrollbar { display: none; }
-.daily-section-nav[data-overflow='true']::after {
-  position: absolute;
-  inset-block: 0;
-  inset-inline-end: 0;
-  width: var(--space-5);
-  background: linear-gradient(to right, transparent, var(--surface-translucent));
-  content: '';
-  pointer-events: none;
+/* The fade is a mask on the scroller, so it stays on the visible edges however far the tabs have scrolled. */
+.daily-section-nav[data-overflow-end='true'] {
+  -webkit-mask-image: linear-gradient(to right, var(--ink-solid) calc(100% - var(--space-5)), transparent);
+  mask-image: linear-gradient(to right, var(--ink-solid) calc(100% - var(--space-5)), transparent);
+}
+.daily-section-nav[data-overflow-start='true'] {
+  -webkit-mask-image: linear-gradient(to left, var(--ink-solid) calc(100% - var(--space-5)), transparent);
+  mask-image: linear-gradient(to left, var(--ink-solid) calc(100% - var(--space-5)), transparent);
+}
+.daily-section-nav[data-overflow-start='true'][data-overflow-end='true'] {
+  -webkit-mask-image: linear-gradient(to right, transparent, var(--ink-solid) var(--space-5), var(--ink-solid) calc(100% - var(--space-5)), transparent);
+  mask-image: linear-gradient(to right, transparent, var(--ink-solid) var(--space-5), var(--ink-solid) calc(100% - var(--space-5)), transparent);
 }
 .daily-section-tabs { display: flex; width: max-content; min-width: 100%; gap: var(--space-1); }
 .daily-section-tab {
   flex: 0 0 auto;
-  min-width: 88px;
+  min-width: 44px;
   min-height: 44px;
   padding: var(--space-2) var(--space-3);
   border: 0;

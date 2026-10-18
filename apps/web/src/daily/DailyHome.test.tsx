@@ -236,6 +236,66 @@ describe('Daily overview', () => {
     expect(tablist.getAllByRole('tab').filter(tab => tab.getAttribute('tabindex') === '0')).toHaveLength(1);
   });
 
+  it('centres the selected tab by scrolling the tab strip only, instantly on first paint and under reduced motion', async () => {
+    const scrolls: { element: unknown; options: ScrollToOptions }[] = [];
+    Object.defineProperty(HTMLElement.prototype, 'scrollTo', {
+      configurable: true,
+      value(this: HTMLElement, options: ScrollToOptions) { scrolls.push({ element: this, options }); },
+    });
+    try {
+      fixture();
+      render(home());
+      await settled();
+      const strip = screen.getByRole('navigation', { name: 'Daily sections' });
+      const stripScrolls = () => scrolls.filter(scroll => scroll.element === strip);
+      expect(stripScrolls().length).toBeGreaterThan(0);
+      expect(stripScrolls().every(scroll => scroll.options.behavior === 'auto')).toBe(true);
+
+      Object.defineProperty(strip, 'clientWidth', { configurable: true, value: 390 });
+      const data = screen.getByRole('tab', { name: 'Data' });
+      Object.defineProperty(data, 'offsetLeft', { configurable: true, value: 600 });
+      Object.defineProperty(data, 'offsetWidth', { configurable: true, value: 80 });
+      scrolls.length = 0;
+      fireEvent.click(data);
+      expect(stripScrolls()).toEqual([{ element: strip, options: { left: 445, behavior: 'smooth' } }]);
+
+      document.documentElement.dataset.motion = 'reduced';
+      scrolls.length = 0;
+      fireEvent.click(screen.getByRole('tab', { name: 'Overview' }));
+      expect(stripScrolls()).toEqual([{ element: strip, options: { left: 0, behavior: 'auto' } }]);
+    } finally {
+      delete document.documentElement.dataset.motion;
+      Reflect.deleteProperty(HTMLElement.prototype, 'scrollTo');
+    }
+  });
+
+  it('flags which edges of the tab strip have more tabs beyond them as it scrolls', async () => {
+    fixture();
+    render(home());
+    await settled();
+    const strip = screen.getByRole('navigation', { name: 'Daily sections' });
+    const edges = () => [strip.dataset.overflowStart, strip.dataset.overflowEnd];
+    expect(edges()).toEqual([undefined, undefined]);
+
+    let scrollLeft = 0;
+    Object.defineProperty(strip, 'scrollWidth', { configurable: true, value: 600 });
+    Object.defineProperty(strip, 'clientWidth', { configurable: true, value: 300 });
+    Object.defineProperty(strip, 'scrollLeft', { configurable: true, get: () => scrollLeft });
+    const scrollTo = (left: number) => {
+      scrollLeft = left;
+      fireEvent.scroll(strip);
+    };
+
+    scrollTo(0);
+    expect(edges()).toEqual([undefined, 'true']);
+    scrollTo(120);
+    expect(edges()).toEqual(['true', 'true']);
+    scrollTo(300);
+    expect(edges()).toEqual(['true', undefined]);
+    scrollTo(0);
+    expect(edges()).toEqual([undefined, 'true']);
+  });
+
   it('aborts old requests during twenty rapid section switches without warnings or a request backlog', async () => {
     let active = 0;
     let maximumActive = 0;

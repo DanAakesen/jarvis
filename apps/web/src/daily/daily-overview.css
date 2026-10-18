@@ -9,6 +9,7 @@
 .daily-summary-tile h3 { margin: 0; color: var(--text); font-size: var(--type-subsection); font-weight: 650; }
 .daily-summary-tile h3 a { display: inline-flex; align-items: center; min-height: 44px; color: var(--text); text-underline-offset: .2em; }
 .daily-summary-tile p { min-width: 0; margin: 0; overflow-wrap: anywhere; }
+.daily-summary-tile > p:not(.daily-stat-value) { font-size: var(--type-small); }
 .daily-summary-workout { display: flex; align-items: center; gap: var(--space-2); }
 .daily-summary-tile .daily-summary-macros { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-3); font-size: var(--type-small); }
 .daily-summary-tile > .daily-freshness { padding-top: var(--space-3); margin-top: auto; }
