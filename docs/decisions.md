@@ -1,5 +1,37 @@
 # Decisions
 
+## #1005 Daily v182 API, upload and selected native tools (18 October 2026)
+
+Keep this delivery on the existing backend, SQL pool, owner authentication and
+tool/confirmation flow. Do not create a parallel API, store, auth service, MCP
+runtime, Azure resource, or revive the withdrawn Daily export/import route.
+`JARVIS_HEALTH_UPLOAD_ENABLED` remains false by default in code and is set to
+the exact string `true` in the reviewed backend deployment environment; rollback
+sets that value to `false` and changes the pin test in the same commit. Existing
+credential hashes and accepted data remain untouched by rollback.
+
+The owner creates the upload credential in Settings after deployment. SQL stores
+only its hash; plaintext is revealed once through the owner-authenticated,
+no-store response. The endpoint comes only from configured backend origin, never
+forwarded headers. A private handoff, deployment, and phone acceptance are not
+claimed from source changes or synthetic tests.
+
+Retain all 16 owner-selected Daily v182 capabilities and exclude fixed status
+renderers, coach commitments/orders/experiments, meal plans and Apple Health meal
+write-back. Use the existing owner authorization and confirmation flow for
+writes, and preserve unknown values as unknown. The nine remaining source
+operations are grouped into three native registry tools to retain the enforced
+eight-tool catalogue headroom; this is a pragmatic assumption, but it does not
+meet the explicit request for nine distinct tool names and must remain reported
+as a mismatch rather than described as complete.
+
+Historical batches must preserve complete source metric/date groups, remain
+within 8 MiB ingress, 10,000 normalized rows/8 MiB output and 256 MiB/10,000
+retained inbox rows per owner. These limits do not establish source completeness
+or exporter UI behavior; mark the latter unverified and do not claim replay or
+physical-phone acceptance. Evidence and unresolved field/HTTP differences are
+tracked in `docs/reference/daily-v182/source-to-jarvis-matrix.md`.
+
 ## P12-33 — Daily Overview as a today dashboard (18 October 2026)
 
 Reuse the Daily kit and existing readers rather than create another dashboard
@@ -3214,6 +3246,8 @@ The nine design areas and where each stands. **Confirmed** = Dan's requirement o
 ## Decision log
 
 12 October 2026, standing Daily migration direction (historical): Dan authorized completion of approved migration work through coordinator dependency/gate releases without generic re-confirmation. At that time #717 remained protected-export blocked; the owner withdrew the database-export/import approach on 18 October and #1005 is now the source-contract-first direction. No independent downstream dispatch or own-PR merge. All migrated React/rich UI must fully reuse current Jarvis layout/styling, DESIGN.md, canonical styles.css tokens, shared components, themes/density/motion and phone/workspace patterns. Legacy Daily capabilities/data survive through recomposition, not a separate navy/plum/card theme. Generated views receive safe existing-bridge theme context without expanded permissions. Browser/mobile visual acceptance is mandatory in #730/#731/#732/#726; #718 starts no frontend work.
+
+18 October 2026, P12-29 / #1005: keep the complete source documentation, API, Azure SQL mapping and selected Jarvis capabilities in one issue and PR. The upload routes, owner-created credential and bounded SQL processor reuse the existing backend, pool, authentication and confirmation boundaries. The runtime flag defaults off and infrastructure explicitly sets it true; deployment, credential issuance, private handoff and phone acceptance remain unverified. The old #717/#721 export/import route is withdrawn. Preserve complete metric/date groups and published size limits in historical upload guidance; the source contract does not prove exporter UI behavior or complete-history delivery. Synthetic tests are not live evidence. The nine requested new tool names are grouped into three registry tools to retain required catalogue headroom; the name-level mismatch is unresolved.
 
 P12-03 (#718, 12 October 2026): additive empty tables use separate SQL schema `daily`, configured server owner prefixes legacy keys/uniqueness, and only the supplied explicit relationships become owner-composite foreign keys. Existing auth resolves the user/hosted agent; runners cannot construct the inactive store. Nullable unknown values, original/sanitized raw checksums, source timestamps/local dates, revisions/tombstones and recovery measurements remain distinct. Legacy OAuth/widget/claim credentials have no active target. Mixed attention data requires explicit source/JSON exclusion in any future source-compatible ingestion. [Mapping and compatibility limits](daily-schema-mapping.md) remain source-code/schema evidence, not a database export or proof of replay. The 18 October source-contract-first API/schema and historical-ingestion direction is tracked in #1005; the #717/#721 export/import approach is withdrawn. No personal seed, source mutation or Daily activation.
 

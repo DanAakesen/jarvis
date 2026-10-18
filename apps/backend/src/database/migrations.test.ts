@@ -233,6 +233,7 @@ describe('committed SQL manifest', () => {
       '0057_proactive_alerts.sql',
       '0058_proactive_todo_receipts.sql',
       '0059_proactive_reminders.sql',
+      '0060_daily_health_processing_state.sql',
     ]);
     for (const migration of migrations) await expect(readDownMigration(migration.name)).resolves.toMatchObject({ name: migration.name });
   });

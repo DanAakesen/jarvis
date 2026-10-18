@@ -31,6 +31,7 @@ describe('backend configuration', () => {
       proactiveEnabled: false,
       proactiveTodoWritesEnabled: false,
       proactiveAlertsEnabled: false,
+      healthUploadEnabled: false,
       auth: loadAuthConfig({}),
     });
   });
@@ -53,6 +54,12 @@ describe('backend configuration', () => {
       : flag === 'JARVIS_PROACTIVE_TODO_WRITES_ENABLED'
         ? 'proactiveTodoWritesEnabled'
         : 'proactiveAlertsEnabled', true);
+  });
+  it('keeps Health upload default-off and accepts only an explicit boolean flag', () => {
+    expect(loadConfig({}).healthUploadEnabled).toBe(false);
+    expect(loadConfig({ JARVIS_HEALTH_UPLOAD_ENABLED: 'false' }).healthUploadEnabled).toBe(false);
+    expect(loadConfig({ JARVIS_HEALTH_UPLOAD_ENABLED: 'true' }).healthUploadEnabled).toBe(true);
+    expect(() => loadConfig({ JARVIS_HEALTH_UPLOAD_ENABLED: 'TRUE' })).toThrow('JARVIS_HEALTH_UPLOAD_ENABLED must be true or false');
   });
   it('does not configure an external OneDrive notes folder', () => {
     expect(loadConfig({ JARVIS_NOTES_FOLDER_PATH: '/obsolete/path' })).not.toHaveProperty('notesFolderPath');
@@ -89,6 +96,7 @@ describe('backend configuration', () => {
       proactiveEnabled: false,
       proactiveTodoWritesEnabled: false,
       proactiveAlertsEnabled: false,
+      healthUploadEnabled: false,
     });
   });
   it('validates the configurable ChatGPT Codex tool model', () => {

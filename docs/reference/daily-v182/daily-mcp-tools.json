@@ -1,0 +1,4030 @@
+{
+  "sourceVersion": 182,
+  "sourceSha": "9e193554c9c8c7c23a788ed3d2b0582580b76c0f",
+  "evidence": "Original Daily exported static contracts only; no handlers invoked, no credentials or records read.",
+  "tools": [
+    {
+      "name": "search",
+      "title": "Search Daily Overview",
+      "description": "Use this when the user wants to find relevant tasks, email attention items, calendar events, countdowns, meals, nutrition, or recent normalized health facts before fetching a specific result. Do not use search instead of log_food when the user explicitly asks to record food.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "description": "Natural-language search query."
+          }
+        },
+        "required": [
+          "query"
+        ],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "results": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "url": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "title",
+                "url"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "results"
+        ],
+        "additionalProperties": false
+      },
+      "securitySchemes": [
+        {
+          "type": "oauth2",
+          "scopes": [
+            "daily-overview.read"
+          ]
+        }
+      ],
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "idempotentHint": true
+      },
+      "_meta": {
+        "securitySchemes": [
+          {
+            "type": "oauth2",
+            "scopes": [
+              "daily-overview.read"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "fetch",
+      "title": "Fetch Daily Overview item",
+      "description": "Use this when the user or a prior search result provides a Daily Overview item ID and complete normalized text is needed for an answer or citation.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 300,
+            "description": "Stable item ID returned by search."
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "text",
+          "url"
+        ],
+        "additionalProperties": false
+      },
+      "securitySchemes": [
+        {
+          "type": "oauth2",
+          "scopes": [
+            "daily-overview.read"
+          ]
+        }
+      ],
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "idempotentHint": true
+      },
+      "_meta": {
+        "securitySchemes": [
+          {
+            "type": "oauth2",
+            "scopes": [
+              "daily-overview.read"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "get_daily_overview",
+      "title": "Get daily overview",
+      "description": "Use this when the user asks for today's combined priorities, attention items, calendar, countdowns, habits, source freshness, health, meals, or nutrition. For calories left, read health.today.calorieGlance.caloriesLeftKcal; it is full maintenance, not the 15% target.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "generatedAt": {
+            "type": "string"
+          },
+          "timezone": {
+            "type": "string"
+          },
+          "date": {
+            "type": "string"
+          },
+          "sources": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "priorityTasks": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "waitingForYou": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "waitingOnOthers": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "calendar": {
+            "type": "object"
+          },
+          "countdowns": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "habits": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "habitInsight": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "health": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "generatedAt",
+          "timezone",
+          "date",
+          "sources",
+          "priorityTasks",
+          "waitingForYou",
+          "waitingOnOthers",
+          "calendar",
+          "countdowns",
+          "habits",
+          "habitInsight",
+          "health"
+        ],
+        "additionalProperties": false
+      },
+      "securitySchemes": [
+        {
+          "type": "oauth2",
+          "scopes": [
+            "daily-overview.read"
+          ]
+        }
+      ],
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "idempotentHint": true
+      },
+      "_meta": {
+        "securitySchemes": [
+          {
+            "type": "oauth2",
+            "scopes": [
+              "daily-overview.read"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "get_attention_items",
+      "title": "Get attention items",
+      "description": "Use this when the user asks for one bounded category of items needing attention: reply-needed email, waiting-on-others email, priority tasks, all open tasks, or countdowns.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "waiting_for_you",
+              "waiting_on_others",
+              "priority_tasks",
+              "open_tasks",
+              "countdowns"
+            ]
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 50,
+            "default": 20
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "total": {
+            "type": "integer"
+          },
+          "limit": {
+            "type": "integer"
+          },
+          "hasMore": {
+            "type": "boolean"
+          },
+          "generatedAt": {
+            "type": "string"
+          },
+          "timezone": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "items",
+          "total",
+          "limit",
+          "hasMore",
+          "generatedAt",
+          "timezone"
+        ],
+        "additionalProperties": false
+      },
+      "securitySchemes": [
+        {
+          "type": "oauth2",
+          "scopes": [
+            "daily-overview.read"
+          ]
+        }
+      ],
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "idempotentHint": true
+      },
+      "_meta": {
+        "securitySchemes": [
+          {
+            "type": "oauth2",
+            "scopes": [
+              "daily-overview.read"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "get_calendar_window",
+      "title": "Get calendar window",
+      "description": "Use this when the user asks for Google Calendar events and timed conflicts in a specific bounded date window from the current normalized connector snapshot.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "startDate": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "description": "First date in YYYY-MM-DD format."
+          },
+          "days": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 31,
+            "default": 7
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100,
+            "default": 50
+          }
+        },
+        "required": [
+          "startDate"
+        ],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "startDate": {
+            "type": "string"
+          },
+          "endDate": {
+            "type": "string"
+          },
+          "days": {
+            "type": "integer"
+          },
+          "timezone": {
+            "type": "string"
+          },
+          "events": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "total": {
+            "type": "integer"
+          },
+          "limit": {
+            "type": "integer"
+          },
+          "hasMore": {
+            "type": "boolean"
+          },
+          "conflictCount": {
+            "type": "integer"
+          },
+          "sourceSnapshot": {
+            "type": [
+              "object",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "startDate",
+          "endDate",
+          "days",
+          "timezone",
+          "events",
+          "total",
+          "limit",
+          "hasMore",
+          "conflictCount",
+          "sourceSnapshot"
+        ],
+        "additionalProperties": false
+      },
+      "securitySchemes": [
+        {
+          "type": "oauth2",
+          "scopes": [
+            "daily-overview.read"
+          ]
+        }
+      ],
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "idempotentHint": true
+      },
+      "_meta": {
+        "securitySchemes": [
+          {
+            "type": "oauth2",
+            "scopes": [
+              "daily-overview.read"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "get_health_summary",
+      "title": "Get health summary",
+      "description": "Use this when the user asks for current Apple Health sleep, activity, workouts, nutrition totals, sync freshness, rolling-seven-day, or workout targets. For calories left today, use today.calorieGlance.caloriesLeftKcal: full maintenance, not the 15% target.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string"
+          },
+          "timezone": {
+            "type": "string"
+          },
+          "generatedAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sync": {
+            "type": "object"
+          },
+          "today": {
+            "type": "object",
+            "properties": {
+              "sleep": {
+                "type": [
+                  "object",
+                  "null"
+                ]
+              },
+              "sleepComparison": {
+                "type": "object"
+              },
+              "steps": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "activeEnergy": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "workouts": {
+                "type": "array",
+                "items": {
+                  "type": "object"
+                }
+              },
+              "workoutDurationMinutes": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "nutrition": {
+                "type": [
+                  "object",
+                  "null"
+                ]
+              },
+              "calorieGlance": {
+                "type": "object",
+                "properties": {
+                  "available": {
+                    "type": "boolean"
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "available",
+                      "unavailable"
+                    ]
+                  },
+                  "period": {
+                    "type": "string"
+                  },
+                  "periodDays": {
+                    "type": "integer"
+                  },
+                  "observedDays": {
+                    "type": "integer"
+                  },
+                  "isAverage": {
+                    "type": "boolean"
+                  },
+                  "totalExpenditureKcal": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  },
+                  "totalIntakeKcal": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  },
+                  "totalRemainingKcal": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  },
+                  "fullBudgetKcal": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  },
+                  "remainingKcal": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  },
+                  "tone": {
+                    "type": "string",
+                    "enum": [
+                      "good",
+                      "close",
+                      "over",
+                      "unknown"
+                    ]
+                  },
+                  "intakeKcal": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  },
+                  "activeKcal": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  },
+                  "restingBaselineKcal": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  },
+                  "fullMaintenanceBudgetKcal": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  },
+                  "caloriesLeftKcal": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  },
+                  "definition": {
+                    "type": "string"
+                  },
+                  "sources": {
+                    "type": "object",
+                    "additionalProperties": true
+                  },
+                  "asOf": {
+                    "type": "object",
+                    "additionalProperties": true
+                  }
+                },
+                "required": [
+                  "status",
+                  "available",
+                  "fullMaintenanceBudgetKcal",
+                  "caloriesLeftKcal",
+                  "definition",
+                  "sources",
+                  "asOf"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "calorieGlance"
+            ],
+            "additionalProperties": false
+          },
+          "rolling7": {
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "weeklyWorkoutCount": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "targets": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "recovery": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        },
+        "required": [
+          "status",
+          "timezone",
+          "generatedAt",
+          "sync",
+          "today",
+          "rolling7",
+          "weeklyWorkoutCount",
+          "targets",
+          "recovery"
+        ],
+        "additionalProperties": false
+      },
+      "securitySchemes": [
+        {
+          "type": "oauth2",
+          "scopes": [
+            "daily-overview.read"
+          ]
+        }
+      ],
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "idempotentHint": true
+      },
+      "_meta": {
+        "securitySchemes": [
+          {
+            "type": "oauth2",
+            "scopes": [
+              "daily-overview.read"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "get_health_history",
+      "title": "Get health history",
+      "description": "Use this when the user asks for normalized Apple Health sleep, workout, or metric history in a date range of at most 93 days; newly backfilled normalized rows are included automatically.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "startDate": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "description": "Inclusive first date; provide together with endDate. Defaults to 30 days ago."
+          },
+          "endDate": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "description": "Inclusive final date; provide together with startDate. Defaults to today."
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100,
+            "default": 50,
+            "description": "Maximum rows returned per category."
+          }
+        },
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "available",
+              "unavailable"
+            ]
+          },
+          "startDate": {
+            "type": "string"
+          },
+          "endDate": {
+            "type": "string"
+          },
+          "days": {
+            "type": "integer"
+          },
+          "timezone": {
+            "type": "string"
+          },
+          "limitPerCategory": {
+            "type": "integer"
+          },
+          "sleep": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "workouts": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "metrics": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "hasMore": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "status",
+          "startDate",
+          "endDate",
+          "days",
+          "timezone",
+          "limitPerCategory",
+          "sleep",
+          "workouts",
+          "metrics",
+          "hasMore"
+        ],
+        "additionalProperties": false
+      },
+      "securitySchemes": [
+        {
+          "type": "oauth2",
+          "scopes": [
+            "daily-overview.read"
+          ]
+        }
+      ],
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "idempotentHint": true
+      },
+      "_meta": {
+        "securitySchemes": [
+          {
+            "type": "oauth2",
+            "scopes": [
+              "daily-overview.read"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "get_nutrition_history",
+      "title": "Get nutrition history",
+      "description": "Use this when the user asks what they ate, which ingredients were logged, meal timing, macros by meal, or needs the exact idempotencyKey for a correction or deletion. Any valid historical date range is supported. Daily Overview Sites is the nutrition source of truth.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "startDate": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "description": "Inclusive first date in YYYY-MM-DD format. Provide together with endDate. Defaults to 30 days ago."
+          },
+          "endDate": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "description": "Inclusive final date in YYYY-MM-DD format. Provide together with startDate. Defaults to today."
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100,
+            "default": 50,
+            "description": "Maximum meals returned."
+          }
+        },
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string"
+          },
+          "startDate": {
+            "type": "string"
+          },
+          "endDate": {
+            "type": "string"
+          },
+          "days": {
+            "type": "integer"
+          },
+          "timezone": {
+            "type": "string"
+          },
+          "limit": {
+            "type": "integer"
+          },
+          "retention": {
+            "type": "string",
+            "const": "until_deleted"
+          },
+          "source": {
+            "type": "string"
+          },
+          "meals": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "hasMore": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "status",
+          "startDate",
+          "endDate",
+          "days",
+          "timezone",
+          "limit",
+          "retention",
+          "source",
+          "meals",
+          "hasMore"
+        ],
+        "additionalProperties": false
+      },
+      "securitySchemes": [
+        {
+          "type": "oauth2",
+          "scopes": [
+            "daily-overview.read"
+          ]
+        }
+      ],
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "idempotentHint": true
+      },
+      "_meta": {
+        "securitySchemes": [
+          {
+            "type": "oauth2",
+            "scopes": [
+              "daily-overview.read"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "analyze_nutrition",
+      "title": "Analyze nutrition over any period",
+      "description": "Use this when the user asks for totals, averages, trends, comparisons, or patterns over any valid nutrition date range. Returns bounded chart-ready day, week, or month series from permanent Daily Overview Sites meals. Use /visualize when a chart materially helps.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "startDate": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "description": "Inclusive first date. Provide with endDate; defaults to 30 days ago."
+          },
+          "endDate": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "description": "Inclusive final date. Provide with startDate; defaults to today."
+          },
+          "granularity": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "day",
+              "week",
+              "month"
+            ],
+            "default": "auto"
+          }
+        },
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string"
+          },
+          "startDate": {
+            "type": "string"
+          },
+          "endDate": {
+            "type": "string"
+          },
+          "days": {
+            "type": "integer"
+          },
+          "timezone": {
+            "type": "string"
+          },
+          "granularity": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          },
+          "retention": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "series": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "recovery": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "visualization": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        },
+        "required": [
+          "status",
+          "startDate",
+          "endDate",
+          "days",
+          "timezone",
+          "granularity",
+          "source",
+          "retention",
+          "summary",
+          "series",
+          "recovery",
+          "visualization"
+        ],
+        "additionalProperties": false
+      },
+      "securitySchemes": [
+        {
+          "type": "oauth2",
+          "scopes": [
+            "daily-overview.read"
+          ]
+        }
+      ],
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "idempotentHint": true
+      },
+      "_meta": {
+        "securitySchemes": [
+          {
+            "type": "oauth2",
+            "scopes": [
+              "daily-overview.read"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "get_calorie_balance",
+      "title": "Get calorie balance",
+      "description": "Use this when the user asks for historical calorie intake, expenditure, deficit, surplus, or net balance. Intake is Sites; expenditure is Apple Health active plus resting energy. If the range includes today, current contains full-maintenance caloriesLeftKcal; do not use the 15% target for that value.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "startDate": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "description": "Inclusive first date in YYYY-MM-DD format. Provide together with endDate. Defaults to 30 days ago."
+          },
+          "endDate": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "description": "Inclusive final date in YYYY-MM-DD format. Provide together with startDate. Defaults to today."
+          }
+        },
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "available",
+              "unavailable"
+            ]
+          },
+          "startDate": {
+            "type": "string"
+          },
+          "endDate": {
+            "type": "string"
+          },
+          "days": {
+            "type": "integer"
+          },
+          "timezone": {
+            "type": "string"
+          },
+          "definition": {
+            "type": "string"
+          },
+          "sources": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "summary": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "recovery": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "current": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": true
+          },
+          "daily": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          }
+        },
+        "required": [
+          "status",
+          "startDate",
+          "endDate",
+          "days",
+          "timezone",
+          "definition",
+          "sources",
+          "summary",
+          "recovery",
+          "current",
+          "daily"
+        ],
+        "additionalProperties": false
+      },
+      "securitySchemes": [
+        {
+          "type": "oauth2",
+          "scopes": [
+            "daily-overview.read"
+          ]
+        }
+      ],
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "idempotentHint": true
+      },
+      "_meta": {
+        "securitySchemes": [
+          {
+            "type": "oauth2",
+            "scopes": [
+              "daily-overview.read"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "get_coach_status",
+      "title": "Get Daily Coach status",
+      "description": "Use this when the user asks for today's status, how today is going, what needs attention today, or daily coaching, and call it exactly once. This authoritative call returns today's kcal, protein, active kcal, steps, and sleep plus weekly training, all four 14-day body trends, previous-seven-completed-day consistency, coach judgment, orders, complete nativeMarkdown, and the attached status widget where supported. Never follow it with render_coach_status. Even if the widget fails, answer from this tool's nativeMarkdown. Render all eight required scoreboardLines exactly once and in order; never merge or omit RECOMP 14 DAYS, Fat %, or CONSISTENCY 7 DAYS.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "view": {
+            "type": "string",
+            "const": "status"
+          },
+          "period": {
+            "type": "string"
+          },
+          "periodLabel": {
+            "type": "string"
+          },
+          "timezone": {
+            "type": "string"
+          },
+          "generatedAt": {
+            "type": "string"
+          },
+          "metrics": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "training": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "recomposition14d": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "consistency7d": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "recovery": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "coach": {
+            "type": "string"
+          },
+          "orders": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "scoreboardLines": {
+            "type": "array",
+            "minItems": 8,
+            "maxItems": 8,
+            "items": {
+              "type": "string"
+            }
+          },
+          "nativeMarkdown": {
+            "type": "string"
+          },
+          "definitions": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "profile": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "commitments": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "accountability": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        },
+        "required": [
+          "view",
+          "period",
+          "periodLabel",
+          "timezone",
+          "generatedAt",
+          "metrics",
+          "training",
+          "recomposition14d",
+          "consistency7d",
+          "recovery",
+          "coach",
+          "orders",
+          "scoreboardLines",
+          "nativeMarkdown",
+          "definitions",
+          "profile",
+          "commitments",
+          "accountability"
+        ],
+        "additionalProperties": false
+      },
+      "securitySchemes": [
+        {
+          "type": "oauth2",
+          "scopes": [
+            "daily-overview.read"
+          ]
+        }
+      ],
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "idempotentHint": true
+      },
+      "_meta": {
+        "securitySchemes": [
+          {
+            "type": "oauth2",
+            "scopes": [
+              "daily-overview.read"
+            ]
+          }
+        ],
+        "ui": {
+          "resourceUri": "ui://daily-overview/daily-coach-v11.html"
+        },
+        "openai/outputTemplate": "ui://daily-overview/daily-coach-v11.html",
+        "openai/toolInvocation/invoking": "Building visual",
+        "openai/toolInvocation/invoked": "Visual ready"
+      }
+    },
+    {
+      "name": "render_coach_status",
+      "title": "Render Daily Coach status",
+      "description": "Use this when a legacy conversation explicitly requests the retired status renderer; it is Legacy compatibility only. Do not call it for normal status requests: get_coach_status now owns the status widget and complete native answer in one authoritative call.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "view": {
+            "type": "string",
+            "const": "status"
+          },
+          "period": {
+            "type": "string"
+          },
+          "periodLabel": {
+            "type": "string"
+          },
+          "timezone": {
+            "type": "string"
+          },
+          "generatedAt": {
+            "type": "string"
+          },
+          "metrics": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "training": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "recomposition14d": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "consistency7d": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "recovery": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "coach": {
+            "type": "string"
+          },
+          "orders": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "scoreboardLines": {
+            "type": "array",
+            "minItems": 8,
+            "maxItems": 8,
+            "items": {
+              "type": "string"
+            }
+          },
+          "nativeMarkdown": {
+            "type": "string"
+          },
+          "definitions": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "profile": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "commitments": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "accountability": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        },
+        "required": [
+          "view",
+          "period",
+          "periodLabel",
+          "timezone",
+          "generatedAt",
+          "metrics",
+          "training",
+          "recomposition14d",
+          "consistency7d",
+          "recovery",
+          "coach",
+          "orders",
+          "scoreboardLines",
+          "nativeMarkdown",
+          "definitions",
+          "profile",
+          "commitments",
+          "accountability"
+        ],
+        "additionalProperties": false
+      },
+      "securitySchemes": [
+        {
+          "type": "oauth2",
+          "scopes": [
+            "daily-overview.read"
+          ]
+        }
+      ],
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "idempotentHint": true
+      },
+      "_meta": {
+        "securitySchemes": [
+          {
+            "type": "oauth2",
+            "scopes": [
+              "daily-overview.read"
+            ]
+          }
+        ],
+        "ui": {
+          "resourceUri": "ui://daily-overview/daily-coach-v11.html"
+        },
+        "openai/outputTemplate": "ui://daily-overview/daily-coach-v11.html",
+        "openai/toolInvocation/invoking": "Building visual",
+        "openai/toolInvocation/invoked": "Visual ready"
+      }
+    },
+    {
+      "name": "ready",
+      "title": "Readiness Decision Path",
+      "description": "Use this when the user's message begins with ready. Call this exact-name tool exactly once and no other visual. Supply the user's explicit 1–10 rating and exact optional context with userConfirmed=true; otherwise omit all arguments to reuse today's check-in or ask in the widget when none exists.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "feelingRating": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10,
+            "description": "Dan's explicit rating for today. Never infer it."
+          },
+          "context": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 280,
+            "description": "Dan's exact optional words about fatigue, allergy, soreness, stress, symptoms, or other context."
+          },
+          "userConfirmed": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "view": {
+            "type": "string",
+            "enum": [
+              "readiness",
+              "readiness_checkin"
+            ]
+          },
+          "title": {
+            "type": "string"
+          },
+          "periodLabel": {
+            "type": "string"
+          },
+          "date": {
+            "type": "string"
+          },
+          "generatedAt": {
+            "type": "string"
+          },
+          "timezone": {
+            "type": "string"
+          },
+          "checkin": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": true
+          },
+          "prompt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "scale": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": true
+          },
+          "contextPrompt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "contextPlaceholder": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "checkpoints": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": true
+          },
+          "call": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": true
+          },
+          "evidence": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": true
+          },
+          "nativeMarkdown": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "view",
+          "title",
+          "periodLabel",
+          "date",
+          "generatedAt",
+          "timezone",
+          "nativeMarkdown"
+        ],
+        "additionalProperties": false
+      },
+      "securitySchemes": [
+        {
+          "type": "oauth2",
+          "scopes": [
+            "daily-overview.food.write"
+          ]
+        }
+      ],
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "idempotentHint": true
+      },
+      "_meta": {
+        "securitySchemes": [
+          {
+            "type": "oauth2",
+            "scopes": [
+              "daily-overview.food.write"
+            ]
+          }
+        ],
+        "ui": {
+          "resourceUri": "ui://daily-overview/readiness-v3.html"
+        },
+        "openai/outputTemplate": "ui://daily-overview/readiness-v3.html",
+        "openai/toolInvocation/invoking": "Checking readiness",
+        "openai/toolInvocation/invoked": "Readiness ready"
+      }
+    },
+    {
+      "name": "set_recovery_period",
+      "title": "Set recovery period",
+      "description": "Use only when Dan directly asks to mark or clear one or more past or current dates as sick/recovery. Marked dates keep all measured Apple Health, body, and nutrition data visible but are excluded from compliance denominators, nutrition averages, calorie totals, streaks, and coaching judgment. Never replace missing values with averages.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "startDate": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "description": "Inclusive first recovery date."
+          },
+          "endDate": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "description": "Inclusive final recovery date."
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "sick",
+              "clear"
+            ],
+            "default": "sick"
+          },
+          "context": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 280,
+            "description": "Dan's optional exact context, such as flu or allergy."
+          },
+          "userConfirmed": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "required": [
+          "startDate",
+          "endDate",
+          "userConfirmed"
+        ],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "saved": {
+            "type": "boolean"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "sick",
+              "clear"
+            ]
+          },
+          "startDate": {
+            "type": "string"
+          },
+          "endDate": {
+            "type": "string"
+          },
+          "affectedDays": {
+            "type": "integer"
+          },
+          "days": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "source": {
+            "type": "string"
+          },
+          "effect": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "saved",
+          "state",
+          "startDate",
+          "endDate",
+          "affectedDays",
+          "days",
+          "source",
+          "effect"
+        ],
+        "additionalProperties": false
+      },
+      "securitySchemes": [
+        {
+          "type": "oauth2",
+          "scopes": [
+            "daily-overview.food.write"
+          ]
+        }
+      ],
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "idempotentHint": true
+      },
+      "_meta": {
+        "securitySchemes": [
+          {
+            "type": "oauth2",
+            "scopes": [
+              "daily-overview.food.write"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "get_coach_profile",
+      "title": "Get durable Coach Profile",
+      "description": "Use this when durable goals, targets, coaching style, meal schedule, restrictions, or football preferences are needed before personalized coaching.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "profile": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "source": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "profile",
+          "source"
+        ],
+        "additionalProperties": false
+      },
+      "securitySchemes": [
+        {
+          "type": "oauth2",
+          "scopes": [
+            "daily-overview.read"
+          ]
+        }
+      ],
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "idempotentHint": true
+      },
+      "_meta": {
+        "securitySchemes": [
+          {
+            "type": "oauth2",
+            "scopes": [
+              "daily-overview.read"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "update_coach_profile",
+      "title": "Update Coach Profile",
+      "description": "Update only the profile fields Dan directly asks to change. The owner-bound Sites profile becomes authoritative across conversations and devices.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "patch": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "userConfirmed": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "required": [
+          "patch",
+          "userConfirmed"
+        ],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "saved": {
+            "type": "boolean"
+          },
+          "profile": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "source": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "saved",
+          "profile",
+          "source"
+        ],
+        "additionalProperties": false
+      },
+      "securitySchemes": [
+        {
+          "type": "oauth2",
+          "scopes": [
+            "daily-overview.food.write"
+          ]
+        }
+      ],
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "idempotentHint": true
+      },
+      "_meta": {
+        "securitySchemes": [
+          {
+            "type": "oauth2",
+            "scopes": [
+              "daily-overview.food.write"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "get_coach_commitments",
+      "title": "Check prior Coach orders",
+      "description": "Use this when accountability is needed before issuing new orders. Reads current and recent quantified Coach orders and evaluates them against live protein, steps, active kcal, intake, and sleep.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "date": {
+            "type": "string"
+          },
+          "commitments": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "accountability": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "source": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "date",
+          "commitments",
+          "accountability",
+          "source"
+        ],
+        "additionalProperties": false
+      },
+      "securitySchemes": [
+        {
+          "type": "oauth2",
+          "scopes": [
+            "daily-overview.read"
+          ]
+        }
+      ],
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "idempotentHint": true
+      },
+      "_meta": {
+        "securitySchemes": [
+          {
+            "type": "oauth2",
+            "scopes": [
+              "daily-overview.read"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "save_coach_orders",
+      "title": "Remember Coach orders",
+      "description": "Store the one to three quantified actions just issued by the Coach. This is idempotent and lets the next check-in verify execution. Do not store vague advice.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "idempotencyKey": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "orders": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 3,
+            "items": {
+              "type": "object",
+              "properties": {
+                "metric": {
+                  "type": "string",
+                  "enum": [
+                    "protein_g",
+                    "steps",
+                    "active_kcal",
+                    "intake_kcal",
+                    "sleep_hours"
+                  ]
+                },
+                "instruction": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 220
+                },
+                "targetValue": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 100000
+                },
+                "unit": {
+                  "type": "string",
+                  "maxLength": 30
+                },
+                "comparison": {
+                  "type": "string",
+                  "enum": [
+                    "at_least",
+                    "at_most"
+                  ]
+                },
+                "baselineValue": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 100000
+                },
+                "dueAt": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              },
+              "required": [
+                "metric",
+                "instruction",
+                "targetValue"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "idempotencyKey",
+          "orders"
+        ],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "saved": {
+            "type": "boolean"
+          },
+          "date": {
+            "type": "string"
+          },
+          "commitments": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "source": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "saved",
+          "date",
+          "commitments",
+          "source"
+        ],
+        "additionalProperties": false
+      },
+      "securitySchemes": [
+        {
+          "type": "oauth2",
+          "scopes": [
+            "daily-overview.food.write"
+          ]
+        }
+      ],
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "idempotentHint": true
+      },
+      "_meta": {
+        "securitySchemes": [
+          {
+            "type": "oauth2",
+            "scopes": [
+              "daily-overview.food.write"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "get_nutrition_activity_trends",
+      "title": "Get nutrition and activity trends",
+      "description": "Use this when the user specifically asks for 7- or 30-day calorie balance, protein, or active-energy history. Never use this for body scans, weight, fat mass, body-fat percentage, lean mass, muscle progress, body composition, or recomposition. For any of those, call get_recomposition_progress exactly once and do not add this widget.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "days": {
+            "type": "integer",
+            "enum": [
+              7,
+              30
+            ],
+            "default": 7
+          }
+        },
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "view": {
+            "type": "string",
+            "const": "trends"
+          },
+          "title": {
+            "type": "string"
+          },
+          "periodLabel": {
+            "type": "string"
+          },
+          "startDate": {
+            "type": "string"
+          },
+          "endDate": {
+            "type": "string"
+          },
+          "points": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "targets": {
+            "type": "object"
+          },
+          "sources": {
+            "type": "object"
+          },
+          "recovery": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        },
+        "required": [
+          "view",
+          "title",
+          "periodLabel",
+          "startDate",
+          "endDate",
+          "points",
+          "targets",
+          "sources",
+          "recovery"
+        ],
+        "additionalProperties": false
+      },
+      "securitySchemes": [
+        {
+          "type": "oauth2",
+          "scopes": [
+            "daily-overview.read"
+          ]
+        }
+      ],
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "idempotentHint": true
+      },
+      "_meta": {
+        "securitySchemes": [
+          {
+            "type": "oauth2",
+            "scopes": [
+              "daily-overview.read"
+            ]
+          }
+        ],
+        "ui": {
+          "resourceUri": "ui://daily-overview/daily-coach-v11.html"
+        },
+        "openai/outputTemplate": "ui://daily-overview/daily-coach-v11.html",
+        "openai/toolInvocation/invoking": "Building visual",
+        "openai/toolInvocation/invoked": "Visual ready"
+      }
+    },
+    {
+      "name": "get_recomposition_progress",
+      "title": "Get recomposition progress",
+      "description": "Use this when the user says recomp or asks about a body scan, weight, fat mass, body-fat percentage, lean mass, muscle-progress, or recomposition. Call it exactly once. It renders the interactive mobile-first Recomposition Lab with 14 Days, 30 Days, and 90 Days body trends, drivers, and scan history. Defaults to the latest scan versus the immediately previous scan plus the last 30 days.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "days": {
+            "type": "integer",
+            "enum": [
+              14,
+              30,
+              90,
+              365
+            ],
+            "default": 30,
+            "description": "Use a standard rolling period ending today."
+          },
+          "startDate": {
+            "type": "string",
+            "format": "date",
+            "description": "Custom inclusive start date; provide together with endDate and omit days."
+          },
+          "endDate": {
+            "type": "string",
+            "format": "date",
+            "description": "Custom inclusive end date; provide together with startDate and omit days."
+          }
+        },
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "view": {
+            "type": "string",
+            "const": "recomposition"
+          },
+          "title": {
+            "type": "string"
+          },
+          "periodLabel": {
+            "type": "string"
+          },
+          "startDate": {
+            "type": "string"
+          },
+          "endDate": {
+            "type": "string"
+          },
+          "periodDays": {
+            "type": "integer"
+          },
+          "scanCount": {
+            "type": "integer"
+          },
+          "totalAvailableScans": {
+            "type": "integer"
+          },
+          "requiredScans": {
+            "type": "integer"
+          },
+          "ready": {
+            "type": "boolean"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "baseline",
+              "improving",
+              "stable",
+              "reversing"
+            ]
+          },
+          "latestScan": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": true
+          },
+          "previousScan": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": true
+          },
+          "scans": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "metrics": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "drivers": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "recovery": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "goal": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "definitions": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "freshness": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "sources": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        },
+        "required": [
+          "view",
+          "title",
+          "periodLabel",
+          "startDate",
+          "endDate",
+          "periodDays",
+          "scanCount",
+          "requiredScans",
+          "ready",
+          "status",
+          "latestScan",
+          "previousScan",
+          "scans",
+          "metrics",
+          "drivers",
+          "recovery",
+          "goal",
+          "definitions",
+          "freshness",
+          "sources"
+        ],
+        "additionalProperties": false
+      },
+      "securitySchemes": [
+        {
+          "type": "oauth2",
+          "scopes": [
+            "daily-overview.read"
+          ]
+        }
+      ],
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "idempotentHint": true
+      },
+      "_meta": {
+        "securitySchemes": [
+          {
+            "type": "oauth2",
+            "scopes": [
+              "daily-overview.read"
+            ]
+          }
+        ],
+        "ui": {
+          "resourceUri": "ui://daily-overview/recomposition-v7.html"
+        },
+        "openai/outputTemplate": "ui://daily-overview/recomposition-v7.html",
+        "openai/toolInvocation/invoking": "Building visual",
+        "openai/toolInvocation/invoked": "Visual ready"
+      }
+    },
+    {
+      "name": "review",
+      "title": "Review",
+      "description": "Use this when the user's trimmed message is exactly review. This exact-name tool must be called exactly once, with no other visual tool. It renders the previous seven completed days as a Recomp Vector, day-by-day execution evidence, confidence-labelled inference, and one recommended variable to test next week.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "view": {
+            "type": "string",
+            "const": "weekly_review"
+          },
+          "title": {
+            "type": "string"
+          },
+          "periodLabel": {
+            "type": "string"
+          },
+          "startDate": {
+            "type": "string"
+          },
+          "endDate": {
+            "type": "string"
+          },
+          "generatedAt": {
+            "type": "string"
+          },
+          "timezone": {
+            "type": "string"
+          },
+          "verdict": {
+            "type": "string",
+            "enum": [
+              "on_track",
+              "mixed",
+              "off_track",
+              "building"
+            ]
+          },
+          "confidence": {
+            "type": "string",
+            "enum": [
+              "strong",
+              "moderate",
+              "building"
+            ]
+          },
+          "body": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "drivers": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "days": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "recovery": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "inference": {
+            "type": "string"
+          },
+          "experiment": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "activeExperiment": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": true
+          },
+          "nativeMarkdown": {
+            "type": "string"
+          },
+          "definitions": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        },
+        "required": [
+          "view",
+          "title",
+          "periodLabel",
+          "startDate",
+          "endDate",
+          "generatedAt",
+          "timezone",
+          "verdict",
+          "confidence",
+          "body",
+          "drivers",
+          "days",
+          "recovery",
+          "inference",
+          "experiment",
+          "nativeMarkdown",
+          "definitions"
+        ],
+        "additionalProperties": false
+      },
+      "securitySchemes": [
+        {
+          "type": "oauth2",
+          "scopes": [
+            "daily-overview.read"
+          ]
+        }
+      ],
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "idempotentHint": true
+      },
+      "_meta": {
+        "securitySchemes": [
+          {
+            "type": "oauth2",
+            "scopes": [
+              "daily-overview.read"
+            ]
+          }
+        ],
+        "ui": {
+          "resourceUri": "ui://daily-overview/weekly-review-v4.html"
+        },
+        "openai/outputTemplate": "ui://daily-overview/weekly-review-v4.html",
+        "openai/toolInvocation/invoking": "Building visual",
+        "openai/toolInvocation/invoked": "Visual ready"
+      }
+    },
+    {
+      "name": "commit_weekly_experiment",
+      "title": "Commit weekly experiment",
+      "description": "Use only after Dan directly confirms the exact one-variable experiment proposed by the review tool, including by tapping Commit for 7 days. Saves it idempotently across devices and never changes Apple Health, training, or nutrition records.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "idempotencyKey": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "userConfirmed": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "required": [
+          "idempotencyKey",
+          "userConfirmed"
+        ],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "saved": {
+            "type": "boolean"
+          },
+          "experiment": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "source": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "saved",
+          "experiment",
+          "source"
+        ],
+        "additionalProperties": false
+      },
+      "securitySchemes": [
+        {
+          "type": "oauth2",
+          "scopes": [
+            "daily-overview.food.write"
+          ]
+        }
+      ],
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "idempotentHint": true
+      },
+      "_meta": {
+        "securitySchemes": [
+          {
+            "type": "oauth2",
+            "scopes": [
+              "daily-overview.food.write"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "get_favorites",
+      "title": "Get favorite meals",
+      "description": "Use this when the user names a familiar meal or asks for saved favorite meals. Search favorites before historical meals.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 20,
+            "default": 10
+          }
+        },
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "favorites": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "hasMore": {
+            "type": "boolean"
+          },
+          "source": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "favorites",
+          "hasMore",
+          "source"
+        ],
+        "additionalProperties": false
+      },
+      "securitySchemes": [
+        {
+          "type": "oauth2",
+          "scopes": [
+            "daily-overview.read"
+          ]
+        }
+      ],
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "idempotentHint": true
+      },
+      "_meta": {
+        "securitySchemes": [
+          {
+            "type": "oauth2",
+            "scopes": [
+              "daily-overview.read"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "save_favorite",
+      "title": "Save favorite meal",
+      "description": "Use this when the user directly asks to save a favorite from one exact logged meal or a complete confirmed nutrient definition. Reusing its name updates it idempotently.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "favoriteName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "aliases": {
+            "type": "array",
+            "maxItems": 12,
+            "items": {
+              "type": "string",
+              "maxLength": 80
+            }
+          },
+          "sourceIdempotencyKey": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "meal": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "userConfirmed": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "required": [
+          "favoriteName",
+          "userConfirmed"
+        ],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "saved": {
+            "type": "boolean"
+          },
+          "favorite": {
+            "type": "object"
+          },
+          "source": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "saved",
+          "favorite",
+          "source"
+        ],
+        "additionalProperties": false
+      },
+      "securitySchemes": [
+        {
+          "type": "oauth2",
+          "scopes": [
+            "daily-overview.food.write"
+          ]
+        }
+      ],
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "idempotentHint": true
+      },
+      "_meta": {
+        "securitySchemes": [
+          {
+            "type": "oauth2",
+            "scopes": [
+              "daily-overview.food.write"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "get_meal_plans",
+      "title": "Get meal plans",
+      "description": "Use this when the user asks for reusable saved daily meal plans, their meals, or their total nutrients.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 20,
+            "default": 10
+          }
+        },
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "mealPlans": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "hasMore": {
+            "type": "boolean"
+          },
+          "source": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "mealPlans",
+          "hasMore",
+          "source"
+        ],
+        "additionalProperties": false
+      },
+      "securitySchemes": [
+        {
+          "type": "oauth2",
+          "scopes": [
+            "daily-overview.read"
+          ]
+        }
+      ],
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "idempotentHint": true
+      },
+      "_meta": {
+        "securitySchemes": [
+          {
+            "type": "oauth2",
+            "scopes": [
+              "daily-overview.read"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "save_meal_plan",
+      "title": "Save meal plan",
+      "description": "Use this when the user directly asks to save or update a plan containing exactly one breakfast, lunch, and dinner plus optional snacks, all resolved to favorite IDs.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "planName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 300
+          },
+          "items": {
+            "type": "array",
+            "minItems": 3,
+            "maxItems": 50,
+            "items": {
+              "type": "object",
+              "properties": {
+                "slot": {
+                  "type": "string",
+                  "enum": [
+                    "breakfast",
+                    "lunch",
+                    "dinner",
+                    "snack"
+                  ]
+                },
+                "favoriteId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 100
+                }
+              },
+              "required": [
+                "slot",
+                "favoriteId"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "userConfirmed": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "required": [
+          "planName",
+          "items",
+          "userConfirmed"
+        ],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "saved": {
+            "type": "boolean"
+          },
+          "mealPlan": {
+            "type": "object"
+          },
+          "source": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "saved",
+          "mealPlan",
+          "source"
+        ],
+        "additionalProperties": false
+      },
+      "securitySchemes": [
+        {
+          "type": "oauth2",
+          "scopes": [
+            "daily-overview.food.write"
+          ]
+        }
+      ],
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "idempotentHint": true
+      },
+      "_meta": {
+        "securitySchemes": [
+          {
+            "type": "oauth2",
+            "scopes": [
+              "daily-overview.food.write"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "get_meal_coach",
+      "title": "Get contextual meal plan",
+      "description": "Use this when the user asks what to eat next or how to finish today's targets. Uses current intake, target room, time of day, favorites, plans, and like/dislike feedback, then automatically renders the suggestions.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "view": {
+            "type": "string",
+            "const": "meals"
+          },
+          "status": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "context": {
+            "type": "string"
+          },
+          "todayISO": {
+            "type": "string"
+          },
+          "remainingKcal": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "remainingProtein": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "suggestions": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "projected": {
+            "type": "object"
+          },
+          "source": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "view",
+          "status",
+          "title",
+          "context",
+          "todayISO",
+          "remainingKcal",
+          "remainingProtein",
+          "suggestions",
+          "projected",
+          "source"
+        ],
+        "additionalProperties": false
+      },
+      "securitySchemes": [
+        {
+          "type": "oauth2",
+          "scopes": [
+            "daily-overview.read"
+          ]
+        }
+      ],
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "idempotentHint": true
+      },
+      "_meta": {
+        "securitySchemes": [
+          {
+            "type": "oauth2",
+            "scopes": [
+              "daily-overview.read"
+            ]
+          }
+        ],
+        "ui": {
+          "resourceUri": "ui://daily-overview/daily-coach-v11.html"
+        },
+        "openai/outputTemplate": "ui://daily-overview/daily-coach-v11.html",
+        "openai/toolInvocation/invoking": "Building visual",
+        "openai/toolInvocation/invoked": "Visual ready"
+      }
+    },
+    {
+      "name": "set_meal_preference",
+      "title": "Rate meal suggestion",
+      "description": "Use this when the user taps or states thumbs up or thumbs down for a suggested meal. Like permits reuse; dislike excludes it from future suggestions. Null clears the preference.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "mealKey": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 200
+          },
+          "preference": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "like",
+              "dislike",
+              null
+            ]
+          }
+        },
+        "required": [
+          "mealKey",
+          "preference"
+        ],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "saved": {
+            "type": "boolean"
+          },
+          "mealKey": {
+            "type": "string"
+          },
+          "preference": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "cleared": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "saved",
+          "mealKey",
+          "preference",
+          "cleared"
+        ],
+        "additionalProperties": false
+      },
+      "securitySchemes": [
+        {
+          "type": "oauth2",
+          "scopes": [
+            "daily-overview.food.write"
+          ]
+        }
+      ],
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "idempotentHint": true
+      },
+      "_meta": {
+        "securitySchemes": [
+          {
+            "type": "oauth2",
+            "scopes": [
+              "daily-overview.food.write"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "render_coach_response",
+      "title": "Show visual Daily Coach response",
+      "description": "Use this when an optional visual enhancement would help and the response is not already rendered by status, meal guidance, coaching trends, or recomposition. The exact prompt ui test must call this tool once with the fixed Daily UI test content from the server instructions. Put the answer into concise visual facts, sections, or a table, and always provide the complete compact native answer too.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "subtitle": {
+            "type": "string",
+            "maxLength": 160
+          },
+          "summary": {
+            "type": "string",
+            "maxLength": 600
+          },
+          "facts": {
+            "type": "array",
+            "maxItems": 8,
+            "items": {
+              "type": "object",
+              "properties": {
+                "label": {
+                  "type": "string",
+                  "maxLength": 60
+                },
+                "value": {
+                  "type": "string",
+                  "maxLength": 120
+                },
+                "tone": {
+                  "type": "string",
+                  "enum": [
+                    "good",
+                    "close",
+                    "risk",
+                    "neutral"
+                  ]
+                }
+              },
+              "required": [
+                "label",
+                "value"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "sections": {
+            "type": "array",
+            "maxItems": 6,
+            "items": {
+              "type": "object",
+              "properties": {
+                "heading": {
+                  "type": "string",
+                  "maxLength": 80
+                },
+                "items": {
+                  "type": "array",
+                  "maxItems": 12,
+                  "items": {
+                    "type": "string",
+                    "maxLength": 260
+                  }
+                }
+              },
+              "required": [
+                "heading",
+                "items"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "table": {
+            "type": "object",
+            "properties": {
+              "columns": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 8,
+                "items": {
+                  "type": "string",
+                  "maxLength": 60
+                }
+              },
+              "rows": {
+                "type": "array",
+                "maxItems": 30,
+                "items": {
+                  "type": "array",
+                  "maxItems": 8,
+                  "items": {
+                    "type": "string",
+                    "maxLength": 120
+                  }
+                }
+              }
+            },
+            "required": [
+              "columns",
+              "rows"
+            ],
+            "additionalProperties": false
+          },
+          "footer": {
+            "type": "string",
+            "maxLength": 240
+          }
+        },
+        "required": [
+          "title"
+        ],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string"
+          },
+          "subtitle": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "facts": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "sections": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "table": {
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "footer": {
+            "type": "string"
+          },
+          "view": {
+            "type": "string",
+            "const": "response"
+          }
+        },
+        "required": [
+          "view",
+          "title",
+          "subtitle",
+          "summary",
+          "facts",
+          "sections",
+          "table",
+          "footer"
+        ],
+        "additionalProperties": false
+      },
+      "securitySchemes": [
+        {
+          "type": "oauth2",
+          "scopes": [
+            "daily-overview.read"
+          ]
+        }
+      ],
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "idempotentHint": true
+      },
+      "_meta": {
+        "securitySchemes": [
+          {
+            "type": "oauth2",
+            "scopes": [
+              "daily-overview.read"
+            ]
+          }
+        ],
+        "ui": {
+          "resourceUri": "ui://daily-overview/daily-coach-v11.html"
+        },
+        "openai/outputTemplate": "ui://daily-overview/daily-coach-v11.html",
+        "openai/toolInvocation/invoking": "Building visual",
+        "openai/toolInvocation/invoked": "Visual ready"
+      }
+    },
+    {
+      "name": "lookup_food",
+      "title": "Calculate food nutrients from DTU Frida",
+      "description": "Use this when a photographed or portion-estimated meal needs nutrition before log_food. Resolve ingredients against Danish DTU Frida v5.5 and calculate per-100 g nutrients. Include estimated grams and preparation method when known. This read-only tool never queues a meal. For unmatched ingredients or unclear amounts, make a transparent general-knowledge estimate and ask one concise confirmation before logging.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "components": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 25,
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 120
+                },
+                "grams": {
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "minimum": 0,
+                  "maximum": 5000,
+                  "description": "Estimated edible weight in grams, or null when unclear."
+                },
+                "preparationMethod": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "maxLength": 120
+                }
+              },
+              "required": [
+                "name",
+                "grams"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "components"
+        ],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "complete",
+              "partial"
+            ]
+          },
+          "confirmationRequired": {
+            "type": "boolean",
+            "const": true
+          },
+          "source": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "components": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "totals": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "unmatched": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "fallbackGuidance": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "confirmationRequired",
+          "source",
+          "components",
+          "totals",
+          "unmatched",
+          "fallbackGuidance"
+        ],
+        "additionalProperties": false
+      },
+      "securitySchemes": [
+        {
+          "type": "oauth2",
+          "scopes": [
+            "daily-overview.read"
+          ]
+        }
+      ],
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "idempotentHint": true
+      },
+      "_meta": {
+        "securitySchemes": [
+          {
+            "type": "oauth2",
+            "scopes": [
+              "daily-overview.read"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "log_food",
+      "title": "Log food to Daily Overview",
+      "description": "Use this when the user explicitly asks to log, save, add, or record food, including retained historical dates. For photo or portion estimates, call lookup_food first, wait for confirmation, and pass its calculated values rather than freeform model totals. The meal is saved immediately and permanently in Sites; Apple Health is not automatic.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "mealName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "description": "Short factual name for the meal or food."
+          },
+          "components": {
+            "type": "array",
+            "maxItems": 25,
+            "description": "Identifiable foods or ingredients in the meal. Include them when known; do not invent hidden ingredients.",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 120
+                },
+                "quantity": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 80,
+                  "description": "Optional factual or estimated amount, such as 2 eggs or 1 slice."
+                },
+                "preparationMethod": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "maxLength": 120,
+                  "description": "Optional visible or inferred preparation such as raw, boiled, fried, or grilled."
+                }
+              },
+              "required": [
+                "name"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Actual time the food was eaten. Defaults to now only when the user gives no different time."
+          },
+          "mealType": {
+            "type": "string",
+            "enum": [
+              "breakfast",
+              "lunch",
+              "dinner",
+              "snack",
+              "other"
+            ],
+            "description": "Optional. Include only when the user states the meal type; do not ask solely to populate this field."
+          },
+          "caloriesKcal": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 10000
+          },
+          "proteinGrams": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1000
+          },
+          "carbohydratesGrams": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1000
+          },
+          "fatGrams": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1000
+          },
+          "fiberGrams": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1000
+          },
+          "confidence": {
+            "type": "string",
+            "enum": [
+              "accurate",
+              "approximate",
+              "estimate"
+            ]
+          },
+          "captureMethod": {
+            "type": "string",
+            "enum": [
+              "voice",
+              "photo",
+              "text",
+              "mixed"
+            ]
+          },
+          "userConfirmed": {
+            "type": "boolean",
+            "const": true,
+            "description": "Set true when the user directly asks to log, save, add, or record the meal, or explicitly confirms a prior estimate."
+          },
+          "idempotencyKey": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100,
+            "description": "Stable retry key for the same confirmed meal. Reuse it when retrying so the meal is not duplicated."
+          }
+        },
+        "required": [
+          "mealName",
+          "caloriesKcal",
+          "confidence",
+          "captureMethod",
+          "userConfirmed"
+        ],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "mealId": {
+            "type": "string"
+          },
+          "idempotencyKey": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "const": "saved"
+          },
+          "duplicate": {
+            "type": "boolean"
+          },
+          "meal": {
+            "type": "object"
+          },
+          "source": {
+            "type": "string"
+          },
+          "retention": {
+            "type": "string",
+            "const": "until_deleted"
+          },
+          "appleHealthExportStatus": {
+            "type": "string"
+          },
+          "nextStep": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "mealId",
+          "idempotencyKey",
+          "status",
+          "duplicate",
+          "meal",
+          "source",
+          "retention",
+          "appleHealthExportStatus",
+          "nextStep"
+        ],
+        "additionalProperties": false
+      },
+      "securitySchemes": [
+        {
+          "type": "oauth2",
+          "scopes": [
+            "daily-overview.food.write"
+          ]
+        }
+      ],
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "idempotentHint": true
+      },
+      "_meta": {
+        "securitySchemes": [
+          {
+            "type": "oauth2",
+            "scopes": [
+              "daily-overview.food.write"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "update_food",
+      "title": "Correct a saved meal",
+      "description": "Use only after the user explicitly confirms a correction to one exact Sites meal. Resolve the idempotencyKey from get_nutrition_history first. Any retained meal age can be corrected; there is no seven-day limit. Only supplied fields change.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "idempotencyKey": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "mealName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "components": {
+            "type": "array",
+            "maxItems": 25,
+            "items": {
+              "type": "object"
+            }
+          },
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "mealType": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "breakfast",
+              "lunch",
+              "dinner",
+              "snack",
+              "other",
+              null
+            ]
+          },
+          "caloriesKcal": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 10000
+          },
+          "proteinGrams": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1000
+          },
+          "carbohydratesGrams": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1000
+          },
+          "fatGrams": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1000
+          },
+          "fiberGrams": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1000
+          },
+          "confidence": {
+            "type": "string",
+            "enum": [
+              "accurate",
+              "approximate",
+              "estimate"
+            ]
+          },
+          "captureMethod": {
+            "type": "string",
+            "enum": [
+              "voice",
+              "photo",
+              "text",
+              "mixed"
+            ]
+          },
+          "userConfirmed": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "required": [
+          "idempotencyKey",
+          "userConfirmed"
+        ],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "const": "updated"
+          },
+          "source": {
+            "type": "string"
+          },
+          "meal": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "status",
+          "source",
+          "meal"
+        ],
+        "additionalProperties": false
+      },
+      "securitySchemes": [
+        {
+          "type": "oauth2",
+          "scopes": [
+            "daily-overview.food.write"
+          ]
+        }
+      ],
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "idempotentHint": true
+      },
+      "_meta": {
+        "securitySchemes": [
+          {
+            "type": "oauth2",
+            "scopes": [
+              "daily-overview.food.write"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "delete_food",
+      "title": "Delete a saved meal",
+      "description": "Use only after the user explicitly confirms deletion of one exact Sites meal. This soft-deletes the canonical meal; an already exported Apple Health copy may remain.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "idempotencyKey": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "userConfirmed": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "required": [
+          "idempotencyKey",
+          "userConfirmed"
+        ],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "deleted": {
+            "type": "boolean"
+          },
+          "alreadyAbsent": {
+            "type": "boolean"
+          },
+          "source": {
+            "type": "string"
+          },
+          "meal": {
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "appleHealthCopyMayRemain": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "deleted",
+          "alreadyAbsent",
+          "source",
+          "meal",
+          "appleHealthCopyMayRemain"
+        ],
+        "additionalProperties": false
+      },
+      "securitySchemes": [
+        {
+          "type": "oauth2",
+          "scopes": [
+            "daily-overview.food.write"
+          ]
+        }
+      ],
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "idempotentHint": true
+      },
+      "_meta": {
+        "securitySchemes": [
+          {
+            "type": "oauth2",
+            "scopes": [
+              "daily-overview.food.write"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "queue_apple_health_export",
+      "title": "Queue nutrition export to Apple Health",
+      "description": "Use only when the user explicitly requests Apple Health export for a confirmed date range. Sites remains the source of truth; this creates an idempotent temporary Shortcut queue using the existing shared token.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "startDate": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+          },
+          "endDate": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+          },
+          "userConfirmed": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "required": [
+          "startDate",
+          "endDate",
+          "userConfirmed"
+        ],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          },
+          "destination": {
+            "type": "string"
+          },
+          "queued": {
+            "type": "integer"
+          },
+          "startDate": {
+            "type": "string"
+          },
+          "endDate": {
+            "type": "string"
+          },
+          "nextStep": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "source",
+          "destination",
+          "queued",
+          "startDate",
+          "endDate",
+          "nextStep"
+        ],
+        "additionalProperties": false
+      },
+      "securitySchemes": [
+        {
+          "type": "oauth2",
+          "scopes": [
+            "daily-overview.food.write"
+          ]
+        }
+      ],
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "idempotentHint": true
+      },
+      "_meta": {
+        "securitySchemes": [
+          {
+            "type": "oauth2",
+            "scopes": [
+              "daily-overview.food.write"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "cancel_food",
+      "title": "Cancel pending food log",
+      "description": "Use this when the user explicitly asks to delete, remove, or cancel a specific food entry that is still pending for the iPhone Shortcut. Call this tool directly in the Daily Overview plugin; never use a browser, direct HTTP request, Codex, or another chat. Require the exact idempotency key and set userConfirmed=true only for the user's direct request. This safely cancels the phone-queue item and hides it from Daily Overview history while retaining a recoverable backend tombstone until cleanup. It refuses entries already claimed or processed and cannot remove samples from Apple Health.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "idempotencyKey": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100,
+            "description": "Exact stable idempotency key of the food log to remove."
+          },
+          "userConfirmed": {
+            "type": "boolean",
+            "const": true,
+            "description": "Set true only when the user directly asks to delete this exact food entry."
+          }
+        },
+        "required": [
+          "idempotencyKey",
+          "userConfirmed"
+        ],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "cancelled": {
+            "type": "boolean"
+          },
+          "alreadyCancelled": {
+            "type": "boolean"
+          },
+          "alreadyAbsent": {
+            "type": "boolean"
+          },
+          "entryId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "previousStatus": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "meal": {
+            "type": [
+              "object",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "cancelled",
+          "alreadyCancelled",
+          "alreadyAbsent",
+          "entryId",
+          "previousStatus",
+          "meal"
+        ],
+        "additionalProperties": false
+      },
+      "securitySchemes": [
+        {
+          "type": "oauth2",
+          "scopes": [
+            "daily-overview.food.write"
+          ]
+        }
+      ],
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "idempotentHint": true
+      },
+      "_meta": {
+        "securitySchemes": [
+          {
+            "type": "oauth2",
+            "scopes": [
+              "daily-overview.food.write"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "retry_uncertain_food",
+      "title": "Retry uncertain food log",
+      "description": "Use this when the user explicitly asks to retry one exact food entry whose status is uncertain, but only after Apple Health readback verifies that entry's nutrition samples are absent. Require its exact idempotency key and userConfirmed=true. This safely returns only that uncertain entry to the pending phone queue; it refuses claimed, written, failed, cancelled, or unidentified entries and never retries automatically because that could duplicate Apple Health samples.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "idempotencyKey": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100,
+            "description": "Exact stable key of the verified uncertain food log."
+          },
+          "userConfirmed": {
+            "type": "boolean",
+            "const": true,
+            "description": "Set true only after the user asks to retry this exact uncertain entry and Apple Health readback shows its samples are absent."
+          }
+        },
+        "required": [
+          "idempotencyKey",
+          "userConfirmed"
+        ],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "retried": {
+            "type": "boolean"
+          },
+          "alreadyPending": {
+            "type": "boolean"
+          },
+          "entryId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "previousStatus": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "meal": {
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "nextStep": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "retried",
+          "alreadyPending",
+          "entryId",
+          "previousStatus",
+          "status",
+          "meal",
+          "nextStep"
+        ],
+        "additionalProperties": false
+      },
+      "securitySchemes": [
+        {
+          "type": "oauth2",
+          "scopes": [
+            "daily-overview.food.write"
+          ]
+        }
+      ],
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "idempotentHint": true
+      },
+      "_meta": {
+        "securitySchemes": [
+          {
+            "type": "oauth2",
+            "scopes": [
+              "daily-overview.food.write"
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

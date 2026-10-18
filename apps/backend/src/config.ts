@@ -29,6 +29,7 @@ export interface BackendConfig {
   proactiveEnabled: boolean;
   proactiveTodoWritesEnabled: boolean;
   proactiveAlertsEnabled: boolean;
+  healthUploadEnabled: boolean;
   phone?: {
     acsEndpoint: string;
     acsResourceId: string;
@@ -221,6 +222,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BackendConfig 
   if (dailySetting !== undefined && dailySetting !== 'true' && dailySetting !== 'false') {
     throw new ConfigurationError('JARVIS_DAILY_ENABLED must be true or false');
   }
+  const healthUploadSetting = env.JARVIS_HEALTH_UPLOAD_ENABLED;
+  if (healthUploadSetting !== undefined && healthUploadSetting !== 'true' && healthUploadSetting !== 'false') {
+    throw new ConfigurationError('JARVIS_HEALTH_UPLOAD_ENABLED must be true or false');
+  }
   const auth = loadAuthConfig(env);
 
   return {
@@ -248,6 +253,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BackendConfig 
     proactiveEnabled: env.JARVIS_PROACTIVE_ENABLED === 'true',
     proactiveTodoWritesEnabled: env.JARVIS_PROACTIVE_TODO_WRITES_ENABLED === 'true',
     proactiveAlertsEnabled: env.JARVIS_PROACTIVE_ALERTS_ENABLED === 'true',
+    healthUploadEnabled: healthUploadSetting === 'true',
     ...(phone ? { phone } : {}),
     ...(dailySetting === 'true' ? { dailyEnabled: true as const } : {}),
   };

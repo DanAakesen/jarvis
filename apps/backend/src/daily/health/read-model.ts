@@ -28,7 +28,10 @@ export class DailyHealthReadModel {
         FROM daily.health_sync_feeds WHERE owner_object_id=@owner AND feed_kind IN(N'metrics',N'workouts');`, bounded)).recordset;
       const heartbeat = (await healthSqlQuery(request(), 'SELECT last_received_at FROM daily.health_phone_sync_state WHERE owner_object_id=@owner AND id=1;', bounded)).recordset[0] ?? null;
       const inbox = (await healthSqlQuery(request(), `SELECT COUNT(*) AS retained,
+        COALESCE(SUM(CASE WHEN processing_status='pending' THEN 1 ELSE 0 END),0) AS accepted,
         COALESCE(SUM(CASE WHEN processing_status='pending' THEN 1 ELSE 0 END),0) AS pending,
+        COALESCE(SUM(CASE WHEN processing_status='processing' THEN 1 ELSE 0 END),0) AS processing,
+        COALESCE(SUM(CASE WHEN processing_status='processed' THEN 1 ELSE 0 END),0) AS succeeded,
         COALESCE(SUM(CASE WHEN processing_status='quarantined' THEN 1 ELSE 0 END),0) AS quarantined,
         MAX(accepted_at) AS last_accepted_at,MAX(CASE WHEN kind='upload' THEN processed_at END) AS last_processed_upload_at FROM daily.health_upload_inbox WHERE owner_object_id=@owner;`, bounded)).recordset[0];
       return { feeds, heartbeat, inbox }; // Heartbeat is distinct and cannot establish a processed feed timestamp.

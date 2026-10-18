@@ -107,6 +107,12 @@ describe('Daily overview', () => {
     await settled();
     expect(row('Sync evidence').getByText('Has records')).toBeTruthy();
   });
+  it('links to Health Auto Export settings only when all visible health collections are empty', async () => {
+    fixture({ answer: query => jsonResponse(dailyFixture(query, query.source === sources.sync ? [emptySync] : [])) });
+    render(home());
+    await settled();
+    expect(screen.getByRole('link', { name: 'Set up Health Auto Export in Settings' }).getAttribute('href')).toBe('/settings#health-upload');
+  });
   it('shows an availability loader until the backend answers', async () => {
     const hold = gate();
     const f = fixture({ capabilities: async () => { await hold.opened; return capabilityList(); } });
@@ -306,16 +312,16 @@ describe('Daily overview', () => {
       jsonResponse(dailyFixture(query, state === 'populated' ? items(query) : [])) });
     render(home());
     await settled();
-    expect(screen.getByRole('link', { name: 'Settings, Health upload' }).getAttribute('href')).toBe('/settings#health-upload');
+    expect(screen.getByRole('link', { name: 'Set up Health Auto Export in Settings' }).getAttribute('href')).toBe('/settings#health-upload');
     state = 'failed';
     fireEvent.click(screen.getByRole('button', { name: 'Refresh overview' }));
     await screen.findByRole('button', { name: 'Retry Measurements' });
     await settled();
-    expect(screen.queryByRole('link', { name: 'Settings, Health upload' })).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Set up Health Auto Export in Settings' })).toBeNull();
     state = 'populated';
     fireEvent.click(screen.getByRole('button', { name: 'Refresh overview' }));
     await waitFor(() => expect(row('Measurements').getByText('Has records')).toBeTruthy());
-    expect(screen.queryByRole('link', { name: 'Settings, Health upload' })).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Set up Health Auto Export in Settings' })).toBeNull();
   });
   it('keeps keyboard order as refresh, section cards, collection actions and the data disclosure', async () => {
     fixture({ answer: query => jsonResponse(dailyFixture(query)) });
@@ -338,7 +344,7 @@ describe('Daily overview', () => {
     await user.keyboard('{Enter}');
     expect(open).toHaveBeenCalledWith(sources.sync);
     await user.tab();
-    expect(document.activeElement).toBe(screen.getByRole('link', { name: 'Settings, Health upload' }));
+    expect(document.activeElement).toBe(screen.getByRole('link', { name: 'Set up Health Auto Export in Settings' }));
     await user.tab();
     expect(document.activeElement).toBe(screen.getByText('About this data'));
     await user.click(screen.getByText('About this data'));

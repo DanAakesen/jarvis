@@ -37,6 +37,7 @@ const limits = JSON.parse(readFileSync(
 
 const dailyToolNames = [
   'daily_query', 'daily_show', 'daily_food', 'daily_food_review', 'daily_saved_food', 'daily_nutrition_targets', 'daily_nutrition_suggest',
+  'daily_health_summary', 'daily_nutrition_history', 'daily_coach_status',
 ];
 const proactiveToolNames = ['proactive_recent_items'];
 const proactiveOwner = '11111111-1111-4111-8111-111111111111';
@@ -128,8 +129,8 @@ describe('production tool catalogue', () => {
     const onNames = createToolRegistry(on).list().map(({ name }) => name);
     const offNames = createToolRegistry(off).list().map(({ name }) => name);
 
-    expect(offNames).toHaveLength(116);
-    expect(onNames).toHaveLength(117);
+    expect(offNames).toHaveLength(119);
+    expect(onNames).toHaveLength(120);
     expect(onNames.filter((name) => !proactiveToolNames.includes(name))).toEqual(offNames);
     expect(on.find(({ id }) => id === 'proactive')!.tools.map(({ name }) => name)).toEqual(proactiveToolNames);
     expect(off.some(({ id }) => id === 'proactive')).toBe(false);

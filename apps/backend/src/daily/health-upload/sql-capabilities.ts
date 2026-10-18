@@ -21,7 +21,7 @@ export async function readSqlHealthCapability(context: sql.ConnectionPool | sql.
     'SELECT owner_object_id,device_id,can_ingest,can_heartbeat,expires_at,revoked,replacement_reference FROM daily.health_upload_capabilities WHERE owner_object_id=@owner AND token_hash=@reference;',signal);
   return result.recordset[0];
 }
-/** Inactive operator library. Only its read-only verifier is passed to the upload routes. */
+/** Owner-scoped SQL credential lifecycle. Only the verifier and guarded owner routes are composed. */
 export class SqlHealthCapabilities {
   readonly owner: string;
   constructor(private readonly pool: sql.ConnectionPool,configuredOwner: string,private readonly now: () => number = Date.now) {
@@ -79,6 +79,53 @@ export class SqlHealthCapabilities {
       .input('heartbeat',sql.Bit,row.permissions.includes('health-heartbeat')).input('expires',sql.DateTime2(3),new Date(row.expiresAt)),
       'INSERT daily.health_upload_capabilities(owner_object_id,token_hash,device_id,can_ingest,can_heartbeat,expires_at,revoked) VALUES(@owner,@reference,@device,@ingest,@heartbeat,@expires,0);',signal);
     return { state: 'issued' as const };
+  }
+  private async activeRecord(tx: sql.Transaction,signal: AbortSignal) {
+    return (await healthSqlQuery(new sql.Request(tx).input('owner',sql.UniqueIdentifier,this.owner).input('now',sql.DateTime2(3),new Date(this.now())),
+      'SELECT TOP(1) token_hash,owner_object_id,device_id,can_ingest,can_heartbeat,expires_at,revoked,replacement_reference FROM daily.health_upload_capabilities WHERE owner_object_id=@owner AND revoked=0 AND expires_at>@now ORDER BY expires_at DESC,token_hash DESC;',signal)).recordset[0] as Record<string,unknown> | undefined;
+  }
+  async status(signal: AbortSignal) {
+    const active = (await healthSqlQuery(this.pool.request().input('owner',sql.UniqueIdentifier,this.owner).input('now',sql.DateTime2(3),new Date(this.now())),
+      'SELECT TOP(1) expires_at FROM daily.health_upload_capabilities WHERE owner_object_id=@owner AND revoked=0 AND expires_at>@now ORDER BY expires_at DESC,token_hash DESC;',signal)).recordset[0];
+    if (active?.expires_at instanceof Date) return { state: 'active' as const,expiresAt: active.expires_at.toISOString() };
+    const row = (await healthSqlQuery(this.pool.request().input('owner',sql.UniqueIdentifier,this.owner),
+      'SELECT TOP(1) expires_at,revoked FROM daily.health_upload_capabilities WHERE owner_object_id=@owner ORDER BY expires_at DESC,token_hash DESC;',signal)).recordset[0];
+    if (!row) return { state: 'empty' as const,expiresAt: null };
+    const expiresAt = row.expires_at instanceof Date ? row.expires_at.toISOString() : null;
+    if (!expiresAt) throw new HealthDenied();
+    return { state: row.revoked === true ? 'revoked' as const : Date.parse(expiresAt) <= this.now() ? 'expired' as const : 'active' as const,expiresAt };
+  }
+  create(operation: PreparedHealthCapability,signal: AbortSignal) {
+    const row = this.record(operation);
+    return this.mutate(signal,async (tx,bounded) => {
+      if (await this.activeRecord(tx,bounded)) throw new HealthConflict();
+      return this.issueRecord(tx,operation,row,bounded);
+    });
+  }
+  rotateCurrent(replacement: PreparedHealthCapability,signal: AbortSignal) {
+    const next = this.record(replacement);
+    return this.mutate(signal,async (tx,bounded) => {
+      const row = await this.activeRecord(tx,bounded);
+      if (!row) throw new HealthConflict();
+      const oldId = reference(String(row.token_hash));
+      const old = sqlHealthCapability(row);
+      if (old.deviceId !== next.deviceId || next.permissions.some(scope => !old.permissions.includes(scope)) ||
+          oldId === replacement.reference || row.replacement_reference !== null) throw new HealthConflict();
+      await healthSqlQuery(new sql.Request(tx).input('owner',sql.UniqueIdentifier,this.owner).input('old',sql.Char(64),oldId)
+        .input('next',sql.Char(64),replacement.reference),
+      'UPDATE daily.health_upload_capabilities SET revoked=1,replacement_reference=@next WHERE owner_object_id=@owner AND token_hash=@old AND revoked=0;',bounded);
+      return this.issueRecord(tx,replacement,next,bounded);
+    });
+  }
+  revokeCurrent(signal: AbortSignal) {
+    return this.mutate(signal,async (tx,bounded) => {
+      const row = await this.activeRecord(tx,bounded);
+      if (!row) return { state: 'not-found' as const };
+      const id = reference(String(row.token_hash));
+      await healthSqlQuery(new sql.Request(tx).input('owner',sql.UniqueIdentifier,this.owner).input('reference',sql.Char(64),id),
+        'UPDATE daily.health_upload_capabilities SET revoked=1 WHERE owner_object_id=@owner AND token_hash=@reference AND revoked=0;',bounded);
+      return { state: 'revoked' as const };
+    });
   }
   issue(operation: PreparedHealthCapability,signal: AbortSignal) {
     const row = this.record(operation);

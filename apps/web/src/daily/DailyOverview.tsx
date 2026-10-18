@@ -75,6 +75,9 @@ export function DailyOverview({ backendUrl, getAccessToken, capabilities, onRetr
   }, [rows]);
   const refreshVersion = useContext(DailyRefreshContext);
   const summary = rows.length > 0 && !pending ? overviewSummary(rows.map(row => row.probe)) : '';
+  const healthSources: readonly DailySourceId[] = [sources.metrics,sources.sleep,sources.workouts,sources.sync];
+  const healthRows = rows.filter(row => healthSources.includes(row.source.id));
+  const healthIsEmpty = !pending && healthRows.length > 0 && healthRows.every(row => row.probe?.state === 'none');
   const refreshOverview = () => {
     if (pending) return;
     reload();
@@ -87,8 +90,6 @@ export function DailyOverview({ backendUrl, getAccessToken, capabilities, onRetr
     available.includes(sources.metrics) && available.includes(sources.metricCatalog) ||
     available.includes(sources.sleep) ||
     available.includes(sources.briefs) && available.includes(sources.brief);
-  const healthRows = rows.filter(row => [sources.metrics, sources.sleep, sources.workouts].some(id => id === row.source.id));
-  const noHealthRecords = !pending && healthRows.length > 0 && healthRows.every(row => row.probe?.state === 'none');
   return <section className={`daily-page daily-overview${embedded ? ' daily-overview-embedded' : ''}`} aria-labelledby="daily-heading" ref={root}>
     <header className="daily-heading">
       {!embedded && <div>
@@ -117,8 +118,8 @@ export function DailyOverview({ backendUrl, getAccessToken, capabilities, onRetr
               <ul className="daily-overview-list" aria-labelledby="daily-holds-heading">
                 {rows.map(row => <OverviewRow key={row.source.id} row={row} onOpen={onOpen} onRetry={reload} />)}
               </ul>
-              {noHealthRecords && <p className="daily-empty">No health records returned in the last 7 days.
-                {' '}<Link to="/settings#health-upload">Settings, Health upload</Link></p>}
+              {healthIsEmpty && <p className="daily-empty">No health records returned in the last 7 days.
+                {' '}<Link to="/settings#health-upload">Set up Health Auto Export in Settings</Link></p>}
               <DataNotes>
                 <p>Coverage checks read one record per collection. Dated collections cover the last 7 days (Europe/Copenhagen);
                   other collections are not limited to a period. No records in this period does not prove the original source is empty.</p>
