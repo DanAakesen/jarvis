@@ -40,6 +40,13 @@ describe('Daily phone stat layouts', () => {
     expect(css).toMatch(/\.daily-section-nav::-webkit-scrollbar\s*\{\s*display:\s*none;/u);
   });
 
+  it('wraps complete Data record labels and values in phone summaries', () => {
+    const css = readFileSync('src/daily/sections/data/data.css', 'utf8');
+    expect(css).toMatch(/\.daily-record-summary\s*\{[^}]*display:\s*grid;/u);
+    expect(css).toMatch(/\.daily-record-summary\s*>\s*span\s*\{[^}]*overflow-wrap:\s*anywhere;/u);
+    expect(css).not.toMatch(/\.daily-record-summary\s*>\s*span\s*\{[^}]*(?:text-overflow:\s*ellipsis|white-space:\s*nowrap|overflow:\s*hidden)/u);
+  });
+
   it('keeps Briefs history rows content-sized with a boundary and explicit interaction states', () => {
     const css = readFileSync('src/daily/sections/briefs/briefs.css', 'utf8');
     expect(css).not.toMatch(/\.daily-brief-list\s*\{[^}]*grid-auto-rows/u);
@@ -72,7 +79,7 @@ describe('Daily phone stat layouts', () => {
     for (const file of stylesheets) {
       const source = readFileSync(file, 'utf8').replace(/\/\*[\s\S]*?\*\//gu, '');
       for (const [, value] of source.matchAll(/(?:^|[;{])\s*width\s*:\s*([^;{}]+)\s*(?=[;}])/gu)) {
-        const declaration = value.trim();
+        const declaration = value?.trim() ?? '';
         const pixels = [...declaration.matchAll(/(\d+(?:\.\d+)?)px/gu)].map(([, number]) => Number(number));
         if (pixels.some(number => number > 320)) {
           expect(declaration, file).toMatch(/\b(?:min|max)\s*\(/iu);

@@ -12,8 +12,8 @@
 .daily-record-cards > li + li { border-block-start: 1px solid var(--rule); }
 .daily-record-cards h3 { margin: 0; font-size: var(--type-body); overflow-wrap: anywhere; }
 .daily-record-cards .daily-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-block: var(--space-3); }
-.daily-record-summary { display: flex; gap: var(--space-3); margin-block: var(--space-2); font-size: var(--type-small); color: var(--text-muted); }
-.daily-record-summary > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.daily-record-summary { display: grid; gap: var(--space-1); margin-block: var(--space-2); font-size: var(--type-small); color: var(--text-muted); }
+.daily-record-summary > span { min-width: 0; overflow-wrap: anywhere; }
 .daily-record-panel { margin-top: var(--space-5); padding-block: var(--space-4); border-block: 1px solid var(--rule); }
 .daily-record-panel:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 .daily-record-panel-heading { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: var(--space-3); }

@@ -1680,7 +1680,8 @@ Data uses one kit section header and a collection/refresh toolbar with a compact
 freshness line. Applied-period, processing and completeness evidence stays in
 “Source, units and coverage.” Wide screens use the sticky-first-column kit table;
 below 700px the same records become compact cards with a date/name heading,
-two-field summary and remaining facts. Long table text is ellipsized, with full
+two-field summary and remaining facts; each summary label/value pair stacks and
+wraps so recorded values remain visible. Long table text is ellipsized, with full
 values in a focused, labelled inline detail region. Closing or Escape restores
 focus and scrolls the opener into view. Raw JSON is secondary, behind “Raw record.”
 Null fields read “Not recorded”; recorded zero remains zero and units stay explicit.

@@ -58,6 +58,15 @@ describe('Daily Data records', () => {
     expect(screen.queryByRole('list', { name: 'Daily records' })).toBeNull();
   });
 
+  it('keeps long recorded values intact in phone summaries', () => {
+    const longValue = 'Synthetic value '.repeat(12);
+    vi.stubGlobal('matchMedia', vi.fn(() => ({
+      matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn(),
+    })));
+    const { container } = render(<DataRecords source={sources.meals} rows={[{ ...row, energy_kcal: longValue }]} />);
+    expect(container.querySelector('.daily-record-summary')?.textContent).toContain(longValue);
+  });
+
   it('keeps the selected record through refresh/reordering and recovers focus if it disappears', async () => {
     const original = { metric_date: '2026-10-17', metric_name: 'synthetic_mass', value: 0, unit: 'kg', notes: 'Original synthetic detail' };
     const rendered = render(<DataRecords source={sources.metrics} rows={[original]} />);
