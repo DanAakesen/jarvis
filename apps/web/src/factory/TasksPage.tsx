@@ -628,11 +628,11 @@ export function TasksPage({ backendUrl, getAccessToken }: Props) {
           </div>
           {createError && <p className="tasks-feedback" role="alert">{createError}</p>}
           <div className="task-dialog-actions button-group">
+            <button className="secondary-button" type="button" onClick={closeDialog} disabled={creating}>Cancel</button>
             <button className="primary-button" type="submit" disabled={creating || !backendUrl} aria-busy={creating || undefined} aria-label={creating ? 'Creating task…' : undefined}>
               <span className="button-label">Create task</span>
               {creating && <span className="button-loading-indicator" aria-hidden="true"><Loader variant="inline" announce={false} label="Creating task…" /></span>}
             </button>
-            <button className="secondary-button" type="button" onClick={closeDialog} disabled={creating}>Cancel</button>
           </div>
         </form>
     </Modal>

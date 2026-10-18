@@ -117,7 +117,10 @@ describe('app-wide control contract', () => {
         if (!selectors!.includes(':focus-visible')) expect(declarations, selectors).not.toMatch(/outline\s*:/);
       }
     }
-    expect(source).toContain('.primary-button:focus-visible, .secondary-button:focus-visible, .ghost-button:focus-visible, .danger-button:focus-visible');
+    expect(source).toContain('.primary-button:focus-visible');
+    expect(source).toContain('.secondary-button:focus-visible');
+    expect(source).toContain('.ghost-button:focus-visible');
+    expect(source).toContain('.danger-button--filled:focus-visible');
     expect(source).toContain('.workspace-tab-close:focus-visible, .workspace-tab-pin:focus-visible');
     expect(source).toContain('.primary-button[aria-busy="true"] > .button-label');
     expect(source).toContain('.primary-button[aria-busy="true"] > .button-loading-indicator');
@@ -128,7 +131,7 @@ describe('app-wide control contract', () => {
 
   it('provides wrapping action groups with consistent responsive button targets', () => {
     expect(source).toContain('.button-group, .settings-actions, .task-dialog-actions, .action-row');
-    expect(source).toContain('.button-group > .primary-button');
+    expect(source).toContain('.button-group > :is(button, a), .settings-actions > :is(button, a), .task-dialog-actions > :is(button, a),');
     expect(source).toContain('.workspace-view-content .task-window-actions, .workspace-view-content .timeline-artifacts { padding-top: var(--space-3); }');
     expect(source).toContain('@media (max-width: 700px) {\n  .button-group, .settings-actions, .task-dialog-actions, .settings-save');
     expect(source).toContain('width: 100%; max-width: 100%;');
@@ -199,12 +202,62 @@ describe('app-wide control contract', () => {
     expect(ruleDeclaration(proactive, /\.proactive-page \[role="alert"\]\s*\{([^}]*)\}/, 'border')).toBe('1px solid var(--rule)');
   });
 
+  it('keeps action group order in markup and the deployment form gap at 10px', () => {
+    const actionGroups = ['button-group', 'settings-actions', 'task-dialog-actions', 'action-row', 'settings-save'];
+    const rules = [...source.matchAll(/([^{}]+)\{([^{}]*)\}/g)];
+    for (const [, selectors, declarations] of rules) {
+      if (actionGroups.some((name) => new RegExp(`\\.${name}(?![\\w-])`).test(selectors!))) {
+        expect(declarations).not.toMatch(/(?:^|;)\s*order\s*:/);
+      }
+    }
+
+    expect(ruleDeclaration(source, /\.deployment-add\s*\{([^}]*)\}/, 'row-gap')).toBe('10px');
+  });
+
+  it('keeps primary actions after sibling controls in shared action groups', () => {
+    const classes = new Set(['button-group', 'settings-actions', 'task-dialog-actions', 'action-row', 'settings-save']);
+    const violations: string[] = [];
+
+    const visit = (directory: string) => {
+      for (const entry of readdirSync(directory, { withFileTypes: true })) {
+        const path = join(directory, entry.name);
+        if (entry.isDirectory()) {
+          visit(path);
+        } else if (entry.isFile() && entry.name.endsWith('.tsx') && !entry.name.includes('.test.')) {
+          const component = readFileSync(path, 'utf8');
+          const groupOpenings = /<div\b[^>]*className=(?:"([^"]*)"|{`([^`]*)`})[^>]*>/g;
+          for (const match of component.matchAll(groupOpenings)) {
+            const groupClasses = (match[1] ?? match[2] ?? '').split(/\s+/);
+            if (!groupClasses.some((name) => classes.has(name))) continue;
+
+            const start = match.index! + match[0].length;
+            const close = matchingDivClose(component, match.index!, match[0].length);
+            const controls = [...component.slice(start, close).matchAll(/<(?:button|a)\b[^>]*>/g)];
+            if (controls.length < 2) continue;
+
+            const primaryIndex = controls.findIndex(([control]) =>
+              /className=(?:"[^"]*\b(?:primary-button|danger-button--filled)\b[^"]*"|{[^}]*\b(?:primary-button|danger-button--filled)\b[^}]*})/.test(control));
+            if (primaryIndex !== -1 && primaryIndex !== controls.length - 1) {
+              violations.push(`${path}: primary action precedes another control in .${groupClasses.find((name) => classes.has(name))}`);
+            }
+          }
+        }
+      }
+    };
+    visit('src');
+
+    expect(violations).toEqual([]);
+  });
+
   it('removes decorative control rims without removing neutral field structure or focus', () => {
     for (const selector of [
-      /\.primary-button, \.secondary-button, \.ghost-button, \.danger-button\s*\{([^}]*)\}/,
       /\.kanban-card-action\s*\{([^}]*)\}/,
       /\.release-trail-button, \.release-trail-open\s*\{([^}]*)\}/,
     ]) expect(ruleDeclaration(source, selector, 'border')).toBe('0');
+    expect(ruleDeclaration(source, /\.primary-button, \.secondary-button, \.ghost-button, \.danger-button\s*\{([^}]*)\}/, 'border'))
+      .toBe('1px solid transparent');
+    expect(source).toContain('border-color: color-mix(in srgb, var(--primary-action) 54%, var(--highlight-solid));');
+    expect(source).toContain('border-color: var(--control-rule); background: color-mix(in srgb, var(--text) 6%, var(--surface)); color: var(--text);');
     const controlRule = /([^{}]+)\{([^{}]*)\}/g;
     for (const [, selectors, declarations] of source.matchAll(controlRule)) {
       if (!/(?:settings-back|signin-button|kanban-card-action|release-trail-button|release-trail-open|presence-mode-card|memory-item|knowledge-reset|knowledge-legend|usage-segmented|advanced-segmented)/.test(selectors!)) continue;
@@ -212,10 +265,27 @@ describe('app-wide control contract', () => {
     }
     expect(ruleDeclaration(source, /\.knowledge-search\.luminous-glass\s*\{([^}]*)\}/, 'border-color')).toBe('var(--control-rule)');
     expect(ruleDeclaration(source, /\.signin-button\.luminous-glass::before\s*\{([^}]*)\}/, 'content')).toBe('none');
-    expect(source).toContain('.primary-button:focus-visible, .secondary-button:focus-visible, .ghost-button:focus-visible, .danger-button:focus-visible');
+    expect(source).toContain('.primary-button:focus-visible');
+    expect(source).toContain('.danger-button--filled:focus-visible');
     expect(source).toContain('.knowledge-search:has(input:focus-visible) { outline: 3px solid var(--focus);');
     expect(source).toContain('.folio-search:has(input:focus-visible) { outline: 3px solid var(--focus);');
   });
+
+  function matchingDivClose(source: string, openingIndex: number, openingLength: number): number {
+    const tags = /<\/?div\b[^>]*>/g;
+    tags.lastIndex = openingIndex + openingLength;
+    let depth = 1;
+    for (const match of source.matchAll(tags)) {
+      const tag = match[0];
+      if (tag.startsWith('</')) {
+        depth -= 1;
+        if (depth === 0) return match.index!;
+      } else if (!tag.endsWith('/>')) {
+        depth += 1;
+      }
+    }
+    throw new Error(`No closing div for opening at ${openingIndex} (${openingLength} characters)`);
+  }
 
   it('draws slim arrowless desktop scrollbars and keeps the glass ring from adding phantom ones', () => {
     expect(ruleDeclaration(source, /\* \{ (scrollbar-width: thin;[^}]*)\}/, 'scrollbar-width')).toBe('thin');
@@ -257,6 +327,42 @@ describe('app-wide control contract', () => {
     expect(source).toContain('.folio-action { width: 44px; height: 44px; }');
     expect(source).toContain('.release-trail-button { width: 44px; min-height: 44px; }');
     expect(source).toContain('.app-shell[data-phone="true"] .knowledge-legend button { min-height: 44px;');
+  });
+
+  it('keeps fields and choice controls on the shared tokenized system', () => {
+    const sharedFields = source.match(/\/\* P14-08: one shared field and choice-control system across application routes\. \*\/([\s\S]*)$/)?.[1] ?? '';
+    const taskDetail = readFileSync('src/factory/TaskDetailPage.tsx', 'utf8');
+    const notes = readFileSync('src/notes/NotesArea.tsx', 'utf8');
+    const noteFolders = readFileSync('src/notes/NoteFolderPicker.tsx', 'utf8');
+    const coarsePointerFields = sharedFields.match(/@media \(pointer: coarse\) \{([\s\S]*?)\n\}/)?.[1] ?? '';
+    expect(sharedFields).toContain('var(--control-rule)');
+    expect(sharedFields).toContain('var(--radius-control)');
+    expect(sharedFields).toContain('var(--surface)');
+    expect(sharedFields).toContain('var(--type-body)');
+    expect(sharedFields).toContain('var(--focus)');
+    expect(sharedFields).toContain('min-height: 38px;');
+    expect(sharedFields).toContain('min-height: 120px;');
+    expect(sharedFields).toContain('resize: vertical;');
+    expect(sharedFields).toMatch(/:focus-visible/);
+    expect(sharedFields).toMatch(/:disabled/);
+    expect(sharedFields).toMatch(/:read-only/);
+    expect(sharedFields).toMatch(/\[aria-invalid="true"\]/);
+    expect(sharedFields).toMatch(/\[aria-busy="true"\]/);
+    expect(sharedFields).toMatch(/:autofill/);
+    expect(coarsePointerFields).toContain(':not([type="file"]):not([type="hidden"])');
+    expect(coarsePointerFields).toContain('min-height: 44px;');
+    expect(coarsePointerFields).toContain('min-height: 120px;');
+    expect(coarsePointerFields).toContain('font-size: 16px;');
+    expect(coarsePointerFields).toContain('.app-shell .composer textarea');
+    expect(sharedFields).toMatch(/\.app-shell :is\(\.knowledge-search input, \.folio-search input\)\s*\{\s*min-height: 38px;\s*font: var\(--type-body\)\/var\(--line-body\) var\(--font-body\);/);
+    expect(sharedFields).toContain('.form-control');
+    expect(sharedFields).toContain('background-size: 5px 5px;');
+    expect(ruleDeclaration(source, /\.form-control\s*\{([^}]*)\}/, 'border-radius')).toBe('var(--radius-control)');
+    expect(sharedFields).toContain('input[role="switch"]::after');
+    expect(sharedFields).toContain('accent-color: var(--focus);');
+    expect(taskDetail).toContain('className="task-timeline-filter form-control"');
+    expect(notes).toContain('className="form-control" placeholder="Note title"');
+    expect(noteFolders).toContain('className="form-control" value={name}');
   });
 });
 

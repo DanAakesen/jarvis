@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { FindingsStoredContext } from './engine.js';
 import { createMemoryAlertLedgerStore } from './alert-ledger.js';
@@ -7,7 +7,8 @@ import { createMemoryProactiveStore } from './store.js';
 import { createTodoReminderPlanner, reminderDedupeKey, reminderKey, reminderTitle } from './reminders.js';
 import { createReminderTicker } from './reminder-ticker.js';
 import { dayKey, localDateTimeInstant, localTimeLabel } from './time.js';
-import { deterministicDedupeKey } from './detect.js';
+import { detectFindings, deterministicDedupeKey } from './detect.js';
+import { createTodosSource } from './sources/todos.js';
 import { proactiveAlertKey } from './alerts.js';
 import { buildPushPayload } from './push-delivery.js';
 import type { SystemPushOutcome, SystemPushRequest } from './push-delivery.js';
@@ -83,8 +84,8 @@ function fixture(options: {
   vi.spyOn(reminders, 'countSent');
   vi.spyOn(reminders, 'updatePending');
   const vault = {
-    tree: vi.fn(async () => [{ path: 'tasks.md', sha: '0'.repeat(40) }]),
-    read: vi.fn(async () => ({ path: 'tasks.md', sha: '0'.repeat(40), content })),
+    tree: vi.fn(async () => [{ path: 'tasks.md', sha: createHash('sha1').update(content).digest('hex') }]),
+    read: vi.fn(async () => ({ path: 'tasks.md', sha: createHash('sha1').update(content).digest('hex'), content })),
   };
   const pushStore = {
     listSubscriptions: vi.fn(async () => options.subscriptions ?? [subscription]),
@@ -268,6 +269,92 @@ describe('todo reminder planning', () => {
 });
 
 describe('todo reminder ticker', () => {
+  it('plans one native-marker reminder and P1 finding across duplicate notes and moves without re-firing', async () => {
+    const at = localDateTimeInstant('2031-04-09', '13:00');
+    const f = fixture({ at });
+    const content = '- [ ] Synthetic personal task 🕒 14:00 ⏫ 📅 2031-04-09';
+    let paths = ['Personal/Inbox.md', 'Work/Inbox.md', 'Personal/Archive/Old.md'];
+    f.vault.tree.mockImplementation(async () => paths.map((path) => ({ path, sha: 'a'.repeat(40) })));
+    f.vault.read.mockImplementation(async (path) => ({ path, sha: 'a'.repeat(40), content }));
+    const source = createTodosSource(f.vault);
+    const read = async () => source.read({
+      now: f.now(), signal: new AbortController().signal, settings: await f.store.settings.read(),
+    });
+    const result = await read();
+    const facts = result.facts.map((value) => ({ ...value, source: 'todos' as const }));
+    expect(facts).toHaveLength(1);
+    expect(facts[0]).toMatchObject({
+      text: 'Synthetic personal task', dueAt: localDateTimeInstant('2031-04-09', '14:00').toISOString(),
+    });
+    expect(detectFindings(facts, at, 'en')).toHaveLength(1);
+    const planner = createTodoReminderPlanner({
+      store: f.store, reminders: f.reminders, now: f.now, onPlanned: f.ticker.considerFireAt,
+    });
+    await planner(context(facts, { now: at }));
+    await f.ticker.start();
+    paths = ['Personal/Projects/Source.md'];
+    await f.ticker.tick();
+    expect(f.send).toHaveBeenCalledOnce();
+    expect(f.reminders.snapshot()).toHaveLength(1);
+    expect(f.reminders.snapshot()[0]).toMatchObject({ state: 'sent' });
+    expect(f.vault.read).toHaveBeenCalledTimes(3);
+
+    paths = ['Work/Projects/Source.md'];
+    const moved = await read();
+    await planner(context(moved.facts.map((value) => ({ ...value, source: 'todos' as const })), { now: at }));
+    await f.ticker.tick();
+    expect(f.send).toHaveBeenCalledOnce();
+    expect(f.reminders.snapshot()).toHaveLength(1);
+    expect(f.store.items.upsertFinding).toHaveBeenCalledOnce();
+  });
+
+  it('creates no finding or reminder for lower-priority, completed or archived native tasks', async () => {
+    const f = fixture({ at: localDateTimeInstant('2031-04-09', '13:00') });
+    const notes = {
+      'Personal/Inbox.md': [
+        '- [ ] Synthetic lower 🕒 14:00 🔼 📅 2031-04-09',
+        '- [ ] Synthetic normal 🕒 14:00 📅 2031-04-09',
+        '- [ ] Synthetic outside scale 🕒 14:00 🔺 📅 2031-04-09',
+        '- [x] Synthetic completed 🕒 14:00 ⏫ 📅 2031-04-09',
+      ].join('\n'),
+      'Work/Archive/Old.md': '- [ ] Synthetic archived 🕒 14:00 ⏫ 📅 2031-04-09',
+    };
+    f.vault.tree.mockImplementation(async () => Object.keys(notes).map((path) => ({ path, sha: 'a'.repeat(40) })));
+    f.vault.read.mockImplementation(async (path) => ({ path, sha: 'a'.repeat(40), content: notes[path as keyof typeof notes] }));
+    const result = await createTodosSource(f.vault).read({
+      now: f.now(), signal: new AbortController().signal, settings: await f.store.settings.read(),
+    });
+    expect(result).toMatchObject({ state: 'ok', facts: [] });
+    expect(detectFindings(result.facts, f.now(), 'en')).toEqual([]);
+    await createTodoReminderPlanner({ store: f.store, reminders: f.reminders, now: f.now })(context([], { now: f.now() }));
+    await f.ticker.start();
+    await f.ticker.tick();
+    expect(f.reminders.snapshot()).toEqual([]);
+    expect(f.send).not.toHaveBeenCalled();
+    expect(f.vault.read).toHaveBeenCalledTimes(1);
+  });
+
+  it('makes only tree reads on subsequent due ticks when blob SHAs are unchanged', async () => {
+    const at = localDateTimeInstant('2031-04-09', '13:00');
+    const firstDue = localDateTimeInstant('2031-04-09', '14:00');
+    const nextDue = localDateTimeInstant('2031-04-09', '15:00');
+    const f = fixture({
+      at,
+      content: [
+        '- [ ] Synthetic first 🕒 14:00 ⏫ 📅 2031-04-09',
+        '- [ ] Synthetic next 🕒 15:00 ⏫ 📅 2031-04-09',
+      ].join('\n'),
+    });
+    await startWith(f, [planned('Synthetic first', firstDue), planned('Synthetic next', nextDue)]);
+    await f.ticker.tick();
+    expect(f.vault.read).toHaveBeenCalledTimes(1);
+    f.setNow(firstDue);
+    await f.ticker.tick();
+    expect(f.vault.tree).toHaveBeenCalledTimes(2);
+    expect(f.vault.read).toHaveBeenCalledTimes(1);
+    expect(f.send).toHaveBeenCalledTimes(2);
+  });
+
   it('does no idle reads, writes, vault work or network calls after its one startup read', async () => {
     const idle = fixture();
     await idle.ticker.start();

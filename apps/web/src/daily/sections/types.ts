@@ -21,5 +21,6 @@ export interface DailySectionDefinition {
   order: number;
   usesPeriod: boolean;
   requiredSources: readonly DailySourceId[];
+  isAvailable?: (sources: readonly DailySourceId[]) => boolean;
   Component: ComponentType<DailySectionProps>;
 }

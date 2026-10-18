@@ -227,13 +227,21 @@ planner runs for every trigger after the successful todo read. The ticker is
 constructed only when its vault, reminder store, alert ledger, push store and
 shared sender dependencies are available. It has no database, vault or push
 work while idle or during Copenhagen quiet hours. Reminder titles stay in
-private database rows; pushes and logs contain no todo text. Only open tasks with
-the explicit `priority:: P1 - High` or `priority: P1 - High` marker are eligible
-for task findings and reminders. The ticker cancels tasks that are no longer
+private database rows; pushes and logs contain no todo text. Open tasks from safe
+Markdown notes under `Personal/` and `Work/` (excluding Archive and hidden paths)
+plus the root task dashboard are eligible when marked `⏫`,
+`priority:: P1 - High` or `priority: P1 - High`. `🔺` is not high.
+`🕒 HH:mm` works before or after the due date in Copenhagen local time.
+Discovery shares path/SHA-cached parsed tasks between source and ticker, with
+256-file, 4-MiB-total, 256-KiB-per-file and four-concurrent-read limits under
+the existing 20-second abort. Exceeded bounds or partial reads are unavailable;
+unchanged SHAs need only the tree listing. Reminder keys exclude note paths.
+The writer still targets only the root dashboard and does not deduplicate
+suggestions against other notes. The ticker cancels tasks that are no longer
 high-priority and suppresses after repeated vault-verification failures.
 
 Focused synthetic checks:
-`npm test --workspace @jarvis/backend -- --run src/proactive/todo-file.test.ts src/proactive/sources/todos.test.ts src/proactive/reminders.test.ts src/proactive/composition.test.ts src/proactive/alerts.test.ts src/proactive/push-delivery.test.ts src/database/migrations.test.ts`,
+`npm test --workspace @jarvis/backend -- --run src/proactive/todo-file.test.ts src/proactive/todo-discovery.test.ts src/proactive/sources/todos.test.ts src/proactive/reminders.test.ts src/proactive/composition.test.ts src/proactive/alerts.test.ts src/proactive/push-delivery.test.ts src/database/migrations.test.ts`,
 `npm run build --workspace @jarvis/backend`, and
 `npm run lint --workspace @jarvis/backend`.
 The SQL store integration test is
@@ -1365,14 +1373,16 @@ noninteractive status, with genuine switches, orb/media and panel/window
 geometry as semantic exceptions. Do not add arbitrary route-specific radii,
 another token inventory, a theme, a component framework or a blanket reset.
 
-Quiet actions are borderless with existing `--glass-hover`/`--glass-pressed`
-feedback; primary actions keep `--primary-action`. Selected choices use the
-existing `--state-selected-*` surfaces/text, weight and semantic ARIA state.
-Do not reintroduce decorative coloured outlines, boxed/bevelled tab chrome,
-inset-shadow control borders or `--glass-selected-glow` on controls, including
-hover/pressed states. Preserve neutral `--control-rule` field boundaries and
-`--rule` structure, semantic error/success text/icons and `--focus` keyboard
-outlines. These are not decorative borders to remove.
+Non-button quiet actions are borderless with existing `--glass-hover`/
+`--glass-pressed` feedback. Selected choices use the existing
+`--state-selected-*` surfaces/text, weight and semantic ARIA state. Dan's direct
+instruction of 18 October 2026 supersedes the earlier button appearance limits:
+buttons use the P14-07 hierarchy in `DESIGN.md` and token-based tonal primary
+and danger fills with visible borders and restrained accent shadows. This
+exception applies to buttons only; do not add `--glass-selected-glow`, bevels or
+inset-shadow borders to buttons or other controls. Preserve neutral
+`--control-rule` field boundaries and `--rule` structure, semantic
+error/success text/icons and `--focus` keyboard outlines.
 
 Shared action levels are `.primary-button`, `.secondary-button`,
 `.ghost-button`, `.danger-button`, and `.danger-button--filled`. Use
