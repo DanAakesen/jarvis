@@ -71,10 +71,6 @@
   .body-sleep-shortcuts ul { display: flex; max-width: 100%; overflow-x: auto; scroll-snap-type: x proximity; }
   .body-sleep-shortcuts li { flex: 0 0 min(10rem, 65vw); scroll-snap-align: start; }
   .body-sleep-stage-breakdown ul { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .body-sleep-view .daily-chart-grid text, .body-sleep-view .daily-chart-xaxis text,
-  .body-sleep-view .daily-chart-target text, .body-sleep-view .daily-chart-active-point text {
-    font-size: calc(var(--type-small) * 2);
-  }
 }
 @media (max-width: 359px) {
   .body-sleep-picker, .body-sleep-detail dl { grid-template-columns: minmax(0, 1fr); }
