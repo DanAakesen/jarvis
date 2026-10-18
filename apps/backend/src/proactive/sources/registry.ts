@@ -1,10 +1,14 @@
 import type { ProactiveSource, SourceId } from '../types.js';
 import type { GoogleApiClient } from '../../google/api-client.js';
 import type { TaskStore } from '../../factory/task-store.js';
+import type { SettingsStore } from '../../core/settings.js';
 import type { createGitHubVaultClient } from '../../vault/github-client.js';
 import { createCalendarSource } from './calendar.js';
+import { createFactorySource } from './factory.js';
 import { createMailSource } from './mail.js';
+import { createTodosSource } from './todos.js';
 import { createTravelSource } from './travel.js';
+import { createWeatherSource } from './weather.js';
 
 type VaultClient = ReturnType<typeof createGitHubVaultClient>;
 
@@ -12,6 +16,7 @@ export interface SourceDependencies {
   googleApiClient?: GoogleApiClient;
   vaultClient?: VaultClient;
   taskStore?: TaskStore;
+  settingsStore?: SettingsStore;
 }
 
 const xSource: ProactiveSource = {
@@ -22,11 +27,15 @@ const xSource: ProactiveSource = {
   },
 };
 
-export function buildSourceRegistry(_dependencies: SourceDependencies): ProactiveSource[] {
-  const sources: ProactiveSource[] = [];
-  sources.push(createCalendarSource(_dependencies.googleApiClient));
-  sources.push(createMailSource(_dependencies.googleApiClient));
-  sources.push(createTravelSource(_dependencies.googleApiClient));
+export function buildSourceRegistry(dependencies: SourceDependencies): ProactiveSource[] {
+  const sources: ProactiveSource[] = [
+    createCalendarSource(dependencies.googleApiClient),
+    createFactorySource(dependencies.taskStore),
+    createMailSource(dependencies.googleApiClient),
+    createTodosSource(dependencies.vaultClient),
+    createTravelSource(dependencies.googleApiClient),
+    createWeatherSource(dependencies.settingsStore),
+  ];
   sources.push(xSource);
   return sources;
 }

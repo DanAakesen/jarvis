@@ -11,6 +11,8 @@ import type {
   TaskListFilters,
   TaskModelConfig,
   TaskModelUpdateResult,
+  ProactiveTaskSnapshot,
+  ProactiveTaskStatus,
   TaskRecord,
   TaskRuntimeVersion,
   TaskStore,
@@ -28,6 +30,12 @@ interface TaskRow extends Omit<TaskRecord, 'createdAt' | 'startedAt' | 'finished
   startedAt: Date | string | null;
   finishedAt: Date | string | null;
   nextAttemptAt: Date | string | null;
+}
+
+interface ProactiveTaskRow extends Omit<ProactiveTaskStatus, 'createdAt' | 'startedAt' | 'pullRequestOpenedAt'> {
+  createdAt: Date | string;
+  startedAt: Date | string | null;
+  pullRequestOpenedAt: Date | string | null;
 }
 
 interface EventRow extends Omit<TaskEventRecord, 'at' | 'payload'> {
@@ -652,6 +660,44 @@ export function createTaskStore(
       const { recordset } = await request.query<TaskRow>(`SELECT ${taskColumns} FROM dbo.tasks ${where}
         ORDER BY created_at DESC, dbo.tasks.id DESC OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY;`);
       return taskSummaries(pool, recordset.map(toTask));
+    },
+
+    async getProactiveSnapshot(): Promise<ProactiveTaskSnapshot> {
+      const running = await databaseReadRequest(pool)
+        .query<{ runningCount: number }>(`SELECT COUNT(*) AS runningCount
+          FROM dbo.tasks WHERE state = N'Running';`);
+      const { recordset } = await databaseReadRequest(pool)
+        .input('limit', sql.Int, 100)
+        .query<ProactiveTaskRow>(`WITH relevant_tasks AS (
+          SELECT TOP (@limit) CAST(t.id AS varchar(19)) AS id, p.name AS projectName,
+            p.policy AS projectPolicy, t.title, t.state, t.created_at AS createdAt,
+            t.started_at AS startedAt, pr.state AS pullRequestState,
+            pr.openedAt AS pullRequestOpenedAt, pr.checks,
+            (SELECT TOP (1) session.end_reason FROM dbo.sandbox_sessions AS session
+              WHERE session.task_id = t.id ORDER BY session.started_at DESC, session.id DESC)
+              AS latestSessionEndReason
+          FROM dbo.tasks AS t
+          INNER JOIN dbo.projects AS p ON p.id = t.project_id
+          OUTER APPLY (
+            SELECT TOP (1) state, checks, opened_at AS openedAt FROM dbo.pull_requests
+            WHERE task_id = t.id ORDER BY opened_at DESC, id DESC
+          ) AS pr
+          WHERE t.state = N'NeedsAttention'
+            OR (p.policy = N'deliver_pr' AND pr.state = N'open')
+          ORDER BY COALESCE(t.started_at, t.created_at), t.id
+        )
+        SELECT tasks.*
+        FROM relevant_tasks AS tasks
+        ORDER BY COALESCE(tasks.startedAt, tasks.createdAt), tasks.id;`);
+      return {
+        runningCount: running.recordset[0]?.runningCount ?? 0,
+        tasks: recordset.map((task) => ({
+          ...task,
+          createdAt: iso(task.createdAt) as string,
+          startedAt: iso(task.startedAt),
+          pullRequestOpenedAt: iso(task.pullRequestOpenedAt),
+        })),
+      };
     },
 
     async get(id: string, eventLimit: number, eventOffset: number): Promise<TaskDetail | null> {

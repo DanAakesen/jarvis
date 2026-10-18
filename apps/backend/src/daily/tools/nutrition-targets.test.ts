@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { FastifyRequest } from 'fastify';
 import { AuthenticationDenied } from '../../auth/verify.js';
 import { ToolFailure, ToolRefusal } from '../../core/tool-registry.js';
-import type { BrowserConfirmationDelivery, ConfirmationActionKind } from '../../teams/service.js';
+import type { BrowserConfirmationDelivery, ConfirmationActionKind } from '../../core/owner-interactions.js';
 import {
   emptyNutritionTargets, nutritionTargetBounds, nutritionTargetFields,
   type NutritionTargets, type NutritionTargetsPatch, type StoredNutritionTargets,
@@ -45,7 +45,7 @@ function fixture(initial: NutritionTargets = emptyNutritionTargets, options: { a
   });
   const request = {
     principal: { objectId: owner }, headers: {},
-    server: { ownerObjectId: owner, ...(options.approval === false ? {} : { teamsNotifications: { runConfirmed } }) },
+    server: { ownerObjectId: owner, ...(options.approval === false ? {} : { ownerInteractions: { runConfirmed } }) },
   } as unknown as FastifyRequest;
   const tool = dailyNutritionTargetsTool(access);
   const begin = async (input: unknown, operationSignal = signal()) => {
