@@ -41,6 +41,7 @@ const sideBorderAllowlist: AllowlistEntry[] = [
   { file: 'styles.css', selector: '.system-status-row + .system-status-row', property: 'border-top', value: '1px solid var(--rule)', reason: 'Separates consecutive system status rows.' },
   { file: 'daily/daily-overview.css', selector: '.daily-overview-row', property: 'border-top', value: '1px solid var(--rule)', reason: 'Daily overview row separator; file is owned by the parallel Daily work.' },
   { file: 'daily/daily.css', selector: '.daily-table th, .daily-table td', property: 'border-bottom', value: '1px solid var(--rule)', reason: 'Daily table row separator; file is owned by the parallel Daily work.' },
+  { file: 'daily/ui/daily-ui.css', selector: '.daily-scroll-table th, .daily-scroll-table td', property: 'border-bottom', value: '1px solid var(--rule)', reason: 'Daily scroll table row separator; file is owned by the parallel Daily work.' },
   { file: 'proactive.css', selector: '.proactive-block', property: 'border-bottom', value: '1px solid var(--rule)', reason: 'Separates Proactive page sections.' },
   { file: 'proactive.css', selector: '.proactive-item-row, .proactive-source-row, .proactive-runs-list > li', property: 'border-bottom', value: '1px solid var(--rule)', reason: 'Separates Proactive list rows.' },
 ];
