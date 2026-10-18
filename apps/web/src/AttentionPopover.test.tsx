@@ -90,4 +90,51 @@ describe('attention popover', () => {
     expect(screen.queryByRole('group', { name: 'Items needing attention' })).toBeNull();
     expect(document.activeElement).toBe(trigger);
   });
+
+  it('keeps focus on a newer popover when an earlier unmount queued the header focus fallback', async () => {
+    const frames: FrameRequestCallback[] = [];
+    const frame = vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => frames.push(callback));
+    try {
+      const user = userEvent.setup();
+      const earlier = view({ items, confirmations: [] });
+      await user.click(screen.getByRole('button', { name: '2 items need attention' }));
+      earlier.unmount();
+      expect(frames).toHaveLength(1);
+
+      view({ items, confirmations: [] });
+      await user.click(screen.getByRole('button', { name: '2 items need attention' }));
+      const popover = screen.getByRole('group', { name: 'Items needing attention' });
+      await waitFor(() => expect(popover).toBe(document.activeElement));
+      frames.forEach((callback) => callback(0));
+      expect(popover).toBe(document.activeElement);
+    } finally {
+      frame.mockRestore();
+    }
+  });
+
+  it('moves focus to the header when removing the last item drops it to the page', async () => {
+    const frames: FrameRequestCallback[] = [];
+    const frame = vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => frames.push(callback));
+    try {
+      const user = userEvent.setup();
+      function Harness() {
+        const [remaining, setRemaining] = useState<FeedAttention['items']>([items[0]!]);
+        const attention: FeedAttention = {
+          items: remaining,
+          confirmations: [],
+          onDismiss: async (id) => setRemaining((current) => current.filter((item) => item.id !== id)),
+        };
+        return <><a className="settings-link" href="/settings">Settings</a><AttentionPopover attention={attention} /></>;
+      }
+      render(<MemoryRouter><Harness /></MemoryRouter>);
+      await user.click(screen.getByRole('button', { name: '1 item needs attention' }));
+      await user.click(screen.getByRole('button', { name: 'Dismiss Sandbox crashed' }));
+      await waitFor(() => expect(screen.queryByRole('button', { name: '1 item needs attention' })).toBeNull());
+      expect(frames).toHaveLength(1);
+      frames.forEach((callback) => callback(0));
+      expect(document.activeElement).toBe(screen.getByRole('link', { name: 'Settings' }));
+    } finally {
+      frame.mockRestore();
+    }
+  });
 });

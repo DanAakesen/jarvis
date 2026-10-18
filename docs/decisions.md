@@ -1,5 +1,29 @@
 # Decisions
 
+## Header focus fallback must not override newer focus (19 October 2026; fix-main)
+
+The Attention popover returns focus to a header control through
+`focusHeaderFallback()` when its trigger has left the page (for example the
+popover unmounts while open). That call queues a `requestAnimationFrame`, and
+the frame callback looked up a header control and focused it without checking
+where focus was by then. A frame queued by one test's teardown could fire during
+the next test, after that test's popover had taken focus, and move focus to the
+new trigger. The popover then never held focus and the wait ran to its 4 s
+budget. This is the "closes on Escape and returns focus" failure seen on CI. It
+was not a slow worker, so the `asyncUtilTimeout` headroom recorded on
+18 October 2026 (fix-main) could not fix it.
+
+The frame callback now acts only when focus has fallen to the page
+(`document.body` or nothing); focus that something else has already taken is
+left alone. The legitimate rescue still runs: when the focused item is removed
+and focus drops to the page, focus still moves to the header. Two regression
+tests pin both sides. The first queues the fallback from an unmount, opens a
+newer popover and runs the stale frame, and fails on the previous code with the
+CI signature. The second checks that the fallback still moves focus to the
+header. Under 16 busy processes on a 12-core machine the original tests failed
+1 run in 80 before the change and 0 in 400 after. No assertion was loosened,
+retried or skipped, and the timeouts are unchanged.
+
 ## P12-40 — Field clearance through custom properties (19 October 2026)
 
 Fix select arrow and search icon overlap at the shared field rule, not per page.
