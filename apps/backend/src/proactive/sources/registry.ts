@@ -2,6 +2,7 @@ import type { ProactiveSource, SourceId } from '../types.js';
 import type { GoogleApiClient } from '../../google/api-client.js';
 import type { TaskStore } from '../../factory/task-store.js';
 import type { createGitHubVaultClient } from '../../vault/github-client.js';
+import { createNewsSource } from './news.js';
 
 type VaultClient = ReturnType<typeof createGitHubVaultClient>;
 
@@ -22,6 +23,7 @@ const xSource: ProactiveSource = {
 export function buildSourceRegistry(_dependencies: SourceDependencies): ProactiveSource[] {
   void _dependencies;
   const sources: ProactiveSource[] = [];
+  sources.push(createNewsSource());
   sources.push(xSource);
   return sources;
 }
