@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import { ContextPanelContext, useContextPanel } from './context-panel-state';
 import type { ContextPanelContent, ContextPanelReturnFocus } from './context-panel-state';
 import { GeneratedViewRenderer } from './GeneratedViewRenderer';
-import { Loader } from './Loader';
+import { StateMessage } from './StateMessage';
 import { isTopModal, useModalLifecycle } from './useModalLifecycle';
 
 const emptyContext: ContextPanelContent = { title: 'Context', status: 'empty' };
@@ -98,9 +98,9 @@ export function ContextPanel({ closeIcon, resizeHandle, modal = false }: { close
         : content.status === 'custom'
           ? isOpen ? content.content : null
           : content.status === 'loading'
-            ? <Loader variant="lines" label={message ?? 'Loading contextual information…'} />
+            ? <StateMessage variant="loading" message={message ?? 'Loading contextual information.'} />
             : content.status === 'error'
-              ? <p role="alert">{message}</p>
+              ? <StateMessage variant="error" message={message ?? 'Contextual information could not be loaded.'} />
               : <p>{message}</p>}
       </div>
       {resizeHandle}

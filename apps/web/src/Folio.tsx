@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { backendFetch } from './backend-request';
-import { Loader } from './Loader';
+import { StateMessage } from './StateMessage';
 import { folioKinds as kinds, folioPageSize as pageSize, groupFolio, isFolioItem, type FolioItem, type FolioKind } from './folio-data';
 
 /**
@@ -103,9 +103,9 @@ export function FolioPane({ backendUrl, getAccessToken, open, onClose, refreshKe
     const controller = new AbortController();
     fetchPage(null, controller.signal)
       .then((items) => setList({ status: 'ready', items, more: items.length >= pageSize }))
-      .catch((error: unknown) => {
+      .catch(() => {
         if (controller.signal.aborted) return;
-        setList({ status: 'error', message: error instanceof Error ? error.message : 'The Folio could not be loaded.' });
+        setList({ status: 'error', message: 'The Folio could not be loaded.' });
       });
     return () => controller.abort();
   }, [fetchPage, open, reload, refreshKey]);
@@ -221,22 +221,15 @@ export function FolioPane({ backendUrl, getAccessToken, open, onClose, refreshKe
         </div>
         {notice && !notice.id && <p className="folio-notice" role={notice.tone === 'error' ? 'alert' : 'status'} data-tone={notice.tone}>{notice.text}</p>}
         <div className="folio-results">
-          {list.status === 'loading' && <Loader variant="rows" label="Loading the Folio…" />}
-          {list.status === 'error' && (
-            <div className="folio-state" role="alert">
-              <p>{list.message}</p>
-              <button className="secondary-button" type="button" onClick={() => { setList({ status: 'loading' }); setReload((value) => value + 1); }}>Retry</button>
-            </div>
-          )}
+          {list.status === 'loading' && <StateMessage variant="loading" loaderVariant="rows" message="Loading the Folio" />}
+          {list.status === 'error' && <StateMessage variant="error" className="folio-state" message={list.message}
+            actionLabel="Retry" onAction={() => { setList({ status: 'loading' }); setReload((value) => value + 1); }} />}
           {list.status === 'ready' && !list.items.length && (filtered ? (
-            <div className="folio-state" role="status">
-              <p>Nothing matches{debounced ? ` “${debounced}”` : ''}{kind ? ` in ${kinds.find((entry) => entry.kind === kind)?.label}` : ''}.</p>
-              <button className="secondary-button" type="button" onClick={() => { setQuery(''); setDebounced(''); setKind(null); search.current?.focus(); }}>Clear search</button>
-            </div>
+            <StateMessage variant="empty" className="folio-state"
+              message={`Nothing matches${debounced ? ` “${debounced}”` : ''}${kind ? ` in ${kinds.find((entry) => entry.kind === kind)?.label}` : ''}.`}
+              actionLabel="Clear search" onAction={() => { setQuery(''); setDebounced(''); setKind(null); search.current?.focus(); }} />
           ) : (
-            <div className="folio-state" role="status">
-              <p>No saved items.</p>
-            </div>
+            <StateMessage variant="empty" className="folio-state" message="No saved items." />
           ))}
           {groups.map((group) => (
             <section key={group.label} className="folio-group" aria-label={group.label}>

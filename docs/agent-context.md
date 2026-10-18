@@ -1115,9 +1115,12 @@ The parent alone owns the approved combined normal PR/CI/deployment pipeline.
 No new worker, dependency restore, private action or Daily activation follows
 from source integration. Internal patch artifacts may retain historical
 itinerary deletion hunks; do not publish those artifacts or old screenshots.
-Existing source-compatible API/schema, device and physical-phone gates stay in
-force. The cancelled Sites database-export/import path is not a prerequisite.
-Earlier lane-specific publication holds describe those earlier stages.
+The old Daily export/import route, including the Sites database-export/preflight
+path, is withdrawn and is not a prerequisite for #1005; do not revive it.
+Source-compatible API/schema work remains required. Device, source-parity and
+physical-phone acceptance remain separate gates. Earlier lane-specific
+publication holds describe those earlier stages and do not override the full
+#1005 scope below.
 
 ## Calendar batch/reply recovery checks (16 October 2026; local candidate)
 
@@ -4894,6 +4897,16 @@ The stylesheet geometry ratchet is part of the web tests:
 `npm test --workspace @jarvis/web -- --run src/stylesheets.test.tsx`.
 It parses every CSS file under `apps/web/src`; new exceptions need an exact
 value and a reason in the allow-list.
+
+## P12-29 Health Auto Export implementation (18 October 2026)
+
+The source-to-Jarvis inventory is `docs/reference/daily-v182/source-to-jarvis-matrix.md`; the complete original contract remains under `docs/reference/daily-v182/`. The Health Auto Export API, owner-created credential lifecycle and restart-safe processor reuse the existing backend, SQL pool and owner authentication. `JARVIS_HEALTH_UPLOAD_ENABLED` defaults false in code; the reviewed backend infrastructure explicitly sets it true, with rollback by setting it false and updating the pin test in the same commit. This does not mean deployment or owner credential issuance occurred. The UI derives the upload endpoint only from configured `backendUrl`; never construct a public URL from forwarded headers or document a guessed live endpoint/token.
+
+`docs/daily-health-ingestion/README.md` records the API shape, request/storage/normalization limits, activation and rollback, plus conservative historical batching instructions: preserve complete metric/date groups; cap ingress at 8 MiB; cap normalized output at 10,000 rows/8 MiB; and remain within the 256 MiB/10,000-row per-owner inbox. These are hard limits, not target batch sizes or proof of complete history. Health Auto Export date-range/chunking controls, settings-screen steps and current app behavior are unverified; do not substitute Health Sync. No synthetic test or local configuration is live phone acceptance.
+
+The owner withdrew the old Daily export/import route for #1005. Keep all selected Daily API/schema/tool changes in that issue and PR; do not revive the withdrawn importer or use real records. The full 16-capability set includes nutrition history/analysis/balance, conversational Status, coach profile, meal preference and recovery; fixed renderers, commitments/orders/experiments, meal plans and Apple Health meal write-back stay excluded. Matrix entries distinguish tested local capability from source-path parity. Three grouped registrations currently cover the nine remaining operations; the exact nine-tool naming request is still a mismatch. A private credential handoff can happen only after deployment and owner creation; no real endpoint/token belongs in this repository.
+
+For this boundary, run backend TypeScript/build, focused `daily/health-upload` and `daily/health` tests, `database/migrations.test.ts`, and web tests for `HealthUploadSettings`/Daily overview. SQL integration tests require the existing isolated loopback SQL Server arrangement used by Database CI; never point them at production. Inspect the Settings panel at desktop and 380 px before claiming visual verification.
 
 ## P13-16 chat and voice recall (18 October 2026)
 

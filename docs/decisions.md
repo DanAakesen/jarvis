@@ -17,6 +17,68 @@ intercept the Factory Create project action. Persistence, alert copy and retry
 behavior are unchanged. Synthetic browser evidence is not live-provider or
 physical on-screen-keyboard verification.
 
+## #1005 Daily v182 API, upload and selected native tools (18 October 2026)
+
+Keep this delivery on the existing backend, SQL pool, owner authentication and
+tool/confirmation flow. Do not create a parallel API, store, auth service, MCP
+runtime, Azure resource, or revive the withdrawn Daily export/import route.
+`JARVIS_HEALTH_UPLOAD_ENABLED` remains false by default in code and is set to
+the exact string `true` in the reviewed backend deployment environment; rollback
+sets that value to `false` and changes the pin test in the same commit. Existing
+credential hashes and accepted data remain untouched by rollback.
+
+The owner creates the upload credential in Settings after deployment. SQL stores
+only its hash; plaintext is revealed once through the owner-authenticated,
+no-store response. The endpoint comes only from configured backend origin, never
+forwarded headers. A private handoff, deployment, and phone acceptance are not
+claimed from source changes or synthetic tests.
+
+Retain all 16 owner-selected Daily v182 capabilities and exclude fixed status
+renderers, coach commitments/orders/experiments, meal plans and Apple Health meal
+write-back. Use the existing owner authorization and confirmation flow for
+writes, and preserve unknown values as unknown. The nine remaining source
+operations are grouped into three native registry tools to retain the enforced
+eight-tool catalogue headroom; this is a pragmatic assumption, but it does not
+meet the explicit request for nine distinct tool names and must remain reported
+as a mismatch rather than described as complete.
+
+Historical batches must preserve complete source metric/date groups, remain
+within 8 MiB ingress, 10,000 normalized rows/8 MiB output and 256 MiB/10,000
+retained inbox rows per owner. These limits do not establish source completeness
+or exporter UI behavior; mark the latter unverified and do not claim replay or
+physical-phone acceptance. Evidence and unresolved field/HTTP differences are
+tracked in `docs/reference/daily-v182/source-to-jarvis-matrix.md`.
+
+## P12-30 — Daily presentation kit and Workouts (18 October 2026)
+
+Move long retained-data caveats into the native “About this data” disclosure,
+but keep partial/lower-bound meaning beside the displayed value and keep unknown
+distinct from zero. Keep every chart’s raw values available through a disclosure
+attached to that chart rather than rendering a table below every visualization.
+Charts retain responsive geometry, direct series labels, explicit data gaps and
+keyboard point inspection. Workouts uses the shared kit in one responsive
+history list with a disclosed table; URL, paging, sorting, filtering and focus
+return stay owned by the existing section. These are presentation changes only;
+the original Daily remains canonical and no new data reads or dependencies are
+introduced.
+
+Daily svg sizing rules must out-rank the shell’s `.app-shell svg` icon size
+(specificity 0,1,1, emitted after the Daily stylesheets in the production
+bundle); an equal or lower specificity rule silently loses and the chart
+collapses to a 21px sliver. Prefix such rules with `.app-shell` (or size the svg
+inline); `svg-cascade.test.ts` enforces this for every Daily stylesheet.
+
+## Share non-Daily loading, empty, error and partial states (18 October 2026; P14-11 / #994)
+
+Use one `StateMessage` component around the existing Loader for non-Daily
+loading, empty, error and partial states. Keep one plain sentence, optional
+detail, and at most one shared-button recovery action. Loading, empty and
+partial states announce politely; errors use alerts. Reserve a 10rem minimum
+block size for loading, empty and error states (partial notices reserve none),
+use skeletons only for known final layouts, and keep error copy
+free of raw exception text, identifiers and codes. Daily retains `DailyState`
+until its separate follow-up; this avoids crossing the parallel page boundary.
+
 ## Consolidate web viewport breakpoints (18 October 2026; P14-05 / #973)
 
 Use one non-Daily viewport set: phone through 700px, tablet above 700px through
@@ -3179,6 +3241,8 @@ The nine design areas and where each stands. **Confirmed** = Dan's requirement o
 
 12 October 2026, standing Daily migration direction (historical): Dan authorized completion of approved migration work through coordinator dependency/gate releases without generic re-confirmation. At that time #717 remained protected-export blocked; the owner withdrew the database-export/import approach on 18 October and #1005 is now the source-contract-first direction. No independent downstream dispatch or own-PR merge. All migrated React/rich UI must fully reuse current Jarvis layout/styling, DESIGN.md, canonical styles.css tokens, shared components, themes/density/motion and phone/workspace patterns. Legacy Daily capabilities/data survive through recomposition, not a separate navy/plum/card theme. Generated views receive safe existing-bridge theme context without expanded permissions. Browser/mobile visual acceptance is mandatory in #730/#731/#732/#726; #718 starts no frontend work.
 
+18 October 2026, P12-29 / #1005: keep the complete source documentation, API, Azure SQL mapping and selected Jarvis capabilities in one issue and PR. The upload routes, owner-created credential and bounded SQL processor reuse the existing backend, pool, authentication and confirmation boundaries. The runtime flag defaults off and infrastructure explicitly sets it true; deployment, credential issuance, private handoff and phone acceptance remain unverified. The old #717/#721 export/import route is withdrawn. Preserve complete metric/date groups and published size limits in historical upload guidance; the source contract does not prove exporter UI behavior or complete-history delivery. Synthetic tests are not live evidence. The nine requested new tool names are grouped into three registry tools to retain required catalogue headroom; the name-level mismatch is unresolved.
+
 P12-03 (#718, 12 October 2026): additive empty tables use separate SQL schema `daily`, configured server owner prefixes legacy keys/uniqueness, and only the supplied explicit relationships become owner-composite foreign keys. Existing auth resolves the user/hosted agent; runners cannot construct the inactive store. Nullable unknown values, original/sanitized raw checksums, source timestamps/local dates, revisions/tombstones and recovery measurements remain distinct. Legacy OAuth/widget/claim credentials have no active target. Mixed attention data requires explicit source/JSON exclusion in any future source-compatible ingestion. [Mapping and compatibility limits](daily-schema-mapping.md) remain source-code/schema evidence, not a database export or proof of replay. The 18 October source-contract-first API/schema and historical-ingestion direction is tracked in #1005; the #717/#721 export/import approach is withdrawn. No personal seed, source mutation or Daily activation.
 
 P9-89 (#736, 12 October 2026, user-directed): make presence behavior salient
@@ -5584,3 +5648,17 @@ and gate heart rate and recorded detail independently by capabilities. Render
 the merged `{ id, detail }` result using Data's existing escaped JSON pattern.
 Synthetic-only browser evidence is under `docs/ui/p12-23/`; live original-site
 parity remains unverified and original Daily stays canonical.
+
+## P12-26 — Daily overview summaries and integration audit (18 October 2026)
+
+Use independently loaded Overview tiles for each exposed section, importing
+the same pure date, display and calculation helpers as the section views.
+Keep the inventory, hide summaries when their required source is absent, and
+isolate failures and retries per tile. Retain the existing Briefs source and
+replace its generic presentation with a history/detail workflow. Share a
+two-request abort-aware queue across Daily query, capability and Nutrition
+target calls so rapid section changes do not create unbounded reads. Preserve
+unknown and partial semantics, owner-only access and original Daily as
+canonical. The integration audit corrected raw chart-series labels, repeated
+coverage copy, narrow Nutrition navigation and workout-detail spacing; no
+backend, contract, navigation or write-path changes are included.

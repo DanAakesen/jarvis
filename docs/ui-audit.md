@@ -31,9 +31,10 @@ inventoried to identify route-specific exceptions.
 | Popover or sheet | `styles.css`: `.jobs-popover`, `.more-menu-list`, `.more-menu-flyout`, `.modal`; `MobileShell.tsx` / `styles.css`: `.mobile-menu-sheet`; mobile `.context-panel` detail sheet | P14-09 shares `--surface`, `--rule`, `--radius-panel`, `--panel-shadow` and the named `--z-*` stack. Dialogs use a heading, internally scrolling body and grouped footer actions. Modal focus is trapped and restored; nested modals share background inertness and scroll locking. Implicit dismissal preserves edited forms and pending work. Sheets respect safe areas and dynamic viewport bounds; nonmodal menus retain their keyboard navigation and focus return. |
 | Section heading | `styles.css`: `h1`, `h2`, `h3`; `SettingsPage.tsx` sections; `daily/daily.css` record heading; `proactive.css` block heading | Follow the existing heading scale and one-headline hierarchy. Route-specific heading size remains where it expresses a real level in the content structure; no eyebrow or subtitle is added. |
 | Body and caption text | `styles.css`: `--type-body`, `--type-small`, `--type-caption`; `daily/daily.css`: `.daily-meta`, `.daily-evidence`; `proactive.css`: `.proactive-item-meta`; `styles.css`: `.jobs-item-meta`, `.activity-meta` | Use the existing type roles and `--text` / `--text-muted`. Metadata may be smaller, but long or actionable text remains readable and wraps rather than clipping. |
-| Empty state | `styles.css`: `.project-empty`, `.workspace-empty`, `.task-column-empty`, `.usage-empty`; `daily/daily.css`: `.daily-empty`; `daily/DailyOverview.tsx`; Proactive page lists | Explain the actual empty condition in nearby body text, use the existing surface and typography roles, and show only a relevant working action. Keep `status` announcements where already present; do not invent counts or sample content. |
-| Error banner and inline error | `styles.css`: `.workspace-feedback-host`, `.workspace-pin-feedback`, `.settings-feedback`, `.projects-feedback`, `.project-policy-feedback`, `.task-control-error`, `.release-feedback`, `.usage-feedback`; `ConversationHistory.css`: `.conversation-history-error`, `.chat-error`; `daily/daily.css`: `.daily-notice[role="alert"]`; `proactive.css`: `[role="alert"]`; `JobsChip.tsx`: `.jobs-item-error` | P14-09 moves workspace pin alerts and retry feedback into normal page flow before route content, never over page rows. Keep field/action-local failures inline in the error text role. Block-level Daily and Proactive alerts use `--error-surface`, `--error` and neutral structure; retain their `role="alert"` and retry action. Do not encode error meaning in border colour alone. |
-| Loading state | `Loader.tsx` variants `dots`, `rows`, and `orb`; `ConversationHistory.css`: `.conversation-loading`; `styles.css`: `.task-window-loading`; Daily and Proactive pending states | Reuse `Loader` for page/collection loading and concise status text for background refreshes. Preserve the existing content while refreshing where the workflow already supports it; reduced motion never hides essential state. |
+| Empty state | `StateMessage` (`empty`); `styles.css`: `.project-empty`, `.workspace-empty`, `.task-column-empty`, `.usage-empty`; `daily/daily.css`: `.daily-empty`; `daily/DailyOverview.tsx`; Proactive page lists | Explain the actual empty condition in the state or nearby body text, use the existing surface and typography roles, and show only a relevant working action. Shared non-Daily states use polite status announcements; Daily remains on its own component. Do not invent counts or sample content. |
+| Error banner and inline error | `StateMessage` (`error`); `styles.css`: `.workspace-feedback-host`, `.workspace-pin-feedback`, `.settings-feedback`, `.projects-feedback`, `.project-policy-feedback`, `.task-control-error`, `.release-feedback`, `.usage-feedback`; `ConversationHistory.css`: `.conversation-history-error`, `.chat-error`; `daily/daily.css`: `.daily-notice[role="alert"]`; `proactive.css`: `[role="alert"]`; `JobsChip.tsx`: `.jobs-item-error` | P14-09 moves workspace pin alerts and retry feedback into normal page flow before route content, never over page rows. Keep field/action-local validation inline. Shared block-level non-Daily errors use a safe sentence, `role="alert"`, `--error-surface`, `--error` and neutral structure, with at most one relevant recovery action. Daily and field-local treatments retain their owners. Do not encode error meaning in border colour alone or display raw error text, IDs or codes. |
+| Loading state | `StateMessage` (`loading`) wraps `Loader.tsx`; `Loader` variants `dots`, `rows` and `orb`; Daily pending states | Reuse `StateMessage` for non-Daily loading and the existing `Loader` for internal button activity. Use skeleton rows only when the final layout is known; otherwise use concise Loader text. Preserve existing content during refresh and honor reduced motion without hiding essential state. |
+| Partial state | `StateMessage` (`partial`); Factory, Usage, release and status surfaces | Name stale, partial or capped data, explain how to refresh, and preserve already loaded content when the workflow supports it. |
 
 ## Rendered checks
 
@@ -53,6 +54,21 @@ The attention popover could not be opened because the harness had no synthetic
 attention event; its shared popover surface is used by the inspected Background
 work popover. Screenshots were captured locally but could not be attached to the
 PR with the available tools. No live backend or real sign-in was used.
+
+### State messages (P14-11)
+
+The before/after fixture gallery and synthetic screen examples are in
+[`docs/ui/p14-11/`](ui/p14-11/). The shared component is documented in
+`DESIGN.md`; it does not change Daily's parallel `DailyState`.
+
+Chromium checks covered 390×844 with touch emulation and 1440×900, light and
+dark, using synthetic content only. Loading, empty and partial states exposed
+polite status roles; errors exposed alerts. Retry became disabled and
+`aria-busy` while active, then returned to idle. Loading-to-error kept a 160px
+state slot with 0px content shift at both sizes. At 320px there was no horizontal
+overflow; reduced motion removed the Loader animation, and the gallery emitted
+no console errors. This measures the shared gallery transition, not route-level
+loading-to-ready transitions or live backend behavior.
 
 ## Bounded follow-up
 

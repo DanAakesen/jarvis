@@ -1,6 +1,6 @@
-# Inactive health processing (P12-05)
+# Daily health processing (P12-05)
 
-The [local coordinator release](https://github.com/DanAakesen/jarvis/issues/720#issuecomment-6154043444) permits synthetic implementation over P12-04's existing SQL inbox. Nothing registers a processor, route, tool, schedule, device credential or production flag. Original Daily remains canonical. Both cloud workers remain idle.
+The [local coordinator release](https://github.com/DanAakesen/jarvis/issues/720#issuecomment-6154043444) permits implementation over P12-04's existing SQL inbox. Production registers its worker only behind `JARVIS_HEALTH_UPLOAD_ENABLED`, which defaults false and remains absent from infrastructure. Original Daily remains canonical; no live endpoint, credential or phone acceptance is claimed.
 
 ## Processing contract
 
@@ -10,7 +10,7 @@ The [local coordinator release](https://github.com/DanAakesen/jarvis/issues/720#
 2. Check the original SHA-256 and UTF-8 JSON, normalize outside the transaction, and validate the bounded result.
 3. Recheck the claim generation/deadline under the owner lock. Commit domain rows, ingestion lineage, applicable feed freshness and processed receipt in one transaction. A heartbeat writes only phone-sync state.
 
-Migration 0047 adds attempt/deadline/fixed error-code columns. An invocation has a 45-second deadline; existing SQL transactions retain their 30-second/query-cancellation and five-second lock bounds. Failed/interrupted attempts become eligible after 2, 5 and 15 minutes; after three attempts the next eligible invocation quarantines the row. No timer or automatic requeue exists. Validation errors quarantine immediately. Unexpected SQL/commit failures remain retry/unknown, never false success. A lost commit response is resolved from durable state on the next invocation; accepted raw bytes are never deleted.
+Migration 0047 adds attempt/deadline/fixed error-code columns. An invocation has a 45-second deadline; existing SQL transactions retain their 30-second/query-cancellation and five-second lock bounds. Failed/interrupted attempts become eligible after 2, 5 and 15 minutes; after three attempts the next eligible invocation quarantines the row. The bounded worker drains at most ten rows per immediate batch, pauses one second between full batches, polls idle/retry results after 30 seconds, and wakes on durable acceptance. Validation errors quarantine immediately. Unexpected SQL/commit failures remain retry/unknown, never false success. A lost commit response is resolved from durable state on the next invocation; accepted raw bytes are never deleted.
 
 Ingress already conflicts on changed owner/kind/automation/session bytes or device. Exact retry retains its receipt and produces one processed result. A matching pre-existing successful ingestion with the same exact session/checksum/length is retained without rewriting original IDs or advancing freshness; conflicting historical lineage quarantines. Empty workout exports succeed and advance only their processed feed, without deleting workouts or child history. Older accepted retries cannot regress newer target timestamps or introduce stale children under a newer workout. Equal acceptance timestamps are serialized; this is arrival-snapshot ordering, not a claim that a phone's late-arriving older export is newer source data.
 
@@ -28,8 +28,9 @@ Nonsensitive `worker/health-normalize.js`, `health-targets.js` and selected pers
 
 ## Owner reads and truthful freshness
 
-The inactive P12-09 query adapter now reuses these methods through one
-owner-authorised HTTP/tool contract; production composition is unchanged.
+The P12-09 query adapter reuses these methods through one
+owner-authorised HTTP/tool contract; health ingestion remains independently
+default-off.
 The optional fourth `SqlHealthProcessor` argument is the shared Daily change
 hub. New normalized lineage notifies its health sources only after the final
 transaction resolves; retained lineage replays do not announce new health data.
@@ -43,7 +44,7 @@ Commit tests use synthetic transaction doubles, not real SQL acceptance.
 
 `DailyHealthReadModel.forRequest` reuses existing root human/hosted-agent authentication and server owner; device/export/coding-runner identities cannot become an owner. It adds no public endpoint.
 
-`sync` distinguishes latest committed upload evidence, actual processing time, inbox pending/quarantine counts and phone heartbeat. Acceptance and heartbeat cannot establish a processed feed timestamp. History uses keyset pages, a maximum 366-day span and 500 rows; list reads omit large JSON detail. Minute HR uses a separate bounded cursor. Exact workout detail is capped at 8 MiB and remains owner-bound. P12-09 supplies public contracts/routes/tools and activation later.
+`sync` distinguishes latest committed upload evidence, actual processing time, inbox accepted/pending, processing, succeeded, quarantine counts and phone heartbeat. Acceptance and heartbeat cannot establish a processed feed timestamp. History uses keyset pages, a maximum 366-day span and 500 rows; list reads omit large JSON detail. Minute HR uses a separate bounded cursor. Exact workout detail is capped at 8 MiB and remains owner-bound.
 
 The shared query contract optionally filters `daily.health.metrics` by the
 exact retained `metric_name`, preserving its date/name cursor order.

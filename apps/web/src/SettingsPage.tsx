@@ -4,6 +4,7 @@ import { useThemePreference } from './theme-preference-context';
 import { saveVoiceWorkspacePreference } from './voice-workspace-preference';
 import { TaskRecipesSettings } from './TaskRecipesSettings';
 import { Loader } from './Loader';
+import { StateMessage } from './StateMessage';
 import { CollapsibleSection } from './CollapsibleSection';
 import { useWakeStatus } from './wake-store';
 import { AppearanceDetails, ModelsSection, ResearchSection, RetrievalSection, TimeoutsSection, VoiceTuningFields } from './SettingsAdvanced';
@@ -282,7 +283,7 @@ function SelectField({
   );
 }
 
-export function SettingsPage({ backendUrl, getAccessToken, presence, notifications, projects, renderProjects, nutrition, proactive, memory, onBack }: {
+export function SettingsPage({ backendUrl, getAccessToken, presence, notifications, projects, renderProjects, nutrition, healthUpload, proactive, memory, onBack }: {
   backendUrl: string | null;
   getAccessToken: () => Promise<string>;
   /** Presence mode and instructions per mode, shown before the saved settings. */
@@ -294,6 +295,8 @@ export function SettingsPage({ backendUrl, getAccessToken, presence, notificatio
   renderProjects?: (projectDefaults: ReactNode) => ReactNode;
   /** Daily nutrition targets, saved on their own; only supplied while Daily is on. */
   nutrition?: ReactNode;
+  /** Health upload credential management, supplied only while the Daily area is enabled. */
+  healthUpload?: ReactNode;
   /** Proactive settings, supplied only while the independent web feature gate is on. */
   proactive?: ReactNode;
   /** What Jarvis remembers: browse, correct and forget. */
@@ -316,6 +319,7 @@ export function SettingsPage({ backendUrl, getAccessToken, presence, notificatio
   const [message, setMessage] = useState('');
   const [personalityResetMessage, setPersonalityResetMessage] = useState('');
   const [error, setError] = useState(backendUrl ? '' : 'Settings unavailable.');
+  const healthUploadAnchor = typeof window !== 'undefined' && window.location.hash === '#health-upload';
 
   const load = useCallback(async () => {
     if (!backendUrl) {
@@ -357,6 +361,10 @@ export function SettingsPage({ backendUrl, getAccessToken, presence, notificatio
     });
     return () => { active = false; };
   }, [backendUrl, getAccessToken]);
+
+  useEffect(() => {
+    if (healthUploadAnchor) document.getElementById('health-upload')?.scrollIntoView?.({ block: 'start' });
+  }, [healthUploadAnchor]);
 
   const update = <Area extends keyof Settings, Key extends keyof Settings[Area]>(
     area: Area,
@@ -486,14 +494,13 @@ export function SettingsPage({ backendUrl, getAccessToken, presence, notificatio
       : '';
   const projectDefaults = state === 'loading' ? (
     <CollapsibleSection storageKey="settings.projects.defaults" headingId="project-defaults-heading" title="Defaults for new projects">
-      <Loader variant="text" label="Loading project defaults…" />
+      <StateMessage variant="loading" message="Loading project defaults" />
     </CollapsibleSection>
   ) : state === 'error' ? (
     <CollapsibleSection storageKey="settings.projects.defaults" headingId="project-defaults-heading" title="Defaults for new projects">
-      <div className="settings-feedback" role="alert">
-        <p>{backendUrl ? error : 'Project defaults are unavailable because Settings cannot connect to the backend.'}</p>
-        {backendUrl && <button className="secondary-button" type="button" onClick={() => { void load(); }}>Retry settings</button>}
-      </div>
+      <StateMessage variant="error" className="settings-feedback"
+        message={backendUrl ? error : 'Project defaults are unavailable because Settings cannot connect to the backend.'}
+        actionLabel={backendUrl ? 'Retry settings' : undefined} onAction={backendUrl ? () => { void load(); } : undefined} />
     </CollapsibleSection>
   ) : settings && options ? (
     <CollapsibleSection storageKey="settings.projects.defaults" headingId="project-defaults-heading" title="Defaults for new projects">
@@ -570,12 +577,10 @@ export function SettingsPage({ backendUrl, getAccessToken, presence, notificatio
       </header>
       {presence}
       {notifications}
-      {state === 'loading' && <Loader variant="text" label="Loading settings…" />}
+      {state === 'loading' && <StateMessage variant="loading" message="Loading settings" />}
       {state === 'error' && (
-        <div className="settings-feedback" role="alert">
-          <p>{error}</p>
-          {backendUrl && <button className="secondary-button" type="button" onClick={() => { void load(); }}>Retry</button>}
-        </div>
+        <StateMessage variant="error" className="settings-feedback" message={error}
+          actionLabel={backendUrl ? 'Retry' : undefined} onAction={backendUrl ? () => { void load(); } : undefined} />
       )}
       {state === 'ready' && settings && options && (
         <form id="settings-form" onSubmit={(event) => { void save(event); }}>
@@ -602,12 +607,10 @@ export function SettingsPage({ backendUrl, getAccessToken, presence, notificatio
                 System
               </label>
             </fieldset>
-            {themePreference.state === 'loading' && <Loader variant="inline" label="Loading saved theme…" />}
+            {themePreference.state === 'loading' && <StateMessage variant="loading" message="Loading saved theme" />}
             {themePreference.state === 'error' && (
-              <div className="settings-feedback" role="alert">
-                <p>{themePreference.error}</p>
-                <button className="secondary-button" type="button" onClick={themePreference.retry}>Retry theme</button>
-              </div>
+              <StateMessage variant="error" className="settings-feedback" message={themePreference.error}
+                actionLabel="Retry theme" onAction={themePreference.retry} />
             )}
             {themePreference.state === 'ready' && themePreference.saving &&
               <p className="settings-feedback" role="status">Saving theme…</p>}
@@ -826,6 +829,8 @@ export function SettingsPage({ backendUrl, getAccessToken, presence, notificatio
       )}
       {renderProjects ? renderProjects(projectDefaults) : projects}
       {nutrition}
+      {healthUpload && <CollapsibleSection storageKey="settings.health-upload" id="health-upload" headingId="health-upload-heading"
+        title="Health upload" initiallyOpen={healthUploadAnchor} persist={!healthUploadAnchor}>{healthUpload}</CollapsibleSection>}
       {proactive}
       {state !== 'ready' && memory && <CollapsibleSection storageKey="settings.memory" id="memory" headingId="memory-settings-heading" title="Memory">{memory}</CollapsibleSection>}
       {backendUrl && <TaskRecipesSettings key={backendUrl} backendUrl={backendUrl} getAccessToken={getAccessToken} />}

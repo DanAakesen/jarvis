@@ -1048,7 +1048,7 @@ describe('Factory task board', () => {
       ? Promise.resolve(response({ ...boardFixture(), stale: true })) : original(input, init));
     publishFactoryBoardStatus('https://api.example.com', 'unavailable');
     renderFactory();
-    await screen.findByText('GitHub is unavailable. Showing a cached board; placement may be out of date.');
+    await screen.findByText('Showing a cached board; issue placement may be out of date.');
     expect(screen.getByText(/Live board updates are unavailable/)).not.toBeNull();
     expect(screen.getByText('DanAakesen/jarvis')).not.toBeNull();
     await user.click(screen.getByRole('button', { name: 'Refresh board' }));
@@ -1074,7 +1074,8 @@ describe('Factory task board', () => {
   it('does not request an unscoped board when there are no active projects', async () => {
     fetchMock.mockResolvedValue(response([]));
     renderFactory();
-    await screen.findByText('No active projects are available for a GitHub board. Create a project to begin.');
+    await screen.findByText('No active projects are available for a GitHub board.');
+    await screen.findByText('Create a project to begin.');
     expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/factory/board'))).toBe(false);
     expect(screen.getByRole('button', { name: 'Create task' }).hasAttribute('disabled')).toBe(true);
   });

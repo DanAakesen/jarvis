@@ -5,6 +5,7 @@ import { Loader } from '../../../Loader';
 import { loadNutritionTargets, nutritionTargetsFailureMessage, NutritionTargetsError, type NutritionTargetsState } from '../../nutrition-targets';
 import { copenhagenDate, isDailyPeriod } from '../../period';
 import { DailyChart } from '../../ui/DailyChart';
+import { DailyCoverageNote } from '../../ui/DailyCoverageNote';
 import { DailyState } from '../../ui/DailyState';
 import { ScrollTable } from '../../ui/ScrollTable';
 import { StatTile } from '../../ui/StatTile';
@@ -59,9 +60,13 @@ function PagesState({ pages, label }: { pages: DailyPages; label: string }) {
   return <>
     {pages.status === 'loading' && <DailyState status="loading" />}
     {pages.error && <DailyState status="error" message={`${label}: ${pages.error}`} onRetry={pages.reload} />}
-    {pages.hasMore && <><p>Partial {label.toLowerCase()}: only loaded records are shown{pages.capped ? ' (page limit reached)' : ''}.</p>
+    {pages.hasMore && <>
       <DailyState status="partial" coverage={{ returned: pages.items.length, hasMore: true }}
-        {...(!pages.capped ? { onLoadMore: pages.loadMore } : {})} /></>}
+        {...(!pages.capped ? { onLoadMore: pages.loadMore } : {})} />
+      <DailyCoverageNote summary={`${label} history is partial.`}>
+        <p>{pages.capped ? 'Page limit reached. Narrow the period or filter the loaded records.' : 'Only loaded records are shown; the original source may contain more.'}</p>
+      </DailyCoverageNote>
+    </>}
   </>;
 }
 
@@ -101,20 +106,22 @@ function Day({ props, date, setDate, days, targets }: {
   const next = knownDays.find(day => day > date);
   return <div className="nutrition-block">
     <div className="nutrition-controls">
-      <button type="button" className="secondary-button" aria-label={`Previous day, ${dateStep(date, -1)}`} onClick={() => setDate(dateStep(date, -1))}>Previous day</button>
+      <button type="button" className="secondary-button" aria-label={`Previous day, ${dateStep(date, -1)}`} onClick={() => setDate(dateStep(date, -1))}>Previous</button>
       <label>Meal date <input aria-label="Meal date" type="date" value={date} max={today}
         onChange={event => {
           const value = event.target.value;
           if (isDailyPeriod({ startDate: value, endDate: value }) && value <= today) setDate(value);
         }} /></label>
-      <button type="button" className="secondary-button" aria-label={`Next day, ${dateStep(date, 1)}`} disabled={date >= today} onClick={() => setDate(dateStep(date, 1))}>Next day</button>
+      <button type="button" className="secondary-button" aria-label={`Next day, ${dateStep(date, 1)}`} disabled={date >= today} onClick={() => setDate(dateStep(date, 1))}>Next</button>
       <button type="button" className="secondary-button" aria-label={`Today, ${today}`} disabled={date === today} onClick={() => setDate(today)}>Today</button>
     </div>
     <div className="nutrition-block nutrition-day-content">
     {result.pending && <DailyState status="loading" />}
     {result.error && <DailyState status="error" message={result.error} onRetry={result.reload} />}
     {result.data && <>
-      {result.data.coverage.hasMore && <p role="status">Partial day: showing {result.data.coverage.returned} meals from the first page (up to 100). Totals cover only displayed non-deleted meals and are lower bounds.</p>}
+      {result.data.coverage.hasMore && <DailyCoverageNote summary="This page is partial; nutrient totals are lower bounds.">
+        <p>Showing {result.data.coverage.returned} meals from the first page, up to 100. Totals use displayed non-deleted meals only; unknown nutrient values are not zero.</p>
+      </DailyCoverageNote>}
       <div className="nutrition-stats">{nutrients.map(nutrient => {
         const total = sumNutrient(rows, nutrient.key);
         return <StatTile key={nutrient.key} label={nutrient.label} value={total.value} unit={nutrient.unit}
@@ -148,7 +155,9 @@ function Trend({ days, select, targets, period }: { days: DailyPages; select: (d
   return <div className="nutrition-block">
     <PagesState pages={days} label="Trend" />
     {(days.status === 'ready' || rows.length > 0) &&
-      <p>{rows.length} of {periodDays} days in this period have meals{days.hasMore ? ' (partial loaded history)' : ''}. Europe/Copenhagen. Missing days are not zero and lines do not bridge gaps. Partial nutrients are lower bounds.</p>}
+      <DailyCoverageNote summary={`${rows.length} of ${periodDays} days in this period have meals; missing days remain unknown.`}>
+        <p>Dates use Europe/Copenhagen. Missing days are not zero, lines do not bridge gaps, and partial nutrients are lower bounds. Loaded history does not establish source completeness.</p>
+      </DailyCoverageNote>}
     {days.status === 'ready' && !rows.length && <DailyState status="empty" />}
     {rows.length > 0 && <>
       {nutrients.filter(nutrient => nutrient.key === 'energy_kcal' || nutrient.key === 'protein_grams').map(nutrient =>
@@ -182,7 +191,9 @@ function LibraryCollection({ props, kind, filter }: { props: DailySectionProps; 
       kind === 'plans' ? text(row.description, '') : '',
       kind === 'plans' && row.items_json ? readableJson(row.items_json) : ''].join(' ').toLowerCase().includes(filter.toLowerCase()));
   return <section className="nutrition-block"><h3>{kind === 'favorites' ? 'Favourites' : 'Meal plans'}</h3>
-    <p>Filter covers {pages.items.length} loaded records only; up to five pages are loaded automatically. Source completeness is unknown.</p>
+    <DailyCoverageNote summary={`Filtering covers ${pages.items.length} loaded ${pages.items.length === 1 ? 'record' : 'records'}.`}>
+      <p>Up to five pages are loaded automatically. Source completeness is unknown.</p>
+    </DailyCoverageNote>
     <PagesState pages={pages} label={kind === 'favorites' ? 'Favourites' : 'Meal plans'} />
     {pages.status === 'ready' && !matches.length && <p>No {filter ? 'matching loaded ' : 'loaded '}{kind === 'favorites' ? 'favourites' : 'plans'}.</p>}
     {matches.map((row, index) => kind === 'favorites'

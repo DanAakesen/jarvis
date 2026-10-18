@@ -4,7 +4,7 @@ import { useBlocker } from 'react-router-dom';
 import type { AreaProps } from '../areas';
 import { KnowledgeGraphView, KnowledgeNoteReader } from '../knowledge/KnowledgeGraphView';
 import { connectedNotes, withoutFrontMatter, type KnowledgeGraph, type KnowledgeNode } from '../knowledge/knowledge-data';
-import { Loader } from '../Loader';
+import { StateMessage } from '../StateMessage';
 import { MarkdownContent } from '../MarkdownContent';
 import { Modal } from '../Modal';
 import { NavigationGuardContext } from '../page-navigation';
@@ -211,7 +211,7 @@ export function NotesArea({ backendUrl, getAccessToken }: AreaProps) {
                 setNewFolder(folder); setEditor({ ...editor, path: newNotePath(folder, editor.title) }); setError('');
               }} />}
             <div className="notes-editor">
-              {opening ? <Loader variant="inline" label="Opening note…" /> : editor ? (
+              {opening ? <StateMessage variant="loading" message="Opening note." /> : editor ? (
                 <>
                   {editor.created && <label className="notes-title-label" htmlFor={`${id}-title`}>Title
                     <input id={`${id}-title`} className="form-control" placeholder="Note title" value={editor.title} maxLength={160}

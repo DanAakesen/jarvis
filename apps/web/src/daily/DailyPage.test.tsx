@@ -68,6 +68,23 @@ describe('inactive single Daily data page', () => {
     expect(container.querySelectorAll('.chart-bars rect')).toHaveLength(2);
     expect(screen.getByText(/Other pages are not included/u)).toBeTruthy();
   });
+  it('shows accepted, processing, succeeded and quarantined upload counts as separate evidence', async () => {
+    fixture(query => jsonResponse(dailyFixture(query, query.source === sources.sync ? [{
+      feeds: [], heartbeat: { last_received_at: '2026-10-17T08:00:00.000Z' },
+      inbox: { retained: 10, accepted: 2, pending: 2, processing: 3, succeeded: 4, quarantined: 1 },
+    }] : [])));
+    render(page());
+    await screen.findByLabelText('Browse');
+    fireEvent.change(screen.getByLabelText('Browse'), { target: { value: sources.sync } });
+    await screen.findByText('Accepted uploads');
+    expect(screen.getByText('2').textContent).toBe('2');
+    expect(screen.getByText('Processing uploads')).toBeTruthy();
+    expect(screen.getByText('3').textContent).toBe('3');
+    expect(screen.getByText('Succeeded uploads')).toBeTruthy();
+    expect(screen.getByText('4').textContent).toBe('4');
+    expect(screen.getByText('Quarantined uploads')).toBeTruthy();
+    expect(screen.getByText('1').textContent).toBe('1');
+  });
   it('applies a period only on request and sends exact returned cursors for next/previous', async () => {
     const f = fixture(query => jsonResponse(dailyFixture(query, [{ metric_name: 'synthetic', value: 'cursor' in query ? 2 : 1, unit: 'm' }],
       'startDate' in query && !('cursor' in query) ? { date: query.startDate, key: 'synthetic' } : null)));

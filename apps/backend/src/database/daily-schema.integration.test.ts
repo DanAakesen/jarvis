@@ -11,6 +11,7 @@ import { DailyHealthReadModel } from '../daily/health/read-model.js';
 import { DailyQueryService, dailyResultByteLimit } from '../daily/query.js';
 import { NutritionStore } from '../daily/nutrition/store.js';
 import { dailyQueryTool } from '../daily/tools/query.js';
+import { SqlDailyCoachStore } from '../daily/coach-store.js';
 import { dailyQuerySources as sources } from '@jarvis/contracts';
 
 const configuration = loadDatabaseConfig();
@@ -65,6 +66,36 @@ describe('Daily SQL owner schema on real SQL Server', () => {
     expect(await DailyOwnerStore.forRequest(pool, requestFor(owner, 'agent')).read('health_daily_metrics', { metric_name: 'weight', metric_date: '2026-01-01' }, signal())).toEqual(row);
     expect(() => DailyOwnerStore.forRequest(pool, requestFor(owner, 'runner'))).toThrow();
     await expect(store.read('recovery_days', { recovery_date: '2026-01-01', owner_object_id: other }, signal())).rejects.toThrow('Invalid Daily key');
+  });
+
+  it('reads and revision-updates the owner profile and marks/clears recovery without changing measurements', async () => {
+    const coachOwner = '33333333-3333-4333-8333-333333333333';
+    const store = SqlDailyCoachStore.forRequest(pool, requestFor(coachOwner));
+    expect(await store.profile(signal())).toEqual({ status: 'not-configured', profile: null });
+    await pool.request().input('owner', sql.UniqueIdentifier, coachOwner).query(`
+      INSERT daily.coach_profiles(owner_object_id,display_name,primary_goal,current_phase,date_of_birth,deficit_rate,
+        protein_minimum_grams,protein_per_kg,sleep_target_hours,steps_target,gym_target_weekly,run_target_weekly,
+        coaching_intensity,profanity_preference,meal_schedule_json,food_preferences_json,restrictions_json,
+        football_preferences_json,revision,created_at,updated_at)
+      VALUES(@owner,N'Synthetic owner',N'Synthetic goal',N'baseline','1990-01-01',0.1,100,1.5,8,8000,3,2,
+        N'balanced',N'none',N'{}',N'{}',N'[]',N'{}',1,N'2026-10-17T00:00:00Z',N'2026-10-17T00:00:00Z');`);
+    const before = await store.profile(signal());
+    expect(before).toMatchObject({ status: 'available', profile: { primaryGoal: 'Synthetic goal', revision: '1' } });
+    const updated = await store.updateProfile({ primaryGoal: 'Synthetic updated goal' }, 1n, signal());
+    expect(updated).toMatchObject({ primaryGoal: 'Synthetic updated goal', revision: '2' });
+    await expect(store.updateProfile({ primaryGoal: 'stale' }, 1n, signal())).rejects.toThrow('changed');
+
+    await pool.request().input('owner', sql.UniqueIdentifier, coachOwner).query(`
+      INSERT daily.health_daily_metrics(owner_object_id,metric_name,metric_date,unit,value,ingestion_id,updated_at)
+      VALUES(@owner,N'synthetic_metric','2026-10-17',N'count',42,N'synthetic-ingestion',N'2026-10-17T00:00:00Z');`);
+    await store.setRecovery('2026-10-17', '2026-10-18', 'sick', 'synthetic', signal());
+    expect(await store.recovery('2026-10-17', '2026-10-18', signal())).toHaveLength(2);
+    const retainedMetric = await DailyOwnerStore.forRequest(pool, requestFor(coachOwner))
+      .read('health_daily_metrics', { metric_name: 'synthetic_metric', metric_date: '2026-10-17' }, signal());
+    expect(retainedMetric).toMatchObject({ value: 42, unit: 'count' });
+    await store.setRecovery('2026-10-17', '2026-10-18', 'clear', null, signal());
+    expect(await store.recovery('2026-10-17', '2026-10-18', signal())).toEqual([]);
+    expect(await SqlDailyCoachStore.forRequest(pool, requestFor(other)).profile(signal())).toEqual({ status: 'not-configured', profile: null });
   });
 
   it('enforces idempotency and retains revisions/tombstones without inventing nutrient values', async () => {

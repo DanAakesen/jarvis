@@ -300,7 +300,7 @@ describe('Projects page', () => {
     projects = [];
     renderFactory();
 
-    expect(await screen.findByRole('heading', { name: 'No managed projects' })).not.toBeNull();
+    expect(await screen.findByText('No managed projects are available.')).not.toBeNull();
     expect(screen.getByRole('button', { name: 'Add project' })).not.toBeNull();
     expect(screen.queryByRole('link', { name: 'New project defaults' })).toBeNull();
 
@@ -355,7 +355,7 @@ describe('Projects page', () => {
     expect(screen.getByText(/task history stays available/)).not.toBeNull();
     await user.click(within(confirmation).getByRole('button', { name: 'Confirm archive' }));
 
-    expect(await screen.findByRole('heading', { name: 'No managed projects' })).not.toBeNull();
+    expect(await screen.findByText('No managed projects are available.')).not.toBeNull();
     expect(screen.getByText(/Project archived\. Its task history is retained/)).not.toBeNull();
     expect(fetchMock.mock.calls.some(([, init]) => init?.method === 'DELETE')).toBe(true);
   });

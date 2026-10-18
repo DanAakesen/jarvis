@@ -17,6 +17,8 @@ import { createDailyChanges, type DailyChanges } from './revisions.js';
 import { dailyJson as json, projectDailyRecord as project, projectNutritionRecord, dailyResultByteLimit } from './records.js';
 import { DailyBriefReadModel, briefDetailFields, briefMetadataFields } from './briefs/read-model.js';
 import { createDailyFeeds, type DailyFeedProviders, type DailyFeedService } from './feeds/service.js';
+import { SqlDailyCoachStore } from './coach-store.js';
+import type { DailyCoachStore } from './coach-store.js';
 export { projectNutritionRecord, dailyResultByteLimit } from './records.js';
 
 export interface DailyReaders {
@@ -193,8 +195,10 @@ export function createDailyData(pool: sql.ConnectionPool, owner: string, now: ()
     : undefined;
   return {
     query: new DailyQueryService(readers, now), changes,
-    processor: new SqlHealthProcessor(pool, owner, now, changes),
+    health: (request: FastifyRequest) => { checkOwner(request); return readers.health(request); },
     nutrition,
+    coach: (request: FastifyRequest) => { checkOwner(request); return SqlDailyCoachStore.forRequest(pool, request); },
+    processor: new SqlHealthProcessor(pool, owner, now, changes),
     ...(foodLookup ? { foodLookup } : {}),
     ...(feeds ? { feeds: createDailyFeeds(pool, owner, changes, feeds, now) } : {}),
   };
@@ -202,6 +206,9 @@ export function createDailyData(pool: sql.ConnectionPool, owner: string, now: ()
 export interface DailyData {
   query: Pick<DailyQueryService, 'query'>;
   changes: DailyChanges;
+  health?: (request: FastifyRequest) => Pick<DailyHealthReadModel, 'history' | 'sync'>;
+  nutrition?: (request: FastifyRequest) => Pick<NutritionStore, 'history' | 'days' | 'feedback' | 'preferences'>;
+  coach?: (request: FastifyRequest) => DailyCoachStore;
   foodLookup?: DailyFoodLookup;
   feeds?: Pick<DailyFeedService, 'execute'>;
 }

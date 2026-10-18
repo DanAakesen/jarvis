@@ -69,7 +69,9 @@ describe('nutrition totals', () => {
       meal({ meal_date: '2026-10-16' }),
     ];
     const runs = trendSeries(rows, 'energy_kcal', 9005);
-    expect(runs[0]?.name).toBe('Resting burn minus deficit (before activity)');
+    expect(runs[0]?.name).toBe('Resting burn minus deficit (before activity) (kcal)');
+    expect(runs.filter(run => run.points.length > 0).map(run => run.name))
+      .toEqual(['Resting burn minus deficit (before activity) (kcal)', 'Energy (kcal)', 'Energy (kcal)', 'Energy (kcal)']);
     expect(runs.filter(run => run.points.length)).toHaveLength(4);
     expect(runs[0]?.points.map(point => point.x)).toEqual(rows.map(row => row.meal_date));
     expect(chartLayout(runs).categories).toEqual(rows.map(row => row.meal_date));
