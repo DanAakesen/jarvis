@@ -10,8 +10,9 @@ import { createDailyChanges, type DailyChangeSink } from '../revisions.js';
 type Inbox = { id: string; checksum: string; bytes: Buffer; kind: string; automation: string; session: string; acceptedAt: Date; attempt: number };
 export type ProcessingResult = { state: 'idle' | 'processed' | 'quarantined' | 'retry'; acceptanceId?: string; reason?: string };
 export const processingRetryDelays = [120000, 300000, 900000] as const;
+const processingLeaseMs = 45000;
 
-/** Explicit one-item operator/rehearsal operation. No production composition, timer, or new pool. */
+/** One-item SQL processor. Production invokes it only from the default-off bounded worker. */
 export class SqlHealthProcessor {
   readonly owner: string;
   private readonly changes = createDailyChanges();
@@ -79,7 +80,7 @@ export class SqlHealthProcessor {
         if (quarantined.state === 'quarantined') this.changes.publish({ owner: this.owner, sources: [sources.sync] });
         return quarantined;
       }
-      if (error instanceof HealthUnavailable) return { state: 'retry', acceptanceId: row.id, reason: 'storage_unavailable' };
+      if (error instanceof HealthUnavailable) return this.retry(row, signal);
       // Unexpected errors remain failures, with no payload/provider detail crossing the boundary.
       throw new HealthUnavailable();
     }
@@ -98,7 +99,8 @@ export class SqlHealthProcessor {
     const found = (await healthSqlQuery(this.request(tx, row), 'SELECT processing_status,processing_attempts,checksum,processing_next_attempt_at FROM daily.health_upload_inbox WHERE owner_object_id=@owner AND acceptance_id=@id;', signal)).recordset[0];
     if (!found || found.checksum !== row.checksum) throw new HealthPayloadError('invalid_payload');
     if (found.processing_status === 'processed') return found;
-    if (found.processing_status !== 'pending' || found.processing_attempts !== row.attempt || !(found.processing_next_attempt_at instanceof Date) || found.processing_next_attempt_at.getTime() <= this.now()) return null;
+    if (found.processing_status !== 'processing' || found.processing_attempts !== row.attempt ||
+        !(found.processing_next_attempt_at instanceof Date) || found.processing_next_attempt_at.getTime() <= this.now()) return null;
     return found;
   }
   private async claim(signal: AbortSignal): Promise<Inbox | ProcessingResult | null> {
@@ -106,7 +108,9 @@ export class SqlHealthProcessor {
       const now = new Date(this.now());
       const found = (await healthSqlQuery(new sql.Request(tx).input('owner', sql.UniqueIdentifier, this.owner).input('now', sql.DateTime2(3), now),
       `SELECT TOP(1) acceptance_id,checksum,byte_count,raw_bytes,kind,automation_id,session_id,accepted_at,processing_attempts
-         FROM daily.health_upload_inbox WHERE owner_object_id=@owner AND processing_status='pending' AND (processing_next_attempt_at IS NULL OR processing_next_attempt_at<=@now)
+         FROM daily.health_upload_inbox WHERE owner_object_id=@owner AND
+           ((processing_status='pending' AND (processing_next_attempt_at IS NULL OR processing_next_attempt_at<=@now)) OR
+            (processing_status='processing' AND processing_next_attempt_at<=@now))
          ORDER BY accepted_at,acceptance_id;`, bounded)).recordset[0];
       if (!found) return null;
       const id = String(found.acceptance_id).toLowerCase(); const attempts = Number(found.processing_attempts);
@@ -117,8 +121,8 @@ export class SqlHealthProcessor {
       }
       if (!Buffer.isBuffer(found.raw_bytes) || found.raw_bytes.length !== found.byte_count || !(found.accepted_at instanceof Date)) throw new HealthUnavailable();
       const attempt = attempts + 1;
-      await healthSqlQuery(this.request(tx, { id, attempt }).input('next', sql.DateTime2(3), new Date(now.getTime() + processingRetryDelays[attempts]!)),
-        "UPDATE daily.health_upload_inbox SET processing_attempts=@attempt,processing_next_attempt_at=@next,processing_error_code='interrupted' WHERE owner_object_id=@owner AND acceptance_id=@id;", bounded);
+      await healthSqlQuery(this.request(tx, { id, attempt }).input('next', sql.DateTime2(3), new Date(now.getTime() + processingLeaseMs)),
+        "UPDATE daily.health_upload_inbox SET processing_status='processing',processing_attempts=@attempt,processing_next_attempt_at=@next,processing_error_code='interrupted' WHERE owner_object_id=@owner AND acceptance_id=@id;", bounded);
       return { id, checksum: String(found.checksum), bytes: Buffer.from(found.raw_bytes), kind: String(found.kind), automation: String(found.automation_id), session: String(found.session_id), acceptedAt: found.accepted_at, attempt };
     });
   }
@@ -130,6 +134,17 @@ export class SqlHealthProcessor {
       await healthSqlQuery(this.request(tx, row).input('code', sql.VarChar(64), code),
         "UPDATE daily.health_upload_inbox SET processing_status='quarantined',processing_error_code=@code,processing_next_attempt_at=NULL WHERE owner_object_id=@owner AND acceptance_id=@id AND processing_attempts=@attempt;", bounded);
       return { state: 'quarantined', acceptanceId: row.id, reason: code };
+    });
+  }
+  private async retry(row: Inbox, signal: AbortSignal): Promise<ProcessingResult> {
+    return healthSqlTransaction<ProcessingResult>(this.pool, this.owner, signal, async (tx, bounded) => {
+      const current = await this.current(tx, row, bounded);
+      if (current?.processing_status === 'processed') return { state: 'processed', acceptanceId: row.id };
+      if (!current) return { state: 'retry', acceptanceId: row.id };
+      const delay = processingRetryDelays[row.attempt - 1]!;
+      await healthSqlQuery(this.request(tx, row).input('next', sql.DateTime2(3), new Date(this.now() + delay)),
+        "UPDATE daily.health_upload_inbox SET processing_status='pending',processing_next_attempt_at=@next,processing_error_code='interrupted' WHERE owner_object_id=@owner AND acceptance_id=@id AND processing_attempts=@attempt;", bounded);
+      return { state: 'retry', acceptanceId: row.id, reason: 'storage_unavailable' };
     });
   }
   private async recordSuccess(tx: sql.Transaction, row: Inbox, counts: Record<string, number>, feeds: string[], completedAt: Date, signal: AbortSignal) {

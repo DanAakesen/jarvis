@@ -1,4 +1,5 @@
 import { useContext, useEffect, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { dailyQuerySources as sources, type DailySourceId } from '@jarvis/contracts';
 import { Loader } from '../Loader';
 import { ShellIcon, type ShellIconName } from '../ShellIcon';
@@ -79,6 +80,9 @@ export function DailyOverview({ backendUrl, getAccessToken, capabilities, onRetr
   }, [rows]);
   const refreshVersion = useContext(DailyRefreshContext);
   const summary = rows.length > 0 && !pending ? overviewSummary(rows.map(row => row.probe)) : '';
+  const healthSources: readonly DailySourceId[] = [sources.metrics,sources.sleep,sources.workouts,sources.sync];
+  const healthRows = rows.filter(row => healthSources.includes(row.source.id));
+  const healthIsEmpty = !pending && healthRows.length > 0 && healthRows.every(row => row.probe?.state === 'none');
   const refreshOverview = () => {
     if (pending) return;
     reload();
@@ -121,6 +125,7 @@ export function DailyOverview({ backendUrl, getAccessToken, capabilities, onRetr
                 {rows.map(row => <OverviewRow key={row.source.id} row={row} onOpen={onOpen} onRetry={reload}
                   headingLevel={hasSummarySource ? 4 : 3} />)}
               </ul>
+              {healthIsEmpty && <p className="daily-meta">No health records were returned. <Link to="/settings#health-upload">Set up Health Auto Export in Settings</Link>.</p>}
             </>}
           </>}
     <p className="visually-hidden" role="status">{summary}</p>

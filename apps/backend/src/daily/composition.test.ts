@@ -22,6 +22,7 @@ const agent = '11111111-1111-4111-8111-111111111111';
 const other = '22222222-2222-4222-8222-222222222222';
 const dailyToolNames = [
   'daily_query', 'daily_show', 'daily_food', 'daily_food_review', 'daily_saved_food', 'daily_nutrition_targets', 'daily_nutrition_suggest',
+  'daily_health_summary', 'daily_nutrition_history', 'daily_coach_status',
 ];
 type App = ReturnType<typeof buildApp>;
 const apps: App[] = [];

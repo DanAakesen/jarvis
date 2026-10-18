@@ -1,0 +1,5068 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Daily Health and Food",
+    "description": "Reads every Daily Overview data area and manages confirmed food, favorites, and meal plans. Uses Danish DTU Frida v5.5 for estimates and Sites as Dan's nutrition source of truth.",
+    "version": "3.1.0"
+  },
+  "servers": [
+    {
+      "url": "https://dan-daily-overview.danaakesen.chatgpt.site"
+    }
+  ],
+  "paths": {
+    "/api/gpt-actions/site/overview": {
+      "get": {
+        "operationId": "getSiteOverview",
+        "summary": "Get the complete current Daily Overview",
+        "description": "Use for current questions spanning priorities, email attention, calendar, habits, countdowns, source freshness, health, workouts, and nutrition. For calories left today, read health.today.calorieGlance.caloriesLeftKcal; it is full maintenance, not the 15% target.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-openai-isConsequential": false,
+        "responses": {
+          "200": {
+            "description": "Current combined Daily Overview data.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "description": "Bounded read-only data returned from the same normalized Sites records used by Daily Overview."
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid API key."
+          },
+          "503": {
+            "description": "Daily Overview data is unavailable."
+          }
+        }
+      }
+    },
+    "/api/gpt-actions/health/summary": {
+      "get": {
+        "operationId": "getHealthSummary",
+        "summary": "Get current health and workout facts",
+        "description": "Use for current Apple Health sleep, steps, active calories, body measurements, workout goals, qualifying Gym and Run sessions, workout calories, sync freshness, and Sites nutrition. For calories left today, read today.calorieGlance.caloriesLeftKcal: full maintenance, not the 15% target.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-openai-isConsequential": false,
+        "responses": {
+          "200": {
+            "description": "Current Sites-backed health summary with full-maintenance calorie glance.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "description": "Current normalized Apple Health and Sites nutrition data. For calories left today, read today.calorieGlance.caloriesLeftKcal.",
+                  "properties": {
+                    "today": {
+                      "type": "object",
+                      "additionalProperties": true,
+                      "properties": {
+                        "calorieGlance": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "status",
+                            "available",
+                            "fullMaintenanceBudgetKcal",
+                            "caloriesLeftKcal",
+                            "definition",
+                            "sources",
+                            "asOf"
+                          ],
+                          "properties": {
+                            "available": {
+                              "type": "boolean"
+                            },
+                            "status": {
+                              "type": "string",
+                              "enum": [
+                                "available",
+                                "unavailable"
+                              ]
+                            },
+                            "period": {
+                              "type": "string"
+                            },
+                            "periodDays": {
+                              "type": "integer"
+                            },
+                            "observedDays": {
+                              "type": "integer"
+                            },
+                            "isAverage": {
+                              "type": "boolean"
+                            },
+                            "totalExpenditureKcal": {
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "totalIntakeKcal": {
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "totalRemainingKcal": {
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "fullBudgetKcal": {
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "remainingKcal": {
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "tone": {
+                              "type": "string",
+                              "enum": [
+                                "good",
+                                "close",
+                                "over",
+                                "unknown"
+                              ]
+                            },
+                            "intakeKcal": {
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "activeKcal": {
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "restingBaselineKcal": {
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "fullMaintenanceBudgetKcal": {
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "caloriesLeftKcal": {
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "definition": {
+                              "type": "string"
+                            },
+                            "sources": {
+                              "type": "object",
+                              "additionalProperties": true
+                            },
+                            "asOf": {
+                              "type": "object",
+                              "additionalProperties": true
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid API key."
+          },
+          "503": {
+            "description": "Health summary is unavailable."
+          }
+        }
+      }
+    },
+    "/api/gpt-actions/health/history": {
+      "get": {
+        "operationId": "getHealthHistory",
+        "summary": "Get historical health and workout data",
+        "description": "Use for dated questions about Apple Health sleep, workouts, activity, active or resting energy, body metrics, and workout calories. Query at most 93 days at a time and continue with another bounded window when needed.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-openai-isConsequential": false,
+        "parameters": [
+          {
+            "name": "startDate",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "endDate",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Bounded historical health, sleep, workout, and metric rows.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "description": "Bounded read-only data returned from the same normalized Sites records used by Daily Overview."
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid date range or limit."
+          },
+          "401": {
+            "description": "Invalid API key."
+          },
+          "503": {
+            "description": "Health history is unavailable."
+          }
+        }
+      }
+    },
+    "/api/gpt-actions/site/attention": {
+      "get": {
+        "operationId": "getAttentionItems",
+        "summary": "Get one category of current attention items",
+        "description": "Use for current reply-needed email, waiting-on-others email, priority tasks, all open tasks, or countdowns. The result is bounded and read-only.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-openai-isConsequential": false,
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "waiting_for_you",
+                "waiting_on_others",
+                "priority_tasks",
+                "open_tasks",
+                "countdowns"
+              ]
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50,
+              "default": 20
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current bounded attention items.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "description": "Bounded read-only data returned from the same normalized Sites records used by Daily Overview."
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid category or limit."
+          },
+          "401": {
+            "description": "Invalid API key."
+          },
+          "503": {
+            "description": "Attention data is unavailable."
+          }
+        }
+      }
+    },
+    "/api/gpt-actions/site/calendar": {
+      "get": {
+        "operationId": "getCalendarWindow",
+        "summary": "Get calendar events for a date window",
+        "description": "Use for questions about Google Calendar events or timed conflicts. Reads the current normalized Sites snapshot for a bounded window of at most 31 days.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-openai-isConsequential": false,
+        "parameters": [
+          {
+            "name": "startDate",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "days",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 31,
+              "default": 7
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Bounded calendar events and conflict facts.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "description": "Bounded read-only data returned from the same normalized Sites records used by Daily Overview."
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid date window or limit."
+          },
+          "401": {
+            "description": "Invalid API key."
+          },
+          "503": {
+            "description": "Calendar data is unavailable."
+          }
+        }
+      }
+    },
+    "/api/gpt-actions/nutrition/lookup": {
+      "post": {
+        "operationId": "lookupFood",
+        "summary": "Calculate food nutrients from DTU Frida",
+        "description": "Resolve photo-derived ingredients against Danish DTU Frida v5.5 and calculate per-100 g nutrients. Read-only; never queues food. For an unmatched ingredient or uncertain amount, make a transparent general-knowledge estimate and ask Dan to confirm before logFood.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-openai-isConsequential": false,
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "components"
+                ],
+                "properties": {
+                  "components": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 25,
+                    "description": "Photo-derived ingredients. Include the estimated edible grams and preparation method when visible or inferable; use null grams when the amount is unclear.",
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "name",
+                        "grams"
+                      ],
+                      "properties": {
+                        "name": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 120
+                        },
+                        "grams": {
+                          "type": [
+                            "number",
+                            "null"
+                          ],
+                          "minimum": 0,
+                          "maximum": 5000,
+                          "description": "Estimated edible weight in grams, or null when unknown."
+                        },
+                        "preparationMethod": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "maxLength": 120,
+                          "description": "Visible or inferred preparation such as raw, boiled, fried, or grilled."
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "DTU Frida v5.5 matches and calculated per-ingredient and total nutrients; no food is queued.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "status",
+                    "confirmationRequired",
+                    "source",
+                    "components",
+                    "totals",
+                    "unmatched",
+                    "fallbackGuidance"
+                  ],
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "complete",
+                        "partial"
+                      ]
+                    },
+                    "confirmationRequired": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "source": {
+                      "type": "object",
+                      "additionalProperties": true
+                    },
+                    "components": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": true
+                      }
+                    },
+                    "totals": {
+                      "type": "object",
+                      "additionalProperties": true
+                    },
+                    "unmatched": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": true
+                      }
+                    },
+                    "fallbackGuidance": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid API key."
+          },
+          "422": {
+            "description": "Ingredient list failed validation."
+          },
+          "503": {
+            "description": "DTU Frida is temporarily unavailable."
+          }
+        }
+      }
+    },
+    "/api/gpt-actions/nutrition/log": {
+      "post": {
+        "operationId": "logFood",
+        "summary": "Log a confirmed meal",
+        "description": "Use after Dan asks to log food. For a photo or portion estimate, call lookupFood, show the DTU Frida v5.5 proposal, and wait; pass its values, not model totals. The response saves immediately in Daily Overview Sites and does not automatically export to Apple Health.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-openai-isConsequential": false,
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "mealName",
+                  "components",
+                  "caloriesKcal",
+                  "confidence",
+                  "captureMethod",
+                  "userConfirmed",
+                  "idempotencyKey"
+                ],
+                "properties": {
+                  "mealName": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200,
+                    "description": "Short factual name for the meal."
+                  },
+                  "components": {
+                    "type": "array",
+                    "maxItems": 25,
+                    "description": "Identifiable foods and the best available quantity for each.",
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "name"
+                      ],
+                      "properties": {
+                        "name": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 120
+                        },
+                        "quantity": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "maxLength": 80
+                        },
+                        "preparationMethod": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "maxLength": 120,
+                          "description": "Optional visible or inferred preparation such as raw, boiled, fried, or grilled."
+                        }
+                      }
+                    }
+                  },
+                  "occurredAt": {
+                    "type": "string",
+                    "format": "date-time",
+                    "description": "When the meal was eaten. Omit when Dan gives no time; the server will use the request time."
+                  },
+                  "mealType": {
+                    "type": "string",
+                    "enum": [
+                      "breakfast",
+                      "lunch",
+                      "dinner",
+                      "snack",
+                      "other"
+                    ],
+                    "description": "Optional. Do not ask only to classify the meal."
+                  },
+                  "caloriesKcal": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 10000
+                  },
+                  "proteinGrams": {
+                    "type": [
+                      "number",
+                      "null"
+                    ],
+                    "minimum": 0,
+                    "maximum": 1000
+                  },
+                  "carbohydratesGrams": {
+                    "type": [
+                      "number",
+                      "null"
+                    ],
+                    "minimum": 0,
+                    "maximum": 1000
+                  },
+                  "fatGrams": {
+                    "type": [
+                      "number",
+                      "null"
+                    ],
+                    "minimum": 0,
+                    "maximum": 1000
+                  },
+                  "fiberGrams": {
+                    "type": [
+                      "number",
+                      "null"
+                    ],
+                    "minimum": 0,
+                    "maximum": 1000
+                  },
+                  "confidence": {
+                    "type": "string",
+                    "enum": [
+                      "accurate",
+                      "approximate",
+                      "estimate"
+                    ]
+                  },
+                  "captureMethod": {
+                    "type": "string",
+                    "enum": [
+                      "voice",
+                      "photo",
+                      "text",
+                      "mixed"
+                    ]
+                  },
+                  "userConfirmed": {
+                    "type": "boolean",
+                    "const": true,
+                    "description": "True only when Dan directly asks to log, save, add, or record this meal."
+                  },
+                  "idempotencyKey": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100,
+                    "description": "Stable unique key for this meal so retries cannot create duplicates."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Meal saved permanently in Sites, or an idempotent retry returned the existing meal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "mealId",
+                    "idempotencyKey",
+                    "status",
+                    "duplicate",
+                    "meal",
+                    "source",
+                    "retention",
+                    "appleHealthExportStatus",
+                    "nextStep"
+                  ],
+                  "properties": {
+                    "mealId": {
+                      "type": "string",
+                      "description": "Stable Sites meal ID."
+                    },
+                    "idempotencyKey": {
+                      "type": "string",
+                      "description": "Exact retry, correction, deletion, and export key for this meal."
+                    },
+                    "status": {
+                      "type": "string",
+                      "const": "saved"
+                    },
+                    "duplicate": {
+                      "type": "boolean",
+                      "description": "True when this idempotency key already existed."
+                    },
+                    "meal": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "name",
+                        "type",
+                        "components",
+                        "occurredAt",
+                        "nutrients",
+                        "confidence"
+                      ],
+                      "properties": {
+                        "name": {
+                          "type": "string"
+                        },
+                        "type": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "components": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "required": [
+                              "name",
+                              "quantity"
+                            ],
+                            "properties": {
+                              "name": {
+                                "type": "string"
+                              },
+                              "quantity": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "preparationMethod": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              }
+                            }
+                          }
+                        },
+                        "occurredAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "nutrients": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "caloriesKcal",
+                            "proteinGrams",
+                            "carbohydratesGrams",
+                            "fatGrams",
+                            "fiberGrams"
+                          ],
+                          "properties": {
+                            "caloriesKcal": {
+                              "type": "number"
+                            },
+                            "proteinGrams": {
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "carbohydratesGrams": {
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "fatGrams": {
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "fiberGrams": {
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            }
+                          }
+                        },
+                        "confidence": {
+                          "type": "string",
+                          "enum": [
+                            "accurate",
+                            "approximate",
+                            "estimate"
+                          ]
+                        }
+                      }
+                    },
+                    "source": {
+                      "type": "string"
+                    },
+                    "retention": {
+                      "type": "string",
+                      "const": "until_deleted"
+                    },
+                    "appleHealthExportStatus": {
+                      "type": "string"
+                    },
+                    "nextStep": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid API key."
+          },
+          "422": {
+            "description": "Meal facts failed validation."
+          },
+          "503": {
+            "description": "Nutrition storage or owner configuration is unavailable."
+          }
+        }
+      }
+    },
+    "/api/gpt-actions/nutrition/analyze": {
+      "get": {
+        "operationId": "analyzeNutrition",
+        "summary": "Analyze nutrition over any period",
+        "description": "Use for every question about nutrition totals, averages, trends, comparisons, or patterns over any date range. Returns chart-ready series. When a chart helps, use /visualize with the returned series; otherwise give a concise table.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-openai-isConsequential": false,
+        "parameters": [
+          {
+            "name": "startDate",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "endDate",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "granularity",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "auto",
+                "day",
+                "week",
+                "month"
+              ],
+              "default": "auto"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sites-backed nutrition summary and chart-ready series.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "status",
+                    "startDate",
+                    "endDate",
+                    "days",
+                    "timezone",
+                    "granularity",
+                    "source",
+                    "retention",
+                    "summary",
+                    "series",
+                    "visualization"
+                  ],
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "const": "available"
+                    },
+                    "startDate": {
+                      "type": "string",
+                      "format": "date"
+                    },
+                    "endDate": {
+                      "type": "string",
+                      "format": "date"
+                    },
+                    "days": {
+                      "type": "integer"
+                    },
+                    "timezone": {
+                      "type": "string"
+                    },
+                    "granularity": {
+                      "type": "string",
+                      "enum": [
+                        "day",
+                        "week",
+                        "month"
+                      ]
+                    },
+                    "source": {
+                      "type": "string"
+                    },
+                    "retention": {
+                      "type": "string",
+                      "const": "until_deleted"
+                    },
+                    "summary": {
+                      "type": "object",
+                      "additionalProperties": true
+                    },
+                    "series": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": true
+                      }
+                    },
+                    "visualization": {
+                      "type": "object",
+                      "additionalProperties": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid date range or granularity."
+          },
+          "401": {
+            "description": "Invalid API key."
+          },
+          "503": {
+            "description": "Nutrition analytics is unavailable."
+          }
+        }
+      }
+    },
+    "/api/gpt-actions/nutrition/update": {
+      "post": {
+        "operationId": "updateFood",
+        "summary": "Correct a saved meal",
+        "description": "Use only after Dan explicitly confirms a correction to one exact Sites meal. Resolve its idempotencyKey from history first. Any retained meal age can be corrected; there is no seven-day limit. Only supplied fields change.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-openai-isConsequential": true,
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "idempotencyKey",
+                  "userConfirmed"
+                ],
+                "properties": {
+                  "idempotencyKey": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100
+                  },
+                  "mealName": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "components": {
+                    "type": "array",
+                    "maxItems": 25,
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": true
+                    }
+                  },
+                  "occurredAt": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "mealType": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "enum": [
+                      "breakfast",
+                      "lunch",
+                      "dinner",
+                      "snack",
+                      "other",
+                      null
+                    ]
+                  },
+                  "caloriesKcal": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 10000
+                  },
+                  "proteinGrams": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1000
+                  },
+                  "carbohydratesGrams": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1000
+                  },
+                  "fatGrams": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1000
+                  },
+                  "fiberGrams": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1000
+                  },
+                  "confidence": {
+                    "type": "string",
+                    "enum": [
+                      "accurate",
+                      "approximate",
+                      "estimate"
+                    ]
+                  },
+                  "captureMethod": {
+                    "type": "string",
+                    "enum": [
+                      "voice",
+                      "photo",
+                      "text",
+                      "mixed"
+                    ]
+                  },
+                  "userConfirmed": {
+                    "type": "boolean",
+                    "const": true
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Sites meal corrected.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "status",
+                    "source",
+                    "meal"
+                  ],
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "const": "updated"
+                    },
+                    "source": {
+                      "type": "string"
+                    },
+                    "meal": {
+                      "type": "object",
+                      "additionalProperties": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid API key."
+          },
+          "422": {
+            "description": "Invalid or unconfirmed correction."
+          }
+        }
+      }
+    },
+    "/api/gpt-actions/nutrition/delete": {
+      "post": {
+        "operationId": "deleteFood",
+        "summary": "Delete a saved meal",
+        "description": "Use only after Dan explicitly confirms deletion of one exact Sites meal. The canonical record is soft-deleted; an already exported Apple Health copy may remain.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-openai-isConsequential": true,
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "idempotencyKey",
+                  "userConfirmed"
+                ],
+                "properties": {
+                  "idempotencyKey": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100
+                  },
+                  "userConfirmed": {
+                    "type": "boolean",
+                    "const": true
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Sites meal deleted or already absent.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "deleted",
+                    "alreadyAbsent",
+                    "source",
+                    "meal",
+                    "appleHealthCopyMayRemain"
+                  ],
+                  "properties": {
+                    "deleted": {
+                      "type": "boolean"
+                    },
+                    "alreadyAbsent": {
+                      "type": "boolean"
+                    },
+                    "source": {
+                      "type": "string"
+                    },
+                    "meal": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "additionalProperties": true
+                    },
+                    "appleHealthCopyMayRemain": {
+                      "type": [
+                        "boolean",
+                        "null"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid API key."
+          },
+          "422": {
+            "description": "Invalid or unconfirmed deletion."
+          }
+        }
+      }
+    },
+    "/api/gpt-actions/nutrition/export-apple-health": {
+      "post": {
+        "operationId": "queueAppleHealthExport",
+        "summary": "Queue a Sites nutrition period for Apple Health export",
+        "description": "Use only when Dan explicitly asks to export a confirmed date range. Sites remains authoritative. The existing shared bearer token is reused by the Get Meals Shortcut.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-openai-isConsequential": true,
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "startDate",
+                  "endDate",
+                  "userConfirmed"
+                ],
+                "properties": {
+                  "startDate": {
+                    "type": "string",
+                    "format": "date"
+                  },
+                  "endDate": {
+                    "type": "string",
+                    "format": "date"
+                  },
+                  "userConfirmed": {
+                    "type": "boolean",
+                    "const": true
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Eligible meals queued idempotently for the Shortcut.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "status",
+                    "source",
+                    "destination",
+                    "queued",
+                    "startDate",
+                    "endDate",
+                    "nextStep"
+                  ],
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "const": "queued"
+                    },
+                    "source": {
+                      "type": "string"
+                    },
+                    "destination": {
+                      "type": "string",
+                      "const": "Apple Health"
+                    },
+                    "queued": {
+                      "type": "integer"
+                    },
+                    "startDate": {
+                      "type": "string",
+                      "format": "date"
+                    },
+                    "endDate": {
+                      "type": "string",
+                      "format": "date"
+                    },
+                    "nextStep": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid API key."
+          },
+          "422": {
+            "description": "Invalid or unconfirmed export range."
+          }
+        }
+      }
+    },
+    "/api/gpt-actions/nutrition/pending": {
+      "get": {
+        "operationId": "listPendingFood",
+        "summary": "List pending food entries",
+        "description": "Use when Dan asks to remove a food log and the exact pending entry is unclear. Return only his pending entries. Match by meal name and time; if multiple entries plausibly match, ask which one before cancellation.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-openai-isConsequential": false,
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 20,
+              "default": 10
+            },
+            "description": "Maximum pending entries to return."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current pending food entries available for exact identification.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "items",
+                    "hasMore"
+                  ],
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "queueId",
+                          "idempotencyKey",
+                          "mealName",
+                          "mealType",
+                          "components",
+                          "occurredAt",
+                          "nutrients",
+                          "confidence",
+                          "captureMethod",
+                          "status",
+                          "createdAt"
+                        ],
+                        "properties": {
+                          "queueId": {
+                            "type": "string"
+                          },
+                          "idempotencyKey": {
+                            "type": "string",
+                            "description": "Pass this exact value to cancelFood after Dan identifies this entry."
+                          },
+                          "mealName": {
+                            "type": "string"
+                          },
+                          "mealType": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "components": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "additionalProperties": true
+                            }
+                          },
+                          "occurredAt": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "nutrients": {
+                            "type": "object",
+                            "additionalProperties": true
+                          },
+                          "confidence": {
+                            "type": "string"
+                          },
+                          "captureMethod": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "pending"
+                            ]
+                          },
+                          "createdAt": {
+                            "type": "string",
+                            "format": "date-time"
+                          }
+                        }
+                      }
+                    },
+                    "hasMore": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid limit."
+          },
+          "401": {
+            "description": "Invalid API key."
+          },
+          "503": {
+            "description": "Food queue or owner configuration is unavailable."
+          }
+        }
+      }
+    },
+    "/api/gpt-actions/nutrition/cancel": {
+      "post": {
+        "operationId": "cancelFood",
+        "summary": "Cancel an exact pending food entry",
+        "description": "Use only after Dan asks to remove one exact food entry. When needed, call listPendingFood first, pass its exact idempotencyKey, and set userConfirmed=true. Only pending entries can be cancelled; Apple Health records cannot be removed.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-openai-isConsequential": true,
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "idempotencyKey",
+                  "userConfirmed"
+                ],
+                "properties": {
+                  "idempotencyKey": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100,
+                    "description": "Exact key returned by logFood or listPendingFood."
+                  },
+                  "userConfirmed": {
+                    "type": "boolean",
+                    "const": true,
+                    "description": "True only when Dan directly asks to cancel this exact pending entry."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Pending entry cancelled, or the same cancellation was safely retried.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "cancelled",
+                    "alreadyCancelled",
+                    "alreadyAbsent",
+                    "entryId",
+                    "previousStatus",
+                    "meal"
+                  ],
+                  "properties": {
+                    "cancelled": {
+                      "type": "boolean"
+                    },
+                    "alreadyCancelled": {
+                      "type": "boolean"
+                    },
+                    "alreadyAbsent": {
+                      "type": "boolean"
+                    },
+                    "entryId": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "previousStatus": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "meal": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "additionalProperties": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid API key."
+          },
+          "422": {
+            "description": "Entry is not pending, was not identified exactly, or confirmation is missing."
+          },
+          "503": {
+            "description": "Food queue or owner configuration is unavailable."
+          }
+        }
+      }
+    },
+    "/api/gpt-actions/nutrition/retry": {
+      "post": {
+        "operationId": "retryFood",
+        "summary": "Retry an exact uncertain food entry",
+        "description": "Use only after Dan asks to retry one exact uncertain entry and Apple Health readback verifies its samples are absent. Pass the exact idempotencyKey and userConfirmed=true. This returns only that entry to the pending phone queue and refuses every other status so retries cannot happen automatically.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-openai-isConsequential": true,
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "idempotencyKey",
+                  "userConfirmed"
+                ],
+                "properties": {
+                  "idempotencyKey": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100,
+                    "description": "Exact key returned by nutrition history for the verified uncertain entry."
+                  },
+                  "userConfirmed": {
+                    "type": "boolean",
+                    "const": true,
+                    "description": "True only after Dan asks to retry this exact uncertain entry and Apple Health readback shows its samples are absent."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The exact entry is pending for the phone again, or was already pending.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "retried",
+                    "alreadyPending",
+                    "entryId",
+                    "previousStatus",
+                    "status",
+                    "meal",
+                    "nextStep"
+                  ],
+                  "properties": {
+                    "retried": {
+                      "type": "boolean"
+                    },
+                    "alreadyPending": {
+                      "type": "boolean"
+                    },
+                    "entryId": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "previousStatus": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "status": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "meal": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "additionalProperties": true
+                    },
+                    "nextStep": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid API key."
+          },
+          "422": {
+            "description": "Entry is not uncertain, was not identified exactly, or confirmation is missing."
+          },
+          "503": {
+            "description": "Food queue or owner configuration is unavailable."
+          }
+        }
+      }
+    },
+    "/api/gpt-actions/nutrition/release-claim": {
+      "post": {
+        "operationId": "releaseFoodClaim",
+        "summary": "Release one stopped phone claim",
+        "description": "Use only after Dan identifies one exact claimed entry, confirms the iPhone Shortcut is stopped, and verifies its samples are absent from Apple Health. All confirmation flags must be true. Returns only that claim to pending; never use while the Shortcut may still be running.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-openai-isConsequential": true,
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "idempotencyKey",
+                  "userConfirmed",
+                  "shortcutStopped",
+                  "appleHealthCheckedAbsent"
+                ],
+                "properties": {
+                  "idempotencyKey": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100,
+                    "description": "Exact key returned by nutrition history for the claimed entry."
+                  },
+                  "userConfirmed": {
+                    "type": "boolean",
+                    "const": true,
+                    "description": "True only when Dan directly asks to release this exact claim."
+                  },
+                  "shortcutStopped": {
+                    "type": "boolean",
+                    "const": true,
+                    "description": "True only after Dan confirms the iPhone Shortcut is no longer running."
+                  },
+                  "appleHealthCheckedAbsent": {
+                    "type": "boolean",
+                    "const": true,
+                    "description": "True only after Apple Health readback confirms this entry's samples are absent."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The exact claimed entry is pending again, or was already pending.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "released",
+                    "alreadyPending",
+                    "entryId",
+                    "previousStatus",
+                    "status",
+                    "meal",
+                    "nextStep"
+                  ],
+                  "properties": {
+                    "released": {
+                      "type": "boolean"
+                    },
+                    "alreadyPending": {
+                      "type": "boolean"
+                    },
+                    "entryId": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "previousStatus": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "status": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "meal": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "additionalProperties": true
+                    },
+                    "nextStep": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid API key."
+          },
+          "422": {
+            "description": "Entry is not claimed, was not identified exactly, or required confirmations are missing."
+          },
+          "503": {
+            "description": "Food queue or owner configuration is unavailable."
+          }
+        }
+      }
+    },
+    "/api/gpt-actions/nutrition/history": {
+      "get": {
+        "operationId": "searchFoodHistory",
+        "summary": "Search or list saved food history",
+        "description": "Search by remembered text, or list exact Sites meals for any date range. Use this for meal-level questions and to resolve an idempotencyKey before correction or deletion.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-openai-isConsequential": false,
+        "parameters": [
+          {
+            "name": "query",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120
+            },
+            "description": "Meal, brand, ingredient, or remembered phrase. Omit when listing a date range."
+          },
+          {
+            "name": "startDate",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            },
+            "description": "Inclusive first date; provide with endDate when listing a period."
+          },
+          {
+            "name": "endDate",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            },
+            "description": "Inclusive final date; provide with startDate when listing a period."
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 20
+            },
+            "description": "Required maximum matching meals; normally use 10."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Matching previous meal logs, newest first.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "meals",
+                    "hasMore"
+                  ],
+                  "properties": {
+                    "meals": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "idempotencyKey",
+                          "mealName",
+                          "mealType",
+                          "components",
+                          "occurredAt",
+                          "nutrients",
+                          "confidence"
+                        ],
+                        "properties": {
+                          "idempotencyKey": {
+                            "type": "string",
+                            "description": "Use this exact key when saving this meal as a favorite."
+                          },
+                          "mealName": {
+                            "type": "string"
+                          },
+                          "mealType": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "components": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "additionalProperties": true
+                            }
+                          },
+                          "occurredAt": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "nutrients": {
+                            "type": "object",
+                            "additionalProperties": true
+                          },
+                          "confidence": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    },
+                    "hasMore": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid query or limit."
+          },
+          "401": {
+            "description": "Invalid API key."
+          },
+          "503": {
+            "description": "Nutrition history is unavailable."
+          }
+        }
+      }
+    },
+    "/api/gpt-actions/nutrition/favorites": {
+      "get": {
+        "operationId": "searchFoodFavorites",
+        "summary": "Search saved food favorites",
+        "description": "Search Dan's favorites by favorite name, alias, brand, meal name, or component. Always try this before prior history when he names a familiar meal or product.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-openai-isConsequential": false,
+        "parameters": [
+          {
+            "name": "query",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120
+            },
+            "description": "Favorite name, alias, brand, meal, or ingredient. Omit to list recent favorites."
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 20
+            },
+            "description": "Required maximum matching favorites; normally use 10."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Matching saved favorites.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "favorites",
+                    "hasMore"
+                  ],
+                  "properties": {
+                    "favorites": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "id",
+                          "favoriteName",
+                          "aliases",
+                          "mealName",
+                          "mealType",
+                          "components",
+                          "nutrients",
+                          "confidence",
+                          "sourceMealId",
+                          "sourceIdempotencyKey",
+                          "updatedAt"
+                        ],
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "favoriteName": {
+                            "type": "string"
+                          },
+                          "aliases": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "mealName": {
+                            "type": "string"
+                          },
+                          "mealType": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "components": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "additionalProperties": true
+                            }
+                          },
+                          "nutrients": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "required": [
+                              "caloriesKcal",
+                              "proteinGrams",
+                              "carbohydratesGrams",
+                              "fatGrams",
+                              "fiberGrams"
+                            ],
+                            "properties": {
+                              "caloriesKcal": {
+                                "type": "number",
+                                "minimum": 0
+                              },
+                              "proteinGrams": {
+                                "type": "number",
+                                "minimum": 0
+                              },
+                              "carbohydratesGrams": {
+                                "type": "number",
+                                "minimum": 0
+                              },
+                              "fatGrams": {
+                                "type": "number",
+                                "minimum": 0
+                              },
+                              "fiberGrams": {
+                                "type": "number",
+                                "minimum": 0
+                              }
+                            }
+                          },
+                          "confidence": {
+                            "type": "string"
+                          },
+                          "sourceMealId": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "sourceIdempotencyKey": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "updatedAt": {
+                            "type": "string",
+                            "format": "date-time"
+                          }
+                        }
+                      }
+                    },
+                    "hasMore": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid query or limit."
+          },
+          "401": {
+            "description": "Invalid API key."
+          },
+          "503": {
+            "description": "Favorites are unavailable."
+          }
+        }
+      },
+      "post": {
+        "operationId": "saveFoodFavorite",
+        "summary": "Save a nutrient-complete favorite meal",
+        "description": "Use when Dan directly asks to save a favorite. Supply either an exact prior log key or a complete confirmed meal definition. Reusing a favorite name updates it.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-openai-isConsequential": false,
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "favoriteName",
+                  "userConfirmed"
+                ],
+                "properties": {
+                  "favoriteName": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100,
+                    "description": "Dan's preferred short name. If omitted in speech, use the meal name."
+                  },
+                  "aliases": {
+                    "type": "array",
+                    "maxItems": 12,
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 80
+                    },
+                    "description": "Useful alternate names or brands Dan mentioned, such as DM bar."
+                  },
+                  "sourceIdempotencyKey": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100,
+                    "description": "Exact key from logFood or searchFoodHistory. Use this or meal, never both."
+                  },
+                  "meal": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "mealName",
+                      "mealType",
+                      "components",
+                      "nutrients",
+                      "confidence"
+                    ],
+                    "properties": {
+                      "mealName": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 120
+                      },
+                      "mealType": {
+                        "type": "string",
+                        "enum": [
+                          "breakfast",
+                          "lunch",
+                          "dinner",
+                          "snack"
+                        ]
+                      },
+                      "components": {
+                        "type": "array",
+                        "minItems": 1,
+                        "maxItems": 30,
+                        "items": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "name",
+                            "quantity"
+                          ],
+                          "properties": {
+                            "name": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 120
+                            },
+                            "quantity": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 100
+                            },
+                            "preparationMethod": {
+                              "type": [
+                                "string",
+                                "null"
+                              ],
+                              "maxLength": 120
+                            }
+                          }
+                        }
+                      },
+                      "nutrients": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "caloriesKcal",
+                          "proteinGrams",
+                          "carbohydratesGrams",
+                          "fatGrams",
+                          "fiberGrams"
+                        ],
+                        "properties": {
+                          "caloriesKcal": {
+                            "type": "number",
+                            "minimum": 0
+                          },
+                          "proteinGrams": {
+                            "type": "number",
+                            "minimum": 0
+                          },
+                          "carbohydratesGrams": {
+                            "type": "number",
+                            "minimum": 0
+                          },
+                          "fatGrams": {
+                            "type": "number",
+                            "minimum": 0
+                          },
+                          "fiberGrams": {
+                            "type": "number",
+                            "minimum": 0
+                          }
+                        }
+                      },
+                      "confidence": {
+                        "type": "string",
+                        "enum": [
+                          "accurate",
+                          "estimate"
+                        ]
+                      }
+                    },
+                    "description": "Complete confirmed meal definition when the favorite is not copied from a prior log."
+                  },
+                  "userConfirmed": {
+                    "type": "boolean",
+                    "const": true,
+                    "description": "True only when Dan directly asks to save this favorite."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Favorite saved or updated.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "saved",
+                    "favorite"
+                  ],
+                  "properties": {
+                    "saved": {
+                      "type": "boolean"
+                    },
+                    "favorite": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "id",
+                        "favoriteName",
+                        "aliases",
+                        "mealName",
+                        "mealType",
+                        "components",
+                        "nutrients",
+                        "confidence",
+                        "sourceMealId",
+                        "sourceIdempotencyKey",
+                        "updatedAt"
+                      ],
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "favoriteName": {
+                          "type": "string"
+                        },
+                        "aliases": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "mealName": {
+                          "type": "string"
+                        },
+                        "mealType": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "components": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": true
+                          }
+                        },
+                        "nutrients": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "caloriesKcal",
+                            "proteinGrams",
+                            "carbohydratesGrams",
+                            "fatGrams",
+                            "fiberGrams"
+                          ],
+                          "properties": {
+                            "caloriesKcal": {
+                              "type": "number",
+                              "minimum": 0
+                            },
+                            "proteinGrams": {
+                              "type": "number",
+                              "minimum": 0
+                            },
+                            "carbohydratesGrams": {
+                              "type": "number",
+                              "minimum": 0
+                            },
+                            "fatGrams": {
+                              "type": "number",
+                              "minimum": 0
+                            },
+                            "fiberGrams": {
+                              "type": "number",
+                              "minimum": 0
+                            }
+                          }
+                        },
+                        "confidence": {
+                          "type": "string"
+                        },
+                        "sourceMealId": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "sourceIdempotencyKey": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "updatedAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid API key."
+          },
+          "404": {
+            "description": "The source meal was not found in retained history."
+          },
+          "422": {
+            "description": "Favorite details or confirmation failed validation."
+          },
+          "503": {
+            "description": "Favorites are unavailable."
+          }
+        }
+      }
+    },
+    "/api/gpt-actions/nutrition/meal-plans": {
+      "get": {
+        "operationId": "searchMealPlans",
+        "summary": "Search or list saved meal plans",
+        "description": "Returns reusable daily meal plans with breakfast, lunch, dinner, optional snacks, ingredient snapshots, complete nutrients, and server-calculated totals.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-openai-isConsequential": false,
+        "parameters": [
+          {
+            "name": "query",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120
+            },
+            "description": "Plan, meal, favorite, slot, or ingredient. Omit to list recent plans."
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 20
+            },
+            "description": "Required maximum matching plans; normally use 10."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Matching meal plans.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "mealPlans",
+                    "hasMore"
+                  ],
+                  "properties": {
+                    "mealPlans": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "id",
+                          "planName",
+                          "description",
+                          "items",
+                          "nutrients",
+                          "revision",
+                          "createdAt",
+                          "updatedAt"
+                        ],
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "planName": {
+                            "type": "string"
+                          },
+                          "description": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "items": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "required": [
+                                "slot",
+                                "position",
+                                "favoriteId",
+                                "favoriteName",
+                                "mealName",
+                                "components",
+                                "nutrients",
+                                "confidence"
+                              ],
+                              "properties": {
+                                "slot": {
+                                  "type": "string",
+                                  "enum": [
+                                    "breakfast",
+                                    "lunch",
+                                    "dinner",
+                                    "snack"
+                                  ]
+                                },
+                                "position": {
+                                  "type": "integer",
+                                  "minimum": 0
+                                },
+                                "favoriteId": {
+                                  "type": "string"
+                                },
+                                "favoriteName": {
+                                  "type": "string"
+                                },
+                                "mealName": {
+                                  "type": "string"
+                                },
+                                "components": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "additionalProperties": true
+                                  }
+                                },
+                                "nutrients": {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "required": [
+                                    "caloriesKcal",
+                                    "proteinGrams",
+                                    "carbohydratesGrams",
+                                    "fatGrams",
+                                    "fiberGrams"
+                                  ],
+                                  "properties": {
+                                    "caloriesKcal": {
+                                      "type": "number",
+                                      "minimum": 0
+                                    },
+                                    "proteinGrams": {
+                                      "type": "number",
+                                      "minimum": 0
+                                    },
+                                    "carbohydratesGrams": {
+                                      "type": "number",
+                                      "minimum": 0
+                                    },
+                                    "fatGrams": {
+                                      "type": "number",
+                                      "minimum": 0
+                                    },
+                                    "fiberGrams": {
+                                      "type": "number",
+                                      "minimum": 0
+                                    }
+                                  }
+                                },
+                                "confidence": {
+                                  "type": "string"
+                                }
+                              }
+                            }
+                          },
+                          "nutrients": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "required": [
+                              "caloriesKcal",
+                              "proteinGrams",
+                              "carbohydratesGrams",
+                              "fatGrams",
+                              "fiberGrams"
+                            ],
+                            "properties": {
+                              "caloriesKcal": {
+                                "type": "number",
+                                "minimum": 0
+                              },
+                              "proteinGrams": {
+                                "type": "number",
+                                "minimum": 0
+                              },
+                              "carbohydratesGrams": {
+                                "type": "number",
+                                "minimum": 0
+                              },
+                              "fatGrams": {
+                                "type": "number",
+                                "minimum": 0
+                              },
+                              "fiberGrams": {
+                                "type": "number",
+                                "minimum": 0
+                              }
+                            }
+                          },
+                          "revision": {
+                            "type": "integer",
+                            "minimum": 1
+                          },
+                          "createdAt": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "updatedAt": {
+                            "type": "string",
+                            "format": "date-time"
+                          }
+                        }
+                      }
+                    },
+                    "hasMore": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid query or limit."
+          },
+          "401": {
+            "description": "Invalid API key."
+          },
+          "503": {
+            "description": "Meal plans are unavailable."
+          }
+        }
+      },
+      "post": {
+        "operationId": "saveMealPlan",
+        "summary": "Build or update a meal plan",
+        "description": "Use after resolving favorite IDs. Requires one breakfast, one lunch, one dinner, and any number of snacks. The server snapshots meals and totals all nutrients.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-openai-isConsequential": false,
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "planName",
+                  "items",
+                  "userConfirmed"
+                ],
+                "properties": {
+                  "planName": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100
+                  },
+                  "description": {
+                    "type": "string",
+                    "maxLength": 300
+                  },
+                  "items": {
+                    "type": "array",
+                    "minItems": 3,
+                    "maxItems": 50,
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "slot",
+                        "favoriteId"
+                      ],
+                      "properties": {
+                        "slot": {
+                          "type": "string",
+                          "enum": [
+                            "breakfast",
+                            "lunch",
+                            "dinner",
+                            "snack"
+                          ]
+                        },
+                        "favoriteId": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 100
+                        }
+                      }
+                    }
+                  },
+                  "userConfirmed": {
+                    "type": "boolean",
+                    "const": true,
+                    "description": "True only when Dan directly asks to build or update this plan."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Meal plan saved or updated.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "saved",
+                    "mealPlan"
+                  ],
+                  "properties": {
+                    "saved": {
+                      "type": "boolean"
+                    },
+                    "mealPlan": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "id",
+                        "planName",
+                        "description",
+                        "items",
+                        "nutrients",
+                        "revision",
+                        "createdAt",
+                        "updatedAt"
+                      ],
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "planName": {
+                          "type": "string"
+                        },
+                        "description": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "required": [
+                              "slot",
+                              "position",
+                              "favoriteId",
+                              "favoriteName",
+                              "mealName",
+                              "components",
+                              "nutrients",
+                              "confidence"
+                            ],
+                            "properties": {
+                              "slot": {
+                                "type": "string",
+                                "enum": [
+                                  "breakfast",
+                                  "lunch",
+                                  "dinner",
+                                  "snack"
+                                ]
+                              },
+                              "position": {
+                                "type": "integer",
+                                "minimum": 0
+                              },
+                              "favoriteId": {
+                                "type": "string"
+                              },
+                              "favoriteName": {
+                                "type": "string"
+                              },
+                              "mealName": {
+                                "type": "string"
+                              },
+                              "components": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "additionalProperties": true
+                                }
+                              },
+                              "nutrients": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "required": [
+                                  "caloriesKcal",
+                                  "proteinGrams",
+                                  "carbohydratesGrams",
+                                  "fatGrams",
+                                  "fiberGrams"
+                                ],
+                                "properties": {
+                                  "caloriesKcal": {
+                                    "type": "number",
+                                    "minimum": 0
+                                  },
+                                  "proteinGrams": {
+                                    "type": "number",
+                                    "minimum": 0
+                                  },
+                                  "carbohydratesGrams": {
+                                    "type": "number",
+                                    "minimum": 0
+                                  },
+                                  "fatGrams": {
+                                    "type": "number",
+                                    "minimum": 0
+                                  },
+                                  "fiberGrams": {
+                                    "type": "number",
+                                    "minimum": 0
+                                  }
+                                }
+                              },
+                              "confidence": {
+                                "type": "string"
+                              }
+                            }
+                          }
+                        },
+                        "nutrients": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "caloriesKcal",
+                            "proteinGrams",
+                            "carbohydratesGrams",
+                            "fatGrams",
+                            "fiberGrams"
+                          ],
+                          "properties": {
+                            "caloriesKcal": {
+                              "type": "number",
+                              "minimum": 0
+                            },
+                            "proteinGrams": {
+                              "type": "number",
+                              "minimum": 0
+                            },
+                            "carbohydratesGrams": {
+                              "type": "number",
+                              "minimum": 0
+                            },
+                            "fatGrams": {
+                              "type": "number",
+                              "minimum": 0
+                            },
+                            "fiberGrams": {
+                              "type": "number",
+                              "minimum": 0
+                            }
+                          }
+                        },
+                        "revision": {
+                          "type": "integer",
+                          "minimum": 1
+                        },
+                        "createdAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "updatedAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid API key."
+          },
+          "404": {
+            "description": "One or more favorite IDs do not exist."
+          },
+          "422": {
+            "description": "Plan structure or confirmation failed validation."
+          },
+          "503": {
+            "description": "Meal plans are unavailable."
+          }
+        }
+      }
+    },
+    "/api/gpt-actions/nutrition/calorie-balance": {
+      "get": {
+        "operationId": "getCalorieBalance",
+        "summary": "Get calorie balance for a period",
+        "description": "Use for historical kcal intake, expenditure, deficit, surplus, or balance. Intake is Sites; expenditure is Apple Health active plus resting energy. If the range includes today, current.caloriesLeftKcal is the full-maintenance value, not the 15% target.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-openai-isConsequential": false,
+        "parameters": [
+          {
+            "name": "startDate",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            },
+            "description": "Inclusive first date in YYYY-MM-DD format."
+          },
+          {
+            "name": "endDate",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            },
+            "description": "Inclusive final date in YYYY-MM-DD format."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sites intake plus Apple Health expenditure, with completed-period totals and daily evidence.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "status",
+                    "startDate",
+                    "endDate",
+                    "days",
+                    "timezone",
+                    "definition",
+                    "sources",
+                    "summary",
+                    "current",
+                    "daily"
+                  ],
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "available",
+                        "unavailable"
+                      ]
+                    },
+                    "startDate": {
+                      "type": "string",
+                      "format": "date"
+                    },
+                    "endDate": {
+                      "type": "string",
+                      "format": "date"
+                    },
+                    "days": {
+                      "type": "integer"
+                    },
+                    "timezone": {
+                      "type": "string"
+                    },
+                    "definition": {
+                      "type": "string"
+                    },
+                    "sources": {
+                      "type": "object",
+                      "additionalProperties": true
+                    },
+                    "summary": {
+                      "type": "object",
+                      "additionalProperties": true
+                    },
+                    "current": {
+                      "oneOf": [
+                        {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "status",
+                            "available",
+                            "fullMaintenanceBudgetKcal",
+                            "caloriesLeftKcal",
+                            "definition",
+                            "sources",
+                            "asOf"
+                          ],
+                          "properties": {
+                            "available": {
+                              "type": "boolean"
+                            },
+                            "status": {
+                              "type": "string",
+                              "enum": [
+                                "available",
+                                "unavailable"
+                              ]
+                            },
+                            "period": {
+                              "type": "string"
+                            },
+                            "periodDays": {
+                              "type": "integer"
+                            },
+                            "observedDays": {
+                              "type": "integer"
+                            },
+                            "isAverage": {
+                              "type": "boolean"
+                            },
+                            "totalExpenditureKcal": {
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "totalIntakeKcal": {
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "totalRemainingKcal": {
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "fullBudgetKcal": {
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "remainingKcal": {
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "tone": {
+                              "type": "string",
+                              "enum": [
+                                "good",
+                                "close",
+                                "over",
+                                "unknown"
+                              ]
+                            },
+                            "intakeKcal": {
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "activeKcal": {
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "restingBaselineKcal": {
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "fullMaintenanceBudgetKcal": {
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "caloriesLeftKcal": {
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "definition": {
+                              "type": "string"
+                            },
+                            "sources": {
+                              "type": "object",
+                              "additionalProperties": true
+                            },
+                            "asOf": {
+                              "type": "object",
+                              "additionalProperties": true
+                            }
+                          }
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "daily": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "date",
+                          "intakeKcal",
+                          "activeKcal",
+                          "restingKcal",
+                          "expenditureKcal",
+                          "netKcal",
+                          "deficitKcal",
+                          "status"
+                        ],
+                        "properties": {
+                          "date": {
+                            "type": "string",
+                            "format": "date"
+                          },
+                          "intakeKcal": {
+                            "type": [
+                              "number",
+                              "null"
+                            ]
+                          },
+                          "activeKcal": {
+                            "type": [
+                              "number",
+                              "null"
+                            ]
+                          },
+                          "restingKcal": {
+                            "type": [
+                              "number",
+                              "null"
+                            ]
+                          },
+                          "expenditureKcal": {
+                            "type": [
+                              "number",
+                              "null"
+                            ]
+                          },
+                          "netKcal": {
+                            "type": [
+                              "number",
+                              "null"
+                            ],
+                            "description": "Dietary intake minus total expenditure. Negative means deficit; positive means surplus."
+                          },
+                          "deficitKcal": {
+                            "type": [
+                              "number",
+                              "null"
+                            ],
+                            "description": "Total expenditure minus dietary intake. Positive means deficit."
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "deficit",
+                              "surplus",
+                              "balanced",
+                              "in_progress",
+                              "missing"
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid date range."
+          },
+          "401": {
+            "description": "Invalid API key."
+          },
+          "503": {
+            "description": "Calorie balance history is unavailable."
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "LookupFoodResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "status",
+          "confirmationRequired",
+          "source",
+          "components",
+          "totals",
+          "unmatched",
+          "fallbackGuidance"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "complete",
+              "partial"
+            ]
+          },
+          "confirmationRequired": {
+            "type": "boolean",
+            "const": true
+          },
+          "source": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "components": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          },
+          "totals": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "unmatched": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          },
+          "fallbackGuidance": {
+            "type": "string"
+          }
+        }
+      },
+      "LogFoodResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "mealId",
+          "idempotencyKey",
+          "status",
+          "duplicate",
+          "meal",
+          "source",
+          "retention",
+          "appleHealthExportStatus",
+          "nextStep"
+        ],
+        "properties": {
+          "mealId": {
+            "type": "string",
+            "description": "Stable Sites meal ID."
+          },
+          "idempotencyKey": {
+            "type": "string",
+            "description": "Exact retry, correction, deletion, and export key for this meal."
+          },
+          "status": {
+            "type": "string",
+            "const": "saved"
+          },
+          "duplicate": {
+            "type": "boolean",
+            "description": "True when this idempotency key already existed."
+          },
+          "meal": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "name",
+              "type",
+              "components",
+              "occurredAt",
+              "nutrients",
+              "confidence"
+            ],
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "type": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "components": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "name",
+                    "quantity"
+                  ],
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "quantity": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "preparationMethod": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  }
+                }
+              },
+              "occurredAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "nutrients": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "caloriesKcal",
+                  "proteinGrams",
+                  "carbohydratesGrams",
+                  "fatGrams",
+                  "fiberGrams"
+                ],
+                "properties": {
+                  "caloriesKcal": {
+                    "type": "number"
+                  },
+                  "proteinGrams": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  },
+                  "carbohydratesGrams": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  },
+                  "fatGrams": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  },
+                  "fiberGrams": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  }
+                }
+              },
+              "confidence": {
+                "type": "string",
+                "enum": [
+                  "accurate",
+                  "approximate",
+                  "estimate"
+                ]
+              }
+            }
+          },
+          "source": {
+            "type": "string"
+          },
+          "retention": {
+            "type": "string",
+            "const": "until_deleted"
+          },
+          "appleHealthExportStatus": {
+            "type": "string"
+          },
+          "nextStep": {
+            "type": "string"
+          }
+        }
+      },
+      "PendingFoodItem": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "queueId",
+          "idempotencyKey",
+          "mealName",
+          "mealType",
+          "components",
+          "occurredAt",
+          "nutrients",
+          "confidence",
+          "captureMethod",
+          "status",
+          "createdAt"
+        ],
+        "properties": {
+          "queueId": {
+            "type": "string"
+          },
+          "idempotencyKey": {
+            "type": "string",
+            "description": "Pass this exact value to cancelFood after Dan identifies this entry."
+          },
+          "mealName": {
+            "type": "string"
+          },
+          "mealType": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "components": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          },
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "nutrients": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "confidence": {
+            "type": "string"
+          },
+          "captureMethod": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "ListPendingFoodResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "items",
+          "hasMore"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "queueId",
+                "idempotencyKey",
+                "mealName",
+                "mealType",
+                "components",
+                "occurredAt",
+                "nutrients",
+                "confidence",
+                "captureMethod",
+                "status",
+                "createdAt"
+              ],
+              "properties": {
+                "queueId": {
+                  "type": "string"
+                },
+                "idempotencyKey": {
+                  "type": "string",
+                  "description": "Pass this exact value to cancelFood after Dan identifies this entry."
+                },
+                "mealName": {
+                  "type": "string"
+                },
+                "mealType": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "components": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": true
+                  }
+                },
+                "occurredAt": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "nutrients": {
+                  "type": "object",
+                  "additionalProperties": true
+                },
+                "confidence": {
+                  "type": "string"
+                },
+                "captureMethod": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "pending"
+                  ]
+                },
+                "createdAt": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            }
+          },
+          "hasMore": {
+            "type": "boolean"
+          }
+        }
+      },
+      "CancelFoodResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "cancelled",
+          "alreadyCancelled",
+          "alreadyAbsent",
+          "entryId",
+          "previousStatus",
+          "meal"
+        ],
+        "properties": {
+          "cancelled": {
+            "type": "boolean"
+          },
+          "alreadyCancelled": {
+            "type": "boolean"
+          },
+          "alreadyAbsent": {
+            "type": "boolean"
+          },
+          "entryId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "previousStatus": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "meal": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": true
+          }
+        }
+      },
+      "ReleaseClaimResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "released",
+          "alreadyPending",
+          "entryId",
+          "previousStatus",
+          "status",
+          "meal",
+          "nextStep"
+        ],
+        "properties": {
+          "released": {
+            "type": "boolean"
+          },
+          "alreadyPending": {
+            "type": "boolean"
+          },
+          "entryId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "previousStatus": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "meal": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": true
+          },
+          "nextStep": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "ReusableMeal": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "idempotencyKey",
+          "mealName",
+          "mealType",
+          "components",
+          "occurredAt",
+          "nutrients",
+          "confidence"
+        ],
+        "properties": {
+          "idempotencyKey": {
+            "type": "string",
+            "description": "Use this exact key when saving this meal as a favorite."
+          },
+          "mealName": {
+            "type": "string"
+          },
+          "mealType": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "components": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          },
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "nutrients": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "confidence": {
+            "type": "string"
+          }
+        }
+      },
+      "FoodHistoryResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "meals",
+          "hasMore"
+        ],
+        "properties": {
+          "meals": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "idempotencyKey",
+                "mealName",
+                "mealType",
+                "components",
+                "occurredAt",
+                "nutrients",
+                "confidence"
+              ],
+              "properties": {
+                "idempotencyKey": {
+                  "type": "string",
+                  "description": "Use this exact key when saving this meal as a favorite."
+                },
+                "mealName": {
+                  "type": "string"
+                },
+                "mealType": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "components": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": true
+                  }
+                },
+                "occurredAt": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "nutrients": {
+                  "type": "object",
+                  "additionalProperties": true
+                },
+                "confidence": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "hasMore": {
+            "type": "boolean"
+          }
+        }
+      },
+      "Favorite": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "favoriteName",
+          "aliases",
+          "mealName",
+          "mealType",
+          "components",
+          "nutrients",
+          "confidence",
+          "sourceMealId",
+          "sourceIdempotencyKey",
+          "updatedAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "favoriteName": {
+            "type": "string"
+          },
+          "aliases": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "mealName": {
+            "type": "string"
+          },
+          "mealType": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "components": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          },
+          "nutrients": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "caloriesKcal",
+              "proteinGrams",
+              "carbohydratesGrams",
+              "fatGrams",
+              "fiberGrams"
+            ],
+            "properties": {
+              "caloriesKcal": {
+                "type": "number",
+                "minimum": 0
+              },
+              "proteinGrams": {
+                "type": "number",
+                "minimum": 0
+              },
+              "carbohydratesGrams": {
+                "type": "number",
+                "minimum": 0
+              },
+              "fatGrams": {
+                "type": "number",
+                "minimum": 0
+              },
+              "fiberGrams": {
+                "type": "number",
+                "minimum": 0
+              }
+            }
+          },
+          "confidence": {
+            "type": "string"
+          },
+          "sourceMealId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sourceIdempotencyKey": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "FavoritesResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "favorites",
+          "hasMore"
+        ],
+        "properties": {
+          "favorites": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "id",
+                "favoriteName",
+                "aliases",
+                "mealName",
+                "mealType",
+                "components",
+                "nutrients",
+                "confidence",
+                "sourceMealId",
+                "sourceIdempotencyKey",
+                "updatedAt"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "favoriteName": {
+                  "type": "string"
+                },
+                "aliases": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "mealName": {
+                  "type": "string"
+                },
+                "mealType": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "components": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": true
+                  }
+                },
+                "nutrients": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "caloriesKcal",
+                    "proteinGrams",
+                    "carbohydratesGrams",
+                    "fatGrams",
+                    "fiberGrams"
+                  ],
+                  "properties": {
+                    "caloriesKcal": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "proteinGrams": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "carbohydratesGrams": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "fatGrams": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "fiberGrams": {
+                      "type": "number",
+                      "minimum": 0
+                    }
+                  }
+                },
+                "confidence": {
+                  "type": "string"
+                },
+                "sourceMealId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "sourceIdempotencyKey": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "updatedAt": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            }
+          },
+          "hasMore": {
+            "type": "boolean"
+          }
+        }
+      },
+      "SaveFavoriteResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "saved",
+          "favorite"
+        ],
+        "properties": {
+          "saved": {
+            "type": "boolean"
+          },
+          "favorite": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "favoriteName",
+              "aliases",
+              "mealName",
+              "mealType",
+              "components",
+              "nutrients",
+              "confidence",
+              "sourceMealId",
+              "sourceIdempotencyKey",
+              "updatedAt"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "favoriteName": {
+                "type": "string"
+              },
+              "aliases": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "mealName": {
+                "type": "string"
+              },
+              "mealType": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "components": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              },
+              "nutrients": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "caloriesKcal",
+                  "proteinGrams",
+                  "carbohydratesGrams",
+                  "fatGrams",
+                  "fiberGrams"
+                ],
+                "properties": {
+                  "caloriesKcal": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "proteinGrams": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "carbohydratesGrams": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "fatGrams": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "fiberGrams": {
+                    "type": "number",
+                    "minimum": 0
+                  }
+                }
+              },
+              "confidence": {
+                "type": "string"
+              },
+              "sourceMealId": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "sourceIdempotencyKey": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "updatedAt": {
+                "type": "string",
+                "format": "date-time"
+              }
+            }
+          }
+        }
+      },
+      "MealPlan": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "planName",
+          "description",
+          "items",
+          "nutrients",
+          "revision",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "planName": {
+            "type": "string"
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "slot",
+                "position",
+                "favoriteId",
+                "favoriteName",
+                "mealName",
+                "components",
+                "nutrients",
+                "confidence"
+              ],
+              "properties": {
+                "slot": {
+                  "type": "string",
+                  "enum": [
+                    "breakfast",
+                    "lunch",
+                    "dinner",
+                    "snack"
+                  ]
+                },
+                "position": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "favoriteId": {
+                  "type": "string"
+                },
+                "favoriteName": {
+                  "type": "string"
+                },
+                "mealName": {
+                  "type": "string"
+                },
+                "components": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": true
+                  }
+                },
+                "nutrients": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "caloriesKcal",
+                    "proteinGrams",
+                    "carbohydratesGrams",
+                    "fatGrams",
+                    "fiberGrams"
+                  ],
+                  "properties": {
+                    "caloriesKcal": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "proteinGrams": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "carbohydratesGrams": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "fatGrams": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "fiberGrams": {
+                      "type": "number",
+                      "minimum": 0
+                    }
+                  }
+                },
+                "confidence": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "nutrients": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "caloriesKcal",
+              "proteinGrams",
+              "carbohydratesGrams",
+              "fatGrams",
+              "fiberGrams"
+            ],
+            "properties": {
+              "caloriesKcal": {
+                "type": "number",
+                "minimum": 0
+              },
+              "proteinGrams": {
+                "type": "number",
+                "minimum": 0
+              },
+              "carbohydratesGrams": {
+                "type": "number",
+                "minimum": 0
+              },
+              "fatGrams": {
+                "type": "number",
+                "minimum": 0
+              },
+              "fiberGrams": {
+                "type": "number",
+                "minimum": 0
+              }
+            }
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "MealPlansResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "mealPlans",
+          "hasMore"
+        ],
+        "properties": {
+          "mealPlans": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "id",
+                "planName",
+                "description",
+                "items",
+                "nutrients",
+                "revision",
+                "createdAt",
+                "updatedAt"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "planName": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "items": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "slot",
+                      "position",
+                      "favoriteId",
+                      "favoriteName",
+                      "mealName",
+                      "components",
+                      "nutrients",
+                      "confidence"
+                    ],
+                    "properties": {
+                      "slot": {
+                        "type": "string",
+                        "enum": [
+                          "breakfast",
+                          "lunch",
+                          "dinner",
+                          "snack"
+                        ]
+                      },
+                      "position": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "favoriteId": {
+                        "type": "string"
+                      },
+                      "favoriteName": {
+                        "type": "string"
+                      },
+                      "mealName": {
+                        "type": "string"
+                      },
+                      "components": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "additionalProperties": true
+                        }
+                      },
+                      "nutrients": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "caloriesKcal",
+                          "proteinGrams",
+                          "carbohydratesGrams",
+                          "fatGrams",
+                          "fiberGrams"
+                        ],
+                        "properties": {
+                          "caloriesKcal": {
+                            "type": "number",
+                            "minimum": 0
+                          },
+                          "proteinGrams": {
+                            "type": "number",
+                            "minimum": 0
+                          },
+                          "carbohydratesGrams": {
+                            "type": "number",
+                            "minimum": 0
+                          },
+                          "fatGrams": {
+                            "type": "number",
+                            "minimum": 0
+                          },
+                          "fiberGrams": {
+                            "type": "number",
+                            "minimum": 0
+                          }
+                        }
+                      },
+                      "confidence": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                },
+                "nutrients": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "caloriesKcal",
+                    "proteinGrams",
+                    "carbohydratesGrams",
+                    "fatGrams",
+                    "fiberGrams"
+                  ],
+                  "properties": {
+                    "caloriesKcal": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "proteinGrams": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "carbohydratesGrams": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "fatGrams": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "fiberGrams": {
+                      "type": "number",
+                      "minimum": 0
+                    }
+                  }
+                },
+                "revision": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "createdAt": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "updatedAt": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            }
+          },
+          "hasMore": {
+            "type": "boolean"
+          }
+        }
+      },
+      "SaveMealPlanResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "saved",
+          "mealPlan"
+        ],
+        "properties": {
+          "saved": {
+            "type": "boolean"
+          },
+          "mealPlan": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "planName",
+              "description",
+              "items",
+              "nutrients",
+              "revision",
+              "createdAt",
+              "updatedAt"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "planName": {
+                "type": "string"
+              },
+              "description": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "items": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "slot",
+                    "position",
+                    "favoriteId",
+                    "favoriteName",
+                    "mealName",
+                    "components",
+                    "nutrients",
+                    "confidence"
+                  ],
+                  "properties": {
+                    "slot": {
+                      "type": "string",
+                      "enum": [
+                        "breakfast",
+                        "lunch",
+                        "dinner",
+                        "snack"
+                      ]
+                    },
+                    "position": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "favoriteId": {
+                      "type": "string"
+                    },
+                    "favoriteName": {
+                      "type": "string"
+                    },
+                    "mealName": {
+                      "type": "string"
+                    },
+                    "components": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": true
+                      }
+                    },
+                    "nutrients": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "caloriesKcal",
+                        "proteinGrams",
+                        "carbohydratesGrams",
+                        "fatGrams",
+                        "fiberGrams"
+                      ],
+                      "properties": {
+                        "caloriesKcal": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "proteinGrams": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "carbohydratesGrams": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "fatGrams": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "fiberGrams": {
+                          "type": "number",
+                          "minimum": 0
+                        }
+                      }
+                    },
+                    "confidence": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              "nutrients": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "caloriesKcal",
+                  "proteinGrams",
+                  "carbohydratesGrams",
+                  "fatGrams",
+                  "fiberGrams"
+                ],
+                "properties": {
+                  "caloriesKcal": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "proteinGrams": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "carbohydratesGrams": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "fatGrams": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "fiberGrams": {
+                    "type": "number",
+                    "minimum": 0
+                  }
+                }
+              },
+              "revision": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "updatedAt": {
+                "type": "string",
+                "format": "date-time"
+              }
+            }
+          }
+        }
+      },
+      "CalorieGlanceResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "status",
+          "available",
+          "fullMaintenanceBudgetKcal",
+          "caloriesLeftKcal",
+          "definition",
+          "sources",
+          "asOf"
+        ],
+        "properties": {
+          "available": {
+            "type": "boolean"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "available",
+              "unavailable"
+            ]
+          },
+          "period": {
+            "type": "string"
+          },
+          "periodDays": {
+            "type": "integer"
+          },
+          "observedDays": {
+            "type": "integer"
+          },
+          "isAverage": {
+            "type": "boolean"
+          },
+          "totalExpenditureKcal": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "totalIntakeKcal": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "totalRemainingKcal": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "fullBudgetKcal": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "remainingKcal": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "tone": {
+            "type": "string",
+            "enum": [
+              "good",
+              "close",
+              "over",
+              "unknown"
+            ]
+          },
+          "intakeKcal": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "activeKcal": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "restingBaselineKcal": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "fullMaintenanceBudgetKcal": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "caloriesLeftKcal": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "definition": {
+            "type": "string"
+          },
+          "sources": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "asOf": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        }
+      },
+      "HealthSummaryResponse": {
+        "type": "object",
+        "additionalProperties": true,
+        "description": "Current normalized Apple Health and Sites nutrition data. For calories left today, read today.calorieGlance.caloriesLeftKcal.",
+        "properties": {
+          "today": {
+            "type": "object",
+            "additionalProperties": true,
+            "properties": {
+              "calorieGlance": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "status",
+                  "available",
+                  "fullMaintenanceBudgetKcal",
+                  "caloriesLeftKcal",
+                  "definition",
+                  "sources",
+                  "asOf"
+                ],
+                "properties": {
+                  "available": {
+                    "type": "boolean"
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "available",
+                      "unavailable"
+                    ]
+                  },
+                  "period": {
+                    "type": "string"
+                  },
+                  "periodDays": {
+                    "type": "integer"
+                  },
+                  "observedDays": {
+                    "type": "integer"
+                  },
+                  "isAverage": {
+                    "type": "boolean"
+                  },
+                  "totalExpenditureKcal": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  },
+                  "totalIntakeKcal": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  },
+                  "totalRemainingKcal": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  },
+                  "fullBudgetKcal": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  },
+                  "remainingKcal": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  },
+                  "tone": {
+                    "type": "string",
+                    "enum": [
+                      "good",
+                      "close",
+                      "over",
+                      "unknown"
+                    ]
+                  },
+                  "intakeKcal": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  },
+                  "activeKcal": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  },
+                  "restingBaselineKcal": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  },
+                  "fullMaintenanceBudgetKcal": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  },
+                  "caloriesLeftKcal": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  },
+                  "definition": {
+                    "type": "string"
+                  },
+                  "sources": {
+                    "type": "object",
+                    "additionalProperties": true
+                  },
+                  "asOf": {
+                    "type": "object",
+                    "additionalProperties": true
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "CalorieBalanceResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "status",
+          "startDate",
+          "endDate",
+          "days",
+          "timezone",
+          "definition",
+          "sources",
+          "summary",
+          "current",
+          "daily"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "available",
+              "unavailable"
+            ]
+          },
+          "startDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "endDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "days": {
+            "type": "integer"
+          },
+          "timezone": {
+            "type": "string"
+          },
+          "definition": {
+            "type": "string"
+          },
+          "sources": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "summary": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "current": {
+            "oneOf": [
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "status",
+                  "available",
+                  "fullMaintenanceBudgetKcal",
+                  "caloriesLeftKcal",
+                  "definition",
+                  "sources",
+                  "asOf"
+                ],
+                "properties": {
+                  "available": {
+                    "type": "boolean"
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "available",
+                      "unavailable"
+                    ]
+                  },
+                  "period": {
+                    "type": "string"
+                  },
+                  "periodDays": {
+                    "type": "integer"
+                  },
+                  "observedDays": {
+                    "type": "integer"
+                  },
+                  "isAverage": {
+                    "type": "boolean"
+                  },
+                  "totalExpenditureKcal": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  },
+                  "totalIntakeKcal": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  },
+                  "totalRemainingKcal": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  },
+                  "fullBudgetKcal": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  },
+                  "remainingKcal": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  },
+                  "tone": {
+                    "type": "string",
+                    "enum": [
+                      "good",
+                      "close",
+                      "over",
+                      "unknown"
+                    ]
+                  },
+                  "intakeKcal": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  },
+                  "activeKcal": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  },
+                  "restingBaselineKcal": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  },
+                  "fullMaintenanceBudgetKcal": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  },
+                  "caloriesLeftKcal": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  },
+                  "definition": {
+                    "type": "string"
+                  },
+                  "sources": {
+                    "type": "object",
+                    "additionalProperties": true
+                  },
+                  "asOf": {
+                    "type": "object",
+                    "additionalProperties": true
+                  }
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "daily": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "date",
+                "intakeKcal",
+                "activeKcal",
+                "restingKcal",
+                "expenditureKcal",
+                "netKcal",
+                "deficitKcal",
+                "status"
+              ],
+              "properties": {
+                "date": {
+                  "type": "string",
+                  "format": "date"
+                },
+                "intakeKcal": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "activeKcal": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "restingKcal": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "expenditureKcal": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "netKcal": {
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "description": "Dietary intake minus total expenditure. Negative means deficit; positive means surplus."
+                },
+                "deficitKcal": {
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "description": "Total expenditure minus dietary intake. Positive means deficit."
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "deficit",
+                    "surplus",
+                    "balanced",
+                    "in_progress",
+                    "missing"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "SiteDataResponse": {
+        "type": "object",
+        "additionalProperties": true,
+        "description": "Bounded read-only data returned from the same normalized Sites records used by Daily Overview."
+      }
+    },
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    }
+  },
+  "x-source-evidence": {
+    "sourceVersion": 182,
+    "sourceSha": "9e193554c9c8c7c23a788ed3d2b0582580b76c0f",
+    "evidence": "Original Daily exported static contracts only; no handlers invoked, no credentials or records read."
+  }
+}

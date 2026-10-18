@@ -13,6 +13,7 @@ export const healthUploadRoutes = { '/api/health/ingest': 'upload','/api/health/
 export interface HealthUploadOptions {
   enabled?: boolean; buffer?: HealthBuffer; verifier?: HealthCredentialVerifier;
   shutdownSignal?: AbortSignal; observe?: (event: HealthHttpObservation) => void; ratePolicy?: HealthRatePolicy;
+  wakeProcessing?: () => void;
 }
 export type HealthHttpObservation = { type: 'accepted'; kind: HealthKind; queue: 'pending' | 'queued'; duplicate: boolean } | { type: 'rejected'; status: number };
 function header(request: FastifyRequest,name: string): string | undefined {
@@ -109,6 +110,7 @@ export async function registerHealthUploadRoutes(app: FastifyInstance,options: H
     const signal = AbortSignal.any([controller.signal,AbortSignal.timeout(30000),...(options.shutdownSignal ? [options.shutdownSignal] : [])]);
     try {
       const receipt = await options.buffer.accept(kind as HealthKind,request.healthUploadCapability,request.healthUploadIdentity,body,signal,request.healthUploadReference ?? undefined);
+      try { options.wakeProcessing?.(); } catch { /* Durable acceptance does not depend on the worker wake-up. */ }
       observe({ type: 'accepted',kind: kind as HealthKind,queue: receipt.queue,duplicate: receipt.duplicate });
       return reply.code(202).send(receipt);
     }
