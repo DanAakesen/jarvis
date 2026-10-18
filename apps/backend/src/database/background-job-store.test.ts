@@ -25,6 +25,15 @@ function dismissalSqlFixture(rows: Array<{ job_id: string; status: string }> = [
 }
 
 describe('SQL background job dismissals', () => {
+  it('uses the proactive restart reason without changing other job recovery text', async () => {
+    const { request, store } = dismissalSqlFixture();
+    await expect(store.reconcileInterrupted()).resolves.toEqual([]);
+    const statements = request.query.mock.calls.map(([statement]) => statement as string);
+    expect(statements.join('\n')).toContain(
+      "CASE WHEN kind = N'proactive' THEN N'Interrupted by a restart' ELSE N'interrupted by restart' END",
+    );
+  });
+
   it('binds owner-specific dismissal reads and excludes expired jobs', async () => {
     const { request, store } = dismissalSqlFixture([{ job_id: finishedId.toUpperCase(), status: 'done' }]);
     await expect(store.listDismissed!(owner)).resolves.toEqual([finishedId]);

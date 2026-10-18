@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import sql from 'mssql';
 import { databaseReadRequest } from './wake-retry.js';
+import { copenhagenDayStart } from '../proactive/time.js';
 import {
   defaultProactiveSettings,
   sourceLabels,
@@ -256,7 +257,7 @@ export function createProactiveStore(pool: sql.ConnectionPool, ownerObjectId: st
             existing.dueAt !== input.dueAt ||
             (priorEvidence?.eventStartAt ?? null) !== (input.eventStartAt ?? null) ||
             (priorEvidence?.eventEndAt ?? null) !== (input.eventEndAt ?? null) ||
-            existing.urgency !== input.urgency
+            (input.urgency === 'time_critical' && existing.urgency !== 'time_critical')
           );
           const evidence: InternalEvidence = {
             evidence: input.evidence,
@@ -314,6 +315,7 @@ export function createProactiveStore(pool: sql.ConnectionPool, ownerObjectId: st
             .input('trigger', sql.NVarChar(16), trigger)
             .input('id', sql.UniqueIdentifier, randomUUID())
             .input('now', sql.DateTime2, now)
+            .input('dayStart', sql.DateTime2, copenhagenDayStart(now))
             .input('lease', sql.DateTime2, new Date(now.getTime() + 10 * 60_000));
           const { recordset } = await request.query<RunRow>(`DECLARE @lockResult int;
             DECLARE @lockResource nvarchar(255) = CONCAT(N'jarvis.proactive.runs:', LOWER(CONVERT(nvarchar(36), @owner)));
@@ -333,6 +335,16 @@ export function createProactiveStore(pool: sql.ConnectionPool, ownerObjectId: st
                 CAST(NULL AS bigint) AS claim_generation;
             ELSE IF @slot IS NOT NULL AND EXISTS (SELECT 1 FROM dbo.proactive_runs WITH (UPDLOCK, HOLDLOCK)
               WHERE owner_object_id = @owner AND slot_key = @slot)
+              SELECT CAST(NULL AS uniqueidentifier) AS id, CAST(NULL AS nvarchar(16)) AS [trigger],
+                CAST(NULL AS nvarchar(16)) AS slot_key, CAST(NULL AS nvarchar(16)) AS status,
+                CAST(NULL AS nvarchar(64)) AS reason, CAST(NULL AS datetime2) AS started_at,
+                CAST(NULL AS datetime2) AS finished_at, CAST(NULL AS int) AS finding_count,
+                CAST(NULL AS bigint) AS claim_generation;
+            ELSE IF @trigger = N'manual' AND (
+              EXISTS (SELECT 1 FROM dbo.proactive_runs WHERE owner_object_id = @owner
+                AND [trigger] = N'manual' AND started_at > DATEADD(minute, -5, @now))
+              OR (SELECT COUNT(*) FROM dbo.proactive_runs WHERE owner_object_id = @owner
+                AND [trigger] = N'manual' AND started_at >= @dayStart) >= 6)
               SELECT CAST(NULL AS uniqueidentifier) AS id, CAST(NULL AS nvarchar(16)) AS [trigger],
                 CAST(NULL AS nvarchar(16)) AS slot_key, CAST(NULL AS nvarchar(16)) AS status,
                 CAST(NULL AS nvarchar(64)) AS reason, CAST(NULL AS datetime2) AS started_at,
@@ -383,6 +395,16 @@ export function createProactiveStore(pool: sql.ConnectionPool, ownerObjectId: st
           .query<RunRow>(`SELECT TOP (1) id, [trigger], slot_key, status, reason, started_at,
             finished_at, finding_count, claim_generation
             FROM dbo.proactive_runs WHERE owner_object_id = @owner ORDER BY started_at DESC, id DESC;`);
+        return recordset[0] ? mapRun(recordset[0]) : null;
+      },
+      async running(now) {
+        const { recordset } = await databaseReadRequest(pool)
+          .input('owner', sql.UniqueIdentifier, owner)
+          .input('now', sql.DateTime2, now)
+          .query<RunRow>(`SELECT TOP (1) id, [trigger], slot_key, status, reason, started_at,
+            finished_at, finding_count, claim_generation
+            FROM dbo.proactive_runs WHERE owner_object_id = @owner AND status = N'running'
+              AND lease_until > @now ORDER BY started_at DESC, id DESC;`);
         return recordset[0] ? mapRun(recordset[0]) : null;
       },
       async list(limit) {

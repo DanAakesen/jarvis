@@ -3,24 +3,26 @@
 ## Status and purpose
 
 17 October 2026 — the broader proactive-assistance design remains staged. The
-Web Push delivery proof and the dark P13-05 backend foundation are approved;
-neither enables production work. The scheduler's in-process location and
-operating bounds are settled, but no scheduler, source read, model call or
-proactive send is implemented here. The
+Web Push delivery proof, the dark P13-05 backend foundation and the P13-06
+engine are implemented behind default-off flags; none enables production work.
+The engine schedules bounded runs using registered sources, deterministic
+detection and one tool-less summary call. Real source adapters, todo writes and
+proactive sends remain separate slices. The
 [plan summary](../PLAN.md#proactive-assistance--proposed-scope-17-october-2026)
 separates these slices from remaining pilot gates. Daily notification-off
 remains in force.
 
-## Confirmed M2 boundaries (17 October 2026; P13-05)
+## Confirmed M2 boundaries (18 October 2026; P13-05, P13-06)
 
 Dan's confirmed decisions supersede the proposals below. The server flags
 `JARVIS_PROACTIVE_ENABLED`, `JARVIS_PROACTIVE_TODO_WRITES_ENABLED` and
 `JARVIS_PROACTIVE_ALERTS_ENABLED` are exact-`true`, default off; this foundation
 sets none. P13-05 adds contracts, owner-bound routes, operational stores,
 time/language/budget helpers and a background-job kind, but no scheduler, source
-read, model call, timer or proactive send.
+read, model call, timer or proactive send. P13-06 extends that foundation with
+the scheduler and run pipeline without enabling any flag.
 
-Later scheduled work runs in-process in the backend, which retains its minimum
+Scheduled work runs in-process in the backend, which retains its minimum
 one replica. Slots are 07:00 and 18:00 Europe/Copenhagen, computed using the IANA
 time zone rather than a fixed offset. The quiet window is 22:00–07:00 without
 exceptions. If the backend was down or asleep, the engine may catch up only the
@@ -28,7 +30,7 @@ latest missed slot, once, during the allowed window and only while it is under
 12 hours old. A run still active at 22:00 is cancelled. Sleep behavior is
 unchanged. No Teams message, card, bot or channel is used.
 
-Later reasoning is one tool-less model call per run using the chat model and
+Reasoning is one tool-less model call per run using the chat model and
 reasoning effort selected in Settings; source content is untrusted data, never
 policy or authority. Todos remain canonical in the vault and any enabled writer
 is add-only. Alerts are limited to a deadline within 24 hours, a calendar clash,
@@ -37,6 +39,17 @@ reminder that falls in quiet hours waits until 07:00. The monthly estimated
 spend cap is 100 DKK by default, editable in settings, with warning at 80% and a
 hard stop at 100%. Findings and push text use deterministic Danish/English
 detection from the last user chat messages without storing or logging them.
+
+The engine considers each latest slot once per process, queries no database on
+idle ticks, and uses durable unique slot claims across restarts. A paused slot
+is skipped without a job and cannot replay. Manual admission checks pause,
+all-disabled sources, conservative budget, active run and stored rate limits,
+in that order. Every non-skipped run has a background job with fixed safe text.
+Deadline and clash detection is independent of the model; rejected output cannot
+set time-critical urgency, invent evidence or invoke a tool. Source facts and
+suggested todo text stay transient outside the private findings database.
+Ordered after-storage hooks are the extension point for later todo/alert/reminder
+slices; this engine attaches none of those effects.
 
 Jarvis is Dan's Microsoft-first personal platform and a learning/demo project
 for his Microsoft ATS role. The proposed next step is bounded assistance across
@@ -398,9 +411,9 @@ compatibility with Jarvis's account. Sources were checked on 17 October 2026.
 Still open: the exact canonical todo path, allowed edit operations and review/
 undo design; source identities, access/coverage and actual provider costs;
 operational retention; subscription/device lifecycle; durable inbox/conversation
-linkage; and any expansion beyond the confirmed bounded assistance. P13-05 does
-not activate the feature or implement the future scheduler, sources, reasoning,
-todo writer or alert delivery.
+linkage; and any expansion beyond the confirmed bounded assistance. P13-06
+settles the engine and hook boundary, not those provider or activation gates.
+Real sources, a todo writer and alert delivery remain separate work.
 
 ## Appendix — optional execution, cost and source research
 

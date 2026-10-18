@@ -14,6 +14,22 @@ const finding = {
 };
 
 describe('in-memory proactive stores', () => {
+  it('enforces stored manual limits atomically, including exact five minutes and the local day boundary', async () => {
+    const store = createMemoryProactiveStore();
+    const start = Date.parse('2026-10-25T21:00:00Z');
+    const claimAt = (timestamp: number) => store.runs.claim({ trigger: 'manual', slot: null, now: new Date(timestamp) });
+    for (let index = 0; index < 6; index++) {
+      const timestamp = start + index * 5 * 60_000;
+      const competing = await Promise.all([claimAt(timestamp), claimAt(timestamp)]);
+      expect(competing.filter(Boolean)).toHaveLength(1);
+      const claimed = competing.find(Boolean)!;
+      await store.runs.finish(claimed.run.id, claimed.generation, 'done', null, 0, new Date(timestamp));
+      expect(await claimAt(timestamp + 5 * 60_000 - 1)).toBeNull();
+    }
+    expect(await claimAt(start + 30 * 60_000)).toBeNull();
+    expect(await claimAt(Date.parse('2026-10-25T23:00:00Z'))).not.toBeNull();
+  });
+
   it('retains dismissed deduplicated findings until material timing or urgency changes', async () => {
     const store = createMemoryProactiveStore();
     const initial = await store.items.upsertFinding(finding);
@@ -21,9 +37,13 @@ describe('in-memory proactive stores', () => {
     const identical = await store.items.upsertFinding({ ...finding, title: 'Updated title' });
     expect(identical.id).toBe(initial.id);
     expect(identical.state).toBe('dismissed');
+    expect((await store.items.upsertFinding({ ...finding, urgency: 'fyi' })).state).toBe('dismissed');
+    expect((await store.items.upsertFinding(finding)).state).toBe('dismissed');
     const changed = await store.items.upsertFinding({ ...finding, urgency: 'time_critical' });
     expect(changed.id).toBe(initial.id);
     expect(changed.state).toBe('new');
+    await store.items.applyFeedback(initial.id, 'dismiss');
+    expect((await store.items.upsertFinding(finding)).state).toBe('dismissed');
   });
 
   it('serializes claims, expires stale leases and rejects stale generations', async () => {
@@ -31,6 +51,8 @@ describe('in-memory proactive stores', () => {
     const now = new Date('2026-10-20T05:00:00.000Z');
     const slot = await store.runs.claim({ trigger: 'scheduled', slot: '2026-10-20T07:00', now });
     expect(slot).not.toBeNull();
+    expect(await store.runs.running(now)).toEqual(slot!.run);
+    expect(await store.runs.running(new Date(now.getTime() + 10 * 60_000))).toBeNull();
     expect(Object.keys(slot!.run)).toEqual([
       'id', 'trigger', 'slot', 'status', 'reason', 'startedAt', 'finishedAt', 'findingCount',
     ]);

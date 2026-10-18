@@ -76,6 +76,7 @@ function storeFixture(overrides: Partial<ConversationStore> = {}) {
     })),
     addMessage: vi.fn<ConversationStore['addMessage']>(async () => message),
     getHistory: vi.fn(async () => history),
+    readRecentUserMessages: vi.fn(async () => []),
     getDanMessagesAfter: vi.fn(async () => []),
     ...overrides,
   } satisfies ConversationStore;

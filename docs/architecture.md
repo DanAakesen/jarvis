@@ -1892,14 +1892,14 @@ guard; every future system-started send must enforce 22:00–07:00
 Europe/Copenhagen with no emergency exception. There is no Teams delivery path.
 The feature remains dark, and actual iPhone delivery is not yet proven.
 
-## Proactive foundation (P13-05; default off)
+## Proactive foundation and engine (P13-05, P13-06; default off)
 
 `JARVIS_PROACTIVE_ENABLED` gates the owner-bound proactive routes and composition;
 the todo-write and alert capabilities are separately gated. The index contributes
 one guarded registration call with existing providers, stores, token callback,
 clock, logger and the background-job registry. Disabled composition does not
 construct proactive stores, query proactive tables, register routes or start a
-timer. This slice adds no source read, model call or outbound request.
+timer. P13-06 extends this composition without another index registration.
 
 The `proactive` module defines the shared source/item/run contracts, a source
 registry with an unavailable `x` placeholder, and authenticated status, settings,
@@ -1912,11 +1912,38 @@ Migration 0055 extends `proactive_items` while preserving test rows, and adds
 owner-scoped settings, runs, source status and estimated-spend tables. SQL stores
 use the existing pool and `databaseReadRequest` for nontransactional reads.
 Finding upserts are deduplicated by owner/key; dismissed findings remain
-dismissed until due/event timing or urgency materially changes. Run claims take
+dismissed until due/event timing changes or urgency escalates to time-critical. Run claims take
 an owner-scoped transaction lock, respect unexpired leases, and use claim
 generations for heartbeat/finish fencing. Startup marks leftover running rows
 interrupted. Migration 0056 adds the `proactive` background-job kind; rollback
 refuses to discard rows of that kind.
+
+The engine owns a self-rescheduling, unreferenced 30-second scheduler. Startup
+reconciles runs once and evaluates the latest Copenhagen slot immediately;
+handled slot keys stay in memory, so idle ticks perform no SQL work. Claims
+serialize through the existing owner lock, including persisted manual rate
+limits. A lease-aware running-run read prevents expired claims from blocking
+manual admission. Paused/all-disabled scheduled slots finish as skipped without a job.
+The owner-only run routes return bounded history and detach manual execution
+after a 202 response containing the running summary.
+
+Each run owns cancellation, a three-minute deadline and 60-second lease
+heartbeats. Enabled registered sources read in parallel with 20-second bounds.
+Quiet hours cancel scheduled/catch-up work, not manual work; generation and
+quiet-hour checks precede item writes and hooks. Detection is pure and shares
+the 24-hour deadline and 48-hour clash constants with future consumers. Language
+uses a narrow SQL read of recent user-message text, never chat history fields;
+chat messages are not model input.
+
+`proactive/model.ts` independently follows the existing Foundry chat-completions
+pattern, with the selected chat role, catalogue validation, no tools, untrusted
+fact data, a 48-KiB request/32-KiB response bound and a 45-second timeout.
+Validated evidence contains labels only. Real response token counts feed both
+estimated proactive spend and global chat-role usage, including rejected output.
+Stable 32-hex content keys exclude run-local refs and urgency. Ordered optional
+`onFindingsStored` hooks receive only this run's stored items and in-memory source
+facts before finish; one hook failure cannot prevent later hooks or change success.
+This slice adds no delivery or todo-writing hook and enables no flag.
 
 ## Web push delivery (P13-02; default off)
 

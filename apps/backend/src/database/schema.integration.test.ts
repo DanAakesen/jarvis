@@ -241,6 +241,45 @@ describe('committed domain schema (groups 1-8)', () => {
     expect(openedAgain.recordset[0]?.opened_at).toEqual(firstOpenedAt);
   });
 
+  it('recovers proactive background jobs with the fixed visible restart reason', () => withRollbackDatabase(async (rollbackPool) => {
+    const store = createBackgroundJobStore(rollbackPool);
+    const jobId = randomUUID();
+    const at = new Date().toISOString();
+    await store.create({
+      jobId, kind: 'proactive', title: 'Proactive check (manual)', status: 'running',
+      step: 0, steps: 1, startedAt: at, updatedAt: at,
+    });
+    expect(await store.reconcileInterrupted()).toContainEqual(expect.objectContaining({
+      jobId, kind: 'proactive', status: 'failed', detail: 'Interrupted by a restart',
+    }));
+  }));
+
+  it('serializes persisted proactive manual limits across stores and resets at Copenhagen midnight', () => withRollbackDatabase(async (rollbackPool) => {
+    const owner = randomUUID();
+    const first = createProactiveStore(rollbackPool, owner);
+    const second = createProactiveStore(rollbackPool, owner);
+    const start = Date.parse('2026-10-25T21:00:00Z');
+    for (let index = 0; index < 6; index++) {
+      const now = new Date(start + index * 5 * 60_000);
+      const claims = await Promise.all([
+        first.runs.claim({ trigger: 'manual', slot: null, now }),
+        second.runs.claim({ trigger: 'manual', slot: null, now }),
+      ]);
+      expect(claims.filter(Boolean)).toHaveLength(1);
+      const claimed = claims.find(Boolean)!;
+      await first.runs.finish(claimed.run.id, claimed.generation, 'done', null, 0, now);
+      expect(await second.runs.claim({
+        trigger: 'manual', slot: null, now: new Date(now.getTime() + 5 * 60_000 - 1),
+      })).toBeNull();
+    }
+    expect(await second.runs.claim({
+      trigger: 'manual', slot: null, now: new Date(start + 30 * 60_000),
+    })).toBeNull();
+    expect(await second.runs.claim({
+      trigger: 'manual', slot: null, now: new Date('2026-10-25T23:00:00Z'),
+    })).not.toBeNull();
+  }));
+
   it('persists proactive settings, findings, feedback, leases, source status and estimated spend', () => withRollbackDatabase(async (rollbackPool) => {
     const owner = randomUUID();
     const store = createProactiveStore(rollbackPool, owner);
@@ -272,6 +311,8 @@ describe('committed domain schema (groups 1-8)', () => {
     expect(first).toMatchObject({ kind: 'finding', state: 'new', dueAt: finding.dueAt, evidence: finding.evidence });
     expect((await store.items.applyFeedback(first.id, 'dismiss'))?.state).toBe('dismissed');
     expect((await store.items.upsertFinding({ ...finding, title: 'Updated synthetic title' })).state).toBe('dismissed');
+    expect((await store.items.upsertFinding({ ...finding, urgency: 'fyi' })).state).toBe('dismissed');
+    expect((await store.items.upsertFinding(finding)).state).toBe('dismissed');
     const changed = await store.items.upsertFinding({ ...finding, urgency: 'time_critical' });
     expect(changed).toMatchObject({ id: first.id, state: 'new', urgency: 'time_critical' });
     await store.items.applyFeedback(changed.id, 'snooze', '2026-10-20T06:00:00.000Z');
@@ -288,15 +329,19 @@ describe('committed domain schema (groups 1-8)', () => {
     ]);
     expect(competing.filter(Boolean)).toHaveLength(1);
     const firstClaim = competing.find(Boolean)!;
+    expect(await store.runs.running(now)).toEqual(firstClaim.run);
     expect(await store.runs.claim({ trigger: 'manual', slot: null, now })).toBeNull();
     const later = new Date(now.getTime() + 10 * 60_000);
+    expect(await store.runs.running(later)).toBeNull();
     const nextClaim = await store.runs.claim({ trigger: 'manual', slot: null, now: later });
     expect(nextClaim).not.toBeNull();
     expect(await store.runs.heartbeat(firstClaim.run.id, firstClaim.generation, later)).toBe(false);
     expect(await store.runs.finish(firstClaim.run.id, firstClaim.generation, 'done', null, 1, later)).toBe(false);
     expect(await store.runs.finish(nextClaim!.run.id, nextClaim!.generation, 'done', null, 1, later)).toBe(true);
+    expect(await store.runs.running(later)).toBeNull();
     expect(await store.runs.countManualSince(now)).toBe(1);
-    const interrupted = await store.runs.claim({ trigger: 'manual', slot: null, now: new Date(later.getTime() + 1_000) });
+    expect(await store.runs.claim({ trigger: 'manual', slot: null, now: new Date(later.getTime() + 1_000) })).toBeNull();
+    const interrupted = await store.runs.claim({ trigger: 'manual', slot: null, now: new Date(later.getTime() + 5 * 60_000) });
     expect(await store.runs.markInterruptedOnStartup()).toBe(1);
     expect(await store.runs.finish(interrupted!.run.id, interrupted!.generation, 'done', null, 0, later)).toBe(false);
     expect(await store.runs.latest()).toMatchObject({ status: 'failed', reason: 'interrupted_by_restart' });
