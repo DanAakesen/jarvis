@@ -260,6 +260,18 @@ roll back with visible retry on failure. These choices do not enable backend
 work, change permissions, or settle outstanding source, todo-write or delivery
 decisions.
 
+## Keep news reads dark, public-address-pinned and content-minimal (18 October 2026; P13-09)
+
+The registry's news source is a read-only RSS 2.0/Atom adapter over editable
+settings, defaulting to the GitHub changelog and OpenAI news. It can only use
+validated HTTPS hostnames and public DNS answers; mixed public/private DNS
+answers, redirects, non-XML responses, compressed bodies, oversized responses,
+and DTD/entity declarations fail closed. Per-feed work is limited to ten
+seconds and 2 MiB. Facts contain only sanitized, bounded titles, publication
+times, and the host; feed URLs, query strings and source payloads are never
+logged. The source remains dark: this change registers it without scheduling a
+read or enabling any proactive flag.
+
 ## Keep P13-07 sources read-only and dark (18 October 2026)
 
 The todo filename remains unsettled, so the reader resolves exactly one

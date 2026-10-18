@@ -3,9 +3,9 @@ import { buildSourceRegistry } from './registry.js';
 import { defaultProactiveSettings } from '../store.js';
 
 describe('proactive source registry', () => {
-  it('registers the new sources in alphabetical order and keeps X as a placeholder', async () => {
+  it('registers the sources alphabetically and keeps X as a non-throwing placeholder', async () => {
     const sources = buildSourceRegistry({});
-    expect(sources.map(({ id }) => id)).toEqual(['factory', 'todos', 'weather', 'x']);
+    expect(sources.map(({ id }) => id)).toEqual(['factory', 'news', 'todos', 'weather', 'x']);
     const source = sources.at(-1);
     expect(source?.id).toBe('x');
     const result = await source!.read({

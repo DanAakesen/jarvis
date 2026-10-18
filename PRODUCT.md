@@ -1068,6 +1068,14 @@ model/source text as plain text. Manual check polling is visible-page-only and
 bounded; item actions can be retried after rollback. This web slice does not set
 the flag or grant permissions.
 
+## Proactive news source (18 October 2026; P13-09)
+
+The backend registry includes a dark, read-only RSS/Atom source for configured
+feeds, defaulting to the GitHub changelog and OpenAI news. It validates hosts, pins HTTPS
+connections to vetted public DNS addresses, rejects redirects and unsafe XML,
+and returns only bounded, sanitized titles. The source does not activate a
+scheduler, model call or proactive delivery; all proactive flags remain off.
+
 ## Daily migration (approved P12)
 
 Tool parity is an acceptance requirement for every retained Daily capability,
