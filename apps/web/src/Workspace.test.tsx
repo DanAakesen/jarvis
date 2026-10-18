@@ -1366,7 +1366,7 @@ describe('Workspace', () => {
     expect(workspaceStyles).toContain('width: min(300px, 100%); min-width: 0; max-width: 100%;');
     const mobile = workspaceStyles.slice(workspaceStyles.indexOf('@media (max-width: 900px)'));
     expect(mobile).toContain('.workspace-window-heading h3 { flex-basis: auto; }');
-    expect(mobile).toContain('.workspace-window-actions { display: flex; width: auto; flex: 0 0 auto; flex-wrap: nowrap; gap: 4px; }');
+    expect(mobile).toContain('.workspace-window-actions { display: flex; width: auto; flex: 0 0 auto; flex-wrap: nowrap; gap: var(--space-1); }');
     expect(workspaceStyles).toContain('.sidebar-close, .workspace-window .workspace-icon-control, .workspace-window .workspace-arrange-menu > summary { width: 44px; min-width: 44px; height: 44px; min-height: 44px; }');
     expect(mobile).toContain('.workspace-arrange-menu > summary { width: 44px; padding: 0; }');
   });

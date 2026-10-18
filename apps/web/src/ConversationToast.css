@@ -14,20 +14,20 @@
   position: relative;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
   width: min(360px, calc(100vw - 40px));
   box-sizing: border-box;
-  padding: 10px 8px 10px 16px;
+  padding: var(--space-3) var(--space-2) var(--space-3) var(--space-4);
   border-radius: var(--radius-control);
   color: var(--text);
   box-shadow: var(--panel-shadow);
   pointer-events: auto;
   animation: conversation-toast-arrive 180ms var(--ease-standard);
 }
-.conversation-toast p { flex: 1; min-width: 0; margin: 0; font-size: var(--type-small); line-height: 1.5; overflow-wrap: anywhere; }
+.conversation-toast p { flex: 1; min-width: 0; margin: 0; font-size: var(--type-small); line-height: var(--line-prose); overflow-wrap: anywhere; }
 .conversation-toast button { display: grid; place-items: center; padding: 0; border: 0; border-radius: var(--radius-control); color: var(--text); background: transparent; font: inherit; cursor: pointer; }
 .conversation-toast .conversation-toast-dismiss { flex: 0 0 36px; width: 36px; height: 36px; }
-.conversation-toast .conversation-toast-action { flex: 0 0 auto; min-height: 36px; padding: 0 12px; background: var(--state-selected-bg); color: var(--state-selected-fg); font-size: var(--type-small); font-weight: 650; }
+.conversation-toast .conversation-toast-action { flex: 0 0 auto; min-height: 36px; padding: 0 var(--space-3); background: var(--state-selected-bg); color: var(--state-selected-fg); font-size: var(--type-small); font-weight: 650; }
 .conversation-toast button:hover { background: var(--glass-hover); }
 .conversation-toast .conversation-toast-action:hover { background: var(--state-selected-hover); }
 .conversation-toast button:active { background: var(--glass-pressed); }
