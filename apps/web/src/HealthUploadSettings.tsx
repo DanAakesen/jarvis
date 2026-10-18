@@ -42,7 +42,7 @@ export function HealthUploadSettings({ backendUrl, getAccessToken }: {
         setError('Health upload settings could not be loaded. Try again.');
       }
     }
-  }, [backendUrl]);
+  }, [backendUrl, getAccessToken]);
 
   useEffect(() => {
     if (!backendUrl) return;
