@@ -128,8 +128,8 @@ describe('production tool catalogue', () => {
     const onNames = createToolRegistry(on).list().map(({ name }) => name);
     const offNames = createToolRegistry(off).list().map(({ name }) => name);
 
-    expect(offNames).toHaveLength(115);
-    expect(onNames).toHaveLength(116);
+    expect(offNames).toHaveLength(116);
+    expect(onNames).toHaveLength(117);
     expect(onNames.filter((name) => !proactiveToolNames.includes(name))).toEqual(offNames);
     expect(on.find(({ id }) => id === 'proactive')!.tools.map(({ name }) => name)).toEqual(proactiveToolNames);
     expect(off.some(({ id }) => id === 'proactive')).toBe(false);
