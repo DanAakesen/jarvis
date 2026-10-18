@@ -367,7 +367,7 @@
   margin-bottom: var(--space-4);
 }
 
-@media (max-width: 600px) {
+@media (max-width: 700px) {
   .proactive-page {
     padding-inline: var(--space-3);
     padding-bottom: max(160px, calc(env(safe-area-inset-bottom) + 144px));

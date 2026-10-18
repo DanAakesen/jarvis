@@ -1,5 +1,16 @@
 # Decisions
 
+## Consolidate web viewport breakpoints (18 October 2026; P14-05 / #973)
+
+Use one non-Daily viewport set: phone through 700px, tablet above 700px through
+900px, desktop above 900px, and wide from 1200px. Keep 380px only for narrow
+handset chat, voice and control fit; preserve the task-board 1099px and task
+detail 720px thresholds as container queries because they respond to allocated
+component width. Daily's existing 640px and 760px media rules are untouched
+because that page is being built in parallel. The responsive probe and every
+boundary comparison are recorded in `docs/ui-audit.md` under "Pass 3:
+responsive and overflow".
+
 ## Discover vault tasks in source notes using native Tasks markers (18 October 2026; P13-18 / #999)
 
 Read safe Markdown notes under `Personal/` and `Work/` recursively, including
