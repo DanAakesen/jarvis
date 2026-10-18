@@ -5456,6 +5456,37 @@ and returning from the browser reads them again. Aborted and superseded reads ar
 ignored. The overview adds no endpoint, DTO, writer, calculation, provider call,
 login or storage.
 
+### Daily section shell and extension contract (18 October 2026; P12-20)
+
+`DailyHome` owns the active section (`?section=<id>`), one Copenhagen-calendar
+period and the known capability source IDs. `sections/*/index.tsx` modules are
+discovered with the lazy `import.meta.glob`; each exports its
+`DailySectionDefinition`. The shell loads these small entry modules to discover
+labels, order, period use and source requirements before rendering the switcher.
+Each entry lazy-loads its own content component, so section UI and its queries
+remain split into a separate chunk and are loaded only when selected. Discovery
+filters out definitions whose required source IDs are not exposed.
+
+To add a section, create `apps/web/src/daily/sections/<id>/index.tsx` exporting
+`section: DailySectionDefinition`, define its id/label/order/`usesPeriod` and
+`requiredSources`, and lazy-load a section component from that module. The
+component receives the backend URL, token supplier, known sources, shared period
+and change callback, and refresh version; it owns its queries, stylesheet and
+tests. Add a folder-scoped fixture test. No shared section registry changes are
+needed. The shipped folders are `overview`, `briefs` and `data`; Briefs is gated
+on both history and detail sources. Workouts, Nutrition and Body & sleep are
+future sections, not placeholder tabs.
+
+`DailyPeriodControl` offers Last 7/30/90 days, This year and custom dates. The
+date-only validator checks real calendar dates, chronological order and at most
+366 inclusive dates before `dailyRequest` can create a query. `daily/ui/` holds
+the shared empty/loading/error/partial/freshness state, unknown-safe statistic
+tile, token-colored SVG chart with a data table, labelled scroll region and
+Copenhagen/user-locale formatters. It does not change the generated-view chart
+renderer or backend/query contracts. The shell retains the period slot's measured
+height between section changes so the shared control does not move the section
+content when it appears or disappears.
+
 `main.tsx` passes the build constant `__JARVIS_DAILY_ENABLED__` to
 `App({ dailyEnabled })`. `apps/web/vite.config.ts` loads `VITE_DAILY_ENABLED` by
 name only and `config/daily-switch.ts` parses it: absent or `false` is off, `true`

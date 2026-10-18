@@ -1,0 +1,22 @@
+.daily-state { display: grid; gap: var(--space-2); }
+.daily-state p { margin: 0; }
+.daily-state-freshness { color: var(--text-muted); font-size: var(--type-small); }
+.daily-stat-tile { min-width: 0; padding: var(--space-3); border: 1px solid var(--rule); border-radius: var(--radius-panel); background: var(--surface-translucent); }
+.daily-stat-tile h3 { margin: 0; color: var(--text-muted); font-size: var(--type-small); font-weight: 500; }
+.daily-stat-value { margin: var(--space-2) 0 0; font-size: var(--type-subheading); font-weight: 650; overflow-wrap: anywhere; }
+.daily-stat-unit { font-size: var(--type-body); font-weight: 400; }
+.daily-stat-note, .daily-stat-comparison { margin: var(--space-1) 0 0; color: var(--text-muted); font-size: var(--type-small); }
+.daily-chart { min-width: 0; margin: var(--space-3) 0; }
+.daily-chart svg { display: block; max-width: 100%; height: auto; overflow: visible; }
+.daily-chart-grid line { stroke: var(--rule); stroke-width: 1; }
+.daily-chart-grid text { fill: var(--text-muted); font: 12px var(--font-body); }
+.daily-chart-line { fill: none; stroke: currentColor; stroke-width: 2; }
+.daily-chart-area { fill: currentColor; opacity: .16; }
+.daily-chart-series circle { fill: currentColor; }
+.daily-chart-bars rect { rx: 2px; }
+.daily-scroll-table { max-width: 100%; overflow: auto; outline-offset: 2px; }
+.daily-scroll-table:focus-visible { outline: 2px solid var(--focus); }
+.daily-scroll-table table { width: 100%; border-collapse: collapse; }
+.daily-scroll-table th, .daily-scroll-table td { padding: var(--space-2) var(--space-3); text-align: start; border-bottom: 1px solid var(--rule); white-space: nowrap; word-break: normal; }
+.daily-scroll-table-sticky tr > :first-child { position: sticky; inset-inline-start: 0; background: var(--surface); }
+.daily-scroll-table caption { text-align: start; padding: var(--space-2) var(--space-3); }

@@ -7,6 +7,7 @@ import { dailyCellValue, dailyColumns, dailyPlots, dailyRequest, dailyRowKey, da
 import { DailyRefreshContext } from './refresh';
 import { useDailyCapabilities } from './useDailyCapabilities';
 import { useDailyQuery } from './useDailyQuery';
+import { DailyState } from './ui/DailyState';
 import './daily.css';
 
 function object(value: DailyJson | undefined): value is Row {
@@ -63,17 +64,28 @@ function BriefBody({ item }: { item: Row }) {
  * The record browser. Used on its own it checks availability itself; the Daily home passes what it already knows
  * (`knownSources`), the collection the user opened (`initialSource`) and a way back to the overview (`onBack`).
  */
-export function DailyPage({ backendUrl, getAccessToken, knownSources, initialSource, onBack }: AreaProps & {
-  knownSources?: readonly DailySourceId[];
-  initialSource?: DailySourceId;
+export function DailyPage({ backendUrl, getAccessToken, knownSources, initialSource, onBack, onSourceChange, sharedPeriod,
+  onPeriodChange, embedded = false, embeddedClassName, availabilityError, onRetryAvailability }: AreaProps & {
+  knownSources?: readonly DailySourceId[] | undefined;
+  initialSource?: DailySourceId | undefined;
   onBack?: () => void;
+  onSourceChange?: ((source: DailySourceId) => void) | undefined;
+  sharedPeriod?: { startDate: string; endDate: string } | undefined;
+  onPeriodChange?: ((period: { startDate: string; endDate: string }) => void) | undefined;
+  embedded?: boolean;
+  embeddedClassName?: string | undefined;
+  availabilityError?: string | undefined;
+  onRetryAvailability?: (() => void) | undefined;
 }) {
   const refreshVersion = useContext(DailyRefreshContext);
   const loaded = useDailyCapabilities(backendUrl, getAccessToken, knownSources === undefined);
-  const current = knownSources ? { sources: knownSources, error: undefined, reload: loaded.reload } : loaded;
+  const current = knownSources !== undefined ? {
+    sources: knownSources, error: availabilityError, reload: onRetryAvailability ?? loaded.reload,
+  } : loaded;
   const [source, setSource] = useState<DailySourceId>(initialSource ?? sources.metrics);
-  const [period, setPeriod] = useState(initialDailyPeriod);
-  const [draftPeriod, setDraftPeriod] = useState(initialDailyPeriod);
+  const [localPeriod, setLocalPeriod] = useState(initialDailyPeriod);
+  const period = sharedPeriod ?? localPeriod;
+  const [draftPeriod, setDraftPeriod] = useState(period);
   const [cursors, setCursors] = useState<DailyCursor[]>([]);
   const [workout, setWorkout] = useState<{ id: string; heartRate: boolean } | null>(null);
   const [briefId, setBriefId] = useState<string | null>(null);
@@ -99,18 +111,23 @@ export function DailyPage({ backendUrl, getAccessToken, knownSources, initialSou
   const plot = plots.find(item => item.id === plotId) ?? plots[0];
   const dirtyPeriod = period.startDate !== draftPeriod.startDate || period.endDate !== draftPeriod.endDate;
   const draftValid = selected ? dailyRequest(selected.id, draftPeriod) !== null : false;
-  const changeSource = (value: DailySourceId) => { focusAfterLoad.current = false; setSource(value); setCursors([]); setWorkout(null); setBriefId(null); setView('table'); setPlotId(''); };
-  const applyPeriod = (event: FormEvent) => { event.preventDefault(); if (draftValid) { focusAfterLoad.current = true; setPeriod(draftPeriod); setCursors([]); } };
+  const changeSource = (value: DailySourceId) => { focusAfterLoad.current = false; setSource(value); onSourceChange?.(value); setCursors([]); setWorkout(null); setBriefId(null); setView('table'); setPlotId(''); };
+  const applyPeriod = (event: FormEvent) => { event.preventDefault(); if (draftValid) { focusAfterLoad.current = true; (onPeriodChange ?? setLocalPeriod)(draftPeriod); setCursors([]); } };
   const title = briefId !== null ? 'Brief details' : workout ? workout.heartRate ? 'Workout heart rate' : 'Workout details' : selected?.label ?? 'Records';
   const detailSource = data?.source === sources.workouts ? sources.workout : data?.source === sources.briefs ? sources.brief : null;
   const canOpenRecord = detailSource !== null && current.sources?.includes(detailSource);
-  return <section className="daily-page" aria-labelledby="daily-heading">
-    <header className="daily-heading"><div><h1 id="daily-heading" tabIndex={-1}>Daily</h1><p>Browse recorded health, food, workouts and historical briefs.</p></div>
-      <div className="daily-heading-actions">
+  return <section className={`daily-page${embedded ? ' daily-data-embedded' : ''}${embeddedClassName ? ` ${embeddedClassName}` : ''}`} aria-labelledby="daily-heading">
+    {!embedded
+      ? <header className="daily-heading"><div><h1 id="daily-heading" tabIndex={-1}>Daily</h1><p>Browse recorded health, food, workouts and historical briefs.</p></div>
+        <div className="daily-heading-actions">
+          {onBack && <button className="secondary-button" type="button" onClick={onBack}>Back to overview</button>}
+          <button className="secondary-button" type="button" disabled={result.pending || !query} onClick={result.reload}>Refresh records</button>
+        </div>
+      </header>
+      : <div className="daily-heading-actions daily-embedded-actions">
         {onBack && <button className="secondary-button" type="button" onClick={onBack}>Back to overview</button>}
         <button className="secondary-button" type="button" disabled={result.pending || !query} onClick={result.reload}>Refresh records</button>
-      </div>
-    </header>
+      </div>}
     {current.error ? <div className="daily-notice" role="alert"><p>{current.error}</p><button className="secondary-button" type="button" onClick={current.reload}>Retry availability</button></div> :
       !current.sources ? <Loader label="Checking Daily availability" variant="rows" /> : <>
         <div className="daily-toolbar">
@@ -120,17 +137,17 @@ export function DailyPage({ backendUrl, getAccessToken, knownSources, initialSou
             {available.length === 0 && <option value="">No collections available</option>}
             {available.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}
           </select></label>
-          {selected?.dated && !workout && <form className="daily-period" onSubmit={applyPeriod}>
+          {selected?.dated && !workout && sharedPeriod === undefined && <form className="daily-period" onSubmit={applyPeriod}>
             <label>From<input type="date" value={draftPeriod.startDate} onChange={event => setDraftPeriod(value => ({ ...value, startDate: event.target.value }))} /></label>
             <label>To<input type="date" value={draftPeriod.endDate} onChange={event => setDraftPeriod(value => ({ ...value, endDate: event.target.value }))} /></label>
             <button className="secondary-button" type="submit" disabled={!draftValid || !dirtyPeriod}>Apply period</button>
           </form>}
         </div>
-        {selected?.dated && !workout && <p className="daily-meta">Periods use Europe/Copenhagen. Edit the dates, then Apply period. The evidence below names the period actually loaded.</p>}
+        {selected?.dated && !workout && sharedPeriod === undefined && <p className="daily-meta">Periods use Europe/Copenhagen. Edit the dates, then Apply period. The evidence below names the period actually loaded.</p>}
         {(actualSource === sources.briefs || actualSource === sources.brief) && <p className="daily-meta">Historical records only, not current health or a new delivery. Timestamps stay exactly as stored; their timezone is not inferred. History uses stored start-text order, then exact ID, descending.</p>}
         {available.length === 0 && <p role="status">This backend has not exposed a browsable Daily collection.</p>}
-        {selected?.dated && !workout && !draftValid && <p className="error-text" role="alert">Choose valid start and end dates in chronological order.</p>}
-        {dirtyPeriod && selected?.dated && !workout && draftValid && <p className="daily-meta">The edited period is not applied yet.</p>}
+        {selected?.dated && !workout && sharedPeriod === undefined && !draftValid && <p className="error-text" role="alert">Choose valid start and end dates in chronological order.</p>}
+        {dirtyPeriod && selected?.dated && !workout && sharedPeriod === undefined && draftValid && <p className="daily-meta">The edited period is not applied yet.</p>}
         <section className="daily-records" aria-labelledby="daily-records-heading" aria-busy={result.pending} data-pending={result.pending || undefined}>
           <div className="daily-records-heading"><h2 id="daily-records-heading" ref={heading} tabIndex={-1}>{title}</h2>
             {workout && <div className="daily-workout-actions">
@@ -141,16 +158,17 @@ export function DailyPage({ backendUrl, getAccessToken, knownSources, initialSou
               focusAfterLoad.current = true; setBriefId(null); setCursors(collectionCursors.current); setView('table');
             }}>Back to brief history</button>}
           </div>
-          {result.error && <div role="alert" className="daily-notice"><p>{result.error}</p>{data && <p>Previously loaded records remain below; their original read time is unchanged.</p>}
+          {result.error && !data && <DailyState status="error" message={result.error} retryLabel="Retry records" onRetry={result.reload} />}
+          {result.error && data && <div role="alert" className="daily-notice"><p>{result.error}</p><p>Previously loaded records remain below; their original read time is unchanged.</p>
             <button className="secondary-button" type="button" onClick={result.reload} disabled={result.pending}>Retry records</button></div>}
-          {result.pending && (data ? <p role="status">Refreshing recorded evidence...</p> : <Loader label="Loading Daily records" variant="rows" />)}
+          {result.pending && (data ? <p role="status">Refreshing recorded evidence...</p> : <DailyState status="loading" />)}
           {data && <>
             <div className="daily-evidence">
               {data.period && <p>Applied period: {dailyValue(data.period.startDate)} to {dailyValue(data.period.endDate)}.</p>}
               <p>Retained Daily SQL records. Read <time dateTime={data.freshness.observedAt}>{dailyValue(data.freshness.observedAt)}</time>.</p>
               <p>Last successful source processing: {dailyValue(data.freshness.sourceProcessedCommittedAt)}. Source freshness and completeness are not established.</p>
             </div>
-            {data.status === 'empty' ? <p className="daily-empty">No records were returned for this query. This does not prove the original source is empty.</p> :
+            {data.status === 'empty' ? <DailyState status="empty" /> :
               data.source === sources.brief ? <BriefBody item={data.items[0]!} /> :
               data.source === sources.sync ? <SyncEvidence item={data.items[0]!} /> : <>
                 {plots.length > 0 && <div className="daily-view-options">

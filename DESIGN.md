@@ -1388,6 +1388,28 @@ private data or real sign-in; the harness has no 3D stage, header or MSAL;
 `prefers-reduced-motion` was not emulated; the Daily-off path is covered by the
 App tests, not the browser. Local runs are not qualification.
 
+18 October 2026 (P12-20): Daily now keeps that overview inside one page-level
+heading and body line, followed by Overview, Briefs and Data tabs and the active
+section. The tabs expose selected state semantically and by stronger text weight
+and a complete selected surface; narrow screens get a contained horizontal tab
+scroller, with 44 px controls and visible focus. Data alone shows the shared
+period control. Preset and custom date changes use Europe/Copenhagen calendar
+dates and reject reversed, impossible or over-366-day ranges before a read.
+The period slot retains its height while switching tabs so section content does
+not jump when the Data control appears or disappears. Sections keep their
+existing page and control geometry; each owns its content
+stylesheet and separately lazy-loaded component. Workouts, Nutrition and Body &
+sleep remain absent until their follow-up sections exist.
+
+Checked the section shell in isolated Chromium against only synthetic capability
+and query responses at 320, 390×844, 768 and 1440×900 in light and dark, with
+reduced motion. Overview, Data and brief detail, keyboard/URL switching, shared
+period retention, custom-range rejection and the chart were exercised. The page
+did not scroll sideways, tab and Open targets measured 44 px, the section panel
+kept the same top position across a tab switch, and the browser console had no
+page errors. Scratch screenshots were kept outside the repository; this is not
+signed-in shell, live-backend or private-data acceptance.
+
 18 October on-demand views (P12-16 / #731): when Jarvis shows Daily data on
 request, it reuses the existing generated-view renderer, workspace window and theme.
 There is no Daily renderer, skin or page. Under every table, chart or detail view
