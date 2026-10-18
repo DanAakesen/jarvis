@@ -599,7 +599,7 @@ export function TaskDetailPage({ backendUrl, getAccessToken, taskId, compact = f
                           currentStreamStatus === 'error' ? 'Live updates unavailable; refresh to retry.' : 'Connecting to live updates…'}
                     </span>
                     <label className="visually-hidden" htmlFor={`${ids}-event-type`}>Event type</label>
-                    <select id={`${ids}-event-type`} className="task-timeline-filter" value={eventType} onChange={(event) => setEventType(event.target.value)}>
+                    <select id={`${ids}-event-type`} className="task-timeline-filter form-control" value={eventType} onChange={(event) => setEventType(event.target.value)}>
                       <option value="all">All event types</option>
                       {eventTypes.map((type) => <option key={type} value={type}>{type}</option>)}
                     </select>

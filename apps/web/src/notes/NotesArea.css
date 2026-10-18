@@ -48,9 +48,9 @@
 .notes-editor-actions .primary-button, .notes-editor-actions .secondary-button { min-height: 44px; margin: 0; }
 .notes-dirty { color: var(--text-muted); font-size: var(--type-caption); }
 .notes-title-label, .notes-source-label { display: grid; gap: 6px; font-size: var(--type-small); font-weight: 600; }
-.notes-title-label input, .notes-folder-input-row input { width: 100%; min-height: 44px; margin: 0; }
-.notes-title-label input, .notes-folder-input-row input, .notes-source-label textarea { padding: 12px; border: 1px solid var(--control-rule); border-radius: var(--radius-control); background: var(--surface-muted); color: var(--text); font: inherit; font-weight: 400; }
-.notes-title-label input:focus-visible, .notes-folder-input-row input:focus-visible, .notes-source-label textarea:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.notes-title-label input, .notes-folder-input-row input { width: 100%; margin: 0; }
+.notes-source-label textarea { padding: 12px; border: 1px solid var(--control-rule); border-radius: var(--radius-control); background: var(--surface-muted); color: var(--text); font: inherit; font-weight: 400; }
+.notes-source-label textarea:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 .notes-source-label textarea { width: 100%; min-height: 320px; margin: 0; resize: vertical; font: 14px/1.65 var(--font-mono); tab-size: 2; }
 .notes-source-label textarea:read-only { opacity: .8; }
 .notes-preview { overflow-wrap: anywhere; }
