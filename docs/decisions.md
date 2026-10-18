@@ -99,7 +99,8 @@ acceptance.** It is the last invisible Daily slice, built under these conditions
   is off, exactly `true` is on, and any other value stops startup with an error
   that does not echo it. The repository ships no value: no workflow, Bicep,
   infrastructure, environment or deploy file sets it, a scan test enforces that,
-  and turning it on is a separate reviewed change.
+  and turning it on is a separate reviewed change (made by the next decision
+  below, for the owner's production only).
 - Off means unchanged. The composition returns no module, validates nothing and
   touches no pool, so the route table, tool catalogue, capability instructions,
   voice session, health response, startup, jobs and timers stay those of Jarvis
@@ -117,6 +118,36 @@ acceptance.** It is the last invisible Daily slice, built under these conditions
 - Unchanged and out of scope: accounts, consent, grants, secrets, RBAC,
   resources, imports, provider, device and private reads or writes, and live
   probes. Rollback is leaving the switch off.
+
+## Switch Daily on for the owner's production (18 October 2026; P12-15 / #730)
+
+**Dan's instruction, not acceptance.** Dan pre-authorised this: "Yes, switch it
+on once it's live and checked", and later "Yes, ship all daily if possible. You
+can take decisions as I would, as good as you can, we can always change it."
+The visible Daily page must be deployed and checked before this change merges.
+
+- Two switches, two reviewed files. `JARVIS_DAILY_ENABLED` is `'true'` in the
+  backend container environment in `infra/main.bicep`; `VITE_DAILY_ENABLED` is
+  `'true'` on the web build step of `.github/workflows/deploy.yml`. The code
+  default stays off, so local runs, tests and every other environment are
+  unchanged. A wrong value is loud, not silent: the backend refuses to start and
+  the web build fails.
+- Scan test. `daily/default-off.test.ts` now allows exactly those two files to
+  mention a switch, and checks that each sets only its own switch, once, to the
+  exact string `true`, with the web switch on the web build step.
+- What turns on is the owner-only nutrition slice and its page: the capabilities,
+  query and nutrition-targets routes, six tools, the "What Daily holds today"
+  overview and the Nutrition targets section in Settings. No MCP connector,
+  Frida lookup, Google or Gmail feed, health upload, job or timer comes with it.
+- Both switches change the release plan, so one deploy applies infrastructure,
+  backend, web and agent together; the backend applies its migrations at start-up
+  as in every deploy. The live check belongs to that deploy, not to this entry.
+- Unchanged: original Daily stays canonical; no import, provider, device or
+  private read or write, no new account, consent, grant, secret, RBAC or
+  resource. Stored-grant and CalendarList parity (#725), physical-phone
+  acceptance and cutover stay unverified and are not claimed.
+- Rollback: revert this change, or set both values to `false`; the next deploy
+  re-applies all four components. Stored Daily data is not deleted.
 
 ## Link every web-created Factory task to a GitHub issue (17 October 2026; P10-08 / #902)
 

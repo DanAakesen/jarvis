@@ -373,13 +373,13 @@ or generic lookup may be reported as full retained-tool parity.
 
 The default-off composition (`apps/backend/src/daily/composition.ts`) is the only
 production entry to these sources. The backend switch `JARVIS_DAILY_ENABLED` is
-off unless exactly `true`, no workflow, infrastructure or environment file sets
-it (a scan test enforces that), and switching it on is a separate reviewed
-change. With it off, Jarvis's routes, tools, instructions and startup are
-unchanged. With it on, one owner-bound module adds only the capabilities, query
-and nutrition-targets routes and six tools (116 of 128), fail-closed on the
-owner, with no connector, Google or Gmail feed, provider call, upload, job or
-timer. No activation, parity or acceptance is claimed.
+off unless exactly `true`. It is off by default in code; production sets it, with
+the web switch, in exactly two reviewed deployment files (18 October 2026), and a
+scan test allows no other file to mention either. With it off, Jarvis's routes,
+tools, instructions and startup are unchanged. With it on, one owner-bound module
+adds only the capabilities, query and nutrition-targets routes and six tools (116
+of 128), fail-closed on the owner, with no connector, Google or Gmail feed,
+provider call, upload, job or timer. No parity or acceptance is claimed.
 
 18 October source (P12-15): the page opens on an overview, "What Daily holds
 today". For each collection the backend exposes it says in plain English what the
@@ -389,10 +389,11 @@ Back returns. It uses only `GET /daily/capabilities` and `POST /daily/query`,
 shows no invented count or estimate, and never treats "none returned" as proof
 that the original source is empty. The page, route and navigation exist only when
 the web build switch `VITE_DAILY_ENABLED` is exactly `true`; it is off by default
-and no workflow or Bicep file sets it, so navigation stays the released one.
-Switching Daily on for Dan's account is a separate reviewed change that he
-pre-authorised once the page is live and checked. No activation, parity or
-physical-phone/provider acceptance is claimed, and #730 is not complete.
+in code, so a build without it keeps the released navigation. Dan pre-authorised
+switching Daily on for his account once the page is live and checked, and the
+production deployment files then set both switches (18 October 2026). No parity,
+real-data or physical-phone/provider acceptance is claimed, and #730 is not
+complete.
 
 One gated Daily destination in the existing Jarvis app (side rail and mobile navigation) for Dan to browse retained health, food, workout and scan history himself, from the same owner-authorised sources as P12-16. Keep existing shell and voice workflow.
 

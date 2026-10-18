@@ -502,19 +502,32 @@ locally; the route, composition and tool tests that load Fastify or `jose` need
 the pinned CI graph where those packages are unavailable locally. The
 `active_energy` metric name is not verified against a live export.
 
-## Daily switch checks (17 October 2026; P12-09)
+## Daily switch checks (17 October 2026; P12-09; updated 18 October 2026, P12-15)
 
 The backend composes Daily only when the environment variable
 `JARVIS_DAILY_ENABLED` is exactly `true`. Absent or `false` leaves Jarvis
 unchanged and any other value stops startup. It is a server switch, not a secret,
-and it is off by default **with nothing setting it**: no workflow, Bicep,
-infrastructure, `.env` or deploy file may carry it, and no session sets it for
-an environment. Only the separate, reviewed change that turns Daily on edits the
-deploy files, and it must update the allow-list in `daily/default-off.test.ts` in
-the same change. The web switch `VITE_DAILY_ENABLED` follows the same rule. The Vite
-build and dev server read it by name only: absent or `false` is off, `true` is on,
-and any other value, including an empty one, stops them. Set it only in the
-reviewed enabling change, and never in a local `.env` that is committed.
+and it is off by default in code, so local runs, tests and any other environment
+stay off. Production turns Daily on for the owner in exactly two reviewed files:
+`JARVIS_DAILY_ENABLED: 'true'` in the backend container environment in
+`infra/main.bicep`, and `VITE_DAILY_ENABLED: 'true'` on the web build step of
+`.github/workflows/deploy.yml`. No other workflow, Bicep, infrastructure, `.env`
+or deploy file may mention either name, and no session sets one anywhere else.
+`daily/default-off.test.ts` allows only those two files and checks that each sets
+only its own switch, once, to the exact string `true`; changing the allow-list is
+turning Daily on or off somewhere else and needs its own reviewed change. The Vite
+build and dev server read the web switch by name only: absent or `false` is off,
+`true` is on, and any other value, including an empty one, stops them. Never set
+it in a local `.env` that is committed.
+
+To turn Daily off, revert both values or set both to `false`. Both files are
+release inputs, so the next deploy re-applies infrastructure, backend, web and
+agent; stored Daily data stays. After a deploy that sets the switches, the owner's
+read-only live check is: `/health` is OK, Daily appears in the side rail and the
+phone menu and opens on "What Daily holds today" with a status on each row (None
+returned is a valid answer before any data exists), and Settings shows the
+Nutrition targets section, empty until Dan enters his own values. None of it needs
+a write, and a failed read is a finding to record.
 
 Check the composition with
 `npm test --workspace @jarvis/backend -- src/config.test.ts src/production-modules.test.ts src/daily/default-off.test.ts src/daily/composition.test.ts`.

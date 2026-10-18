@@ -1009,7 +1009,8 @@ no mail/calendar/order-provider mutation, original workflow dispatch or schedule
 Changed targets are refused under the owner transaction; acknowledged changes
 refresh existing consumers. Missing Google/model configuration and failed,
 limited or incomplete refreshes cannot establish fresh coverage. The separate
-nutrition-only connector has no feed access. Daily remains off; stored grants,
+nutrition-only connector has no feed access. The feed is not part of the
+owner-only Daily module that production switches on; stored grants,
 CalendarList/live-model parity and #725 acceptance remain unverified.
 Active suppressions are limited to1,000 per type under the owner lock. Updating
 an existing suppression and native-reviewed exact-key restoration remain usable
@@ -1039,8 +1040,8 @@ that same read path, not another service. These periodless collections use
 exact ID-only cursors and at most 100 records per page. Preserve display aliases,
 saved nutrient provenance, plan snapshots/revisions/tombstones and nullable
 values; definitions and plans are not consumed meals. Their acknowledged writes
-invalidate their own source through the same refresh hub. Daily stays off and
-the hosted ChatGPT food-write/connector requirement remains unfinished.
+invalidate their own source through the same refresh hub. The hosted ChatGPT
+food-write/connector requirement remains unfinished.
 
 The next inactive hosted nutrition adapter exposes only nutrition reads,
 Frida lookup and explicitly reviewed intake logging/correction/soft deletion.
@@ -1054,7 +1055,7 @@ logging; internal exact/favourite logging keeps its no-redundant-confirmation
 requirement. This conservative external limitation is not full retained-workflow
 parity. Unsupported clients refuse writes; actual ChatGPT compatibility,
 account linking, scopes/grants and mobile acceptance are not established by
-synthetic protocol tests. Production Daily stays off.
+synthetic protocol tests. Production composes no hosted adapter.
 
 The inactive saved-food continuation supports native-reviewed favourite/alias
 saves, server-resolved plan saves/soft deletion and persistent canonical
@@ -1119,8 +1120,8 @@ estimate and no coaching, recovery or recomposition automation. The values are
 private health data and stay out of source, fixtures, documents and logs. The
 stored targets, their approved tool and the read-only `daily_nutrition_suggest`
 tool exist only behind the default-off Daily gate (Daily off leaves Jarvis
-unchanged). The gate is one server switch that is off by default and set in no
-environment; turning it on is a separate, reviewed change. The suggest tool
+unchanged). The gate is one server switch that is off by default in code; only the
+reviewed production deployment files turn it on (18 October 2026). The suggest tool
 reports energy and protein left and the saved
 favourites that fit, using the stored active energy and only the meals logged in
 Jarvis, so food eaten but never logged is not counted. The Settings section
@@ -1128,7 +1129,7 @@ appears only while Daily is on. It shows the three targets as whole-number field
 with their allowed ranges, saves on its own rather than with Save settings, and
 clears a target when its field is emptied. It ships no defaults, placeholders or
 example figures, and a failed load or save shows page-owned wording, never server
-text. No activation or acceptance is implied.
+text. Checking it with his real figures is Dan's own step.
 
 The Daily page (P12-15 / #730) opens on an overview so Dan can see what is
 actually stored before he browses it. For each retained collection the backend
@@ -1141,11 +1142,12 @@ to the existing record browser, which keeps its periods, paging, details, units
 and source/freshness labels. The page uses only the existing owner-authorised
 `/daily/capabilities` and `/daily/query` reads, so it adds no writer, provider,
 device, private-data or consent path. It exists only when the web build switch
-`VITE_DAILY_ENABLED` is exactly `true`; the switch is off by default and this
-change sets it in no environment, so Daily off leaves the released navigation
-unchanged. Switching it on for Dan's account is a separate, reviewed change that
-he pre-authorised once the page is live and checked. No activation or acceptance
-is implied.
+`VITE_DAILY_ENABLED` is exactly `true`; the switch is off by default in code, so a
+build without it leaves the released navigation unchanged. Dan pre-authorised
+switching Daily on for his account once the page is live and checked, and the
+production deployment files then set it together with the backend switch (18
+October 2026). Acceptance with real data, a physical phone and the original source
+stays open.
 
 When an existing Frida adapter is explicitly supplied, owner-authenticated
 `daily_food_lookup` exposes only its public-reference component lookup.
