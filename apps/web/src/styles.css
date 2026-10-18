@@ -25,7 +25,6 @@
   --rule: #d8cfc2;
   --ink-solid: #000;
   --highlight-solid: #fff;
-  --highlight-warm: #fff3dd;
   --voice-glow-source: #beebff;
   --focus: #14768d;
   --text: #17202a;
@@ -2353,7 +2352,7 @@ a.task-chip:hover { background: var(--glass-pressed); }
 :root[data-theme="light"] { --presence-present: #2db35d; --presence-away: #f2c200; --presence-move: #2f80ed; }
 /* On the light glass a yellow that clears 3:1 alone reads brown, so each light dot keeps its true hue and gains a darker ring of that hue; the ring holds 3:1. */
 .presence-dot { --presence-ring: transparent; width: 9px; height: 9px; flex: 0 0 auto; border-radius: 50%; background: var(--tone); box-shadow: 0 0 0 1.5px var(--presence-ring), 0 0 10px color-mix(in srgb, var(--tone) 70%, transparent); }
-:root[data-theme="light"] .presence-dot { --presence-ring: color-mix(in srgb, var(--tone) 55%, #000); }
+:root[data-theme="light"] .presence-dot { --presence-ring: color-mix(in srgb, var(--tone) 55%, var(--ink-solid)); }
 .presence-chip { position: relative; display: inline-flex; }
 .presence-chip-trigger { display: inline-flex; width: 44px; min-width: 44px; min-height: 44px; justify-content: center; align-items: center; padding: 0; border: 0; border-radius: var(--radius-control);
   background: transparent; box-shadow: none;
