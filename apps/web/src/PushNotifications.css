@@ -1,0 +1,29 @@
+.push-notifications {
+  display: grid;
+  min-width: 0;
+  gap: var(--space-3);
+}
+.push-notifications p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.push-notification-actions {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+.push-notifications .primary-button,
+.push-notifications .secondary-button {
+  min-height: 44px;
+  margin: 0;
+}
+.push-notifications .primary-button {
+  padding: 0 18px;
+}
+.push-notification-feedback {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-3);
+}

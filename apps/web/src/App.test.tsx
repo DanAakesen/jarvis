@@ -14,6 +14,8 @@ const {
   isSignInRedirectPending,
   restoreProfile,
   signIn,
+  saveSignInReturnPath,
+  takeSignInReturnPath,
   loadConversationHistory,
   createChatSession,
   sendChatTurn,
@@ -32,6 +34,8 @@ const {
     isSignInRedirectPending: vi.fn(() => false),
     restoreProfile: vi.fn().mockResolvedValue(null),
     signIn: vi.fn(),
+    saveSignInReturnPath: vi.fn(),
+    takeSignInReturnPath: vi.fn<() => string | null>(() => null),
     loadConversationHistory: vi.fn().mockResolvedValue({ messages: [], nextCursor: null }),
     createChatSession: vi.fn(),
     sendChatTurn: vi.fn(),
@@ -46,7 +50,9 @@ const {
     }>,
   };
 });
-vi.mock('./auth', () => ({ createAuthClient, isSignInRedirectPending, restoreProfile, signIn }));
+vi.mock('./auth', () => ({
+  createAuthClient, isSignInRedirectPending, restoreProfile, signIn, saveSignInReturnPath, takeSignInReturnPath,
+}));
 vi.mock('./conversation-history', () => ({
   loadConversationHistory,
   createChatSession,
@@ -93,6 +99,7 @@ beforeEach(() => {
   createAuthClient.mockReturnValue(makeAuthClient());
   restoreProfile.mockResolvedValue(null);
   isSignInRedirectPending.mockReturnValue(false);
+  takeSignInReturnPath.mockReturnValue(null);
   loadConversationHistory.mockResolvedValue({ messages: [], nextCursor: null });
   createChatSession.mockResolvedValue({ id: '41', language: 'da' });
   sendChatTurn.mockResolvedValue({
@@ -107,6 +114,7 @@ beforeEach(() => {
 
 const mediaDevicesDescriptor = Object.getOwnPropertyDescriptor(navigator, 'mediaDevices');
 const permissionsDescriptor = Object.getOwnPropertyDescriptor(navigator, 'permissions');
+const serviceWorkerDescriptor = Object.getOwnPropertyDescriptor(navigator, 'serviceWorker');
 
 function MemoryRouter({ children, initialEntries = ['/'], initialIndex }: { children: ReactNode; initialEntries?: string[]; initialIndex?: number }) {
   const [router] = useState(() => createMemoryRouter([{ path: '*', element: children }], {
@@ -130,6 +138,8 @@ afterEach(() => {
   else Reflect.deleteProperty(navigator, 'mediaDevices');
   if (permissionsDescriptor) Object.defineProperty(navigator, 'permissions', permissionsDescriptor);
   else Reflect.deleteProperty(navigator, 'permissions');
+  if (serviceWorkerDescriptor) Object.defineProperty(navigator, 'serviceWorker', serviceWorkerDescriptor);
+  else Reflect.deleteProperty(navigator, 'serviceWorker');
 });
 
 describe('Jarvis routes', () => {
@@ -382,6 +392,58 @@ describe('App shell', () => {
     await screen.findByRole('navigation', { name: 'Areas' });
     return rendered;
   }
+
+  it('keeps push settings, item route, registration and requests absent when the gate is off', async () => {
+    restoreProfile.mockResolvedValue({ name: 'Test User' });
+    const register = vi.fn();
+    Object.defineProperty(navigator, 'serviceWorker', { configurable: true, value: { register } });
+    vi.stubGlobal('PushManager', class {});
+    vi.stubGlobal('Notification', { permission: 'default', requestPermission: vi.fn() });
+
+    const settings = await renderSignedIn('/settings');
+    expect(screen.queryByRole('button', { name: 'Notifications' })).toBeNull();
+    expect(register).not.toHaveBeenCalled();
+    expect(fetchMock.mock.calls.some(([url]) => {
+      const path = new URL(String(url)).pathname;
+      return path.startsWith('/push/') || path.startsWith('/proactive/');
+    })).toBe(false);
+
+    settings.unmount();
+    await renderSignedIn('/proactive/11111111-1111-4111-8111-111111111111');
+    expect(screen.getByRole('heading', { name: 'Page not found' })).not.toBeNull();
+    expect(register).not.toHaveBeenCalled();
+  });
+
+  it('restores the notification deep link after sign-in returns to the site root', async () => {
+    const itemId = '11111111-1111-4111-8111-111111111111';
+    restoreProfile.mockResolvedValue({ name: 'Test User' });
+    takeSignInReturnPath.mockReturnValueOnce(`/proactive/${itemId}`);
+    fetchMock.mockImplementation(async (input) => {
+      const path = new URL(String(input)).pathname;
+      if (path === `/proactive/items/${itemId}`) {
+        return new Response(JSON.stringify({
+          id: itemId, kind: 'test', title: 'Synthetic delivery test',
+          body: 'Generic notification item.', createdAt: '2026-10-17T12:00:00.000Z',
+        }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      }
+      return new Response(JSON.stringify({ state: 'awake' }), { status: 200 });
+    });
+
+    render(<MemoryRouter><App config={config} pushEnabled /></MemoryRouter>);
+    expect(await screen.findByRole('heading', { name: 'Synthetic delivery test' })).not.toBeNull();
+    expect(fetchMock.mock.calls.some(([url]) =>
+      new URL(String(url)).pathname === `/proactive/items/${itemId}`)).toBe(true);
+  });
+
+  it('saves the protected notification path before redirecting a signed-out visitor', async () => {
+    const itemId = '11111111-1111-4111-8111-111111111111';
+    const path = `/proactive/${itemId}?from=notification`;
+    const user = userEvent.setup();
+    render(<MemoryRouter initialEntries={[path]}><App config={config} pushEnabled /></MemoryRouter>);
+    await user.click(await screen.findByRole('button', { name: 'Sign in with Microsoft' }));
+    expect(saveSignInReturnPath).toHaveBeenCalledWith(path);
+    expect(signIn).toHaveBeenCalledOnce();
+  });
 
   it('keeps the workspace command stream connected when navigating away from conversation', async () => {
     const user = userEvent.setup();
@@ -1345,7 +1407,9 @@ describe('App shell', () => {
     const original = fetchMock.getMockImplementation()!;
     fetchMock.mockImplementation(async (input, init) => {
       const path = new URL(String(input)).pathname;
-      if (path === '/factory/projects') return new Response(JSON.stringify([{ id: '7', name: 'Jarvis', default_agent: 'copilot' }]));
+      if (path === '/factory/projects') return new Response(JSON.stringify([
+        { id: '7', name: 'Jarvis', default_agent: 'copilot', policy: 'deliver_pr' },
+      ]));
       if (path === '/factory/board') return boardResponse();
       return original(input, init);
     });
@@ -1488,6 +1552,31 @@ describe('App shell', () => {
     expect(screen.queryByText('Open windows appear here.')).toBeNull();
   });
 
+  it('keeps empty phone background work directly reachable after reload with server-filtered dismissals', async () => {
+    vi.stubGlobal('matchMedia', vi.fn((query: string) => ({
+      matches: query.includes('max-width: 700px'),
+      media: query, addEventListener: vi.fn(), removeEventListener: vi.fn(),
+    })));
+    streamWorkspaceCommands();
+    const respond = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation((input, init) => new URL(String(input)).pathname === '/jobs'
+      ? Promise.resolve(new Response(JSON.stringify({ jobs: [], dismissedJobIds: ['11111111-1111-4111-8111-111111111111'] })))
+      : respond(input, init));
+    localStorage.clear();
+    await renderSignedIn();
+    const user = userEvent.setup();
+    expect(screen.queryByRole('button', { name: /Open windows/ })).toBeNull();
+    expect(document.querySelector('.app-shell')!.getAttribute('data-windows-open')).toBe('false');
+    const history = screen.getByRole('button', { name: 'Show background work' });
+    await user.click(history);
+    expect(screen.getByText('No background work to show.')).not.toBeNull();
+    expect(screen.getByRole('button', { name: 'Dismiss all finished' })).toHaveProperty('disabled', true);
+    await user.keyboard('{Escape}');
+    expect(history).toBe(document.activeElement);
+    expect(document.querySelector('.app-shell')!.getAttribute('data-windows-open')).toBe('false');
+    expect(screen.queryByRole('button', { name: /Open windows/ })).toBeNull();
+  });
+
   it('keeps phone job-only history reachable and open, without changing artifact restore behaviour', async () => {
     vi.stubGlobal('matchMedia', vi.fn((query: string) => ({
       matches: query.includes('max-width: 700px'),
@@ -1495,29 +1584,43 @@ describe('App shell', () => {
     })));
     const stream = streamWorkspaceCommands();
     const respond = fetchMock.getMockImplementation()!;
-    fetchMock.mockImplementation((input, init) => new URL(String(input)).pathname === '/jobs'
-      ? Promise.resolve(new Response(JSON.stringify({ jobs: [] })))
-      : respond(input, init));
+    const jobId = '11111111-1111-4111-8111-111111111111';
+    let dismissed = false;
+    let serverHasJob = false;
+    const historicalJob = {
+      jobId, kind: 'embedding', title: 'Re-embed memory and vault', status: 'failed', step: 1, steps: 2,
+      detail: 'interrupted by restart', startedAt: '2026-10-16T08:00:00.000Z', updatedAt: '2026-10-16T08:05:07.000Z',
+    };
+    fetchMock.mockImplementation((input, init) => {
+      const path = new URL(String(input)).pathname;
+      if (path === '/jobs') return Promise.resolve(new Response(JSON.stringify({
+        jobs: serverHasJob && !dismissed ? [historicalJob] : [], dismissedJobIds: dismissed ? [jobId] : [],
+      })));
+      if (path === `/jobs/${jobId}/dismiss` && init?.method === 'POST') {
+        dismissed = true;
+        return Promise.resolve(new Response(JSON.stringify({ dismissedJobIds: [jobId] })));
+      }
+      return respond(input, init);
+    });
     await renderSignedIn();
     await waitFor(() => expect(activityStream).not.toBeNull());
     expect(screen.queryByRole('button', { name: /Open windows/ })).toBeNull();
-    act(() => publishJob({
-      jobId: '11111111-1111-4111-8111-111111111111', kind: 'embedding',
-      title: 'Re-embed memory and vault', status: 'failed', step: 1, steps: 2,
-      detail: 'interrupted by restart', startedAt: '2026-10-16T08:00:00.000Z', updatedAt: '2026-10-16T08:05:07.000Z',
-    }));
+    serverHasJob = true;
+    act(() => publishJob(historicalJob));
     const user = userEvent.setup();
     const shell = document.querySelector('.app-shell')!;
-    await user.click(screen.getByRole('button', { name: 'Show background work: 1 failed' }));
+    await user.click(screen.getByRole('button', { name: 'Show background work' }));
     expect(shell.getAttribute('data-windows-open')).toBe('false');
-    await user.click(screen.getByRole('button', { name: /Re-embed memory and vault Indexing · failed/ }));
+    await user.click(screen.getByRole('button', { name: /Re-embed memory and vault Memory re-embed · interrupted/ }));
     expect(shell.getAttribute('data-windows-open')).toBe('false');
     await user.click(screen.getByRole('button', { name: 'Dismiss' }));
+    await waitFor(() => expect(screen.queryByRole('group', { name: 'Re-embed memory and vault details' })).toBeNull());
+    expect(fetchMock).toHaveBeenCalledWith(`https://api.example.com/jobs/${jobId}/dismiss`, expect.objectContaining({ method: 'POST' }));
     expect(shell.getAttribute('data-windows-open')).toBe('false');
     expect(screen.queryByRole('button', { name: /Open windows/ })).toBeNull();
     expect(screen.getByRole('img', { name: 'Background work: idle' })).not.toBeNull();
     await user.click(screen.getByRole('button', { name: 'Show background work' }));
-    expect(screen.queryByRole('button', { name: /Re-embed memory and vault Indexing · failed/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Re-embed memory and vault Memory re-embed · interrupted/ })).toBeNull();
     expect(screen.getByText('No background work to show.')).not.toBeNull();
     await user.click(screen.getByRole('button', { name: 'Close job details' }));
     stream.ready();

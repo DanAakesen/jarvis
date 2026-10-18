@@ -22,17 +22,37 @@ conversation visibility and existing reader/tail-following behaviour through
 focus, viewport pan/resize, keyboard dismissal and orientation changes.
 Native-phone acceptance remains separate from controlled browser evidence.
 
-## Header background work (16 October 2026; P11-05 local candidate)
+## Header background work (17 October 2026; P11-12)
 
 The header's **Background work** control covers research, images, apps and
 indexing, not Software Factory tasks or current service health. Show only
 undismissed entries, with their real status, failure details and available
-result/cancellation controls. Dismissing an entry removes it from this header
-immediately and after refresh/reload on the same account, backend and device.
+result/cancellation controls. Dismissing finished work is saved for the account
+on the server, across browsers, devices and cleared browser storage.
 It does not cancel work, delete records or remove saved results. Keep the
 control and an explicit empty state available after the last entry is hidden
 so keyboard focus is not lost. Storage/load failures remain visible and must
 not be presented as a successfully empty list.
+
+### What appears here
+
+- **Research** starts when Jarvis runs a research request. **Image** labels
+  recorded image work; **App** labels app work, including requested weather
+  reports. These are supported job kinds, not a promise that every generation
+  tool creates a header entry.
+- **Memory re-embed** rebuilds memory and vault search vectors after an embedding
+  model change, or at backend startup when vectors are missing. Viewing or
+  dismissing the list does not start it.
+- Rows show the kind, start time and stored reason. A trigger is shown only if
+  recorded; older rows do not establish which trigger started them.
+  **Interrupted by a restart** is neutral history, not a failure count or a
+  claim about current service health.
+- **Dismiss** hides finished work for the account; **Dismiss all finished**
+  hides all finished entries, never running work. Equivalent finished rows can
+  share a count and are dismissed together. Raw records remain available under
+  the existing history retention for Status, Usage and audit.
+- Existing browser dismissals are sent to the server once. A failed transfer
+  remains visible as an error, with those entries hidden locally until confirmed.
 
 ## Readable chat and attached phone typing (16 October 2026; local candidate)
 
@@ -329,24 +349,24 @@ stateDiagram-v2
 
 | Policy | Allowed outcome |
 | --- | --- |
-| **Deliver a PR** | Implement, test, push a task branch, and open or update a pull request. Stop at a non-draft PR with green checks, or with no configured checks after a two-minute grace period; mark Done without merging. |
-| **Complete without deployment** | Also squash-merge with the GitHub App when checks are green or none are configured after a two-minute grace period, the PR is not a draft, its branch is up to date, and GitHub reports it mergeable. Mark Done after the signed merge webhook is persisted. |
+| **Deliver a pull request** | Implement, test, push a task branch, and open or update a pull request. Stop at a non-draft PR with green checks, or with no configured checks after a two-minute grace period; mark Done without merging. |
+| **Complete without deployment** | Also squash-merge with the GitHub App when checks are green or none are configured after a two-minute grace period, the PR is not a draft, its branch is up to date, and GitHub reports it mergeable. Selecting this policy is approval; no additional confirmation or message is requested. Mark Done after the signed merge webhook is persisted. |
 
-- Merge rules and Done are Dan's choices per project.
+- Merge rules and Done behavior are Dan's choices per project.
 - The backend applies policy only from task-linked P3-04 GitHub records, current GitHub API state, and backend-verified completion proof for the current sandbox session and invocation. Proof is either a clean final completed snapshot, or final failed status with independently recorded successful work and verified owned-provider stop, where only credential/event/publisher cleanup failed. A runner's early `completed` event, idle expiry, or passing PR checks alone never authorises Done or a policy merge. `NeedsAttention` can become Done only after that verification.
 - An explicit failed runner snapshot overrides earlier completion or question events. Failed work or uncertain writer teardown requires attention. Post-stop credential/event/publisher failure remains visible as runner failure even when verified delivery satisfies task policy. Logical session expiry and stopped-writer proof do not prove cloud compute deallocation.
-- Recovery invalidates the previous execution's completion proof before starting its replacement. Done and an approved merge require the same current task/session/proof generation and no pending start lease, including after deferred approval; a failed replacement start never restores old proof.
+- Recovery invalidates the previous execution's completion proof before starting its replacement. Done and an automatic policy merge require the same current task/session/proof generation and no pending start lease; a failed replacement start never restores old proof.
 - Proof must match opaque Foundry session and invocation identifiers exactly, including case, regardless of the database-default collation.
-- Durable delivery, project-policy completion and runtime release are separate facts. Persisted runner-owned `work_completed`, `provider_stopped` and `work_commit_sha` facts bind completed work to its verified commit. Both clean and cleanup-failed completion require that exact published task-branch/PR head; the locked policy gate compares the proof commit with its candidate head, including after approval. A local unpushed commit or an older green PR cannot substitute. Successful-work proof never comes from a generic completed or question-only turn. Legacy unbound snapshots remain readable but cannot authorise new completion. Missing or malformed proof, question snapshots, cancelled/nonterminal status, or process/reader/provider shutdown failure cannot use it. Physical release and fresh live acceptance remain separately verified outcomes.
+- Durable delivery, project-policy completion and runtime release are separate facts. Persisted runner-owned `work_completed`, `provider_stopped` and `work_commit_sha` facts bind completed work to its verified commit. Both clean and cleanup-failed completion require that exact published task-branch/PR head; the locked policy gate compares the proof commit with its candidate head. A local unpushed commit or an older green PR cannot substitute. Successful-work proof never comes from a generic completed or question-only turn. Legacy unbound snapshots remain readable but cannot authorise new completion. Missing or malformed proof, question snapshots, cancelled/nonterminal status, or process/reader/provider shutdown failure cannot use it. Physical release and fresh live acceptance remain separately verified outcomes.
 - A clean completed invocation without delivery proof retains its observed completed lifecycle and leaves the task in verification attention. Missing proof is neither a runner crash nor permission to deliver, mark Done or merge.
 - The GitHub merge endpoint enforces repository branch protection and required checks. A refusal is recorded on the task and leaves it unfinished.
 
-### New projects
+### Project creation and defaults
 
-Dan never fills in a project form. He gives Jarvis, by voice or chat, a project name and a short description; everything else comes from the **New projects** settings.
+Jarvis creates new repositories from a name and description; the Add project dialog shows the saved defaults that Jarvis applies. Each project keeps its own settings and can change them at any time.
 
 1. Jarvis creates `<owner>/<name>` with the configured visibility and the backend-only `jarvis-repo-admin` token. The token never enters a sandbox.
-2. Jarvis registers the project with the New projects defaults and starts the first task in a sandbox: clone the templates repository, run its initializer (`cpinit`) with the modules the agent chooses from the description, fill `PRODUCT.md` and `PLAN.md` from the description, add the repository's PR-check and release workflow templates (P3-09), and open a pull request.
+2. Jarvis registers the project with the configured defaults and starts the first task in a sandbox: clone the templates repository, run its initializer (`cpinit`) with the modules the agent chooses from the description, fill `PRODUCT.md` and `PLAN.md` from the description, add the repository's PR-check and release workflow templates (P3-09), and open a pull request.
 3. When the description is not enough to choose modules or fill the documents, the task moves to Needs attention with a question for Dan instead of guessing.
 4. A new project starts with the base `node`/`1x2` defaults; this is not a detected stack. Dan can change any project setting afterwards.
 
@@ -535,7 +555,13 @@ unavailable, including after backend restart.
 
 Jarvis writes bounded text notifications to the Now activity feed. Gated actions appear as browser approval requests with Approve and Reject controls and normally expire after five minutes. Internal food-review cards explicitly expire after two minutes to keep the whole operation inside the hosting request limit; the visible expiry matches persistence and cancellation. Unknown, replayed, rejected, cancelled, expired, or unverified responses never run the action. A pending approval is announced to an active browser voice session; the authenticated Now feed remains the approval channel.
 
-These actions always require Dan's confirmation: merge, delete, send mail, calendar changes, repository creation, destructive or externally consequential computer use outside the browser, and anything that spends money. The backend fails closed if Jarvis approval is unavailable or expires; it never proceeds without Dan's authenticated approval. Provider credentials remain server-side; notification content, audio, tokens, and images are not written to logs, task events, or errors.
+P13-02 adds an optional, default-off web push opt-in for a visible generic alert
+that links to a durable owner-protected item. Notifications never approve an
+action or carry sensitive item text. Opening an item requires the usual
+authenticated session; after sign-in, Jarvis returns to that same-origin item
+path. Provider acceptance is not proof that a phone displayed the notification.
+
+Manual gated actions—including a merge initiated through GitHub tools, deletion, sending mail, calendar changes, repository creation, destructive or externally consequential computer use outside the browser, and anything that spends money—always require Dan's confirmation. The automatic project-policy merge under **Complete without deployment** is distinct: selecting that policy is approval, and its automatic merge asks for no additional confirmation or message. Other gated actions fail closed if Jarvis approval is unavailable or expires. Provider credentials remain server-side; notification content, audio, tokens, and images are not written to logs, task events, or errors.
 
 Personality preferences are validated and persisted in Settings. They apply to new chat and voice sessions; changing or resetting them does not interrupt an active voice session. Reset restores the current British-butler, concise defaults and clears custom instructions. Preferences affect response style only, not Jarvis's identity, available tools, permissions, selected language, model or voice, or truthful reporting of action outcomes.
 
@@ -680,8 +706,8 @@ It checks free space every 15 seconds; below the configurable threshold it repor
 
 | Data points | Actions |
 | --- | --- |
-| List: every repository of Dan's GitHub account. Managed projects first (name, repository, default agent, policy, tech, running tasks, last release), then the other repositories (name, last push, language) | Edit or archive a managed project; **Manage with Jarvis** registers an existing repository with the New projects defaults (tech detected from the repository); Jarvis can do the same by voice or chat; new repositories are created by Jarvis (see New projects) |
-| Project settings: repository, default branch, default agent, policy, merge rules, sandbox size, tech, max parallel tasks | Save (applies to new tasks only) |
+| List: every repository of Dan's GitHub account. Managed projects first (name, repository, default agent, policy, tech, running tasks, last release), then the other repositories (name, last push, language) | Change the labelled, two-choice completion policy directly on each project card; edit or archive a managed project; **Manage with Jarvis** registers an existing repository with the configured defaults (tech detected from the repository); **Add project** opens the existing-repository and new-repository actions |
+| Project settings: repository, default branch, default agent, completion policy, merge rules, sandbox size, tech, max parallel tasks | Change the completion policy in one choice; the saved policy is confirmed by the server and applies now, including to pull requests already open. Save other project settings for new tasks. |
 
 The project API lists active projects, creates and updates settings, and archives
 without deleting the row or its task history. Repositories use `owner/name`;
@@ -691,12 +717,12 @@ letters, digits, `.`, `_`, and `-`, and max parallel tasks is a positive
 32-bit integer (default 1).
 
 The backend lists every repository in the GitHub App installation for the
-configured New projects owner. It caches the list and refreshes it when Dan asks
+configured project owner. It caches the list and refreshes it when Dan asks
 from the Projects page. Managed projects appear first; each other repository
 shows its last push and primary language, with **Manage with Jarvis** registering
 it without a form. Jarvis can register the same installed repository through
 `manage_repository`. Registration uses the repository's actual default branch,
-the New projects agent, policy, and task-limit defaults, and a tech identifier
+the configured agent, policy, and task-limit defaults, and a tech identifier
 detected from its default-branch files or primary language. The GitHub App token
 and private key stay in the backend.
 
@@ -715,7 +741,7 @@ the last-release field is explicitly unavailable rather than inferred.
 | Voice: speech-to-text model, English voice, fixed Danish voice (Jeppe), default language, minimise windows on voice start (off by default) | Change supported preferences; Danish voice is read-only |
 | Coding agents: Codex default model and reasoning; Copilot default model | Change (applies to new tasks) |
 | Global: max parallel tasks; sleep switch | Change |
-| New projects: owner, visibility, templates repository, default agent, policy, max parallel tasks, default branch | Change (applies to projects Jarvis registers) |
+| Projects: defaults for new projects (owner, visibility, templates repository, default agent, policy, max parallel tasks, default branch) | Change in the Projects section. The policy default only pre-fills projects Jarvis registers later; every project keeps its own policy and can be changed any time. |
 | Credentials: name, expiry, last renewal, last check, status (never secret values) | Trigger Codex renewal; open re-seed instructions |
 
 The backend checks Codex daily and renews only when the access token has three
@@ -951,6 +977,17 @@ Dan approved these after a gap audit. They are planned, not built.
 ## GitHub backlog (8 October 2026, P10)
 
 Dan decided that GitHub issues are the single backlog. When Dan asks Jarvis to change code, Jarvis drafts an issue, confirms it with him and creates it; the Software Factory then picks it up with the Codex agent (worker label `Jarvis`), or Copilot when Dan chooses. Factory progress shows on the issue, its pull request uses `Fixes #N`, and the Factory board uses the same columns as the GitHub Project: Backlog, Needs Dan, Ready, In progress, In review, Done. ([#573](https://github.com/DanAakesen/jarvis/issues/573)–[#577](https://github.com/DanAakesen/jarvis/issues/577))
+
+## Proactive Web Push (17 October 2026; P13-01 / #917)
+
+Web Push is an opt-in visible alert for a durable, owner-protected item; it
+carries no private details, performs no silent work and never approves an
+action. The backend defaults off and registers no push routes unless
+`JARVIS_PUSH_ENABLED` is exactly `true`; this milestone does not enable it. The
+user-triggered test is not proactive delivery. Teams is not a delivery option.
+Real iPhone delivery remains unproven until separately observed on the installed
+Home Screen app.
+
 ## Daily migration (approved P12)
 
 Tool parity is an acceptance requirement for every retained Daily capability,
@@ -1082,7 +1119,9 @@ estimate and no coaching, recovery or recomposition automation. The values are
 private health data and stay out of source, fixtures, documents and logs. The
 stored targets, their approved tool and the read-only `daily_nutrition_suggest`
 tool exist only behind the default-off Daily gate (Daily off leaves Jarvis
-unchanged). The suggest tool reports energy and protein left and the saved
+unchanged). The gate is one server switch that is off by default and set in no
+environment; turning it on is a separate, reviewed change. The suggest tool
+reports energy and protein left and the saved
 favourites that fit, using the stored active energy and only the meals logged in
 Jarvis, so food eaten but never logged is not counted. The Settings section
 appears only while Daily is on. It shows the three targets as whole-number fields

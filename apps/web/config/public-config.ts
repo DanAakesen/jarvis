@@ -5,6 +5,10 @@ export interface PublicConfig {
   backendUrl: string | null;
 }
 
+export function isPushEnabled(value: unknown): boolean {
+  return value === 'true';
+}
+
 function record(value: unknown): Record<string, unknown> {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     throw new Error('Expected an object in the web configuration.');

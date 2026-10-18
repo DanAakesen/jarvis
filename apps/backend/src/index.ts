@@ -124,6 +124,9 @@ import { WorkspacePinStore } from './database/workspace-pin-store.js';
 import { createWeatherModule } from './core/weather.js';
 import { createSystemStatusReader } from './system-status.js';
 import { createProductionModules } from './production-modules.js';
+import { createPushStore } from './database/push-store.js';
+import { registerPushRoutes } from './push/routes.js';
+import { composeDaily } from './daily/composition.js';
 
 try {
   const config = loadConfig();
@@ -547,10 +550,6 @@ try {
       store: createProjectPolicyStore(database.pool),
       tasks: taskStore,
       tokenIssuer: githubAppTokenIssuer,
-      ...(ownerInteractions ? {
-        runConfirmed: (summary, action) => ownerInteractions.runConfirmed('merge', summary, action),
-      } : {}),
-      onConfirmationError: (error) => logger.warn(safeErrorFields(error), 'project_policy.confirmation_failed'),
       onError: (error) => logger.warn(safeErrorFields(error), 'project_policy.recheck_failed'),
     })
     : undefined;
@@ -816,6 +815,11 @@ try {
     screenVision: screenVisionModule,
     visionWatch: visionWatchModule,
     voiceRelay: voiceRelayModule,
+    daily: composeDaily({
+      enabled: config.dailyEnabled === true,
+      pool: database?.pool,
+      ownerObjectId: config.auth.ownerObjectId,
+    }),
   });
   const budgetAlertStore = alertActivityStore;
   const budgetReader = database && credential && config.monthlyBudgetResourceId
@@ -1022,6 +1026,9 @@ try {
     ...(conversationAttachments ? { conversationAttachments } : {}),
     ...(attachmentVision ? { attachmentVision } : {}),
     modules,
+    ...(projectPolicyEvaluator ? {
+      projectPolicyChanged: (projectId: string) => projectPolicyEvaluator.recheckProject(projectId),
+    } : {}),
     systemStatusReader,
     systemSmokeProbes,
     modelCatalogue,
@@ -1098,12 +1105,19 @@ try {
     ...(ownerInteractions ? { ownerInteractions } : {}),
     ...(phoneSessionStore ? { phoneSessionStore } : {}),
   });
+  registerPushRoutes(app, config.pushEnabled, () => ({
+    store: createPushStore(database!.pool),
+    publicOrigin: config.staticWebAppOrigin!,
+  }));
   runtime.app = app;
   if (checksLoop || projectPolicyEvaluator) {
     app.addHook('onClose', async () => {
       await checksLoop?.stop();
-      projectPolicyEvaluator?.stop();
+      await projectPolicyEvaluator?.stop();
     });
+  }
+  if (projectPolicyEvaluator) {
+    app.addHook('onReady', async () => { projectPolicyEvaluator.start(); });
   }
   if (dispatcher) app.addHook('onClose', async () => { await dispatcher.stop(); });
   if (database) registerDatabase(app, database);

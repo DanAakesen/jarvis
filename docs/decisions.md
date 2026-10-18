@@ -1,5 +1,68 @@
 # Decisions
 
+## Keep the first Web Push proof dark and user-triggered (17 October 2026; P13-01 / #917)
+
+Milestone 1 proves a visible Web Push notification can point to a durable,
+owner-protected item; a push never approves an action or carries private data.
+The feature is disabled unless `JARVIS_PUSH_ENABLED` is exactly `true`; these
+changes do not set it. Disabled startup does not register routes or access push
+storage, signing keys or providers.
+
+The backend generates and stores its VAPID key pair on first use, serving only
+the public key. Keep RFC 8030 delivery, RFC 8291 `aes128gcm` encryption and
+RFC 8292 VAPID in a small `node:crypto` module without a new dependency. Store
+subscriptions and durable items separately from Now/activity. Push text stays
+generic; provider acceptance is not delivery evidence, and `opened_at` means
+loaded, not read. There is no Teams delivery path.
+
+The test send is user-started, so quiet hours do not block it. Do not add the
+22:00–07:00 Europe/Copenhagen guard or an emergency exception now; all later
+system-started sends must pass that guard. Actual iPhone delivery remains an
+unverified physical-device acceptance step.
+
+## Keep web push default-off and notification taps owner-authenticated (17 October 2026; P13-02)
+
+Implement the web half of the delivery proof behind the exact-string
+`VITE_PUSH_ENABLED === "true"` gate; the build default remains off. The service
+worker shows fixed generic text even for malformed pushes and retains only a
+validated UUID for a same-origin item path. It never trusts a payload URL, and
+the item page remains behind the normal sign-in and owner-protected API.
+
+Permission is requested as the first awaited operation in the user's explicit
+opt-in action. The UI distinguishes unsupported, server-off, not-yet-asked,
+denied, on-device, changed-key/lost-subscription and recoverable failure states.
+No backend or deployment flag is changed here. Mocked browser checks are not
+evidence of iOS permission prompts, lock-screen delivery or physical tap-through;
+those require the separate enabling change and device test.
+
+## Compose Daily only behind one exact server switch (17 October 2026; P12-09 / #724)
+
+**Builder decision inside Dan's "go with the daily", not an activation and not
+acceptance.** It is the last invisible Daily slice, built under these conditions.
+
+- One switch. `JARVIS_DAILY_ENABLED` is read once at startup. Absent or `false`
+  is off, exactly `true` is on, and any other value stops startup with an error
+  that does not echo it. The repository ships no value: no workflow, Bicep,
+  infrastructure, environment or deploy file sets it, a scan test enforces that,
+  and turning it on is a separate reviewed change.
+- Off means unchanged. The composition returns no module, validates nothing and
+  touches no pool, so the route table, tool catalogue, capability instructions,
+  voice session, health response, startup, jobs and timers stay those of Jarvis
+  without Daily. Tests compare each of them with a Daily-free application.
+- On means the smallest module. One owner-bound module over the existing
+  nutrition data: the capabilities, query and nutrition-targets routes and six
+  tools, which brings the catalogue to 116 of its 128-tool limit. It adds no MCP
+  connector, Frida lookup, Google or Gmail feed, health upload, job or timer.
+- Fail closed. Missing SQL or an owner that is not a UUID stops startup. Every
+  data accessor, and the targets and health readers that the composition wraps,
+  re-check the signed-in owner against the composed owner, so a mismatch is
+  refused before any SQL read. A connector or runner is refused on every Daily
+  route, and an agent reaches the targets only through the approved tool, whose
+  changes keep the exact browser Now approval.
+- Unchanged and out of scope: accounts, consent, grants, secrets, RBAC,
+  resources, imports, provider, device and private reads or writes, and live
+  probes. Rollback is leaving the switch off.
+
 ## Link every web-created Factory task to a GitHub issue (17 October 2026; P10-08 / #902)
 
 The Create task dialog and `POST /factory/tasks` reuse the chat path's
@@ -74,7 +137,8 @@ the least inference the repository allows.
   `suggest` calculation and the persisted dislikes. Nothing invents a meal or a
   quantity, and an unknown energy left applies no energy filter and says so.
 - The tool is read-only, sensitive and phone-denied, behind the default-off Daily
-  gate with no production caller. Daily off leaves Jarvis unchanged.
+  gate; only the default-off composition can reach it. Daily off leaves Jarvis
+  unchanged.
 
 ## Use owner-configured nutrition targets for the daily food budget (17 October 2026; P12-09 / #724)
 
@@ -102,7 +166,7 @@ data in a public repository, so no source, fixture, document, PR text or log
 carries real figures; tests use synthetic values and Dan enters his own.
 
 Everything stays behind the default-off Daily gate: Daily off leaves Jarvis
-unchanged and this slice has no production caller. The budget adapter (recorded
+unchanged and only the default-off composition can reach it. The budget adapter (recorded
 in the entry above) reports unknown burn or unknown meal macros as unknown, never
 zero, and counts only the exact active-energy metric so resting energy is not
 double-counted. The Settings section ships as its own web slice over the same
@@ -765,6 +829,28 @@ and returns HTTP 200. The disconnected PC bridge remains a nonblocking warning;
 `chat_identity` is ok in this run. Issue #860 stays open with `needs-decision`
 for native-phone acceptance. A deployed controlled-browser correction does not
 establish the cause or result on Dan's physical iPhone.
+
+## Account-owned background-work dismissal (17 October 2026; P11-12 / #905)
+
+The explicit cross-device requirement supersedes the P11-05 / #859 decision
+below that dismissal is a scoped device preference. Store dismissal separately
+from jobs, keyed by the authenticated owner and UUID. Only the configured owner
+can access these jobs. Dismiss-one and Dismiss all finished never change a job,
+its events, results or lifecycle; running work is not dismissible.
+Keep existing list fields compatible with deployed clients. Import at most
+1,000 validated legacy UUIDs, retain local hides on failure, and remove the
+browser copy only on confirmation.
+
+The popover explains kind, start time and recorded failure reason, and groups
+equivalent finished entries for one dismissal. Derive the neutral wording
+“Interrupted by a restart” from the existing stored restart reason without
+rewriting historical failed rows or changing Status/Usage/audit calculations.
+Do not infer a specific trigger or restart from a generic failure.
+
+Source inspection confirms that embedding runs can start on model changes and
+at startup with missing vectors, and that reconciliation records
+`interrupted by restart`. No stored production rows are available in this
+checkout; the reported cluster's timing and cause remain unverified.
 
 ## Filter header background work instead of retaining hidden rows (16 October 2026)
 
@@ -3539,6 +3625,7 @@ Windows/Chrome/Jev speedup remains live acceptance.
 | 2026-10-04 | P2-14 correlates confirmed Foundry expiry with persisted invocation completion: completed-turn expiry ends only the sandbox session as `idle_expired`; active-turn failures retain the P2-06 crash transition. Continue after expiry reuses P2-10 recovery on the task branch. | A completed provider invocation can remain in an active session until Foundry expires it. Persisting the matching turn's terminal status and keeping `session_question` sessions monitored lets heartbeat distinguish that idle timeout from a crash without inferring from event gaps or changing task state. Focused fake-Foundry/backend/web tests pass; SQL Server CI and live Foundry expiry remain unverified. | Implemented offline |
 | 2026-10-04 | P2-14 follow-up: guard every NeedsAttention session-cleanup path with current task state and latest-invocation completion evidence; persist heartbeat-observed completion, reconcile early runner events, and log every heartbeat decision with IDs and HTTP status only. Steering after expiry reuses branch recovery. | Reopened #226 reports task 4 marked Crashed about 30 seconds after completion. Code inspection found generic dispatcher cleanup marked active sessions Crashed regardless of persisted completion. Fake-Foundry/store tests cover a first failing poll without a completed snapshot and distinguish the committed expiry/crash outcomes; SQL contracts cover generic cleanup, early events, and delayed cleanup after recovery. | Implemented offline; SQL Server CI and coordinator live check pending |
 | 2026-10-04 | P3-06: evaluate policy after persisted signed GitHub webhooks; `deliver_pr` completes on a verified green PR without merging, while `complete_without_deployment` requests an App-token squash merge only for a green, non-draft, up-to-date and mergeable PR. A task-scoped SQL application lock serializes cancellation with automatic merge; accepted merges are recorded before releasing the lock, so cancellation remains refused until the merge webhook arrives. GitHub rate limits remain retryable. Treat the merge response as provisional and mark Done only from the persisted merged-PR record plus current GitHub verification. | Keeps runner reports outside the completion trust boundary, lets GitHub enforce required checks and branch protection, and makes duplicate webhook retries safe. Fake-backed backend tests cover both policies, cancellation serialization, and refusal cases; live test-repository/App merge acceptance remains unverified. | Implemented offline |
+| 2026-10-17 | P10-09: selecting `complete_without_deployment` is approval for its guarded App squash merge; ask for no additional confirmation and send no message. Re-evaluate live project policy at startup, every minute, and immediately after a policy PATCH so the persisted two-minute no-check grace survives restarts. Preserve existing safety guards, the cancellation lock, task events, `deliver_pr` behavior, and the signed merge webhook as the only source of Done. Bound transient GitHub retries to three attempts with 1/2/4-minute backoff; record and suppress repeated permanent merge refusals. This supersedes any project-policy merge-confirmation behavior; manual GitHub-tool merges and all other confirmation gates remain unchanged. | Choosing the policy is Dan's explicit approval for this one automatic project workflow. Fake-backed tests cover direct merge, no-check restart recovery, live policy changes, sweep idempotency, refusal visibility, bounded retry, and the existing verification guards. | Implemented offline; live GitHub App acceptance remains unverified |
 | 2026-10-04 | P3-06 specified App-token PR creation on completed work, but that step was absent from the backend; P3-14 implements it at completed-turn handling. The backend reuses an open PR or creates one only when the task branch is ahead of the default branch, records `pull_request_opened`, and leaves Done to the persisted-webhook policy. Missing commits and GitHub failures record a reason and move the task to Needs attention. The task policy lock rechecks Running immediately before the bounded create, reconciles ambiguous create responses, and records the PR event before release, so cancellation cannot win midway through the side effect; GitHub preflight reads stay outside the lock. | The original P3-06 row overstated the implementation: its webhook policy only consumed PR records. Moving creation into the completion verifier prevents pushed work from being stranded, while reusing the App issuer, webhook policy and existing task-event store keeps the trust boundary unchanged. Fake GitHub and dispatcher tests cover create/reuse, duplicate completion, no-ahead refusal, API failure and the Needs attention event; the live `jarvis-test-target` check remains unverified. | Implemented offline; coordinator live check pending |
 | 2026-10-04 | P6-02: persist each alert as one `activity` row keyed by a unique condition, and publish the notification only after its source transaction commits. Use hashed Application Insights trace dimensions and stateful Azure Monitor log rules for deployment, sandbox and credential alerts; the Azure Budget 80% rule calls the same email-only action group. Poll actual budget spend with the backend identity for the Now feed. | Reuses the authenticated Now feed and existing source-of-truth records while making webhook retries, repeated credential metadata and budget polls idempotent. Backend tests use fakes for ARM/telemetry; SQL Server integration tests confirm migration and condition deduplication; deployed email, monitor behavior, and the `JARVIS_BUDGET_CONTACT_EMAILS` secret remain to verify. No SMS or voice action is configured. | Implemented offline; live Azure delivery pending |
 | 2026-10-04 | P7-06: build a .NET 10 WinForms tray companion using Entra device-code sign-in and an outbound authenticated WebSocket; accept only Dan's delegated API token from the configured public-client ID. Limit PC actions to HTTP(S) URLs, four named apps, folders under `C:\Repo` in VS Code, active-window title, and exact-title focus. | The backend routes registered `pc_open` and `pc_active_window` tools over a bounded, correlated protocol; the PC independently enforces the allow-list. No arbitrary commands, inbound listener, message-content logging, or schema migration. Core policy and fake-bridge tests pass offline; actual Entra sign-in, Windows actions, and deployment remain the coordinator's post-merge verification. | Implemented offline; live PC check pending |
@@ -4638,3 +4725,25 @@ provider or persisted-state change is needed.
 This is a local source correction from released `3d3a12ab`, not full #811
 acceptance. PM owns independent review, integration and rendered readback;
 historical 502 causation remains unestablished and #717/#741 stays parked.
+
+## P9-121 — One Projects section (17 October 2026)
+
+Keep the managed-project list, Add project action, and new-project defaults
+inside the existing Projects section and `#projects` anchor. The seven defaults
+remain in the existing page-level Settings save/PATCH; the Projects disclosure
+shows unsaved, pending, confirmed, and failed states with an in-section retry,
+without changing the endpoint or project PATCH contract. Add project previews
+the saved defaults that the backend applies, and each registered project keeps
+its own editable settings.
+
+## P10-11 — Per-project completion policy controls (17 October 2026)
+
+Show the active completion policy as a labelled, descriptive two-choice radio
+group on project cards and project settings, and reuse that group beside the
+project choice in Create task. A choice uses the existing project PATCH; keep
+the saved choice visible until the server confirms the update, disable both
+options while saving, and provide an inline retry on failure. State that the
+change applies now, including to already-open pull requests. The new-project
+policy default is separate: it only pre-fills projects Jarvis registers later,
+and each project keeps its own changeable policy. This is web-only; the PATCH
+contract, default values, and P10-09 merge behavior do not change.

@@ -13,6 +13,30 @@ async function directory() {
 afterEach(async () => { await Promise.all(directories.splice(0).map((path) => rm(path, { recursive: true }))); });
 
 describe('committed SQL manifest', () => {
+  it('stores owner-bound background job dismissals separately from raw jobs with reversible visibility state', async () => {
+    const migration = (await readMigrations()).find(({ name }) => name === '0053_background_job_dismissals.sql');
+    expect(migration?.sql).toContain('CREATE TABLE dbo.background_job_dismissals');
+    expect(migration?.sql).toContain('owner_object_id uniqueidentifier NOT NULL');
+    expect(migration?.sql).toContain('PRIMARY KEY (owner_object_id, job_id)');
+    expect(migration?.sql).toContain('REFERENCES dbo.background_jobs (job_id) ON DELETE CASCADE');
+    expect(migration?.sql).toContain('DEFAULT SYSUTCDATETIME()');
+    expect(migration?.sql).toContain('IX_background_job_dismissals_job_id');
+    expect(migration?.sql).not.toMatch(/\b(?:UPDATE|DELETE)\b(?! CASCADE)/u);
+    const down = await readDownMigration('0053_background_job_dismissals.sql');
+    expect(down.sql).toContain('IF EXISTS (SELECT 1 FROM dbo.background_job_dismissals WITH (TABLOCKX,HOLDLOCK))');
+    expect(down.sql).toContain('THROW 51000');
+    expect(down.sql).toContain('dismissal preferences must be retained');
+    expect(down.sql).toContain('DROP TABLE dbo.background_job_dismissals;');
+  });
+
+  it('adds durable owner-scoped push delivery tables and protects rollback evidence', async () => {
+    const migration = (await readMigrations()).find(({ name }) => name === '0054_proactive_push.sql');
+    expect(migration?.sql).toContain('CHECK (id = 1)');
+    expect(migration?.sql).toContain('UX_push_subscriptions_owner_endpoint_hash');
+    expect(migration?.sql).toContain("CHECK (kind = N'test')");
+    expect((await readDownMigration('0054_proactive_push.sql')).sql).toContain('cannot roll back while rows exist');
+  });
+
   it('retains durable task submission claims and refuses to erase retry protection on rollback', async () => {
     const migration = (await readMigrations()).find(({ name }) => name === '0052_factory_task_submissions.sql');
     expect(migration?.sql).toContain('submission_id uniqueidentifier NOT NULL PRIMARY KEY');
@@ -150,6 +174,8 @@ describe('committed SQL manifest', () => {
       '0050_daily_saved_food.sql',
       '0051_conversation_summaries.sql',
       '0052_factory_task_submissions.sql',
+      '0053_background_job_dismissals.sql',
+      '0054_proactive_push.sql',
     ]);
     for (const migration of migrations) await expect(readDownMigration(migration.name)).resolves.toMatchObject({ name: migration.name });
   });

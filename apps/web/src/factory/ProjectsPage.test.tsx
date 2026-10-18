@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -18,6 +18,16 @@ const project = {
   tech: 'node',
   max_parallel_tasks: 1,
   active: true,
+};
+
+const newProjectDefaults = {
+  owner: 'DanAakesen',
+  visibility: 'private' as const,
+  templatesRepository: 'DanAakesen/templates',
+  defaultAgent: 'copilot' as const,
+  policy: 'deliver_pr' as const,
+  maxParallelTasks: 1,
+  defaultBranch: 'main',
 };
 
 const getAccessToken = vi.fn(async () => 'test-access-token');
@@ -67,6 +77,7 @@ beforeEach(() => {
   fetchMock.mockImplementation(async (input, init) => {
     const url = String(input);
     const method = init?.method ?? 'GET';
+    if (url.endsWith('/settings') && method === 'GET') return response({ settings: { newProjects: newProjectDefaults } });
     if (url.endsWith('/factory/tasks?state=Running&limit=100')) {
       return response({ tasks: [{ projectId: '7', state: 'Running' }], limit: 100, offset: 0 });
     }
@@ -121,6 +132,9 @@ describe('Projects page', () => {
     const list = await within(dialog).findByRole('list', { name: 'Repositories you can add' });
     expect(within(list).getByText('DanAakesen/second-project')).not.toBeNull();
     expect(within(list).queryByText('DanAakesen/jarvis')).toBeNull();
+    expect(await within(dialog).findByText('The policy default only pre-fills projects Jarvis registers later. Every project keeps its own policy and can be changed any time.')).not.toBeNull();
+    expect(within(dialog).getByText('DanAakesen', { selector: 'dd' })).not.toBeNull();
+    expect(within(dialog).getByText('main', { selector: 'dd' })).not.toBeNull();
     expect(within(dialog).getByRole('button', { name: 'Ask Jarvis to create it' })).toHaveProperty('disabled', true);
 
     await user.click(within(list).getByRole('button', { name: 'Add' }));
@@ -136,7 +150,10 @@ describe('Projects page', () => {
     const row = await screen.findByRole('article', { name: 'Jarvis' });
     expect(within(row).getByText('DanAakesen/jarvis')).not.toBeNull();
     expect(within(row).getByText('Copilot')).not.toBeNull();
-    expect(within(row).getByText('Deliver a pull request')).not.toBeNull();
+    const policy = within(row).getByRole('group', { name: 'Completion policy for Jarvis' });
+    expect(within(policy).getByRole('radio', { name: /Deliver a pull request/ })).toHaveProperty('checked', true);
+    expect(within(policy).getByText('Jarvis opens a pull request and stops. You merge it.')).not.toBeNull();
+    expect(within(policy).getByText('Jarvis opens a pull request and squash-merges it automatically once checks pass. It never deploys.')).not.toBeNull();
     expect(within(row).getByText('node')).not.toBeNull();
     expect(within(row).getByText('1')).not.toBeNull();
     expect(within(row).getByRole('link', { name: 'View releases' }).getAttribute('href'))
@@ -151,6 +168,90 @@ describe('Projects page', () => {
 
     const request = fetchMock.mock.calls.find(([url]) => String(url).includes('/factory/projects'))?.[1];
     expect(request?.headers).toMatchObject({ Authorization: ['Bearer', 'test-access-token'].join(' ') });
+  });
+
+  it('shows the active project policy on its settings page', async () => {
+    renderFactory('/factory/projects/7');
+
+    const policy = await screen.findByRole('group', { name: 'Completion policy for Jarvis' });
+    expect(within(policy).getByRole('radio', { name: /Deliver a pull request/ })).toHaveProperty('checked', true);
+    expect(within(policy).getByRole('radio', { name: /Complete without deployment/ })).toHaveProperty('checked', false);
+    expect(within(policy).getByText('Applies now, including pull requests that are already open.')).not.toBeNull();
+    expect(screen.queryByRole('combobox', { name: 'Policy' })).toBeNull();
+  });
+
+  it('does not show a policy change as saved until the server confirms it', async () => {
+    const user = userEvent.setup();
+    const defaultFetch = fetchMock.getMockImplementation()!;
+    let confirmPatch!: (value: Response) => void;
+    fetchMock.mockImplementation((input, init) => {
+      if (String(input).endsWith('/factory/projects/7') && init?.method === 'PATCH') {
+        return new Promise((resolve) => { confirmPatch = resolve; });
+      }
+      return defaultFetch(input, init);
+    });
+    renderFactory();
+
+    const row = await screen.findByRole('article', { name: 'Jarvis' });
+    const policy = within(row).getByRole('group', { name: 'Completion policy for Jarvis' });
+    const deliver = within(policy).getByRole('radio', { name: /Deliver a pull request/ });
+    const complete = within(policy).getByRole('radio', { name: /Complete without deployment/ });
+    await user.click(complete);
+
+    expect(deliver).toHaveProperty('checked', true);
+    expect(complete).toHaveProperty('checked', false);
+    expect(within(policy).getByRole('status').textContent).toContain('Saving policy…');
+    expect(within(policy).queryByText('Applies now, including pull requests that are already open.', {
+      selector: '[role="status"]',
+    })).toBeNull();
+    expect(deliver).toHaveProperty('disabled', true);
+    expect(complete).toHaveProperty('disabled', true);
+    const patch = fetchMock.mock.calls.find(([url, init]) =>
+      String(url).endsWith('/factory/projects/7') && init?.method === 'PATCH');
+    expect(JSON.parse(String(patch?.[1]?.body))).toEqual({ policy: 'complete_without_deployment' });
+
+    await act(async () => {
+      confirmPatch(response({ ...project, policy: 'complete_without_deployment' }));
+    });
+    expect(await within(policy).findByText('Applies now, including pull requests that are already open.', {
+      selector: '[role="status"]',
+    })).not.toBeNull();
+    expect(complete).toHaveProperty('checked', true);
+    expect(complete).toHaveProperty('disabled', false);
+  });
+
+  it('keeps the saved policy on failure and retries the requested change', async () => {
+    const user = userEvent.setup();
+    const defaultFetch = fetchMock.getMockImplementation()!;
+    let patchCount = 0;
+    fetchMock.mockImplementation((input, init) => {
+      if (String(input).endsWith('/factory/projects/7') && init?.method === 'PATCH') {
+        patchCount += 1;
+        return patchCount === 1
+          ? Promise.resolve(response({ error: 'unavailable' }, 503))
+          : Promise.resolve(response({ ...project, policy: 'complete_without_deployment' }));
+      }
+      return defaultFetch(input, init);
+    });
+    renderFactory();
+
+    const row = await screen.findByRole('article', { name: 'Jarvis' });
+    const policy = within(row).getByRole('group', { name: 'Completion policy for Jarvis' });
+    const deliver = within(policy).getByRole('radio', { name: /Deliver a pull request/ });
+    const complete = within(policy).getByRole('radio', { name: /Complete without deployment/ });
+    await user.click(complete);
+
+    const failure = await within(policy).findByRole('alert');
+    expect(failure.textContent).toContain('Project or repository data unavailable.');
+    expect(deliver).toHaveProperty('checked', true);
+    expect(complete).toHaveProperty('checked', false);
+    await user.click(within(failure).getByRole('button', { name: 'Retry policy change' }));
+
+    expect(await within(policy).findByText('Applies now, including pull requests that are already open.', {
+      selector: '[role="status"]',
+    })).not.toBeNull();
+    expect(complete).toHaveProperty('checked', true);
+    expect(patchCount).toBe(2);
   });
 
   it('manages an existing repository without a form and refreshes the list on demand', async () => {
@@ -172,6 +273,19 @@ describe('Projects page', () => {
     await user.click(screen.getByRole('button', { name: 'Refresh projects and repositories' }));
     await screen.findByRole('article', { name: 'second-project' });
     expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith('/factory/repositories?refresh=true'))).toBe(true);
+  });
+
+  it('offers Add project from the empty state instead of a defaults link', async () => {
+    const user = userEvent.setup();
+    projects = [];
+    renderFactory();
+
+    expect(await screen.findByRole('heading', { name: 'No managed projects' })).not.toBeNull();
+    expect(screen.getByRole('button', { name: 'Add project' })).not.toBeNull();
+    expect(screen.queryByRole('link', { name: 'New project defaults' })).toBeNull();
+
+    await user.click(screen.getByRole('button', { name: 'Add project' }));
+    expect(await screen.findByRole('dialog', { name: 'Create project' })).not.toBeNull();
   });
 
   it('explains when an existing repository is no longer available to manage', async () => {
