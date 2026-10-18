@@ -71,17 +71,6 @@ def calendar_context(messages: Sequence[ModelMessage]) -> bool:
     return any(_calendar_scope(message.content) for message in messages[-2:])
 
 
-def calendar_approval_candidate(text: str) -> bool:
-    # Routing only; the backend classifier and saved-message guard authorise execution.
-    return len(text.strip()) <= 60 and bool(re.match(
-        r"""^[\s"'“”’]*(?:yes|yeah|yep|yup|sure|ok|okay|approve|approved|confirm|confirmed|"""
-        r"go ahead|do it|send it|proceed|please do|sounds good|looks good|ja|jep|jo|"
-        r"godkend|godkendt|bekræft|bekræftet|gør det|kør|send den|fint|"
-        r"no|nope|nah|cancel|stop|dont|don't|never mind|nevermind|decline|reject|"
-        r"nej|annuller|afbryd|lad være)\b", text, re.IGNORECASE,
-    ))
-
-
 def _calendar_request_text(message: ModelMessage) -> str:
     text = message.content.removeprefix(
         "Dan interrupted your previous reply with this message; continue accordingly:\n"
@@ -169,7 +158,6 @@ def calendar_response_scope(messages: Sequence[ModelMessage], text: str) -> bool
     return bool(
         messages and calendar_context(messages)
         and (calendar_status_question(messages[-1].content)
-             or calendar_approval_candidate(messages[-1].content)
              or re.match(r"^(?:why|what about|hvorfor|hvad med)\b",
                          messages[-1].content.strip(), re.IGNORECASE)
              or re.search(
@@ -267,6 +255,45 @@ def no_calendar_evidence(danish: bool) -> str:
     )
 
 
+def _approval_question(pending: dict[str, Any], danish: bool) -> str:
+    """Ask Dan in plain words what to do with a staged change; never prescribe how to answer."""
+    items = pending.get("items")
+    count = len(items) if isinstance(items, list) and len(items) >= 2 else 0
+    if danish:
+        return (
+            f" Vil du have, at jeg opretter alle {count} viste begivenheder, eller skal jeg "
+            "droppe hele forslaget?"
+            if count else " Vil du have, at jeg udfører ændringen?"
+        )
+    return (
+        f" Do you want me to create all {count} listed events, or drop the entire proposal?"
+        if count else " Do you want me to make this change?"
+    )
+
+
+def _pending_notice(pending: dict[str, Any], danish: bool, ask: bool) -> str:
+    return (
+        ("Afventer kalendergodkendelse: " if danish else "Pending calendar approval: ")
+        + pending["summary"]
+        + (" Intet er ændret." if danish else " Nothing has changed.")
+        + (_approval_question(pending, danish) if ask else "")
+    )
+
+
+def calendar_unsettled_confirmation(
+    name: str, result: dict[str, Any], state: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """Tag a backend-refused confirmation while the change is still staged.
+
+    The backend judges what Dan's reply means. When it cannot tell, the refusal text is written
+    for the model, so Dan is asked a plain question about the staged change instead.
+    """
+    if name != "calendar_confirm_change" or result.get("outcome") != "refused":
+        return result
+    pending = pending_calendar(state) if isinstance(state, dict) else None
+    return result if pending is None else {**result, "stillPending": pending}
+
+
 def calendar_details_requested(text: str) -> bool:
     return bool(re.search(
         r"\b(?:read (?:them|it) (?:to me|aloud)|what (?:time|details|address|place)|"
@@ -282,6 +309,12 @@ def calendar_reply(
 ) -> str:
     payload = evidence.get("result")
     if evidence.get("outcome") != "ok" or not isinstance(payload, dict):
+        unsettled = pending_calendar({"outcome": "ok", "result": evidence.get("stillPending")})
+        if name == "calendar_confirm_change" and unsettled is not None:
+            return (
+                "Jeg var ikke sikker på, hvad du mente. " if danish
+                else "I wasn't sure what you meant. "
+            ) + _pending_notice(unsettled, danish, ask=True)
         reason = None
         if isinstance(payload, dict):
             reason = next((payload[key] for key in ("refused", "failure", "error")
@@ -289,22 +322,7 @@ def calendar_reply(
         return no_calendar_evidence(danish) + (" " + reason if reason else "")
     pending = pending_calendar(evidence)
     if pending is not None and name in CALENDAR_MUTATIONS | {"calendar_get_pending_change"}:
-        prefix = "Afventer kalendergodkendelse: " if danish else "Pending calendar approval: "
-        suffix = " Intet er ændret." if danish else " Nothing has changed."
-        if name in CALENDAR_MUTATIONS:
-            items = pending.get("items")
-            suffix += (
-                (
-                    f" Svar ja for at godkende alle {len(items)} viste begivenheder "
-                    "eller nej for at annullere hele forslaget."
-                    if danish else
-                    f" Reply yes to approve all {len(items)} listed events "
-                    "or no to cancel the entire proposal."
-                ) if isinstance(items, list) and len(items) >= 2 else
-                " Svar ja for at godkende eller nej for at annullere."
-                if danish else " Reply yes to approve or no to cancel."
-            )
-        return prefix + pending["summary"] + suffix
+        return _pending_notice(pending, danish, ask=name in CALENDAR_MUTATIONS)
     if name == "calendar_get_pending_change" and payload.get("status") == "none":
         text = (
             "Der er ingen afventende kalenderændring at godkende. Jeg har ikke tjekket kalenderen."

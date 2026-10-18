@@ -8,7 +8,7 @@ import type { ToolCallRecord } from '../core/tool-calls.js';
 import { GoogleApiError, type GoogleApi, type GoogleApiClient, type GoogleApiRequest } from './api-client.js';
 import { createGoogleModule } from './tools.js';
 import { PendingGoogleActions } from './pending-actions.js';
-import { confirmPendingCalendarReply } from '../voice/realtime.js';
+import { resolveCalendarReply } from '../voice/realtime.js';
 
 const config = { ...loadConfig({}), logLevel: 'silent' as const };
 const headers = { authorization: ['Bea', 'rer a.b.c'].join('') };
@@ -65,7 +65,21 @@ function appFor(request: GoogleApiClient['request'], options: {
     app,
     records,
     setLatest: (message: ConversationMessage) => { latest = message; },
+    latestText: () => latest.text,
   };
+}
+
+/** The route chat and voice share: the backend reads the latest Dan message and decides what it means. */
+function calendarReplyRoute(
+  app: ReturnType<typeof buildApp>,
+  latestText: () => string,
+  url = '/fixture/calendar-reply',
+  signal: () => AbortSignal = () => new AbortController().signal,
+) {
+  app.post(url, { config: { jarvisAgent: true } }, async (req) => {
+    const { output } = await resolveCalendarReply(app.jarvisTools, req, signal(), latestText());
+    return JSON.parse(output ?? '{"outcome":"undecided"}');
+  });
 }
 
 function confirmHeaders(id: string) {
@@ -102,10 +116,8 @@ describe('Google Calendar and Gmail tools', () => {
   it('grounds a real read/stage/later-approval/repeated-yes flow in actual tool receipts', async () => {
     const request = vi.fn<GoogleApiClient['request']>(async (_api, _path, options) =>
       options.method === 'POST' ? { id: 'fixture-created-event' } : { items: [] });
-    const { app, records, setLatest } = appFor(request);
-    app.post('/fixture/calendar-reply', { config: { jarvisAgent: true } }, async (req) => JSON.parse(await confirmPendingCalendarReply(
-      app.jarvisTools, req, new AbortController().signal,
-    )));
+    const { app, records, setLatest, latestText } = appFor(request);
+    calendarReplyRoute(app, latestText);
     const reply = (id: string) => app.inject({
       method: 'POST', url: '/fixture/calendar-reply', headers: confirmHeaders(id), payload: {},
     });
@@ -156,10 +168,8 @@ describe('Google Calendar and Gmail tools', () => {
     'does not repeat a write after an actual %s stage', async (state) => {
       let now = Date.now();
       const request = vi.fn<GoogleApiClient['request']>(async () => { throw new GoogleApiError('uncertain'); });
-      const { app, setLatest } = appFor(request, { pendingActions: new PendingGoogleActions(() => now) });
-      app.post('/fixture/calendar-reply', { config: { jarvisAgent: true } }, async (req) => JSON.parse(await confirmPendingCalendarReply(
-        app.jarvisTools, req, new AbortController().signal,
-      )));
+      const { app, setLatest, latestText } = appFor(request, { pendingActions: new PendingGoogleActions(() => now) });
+      calendarReplyRoute(app, latestText);
       const stage = await app.inject({
         method: 'POST', url: '/tools/calendar_create_event', headers: confirmHeaders('42'),
         payload: { subject: 'Fixture', startDateTime: '2027-12-09T16:00:00+01:00', endDateTime: '2027-12-10T12:00:00+01:00' },
@@ -674,9 +684,8 @@ describe('Google Calendar and Gmail tools', () => {
         abort.abort();
         return { id: 'first-created' };
       });
-      const { app, setLatest } = appFor(request);
-      app.post('/fixture/calendar-interruption', { config: { jarvisAgent: true } }, async (req) =>
-        JSON.parse(await confirmPendingCalendarReply(app.jarvisTools, req, abort.signal)));
+      const { app, setLatest, latestText } = appFor(request);
+      calendarReplyRoute(app, latestText, '/fixture/calendar-interruption', () => abort.signal);
       await app.inject({
         method: 'POST', url: '/tools/calendar_create_events', headers: confirmHeaders('42'),
         payload: { events: hotelEvents },
@@ -706,7 +715,7 @@ describe('Google Calendar and Gmail tools', () => {
       payload: { confirmationCode: '12345678' },
     });
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toMatchObject({ outcome: 'refused', result: { refused: expect.stringContaining('No calendar change was made') } });
+    expect(response.json()).toMatchObject({ outcome: 'refused', result: { refused: expect.stringContaining('No change was made') } });
     expect(request).not.toHaveBeenCalled();
   });
 

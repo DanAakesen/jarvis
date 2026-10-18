@@ -18,6 +18,7 @@ import { conversationModule } from './core/conversation.js';
 import type { ConversationStore } from './core/conversation-store.js';
 import type { ConversationAgent } from './core/chat-agent.js';
 import type { ReflexClassifier } from './core/reflex.js';
+import { createApprovalInterpreter, type ApprovalInterpreter } from './core/approval-interpreter.js';
 import type { BrowserAgent } from './core/browser-agent.js';
 import { factoryModule } from './factory/index.js';
 import type { TaskController, TaskEventHub, TaskEventMessage, TaskStore } from './factory/task-store.js';
@@ -100,6 +101,8 @@ export interface BuildAppOptions {
   readonly sandboxHeartbeat?: SandboxHeartbeat;
   readonly conversationAgent?: ConversationAgent;
   readonly reflexClassifier?: ReflexClassifier;
+  /** Decides what a verified Dan reply means for a staged action. Defaults to the deterministic fast path only. */
+  readonly approvalInterpreter?: ApprovalInterpreter;
   readonly browserAgent?: BrowserAgent;
   readonly containerAppScaler?: ContainerAppScaler | null;
   readonly ownerInteractions?: OwnerInteractionService | null;
@@ -148,6 +151,7 @@ declare module 'fastify' {
     sandboxHeartbeat: SandboxHeartbeat | null;
     conversationAgent: ConversationAgent | null;
     reflexClassifier: ReflexClassifier | null;
+    approvalInterpreter: ApprovalInterpreter;
     browserAgent: BrowserAgent | null;
     ownerInteractions: OwnerInteractionService | null;
     awayModeStore: AwayModeStore | null;
@@ -332,6 +336,7 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
   }
   app.decorate('conversationAgent', options.conversationAgent ?? null);
   app.decorate('reflexClassifier', options.reflexClassifier ?? null);
+  app.decorate('approvalInterpreter', options.approvalInterpreter ?? createApprovalInterpreter());
   app.decorate('browserAgent', options.browserAgent ?? null);
   app.decorate('ownerInteractions', options.ownerInteractions ?? null);
   app.decorate('phoneSessionStore', options.phoneSessionStore ?? null);

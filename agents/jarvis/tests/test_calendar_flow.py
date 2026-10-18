@@ -1,6 +1,7 @@
 """Regression turns use the real model loop with a synthetic backend and provider."""
 
 import json
+import re
 from dataclasses import replace
 from types import SimpleNamespace
 
@@ -21,6 +22,7 @@ from calendar_flow import (
     calendar_details_requested,
     calendar_multiple_requested,
     calendar_reply,
+    calendar_unsettled_confirmation,
     pending_calendar,
 )
 from jarvis_tools import current_message_id, current_steering_fetcher
@@ -66,7 +68,7 @@ def tool_call(name):
 
 
 class CalendarBackend(FakeBackend):
-    def __init__(self, pending=None, outcome="ok", fail_confirmation=False):
+    def __init__(self, pending=None, outcome="ok", fail_confirmation=False, strict_reply=False):
         super().__init__(catalogue=[
             {"name": name, "description": name, "inputSchema": {"type": "object"}}
             for name in ["calendar_get_pending_change", "calendar_confirm_change",
@@ -77,7 +79,24 @@ class CalendarBackend(FakeBackend):
         self.stage_result = PENDING.copy()
         self.outcome = outcome
         self.fail_confirmation = fail_confirmation
+        # The real backend refuses a confirmation unless it judged Dan's latest message to
+        # approve or decline; the flag lets a test play that refusal.
+        self.strict_reply = strict_reply
         self.reply = None
+
+    def refuse_undecided_reply(self):
+        if not self.strict_reply:
+            return None
+        if self.pending is None:
+            message = "No change was made. There is no pending change waiting for a reply."
+        elif self.reply not in {"approve", "decline"}:
+            message = (
+                "No change was made. The latest message did not clearly approve or decline the "
+                "pending change. Ask one short, natural question about it."
+            )
+        else:
+            return None
+        return httpx.Response(200, json={"outcome": "refused", "result": {"refused": message}})
 
     def handle(self, request):
         name = request.url.path.rsplit("/", 1)[-1]
@@ -96,6 +115,9 @@ class CalendarBackend(FakeBackend):
                 payload = self.stage_result.copy()
             elif name == "calendar_confirm_change":
                 assert json.loads(request.content) == {"confirmationCode": "12345678"}
+                refusal = self.refuse_undecided_reply()
+                if refusal is not None:
+                    return refusal
                 self.pending = None  # Consumption happens before provider execution.
                 payload = {"status": "completed", "detail": "The event was created.",
                            "summary": SUMMARY,
@@ -137,6 +159,9 @@ class CalendarBatchBackend(CalendarBackend):
         if request.method == "POST" and name == "calendar_confirm_change":
             self.requests.append(request)
             assert self.pending is not None
+            refusal = self.refuse_undecided_reply()
+            if refusal is not None:
+                return refusal
             source_id = self.pending["sourceMessageId"]
             assert self.pending == {**BATCH_PENDING, "sourceMessageId": source_id}
             assert json.loads(request.content) == {"confirmationCode": "12345678"}
@@ -463,7 +488,7 @@ async def test_gmail_staging_prose_cannot_route_yes_to_an_older_calendar(pending
     "Is it raining tomorrow?", "Did you find my reservation email?",
     "Have you checked the build status?", "Is Gmail working now?",
 ])
-async def test_unrelated_status_question_does_not_query_or_relay_stale_calendar(pending, question):
+async def test_unrelated_status_question_never_relays_or_confirms_stale_calendar(pending, question):
     backend = CalendarBackend(pending=pending)
     answer = "The answer concerns only the current request."
     model, _ = client([delta(answer), completed()], backend=backend)
@@ -472,7 +497,9 @@ async def test_unrelated_status_question_does_not_query_or_relay_stale_calendar(
             ModelMessage("assistant", "Pending calendar approval: " + SUMMARY),
             ModelMessage("user", question),
         ]) == answer
-        assert backend.calendar_calls == []
+        assert "calendar_confirm_change" not in backend.calendar_calls
+        assert "calendar_create_event" not in backend.calendar_calls
+        assert backend.pending == pending
     finally:
         await model.close()
 
@@ -610,7 +637,7 @@ async def test_general_tool_failure_is_not_swallowed_by_calendar_topic():
             ModelMessage("assistant", "I have no verified calendar result."),
             ModelMessage("user", "Are you broken?"),
         ]) == "My health check failed; I cannot diagnose the calendar issue from it."
-        assert backend.calendar_calls == []
+        assert "calendar_confirm_change" not in backend.calendar_calls
     finally:
         await model.close()
 
@@ -880,7 +907,8 @@ async def test_both_hotels_survive_one_later_approval_and_repeated_yes_without_r
     try:
         staged = await turn(model, history)
         assert all(summary in staged for summary in BATCH_SUMMARIES)
-        assert "Reply yes" in staged and "already created" not in staged
+        assert "Do you want me to create all 2 listed events" in staged
+        assert "already created" not in staged
         assert backend.calendar_calls == ["calendar_get_pending_change", "calendar_create_events"]
         backend.reply = "approve"
         confirmed = await turn(model, [
@@ -1198,13 +1226,54 @@ async def test_model_confirmation_cannot_bypass_backend_proposal_origin(
                 "Dan interrupted your previous reply with this message; continue accordingly:\nyes"
             )),
         ], "43")
-        if source_id == "42" and recovery_available:
-            assert "Both are in your calendar." in answer
-            assert backend.calendar_calls.count("calendar_confirm_change") == 1
-        else:
+        if not recovery_available:
+            # Without the pending-change tool no origin can be verified, so the model's own
+            # confirmation is refused before it reaches the backend.
             assert "No matching backend-staged proposal origin" in answer
             assert "calendar_confirm_change" not in backend.calendar_calls
             assert backend.pending is not None
+        elif source_id == "42":
+            assert "Both are in your calendar." in answer
+            assert backend.calendar_calls.count("calendar_confirm_change") == 1
+        else:
+            # The backend decided the reply approves, but the stage does not belong to this
+            # request, so the up-front probe refuses before anything is confirmed.
+            assert "cannot verify a matching backend-staged calendar proposal" in answer
+            assert "calendar_confirm_change" not in backend.calendar_calls
+            assert backend.pending is not None
+    finally:
+        await model.close()
+
+
+@pytest.mark.parametrize("provider", ["openai", "anthropic"])
+@pytest.mark.parametrize("source_id", ["42", "20", None])
+async def test_model_confirmation_after_an_undecided_reply_is_still_origin_bound_and_refused(
+    provider, source_id,
+):
+    backend = CalendarBatchBackend()
+    backend.strict_reply = True
+    backend.pending = {**BATCH_PENDING, "sourceMessageId": source_id}
+    backend.reply = None
+    call = FakeItem(
+        type="function_call", name="calendar_confirm_change", call_id="confirm",
+        arguments=json.dumps({"confirmationCode": BATCH_PENDING["confirmationCode"]}),
+    )
+    model, _ = provider_client(provider, backend, [[completed(call)]])
+    try:
+        answer = await turn(model, [
+            ModelMessage("user", "Add both bookings to my calendar", source_message_id="42"),
+            ModelMessage("assistant", "Here is the earlier list:\n\n" + BATCH_PENDING["summary"]),
+            ModelMessage("user", "hmm, let me think about it"),
+        ], "43")
+        assert backend.pending is not None
+        if source_id == "42":
+            # The backend, not the model, refused: the reply was not read as approval.
+            assert backend.calendar_calls.count("calendar_confirm_change") == 1
+            assert answer.startswith("I wasn't sure what you meant.")
+            assert "Do you want me to create all 2 listed events" in answer
+        else:
+            assert "calendar_confirm_change" not in backend.calendar_calls
+            assert "No matching backend-staged proposal origin" in answer
     finally:
         await model.close()
 
@@ -1353,3 +1422,158 @@ async def test_reported_conversation_completes_both_then_answers_ordinary_follow
         assert backend.calendar_calls.count("calendar_confirm_change") == 1
     finally:
         await model.close()
+
+
+# The bridge never reads Dan's words: the backend decides what a reply means and exposes only
+# the verdict, so these replies are deliberately not phrases any local pattern could match.
+WORD_LIST = re.compile(
+    r"\b(yes|approved|confirmed|go ahead|ja|godkendt|bekræftet)\b", re.IGNORECASE,
+)
+
+
+@pytest.mark.parametrize(("reply", "voice", "done"), [
+    ("perfect, go for it", False, "The calendar change is done."),
+    ("yes please, book both", False, "The calendar change is done."),
+    ("looks good, add them", False, "The calendar change is done."),
+    ("ja tak, book dem begge", True, "Kalenderændringen er gennemført."),
+])
+async def test_natural_approval_the_backend_accepted_confirms_without_phrase_matching(
+    reply, voice, done,
+):
+    backend = CalendarBackend(pending=PENDING, strict_reply=True)
+    backend.reply = "approve"
+    model, transport = client([], backend=backend)
+    try:
+        text = await turn(model, [
+            ModelMessage("assistant", "Pending calendar approval: " + SUMMARY),
+            ModelMessage("user", reply),
+        ], voice=voice)
+        assert done in text and SUMMARY not in text
+        assert backend.calendar_calls == ["calendar_get_pending_change", "calendar_confirm_change"]
+        assert backend.pending is None
+        assert transport.responses.requests == []
+    finally:
+        await model.close()
+
+
+@pytest.mark.parametrize("voice", [False, True])
+@pytest.mark.parametrize("reply", [
+    "hmm, which hotel was that again?", "yes but make it 9", "wait", "nej tak",
+])
+async def test_reply_the_backend_did_not_read_as_approval_is_never_confirmed_by_the_bridge(
+    voice, reply,
+):
+    backend = CalendarBackend(pending=PENDING, strict_reply=True)
+    backend.reply = None
+    answer = "That was the Synthetic Hotel Beta booking."
+    model, _ = client([delta(answer), completed()], backend=backend)
+    try:
+        text = await turn(model, [
+            ModelMessage("assistant", "Pending calendar approval: " + SUMMARY),
+            ModelMessage("user", reply),
+        ], voice=voice)
+        assert text == answer
+        assert "calendar_confirm_change" not in backend.calendar_calls
+        assert backend.pending == PENDING
+    finally:
+        await model.close()
+
+
+@pytest.mark.parametrize("voice", [False, True])
+async def test_undecided_reply_gets_one_natural_question_and_never_a_list_of_words(voice):
+    backend = CalendarBackend(pending=PENDING, strict_reply=True)
+    call = FakeItem(
+        type="function_call", name="calendar_confirm_change", call_id="confirm",
+        arguments=json.dumps({"confirmationCode": "12345678"}),
+    )
+    model, _ = client([], backend=backend, rounds=[[completed(call)]])
+    try:
+        text = await turn(model, [
+            ModelMessage("assistant", "Pending calendar approval: " + SUMMARY),
+            ModelMessage("user", "hmm, not sure about the dates"),
+        ], voice=voice)
+        lead = (
+            "Jeg var ikke sikker på, hvad du mente. " if voice
+            else "I wasn't sure what you meant. "
+        )
+        assert text.startswith(lead + ("Afventer" if voice else "Pending"))
+        assert SUMMARY in text
+        assert ("Intet er ændret." if voice else "Nothing has changed.") in text
+        assert text.endswith("?") and text.count("?") == 1
+        assert not WORD_LIST.search(text.replace(SUMMARY, ""))
+        assert "Ask one short, natural question" not in text
+        assert backend.calendar_calls.count("calendar_confirm_change") == 1
+        assert backend.pending == PENDING
+    finally:
+        await model.close()
+
+
+async def test_refusal_with_nothing_staged_is_reported_as_the_actual_refusal():
+    backend = CalendarBackend(pending=None, strict_reply=True)
+    call = FakeItem(
+        type="function_call", name="calendar_confirm_change", call_id="confirm",
+        arguments=json.dumps({"confirmationCode": "12345678"}),
+    )
+    model, _ = client([], backend=backend, rounds=[[completed(call)]])
+    try:
+        text = await turn(model, [
+            ModelMessage("assistant", "Calendar change is staged."),
+            ModelMessage("user", "yes please, book both"),
+        ])
+        assert text.startswith("I have no verified calendar result.")
+        assert "There is no pending change waiting for a reply." in text
+        assert "I wasn't sure" not in text and "?" not in text
+    finally:
+        await model.close()
+
+
+@pytest.mark.parametrize(("pending", "danish", "question"), [
+    (PENDING, False, "Do you want me to make this change?"),
+    (PENDING, True, "Vil du have, at jeg udfører ændringen?"),
+    (BATCH_PENDING, False,
+     "Do you want me to create all 2 listed events, or drop the entire proposal?"),
+    (BATCH_PENDING, True,
+     "Vil du have, at jeg opretter alle 2 viste begivenheder, eller skal jeg droppe hele "
+     "forslaget?"),
+])
+def test_staging_notice_ends_with_a_natural_question_and_never_prescribes_words(
+    pending, danish, question,
+):
+    envelope = {"outcome": "ok", "result": pending}
+    staged = calendar_reply("calendar_create_event", envelope, danish)
+    assert staged.endswith(question)
+    assert not WORD_LIST.search(staged.replace(pending["summary"], ""))
+    status = calendar_reply("calendar_get_pending_change", envelope, danish)
+    assert pending["summary"] in status and question not in status
+
+
+def test_only_a_refused_confirmation_with_a_staged_change_is_marked_unsettled():
+    state = {"outcome": "ok", "result": PENDING}
+    refused = {"outcome": "refused", "result": {"refused": "No change was made."}}
+    marked = calendar_unsettled_confirmation("calendar_confirm_change", refused, state)
+    assert marked == {**refused, "stillPending": PENDING}
+    assert calendar_unsettled_confirmation("calendar_create_event", refused, state) == refused
+    nothing_staged = {"outcome": "ok", "result": {"status": "none"}}
+    assert calendar_unsettled_confirmation(
+        "calendar_confirm_change", refused, nothing_staged,
+    ) == refused
+    assert calendar_unsettled_confirmation("calendar_confirm_change", refused, None) == refused
+    completed_result = {"outcome": "ok", "result": {"status": "completed", "detail": "Done."}}
+    assert calendar_unsettled_confirmation(
+        "calendar_confirm_change", completed_result, state,
+    ) == completed_result
+    failed = {"outcome": "error", "result": {"error": "Provider failed"}}
+    assert calendar_unsettled_confirmation("calendar_confirm_change", failed, state) == failed
+
+
+def test_unsettled_confirmation_is_explained_in_plain_words_without_the_model_instruction():
+    refused = calendar_unsettled_confirmation(
+        "calendar_confirm_change",
+        {"outcome": "refused", "result": {"refused": "No change was made. Ask one question."}},
+        {"outcome": "ok", "result": PENDING},
+    )
+    assert calendar_reply("calendar_confirm_change", refused, False) == (
+        "I wasn't sure what you meant. Pending calendar approval: " + SUMMARY
+        + " Nothing has changed. Do you want me to make this change?"
+    )
+    assert "Ask one question" not in calendar_reply("calendar_confirm_change", refused, True)

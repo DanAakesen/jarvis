@@ -1,4 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
+import { approvalNotPending, approvalUnclear } from '../core/approval.js';
+import type { ApprovalDecider, ApprovalVerdict } from '../core/approval-interpreter.js';
 import type { ConversationMessage } from '../core/conversation-store.js';
 import { PendingGoogleActions } from './pending-actions.js';
 
@@ -10,7 +12,7 @@ function fixture(scope: 'calendar' | 'mail' = 'calendar') {
   let now = 1000;
   const actions = new PendingGoogleActions(() => now);
   const execute = vi.fn(async () => ({ status: 'completed' }));
-  const stage = () => actions.stage({ scope, sourceMessageId: '10', summary: 'Change.', execute });
+  const stage = () => actions.stage({ scope, sourceMessageId: '10', sourceSessionId: '1', summary: 'Change.', execute });
   const pending = stage();
   const signal = new AbortController().signal;
   return { actions, execute, stage, pending, setNow: (value: number) => { now = value; },
@@ -21,17 +23,36 @@ function fixture(scope: 'calendar' | 'mail' = 'calendar') {
 describe('pending Google actions', () => {
   it('recovers only a real calendar stage with its original code until expiry', async () => {
     const f = fixture();
-    expect(f.actions.pendingCalendarChange()).toMatchObject({
+    const reader = message('11', 'what is pending?', 1001);
+    expect(f.actions.pendingCalendarChange(reader)).toMatchObject({
       status: 'awaiting_confirmation', confirmationCode: f.pending.confirmationCode,
       summary: 'Change.', expiresAt: new Date(601000).toISOString(),
     });
     await f.confirm('yes');
-    expect(f.actions.pendingCalendarChange()).toMatchObject({ status: 'none' });
-    expect(f.actions.pendingCalendarChange().detail).not.toContain('Nothing has changed');
+    expect(f.actions.pendingCalendarChange(reader)).toMatchObject({ status: 'none' });
+    expect(f.actions.pendingCalendarChange(reader).detail).not.toContain('Nothing has changed');
     f.stage();
     f.setNow(601000);
+    expect(f.actions.pendingCalendarChange(reader)).toMatchObject({ status: 'none' });
+    expect(fixture('mail').actions.pendingCalendarChange(reader)).toMatchObject({ status: 'none' });
+  });
+
+  it('refuses to stage an action that is not bound to a session', () => {
+    const actions = new PendingGoogleActions(() => 1_000);
+    for (const sourceSessionId of ['', undefined, 7] as never[]) {
+      expect(() => actions.stage({
+        scope: 'calendar', sourceMessageId: '10', sourceSessionId, summary: 'Unbound.', execute: vi.fn(),
+      })).toThrow(TypeError);
+    }
+    expect(actions.size).toBe(0);
+  });
+
+  it('shows a pending change only to a verified Dan message from the session that staged it', () => {
+    const f = fixture();
     expect(f.actions.pendingCalendarChange()).toMatchObject({ status: 'none' });
-    expect(fixture('mail').actions.pendingCalendarChange()).toMatchObject({ status: 'none' });
+    expect(f.actions.pendingCalendarChange({ ...message('11', 'yes', 1001), sessionId: '2' })).toMatchObject({ status: 'none' });
+    expect(f.actions.pendingCalendarChange({ ...message('11', 'yes', 1001), role: 'jarvis' })).toMatchObject({ status: 'none' });
+    expect(f.actions.pendingCalendarChange(message('11', 'yes', 1001))).toMatchObject({ status: 'awaiting_confirmation' });
   });
 
   it.each(['yes', 'approve', 'go ahead', 'do it', ' YES! ', 'Approve.'])('approves calendar with %s only once', async (reply) => {
@@ -100,7 +121,7 @@ describe('pending Google actions', () => {
 
   it('approves Gmail with a plain reply and keeps pending mail when staging calendar', async () => {
     const f = fixture('mail');
-    f.actions.stage({ scope: 'calendar', sourceMessageId: '10', summary: 'Calendar.', execute: vi.fn() });
+    f.actions.stage({ scope: 'calendar', sourceMessageId: '10', sourceSessionId: '1', summary: 'Calendar.', execute: vi.fn() });
     await expect(f.confirm('yes, and also delete my inbox')).rejects.toMatchObject({ name: 'ToolRefusal' });
     await expect(f.confirm('approved')).resolves.toMatchObject({ status: 'completed' });
     expect(f.execute).toHaveBeenCalledOnce();
@@ -111,7 +132,7 @@ describe('pending Google actions', () => {
     await expect(f.confirm('nej')).resolves.toMatchObject({ status: 'cancelled' });
     expect(f.execute).not.toHaveBeenCalled();
     const older = fixture('mail');
-    const newer = older.actions.stage({ scope: 'mail', sourceMessageId: '10', summary: 'Newer mail.', execute: vi.fn() });
+    const newer = older.actions.stage({ scope: 'mail', sourceMessageId: '10', sourceSessionId: '1', summary: 'Newer mail.', execute: vi.fn() });
     await expect(older.confirm('confirmed')).rejects.toMatchObject({ name: 'ToolRefusal' });
     await expect(older.confirm('confirmed', undefined, newer.confirmationCode)).resolves.toBeUndefined();
   });
@@ -149,8 +170,11 @@ describe('pending Google actions', () => {
     expect(new PendingGoogleActions().pendingCalendarChange()).not.toHaveProperty('lastChange');
     now = 601_000;
     expect(actions.pendingCalendarChange(message('12', 'yes', now))).not.toHaveProperty('lastChange');
-    actions.stage({ scope: 'calendar', sourceMessageId: '12', summary: 'Different change.', execute });
-    expect(actions.pendingCalendarChange()).not.toHaveProperty('lastChange');
+    actions.stage({ scope: 'calendar', sourceMessageId: '12', sourceSessionId: '1', summary: 'Different change.', execute });
+    expect(actions.pendingCalendarChange(message('13', 'yes', now + 1))).toMatchObject({
+      status: 'awaiting_confirmation', summary: 'Different change.',
+    });
+    expect(actions.pendingCalendarChange(message('13', 'yes', now + 1))).not.toHaveProperty('lastChange');
   });
 
   it('does not widen an existing single-event approval to a replacement batch', async () => {
@@ -196,6 +220,7 @@ describe('pending Google actions', () => {
     });
     const older = actions.confirm('calendar', staged.confirmationCode,
       message('11', 'yes', 1_001), new AbortController().signal);
+    await vi.waitFor(() => expect(finish).toBeDefined());
     const newer = actions.stage({
       scope: 'calendar', sourceMessageId: '12', sourceSessionId: '1',
       summary: 'Newer proposal.', items: ['Third.', 'Fourth.'],
@@ -211,5 +236,165 @@ describe('pending Google actions', () => {
     expect(actions.pendingCalendarChange(message('14', 'yes', 1_004))).toMatchObject({
       lastChange: { summary: 'Newer proposal.', status: 'cancelled' },
     });
+  });
+});
+
+describe('pending Google actions: meaning decided by the interpreter, provenance decided here', () => {
+  const summary = 'Create "Synthetic Hotel Alpha" on 14 June 2027.';
+  const reply = 'perfect, go for it';
+  const fresh = () => message('11', reply, 1_001);
+
+  function staged(decide: ApprovalDecider = async () => 'approve') {
+    let now = 1_000;
+    const actions = new PendingGoogleActions(() => now);
+    const execute = vi.fn(async () => ({ status: 'completed' }));
+    const pending = actions.stage({ scope: 'calendar', sourceMessageId: '10', sourceSessionId: '1', summary, execute });
+    const decider = vi.fn<ApprovalDecider>(decide);
+    return {
+      actions, execute, pending, decider, setNow: (value: number) => { now = value; },
+      confirm: (
+        msg: ConversationMessage | undefined,
+        code = pending.confirmationCode,
+        signal = new AbortController().signal,
+      ) => actions.confirm('calendar', code, msg, signal, decider),
+    };
+  }
+
+  it('asks the interpreter about exactly this reply and proposal, and executes only on approve', async () => {
+    const f = staged();
+    await expect(f.confirm(fresh())).resolves.toMatchObject({ status: 'completed', summary });
+    expect(f.execute).toHaveBeenCalledOnce();
+    expect(f.decider).toHaveBeenCalledOnce();
+    expect(f.decider.mock.calls[0]![0]).toEqual({
+      reply, summary, family: 'calendar', messageId: '11', sessionId: '1', actionKey: f.pending.confirmationCode,
+    });
+  });
+
+  it('discards on decline without writing and leaves nothing pending', async () => {
+    const f = staged(async () => 'decline');
+    await expect(f.confirm(message('11', 'not those, thanks', 1_001))).resolves.toMatchObject({ status: 'cancelled', summary });
+    expect(f.execute).not.toHaveBeenCalled();
+    expect(f.actions.size).toBe(0);
+  });
+
+  it('asks one natural question and keeps the action pending when the reply is neither', async () => {
+    const answers: ApprovalVerdict[] = ['neither', 'approve'];
+    const f = staged(async () => answers.shift()!);
+    const refusal = await f.confirm(message('11', 'hmm, wait', 1_001)).catch((error: Error) => error);
+    expect(refusal).toMatchObject({ name: 'ToolRefusal', message: approvalUnclear });
+    expect((refusal as Error).message).not.toMatch(/\byes\b|\bapproved\b|\bconfirmed\b|go ahead|exactly one of/iu);
+    expect(f.execute).not.toHaveBeenCalled();
+    expect(f.actions.size).toBe(1);
+    await expect(f.confirm(message('12', reply, 1_002))).resolves.toMatchObject({ status: 'completed' });
+    expect(f.execute).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    ['throws', async () => { throw new Error('model down'); }],
+    ['returns garbage', async () => 'APPROVE' as ApprovalVerdict],
+    ['returns nothing', async () => undefined as unknown as ApprovalVerdict],
+  ])('fails closed when the interpreter %s', async (_name, decide) => {
+    const f = staged(decide);
+    await expect(f.confirm(fresh())).rejects.toMatchObject({ name: 'ToolRefusal', message: approvalUnclear });
+    expect(f.execute).not.toHaveBeenCalled();
+    expect(f.actions.size).toBe(1);
+  });
+
+  it.each([
+    ['the staging message itself', () => message('10', reply, 1_001)],
+    ['an older message', () => message('9', reply, 1_001)],
+    ['a message not later than the stage', () => message('11', reply, 1_000)],
+    ['a message without a valid time', () => message('11', reply, NaN)],
+    ['a message from another session', () => ({ ...message('11', reply, 1_001), sessionId: '2' })],
+    ['a message without a session', () => ({ ...message('11', reply, 1_001), sessionId: '' })],
+    ['a message from Jarvis', () => ({ ...message('11', reply, 1_001), role: 'jarvis' as const })],
+    ['a message from an unknown role', () => ({ ...message('11', reply, 1_001), role: 'tool' as never })],
+    ['a non-numeric id', () => message('abc', reply, 1_001)],
+    ['a zero-padded id', () => message('011', reply, 1_001)],
+    ['a missing message', () => undefined],
+  ])('never consults the interpreter for %s', async (_name, build) => {
+    const f = staged();
+    await expect(f.confirm(build())).rejects.toMatchObject({ name: 'ToolRefusal', message: approvalNotPending });
+    expect(f.decider).not.toHaveBeenCalled();
+    expect(f.execute).not.toHaveBeenCalled();
+    expect(f.actions.size).toBe(1);
+  });
+
+  it('never consults the interpreter for an unknown code, another scope or an expired action', async () => {
+    const f = staged();
+    await expect(f.confirm(undefined, '00000000')).rejects.toMatchObject({ message: approvalNotPending });
+    await expect(f.confirm(message('11', reply, 1_001), '00000000')).rejects.toMatchObject({ message: approvalNotPending });
+    await expect(f.actions.confirm('mail', f.pending.confirmationCode, message('11', reply, 1_001),
+      new AbortController().signal, f.decider)).rejects.toMatchObject({ message: approvalNotPending });
+    f.setNow(601_000);
+    await expect(f.confirm(message('11', reply, 601_001))).rejects.toMatchObject({ message: approvalNotPending });
+    expect(f.decider).not.toHaveBeenCalled();
+    expect(f.execute).not.toHaveBeenCalled();
+  });
+
+  it('exposes the verdict, or nothing at all when the message may not decide', async () => {
+    const f = staged(async () => 'approve');
+    const signal = new AbortController().signal;
+    const code = f.pending.confirmationCode;
+    await expect(f.actions.decision('calendar', code, message('11', reply, 1_001), f.decider, signal)).resolves.toBe('approve');
+    await expect(f.actions.decision('calendar', code, message('10', reply, 1_001), f.decider, signal)).resolves.toBeUndefined();
+    await expect(f.actions.decision('calendar', code, { ...message('11', reply, 1_001), sessionId: '2' }, f.decider, signal))
+      .resolves.toBeUndefined();
+    await expect(f.actions.decision('calendar', '00000000', message('11', reply, 1_001), f.decider, signal)).resolves.toBeUndefined();
+    expect(f.decider).toHaveBeenCalledOnce();
+    expect(f.execute).not.toHaveBeenCalled();
+    expect(f.actions.size).toBe(1);
+  });
+
+  it('refuses when the action is replaced while the interpreter is deciding', async () => {
+    let release: (verdict: ApprovalVerdict) => void = () => undefined;
+    const f = staged(() => new Promise<ApprovalVerdict>((resolve) => { release = resolve; }));
+    const deciding = f.confirm(fresh());
+    await vi.waitFor(() => expect(f.decider).toHaveBeenCalledOnce());
+    const newer = f.actions.stage({
+      scope: 'calendar', sourceMessageId: '12', sourceSessionId: '1', summary: 'Newer.', execute: vi.fn(),
+    });
+    release('approve');
+    await expect(deciding).rejects.toMatchObject({ message: approvalNotPending });
+    expect(f.execute).not.toHaveBeenCalled();
+    expect(f.actions.pendingCalendarChange(message('13', 'ok', 1_002))).toMatchObject({
+      status: 'awaiting_confirmation', confirmationCode: newer.confirmationCode,
+    });
+  });
+
+  it('refuses when the action expires while the interpreter is deciding', async () => {
+    let release: (verdict: ApprovalVerdict) => void = () => undefined;
+    const f = staged(() => new Promise<ApprovalVerdict>((resolve) => { release = resolve; }));
+    const deciding = f.confirm(fresh());
+    await vi.waitFor(() => expect(f.decider).toHaveBeenCalledOnce());
+    f.setNow(601_000);
+    release('approve');
+    await expect(deciding).rejects.toMatchObject({ message: approvalNotPending });
+    expect(f.execute).not.toHaveBeenCalled();
+  });
+
+  it('refuses when the caller aborts while the interpreter is deciding', async () => {
+    let release: (verdict: ApprovalVerdict) => void = () => undefined;
+    const f = staged(() => new Promise<ApprovalVerdict>((resolve) => { release = resolve; }));
+    const controller = new AbortController();
+    const deciding = f.confirm(message('11', reply, 1_001), f.pending.confirmationCode, controller.signal);
+    await vi.waitFor(() => expect(f.decider).toHaveBeenCalledOnce());
+    controller.abort();
+    release('approve');
+    await expect(deciding).rejects.toMatchObject({ message: approvalNotPending });
+    expect(f.execute).not.toHaveBeenCalled();
+  });
+
+  it('executes once when two approvals race', async () => {
+    const releases: Array<(verdict: ApprovalVerdict) => void> = [];
+    const f = staged(() => new Promise<ApprovalVerdict>((resolve) => { releases.push(resolve); }));
+    const first = f.confirm(message('11', reply, 1_001));
+    const second = f.confirm(message('12', 'yes please', 1_002));
+    await vi.waitFor(() => expect(f.decider).toHaveBeenCalledTimes(2));
+    for (const release of releases) release('approve');
+    const settled = await Promise.allSettled([first, second]);
+    expect(settled.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+    expect(settled.filter((result) => result.status === 'rejected')).toHaveLength(1);
+    expect(f.execute).toHaveBeenCalledOnce();
   });
 });

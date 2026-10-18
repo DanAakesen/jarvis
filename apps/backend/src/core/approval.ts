@@ -22,8 +22,9 @@ const approvePattern = new RegExp(`^(?:${approveWord})(?:[\\s,.!;-]+(?:${approve
 const declinePattern = new RegExp(`^(?:${declineWord})(?:[\\s,.!;-]+(?:${declineWord}|${filler}))*[\\s.!]*$`, 'iu');
 
 /**
- * Dan approves or declines a staged action with a short plain reply ("yes", "approved", "confirmed", "go ahead", "ja"),
- * never an exact generated phrase. A reply that asks for anything else is neither, so it can never approve by accident.
+ * Deterministic fast path only: a short plain reply such as "yes" or "nej" needs no model. Anything else, including
+ * every natural sentence, is decided by the bounded interpreter in approval-interpreter.ts. A reply that is not
+ * recognised here is undefined, never an approval.
  */
 export function classifyApprovalReply(text: string | undefined): ApprovalReply | undefined {
   if (typeof text !== 'string') return undefined;
@@ -35,7 +36,15 @@ export function classifyApprovalReply(text: string | undefined): ApprovalReply |
 }
 
 export const approvalInstruction =
-  'Reply yes, approved, confirmed or go ahead to approve; no or cancel to decline, in a new message within ten minutes.';
+  'Ask Dan in your own words whether he wants this done; it happens only after his later reply clearly agrees. Never ask him to repeat a code or phrase.';
+
+/** Returned when Dan's later message is verified but does not clearly approve or decline. */
+export const approvalUnclear =
+  'No change was made. Dan’s latest message did not clearly approve or decline the pending change. Ask him one short, natural question about it; never ask him to repeat a code or phrase.';
+
+/** Returned when nothing can be approved: missing, expired, or no later verified Dan reply. */
+export const approvalNotPending =
+  'No change was made. The pending change is missing, has expired, or Dan has not replied after it yet. If he still wants it, show him the proposal again and ask in your own words.';
 
 export function isSimpleApproval(value: string): boolean {
   return classifyApprovalReply(value) === 'approve';

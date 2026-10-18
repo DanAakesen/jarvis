@@ -1,6 +1,9 @@
 import { randomInt } from 'node:crypto';
 import type { ConversationMessage } from '../core/conversation-store.js';
-import { approvalInstruction, classifyApprovalReply } from '../core/approval.js';
+import { approvalInstruction, approvalNotPending, approvalUnclear } from '../core/approval.js';
+import {
+  fastApprovalDecider, safeDecision, type ApprovalDecider, type ApprovalVerdict,
+} from '../core/approval-interpreter.js';
 import { ToolRefusal } from '../core/tool-registry.js';
 
 const ACTION_TTL_MS = 10 * 60_000;
@@ -14,9 +17,10 @@ interface PendingAction {
   readonly code: string;
   readonly scope: GoogleActionScope;
   readonly sourceMessageId: string;
+  /** Only a later Dan message in this same session can decide the action. Required, so no stage is ever unbound. */
+  readonly sourceSessionId: string;
   readonly createdAt: number;
   readonly summary: string;
-  readonly sourceSessionId?: string;
   readonly items?: readonly string[];
   readonly execute: (signal: AbortSignal) => Promise<unknown>;
 }
@@ -25,7 +29,7 @@ export class PendingGoogleActions {
   private readonly actions = new Map<string, PendingAction>();
   private calendarProposal: PendingAction | undefined;
   private calendarReceipt: {
-    readonly sourceSessionId?: string;
+    readonly sourceSessionId: string;
     readonly expiresAt: number;
     readonly result: Record<string, unknown>;
   } | undefined;
@@ -40,6 +44,9 @@ export class PendingGoogleActions {
     readonly items?: readonly { readonly summary: string }[];
   } {
     this.removeExpired();
+    if (typeof input.sourceSessionId !== 'string' || input.sourceSessionId.length === 0) {
+      throw new TypeError('A pending Google action must be bound to the session that staged it');
+    }
     if (this.actions.size >= MAX_PENDING_ACTIONS) {
       throw new Error('Too many pending Google actions');
     }
@@ -68,30 +75,69 @@ export class PendingGoogleActions {
     };
   }
 
-  async confirm(
+  /**
+   * Provenance only: the action exists in this scope and the message is a verified, later, Dan-authored message in the
+   * same session and window. Nothing here looks at what the message says.
+   */
+  private eligible(
     scope: GoogleActionScope,
     code: string,
     message: ConversationMessage | undefined,
-    signal: AbortSignal,
-  ): Promise<unknown> {
+  ): { readonly action: PendingAction; readonly message: ConversationMessage } | undefined {
     this.removeExpired();
     const action = this.actions.get(code);
-    const reply = classifyApprovalReply(message?.text);
     if (!action || action.scope !== scope || !message || message.role !== 'dan' ||
         !/^[1-9]\d{0,18}$/u.test(message.id) ||
         !/^[1-9]\d{0,18}$/u.test(action.sourceMessageId) ||
         message.id === action.sourceMessageId ||
         BigInt(message.id) <= BigInt(action.sourceMessageId) ||
-        (action.sourceSessionId !== undefined && message.sessionId !== action.sourceSessionId) ||
-        !Number.isFinite(message.at.getTime()) || message.at.getTime() <= action.createdAt ||
-        reply === undefined) {
-      throw new ToolRefusal(`No ${scope === 'calendar' ? 'calendar' : 'Google'} change was made. Dan must reply yes, approved, confirmed or go ahead (or no/cancel to decline) in a later message for the latest pending action within ten minutes. Otherwise stage the action again.`);
+        !message.sessionId || message.sessionId !== action.sourceSessionId ||
+        !Number.isFinite(message.at.getTime()) || message.at.getTime() <= action.createdAt) {
+      return undefined;
     }
+    return { action, message };
+  }
+
+  /** What Dan's later message means for this pending action, or undefined when it may not decide it at all. */
+  async decision(
+    scope: GoogleActionScope,
+    code: string,
+    message: ConversationMessage | undefined,
+    decide: ApprovalDecider,
+    signal: AbortSignal,
+  ): Promise<ApprovalVerdict | undefined> {
+    const eligible = this.eligible(scope, code, message);
+    if (!eligible) return undefined;
+    return safeDecision(decide, {
+      reply: eligible.message.text, summary: eligible.action.summary, family: scope,
+      messageId: eligible.message.id, sessionId: eligible.message.sessionId, actionKey: code,
+    }, signal);
+  }
+
+  async confirm(
+    scope: GoogleActionScope,
+    code: string,
+    message: ConversationMessage | undefined,
+    signal: AbortSignal,
+    decide: ApprovalDecider = fastApprovalDecider,
+  ): Promise<unknown> {
+    const eligible = this.eligible(scope, code, message);
+    if (!eligible) throw new ToolRefusal(approvalNotPending);
+    const { action } = eligible;
+    const verdict = await safeDecision(decide, {
+      reply: eligible.message.text, summary: action.summary, family: scope,
+      messageId: eligible.message.id, sessionId: eligible.message.sessionId, actionKey: code,
+    }, signal);
+    // The interpreter awaited: another confirmation may have consumed, replaced or expired this action meanwhile.
+    // Nothing below this check awaits before the action is consumed, so exactly one confirmation can proceed.
+    this.removeExpired();
+    if (signal.aborted || this.actions.get(code) !== action) throw new ToolRefusal(approvalNotPending);
+    if (verdict === 'neither') throw new ToolRefusal(approvalUnclear);
     this.actions.delete(code);
     const remember = (result: Record<string, unknown>) => {
       if (scope === 'calendar' && this.calendarProposal === action) {
         this.calendarReceipt = {
-          sourceSessionId: action.sourceSessionId ?? message.sessionId,
+          sourceSessionId: action.sourceSessionId,
           expiresAt: action.createdAt + ACTION_TTL_MS,
           result: structuredClone({
             ...result, ...(action.items ? { sourceMessageId: action.sourceMessageId } : {}),
@@ -100,7 +146,7 @@ export class PendingGoogleActions {
       }
       return result;
     };
-    if (reply === 'decline') {
+    if (verdict === 'decline') {
       return remember({
         status: 'cancelled', summary: action.summary,
         detail: `The pending ${scope === 'calendar' ? 'calendar' : 'Google'} change was discarded. No change was made.`,
@@ -129,8 +175,8 @@ export class PendingGoogleActions {
   /** Recover the real process-local stage after private tool results leave turn history. */
   pendingCalendarChange(message?: ConversationMessage) {
     this.removeExpired();
-    const visible = (sourceSessionId?: string) =>
-      sourceSessionId === undefined || (message?.role === 'dan' && message.sessionId === sourceSessionId);
+    const visible = (sourceSessionId: string) =>
+      message?.role === 'dan' && Boolean(message.sessionId) && message.sessionId === sourceSessionId;
     const action = [...this.actions.values()].find((candidate) =>
       candidate.scope === 'calendar' && visible(candidate.sourceSessionId));
     return action ? {

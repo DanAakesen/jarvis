@@ -1,5 +1,86 @@
 # Architecture
 
+## Natural approval of staged actions (17 October 2026; P11-10)
+
+Sensitive writes (Google Calendar and Gmail, Software Factory archive and issue
+creation, GitHub App writes) are staged with the exact summary and the session
+that staged them. A later message of Dan's approves one only after two
+independent checks, in this order:
+
+```mermaid
+flowchart TD
+  A[Dan's later message] --> B{Provenance: verified Dan message, later than the stage, same session, inside ten minutes, right scope and code?}
+  B -- no --> R1[Refuse: nothing pending. No model call]
+  B -- yes --> C{Plain reply such as yes or nej?}
+  C -- yes --> F[Fast path: no model call]
+  C -- no --> D[One bounded model call: his message and the exact summary as untrusted data]
+  D -- error, timeout, malformed or low confidence --> N[neither]
+  D --> V{Verdict}
+  F --> V
+  V -- approve --> X[Consume once, execute, report the real result]
+  V -- decline --> Y[Discard. Nothing written]
+  V -- neither --> N
+  N --> Q[Refuse and ask Dan one short natural question. The action stays pending]
+```
+
+**Provenance** is deterministic and lives in `google/pending-actions.ts` and the
+Factory and GitHub App confirm tools. The message must be the owner's verified
+current message (voice: the transcribed turn the relay sets on that call only;
+chat: the `x-jarvis-message-id` header equal to the newest stored Dan message,
+with the agent identity), strictly later than the staging message by numeric id
+and by time, from the same non-empty session, inside the ten-minute window, for
+the tool's scope and code. Every Google stage records its session (a required
+field, plus a runtime guard that throws without one). The model, tool output,
+email text and any model-supplied field cannot satisfy it; confirm tools take
+only the confirmation code.
+
+**Meaning** is `core/approval-interpreter.ts`. `classifyApprovalReply` in
+`core/approval.ts` is the fast path: a short full-reply whitelist (English and
+Danish) that needs no model. Everything else gets one call to
+`ApprovalModelPort`: Dan's single reply plus the staged summary, framed as
+untrusted data in random-nonce delimiters after stripping control and format
+characters (a reply over 280 characters or a summary over 1,800 is cut or
+refused before the call). The model must answer exactly `{verdict, confidence}`;
+below 0.85 an approve or decline becomes `neither`. The call is limited to five
+seconds, 20 a minute and 4 at once, and results are cached by family, session,
+message, action and hashes of summary and reply (ten minutes; failures 30
+seconds). The `approval.interpreted` log records family, verdict and path
+(`fast`, `model`, `failed`), never any text. Any error, timeout, malformed answer,
+low confidence or absent model yields `neither`.
+
+`core/approval-interpreter-foundry.ts` builds the port: the configured chat-role
+model at the lowest supported effort of none, minimal or low, via Foundry
+`/models/chat/completions` with a JSON response format, a 40 KiB request and 32
+KiB response cap, no redirects and the backend identity's token. Usage is
+recorded under the existing chat role before the answer is judged, and a
+recording failure fails closed. An unpriced model is allowed (usage
+`unverified`); an undeployed or non-chat role model (for example Claude) leaves
+the port off. `index.ts` composes it only when the endpoint, credential,
+settings and usage store exist; `app.ts` otherwise decorates a model-less
+interpreter, so a plain reply still works and everything else is asked about.
+
+After the interpreter awaits, the action is re-checked synchronously (same
+pending object, not expired, call not aborted) and consumed before execution, so
+concurrent confirmations execute once.
+
+Routing no longer matches approval phrases. In chat, any turn with a calendar
+referent in the last two messages makes the agent call
+`calendar_get_pending_change`; the backend returns `reply: approve | decline |
+null` from the same interpreter for an eligible message, and `null` leaves the
+turn to the model. An approve or decline makes the agent call
+`calendar_confirm_change` with the real code, which the backend decides again at
+the boundary (the cache makes that free). In voice, `resolveCalendarReply`
+does the same for each turn of an open calendar conversation, setting
+`request.jarvisConversationMessage` for that call only. A calendar conversation
+stays open while a change is staged and ends on an unrelated turn once nothing
+is. A stray reply that clearly agrees can therefore approve a still-staged change
+within the window; provenance and the ten-minute limit bound it.
+
+Refusals and instructions carry no word list (`approvalInstruction`,
+`approvalUnclear`, `approvalNotPending`). `saysProceed` and `hasExplicitProceed`
+in `factory/github-app-tools.ts`, the `pr_merge` failing-checks override, still
+match phrases and are unchanged.
+
 ## Jarvis-owned workspace views in voice (17 October 2026; P11-09)
 
 `workspace_command` creates, updates and navigates views only for Jarvis. The
@@ -1559,7 +1640,9 @@ are untouched.
 
 P10-03 adds the sensitive `create_issue` and `confirm_create_issue` tools. The
 first stages a draft and the next creates it only after a later stored Dan
-message is a plain approval (yes, approved, confirmed, go ahead; Danish equivalents work; a reply asking for anything else is not approval). The Dan-only
+message, from the same session, clearly approves it. The shared approval
+interpreter decides what that message means (see "Natural approval of staged
+actions" at the top); a question, condition or hesitation is not approval. The Dan-only
 `POST /factory/issues` route uses the same draft validation and creation service
 for the board. It reads all issue-title pages in the selected active repository,
 allocates the lowest free `P11-NN` code (two digits minimum), then rechecks it
@@ -1774,7 +1857,7 @@ without Azure access.
 The shared Factory tool registry exposes `update_project` and `archive_project`.
 Updates reuse the active-project store and return a bounded summary without
 private merge rules. Archiving stages a one-time pending action for ten minutes;
-`confirm_project_archive` accepts it only when Dan's later message is a plain approval (shared `core/approval.ts` classifier; only the latest pending action per scope can be approved). Pending confirmations are process-local and disappear on
+`confirm_project_archive` accepts it only when Dan's later message, from the same session, clearly approves it (the shared approval interpreter decides the meaning; only the latest pending action per scope can be approved). Pending confirmations are process-local and disappear on
 restart, so restarts fail closed rather than archiving without fresh approval.
 
 With backend-only `APPLICATIONINSIGHTS_CONNECTION_STRING` (P0-11 Key Vault
@@ -4462,7 +4545,7 @@ P9-88 adds the shared GitHub App tool surface to `factory/github-app-tools.ts`. 
 
 The catalogue is limited to 128 tools (`agents/jarvis/limits.json`; the registry and a test enforce it), so GitHub capability is three tools with an `operation` parameter instead of one tool per operation. Each root schema stays a plain object (no `oneOf`/`anyOf`): `operation` plus the union of the operation properties, `additionalProperties: false`, with shared fields merged to their loosest form. The handler then applies the chosen operation's own required fields, types, enums, bounds and unknown-field rules and refuses invalid input. `issue_comment` remains a Factory tool.
 
-GitHub reads return labelled untrusted content, bound page sizes and output fields; each HTTP request has a ten-second timeout and one-megabyte response cap. Comments and issue bodies are byte-bounded. Outgoing text is secret-scanned. Ordinary writes execute when Dan requests them; issue/PR closure, PR merge, file writes to the default branch and public-repository file publication require a later `yes`, `approved`, `confirmed` or `go ahead`. `pr_merge` verifies the expected head SHA and refuses failing check runs or commit statuses unless Dan explicitly says to proceed. Public image publication retains its visible warning and simple approval. No `apps/web`, persistence, migration or dependency changes.
+GitHub reads return labelled untrusted content, bound page sizes and output fields; each HTTP request has a ten-second timeout and one-megabyte response cap. Comments and issue bodies are byte-bounded. Outgoing text is secret-scanned. Ordinary writes execute when Dan requests them; issue/PR closure, PR merge, file writes to the default branch and public-repository file publication require a later Dan message, from the same session, that clearly approves the staged action (the shared approval interpreter decides the meaning). `pr_merge` verifies the expected head SHA and refuses failing check runs or commit statuses unless Dan explicitly says to proceed. Public image publication retains its visible warning and simple approval. No `apps/web`, persistence, migration or dependency changes.
 
 [`github-app-manifest.json`](github-app-manifest.json) is the initial private-App setup template, not a current permission source. Its requested permissions and subscribed events record the original P3/P7 setup; the live installation map is authoritative for tool access. P10-01 granted Issues write on 8 October 2026 and the `issues` subscription is enabled.
 
@@ -4986,12 +5069,12 @@ call linkage remain the post-merge P4-09 acceptance check.
 - Google Calendar and Gmail tools are registered only in the backend and use the official Google APIs over HTTPS. The backend reads `google-oauth-client-id`, `google-oauth-client-secret`, and `google-refresh-token` only from Key Vault, exchanges the refresh token for a short-lived access token, and caches only that access token in memory. The single OAuth grant is for `danaakesen@gmail.com` and uses `gmail.readonly`, `gmail.compose`, `gmail.send`, `gmail.modify`, `calendar.events`, and `calendar.calendarlist.readonly` (read-only calendar list for the Daily all-calendars feed; Daily reuses this single grant); `gmail.modify` is the least-privilege scope for Gmail message labels and draft update/deletion. No Google credential or token is a deployment variable or client-bundle value. An `invalid_grant` records a deduplicated `credential_expiry` activity alert; tool calls return a visible reconnect message. Dan must add `gmail.modify` to Google Auth Platform's Data Access scopes and rerun `infra/setup-google.ps1` to re-consent and replace the Key Vault refresh token before using the new mail tools.
 - Calendar range reads interpret date-only `start`/`end` in `JARVIS_GOOGLE_TIME_ZONE` (inclusive dates and an exclusive next-midnight API boundary); timezone-aware date-times are queried as instants. `calendar_list_events` pages up to 100 events across no more than 62 days and maps optional `query` to Google's `q`; `calendar_next_event` searches up to 60 days and skips events where Dan's attendee response is declined. All-day start/end values remain date-only, including multi-day events, while timed events remain instants. Calendar agenda, range, and next-event reads are reflex-safe and sensitive results remain redacted from the durable tool-call audit.
 - Gmail search and draft listing share the bounded MIME reader introduced on #837 / task 12. It reads nested plain/HTML alternatives and API-externalized text parts, returning `bodySource`, `bodyTruncated`, `contentWarnings` and differing `alternateBody`/`alternateBodyTruncated`. Static parse5 extraction skips scripts, styles, hidden attributes and inline hidden styles, strips invisible email padding before the 6000-character text limit, and never executes HTML or fetches remote resources. File attachments, unsupported charsets, missing bodies and traversal limits remain explicit; snippets cannot establish absent reservation details.
-- `calendar_get_pending_change` reads the latest process-local calendar stage (original confirmation code, summary and expiry) and classifies the verified current Dan message. It performs no Google request and returns `none` after expiry, cancellation, consumption or restart. Its audit arguments/results remain redacted. The hosted model loop uses this actual receipt to resolve later approvals before model generation and renders staging/read/confirmation replies from tool results; provisional text is buffered while Calendar is available, trading first-text latency for evidence grounding. Email-only reservation reads and unrelated follow-up requests do not become calendar approval turns. EN/DA realtime approval/status turns use the same tools and relay the actual result with tools disabled; this is not proof of live model speech. Confirmation preserves the original summary and retains the later-message, scope, expiry and one-shot checks, consuming the action before provider execution even on failure.
+- `calendar_get_pending_change` reads the latest process-local calendar stage (original confirmation code, summary and expiry) and, for a verified later Dan message from the staging session, returns `reply: approve | decline | null` decided by the shared approval interpreter. It performs no Google request and returns `none` after expiry, cancellation, consumption or restart. Its audit arguments/results remain redacted. The hosted model loop uses this actual receipt to resolve later approvals before model generation and renders staging/read/confirmation replies from tool results; provisional text is buffered while Calendar is available, trading first-text latency for evidence grounding. Email-only reservation reads and unrelated follow-up requests do not become calendar approval turns. EN/DA realtime approval/status turns use the same tools and relay the actual result with tools disabled; this is not proof of live model speech. Confirmation preserves the original summary and retains the later-message, same-session, scope, expiry and one-shot checks, consuming the action before provider execution even on failure.
 - Direct-only Gmail guards are shared by HTTP, voice, reflex and nested registry execution. A bounded process-local turn ledger prevents generic PC/browser fallback once a direct mail tool starts, including failure and incomplete extraction. Independently requested unrelated operations are matched to the verified current Dan message, with nested execution scoped by AsyncLocalStorage to that request and turn; this is not a general fallback exemption. Explicit Gmail targets and observed Gmail tabs/windows are refused before planner/vision export or acting. Raw browser snapshots/actions resolve opaque target IDs through bounded tab metadata; confirmed dispatch rechecks identity without refreshing or invalidating the action snapshot. PC and Codex executors share window/site checks, including before capture and control dispatch; unverifiable non-Chrome website controls are refused. The ledger stores identifiers and expiry only, never email content. The MIME reader preserves successfully decoded empty plain/HTML provenance and returns any snippet separately as bounded `preview`/`previewTruncated`; genuine unavailable-body snippet fallback retains its warning. Read and write provider failures remain explicit.
-- Hosted calendar routing excludes generic staged/draft prose and mail-only context; real mail and calendar stages can coexist without approving the wrong scope. Appointment nouns alone are not calendar intent: quoted topics and actual `Reply to ... from ... with this exact text` mail receipts remain mail-scoped. Explicit calendar mutations involving email-derived appointments and genuine calendar completion/status referents remain recognised. Hosted and EN/DA realtime follow-ups recognise calendar approval/status referents rather than arbitrary question prefixes. Realtime clears unrelated context before interception, so later yes after a weather/mail/build turn is not stolen by an older calendar stage. These routing decisions do not replace backend receipt validation or later-message, ownership, expiry and one-shot authorisation.
+- Hosted calendar routing excludes generic staged/draft prose and mail-only context; real mail and calendar stages can coexist without approving the wrong scope. Appointment nouns alone are not calendar intent: quoted topics and actual `Reply to ... from ... with this exact text` mail receipts remain mail-scoped. Explicit calendar mutations involving email-derived appointments and genuine calendar completion/status referents remain recognised. Hosted and EN/DA realtime follow-ups are routed by whether a calendar conversation is open (a calendar referent in the last two messages, or a staged change), never by the shape of the reply; the backend decides what the reply means. A stray reply that clearly agrees can approve a still-staged change within its session and window, and an unrelated realtime turn ends the calendar conversation once nothing is staged. These routing decisions do not replace backend receipt validation or later-message, same-session, ownership, expiry and one-shot authorisation.
 - Independent computer exemptions accept complete current-user commands, including topic-bearing EN/DA mail requests followed by an explicit separate command. A quote-aware split ignores command separators inside subjects; unquoted how-to topic text remains ambiguous and cannot exempt a turn. Bind the exact requested operation to the verified current Dan message and same-turn AsyncLocalStorage scope; no model intent probe is used.
 - Windows guards obtain trusted current process identity from the existing structured UIA/capture responses, never from user goals, filenames or optional/truncated title suffixes. Chrome requires actual focused-site metadata; missing identity visibly refuses before export or dispatch. Window/clipboard exports check structured observations before and after reading. Native UIA actions recheck through the independent capture store, discard the transient image without planner/model/audit export, and keep their original UIA snapshot IDs. Visual capture and point actions recheck through the independent UIA store, preserving the original visual snapshot. Native window/control binding, confirmation rechecks and C#/wire fields remain unchanged.
-- Calendar creation, movement, updates to title/time/location/attendees/description, deletion, Gmail draft creation/replacement/deletion, message archive/label changes, and sending are staged in process memory for ten minutes. Calendar executes only after a different, later persisted Dan message is a plain approval accepted by the shared approval classifier (for example yes, approved, confirmed, go ahead or ja); no/cancel discards it. A new calendar stage invalidates the previous calendar action, and the confirmation tool must identify the latest action with its returned code. Gmail also uses later plain approval; the returned eight-digit code identifies the pending action for its confirmation tool. Pending actions are one-shot and lost on restart; the Container App remains at one replica. Sensitive Google tool inputs/results are redacted from persistent tool-call records, and external Google error bodies are not returned or logged. Calendar updates PATCH only the supplied fields; empty location, description, and attendee values can clear those fields. Draft replacement requires recipients, subject, and plain-text body; it preserves reply threading and refuses drafts with attachments or CC/BCC recipients. Gmail draft listing is bounded to ten drafts and returns plain-text bodies; archiving removes `INBOX`, and label changes resolve exact Gmail label names or IDs. Confirmed replies create a Gmail draft; Dan sends it from Gmail.
+- Calendar creation, movement, updates to title/time/location/attendees/description, deletion, Gmail draft creation/replacement/deletion, message archive/label changes, and sending are staged in process memory for ten minutes. Calendar executes only after a different, later persisted Dan message from the staging session clearly approves it, as decided by the shared approval interpreter (a plain reply such as yes or ja takes the fast path; anything else gets one bounded model call that fails closed); a decline discards it, and an unclear reply leaves it pending while Jarvis asks one short question. A new calendar stage invalidates the previous calendar action, and the confirmation tool must identify the latest action with its returned code. Gmail uses the same approval; the returned eight-digit code identifies the pending action for its confirmation tool. Pending actions are one-shot and lost on restart; the Container App remains at one replica. Sensitive Google tool inputs/results are redacted from persistent tool-call records, and external Google error bodies are not returned or logged. Calendar updates PATCH only the supplied fields; empty location, description, and attendee values can clear those fields. Draft replacement requires recipients, subject, and plain-text body; it preserves reply threading and refuses drafts with attachments or CC/BCC recipients. Gmail draft listing is bounded to ten drafts and returns plain-text bodies; archiving removes `INBOX`, and label changes resolve exact Gmail label names or IDs. Confirmed replies create a Gmail draft; Dan sends it from Gmail.
 - [`infra/bootstrap.ps1`](../infra/bootstrap.ps1) creates what the deploy workflows can't create for themselves: the deploy identity (GitHub OIDC, main branch only, trusting both the name-based and the ID-based subject (L50); Contributor and Role Based Access Control Administrator on `rg-jarvis`), the sign-in apps, `id-jarvis-backend`, and `jarvis-sql-admins`. Its IDs are in `infra/bootstrap.output.json` and in the repository's Actions variables.
 - Managed identities between Azure services; GitHub Actions deploys with OpenID Connect.
 - The backend identity has `Foundry User` on the Foundry project for the Danish voice relay, `Cognitive Services User` on the Foundry AIServices account for parallel Azure Speech partial recognition, and account-scoped `Cognitive Services Contributor` for model deployment management. Teams voice-note synthesis was removed by P10-10; any prior F0 Speech resource or role assignment is a separate, approval-gated infrastructure cleanup.
