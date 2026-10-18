@@ -277,7 +277,9 @@ describe('committed domain schema (groups 1-8)', () => {
     await store.items.applyFeedback(changed.id, 'snooze', '2026-10-20T06:00:00.000Z');
     expect(await store.items.list('open', 20, now)).toEqual([]);
     expect(await store.items.list('open', 20, new Date('2026-10-20T06:00:00.000Z'))).toHaveLength(1);
-    expect(await store.items.get(changed.id, true)).toMatchObject(changed);
+    expect(await store.items.get(changed.id, true)).toMatchObject({
+      ...changed, state: 'snoozed', snoozedUntil: '2026-10-20T06:00:00.000Z',
+    });
 
     const slot = '2026-10-20T07:00';
     const competing = await Promise.all([
@@ -294,7 +296,7 @@ describe('committed domain schema (groups 1-8)', () => {
     expect(await store.runs.finish(firstClaim.run.id, firstClaim.generation, 'done', null, 1, later)).toBe(false);
     expect(await store.runs.finish(nextClaim!.run.id, nextClaim!.generation, 'done', null, 1, later)).toBe(true);
     expect(await store.runs.countManualSince(now)).toBe(1);
-    const interrupted = await store.runs.claim({ trigger: 'manual', slot: null, now: later });
+    const interrupted = await store.runs.claim({ trigger: 'manual', slot: null, now: new Date(later.getTime() + 1_000) });
     expect(await store.runs.markInterruptedOnStartup()).toBe(1);
     expect(await store.runs.finish(interrupted!.run.id, interrupted!.generation, 'done', null, 0, later)).toBe(false);
     expect(await store.runs.latest()).toMatchObject({ status: 'failed', reason: 'interrupted_by_restart' });

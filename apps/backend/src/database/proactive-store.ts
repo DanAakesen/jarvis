@@ -326,14 +326,14 @@ export function createProactiveStore(pool: sql.ConnectionPool, ownerObjectId: st
               WHERE owner_object_id = @owner AND status = N'running' AND lease_until <= @now;
             IF EXISTS (SELECT 1 FROM dbo.proactive_runs WITH (UPDLOCK, HOLDLOCK)
               WHERE owner_object_id = @owner AND status = N'running' AND lease_until > @now)
-              SELECT CAST(NULL AS uniqueidentifier) AS id, CAST(NULL AS nvarchar(16)) AS trigger,
+              SELECT CAST(NULL AS uniqueidentifier) AS id, CAST(NULL AS nvarchar(16)) AS [trigger],
                 CAST(NULL AS nvarchar(16)) AS slot_key, CAST(NULL AS nvarchar(16)) AS status,
                 CAST(NULL AS nvarchar(64)) AS reason, CAST(NULL AS datetime2) AS started_at,
                 CAST(NULL AS datetime2) AS finished_at, CAST(NULL AS int) AS finding_count,
                 CAST(NULL AS bigint) AS claim_generation;
             ELSE IF @slot IS NOT NULL AND EXISTS (SELECT 1 FROM dbo.proactive_runs WITH (UPDLOCK, HOLDLOCK)
               WHERE owner_object_id = @owner AND slot_key = @slot)
-              SELECT CAST(NULL AS uniqueidentifier) AS id, CAST(NULL AS nvarchar(16)) AS trigger,
+              SELECT CAST(NULL AS uniqueidentifier) AS id, CAST(NULL AS nvarchar(16)) AS [trigger],
                 CAST(NULL AS nvarchar(16)) AS slot_key, CAST(NULL AS nvarchar(16)) AS status,
                 CAST(NULL AS nvarchar(64)) AS reason, CAST(NULL AS datetime2) AS started_at,
                 CAST(NULL AS datetime2) AS finished_at, CAST(NULL AS int) AS finding_count,
@@ -341,7 +341,7 @@ export function createProactiveStore(pool: sql.ConnectionPool, ownerObjectId: st
             ELSE
               INSERT dbo.proactive_runs
                 (id, owner_object_id, [trigger], slot_key, status, started_at, finding_count, lease_until, claim_generation)
-              OUTPUT inserted.id, inserted.[trigger] AS trigger, inserted.slot_key, inserted.status, inserted.reason,
+              OUTPUT inserted.id, inserted.[trigger], inserted.slot_key, inserted.status, inserted.reason,
                 inserted.started_at, inserted.finished_at, inserted.finding_count, inserted.claim_generation
               VALUES (@id, @owner, @trigger, @slot, N'running', @now, 0, @lease, 1);`);
           await transaction.commit();
@@ -380,7 +380,7 @@ export function createProactiveStore(pool: sql.ConnectionPool, ownerObjectId: st
       async latest() {
         const { recordset } = await databaseReadRequest(pool)
           .input('owner', sql.UniqueIdentifier, owner)
-          .query<RunRow>(`SELECT TOP (1) id, [trigger] AS trigger, slot_key, status, reason, started_at,
+          .query<RunRow>(`SELECT TOP (1) id, [trigger], slot_key, status, reason, started_at,
             finished_at, finding_count, claim_generation
             FROM dbo.proactive_runs WHERE owner_object_id = @owner ORDER BY started_at DESC, id DESC;`);
         return recordset[0] ? mapRun(recordset[0]) : null;
@@ -389,7 +389,7 @@ export function createProactiveStore(pool: sql.ConnectionPool, ownerObjectId: st
         const { recordset } = await databaseReadRequest(pool)
           .input('owner', sql.UniqueIdentifier, owner)
           .input('limit', sql.Int, limit)
-          .query<RunRow>(`SELECT TOP (@limit) id, [trigger] AS trigger, slot_key, status, reason, started_at,
+          .query<RunRow>(`SELECT TOP (@limit) id, [trigger], slot_key, status, reason, started_at,
             finished_at, finding_count, claim_generation
             FROM dbo.proactive_runs WHERE owner_object_id = @owner ORDER BY started_at DESC, id DESC;`);
         return recordset.map(mapRun);
