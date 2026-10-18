@@ -1558,3 +1558,27 @@ Selected and status states use shared surfaces, text or icons, never a colored
 edge alone. Use real neutral borders instead of inset-shadow borders. Panels,
 popovers, rows and hover states reuse the existing surface roles and
 `--panel-shadow`. Keep exact, reasoned exceptions in the stylesheet ratchet.
+
+## Form controls (P14-08, 18 October 2026)
+
+The shared field rules in `apps/web/src/styles.css` own text fields, selects and
+textareas across routes. They use the body type role, one neutral
+`--control-rule` boundary, `--surface`, `--radius-control` and the existing
+`--focus` visible outline. Fine-pointer fields are compact at 38px; coarse
+pointer fields retain a 44px minimum and 16px text. Textareas share the field
+surface, remain vertically resizable and start at a 120px minimum height.
+
+Selects use a CSS-drawn arrow and inherit the page's light/dark `color-scheme`.
+Autofill retains the field surface and text colors. Disabled, read-only, invalid
+and busy states remain explicit; invalid fields keep their existing linked
+message and `aria-invalid`, with a visible error symbol alongside the message.
+Notes folder-name errors now use the same description relationship.
+
+Native checkbox and radio marks stay semantic and use one 18px visual size;
+switches share one 44×26px track with a moving thumb. Segmented choices preserve
+their selected surface and label weight, use the common visible focus, wrap, and
+reach 44px on coarse pointers. The Notes source editor and integrated search
+fields retain their intentional editor/search layouts; only the Notes title and
+other surrounding form fields join the shared field look. Daily controls inherit
+the system without changing Daily markup. Buttons and non-field surfaces remain
+owned by their existing P14 work.

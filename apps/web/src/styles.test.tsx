@@ -179,6 +179,42 @@ describe('app-wide control contract', () => {
     expect(source).toContain('.release-trail-button { width: 44px; min-height: 44px; }');
     expect(source).toContain('.app-shell[data-phone="true"] .knowledge-legend button { min-height: 44px;');
   });
+
+  it('keeps fields and choice controls on the shared tokenized system', () => {
+    const sharedFields = source.match(/\/\* P14-08: one shared field and choice-control system across application routes\. \*\/([\s\S]*)$/)?.[1] ?? '';
+    const taskDetail = readFileSync('src/factory/TaskDetailPage.tsx', 'utf8');
+    const notes = readFileSync('src/notes/NotesArea.tsx', 'utf8');
+    const noteFolders = readFileSync('src/notes/NoteFolderPicker.tsx', 'utf8');
+    const coarsePointerFields = sharedFields.match(/@media \(pointer: coarse\) \{([\s\S]*?)\n\}/)?.[1] ?? '';
+    expect(sharedFields).toContain('var(--control-rule)');
+    expect(sharedFields).toContain('var(--radius-control)');
+    expect(sharedFields).toContain('var(--surface)');
+    expect(sharedFields).toContain('var(--type-body)');
+    expect(sharedFields).toContain('var(--focus)');
+    expect(sharedFields).toContain('min-height: 38px;');
+    expect(sharedFields).toContain('min-height: 120px;');
+    expect(sharedFields).toContain('resize: vertical;');
+    expect(sharedFields).toMatch(/:focus-visible/);
+    expect(sharedFields).toMatch(/:disabled/);
+    expect(sharedFields).toMatch(/:read-only/);
+    expect(sharedFields).toMatch(/\[aria-invalid="true"\]/);
+    expect(sharedFields).toMatch(/\[aria-busy="true"\]/);
+    expect(sharedFields).toMatch(/:autofill/);
+    expect(coarsePointerFields).toContain(':not([type="file"]):not([type="hidden"])');
+    expect(coarsePointerFields).toContain('min-height: 44px;');
+    expect(coarsePointerFields).toContain('min-height: 120px;');
+    expect(coarsePointerFields).toContain('font-size: 16px;');
+    expect(coarsePointerFields).toContain('.app-shell .composer textarea');
+    expect(sharedFields).toMatch(/\.app-shell :is\(\.knowledge-search input, \.folio-search input\)\s*\{\s*min-height: 38px;\s*font: var\(--type-body\)\/var\(--line-body\) var\(--font-body\);/);
+    expect(sharedFields).toContain('.form-control');
+    expect(sharedFields).toContain('background-size: 5px 5px;');
+    expect(ruleDeclaration(source, /\.form-control\s*\{([^}]*)\}/, 'border-radius')).toBe('var(--radius-control)');
+    expect(sharedFields).toContain('input[role="switch"]::after');
+    expect(sharedFields).toContain('accent-color: var(--focus);');
+    expect(taskDetail).toContain('className="task-timeline-filter form-control"');
+    expect(notes).toContain('className="form-control" placeholder="Note title"');
+    expect(noteFolders).toContain('className="form-control" value={name}');
+  });
 });
 
 describe('generated view styling', () => {

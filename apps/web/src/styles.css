@@ -2374,7 +2374,6 @@ a.task-chip:hover { background: var(--glass-pressed); }
 .timeline-stream-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--disabled-text); }
 .timeline-stream[data-stream="connected"] .timeline-stream-dot { background: var(--success); box-shadow: 0 0 8px var(--success); }
 .timeline-stream[data-stream="error"] .timeline-stream-dot { background: var(--error); }
-.task-timeline-filter { min-height: 30px; padding: 2px 28px 2px 10px; font-size: 13px; }
 .task-trail { position: relative; margin: 6px 0 0; padding: 0; list-style: none; }
 .task-trail::before { position: absolute; top: 8px; bottom: 8px; left: 5px; width: 2px; border-radius: 0; background: linear-gradient(var(--glass-edge-cool), color-mix(in srgb, var(--glass-edge-cool) 15%, transparent)); content: ""; }
 .task-trail > li { position: relative; display: grid; grid-template-columns: 12px minmax(0, 1fr); gap: 12px; padding: 6px 0; }
@@ -3115,7 +3114,7 @@ a.task-chip:hover { background: var(--glass-pressed); }
 @media (max-width: 700px) {
   .kanban-header { grid-template-columns: minmax(0, 1fr); grid-template-areas: "title" "pulse" "actions"; gap: 12px; }
   .kanban-header h1 { font-size: 30px; }
-  .kanban-header .kanban-pulse { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  .kanban-header .kanban-pulse { min-width: 0; flex-wrap: wrap; }
   .kanban-header .kanban-pulse li { flex: none; }
   .kanban-header-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
   .kanban-header-actions .kanban-create { width: 100%; padding: 0 12px; }
@@ -3568,3 +3567,348 @@ a.task-chip:hover { background: var(--glass-pressed); }
 }
 :root[data-motion="reduced"] .app-shell .workspace-canvas-layered .workspace-window:not(.workspace-window-conversation) { transition: none; }
 @media (prefers-reduced-motion: reduce) { .app-shell .workspace-canvas-layered .workspace-window:not(.workspace-window-conversation) { transition: none; } }
+
+/* P14-08: one shared field and choice-control system across application routes. */
+.app-shell :is(
+  .settings-field, .project-form, .task-filter-field, .task-form-field, .task-create-form, .task-control-form,
+  .timeline-toolbar, .usage-field, .role-controls, .kanban-search, .kanban-select, .proactive-feed-input,
+  .daily-page, .notes-title-label, .notes-folder-input-row, .folio-rename
+) :is(
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]):not([type="hidden"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="image"]),
+  select
+) {
+  box-sizing: border-box;
+  min-width: 0;
+  min-height: 38px;
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--control-rule);
+  border-radius: var(--radius-control);
+  background-color: var(--surface);
+  color: var(--text);
+  font: var(--type-body)/var(--line-body) var(--font-body);
+  transition: background-color var(--motion-press) var(--ease-standard);
+}
+.app-shell :is(
+  .settings-field, .project-form, .task-filter-field, .task-form-field, .task-create-form, .task-control-form,
+  .timeline-toolbar, .usage-field, .role-controls, .kanban-search, .kanban-select, .proactive-feed-input,
+  .daily-page, .notes-title-label, .notes-folder-input-row, .folio-rename
+) textarea {
+  box-sizing: border-box;
+  min-width: 0;
+  min-height: 120px;
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--control-rule);
+  border-radius: var(--radius-control);
+  background-color: var(--surface);
+  color: var(--text);
+  font: var(--type-body)/var(--line-body) var(--font-body);
+  resize: vertical;
+  transition: background-color var(--motion-press) var(--ease-standard);
+}
+.form-control {
+  box-sizing: border-box;
+  min-width: 0;
+  min-height: 38px;
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--control-rule);
+  border-radius: var(--radius-control);
+  background-color: var(--surface);
+  color: var(--text);
+  font: var(--type-body)/var(--line-body) var(--font-body);
+  transition: background-color var(--motion-press) var(--ease-standard);
+}
+.app-shell :is(
+  .settings-field, .project-form, .task-filter-field, .task-form-field, .task-create-form, .task-control-form,
+  .timeline-toolbar, .usage-field, .role-controls, .kanban-search, .kanban-select, .proactive-feed-input,
+  .daily-page, .notes-title-label, .notes-folder-input-row, .folio-rename
+) :is(
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]):not([type="hidden"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="image"]),
+  select, textarea
+):hover:not(:disabled):not(:read-only) {
+  background-color: var(--surface-translucent);
+}
+.form-control:hover:not(:disabled) {
+  background-color: var(--surface-translucent);
+}
+.form-control::placeholder {
+  color: var(--text-muted);
+  opacity: 1;
+}
+.app-shell :is(
+  .settings-field, .project-form, .task-filter-field, .task-form-field, .task-create-form, .task-control-form,
+  .timeline-toolbar, .usage-field, .role-controls, .kanban-search, .kanban-select, .proactive-feed-input,
+  .daily-page, .notes-title-label, .notes-folder-input-row, .folio-rename
+) :is(
+    input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]):not([type="hidden"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="image"]),
+  select, textarea
+)::placeholder {
+  color: var(--text-muted);
+  opacity: 1;
+}
+.app-shell :is(
+  .settings-field, .project-form, .task-filter-field, .task-form-field, .task-create-form, .task-control-form,
+  .timeline-toolbar, .usage-field, .role-controls, .kanban-search, .kanban-select, .proactive-feed-input,
+  .daily-page, .notes-title-label, .notes-folder-input-row, .folio-rename
+) select {
+  appearance: none;
+  padding-right: 36px;
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--text-muted) 50%),
+    linear-gradient(135deg, var(--text-muted) 50%, transparent 50%);
+  background-position: calc(100% - 15px) 50%, calc(100% - 10px) 50%;
+  background-repeat: no-repeat;
+  background-size: 5px 5px;
+  color-scheme: inherit;
+}
+select.form-control {
+  appearance: none;
+  padding-right: 36px;
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--text-muted) 50%),
+    linear-gradient(135deg, var(--text-muted) 50%, transparent 50%);
+  background-position: calc(100% - 15px) 50%, calc(100% - 10px) 50%;
+  background-repeat: no-repeat;
+  background-size: 5px 5px;
+  color-scheme: inherit;
+}
+.app-shell :is(.knowledge-search input, .folio-search input) {
+  min-height: 38px;
+  font: var(--type-body)/var(--line-body) var(--font-body);
+}
+.app-shell .kanban-search input {
+  padding-left: 42px;
+}
+.app-shell .proactive-feed-input {
+  align-items: flex-start;
+}
+.app-shell :is(
+  .settings-field, .project-form, .task-filter-field, .task-form-field, .task-create-form, .task-control-form,
+  .timeline-toolbar, .usage-field, .role-controls, .kanban-search, .kanban-select, .proactive-feed-input,
+  .daily-page, .notes-title-label, .notes-folder-input-row, .folio-rename
+) :is(input, select, textarea):focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+.form-control:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+.app-shell :is(
+  .settings-field, .project-form, .task-filter-field, .task-form-field, .task-create-form, .task-control-form,
+  .timeline-toolbar, .usage-field, .role-controls, .kanban-search, .kanban-select, .proactive-feed-input,
+  .daily-page, .notes-title-label, .notes-folder-input-row, .folio-rename
+) :is(input, select, textarea):disabled {
+  background-color: var(--disabled-surface);
+  color: var(--disabled-text);
+  cursor: not-allowed;
+}
+.form-control:disabled {
+  background-color: var(--disabled-surface);
+  color: var(--disabled-text);
+  cursor: not-allowed;
+}
+.form-control:read-only:not(:disabled) {
+  background-color: var(--surface-muted);
+  cursor: default;
+}
+.app-shell :is(
+  .settings-field, .project-form, .task-filter-field, .task-form-field, .task-create-form, .task-control-form,
+  .timeline-toolbar, .usage-field, .role-controls, .kanban-search, .kanban-select, .proactive-feed-input,
+  .daily-page, .notes-title-label, .notes-folder-input-row, .folio-rename
+) :is(input, textarea):read-only:not(:disabled) {
+  background-color: var(--surface-muted);
+  cursor: default;
+}
+.app-shell :is(
+  .settings-field, .project-form, .task-filter-field, .task-form-field, .task-create-form, .task-control-form,
+  .timeline-toolbar, .usage-field, .role-controls, .kanban-search, .kanban-select, .proactive-feed-input,
+  .daily-page, .notes-title-label, .notes-folder-input-row, .folio-rename
+) :is(input, select, textarea)[aria-invalid="true"] {
+  border-color: var(--error);
+  background-color: var(--error-surface);
+}
+.form-control[aria-invalid="true"] {
+  border-color: var(--error);
+  background-color: var(--error-surface);
+}
+.app-shell :is(
+  .settings-field, .project-form, .task-filter-field, .task-form-field, .task-create-form, .task-control-form,
+  .timeline-toolbar, .usage-field, .role-controls, .kanban-search, .kanban-select, .proactive-feed-input,
+  .daily-page, .notes-title-label, .notes-folder-input-row, .folio-rename
+) :is(input, select, textarea)[aria-busy="true"] {
+  cursor: progress;
+}
+.form-control[aria-busy="true"] {
+  cursor: progress;
+}
+.form-control:autofill,
+.form-control:-webkit-autofill {
+  background-color: var(--surface) !important;
+  color: var(--text) !important;
+  -webkit-text-fill-color: var(--text);
+  caret-color: var(--text);
+}
+.app-shell :is(.knowledge-search input, .folio-search input):is(:autofill, :-webkit-autofill) {
+  background-color: transparent !important;
+  color: var(--text) !important;
+  -webkit-text-fill-color: var(--text);
+  caret-color: var(--text);
+}
+.app-shell :is(
+  .settings-field, .project-form, .task-filter-field, .task-form-field, .task-create-form, .task-control-form,
+  .timeline-toolbar, .usage-field, .role-controls, .kanban-search, .kanban-select, .proactive-feed-input,
+  .daily-page, .notes-title-label, .notes-folder-input-row, .folio-rename
+) :is(input, select, textarea):autofill,
+.app-shell :is(
+  .settings-field, .project-form, .task-filter-field, .task-form-field, .task-create-form, .task-control-form,
+  .timeline-toolbar, .usage-field, .role-controls, .kanban-search, .kanban-select, .proactive-feed-input,
+  .daily-page, .notes-title-label, .notes-folder-input-row, .folio-rename
+) :is(input, select, textarea):-webkit-autofill {
+  background-color: var(--surface) !important;
+  color: var(--text) !important;
+  -webkit-text-fill-color: var(--text);
+  caret-color: var(--text);
+}
+.app-shell input:is([type="checkbox"], [type="radio"]):not([role="switch"]) {
+  width: 18px;
+  height: 18px;
+  min-width: 18px;
+  min-height: 18px;
+  padding: 0;
+  accent-color: var(--focus);
+}
+.app-shell input:is([type="checkbox"], [type="radio"]):not([role="switch"]):focus-visible,
+.app-shell input[role="switch"]:focus-visible,
+.app-shell :is(.usage-segmented button, .advanced-segmented button, .presence-option, .presence-mode-card):focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+.app-shell input:is([type="checkbox"], [type="radio"]):not([role="switch"]):disabled {
+  cursor: not-allowed;
+}
+.app-shell input[role="switch"] {
+  appearance: none;
+  position: relative;
+  flex: none;
+  width: 44px;
+  height: 26px;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--control-rule);
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--text) 18%, transparent);
+  cursor: pointer;
+  transition: background-color var(--motion-state) var(--ease-standard);
+}
+.app-shell input[role="switch"]::after {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--text);
+  content: "";
+  transition: translate var(--motion-state) var(--ease-enter);
+}
+.app-shell input[role="switch"]:checked {
+  background: var(--focus);
+}
+.app-shell input[role="switch"]:checked::after {
+  translate: 18px 0;
+  background: var(--primary-action-text);
+}
+.app-shell input[role="switch"]:disabled {
+  background: var(--disabled-surface);
+  cursor: not-allowed;
+}
+.app-shell :is(label.choice, label.project-policy-choice):has(> input:is([type="checkbox"], [type="radio"]):not([role="switch"])) {
+  min-width: 0;
+}
+.field-error[id]::before,
+.settings-validation-error[id]::before {
+  display: inline-grid;
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  place-items: center;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  content: "!";
+  font-size: var(--type-caption);
+  font-weight: 700;
+  line-height: 1;
+}
+.field-error[id],
+.settings-validation-error[id] {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-1);
+  overflow-wrap: anywhere;
+}
+@media (prefers-reduced-motion: reduce) {
+  .app-shell input[role="switch"]::after { transition: none; }
+}
+:root[data-motion="reduced"] .app-shell input[role="switch"]::after { transition: none; }
+@media (pointer: coarse) {
+  .app-shell :is(
+    .settings-field, .project-form, .task-filter-field, .task-form-field, .task-create-form, .task-control-form,
+    .timeline-toolbar, .usage-field, .role-controls, .kanban-search, .kanban-select, .proactive-feed-input,
+    .daily-page, .notes-title-label, .notes-folder-input-row, .folio-rename
+  ) :is(
+    input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]):not([type="hidden"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="image"]),
+    select
+  ) {
+    min-height: 44px;
+    font-size: 16px;
+  }
+  .app-shell :is(
+    .settings-field, .project-form, .task-filter-field, .task-form-field, .task-create-form, .task-control-form,
+    .timeline-toolbar, .usage-field, .role-controls, .kanban-search, .kanban-select, .proactive-feed-input,
+    .daily-page, .notes-title-label, .notes-folder-input-row, .folio-rename
+  ) textarea {
+    min-height: 120px;
+    font-size: 16px;
+  }
+  .form-control {
+    min-height: 44px;
+    font-size: 16px;
+  }
+  .app-shell :is(.knowledge-search input, .folio-search input) {
+    min-height: 44px;
+    font-size: 16px;
+  }
+  .app-shell .composer textarea {
+    min-height: 44px;
+    font-size: 16px;
+  }
+  .app-shell :is(.usage-segmented button, .advanced-segmented button, .presence-option, .presence-mode-card) {
+    min-height: 44px;
+  }
+  .app-shell label.choice:has(> input:is([type="checkbox"], [type="radio"]):not([role="switch"])) {
+    min-height: 44px;
+  }
+  .app-shell label.choice:has(> input[role="switch"]) {
+    min-height: 44px;
+  }
+}
+@media (max-width: 700px) {
+  .app-shell :is(.settings-grid, .projects-form-grid, .usage-controls, .role-controls) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .app-shell .presence-modes {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.app-shell :is(.settings-field, .task-filter-field, .task-form-field, .task-create-form, .usage-field, .proactive-feed-field, .daily-page) label,
+.app-shell :is(.timeline-toolbar) label,
+.app-shell :is(.notes-title-label, .notes-source-label) {
+  color: var(--text);
+  font-size: var(--type-small);
+  font-weight: 600;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.app-shell :is(.settings-field, .task-filter-field, .task-form-field, .task-create-form, .usage-field, .proactive-feed-field) :is(.settings-explanation, .settings-validation-error, .field-error) {
+  margin: 0;
+}
