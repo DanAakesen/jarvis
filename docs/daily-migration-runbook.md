@@ -91,7 +91,9 @@ Only synthetic bundles may enter a coding-agent environment.
    ```
 
    Choose the actual validation time, not the example date. Preserve an
-   unchanged copy of the bundle throughout validation.
+   unchanged copy of the bundle throughout validation. The private report
+   directory must be separate from, and not nested inside, the bundle;
+   validation refuses overlapping destinations.
    **Expected:** exit zero only when all checks and rulings pass; otherwise
    nonzero with fixed, value-free diagnostics. Reports never show source
    keys, row values, free text or credentials. Unknown identifiers appear

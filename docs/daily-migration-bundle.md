@@ -130,9 +130,13 @@ claim to verify a second, sanitized byte stream. Do not substitute sanitized
 bytes under an original digest. If only a sanitized copy remains, reconcile
 that source/storage fact privately before import rather than relabel it.
 Every ingestion reference must exist in `health_ingestions`. Validation checks
-the entry's original size/checksum against both ingestion and raw-object
-ledgers, its exact expiry text against the raw ledger, and complete raw-ledger
-index coverage. Each file path and ingestion occurs once. It checks nonexpired
+known, non-NULL original size/checksum/expiry against a matching raw-object
+ledger entry when one exists. The ingestion request checksum and size describe
+a different boundary and need not match the retained object. Missing optional
+ledger metadata remains unknown. Historical raw-ledger rows do not establish
+that bytes still exist: the object index is optional and is not required to
+cover every historical row. The owner independently establishes the retained
+inventory. Each file path and ingestion occurs once. Validation checks nonexpired
 file size and checksum and the index count/total byte coverage; `totalBytes`
 includes expired entries' declared sizes. It counts
 expired entries separately: expiry at or before validation time is not an
@@ -149,6 +153,8 @@ owner established the inventory.
 
 `validate` writes `validation-report.json` and `validation-summary.md` to the
 private report directory and exits nonzero for failures or blocked rulings.
+The report directory must be outside the bundle, never the bundle itself or
+one of its descendants.
 Per-table evidence includes the decision, observed/manifest counts, checksum
 match, stable warning/error codes and blocked state. Object coverage and
 overall counts are separate. Reports contain only known table identifiers,

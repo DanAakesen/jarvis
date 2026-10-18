@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { mkdir, readFile, writeFile, rm, readdir, symlink, lstat } from 'node:fs/promises';
+import { mkdir, readFile, writeFile, rm, readdir, symlink, lstat, link } from 'node:fs/promises';
 import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
@@ -183,8 +183,8 @@ describe('streaming validation and negative fixtures', () => {
   it('detects numeric/string representations of the same integer key as duplicates', async () => {
     const options = paths();
     await generateBundle({ bundle: options.bundle, seed: 22 });
-    await rewriteTable(options.bundle, 'health_sync_state', '{"id":1}\n{"id":"1"}\n');
-    expect((await validateBundle(options)).tables.health_sync_state!.errors['duplicate-key']).toBe(1);
+    await rewriteTable(options.bundle, 'health_sync_state', '{"id":1}\n{"id":"1"}\n{"id":"01"}\n');
+    expect((await validateBundle(options)).tables.health_sync_state!.errors['duplicate-key']).toBe(2);
   });
   it('does not bless mixed payloads with arbitrary free-text owner rules or TickTick hidden in JSON', async () => {
     const options = paths();
@@ -204,7 +204,7 @@ describe('streaming validation and negative fixtures', () => {
     await rewriteManifest(options.bundle, m => { delete m.rulings!.attention_runs; });
     expect((await validateBundle(options)).tables.attention_runs!.blocked).toBe(true);
   });
-  it('checks object coverage, index absence, ingestion metadata and strict entry shape', async () => {
+  it('permits optional retained inventory independently of request checksums and checks strict entry shape', async () => {
     for (const kind of ['coverage', 'no-index', 'ingestion', 'shape']) {
       const options = paths();
       await generateBundle({ bundle: options.bundle, seed: 22 });
@@ -213,13 +213,16 @@ describe('streaming validation and negative fixtures', () => {
         await rewriteManifest(options.bundle, m => { m.objects = { index: 'objects.ndjson', count: 0, totalBytes: 0, sha256: sha256('') }; });
       } else if (kind === 'no-index') {
         await rewriteManifest(options.bundle, m => { delete m.objects; });
+        await rm(join(options.bundle, 'objects.ndjson'));
+        await rm(join(options.bundle, 'objects'), { recursive: true });
       } else if (kind === 'ingestion') {
         await rewriteTable(options.bundle, 'health_ingestions', JSON.stringify({ id: 'SYNTHETIC_22_0', checksum: '0'.repeat(64), content_bytes: 1 }) + '\n');
       } else {
         await writeFile(join(options.bundle, 'objects.ndjson'), '{"file":"../SYNTHETIC"}\n');
       }
       const report = await validateBundle(options);
-      expect(codes(report)).toContain(({ coverage: 'object-coverage-missing', 'no-index': 'objects-index-missing', ingestion: 'object-ingestion-mismatch', shape: 'object-entry-invalid' })[kind]);
+      if (kind === 'shape') expect(codes(report)).toContain('object-entry-invalid');
+      else expect(report.valid).toBe(true);
     }
   });
   it('bounds manifest and line sizes, and rejects invalid time/budget', async () => {
@@ -241,8 +244,8 @@ describe('streaming validation and negative fixtures', () => {
       id: 'SYNTHETIC', workout_type: {}, duration_seconds: '1', is_indoor: 2, workout_date: '2026-02-30',
     }) + '\n');
     expect((await validateBundle(options)).tables.health_workouts!.errors['column-type-invalid']).toBe(4);
-    await rewriteTable(options.bundle, 'nutrition_meals', '{"id":"SYNTHETIC","energy_kcal":1e309}\n');
-    expect((await validateBundle(options)).tables.nutrition_meals!.errors['column-type-invalid']).toBe(1);
+    await rewriteTable(options.bundle, 'nutrition_meals', '{"id":"SYNTHETIC","energy_kcal":1e309,"meal_name":{},"occurred_at":123}\n');
+    expect((await validateBundle(options)).tables.nutrition_meals!.errors['column-type-invalid']).toBe(3);
   });
   it('keeps source offsets, tombstones and NULL versus zero unchanged', async () => {
     const { options } = await fixture('tombstoned-meal');
@@ -267,6 +270,48 @@ describe('streaming validation and negative fixtures', () => {
     await rewriteTable(options.bundle, 'health_ingestions', '');
     expect((await validateBundle({ ...options, now: '2099-01-01T00:00:00Z' })).objects.errors).toHaveProperty('object-ingestion-missing');
   });
+  it('preserves unknown raw retention and separate original/sanitized checksums without inventing object coverage', async () => {
+    const options = paths();
+    await generateBundle({ bundle: options.bundle, seed: 22 });
+    const raw = JSON.parse(await readFile(join(options.bundle, 'health_raw_objects.ndjson'), 'utf8')) as Record<string, unknown>;
+    raw.expires_at = null;
+    raw.sanitized_checksum = '1'.repeat(64);
+    raw.deleted_at = now;
+    raw.storage_status = 'SYNTHETIC_DELETED';
+    const text = JSON.stringify(raw) + '\n';
+    await rewriteTable(options.bundle, 'health_raw_objects', text);
+    expect((await validateBundle(options)).valid).toBe(true);
+    expect(await readFile(join(options.bundle, 'health_raw_objects.ndjson'), 'utf8')).toBe(text);
+    await rewriteManifest(options.bundle, m => { delete m.objects; });
+    await rm(join(options.bundle, 'objects.ndjson'));
+    await rm(join(options.bundle, 'objects'), { recursive: true });
+    expect((await validateBundle(options)).valid).toBe(true);
+  });
+  it('validates optional sanitized-checksum metadata without claiming to verify sanitized bytes', async () => {
+    const options = paths();
+    await generateBundle({ bundle: options.bundle, seed: 22 });
+    const raw = JSON.parse(await readFile(join(options.bundle, 'health_raw_objects.ndjson'), 'utf8')) as Record<string, unknown>;
+    const sanitizedBytes = Buffer.from('SYNTHETIC_SANITISED_OBJECT_BYTES\n');
+    raw.sanitized_checksum = sha256(sanitizedBytes).toUpperCase();
+    const retained = JSON.stringify(raw) + '\n';
+    await rewriteTable(options.bundle, 'health_raw_objects', retained);
+    expect((await validateBundle(options)).valid).toBe(true);
+    expect(await readFile(join(options.bundle, 'health_raw_objects.ndjson'), 'utf8')).toBe(retained);
+    raw.sanitized_checksum = SYNTHETIC_SENTINEL;
+    await rewriteTable(options.bundle, 'health_raw_objects', JSON.stringify(raw) + '\n');
+    const invalid = await validateBundle(options);
+    expect(invalid.tables.health_raw_objects!.errors).toHaveProperty('sanitized-checksum-invalid');
+    expect(JSON.stringify(invalid)).not.toContain(SYNTHETIC_SENTINEL);
+    raw.sanitized_checksum = sha256(sanitizedBytes);
+    await rewriteTable(options.bundle, 'health_raw_objects', JSON.stringify(raw) + '\n');
+    await writeFile(join(options.bundle, 'objects/SYNTHETIC_OBJECT.bin'), sanitizedBytes);
+    const entry = { file: 'objects/SYNTHETIC_OBJECT.bin', ingestionId: 'SYNTHETIC_22_0', bytes: sanitizedBytes.length,
+      sha256: sha256(sanitizedBytes), expiresAt: '2099-01-01T00:00:00Z' };
+    const index = JSON.stringify(entry) + '\n';
+    await writeFile(join(options.bundle, 'objects.ndjson'), index);
+    await rewriteManifest(options.bundle, m => { m.objects!.sha256 = sha256(index); m.objects!.totalBytes = sanitizedBytes.length; });
+    expect((await validateBundle(options)).objects.errors).toHaveProperty('object-ledger-mismatch');
+  });
   it('bounds and validates excluded bytes without attempting JSON decoding', async () => {
     const options = paths();
     await generateBundle({ bundle: options.bundle, seed: 22 });
@@ -285,7 +330,7 @@ describe('streaming validation and negative fixtures', () => {
     await rewriteTable(options.bundle, 'health_raw_objects', '{"ingestion_id":"SYNTHETIC_22_0","expires_at":"SYNTHETIC_INVALID","checksum":"SYNTHETIC_INVALID"}\n');
     await rewriteManifest(options.bundle, m => { m.rulings![SYNTHETIC_SENTINEL] = { decision: 'exclude', rule: SYNTHETIC_SENTINEL }; delete m.rulings!.briefing_runs; });
     const report = await validateBundle(options);
-    expect(codes(report)).toEqual(expect.arrayContaining(['unexpected-files', 'unknown-ruling', 'unknown-column', 'undeclared-column', 'retention-invalid', 'object-ledger-invalid']));
+    expect(codes(report)).toEqual(expect.arrayContaining(['unexpected-files', 'unknown-ruling', 'unknown-column', 'undeclared-column', 'object-ledger-mismatch']));
     expect(JSON.stringify(report)).not.toContain(SYNTHETIC_SENTINEL);
   });
   it('rejects root/ancestor symlinks, object symlinks and output-file symlinks', async () => {
@@ -302,6 +347,30 @@ describe('streaming validation and negative fixtures', () => {
     const manifestBefore = await readFile(join(options.bundle, 'manifest.json'));
     await expect(validateBundle(options)).rejects.toThrow();
     expect(await readFile(join(options.bundle, 'manifest.json'))).toEqual(manifestBefore);
+  });
+  it('refuses report directories inside the bundle without changing any source files', async () => {
+    const options = paths();
+    await generateBundle({ bundle: options.bundle, seed: 22 });
+    const before = await readdir(options.bundle);
+    const manifest = await readFile(join(options.bundle, 'manifest.json'));
+    for (const reportDir of [options.bundle, join(options.bundle, 'reports'), join(options.bundle, 'objects', 'reports')]) {
+      await expect(validateBundle({ ...options, reportDir })).rejects.toThrow('report-location-invalid');
+    }
+    expect(await readdir(options.bundle)).toEqual(before);
+    expect(await readFile(join(options.bundle, 'manifest.json'))).toEqual(manifest);
+    expect((await validateBundle(options)).valid).toBe(true);
+    expect((await validateBundle(options)).valid).toBe(true);
+  });
+  it('refuses hard-linked output files without truncating bundle data', async () => {
+    const options = paths();
+    await generateBundle({ bundle: options.bundle, seed: 22 });
+    await mkdir(options.reportDir);
+    const original = join(options.bundle, 'manifest.json');
+    const bytes = await readFile(original);
+    await link(original, join(options.reportDir, 'validation-report.json'));
+    await expect(validateBundle(options)).rejects.toThrow('unsafe-report-file');
+    expect(await readFile(original)).toEqual(bytes);
+    expect((await readdir(options.reportDir)).filter(f => f.startsWith('.daily-report-'))).toEqual([]);
   });
   it('decodes UTF-8 across chunk boundaries and final lines without LF', async () => {
     const options = paths();
@@ -320,8 +389,8 @@ describe('streaming validation and negative fixtures', () => {
 });
 
 describe('integer/date values and privacy', () => {
-  it.each([-9007199254740991, 9007199254740991, 0, '9223372036854775807', '-9223372036854775808'])('accepts exact integer %s', value => expect(validInteger(value)).toBe(true));
-  it.each([9007199254740992, -9007199254740992, 1.2, '9223372036854775808', '-9223372036854775809', '01', '1.0', null, {}, '1e3'])('rejects invalid integer %s', value => expect(validInteger(value)).toBe(false));
+  it.each([-9007199254740991, 9007199254740991, 0, '01', '-0001', '0009223372036854775807', '9223372036854775807', '-9223372036854775808'])('accepts exact integer %s', value => expect(validInteger(value)).toBe(true));
+  it.each([9007199254740992, -9007199254740992, 1.2, '9223372036854775808', '-9223372036854775809', '1.0', null, {}, '1e3'])('rejects invalid integer %s', value => expect(validInteger(value)).toBe(false));
   it.each(['2024-02-29', '2026-10-18'])('accepts exact calendar key %s', value => expect(validDate(value)).toBe(true));
   it.each(['2026-02-29', '2026-02-30', '2026-1-01', '2026-01-01T00:00:00Z', '0000-01-01'])('rejects invalid calendar key %s', value => expect(validDate(value)).toBe(false));
   it('leaks no sentinel from keys, values, columns, unknown tables, metadata, rules or CLI arguments', async () => {
@@ -345,7 +414,11 @@ describe('integer/date values and privacy', () => {
       expect(text).not.toContain('SYNTHETIC_OWNER.invalid');
     }
     expect(report.unknownTables).toMatchObject({ count: 1 });
-    expect(report.unknownTables.digest).toMatch(/^[a-f0-9]{64}$/);
+    expect(report.unknownTables.digest).toMatch(/^[a-f0-9]{24}$/);
+    for (const table of Object.values(report.tables)) {
+      if (table.evidenceDigest !== null) expect(table.evidenceDigest).toMatch(/^[a-f0-9]{24}$/);
+      if (table.sha256 !== null) expect(table.sha256).toMatch(/^[a-f0-9]{64}$/);
+    }
   });
   it('never exposes a populated excluded claim token or raw filesystem errors', async () => {
     const { options, report } = await fixture('claim-token');
@@ -356,7 +429,7 @@ describe('integer/date values and privacy', () => {
     let message = '';
     try { await validateBundle({ ...options, reportDir: join(blocked, SYNTHETIC_SENTINEL) }); }
     catch (e) { message = (e as Error).message; }
-    expect(message).toBe('report-io');
+    expect(message).toBe('unsafe-path');
     expect(message).not.toContain(SYNTHETIC_SENTINEL);
   });
 });

@@ -68,14 +68,21 @@ The hash is over exact index bytes; totalBytes sums declared original sizes,
 
 This is shape-only, not a valid checksum example. File basenames allow only
 ASCII letters/digits/underscore/hyphen and at most one extension. Each ingestion
-and path occurs once. The ingestion must exist in `health_ingestions` and
-`health_raw_objects`. The size/original checksum must equal both ledgers;
-expiration must exactly equal the raw ledger's text. Every raw-ledger entry
-requires index coverage. Sanitized checksums stay historical row metadata;
+and path occurs once. The ingestion must exist in `health_ingestions`. Its request
+checksum/size need not equal a retained object's checksum/size: these are different
+boundaries. If a raw-ledger entry exists, its known non-NULL original checksum,
+size and expiration text must match the index; missing/NULL metadata stays
+unknown, never fabricated. A historical raw ledger alone does not prove that
+retained bytes still exist, so the object index is optional and need not include
+every historical ledger row. The owner must establish retained-object coverage
+independently. Sanitized checksums stay historical row metadata;
 this format validates **original bytes only**, never substitutes sanitized bytes.
+Optional `sanitized_checksum` must be 64 hexadecimal characters or NULL; its
+case and value remain unchanged. This validates checksum shape, not sanitized
+byte existence or integrity.
 
 An entry is expired when `expiresAt <= --now` (default current time).
-Its reference, declared metadata and index coverage are still checked; its
+Its reference, declared metadata and manifest index coverage are still checked; its
 bytes are **not opened, hashed, required or imported**, even if present. A
 missing expired file is accepted and counted, not an error. A nonexpired file
 requires exact streamed byte length and SHA-256. This is a deliberate retention
@@ -104,12 +111,18 @@ Private random scratch directories under the report directory contain digests
 and minimum ledger metadata, are mode 0700, and are removed on normal completion
 or failure. Abrupt process termination can leave scratch: the owner must remove
 stale `.daily-index-*` directories privately. Disk usage/inodes grow with rows;
-disk exhaustion fails closed. The output directory must be private and trusted.
+disk exhaustion fails closed. The output directory must be private and trusted, and must be outside the
+bundle. Validation refuses an equal/nested report directory before writing.
+Report replacement is atomic and refuses existing symlinks or hard-linked files,
+so output cannot truncate a source inode through an existing hard link.
 
 Reports `validation-report.json` and `validation-summary.md` contain only fixed
 table names/decisions, stable codes, counts, booleans and hashes. Unknown names,
 column names, raw keys, row values, exporter/schema text, ruling prose, paths and
 exception details are never echoed. CLI prints only static help/status/errors.
+Reported key/unknown-identifier evidence digests are truncated to 24 hex
+characters. File/integrity checksums and private disk-membership digests retain
+the full 64-character SHA-256.
 Existing report-file symlinks are refused. Warnings are not private-source
 schema reconciliation or proof of importability; this tool does not validate
 every downstream business invariant or SQL nullability/default/CHECK.

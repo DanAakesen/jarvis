@@ -1,6 +1,7 @@
 import { constants } from 'node:fs';
-import { open } from 'node:fs/promises';
-import { join } from 'node:path';
+import { open, lstat, rename, unlink } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
+import { join, resolve, sep } from 'node:path';
 import { dailyTables, type DailyTable } from '../store/schema.js';
 import { columnTypes, decisions, IMPORT_ORDER, MIXED_TABLES, SOURCE_CHECKS, type TableDecision } from './decisions.js';
 import { BundleReader, DiskIndex, safeDirectory, sha256 } from './io.js';
@@ -34,15 +35,17 @@ export interface ValidateOptions { bundle: string; reportDir: string; now?: stri
 const bump = (counts: Counts, code: string): void => { counts[code] = (counts[code] ?? 0) + 1; };
 const sum = (counts: Counts): number => Object.values(counts).reduce((a, b) => a + b, 0);
 const ownDecision = (name: string): TableDecision | undefined => Object.hasOwn(decisions, name) ? decisions[name] : undefined;
-const evidence = (report: TableReport, value: string): void => { report.evidenceDigest = sha256(`${report.evidenceDigest ?? ''}\0${value}`); };
+const evidence = (report: TableReport, value: string): void => { report.evidenceDigest = sha256(`${report.evidenceDigest ?? ''}\0${value}`).slice(0, 24); };
 const failureCode = (e: unknown): string => e instanceof ValidationFailure ? e.code
   : e instanceof SyntaxError ? 'invalid-json'
     : e instanceof TypeError ? 'invalid-utf8' : 'bundle-io';
 
 export function validInteger(value: unknown): boolean {
   if (typeof value === 'number') return Number.isSafeInteger(value);
-  if (typeof value !== 'string' || !/^-?(?:0|[1-9]\d*)$/.test(value) || value.length > 20) return false;
-  const integer = BigInt(value);
+  if (typeof value !== 'string' || !/^-?\d+$/.test(value)) return false;
+  const canonical = value.replace(/^(-?)0+(?=\d)/, '$1');
+  if (canonical.length > 20) return false;
+  const integer = BigInt(canonical);
   return integer >= -9223372036854775808n && integer <= 9223372036854775807n;
 }
 export function validDate(value: unknown): boolean {
@@ -139,11 +142,11 @@ async function inspectRow(table: DailyTable, line: string, decision: TableDecisi
     }
   }
   if (table === 'health_ingestions' && keysValid) {
-    await index.add('ingestions', String(row.id), JSON.stringify({ checksum: row.checksum, bytes: row.content_bytes }));
+    await index.add('ingestions', String(row.id));
   }
   if (table === 'health_raw_objects' && keysValid) {
-    if (!timestamp(row.expires_at)) bump(report.errors, 'retention-invalid');
-    if (typeof row.checksum !== 'string' || !/^[a-f0-9]{64}$/.test(row.checksum)) bump(report.errors, 'object-ledger-invalid');
+    if (row.sanitized_checksum !== undefined && row.sanitized_checksum !== null
+      && (typeof row.sanitized_checksum !== 'string' || !/^[a-fA-F0-9]{64}$/.test(row.sanitized_checksum))) bump(report.errors, 'sanitized-checksum-invalid');
     await index.add('ledger', String(row.ingestion_id), JSON.stringify({
       checksum: row.checksum, bytes: row.content_bytes, expiresAt: row.expires_at,
     }));
@@ -153,10 +156,8 @@ async function inspectRow(table: DailyTable, line: string, decision: TableDecisi
 async function inspectObjects(manifest: Manifest, reader: BundleReader, index: DiskIndex, now: number, report: ValidationReport): Promise<void> {
   const objects = report.objects;
   const metadata = manifest.objects;
-  if (!metadata) {
-    if ((report.tables.health_raw_objects?.sourceRows ?? 0) > 0) bump(objects.errors, 'objects-index-missing');
-    return;
-  }
+  // A historical ledger does not establish that retained bytes still exist.
+  if (!metadata) return;
   try {
     const actual = await reader.lines(metadata.index, async line => {
       objects.count++;
@@ -168,15 +169,13 @@ async function inspectObjects(manifest: Manifest, reader: BundleReader, index: D
       if (!await index.add('object-files', entry.file) || !await index.add('object-ingestions', entry.ingestionId)) bump(objects.errors, 'object-duplicate');
       const ingestion = await index.get('ingestions', entry.ingestionId);
       if (ingestion === null) bump(objects.errors, 'object-ingestion-missing');
-      else {
-        const expected = JSON.parse(ingestion) as { checksum?: unknown; bytes?: unknown };
-        if (expected.checksum !== entry.sha256 || String(expected.bytes) !== String(entry.bytes)) bump(objects.errors, 'object-ingestion-mismatch');
-      }
       const ledger = await index.get('ledger', entry.ingestionId);
-      if (ledger === null) bump(objects.errors, 'object-ledger-missing');
-      else {
+      if (ledger !== null) {
         const expected = JSON.parse(ledger) as { checksum?: unknown; bytes?: unknown; expiresAt?: unknown };
-        if (expected.checksum !== entry.sha256 || String(expected.bytes) !== String(entry.bytes) || expected.expiresAt !== entry.expiresAt) bump(objects.errors, 'object-ledger-mismatch');
+        const known = (value: unknown): boolean => value !== null && value !== undefined;
+        if ((known(expected.checksum) && (typeof expected.checksum !== 'string' || expected.checksum.toLowerCase() !== entry.sha256))
+          || (known(expected.bytes) && (!validInteger(expected.bytes) || BigInt(expected.bytes as string | number) !== BigInt(entry.bytes)))
+          || (known(expected.expiresAt) && expected.expiresAt !== entry.expiresAt)) bump(objects.errors, 'object-ledger-mismatch');
       }
       if (Date.parse(entry.expiresAt) <= now) { objects.expired++; return; }
       try {
@@ -190,12 +189,6 @@ async function inspectObjects(manifest: Manifest, reader: BundleReader, index: D
     if (actual.sha256 !== metadata.sha256) bump(objects.errors, 'objects-checksum-mismatch');
     if (actual.rows !== metadata.count) bump(objects.errors, 'objects-count-mismatch');
     if (objects.bytes !== metadata.totalBytes) bump(objects.errors, 'objects-bytes-mismatch');
-    // A complete object index covers every ledger entry, including expired entries.
-    const ledgerTable = manifest.tables.health_raw_objects;
-    if (ledgerTable) await reader.lines(ledgerTable.file, async line => {
-      const row: unknown = JSON.parse(line);
-      if (record(row) && typeof row.ingestion_id === 'string' && await index.get('object-ingestions', row.ingestion_id) === null) bump(objects.errors, 'object-coverage-missing');
-    });
   } catch (e) { bump(objects.errors, failureCode(e)); }
 }
 
@@ -208,17 +201,29 @@ async function writeReport(directory: string, report: ValidationReport): Promise
     'See validation-report.json for stable failure codes. This is not import or private-source acceptance.', '',
   ].join('\n');
   for (const [name, text] of [['validation-report.json', `${JSON.stringify(report, null, 2)}\n`], ['validation-summary.md', summary]]) {
-    const handle = await open(join(directory, name!), constants.O_WRONLY | constants.O_CREAT | constants.O_TRUNC | constants.O_NOFOLLOW, 0o600);
-    try { await handle.writeFile(text!); } finally { await handle.close(); }
+    const destination = join(directory, name!);
+    try {
+      const existing = await lstat(destination);
+      if (!existing.isFile() || existing.isSymbolicLink() || existing.nlink !== 1) fail('unsafe-report-file');
+    } catch (e) { if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw e; }
+    const staging = join(directory, `.daily-report-${randomUUID()}`);
+    try {
+      const handle = await open(staging, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600);
+      try { await handle.writeFile(text!); } finally { await handle.close(); }
+      // Replace only the directory entry, never truncate an existing inode/hard link.
+      await rename(staging, destination);
+    } finally { await unlink(staging).catch((e: NodeJS.ErrnoException) => { if (e.code !== 'ENOENT') throw e; }); }
   }
 }
 
 export async function validateBundle(options: ValidateOptions): Promise<ValidationReport> {
   try { return await validate(options); }
-  catch { return fail('report-io'); }
+  catch (e) { if (e instanceof ValidationFailure) throw e; return fail('report-io'); }
 }
 
 async function validate(options: ValidateOptions): Promise<ValidationReport> {
+  const bundlePath = resolve(options.bundle), reportPath = resolve(options.reportDir);
+  if (reportPath === bundlePath || reportPath.startsWith(`${bundlePath.endsWith(sep) ? bundlePath : bundlePath + sep}`)) fail('report-location-invalid');
   const report: ValidationReport = {
     formatVersion: 1, valid: false, errors: {}, tables: {}, unknownTables: { count: 0, digest: null },
     objects: { count: 0, bytes: 0, expired: 0, verified: 0, errors: {}, sha256: null },
@@ -240,7 +245,7 @@ async function validate(options: ValidateOptions): Promise<ValidationReport> {
     for (const file of await reader.entries()) if (!allowedFiles.has(file)) bump(report.errors, 'unexpected-files');
     for (const name of Object.keys(manifest.tables)) if (!ownDecision(name)) {
       report.unknownTables.count++;
-      report.unknownTables.digest = sha256(`${report.unknownTables.digest ?? ''}\0${name}`);
+      report.unknownTables.digest = sha256(`${report.unknownTables.digest ?? ''}\0${name}`).slice(0, 24);
       bump(report.errors, 'unknown-table');
     }
     for (const name of Object.keys(manifest.rulings ?? {})) {
