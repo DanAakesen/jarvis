@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState, useSyncExternalStore } from 'react';
 import { dailyQuerySources as sources, type DailyJson, type DailySourceId } from '@jarvis/contracts';
-import { dailyColumns, dailyRowKey, readable, type Row } from '../../presentation';
+import { dailyColumns, dailyRowKey, isNumericColumn, readable, type Row } from '../../presentation';
 import { ScrollTable } from '../../ui/ScrollTable';
 import { formatDate, formatNumber, formatTime } from '../../ui/formatters';
 import './data.css';
@@ -58,7 +58,8 @@ export function DataRecords({ source, rows, units = {}, onOpenRecord, openLabel 
   const records = useRef<HTMLDivElement>(null);
   const id = useId();
   const columns = dailyColumns(source);
-  const numericColumns = new Set(columns.filter(column => rows.some(row => typeof row[column.key] === 'number')).map(column => column.key));
+  const numericColumns = new Set(columns.filter(column => isNumericColumn(column) || rows.some(row => typeof row[column.key] === 'number'))
+    .map(column => column.key));
   const occurrences = new Map<string, number>();
   const keys = rows.map((row, index) => {
     const base = source === sources.metrics ? JSON.stringify([source, row.metric_date, row.metric_name, row.unit]) :

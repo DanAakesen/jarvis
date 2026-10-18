@@ -23,11 +23,15 @@ existing Europe/Copenhagen display timezone and source-specific handling of
 unqualified historical timestamps.
 
 Standardize section presentation through the shared title → controls/filters →
-freshness → “About this data” slot order. Use the established pill-tab class for
+freshness → “About this data” slot order, with the embedded Overview navigation
+action beside the title so keyboard order still reads heading, Overview, then
+filters. Use the established pill-tab class for
 Data’s Table/Chart choice while preserving its button-group semantics, selected
 pressed state, names and keyboard behavior. Align every value within a numeric
-column alike, including “Not recorded,” and use the shared secondary button for
-record-detail actions.
+column alike, including “Not recorded”: a column is numeric when its schema says
+so (a declared unit or an explicit flag), with observed numbers as a fallback, so
+a page that records none still aligns. Text labels such as confidence stay
+left-aligned. Use the shared secondary button for record-detail actions.
 
 For sparse Body metric charts, keep one series and legend entry per metric/unit,
 plot every recorded value, connect readings no more than three calendar days

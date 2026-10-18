@@ -2,13 +2,16 @@
 
 ## Daily visual QA pass (P12-38, 18 October 2026)
 
-Use the shared `DailySectionHeader` slot order throughout Daily: section title,
-period and other filters, freshness, then “About this data.” Reordering must not
-change heading levels, accessible names, control roles or keyboard order.
+Use the shared `DailySectionHeader` slot order throughout Daily: section title
+(with any navigation action, such as Overview, beside it), period and other
+filters, freshness, then “About this data.” Reordering must not change heading
+levels, accessible names, control roles or keyboard order.
 Data’s Table/Chart choice uses the same borderless selected pill as other Daily
 segmented controls while retaining its labelled button group and pressed states.
-Details actions use the secondary button treatment, and missing values in a
-numeric column share the column’s numeric alignment.
+Details actions use the secondary button treatment. A column is numeric when its
+schema says so (it declares a unit or is flagged numeric), even if the loaded page
+records no values, so missing values in a numeric column share the column’s numeric
+alignment.
 
 All displayed Daily dates and times use `dailyLocale()` and the formatters in
 `apps/web/src/daily/ui/formatters.ts`; dated values retain the established

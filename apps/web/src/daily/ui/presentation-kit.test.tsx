@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { DataNotes } from './DataNotes';
 import { DailyGrid, DailyGridItem } from './DailyGrid';
@@ -107,7 +107,7 @@ describe('Daily presentation kit', () => {
     expect(screen.queryByRole('progressbar')).toBeNull();
   });
 
-  it('keeps the shared section slots in title, controls, freshness, disclosure order', () => {
+  it('keeps the shared section slots in title, controls, freshness, disclosure order with actions beside the title', () => {
     const { container } = render(<>
       <DailySectionHeader title="Workouts" controls={<div id="controls">Filters</div>}
         actions={<button type="button">Action</button>} freshness={<p id="freshness">Read time</p>}
@@ -115,11 +115,21 @@ describe('Daily presentation kit', () => {
       <DailyGrid columns="twelve"><DailyGridItem span={8}>Overview</DailyGridItem><DailyGridItem span={4}>Types</DailyGridItem></DailyGrid>
     </>);
     expect(screen.getByRole('heading', { level: 2, name: 'Workouts' })).toBeTruthy();
-    expect([...container.children].slice(0, 5).map(element =>
+    expect([...container.children].slice(0, 4).map(element =>
       element.id || element.querySelector('h2')?.textContent || element.className,
-    )).toEqual(['Workouts', 'controls', 'daily-section-actions', 'freshness', 'about']);
+    )).toEqual(['Workouts', 'controls', 'freshness', 'about']);
+    const header = within(container.querySelector<HTMLElement>('header.daily-section-header')!);
+    const action = header.getByRole('button', { name: 'Action' });
+    expect(header.getByRole('heading', { level: 2 }).compareDocumentPosition(action) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(action.compareDocumentPosition(container.querySelector('#controls')!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(container.querySelector('.daily-grid--twelve .daily-grid-item--8')).toBeTruthy();
     expect(container.querySelector('.daily-grid--twelve .daily-grid-item--4')).toBeTruthy();
+  });
+
+  it('keeps actions ahead of the controls when a section header has no title', () => {
+    const { container } = render(<DailySectionHeader controls={<div id="controls">Filters</div>} actions={<button type="button">Action</button>} />);
+    expect([...container.children].map(element => element.id || element.className)).toEqual(['daily-section-actions', 'controls']);
+    expect(container.querySelector('header')).toBeNull();
   });
 
   it('keeps over-target progress in the accessible range without hiding the recorded total or lower bound', () => {

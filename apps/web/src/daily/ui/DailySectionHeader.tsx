@@ -11,14 +11,15 @@ export function DailySectionHeader({ title, actions, controls, freshness, aboutD
   headingId?: string;
   headingTabIndex?: number | null;
 }) {
+  const actionBar = actions && <div className="daily-section-actions">{actions}</div>;
   return <>
-    {title && <header className="daily-section-header">
+    {title ? <header className="daily-section-header">
       <div className="daily-section-header-content">
         <h2 id={headingId} ref={headingRef} {...(headingTabIndex === null ? {} : { tabIndex: headingTabIndex })}>{title}</h2>
       </div>
-    </header>}
+      {actionBar}
+    </header> : actionBar}
     {controls}
-    {actions && <div className="daily-section-actions">{actions}</div>}
     {freshness}
     {aboutData}
   </>;
