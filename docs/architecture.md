@@ -6,9 +6,12 @@ Daily remains a presentation-only client over its existing owner-authenticated
 read models. The page and nested sections keep their current routes, URL state,
 queries and selection behavior. Shared chart and table semantics are rendered
 in the web client: `DailyChart` exposes its data table, `ScrollTable` supplies a
-named keyboard-focusable region, and `Sparkline` names the ordered values and
-missing observations. Record details remain an in-flow, nonmodal region with a
-mounted hidden target while closed and focus restoration to the trigger. The
+named keyboard-focusable region, and `Sparkline` names short series (up to
+seven slots) as ordered values with missing observations and longer series as a
+bounded summary of recorded count, first, last, lowest and highest values; the
+dated values stay in the section tables and the Data section. Record details
+remain an in-flow, nonmodal region with a mounted hidden target while closed and
+focus restoration to the trigger. The
 shared state component announces loading/empty/partial as status and failures
 as alerts. Focused web tests guard these contracts; no API, dependency or
 persisted-data contract changed. See

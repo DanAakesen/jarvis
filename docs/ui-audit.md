@@ -9,8 +9,9 @@ not parallel palettes or control systems.
 
 The Daily keyboard, focus, naming, state-announcement and table/chart semantics
 were audited across the shell, each section and the shared Daily kit. Three
-confirmed defects were corrected: sparklines now expose ordered observations
-and explicit missing points in their image name; record tables use row headers;
+confirmed defects were corrected: sparklines now name short series as ordered
+observations with explicit missing points and longer series as a bounded
+summary; record tables use row headers;
 and closed record-detail triggers retain a valid hidden `aria-controls` target.
 Other reviewed controls retain their existing names and behavior. Tests guard
 roving tab navigation, period keyboard order, record focus return, table/chart

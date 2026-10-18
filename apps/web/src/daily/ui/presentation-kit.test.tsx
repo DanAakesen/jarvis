@@ -47,6 +47,19 @@ describe('Daily presentation kit', () => {
     expect(container.querySelector('path')?.getAttribute('d')).toContain('M116.0');
   });
 
+  it('lists up to seven sparkline observations and summarises longer series with a bounded name', () => {
+    const { rerender } = render(<Sparkline values={[1, 2, 3, 4, 5, 6, 7]} label="Synthetic trend" />);
+    expect(screen.getByRole('img').getAttribute('aria-label')).toContain('observation 7, 7');
+    rerender(<Sparkline values={[1, 2, 3, 4, 5, 6, 7, 8]} label="Synthetic trend" />);
+    expect(screen.getByRole('img').getAttribute('aria-label'))
+      .toBe('Synthetic trend: 8 of 8 observations recorded; first 1, last 8, lowest 1, highest 8');
+    const year = Array.from({ length: 366 }, (_, index) => ({ 3: 12, 200: 4, 365: 9 })[index] ?? null);
+    rerender(<Sparkline values={year} label="Synthetic trend" />);
+    const name = screen.getByRole('img').getAttribute('aria-label') ?? '';
+    expect(name).toBe('Synthetic trend: 3 of 366 observations recorded; first 12, last 9, lowest 4, highest 12');
+    expect(name).not.toContain('Not recorded');
+  });
+
   it('explains unknown values and unset targets, and marks partial progress', () => {
     const { rerender } = render(<Meter label="Synthetic progress" value={null} target={null} unit="min" />);
     expect(screen.getByText('Value unknown')).toBeTruthy();
