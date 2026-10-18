@@ -1611,6 +1611,12 @@ desktop-sized SVG viewBox on phones. Legend line patterns match plotted line
 patterns. Phone statistic rows wrap with a flexible last row instead of leaving
 a lone half-width tile.
 
+Synthetic captures in [`docs/ui/p12-31/`](docs/ui/p12-31/) cover Day and Trend
+at 390×844 and 1440×900 in light and dark, plus Day at 320px in both themes.
+They mount the real Daily shell with synthetic API responses, loading Daily
+CSS before the shell stylesheet. They are not live-provider or physical-device
+acceptance.
+
 ## Daily overview and Briefs integration (18 October 2026; P12-26)
 
 The Overview retains its source inventory and adds a responsive tile grid for

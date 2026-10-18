@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { chartLayout } from '../../../chart-data';
-import { dateStep, groupedMeals, mealDate, planItems, proteinTargetComparison, sumNutrient, targetBaseline, trendSeries, weeklyAverages, type Row } from './totals';
+import { dateStep, groupedMeals, mealDate, planItems, proteinTargetComparison, sumNutrient, targetBaseline, trendPoints, trendSeries, weeklyAverages, type Row } from './totals';
 
 const meal = (overrides: Row = {}): Row => ({
   id: 'synthetic-meal-9001', meal_date: '2026-10-18', occurred_at: '2026-10-18T09:00:00Z',
@@ -25,14 +25,24 @@ describe('nutrition totals', () => {
     expect(mealDate(meal({ occurred_at: '2026-10-17T23:30:00Z' }))).toBe('2026-10-18');
     expect(dateStep('2026-10-25', 1)).toBe('2026-10-26');
   });
-  it('groups known types and Other, sorted by actual instant', () => {
+  it('preserves recorded custom groups and sorts their meals by actual instant', () => {
     const groups = groupedMeals([
       meal({ id: 'synthetic-9002', meal_type: 'breakfast', occurred_at: '2026-10-18T09:30:00+02:00' }),
       meal({ id: 'synthetic-9003', meal_type: 'breakfast', occurred_at: '2026-10-18T07:00:00Z' }),
       meal({ meal_type: 'synthetic-unknown' }),
     ]);
-    expect(groups.map(([group]) => group)).toEqual(['Breakfast', 'Other']);
+    expect(groups.map(([group]) => group)).toEqual(['Breakfast', 'synthetic-unknown']);
     expect(groups[0]?.[1].map(row => row.id)).toEqual(['synthetic-9003', 'synthetic-9002']);
+  });
+  it('keeps distinct recorded custom names and uses Other only for missing meal types', () => {
+    const groups = groupedMeals([
+      meal({ id: 'synthetic-9001', meal_type: 'After training' }),
+      meal({ id: 'synthetic-9002', meal_type: 'Evening meal' }),
+      meal({ id: 'synthetic-9003', meal_type: null }),
+      meal({ id: 'synthetic-9004', meal_type: 'After training' }),
+    ]);
+    expect(groups.map(([group]) => group)).toEqual(['Other', 'After training', 'Evening meal']);
+    expect(groups.find(([group]) => group === 'After training')?.[1].map(row => row.id)).toEqual(['synthetic-9001', 'synthetic-9004']);
   });
   it.each([
     [null, null, null], [9001, null, null], [null, 9002, null], [9003, 9001, 2],
@@ -84,6 +94,19 @@ describe('nutrition totals', () => {
       expect(series.flatMap((run, index) => run.name.startsWith('Recorded') ? [index % 2] : []).every(index => index === 1)).toBe(true);
     }
   });
+  it('presents one nullable observed series without bridging missing or unknown dates', () => {
+    expect(trendPoints([
+      meal({ meal_date: '2026-10-16', energy_kcal: 0 }),
+      meal({ meal_date: '2026-10-12' }),
+      meal({ meal_date: '2026-10-14', energy_kcal: null }),
+    ], 'energy_kcal')).toEqual([
+      { x: '2026-10-12', y: 9001 },
+      { x: '2026-10-13', y: null },
+      { x: '2026-10-14', y: null },
+      { x: '2026-10-15', y: null },
+      { x: '2026-10-16', y: 0 },
+    ]);
+  });
   it('derives null-aware plan totals from stored item nutrients instead of trusting cached totals', () => {
     const items = planItems([
       { mealKey: 'synthetic-plan-item-9001', name: 'Synthetic plan item 9001', slot: 'breakfast',
@@ -96,5 +119,17 @@ describe('nutrition totals', () => {
     expect(sumNutrient(items, 'fat_grams')).toEqual({ value: null, missing: 2, count: 2 });
     expect(planItems('synthetic malformed JSON')).toBeNull();
     expect(planItems('[{"energy_kcal":9004}]')?.[0]?.energy_kcal).toBe(9004);
+  });
+  it.each([
+    ['carbohydrates_grams', 'Carbohydrates (g)'], ['fat_grams', 'Fat (g)'],
+  ] as const)('keeps %s chart labels and gaps without inventing targets', (key, label) => {
+    const runs = trendSeries([
+      meal({ meal_date: '2026-10-12', [key]: 9001 }),
+      meal({ meal_date: '2026-10-13', [key]: null }),
+      meal({ meal_date: '2026-10-14', [key]: 0 }),
+    ], key, null);
+    expect(runs[0]?.points).toEqual([]);
+    expect(runs.filter(run => run.points.length).map(run => run.name)).toEqual([label, label]);
+    expect(runs.flatMap(run => run.points).map(point => point.y)).toEqual([9001, 0]);
   });
 });

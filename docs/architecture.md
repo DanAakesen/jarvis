@@ -6125,6 +6125,11 @@ the measured width; legend swatches share plotted dash patterns. Shared phone
 statistic rows flex to fill the last row. These changes add no backend reads,
 dependencies, persistence or authorization changes.
 
+Nullable chart observations retain their x-domain positions without entering
+the numeric y scale. Chart table disclosures cancel the native summary toggle
+before updating their controlled open state; supplied tables remain available
+even when every observation is unknown.
+
 `apps/web/src/daily/sections/nutrition/index.tsx` exports the auto-discovered
 section definition and lazy-loads its content. It requires only
 `daily.nutrition.meals`; the optional `daily.nutrition.days`, favourites and
