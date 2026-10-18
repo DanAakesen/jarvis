@@ -13,8 +13,10 @@ import type { PushStore } from '../database/push-store.js';
 import { ConfigurationError } from '../configuration-error.js';
 import { createProactiveStore } from '../database/proactive-store.js';
 import { createProactiveAlertStore } from '../database/proactive-alert-store.js';
+import { createProactiveTodoReceiptStore } from '../database/proactive-todo-store.js';
 import { createMemoryProactiveStore } from './store.js';
 import type { ProactiveStore } from './store.js';
+import { createProactiveTodoWriter } from './todo-writer.js';
 import { createMemoryAlertLedgerStore, type AlertLedgerStore } from './alert-ledger.js';
 import { buildSourceRegistry } from './sources/registry.js';
 import { registerProactiveRoutes } from './routes.js';
@@ -86,6 +88,15 @@ export function registerProactive<Logger extends FastifyBaseLogger>(
       },
     });
   }
+  const todoWriter = options.todoWritesEnabled === true && options.vaultClient && options.pool
+    ? createProactiveTodoWriter({
+      vault: options.vaultClient,
+      store,
+      receipts: createProactiveTodoReceiptStore(options.pool, options.ownerObjectId),
+      now,
+      ...(options.logger ? { logger: options.logger } : {}),
+    })
+    : undefined;
   const alertHook = options.alertsEnabled === true && options.pushEnabled === true &&
     options.pushStore !== undefined && options.systemPushSender !== undefined
     ? createProactiveAlertHook({
@@ -100,6 +111,7 @@ export function registerProactive<Logger extends FastifyBaseLogger>(
       ...(options.logger ? { logger: options.logger } : {}),
     })
     : undefined;
+  // Hooks run in order: the time-critical alert goes first so a slow vault write never delays it.
   const run = createProactiveEngine({
     ...options,
     store,
@@ -109,6 +121,7 @@ export function registerProactive<Logger extends FastifyBaseLogger>(
     onFindingsStored: [
       ...(options.onFindingsStored ?? []),
       ...(alertHook ? [alertHook] : []),
+      ...(todoWriter ? [todoWriter] : []),
     ],
   });
   const scheduler = createProactiveScheduler({

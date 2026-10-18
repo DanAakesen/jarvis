@@ -73,6 +73,7 @@ export interface ProactiveItemsStore {
   getMany(ids: readonly string[]): Promise<Pick<Item, 'id' | 'state'>[]>;
   applyFeedback(id: string, action: FeedbackAction, snoozeUntil?: string): Promise<Item | undefined>;
   upsertFinding(input: FindingInput, guard?: FindingWriteGuard): Promise<Item>;
+  markTodoAdded(itemIds: readonly string[]): Promise<void>;
 }
 export interface ProactiveRunsStore {
   claim(input: { trigger: RunSummary['trigger']; slot: string | null; now: Date }): Promise<{ run: RunSummary; generation: number } | null>;
@@ -216,6 +217,12 @@ export function createMemoryProactiveStore(ownerObjectId: string = randomUUID())
         findings.set(input.dedupeKey, item.id);
         materials.set(item.id, material);
         return copyItem(item);
+      },
+      async markTodoAdded(itemIds) {
+        for (const id of itemIds) {
+          const item = items.get(id.toLowerCase());
+          if (item) items.set(id.toLowerCase(), { ...item, todoAdded: true });
+        }
       },
     },
     runs: {

@@ -356,6 +356,16 @@ export function createProactiveStore(pool: sql.ConnectionPool, ownerObjectId: st
           guard?.signal.removeEventListener('abort', cancel);
         }
       },
+      async markTodoAdded(itemIds: readonly string[]) {
+        if (itemIds.length === 0) return;
+        await pool.request()
+          .input('owner', sql.UniqueIdentifier, owner)
+          .input('ids', sql.NVarChar(sql.MAX), JSON.stringify(itemIds))
+          .query(`UPDATE item SET todo_added = 1
+            FROM dbo.proactive_items AS item
+            INNER JOIN OPENJSON(@ids) WITH (id uniqueidentifier '$') AS requested ON requested.id = item.id
+            WHERE item.owner_object_id = @owner AND item.kind = N'finding';`);
+      },
     },
     runs: {
       async claim({ trigger, slot, now }) {
