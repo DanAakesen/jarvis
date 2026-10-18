@@ -371,6 +371,9 @@ jobs:
             echo "STATIC_WEB_APP_HOST=$(jq -er .staticWebAppHostname.value "$RUNNER_TEMP/infra-outputs.json")"
           } >>"$GITHUB_ENV"
       - name: Build the web app against the production backend
+        env:
+          # Web half of the Daily switch; the backend half is JARVIS_DAILY_ENABLED in infra/main.bicep. Set both to false to turn Daily off.
+          VITE_DAILY_ENABLED: 'true'
         run: npm run build --workspace @jarvis/web
       - name: Identify the exact production bundle
         id: bundle
