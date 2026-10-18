@@ -47,7 +47,7 @@ const tablesInSchema = [
   'activity', 'artifacts', 'background_job_dismissals', 'background_job_steps', 'background_jobs', 'conversation_attachments',
   'conversation_summaries', 'credential_status', 'deployment_failure_receipts', 'deployments', 'factory_task_submissions', 'folio_items', 'jarvis_sessions',
   'memories', 'memory_deletions', 'memory_history', 'messages', 'phone_sessions', 'proactive_items',
-  'proactive_runs', 'proactive_settings', 'proactive_source_status', 'proactive_spend', 'projects',
+  'proactive_runs', 'proactive_settings', 'proactive_source_status', 'proactive_spend', 'proactive_todo_receipts', 'projects',
   'pull_requests', 'push_subscriptions', 'push_vapid_keys', 'releases',
   'sandbox_sessions', 'sandbox_turns', 'settings', 'task_event_archives', 'task_events', 'task_status_notifications',
   'tasks', 'teams_confirmations', 'teams_conversations', 'tool_calls', 'usage', 'vault_chunks', 'vault_links',

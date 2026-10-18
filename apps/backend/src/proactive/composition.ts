@@ -12,7 +12,10 @@ import type { createGitHubVaultClient } from '../vault/github-client.js';
 import type { PushRouteDependencies } from '../push/routes.js';
 import { ConfigurationError } from '../configuration-error.js';
 import { createProactiveStore } from '../database/proactive-store.js';
+import { createProactiveTodoReceiptStore } from '../database/proactive-todo-store.js';
 import { createMemoryProactiveStore } from './store.js';
+import { createMemoryProactiveTodoReceiptStore } from './todo-store.js';
+import { createProactiveTodoWriter } from './todo-writer.js';
 import { buildSourceRegistry } from './sources/registry.js';
 import { registerProactiveRoutes } from './routes.js';
 import { createProactiveEngine, type ProactiveEngineOptions } from './engine.js';
@@ -78,7 +81,22 @@ export function registerProactive<Logger extends FastifyBaseLogger>(
       },
     });
   }
-  const run = createProactiveEngine({ ...options, store, sources, model, now });
+  const todoWriter = options.todoWritesEnabled === true && options.vaultClient
+    ? createProactiveTodoWriter({
+      vault: options.vaultClient,
+      store,
+      receipts: options.pool
+        ? createProactiveTodoReceiptStore(options.pool, options.ownerObjectId)
+        : createMemoryProactiveTodoReceiptStore(),
+      now,
+      ...(options.logger ? { logger: options.logger } : {}),
+    })
+    : undefined;
+  const onFindingsStored = [
+    ...(options.onFindingsStored ?? []),
+    ...(todoWriter ? [todoWriter] : []),
+  ];
+  const run = createProactiveEngine({ ...options, store, sources, model, now, onFindingsStored });
   const scheduler = createProactiveScheduler({
     store, now, run, ...(options.logger ? { logger: options.logger } : {}),
   });

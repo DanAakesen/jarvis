@@ -54,6 +54,17 @@ describe('committed SQL manifest', () => {
     expect(down.sql).toContain("WHERE kind = N'proactive'");
     expect(down.sql).toContain('THROW 51000');
   });
+  it('adds durable suggested-todo receipts with add-once and daily-cap indexes', async () => {
+    const migration = (await readMigrations()).find(({ name }) => name === '0057_proactive_todo_receipts.sql');
+    expect(migration?.sql).toContain('CREATE TABLE dbo.proactive_todo_receipts');
+    expect(migration?.sql).toContain('item_id uniqueidentifier NULL');
+    expect(migration?.sql).toContain('dedupe_key char(32) NOT NULL');
+    expect(migration?.sql).toContain('WHERE status = N\'added\'');
+    expect(migration?.sql).toContain('IX_proactive_todo_receipts_owner_day_status');
+    const down = await readDownMigration('0057_proactive_todo_receipts.sql');
+    expect(down.sql).toContain('proactive todo receipts are durable evidence');
+    expect(down.sql).toContain('DROP TABLE dbo.proactive_todo_receipts');
+  });
 
   it('retains durable task submission claims and refuses to erase retry protection on rollback', async () => {
     const migration = (await readMigrations()).find(({ name }) => name === '0052_factory_task_submissions.sql');
