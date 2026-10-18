@@ -1634,9 +1634,12 @@ export const Workspace = forwardRef<WorkspaceController, {
                   <>
                     <p role="alert">{view.content.message}</p>
                     {view.content.retry && (
-                      <button className="secondary-button" type="button" disabled={actionPending} onClick={() => { void runAction(view.id, retry, 'Retry requested.'); }}>
-                        {actionPending ? 'Retrying…' : 'Retry view'}
-                      </button>
+                      <div className="button-group button-group--space-3">
+                        <button className="secondary-button" type="button" disabled={actionPending} aria-busy={actionPending || undefined} aria-label={actionPending ? 'Retrying…' : undefined} onClick={() => { void runAction(view.id, retry, 'Retry requested.'); }}>
+                          <span className="button-label">Retry view</span>
+                          {actionPending && <span className="button-loading-indicator" aria-hidden="true"><Loader variant="inline" announce={false} label="Retrying…" /></span>}
+                        </button>
+                      </div>
                     )}
                   </>
                 )}
@@ -1645,9 +1648,12 @@ export const Workspace = forwardRef<WorkspaceController, {
                     <p role="status">{view.content.message}</p>
                     {view.content.content}
                     {view.content.resume && (
-                      <button className="secondary-button" type="button" disabled={actionPending} onClick={() => { void runAction(view.id, resume, 'Continue requested.'); }}>
-                        {actionPending ? 'Continuing…' : 'Continue view'}
-                      </button>
+                      <div className="button-group button-group--space-3">
+                        <button className="secondary-button" type="button" disabled={actionPending} aria-busy={actionPending || undefined} aria-label={actionPending ? 'Continuing…' : undefined} onClick={() => { void runAction(view.id, resume, 'Continue requested.'); }}>
+                          <span className="button-label">Continue view</span>
+                          {actionPending && <span className="button-loading-indicator" aria-hidden="true"><Loader variant="inline" announce={false} label="Continuing…" /></span>}
+                        </button>
+                      </div>
                     )}
                   </>
                 )}

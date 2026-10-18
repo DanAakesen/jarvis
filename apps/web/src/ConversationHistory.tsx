@@ -774,8 +774,9 @@ export function ConversationHistory({
         ) : (
           <>
             {nextCursor && (
-              <button className="history-button" type="button" onClick={() => void loadOlder()} disabled={loadingOlder}>
-                {loadingOlder ? <Loader variant="inline" announce={false} label="Loading older history…" /> : 'Load older history'}
+              <button className="history-button secondary-button" type="button" onClick={() => void loadOlder()} disabled={loadingOlder} aria-busy={loadingOlder || undefined} aria-label={loadingOlder ? 'Loading older history…' : undefined}>
+                <span className="button-label">Load older history</span>
+                {loadingOlder && <span className="button-loading-indicator" aria-hidden="true"><Loader variant="inline" announce={false} label="Loading older history…" /></span>}
               </button>
             )}
             <ol className="conversation-messages" aria-label="Messages between Dan and Jarvis">

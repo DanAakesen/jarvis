@@ -303,9 +303,11 @@ export function ReleasePage({ backendUrl, getAccessToken }: AreaProps) {
                 pullRequests={releasePullRequests(selectedRelease)}
                 taskIds={releaseTasks(selectedRelease)}
               />
-              <button className="secondary-button" type="button" onClick={() => navigate(`/factory/projects/${projectId}/releases`)}>
-                Close release details
-              </button>
+              <div className="button-group button-group--space-4">
+                <button className="secondary-button" type="button" onClick={() => navigate(`/factory/projects/${projectId}/releases`)}>
+                  Close release details
+                </button>
+              </div>
             </>
           ) : (
             <>

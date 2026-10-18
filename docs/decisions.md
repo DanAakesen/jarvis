@@ -1,5 +1,29 @@
 # Decisions
 
+## Use one refined button hierarchy across the web app (18 October 2026; P14-03 / #969)
+
+Keep the existing class names and route behavior while making button intent
+visible in the shared stylesheet. Primary remains the existing primary fill;
+secondary is a distinct neutral surface, ghost is quiet, danger is low
+emphasis, and confirmed destructive actions use the filled danger modifier.
+All variants use the existing control radius, focus outline and semantic
+surface/state tokens; no decorative control rim or new palette is introduced.
+
+Buttons no longer carry layout margins. Shared action groups own spacing,
+wrapping, phone stacking and primary-last ordering. Busy controls keep their
+disabled state and accessible name while the shared inline Loader overlays a
+label that still reserves the button's width. This is a presentation-only
+change, not a change to actions, confirmation boundaries or API behavior.
+
+## Notify only on P1 - High vault tasks (18 October 2026; #996)
+
+Proactive todo findings and reminders are eligible only for open vault tasks
+explicitly marked `priority:: P1 - High` or `priority: P1 - High`. Missing and
+lower priority values are not notification-worthy. Re-check priority at reminder
+delivery; if the vault cannot establish the current priority after bounded
+retries, suppress rather than send an unverified reminder. This reuses the
+existing parser, proactive sources and reminder lifecycle without a migration.
+
 ## Discover Daily sections from folders (18 October 2026; P12-20 / #964)
 
 Daily keeps one destination and discovers section definitions from
@@ -5370,6 +5394,18 @@ announcement is the concise “Saved.” while its standing applicability hint
 remains visible and the success stays announced with `role="status"`. The
 bounded code audit and follow-up surfaces are recorded in
 [`docs/ui-audit.md`](ui-audit.md); browser acceptance remains separate evidence.
+
+## P14-04 — Ratchet shared borders, radii and surfaces (18 October 2026)
+
+Keep the existing radius and surface tokens as the only shared geometry system.
+Retain only structural 1px neutral side borders, represent selection through
+shared surfaces, and replace inset-shadow pseudo-borders with real boundaries
+or no boundary. A PostCSS ratchet in the existing web tests scans every
+stylesheet; its exact-value exceptions carry reasons for the P14-03-owned
+buttons and genuine circular voice control. No dependency or theme was added.
+The Pass 3 audit records measured counts, classifications, exceptions and
+synthetic before/after Chromium evidence; this does not claim live-service or
+human acceptance.
 
 ## P13-16 owner-bound proactive recall (18 October 2026; #937)
 
