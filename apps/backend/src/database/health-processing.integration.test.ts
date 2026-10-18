@@ -14,7 +14,6 @@ import { loadConfig } from '../config.js';
 import { dailySourceTools } from '../daily/tools/source-tools.js';
 import type { NutritionStore } from '../daily/nutrition/store.js';
 import type { DailyCoachStore } from '../daily/coach-store.js';
-import type { FastifyRequest } from 'fastify';
 import { healthUploadLimit } from '../daily/health-upload/contracts.js';
 
 const configuration = loadDatabaseConfig();
