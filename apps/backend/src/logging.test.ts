@@ -378,6 +378,32 @@ describe('structured log export', () => {
     expect(records.join('') + JSON.stringify(sink.trackTrace.mock.calls)).not.toContain('private');
   });
 
+  it('exports only the family, verdict and path of an interpreted approval and never the words', () => {
+    const records: string[] = [];
+    const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
+    const sink = { ...sdk, trackTrace: vi.fn() };
+    const logger = createLogger({ logLevel: 'info' }, sink, output);
+    logger.info({
+      event: 'approval.interpreted', family: 'calendar', verdict: 'approve', path: 'model',
+      reply: 'private-reply', summary: 'private-summary', text: 'private-text', error: new Error('private-error'),
+    }, 'approval.interpreted');
+    const fields = { family: 'calendar', verdict: 'approve', path: 'model' };
+    expect(JSON.parse(records[0]!)).toEqual({
+      level: 30, time: expect.any(Number), service: 'jarvis-backend', msg: 'approval.interpreted', ...fields,
+    });
+    expect(sink.trackTrace).toHaveBeenCalledWith(expect.objectContaining({
+      message: 'approval.interpreted', properties: { service: 'jarvis-backend', ...fields },
+    }));
+    logger.info({ family: 'private-family', verdict: 'private-verdict', path: 'private-path' }, 'approval.interpreted');
+    expect(JSON.parse(records[1]!)).toEqual({
+      level: 30, time: expect.any(Number), service: 'jarvis-backend', msg: 'approval.interpreted',
+    });
+    expect(sink.trackTrace).toHaveBeenLastCalledWith(expect.objectContaining({
+      message: 'approval.interpreted', properties: { service: 'jarvis-backend' },
+    }));
+    expect(records.join('') + JSON.stringify(sink.trackTrace.mock.calls)).not.toContain('private');
+  });
+
   it.each([
     'sandbox_heartbeat.poll_failed', 'sandbox_heartbeat.configuration_missing',
     'budget_alert.check_failed', 'task_event_archive.failed', 'project_policy.confirmation_failed',

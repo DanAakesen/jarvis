@@ -89,7 +89,7 @@ const events = new Set([
   'conversation.reply_failed', 'voice.connection_failed', 'voice.upstream_closed', 'voice.upstream_error',
   'voice.upstream_event_error', 'voice.turn_timing', 'pc_bridge.command_timing', 'pc_bridge.wake_word',
   'credentials.codex_renewal', 'dispatcher.start_failed',
-  'tool.invalid_arguments', 'decision.provider_unavailable',
+  'tool.invalid_arguments', 'decision.provider_unavailable', 'approval.interpreted',
   'factory.issue_create_outcome_uncertain',
   'factory.board_phase', 'factory.board_read_timing', 'factory.board_invalidated',
   'system.smoke_check',
@@ -154,6 +154,9 @@ const boardReadReasons = new Set([
 const boardReadOutcomes = new Set(['success', 'failure', 'not_found', 'unavailable']);
 const boardCachePaths = new Set(['not_started', 'cache_hit', 'shared_wait', 'source_load']);
 const boardInvalidationOrigins = new Set(['task_event', 'github_webhook']);
+const approvalFamilies = new Set(['calendar', 'mail', 'factory', 'github']);
+const approvalVerdicts = new Set(['approve', 'decline', 'neither']);
+const approvalPaths = new Set(['fast', 'model', 'failed']);
 
 function safeRequestId(value: unknown): value is string {
   return typeof value === 'string' && /^[\da-f-]{36}$/iu.test(value);
@@ -260,6 +263,13 @@ function safeFields(input: Record<string, unknown>): Record<string, unknown> {
   }
   if (input.msg === 'decision.provider_unavailable') {
     return ['jev', 'microsoft'].includes(String(input.provider)) ? { provider: input.provider } : {};
+  }
+  if (input.msg === 'approval.interpreted') {
+    const fields: Record<string, unknown> = {};
+    if (typeof input.family === 'string' && approvalFamilies.has(input.family)) fields.family = input.family;
+    if (typeof input.verdict === 'string' && approvalVerdicts.has(input.verdict)) fields.verdict = input.verdict;
+    if (typeof input.path === 'string' && approvalPaths.has(input.path)) fields.path = input.path;
+    return fields;
   }
   if (input.msg === 'tool.invalid_arguments') {
     const fields: Record<string, unknown> = {};

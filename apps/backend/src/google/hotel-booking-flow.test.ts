@@ -8,7 +8,7 @@ import type { ToolCallRecord } from '../core/tool-calls.js';
 import { runModelToolCall } from '../core/tool-origin.js';
 import { WorkspaceCommandBroker } from '../core/workspace-commands.js';
 import type { BackendModule } from '../modules.js';
-import { calendarTurnContext, confirmPendingCalendarReply, executeRealtimeToolCall } from '../voice/realtime.js';
+import { calendarTurnContext, executeRealtimeToolCall, resolveCalendarReply } from '../voice/realtime.js';
 import type { GoogleApiClient } from './api-client.js';
 import { createGoogleModule } from './tools.js';
 
@@ -190,7 +190,10 @@ function harness(channel: Channel) {
       instance.post('/test/voice-reply', async (request) => {
         request.jarvisConversationMessage = latest;
         try {
-          return JSON.parse(await confirmPendingCalendarReply(instance.jarvisTools, request, new AbortController().signal));
+          const { output } = await resolveCalendarReply(
+            instance.jarvisTools, request, new AbortController().signal, latest.text,
+          );
+          return JSON.parse(output ?? '{"outcome":"undecided"}');
         } finally {
           delete request.jarvisConversationMessage;
         }
