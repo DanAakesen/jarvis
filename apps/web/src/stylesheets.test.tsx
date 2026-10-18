@@ -90,8 +90,6 @@ const typeSpacingAllowlist: AllowlistEntry[] = [
   { file: 'daily/ui/daily-ui.css', selector: '.daily-chart-xaxis text', property: 'font', value: '12px var(--font-body)', reason: 'The Daily chart axis labels retain their pixel-exact chart scale.' },
   { file: 'daily/ui/daily-ui.css', selector: '.daily-chart-target text', property: 'font', value: '12px var(--font-body)', reason: 'The Daily chart target label is SVG text sized in viewBox units, so it retains the chart scale.' },
   { file: 'daily/ui/daily-ui.css', selector: '.daily-chart-active-point text', property: 'font', value: '12px var(--font-body)', reason: 'The Daily chart readout label is SVG text sized in viewBox units, so it retains the chart scale.' },
-  { file: 'daily/sections/body-sleep/body-sleep.css', selector: '.body-sleep-axis-label', property: 'font', value: '12px var(--font-body)', reason: 'The Daily chart axis labels retain their pixel-exact chart scale.' },
-  { file: 'daily/sections/body-sleep/body-sleep.css', selector: '.body-sleep-stage-mark', property: 'font', value: 'bold 12px var(--font-body)', reason: 'The Daily stage marks retain their pixel-exact chart scale.' },
   { file: 'daily/daily.css', selector: '.daily-page pre', property: 'font', value: 'var(--type-caption)/1.5 var(--font-mono)', reason: 'The ongoing Daily work owns its preformatted text line-height; the type size already uses the shared caption role.' },
   { file: 'daily/sections/workouts/workouts.css', selector: '.workouts-type-volume', property: 'margin-inline-start', value: 'calc(1.5rem + var(--space-2))', reason: 'The offset is the 1.5rem workout glyph column plus its gap, so the volume bar aligns under the type name.' },
   { file: 'ConversationHistory.css', selector: '.conversation-message.live-turn::before, .conversation-message[data-speaker="jarvis"][data-latest]::before', property: 'padding', value: '1.5px', reason: 'This pseudo-element padding creates the conversation glass rim, not content spacing.' },
@@ -302,7 +300,7 @@ describe('stylesheets', () => {
       total.spacing += result.spacing;
       return total;
     }, { fontSize: 0, lineHeight: 0, fontShorthand: 0, spacing: 0 });
-    expect(inventory).toEqual({ fontSize: 4, lineHeight: 0, fontShorthand: 8, spacing: 14 });
+    expect(inventory).toEqual({ fontSize: 4, lineHeight: 0, fontShorthand: 6, spacing: 14 });
   });
 
   it('keeps legacy state selectors on shared semantic tokens or removes their styles', () => {
