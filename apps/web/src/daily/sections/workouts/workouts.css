@@ -6,10 +6,11 @@
 .workouts-detail { display: grid; gap: var(--space-3); min-width: 0; }
 .workouts-detail > button { justify-self: start; }
 .workouts-detail-heading { display: flex; align-items: center; gap: var(--space-3); min-width: 0; }
-.workouts-detail-heading .daily-workout-glyph { width: 2rem; height: 2rem; }
+.app-shell .workouts-detail-heading .daily-workout-glyph { width: 2rem; height: 2rem; }
 .workouts-detail-heading h3 { margin-block: 0 var(--space-1); }
 .workouts-detail-heading p { margin: 0; color: var(--text-muted); }
 .workouts-detail-stats { grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr)); }
+.workouts-detail > h3 { margin: 0; }
 .workouts-coverage { margin-block: var(--space-4); }
 .workouts-field { max-width: 100%; width: fit-content; }
 .workouts-field select { max-width: 100%; }

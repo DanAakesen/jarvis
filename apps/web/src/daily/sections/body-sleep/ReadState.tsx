@@ -11,6 +11,5 @@ export function ReadState({ pages, name }: { pages: DailyPages; name: string }) 
     {pages.status === 'ready' && pages.items.length === 0 && <DailyState status="empty" />}
     {pages.hasMore && <p role="status">{pages.capped ? 'Five-page limit reached.' : 'More records remain.'} Loaded records only; narrow the period for more detail.</p>}
     {pages.first && <DailyState status="ready" freshness={pages.first.freshness} />}
-    <p className="body-sleep-note">Source: retained Daily SQL records. Source completeness and freshness are unknown. Summaries cover loaded records only.</p>
   </div>;
 }

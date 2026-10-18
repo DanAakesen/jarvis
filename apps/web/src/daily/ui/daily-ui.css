@@ -1,6 +1,10 @@
 .daily-state { display: grid; gap: var(--space-2); }
 .daily-state p { margin: 0; }
 .daily-state-freshness { color: var(--text-muted); font-size: var(--type-small); }
+.daily-coverage-note { min-width: 0; }
+.daily-coverage-note > summary { min-height: 44px; align-content: center; cursor: pointer; overflow-wrap: anywhere; }
+.daily-coverage-note > summary:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.daily-coverage-note-content { display: grid; gap: var(--space-2); min-width: 0; padding-block: var(--space-2); color: var(--text-muted); font-size: var(--type-small); overflow-wrap: anywhere; }
 .daily-stat-tile { display: grid; align-content: start; min-width: 0; height: 100%; padding: var(--space-3); border: 1px solid var(--rule); border-radius: var(--radius-panel); background: var(--surface-translucent); }
 .daily-stat-tile--compact { padding: var(--space-2) var(--space-3); }
 .daily-stat-tile h3 { margin: 0; color: var(--text-muted); font-size: var(--type-small); font-weight: 500; }
@@ -9,7 +13,7 @@
 .daily-stat-unit { font-size: var(--type-body); font-weight: 400; }
 .daily-stat-note, .daily-stat-comparison { margin: var(--space-1) 0 0; color: var(--text-muted); font-size: var(--type-small); }
 .daily-stat-delta { display: flex; align-items: center; gap: var(--space-1); margin: var(--space-2) 0 0; font-size: var(--type-small); }
-.daily-stat-delta svg { width: 1em; height: 1em; fill: none; stroke: currentColor; stroke-width: 2; }
+.app-shell .daily-stat-delta svg { width: 1em; height: 1em; fill: none; stroke: currentColor; stroke-width: 2; }
 .daily-freshness { margin: 0; color: var(--text-muted); font-size: var(--type-small); font-variant-numeric: tabular-nums; }
 .daily-data-notes { min-width: 0; }
 .daily-data-notes summary, .daily-chart-table summary { min-height: 44px; align-content: center; cursor: pointer; }
@@ -17,7 +21,8 @@
 .daily-data-notes p { margin: 0; }
 .daily-chart { min-width: 0; margin: var(--space-3) 0; }
 .daily-chart > figcaption { margin-bottom: var(--space-2); font-weight: 600; }
-.daily-chart svg { display: block; width: 100%; max-width: 100%; height: auto; overflow: visible; }
+/* Daily svg sizing must out-rank the shell's `.app-shell svg` icon size, whatever the stylesheet order. */
+.app-shell .daily-chart svg { display: block; width: 100%; max-width: 100%; height: auto; overflow: visible; }
 .daily-chart > svg:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; border-radius: var(--radius-control); }
 .daily-chart-grid line { stroke: var(--rule); stroke-width: 1; }
 .daily-chart-grid text { fill: var(--text-muted); font: 12px var(--font-body); }
@@ -41,7 +46,7 @@
 .daily-chart-legend-range { width: 1.4rem; height: .75rem; border-radius: var(--radius-control); background: var(--text-muted); opacity: .22; }
 .daily-chart-readout { min-height: 1.4em; margin: var(--space-1) 0; color: var(--text-muted); font-size: var(--type-small); font-variant-numeric: tabular-nums; }
 .daily-chart-table { margin-top: var(--space-2); }
-.daily-sparkline { display: block; width: min(100%, 8rem); height: 2rem; margin-top: var(--space-2); overflow: visible; }
+.app-shell .daily-sparkline { display: block; width: min(100%, 8rem); height: 2rem; margin-top: var(--space-2); overflow: visible; }
 .daily-sparkline path { fill: none; stroke: var(--focus); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .daily-sparkline-empty { display: block; margin-top: var(--space-2); color: var(--text-muted); font-size: var(--type-small); }
 .daily-meter { display: grid; gap: var(--space-2); min-width: 0; }
@@ -59,7 +64,7 @@
 .daily-grid--twelve { grid-template-columns: minmax(0, 1fr); }
 .daily-grid-item { min-width: 0; }
 .daily-grid-item--8, .daily-grid-item--4 { grid-column: auto; }
-.daily-workout-glyph { flex: 0 0 auto; width: 1.5rem; height: 1.5rem; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.app-shell .daily-workout-glyph { flex: 0 0 auto; width: 1.5rem; height: 1.5rem; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .daily-scroll-table { max-width: 100%; overflow: auto; outline-offset: 2px; }
 .daily-scroll-table:focus-visible { outline: 2px solid var(--focus); }
 .daily-scroll-table table { width: 100%; border-collapse: collapse; }

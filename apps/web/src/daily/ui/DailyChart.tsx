@@ -124,7 +124,7 @@ export function DailyChart({ kind, name, series, target, rangeLabel }: {
       </g>
       {series.map((entry, seriesIndex) => {
         const colour = colours[seriesIndex % colours.length];
-        if (kind === 'bar') return <g key={entry.name} fill={colour} className="daily-chart-bars">
+        if (kind === 'bar') return <g key={`${entry.name}-${seriesIndex}`} fill={colour} className="daily-chart-bars">
           {entry.points.map((point, index) => {
             if (point.y === null) return null;
             const x = px(point) - barWidth * series.length / 2 + barWidth * seriesIndex;
@@ -141,10 +141,10 @@ export function DailyChart({ kind, name, series, target, rangeLabel }: {
         const line = pathSegments(orderedPoints, px, py);
         const last = orderedPoints.filter(point => point.y !== null).at(-1);
         const first = orderedPoints.find(point => point.y !== null);
-        return <g key={entry.name} className="daily-chart-series" style={{ color: colour }} data-series-index={seriesIndex}>
+        return <g key={`${entry.name}-${seriesIndex}`} className="daily-chart-series" style={{ color: colour }} data-series-index={seriesIndex}>
           {orderedPoints.some(point => point.low != null && point.high != null) &&
             <g className="daily-chart-range">{bandSegments(orderedPoints, px, py).map((path, index) => <path key={index} d={path} />)}</g>}
-          {kind === 'area' && first && last && first.y !== null && last.y !== null &&
+          {kind === 'area' && first && last && first !== last && first.y !== null && last.y !== null &&
             <path className="daily-chart-area" d={`${line} L${px(last)},${baseline} L${px(first)},${baseline} Z`} />}
           <path className="daily-chart-line" d={line} />
           {orderedPoints.map((point, index) => point.y === null ? null : <circle key={`${point.x}-${index}`} cx={px(point)} cy={py(point.y)} r="3"
@@ -164,7 +164,7 @@ export function DailyChart({ kind, name, series, target, rangeLabel }: {
     </svg>
     <ul className="daily-chart-legend" aria-label={`${name} legend`}>
       {rangeLabel && <li><span className="daily-chart-legend-range" aria-hidden="true" />{rangeLabel}</li>}
-      {series.map((entry, index) => <li key={entry.name}>
+      {series.map((entry, index) => <li key={`${entry.name}-${index}`}>
         <span className={`daily-chart-legend-mark daily-chart-legend-mark--${kind}`} style={{ color: colours[index % colours.length] }} aria-hidden="true" />
         {entry.name}
       </li>)}
@@ -178,8 +178,8 @@ export function DailyChart({ kind, name, series, target, rangeLabel }: {
         <table>
           <caption>{name} data</caption>
           <thead><tr><th scope="col">Series</th><th scope="col">X</th><th scope="col">Value</th><th scope="col">Minimum</th><th scope="col">Maximum</th></tr></thead>
-          <tbody>{series.flatMap(entry => entry.points.map((point, index) =>
-            <tr key={`${entry.name}-${index}`}><th scope="row">{entry.name}</th><td>{String(point.x)}</td>
+          <tbody>{series.flatMap((entry, seriesIndex) => entry.points.map((point, index) =>
+            <tr key={`${seriesIndex}-${index}`}><th scope="row">{entry.name}</th><td>{String(point.x)}</td>
               <td>{point.y === null ? 'Not recorded' : formatNumber(point.y)}</td>
               <td>{point.low == null ? 'Not recorded' : formatNumber(point.low)}</td>
               <td>{point.high == null ? 'Not recorded' : formatNumber(point.high)}</td></tr>))}</tbody>

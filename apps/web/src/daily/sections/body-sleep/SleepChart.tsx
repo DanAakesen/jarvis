@@ -26,7 +26,8 @@ export function SleepChart({ rows }: { rows: Row[] }) {
       <li>T · Stages not recorded</li>
     </ul>
     <div className="body-sleep-plot-scroll" role="region" aria-label="Sleep stage chart, scroll horizontally for more nights" tabIndex={0}>
-      <svg viewBox={`0 0 ${width} 280`} width={width} height="280" role="img" aria-label="Recorded nightly sleep stages in hours">
+      {/* Inline size: the shell's `.app-shell svg` icon rule would otherwise override the width/height attributes. */}
+      <svg viewBox={`0 0 ${width} 280`} width={width} height="280" style={{ width, height: 280 }} role="img" aria-label="Recorded nightly sleep stages in hours">
         <defs>{stages.map((stage, index) => <pattern id={`${id}-${stage.key}`} key={stage.key}
           width={8 + index * 2} height={8 + index * 2} patternUnits="userSpaceOnUse"
           patternTransform={`rotate(${index * 45})`}>

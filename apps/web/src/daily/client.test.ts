@@ -49,6 +49,29 @@ describe('owner-authenticated Daily query client', () => {
     expect(init).toMatchObject({ method: 'POST', cache: 'no-store', body: JSON.stringify(query), headers: { Authorization: ['Bearer', 'synthetic-fixture'].join(' ') } });
     expect(init.signal).toBeInstanceOf(AbortSignal);
   });
+  it('limits overview and section reads to two and removes an aborted queued request', async () => {
+    let release!: () => void;
+    let started!: () => void;
+    const gate = new Promise<void>(resolve => { release = resolve; });
+    const twoStarted = new Promise<void>(resolve => { started = resolve; });
+    const fetch = vi.fn(async () => {
+      if (fetch.mock.calls.length === 2) started();
+      await gate;
+      return jsonResponse(dailyFixture(query));
+    });
+    vi.stubGlobal('fetch', fetch);
+    const first = queryDaily('http://localhost:3999', query, token, signal());
+    const second = queryDaily('http://localhost:3999', query, token, signal());
+    const controller = new AbortController();
+    const third = queryDaily('http://localhost:3999', query, token, controller.signal);
+    await twoStarted;
+    expect(fetch).toHaveBeenCalledTimes(2);
+    controller.abort();
+    release();
+    await Promise.all([first, second]);
+    await expect(third).rejects.toMatchObject({ name: 'AbortError' });
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
   it('bounds brief detail to one row and validates the exact history cursor without reinterpreting source time', () => {
     const detail: DailyQuery = { source: sources.brief, briefId: ' padded ' };
     expect(isDailyResult(dailyFixture(detail, [{ id: ' padded ', started_at: 'unknown timezone', body_json: null }]), detail)).toBe(true);

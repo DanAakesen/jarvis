@@ -125,6 +125,9 @@ export function weeklyAverages(rows: readonly Row[]) {
 
 /** Separate runs stop the shared chart from drawing through an unlogged/unknown day. */
 export function trendSeries(rows: readonly Row[], key: Nutrient, target: number | null): ChartSeries[] {
+  const unit = key === 'energy_kcal' ? 'kcal' : 'g';
+  const label = key === 'energy_kcal' ? 'Energy' : 'Protein';
+  const recordedName = `${label} (${unit})`;
   const sorted = [...rows].sort((a, b) => text(a.meal_date).localeCompare(text(b.meal_date)));
   const runs: ChartSeries[] = [];
   let previous = '';
@@ -134,7 +137,7 @@ export function trendSeries(rows: readonly Row[], key: Nutrient, target: number 
     const value = numeric(row[key]);
     if (value === null) { run = undefined; previous = ''; continue; }
     if (!run || dateStep(previous, 1) !== date) {
-      run = { name: `Recorded ${key} · run ${runs.length + 1}`, points: [] };
+      run = { name: recordedName, points: [] };
       runs.push(run);
     }
     run.points.push({ x: date, y: value });
@@ -144,7 +147,7 @@ export function trendSeries(rows: readonly Row[], key: Nutrient, target: number 
   // so every observed run keeps the same color and never impersonates the target.
   // Its categories follow series traversal, so the target seeds all returned dates first,
   // including initial unknown observations. A target second would reorder those dates.
-  return [{ name: key === 'energy_kcal' ? 'Resting burn minus deficit (before activity)' : 'Protein target',
+  return [{ name: key === 'energy_kcal' ? 'Resting burn minus deficit (before activity) (kcal)' : 'Protein target (g)',
     points: target === null ? [] : sorted.map(row => ({ x: text(row.meal_date), y: target })) },
     ...runs.flatMap((entry, index) => index === 0 ? [entry] : [{ name: `Gap before ${entry.name}`, points: [] }, entry])];
 }

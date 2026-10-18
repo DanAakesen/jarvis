@@ -1590,6 +1590,31 @@ Synthetic browser captures for the new list and detail presentation are in
 responses, not Microsoft sign-in, live records, physical-device behavior or
 original-site parity.
 
+## Daily overview and Briefs integration (18 October 2026; P12-26)
+
+The Overview retains its source inventory and adds a responsive tile grid for
+available Daily sections. Each tile has its own loading, empty, retry and
+freshness states; one summary can fail without removing the others. Tile links
+lead to their section, and section-owned helpers provide names, dates and
+null-aware figures. Briefs uses a dated history list and a spaced in-page detail
+view; long text wraps within the available width. Coverage caveats use one
+shared disclosure per view. Phone Nutrition day controls stay together in a
+compact row, while wide tables remain in their own scroll regions. Existing
+buttons and shared geometry are retained. Synthetic automated tests cover the
+new states and interaction fixes. The Overview summary tiles keep each fact's label and value in fixed columns;
+a second value line sits under the first value, never in the label column.
+Synthetic Chromium inspection of the actual
+Daily shell and sections covered Overview, Workouts, Nutrition, Body & sleep,
+Briefs and Data at 320×844, 390×844, 768×900 and 1440×900 in both themes (48
+view/viewport/theme combinations). It also exercised Nutrition Day/Trend/Library,
+Body and Sleep, workout detail and Back focus, Briefs detail and focus return,
+tab arrow navigation, reduced-motion emulation and the responsive scroll-table
+regions. No page overflow, clipped touch controls, heading-count mismatch or
+browser console errors were observed. Ten synthetic-only JPEG captures are in
+`docs/ui/p12-26/` (512 KB total). The two Overview captures are static renders of
+the summary-tile markup against the shipped stylesheets. These checks do not
+establish live-data, original-site or physical-device acceptance.
+
 ## Border, radius and surface rules (P14-04, 18 October 2026)
 
 Use `--radius-control`, `--radius-panel`, `--radius-window` and `--radius-pill`

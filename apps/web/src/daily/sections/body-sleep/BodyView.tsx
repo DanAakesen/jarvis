@@ -5,6 +5,7 @@ import type { DailySectionProps } from '../types';
 import { DailyChart } from '../../ui/DailyChart';
 import { ScrollTable } from '../../ui/ScrollTable';
 import { StatTile } from '../../ui/StatTile';
+import { DailyCoverageNote } from '../../ui/DailyCoverageNote';
 import { formatDate, formatNumber } from '../../ui/formatters';
 import { useDailyPages } from '../../ui/useDailyPages';
 import { dateOnly, finite, metricDisplay, metricGroups, metricSummary, metricValue, splitUnits, type Row } from './metrics';
@@ -69,9 +70,11 @@ export function BodyView({ backendUrl, getAccessToken, period, refreshVersion }:
     <ReadState pages={catalogue} name="catalogue" />
     {selected && <>
       <p className="body-sleep-identifier body-sleep-note">Recorded identifier: <code tabIndex={0}>{selected}</code></p>
-      <p className="body-sleep-note">Daily value is shown; when missing, the recorded average is used and labelled. Missing days are not zero or interpolated.</p>
       <ReadState pages={records} name="measurements" />
-      <p className="body-sleep-note">{units.length} recorded unit groups. Each unit has its own summary, chart and table; no conversion or combined average is applied. Multiple units stay separate.</p>
+      <DailyCoverageNote summary="Missing values, gaps and units remain explicit.">
+        <p>Daily values use the recorded average only as a labelled fallback. Missing days are not zero or interpolated. Each recorded unit group has its own summary, chart and table; units are not converted or combined.</p>
+        <p>Summaries use one value per day, averaging retained observations when a date repeats. Minimum and maximum refer to daily values; recorded ranges remain in the table, and date gaps break trend lines. Coverage and freshness are not established by returned records.</p>
+      </DailyCoverageNote>
       {units.map(group => <MetricUnit key={JSON.stringify(group.unit)} name={metricDisplay(selected).label}
         unit={group.unit} rows={group.rows} period={period} />)}
     </>}
@@ -104,7 +107,6 @@ function MetricUnit({ name, unit, rows, period }: {
         note={summary.first && summary.latest ? `${formatDate(summary.first.date)} to ${formatDate(summary.latest.date)}; at least two days required` : 'No numeric days recorded'} />
       <StatTile label="Days with data" value={`${summary.count} of ${summary.total}`} note="Numeric days in the selected period, from loaded records only" />
     </div>
-    <p className="body-sleep-note">Summaries and trend use one value per day, averaging retained observations if a date repeats. Minimum and maximum above refer to those daily values; recorded ranges remain in the table. Gaps break the trend line.</p>
     <DailyChart kind="line" name={chartName} series={segments.map((segment, index) => ({
       name: `Daily value (recorded average fallback), segment ${index + 1} (${unitLabel})`,
       points: segment.map(day => ({ x: day.date, y: day.value })),
