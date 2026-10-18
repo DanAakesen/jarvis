@@ -1,1 +1,32 @@
 .daily-data-embedded { height: auto; min-height: 0; overflow: visible; padding: 0; border: 0; border-radius: 0; background: none; backdrop-filter: none; }
+.daily-data-page .daily-records { padding: 0; border: 0; border-radius: 0; }
+.daily-data-page .daily-toolbar { margin-block: var(--space-4); }
+.daily-data-page .daily-toolbar > label { flex: 0 1 260px; }
+.daily-data-page .daily-freshness { margin: 0; align-self: center; }
+.daily-data-records { min-width: 0; margin-top: var(--space-3); }
+.daily-data-records .daily-scroll-table { max-width: 100%; }
+.daily-data-records .daily-record-number { text-align: right; font-variant-numeric: tabular-nums; }
+.daily-record-cell { display: block; max-width: 28ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.daily-record-cards { list-style: none; padding: 0; margin: 0; }
+.daily-record-cards > li { padding-block: var(--space-4); min-width: 0; }
+.daily-record-cards > li + li { border-block-start: 1px solid var(--rule); }
+.daily-record-cards h3 { margin: 0; font-size: var(--type-body); overflow-wrap: anywhere; }
+.daily-record-cards .daily-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-block: var(--space-3); }
+.daily-record-summary { display: flex; gap: var(--space-3); margin-block: var(--space-2); font-size: var(--type-small); color: var(--text-muted); }
+.daily-record-summary > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.daily-record-panel { margin-top: var(--space-5); padding-block: var(--space-4); border-block: 1px solid var(--rule); }
+.daily-record-panel:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.daily-record-panel-heading { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: var(--space-3); }
+.daily-record-panel-heading h3 { margin: 0; font-size: var(--type-subheading); overflow-wrap: anywhere; }
+.daily-record-fields dd { white-space: pre-wrap; font-variant-numeric: tabular-nums; }
+.daily-record-fields .daily-record-fields { margin: 0; }
+.daily-data-page .daily-pagination { align-items: center; gap: var(--space-2); }
+.daily-data-page .daily-pagination-reason { flex-basis: 100%; }
+.daily-data-page pre { font-size: var(--type-caption); line-height: var(--line-body); }
+@media (width < 700px) {
+  .daily-data-page { min-width: 0; }
+  .daily-data-page.daily-data-embedded { padding: 0; }
+  .daily-data-page .daily-toolbar > label { flex: 1 1 100%; }
+  .daily-data-page .daily-period { min-width: 0; }
+  .daily-record-cards .ghost-button { max-width: 100%; text-align: left; overflow-wrap: anywhere; }
+}

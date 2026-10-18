@@ -39,15 +39,18 @@ describe('inactive single Daily data page', () => {
     expect(screen.queryByLabelText('From')).toBeNull();
     expect(screen.getByText(/Historical records only, not current health or a new delivery/u)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
-    await screen.findByText(/1 record on page 2/u);
+    await screen.findByText(/Page 2, 1 record/u);
+    fireEvent.click(screen.getByRole('button', { name: /Details for/u }));
     fireEvent.click(screen.getByRole('button', { name: 'Open brief' }));
     await screen.findByRole('heading', { name: 'Brief details' });
     await screen.findByText('Synthetic stored body <script>not executable</script>');
     expect(document.querySelector('script')).toBeNull();
     expect(f.queries.at(-1)).toEqual({ source: sources.brief, briefId: ' padded ' });
     fireEvent.click(screen.getByRole('button', { name: 'Back to brief history' }));
-    await screen.findByRole('button', { name: 'Open brief' });
-    expect(screen.getByText(/1 record on page 2/u)).toBeTruthy();
+    await screen.findByRole('button', { name: /Details for/u });
+    fireEvent.click(screen.getByRole('button', { name: /Details for/u }));
+    expect(screen.getByRole('button', { name: 'Open brief' })).toBeTruthy();
+    expect(screen.getByText(/Page 2, 1 record/u)).toBeTruthy();
     expect(f.queries.at(-1)).toMatchObject({ source: sources.briefs, cursor: { startedAt: '2026-10-16T07:00:00', id: 'source-first' } });
     expect(f.fetch.mock.calls.every(([url]) => /\/daily\/(?:capabilities|query)$/u.test(String(url)))).toBe(true);
   });
@@ -61,12 +64,21 @@ describe('inactive single Daily data page', () => {
     const table = await screen.findByRole('table', { name: /Recorded Daily values/u });
     expect(within(table).getAllByRole('row')).toHaveLength(4);
     expect(within(table).getByText('0')).toBeTruthy();
-    expect(within(table).getAllByText('Unknown').length).toBeGreaterThan(0);
+    expect(within(table).getAllByText('Not recorded').length).toBeGreaterThan(0);
     expect(screen.getByText(/Source freshness and completeness are not established/u)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Chart' }));
     expect(await screen.findByRole('img', { name: /Synthetic scan mass \(kg\)/u })).toBeTruthy();
-    expect(container.querySelectorAll('.chart-bars rect')).toHaveLength(2);
+    expect(container.querySelectorAll('.daily-chart-bars path')).toHaveLength(2);
     expect(screen.getByText(/Other pages are not included/u)).toBeTruthy();
+    fireEvent.keyDown(screen.getByRole('img', { name: /Synthetic scan mass \(kg\)/u }), { key: 'ArrowRight' });
+    expect(container.querySelector('.daily-chart-readout')?.textContent).toContain(': 2');
+    fireEvent.keyDown(screen.getByRole('img', { name: /Synthetic scan mass \(kg\)/u }), { key: 'Home' });
+    expect(container.querySelector('.daily-chart-readout')?.textContent).toContain(': 0');
+    const disclosure = screen.getByText('View data table').closest('details')!;
+    expect(disclosure.open).toBe(false);
+    fireEvent.click(screen.getByText('View data table'));
+    expect(disclosure.open).toBe(true);
+    expect(within(disclosure).getByRole('table')).toBeTruthy();
   });
   it('shows accepted, processing, succeeded and quarantined upload counts as separate evidence', async () => {
     fixture(query => jsonResponse(dailyFixture(query, query.source === sources.sync ? [{
@@ -88,7 +100,7 @@ describe('inactive single Daily data page', () => {
   it('applies a period only on request and sends exact returned cursors for next/previous', async () => {
     const f = fixture(query => jsonResponse(dailyFixture(query, [{ metric_name: 'synthetic', value: 'cursor' in query ? 2 : 1, unit: 'm' }],
       'startDate' in query && !('cursor' in query) ? { date: query.startDate, key: 'synthetic' } : null)));
-    render(page()); await screen.findByText(/1 record on page 1/u);
+    render(page()); await screen.findByText(/Page 1, 1 record/u);
     const before = f.queries.length;
     fireEvent.change(screen.getByLabelText('From'), { target: { value: '2026-01-01' } });
     fireEvent.change(screen.getByLabelText('To'), { target: { value: '2026-01-07' } });
@@ -97,11 +109,11 @@ describe('inactive single Daily data page', () => {
     await waitFor(() => expect(f.queries.at(-1)).toMatchObject({ startDate: '2026-01-01', endDate: '2026-01-07' }));
     await waitFor(() => expect(screen.getByRole('button', { name: 'Next page' }).hasAttribute('disabled')).toBe(false));
     fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
-    await screen.findByText(/1 record on page 2/u);
+    await screen.findByText(/Page 2, 1 record/u);
     expect(f.queries.at(-1)).toMatchObject({ cursor: { date: '2026-01-01', key: 'synthetic' } });
     await waitFor(() => expect(document.activeElement?.id).toBe('daily-records-heading'));
     fireEvent.click(screen.getByRole('button', { name: 'Previous page' }));
-    await screen.findByText(/1 record on page 1/u);
+    await screen.findByText(/Page 1, 1 record/u);
     expect(f.queries.at(-1)).not.toHaveProperty('cursor');
   });
   it('settles disabled availability honestly without querying records or starting another login', async () => {
@@ -138,6 +150,7 @@ describe('inactive single Daily data page', () => {
     expect(screen.queryByLabelText('From')).toBeNull();
     expect(f.queries.at(-1)).not.toHaveProperty('startDate');
     fireEvent.change(screen.getByLabelText('Browse'), { target: { value: sources.workouts } });
+    fireEvent.click(await screen.findByRole('button', { name: /Details for/u }));
     fireEvent.click(await screen.findByRole('button', { name: 'Open workout' }));
     await screen.findByRole('heading', { name: 'Workout details' });
     await screen.findByText('synthetic-workout', { exact: true });
@@ -149,7 +162,7 @@ describe('inactive single Daily data page', () => {
   });
   it('refetches on the existing refresh signal without adding a second SSE connection', async () => {
     const f = fixture();
-    const rendered = render(page()); await screen.findByText(/0 records on page 1/u);
+    const rendered = render(page()); await screen.findByText(/Page 1, 0 records/u);
     const count = f.queries.length;
     await act(async () => { rendered.rerender(page(1)); });
     await waitFor(() => expect(f.queries.length).toBeGreaterThan(count));
@@ -189,6 +202,6 @@ describe('inactive single Daily data page', () => {
     await act(async () => { finish(jsonResponse(dailyFixture(initial!))); });
     await act(async () => { await vi.advanceTimersByTimeAsync(200); });
     expect(f.queries).toHaveLength(2);
-    expect(screen.getByText(/0 records on page 1/u)).toBeTruthy();
+    expect(screen.getByText(/Page 1, 0 records/u)).toBeTruthy();
   });
 });

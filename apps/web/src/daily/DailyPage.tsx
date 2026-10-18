@@ -1,13 +1,18 @@
 import { useContext, useEffect, useRef, useState, type FormEvent } from 'react';
 import { dailyQuerySources as sources, type DailyCursor, type DailyJson, type DailySourceId } from '@jarvis/contracts';
 import type { AreaProps } from '../areas';
-import { ChartView } from '../ChartView';
 import { Loader } from '../Loader';
-import { dailyCellValue, dailyColumns, dailyPlots, dailyRequest, dailyRowKey, dailySources, dailyValue, initialDailyPeriod, readable, type Row } from './presentation';
+import { dailyPlots, dailyRequest, dailySources, dailyValue, initialDailyPeriod, readable, type Row } from './presentation';
 import { DailyRefreshContext } from './refresh';
 import { useDailyCapabilities } from './useDailyCapabilities';
 import { useDailyQuery } from './useDailyQuery';
 import { DailyState } from './ui/DailyState';
+import { DailyChart } from './ui/DailyChart';
+import { DailySectionHeader } from './ui/DailySectionHeader';
+import { FreshnessLine } from './ui/FreshnessLine';
+import { formatDate } from './ui/formatters';
+import { DataRecords as Records, RecordFields } from './sections/data/DataRecords';
+import './ui/daily-ui.css';
 import './daily.css';
 
 function object(value: DailyJson | undefined): value is Row {
@@ -27,28 +32,6 @@ function SyncEvidence({ item }: { item: Row }) {
     <Records source={sources.sync} rows={feeds} />
   </>;
 }
-function Records({ source, rows, onOpenRecord, openLabel }: { source: DailySourceId; rows: readonly Row[]; onOpenRecord?: (id: string) => void; openLabel?: string }) {
-  const columns = dailyColumns(source);
-  return <div className="daily-table-wrap" role="region" aria-label="Daily record table" tabIndex={0}>
-    <table className={`daily-table${columns.length > 3 ? ' daily-table-wide' : ''}`}>
-      <caption className="visually-hidden">Recorded Daily values; unknown values are not zero</caption>
-      <thead><tr>{columns.map(column => <th scope="col" key={column.key}>{column.label}{column.unit ? ` (${column.unit})` : ''}</th>)}<th scope="col">Inspect</th></tr></thead>
-      <tbody>{rows.map((row, index) => <tr key={dailyRowKey(row, source, index)}>
-        {columns.map(column => <td key={column.key} title={typeof row[column.key] === 'number' ? String(row[column.key]) : undefined}>
-          {dailyCellValue(source, column.key, row[column.key])}
-          {column.key === 'meal_name' || column.key === 'plan_name' ? row.deleted_at != null && <span className="daily-deleted">Deleted record</span> : null}
-        </td>)}
-        <td>
-          {onOpenRecord && typeof row.id === 'string' && row.id.length > 0 && <button className="secondary-button" type="button" onClick={() => {
-            const id = row.id; if (typeof id === 'string') onOpenRecord(id);
-          }}>{openLabel}</button>}
-          <details className="daily-record-details"><summary>Record details</summary><pre>{JSON.stringify(row, null, 2)}</pre></details>
-        </td>
-      </tr>)}</tbody>
-    </table>
-  </div>;
-}
-
 function BriefBody({ item }: { item: Row }) {
   return <>
     <Records source={sources.brief} rows={[item]} />
@@ -57,7 +40,8 @@ function BriefBody({ item }: { item: Row }) {
       {typeof item.preview_text === 'string' && item.preview_text.length > 0 && <p className="daily-brief-text">{item.preview_text}</p>}
       {item.body_json == null ? <p>No stored brief body is available.</p> :
         typeof item.body_json === 'string' ? <p className="daily-brief-text">{item.body_json || 'The stored brief body is empty.'}</p> :
-          <pre>{JSON.stringify(item.body_json, null, 2)}</pre>}
+          object(item.body_json) ? <RecordFields source={sources.brief} row={item.body_json} /> :
+            <p>{dailyValue(item.body_json)}</p>}
     </section>
   </>;
 }
@@ -118,40 +102,38 @@ export function DailyPage({ backendUrl, getAccessToken, knownSources, initialSou
   const title = briefId !== null ? 'Brief details' : workout ? workout.heartRate ? 'Workout heart rate' : 'Workout details' : selected?.label ?? 'Records';
   const detailSource = data?.source === sources.workouts ? sources.workout : data?.source === sources.briefs ? sources.brief : null;
   const canOpenRecord = detailSource !== null && current.sources?.includes(detailSource);
-  return <section className={`daily-page${embedded ? ' daily-data-embedded' : ''}${embeddedClassName ? ` ${embeddedClassName}` : ''}`} aria-labelledby="daily-heading">
+  return <section className={`daily-page daily-data-page${embedded ? ' daily-data-embedded' : ''}${embeddedClassName ? ` ${embeddedClassName}` : ''}`} aria-labelledby={embedded ? 'daily-records-heading' : 'daily-heading'}>
     {!embedded
       ? <header className="daily-heading"><div><h1 id="daily-heading" tabIndex={-1}>Daily</h1><p>Browse recorded health, food, workouts and historical briefs.</p></div>
-        <div className="daily-heading-actions">
-          {onBack && <button className="secondary-button" type="button" onClick={onBack}>Back to overview</button>}
-          <button className="secondary-button" type="button" disabled={result.pending || !query} onClick={result.reload}>Refresh records</button>
-        </div>
-      </header>
-      : <div className="daily-heading-actions daily-embedded-actions">
         {onBack && <button className="secondary-button" type="button" onClick={onBack}>Back to overview</button>}
-        <button className="secondary-button" type="button" disabled={result.pending || !query} onClick={result.reload}>Refresh records</button>
-      </div>}
+      </header>
+      : null}
+    <DailySectionHeader title={title} headingId="daily-records-heading" headingRef={heading}
+      actions={embedded && onBack ? <button className="secondary-button" type="button" onClick={onBack}>Back to overview</button> : undefined} />
     {current.error ? <div className="daily-notice" role="alert"><p>{current.error}</p><button className="secondary-button" type="button" onClick={current.reload}>Retry availability</button></div> :
       !current.sources ? <Loader label="Checking Daily availability" variant="rows" /> : <>
-        <div className="daily-toolbar">
+        {available.length > 0 && <div className="daily-toolbar">
           <label>Browse<select value={selected?.id ?? ''} disabled={available.length === 0} onChange={event => {
             const selected = available.find(item => item.id === event.target.value); if (selected) changeSource(selected.id);
           }}>
             {available.length === 0 && <option value="">No collections available</option>}
             {available.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}
           </select></label>
+          <button className="secondary-button" type="button" disabled={result.pending || !query} onClick={result.reload}>Refresh records</button>
+          {data && <FreshnessLine observedAt={data.freshness.observedAt} count={data.coverage.returned} partial={data.coverage.hasMore} />}
           {selected?.dated && !workout && sharedPeriod === undefined && <form className="daily-period" onSubmit={applyPeriod}>
             <label>From<input type="date" value={draftPeriod.startDate} onChange={event => setDraftPeriod(value => ({ ...value, startDate: event.target.value }))} /></label>
             <label>To<input type="date" value={draftPeriod.endDate} onChange={event => setDraftPeriod(value => ({ ...value, endDate: event.target.value }))} /></label>
             <button className="secondary-button" type="submit" disabled={!draftValid || !dirtyPeriod}>Apply period</button>
           </form>}
-        </div>
+        </div>}
         {selected?.dated && !workout && sharedPeriod === undefined && <p className="daily-meta">Periods use Europe/Copenhagen. Edit the dates, then Apply period. The evidence below names the period actually loaded.</p>}
         {(actualSource === sources.briefs || actualSource === sources.brief) && <p className="daily-meta">Historical records only, not current health or a new delivery. Timestamps stay exactly as stored; their timezone is not inferred. History uses stored start-text order, then exact ID, descending.</p>}
-        {available.length === 0 && <p role="status">This backend has not exposed a browsable Daily collection.</p>}
+        {available.length === 0 && <><DailyState status="empty" emptyMessage="This backend has not exposed a browsable Daily collection." /><a href="/settings#health-upload">Settings, Health upload</a></>}
         {selected?.dated && !workout && sharedPeriod === undefined && !draftValid && <p className="error-text" role="alert">Choose valid start and end dates in chronological order.</p>}
         {dirtyPeriod && selected?.dated && !workout && sharedPeriod === undefined && draftValid && <p className="daily-meta">The edited period is not applied yet.</p>}
         <section className="daily-records" aria-labelledby="daily-records-heading" aria-busy={result.pending} data-pending={result.pending || undefined}>
-          <div className="daily-records-heading"><h2 id="daily-records-heading" ref={heading} tabIndex={-1}>{title}</h2>
+          <div className="daily-records-heading">
             {workout && <div className="daily-workout-actions">
               <button className="secondary-button" type="button" onClick={() => { focusAfterLoad.current = true; setWorkout(null); setCursors(collectionCursors.current); setView('table'); }}>Back to workouts</button>
               {!workout.heartRate && current.sources?.includes(sources.heartRate) && <button className="secondary-button" type="button" onClick={() => { focusAfterLoad.current = true; setWorkout({ ...workout, heartRate: true }); setCursors([]); }}>Heart rate samples</button>}
@@ -165,12 +147,7 @@ export function DailyPage({ backendUrl, getAccessToken, knownSources, initialSou
             <button className="secondary-button" type="button" onClick={result.reload} disabled={result.pending}>Retry records</button></div>}
           {result.pending && (data ? <p role="status">Refreshing recorded evidence...</p> : <DailyState status="loading" />)}
           {data && <>
-            <div className="daily-evidence">
-              {data.period && <p>Applied period: {dailyValue(data.period.startDate)} to {dailyValue(data.period.endDate)}.</p>}
-              <p>Retained Daily SQL records. Read <time dateTime={data.freshness.observedAt}>{dailyValue(data.freshness.observedAt)}</time>.</p>
-              <p>Last successful source processing: {dailyValue(data.freshness.sourceProcessedCommittedAt)}. Source freshness and completeness are not established.</p>
-            </div>
-            {data.status === 'empty' ? <DailyState status="empty" /> :
+            {data.status === 'empty' ? <><DailyState status="empty" /><a href="/settings#health-upload">Settings, Health upload</a></> :
               data.source === sources.brief ? <BriefBody item={data.items[0]!} /> :
               data.source === sources.sync ? <SyncEvidence item={data.items[0]!} /> : <>
                 {plots.length > 0 && <div className="daily-view-options">
@@ -184,9 +161,10 @@ export function DailyPage({ backendUrl, getAccessToken, knownSources, initialSou
                 </div>}
                 {view === 'chart' && plot ? <div className="daily-plot">
                   <p>{plot.label}. One bar per numeric recorded observation on this page; unknown values remain in the table. No averaging or interpolation.</p>
-                  <ChartView kind="bar" series={plot.series} title={`${plot.label}, recorded Copenhagen dates`} />
+                  <DailyChart kind="bar" series={plot.series} name={`${plot.label}, recorded Copenhagen dates`}
+                    dataTable={<Records source={data.source} rows={data.items} units={data.units} />} />
                   <p className="daily-meta">X: recorded observation and Copenhagen date. Y: {plot.unit}. Other pages are not included in this chart.</p>
-                </div> : <Records source={data.source} rows={data.items} {...(canOpenRecord ? {
+                </div> : <Records key={`${data.source}:${cursors.length}:${data.freshness.observedAt}`} source={data.source} rows={data.items} units={data.units} {...(canOpenRecord ? {
                   openLabel: data.source === sources.workouts ? 'Open workout' : 'Open brief',
                   onOpenRecord: (id: string) => {
                     collectionCursors.current = cursors; focusAfterLoad.current = true; setCursors([]); setView('table');
@@ -195,13 +173,17 @@ export function DailyPage({ backendUrl, getAccessToken, knownSources, initialSou
                 } : {})} />}
               </>}
             <footer className="daily-pagination">
-              <p role="status">{data.coverage.returned} {data.coverage.returned === 1 ? 'record' : 'records'} on page {cursors.length + 1}. {data.coverage.hasMore ? 'More records are available.' : 'End of returned records; original-source coverage remains unknown.'}</p>
-              <div><button className="secondary-button" type="button" disabled={result.pending || cursors.length === 0} onClick={() => { focusAfterLoad.current = true; setCursors(value => value.slice(0, -1)); }}>Previous page</button>
-                <button className="secondary-button" type="button" disabled={result.pending || !data.coverage.hasMore} onClick={() => {
+              <p role="status">Page {cursors.length + 1}, {data.coverage.returned} {data.coverage.returned === 1 ? 'record' : 'records'}, {data.coverage.hasMore ? 'more available' : 'end of returned records'}.</p>
+              <div><button className="secondary-button" type="button" aria-describedby="daily-pagination-reason" disabled={result.pending || cursors.length === 0} onClick={() => { focusAfterLoad.current = true; setCursors(value => value.slice(0, -1)); }}>Previous page</button>
+                <button className="secondary-button" type="button" aria-describedby="daily-pagination-reason" disabled={result.pending || !data.coverage.hasMore} onClick={() => {
                   const next = data.coverage.next; if (next) { focusAfterLoad.current = true; setCursors(value => [...value, next]); }
                 }}>Next page</button></div>
+              <p id="daily-pagination-reason" className="daily-pagination-reason">{result.pending ? 'Loading records; pagination is unavailable.' :
+                `${cursors.length === 0 ? 'Previous unavailable: this is the first page. ' : ''}${!data.coverage.hasMore ? 'Next unavailable: no more returned records.' : ''}`}</p>
             </footer>
             <details className="daily-contract-details"><summary>Source, units and coverage</summary>
+              {data.period && <p>Applied period: {formatDate(data.period.startDate)} to {formatDate(data.period.endDate)} (Europe/Copenhagen).</p>}
+              <p>Retained Daily SQL records. Last successful source processing: {dailyValue(data.freshness.sourceProcessedCommittedAt)}. Source freshness and completeness are not established.</p>
               <dl className="daily-facts"><div><dt>Source</dt><dd>{data.source}</dd></div>
                 <div><dt>Consistency</dt><dd>Independent committed reads, not an atomic snapshot</dd></div>
                 <div><dt>Latest returned update</dt><dd>{dailyValue(data.freshness.latestReturnedRecordUpdatedAt)}</dd></div>
