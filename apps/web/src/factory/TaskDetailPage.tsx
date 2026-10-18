@@ -7,6 +7,7 @@ import type { PullRequest, ReleaseView } from './release-data';
 import { TaskControls } from './TaskControls';
 import { TaskWindowLink } from '../TaskWindowLink';
 import { Loader } from '../Loader';
+import { StateMessage } from '../StateMessage';
 
 type TaskState = 'Ready' | 'Running' | 'PauseRequested' | 'Paused' | 'NeedsAttention' | 'Done' | 'Cancelled';
 type TaskEventSource = 'runner' | 'backend' | 'github' | 'dan';
@@ -532,13 +533,11 @@ export function TaskDetailPage({ backendUrl, getAccessToken, taskId, compact = f
     const latestDisk = measurements.at(-1);
     return (
       <section className="task-detail task-window" data-task-state={task?.state} aria-label={`Task ${taskId}`}>
-        {result.status === 'loading' && <Loader variant="panel" label="Loading task details…" />}
+        {result.status === 'loading' && <StateMessage variant="loading" loaderVariant="panel" message="Loading task details" />}
         {result.status === 'error' && (
-          <div className="task-detail-error" role="alert">
-            <p>{result.message}</p>
-            <button className="secondary-button" type="button" onClick={() => setReloadKey((key) => key + 1)}
-              disabled={!backendUrl}>Retry</button>
-          </div>
+          <StateMessage variant="error" className="task-detail-error" message={result.message}
+            actionLabel="Retry" actionDisabled={!backendUrl}
+            onAction={() => setReloadKey((key) => key + 1)} />
         )}
         {task && (
           <>
@@ -579,7 +578,7 @@ export function TaskDetailPage({ backendUrl, getAccessToken, taskId, compact = f
                   {task.originMessageId && (
                     <div className="task-origin">
                       {sourceMessageLoading
-                        ? <Loader variant="lines" label="Loading the conversation message…" />
+                        ? <StateMessage variant="loading" loaderVariant="lines" message="Loading the conversation message" />
                         : sourceMessage
                           ? <>
                             <blockquote className="task-origin-message">{sourceMessage.text}</blockquote>
@@ -730,13 +729,11 @@ export function TaskDetailPage({ backendUrl, getAccessToken, taskId, compact = f
     >
       {!compact && <Link className="home-link" to="/factory/kanban">Back to Kanban</Link>}
       {!compact && <h1 id="task-heading">{task?.title ?? `Task ${taskId}`}</h1>}
-      {result.status === 'loading' && <Loader variant="panel" label="Loading task details…" />}
+      {result.status === 'loading' && <StateMessage variant="loading" loaderVariant="panel" message="Loading task details" />}
       {result.status === 'error' && (
-        <div className="task-detail-error" role="alert">
-          <p>{result.message}</p>
-          <button className="secondary-button" type="button" onClick={() => setReloadKey((key) => key + 1)}
-            disabled={!backendUrl}>Retry</button>
-        </div>
+        <StateMessage variant="error" className="task-detail-error" message={result.message}
+          actionLabel="Retry" actionDisabled={!backendUrl}
+          onAction={() => setReloadKey((key) => key + 1)} />
       )}
       {task && (
         <>

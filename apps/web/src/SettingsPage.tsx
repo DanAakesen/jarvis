@@ -4,6 +4,7 @@ import { useThemePreference } from './theme-preference-context';
 import { saveVoiceWorkspacePreference } from './voice-workspace-preference';
 import { TaskRecipesSettings } from './TaskRecipesSettings';
 import { Loader } from './Loader';
+import { StateMessage } from './StateMessage';
 import { CollapsibleSection } from './CollapsibleSection';
 import { useWakeStatus } from './wake-store';
 import { AppearanceDetails, ModelsSection, ResearchSection, RetrievalSection, TimeoutsSection, VoiceTuningFields } from './SettingsAdvanced';
@@ -486,14 +487,13 @@ export function SettingsPage({ backendUrl, getAccessToken, presence, notificatio
       : '';
   const projectDefaults = state === 'loading' ? (
     <CollapsibleSection storageKey="settings.projects.defaults" headingId="project-defaults-heading" title="Defaults for new projects">
-      <Loader variant="text" label="Loading project defaults…" />
+      <StateMessage variant="loading" message="Loading project defaults" />
     </CollapsibleSection>
   ) : state === 'error' ? (
     <CollapsibleSection storageKey="settings.projects.defaults" headingId="project-defaults-heading" title="Defaults for new projects">
-      <div className="settings-feedback" role="alert">
-        <p>{backendUrl ? error : 'Project defaults are unavailable because Settings cannot connect to the backend.'}</p>
-        {backendUrl && <button className="secondary-button" type="button" onClick={() => { void load(); }}>Retry settings</button>}
-      </div>
+      <StateMessage variant="error" className="settings-feedback"
+        message={backendUrl ? error : 'Project defaults are unavailable because Settings cannot connect to the backend.'}
+        actionLabel={backendUrl ? 'Retry settings' : undefined} onAction={backendUrl ? () => { void load(); } : undefined} />
     </CollapsibleSection>
   ) : settings && options ? (
     <CollapsibleSection storageKey="settings.projects.defaults" headingId="project-defaults-heading" title="Defaults for new projects">
@@ -570,12 +570,10 @@ export function SettingsPage({ backendUrl, getAccessToken, presence, notificatio
       </header>
       {presence}
       {notifications}
-      {state === 'loading' && <Loader variant="text" label="Loading settings…" />}
+      {state === 'loading' && <StateMessage variant="loading" message="Loading settings" />}
       {state === 'error' && (
-        <div className="settings-feedback" role="alert">
-          <p>{error}</p>
-          {backendUrl && <button className="secondary-button" type="button" onClick={() => { void load(); }}>Retry</button>}
-        </div>
+        <StateMessage variant="error" className="settings-feedback" message={error}
+          actionLabel={backendUrl ? 'Retry' : undefined} onAction={backendUrl ? () => { void load(); } : undefined} />
       )}
       {state === 'ready' && settings && options && (
         <form id="settings-form" onSubmit={(event) => { void save(event); }}>
@@ -602,12 +600,10 @@ export function SettingsPage({ backendUrl, getAccessToken, presence, notificatio
                 System
               </label>
             </fieldset>
-            {themePreference.state === 'loading' && <Loader variant="inline" label="Loading saved theme…" />}
+            {themePreference.state === 'loading' && <StateMessage variant="loading" message="Loading saved theme" />}
             {themePreference.state === 'error' && (
-              <div className="settings-feedback" role="alert">
-                <p>{themePreference.error}</p>
-                <button className="secondary-button" type="button" onClick={themePreference.retry}>Retry theme</button>
-              </div>
+              <StateMessage variant="error" className="settings-feedback" message={themePreference.error}
+                actionLabel="Retry theme" onAction={themePreference.retry} />
             )}
             {themePreference.state === 'ready' && themePreference.saving &&
               <p className="settings-feedback" role="status">Saving theme…</p>}

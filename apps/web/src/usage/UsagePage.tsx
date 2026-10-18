@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { backendFetch } from '../backend-request';
 import { TaskWindowLink } from '../TaskWindowLink';
 import type { AreaProps } from '../areas';
-import { Loader } from '../Loader';
+import { StateMessage } from '../StateMessage';
 import { CollapsibleSection } from '../CollapsibleSection';
 
 type UsagePeriod = '7d' | '30d' | '90d' | 'all';
@@ -316,13 +316,11 @@ export function UsagePage({ backendUrl, getAccessToken }: AreaProps) {
           onChange={setPeriod} />
       </header>
 
-      {currentState.status === 'loading' && <Loader variant="text" label={`Loading usage for ${periods.find(({ value }) => value === period)?.label.toLowerCase()}…`} />}
-      {currentState.status === 'error' && (
-        <div className="usage-feedback" role="alert">
-          <p>{currentState.message}</p>
-          <button className="secondary-button" type="button" onClick={() => setReload((value) => value + 1)}>Retry</button>
-        </div>
-      )}
+      {currentState.status === 'loading' && <StateMessage variant="loading"
+        message={`Loading usage for ${periods.find(({ value }) => value === period)?.label.toLowerCase()}`} />}
+      {currentState.status === 'error' && <StateMessage variant="error" className="usage-feedback"
+        message={currentState.message} actionLabel="Retry"
+        onAction={() => setReload((value) => value + 1)} />}
       {report && (
         <div className="usage-results">
           <div className="usage-hero">
@@ -339,12 +337,14 @@ export function UsagePage({ backendUrl, getAccessToken }: AreaProps) {
             </ul>
           </div>
           {report.truncated && (
-            <p className="usage-limit-note" role="status">
-              Showing the latest {entries.length} of {report.totalEntries} records.
-            </p>
+            <StateMessage variant="partial" className="usage-limit-note"
+              message={`Showing the latest ${entries.length} of ${report.totalEntries} records.`}
+              detail="Refresh this report to check for the latest records."
+              actionLabel="Refresh usage" onAction={() => setReload((value) => value + 1)} />
           )}
 
-          {entries.length === 0 ? <p className="usage-empty">No usage was recorded in this period.</p> : (
+          {entries.length === 0 ? <StateMessage variant="empty" className="usage-empty"
+            message="No usage was recorded in this period." /> : (
             <div className="usage-grid">
               <section className="usage-card" aria-labelledby="usage-split-heading">
                 <div className="usage-card-head">

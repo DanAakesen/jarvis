@@ -13,6 +13,23 @@ return stay owned by the existing section. These are presentation changes only;
 the original Daily remains canonical and no new data reads or dependencies are
 introduced.
 
+Daily svg sizing rules must out-rank the shell’s `.app-shell svg` icon size
+(specificity 0,1,1, emitted after the Daily stylesheets in the production
+bundle); an equal or lower specificity rule silently loses and the chart
+collapses to a 21px sliver. Prefix such rules with `.app-shell` (or size the svg
+inline); `svg-cascade.test.ts` enforces this for every Daily stylesheet.
+
+## Share non-Daily loading, empty, error and partial states (18 October 2026; P14-11 / #994)
+
+Use one `StateMessage` component around the existing Loader for non-Daily
+loading, empty, error and partial states. Keep one plain sentence, optional
+detail, and at most one shared-button recovery action. Loading, empty and
+partial states announce politely; errors use alerts. Reserve a 10rem minimum
+block size for loading, empty and error states (partial notices reserve none),
+use skeletons only for known final layouts, and keep error copy
+free of raw exception text, identifiers and codes. Daily retains `DailyState`
+until its separate follow-up; this avoids crossing the parallel page boundary.
+
 ## Consolidate web viewport breakpoints (18 October 2026; P14-05 / #973)
 
 Use one non-Daily viewport set: phone through 700px, tablet above 700px through

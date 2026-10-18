@@ -3,7 +3,7 @@ import type { HtmlArtifact } from '@jarvis/contracts';
 import { backendFetch } from './backend-request';
 import { useConversationIntents } from './conversation-intents';
 import { useKnowledgeBackend } from './knowledge/knowledge-context';
-import { Loader } from './Loader';
+import { StateMessage } from './StateMessage';
 import { reportFrameReadback } from './window-readback';
 import type { SessionCommandResult } from './session-commands';
 import { htmlAppDocument, minAppHeight, readHtmlAppMessage, readHtmlArtifact, type HtmlAppTheme } from './html-app-document';
@@ -77,8 +77,10 @@ export function HtmlAppView({ artifactId, title, updatedAt, onPinChange }: {
       if (active) setLoad({ key: loadKey, status: 'ready', artifact, document: htmlAppDocument(artifact.html, hostTheme()) });
     }).catch((reason: unknown) => {
       if (!active) return;
-      const message = reason instanceof Error && reason.message !== 'unavailable' ? reason.message : 'Jarvis could not load this window. Try again.';
-      setLoad({ key: loadKey, status: 'error', message, retry: !(reason as { final?: boolean } | null)?.final });
+      const final = (reason as { final?: boolean } | null)?.final;
+      setLoad({ key: loadKey, status: 'error',
+        message: final ? 'This report or app is no longer available.' : 'This view could not be opened.',
+        retry: !final });
     });
     return () => { active = false; controller.abort(); };
   }, [artifactId, loadKey, backend?.backendUrl, call]);
@@ -139,13 +141,12 @@ export function HtmlAppView({ artifactId, title, updatedAt, onPinChange }: {
   }, [call, intents, onPinChange]);
 
   if (!backend?.backendUrl) return <p className="html-app-state" role="status">This window opens in the Jarvis workspace.</p>;
-  if (load.key !== loadKey || load.status === 'loading') return <Loader variant="lines" label={`Opening ${title}…`} />;
+  if (load.key !== loadKey || load.status === 'loading') return <StateMessage variant="loading" message="Opening this view." />;
   if (load.status === 'error') {
     return (
-      <div className="html-app-state" role="alert">
-        <p>{load.message}</p>
-        {load.retry && <button className="secondary-button" type="button" onClick={() => { setAttempt((value) => value + 1); }}>Retry</button>}
-      </div>
+      <StateMessage variant="error" className="html-app-state" message={load.message}
+        actionLabel={load.retry ? 'Retry' : undefined}
+        onAction={load.retry ? () => { setAttempt((value) => value + 1); } : undefined} />
     );
   }
   return (

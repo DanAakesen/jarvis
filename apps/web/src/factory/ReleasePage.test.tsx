@@ -96,8 +96,8 @@ describe('project release view', () => {
     expect(await screen.findByRole('alert')).not.toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
 
-    expect(await screen.findByText('No releases recorded.')).not.toBeNull();
-    expect(screen.getByText(/The GitHub graph is unavailable/)).not.toBeNull();
+    expect(await screen.findByText('No releases have been recorded.')).not.toBeNull();
+    expect(screen.getByText(/Release records are still shown without the GitHub graph/)).not.toBeNull();
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 

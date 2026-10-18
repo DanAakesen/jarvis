@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState, type CSSProperties } from 'react';
 import { backendFetch } from './backend-request';
 import { presenceLabel, presenceModes, usePresence, useDevicePresence, type PresenceMode } from './presence-store';
-import { Loader } from './Loader';
+import { StateMessage } from './StateMessage';
 import { CollapsibleSection } from './CollapsibleSection';
 import { ShellIcon } from './ShellIcon';
 
@@ -134,15 +134,14 @@ export function PresenceSettings({ backendUrl, getAccessToken }: { backendUrl: s
   return (
     <CollapsibleSection storageKey="settings.presence" className="presence-settings" id="presence" headingId={`${ids}-heading`} title="Presence"
       summary={presence.status === 'ready' ? presenceLabel(presence.mode) : undefined}>
-      {presence.status === 'loading' || presence.status === 'idle' ? <Loader variant="rows" label="Loading presence…" /> : null}
+      {presence.status === 'loading' || presence.status === 'idle'
+        ? <StateMessage variant="loading" loaderVariant="rows" message="Loading presence" /> : null}
       {presence.status === 'unavailable' && (
         <p className="settings-unavailable" role="status">Presence modes unavailable.</p>
       )}
       {presence.status === 'error' && (
-        <div className="settings-feedback" role="alert">
-          <p>{presence.message}</p>
-          <button className="secondary-button" type="button" onClick={retry}>Retry</button>
-        </div>
+        <StateMessage variant="error" className="settings-feedback" message={presence.message}
+          actionLabel="Retry" onAction={retry} />
       )}
       {presence.status === 'ready' && (
         <>
@@ -163,11 +162,12 @@ export function PresenceSettings({ backendUrl, getAccessToken }: { backendUrl: s
         </>
       )}
       <h3 className="presence-instructions-heading">Instructions per mode</h3>
-      {instructionsState === 'loading' && <Loader variant="lines" label="Loading mode instructions…" />}
+      {instructionsState === 'loading' && <StateMessage variant="loading" loaderVariant="lines" message="Loading mode instructions" />}
       {instructionsState === 'unavailable' && (
         <p className="settings-unavailable" role="status">Mode instructions unavailable.</p>
       )}
-      {instructionsState === 'error' && <p className="settings-validation-error" role="alert">Mode instructions could not be loaded. Reload Settings to try again.</p>}
+      {instructionsState === 'error' && <StateMessage variant="error" className="settings-validation-error"
+        message="Mode instructions could not be loaded." detail="Reload Settings to try again." />}
       {instructionsState === 'ready' && draft && (
         <>
           <div className="presence-instructions">

@@ -15,6 +15,24 @@ type AllowlistEntry = {
   value?: string;
 };
 
+const legacyStateStyles = [
+  ['styles.css', '.project-empty'],
+  ['styles.css', '.workspace-empty'],
+  ['styles.css', '.task-column-empty'],
+  ['styles.css', '.usage-empty'],
+  ['daily/daily.css', '.daily-empty'],
+  ['styles.css', '.settings-feedback'],
+  ['styles.css', '.projects-feedback'],
+  ['styles.css', '.project-policy-feedback'],
+  ['styles.css', '.task-control-error'],
+  ['styles.css', '.release-feedback'],
+  ['styles.css', '.usage-feedback'],
+  ['ConversationHistory.css', '.conversation-history-error'],
+  ['ConversationHistory.css', '.chat-error'],
+  ['styles.css', '.task-detail-error'],
+  ['styles.css', '.workspace-pin-feedback'],
+] as const;
+
 const sideBorderAllowlist: AllowlistEntry[] = [
   { file: 'styles.css', selector: '.area-rail', property: 'border-right', value: '1px solid var(--rule)', reason: 'Structural separator between the navigation rail and page.' },
   { file: 'styles.css', selector: '.area-sidebar', property: 'border-right', value: '1px solid var(--rule)', reason: 'Structural separator between the sidebar and page.' },
@@ -186,6 +204,21 @@ describe('stylesheets', () => {
 
   it.each(stylesheets)('%s follows the shared geometry and surface rules', (file) => {
     expect(stylesheetViolations(file, readFileSync(join(sourceDirectory, file), 'utf8'))).toEqual([]);
+  });
+
+  it('keeps legacy state selectors on shared semantic tokens or removes their styles', () => {
+    const sharedStateToken = /var\(--(?:text-muted|error|error-surface|surface(?:-[\w-]+)?|rule|type-(?:body|small|caption)|space-[1-7]|radius-panel)\)/u;
+    for (const [file, selector] of legacyStateStyles) {
+      const root = postcss.parse(readFileSync(join(sourceDirectory, file), 'utf8'), { from: file });
+      const declarations: string[] = [];
+      root.walkRules((rule) => {
+        if (rule.selector.includes(selector)) {
+          rule.walkDecls((declaration) => { declarations.push(declaration.value); });
+        }
+      });
+      if (declarations.length === 0) continue;
+      expect(declarations.some((value) => sharedStateToken.test(value)), `${file}: ${selector}`).toBe(true);
+    }
   });
 
   it('rejects reintroduced stylesheet violations', () => {
