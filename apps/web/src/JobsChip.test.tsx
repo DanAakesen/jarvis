@@ -65,6 +65,18 @@ function RoutePath() {
   return <output>{location.pathname}</output>;
 }
 
+it('returns focus after an outside press dismisses background work', async () => {
+  stubFetch('present', [job()]);
+  mount();
+  const trigger = await screen.findByRole('button', { name: /Show background work/ });
+  fireEvent.click(trigger);
+  const panel = screen.getByRole('group', { name: 'Background work' });
+  expect(document.activeElement).toBe(panel);
+  fireEvent.pointerDown(document.body);
+  expect(screen.queryByRole('group', { name: 'Background work' })).toBeNull();
+  expect(document.activeElement).toBe(trigger);
+});
+
 afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();

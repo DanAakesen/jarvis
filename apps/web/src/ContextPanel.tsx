@@ -4,6 +4,7 @@ import { ContextPanelContext, useContextPanel } from './context-panel-state';
 import type { ContextPanelContent, ContextPanelReturnFocus } from './context-panel-state';
 import { GeneratedViewRenderer } from './GeneratedViewRenderer';
 import { Loader } from './Loader';
+import { useModalLifecycle } from './useModalLifecycle';
 
 const emptyContext: ContextPanelContent = { title: 'Context', status: 'empty' };
 
@@ -49,8 +50,10 @@ export function ContextPanelProvider({ children }: { children: ReactNode }) {
   );
 }
 
-export function ContextPanel({ closeIcon, resizeHandle }: { closeIcon: ReactNode; resizeHandle?: ReactNode }) {
+export function ContextPanel({ closeIcon, resizeHandle, modal = false }: { closeIcon: ReactNode; resizeHandle?: ReactNode; modal?: boolean }) {
   const { content, isOpen, close } = useContextPanel();
+  const panel = useRef<HTMLElement>(null);
+  const { onKeyDown } = useModalLifecycle({ active: modal && isOpen, dialog: panel, onDismiss: close });
   const message = content.status === 'empty'
     ? content.message ?? 'No relevant information.'
     : content.status === 'loading'
@@ -61,10 +64,15 @@ export function ContextPanel({ closeIcon, resizeHandle }: { closeIcon: ReactNode
 
   return (
     <aside
+      ref={panel}
       id="context-panel"
       className="context-panel"
       hidden={!isOpen}
       aria-labelledby="context-heading"
+      role={modal ? 'dialog' : undefined}
+      aria-modal={modal ? true : undefined}
+      tabIndex={modal ? -1 : undefined}
+      onKeyDown={modal ? onKeyDown : undefined}
     >
       <div className="context-panel-heading">
         <h2 id="context-heading">{content.title}</h2>

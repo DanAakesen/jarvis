@@ -24,7 +24,10 @@ export function PresenceChip({ backendUrl, getAccessToken }: { backendUrl: strin
   useEffect(() => {
     if (!open) return;
     const close = (event: PointerEvent) => {
-      if (!root.current?.contains(event.target as Node)) setOpen(false);
+      if (!root.current?.contains(event.target as Node)) {
+        if (root.current?.contains(document.activeElement)) trigger.current?.focus();
+        setOpen(false);
+      }
     };
     document.addEventListener('pointerdown', close);
     return () => document.removeEventListener('pointerdown', close);
@@ -36,6 +39,7 @@ export function PresenceChip({ backendUrl, getAccessToken }: { backendUrl: strin
     <div ref={root} className="presence-chip" style={{ '--tone': current.tone } as CSSProperties} onKeyDown={(event) => {
       if (event.key !== 'Escape' || !open) return;
       event.preventDefault();
+      event.stopPropagation();
       setOpen(false);
       trigger.current?.focus();
     }}>

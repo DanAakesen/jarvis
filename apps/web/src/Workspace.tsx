@@ -142,6 +142,8 @@ export const Workspace = forwardRef<WorkspaceController, {
   conversationComposerHeight?: number;
   /** The shell's tab bar under the top bar; minimised windows become tabs there. */
   tabsHost?: HTMLElement | null;
+  /** In-flow shell host for feedback that must not float over the current page. */
+  feedbackHost?: HTMLElement | null;
   /** The shell floats windows freely (drag to move) instead of tiling them. */
   defaultArrangement?: Arrangement;
   /** The per-window Arrange menu; the shell drops it in favour of dragging and title-bar arrow keys. */
@@ -150,7 +152,7 @@ export const Workspace = forwardRef<WorkspaceController, {
   hideTab?: (view: WorkspaceView) => boolean;
   /** Authenticated persistence for generated windows. Omit it when persistent pins are unavailable. */
   pins?: WorkspacePinsClient;
-}>(function Workspace({ views, onVisibleViewsChange, onOpenWindowsChange, onVisibleViewIdsChange, onFrontViewChange, onConversationPositionChange, conversationComposerHeight, tabsHost, defaultArrangement = 'tiled', arrangeMenu = true, hideTab, pins }, ref) {
+}>(function Workspace({ views, onVisibleViewsChange, onOpenWindowsChange, onVisibleViewIdsChange, onFrontViewChange, onConversationPositionChange, conversationComposerHeight, tabsHost, feedbackHost, defaultArrangement = 'tiled', arrangeMenu = true, hideTab, pins }, ref) {
   const workspaceId = useId();
   const [agentViews, setAgentViews] = useState<WorkspaceView[]>([]);
   const closedAgentViews = useRef(new Map<string, { view: WorkspaceView; geometry: Geometry | undefined }>());
@@ -1310,7 +1312,7 @@ export const Workspace = forwardRef<WorkspaceController, {
     }
   }
 
-  const maybePortal = (node: ReactNode) => tabsHost ? createPortal(node, tabsHost) : node;
+  const maybePortal = (node: ReactNode, host = tabsHost) => host ? createPortal(node, host) : node;
   // In the shell the tab bar lists every open window, the conversation included;
   // without a shell host it lists only minimised views.
   const tabViews = (tabsHost ? openViews : minimizedViews).filter((view) => !hideTab?.(view));
@@ -1350,6 +1352,7 @@ export const Workspace = forwardRef<WorkspaceController, {
       ) : openViews.length === minimizedViews.length ? (
         <p className="workspace-empty">All views are minimised.</p>
       ) : null}
+      {maybePortal(<>
       {pinLoadError && (
         <div className="workspace-pin-feedback" role="alert">
           <span>{pinLoadError}</span>
@@ -1368,6 +1371,7 @@ export const Workspace = forwardRef<WorkspaceController, {
           void requestPinChange(retry.id, retry.pinned, retry.refresh && content?.status === 'generated' ? content.view : undefined);
         }}>Retry pin change</button>}
       </div>}
+      </>, feedbackHost)}
       {phone && primaryViews.length > 1 && (
         <nav className="workspace-view-switcher" aria-label="Switch foreground view">
           {primaryViews.map((view, index) => (

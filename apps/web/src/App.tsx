@@ -426,6 +426,7 @@ function ShellLayout({ signedIn, config, session, camera, screenShare, dailyEnab
     controller?.dispatch({ commandId: `task-window-focus-${focusTaskWindow.seq}`, operation: 'focus', viewId });
   }, [focusTaskWindow]);
   const [tabsHost, setTabsHost] = useState<HTMLDivElement | null>(null);
+  const [feedbackHost, setFeedbackHost] = useState<HTMLDivElement | null>(null);
   useEffect(() => {
     const strip = tabsHost?.parentElement;
     if (!phone || !strip) return;
@@ -768,6 +769,7 @@ function ShellLayout({ signedIn, config, session, camera, screenShare, dailyEnab
             <ConversationWindowContext.Provider value={conversationWindow}>
               <NavigationGuardContext.Provider value={navigationGuard}>
                 <FactoryIssueNavigationContext.Provider value={factoryIssueNavigator}>
+                  <div ref={setFeedbackHost} className="workspace-feedback-host" />
                   <DailyRefreshContext.Provider value={dailyRefresh}><Outlet /></DailyRefreshContext.Provider>
                 </FactoryIssueNavigationContext.Provider>
               </NavigationGuardContext.Provider>
@@ -786,7 +788,7 @@ function ShellLayout({ signedIn, config, session, camera, screenShare, dailyEnab
             {signedIn && (
               <div className="workspace-shell-area">
                 <Workspace ref={workspaceController} views={workspaceViews} onVisibleViewsChange={setVoiceHasWindows} onOpenWindowsChange={onOpenWindowsChange} onFrontViewChange={setFrontViewId}
-                  onVisibleViewIdsChange={onVisibleViewIdsChange} tabsHost={tabsHost} defaultArrangement="layered" arrangeMenu={false}
+                  onVisibleViewIdsChange={onVisibleViewIdsChange} tabsHost={tabsHost} feedbackHost={feedbackHost} defaultArrangement="layered" arrangeMenu={false}
                   onConversationPositionChange={setConversationPosition}
                   conversationComposerHeight={conversationComposerHeight}
                   hideTab={hideResearchProgressTab} {...(workspacePins ? { pins: workspacePins } : {})} />
@@ -817,7 +819,7 @@ function ShellLayout({ signedIn, config, session, camera, screenShare, dailyEnab
           <MobileMenu open={menuOpen} onClose={closeMenu} onNavigate={closePagePanels} onFolio={() => setFolioOpen(true)} onContext={contextPanel.toggle} dailyEnabled={dailyEnabled} />
         </>
       )}
-      {signedIn && <ContextPanel closeIcon={<ShellIcon name="close" />} resizeHandle={phone ? undefined : (
+      {signedIn && <ContextPanel modal={phone} closeIcon={<ShellIcon name="close" />} resizeHandle={phone ? undefined : (
         <PanelResizeHandle edge="left" label="Resize context panel" width={contextWidth ?? 280}
           min={contextLimits.min} max={contextLimits.max} onChange={changeContextWidth} />
       )} />}

@@ -63,6 +63,26 @@ function renderPanel() {
 }
 
 describe('ContextPanel', () => {
+  it('uses a focus-trapped modal sheet on phones and returns focus on Escape', async () => {
+    const user = userEvent.setup();
+    render(<ContextPanelProvider>
+      <PanelToggle />
+      <ContextPanel modal closeIcon={<span aria-hidden="true">×</span>} />
+    </ContextPanelProvider>);
+    const trigger = screen.getByRole('button', { name: 'Toggle contextual panel' });
+    await user.click(trigger);
+    const dialog = screen.getByRole('dialog', { name: 'Context' });
+    expect(dialog.getAttribute('aria-modal')).toBe('true');
+    const close = screen.getByRole('button', { name: 'Close context panel' });
+    expect(document.activeElement).toBe(close);
+    await user.tab();
+    expect(document.activeElement).toBe(close);
+    expect(document.body.style.overflow).toBe('hidden');
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(document.activeElement).toBe(trigger);
+    expect(document.body.style.overflow).not.toBe('hidden');
+  });
   it('shows and replaces agent-provided context while preserving the main view', async () => {
     const user = userEvent.setup();
     renderPanel();

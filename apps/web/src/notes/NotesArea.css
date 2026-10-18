@@ -6,7 +6,7 @@
 .notes-create-button:disabled, .notes-location button:disabled { opacity: .5; cursor: default; }
 .notes-page .knowledge-search, .notes-page .knowledge-results { left: 50%; width: min(560px, calc(100% - 32px)); translate: -50% 0; }
 .notes-page .knowledge-reset { min-height: 44px; }
-.knowledge-note.notes-popup { position: fixed; z-index: 40; top: calc(var(--rail-size, 56px) + 76px); bottom: 88px; }
+.knowledge-note.notes-popup { position: fixed; z-index: var(--z-dock); top: calc(var(--rail-size, 56px) + 76px); bottom: 88px; }
 .knowledge-note.notes-popup-creating { width: min(820px, calc(100vw - var(--rail-size, 56px) - 48px)); }
 .notes-popup .modal-close { min-width: 44px; min-height: 44px; }
 .notes-popup .knowledge-note-heading { align-items: center; }

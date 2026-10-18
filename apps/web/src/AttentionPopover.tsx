@@ -172,7 +172,10 @@ function AttentionPopoverContent({ attention, count }: { attention: FeedAttentio
   useEffect(() => {
     if (!open) return;
     const closeOutside = (event: PointerEvent) => {
-      if (!root.current?.contains(event.target as Node)) setOpen(false);
+      if (!root.current?.contains(event.target as Node)) {
+        if (popover.current?.contains(document.activeElement)) trigger.current?.focus();
+        setOpen(false);
+      }
     };
     document.addEventListener('pointerdown', closeOutside);
     const activeTrigger = trigger.current;

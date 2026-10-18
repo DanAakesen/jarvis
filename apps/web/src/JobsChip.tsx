@@ -162,7 +162,11 @@ export function JobsChip({ backendUrl, getAccessToken, onResult, accountId = nul
     if (!open && !showList) return;
     const tick = window.setInterval(() => setNow(Date.now()), 1000);
     const close = (event: PointerEvent) => {
-      if (!root.current?.contains(event.target as Node)) { setOpenId(null); setShowHistory(false); }
+      if (!root.current?.contains(event.target as Node)) {
+        if (popover.current?.contains(document.activeElement)) (returnFocus.current?.isConnected ? returnFocus.current : historyButton.current)?.focus();
+        setOpenId(null);
+        setShowHistory(false);
+      }
     };
     document.addEventListener('pointerdown', close);
     return () => { window.clearInterval(tick); document.removeEventListener('pointerdown', close); };

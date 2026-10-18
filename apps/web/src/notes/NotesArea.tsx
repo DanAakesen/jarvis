@@ -274,12 +274,12 @@ export function NotesArea({ backendUrl, getAccessToken }: AreaProps) {
         </aside>, document.body)}
       </KnowledgeGraphView>
       {(pendingChange || blocker.state === 'blocked') && <Modal title={saving ? 'Save in progress' : dirty ? 'Unsaved changes' : 'Continue navigation'} titleId={`${id}-guard`}
-        busy={saving} onClose={() => { setPendingChange(null); if (blocker.state === 'blocked') blocker.reset(); }}>
-        <p>{saving ? 'Wait for the save result before leaving this note.' : dirty ? 'Your changes have not been saved to the vault.' : 'Your note was saved. Continue to the page you selected?'}</p>
-        <div className="notes-editor-actions">
+        busy={saving} onClose={() => { setPendingChange(null); if (blocker.state === 'blocked') blocker.reset(); }}
+        footer={<div className="notes-editor-actions button-group">
           <button className="secondary-button" type="button" disabled={saving} onClick={() => { setPendingChange(null); if (blocker.state === 'blocked') blocker.reset(); }}>Keep editing</button>
           <button className="secondary-button" type="button" disabled={saving} onClick={discard}>{dirty ? 'Discard changes and continue' : 'Continue'}</button>
-        </div>
+        </div>}>
+        <p>{saving ? 'Wait for the save result before leaving this note.' : dirty ? 'Your changes have not been saved to the vault.' : 'Your note was saved. Continue to the page you selected?'}</p>
       </Modal>}
     </div>
   );

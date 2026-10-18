@@ -90,7 +90,7 @@ export function ConversationMoreMenu({
     if (!open) return;
     const onPointerDown = (event: PointerEvent) => {
       if (event.target instanceof Node && root.current?.contains(event.target)) return;
-      close(false);
+      close(Boolean(root.current?.contains(document.activeElement)));
     };
     document.addEventListener('pointerdown', onPointerDown);
     return () => document.removeEventListener('pointerdown', onPointerDown);
