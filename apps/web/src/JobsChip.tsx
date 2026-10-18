@@ -8,7 +8,7 @@ import { ShellIcon } from './ShellIcon';
 /** Opens (or just reveals) a job's result window; returns false while the window does not exist yet. */
 export type ResultWindowAction = (viewId: string, mode: 'open' | 'park') => boolean;
 
-const kindLabel: Record<BackgroundJob['kind'], string> = { research: 'Research', image: 'Image', html_app: 'App', embedding: 'Memory re-embed' };
+const kindLabel: Record<BackgroundJob['kind'], string> = { research: 'Research', image: 'Image', html_app: 'App', embedding: 'Memory re-embed', proactive: 'Proactive check' };
 
 function interrupted(job: JobEntry) {
   return job.status === 'failed' && (job.detail === 'interrupted by restart' || job.detail === 'Interrupted by a backend restart');

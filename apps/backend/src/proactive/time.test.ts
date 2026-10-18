@@ -8,6 +8,7 @@ describe('Copenhagen proactive time', () => {
     expect(localTimeLabel(morning)).toBe('07:00');
     expect(isQuietHour(morning)).toBe(false);
     expect(isQuietHour(new Date('2026-10-20T20:00:00Z'))).toBe(true);
+    expect(isQuietHour(new Date('2026-10-20T05:00:00Z'))).toBe(false);
     expect(monthKey(morning)).toBe('2026-10');
     expect(slotKey(morning, '07:00')).toBe('2026-10-20T07:00');
     expect(localSlotInstant('2026-10-20T07:00').toISOString()).toBe('2026-10-20T05:00:00.000Z');
@@ -20,6 +21,8 @@ describe('Copenhagen proactive time', () => {
     expect(localTimeLabel(before)).toBe('02:30');
     expect(localTimeLabel(after)).toBe('03:30');
     expect(localSlotInstant('2026-10-25T07:00').toISOString()).toBe('2026-10-25T06:00:00.000Z');
+    expect(localSlotInstant('2026-10-25T07:00').getTime() -
+      localSlotInstant('2026-10-24T07:00').getTime()).toBe(25 * 60 * 60_000);
     expect(nextSlotAfter(before).key).toBe('2026-10-25T07:00');
   });
 
@@ -30,6 +33,8 @@ describe('Copenhagen proactive time', () => {
     expect(localTimeLabel(before)).toBe('01:30');
     expect(localTimeLabel(after)).toBe('07:30');
     expect(localSlotInstant('2027-03-28T07:00').toISOString()).toBe('2027-03-28T05:00:00.000Z');
+    expect(localSlotInstant('2027-03-28T07:00').getTime() -
+      localSlotInstant('2027-03-27T07:00').getTime()).toBe(23 * 60 * 60_000);
     expect(latestSlotAtOrBefore(after).key).toBe('2027-03-28T07:00');
   });
 

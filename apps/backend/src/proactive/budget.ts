@@ -1,6 +1,5 @@
-import { foundryTokenCosts } from '../core/usage-pricing.js';
+import { foundryTokenCosts, highestFoundryTokenCosts } from '../core/usage-pricing.js';
 
-const knownModels = ['gpt-5.6-luna', 'gpt-6-luna'];
 export type BudgetState = 'ok' | 'warn' | 'exhausted';
 
 export function estimateCost(model: string, inputTokens: number, outputTokens: number): {
@@ -12,11 +11,9 @@ export function estimateCost(model: string, inputTokens: number, outputTokens: n
   }
   const known = foundryTokenCosts(model, inputTokens, outputTokens);
   if (known) return { estimatedDkk: known.inputDkk + known.outputDkk, estimated: false };
-  const conservative = knownModels.map((candidate) =>
-    foundryTokenCosts(candidate, inputTokens, outputTokens)!);
+  const conservative = highestFoundryTokenCosts(inputTokens, outputTokens);
   return {
-    estimatedDkk: Math.max(...conservative.map(({ inputDkk }) => inputDkk)) +
-      Math.max(...conservative.map(({ outputDkk }) => outputDkk)),
+    estimatedDkk: conservative.inputDkk + conservative.outputDkk,
     estimated: true,
   };
 }

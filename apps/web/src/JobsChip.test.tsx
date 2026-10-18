@@ -90,6 +90,13 @@ describe('job tabs', () => {
     expect(screen.getByRole('group', { name: 'Background work' })).not.toBeNull();
   });
 
+  it('labels proactive background work as a check', async () => {
+    stubFetch('present', [job({ kind: 'proactive', title: 'Proactive check (07:00)' })]);
+    mount();
+    const chip = await screen.findByRole('button', { name: /Proactive check running/ });
+    expect(chip.getAttribute('aria-label')).toContain('Proactive check (07:00)');
+  });
+
   it('counts each undismissed outcome with a distinct icon, accessible name and tooltip', async () => {
     stubFetch('away', [
       job(),
