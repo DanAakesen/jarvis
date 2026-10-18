@@ -6093,6 +6093,20 @@ Backend, contracts, navigation, mutation paths and refresh transport are unchang
 
 ## Web Daily Nutrition section (18 October 2026; P12-24)
 
+P12-31 rebuilds only this section's presentation with the shared Daily kit.
+Day uses nullable meters and known-only secondary nutrient tiles, grouped
+expandable meal rows and a single unavailable-nutrient disclosure. Trend keeps
+the same loaded-day calculations and gaps, adds carbohydrate and fat charts,
+and attaches the existing day/weekly tables to chart disclosures. Library keeps
+its existing source gates, bounded paging and loaded-record filter. Existing
+date/view URL state, target reads and navigation remain unchanged.
+
+The shared chart measures its figure with `ResizeObserver` and falls back to
+its initial geometry when measurement is unavailable. SVG axis geometry follows
+the measured width; legend swatches share plotted dash patterns. Shared phone
+statistic rows flex to fill the last row. These changes add no backend reads,
+dependencies, persistence or authorization changes.
+
 `apps/web/src/daily/sections/nutrition/index.tsx` exports the auto-discovered
 section definition and lazy-loads its content. It requires only
 `daily.nutrition.meals`; the optional `daily.nutrition.days`, favourites and

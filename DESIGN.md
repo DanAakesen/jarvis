@@ -1590,6 +1590,27 @@ Synthetic browser captures for the new list and detail presentation are in
 responses, not Microsoft sign-in, live records, physical-device behavior or
 original-site parity.
 
+### Nutrition presentation (18 October 2026; P12-31)
+
+Day puts the date controls and meal freshness before four text-backed meters:
+calories, protein, carbohydrates and fat. Meters sit together from 900px and
+stack below it. Only the existing calorie baseline before activity and protein
+target are available; missing targets are not estimated. Known other nutrients
+use compact tiles, with unavailable nutrients collected in one closed
+“Not recorded” disclosure. Meal rows keep recorded groups, group subtotals,
+wrapping names, time and macro chips; native details retain the full record.
+
+Trend uses four charts with gaps preserved and the existing data tables inside
+chart disclosures. Weekly averages show each nutrient's known logged-day count.
+Library reuses the meal-row anatomy and existing loaded-record filtering.
+Source caveats stay disclosed; unknown and lower-bound labels stay with values.
+No new tokens, theme, controls or data sources are introduced.
+
+Shared charts measure their container so axis text does not shrink with a
+desktop-sized SVG viewBox on phones. Legend line patterns match plotted line
+patterns. Phone statistic rows wrap with a flexible last row instead of leaving
+a lone half-width tile.
+
 ## Daily overview and Briefs integration (18 October 2026; P12-26)
 
 The Overview retains its source inventory and adds a responsive tile grid for
