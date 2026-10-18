@@ -1,7 +1,7 @@
 import { ToolRefusal, type JarvisTool } from '../core/tool-registry.js';
 import type { PhoneSessionStore } from '../database/phone-session-store.js';
-import type { TeamsNotificationService } from '../teams/service.js';
-import { withPhoneConfirmationSession } from '../teams/service.js';
+import type { OwnerInteractionService } from '../core/owner-interactions.js';
+import { withPhoneConfirmationSession } from '../core/owner-interactions.js';
 
 const phoneSessionIdPattern = /^[1-9]\d{0,18}$/u;
 
@@ -18,7 +18,7 @@ export async function executePhoneTool<T>({
   readonly sessionId: string;
   readonly callerId: string;
   readonly store: PhoneSessionStore | null;
-  readonly notifications: TeamsNotificationService | null;
+  readonly notifications: OwnerInteractionService | null;
   readonly signal: AbortSignal;
   readonly execute: () => Promise<T>;
 }): Promise<T> {

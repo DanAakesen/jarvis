@@ -126,7 +126,7 @@ export async function getSystemHealth(app: FastifyInstance, signal: AbortSignal,
       status === 'degraded' ? 'Credential expires soon or needs renewal.' :
       status === 'ok' ? 'Stored credential status is healthy.' : 'Credential status is unavailable.',
     credential?.lastCheckedAt ?? credential?.lastRenewedAt,
-    name === 'codex-login' && app.renewCodexCredential && app.teamsNotifications
+    name === 'codex-login' && app.renewCodexCredential && app.ownerInteractions
       ? [{ tool: 'renew_credential', description: 'Request renewal of codex-login with Now approval.' }] : []);
   }
   add('background_jobs', jobs ? jobs.count ? 'degraded' : 'ok' : 'unknown',

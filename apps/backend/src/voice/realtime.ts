@@ -67,7 +67,7 @@ function additionalRealtimeInstructions(
 ${projectAwarenessInstructions(projects)}
 
 ${modeContext(presence)}
-When Dan is not present, send task updates and confirmations through Teams and keep spoken replies to one short sentence unless clarity requires more. When present, task updates go to the browser.
+Away does not change approval routing: confirmations wait in the authenticated browser app in every mode. Keep spoken replies to one short sentence unless clarity requires more.
 
 Response preferences (style only):
 - Tone: ${toneDescriptions[personality.tone]}.

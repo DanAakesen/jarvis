@@ -109,39 +109,51 @@ describe('backend configuration', () => {
         .toThrow('JARVIS_MEMORY_EMBEDDING_DEPLOYMENT_NAME');
     }
   });
-  it('accepts a complete bot, audio-origin, and Speech F0 configuration', () => {
+  it('ignores Teams settings whether complete, partial, or malformed', () => {
+    const baseline = loadConfig({});
+    expect(loadConfig({
+      TEAMS_BOT_APP_ID: 'not-a-uuid',
+      TEAMS_BOT_TENANT_ID: 'not-a-tenant',
+      TEAMS_AUDIO_ORIGIN: 'http://invalid.example/path',
+      SPEECH_REGION: 'not a region',
+    })).toEqual(baseline);
     expect(loadConfig({
       TEAMS_BOT_APP_ID: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
-      TEAMS_BOT_TENANT_ID: '802efa29-17f2-4a79-8f5f-38f087aed96a',
+      TEAMS_BOT_TENANT_ID: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
       TEAMS_AUDIO_ORIGIN: 'https://jarvis.example',
       SPEECH_REGION: 'westeurope',
-    }).teams).toEqual({
-      botAppId: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
-      tenantId: '802efa29-17f2-4a79-8f5f-38f087aed96a',
-      audioOrigin: 'https://jarvis.example',
-      speechRegion: 'westeurope',
-    });
+    })).toEqual(baseline);
+    expect(baseline).not.toHaveProperty('teams');
   });
-  it('rejects partial, cross-tenant, or unsafe Teams and Speech settings', () => {
-    expect(() => loadConfig({ TEAMS_BOT_APP_ID: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa' }))
-      .toThrow('must be configured together');
-    const complete = {
-      TEAMS_BOT_APP_ID: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
-      TEAMS_BOT_TENANT_ID: '802efa29-17f2-4a79-8f5f-38f087aed96a',
-      TEAMS_AUDIO_ORIGIN: 'https://jarvis.example',
-      SPEECH_REGION: 'westeurope',
-    };
-    expect(() => loadConfig({ ...complete, TEAMS_BOT_TENANT_ID: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa' }))
-      .toThrow('must match ENTRA_TENANT_ID');
-    for (const TEAMS_AUDIO_ORIGIN of [
-      'http://jarvis.example',
-      'https://jarvis.example/',
-      'https://jarvis.example/path',
-      'https://user@jarvis.example',
-    ]) {
-      expect(() => loadConfig({ ...complete, TEAMS_AUDIO_ORIGIN })).toThrow('TEAMS_AUDIO_ORIGIN');
-    }
-    expect(() => loadConfig({ ...complete, SPEECH_REGION: 'https://example.com' })).toThrow('SPEECH_REGION');
+  it('configures phone media independently from Teams messaging settings', () => {
+    const phoneConfig = loadConfig({
+      JARVIS_PHONE_ACS_ENDPOINT: 'https://fixture.communication.azure.com/',
+      JARVIS_PHONE_ACS_RESOURCE_ID:
+        '/subscriptions/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/resourceGroups/rg/providers/Microsoft.Communication/communicationServices/jarvis',
+      JARVIS_PHONE_TEAMS_RESOURCE_ACCOUNT_OBJECT_ID: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+      JARVIS_PHONE_PUBLIC_ORIGIN: 'https://jarvis.example',
+      KEY_VAULT_URI: 'https://fixture.vault.azure.net/',
+      FOUNDRY_PROJECT_ENDPOINT: 'https://resource.services.ai.azure.com/api/projects/jarvis',
+      ENTRA_PHONE_EVENT_GRID_OBJECT_ID: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+    });
+    expect(phoneConfig.phone).toEqual({
+      acsEndpoint: 'https://fixture.communication.azure.com',
+      acsResourceId:
+        '/subscriptions/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/resourcegroups/rg/providers/microsoft.communication/communicationservices/jarvis',
+      teamsResourceAccountObjectId: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+      publicOrigin: 'https://jarvis.example',
+    });
+    expect(phoneConfig).not.toHaveProperty('teams');
+    expect(() => loadConfig({
+      JARVIS_PHONE_ACS_ENDPOINT: 'https://fixture.communication.azure.com/',
+      JARVIS_PHONE_ACS_RESOURCE_ID:
+        '/subscriptions/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/resourceGroups/rg/providers/Microsoft.Communication/communicationServices/jarvis',
+      JARVIS_PHONE_TEAMS_RESOURCE_ACCOUNT_OBJECT_ID: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+      JARVIS_PHONE_PUBLIC_ORIGIN: 'http://jarvis.example',
+      KEY_VAULT_URI: 'https://fixture.vault.azure.net/',
+      FOUNDRY_PROJECT_ENDPOINT: 'https://resource.services.ai.azure.com/api/projects/jarvis',
+      ENTRA_PHONE_EVENT_GRID_OBJECT_ID: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+    })).toThrow('JARVIS_PHONE_PUBLIC_ORIGIN');
   });
   it('accepts a GitHub App ID only with a secure Key Vault origin', () => {
     expect(loadConfig({

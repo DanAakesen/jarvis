@@ -10,8 +10,8 @@ import { favoriteFingerprint } from '../daily/records.js';
 import { dailyFoodTool } from '../daily/tools/food.js';
 import { dailyFoodReviewTool } from '../daily/tools/food-review.js';
 import { dailySavedFoodTool } from '../daily/tools/saved-food.js';
-import { createTeamsNotificationService } from '../teams/service.js';
-import { createTeamsNotificationStore } from './teams-notification-store.js';
+import { createOwnerInteractionService } from '../core/owner-interactions.js';
+import { createConfirmationStore } from './confirmation-store.js';
 
 const config = loadDatabaseConfig();
 if (!config || process.env.NODE_ENV !== 'test' || config.server !== '127.0.0.1') throw new Error('Nutrition tests require isolated loopback SQL Server');
@@ -390,14 +390,12 @@ describe('inactive nutrition services on real SQL Server', () => {
     const at = new Date(now()); const sessionId = randomUUID();
     const controller = new AbortController();
     const notifications: string[] = [];
-    const send = vi.fn(async () => { throw new Error('Synthetic health proposal must never be sent to Teams'); });
-    const confirmations = createTeamsNotificationService({
-      ownerObjectId: owner, tenantId: other, store: createTeamsNotificationStore(pool),
-      connector: { send }, isAway: async () => true, onWebNotification: async () => {},
+    const confirmations = createOwnerInteractionService({
+      ownerObjectId: owner, store: createConfirmationStore(pool), onWebNotification: async () => {},
     });
     const source = { id: '223001', sessionId, role: 'dan' as const, text: 'I ate a synthetic portion; review the estimate.', model: null, at };
     const req = { ...request(owner), headers: {}, jarvisConversationMessage: source,
-      server: { ownerObjectId: owner, teamsNotifications: confirmations, awayModeStore: { read: async () => ({ mode: 'present' }) },
+      server: { ownerObjectId: owner, ownerInteractions: confirmations, awayModeStore: { read: async () => ({ mode: 'present' }) },
         conversationStore: { getSession: async () => ({ id: sessionId, channel: 'voice', language: 'en', startedAt: at, endedAt: null }) } } } as unknown as FastifyRequest;
     const tool = dailyFoodReviewTool(request => NutritionStore.forRequest(pool, request, now, {
       publish: change => { notifications.push(...change.sources); },
@@ -412,7 +410,6 @@ describe('inactive nutrition services on real SQL Server', () => {
       expect(remaining).toBeGreaterThan(0);
       expect(remaining).toBeLessThanOrEqual(120_000);
       expect(confirmation.summary).toContain('Nothing has changed');
-      expect(send).not.toHaveBeenCalled();
       expect(await confirmations.resolveBrowserConfirmation(confirmation.id, decision)).toBe(true);
       const result = await outcome;
       expect(await confirmations.resolveBrowserConfirmation(confirmation.id, 'approve')).toBe(false);
@@ -443,7 +440,6 @@ describe('inactive nutrition services on real SQL Server', () => {
       expect(await tool.execute(deletion, req, controller.signal)).toMatchObject({ status: 'already-deleted', record: { revision: '3' } });
       expect(notifications).toHaveLength(3);
       expect(confirmations.pendingBrowserConfirmations()).toEqual([]);
-      expect(send).not.toHaveBeenCalled();
       expect((await pool.request().query('SELECT COUNT(*) AS count FROM daily.nutrition_queue')).recordset[0].count).toBe(0);
     } finally {
       controller.abort();
@@ -454,14 +450,12 @@ describe('inactive nutrition services on real SQL Server', () => {
     const at = new Date(now()); const sessionId = randomUUID(); const controller = new AbortController();
     const notifications: string[] = [];
     const mealsBefore = (await pool.request().query('SELECT COUNT(*) AS count FROM daily.nutrition_meals')).recordset[0].count;
-    const send = vi.fn(async () => { throw new Error('Saved health data must never be sent to Teams'); });
-    const confirmations = createTeamsNotificationService({
-      ownerObjectId: owner, tenantId: other, store: createTeamsNotificationStore(pool),
-      connector: { send }, isAway: async () => true, onWebNotification: async () => {},
+    const confirmations = createOwnerInteractionService({
+      ownerObjectId: owner, store: createConfirmationStore(pool), onWebNotification: async () => {},
     });
     const source = { id: '224001', sessionId, role: 'dan' as const, text: 'Review this synthetic saved-food change.', model: null, at };
     const req = { ...request(owner), headers: {}, jarvisConversationMessage: source,
-      server: { ownerObjectId: owner, teamsNotifications: confirmations, awayModeStore: { read: async () => ({ mode: 'present' }) },
+      server: { ownerObjectId: owner, ownerInteractions: confirmations, awayModeStore: { read: async () => ({ mode: 'present' }) },
         conversationStore: { getSession: async () => ({ id: sessionId, channel: 'voice', language: 'en', startedAt: at, endedAt: null }) } } } as unknown as FastifyRequest;
     const tool = dailySavedFoodTool(request => NutritionStore.forRequest(pool, request, now, {
       publish: change => { notifications.push(...change.sources); },
@@ -521,7 +515,6 @@ describe('inactive nutrition services on real SQL Server', () => {
       expect((await pool.request().query('SELECT COUNT(*) AS count FROM daily.nutrition_meals')).recordset[0].count).toBe(mealsBefore);
       expect((await pool.request().query('SELECT COUNT(*) AS count FROM daily.nutrition_queue')).recordset[0].count).toBe(0);
       expect(confirmations.pendingBrowserConfirmations()).toEqual([]);
-      expect(send).not.toHaveBeenCalled();
     } finally {
       controller.abort();
       if (active) await Promise.allSettled([active]);

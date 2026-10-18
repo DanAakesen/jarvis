@@ -86,7 +86,7 @@ describe('structured system health', () => {
     f.credentials[1]!.expiresAt = new Date(now + 60_000).toISOString();
     expect(component(await health(f.app), 'credential.codex-login').recovery).toEqual([]);
     f.app.renewCodexCredential = vi.fn();
-    f.app.teamsNotifications = { runConfirmed: vi.fn() } as unknown as NonNullable<typeof f.app.teamsNotifications>;
+    f.app.ownerInteractions = { runConfirmed: vi.fn() } as unknown as NonNullable<typeof f.app.ownerInteractions>;
     const result = await health(f.app);
     expect(component(result, 'credential.codex-login')).toMatchObject({ status: 'down',
       detail: 'Credential has expired.', recovery: [{ tool: 'renew_credential' }] });
