@@ -18,7 +18,7 @@ inventoried to identify route-specific exceptions.
 
 | Recurring element | Variants found (source and selector/component) | Canonical form and reason |
 | --- | --- | --- |
-| Button | `styles.css`: `.primary-button`, `.secondary-button`, `.ghost-button`, `.danger-button`, `.danger-button--filled`, `.button-group`, `.settings-back`, `.jobs-action`, `.workspace-control`; `proactive.css`: `.proactive-text-toggle`, `.proactive-snooze > summary`; Factory task/release action overrides; Daily keeps `.daily-page button` | Use the filled primary, surfaced secondary, quiet ghost, low-emphasis danger and filled-confirmation danger levels. Shared states, radius, type, icon alignment and busy width live in `styles.css`; specialized controls keep their workflow role. Action rows own spacing and wrap/stack at phone widths. Compact actions are 36px on fine pointers and at least 44px on coarse pointers. |
+| Button | `styles.css`: `.primary-button`, `.secondary-button`, `.ghost-button`, `.danger-button`, `.danger-button--filled`, `.button-group`, `.settings-back`, `.jobs-action`, `.workspace-control`; `ConversationHistory.css`: `.composer-send`, `.conversation-latest`; `proactive.css`: `.proactive-text-toggle`, `.proactive-snooze > summary`; Factory task/release actions; Daily keeps `.daily-page button` | Primary and filled danger use token-based tonal fills, real tinted borders and one restrained accent shadow; secondary and unfilled danger have visible boundaries; ghost stays text-only until hover/press. Shared focus, disabled, busy and reduced-motion states live in `styles.css`. The composer send and `.jobs-action-primary` alias shared primary styling while keeping their classes and compact geometry; Factory Create task and Settings save already use shared primary. Factory Create project uses shared secondary. `.conversation-latest` stays a contextual utility with the same radius and focus. Action rows own spacing and wrap/stack at phone widths. Compact actions are 36px on fine pointers and at least 44px on coarse pointers. |
 | Icon button | `styles.css`: `.rail-button`, `.topbar-icon-button`, `.workspace-icon-control`, `.workspace-tab-close`, `.modal-close`, `.folio-action`, `.release-trail-button`; `ConversationToast.css`: toast dismiss; `CameraPreview.css`: camera controls | Use the shared quiet surface treatment, `--radius-control` and visible focus. Icon-only actions remain at least 44px on touch layouts and keep an accessible name. Drag handles and media controls remain semantic exceptions. |
 | Text input | `styles.css`: `.settings-field`, `.project-form`, `.task-form-field`, `.task-filter-field`, `.task-create-form`, `.task-control-form`, `.kanban-search`, `.usage-field`, `.role-controls`, `.folio-rename`; `.proactive-feed-input`; `.daily-page`; `NotesArea.css`: note title and folder-name fields | The shared field rule uses `--surface`, `--control-rule`, `--radius-control`, `--type-body`, one placeholder treatment and the `--focus` visible outline. Fine-pointer fields are 38px minimum; coarse-pointer fields are 44px minimum with 16px text. Integrated Knowledge, Folio and chat searches keep their transparent inner fields and host-provided boundary/focus. |
 | Select | `styles.css`: `.settings-field select`, `.timeline-toolbar select`, `.usage-field select`, `.role-controls select`, `.kanban-select select`; `.daily-page select` | Use the text-field height, surface, neutral boundary, radius and focus. A CSS arrow replaces browser-specific arrow geometry; inherited `color-scheme` follows light/dark themes while native option semantics and route widths remain. |
@@ -132,6 +132,104 @@ checks, not live-backend or human acceptance.
   not verified; no real media device was used.
 - Keyboard scrolling of a wide generated table and reduced-motion behavior for
   an active voice status were not verified.
+
+## Pass 3: responsive and overflow (18 October 2026; P14-05)
+
+### Method and coverage
+
+Used a scratch-only Vite configuration and headless Chromium over the local
+DevTools protocol. The signed-in profile and every API response were synthetic;
+unmatched endpoints returned synthetic 503 responses. No repository test
+dependency or browser harness was added. The probe recorded document width,
+visible boxes without a scrolling ancestor, clipped controls, coarse-pointer
+target sizes, and fixed/sticky bounds. On emulated phones it used the narrowest
+of `innerWidth`, the visual viewport, and the document client width: content
+intrinsics can make Chromium report a wider layout viewport than the emulated
+screen.
+
+The settled matrix covered 14 entry paths × seven viewports × light and dark
+(196 samples): `/`, `/settings`, `/factory/kanban`, `/factory/tasks/12345`,
+`/factory/projects/7`, `/factory/projects/7/releases`,
+`/factory/projects/7/releases/9`, `/notes`, `/usage`, `/status`, `/daily`,
+`/proactive`, `/proactive/11111111-1111-4111-8111-111111111111`, and an
+unknown path. The task link redirects to Kanban and opens its workspace
+window. The viewports were 320×844, 375×812, 390×844, 768×1024, 1024×768,
+1440×900, and 844×390 with touch emulation. Settings, Usage, Status, Notes,
+and release data included synthetic populated and long-text content. Also
+opened the mobile navigation sheet and Background work popover at 320×844.
+
+Three repeatable overflow causes were fixed. The matrix found no document
+horizontal overflow at any width after the fixes. A single 320×844 dark
+task-window sample caught its action row outside the viewport during the
+window's opening transition; a focused 2.5-second settled check found the
+window and its actions within the viewport. This transient is not counted as a
+stable overflow defect.
+
+| Route or state | Viewport | Selector | Cause | Fix |
+| --- | --- | --- | --- | --- |
+| Usage, populated Top tasks | 320×844; the same unbroken title also exceeded its parent at wider samples | `.usage-rank-label a` | An inline task link had a 4,031px box inside a 185px ellipsis label. | Make the link a block constrained to its label, retaining the existing ellipsis. The full task title remains in the usage table. See [before](ui/p14-05/usage-rank-before.png) and [after](ui/p14-05/usage-rank-after.png). |
+| Factory release detail, populated long version | 320×844 | `.selected-release h2` | The unbroken release version had no wrapping rule; its section's scroll width grew to 452px and Chromium's layout viewport to 469px on a 320px screen. | Add `overflow-wrap: anywhere` to release headings. See [before](ui/p14-05/release-heading-before.png) and [after](ui/p14-05/release-heading-after.png). |
+| Factory release context on Kanban | 320×844 | `.release-trail-pipeline li`, `.release-trail-pipeline a` | A long release version forced a 261px flex item into a 194px project track and widened the mobile layout viewport. | Allow pipeline items to shrink and links to wrap. See [before](ui/p14-05/release-trail-before.png) and [after](ui/p14-05/release-trail-after.png). |
+| Conversation composer, coarse pointer | 320×844 | `.conversation-history .composer textarea` | The stylesheet's minimum height was 40px, below the 44px target. | Raise its minimum height to 44px; the style contract pins this rule. |
+| Task deep-link window opening | 320×844 dark, during the opening transition | `.workspace-window-actions` | The intermediate window-width transition briefly placed the actions beyond the viewport; the settled window fits. | No persistent overflow remained after settling. This is recorded as a transition-only observation, not a stable defect. |
+| Mobile menu and Background work popover | 320×844 coarse pointer | `.mobile-menu-button`, `.mobile-windows-button`, `.jobs-action`, `.workspace-tab-close`, `.composer-send` | Several existing buttons measure under 44px in the open/closed states (including 36px-high top-bar controls and 32px-high popover actions). | Not changed: button geometry is explicitly excluded from P14-05 and belongs to P14-03. The menu sheet and popover themselves fit the viewport without document overflow. |
+
+The small-target scan excluded the off-screen-until-focused skip link and the
+visually hidden file input. The Usage ranking label's intentional ellipsis is
+not an unrecoverable clipping defect: its full title is also present in the
+scrollable usage table. The generated-view table scroll region is now named and
+keyboard focusable; its focus outline is covered by a renderer test. The
+textarea height and responsive CSS signatures are pinned in `styles.test.tsx`.
+
+### Breakpoint boundary comparisons
+
+The boundary script measured computed styles at the pixel immediately below,
+at, and above each old and replacement threshold. For the ranges shown, the
+tested widths were:
+
+| Change | Styles compared | Before/after boundary result |
+| --- | --- | --- |
+| 360px → 380px | Voice-bar gap and padding at 359, 360, 361, 379, 380, 381 | Compact 4px gap/6px padding now remains through 380px; default 6px/7px begins at 381px. |
+| 600px → 700px | Chat page/composer, attachment text, Proactive page, and release trail at 599, 600, 601, 699, 700, 701 | Phone spacing and 11rem attachment width now remain through 700px; desktop/tablet values begin at 701px. |
+| 640px → above 700px | Task-board columns at 639, 640, 641, 699, 700, 701 | The board stays one column through phone width and becomes two at 701px; the old rule made it two columns at 640px. |
+| 701px → above 700px | Desktop shell rules at 700 and 701 | The integer-width rendering is unchanged: phone at 700px, desktop rules from 701px. |
+| 900/901px → above 900px | Usage layout, task-release time, and skeleton columns at 899, 900, 901 | Tablet rendering remains at 900px; desktop two-column usage, hidden compact timestamps, and four skeleton columns begin at 901px. |
+| 980px → 900px | Sidebar sizing and skeleton columns at 899, 900, 901, 979, 980, 981 | Compact sizing now ends at 900px instead of 980px; the desktop sidebar size and four-column skeleton begin at 901px. |
+| 1100px → 1200px | Release-trail columns at 1099, 1100, 1101, 1199, 1200, 1201 | The compact release trail now remains through the wide breakpoint; the full track layout begins at 1201px. |
+
+Equivalent integer ranges (`min-width: 701px` and `701px–900px`) were compared
+at 700/701 and 900/901 before replacing them with CSS range syntax. The
+720px task-detail and 1099px task-board thresholds remain container queries:
+their layout follows allocated component width, not viewport width. Daily's
+640px and 760px queries were left untouched as requested.
+
+### Final results and limits
+
+| Viewport | Samples | Document horizontal overflow | Stable uncontained overflow |
+| --- | ---: | --- | --- |
+| 320×844 touch | 28 | None | None |
+| 375×812 touch | 28 | None | None |
+| 390×844 touch | 28 | None | None |
+| 768×1024 | 28 | None | None |
+| 1024×768 | 28 | None | None |
+| 1440×900 | 28 | None | None |
+| 844×390 touch landscape | 28 | None | None |
+
+The 28 samples per width are 14 entry paths in two themes. The focused
+long-text check also passed for Usage, Kanban, the task window, and release
+detail at all seven widths and both themes (56 additional samples).
+
+The healthy Kanban/task fixture was rejected by the app's strict response
+validator, so the board and task-history content could not be verified as
+populated; their error and workspace-window states were reachable. Daily's
+healthy state was not reachable and remains unmodified. Proactive healthy data
+and the attention-event popover were also not reached; the mobile menu and
+Background work popover were. The synthetic responses made loading brief, so
+loading was not retained as a separate stable matrix state. Chromium supplied
+zero safe-area insets and no operating-system keyboard; physical notch,
+on-screen-keyboard, and live-device behavior remain unverified. Only three
+distinct, persistent overflow causes were reproduced, so the screenshot set
+contains three before/after pairs rather than fabricating five defects.
 
 ## Pass 3: button system (18 October 2026; P14-03)
 
@@ -255,8 +353,8 @@ an unrelated selector's exemption.
 | --- | --- | --- |
 | Radius | `0`; `50%`; `.deployment-add` at `14px` | Square edges and true circles are intentional; the deployment button is owned by P14-03. |
 | Side borders | Entries in the classification table above | Structural separators and functional grip glyph only; 1px neutral `--rule`. |
-| Inset shadows | Three `.conversation-history .composer-send` rules; two `.input-orb span` states; `.conversation-latest` and its hover state | Button rules are P14-03-owned; the orb's actual interior shading is not a pseudo-border. |
-| Raw colors | `.composer-send:not(:disabled)` background; `.input-orb span` background; `.conversation-latest` shadow | Existing button/voice-control highlights are P14-03-owned; exact values are pinned. |
+| Inset shadows | Two `.input-orb span` states | The inset shading is part of the genuine circular voice orb, not a button border. |
+| Raw colors | `.input-orb span` background | The highlight and stage surface belong to the semantic voice orb; button hierarchy colors use tokens. |
 
 Shared panels, dialogs, popovers, cards, selected rows and hover states now use
 the established surface roles, neutral `--rule`, and `--panel-shadow`. Selected
@@ -278,3 +376,43 @@ skip link. Reduced-motion emulation kept the page content available. These are
 local synthetic Chromium checks, not live-service or human acceptance. Usage,
 Status, Knowledge, Notes, and a separate healthy Factory board view were not
 captured in this bounded screenshot set.
+
+### P14-07 rendered checks (18 October 2026)
+
+Captured the five button variants in rest, hover, pressed, focus-visible,
+disabled and busy states in the scratch gallery at 390×844 (touch) and
+1440×900, light and dark. The gallery also shows Settings save, Factory task
+actions, a danger confirmation, an empty-state action and the chat composer.
+Four actual-app composites add Settings, the Factory board and chat at each
+viewport/theme. All samples use synthetic data:
+
+| View | Light | Dark |
+| --- | --- | --- |
+| Gallery, 1440×900 | [before](ui/p14-07/before-light-desktop.webp) · [after](ui/p14-07/after-light-desktop.webp) | [before](ui/p14-07/before-dark-desktop.webp) · [after](ui/p14-07/after-dark-desktop.webp) |
+| Gallery, 390×844 touch | [before](ui/p14-07/before-light-touch.webp) · [after](ui/p14-07/after-light-touch.webp) | [before](ui/p14-07/before-dark-touch.webp) · [after](ui/p14-07/after-dark-touch.webp) |
+| Actual app composite, 1440×900 | [Settings, Factory and chat](ui/p14-07/after-app-light-desktop.webp) | [Settings, Factory and chat](ui/p14-07/after-app-dark-desktop.webp) |
+| Actual app composite, 390×844 touch | [Settings, Factory and chat](ui/p14-07/after-app-light-touch.webp) | [Settings, Factory and chat](ui/p14-07/after-app-dark-touch.webp) |
+
+Chromium contrast ratios below are the minimum of top and bottom interior
+samples after state transitions settled; the tonal gradients are vertical.
+Busy labels are visually hidden beneath the inline Loader, so there is no
+visible label sample for that state; the accessible name remains unchanged.
+
+| Theme | Primary | Secondary | Ghost | Danger | Filled danger |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Light | 4.63:1 | 12.02:1 | 12.15:1 | 5.53:1 | 5.92:1 |
+| Dark | 6.96:1 | 12.25:1 | 16.13:1 | 6.32:1 | 6.24:1 |
+
+The outer focus outline measured 4.62:1 against the light page and 14.40:1
+against the dark page. The weakest of the two visible focus bands, measured
+against both its page and button, was 4.49:1 in light and 9.25:1 in dark.
+Forced-colours emulation removed gradients and resolved the boundary and focus
+to system colours ([capture](ui/p14-07/forced-colors.webp)). More-contrast
+emulation removed gradients; reduced-motion emulation produced no button
+transition or press transform, while state colours remained. Coarse-pointer
+button targets, including the composer send action, were 44px high (44×44px
+for the send action). No horizontal overflow was found at 320px or at the
+390px app viewport, and Chromium reported no console errors.
+
+These are local synthetic Chromium results, not live-service, physical-device
+or human acceptance.

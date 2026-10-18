@@ -47,19 +47,12 @@ const sideBorderAllowlist: AllowlistEntry[] = [
 ];
 
 const insetShadowAllowlist: AllowlistEntry[] = [
-  { file: 'ConversationHistory.css', selector: '.conversation-history .composer-send', property: 'box-shadow', value: 'inset 0 0 0 1px color-mix(in srgb, var(--glass-rim-light) 35%, transparent)', reason: 'Composer button styling is owned by P14-03 and is explicitly out of scope.' },
-  { file: 'ConversationHistory.css', selector: '.conversation-history .composer-send:not(:disabled)', property: 'box-shadow', value: 'inset 0 0 0 1px color-mix(in srgb, var(--glass-glow-warm) 80%, transparent), 0 0 14px -2px color-mix(in srgb, var(--glass-glow-warm) 70%, transparent)', reason: 'Composer button styling is owned by P14-03 and is explicitly out of scope.' },
-  { file: 'ConversationHistory.css', selector: '.conversation-history .composer-send:hover:not(:disabled)', property: 'box-shadow', value: 'inset 0 0 0 1px var(--glass-glow-warm), 0 0 20px 0 color-mix(in srgb, var(--glass-glow-warm) 80%, transparent)', reason: 'Composer button styling is owned by P14-03 and is explicitly out of scope.' },
   { file: 'ConversationHistory.css', selector: '.input-orb span', property: 'box-shadow', value: '0 0 0 1.5px color-mix(in srgb, var(--stage-orb) 85%, transparent), 0 0 16px color-mix(in srgb, var(--stage-orb) 45%, transparent), inset 0 0 10px color-mix(in srgb, var(--stage-orb) 35%, transparent)', reason: 'The inset shading is part of the genuine circular voice orb, not a border.' },
   { file: 'ConversationHistory.css', selector: '.input-orb:is(:hover, :focus-visible):not(:disabled) span', property: 'box-shadow', value: '0 0 0 1.5px color-mix(in srgb, var(--glass-glow-warm) 80%, transparent), 0 0 20px color-mix(in srgb, var(--glass-glow-warm) 55%, transparent), inset 0 0 12px color-mix(in srgb, var(--glass-glow-warm) 45%, transparent)', reason: 'The inset shading is part of the genuine circular voice orb, not a border.' },
-  { file: 'ConversationHistory.css', selector: '.conversation-latest', property: 'box-shadow', value: 'inset 0 1px 0 var(--glass-rim-light), inset 0 0 0 1px color-mix(in srgb, var(--glass-rim-light) 28%, transparent), 0 8px 20px -12px rgb(0 0 0 / 70%)', reason: 'This compact action button is owned by P14-03 and is explicitly out of scope.' },
-  { file: 'ConversationHistory.css', selector: '.conversation-latest:hover', property: 'box-shadow', value: 'inset 0 0 0 1px color-mix(in srgb, var(--glass-rim-light) 40%, transparent), 0 0 14px color-mix(in srgb, var(--glass-edge-cool) 14%, transparent)', reason: 'This compact action button is owned by P14-03 and is explicitly out of scope.' },
 ];
 
 const rawColorAllowlist: AllowlistEntry[] = [
-  { file: 'ConversationHistory.css', selector: '.conversation-history .composer-send:not(:disabled)', property: 'background', value: 'radial-gradient(circle at 50% 28%, color-mix(in srgb, #fff 34%, transparent), transparent 62%), radial-gradient(circle at 50% 100%, color-mix(in srgb, var(--glass-glow-warm) 75%, transparent), color-mix(in srgb, var(--glass-glow-warm) 28%, transparent) 70%)', reason: 'Composer button styling is owned by P14-03 and is explicitly out of scope.' },
   { file: 'ConversationHistory.css', selector: '.input-orb span', property: 'background', value: 'radial-gradient(circle at 34% 28%, rgb(255 255 255 / 18%), transparent 42%), radial-gradient(circle, var(--stage-background) 52%, color-mix(in srgb, var(--stage-orb) 55%, var(--stage-background)) 100%)', reason: 'The orb highlight is part of the P14-03-owned circular voice control.' },
-  { file: 'ConversationHistory.css', selector: '.conversation-latest', property: 'box-shadow', value: 'inset 0 1px 0 var(--glass-rim-light), inset 0 0 0 1px color-mix(in srgb, var(--glass-rim-light) 28%, transparent), 0 8px 20px -12px rgb(0 0 0 / 70%)', reason: 'This compact action button is owned by P14-03 and is explicitly out of scope.' },
 ];
 
 const literalRadiusAllowlist = [
@@ -212,5 +205,58 @@ describe('stylesheets', () => {
     const exceptions = [...sideBorderAllowlist, ...insetShadowAllowlist, ...rawColorAllowlist, ...radiusAllowlist];
     expect(exceptions.every((entry) => entry.reason.trim().length > 0)).toBe(true);
     expect(literalRadiusAllowlist.every((entry) => entry.reason.trim().length > 0)).toBe(true);
+  });
+
+  it.each(['primary-button', 'secondary-button', 'ghost-button', 'danger-button', 'danger-button--filled'])(
+    'keeps hover, pressed, focus-visible and disabled rules for .%s',
+    (variant) => {
+      const source = readFileSync(join(sourceDirectory, 'styles.css'), 'utf8');
+      const root = postcss.parse(source);
+      for (const state of [':hover', ':active', ':focus-visible', ':disabled']) {
+        let found = false;
+        root.walkRules((rule) => {
+          if (rule.selector.includes(`.${variant}`) && rule.selector.includes(state) && rule.nodes?.length) found = true;
+        });
+        expect(found, `.${variant}${state} rule`).toBe(true);
+      }
+      let busy = false;
+      root.walkRules((rule) => {
+        if (rule.selector.includes(`.${variant}`) && rule.selector.includes('[aria-busy="true"]')) busy = true;
+      });
+      expect(busy, `.${variant}[aria-busy="true"] rule`).toBe(true);
+    },
+  );
+
+  it('keeps explicit contrast, coarse-pointer targets, and token-only button colours', () => {
+    const source = readFileSync(join(sourceDirectory, 'styles.css'), 'utf8');
+    const coarseRules: string[] = [];
+    postcss.parse(source).walkAtRules('media', (atRule) => {
+      if (atRule.params.includes('(pointer: coarse)')) {
+        atRule.walkRules((rule) => {
+          coarseRules.push(`${rule.selector} { ${rule.nodes?.map((node) => node.toString()).join('; ')} }`);
+        });
+      }
+    });
+    expect(coarseRules.some((rule) => rule.includes('.primary-button') && rule.includes('min-height: 44px'))).toBe(true);
+    expect(coarseRules.some((rule) => rule.includes('.secondary-button') && rule.includes('min-height: 44px'))).toBe(true);
+    expect(coarseRules.some((rule) => rule.includes('.ghost-button') && rule.includes('min-height: 44px'))).toBe(true);
+    expect(coarseRules.some((rule) => rule.includes('.danger-button') && rule.includes('min-height: 44px'))).toBe(true);
+    expect(coarseRules.some((rule) => rule.includes('.conversation-history .composer-send') && rule.includes('min-height: 44px'))).toBe(true);
+    expect(source).toContain('@media (prefers-contrast: more)');
+    expect(source).toContain('@media (forced-colors: active)');
+    const buttonClasses = [
+      '.primary-button', '.secondary-button', '.ghost-button', '.danger-button',
+      '.danger-button--filled', '.jobs-action-primary', '.composer-send', '.conversation-latest',
+    ];
+    for (const file of stylesheets) {
+      const root = postcss.parse(readFileSync(join(sourceDirectory, file), 'utf8'), { from: file });
+      root.walkRules((rule) => {
+        if (!buttonClasses.some((buttonClass) => rule.selector.includes(buttonClass))) return;
+        rule.walkDecls((declaration) => {
+          expect(declaration.value, `${file}: ${rule.selector} ${declaration.prop}`)
+            .not.toMatch(/#[\da-f]{3,8}\b|\b(?:rgb|rgba|hsl|hsla)\(/iu);
+        });
+      });
+    }
   });
 });

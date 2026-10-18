@@ -1,3 +1,4 @@
+/* Viewport breakpoints: phone ≤700px, tablet >700–900px, desktop >900px, wide ≥1200px. The 380px exception keeps narrow-handset chat, voice and controls legible. */
 :root {
   font-family: var(--font-body);
   color-scheme: light;
@@ -59,7 +60,13 @@
   --surface-blur: 16px;
   --soft-shadow: 0 2px 8px rgb(32 37 44 / 6%), 0 20px 50px rgb(32 37 44 / 4%);
   --panel-shadow: 0 1px 2px rgb(32 37 44 / 5%), 0 18px 48px rgb(32 37 44 / 5%);
-  --button-primary-shadow: 0 2px 4px rgb(32 37 44 / 14%);
+  --button-primary-shadow:
+    0 2px 4px color-mix(in srgb, var(--primary-action) 28%, transparent),
+    0 4px 12px color-mix(in srgb, var(--primary-action) 16%, transparent);
+  --button-danger-shadow:
+    0 2px 4px color-mix(in srgb, var(--error) 28%, transparent),
+    0 4px 12px color-mix(in srgb, var(--error) 16%, transparent);
+  --danger-action-text: var(--highlight-solid);
   --dialog-shadow: 0 20px 64px rgb(32 37 44 / 22%);
   --success-surface: #e3f2f5;
   --warning: #835000;
@@ -180,7 +187,7 @@
   --surface-blur: 24px;
   --soft-shadow: 0 22px 70px rgb(0 0 0 / 30%);
   --panel-shadow: 0 16px 46px rgb(0 0 0 / 26%);
-  --button-primary-shadow: 0 2px 6px rgb(0 0 0 / 34%);
+  --danger-action-text: var(--ink-solid);
   --dialog-shadow: 0 20px 64px rgb(0 0 0 / 62%);
   --success-surface: #14323d;
   --warning: #ffc27a;
@@ -278,7 +285,7 @@ body {
 }
 a { color: inherit; text-underline-offset: 0.2em; }
 a:focus-visible { outline: 3px solid var(--focus); outline-offset: 5px; }
-.app { min-height: 100vh; }
+.app { min-height: 100vh; min-height: 100dvh; }
 .app-shell {
   position: relative;
   isolation: isolate;
@@ -527,44 +534,101 @@ dd { margin: 0; color: var(--text-muted); overflow-wrap: anywhere; }
 .home-link:hover { color: var(--focus); }
 .primary-button, .secondary-button, .ghost-button, .danger-button {
   display: inline-flex; max-width: 100%; min-width: 0; min-height: 44px; align-items: center; justify-content: center;
-  gap: var(--space-2); padding: 8px 16px; border: 0; border-radius: var(--radius-control); font: inherit;
+  gap: var(--space-2); padding: 8px 16px; border: 1px solid transparent; border-radius: var(--radius-control); font: inherit;
   font-weight: 650; line-height: 1.25; text-align: center; white-space: normal; overflow-wrap: anywhere;
-  cursor: pointer; transition: background-color var(--motion-press) var(--ease-standard), color var(--motion-press) var(--ease-standard),
+  cursor: pointer; transition: background var(--motion-press) var(--ease-standard), border-color var(--motion-press) var(--ease-standard),
+    box-shadow var(--motion-press) var(--ease-standard), color var(--motion-press) var(--ease-standard),
     transform var(--motion-press) var(--ease-standard);
 }
-.primary-button { padding-inline: 18px; background: var(--primary-action); color: var(--primary-action-text); box-shadow: var(--button-primary-shadow); }
-.primary-button:hover:not(:disabled, [aria-busy="true"]) { background: var(--primary-action-hover); }
-.primary-button:active:not(:disabled, [aria-busy="true"]) { transform: translateY(1px); }
-.secondary-button { background: color-mix(in srgb, var(--text) 8%, var(--surface)); color: var(--text); }
-.secondary-button:hover:not(:disabled, [aria-busy="true"]) { background: color-mix(in srgb, var(--text) 14%, var(--surface)); }
-.secondary-button:active:not(:disabled, [aria-busy="true"]) { background: color-mix(in srgb, var(--text) 18%, var(--surface)); transform: translateY(1px); }
+.primary-button, .jobs-action-primary, .conversation-history .composer-send {
+  border-color: color-mix(in srgb, var(--primary-action) 54%, var(--highlight-solid));
+  background: linear-gradient(180deg, color-mix(in srgb, var(--primary-action) 93%, var(--highlight-solid)),
+    color-mix(in srgb, var(--primary-action) 94%, var(--ink-solid)));
+  color: var(--primary-action-text); box-shadow: var(--button-primary-shadow);
+}
+.primary-button:hover:not(:disabled, [aria-busy="true"]),
+.jobs-action-primary:hover:not(:disabled, [aria-busy="true"]),
+.conversation-history .composer-send:hover:not(:disabled, [aria-busy="true"]) {
+  border-color: color-mix(in srgb, var(--primary-action-hover) 48%, var(--highlight-solid));
+  background: linear-gradient(180deg, color-mix(in srgb, var(--primary-action-hover) 94%, var(--highlight-solid)),
+    color-mix(in srgb, var(--primary-action-hover) 92%, var(--ink-solid)));
+  box-shadow: 0 3px 8px color-mix(in srgb, var(--primary-action) 40%, transparent),
+    0 0 18px color-mix(in srgb, var(--primary-action) 28%, transparent);
+}
+.primary-button:active:not(:disabled, [aria-busy="true"]),
+.jobs-action-primary:active:not(:disabled, [aria-busy="true"]),
+.conversation-history .composer-send:active:not(:disabled, [aria-busy="true"]) {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--primary-action) 84%, var(--ink-solid)),
+    color-mix(in srgb, var(--primary-action) 78%, var(--ink-solid)));
+  transform: translateY(1px);
+}
+.secondary-button, .jobs-action:not(.jobs-action-primary) {
+  border-color: var(--control-rule); background: color-mix(in srgb, var(--text) 6%, var(--surface)); color: var(--text);
+}
+.secondary-button:hover:not(:disabled, [aria-busy="true"]),
+.jobs-action:not(.jobs-action-primary):hover:not(:disabled, [aria-busy="true"]) {
+  background: color-mix(in srgb, var(--text) 12%, var(--surface));
+}
+.secondary-button:active:not(:disabled, [aria-busy="true"]),
+.jobs-action:not(.jobs-action-primary):active:not(:disabled, [aria-busy="true"]) {
+  background: color-mix(in srgb, var(--text) 18%, var(--surface)); transform: translateY(1px);
+}
 .ghost-button { background: transparent; color: var(--text); }
 .ghost-button:hover:not(:disabled, [aria-busy="true"]) { background: var(--glass-hover); }
 .ghost-button:active:not(:disabled, [aria-busy="true"]) { background: var(--glass-pressed); transform: translateY(1px); }
-.danger-button { background: color-mix(in srgb, var(--error-surface) 72%, var(--surface)); color: var(--error); }
+.danger-button {
+  border-color: color-mix(in srgb, var(--error) 42%, var(--surface));
+  background: color-mix(in srgb, var(--error-surface) 72%, var(--surface)); color: var(--error);
+}
 .danger-button:hover:not(:disabled, [aria-busy="true"]) { background: var(--error-surface); }
-.danger-button:active:not(:disabled, [aria-busy="true"]) { background: color-mix(in srgb, var(--error-surface) 76%, var(--error)); transform: translateY(1px); }
-.danger-button--filled { background: var(--error); color: var(--page); box-shadow: var(--button-primary-shadow); }
-.danger-button--filled:hover:not(:disabled, [aria-busy="true"]) { background: color-mix(in srgb, var(--error) 88%, var(--text)); }
-.danger-button--filled:active:not(:disabled, [aria-busy="true"]) { transform: translateY(1px); }
-.primary-button:focus-visible, .secondary-button:focus-visible, .ghost-button:focus-visible, .danger-button:focus-visible {
-  outline: 3px solid var(--focus); outline-offset: 3px;
+.danger-button:active:not(:disabled, [aria-busy="true"]) {
+  background: color-mix(in srgb, var(--error-surface) 76%, var(--error)); transform: translateY(1px);
+}
+.danger-button--filled {
+  border-color: color-mix(in srgb, var(--error) 52%, var(--highlight-solid));
+  background: linear-gradient(180deg, color-mix(in srgb, var(--error) 93%, var(--highlight-solid)),
+    color-mix(in srgb, var(--error) 94%, var(--ink-solid)));
+  color: var(--danger-action-text); box-shadow: var(--button-danger-shadow);
+}
+.danger-button--filled:hover:not(:disabled, [aria-busy="true"]) {
+  border-color: color-mix(in srgb, var(--error) 44%, var(--highlight-solid));
+  background: linear-gradient(180deg, color-mix(in srgb, var(--error) 88%, var(--highlight-solid)),
+    color-mix(in srgb, var(--error) 90%, var(--ink-solid)));
+  box-shadow: 0 3px 8px color-mix(in srgb, var(--error) 40%, transparent),
+    0 0 18px color-mix(in srgb, var(--error) 28%, transparent);
+}
+.danger-button--filled:active:not(:disabled, [aria-busy="true"]) {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--error) 84%, var(--ink-solid)),
+    color-mix(in srgb, var(--error) 78%, var(--ink-solid)));
+  transform: translateY(1px);
+}
+.primary-button:focus-visible, .secondary-button:focus-visible, .ghost-button:focus-visible,
+.danger-button:focus-visible, .danger-button--filled:focus-visible, .jobs-action:focus-visible,
+.conversation-history .composer-send:focus-visible {
+  outline: 3px solid var(--focus); outline-offset: 3px; box-shadow: 0 0 0 3px var(--page);
 }
 .primary-button:disabled, .secondary-button:disabled, .ghost-button:disabled, .danger-button:disabled {
-  background: var(--disabled-surface); color: var(--disabled-text); box-shadow: none; cursor: not-allowed;
+  border-color: var(--control-rule); background: var(--disabled-surface); color: var(--disabled-text); box-shadow: none; cursor: not-allowed;
 }
-.primary-button:disabled { background: var(--primary-action-disabled); color: var(--primary-action-disabled-text); }
+.primary-button:disabled, .jobs-action-primary:disabled, .conversation-history .composer-send:disabled {
+  border-color: color-mix(in srgb, var(--primary-action-disabled) 55%, var(--highlight-solid));
+  background: var(--primary-action-disabled); color: var(--primary-action-disabled-text);
+}
 .danger-button--filled:disabled { background: var(--disabled-surface); color: var(--disabled-text); }
-.primary-button[aria-busy="true"], .secondary-button[aria-busy="true"], .ghost-button[aria-busy="true"], .danger-button[aria-busy="true"] {
+.primary-button[aria-busy="true"], .secondary-button[aria-busy="true"], .ghost-button[aria-busy="true"],
+.danger-button[aria-busy="true"], .danger-button--filled[aria-busy="true"] {
   position: relative; display: inline-grid; grid-template-columns: auto; grid-template-rows: auto; place-items: center; cursor: progress;
 }
 .primary-button[aria-busy="true"] > .button-label, .secondary-button[aria-busy="true"] > .button-label,
-.ghost-button[aria-busy="true"] > .button-label, .danger-button[aria-busy="true"] > .button-label { grid-area: 1 / 1; }
+.ghost-button[aria-busy="true"] > .button-label, .danger-button[aria-busy="true"] > .button-label,
+.danger-button--filled[aria-busy="true"] > .button-label { grid-area: 1 / 1; }
 .primary-button[aria-busy="true"] > .button-label, .secondary-button[aria-busy="true"] > .button-label,
-.ghost-button[aria-busy="true"] > .button-label, .danger-button[aria-busy="true"] > .button-label { opacity: 0; }
+.ghost-button[aria-busy="true"] > .button-label, .danger-button[aria-busy="true"] > .button-label,
+.danger-button--filled[aria-busy="true"] > .button-label { opacity: 0; }
 .button-loading-indicator { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; pointer-events: none; }
 .primary-button[aria-busy="true"] > .button-loading-indicator, .secondary-button[aria-busy="true"] > .button-loading-indicator,
-.ghost-button[aria-busy="true"] > .button-loading-indicator, .danger-button[aria-busy="true"] > .button-loading-indicator {
+.ghost-button[aria-busy="true"] > .button-loading-indicator, .danger-button[aria-busy="true"] > .button-loading-indicator,
+.danger-button--filled[aria-busy="true"] > .button-loading-indicator {
   display: inline-flex; align-items: center; justify-content: center;
 }
 .primary-button > svg, .secondary-button > svg, .ghost-button > svg, .danger-button > svg {
@@ -575,10 +639,7 @@ dd { margin: 0; color: var(--text-muted); overflow-wrap: anywhere; }
 }
 .button-group--space-3 { margin-top: var(--space-3); }
 .button-group--space-4 { margin-top: var(--space-4); }
-.button-group > .primary-button, .settings-actions > .primary-button, .task-dialog-actions > .primary-button,
-.action-row > .primary-button, .button-group > .danger-button--filled, .settings-actions > .danger-button--filled,
-.task-dialog-actions > .danger-button--filled, .action-row > .danger-button--filled { order: 1; }
-@media (max-width: 600px) {
+@media (max-width: 700px) {
   .button-group, .settings-actions, .task-dialog-actions, .settings-save { flex-direction: column; align-items: stretch; }
   .button-group > :is(button, a), .settings-actions > :is(button, a), .task-dialog-actions > :is(button, a),
   .settings-save > :is(button, a) {
@@ -777,6 +838,7 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
 .workspace-view-content .task-window-actions, .workspace-view-content .timeline-artifacts { padding-top: var(--space-3); }
 .workspace-view-content [role="alert"] { color: var(--error); }
 .generated-view-table { max-width: 100%; overflow: auto; }
+.generated-view-table:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
 .generated-view-table table { width: 100%; border-collapse: collapse; text-align: left; }
 /* Cells keep words and numbers whole: a wide table scrolls inside its wrapper instead of splitting a value across lines. */
 .generated-view-table th, .generated-view-table td { padding: var(--space-2); border-bottom: 1px solid var(--rule); vertical-align: top; overflow-wrap: normal; }
@@ -899,7 +961,7 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
 /* The composer and its menus stay above workspace windows, so More and attach menus are never hidden. */
 .conversation-input.luminous-glass { z-index: 1100; }
 /* Shell panels keep their heading and resize handle in place while only the body scrolls. */
-@media (min-width: 701px) and (not ((max-height: 500px) and (pointer: coarse))) {
+@media (width > 700px) and (not ((max-height: 500px) and (pointer: coarse))) {
   .area-sidebar, .context-panel { position: relative; display: flex; flex-direction: column; overflow: hidden; }
   .area-sidebar > nav, .context-panel-body { flex: 1; min-height: 0; align-content: start; overflow-y: auto; }
 }
@@ -968,7 +1030,7 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
   .topbar-feature-button, .topbar-icon-button, .topbar-feature-button.screen-control-button[aria-pressed="false"] { width: 44px; min-width: 44px; }
 }
 /* Desktop shell (every page): the top bar floats as the same glass slab as the side panels. */
-@media (min-width: 701px) and (not ((max-height: 500px) and (pointer: coarse))) {
+@media (width > 700px) and (not ((max-height: 500px) and (pointer: coarse))) {
   .app-shell:not(.app-signed-out) .app-topbar {
     position: relative;
     isolation: isolate;
@@ -1111,7 +1173,7 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
 :root[data-motion="reduced"] .conversation-input.luminous-glass::after { animation: none; background: color-mix(in srgb, var(--glass-edge-cool) 80%, var(--glass-rim-light)); }
 .workspace-window-conversation.luminous-glass:focus-within { box-shadow: 0 26px 60px -18px color-mix(in srgb, var(--ink-solid) 55%, transparent), 0 0 0 2px var(--focus); }
 /* Desktop shell (every page): rail, navigation and context stand as glass slabs angled back like opened doors. */
-@media (min-width: 701px) and (not ((max-height: 500px) and (pointer: coarse))) {
+@media (width > 700px) and (not ((max-height: 500px) and (pointer: coarse))) {
   .app-shell:not(.app-signed-out) :is(.area-rail, .area-sidebar, .context-panel) {
     position: relative;
     isolation: isolate;
@@ -1375,9 +1437,10 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
 .task-release-actions { display: flex; grid-area: actions; align-items: center; justify-content: flex-end; gap: var(--space-2); }
 .task-release-actions p { margin: 0; font-size: 13px; }
 .task-release-actions .secondary-button { min-height: 36px; padding-inline: 10px; }
-@media (min-width: 901px) {
+@media (width > 900px) {
   .task-release-commits time { display: none; }
 }
+/* The task-board container adapts to its allocated width, not the browser viewport. */
 @container task-board (max-width: 1099px) {
   .task-release-bar {
     grid-template-columns: minmax(190px, .9fr) minmax(0, 1.6fr);
@@ -1449,7 +1512,7 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
   overflow-y: auto; padding: 24px; background: var(--overlay);
 }
 .task-dialog {
-  width: min(100%, 620px); max-height: calc(100vh - 48px); overflow-y: auto; margin: auto;
+  width: min(100%, 620px); max-height: calc(100vh - 48px); max-height: calc(100dvh - 48px); overflow-y: auto; margin: auto;
   padding: 24px; border: 1px solid var(--rule); border-radius: var(--radius-window); background: var(--surface);
   box-shadow: var(--dialog-shadow);
 }
@@ -1535,7 +1598,7 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
 
 .release-page { width: 100%; max-width: 1200px; margin-inline: auto; }
 .release-page h1 { margin: 8px 0 6px; font-size: clamp(26px, 4vw, 36px); line-height: 1.2; overflow-wrap: anywhere; }
-.release-page h2 { margin: 0; font-size: 21px; line-height: 1.3; }
+.release-page h2 { margin: 0; font-size: 21px; line-height: 1.3; overflow-wrap: anywhere; }
 .release-page-header { display: flex; min-width: 0; align-items: flex-end; justify-content: space-between; flex-wrap: wrap; gap: 16px; }
 .release-page-header > div { min-width: 0; }
 .release-page-header > div > p { margin: 0; overflow-wrap: anywhere; }
@@ -1602,7 +1665,7 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
 .selected-release .release-details { margin-bottom: 16px; }
 .project-releases-link { display: inline-flex; min-height: 44px; align-items: center; }
 
-@media (min-width: 640px) {
+@media (width > 700px) {
   .task-board { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
@@ -1705,7 +1768,7 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
 .usage-table td:first-child { min-width: 12rem; overflow-wrap: anywhere; }
 .usage-table a:hover { color: var(--focus); }
 
-@media (min-width: 900px) {
+@media (width > 900px) {
   .jarvis-layout { grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); align-items: start; }
 }
 
@@ -1726,7 +1789,7 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
   .workspace-resize-edge-corner { cursor: ns-resize; }
 }
 
-@media (max-width: 980px) and (min-width: 701px) {
+@media (width > 700px) and (width <= 900px) {
   .app-shell { --sidebar-size: var(--sidebar-width, 190px); }
   .app-shell[data-navigation-open="false"] { --sidebar-size: 0px; }
   .app-shell[data-context-open="true"] { --context-size: var(--context-width, 240px); }
@@ -1841,7 +1904,7 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
   .task-release-actions .secondary-button { flex: 1 1 120px; }
   .task-detail-panel .task-meta { grid-template-columns: minmax(0, 1fr); }
   .task-dialog-backdrop { padding: 12px; }
-  .task-dialog { max-height: calc(100vh - 24px); padding: 20px 16px; }
+  .task-dialog { max-height: calc(100vh - 24px); max-height: calc(100dvh - 24px); padding: 20px 16px; }
   .task-meta, .task-disk-meta { grid-template-columns: minmax(0, 1fr); }
   .task-detail-section { padding: 20px 16px; }
   .timeline-toolbar { align-items: flex-start; flex-direction: column; }
@@ -1958,7 +2021,6 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
   backdrop-filter: blur(var(--surface-blur));
   box-shadow: var(--panel-shadow);
 }
-.settings-save .primary-button { order: 2; }
 .settings-save { width: fit-content; max-width: 100%; margin-left: auto; }
 .settings-save .settings-feedback:empty { display: none; }
 .settings-save:has(.settings-feedback:empty) { padding-left: var(--space-2); }
@@ -2063,10 +2125,8 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
    --------------------------------------------------------------------------------------------- */
 .kanban-header { justify-content: flex-start; }
 .kanban-header .kanban-create-project { margin-left: auto; }
-.kanban-header .primary-button.kanban-create { box-shadow: none; }
 .kanban-header .kanban-create-project svg { width: 18px; height: 18px; }
-.kanban-create-project { display: inline-flex; align-items: center; gap: var(--space-2); min-height: 44px; background: var(--glass-hover); }
-.kanban-create-project:hover:not(:disabled) { background: var(--glass-pressed); }
+.kanban-create-project { display: inline-flex; align-items: center; gap: var(--space-2); min-height: 44px; }
 .project-dialog { display: grid; gap: var(--space-4); background: var(--surface); }
 .project-dialog h2 { margin: 0; }
 .project-dialog-part { display: grid; gap: var(--space-3); padding: var(--space-4); border: 1px solid color-mix(in srgb, var(--glass-rim-light) 30%, transparent); border-radius: var(--radius-panel); background: var(--glass-hover); }
@@ -2184,12 +2244,12 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
 .release-trail-name > span { color: var(--text-muted); font-weight: 400; }
 .release-trail-name code { font-family: var(--font-mono); font-size: 14px; }
 .release-trail-pipeline { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 4px 0 0; padding: 0; list-style: none; color: var(--text-muted); font-size: var(--type-caption); }
-.release-trail-pipeline li { --tone: var(--text-muted); display: inline-flex; align-items: center; gap: 6px; }
+.release-trail-pipeline li { --tone: var(--text-muted); display: inline-flex; min-width: 0; max-width: 100%; align-items: center; gap: 6px; }
 .release-trail-pipeline li::before { width: 7px; height: 7px; border-radius: 50%; background: var(--tone); box-shadow: 0 0 8px var(--tone); content: ""; }
 .release-trail-pipeline li[data-tone="ok"] { --tone: var(--success); }
 .release-trail-pipeline li[data-tone="bad"] { --tone: var(--error); }
 .release-trail-pipeline li[data-tone="live"] { --tone: var(--glass-edge-cool); }
-.release-trail-pipeline a { color: var(--text); }
+.release-trail-pipeline a { color: var(--text); overflow-wrap: anywhere; }
 .release-trail-commits, .release-trail-line {
   position: relative;
   display: grid;
@@ -2265,11 +2325,11 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
 .release-trail-button:hover:not(:disabled), .release-trail-open:hover { background: var(--glass-pressed); }
 .release-trail-button:disabled { color: var(--disabled-text); cursor: wait; }
 .release-trail-button:focus-visible, .release-trail-open:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
-@media (max-width: 1100px) {
+@media (max-width: 1200px) {
   .release-trail { grid-template-columns: auto minmax(0, 1fr) auto; }
   .release-trail-commits { grid-column: 1 / -1; grid-row: 2; }
 }
-@media (max-width: 600px) {
+@media (max-width: 700px) {
   .release-trail { grid-template-columns: auto minmax(0, 1fr); }
   .release-trail-actions { grid-column: 1 / -1; }
   .release-trail-commits li:nth-last-child(n + 4) { display: none; }
@@ -2282,7 +2342,7 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
 
 /* Desktop shell: the side panels float over the page like drawers. The main area keeps one constant
    gutter, so opening, closing or resizing a panel never moves content; content passes behind the glass. */
-@media (min-width: 701px) and (not ((max-height: 500px) and (pointer: coarse))) {
+@media (width > 700px) and (not ((max-height: 500px) and (pointer: coarse))) {
   .app-shell:not(.app-signed-out) .shell-main {
     --main-gutter: clamp(24px, 4vw, 56px);
     --main-pad-start: var(--main-gutter);
@@ -2331,7 +2391,7 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
 @keyframes tab-arrive { from { opacity: 0; scale: .7; } }
 @media (prefers-reduced-motion: reduce) { .workspace-tab-item { animation: none; } }
 :root[data-motion="reduced"] .workspace-tab-item { animation: none; }
-@media (min-width: 701px) and (not ((max-height: 500px) and (pointer: coarse))) {
+@media (width > 700px) and (not ((max-height: 500px) and (pointer: coarse))) {
 
 }
 @media (max-width: 700px), (max-height: 500px) and (pointer: coarse) {
@@ -2359,6 +2419,7 @@ a.task-chip:hover { background: var(--glass-pressed); }
 .task-window-note, .task-window-actions .task-window-note { flex-basis: 100%; margin: 0; color: var(--text-muted); font-size: 13px; text-align: right; }
 .task-window-grid { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(250px, 1fr); align-items: start; gap: 12px; }
 .task-window-main, .task-window-side { display: grid; gap: 12px; min-width: 0; }
+/* The nested task-detail grid responds to its own available container width. */
 @container (max-width: 720px) { .task-window-grid { grid-template-columns: minmax(0, 1fr); } }
 .task-card { min-width: 0; padding: 12px 14px 14px; border: 1px solid var(--rule); border-radius: var(--radius-panel); background: var(--surface-translucent); box-shadow: var(--panel-shadow); }
 .task-card h4 { margin: 0 0 8px; color: var(--text); font-size: 14px; font-weight: 650; }
@@ -2506,7 +2567,7 @@ a.task-chip:hover { background: var(--glass-pressed); }
    Close with the X, Escape or a click outside. */
 .modal-backdrop {
   position: fixed; z-index: 3000; inset: 0; display: grid; align-items: start; justify-items: center;
-  overflow-y: auto; padding: clamp(56px, 10vh, 120px) 16px 32px;
+  overflow-y: auto; padding: clamp(56px, 10vh, 120px) 16px 32px; padding: clamp(56px, 10dvh, 120px) 16px 32px;
   background: color-mix(in srgb, var(--stage-background) 45%, transparent); backdrop-filter: blur(6px);
   animation: modal-fade var(--motion-state) var(--ease-standard);
 }
@@ -2553,7 +2614,7 @@ a.task-chip:hover { background: var(--glass-pressed); }
 .workspace-window-dragging .workspace-title-drag { cursor: grabbing; }
 .workspace-window .workspace-title-drag:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: var(--radius-control); }
 .workspace-window-dragging { box-shadow: 0 34px 80px -20px color-mix(in srgb, var(--ink-solid) 65%, transparent), 0 0 0 1px color-mix(in srgb, var(--glass-edge-cool) 45%, transparent) !important; }/* On the home page the window area starts below the tab bar, so windows never slide under it. */
-@media (min-width: 701px) and (not ((max-height: 500px) and (pointer: coarse))) {
+@media (width > 700px) and (not ((max-height: 500px) and (pointer: coarse))) {
 
 }
 /* Tabs in the top bar (Dan, 7 October): open windows sit between the brand and the controls; no breadcrumb.
@@ -2634,13 +2695,18 @@ a.task-chip:hover { background: var(--glass-pressed); }
 .jobs-item[data-status="failed"] .jobs-item-detail { color: var(--warning-text); }
 .jobs-item-error { color: var(--error); font-size: 12.5px; }
 .jobs-item-actions { display: flex; flex-direction: column; gap: 4px; }
-.jobs-action { display: inline-flex; min-height: 36px; max-width: 100%; align-items: center; justify-content: center; gap: var(--space-1); padding: 6px 12px; border: 0; border-radius: var(--radius-control); background: color-mix(in srgb, var(--text) 8%, var(--surface)); color: var(--text); font: inherit; font-size: 12.5px; font-weight: 650; line-height: 1.25; text-align: center; white-space: normal; overflow-wrap: anywhere; cursor: pointer; transition: background-color var(--motion-press) var(--ease-standard), transform var(--motion-press) var(--ease-standard); }
-.jobs-action:hover:not(:disabled) { background: color-mix(in srgb, var(--text) 14%, var(--surface)); }
-.jobs-action:active:not(:disabled) { background: color-mix(in srgb, var(--text) 18%, var(--surface)); transform: translateY(1px); }
-.jobs-action:disabled { background: var(--disabled-surface); color: var(--disabled-text); cursor: not-allowed; }
-.jobs-action:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
-.jobs-action-primary { background: var(--primary-action); color: var(--primary-action-text); box-shadow: var(--button-primary-shadow); }
-.jobs-action-primary:is(:hover, :active):not(:disabled) { background: var(--primary-action-hover); }
+.jobs-action {
+  display: inline-flex; min-height: 36px; max-width: 100%; align-items: center; justify-content: center; gap: var(--space-1);
+  padding: 6px 12px; border-width: 1px; border-style: solid; border-radius: var(--radius-control); font: inherit;
+  font-size: 12.5px; font-weight: 650; line-height: 1.25; text-align: center; white-space: normal;
+  overflow-wrap: anywhere; cursor: pointer;
+  transition: background var(--motion-press) var(--ease-standard), border-color var(--motion-press) var(--ease-standard),
+    box-shadow var(--motion-press) var(--ease-standard), transform var(--motion-press) var(--ease-standard);
+}
+.jobs-action:hover:not(:disabled, .jobs-action-primary) { background: color-mix(in srgb, var(--text) 12%, var(--surface)); }
+.jobs-action:active:not(:disabled, .jobs-action-primary) { background: color-mix(in srgb, var(--text) 18%, var(--surface)); transform: translateY(1px); }
+.jobs-action:disabled:not(.jobs-action-primary) { background: var(--disabled-surface); color: var(--disabled-text); cursor: not-allowed; }
+.jobs-action-primary { font-size: 12.5px; padding: 6px 12px; }
 @media (pointer: coarse) { .jobs-action { min-height: 44px; } }
 @media (prefers-reduced-motion: reduce) { .jobs-popover { animation: none; } .jobs-ring-value { transition: none; } }
 :root[data-motion="reduced"] .jobs-popover { animation: none; }
@@ -2727,7 +2793,7 @@ a.task-chip:hover { background: var(--glass-pressed); }
 .knowledge-legend li:has(> button:hover) { background: var(--glass-hover); }
 .knowledge-legend li:has(> button[aria-pressed="true"]) { background: var(--state-selected-bg); color: var(--state-selected-fg); font-weight: 750; }
 .knowledge-legend button:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }/* Shell windows float at every desktop width (Dan, 7 October): the old ≤900 px stacking is for the classic workspace only. */
-@media (min-width: 701px) and (max-width: 900px) and (not ((max-height: 500px) and (pointer: coarse))) {
+@media (width > 700px) and (width <= 900px) and (not ((max-height: 500px) and (pointer: coarse))) {
   .app-shell:not(.app-signed-out) .workspace-canvas-layered { display: block; height: auto; min-height: 0; overflow: visible; }
   .app-shell:not(.app-signed-out) .workspace-canvas-layered .workspace-window { position: absolute; min-height: 0; }
   .app-shell:not(.app-signed-out) .workspace-canvas-layered .workspace-window:not(.workspace-window-conversation, .workspace-window-maximized) {
@@ -2799,7 +2865,7 @@ a.task-chip:hover { background: var(--glass-pressed); }
 /* No page bounce (Dan, 7 October): signed in, the shell owns every scroll area, so the document itself never scrolls,
    wobbles or rubber-bands; inner lists stop their scroll at their own edges instead of passing it to the page. */
 /* Desktop only: there the shell is exactly the viewport and inner panes scroll. On phones the page itself scrolls (Dan, 8 October). */
-@media (min-width: 701px) and (not ((max-height: 500px) and (pointer: coarse))) {
+@media (width > 700px) and (not ((max-height: 500px) and (pointer: coarse))) {
   :root:has(.app-shell:not(.app-signed-out)), :root:has(.app-shell:not(.app-signed-out)) body { height: 100%; overflow: hidden; overscroll-behavior: none; }
 }
 @media (max-width: 700px), (max-height: 500px) and (pointer: coarse) {
@@ -2860,7 +2926,7 @@ a.task-chip:hover { background: var(--glass-pressed); }
 @keyframes skeleton-in { from { opacity: 0; translate: 0 6px; } }
 @keyframes skeleton-sweep { 0% { background-position: 130% 0; } 70%, 100% { background-position: -30% 0; } }
 @keyframes skeleton-twinkle { 0%, 100% { opacity: .12; scale: .8; } 45% { opacity: .85; scale: 1.15; box-shadow: 0 0 10px var(--glass-rim-light); } }
-@media (max-width: 980px) { .skeleton-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } .skeleton-column:nth-child(n + 3) { display: none; } }
+@media (max-width: 900px) { .skeleton-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } .skeleton-column:nth-child(n + 3) { display: none; } }
 @media (max-width: 700px) { .skeleton-cards { grid-template-columns: minmax(0, 1fr); } .skeleton-column:nth-child(n + 2) { display: none; } }
 :root[data-motion="reduced"] :is(.skeleton, .skeleton-bar, .skeleton-slab, .skeleton-star) { animation: none; }
 @media (prefers-reduced-motion: reduce) { :is(.skeleton, .skeleton-bar, .skeleton-slab, .skeleton-star) { animation: none; } }
@@ -2879,8 +2945,8 @@ a.task-chip:hover { background: var(--glass-pressed); }
 @property --sidebar-size { syntax: "<length>"; inherits: true; initial-value: 0px; }
 @property --context-size { syntax: "<length>"; inherits: true; initial-value: 0px; }
 .app-shell { --sidebar-open: var(--sidebar-width, 220px); --context-open: var(--context-width, 280px); }
-@media (max-width: 980px) and (min-width: 701px) { .app-shell { --sidebar-open: var(--sidebar-width, 190px); --context-open: var(--context-width, 240px); } }
-@media (min-width: 701px) and (not ((max-height: 500px) and (pointer: coarse))) {
+@media (width > 700px) and (width <= 900px) { .app-shell { --sidebar-open: var(--sidebar-width, 190px); --context-open: var(--context-width, 240px); } }
+@media (width > 700px) and (not ((max-height: 500px) and (pointer: coarse))) {
   .app-shell:not(.app-signed-out) { transition: --sidebar-size var(--motion-panel) var(--ease-enter), --context-size var(--motion-panel) var(--ease-enter); }
   :root[data-panel-resizing] .app-shell { transition: none; }
   /* Fixed widths while the column moves, so the text inside never re-wraps mid-animation. */
@@ -2921,7 +2987,7 @@ a.task-chip:hover { background: var(--glass-pressed); }
 @media (prefers-reduced-motion: reduce) { [data-navigated] { animation: none; box-shadow: 0 0 0 2px var(--focus); } }
 /* Folio (P9-25): everything Jarvis pulled up, reopened from the left pane. It shares the sidebar slot and its hinge. */
 .app-shell[data-folio-open="true"] { --sidebar-size: 320px; --sidebar-open: 320px; }
-@media (max-width: 980px) and (min-width: 701px) { .app-shell[data-folio-open="true"] { --sidebar-size: 270px; --sidebar-open: 270px; } }
+@media (width > 700px) and (width <= 900px) { .app-shell[data-folio-open="true"] { --sidebar-size: 270px; --sidebar-open: 270px; } }
 .rail-folio[aria-pressed="true"] { background: var(--state-selected-bg); color: var(--state-selected-fg); }
 .rail-folio[aria-pressed="true"] svg {
   color: var(--state-selected-indicator);
@@ -3116,7 +3182,7 @@ a.task-chip:hover { background: var(--glass-pressed); }
   .kanban-header h1 { font-size: 30px; }
   .kanban-header .kanban-pulse { min-width: 0; flex-wrap: wrap; }
   .kanban-header .kanban-pulse li { flex: none; }
-  .kanban-header-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .kanban-header-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
   .kanban-header-actions .kanban-create { width: 100%; padding: 0 12px; }
 }
 .kanban-filter-panel { margin: 0 0 var(--space-4); border: 1px solid var(--rule); border-radius: var(--radius-panel); background: var(--surface-muted); }
@@ -3285,7 +3351,7 @@ a.task-chip:hover { background: var(--glass-pressed); }
 .usage-rank { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
 .usage-rank li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 10px; font-size: var(--type-small); }
 .usage-rank-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-transform: none; }
-.usage-rank-label a { color: var(--text); text-decoration: none; }
+.usage-rank-label a { display: block; max-width: 100%; overflow: hidden; color: var(--text); text-decoration: none; text-overflow: ellipsis; }
 .usage-rank-label a:hover { text-decoration: underline; }
 .usage-rank-value { font-weight: 650; font-variant-numeric: tabular-nums; }
 .usage-rank-track { grid-column: 1 / -1; height: 6px; overflow: hidden; border-radius: var(--radius-pill); background: color-mix(in srgb, var(--text) 6%, transparent); }
@@ -3333,7 +3399,7 @@ a.task-chip:hover { background: var(--glass-pressed); }
 .deployment-name { display: grid; min-width: 0; font-family: var(--font-mono); font-size: 13px; font-weight: 600; overflow-wrap: anywhere; }
 .deployment-meta { color: var(--text-muted); font-family: inherit; font-size: var(--type-caption); font-weight: 500; }
 .deployment-confirm { display: flex; gap: var(--space-2); }
-.deployment-add { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)) auto; align-items: end; column-gap: 10px; row-gap: 42px; padding: 12px; border-radius: 14px;
+.deployment-add { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)) auto; align-items: end; column-gap: 10px; row-gap: 10px; padding: 12px; border-radius: 14px;
   background: color-mix(in srgb, var(--glass-edge-cool) 6%, transparent); }
 .advanced-group { display: grid; gap: 12px; margin-top: 18px; }
 .advanced-field input[type="number"] { width: 100%; }
@@ -3405,6 +3471,8 @@ a.task-chip:hover { background: var(--glass-pressed); }
   :is(.primary-button, .secondary-button, .ghost-button, .danger-button, .settings-back,
     .jobs-action, .workspace-control, .workspace-tab-close, .workspace-tab-pin, .modal-close,
     .folio-action, .release-trail-button, .release-trail-open) { min-height: 44px; }
+  :is(.jobs-action-primary, .conversation-history .composer-send) { min-height: 44px; }
+  .conversation-history .composer-send { width: 44px; height: 44px; }
   :is(.workspace-tab-close, .workspace-tab-pin, .modal-close, .folio-action) {
     width: 44px; min-width: 44px; height: 44px; min-height: 44px;
   }
@@ -3464,8 +3532,7 @@ a.task-chip:hover { background: var(--glass-pressed); }
 .collapsible-toggle:active .collapsible-title { color: var(--text-muted); }
 .settings-page > .settings-save { position: static; width: auto; max-width: none; margin: 16px 0 0; padding: 0; border-radius: 0; background: none; backdrop-filter: none; box-shadow: none;
   justify-content: flex-end; }
-.settings-page > .settings-save .settings-feedback { order: 1; margin: 0; }
-.settings-page > .settings-save .primary-button { order: 2; }
+.settings-page > .settings-save .settings-feedback { margin: 0; }
 /* Memory: what Jarvis remembers, between the capture switch and recall tuning. The detail opens only once a memory is chosen. */
 .settings-subheading { margin: 22px 0 10px; color: var(--text); font-size: var(--type-body); font-weight: 650; }
 .memory-settings .memory-search { margin: 0 0 10px; }
@@ -3567,6 +3634,84 @@ a.task-chip:hover { background: var(--glass-pressed); }
 }
 :root[data-motion="reduced"] .app-shell .workspace-canvas-layered .workspace-window:not(.workspace-window-conversation) { transition: none; }
 @media (prefers-reduced-motion: reduce) { .app-shell .workspace-canvas-layered .workspace-window:not(.workspace-window-conversation) { transition: none; } }
+
+@media (prefers-reduced-motion: reduce) {
+  :is(.primary-button, .secondary-button, .ghost-button, .danger-button, .danger-button--filled,
+    .jobs-action, .conversation-history .composer-send, .conversation-latest) { transition: none; }
+  :is(.primary-button, .secondary-button, .ghost-button, .danger-button, .danger-button--filled,
+    .jobs-action, .conversation-history .composer-send, .conversation-latest):active:not(:disabled) { transform: none; }
+  .conversation-latest { animation: none; }
+}
+:root[data-motion="reduced"] :is(.primary-button, .secondary-button, .ghost-button, .danger-button,
+  .danger-button--filled, .jobs-action, .conversation-history .composer-send, .conversation-latest) { transition: none; }
+:root[data-motion="reduced"] :is(.primary-button, .secondary-button, .ghost-button, .danger-button,
+  .danger-button--filled, .jobs-action, .conversation-history .composer-send, .conversation-latest):active:not(:disabled) { transform: none; }
+:root[data-motion="reduced"] .conversation-latest { animation: none; }
+
+:is(.primary-button, .secondary-button, .ghost-button, .danger-button, .danger-button--filled,
+  .jobs-action, .conversation-history .composer-send, .conversation-latest):focus-visible {
+  box-shadow: 0 0 0 3px var(--page);
+}
+
+@media (prefers-contrast: more) {
+  :is(.primary-button, .secondary-button, .ghost-button, .danger-button, .danger-button--filled,
+    .jobs-action, .conversation-history .composer-send, .conversation-latest):not(:disabled) {
+    background-image: none; border-color: currentColor; box-shadow: none;
+  }
+  :is(.primary-button, .jobs-action-primary, .conversation-history .composer-send):not(:disabled) {
+    background-color: var(--primary-action);
+  }
+  :is(.primary-button, .jobs-action-primary, .conversation-history .composer-send):hover:not(:disabled, [aria-busy="true"]) {
+    background-color: var(--primary-action-hover);
+  }
+  :is(.primary-button, .jobs-action-primary, .conversation-history .composer-send):active:not(:disabled, [aria-busy="true"]) {
+    background-color: color-mix(in srgb, var(--primary-action) 78%, var(--ink-solid));
+  }
+  :is(.secondary-button, .jobs-action:not(.jobs-action-primary), .conversation-latest):not(:disabled) {
+    background-color: color-mix(in srgb, var(--text) 6%, var(--surface));
+  }
+  :is(.secondary-button, .jobs-action:not(.jobs-action-primary), .conversation-latest):hover:not(:disabled, [aria-busy="true"]) {
+    background-color: color-mix(in srgb, var(--text) 12%, var(--surface));
+  }
+  :is(.secondary-button, .jobs-action:not(.jobs-action-primary), .conversation-latest):active:not(:disabled, [aria-busy="true"]) {
+    background-color: color-mix(in srgb, var(--text) 18%, var(--surface));
+  }
+  .ghost-button:not(:disabled) { background-color: transparent; }
+  .ghost-button:hover:not(:disabled, [aria-busy="true"]) { background-color: var(--glass-hover); }
+  .ghost-button:active:not(:disabled, [aria-busy="true"]) { background-color: var(--glass-pressed); }
+  .danger-button:not(:disabled) { background-color: var(--error-surface); }
+  .danger-button:hover:not(:disabled, [aria-busy="true"]) { background-color: var(--error-surface); }
+  .danger-button:active:not(:disabled, [aria-busy="true"]) {
+    background-color: color-mix(in srgb, var(--error-surface) 76%, var(--error));
+  }
+  .danger-button--filled:not(:disabled) { background-color: var(--error); }
+  .danger-button--filled:hover:not(:disabled, [aria-busy="true"]) {
+    background-color: color-mix(in srgb, var(--error) 88%, var(--text));
+  }
+  .danger-button--filled:active:not(:disabled, [aria-busy="true"]) {
+    background-color: color-mix(in srgb, var(--error) 78%, var(--ink-solid));
+  }
+  :is(.primary-button, .secondary-button, .ghost-button, .danger-button, .danger-button--filled,
+    .jobs-action, .conversation-history .composer-send, .conversation-latest):focus-visible {
+    box-shadow: 0 0 0 3px var(--page);
+  }
+}
+@media (forced-colors: active) {
+  :is(.primary-button, .secondary-button, .ghost-button, .danger-button, .danger-button--filled,
+    .jobs-action, .conversation-history .composer-send, .conversation-latest):not(:disabled) {
+    border-color: ButtonText; background: ButtonFace; background-image: none; color: ButtonText;
+    box-shadow: none; forced-color-adjust: auto;
+  }
+  :is(.primary-button, .secondary-button, .ghost-button, .danger-button, .danger-button--filled,
+    .jobs-action, .conversation-history .composer-send, .conversation-latest):disabled {
+    border-color: GrayText; background: ButtonFace; background-image: none; color: GrayText;
+    box-shadow: none; forced-color-adjust: auto;
+  }
+  :is(.primary-button, .secondary-button, .ghost-button, .danger-button, .danger-button--filled,
+    .jobs-action, .conversation-history .composer-send, .conversation-latest):focus-visible {
+    outline: 3px solid Highlight; outline-offset: 3px; box-shadow: none;
+  }
+}
 
 /* P14-08: one shared field and choice-control system across application routes. */
 .app-shell :is(

@@ -1,5 +1,15 @@
 # Design
 
+## Responsive rules (P14-05, 18 October 2026)
+
+Use the shared viewport set in `apps/web/src/styles.css`: phone through 700px,
+tablet above 700px through 900px, desktop above 900px, and wide from 1200px.
+The 380px narrow-handset exception only tightens chat, voice, metadata and
+camera controls. The 1099px task-board and 720px task-detail container queries
+remain content-scoped because their layout follows allocated component width.
+Daily's 640px and 760px media queries remain outside this pass as its page is
+being built in parallel.
+
 ## Icon-only header (P9-119)
 
 Settings is a gear only at every width, including phones, with its Settings
@@ -112,13 +122,14 @@ older capsule-action and refracted-control-rim descriptions below.
 Actions, icon buttons, navigation tabs, filters, segmented choices and form
 fields use the existing control radius from `apps/web/src/styles.css`.
 Pills identify compact noninteractive status; genuine switch tracks, orb/media
-geometry and window/panel surfaces retain their semantic shapes. Primary actions
-keep the existing primary fill. Quiet actions use borderless surfaces with
-hover/pressed feedback. Selected choices retain their existing surface/text
-roles, stronger weight and accessible state. No decorative coloured boxes,
-bevels, inset-shadow borders or glowing control outlines, including on hover.
-Neutral field boundaries and real panel/list structure remain; keyboard focus
-uses the existing visible focus outline rather than a permanent accent rim.
+geometry and window/panel surfaces retain their semantic shapes. Buttons follow
+the dedicated hierarchy below. Dan's direct instruction of 18 October 2026
+supersedes this section's earlier button appearance limits for buttons only;
+other controls keep the restrained surfaces, neutral field boundaries and
+visible keyboard focus described here. No decorative coloured boxes, bevels,
+inset-shadow borders or selected-state glows are added to non-button controls.
+Within action groups, markup order is keyboard and visual order: place the
+primary action last. CSS does not reorder action groups.
 
 Keep compact desktop controls where useful and at least 44px touch targets.
 Segmented groups wrap at narrow widths; scrolling filter rows retain keyboard
@@ -134,15 +145,34 @@ selection cue.
 for future work. Header/job and mobile chat corrections have separate owners;
 this candidate does not imply their changes are integrated or released.
 
-## Button system (P14-03; 18 October 2026)
+## Button system (P14-07; owner direction of 18 October 2026)
 
-`apps/web/src/styles.css` owns the shared button hierarchy. `.primary-button`
-keeps the existing primary fill with a restrained shadow; `.secondary-button`
-uses a clearly surfaced neutral tone; `.ghost-button` stays quiet until hover
-or press; `.danger-button` is a low-emphasis destructive action, and
-`.danger-button--filled` marks a confirmed destructive action. Existing
-specialized and icon button classes keep their workflow role while sharing the
-same control radius, feedback and visible focus.
+`apps/web/src/styles.css` owns the shared button hierarchy. Dan's direct
+instruction on 18 October 2026 supersedes the flat-fill and no-glow button
+constraints from Shared control geometry and P14-03; it does not change other
+controls. `.primary-button` uses a tonal, top-lit gradient derived from
+`--primary-action`, a real lighter-tint border and one soft accent-tinted ambient
+shadow that strengthens on hover. Press settles to a darker fill. `.secondary-button`
+uses a neutral tinted surface with a visible `--control-rule` boundary;
+`.ghost-button` stays text-only until hover or press. `.danger-button` and
+`.danger-button--filled` use the same surfaced and filled constructions in the
+error hue. These calm, finite state changes do not pulse or loop.
+
+The composer send action and Factory job “Open” actions keep their specialized
+class names and compact geometry, but alias the shared primary styling and
+states. Factory “Create task” already uses the shared primary; its “Create
+project” secondary now keeps the shared neutral surface. Settings save actions
+already use the shared primary. “Jump to latest” is a contextual utility, not a
+main action; it keeps its placement behavior with the shared-radius surfaced
+neutral boundary and focus treatment. The voice orb remains specialized because
+its circular core is a voice-mode affordance, not an action button.
+
+All variants retain a visible focus ring with a page-colored separator and
+outer `--focus` outline. Contrast and forced-color/reduced-motion behavior use
+the existing theme and system colors; gradients and glows are removed for more
+contrast and forced colors. Reduced motion removes transitions and pressed
+movement while preserving color feedback. Specialized controls that remain
+outside the hierarchy keep the shared radius, state contrast and focus.
 
 Text actions are 44px high by default. Compact controls are 36px only on fine
 pointers and return to at least 44px on coarse pointers. Icon-only actions stay
