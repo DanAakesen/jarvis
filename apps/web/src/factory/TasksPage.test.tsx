@@ -218,7 +218,8 @@ describe('Factory task board', () => {
     const navigation: { current: FactoryIssueNavigator | null } = { current: null };
     renderFactory('/factory/kanban', navigation);
     await screen.findByRole('article', { name: 'Fix the bug' });
-    act(() => expect(navigation.current?.(42)).toEqual({ status: 'ready', anchorId: 'issue-title-42' }));
+    // The navigator is installed by an effect, which can trail the first paint on a loaded runner.
+    await waitFor(() => expect(navigation.current?.(42)).toEqual({ status: 'ready', anchorId: 'issue-title-42' }));
     expect(screen.getByRole('link', { name: 'Fix the bug' }).getAttribute('href')).toContain('/issues/42');
     expect(navigation.current?.(42, '42')).toMatchObject({ status: 'refused', reason: expect.stringContaining('not linked') });
     expect(navigation.current?.(793)).toMatchObject({ status: 'refused', reason: expect.stringContaining('not in') });

@@ -31,6 +31,23 @@ trap focus or inert the page. Daily reduced-motion rules disable transitions
 without removing essential status or measurements. See
 [`docs/ui/p12-37/audit.md`](docs/ui/p12-37/audit.md) for findings and guards.
 
+## Daily visual QA pass (P12-39, 18 October 2026)
+
+Keep the selected Daily section tab in view: when the selection changes, the
+tab strip scrolls horizontally to centre it. Only the strip scrolls, never the
+page. The move is instant on first paint, while availability is still loading
+and under reduced motion. The fade that cues more tabs is a mask on the strip,
+driven by its scroll position, so it stays on the visible edges (end, start or
+both) instead of scrolling over the tabs. Section tabs size to their label with
+a 44px minimum width, so the gaps between labels stay even. Headings inside a
+section use `--type-subsection`; stat tiles that share a row have equal height;
+secondary text inside a Daily tile, an open Nutrition record and a Nutrition
+group subtotal uses `--type-small`. Buttons beside a field in the Nutrition
+date row share the field's 38px fine-pointer height, and coarse pointers keep
+44px. The structural findings from the same pass (header slot order, one
+date-locale source, the Data row action and view switch, numeric cell alignment,
+workout type glyphs and the sparse-data chart legend) belong to P12-38.
+
 ## Colour and contrast (P14-12)
 
 18 October 2026.
