@@ -61,7 +61,8 @@ const reasonLimit = 480;
 const cellLimit = 2_000;
 const titleLimit = 200;
 const moreSentence = 'More records are available beyond this page.';
-const closingSentence = 'Completeness and freshness are not established. Unknown means no value was recorded, not zero.';
+const notEstablishedSentence = 'Completeness and freshness are not established.';
+const closingSentence = `${notEstablishedSentence} Unknown means no value was recorded, not zero.`;
 const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'] as const;
 const dateText = /^(\d{4})-(\d{2})-(\d{2})$/u;
 const instantText = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+-]\d{2}:\d{2})$/u;
@@ -415,9 +416,11 @@ export function buildDailyView(result: DailyQueryResult, options: DailyViewOptio
 
   if (wanted && matching.length === 0) {
     const names = [...new Set(result.items.map((row) => row.metric_name).filter(present))].map(readable).sort();
+    // A text view prints no footnote, so the read time and the disclosure have to live in the text itself.
     const content = `None of the ${count(returned, 'row')} on this page is ${wanted}. ` +
       `Measurements on this page: ${names.length ? listed(names) : 'none with a name'}.` +
-      (hasMore ? ' More records are available beyond this page, so it may appear on another page.' : '');
+      (hasMore ? ' More records are available beyond this page, so it may appear on another page.' : '') +
+      ` ${readSentence(result.freshness.observedAt)} ${notEstablishedSentence}`;
     return {
       viewId: viewIdFor(sourceId, 'table', options),
       view: make.text(
@@ -478,7 +481,7 @@ export function buildDailyView(result: DailyQueryResult, options: DailyViewOptio
     ...(trimmed ? [`Showing only the first ${count(kept, 'row')} so the view stays small. Ask for a narrower period or one measurement to see the rest.`] : []),
     ...(clippedCells ? [`${count(clippedCells, 'long value')} shortened.`] : []),
   ];
-  const partial = hasMore || capped || trimmed;
+  const partial = hasMore || capped || trimmed || clippedCells > 0;
   return {
     viewId: viewIdFor(sourceId, 'table', keyed),
     view: make.table(

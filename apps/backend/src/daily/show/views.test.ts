@@ -19,6 +19,8 @@ type Fields = { fields: { label: string; value: string }[] };
 const observedAt = '2026-10-17T19:26:00.000Z';
 const ranged = { startDate: '2026-10-11', endDate: '2026-10-17', timeZone: 'Europe/Copenhagen' } as const;
 const closing = 'Completeness and freshness are not established. Unknown means no value was recorded, not zero.';
+const notEstablished = 'Completeness and freshness are not established.';
+const readStamp = 'Read 17 Oct 2026, 21:26 Copenhagen time.';
 const table: DailyViewOptions = { display: 'table' };
 const chart: DailyViewOptions = { display: 'chart' };
 
@@ -242,14 +244,27 @@ describe('daily show view builder: measurement filter', () => {
     const build = show(read(sources.metrics, mixed), { display: 'chart', metric: 'distance' });
     expect(build.view.renderer).toBe('text');
     expect(build.view.title).toBe('Distance, 11 Oct 2026 to 17 Oct 2026');
-    expect(body<{ content: string }>(build).content).toBe('None of the 3 rows on this page is Distance. Measurements on this page: Flights climbed, Step count.');
+    expect(body<{ content: string }>(build).content).toBe(
+      `None of the 3 rows on this page is Distance. Measurements on this page: Flights climbed, Step count. ${readStamp} ${notEstablished}`,
+    );
     expect(build.receipt).toEqual({ renderer: 'text', rowsShown: 0, rowsReturned: 3, partial: false, notes: ['No row on this page is Distance.'] });
     expect(build.view.source.status).toBe('complete');
   });
 
+  it('carries the read time and the disclosure in the text itself, because a text view prints no footnote', () => {
+    const build = show(read(sources.metrics, mixed, { observed: '2026-10-17T07:05:00.000Z' }), { display: 'table', metric: 'distance' });
+    const { content } = body<{ content: string }>(build);
+    expect(build.view.renderer).toBe('text');
+    expect(content).toContain('Read 17 Oct 2026, 09:05 Copenhagen time.');
+    expect(content.endsWith(`Copenhagen time. ${notEstablished}`)).toBe(true);
+  });
+
   it('warns that a missing measurement may be on another page', () => {
     const build = show(read(sources.metrics, mixed, { hasMore: true }), { display: 'table', metric: 'distance' });
-    expect(body<{ content: string }>(build).content).toContain('may appear on another page');
+    const { content } = body<{ content: string }>(build);
+    expect(content).toContain('may appear on another page');
+    expect(content).toContain(readStamp);
+    expect(content.endsWith(notEstablished)).toBe(true);
     expect(build.view.source.status).toBe('partial');
   });
 
@@ -483,6 +498,21 @@ describe('daily show view builder: size limits', () => {
     expect(build.receipt.notes.join(' ')).toContain(`Showing only the first ${build.receipt.rowsShown} rows so the view stays small.`);
     expect(build.receipt.notes.join(' ')).toContain(`${maxShownRows} long values shortened.`);
     expect(body<Cells>(build).rows.every((row) => (row[1] ?? '').length <= 2_000)).toBe(true);
+  });
+
+  it('calls a table partial when a long value was shortened, even though every row is shown', () => {
+    const meal = (name: string): Row => ({ meal_date: '2026-10-17', meal_name: name, energy_kcal: 1, protein_grams: 1, confidence: 'logged' });
+    const shortened = show(read(sources.meals, [meal('y'.repeat(2_001))]), table);
+    expect(body<Cells>(shortened).rows).toHaveLength(1);
+    expect(body<Cells>(shortened).rows[0]?.[1]).toHaveLength(2_000);
+    expect(shortened.receipt).toEqual({ renderer: 'table', rowsShown: 1, rowsReturned: 1, partial: true, notes: ['1 long value shortened.'] });
+    expect(shortened.view.source.status).toBe('partial');
+    expect(reason(shortened)).toContain('1 long value shortened.');
+
+    const exact = show(read(sources.meals, [meal('y'.repeat(2_000))]), table);
+    expect(body<Cells>(exact).rows[0]?.[1]).toHaveLength(2_000);
+    expect(exact.receipt).toEqual({ renderer: 'table', rowsShown: 1, rowsReturned: 1, partial: false, notes: [] });
+    expect(exact.view.source.status).toBe('complete');
   });
 
   it('keeps the closing disclosure and read time when a long note has to be clipped', () => {
