@@ -15,6 +15,10 @@ import { createProactiveStore } from '../database/proactive-store.js';
 import { createMemoryProactiveStore } from './store.js';
 import { buildSourceRegistry } from './sources/registry.js';
 import { registerProactiveRoutes } from './routes.js';
+import { createProactiveEngine, type ProactiveEngineOptions } from './engine.js';
+import { createFoundryProactiveModel, MAX_PROACTIVE_COMPLETION_TOKENS, MAX_PROACTIVE_REQUEST_BYTES, type ProactiveModel } from './model.js';
+import { createProactiveScheduler } from './scheduler.js';
+import { estimateCost } from './budget.js';
 
 const uuidPattern = /^[\da-f]{8}-(?:[\da-f]{4}-){3}[\da-f]{12}$/iu;
 type GitHubVaultClient = ReturnType<typeof createGitHubVaultClient>;
@@ -32,7 +36,8 @@ export interface ProactiveCompositionOptions {
   usageStore?: UsageStore;
   taskStore?: TaskStore;
   backgroundJobs?: BackgroundJobRegistry;
-  conversationStore?: Pick<ConversationStore, 'getHistory'>;
+  conversationStore?: Pick<ConversationStore, 'readRecentUserMessages'>;
+  onFindingsStored?: NonNullable<ProactiveEngineOptions['onFindingsStored']>;
   pushSender?: PushRouteDependencies['send'];
   pushEnabled?: boolean;
   todoWritesEnabled?: boolean;
@@ -50,15 +55,39 @@ export function registerProactive<Logger extends FastifyBaseLogger>(
     throw new ConfigurationError('The proactive owner must be a UUID');
   }
   const sources = buildSourceRegistry(options);
-  void sources;
   const store = options.pool
     ? createProactiveStore(options.pool, options.ownerObjectId)
     : createMemoryProactiveStore(options.ownerObjectId);
-  if (options.pool) {
-    app.addHook('onReady', async () => {
-      await store.runs.markInterruptedOnStartup();
+  const now = options.now ?? (() => new Date());
+  let model: ProactiveModel = {
+    async worstCaseDkk() {
+      return estimateCost('unknown', MAX_PROACTIVE_REQUEST_BYTES, MAX_PROACTIVE_COMPLETION_TOKENS).estimatedDkk;
+    },
+    async summarize() { return { reason: 'model_unavailable', findings: [] }; },
+  };
+  if (options.settingsStore && options.modelCatalogue && options.getCredentialToken && options.foundryProjectEndpoint) {
+    const getToken = options.getCredentialToken;
+    model = createFoundryProactiveModel({
+      settingsStore: options.settingsStore,
+      modelCatalogue: options.modelCatalogue,
+      foundryProjectEndpoint: options.foundryProjectEndpoint,
+      getCredentialToken: async (scope, signal) => {
+        const token = await getToken(scope, signal);
+        if (!token) throw new Error('Model unavailable');
+        return token;
+      },
     });
   }
+  const run = createProactiveEngine({ ...options, store, sources, model, now });
+  const scheduler = createProactiveScheduler({
+    store, now, run, ...(options.logger ? { logger: options.logger } : {}),
+  });
+  app.addHook('onReady', async () => {
+    await scheduler.start();
+  });
+  app.addHook('onClose', async () => {
+    await scheduler.stop();
+  });
   registerProactiveRoutes(app, {
     store,
     ownerObjectId: options.ownerObjectId,
@@ -67,6 +96,8 @@ export function registerProactive<Logger extends FastifyBaseLogger>(
     pushEnabled: options.pushEnabled === true,
     databaseAvailable: options.pool !== undefined,
     registerItemDetail: options.pushEnabled !== true,
-    now: options.now ?? (() => new Date()),
+    now,
+    run,
+    worstCaseDkk: () => model.worstCaseDkk(),
   });
 }

@@ -161,7 +161,7 @@ The test send is user-started, so quiet hours do not block it. Do not add the
 system-started sends must pass that guard. Actual iPhone delivery remains an
 unverified physical-device acceptance step.
 
-## Keep the proactive foundation dark and bounded (17 October 2026; P13-05)
+## Keep the proactive foundation and engine dark and bounded (18 October 2026; P13-05, P13-06)
 
 The server gate `JARVIS_PROACTIVE_ENABLED` and its todo-write and alert
 capability gates are exact-string `true`, default off. The foundation registers
@@ -184,9 +184,28 @@ enabled, are add-only. Alerts are restricted to time-critical deadlines,
 calendar clashes, travel disruptions and the due-soon todo reminder; quiet-hour
 reminders wait until 07:00. Teams is never a proactive channel.
 
-The new `proactive` background-job kind makes future runs visible in the
+The `proactive` background-job kind makes runs visible in the
 existing Background work control. Existing embedding result-window exclusions
 remain specific to embedding jobs.
+
+P13-06 implements these bounds in the existing composition and stores. Slot
+memory, not SQL polling, gates scheduler work; persisted claims and manual rate
+limits serialize under the existing owner lock. The engine limits sources to
+20 seconds each, the tool-less Foundry call to 45 seconds, and the run to three
+minutes. Deterministic detection remains available when summary generation fails.
+Model evidence must reference the bounded input; text, links, urgency and schema
+are validated before persistence. Reported token usage is recorded even when
+output is rejected. Source text is never job or log content.
+Finding persistence checks the claim inside its transaction and participates in
+run cancellation; the engine awaits commit or rollback, not merely an aborted
+wait, before finalizing the run.
+
+Future todo, alert and reminder slices attach ordered `onFindingsStored` hooks
+instead of changing the engine. Hooks receive transient facts and suggested
+todo text only in memory; suggested todo text is not persisted by this slice.
+Hooks run after item upserts and before finish, never after cancellation or
+lease loss, and hook failures are isolated. No flag, source provider or proactive
+send is activated.
 
 ## Keep P13-07 sources read-only and dark (18 October 2026)
 

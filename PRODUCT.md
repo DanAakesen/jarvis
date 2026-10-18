@@ -1013,18 +1013,25 @@ push and send a test. The user-triggered test is not proactive delivery. Teams i
 not a delivery option. Real iPhone delivery remains unproven until separately
 observed on the installed Home Screen app.
 
-## Proactive foundation (17 October 2026; P13-05)
+## Proactive foundation and engine (18 October 2026; P13-05, P13-06)
 
 The backend foundation provides owner-only status, settings, durable finding
 storage and feedback behind `JARVIS_PROACTIVE_ENABLED`, which defaults off.
-Separate todo-write and alert flags also default off. The foundation does not
-schedule runs, call a model or send proactive alerts. P13-07 adds read-only todo,
-Factory and weather source readers, but does not run them or enable any flag.
+Separate todo-write and alert flags also default off. P13-06 adds the in-process
+scheduler, manual checks and run history, deterministic deadline/clash detection,
+and one bounded, tool-less summary call; sources plug into the existing registry.
+P13-07 adds read-only todo, Factory and weather source readers. Neither slice adds
+a todo writer or proactive alert, and neither enables any flag.
 
 The approved schedule uses 07:00 and 18:00 Europe/Copenhagen slots; scheduled
 work is forbidden from 22:00 to 07:00. The monthly estimate limit defaults to
-100 DKK, warns at 80% and stops at 100%. These are policy boundaries for later
-engine work, not behavior activated by this foundation.
+100 DKK, warns at 80% and stops at 100%, including a conservative request-cost
+pre-check. Idle scheduler ticks do not query SQL. Only the latest missed slot
+can catch up, while under 12 hours old; paused slots are recorded without replay.
+Scheduled checks still running at 22:00 are cancelled. Manual checks ignore quiet
+hours but respect pause, source settings, budget and stored rate limits (one per
+five minutes, six per Copenhagen day). Runs appear in Background work with safe
+plain-language outcomes. None of these flags is enabled by this change.
 
 The todo reader matches exactly one case-insensitive root `task.md` or
 `tasks.md`, never writes, and emits at most 40 sanitized facts. The Factory

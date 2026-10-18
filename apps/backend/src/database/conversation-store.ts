@@ -333,6 +333,18 @@ export function createConversationStore(pool: sql.ConnectionPool): ConversationS
       return result.recordset[0]?.text ?? null;
     },
 
+    async readRecentUserMessages(limit = 5) {
+      if (!Number.isInteger(limit) || limit < 1 || limit > 20) {
+        throw new RangeError('Recent user message limit must be an integer from 1 to 20');
+      }
+      const result = await databaseReadRequest(pool)
+        .input('limit', sql.Int, limit)
+        .query<{ text: string }>(`SELECT TOP (@limit) m.text FROM dbo.messages AS m
+          INNER JOIN dbo.jarvis_sessions AS s ON s.id = m.jarvis_session_id
+          WHERE m.role = N'dan' AND s.channel = N'chat' ORDER BY m.id DESC;`);
+      return result.recordset.map((row) => row.text);
+    },
+
     async getHistory({ limit, before }) {
       const result = await databaseReadRequest(pool)
         .input('take', sql.Int, limit + 1)

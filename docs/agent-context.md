@@ -47,14 +47,17 @@ uses `npm run test:database --workspace @jarvis/backend -- src/database/schema.i
 with the isolated loopback test database; do not claim it ran without that
 service. A green local test or build does not establish real iPhone delivery.
 
-## P13-05 proactive foundation (17 October 2026)
+## P13-05/P13-06 proactive foundation and engine (18 October 2026)
 
 `JARVIS_PROACTIVE_ENABLED`, `JARVIS_PROACTIVE_TODO_WRITES_ENABLED` and
 `JARVIS_PROACTIVE_ALERTS_ENABLED` are independent exact-`true` flags, all off by
 default. The latter two do not activate work unless the main proactive flag is
 on. Do not set any of them in deployment, workflows or infrastructure. This
-foundation registers owner-bound status/settings/items routes only when enabled;
-it adds no scheduler, source read, model call or proactive send.
+composition registers owner-bound status/settings/items/run routes and starts
+the in-process scheduler only when enabled. Idle ticks do not query SQL. The
+engine supports fake sources and a fake model; real source adapters and proactive
+sends remain separate slices. No index, workflow or infrastructure activation
+is needed.
 
 Focused checks:
 `npm test --workspace @jarvis/backend -- --run src/config.test.ts src/proactive/routes.test.ts src/proactive/store.test.ts src/proactive/time.test.ts src/proactive/budget.test.ts src/proactive/language.test.ts src/proactive/sources/registry.test.ts src/database/migrations.test.ts src/push/routes.test.ts`,
@@ -62,8 +65,13 @@ Focused checks:
 `npm test --workspace @jarvis/web -- --run src/JobsChip.test.tsx`,
 `npm run build --workspace @jarvis/backend`,
 `npm run build --workspace @jarvis/web`, and lint for both workspaces.
+Engine checks:
+`npm test --workspace @jarvis/backend -- --run src/proactive src/database/conversation-store.test.ts`,
+`npm run build --workspace @jarvis/backend`, and
+`npm run lint --workspace @jarvis/backend`.
 Proactive SQL contracts are in
-`src/database/schema.integration.test.ts`; run them only with the isolated
+`src/database/schema.integration.test.ts` and the narrow conversation reader has
+coverage in `src/database/conversation-store.integration.test.ts`; run them only with the isolated
 loopback SQL Server fixture via `npm run test:database --workspace @jarvis/backend -- src/database/schema.integration.test.ts`.
 Do not report SQL integration coverage unless that service ran.
 
