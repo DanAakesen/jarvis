@@ -6,6 +6,7 @@
 .daily-data-records { min-width: 0; margin-top: var(--space-3); }
 .daily-data-records .daily-scroll-table { max-width: 100%; }
 .daily-data-records .daily-record-number { text-align: right; font-variant-numeric: tabular-nums; }
+.daily-data-records .daily-record-row-header { font-weight: 400; }
 .daily-record-cell { display: block; max-width: 28ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .daily-record-cards { list-style: none; padding: 0; margin: 0; }
 .daily-record-cards > li { padding-block: var(--space-4); min-width: 0; }

@@ -16,11 +16,19 @@ describe('Daily Data records', () => {
     const table = screen.getByRole('table');
     expect(container.querySelector('.daily-scroll-table-sticky')).toBeTruthy();
     expect(within(table).getByRole('columnheader', { name: 'Energy (kcal)' })).toBeTruthy();
+    const rowHeader = within(table).getByRole('rowheader', { name: 'Oct 17, 2026' });
+    expect(rowHeader.classList.contains('daily-record-row-header')).toBe(true);
     expect(within(table).getByText('0').closest('td')?.className).toBe('daily-record-number');
     expect(screen.queryByRole('region', { name: /Details for/u })).toBeNull();
     const opener = screen.getByRole('button', { name: /Details for/u });
+    const detailPanel = document.getElementById(opener.getAttribute('aria-controls')!);
+    expect(opener.getAttribute('aria-expanded')).toBe('false');
+    expect(detailPanel?.hidden).toBe(true);
     opener.focus(); fireEvent.click(opener);
     const panel = screen.getByRole('region', { name: /Details for/u });
+    expect(opener.getAttribute('aria-expanded')).toBe('true');
+    expect(opener.getAttribute('aria-controls')).toBe(panel.id);
+    expect(panel.hidden).toBe(false);
     await waitFor(() => expect(document.activeElement).toBe(panel));
     expect(within(panel).getByText('Protein grams (g)')).toBeTruthy();
     expect(within(panel).getAllByText('Not recorded')).toHaveLength(2);
@@ -33,6 +41,8 @@ describe('Daily Data records', () => {
     expect(raw.querySelector('pre')?.textContent).toContain('"protein_grams": null');
     fireEvent.click(within(panel).getByRole('button', { name: 'Close details' }));
     expect(document.activeElement).toBe(opener);
+    expect(opener.getAttribute('aria-expanded')).toBe('false');
+    expect(detailPanel?.hidden).toBe(true);
     expect(screen.queryByRole('region', { name: /Details for/u })).toBeNull();
     fireEvent.click(opener);
     await waitFor(() => expect(document.activeElement?.getAttribute('role')).toBe('region'));

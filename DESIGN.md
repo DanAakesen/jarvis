@@ -1,5 +1,18 @@
 # Design
 
+## Daily accessibility and keyboard audit (P12-37, 18 October 2026)
+
+Keep the Daily section navigation and nested view switches as named tablists
+with a single roving tab stop and visible focus. Shared tables remain captioned
+and navigable through a labelled, focusable scroll region; charts keep their
+recorded data available in a table, and value graphics expose text alternatives.
+Loading, empty, partial and error states use status or alert semantics without
+depending on color or animation. The record detail remains an in-flow,
+nonmodal region: move focus in on open, return it on close or Escape, and do not
+trap focus or inert the page. Daily reduced-motion rules disable transitions
+without removing essential status or measurements. See
+[`docs/ui/p12-37/audit.md`](docs/ui/p12-37/audit.md) for findings and guards.
+
 ## Colour and contrast (P14-12)
 
 18 October 2026.
