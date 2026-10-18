@@ -25,6 +25,8 @@ export function DailyHome({ backendUrl, getAccessToken }: AreaProps) {
   const [initialSource, setInitialSource] = useState<DailySourceId>();
   const [periodSlotHeight, setPeriodSlotHeight] = useState(70);
   const periodSlot = useRef<HTMLDivElement>(null);
+  const sectionNavigation = useRef<HTMLElement>(null);
+  const [sectionTabsOverflow, setSectionTabsOverflow] = useState(false);
   const [sectionLoadAttempt, setSectionLoadAttempt] = useState(0);
   const [loadedSections, setLoadedSections] = useState<{
     attempt: number;
@@ -55,6 +57,18 @@ export function DailyHome({ backendUrl, getAccessToken }: AreaProps) {
     observer.observe(element);
     return () => observer.disconnect();
   }, [activeSection?.id, activeSection?.usesPeriod]);
+
+  useEffect(() => {
+    const navigation = sectionNavigation.current;
+    if (!navigation) return;
+    const measure = () => setSectionTabsOverflow(navigation.scrollWidth > navigation.clientWidth + 1);
+    measure();
+    if (typeof ResizeObserver !== 'function') return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(navigation);
+    if (navigation.firstElementChild) observer.observe(navigation.firstElementChild);
+    return () => observer.disconnect();
+  }, [availableSections.length]);
 
   const setSection = (id: string, replace = false) => {
     setSearchParams(previous => {
@@ -111,7 +125,8 @@ export function DailyHome({ backendUrl, getAccessToken }: AreaProps) {
         <p>Browse your recorded workouts, nutrition, body measurements, sleep and briefs.</p>
       </div>
     </header>
-    <nav className="daily-section-nav" aria-label="Daily sections">
+    <nav ref={sectionNavigation} className="daily-section-nav" aria-label="Daily sections"
+      data-overflow={sectionTabsOverflow || undefined}>
       <div className="daily-section-tabs" role="tablist" aria-label="Daily sections" onKeyDown={onTabKeyDown}>
         {availableSections.map(item => <button key={item.id} id={`daily-tab-${item.id}`} className="daily-section-tab" type="button" role="tab"
           aria-selected={item.id === activeSection?.id} aria-controls="daily-section-panel"

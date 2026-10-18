@@ -33,6 +33,22 @@ describe('Daily phone stat layouts', () => {
     expect(css).toMatch(/\.daily-nutrition > \.daily-section-tabs\s*\{[^}]*width:\s*100%;[^}]*min-width:\s*0;[^}]*overflow-x:\s*auto;/u);
   });
 
+  it('cues overflow in the Daily section tabs without showing a native scrollbar', () => {
+    const css = readFileSync('src/daily/daily.css', 'utf8');
+    expect(css).toMatch(/\.daily-section-nav\[data-overflow='true'\]::after\s*\{[^}]*linear-gradient/u);
+    expect(css).toMatch(/\.daily-section-nav\s*\{[^}]*scrollbar-width:\s*none;/u);
+    expect(css).toMatch(/\.daily-section-nav::-webkit-scrollbar\s*\{\s*display:\s*none;/u);
+  });
+
+  it('keeps Briefs history rows content-sized with a boundary and explicit interaction states', () => {
+    const css = readFileSync('src/daily/sections/briefs/briefs.css', 'utf8');
+    expect(css).not.toMatch(/\.daily-brief-list\s*\{[^}]*grid-auto-rows/u);
+    expect(css).toMatch(/\.daily-briefs \.daily-brief-row\s*\{[^}]*border:\s*1px solid var\(--rule\);[^}]*background:\s*var\(--surface-translucent\);/u);
+    for (const state of ['hover', 'active', 'focus-visible']) {
+      expect(css).toContain(`.daily-briefs .daily-brief-row:${state}`);
+    }
+  });
+
   it('wraps long shared stat notes within their tiles', () => {
     const css = readFileSync('src/daily/ui/daily-ui.css', 'utf8');
     expect(css).toMatch(/\.daily-stat-note,\s*\.daily-stat-comparison\s*\{[^}]*min-width:\s*0;[^}]*overflow-wrap:\s*anywhere;/u);

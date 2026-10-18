@@ -103,10 +103,17 @@
   .daily-table th, .daily-table td { padding: var(--space-2); }
 }
 .daily-shell > .daily-heading { margin-bottom: var(--space-4); }
-.daily-section-nav { min-width: 0; max-width: 100%; overflow-x: auto; margin-bottom: var(--space-4); scrollbar-width: thin; scrollbar-color: var(--text-muted) transparent; }
-.daily-section-nav::-webkit-scrollbar { height: var(--space-2); }
-.daily-section-nav::-webkit-scrollbar-thumb { border-radius: var(--radius-pill); background: var(--text-muted); }
-.daily-section-nav::-webkit-scrollbar-track { background: transparent; }
+.daily-section-nav { position: relative; min-width: 0; max-width: 100%; overflow-x: auto; margin-bottom: var(--space-4); scrollbar-width: none; }
+.daily-section-nav::-webkit-scrollbar { display: none; }
+.daily-section-nav[data-overflow='true']::after {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-end: 0;
+  width: var(--space-5);
+  background: linear-gradient(to right, transparent, var(--surface-translucent));
+  content: '';
+  pointer-events: none;
+}
 .daily-section-tabs { display: flex; width: max-content; min-width: 100%; gap: var(--space-1); }
 .daily-section-tab {
   flex: 0 0 auto;
