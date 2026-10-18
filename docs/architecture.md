@@ -5045,8 +5045,11 @@ is on, and any other value, including an empty one, stops the build or dev serve
 The value is baked into the bundle and is never read from the URL, local storage
 or the public bootstrap response; `App` itself still defaults to off. The switch
 grants no access: the backend composition switch and the owner checks above still
-decide every read. No workflow, Bicep or environment file sets either name in this
-change, and `daily/default-off.test.ts` enforces that.
+decide every read. Production sets both switches to `true` in exactly two reviewed
+files: `JARVIS_DAILY_ENABLED` in the backend container environment in
+`infra/main.bicep` and `VITE_DAILY_ENABLED` on the web build step of
+`.github/workflows/deploy.yml` (18 October 2026). `daily/default-off.test.ts` allows
+no other configuration file to mention either name.
 
 ### Inactive internal direct intake (17 October 2026)
 
@@ -5287,10 +5290,12 @@ inside the data accessors. Root authentication is unchanged: a connector or
 runner principal is refused on every Daily route, and an agent is refused on the
 targets route because it reaches targets only through the approved tool.
 
-No workflow, Bicep, infrastructure, environment or deploy file sets
-`JARVIS_DAILY_ENABLED`, or the web switch `VITE_DAILY_ENABLED` that the Daily
-overview page reads at build time, so every environment keeps Daily off; `daily/default-off.test.ts`
-scans those files for both names. `daily/composition.test.ts` builds real
+The code default is off. Production sets `JARVIS_DAILY_ENABLED` and the web switch
+`VITE_DAILY_ENABLED` (read at build time by the Daily overview page) in exactly two
+reviewed files, `infra/main.bicep` and the web build step of `deploy.yml`, and every
+other environment stays off. `daily/default-off.test.ts` scans configuration files
+for both names, allows only those two files and checks their literal values.
+`daily/composition.test.ts` builds real
 applications: it compares a Daily-off one with one built without Daily, shows the
 module adds exactly its three routes and six tools, and checks that
 unauthenticated, other-user, runner, connector and mismatched-owner callers are
