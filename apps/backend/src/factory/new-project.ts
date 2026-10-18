@@ -67,7 +67,7 @@ export const createProjectTool: JarvisTool = {
     const settings = await readSettings(settingsStore);
     const defaults = settings.newProjects;
     const repo = `${defaults.owner}/${cleanName}`;
-    const notifications = request.server.teamsNotifications;
+    const notifications = request.server.ownerInteractions;
     if (!notifications) {
       throw new ToolRefusal('Jarvis approval is unavailable; no repository was created.');
     }

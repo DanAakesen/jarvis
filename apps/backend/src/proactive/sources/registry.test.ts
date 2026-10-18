@@ -3,11 +3,12 @@ import { buildSourceRegistry } from './registry.js';
 import { defaultProactiveSettings } from '../store.js';
 
 describe('proactive source registry', () => {
-  it('registers the news source alphabetically and keeps X as a non-throwing placeholder', async () => {
+  it('registers the sources alphabetically and keeps X as a non-throwing placeholder', async () => {
     const sources = buildSourceRegistry({});
-    expect(sources.map(({ id }) => id)).toEqual(['news', 'x']);
-    const source = sources.find(({ id }) => id === 'x')!;
-    const result = await source.read({
+    expect(sources.map(({ id }) => id)).toEqual(['factory', 'news', 'todos', 'weather', 'x']);
+    const source = sources.at(-1);
+    expect(source?.id).toBe('x');
+    const result = await source!.read({
       now: new Date('2026-10-20T05:00:00.000Z'),
       signal: new AbortController().signal,
       settings: defaultProactiveSettings(),
@@ -19,5 +20,16 @@ describe('proactive source registry', () => {
       facts: [],
       observedAt: '2026-10-20T05:00:00.000Z',
     });
+  });
+
+  it('reports unavailable when a new source dependency is not connected', async () => {
+    const sources = buildSourceRegistry({});
+    for (const source of sources.filter(({ id }) => ['factory', 'todos', 'weather'].includes(id))) {
+      await expect(source.read({
+        now: new Date('2026-10-20T05:00:00.000Z'),
+        signal: new AbortController().signal,
+        settings: defaultProactiveSettings(),
+      })).resolves.toMatchObject({ state: 'unavailable', reason: 'not_connected', facts: [] });
+    }
   });
 });
