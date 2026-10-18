@@ -101,6 +101,60 @@
   .daily-record-details { min-width: 110px; }
   .daily-table th, .daily-table td { padding: var(--space-2); }
 }
+.daily-shell > .daily-heading { margin-bottom: var(--space-4); }
+.daily-section-nav { min-width: 0; max-width: 100%; overflow-x: auto; margin-bottom: var(--space-4); }
+.daily-section-tabs { display: flex; width: max-content; min-width: 100%; gap: var(--space-1); }
+.daily-section-tab {
+  flex: 0 0 auto;
+  min-width: 88px;
+  min-height: 44px;
+  padding: var(--space-2) var(--space-3);
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+.daily-section-tab:hover { background: var(--glass-hover); }
+.daily-section-tab:active { background: var(--glass-pressed); }
+.daily-section-tab[aria-selected="true"] {
+  background: var(--state-selected-bg);
+  color: var(--state-selected-fg);
+  font-weight: 650;
+}
+.daily-section-tab[aria-selected="true"]:hover { background: var(--state-selected-hover); }
+.daily-section-tab[aria-selected="true"]:active { background: var(--state-selected-pressed); }
+.daily-section-tab:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.daily-section-panel { min-width: 0; min-height: 12rem; }
+.daily-section-panel:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; border-radius: var(--radius-control); }
+.daily-period-slot { margin-bottom: var(--space-4); }
+.daily-period-hint { margin: 0; min-height: 70px; display: flex; align-items: center; color: var(--text-muted); font-size: var(--type-small); }
+.daily-period-control { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--space-3); margin-bottom: 0; }
+.daily-period-control > label, .daily-custom-period > label { display: grid; gap: var(--space-1); font-size: var(--type-small); }
+.daily-custom-period { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--space-3); }
+.daily-period-control select, .daily-period-control input, .daily-period-control button {
+  min-height: 44px;
+  max-width: 100%;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-control);
+}
+.daily-period-control select, .daily-period-control input {
+  border: 1px solid var(--control-rule);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+}
+.daily-period-control select:focus-visible, .daily-period-control input:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.daily-period-control > .error-text { flex-basis: 100%; margin: 0; }
+.daily-embedded-actions { margin-bottom: var(--space-3); }
+@media (max-width: 480px) {
+  .daily-section-tabs { gap: 0; }
+  .daily-section-tab { min-width: max-content; padding-inline: var(--space-3); }
+  .daily-custom-period { width: 100%; }
+  .daily-custom-period > label { flex: 1 1 130px; }
+  .daily-custom-period > button { flex: 1 1 100%; }
+}
 @media (prefers-reduced-motion: reduce) {
   .daily-records { transition: none; }
 }

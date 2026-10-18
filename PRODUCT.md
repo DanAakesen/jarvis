@@ -1047,11 +1047,13 @@ check Jarvis may add new lines under "Suggested by Jarvis" in the owner's existi
 todo file; it never edits or deletes an existing line and never creates the file.
 A time-critical finding (a deadline within 24 hours or a calendar clash) found by
 the 07:00 or 18:00 check can send one push, at most 3 a day and never between 22:00
-and 07:00. About an hour before a todo with a time is due, Jarvis sends one
-reminder push; a reminder due in the quiet window is held until 07:00 and shown as
-due soon or overdue. Pause, the Todo list source switch and Notifications → Turn
-off stop them. Whether todo lines appear and pushes arrive is established by Dan's
-test on the deployed app, not by CI.
+and 07:00. Todo findings and reminders are limited to open vault tasks explicitly
+marked `priority:: P1 - High`; unmarked and lower-priority tasks do not generate
+task notifications. About an hour before an eligible todo with a time is due,
+Jarvis sends one reminder push; a reminder due in the quiet window is held until
+07:00 and shown as due soon or overdue. Pause, the Todo list source switch and
+Notifications → Turn off stop them. Whether todo lines appear and pushes arrive is
+established by Dan's test on the deployed app, not by CI.
 
 ## Proactive foundation and engine (18 October 2026; P13-05, P13-06)
 
@@ -1081,13 +1083,14 @@ five minutes, six per Copenhagen day). Runs appear in Background work with safe
 plain-language outcomes. None of these flags is enabled by this change.
 
 The todo reader matches exactly one case-insensitive root `task.md` or
-`tasks.md` and emits at most 40 sanitized facts. The P13-11 writer reuses that
-resolver/parser, writes only to an existing resolved file, and records hashed
-receipts so completed or deleted suggestions are not re-added. The Factory
-reader reports attention/failure and open-PR status plus a running-task count;
-the weather reader uses the saved home location and makes a bounded HTTPS
-forecast request. Their reads remain governed by the existing proactive engine;
-the todo writer is a separate gated after-storage hook.
+`tasks.md` and emits at most 40 sanitized facts, only for open tasks explicitly
+marked `priority:: P1 - High`. The P13-11 writer reuses that resolver/parser,
+writes only to an existing resolved file, and records hashed receipts so
+completed or deleted suggestions are not re-added. The Factory reader reports
+attention/failure and open-PR status plus a running-task count; the weather
+reader uses the saved home location and makes a bounded HTTPS forecast request.
+Their reads remain governed by the existing proactive engine; the todo writer is
+a separate gated after-storage hook.
 
 ## Proactive calendar, mail and travel sources (18 October 2026; P13-08)
 
@@ -1112,11 +1115,14 @@ part of this slice.
 
 ## Proactive todo reminders (18 October 2026; P13-13)
 
-An explicit-time todo gets one generic reminder push about an hour before it is
-due when a proactive check has seen it. Date-only todos remain covered by the
-24-hour deadline alert. Reminders wait through the 22:00–07:00 Copenhagen quiet
-window and are presented as due soon or overdue after 07:00. Each reminder has a
-private Proactive item; todo text is not included in its push or logs. The shared
+An explicit-time P1 - High todo gets one generic reminder push about an hour
+before it is due when a proactive check has seen it. Other priorities and tasks
+without an explicit priority do not generate task notifications. Date-only
+P1 - High todos remain covered by the 24-hour deadline alert. Reminders wait
+through the 22:00–07:00 Copenhagen quiet window and are presented as due soon or
+overdue after 07:00. The ticker verifies the current priority before sending and
+suppresses a reminder when vault verification fails. Each reminder has a private
+Proactive item; todo text is not included in its push or logs. The shared
 proactive, push and alert switches default off in code, are on in production since
 P13-15, and add no new setting or web control.
 
@@ -1301,6 +1307,16 @@ switching Daily on for his account once the page is live and checked, and the
 production deployment files then set it together with the backend switch (18
 October 2026). Acceptance with real data, a physical phone and the original source
 stays open.
+
+18 October 2026 (P12-20 / #964): Daily keeps that single destination and now has
+one page heading, a section switcher and an active section. The shipped sections
+are Overview, Briefs and Data; Overview still opens a collection in the existing
+browser, and Briefs reuses its history and detail. Unavailable section
+capabilities do not create dead tabs. Data uses one shared Europe/Copenhagen
+period (Last 7, 30 or 90 days, This year, or a validated custom range of at most
+366 calendar days), retained while switching sections and in the URL. New
+Workouts, Nutrition and Body & sleep views remain follow-up work; there are no
+separate navigation destinations, widget, coaching/recovery/recomp or TickTick.
 
 On-demand Daily views (P12-16 / #731) let Dan ask Jarvis in chat or voice to show
 what Daily holds, and the answer appears as a table, chart or detail in the existing

@@ -73,7 +73,8 @@ const night = (date: string, asleep: DailyJson, total: DailyJson): Row => ({ sle
 describe('daily show view builder: source guard', () => {
   it('covers exactly the sources that have an on-screen form', () => {
     expect([...dailyShowSources].sort()).toEqual([
-      sources.favorites, sources.heartRate, sources.meals, sources.metrics, sources.plans, sources.sleep, sources.sync, sources.workouts,
+      sources.days, sources.favorites, sources.heartRate, sources.meals, sources.metrics,
+      sources.metricCatalog, sources.plans, sources.sleep, sources.sync, sources.workouts,
     ].sort());
     for (const source of dailyShowSources) expect(isDailyShowSource(source)).toBe(true);
     for (const other of [sources.briefs, sources.brief, sources.workout, 'daily.unknown', '', null, 7]) expect(isDailyShowSource(other)).toBe(false);
@@ -107,6 +108,27 @@ describe('daily show view builder: measurements', () => {
       reason: `Retained Daily records, 11 Oct 2026 to 17 Oct 2026 (Copenhagen dates). 2 rows shown. Read 17 Oct 2026, 21:26 Copenhagen time. ${closing}`,
     });
     expect(build.receipt).toEqual({ renderer: 'table', rowsShown: 2, rowsReturned: 2, partial: false, notes: [] });
+  });
+  it('shows the metric catalogue and derived per-day totals without presenting unknown nutrients as zero', () => {
+    const catalogue = show(read(sources.metricCatalog, [{
+      metric_name: 'body_mass', units: ['kg', 'lb'], first_date: '2026-10-11', last_date: '2026-10-17',
+      day_count: 2, latest_updated_at: observedAt,
+    }]), table);
+    expect(body<Cells>(catalogue).rows[0]).toEqual(['Body mass', 'kg, lb', '11 Oct 2026', '17 Oct 2026', '2', '17 Oct 2026, 21:26']);
+
+    const result = read(sources.days, [{
+      meal_date: '2026-10-17', meal_count: 2, energy_kcal: 240, protein_grams: null,
+      carbohydrates_grams: 30, fat_grams: 8, fiber_grams: null,
+      unknown_nutrients: ['protein_grams', 'fiber_grams'], partial_nutrients: ['carbohydrates_grams'],
+      latest_updated_at: observedAt,
+    }]);
+    result.provenance.calculations = 'derived-from-retained-meals';
+    const days = show(result, table);
+    expect(body<Cells>(days).columns).toContain('Unknown nutrients');
+    expect(body<Cells>(days).rows[0]).toContain('Unknown');
+    expect(body<Cells>(days).rows[0]).toContain('carbohydrates_grams');
+    expect(reason(days)).toContain('derived from retained, non-deleted meals');
+    expect(reason(days)).toContain('lower bounds');
   });
 
   it('keeps a missing value unknown, a recorded zero as zero, and every duplicate-date row', () => {

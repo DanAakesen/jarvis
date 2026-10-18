@@ -8,7 +8,93 @@ handset chat, voice and control fit; preserve the task-board 1099px and task
 detail 720px thresholds as container queries because they respond to allocated
 component width. Daily's existing 640px and 760px media rules are untouched
 because that page is being built in parallel. The responsive probe and every
-boundary comparison are recorded in `docs/ui-audit.md` under Pass 3.
+boundary comparison are recorded in `docs/ui-audit.md` under "Pass 3:
+responsive and overflow".
+
+## Use one refined button hierarchy across the web app (18 October 2026; P14-03 / #969)
+
+Keep the existing class names and route behavior while making button intent
+visible in the shared stylesheet. Primary remains the existing primary fill;
+secondary is a distinct neutral surface, ghost is quiet, danger is low
+emphasis, and confirmed destructive actions use the filled danger modifier.
+All variants use the existing control radius, focus outline and semantic
+surface/state tokens; no decorative control rim or new palette is introduced.
+
+Buttons no longer carry layout margins. Shared action groups own spacing,
+wrapping, phone stacking and primary-last ordering. Busy controls keep their
+disabled state and accessible name while the shared inline Loader overlays a
+label that still reserves the button's width. This is a presentation-only
+change, not a change to actions, confirmation boundaries or API behavior.
+
+## Notify only on P1 - High vault tasks (18 October 2026; #996)
+
+Proactive todo findings and reminders are eligible only for open vault tasks
+explicitly marked `priority:: P1 - High` or `priority: P1 - High`. Missing and
+lower priority values are not notification-worthy. Re-check priority at reminder
+delivery; if the vault cannot establish the current priority after bounded
+retries, suppress rather than send an unverified reminder. This reuses the
+existing parser, proactive sources and reminder lifecycle without a migration.
+
+## Discover Daily sections from folders (18 October 2026; P12-20 / #964)
+
+Daily keeps one destination and discovers section definitions from
+`sections/*/index.tsx`, not a shared hand-maintained registry. Definitions are
+loaded from the lazy glob's small entry chunks because the tab switcher must
+know each label, order, period behavior and source requirements before a section
+is selected. Each entry lazy-loads its actual content component and queries.
+Required-source filtering prevents dead tabs, and `?section=` preserves the
+selected section across reloads.
+
+One page-owned Copenhagen period is shared only with sections that opt into it.
+The shipped set stays Overview, Briefs and Data; future Workouts, Nutrition and
+Body & sleep folders register without changes to the shell. There is no new API,
+query semantics, navigation destination or generated-view renderer.
+
+## Fail-closed offline Daily bundles (18 October 2026; P12-22 / #968)
+
+Use a versioned manifest, exact-byte per-table checksums/counts and streamed
+NDJSON for the 31 mapped source tables. Keep the decisions, bounded reader,
+validator and deterministic synthetic generator in one temporary directory,
+outside the production request path; remove it at P12-19. P12-27 can reuse
+these interfaces for the later resumable importer and reconciliation report.
+No source export, import, SQL migration or production activation is authorised
+by this tooling.
+
+Validation fails closed on completeness/schema/key/type failures and unknown
+mixed-source payloads. Each of the five mixed-source tables requires an owner
+ruling in the manifest (`import-sanitised` or `exclude`, with a private rule);
+free text never executes or overrides classification. The live column set,
+export route and real TickTick discriminator values remain unknown. Existing
+mapping decisions and target CHECK constraints remain authoritative. Inspection
+of migration 0041 found only case-insensitive `ticktick` substring exclusions
+for source discriminators, not the positive allowed set assumed by the issue.
+Do not invent that set or equate passing SQL checks with classification;
+nonempty source payloads need verified semantics before active import.
+
+Reports and diagnostics use fixed codes, known table names, counts and
+hashes/digests only, never source row values, raw keys, unknown identifiers or
+free-text rulings. Disk-backed digest indexes bound duplicate/reference memory.
+Expired objects are counted and never eligible for import. Source owner emails
+never select the target owner, and excluded credentials never become active
+credentials. Actual exports, reports and source-schema evidence remain
+encrypted and owner-only outside the repository, agent environments and
+GitHub artifacts. Synthetic validation is not private migration acceptance.
+Refs DanAakesen/jarvis#717 and DanAakesen/jarvis#721.
+
+## Give asynchronous test waits headroom on loaded CI runners (18 October 2026; fix-main)
+
+Web tests such as the attention popover focus return and the workspace pin
+loading recovery failed intermittently in CI at about 1.0 s, the Testing
+Library `asyncUtilTimeout` default, and passed on rerun with no code change.
+Each assertion was about to hold; a loaded runner had stalled the worker for
+longer than the budget. The web test setup now sets `asyncUtilTimeout` to 4 s,
+and Vitest's `testTimeout` is 15 s so that a wait which does fail reports its
+own assertion rather than a generic 5 s test timeout.
+
+No assertion, retry or skip was added or loosened. A wait whose condition never
+holds still fails, after at most 4 s instead of 1 s. This is a unit-test wait
+budget only; it does not change the release, acceptance-evidence or
+worker-start timeouts recorded elsewhere.
 
 ## Preserve attention dismissals across backend restarts (18 October 2026; P9-123 / #962)
 
@@ -21,6 +107,28 @@ PC bridge persistence changes only when the status title changes. Startup allows
 two minutes for reconnection before recording offline, and shutdown records
 nothing. Live socket status remains immediate. This separates restart noise from
 real attention changes without hiding an offline bridge indefinitely.
+
+## Draw slim desktop scrollbars and keep glass rings off scrolling surfaces (18 October 2026; fix-main)
+
+`.luminous-glass::before` is a 1px ring drawn at `inset: -1px`. Inside a scrolling
+container that overhang counts as scrollable overflow, so the Notes search results
+and every modal showed vertical and horizontal scrollbars even when their content
+fitted. A glass surface that scrolls now drops the ring (`.knowledge-results` keeps
+a hairline border instead) or stops being the scroller (`.modal` no longer sets
+`overflow`; a card taller than the viewport scrolls with its backdrop).
+
+Chromium and Safari add arrow buttons to the standard thin scrollbar and ignore
+`::-webkit-scrollbar` while `scrollbar-width` or `scrollbar-color` is set. With a
+fine pointer the standard properties are therefore reset and the bar is built from
+its parts: 10px wide, no arrow buttons, transparent track and a pill thumb that
+lights cyan while the main scroll surfaces or the thumb are hovered. Touch screens
+and Firefox keep the standard thin overlay bars. The Notes reader keeps its
+stronger resting thumb, and the deliberately hidden scrollbars (tab strips, job
+tabs, kanban pulse, phone legend) are unchanged. The hovered scroller also sets an
+empty custom property, the documented workaround for Safari not restyling the
+hovered thumb otherwise. `styles.test.tsx` pins the
+approach. Checked in headless Edge before and after, in dark and light themes, and
+with phone emulation; not checked on a physical phone or in Safari.
 
 ## Decide what Dan's approval means on the server, never with a word list (17 October 2026; P11-10 / #894)
 
@@ -87,6 +195,31 @@ plumbing, provenance and fail-closed behaviour, not model judgment. Real model
 quality is unverified until Dan's live re-test, which closes #894. This supersedes
 the whole-message-match safeguard of 12 October and the "plain approval" wording of
 P11-01 and P11-03; every other safeguard there stands.
+
+## Version Daily read-model additions without changing the page (18 October 2026; P12-21 / #966)
+
+The owner-fixed source names and shapes are implemented additively through the
+existing `DailyQueryService`. Capability v1 and v2 responses keep their original
+source lists and serialized capability response bodies; only an explicit
+version-3 Accept negotiation advertises the new source IDs in Daily
+capabilities. The web client requests v3 but validates each version against its
+own allowlist.
+
+Metric filtering is exact by retained metric name. The catalogue aggregates
+only retained health measurements inside the requested period and exposes at
+most five sorted non-null units per metric. Per-day nutrition totals aggregate
+only retained, non-deleted meals: all-null nutrient sums stay null, partial
+totals are marked lower bounds, and dates without meals remain absent. These
+totals are derived evidence, not retained source records. Completeness and
+freshness remain unknown.
+
+Both reads reuse the current owner authorization, SQL connection and query
+limits. No table, index, migration, refresh event or visible Daily Overview
+row/layout is added; a measured query-plan need would be reviewed separately
+before changing indexes. The existing generated-view tool can render these
+version-3 results, and the nutrition-only MCP connector exposes per-day reads
+under its existing read scope. No real health/food data, activation or change
+to original Daily is included.
 
 ## Show Daily data on demand through the existing workspace (18 October 2026; P12-16 / #731)
 
@@ -5309,6 +5442,18 @@ announcement is the concise “Saved.” while its standing applicability hint
 remains visible and the success stays announced with `role="status"`. The
 bounded code audit and follow-up surfaces are recorded in
 [`docs/ui-audit.md`](ui-audit.md); browser acceptance remains separate evidence.
+
+## P14-04 — Ratchet shared borders, radii and surfaces (18 October 2026)
+
+Keep the existing radius and surface tokens as the only shared geometry system.
+Retain only structural 1px neutral side borders, represent selection through
+shared surfaces, and replace inset-shadow pseudo-borders with real boundaries
+or no boundary. A PostCSS ratchet in the existing web tests scans every
+stylesheet; its exact-value exceptions carry reasons for the P14-03-owned
+buttons and genuine circular voice control. No dependency or theme was added.
+The Pass 3 audit records measured counts, classifications, exceptions and
+synthetic before/after Chromium evidence; this does not claim live-service or
+human acceptance.
 
 ## P13-16 owner-bound proactive recall (18 October 2026; #937)
 

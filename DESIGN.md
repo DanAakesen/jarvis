@@ -144,6 +144,30 @@ selection cue.
 for future work. Header/job and mobile chat corrections have separate owners;
 this candidate does not imply their changes are integrated or released.
 
+## Button system (P14-03; 18 October 2026)
+
+`apps/web/src/styles.css` owns the shared button hierarchy. `.primary-button`
+keeps the existing primary fill with a restrained shadow; `.secondary-button`
+uses a clearly surfaced neutral tone; `.ghost-button` stays quiet until hover
+or press; `.danger-button` is a low-emphasis destructive action, and
+`.danger-button--filled` marks a confirmed destructive action. Existing
+specialized and icon button classes keep their workflow role while sharing the
+same control radius, feedback and visible focus.
+
+Text actions are 44px high by default. Compact controls are 36px only on fine
+pointers and return to at least 44px on coarse pointers. Icon-only actions stay
+square and retain their accessible names. Leading/trailing SVGs align with
+their label in the shared gap. Busy actions set `aria-busy`, stay disabled and
+overlay the shared inline `Loader` on an opacity-hidden label so the button
+keeps its measured width and accessible name.
+
+`.button-group` and the existing `.settings-actions`, `.task-dialog-actions`
+and `.action-row` patterns use tokenized gaps, wrap without clipping, and place
+the primary action last. Form and dialog groups stack full-width on narrow
+phones. Buttons own no outer spacing: the parent action row or section owns
+that spacing. The primary button's previous 32px top margin is removed; the
+deployment form preserves that separation in its grid row-gap instead.
+
 ## Gated push notifications (17 October 2026; P13-02)
 
 The Notifications Settings section is its own collapsed-by-default section and
@@ -1184,7 +1208,7 @@ Dan supplied a reference image and iterated live. Canonical values live in `styl
 - **Composer:** the same clear glass. Hover and typing show a thin light running around the rim instead of a thick focus ring; reduced motion shows a steady bright rim. The voice orb is a living miniature of the stage orb: a cyan shell with rotating meridians and an amber filament core, which brightens while Jarvis works.
 - **Messages:** uniform 18px radius. Dan's bubble has a glowing amber outline; Jarvis's a cool hairline.
 - **Removed from the Jarvis page:** the Arrange menu and the "Activity, sharing and backend" disclosure. P9-120 removes Now and Backend from Settings; the shell-owned feed stays mounted and publishes its attention items to the header popover. The `/operations/sleep` API remains unchanged, with no web Settings control. Screen sharing is a working top-bar toggle beside the camera.
-- **Scrollbars:** thin, quiet at rest, cyan while hovered.
+- **Scrollbars:** thin, quiet at rest, cyan while hovered. With a mouse or trackpad in Chromium or Safari they are 10px pill thumbs with no arrow buttons and a transparent track; touch screens and Firefox keep the standard thin overlay bars. The Notes reader keeps a stronger resting thumb. A glass surface never shows a scrollbar unless its content overflows: a scrolling glass surface drops the 1px ring (the Notes search results use a hairline border instead) or leaves scrolling to a parent, because the ring's overhang would otherwise add phantom bars.
 - **Panel width:** a vertical pill handle is centred on the inner edge of the navigation and Context panels. Dragging it, or using the arrow keys on it as a separator (Shift for bigger steps, Home/End for the limits), resizes the panel within 160–420px and 220–560px. Widths are remembered on the device; phones have no handle. Only the panel body scrolls, so the heading and handle stay put.
 - **Handle exit:** hiding the conversation with the composer handle (click or drag down) uses the same top-right fly-off as Close.
 - **Phone conversation resize (P9-117):** a visible horizontal grip in the window's heading resizes its height; drag up to expand and down to shrink. Its 72×44px target stays inside the window, clear of transcript actions and the separate composer open/close handle. It uses the shared quiet hover/pressed surfaces and focus outline, with no added animation. Up/Down resize by 32px (64px with Shift); Home/End select the height limits. Phone height is remembered separately from desktop placement.
@@ -1258,10 +1282,11 @@ camera correction. Reduced motion retains solid text without the sweep.
 - **Chat turn in progress:** Jarvis's bubble shows the amber working core (the orb's brain) with rotating first-person phrases from large shuffled sets (thinking, working, composing), each tool as a line on a thin lit trail with a running core or a round tick or cross, then the streamed answer. Tool calls sit on Jarvis's reply, not Dan's message. Bubbles use compact body type and tighter speaker spacing (revised 12 October below); the time is a glass tag on the bubble's top-right rim shown on hover. Sharing starts in the ⋯ menu. Screen sharing retains its live line/Stop above typing; camera controls live in Camera preview. The top bar has no capture controls.
 - **Movable chat and density (Dan, 12 October; local, unreleased):** Dan rejected visible corner brackets. The existing glass rim is the resize affordance: invisible pointer regions cover every edge and corner, with directional resize cursors and keyboard focus only. There are no brackets, hover decorations or extra top grip. The Move icon sits beside Maximise; moving/resizing keeps the composer attached without reparenting its draft or voice client. Preferred position and size survive refresh on this browser and fit smaller viewports. Cancellation restores the prior placement. Minimise leaves the composer in place with messages hidden, as Dan selected; maximise/restore preserves the placement. A first drag interrupts the opening spring using its visible rectangle, rather than applying a scaled height twice. Top-border Up/Down and Home/End retain height shortcuts; other borders/corners and Move use arrows, with Shift for larger steps. Touch corners have 44 px hit regions; title actions retain priority over overlapping resize regions. Compact `--type-small` message paragraphs, lists and quotes remain distinct from the composer's readable `--type-body`. Initial shell-history loading is a screen-reader status, not skeleton content in the empty room. Standalone history still uses its ordinary loader; errors retain Retry. No camera UI or evidence wording changes.
   Side resize regions sit outside the transcript, on the rim and its outer side. Corner hit regions exclude their inward quadrant so the entire native scrollbar track stays usable, including beside the corners. Scrollbar dragging and touch scrolling do not change window geometry.
-- **Modals:** one Modal component, rendered at the document root near the top of the viewport, with an X, Escape and click-outside to close.
+- **Modals:** one Modal component, rendered at the document root near the top of the viewport, with an X, Escape and click-outside to close. The card never scrolls itself; a card taller than the viewport scrolls with its backdrop.
 - **Job tabs (P8-43):** each background job is a tab in the top bar strip: a cyan progress ring with the short title and step (or "N running"), a peek with the current step, elapsed time and Cancel; a green ✓ pulse when ready while the result window grows out of the chip (it waits in the chip with Open while Dan is Away or On the move); amber with the reason, Retry and Dismiss when it fails. Research progress windows start as tabs while the chip tracks them.
 - **Knowledge (P7-43):** a rail page and a window Jarvis opens with `show_knowledge`, showing Dan's vault as a 3D star cloud. Stars are coloured by folder (People blue, Work amber, Personal green, General violet) and sized by connections, with fine additive lines for links and fainter lines for similarity. Since 8 October it is a flat 2D map (Dan found the spinning 3D cloud too much in his face): every note lies on one plane seen straight on, dragging pans and the wheel zooms, and stars are crisp with only a faint halo. It never goes fully still: each note floats a few pixels on its own slow orbit with its links following, each star breathes, and every second or two one link lights up and fades. It stops drawing off-screen or hidden; reduced motion keeps it still. Search lights the matches, dims the rest and flies the camera to them; the accessible results list, labels and a glass note reader (front matter stripped, GitHub link, connected notes) sit over it. One draw call for stars and one for lines, at 30 fps. Development builds can show a labelled sample graph when the service is missing.
 - **Knowledge reader (P9-74):** hide properties, including malformed YAML after leading comments. Titles and paths wrap. The path, Markdown and connected notes share one keyboard-focusable scroll region; a bottom fade and labelled Scroll down button appear only while content remains below. The button scrolls directly under reduced motion.
+- **Mobile Notes search (#984):** use 16px search-input text to avoid iPhone focus zoom clipping the search and dropdown. Keep graph camera zoom on matches and user-controlled page zoom unchanged.
 - **Notes (P9-77, Dan; creation revised locally on 11 October):** keep the existing full-room graph as the default Notes page, including search, stars and folder filters; no list-first browser or Notes/Graph switch. Selecting a note opens the familiar floating reader with Edit Markdown, Preview and explicit Save. Connected notes stay reachable. Search stays centred at desktop, medium and phone widths. Create new is a named, plus-only 44 px action inside the right end of search, transparent at rest. It opens a blank draft immediately with writing focus, no Start writing gate and no generated source text. Desktop creation widens the same popup: an Obsidian-like nested folder tree on the left, title and Markdown on the right. Phones stack the destination disclosure above the editor, initially folded; the focused Markdown area scrolls into view without animation so writing is immediately reachable. Folder rows have separate expansion and selection controls, a selected surface/checkmark, and inline New folder under the current destination. New folders are marked New and persist only when a note is saved inside them. Dan requires all normal vault folders and root notes, with his explicit exception for hidden dot-folders; the repeated exclusion notice is removed, not the safety rule. The picker loads `/notes/tree`, adds the implicit Vault root locally, and offers Retry on absent/not-ready data without reverting to inferred graph/index folders. Last-sync text belongs in the popup header, not the folder body, and remains visible with a folded phone picker; truncation remains near the tree. Deployed #699 includes attachment-only folders with the same contract; the local picker loads the refreshed live inventory. Existing note readers remain narrow; content scrolls above the dock. Source preserves front matter and whitespace; preview hides properties like the old reader. Dirty/saving/saved feedback and conflict comparison accompany explicit saves. An untouched new draft closes freely; actual title/source edits guard closing, changing notes, navigation and reload. The generated `show_knowledge` window stays read-only.
 - **Room colour:** the room's amber strips, ring accents, floor arcs, the lamp by the orb and the 3D orb's brain all use the bright `--glass-glow-warm` amber of the chat orb. Strips and ring inlays are thin, unlit lines so they stay crisp.
 - **Voice keeps the shell (7 October):** on desktop, voice no longer hides the top bar, tabs, job tabs, rail or panels; they stay over the full-screen voice room, windows float across it as while typing, and only the chat bar becomes the voice bar.
@@ -1397,6 +1422,28 @@ private data or real sign-in; the harness has no 3D stage, header or MSAL;
 `prefers-reduced-motion` was not emulated; the Daily-off path is covered by the
 App tests, not the browser. Local runs are not qualification.
 
+18 October 2026 (P12-20): Daily now keeps that overview inside one page-level
+heading and body line, followed by Overview, Briefs and Data tabs and the active
+section. The tabs expose selected state semantically and by stronger text weight
+and a complete selected surface; narrow screens get a contained horizontal tab
+scroller, with 44 px controls and visible focus. Data alone shows the shared
+period control. Preset and custom date changes use Europe/Copenhagen calendar
+dates and reject reversed, impossible or over-366-day ranges before a read.
+The period slot retains its height while switching tabs so section content does
+not jump when the Data control appears or disappears. Sections keep their
+existing page and control geometry; each owns its content
+stylesheet and separately lazy-loaded component. Workouts, Nutrition and Body &
+sleep remain absent until their follow-up sections exist.
+
+Checked the section shell in isolated Chromium against only synthetic capability
+and query responses at 320, 390×844, 768 and 1440×900 in light and dark, with
+reduced motion. Overview, Data and brief detail, keyboard/URL switching, shared
+period retention, custom-range rejection and the chart were exercised. The page
+did not scroll sideways, tab and Open targets measured 44 px, the section panel
+kept the same top position across a tab switch, and the browser console had no
+page errors. Scratch screenshots were kept outside the repository; this is not
+signed-in shell, live-backend or private-data acceptance.
+
 18 October on-demand views (P12-16 / #731): when Jarvis shows Daily data on
 request, it reuses the existing generated-view renderer, workspace window and theme.
 There is no Daily renderer, skin or page. Under every table, chart or detail view
@@ -1437,3 +1484,13 @@ variants and remaining workflow-specific layouts. Local synthetic Chromium
 inspection covered the phone and desktop sizes in both themes, plus reduced
 motion. The attention event and healthy Daily/Proactive data states were not
 available in the harness; screenshot captures could not be attached to the PR.
+
+## Border, radius and surface rules (P14-04, 18 October 2026)
+
+Use `--radius-control`, `--radius-panel`, `--radius-window` and `--radius-pill`
+for their matching roles; reserve `50%` for circles and `0` for square edges.
+Structural separators use a single 1px `--rule` or `--control-rule` border.
+Selected and status states use shared surfaces, text or icons, never a colored
+edge alone. Use real neutral borders instead of inset-shadow borders. Panels,
+popovers, rows and hover states reuse the existing surface roles and
+`--panel-shadow`. Keep exact, reasoned exceptions in the stylesheet ratchet.

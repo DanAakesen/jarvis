@@ -61,7 +61,7 @@ function planned(text: string, dueAt: Date, overrides: Partial<PlannedReminder> 
 }
 
 function todoText(text: string, dueAt: Date): string {
-  return `- [ ] ${text} 📅 ${dayKey(dueAt)} ${localTimeLabel(dueAt)}`;
+  return `- [ ] ${text} 📅 ${dayKey(dueAt)} ${localTimeLabel(dueAt)} [priority:: P1 - High]`;
 }
 
 function fixture(options: {
@@ -417,10 +417,12 @@ describe('todo reminder ticker', () => {
   });
 
   it.each([
-    ['completed', '- [x] Synthetic matching task 📅 2026-10-20 11:00'],
-    ['retimed', '- [ ] Synthetic matching task 📅 2026-10-20 12:00'],
+    ['completed', '- [x] Synthetic matching task 📅 2026-10-20 11:00 [priority:: P1 - High]'],
+    ['retimed', '- [ ] Synthetic matching task 📅 2026-10-20 12:00 [priority:: P1 - High]'],
     ['deleted', ''],
-    ['same text, different time', '- [ ] Synthetic matching task 📅 2026-10-20 12:00'],
+    ['same text, different time', '- [ ] Synthetic matching task 📅 2026-10-20 12:00 [priority:: P1 - High]'],
+    ['priority removed', '- [ ] Synthetic matching task 📅 2026-10-20 11:00'],
+    ['priority lowered', '- [ ] Synthetic matching task 📅 2026-10-20 11:00 [priority:: P2 - Medium]'],
   ])('cancels a %s todo without sending', async (_description, content) => {
     const current = fixture({ content });
     const row = planned('Synthetic matching task', new Date('2026-10-20T09:00:00.000Z'));
@@ -431,7 +433,7 @@ describe('todo reminder ticker', () => {
     expect(current.send).not.toHaveBeenCalled();
   });
 
-  it('retries failed verification twice at five-minute intervals then sends as unverified', async () => {
+  it('retries failed verification twice then suppresses without sending an unverified task', async () => {
     const current = fixture();
     const row = planned('Synthetic unverified task', new Date(NOW.getTime() + 30 * 60_000));
     current.vault.tree.mockRejectedValue(new Error('synthetic vault failure'));
@@ -447,8 +449,9 @@ describe('todo reminder ticker', () => {
       }
     }
     expect(current.reminders.snapshot()[0]).toMatchObject({
-      state: 'sent', verifyAttempts: 3, reason: 'unverified',
+      state: 'suppressed', verifyAttempts: 3, reason: 'unverified',
     });
+    expect(current.send).not.toHaveBeenCalled();
   });
 
   it('suppresses only deadline alerts sent within two hours', async () => {
