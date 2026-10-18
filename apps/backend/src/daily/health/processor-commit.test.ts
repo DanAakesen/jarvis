@@ -36,7 +36,7 @@ function fixture(kind = 'upload', payload: unknown = { data: { metrics: [] } }, 
       kind, automation_id: 'synthetic-automation', session_id: 'synthetic-session', accepted_at: new Date(now - 60000), processing_attempts: options.attempts ?? 0,
     }];
     if (query.includes('SELECT processing_status')) rows = [{ checksum: sha256(raw),
-      processing_status: options.current === 'processed' ? 'processed' : 'pending', processing_attempts: 1,
+      processing_status: options.current === 'processed' ? 'processed' : 'processing', processing_attempts: 1,
       processing_next_attempt_at: new Date(now + (options.current === 'expired' ? -1 : 120000)) }];
     if (query.includes('SELECT id,automation_id') && prior) rows = [{ automation_id: 'synthetic-automation', session_id: 'synthetic-session', checksum: sha256(raw), status: 'succeeded', content_bytes: raw.length }];
     return { recordset: rows };
