@@ -37,11 +37,8 @@ describe('workspace pin loading', () => {
     act(() => { (event === 'online' ? window : document).dispatchEvent(new Event(event)); });
     expect(pins.load).toHaveBeenCalledOnce();
     visible.mockReturnValue('visible');
-    // The retry listener is registered in a passive effect that can land after the failure text; repeat the event until it is heard.
-    await waitFor(() => {
-      act(() => { (event === 'online' ? window : document).dispatchEvent(new Event(event)); });
-      expect(pins.load).toHaveBeenCalledTimes(2);
-    });
+    act(() => { (event === 'online' ? window : document).dispatchEvent(new Event(event)); });
+    await waitFor(() => expect(pins.load).toHaveBeenCalledTimes(2));
     await screen.findByRole('button', { name: 'Restore Saved report' });
     expect(screen.queryByText('Connection interrupted.')).toBeNull();
     act(() => { (event === 'online' ? window : document).dispatchEvent(new Event(event)); });
