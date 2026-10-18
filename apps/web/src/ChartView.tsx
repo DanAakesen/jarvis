@@ -5,9 +5,9 @@ const margin = { top: 14, right: 16, bottom: 34, left: 44 };
 // Cyan and amber first (the house pair), then softer versions of each for a third to fifth series.
 const colours = [
   'var(--glass-edge-cool)',
-  'var(--glass-glow-warm)',
+  'var(--chart-series-warm)',
   'color-mix(in srgb, var(--glass-edge-cool) 50%, var(--text))',
-  'color-mix(in srgb, var(--glass-glow-warm) 50%, var(--text))',
+  'color-mix(in srgb, var(--chart-series-warm) 50%, var(--text))',
   'var(--text-muted)',
 ];
 
