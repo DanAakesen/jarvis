@@ -13,9 +13,10 @@ export interface AlertLedgerRow {
   status: AlertStatus;
   reason: string | null;
   attempts: number;
+  updatedAt: string;
 }
 
-export type AlertLedgerWrite = Omit<AlertLedgerRow, 'id' | 'attempts'>;
+export type AlertLedgerWrite = Omit<AlertLedgerRow, 'id' | 'attempts' | 'updatedAt'>;
 
 export interface AlertLedgerStore {
   get(alertKey: string): Promise<AlertLedgerRow | undefined>;
@@ -23,7 +24,7 @@ export interface AlertLedgerStore {
   upsert(input: AlertLedgerWrite): Promise<AlertLedgerRow>;
 }
 
-export function createMemoryAlertLedgerStore(): AlertLedgerStore {
+export function createMemoryAlertLedgerStore(now: () => Date = () => new Date()): AlertLedgerStore {
   const entries = new Map<string, AlertLedgerRow>();
   return {
     async get(alertKey) {
@@ -41,6 +42,7 @@ export function createMemoryAlertLedgerStore(): AlertLedgerStore {
         ...input,
         id: existing?.id ?? randomUUID(),
         attempts: Math.min(255, (existing?.attempts ?? 0) + 1),
+        updatedAt: now().toISOString(),
       };
       entries.set(input.alertKey, row);
       return { ...row };

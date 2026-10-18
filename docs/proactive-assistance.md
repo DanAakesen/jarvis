@@ -211,6 +211,25 @@ forbids redirects and non-XML/compressed responses, and caps each read at ten
 seconds and 2 MiB. It rejects DTD/entity declarations and outputs only sanitized
 titles with publication time and feed host. Feed content remains untrusted.
 
+## Proactive todo reminders (18 October 2026; P13-13)
+
+Reminders reuse the P13-12 alert flag and are constructed only with the
+proactive, push and alert gates and their vault, store and sender dependencies;
+all remain default-off. The planner runs after every check, but only when the
+todo source succeeded, and records explicit-time todos due within 48 hours for
+one hour before their deadline. A date-only todo remains covered by the
+24-hour deadline alert.
+
+The in-process ticker reads the earliest pending time once at startup, remains
+silent while idle, and does no reminder work from 22:00 to 07:00 Copenhagen
+time. At send time it re-reads and parses the todo file; changed, completed or
+deleted todos are cancelled. It creates one private Proactive item per reminder
+and sends one generic bundled push. The daily cap is eight. Titles remain in
+the private reminder/item database rows, never in push payloads or logs.
+
+A todo added after the last check is covered from the next check on; "Check
+now" covers it immediately.
+
 ## Current evidence
 
 Repository checks used main `fa4e52f9307a8b88d63497e4a83e4b636b36c933`,

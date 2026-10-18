@@ -312,6 +312,27 @@ Hooks run after item upserts and before finish, never after cancellation or
 lease loss, and hook failures are isolated. No flag, source provider or proactive
 send is activated.
 
+## Keep proactive todo reminders behind the shared alert gate (18 October 2026; P13-13)
+
+Use the existing proactive, push and alert flags; introduce no reminder setting
+and enable nothing in this slice. A planner records only explicit-time todos
+within 48 hours, at due time minus one hour, and only after a successful todo
+read. Existing reminder rows are never reopened, and the bounded fact list is
+not evidence for plan-time cancellation.
+
+At send time the ticker re-reads the todo file, observes pause and subscription
+state, suppresses recently alerted deadlines, and enforces eight reminders per
+Copenhagen day. Quiet-window work remains pending until 07:00. Each reminder
+gets an idempotent private finding, while the shared push payload stays generic
+and logs contain only IDs, counts, durations and reason codes. Verification
+failures retry twice at five-minute intervals; a third failure sends as
+unverified. Delivery is at-least-once: a process crash between push acceptance
+and state persistence, or a short overlap of deployment revisions, can produce
+a duplicate reminder; this is accepted.
+
+A todo added after the last check is covered from the next check on; "Check
+now" covers it immediately.
+
 ## Keep the Proactive web client dark and private (18 October 2026; P13-10)
 
 The web client uses its own exact-string `VITE_PROACTIVE_ENABLED` build gate;
