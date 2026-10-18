@@ -1,5 +1,28 @@
 # Decisions
 
+## Switch Web Push milestone 1 on in production (18 October 2026; P13-03 / #934)
+
+Dan confirmed turning milestone 1 on: a user-started test notification that opens
+an owner-protected item. His gate was met first: the P13-01 backend (PR #918) and
+the P13-02 web client (PR #920) are merged and deployed, and live acceptance
+passed. This supersedes the "dark" and "default-off" decisions below for
+production only; the code defaults stay off.
+
+Two lines do it. `infra/main.bicep` sets `JARVIS_PUSH_ENABLED` to `'true'` in the
+backend container app, and the web build step in `deploy.yml` sets
+`VITE_PUSH_ENABLED=true`. There is no new parameter, secret, resource,
+dependency or code change: the VAPID key pair is generated on first use and stays
+in SQL. A scan test pins both values and fails if anything else sets either
+switch.
+
+Scope does not grow: no scheduler, no proactive sends and no Teams path. CI does
+not establish iPhone delivery; Dan's Home Screen device test is the acceptance
+step. Rollback is reverting the whole P13-03 change, which removes the two gate
+lines and the pin test together, or setting both values to `false` and updating
+the pin test in the same commit. Reverting only the two lines would fail the pin
+test in CI before Deploy could run. Stored subscriptions and the key stay in SQL
+and, with the routes off, nothing can send to them.
+
 ## Open Daily on an overview behind a build-time switch (18 October 2026; P12-15 / #730)
 
 **Builder decision inside Dan's "go with the daily", not an activation and not
