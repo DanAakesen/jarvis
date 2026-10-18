@@ -54,6 +54,18 @@ describe('committed SQL manifest', () => {
     expect(down.sql).toContain("WHERE kind = N'proactive'");
     expect(down.sql).toContain('THROW 51000');
   });
+  it('stores hash-only alert attempts with owner/key idempotency and retains rollback evidence', async () => {
+    const migration = (await readMigrations()).find(({ name }) => name === '0057_proactive_alerts.sql');
+    expect(migration?.sql).toContain('CREATE TABLE dbo.proactive_alerts');
+    expect(migration?.sql).toContain('alert_key char(32) COLLATE Latin1_General_100_BIN2 NOT NULL');
+    expect(migration?.sql).toContain('UNIQUE INDEX UX_proactive_alerts_owner_alert_key');
+    expect(migration?.sql).toContain('IX_proactive_alerts_owner_day_status');
+    expect(migration?.sql).toContain("N'travel_disruption'");
+    expect(migration?.sql).toContain('CK_proactive_alerts_reason');
+    const down = await readDownMigration('0057_proactive_alerts.sql');
+    expect(down.sql).toContain('cannot roll back while rows exist');
+    expect(down.sql).toContain('DROP TABLE dbo.proactive_alerts;');
+  });
 
   it('retains durable task submission claims and refuses to erase retry protection on rollback', async () => {
     const migration = (await readMigrations()).find(({ name }) => name === '0052_factory_task_submissions.sql');
@@ -196,6 +208,7 @@ describe('committed SQL manifest', () => {
       '0054_proactive_push.sql',
       '0055_proactive_foundation.sql',
       '0056_background_job_kind_proactive.sql',
+      '0057_proactive_alerts.sql',
     ]);
     for (const migration of migrations) await expect(readDownMigration(migration.name)).resolves.toMatchObject({ name: migration.name });
   });

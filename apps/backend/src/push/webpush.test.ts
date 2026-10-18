@@ -115,11 +115,15 @@ function response(status: number, headers?: HeadersInit): Response {
 }
 
 describe('Web Push send outcomes', () => {
-  it.each([200, 201, 202])('accepts HTTP %i with encrypted, cookie-free delivery options', async (status) => {
+  it.each([
+    { origin: 'user_test' as const, ttl: '300', urgency: 'normal' },
+    { origin: 'proactive_alert' as const, ttl: '3600', urgency: 'high' },
+    { origin: 'proactive_reminder' as const, ttl: '1800', urgency: 'high' },
+  ])('uses $origin headers for accepted responses', async ({ origin, ttl, urgency }) => {
     const keys = generateVapidKeyPair();
-    const fetchMock = vi.fn<typeof fetch>(async () => response(status));
+    const fetchMock = vi.fn<typeof fetch>(async () => response(202));
     const transport = { fetch: fetchMock, now: () => 1_000, sleep: async () => {} };
-    const result = await sendWebPush(subscription, Buffer.from('payload'), keys, 'https://jarvis.example', 'user_test', transport);
+    const result = await sendWebPush(subscription, Buffer.from('payload'), keys, 'https://jarvis.example', origin, transport);
     const [url, init] = fetchMock.mock.calls[0]!;
     expect(url).toBe(subscription.endpoint);
     expect(init).toMatchObject({
@@ -127,8 +131,8 @@ describe('Web Push send outcomes', () => {
       credentials: 'omit',
       redirect: 'error',
       headers: {
-        TTL: '300',
-        Urgency: 'normal',
+        TTL: ttl,
+        Urgency: urgency,
         'Content-Encoding': 'aes128gcm',
         'Content-Type': 'application/octet-stream',
       },
@@ -136,7 +140,7 @@ describe('Web Push send outcomes', () => {
     expect((init?.headers as Record<string, string>).Authorization).toMatch(/^vapid t=.+, k=.+$/u);
     expect(Buffer.isBuffer(init?.body)).toBe(true);
     expect(init?.signal).toBeInstanceOf(AbortSignal);
-    expect(result).toEqual({ attempted: 1, accepted: true, statusCode: status, removed: false });
+    expect(result).toEqual({ attempted: 1, accepted: true, statusCode: 202, removed: false });
   });
 
   it.each([404, 410])('removes a subscription after HTTP %i', async (status) => {

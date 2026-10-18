@@ -1068,6 +1068,18 @@ selected headers; travel reads up to seven calendar days and makes no
 travel-provider request. These changes enable no flag, run no source, add no OAuth
 scope and leave the server entry point unchanged.
 
+## Proactive run alerts (18 October 2026; P13-12)
+
+Only scheduled and catch-up checks can notify for a new, time-critical deadline
+within 24 hours or calendar clash; travel disruption keeps a typed category for a
+future provider. Eligible items share one generic push, capped at three accepted
+bundles per Copenhagen day. Manual checks, paused settings, quiet hours, cancelled
+runs, missing subscriptions, and findings already seen, snoozed or dismissed do
+not alert. Push payloads contain no finding text; notification wording comes from
+a closed Danish/English template table in the worker. The alert switch remains
+default-off alongside the proactive and push switches; per-class controls are not
+part of this slice.
+
 ## Proactive web (18 October 2026; P13-10)
 
 The web page and Settings section are independently dark behind

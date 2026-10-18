@@ -70,6 +70,7 @@ export interface ProactiveSettingsStore {
 export interface ProactiveItemsStore {
   list(state: 'open' | 'all', limit: number, now: Date): Promise<Item[]>;
   get(id: string, markLoaded?: boolean): Promise<Item | undefined>;
+  getMany(ids: readonly string[]): Promise<Pick<Item, 'id' | 'state'>[]>;
   applyFeedback(id: string, action: FeedbackAction, snoozeUntil?: string): Promise<Item | undefined>;
   upsertFinding(input: FindingInput, guard?: FindingWriteGuard): Promise<Item>;
 }
@@ -151,6 +152,12 @@ export function createMemoryProactiveStore(ownerObjectId: string = randomUUID())
       async get(id) {
         const item = items.get(id.toLowerCase());
         return item ? copyItem(item) : undefined;
+      },
+      async getMany(ids) {
+        return ids.flatMap((id) => {
+          const item = items.get(id.toLowerCase());
+          return item ? [{ id: item.id, state: item.state }] : [];
+        });
       },
       async applyFeedback(id, action, snoozeUntil) {
         const key = id.toLowerCase();
