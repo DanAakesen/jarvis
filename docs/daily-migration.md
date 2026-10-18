@@ -1,12 +1,14 @@
 # Approved Daily migration to Jarvis
 
-## Offline export tooling status (18 October 2026; P12-22)
+## Offline export and import tooling status (18 October 2026; P12-22 / P12-27)
 
 The [version 1 bundle format](daily-migration-bundle.md) and
 [owner runbook](daily-migration-runbook.md) define offline validation and
-synthetic fixtures only. Real source-schema reconciliation, private export and
-import remain owner-only gates; no production records or cutover are verified.
-The reusable temporary tooling prepares P12-27's importer, not an import here.
+synthetic fixtures. P12-27 adds resumable import and digest-only reconciliation
+commands to the same temporary directory. Synthetic database tests are the
+proof boundary for code behavior. Real source-schema reconciliation, private
+export, owner rulings, protected execution, record parity and cutover remain
+owner-only gates; no real records have been imported or reconciled.
 Refs DanAakesen/jarvis#717 and DanAakesen/jarvis#721.
 
 ## Current approved scope (15 October 2026)
@@ -177,9 +179,9 @@ Preserve metrics, sleep/wake dates, distinct qualifying workouts, workout detail
 
 **TEMPORARY — migration-only; remove after acceptance/retention gates** · Backend & migration rehearsal
 
-Private repeatable migration runner, staging, retained raw objects, SQL integrity and in-scope Daily-to-Azure comparison.
+Private repeatable migration runner, staging, retained raw objects, SQL integrity and in-scope Daily-to-Azure comparison. P12-27 implements the temporary resumable/idempotent importer and read-only reconciliation command, proven with synthetic data only.
 
-Every exported record has an import or explicit exclusion decision. Import in-scope data, stable IDs, revisions and tombstones; exclude TickTick payloads from active feeds. Copy only retained sanitized raw objects with remaining retention, never fabricate expired originals. Compare read-only Azure results against Sites and prove resumable import and reverse-delta recovery. Importer/staging/comparison tooling is temporary.
+Every exported record has an import or explicit exclusion decision. Import in-scope data, stable IDs, revisions and tombstones; exclude TickTick payloads from active feeds. Copy only retained sanitized raw objects with remaining retention, never fabricate expired originals. Compare read-only Azure results against Sites and prove resumable import and reverse-delta recovery. Importer/staging/comparison tooling is temporary. The current importer never overwrites a different existing row: identical rows are skipped and conflicts produce exit code 3. Reports and checkpoints contain only counts, hashes and digests. Real import requires the owner's private export and rulings plus protected workflow #721; no real data has been run.
 
 ### [P12-07: Nutrition tools, Frida & meal planning](https://github.com/DanAakesen/jarvis/issues/722)
 
@@ -461,7 +463,7 @@ Standing UI requirement (recorded on #730/#731/#732/#726): every migrated React/
 
 1. Contract-only/default-off: synthetic tests, unchanged current Jarvis when disabled; no private exports, production writes or actual Daily views.
 2. Private inventory/backup and owner-bound schema/services: protected export is complete and untruncated with counts/checksums/retained-object coverage. Every source record has an import or explicit exclusion decision; no fabricated expired raw objects.
-3. Read-only shadow and bounded synthetic workflows: prove resumability, exact-once confirmed food writes, scope denials, freshness/revisions, recovery dates and parity; original Daily stays canonical, no automatic food dual-writes.
+3. Read-only shadow and bounded synthetic workflows: prove resumability, idempotency, conflict handling and reconciliation with synthetic SQL data; separately prove exact-once confirmed food writes, scope denials, freshness/revisions, recovery dates and parity. Original Daily stays canonical, with no automatic food dual-writes. Synthetic importer tests do not satisfy private-data parity or protected execution gates.
 4. P12-17 acceptance: dependency work completed, reconciled manifests, real iPhone Health Auto Export/widget/Shortcut, live providers, existing Jarvis regression, SQL availability, private backup and rehearsed reverse-delta rollback. Keep live/private evidence protected and redacted; browser fixtures are not physical-device acceptance.
 5. P12-18 cutover: pre-authorization applies only after every gate passes; agree rollback window, recover new Jarvis writes on rollback, confirm one canonical writer and endpoint/sync parity. No original source edits or deletions.
 6. P12-19 legacy deprecation and temporary cleanup only after verified complete migration plus rollback/retention gates. Preserve original source/data and permanent services.

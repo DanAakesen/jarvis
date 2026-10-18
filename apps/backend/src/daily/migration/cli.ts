@@ -1,9 +1,8 @@
 import { pathToFileURL } from 'node:url';
 import sql from 'mssql';
-import { loadAuthConfig } from '../../auth/config.js';
 import { loadDatabaseConfig } from '../../database/config.js';
 import { generateBundle, VARIANTS } from './generate.js';
-import { assertConfiguredOwner, importBundle, reconcileBundle, writeMigrationReport, IMPORT_CONFLICT_EXIT_CODE } from './importer.js';
+import { importBundle, reconcileBundle, writeMigrationReport, IMPORT_CONFLICT_EXIT_CODE } from './importer.js';
 import { validateBundle } from './validate.js';
 
 export const CLI_FLAGS = [
@@ -79,12 +78,10 @@ export async function main(args: string[], output: (text: string) => void = text
     }
     const tables = values['--tables']?.split(',');
     if (tables?.some(table => !table)) { output('cli-invalid-arguments\n'); return 2; }
-    assertConfiguredOwner(values['--owner-object-id']!, loadAuthConfig(process.env).ownerObjectId);
     const configuration = loadDatabaseConfig();
     if (!configuration) { output('operation-failed\n'); return 2; }
     const pool = new sql.ConnectionPool(configuration);
     try {
-      await pool.connect();
       const report = command === 'import'
         ? await importBundle({
           bundle: values['--bundle']!, ownerObjectId: values['--owner-object-id']!, stateDir: values['--state-dir']!,
@@ -98,9 +95,7 @@ export async function main(args: string[], output: (text: string) => void = text
           ...(tables === undefined ? {} : { tables }),
         }, pool);
       if (reportPath) await writeMigrationReport(reportPath, bundlePath!, statePath, report);
-      output(report.status === 'conflicts' ? 'import-conflicts\n'
-        : report.status === 'differences' ? 'reconciliation-differences\n'
-          : command === 'import' ? 'import-complete\n' : 'reconciliation-passed\n');
+      output(`${JSON.stringify(report)}\n`);
       return report.status === 'conflicts' ? IMPORT_CONFLICT_EXIT_CODE : report.status === 'differences' ? 1 : 0;
     } finally { await pool.close(); }
   } catch (error) {
@@ -108,7 +103,7 @@ export async function main(args: string[], output: (text: string) => void = text
     if (report && reportPath && bundlePath) {
       try { await writeMigrationReport(reportPath, bundlePath, statePath, report); } catch { /* Keep diagnostics value-free. */ }
     }
-    output('operation-failed\n');
+    output(report ? `${JSON.stringify(report)}\n` : 'operation-failed\n');
     return 2;
   }
 }

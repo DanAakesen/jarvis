@@ -1,6 +1,8 @@
 import { constants } from 'node:fs';
+import { createReadStream } from 'node:fs';
 import { createHash, randomUUID } from 'node:crypto';
-import { open, lstat, mkdtemp, readFile, readdir, rename, rm, unlink } from 'node:fs/promises';
+import { mkdir, open, lstat, mkdtemp, readFile, readdir, rename, rm, unlink } from 'node:fs/promises';
+import { createInterface } from 'node:readline';
 import { tmpdir } from 'node:os';
 import { dirname, isAbsolute, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -65,6 +67,7 @@ export interface MigrationReport {
   bundleDigest: string;
   tables: Partial<Record<DailyTable, MigrationTableReport>>;
   excludedTables: number;
+  excludedRows: number;
 }
 
 interface BatchCounts {
@@ -78,9 +81,9 @@ interface BatchCounts {
   wouldSkip: number;
   wouldConflict: number;
 }
-interface BatchCheckpoint extends BatchCounts { digest: string }
-interface TableCheckpoint { complete: boolean; batches: BatchCheckpoint[] }
-interface ImportCheckpoint {
+export interface BatchCheckpoint extends BatchCounts { digest: string }
+export interface TableCheckpoint { complete: boolean; batches: BatchCheckpoint[] }
+export interface ImportCheckpoint {
   version: 1;
   manifestDigest: string;
   batchSize: number;
@@ -88,6 +91,7 @@ interface ImportCheckpoint {
 }
 interface SourceRow { line: string; value: Record<string, unknown> }
 interface PreparedRow { source: Record<string, unknown>; values: Record<string, unknown> }
+interface ImportContext { workspace: string; manifest: Manifest; digest: string; reader: BundleReader }
 
 const emptyCounts = (): BatchCounts => ({
   sourceRows: 0, importableRows: 0, excludedRows: 0, inserted: 0, skipped: 0, conflicts: 0,
@@ -204,7 +208,7 @@ async function readManifest(bundle: string): Promise<{ manifest: Manifest; diges
   } finally { await reader.close(); }
 }
 
-function selectedTables(tables: readonly string[] | undefined): DailyTable[] {
+export function selectedTables(tables: readonly string[] | undefined): DailyTable[] {
   if (!tables) return [...IMPORT_ORDER];
   if (!tables.length || new Set(tables).size !== tables.length) throw new Error('tables-invalid');
   for (const table of tables) if (!Object.hasOwn(dailyTables, table)) throw new Error('tables-invalid');
@@ -218,7 +222,7 @@ async function preflight(bundle: string, workspace: string): Promise<Manifest> {
   return manifest;
 }
 
-async function acquireState(stateDirectory: string, manifestDigest: string, batchSize: number): Promise<{
+export async function acquireState(stateDirectory: string, manifestDigest: string, batchSize: number): Promise<{
   directory: string; checkpoint: ImportCheckpoint; release: () => Promise<void>;
 }> {
   const directory = resolve(stateDirectory);
@@ -273,7 +277,7 @@ async function acquireState(stateDirectory: string, manifestDigest: string, batc
   return { directory, checkpoint, release };
 }
 
-async function writeCheckpoint(directory: string, checkpoint: ImportCheckpoint): Promise<void> {
+export async function writeCheckpoint(directory: string, checkpoint: ImportCheckpoint): Promise<void> {
   const destination = join(directory, STATE_FILE);
   try {
     const info = await lstat(destination);
@@ -401,9 +405,12 @@ async function processBatch(
   const evaluate = async (transaction?: Transaction): Promise<void> => {
     for (const row of rows) {
       const status = await rowStatus(pool, transaction, table, owner, row, execute);
-      if (status === 'insert') execute ? result.inserted++ : result.wouldInsert++;
-      else if (status === 'skip') execute ? result.skipped++ : result.wouldSkip++;
-      else execute ? result.conflicts++ : result.wouldConflict++;
+      if (status === 'insert') {
+        if (execute) result.inserted++; else result.wouldInsert++;
+      } else if (status === 'skip') {
+        if (execute) result.skipped++; else result.wouldSkip++;
+      } else if (execute) result.conflicts++;
+      else result.wouldConflict++;
     }
   };
   if (!execute) { await evaluate(); return result; }
@@ -453,6 +460,323 @@ function sourceRowDigest(rows: readonly SourceRow[]): string {
   return hash.digest('hex');
 }
 
+function compareScalar(table: DailyTable, column: string, left: unknown, right: unknown): number {
+  if (left === null || left === undefined) return right === null || right === undefined ? 0 : -1;
+  if (right === null || right === undefined) return 1;
+  const type = (dailyTables[table].keyTypes as Record<string, { type: string }>)[column]?.type;
+  if (type === 'bigint') {
+    const a = BigInt(String(left)), b = BigInt(String(right));
+    return a < b ? -1 : a > b ? 1 : 0;
+  }
+  let a = type === 'date' ? canonicalValue(table, column, left) as string : String(left);
+  let b = type === 'date' ? canonicalValue(table, column, right) as string : String(right);
+  if (type === 'text') {
+    const aTrimmed = a.replace(/ +$/u, ''), bTrimmed = b.replace(/ +$/u, '');
+    if (aTrimmed !== bTrimmed) { a = aTrimmed; b = bTrimmed; }
+    else return a.length < b.length ? -1 : a.length > b.length ? 1 : 0;
+  }
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+
+function compareRows(
+  table: DailyTable,
+  left: Record<string, unknown>,
+  right: Record<string, unknown>,
+  orderColumns: readonly string[] = dailyTables[table].keys,
+): number {
+  for (const column of orderColumns) {
+    const comparison = compareScalar(table, column, left[column], right[column]);
+    if (comparison) return comparison;
+  }
+  return 0;
+}
+
+async function* readSortedRun(path: string): AsyncGenerator<SourceRow> {
+  const stream = createReadStream(path, { encoding: 'utf8' });
+  const lines = createInterface({ input: stream, crlfDelay: Infinity });
+  try {
+    for await (const line of lines) yield { line, value: JSON.parse(line) as Record<string, unknown> };
+  } finally { lines.close(); stream.destroy(); }
+}
+
+async function* mergeRuns(paths: readonly string[], table: DailyTable, orderColumns: readonly string[]): AsyncGenerator<SourceRow> {
+  const iterators = paths.map(path => readSortedRun(path)[Symbol.asyncIterator]());
+  const current: (SourceRow | undefined)[] = await Promise.all(iterators.map(async iterator => (await iterator.next()).value));
+  try {
+    while (true) {
+      let smallest = -1;
+      for (let index = 0; index < current.length; index++) {
+        const candidate = current[index];
+        if (candidate && (smallest < 0 || compareRows(table, candidate.value, current[smallest]!.value, orderColumns) < 0)) smallest = index;
+      }
+      if (smallest < 0) return;
+      yield current[smallest]!;
+      current[smallest] = (await iterators[smallest]!.next()).value;
+    }
+  } finally { await Promise.all(iterators.map(iterator => iterator.return?.(undefined))); }
+}
+
+async function writeSortedRun(path: string, rows: readonly SourceRow[]): Promise<void> {
+  const handle = await open(path, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600);
+  try { for (const row of rows) await handle.write(`${row.line}\n`); } finally { await handle.close(); }
+}
+
+async function* sortedSourceRows(
+  reader: BundleReader,
+  table: DailyTable,
+  manifest: Manifest,
+  batchSize: number,
+  workspace: string,
+  orderColumns: readonly string[] = dailyTables[table].keys,
+  excluded?: { count: number },
+): AsyncGenerator<SourceRow> {
+  const directory = join(workspace, `sort-${randomUUID()}`);
+  await mkdir(directory, { mode: 0o700 });
+  let runs: string[] = [];
+  let sequence = 0;
+  const chunk: SourceRow[] = [];
+  const add = async () => {
+    if (!chunk.length) return;
+    chunk.sort((left, right) => compareRows(table, left.value, right.value, orderColumns));
+    const path = join(directory, `run-${sequence++}`);
+    await writeSortedRun(path, chunk.splice(0));
+    runs.push(path);
+  };
+  try {
+    const metadata = manifest.tables[table];
+    if (!metadata) throw new Error('validation-failed');
+    await reader.lines(metadata.file, async line => {
+      let value: unknown;
+      try { value = JSON.parse(line); } catch { throw new Error('validation-failed'); }
+      if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('validation-failed');
+      const row = value as Record<string, unknown>;
+      if (!classifyImportRow(table, row, manifest.rulings?.[table])) { if (excluded) excluded.count++; return; }
+      chunk.push({ line, value: row });
+      if (chunk.length >= batchSize) await add();
+    });
+    await add();
+    while (runs.length > 32) {
+      const merged: string[] = [];
+      for (let offset = 0; offset < runs.length; offset += 32) {
+        const group = runs.slice(offset, offset + 32);
+        const path = join(directory, `merge-${sequence++}`);
+        const handle = await open(path, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600);
+        try { for await (const row of mergeRuns(group, table, orderColumns)) await handle.write(`${row.line}\n`); }
+        finally { await handle.close(); }
+        merged.push(path);
+        await Promise.all(group.map(run => unlink(run)));
+      }
+      runs = merged;
+    }
+    yield* mergeRuns(runs, table, orderColumns);
+  } finally { await rm(directory, { recursive: true, force: true }); }
+}
+
+async function* streamQueryRows(
+  pool: ConnectionPool,
+  statement: string,
+  owner: string,
+): AsyncGenerator<Record<string, unknown>> {
+  const request = pool.request();
+  request.stream = true;
+  request.input('owner', sql.UniqueIdentifier, owner);
+  const queued: Record<string, unknown>[] = [];
+  let failure: unknown;
+  let ended = false;
+  let notify: (() => void) | undefined;
+  const wake = () => { notify?.(); notify = undefined; };
+  request.on('row', (row: Record<string, unknown>) => {
+    queued.push(row);
+    if (queued.length >= 32) request.pause();
+    wake();
+  });
+  request.on('error', error => { failure = error; ended = true; wake(); });
+  request.on('done', () => { ended = true; wake(); });
+  const pending = request.query(statement).catch(error => { failure = error; ended = true; wake(); });
+  try {
+    while (!ended || queued.length) {
+      if (queued.length) {
+        yield queued.shift()!;
+        if (queued.length < 16) request.resume();
+      } else await new Promise<void>(resolve => { notify = resolve; if (ended || queued.length) wake(); });
+    }
+    if (failure) throw failure;
+    await pending;
+  } finally {
+    if (!ended) request.cancel();
+    await pending;
+  }
+}
+
+function keyOrderSql(table: DailyTable, columns = dailyTables[table].keys): string {
+  return columns.flatMap(column => {
+    const metadata = textKeyMetadata(table, column);
+    return metadata?.type === 'text' ? [`[${column}]`, `DATALENGTH([${column}])`] : [`[${column}]`];
+  }).join(', ');
+}
+
+const NUTRIENTS = ['energy_kcal', 'protein_grams', 'carbohydrates_grams', 'fat_grams', 'fiber_grams'] as const;
+
+function sourceDateRanges(table: DailyTable): Map<string, { min: string; max: string }> {
+  return new Map(dailyTables[table].columns.filter(column => columnTypes[table][column] === 'date')
+    .map(column => [column, { min: '', max: '' }]));
+}
+
+function updateDateRanges(table: DailyTable, ranges: Map<string, { min: string; max: string }>, row: Record<string, unknown>): void {
+  for (const [column, range] of ranges) {
+    const value = canonicalValue(table, column, row[column]);
+    if (typeof value !== 'string') continue;
+    if (!range.min || value < range.min) range.min = value;
+    if (!range.max || value > range.max) range.max = value;
+  }
+}
+
+function rangesDigest(source: Map<string, { min: string; max: string }>, target: Map<string, { min: string; max: string }>): string | null {
+  if (!source.size) return null;
+  const encode = (ranges: Map<string, { min: string; max: string }>) =>
+    [...ranges].map(([column, range]) => [column, range.min, range.max]);
+  return sha256(JSON.stringify([encode(source), encode(target)])).slice(0, 24);
+}
+
+interface MealTotal { date: unknown; count: number; nutrients: { present: number; zero: number; sum: number }[] }
+
+function addMeal(total: MealTotal, row: Record<string, unknown>): void {
+  total.count++;
+  NUTRIENTS.forEach((column, index) => {
+    const value = row[column];
+    if (value === null || value === undefined) return;
+    total.nutrients[index]!.present++;
+    if (Number(value) === 0) total.nutrients[index]!.zero++;
+    total.nutrients[index]!.sum += Number(value);
+  });
+}
+
+function flushMealHash(hash: ReturnType<typeof createHash>, total: MealTotal): void {
+  hash.update(JSON.stringify([
+    total.date,
+    total.count,
+    ...total.nutrients.flatMap(nutrient => [nutrient.present, nutrient.zero, Number(nutrient.sum.toPrecision(12))]),
+  ])).update('\n');
+}
+
+async function sourceMealTotalsDigest(
+  reader: BundleReader,
+  table: DailyTable,
+  manifest: Manifest,
+  batchSize: number,
+  workspace: string,
+): Promise<string> {
+  const hash = createHash('sha256');
+  let current: MealTotal | undefined;
+  for await (const { value } of sortedSourceRows(reader, table, manifest, batchSize, workspace, ['meal_date', 'id'])) {
+    const date = canonicalValue(table, 'meal_date', value.meal_date);
+    if (!current || current.date !== date) {
+      if (current) flushMealHash(hash, current);
+      current = { date, count: 0, nutrients: NUTRIENTS.map(() => ({ present: 0, zero: 0, sum: 0 })) };
+    }
+    addMeal(current, value);
+  }
+  if (current) flushMealHash(hash, current);
+  return hash.digest('hex');
+}
+
+async function targetMealTotalsDigest(pool: ConnectionPool, owner: string): Promise<string> {
+  const aggregation = `SELECT [meal_date], COUNT_BIG(*) AS meal_count,
+    ${NUTRIENTS.map((column, index) => `COUNT([${column}]) AS present${index}, SUM(CASE WHEN [${column}] = 0 THEN CONVERT(bigint,1) ELSE CONVERT(bigint,0) END) AS zero${index}, SUM([${column}]) AS sum${index}`).join(', ')}
+    FROM daily.[nutrition_meals] WHERE owner_object_id = @owner GROUP BY [meal_date] ORDER BY [meal_date];`;
+  const hash = createHash('sha256');
+  for await (const row of streamQueryRows(pool, aggregation, owner)) {
+    const nutrients = NUTRIENTS.map((_, index) => [
+    Number(row[`present${index}`]), Number(row[`zero${index}`]),
+    Number(Number(row[`sum${index}`] ?? 0).toPrecision(12)),
+    ]).flat();
+    const date = row.meal_date instanceof Date ? row.meal_date.toISOString().slice(0, 10) : row.meal_date ?? null;
+    hash.update(JSON.stringify([date, Number(row.meal_count), ...nutrients])).update('\n');
+  }
+  return hash.digest('hex');
+}
+
+async function reconcileTable(
+  pool: ConnectionPool,
+  owner: string,
+  context: ImportContext,
+  table: DailyTable,
+  batchSize: number,
+  updateReport: (report: MigrationTableReport) => void,
+): Promise<boolean> {
+  const tableReport = makeTableReport();
+  updateReport(tableReport);
+  const sourceHash = createHash('sha256');
+  const targetHash = createHash('sha256');
+  const sourceRanges = sourceDateRanges(table), targetRanges = sourceDateRanges(table);
+  const excluded = { count: 0 };
+  const sourceRows = sortedSourceRows(context.reader, table, context.manifest, batchSize,
+    context.workspace, dailyTables[table].keys, excluded)[Symbol.asyncIterator]();
+  const columns = dailyTables[table].columns.map(column => `[${column}]`).join(', ');
+  const orderBy = keyOrderSql(table);
+  const statement = `SELECT ${columns} FROM daily.[${table}] WHERE owner_object_id = @owner${orderBy ? ` ORDER BY ${orderBy}` : ''};`;
+  const targetRows = streamQueryRows(pool, statement, owner)[Symbol.asyncIterator]();
+  let source = await sourceRows.next(), target = await targetRows.next();
+  tableReport.excludedRows = excluded.count;
+  try {
+    while (!source.done || !target.done) {
+      if (source.done) {
+        const row = target.value!;
+        tableReport.extra++;
+        targetHash.update(canonicalRow(table, row)).update('\n');
+        updateDateRanges(table, targetRanges, row);
+        target = await targetRows.next();
+        updateReport(tableReport);
+        continue;
+      }
+      const imported = projectRow(table, source.value!.value).values;
+      if (target.done) {
+        tableReport.missing++;
+        tableReport.sourceRows++; tableReport.importableRows++;
+        sourceHash.update(canonicalRow(table, imported)).update('\n');
+        updateDateRanges(table, sourceRanges, imported);
+        source = await sourceRows.next();
+        updateReport(tableReport);
+        continue;
+      }
+      const currentTarget = target.value!;
+      const order = compareRows(table, imported, currentTarget);
+      const sourceCanonical = canonicalRow(table, imported);
+      const targetCanonical = canonicalRow(table, currentTarget);
+      if (order <= 0) {
+        tableReport.sourceRows++; tableReport.importableRows++;
+        sourceHash.update(sourceCanonical).update('\n');
+        updateDateRanges(table, sourceRanges, imported);
+      }
+      if (order >= 0) {
+        targetHash.update(targetCanonical).update('\n');
+        updateDateRanges(table, targetRanges, currentTarget);
+      }
+      if (order < 0) tableReport.missing++;
+      else if (order > 0) tableReport.extra++;
+      else if (sourceCanonical !== targetCanonical) tableReport.different++;
+      if (order <= 0) source = await sourceRows.next();
+      if (order >= 0) target = await targetRows.next();
+      updateReport(tableReport);
+    }
+  } finally {
+    await Promise.all([sourceRows.return?.(undefined), targetRows.return?.(undefined)]);
+  }
+  tableReport.excludedRows = excluded.count;
+  tableReport.sourceSha256 = sourceHash.digest('hex');
+  tableReport.targetSha256 = targetHash.digest('hex');
+  tableReport.dateRangeDigest = rangesDigest(sourceRanges, targetRanges);
+  let mealTotalsDiffer = false;
+  if (table === 'nutrition_meals') {
+    const sourceDigest = await sourceMealTotalsDigest(context.reader, table, context.manifest, batchSize, context.workspace);
+    const targetDigest = await targetMealTotalsDigest(pool, owner);
+    tableReport.mealTotalsDigest = sha256(`${sourceDigest}\0${targetDigest}`).slice(0, 24);
+    mealTotalsDiffer = sourceDigest !== targetDigest;
+  }
+  updateReport(tableReport);
+  return mealTotalsDiffer || tableReport.missing > 0 || tableReport.extra > 0 || tableReport.different > 0;
+}
+
 async function loadProgressReport(
   pool: ConnectionPool,
   table: DailyTable,
@@ -475,20 +799,23 @@ async function loadProgressReport(
     const importable = sourceRows.filter(row => classifyImportRow(table, row.value, manifest.rulings?.[table]));
     const excluded = sourceRows.length - importable.length;
     for (const row of importable) sourceHash.update(canonicalRow(table, projectRow(table, row.value).values)).update('\n');
-    if (index < tableState.batches.length) {
+    if (execute && index < tableState.batches.length) {
       const saved = tableState.batches[index]!;
       if (saved.digest !== digest) throw new Error('state-bundle-mismatch');
-      addReportCounts(report, saved);
-      return;
+      if (saved.conflicts === 0) {
+        addReportCounts(report, saved);
+        return;
+      }
     }
-    if (tableState.complete) throw new Error('state-invalid');
+    if (tableState.complete && index >= tableState.batches.length) throw new Error('state-invalid');
     const counts = await processBatch(pool, table, owner, importable.map(row => projectRow(table, row.value)), execute);
     counts.sourceRows = sourceRows.length;
     counts.importableRows = importable.length;
     counts.excludedRows = excluded;
     addReportCounts(report, counts);
     if (execute) {
-      tableState.batches.push({ ...counts, digest });
+      if (index < tableState.batches.length) tableState.batches[index] = { ...counts, digest };
+      else tableState.batches.push({ ...counts, digest });
       checkpointStore.tables[table] = tableState;
       await writeCheckpoint(stateDirectory, checkpointStore);
     }
@@ -505,7 +832,7 @@ async function loadProgressReport(
   report.sourceSha256 = sourceHash.digest('hex');
 }
 
-async function createImportContext(bundle: string): Promise<{ workspace: string; manifest: Manifest; digest: string; reader: BundleReader }> {
+async function createImportContext(bundle: string): Promise<ImportContext> {
   const workspace = await mkdtemp(join(tmpdir(), 'daily-import-validation-'));
   try {
     const manifest = await preflight(bundle, workspace);
@@ -521,15 +848,18 @@ export async function importBundle(
   configuredOwner = loadAuthConfig(process.env).ownerObjectId,
 ): Promise<MigrationReport> {
   validateOptions(options.bundle, options.ownerObjectId, options.batchSize);
-  const owner = assertConfiguredOwner(options.ownerObjectId, configuredOwner);
   const tables = selectedTables(options.tables);
   const context = await createImportContext(options.bundle);
   let state: Awaited<ReturnType<typeof acquireState>> | undefined;
   const report: MigrationReport = {
-    formatVersion: 1, operation: 'import', status: 'complete', bundleDigest: context.digest, tables: {}, excludedTables: EXCLUDED_TABLES.length,
+    formatVersion: 1, operation: 'import', status: 'complete', bundleDigest: context.digest, tables: {},
+    excludedTables: EXCLUDED_TABLES.length,
+    excludedRows: EXCLUDED_TABLES.reduce((count, table) => count + (context.manifest.tables[table]?.rowCount ?? 0), 0),
   };
   try {
+    const owner = assertConfiguredOwner(options.ownerObjectId, configuredOwner);
     state = await acquireState(options.stateDir, context.digest, options.batchSize ?? 500);
+    if (!pool.connected) await pool.connect();
     await verifyLiveSchema(pool, tables);
     for (const table of tables) {
       const tableReport = makeTableReport();
@@ -555,70 +885,22 @@ export async function reconcileBundle(
   configuredOwner = loadAuthConfig(process.env).ownerObjectId,
 ): Promise<MigrationReport> {
   validateOptions(options.bundle, options.ownerObjectId, options.batchSize);
-  const owner = assertConfiguredOwner(options.ownerObjectId, configuredOwner);
   const tables = selectedTables(options.tables);
   const context = await createImportContext(options.bundle);
   const report: MigrationReport = {
-    formatVersion: 1, operation: 'reconcile', status: 'complete', bundleDigest: context.digest, tables: {}, excludedTables: EXCLUDED_TABLES.length,
+    formatVersion: 1, operation: 'reconcile', status: 'complete', bundleDigest: context.digest, tables: {},
+    excludedTables: EXCLUDED_TABLES.length,
+    excludedRows: EXCLUDED_TABLES.reduce((count, table) => count + (context.manifest.tables[table]?.rowCount ?? 0), 0),
   };
   try {
+    const owner = assertConfiguredOwner(options.ownerObjectId, configuredOwner);
+    if (!pool.connected) await pool.connect();
     await verifyLiveSchema(pool, tables);
     for (const table of tables) {
-      const tableReport = makeTableReport();
-      report.tables[table] = tableReport;
-      const rowHashes = new Map<string, string>();
-      const sourceHash = createHash('sha256');
-      await streamTable(context.reader, table, context.manifest, options.batchSize ?? 500, async rows => {
-        for (const row of rows) {
-          if (!classifyImportRow(table, row.value, context.manifest.rulings?.[table])) {
-            tableReport.excludedRows++;
-            continue;
-          }
-          tableReport.sourceRows++;
-          tableReport.importableRows++;
-          const canonical = canonicalRow(table, projectRow(table, row.value).values);
-          sourceHash.update(canonical).update('\n');
-          const key = JSON.stringify(dailyTables[table].keys.map(column => canonicalValue(table, column, row.value[column])));
-          rowHashes.set(key, canonical);
-        }
-      });
-      tableReport.sourceSha256 = sourceHash.digest('hex');
-      const targetHash = createHash('sha256');
-      const result = await pool.request().input('owner', sql.UniqueIdentifier, owner).query<Record<string, unknown>>(
-        `SELECT ${dailyTables[table].columns.map(column => `[${column}]`).join(', ')}
-         FROM daily.[${table}] WHERE owner_object_id = @owner;`,
-      );
-      for (const row of result.recordset) {
-        const key = JSON.stringify(dailyTables[table].keys.map(column => canonicalValue(table, column, row[column])));
-        const canonical = canonicalRow(table, row);
-        targetHash.update(canonical).update('\n');
-        const source = rowHashes.get(key);
-        if (source === undefined) tableReport.extra++;
-        else if (source !== canonical) tableReport.different++;
-        else rowHashes.delete(key);
-      }
-      tableReport.missing = rowHashes.size;
-      tableReport.targetSha256 = targetHash.digest('hex');
-      if (tableReport.missing || tableReport.extra || tableReport.different) report.status = 'differences';
-      const dates = dailyTables[table].columns.filter(column => column.endsWith('_date') || column.endsWith('_on'));
-      if (dates.length) {
-        const boundaries = dates.flatMap(column => {
-          const values = [...rowHashes.values()].map(value => JSON.parse(value) as [string, unknown][]);
-          return values.flatMap(valuesForRow => {
-            const value = valuesForRow.find(([name]) => name === column)?.[1];
-            return typeof value === 'string' && /^\d{4}-\d\d-\d\d$/.test(value) ? [value] : [];
-          });
-        });
-        tableReport.dateRangeDigest = sha256(boundaries.sort().join('\0')).slice(0, 24);
-      }
-      if (table === 'nutrition_meals') {
-        const totals = result.recordset.map(row => [
-          canonicalValue(table, 'meal_date', row.meal_date),
-          ...['energy_kcal', 'protein_grams', 'carbohydrates_grams', 'fat_grams', 'fiber_grams']
-            .map(column => canonicalValue(table, column, row[column])),
-        ]);
-        tableReport.mealTotalsDigest = sha256(JSON.stringify(totals)).slice(0, 24);
-      }
+      const different = await retryTransient(() => reconcileTable(
+        pool, owner, context, table, options.batchSize ?? 500, tableReport => { report.tables[table] = tableReport; },
+      ));
+      if (different) report.status = 'differences';
     }
     return report;
   } catch {

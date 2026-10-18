@@ -5315,21 +5315,30 @@ P8-33 scratch Chromium checks cover the adaptive quality thresholds, compact pho
 The reference lockfile is standalone, outside root workspaces, and contains the prototype's dependencies only. Bundled Three.js/Phosphor notices are retained. Physical/hardware performance, live activity/voice behavior and normal-rate flicker acceptance remain unverified; P8-31 adds no production Three.js dependency.
 ## Daily integration boundary (P12-01)
 
-### Temporary offline migration tooling (18 October 2026; P12-22)
+### Temporary offline Daily migration tooling (18 October 2026; P12-22 / P12-27)
 
 `apps/backend/src/daily/migration/` contains the removable export-bundle
 manifest/reader, table decisions, validator, deterministic synthetic generator
-and standalone CLI. It uses existing backend TypeScript build conventions and
-Node built-ins, with no new dependency, SQL access or network access.
-Production server entrypoints must not import it; it is outside the production
+standalone CLI, resumable importer and read-only reconciler. It uses existing
+backend TypeScript, the configured backend SQL connection and Node built-ins,
+with no new dependency or source/network access. Only import/reconcile connect
+to the target SQL database; generation and validation remain offline.
+Production server entrypoints must not import it. It is outside the production
 request path and does not change Daily reads/writes or migrations.
 Validation streams private bytes with bounded buffers and disk-backed digest
 indexes, emits value-free reports, and blocks unruled/unclassified mixed-source
 payloads. Source owner emails never select an identity; legacy credentials
-never become active credentials. Real exports remain encrypted, owner-only and
-outside repositories, agents and GitHub artifacts. This is synthetic evidence,
-not live-schema or data parity. P12-27 reuses the decisions/reader/generator;
-P12-19 removes this temporary directory following its README. See the
+never become active credentials. Import resolves the explicit CLI owner through
+the server's configured Daily-owner boundary, checks the live column types
+against the registry, writes each batch transactionally, and resumes from
+atomic count/digest-only checkpoints outside the repository. It skips identical
+rows and never overwrites conflicts. Reconciliation streams owner-scoped rows
+in key order and reports canonical checksums, counts and truncated digests only.
+Real exports, state, reports and temporary sort data remain private and outside
+repositories, agents and GitHub artifacts. Synthetic tests do not establish
+live-schema/data parity; no real import or reconciliation has been run. P12-19
+removes this temporary directory and its related SQL test following its README.
+See the
 [bundle format](daily-migration-bundle.md) and
 [owner runbook](daily-migration-runbook.md).
 

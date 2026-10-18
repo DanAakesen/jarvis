@@ -46,6 +46,34 @@ encrypted and owner-only outside the repository, agent environments and
 GitHub artifacts. Synthetic validation is not private migration acceptance.
 Refs DanAakesen/jarvis#717 and DanAakesen/jarvis#721.
 
+## Resumable Daily import and digest-only reconciliation (18 October 2026; P12-27 / #982)
+
+The temporary importer reuses the P12-22 bundle validator, registry, reader and
+table decisions. It validates the complete bundle before connecting to the
+target, requires the explicit owner GUID to resolve to the backend-configured
+Daily owner, and verifies live source-column types against the registry.
+Parent-before-child order and owner-composite keys remain authoritative.
+
+Never overwrite an existing row. Insert an absent key, skip a canonical
+column-for-column match, and count a mismatch as a conflict while continuing
+through the table. Conflict exit code 3 is distinct from validation/runtime
+failure and is returned only after the digest-only report is written. Each
+executed batch commits in one transaction. Atomic checkpoints outside the
+repository retain only the manifest digest, batch size, counts and digests;
+reapplying a committed-but-uncheckpointed batch is safe under these row
+semantics.
+
+Dry runs classify every selected importable row without target writes.
+Reconciliation is read-only and streams canonical source and owner-scoped
+target rows in key order, reporting missing/extra/different counts and hashes.
+Date-range and meal-total evidence is represented by digests; meal aggregation
+keeps NULL distinct from zero. Reports and CLI output contain known table
+names, counts, hashes and digests only, never row values, free text or raw keys.
+
+Only synthetic data is used by tests. No real export, ruling, credential,
+production target or protected workflow has been used; private import and
+reconciliation remain owner-only gates under #717/#721.
+
 ## Preserve attention dismissals across backend restarts (18 October 2026; P9-123 / #962)
 
 Policy-blocked reasons are de-duplicated transactionally against task event

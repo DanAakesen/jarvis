@@ -1,7 +1,9 @@
-# Daily migration owner runbook (P12-22)
+# Daily migration owner runbook (P12-22 / P12-27)
 
-This prepares and validates an export; it does not import records, activate
-Daily, or close the private export/import gates.
+This covers bundle preparation, validation, import and reconciliation. The
+commands and tests use synthetic data only. No real records have been imported
+or reconciled; this does not activate Daily or close the private export/import
+gates.
 Refs DanAakesen/jarvis#717 and DanAakesen/jarvis#721.
 Only synthetic bundles may enter a coding-agent environment.
 
@@ -62,10 +64,11 @@ Only synthetic bundles may enter a coding-agent environment.
    node apps/backend/dist/daily/migration/cli.js --help
    ```
 
-   **Expected:** TypeScript compilation succeeds and help lists `generate`
-   and `validate`. No server, database or network operation is started by
-   either migration command. Dependency installation/build preparation is
-   separate from offline validation.
+   **Expected:** TypeScript compilation succeeds and help lists `generate`,
+   `validate`, `import` and `reconcile`. Generation and validation are offline.
+   Import/reconcile use only the target SQL connection from existing backend
+   configuration. Dependency installation/build preparation is separate from
+   offline validation.
 
 6. **Prove the setup with synthetic data first.** These paths are disposable
    synthetic examples, not locations for a real export:
@@ -121,7 +124,75 @@ Only synthetic bundles may enter a coding-agent environment.
    backup location and unresolved differences. Never put actual paths,
    records, rulings or exports into public acceptance notes.
    **Expected:** a recoverable private evidence package. Real source-schema
-   parity, source/provider/device behavior, resumable import/reconciliation
-   (P12-27), final delta, rollback and cutover remain unverified here.
-   The actual export (#717) and import (#721) require the owner's access.
-   Passing synthetic validation closes neither issue.
+   parity, source/provider/device behavior, final delta, rollback and cutover
+   remain unverified here. The actual export (#717) and import (#721) require
+   the owner's access. Passing synthetic validation closes neither issue.
+
+10. **Prove import and reconciliation with synthetic SQL data.** The Database
+   CI job creates an isolated loopback SQL database, applies migrations 0041
+   through 0050, and exercises a synthetic bundle. Do not point this step at
+   production or use a private export in CI. The tests cover dry run,
+   idempotency, conflicts, resume, another-owner isolation, padded/max-length
+   keys, signed 64-bit values, NULL nutrients, mixed-source exclusions and
+   digest-only reconciliation.
+   **Expected:** the Database CI integration test passes on its exact tested
+   revision. This demonstrates tooling behavior only, not production access or
+   source parity.
+
+11. **Owner-only — private dry run after the protected workflow gate.** Only
+   after the owner has supplied the private export, made the rulings, and
+   protected workflow #721 releases this stage, run the importer without
+   `--execute`. Use the existing backend SQL environment configuration; never
+   provide credentials on the command line. The owner GUID is mandatory and
+   must match the server's configured Daily owner. Optional `--tables`
+   accepts comma-separated table names and retains dependency order.
+
+   ```sh
+   node apps/backend/dist/daily/migration/cli.js import --bundle /PRIVATE/EXPORT --owner-object-id OWNER_GUID --state-dir /PRIVATE/STATE --batch-size 500 --report /PRIVATE/DRY-RUN-REPORT.json
+   ```
+
+   The state directory must be absolute, private, outside the repository and
+   outside the bundle. Resume only with the same immutable bundle and batch
+   size. Reports and state contain counts/digests only; store them outside the
+   repository, bundle and state directory.
+   **Expected:** a digest-only report classifying each selected row as
+   `wouldInsert`, `wouldSkip` or `wouldConflict`, with no SQL writes. A
+   conflict returns exit code 3. A dry-run pass is not authorization to write.
+
+12. **Owner-only — protected execution.** Execute only through the approved
+   protected workflow after its owner-only checks pass. The direct CLI option
+   below documents the interface; it does not replace or authorize #721:
+
+   ```sh
+   node apps/backend/dist/daily/migration/cli.js import --bundle /PRIVATE/EXPORT --owner-object-id OWNER_GUID --state-dir /PRIVATE/STATE --batch-size 500 --execute --report /PRIVATE/IMPORT-REPORT.json
+   ```
+
+   Each batch is its own transaction. Identical rows are skipped. A different
+   existing row is not overwritten; processing continues through that table,
+   checkpoints are preserved, and exit code 3 reports conflicts. After a
+   transient failure, resume from the same private state directory only after
+   verifying the process lock is stale. Do not remove a live lock.
+   **Expected:** a digest-only report of committed batch counts, conflicts and
+   checksums. The command never prints row content or credentials.
+
+13. **Owner-only — reconcile read-only.** After protected execution, use the
+   same immutable bundle and owner. This is also a standalone read-only check:
+
+   ```sh
+   node apps/backend/dist/daily/migration/cli.js reconcile --bundle /PRIVATE/EXPORT --owner-object-id OWNER_GUID --batch-size 500 --report /PRIVATE/RECONCILE-REPORT.json
+   ```
+
+   **Expected:** zero missing, extra and different rows; matching canonical
+   source/target hashes; date-range and meals per-day-total digests. NULL
+   nutrients remain distinct from zero. Any difference exits nonzero and
+   blocks acceptance/cutover. Reports contain only table names, counts, hashes
+   and digests, never row values, free text, dates or raw keys.
+
+14. **Owner-only — retain evidence and stop.** Privately retain the bundle and
+   manifest hashes, validation/import/reconcile reports, state/checkpoint
+   directory, owner rulings, protected workflow evidence and backup/recovery
+   notes. Keep every item outside this repository, agent environments and
+   GitHub artifacts.
+   **Expected:** no real import is claimed by this issue. No real data,
+   export, ruling, credential or report was used or produced here. Final delta,
+   rollback and cutover remain separate owner-only gates.

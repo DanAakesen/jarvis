@@ -2,9 +2,12 @@
 
 Remove at **P12-19**, including compiled counterparts in `apps/backend/dist/daily/migration/`.
 Files to remove: `README.md`, `cli.ts`, `decisions.ts`, `manifest.ts`, `io.ts`,
-`validate.ts`, `generate.ts`, `migration.test.ts`.
-No production entrypoint imports this directory. No SQL, network, deployment,
-source export/import, activation, credentials or new dependencies.
+`validate.ts`, `generate.ts`, `importer.ts`, `migration.test.ts`,
+`importer.test.ts`, and `apps/backend/src/database/daily-migration.integration.test.ts`.
+No production entrypoint imports this directory. Import/reconcile connect only to
+the configured target SQL database; bundle validation and synthetic generation
+remain offline. No deployment, activation, credentials or new dependencies are
+added.
 
 Build with the existing backend build, then run:
 
@@ -17,7 +20,9 @@ node apps/backend/dist/daily/migration/cli.js validate --bundle ./SYNTHETIC_BUND
 Only synthetic examples belong in an agent environment. Real bundles/reports
 must stay in owner-controlled encrypted private storage, outside this repository,
 agent environments and GitHub artifacts. Validation does not accept #717/#721.
-The reusable reader and decision metadata are for P12-27.
+`import` and `reconcile` reuse this reader and decision metadata. Real imports
+remain gated on the owner's private export and rulings plus protected workflow
+#721; this CLI does not supply or replace that workflow.
 
 ## Contract and conservative classification
 
@@ -126,3 +131,83 @@ the full 64-character SHA-256.
 Existing report-file symlinks are refused. Warnings are not private-source
 schema reconciliation or proof of importability; this tool does not validate
 every downstream business invariant or SQL nullability/default/CHECK.
+
+## Import and reconciliation (P12-27)
+
+The importer first validates the complete bundle, checks the explicit owner
+against the backend's configured Daily owner, and checks target column types
+against the registry. It connects only to the configured target SQL database;
+credentials are not CLI arguments. `--tables` accepts a comma-separated subset
+and is always reordered by the registry's parent-before-child order.
+
+An import requires an absolute `--state-dir` outside this repository. Keep it
+private and outside the bundle. Its atomic checkpoint contains only the
+manifest digest, batch size, counts and batch digests. Resume with the same
+bundle, state directory and batch size. A stale process lock is recovered only
+after its recorded process no longer exists. Never remove a live lock.
+Each executing batch is one transaction. Identical existing rows are skipped,
+different rows are not overwritten, and conflicts are counted while later rows
+continue. Exit code 3 means at least one conflict, including in a dry run.
+
+Without `--execute`, every selected importable row is read and classified as
+`wouldInsert`, `wouldSkip` or `wouldConflict`; no target row is written. The
+digest-only JSON report is printed to standard output, or atomically written to
+`--report`. Keep reports outside the repository, bundle and state directory.
+Reports contain known table names, counts, hashes and truncated digests only.
+They contain no row values, free text or raw keys.
+
+```sh
+node apps/backend/dist/daily/migration/cli.js import --bundle /tmp/daily-synthetic --owner-object-id OWNER_GUID --state-dir /tmp/daily-import-state --batch-size 500 --tables health_workouts,nutrition_meals --report /tmp/daily-import-report.json
+```
+
+**Expected:** a digest-only report with `status: complete` and per-table
+`wouldInsert` counts for a fresh synthetic target. The command exits 3 for any
+conflict and does not overwrite it. The actual configured owner ID and SQL
+connection must be available through the existing backend configuration, never
+as command-line credentials.
+
+`reconcile` is standalone and read-only. It validates the complete bundle,
+streams the source and owner-scoped target in key order, and reports source and
+target canonical checksums, missing/extra/different counts, date-range digests,
+and the meals per-day totals digest. Meal aggregates distinguish NULL nutrients
+from zero. Any difference exits nonzero.
+
+```sh
+node apps/backend/dist/daily/migration/cli.js reconcile --bundle /tmp/daily-synthetic --owner-object-id OWNER_GUID --batch-size 500 --tables health_workouts,nutrition_meals --report /tmp/daily-reconcile-report.json
+```
+
+**Expected:** `status: complete`, zero missing/extra/different rows, matching
+canonical source/target hashes, and a digest for meal totals. Reports expose no
+meal amounts or dates.
+
+**Owner-only — private dry run.** Only after the owner has supplied and validated
+the private export, recorded rulings, and the protected workflow in #721 has
+released this stage, run `import` without `--execute` against the configured
+Daily target. Keep the bundle, state directory and report in protected private
+storage.
+
+**Expected:** a digest-only classification report. A dry run makes no target
+writes and is not authorization to execute.
+
+**Owner-only — protected execution.** Execute only through the approved
+protected workflow after its owner-only checks pass:
+
+```sh
+node apps/backend/dist/daily/migration/cli.js import --bundle /PRIVATE/EXPORT --owner-object-id OWNER_GUID --state-dir /PRIVATE/STATE --batch-size 500 --execute --report /PRIVATE/IMPORT-REPORT.json
+```
+
+**Expected:** digest-only batch/table counts and hashes. Exit 3 reports row
+conflicts after the table finishes; other failures stop with a value-free
+diagnostic and preserve committed checkpoints for a safe resume.
+
+**Owner-only — read-only reconciliation.** After the protected execution, run
+`reconcile` on the same immutable bundle and owner-scoped target, writing its
+report only to private storage.
+
+**Expected:** zero missing, extra and different rows and matching checksums and
+meal totals. Any nonzero difference blocks acceptance and cutover; resolve it
+privately and rerun reconciliation.
+
+No private export or ruling has been used here. No real import or
+reconciliation has been run; synthetic unit/database tests are not evidence of
+source parity, owner approval, protected-workflow completion or cutover.

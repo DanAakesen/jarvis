@@ -174,8 +174,9 @@ private report directory before retiring the host/storage.
 The bundle must remain immutable throughout validation and later import.
 
 The removable implementation is in
-`apps/backend/src/daily/migration/`. Its decisions, reader and generator are
-reusable by P12-27's resumable importer/reconciliation report. No importer is
-included, and production entrypoints must not import this directory. Remove
-it at P12-19 following its README. See the
+`apps/backend/src/daily/migration/`. Its decisions, reader, validator, generator,
+resumable importer and reconciliation report are temporary and outside the
+production request path. Production entrypoints must not import this directory.
+Real import/reconciliation remains owner-only and has not been run. Remove the
+directory and its related SQL test at P12-19 following its README. See the
 [owner runbook](daily-migration-runbook.md) for commands and evidence gates.
