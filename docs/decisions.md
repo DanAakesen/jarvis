@@ -1,5 +1,41 @@
 # Decisions
 
+## Discover vault tasks in source notes using native Tasks markers (18 October 2026; P13-18 / #999)
+
+Read safe Markdown notes under `Personal/` and `Work/` recursively, including
+their inboxes, and the existing root `Task.md` or `Tasks.md` dashboard.
+Exclude Archive path segments (case-insensitive), hidden paths and unsafe note
+paths. Preserve ambiguous-root detection, but allow scoped notes without a root
+dashboard. This supersedes the root-only read scope of P13-07.
+
+Treat native `⏫` as P1 - High alongside legacy `priority:: P1 - High` and
+`priority: P1 - High`. `🔼` is P2 - Medium; no priority is P3 - Normal.
+Neither those values nor `🔽`/`⏬` qualifies for findings or reminders.
+Assumption: `🔺` is outside the supported priority scale and is not high.
+Parse `🕒 HH:mm` independently of its position around `📅 YYYY-MM-DD`,
+using Copenhagen local time. Preserve trailing date/time and legacy due fields;
+date-only tasks remain due at 23:59. Strip clock/time, priority and the existing
+Tasks metadata emoji and their recognized date, recurrence, ID and
+completion-action payloads from reminder/finding text, and ignore fenced examples.
+
+Share parsed-task caching by vault client, path and tree blob SHA between the
+source and ticker. Bound each scan to 256 files, 4 MiB total content, 256 KiB per
+file and four concurrent reads, retaining the 20-second deadline. Unknown blob
+sizes reserve 256 KiB. A skipped oversized file, cap, failed read or tree/content
+SHA race makes the whole scan unavailable, not empty or partially successful;
+the ticker retains its bounded verification retries and suppression policy.
+Only complete scans replace the cache. Reminder identity stays normalized text
+plus due instant, independent of path, and duplicate facts are collapsed before
+the fact cap, preserving explicit-time eligibility across duplicates.
+The 30-second ticker cadence and existing one-hour reminder lead
+time, flags and release controls are unchanged.
+
+Keep the writer's root-only, add-only "Suggested by Jarvis" behavior unchanged.
+Limitation: suggestion deduplication still checks the root file and durable
+receipts, not all source notes. Widening it would couple writes to scan limits,
+failures and snapshot freshness; defer that write-path change.
+Validation uses synthetic notes only, not private vault content or live delivery.
+
 ## Use one refined button hierarchy across the web app (18 October 2026; P14-03 / #969)
 
 Keep the existing class names and route behavior while making button intent
@@ -38,7 +74,8 @@ system, action-group spacing and confirmation boundaries are unchanged.
 ## Notify only on P1 - High vault tasks (18 October 2026; #996)
 
 Proactive todo findings and reminders are eligible only for open vault tasks
-explicitly marked `priority:: P1 - High` or `priority: P1 - High`. Missing and
+explicitly marked `priority:: P1 - High` or `priority: P1 - High` (extended to
+native `⏫` by P13-18 above). Missing and
 lower priority values are not notification-worthy. Re-check priority at reminder
 delivery; if the vault cannot establish the current priority after bounded
 retries, suppress rather than send an unverified reminder. This reuses the
@@ -90,6 +127,21 @@ encrypted and owner-only outside the repository, agent environments and
 GitHub artifacts. Synthetic validation is not private migration acceptance.
 Refs DanAakesen/jarvis#717 and DanAakesen/jarvis#721.
 
+## Give asynchronous test waits headroom on loaded CI runners (18 October 2026; fix-main)
+
+Web tests such as the attention popover focus return and the workspace pin
+loading recovery failed intermittently in CI at about 1.0 s, the Testing
+Library `asyncUtilTimeout` default, and passed on rerun with no code change.
+Each assertion was about to hold; a loaded runner had stalled the worker for
+longer than the budget. The web test setup now sets `asyncUtilTimeout` to 4 s,
+and Vitest's `testTimeout` is 15 s so that a wait which does fail reports its
+own assertion rather than a generic 5 s test timeout.
+
+No assertion, retry or skip was added or loosened. A wait whose condition never
+holds still fails, after at most 4 s instead of 1 s. This is a unit-test wait
+budget only; it does not change the release, acceptance-evidence or
+worker-start timeouts recorded elsewhere.
+
 ## Preserve attention dismissals across backend restarts (18 October 2026; P9-123 / #962)
 
 Policy-blocked reasons are de-duplicated transactionally against task event
@@ -101,6 +153,28 @@ PC bridge persistence changes only when the status title changes. Startup allows
 two minutes for reconnection before recording offline, and shutdown records
 nothing. Live socket status remains immediate. This separates restart noise from
 real attention changes without hiding an offline bridge indefinitely.
+
+## Draw slim desktop scrollbars and keep glass rings off scrolling surfaces (18 October 2026; fix-main)
+
+`.luminous-glass::before` is a 1px ring drawn at `inset: -1px`. Inside a scrolling
+container that overhang counts as scrollable overflow, so the Notes search results
+and every modal showed vertical and horizontal scrollbars even when their content
+fitted. A glass surface that scrolls now drops the ring (`.knowledge-results` keeps
+a hairline border instead) or stops being the scroller (`.modal` no longer sets
+`overflow`; a card taller than the viewport scrolls with its backdrop).
+
+Chromium and Safari add arrow buttons to the standard thin scrollbar and ignore
+`::-webkit-scrollbar` while `scrollbar-width` or `scrollbar-color` is set. With a
+fine pointer the standard properties are therefore reset and the bar is built from
+its parts: 10px wide, no arrow buttons, transparent track and a pill thumb that
+lights cyan while the main scroll surfaces or the thumb are hovered. Touch screens
+and Firefox keep the standard thin overlay bars. The Notes reader keeps its
+stronger resting thumb, and the deliberately hidden scrollbars (tab strips, job
+tabs, kanban pulse, phone legend) are unchanged. The hovered scroller also sets an
+empty custom property, the documented workaround for Safari not restyling the
+hovered thumb otherwise. `styles.test.tsx` pins the
+approach. Checked in headless Edge before and after, in dark and light themes, and
+with phone emulation; not checked on a physical phone or in Safari.
 
 ## Decide what Dan's approval means on the server, never with a word list (17 October 2026; P11-10 / #894)
 
@@ -5434,3 +5508,40 @@ query as the Proactive page. It is composed only behind the existing
 `JARVIS_PROACTIVE_ENABLED` flag, returns only bounded display fields marked as
 untrusted data, and cannot change item state or authorize actions. Reusing the
 page's query keeps both views consistent and avoids creating a second read model.
+
+## P12-25 — Conditional Daily section availability (18 October 2026)
+
+The owner approved an optional `isAvailable(sources)` predicate on section
+definitions, combined with—not replacing—the existing all-required-sources
+check. This expresses Body & sleep's sleep-OR-metrics-and-catalogue requirement
+without a shared registry or changes to existing sections. Views independently
+check sources. Use a section-local sleep SVG rather than changing the shared
+chart: stacked stages, total-only nights and unknown values need explicit
+semantics, while existing line, grouped-bar and area output stays untouched.
+Keep summaries limited to recorded numeric days/nights, split metric units,
+and label incomplete reads. No backend, contract, write or access-control
+change is part of this decision.
+
+## P12-24 read-only Nutrition inside Daily (18 October 2026; #979)
+
+Use the merged Daily plug-in contract and shared UI rather than a new route,
+registry or nutrition read service. Day totals reconcile with the displayed
+nondeleted meals; optional daily aggregates supply Trend and known neighbouring
+logged dates, not replacement day totals. Keep missing nutrients unknown,
+partial sums labelled as lower bounds, and unlogged chart dates as gaps.
+Compare energy only with the configured resting-minus-deficit baseline and
+explicitly exclude activity; never infer a missing target. Favourites and plans
+are saved definitions, not consumed meals. Logging and corrections remain in
+chat under the existing native approval boundary. The original Daily remains
+canonical; synthetic inspection does not establish live source parity.
+
+## P12-23 — Read-only Daily Workouts (18 October 2026)
+
+Use the merged Daily plug-in, pagination and UI contracts without backend or
+shared-component changes. Continue capped reads in explicit ten-page batches;
+label incomplete totals and do not aggregate unlike or unknown units. Keep the
+selected workout in a section-owned URL parameter, retain the list for Back,
+and gate heart rate and recorded detail independently by capabilities. Render
+the merged `{ id, detail }` result using Data's existing escaped JSON pattern.
+Synthetic-only browser evidence is under `docs/ui/p12-23/`; live original-site
+parity remains unverified and original Daily stays canonical.
