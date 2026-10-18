@@ -1382,3 +1382,16 @@ through the same owner-bound store query as the Proactive page. The tool is
 read-only, returns bounded untrusted finding text, and does not change item state
 or grant action authority. It remains absent when
 `JARVIS_PROACTIVE_ENABLED` is off.
+
+## Daily Body & sleep (18 October 2026; P12-25)
+
+The owner-only Daily page includes a read-only Body & sleep section when sleep
+or both metric sources are exposed. Body browses every recorded metric through
+a searchable catalogue and a native selector, with separate trends and daily
+tables for each unit. Summary figures use only days with numeric observations;
+missing days are not zeroes and partial reads do not establish complete coverage.
+Sleep shows recorded nights, stages and nullable figures, with an inspectable
+night detail. Totals without stages remain explicitly distinct from recorded
+stages. The selected view, metric and night belong in the URL. This extends the
+existing owner-authorised query workflow without new sources, writes, coaching,
+recovery, recomp or TickTick integration; original Daily remains canonical.

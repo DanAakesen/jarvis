@@ -5378,3 +5378,16 @@ query as the Proactive page. It is composed only behind the existing
 `JARVIS_PROACTIVE_ENABLED` flag, returns only bounded display fields marked as
 untrusted data, and cannot change item state or authorize actions. Reusing the
 page's query keeps both views consistent and avoids creating a second read model.
+
+## P12-25 — Conditional Daily section availability (18 October 2026)
+
+The owner approved an optional `isAvailable(sources)` predicate on section
+definitions, combined with—not replacing—the existing all-required-sources
+check. This expresses Body & sleep's sleep-OR-metrics-and-catalogue requirement
+without a shared registry or changes to existing sections. Views independently
+check sources. Use a section-local sleep SVG rather than changing the shared
+chart: stacked stages, total-only nights and unknown values need explicit
+semantics, while existing line, grouped-bar and area output stays untouched.
+Keep summaries limited to recorded numeric days/nights, split metric units,
+and label incomplete reads. No backend, contract, write or access-control
+change is part of this decision.

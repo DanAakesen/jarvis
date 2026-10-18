@@ -6034,3 +6034,22 @@ code-point boundaries, caps the serialized result at 8 KiB and marks it
 in generic tool-call audit records. Raw JSON validation runs before Fastify's
 AJV coercion; failures remain explicit tool refusals/errors. The module exposes
 no item mutation or approval capability.
+
+### Daily Body & sleep section (18 October 2026; P12-25)
+
+`apps/web/src/daily/sections/body-sleep/` is discovered through the existing
+section glob; no registry entry is added. `DailySectionDefinition.isAvailable`
+is an optional predicate evaluated in addition to every `requiredSources`
+entry. Definitions without it retain the previous filtering. Body & sleep uses
+an empty required-source list and accepts `daily.health.sleep` OR both
+`daily.health.metrics` and `daily.health.metric-catalog`; its views independently
+check their own sources and identify unavailable views without querying them.
+
+The section reads the existing owner-only query boundary through
+`daily/ui/useDailyPages`, automatically following cursors up to five pages over
+the shell period. Has-more, cap and errors remain visible; returned records do
+not prove complete source coverage. Section-local URL parameters preserve view,
+metric and night selection. Pure metric/sleep helpers own display names,
+unit separation and observation-only summaries. The sleep chart is local SVG,
+so shared `DailyChart` line, grouped-bar and area rendering is unchanged.
+Backend, contracts, navigation, mutation paths and refresh transport are unchanged.
