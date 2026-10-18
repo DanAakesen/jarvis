@@ -77,6 +77,17 @@ describe('committed SQL manifest', () => {
     expect(down.sql).toContain('cannot roll back while rows exist');
     expect(down.sql).toContain('DROP TABLE dbo.proactive_alerts;');
   });
+  it('creates the owner-scoped proactive reminder store with its pending and sent indexes', async () => {
+    const migration = (await readMigrations()).find(({ name }) => name === '0059_proactive_reminders.sql');
+    expect(migration?.sql).toContain('CREATE TABLE dbo.proactive_reminders');
+    expect(migration?.sql).toContain('title nvarchar(80) NOT NULL');
+    expect(migration?.sql).toContain("N'pending', N'sent', N'cancelled', N'expired', N'failed', N'suppressed'");
+    expect(migration?.sql).toContain('UX_proactive_reminders_owner_key');
+    expect(migration?.sql).toContain('IX_proactive_reminders_owner_state_fire_at');
+    expect(migration?.sql).toContain('IX_proactive_reminders_owner_day_state');
+    expect((await readDownMigration('0059_proactive_reminders.sql')).sql)
+      .toContain('DROP TABLE dbo.proactive_reminders;');
+  });
 
   it('retains durable task submission claims and refuses to erase retry protection on rollback', async () => {
     const migration = (await readMigrations()).find(({ name }) => name === '0052_factory_task_submissions.sql');
@@ -221,6 +232,7 @@ describe('committed SQL manifest', () => {
       '0056_background_job_kind_proactive.sql',
       '0057_proactive_alerts.sql',
       '0058_proactive_todo_receipts.sql',
+      '0059_proactive_reminders.sql',
     ]);
     for (const migration of migrations) await expect(readDownMigration(migration.name)).resolves.toMatchObject({ name: migration.name });
   });
