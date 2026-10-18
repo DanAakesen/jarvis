@@ -555,11 +555,12 @@ unavailable, including after backend restart.
 
 Jarvis writes bounded text notifications to the Now activity feed. Gated actions appear as browser approval requests with Approve and Reject controls and normally expire after five minutes. Internal food-review cards explicitly expire after two minutes to keep the whole operation inside the hosting request limit; the visible expiry matches persistence and cancellation. Unknown, replayed, rejected, cancelled, expired, or unverified responses never run the action. A pending approval is announced to an active browser voice session; the authenticated Now feed remains the approval channel.
 
-P13-02 adds an optional, default-off web push opt-in for a visible generic alert
-that links to a durable owner-protected item. Notifications never approve an
-action or carry sensitive item text. Opening an item requires the usual
-authenticated session; after sign-in, Jarvis returns to that same-origin item
-path. Provider acceptance is not proof that a phone displayed the notification.
+P13-02 adds an optional web push opt-in, on in production since P13-03, for a
+visible generic alert that links to a durable owner-protected item.
+Notifications never approve an action or carry sensitive item text. Opening an
+item requires the usual authenticated session; after sign-in, Jarvis returns to
+that same-origin item path. Provider acceptance is not proof that a phone
+displayed the notification.
 
 Manual gated actions—including a merge initiated through GitHub tools, deletion, sending mail, calendar changes, repository creation, destructive or externally consequential computer use outside the browser, and anything that spends money—always require Dan's confirmation. The automatic project-policy merge under **Complete without deployment** is distinct: selecting that policy is approval, and its automatic merge asks for no additional confirmation or message. Other gated actions fail closed if Jarvis approval is unavailable or expires. Provider credentials remain server-side; notification content, audio, tokens, and images are not written to logs, task events, or errors.
 
@@ -982,10 +983,11 @@ Dan decided that GitHub issues are the single backlog. When Dan asks Jarvis to c
 Web Push is an opt-in visible alert for a durable, owner-protected item; it
 carries no private details, performs no silent work and never approves an
 action. The backend defaults off and registers no push routes unless
-`JARVIS_PUSH_ENABLED` is exactly `true`; this milestone does not enable it. The
-user-triggered test is not proactive delivery. Teams is not a delivery option.
-Real iPhone delivery remains unproven until separately observed on the installed
-Home Screen app.
+`JARVIS_PUSH_ENABLED` is exactly `true`; production has set it since P13-03
+(18 October 2026), so milestone 1 is live: Notifications in Settings can turn on
+push and send a test. The user-triggered test is not proactive delivery. Teams is
+not a delivery option. Real iPhone delivery remains unproven until separately
+observed on the installed Home Screen app.
 
 ## Daily migration (approved P12)
 

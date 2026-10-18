@@ -1,11 +1,39 @@
 # Agent context
 
+## Web Push is on in production (P13-03; 18 October 2026)
+
+Dan switched Web Push milestone 1 on after the P13-01 backend and the P13-02 web
+client shipped dark. Two lines do it, and the code defaults stay off:
+
+- Backend: `infra/main.bicep` sets `JARVIS_PUSH_ENABLED` to `'true'` in the
+  backend container app's `env`, beside `STATIC_WEB_APP_ORIGIN`.
+- Web: the web job's "Load infrastructure outputs" step in
+  `.github/workflows/deploy.yml` writes `VITE_PUSH_ENABLED=true` to
+  `$GITHUB_ENV` beside `VITE_BACKEND_URL`, so the production build includes the
+  Notifications section and worker.
+
+`apps/backend/src/push/enabled-switch.test.ts` pins both values and fails if any
+other workflow, Dockerfile, package file, web config or Bicep/parameter file
+names either switch, so changing a gate is a reviewed edit to those two files
+and to the pin.
+
+To switch push off, revert the whole P13-03 change, which removes the two gate
+lines and the pin test together, or set both values to `false` and update the pin
+test in the same commit. Reverting only the two lines fails the pin test in CI
+before Deploy can run. Once Deploy has run, the backend registers no push routes,
+so nothing can send, and the web build drops the Notifications section and worker
+registration. The VAPID key pair and stored subscriptions stay in SQL and are
+reused if push is switched on again. No secret, identity or resource is involved.
+
+CI proves the wiring only. Delivery to an iPhone is established by Dan's device
+test on the installed Home Screen app (iOS 16.4 or newer), not by any check here.
+
 ## P13-01 Web Push backend (17 October 2026)
 
 `JARVIS_PUSH_ENABLED` enables the authenticated Web Push backend only when its
 value is exactly `true`; unset and all other values leave routes unregistered
-and avoid push-store/database/provider work. Do not set this flag in deployment,
-workflows or infrastructure as part of P13-01. The VAPID private key stays in
+and avoid push-store/database/provider work. P13-01 itself set no deployment
+value; P13-03 (above) sets it in production. The VAPID private key stays in
 server-side SQL; routes expose only its public half, and test push content is
 generic. No Teams delivery path exists. The user-started test is not subject to
 quiet hours; any future system-started delivery must enforce 22:00–07:00
@@ -1044,13 +1072,14 @@ instructions or `C:\Repo\templates`.
 
 ## Push notification feature gate (P13-02; 17 October 2026)
 
-Web push is default-off. The Vite build reads only `VITE_PUSH_ENABLED` in
+Web push is default-off in code. The Vite build reads only `VITE_PUSH_ENABLED` in
 addition to its existing explicit backend override and injects enabled only
 when the value is exactly the string `true`. Do not expose arbitrary environment
-variables or set this gate as part of the web implementation. When off, the web
-app registers no worker, requests no push endpoints, renders no Notifications
-section and has no proactive-item route. Physical iOS permission and delivery
-checks happen only after a separate enabling change.
+variables. P13-02 did not set the gate; P13-03 sets it in the production deploy
+(see the first section), and CI or local builds stay off unless the variable is
+set. When off, the web app registers no worker, requests no push endpoints,
+renders no Notifications section and has no proactive-item route. Physical iOS
+permission and delivery checks are Dan's device test after P13-03.
 
 This worktree starts from released/remote main `2823585184d67980c580127f9dbbce97109fa91b`.
 Pinned web dependencies can be restored from an owned copy of the authorised

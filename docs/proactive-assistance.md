@@ -4,7 +4,8 @@
 
 17 October 2026 — the broader proactive-assistance design remains a proposal.
 The first Web Push delivery-proof milestone was approved separately; P13-01
-implements its backend dark, without deployment activation. The
+built its backend and P13-02 its web client dark, and P13-03 (18 October 2026)
+switches both on in production. The
 [plan summary](../PLAN.md#proactive-assistance--proposed-scope-17-october-2026)
 separates that bounded proof from open design choices. This approval does not
 approve a scheduler, proactive sends, permissions, additional resources or the
@@ -320,8 +321,9 @@ prove delivery on Dan's phone.
 explicitly excludes iOS; do not use it for this PWA path. Native APNs and
 Notification Hubs can be evaluated separately if a native app is later approved.
 The P13-01 backend and its separately built web client have not yet established
-real iPhone delivery. The feature remains dark until a separate enabling change
-and physical-device acceptance.
+real iPhone delivery. P13-03 switched them on in production (18 October 2026);
+delivery is established only by physical-device acceptance on the installed Home
+Screen app.
 
 ## Optional Microsoft services
 
