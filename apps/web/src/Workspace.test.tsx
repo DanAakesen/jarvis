@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createRef, useMemo, useRef, useState } from 'react';
+import { createRef, Profiler, useMemo, useRef, useState } from 'react';
 import { PHONE_LAYOUT_MEDIA_QUERY, Workspace, type WorkspaceController, type WorkspaceView } from './Workspace';
 import { useWorkspaceCommands, WorkspaceCommandContext } from './workspace-command-state';
 import { readFileSync } from 'node:fs';
@@ -333,15 +333,30 @@ describe('Workspace', () => {
     act(() => { (event === 'online' ? window : document).dispatchEvent(new Event(event)); });
     expect(pins.load).toHaveBeenCalledOnce();
     visible.mockReturnValue('visible');
-    // The retry listener is registered in a passive effect that can land after the failure text; repeat the event until it is heard.
-    await waitFor(() => {
-      act(() => { (event === 'online' ? window : document).dispatchEvent(new Event(event)); });
-      expect(pins.load).toHaveBeenCalledTimes(2);
-    });
+    act(() => { (event === 'online' ? window : document).dispatchEvent(new Event(event)); });
+    await waitFor(() => expect(pins.load).toHaveBeenCalledTimes(2));
     await waitFor(() => expect(screen.queryByText('Connection interrupted.')).toBeNull());
     act(() => { (event === 'online' ? window : document).dispatchEvent(new Event(event)); });
     expect(pins.load).toHaveBeenCalledTimes(2);
     visible.mockRestore();
+  });
+
+  it.each(['online', 'visibilitychange'])('hears one %s event sent in the commit that first shows a pin load failure', async event => {
+    const pins: WorkspacePinsClient = {
+      load: vi.fn().mockRejectedValueOnce(new Error('Connection interrupted.')).mockResolvedValue([]),
+      pin: vi.fn(), unpin: vi.fn(),
+    };
+    vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
+    let sent = false;
+    // Profiler callbacks run in the commit's layout phase, before React can flush passive effects: the earliest moment an event can arrive.
+    const onCommit = () => {
+      if (sent || !document.body.textContent?.includes('Connection interrupted.')) return;
+      sent = true;
+      (event === 'online' ? window : document).dispatchEvent(new Event(event));
+    };
+    render(<Profiler id="workspace" onRender={onCommit}><Workspace views={[]} pins={pins} /></Profiler>);
+    await waitFor(() => expect(sent).toBe(true));
+    await waitFor(() => expect(pins.load).toHaveBeenCalledTimes(2));
   });
 
   it('awaits storage before acknowledging pinning, deduplicates requests and prevents closing during a save', async () => {

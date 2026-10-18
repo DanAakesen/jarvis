@@ -318,7 +318,8 @@ export const Workspace = forwardRef<WorkspaceController, {
     });
     return () => controller.abort();
   }, [pinLoadAttempt, pins]);
-  useEffect(() => {
+  // A layout effect, so the listeners exist in the commit that shows the failure and one early transition event is not missed.
+  useLayoutEffect(() => {
     if (!pinLoadError) return;
     const retry = () => {
       if (document.visibilityState !== 'hidden') {
