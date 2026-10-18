@@ -10,10 +10,13 @@ import { WorkoutGlyph } from './WorkoutGlyph';
 
 describe('Daily presentation kit', () => {
   it('labels freshness, unknown count, and partial status in text', () => {
-    render(<FreshnessLine observedAt="invalid-date" partial />);
-    expect(screen.getByRole('status').textContent).toContain('at an unknown time');
-    expect(screen.getByRole('status').textContent).toContain('an unknown number of records');
-    expect(screen.getByRole('status').textContent).toContain('partial');
+    const view = render(<FreshnessLine observedAt="invalid-date" partial />);
+    const status = screen.getByRole('status');
+    expect(status.textContent).toContain('at an unknown time');
+    expect(status.textContent).toContain('an unknown number of records');
+    expect(status.textContent).toContain('partial');
+    view.rerender(<FreshnessLine observedAt="invalid-date" partial />);
+    expect(screen.getByRole('status')).toBe(status);
   });
 
   it.each([[1, '1 meal'], [2, '2 meals'], [null, 'an unknown number of meals']] as const)(
@@ -39,9 +42,22 @@ describe('Daily presentation kit', () => {
     const { container, rerender } = render(<Sparkline values={[null, Number.NaN]} label="Synthetic trend" />);
     expect(screen.getByText('No trend available')).toBeTruthy();
     rerender(<Sparkline values={[2, null, 5]} label="Synthetic trend" />);
-    expect(screen.getByRole('img', { name: 'Synthetic trend' })).toBeTruthy();
+    expect(screen.getByRole('img', { name: 'Synthetic trend: observation 1, 2; observation 2, Not recorded; observation 3, 5' })).toBeTruthy();
     expect(container.querySelector('path')?.getAttribute('d')).toContain('M4.0');
     expect(container.querySelector('path')?.getAttribute('d')).toContain('M116.0');
+  });
+
+  it('lists up to seven sparkline observations and summarises longer series with a bounded name', () => {
+    const { rerender } = render(<Sparkline values={[1, 2, 3, 4, 5, 6, 7]} label="Synthetic trend" />);
+    expect(screen.getByRole('img').getAttribute('aria-label')).toContain('observation 7, 7');
+    rerender(<Sparkline values={[1, 2, 3, 4, 5, 6, 7, 8]} label="Synthetic trend" />);
+    expect(screen.getByRole('img').getAttribute('aria-label'))
+      .toBe('Synthetic trend: 8 of 8 observations recorded; first 1, last 8, lowest 1, highest 8');
+    const year = Array.from({ length: 366 }, (_, index) => ({ 3: 12, 200: 4, 365: 9 })[index] ?? null);
+    rerender(<Sparkline values={year} label="Synthetic trend" />);
+    const name = screen.getByRole('img').getAttribute('aria-label') ?? '';
+    expect(name).toBe('Synthetic trend: 3 of 366 observations recorded; first 12, last 9, lowest 4, highest 12');
+    expect(name).not.toContain('Not recorded');
   });
 
   it('explains unknown values and unset targets, and marks partial progress', () => {

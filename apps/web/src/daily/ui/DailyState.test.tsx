@@ -3,9 +3,23 @@ import { describe, expect, it, vi } from 'vitest';
 import { DailyState } from './DailyState';
 
 describe('DailyState', () => {
-  it('shows the shared loading state', () => {
-    render(<DailyState status="loading" />);
-    expect(screen.getByText('Loading Daily history')).toBeTruthy();
+  it('announces loading, empty, partial and error states with the appropriate live roles', () => {
+    const { rerender } = render(<DailyState status="loading" />);
+    const loading = screen.getByRole('status');
+    expect(loading.textContent).toContain('Loading Daily history');
+    expect(loading.getAttribute('aria-live')).toBe('polite');
+
+    rerender(<DailyState status="empty" emptyMessage="No synthetic records were returned." />);
+    expect(screen.getByRole('status').textContent).toBe('No synthetic records were returned.');
+    expect(screen.queryByRole('alert')).toBeNull();
+
+    rerender(<DailyState status="partial" coverage={{ returned: 3, hasMore: true }} />);
+    expect(screen.getByRole('status').textContent).toContain('Showing the first 3');
+    expect(screen.getAllByRole('status')).toHaveLength(1);
+
+    rerender(<DailyState status="error" message="Synthetic read failed." />);
+    expect(screen.getByRole('alert').textContent).toContain('Synthetic read failed.');
+    expect(screen.queryByRole('status')).toBeNull();
   });
 
   it('explains empty history without claiming the original source is empty', () => {

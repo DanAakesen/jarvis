@@ -1,5 +1,20 @@
 # Decisions
 
+## P12-37 — Daily accessibility and keyboard audit (18 October 2026)
+
+Keep Daily's routes, visible copy, reads and switch behavior unchanged. Give
+sparkline images a bounded, value-bearing text alternative: up to seven slots
+list each observation and preserve gaps as “Not recorded”; longer series state
+the recorded count, first, last, lowest and highest values, so a 366-day period
+cannot produce a multi-thousand-character name. Dated values remain in the
+section tables and the Data section. Table first cells are row headers, and
+each record-detail trigger's `aria-controls` continues to reference a labelled
+region while that region is closed. Keep record details nonmodal and preserve focus entry,
+Escape/close, and focus return without trapping the background. Add focused
+Testing Library and reduced-motion guards; record audit evidence and browser
+limitations in [`ui/p12-37/audit.md`](ui/p12-37/audit.md). No new dependency,
+API, route, token or data read is introduced.
+
 ## P14-12 — Shared colour tokens and contrast (18 October 2026)
 
 Resolve contrast at shared token roles, not route-specific CSS. Tie the

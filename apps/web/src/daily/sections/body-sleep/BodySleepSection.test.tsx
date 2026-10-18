@@ -109,7 +109,7 @@ describe('Body & sleep section (synthetic records only)', () => {
     await screen.findByRole('img', { name: 'Body mass — kg' });
     expect(screen.getByRole('combobox', { name: 'Period' })).toBeTruthy();
     expect(mounted.container.querySelectorAll('.daily-freshness')).toHaveLength(1);
-    expect(screen.getByRole('img', { name: 'Body mass selected-unit trend' })).toBeTruthy();
+    expect(screen.getByRole('img', { name: /Body mass selected-unit trend: observation/u })).toBeTruthy();
     const shortcut = screen.getByRole('button', { name: /synthetic_other.*Select/ });
     shortcut.focus();
     expect(document.activeElement).toBe(shortcut);

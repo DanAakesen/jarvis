@@ -215,15 +215,25 @@ describe('Daily overview', () => {
     await waitFor(() => expect(overview.getAttribute('aria-selected')).toBe('true'));
     expect(screen.getByTestId('daily-section-url').textContent).toBe('unknown');
 
-    const nextTab = within(screen.getByRole('tablist', { name: 'Daily sections' })).getAllByRole('tab')[1]!;
+    const tablist = within(screen.getByRole('tablist', { name: 'Daily sections' }));
+    const tabs = tablist.getAllByRole('tab');
+    const nextTab = tabs[1]!;
+    expect(screen.getByRole('navigation', { name: 'Daily sections' })).toBeTruthy();
+    expect(tabs.filter(tab => tab.getAttribute('tabindex') === '0')).toHaveLength(1);
+    overview.focus();
     fireEvent.keyDown(overview, { key: 'ArrowRight' });
     expect(nextTab.getAttribute('aria-selected')).toBe('true');
+    expect(document.activeElement).toBe(nextTab);
     expect(screen.getByTestId('daily-section-url').textContent).toBe(nextTab.id.replace('daily-tab-', ''));
     fireEvent.keyDown(nextTab, { key: 'End' });
-    expect(screen.getByRole('tab', { name: 'Data' }).getAttribute('aria-selected')).toBe('true');
+    const data = screen.getByRole('tab', { name: 'Data' });
+    expect(data.getAttribute('aria-selected')).toBe('true');
+    expect(document.activeElement).toBe(data);
     expect(screen.getByTestId('daily-section-url').textContent).toBe('data');
-    fireEvent.keyDown(screen.getByRole('tab', { name: 'Data' }), { key: 'Home' });
+    fireEvent.keyDown(data, { key: 'Home' });
     expect(screen.getByRole('tab', { name: 'Overview' }).getAttribute('aria-selected')).toBe('true');
+    expect(document.activeElement).toBe(overview);
+    expect(tablist.getAllByRole('tab').filter(tab => tab.getAttribute('tabindex') === '0')).toHaveLength(1);
   });
 
   it('aborts old requests during twenty rapid section switches without warnings or a request backlog', async () => {
