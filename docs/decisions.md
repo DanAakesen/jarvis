@@ -5,8 +5,11 @@
 Personal to-dos remain checkbox items in the proactive reader's shared scope:
 recursive `Personal/` and `Work/` notes and the root `task.md` or `tasks.md`,
 excluding hidden paths and Archive segments. Jarvis exposes them in an owner-only
-Tasks view, Notes task-search group, and read-only `vault_tasks` tool. The same
-parser and direct vault read model serve the proactive engine and these surfaces.
+Tasks view, Notes task-search group, and the read-only tasks kind of `vault_search`.
+The same parser and direct vault read model serve the proactive engine and these
+surfaces. The tool catalogue is at its 120-tool all-features ceiling (the 128-tool
+platform limit minus the required eight-tool headroom), so tasks share
+`vault_search` through a flat `kind` argument instead of adding a tool.
 Jarvis never creates, edits, completes, reorders or deletes the owner's tasks;
 the owner completes them in Obsidian. Software Factory remains the separate
 agent-work board.

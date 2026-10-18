@@ -3501,10 +3501,15 @@ never written to logs. Connection, GitHub App/token, missing/ambiguous task
 source, limit, timeout and read failures return stable 503 reason codes rather
 than empty task lists.
 
-The read-only sensitive `vault_tasks` chat/voice tool uses the same model and
-scope, with query, state and optional bounded due window, and returns at most 40
-items. Task requests route to this tool; note requests continue through
-`vault_search`/`vault_read`. The Notes page retains search snippets and fetches
+The read-only sensitive `vault_search` chat/voice tool serves both reads through a
+flat `kind` argument: `notes` (the default) searches the knowledge index, and
+`tasks` uses the same model and scope as the route, with query, state and
+optional bounded due window, returning at most 40 items. The schema has no
+combinators, so voice schemas stay valid, and no catalogue entry is added: the
+all-features production catalogue is held at 120 tools, leaving the required
+eight-tool headroom below the 128-tool platform limit. Task requests route to
+`kind` tasks; note requests continue through `vault_search` (notes) and
+`vault_read`. The Notes page retains search snippets and fetches
 matching open tasks separately; its task group links to `/tasks?q=...`. Task
 source links use `/notes?note=<path>`, which opens the note in the existing
 Notes read flow. Neither screen nor tool writes or changes task state.

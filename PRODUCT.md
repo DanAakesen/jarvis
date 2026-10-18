@@ -656,7 +656,8 @@ Agent work remains on the Software Factory board.
 Notes remains a notes surface. Search shows the matching plain-text snippet under
 each note title and, when open tasks match, a separate Tasks result group linking
 to `/tasks?q=...`. In chat and voice, task/to-do/reminder requests use the
-read-only `vault_tasks` tool; note searches use `vault_search` and `vault_read`.
+read-only tasks kind of `vault_search`; note searches use its default notes kind
+and `vault_read`.
 All reads are owner-only and treat vault content as untrusted data.
 
 #### Software Factory — task view

@@ -191,7 +191,7 @@ describe('English realtime session', () => {
       parameters: tool.inputSchema,
     }]);
     expect(session.instructions).toContain('vault_search then vault_read');
-    expect(session.instructions).toContain('"My tasks"/"to-dos"/"reminders": vault_tasks');
+    expect(session.instructions).toContain('"My tasks"/"to-dos"/"reminders": vault_search with kind tasks');
     expect(session.instructions).toContain('Use show_knowledge');
     expect(session.instructions).toContain('using vault_write');
     expect(session.instructions).toContain('vault_delete');

@@ -371,11 +371,11 @@ describe('GitHub vault', () => {
     expect(indexStore.entry('General/old.md')).toBeUndefined();
     expect(indexStore.entry('General/new.md')).toBeDefined();
     expect(module.tools.map(({ name }) => name)).toEqual([
-      'vault_search', 'vault_tasks', 'show_knowledge', 'vault_read', 'vault_write', 'vault_delete',
+      'vault_search', 'show_knowledge', 'vault_read', 'vault_write', 'vault_delete',
     ]);
   });
 
-  it('returns bounded, redacted vault tasks through a sensitive read-only tool', async () => {
+  it('returns bounded, redacted vault tasks through the sensitive read-only tasks kind of vault_search', async () => {
     const { github, module } = moduleFor({
       remote: {
         'Personal/Inbox.md': {
@@ -384,8 +384,8 @@ describe('GitHub vault', () => {
         },
       },
     });
-    const result = await tool(module, 'vault_tasks').execute(
-      { query: 'mirror', state: 'open' }, {} as FastifyRequest, signal(),
+    const result = await tool(module, 'vault_search').execute(
+      { kind: 'tasks', query: 'mirror', state: 'open' }, {} as FastifyRequest, signal(),
     ) as { items: Array<Record<string, unknown>>; total: number; truncated: boolean };
     expect(result).toMatchObject({
       total: 1,
@@ -395,7 +395,7 @@ describe('GitHub vault', () => {
         priority: 'high', path: 'Personal/Inbox.md', line: 2, heading: 'Home',
       }],
     });
-    expect(tool(module, 'vault_tasks').sensitive).toBe(true);
+    expect(tool(module, 'vault_search').sensitive).toBe(true);
     expect(github.calls.every(({ method }) => method === 'GET')).toBe(true);
     expect(github.calls.some(({ url }) => url.includes('/git/trees/'))).toBe(true);
 
@@ -403,12 +403,40 @@ describe('GitHub vault', () => {
       sha: sha('b'),
       content: Array.from({ length: 41 }, (_, index) => `- [ ] Synthetic tool item ${index}`).join('\n'),
     } } });
-    const boundedResult = await tool(bounded.module, 'vault_tasks').execute(
-      {}, {} as FastifyRequest, signal(),
+    const boundedResult = await tool(bounded.module, 'vault_search').execute(
+      { kind: 'tasks' }, {} as FastifyRequest, signal(),
     ) as { items: unknown[]; total: number; truncated: boolean };
     expect(boundedResult).toMatchObject({ total: 41, truncated: true });
     expect(boundedResult.items).toHaveLength(40);
     expect(bounded.github.calls.every(({ method }) => method === 'GET')).toBe(true);
+  });
+
+  it('keeps notes and tasks apart inside vault_search and refuses mixed or malformed arguments', async () => {
+    const { github, module } = moduleFor({
+      remote: { 'Personal/Inbox.md': { sha: sha('a'), content: '- [ ] Buy a mirror' } },
+    });
+    const search = tool(module, 'vault_search');
+    const schema = search.inputSchema as { properties: Record<string, unknown> };
+    expect(Object.keys(schema.properties).sort()).toEqual(['dueWindowDays', 'k', 'kind', 'query', 'state']);
+    for (const combinator of ['oneOf', 'anyOf', 'allOf', 'not']) expect(schema).not.toHaveProperty(combinator);
+    expect(search.description).toContain('Tasks are not notes');
+
+    const refused: Array<[unknown, string]> = [
+      [{ kind: 'task', query: 'mirror' }, 'kind must be notes or tasks'],
+      [{ kind: 'notes' }, 'query or result count is invalid'],
+      [{ kind: 'notes', query: 'mirror', state: 'open' }, 'query or result count is invalid'],
+      [{ kind: 'notes', query: 'mirror', dueWindowDays: 7 }, 'query or result count is invalid'],
+      [{ kind: 'tasks', k: 3 }, 'task filters are invalid'],
+      [{ kind: 'tasks', query: ' ' }, 'task filters are invalid'],
+      [{ kind: 'tasks', query: 'x'.repeat(201) }, 'task filters are invalid'],
+      [{ kind: 'tasks', state: 'archived' }, 'task filters are invalid'],
+      [{ kind: 'tasks', dueWindowDays: 366 }, 'task filters are invalid'],
+    ];
+    for (const [input, message] of refused) {
+      await expect(search.execute(input, {} as FastifyRequest, signal()), JSON.stringify(input))
+        .rejects.toThrow(message);
+    }
+    expect(github.calls).toHaveLength(0);
   });
 
   it('serves owner-only vault tasks with no-store, filters, and a visible truncation marker', async () => {
