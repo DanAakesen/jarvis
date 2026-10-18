@@ -1048,7 +1048,7 @@ todo file; it never edits or deletes an existing line and never creates the file
 A time-critical finding (a deadline within 24 hours or a calendar clash) found by
 the 07:00 or 18:00 check can send one push, at most 3 a day and never between 22:00
 and 07:00. Todo findings and reminders are limited to open vault tasks explicitly
-marked `priority:: P1 - High`; unmarked and lower-priority tasks do not generate
+marked `⏫` or legacy `priority:: P1 - High`; unmarked and lower-priority tasks do not generate
 task notifications. About an hour before an eligible todo with a time is due,
 Jarvis sends one reminder push; a reminder due in the quiet window is held until
 07:00 and shown as due soon or overdue. Pause, the Todo list source switch and
@@ -1082,9 +1082,16 @@ hours but respect pause, source settings, budget and stored rate limits (one per
 five minutes, six per Copenhagen day). Runs appear in Background work with safe
 plain-language outcomes. None of these flags is enabled by this change.
 
-The todo reader matches exactly one case-insensitive root `task.md` or
-`tasks.md` and emits at most 40 sanitized facts, only for open tasks explicitly
-marked `priority:: P1 - High`. The P13-11 writer reuses that resolver/parser,
+The todo reader scans safe Markdown notes recursively under `Personal/` and
+`Work/`, excluding Archive and hidden paths, plus the case-insensitive root
+`task.md` or `tasks.md`. It emits at most 40 sanitized facts, only for open tasks
+marked `⏫` or legacy P1 - High metadata. `🔼`, `🔽`, `⏬`, `🔺` and no priority
+do not generate task notifications. `🕒 HH:mm` can precede or follow the due
+date; legacy due fields and date-only end-of-day behavior remain supported.
+Duplicate tasks and moves between notes preserve reminder identity.
+Discovery is SHA-cached and bounded to 256 files, 4 MiB total content,
+256 KiB per file, four concurrent reads and 20 seconds. Partial scans show
+unavailable, never "no tasks". The P13-11 writer keeps its root-only resolver/parser,
 writes only to an existing resolved file, and records hashed receipts so
 completed or deleted suggestions are not re-added. The Factory reader reports
 attention/failure and open-PR status plus a running-task count; the weather
@@ -1401,3 +1408,36 @@ night detail. Totals without stages remain explicitly distinct from recorded
 stages. The selected view, metric and night belong in the URL. This extends the
 existing owner-authorised query workflow without new sources, writes, coaching,
 recovery, recomp or TickTick integration; original Daily remains canonical.
+
+## Daily Nutrition day, trend and library (18 October 2026; P12-24)
+
+The owner can browse recorded meals by Copenhagen calendar day inside Daily,
+compare null-aware totals with their own configured targets, follow energy and
+protein over the selected period, and filter loaded favourites and meal plans.
+Nutrition is read-only: logging and corrections stay in chat with the existing
+native approval rules, and the original Daily remains canonical. The section
+requires the meals source; Trend and Library appear only when their respective
+sources are exposed. Unknown values never become zero, partial totals are lower
+bounds, and days without meals remain gaps. The resting-burn-minus-deficit
+comparison is explicitly a baseline before activity, not the full allowance.
+No missing target is estimated. This adds no coaching, recovery, recomposition,
+TickTick integration or permission changes.
+
+## Daily page: Workouts (18 October 2026; P12-23)
+
+The read-only Workouts section now appears when `daily.health.workouts` is
+exposed. Over the shared period it shows loaded workout count, distinct recorded
+workout dates, known duration, distance and active energy by unit, weekly or
+monthly recorded-minute volume, and filterable/sortable history. Missing values
+are not zero, unlike units are never added, and values without units remain
+individual observations. Automatically read at most ten 500-row pages per
+batch; a visible continuation loads another bounded batch. Incomplete totals
+explicitly say “in the N loaded”; returned records never establish original
+source completeness.
+
+A URL-selected workout shows its recorded figures and, only when their sources
+are exposed, bounded recorded detail and paged heart-rate samples. Browser Back,
+reload and refresh retain the selected ID; returning to history restores focus
+and scroll. Logging and corrections stay in chat. Original Daily remains
+canonical; no coaching, recovery, recomp, TickTick or new writer is introduced.
+Synthetic browser checks do not establish live-data or original-site acceptance.

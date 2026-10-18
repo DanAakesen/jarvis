@@ -1198,7 +1198,7 @@ Dan supplied a reference image and iterated live. Canonical values live in `styl
 - **Composer:** the same clear glass. Hover and typing show a thin light running around the rim instead of a thick focus ring; reduced motion shows a steady bright rim. The voice orb is a living miniature of the stage orb: a cyan shell with rotating meridians and an amber filament core, which brightens while Jarvis works.
 - **Messages:** uniform 18px radius. Dan's bubble has a glowing amber outline; Jarvis's a cool hairline.
 - **Removed from the Jarvis page:** the Arrange menu and the "Activity, sharing and backend" disclosure. P9-120 removes Now and Backend from Settings; the shell-owned feed stays mounted and publishes its attention items to the header popover. The `/operations/sleep` API remains unchanged, with no web Settings control. Screen sharing is a working top-bar toggle beside the camera.
-- **Scrollbars:** thin, quiet at rest, cyan while hovered.
+- **Scrollbars:** thin, quiet at rest, cyan while hovered. With a mouse or trackpad in Chromium or Safari they are 10px pill thumbs with no arrow buttons and a transparent track; touch screens and Firefox keep the standard thin overlay bars. The Notes reader keeps a stronger resting thumb. A glass surface never shows a scrollbar unless its content overflows: a scrolling glass surface drops the 1px ring (the Notes search results use a hairline border instead) or leaves scrolling to a parent, because the ring's overhang would otherwise add phantom bars.
 - **Panel width:** a vertical pill handle is centred on the inner edge of the navigation and Context panels. Dragging it, or using the arrow keys on it as a separator (Shift for bigger steps, Home/End for the limits), resizes the panel within 160–420px and 220–560px. Widths are remembered on the device; phones have no handle. Only the panel body scrolls, so the heading and handle stay put.
 - **Handle exit:** hiding the conversation with the composer handle (click or drag down) uses the same top-right fly-off as Close.
 - **Phone conversation resize (P9-117):** a visible horizontal grip in the window's heading resizes its height; drag up to expand and down to shrink. Its 72×44px target stays inside the window, clear of transcript actions and the separate composer open/close handle. It uses the shared quiet hover/pressed surfaces and focus outline, with no added animation. Up/Down resize by 32px (64px with Shift); Home/End select the height limits. Phone height is remembered separately from desktop placement.
@@ -1272,7 +1272,7 @@ camera correction. Reduced motion retains solid text without the sweep.
 - **Chat turn in progress:** Jarvis's bubble shows the amber working core (the orb's brain) with rotating first-person phrases from large shuffled sets (thinking, working, composing), each tool as a line on a thin lit trail with a running core or a round tick or cross, then the streamed answer. Tool calls sit on Jarvis's reply, not Dan's message. Bubbles use compact body type and tighter speaker spacing (revised 12 October below); the time is a glass tag on the bubble's top-right rim shown on hover. Sharing starts in the ⋯ menu. Screen sharing retains its live line/Stop above typing; camera controls live in Camera preview. The top bar has no capture controls.
 - **Movable chat and density (Dan, 12 October; local, unreleased):** Dan rejected visible corner brackets. The existing glass rim is the resize affordance: invisible pointer regions cover every edge and corner, with directional resize cursors and keyboard focus only. There are no brackets, hover decorations or extra top grip. The Move icon sits beside Maximise; moving/resizing keeps the composer attached without reparenting its draft or voice client. Preferred position and size survive refresh on this browser and fit smaller viewports. Cancellation restores the prior placement. Minimise leaves the composer in place with messages hidden, as Dan selected; maximise/restore preserves the placement. A first drag interrupts the opening spring using its visible rectangle, rather than applying a scaled height twice. Top-border Up/Down and Home/End retain height shortcuts; other borders/corners and Move use arrows, with Shift for larger steps. Touch corners have 44 px hit regions; title actions retain priority over overlapping resize regions. Compact `--type-small` message paragraphs, lists and quotes remain distinct from the composer's readable `--type-body`. Initial shell-history loading is a screen-reader status, not skeleton content in the empty room. Standalone history still uses its ordinary loader; errors retain Retry. No camera UI or evidence wording changes.
   Side resize regions sit outside the transcript, on the rim and its outer side. Corner hit regions exclude their inward quadrant so the entire native scrollbar track stays usable, including beside the corners. Scrollbar dragging and touch scrolling do not change window geometry.
-- **Modals:** one Modal component, rendered at the document root near the top of the viewport, with an X, Escape and click-outside to close.
+- **Modals:** one Modal component, rendered at the document root near the top of the viewport, with an X, Escape and click-outside to close. The card never scrolls itself; a card taller than the viewport scrolls with its backdrop.
 - **Job tabs (P8-43):** each background job is a tab in the top bar strip: a cyan progress ring with the short title and step (or "N running"), a peek with the current step, elapsed time and Cancel; a green ✓ pulse when ready while the result window grows out of the chip (it waits in the chip with Open while Dan is Away or On the move); amber with the reason, Retry and Dismiss when it fails. Research progress windows start as tabs while the chip tracks them.
 - **Knowledge (P7-43):** a rail page and a window Jarvis opens with `show_knowledge`, showing Dan's vault as a 3D star cloud. Stars are coloured by folder (People blue, Work amber, Personal green, General violet) and sized by connections, with fine additive lines for links and fainter lines for similarity. Since 8 October it is a flat 2D map (Dan found the spinning 3D cloud too much in his face): every note lies on one plane seen straight on, dragging pans and the wheel zooms, and stars are crisp with only a faint halo. It never goes fully still: each note floats a few pixels on its own slow orbit with its links following, each star breathes, and every second or two one link lights up and fades. It stops drawing off-screen or hidden; reduced motion keeps it still. Search lights the matches, dims the rest and flies the camera to them; the accessible results list, labels and a glass note reader (front matter stripped, GitHub link, connected notes) sit over it. One draw call for stars and one for lines, at 30 fps. Development builds can show a labelled sample graph when the service is missing.
 - **Knowledge reader (P9-74):** hide properties, including malformed YAML after leading comments. Titles and paths wrap. The path, Markdown and connected notes share one keyboard-focusable scroll region; a bottom fade and labelled Scroll down button appear only while content remains below. The button scrolls directly under reduced motion.
@@ -1495,6 +1495,59 @@ overflow was observed; controls met 44px targets and metric switching retained
 layout position. Six synthetic-only captures are in `docs/ui/p12-25/`
 (1,351,644 bytes combined). These checks do not verify live sign-in, private
 records, import completeness or a physical phone.
+
+## Daily Nutrition (18 October 2026; P12-24)
+
+Nutrition stays within the existing Daily surface and shared control geometry.
+A compact keyboard-operated Day / Trend / Library tab list separates meal
+inspection, period comparisons and saved definitions. The day stepper precedes
+five shared statistic tiles; meal-type groups provide chronological rows with
+collapsed components and provenance, while deleted meals remain separately
+collapsed. Target comparisons use explicit text as well as protein progress;
+the energy baseline excludes activity. Unknown and lower-bound values are
+labelled in text, never conveyed by colour alone.
+
+Trend uses the shared line charts and their data tables, with gaps between
+unlogged dates, a selectable daily table and Monday-start weekly averages.
+Library uses filterable read-only lists and explicitly limits filtering to
+loaded records. Layout CSS consumes existing spacing and typography tokens,
+uses tabular numerals, and keeps wide tables in labelled scrolling regions.
+Buttons retain the shared classes without local border or radius overrides.
+Synthetic browser evidence belongs in `docs/ui/p12-24/`; it is not live-data or
+physical-device acceptance.
+
+Synthetic Chromium inspection exercised Day, Trend and Library at 320,
+390×844, 768 and 1440×900 in both light and dark appearances. All 24 combinations
+kept page content within the viewport, one Nutrition `h2`, and at least 44px
+visible button, input and disclosure targets. Date stepping retained the
+stepper position; refocus refresh retained the selected date, open meal and
+scroll position. Inspection also exercised Back/reload, keyboard tabs, escaped
+provenance, empty-day neighbours, unset targets, independent capability gates,
+filtering loaded records, five-page library capping, per-view recovery and
+reduced motion. Expanded plan content remained reachable above the mobile
+composer at 320px. The six JPEG captures cover phone Day in both themes,
+desktop Trend in both themes, Library at 768px light and 320px dark. They are
+synthetic desktop-browser evidence, not live-owner or physical-phone checks.
+
+## Daily Workouts (18 October 2026; P12-23)
+
+Workouts extends the existing Daily section shell, not navigation or a separate
+theme. One section heading leads to a type filter, loaded-row sort, unknown-safe
+statistic strip, recorded-minute volume chart and workout history. Phones use
+stacked items; wider screens use the shared scroll table. Detail keeps the same
+section, with recorded figures, elapsed-minute heart-rate lines and collapsed
+recorded JSON. Average, minimum and maximum lines also differ by stroke pattern.
+All controls retain shared geometry, 44px targets and focus treatment; local CSS
+owns only layout, tabular figures, chart patterns and scroll anchoring.
+
+Synthetic-only local Chromium checks covered 320×844, 390×844, 768×900 and
+1440×900 in light and dark, with reduced motion. Exercised type filtering,
+sorting, detail, heart rate, recorded JSON, URL reload, browser Back, unknown ID,
+refresh, loading, empty, error/Retry and capped Load more. Page and Daily viewport
+had no horizontal overflow; Back restored the opened control's focus and exact
+list scroll offset. Six synthetic screenshots are in `docs/ui/p12-23/` (under
+1.5 MB). This checked the actual Daily shell with isolated API fixtures, not
+Microsoft sign-in, a live backend, native devices or original-site parity.
 
 ## Border, radius and surface rules (P14-04, 18 October 2026)
 

@@ -1,0 +1,67 @@
+.daily-nutrition {
+  display: grid;
+  gap: var(--space-4);
+  font-variant-numeric: tabular-nums;
+}
+.nutrition-controls, .nutrition-stats {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+.nutrition-stats {
+  align-items: stretch;
+}
+.nutrition-stats > * {
+  flex: 1 1 10rem;
+}
+.nutrition-block {
+  display: grid;
+  align-content: start;
+  gap: var(--space-3);
+  min-width: 0;
+}
+.nutrition-day-content {
+  min-height: 24rem;
+}
+.nutrition-record {
+  padding-block: var(--space-3);
+  overflow-wrap: anywhere;
+}
+.nutrition-record summary {
+  cursor: pointer;
+  min-height: 44px;
+  align-content: center;
+}
+.nutrition-summary-content {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+  gap: var(--space-1);
+}
+.nutrition-meal-macros {
+  display: block;
+  color: var(--text-muted);
+  font-size: var(--type-small);
+}
+.nutrition-record pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 24rem;
+  overflow: auto;
+}
+.daily-nutrition input {
+  max-width: 100%;
+}
+.nutrition-record dl {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: var(--space-2) var(--space-3);
+}
+.nutrition-record dl > div {
+  display: contents;
+}
+.nutrition-record dd {
+  min-width: 0;
+  margin: 0;
+}
