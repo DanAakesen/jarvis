@@ -6,6 +6,11 @@ import { DailyChart } from '../../ui/DailyChart';
 import { DailyState } from '../../ui/DailyState';
 import { ScrollTable } from '../../ui/ScrollTable';
 import { StatTile } from '../../ui/StatTile';
+import { DataNotes } from '../../ui/DataNotes';
+import { DailyGrid, DailyGridItem } from '../../ui/DailyGrid';
+import { DailySectionHeader } from '../../ui/DailySectionHeader';
+import { FreshnessLine } from '../../ui/FreshnessLine';
+import { WorkoutGlyph } from '../../ui/WorkoutGlyph';
 import { formatDuration, formatNumber } from '../../ui/formatters';
 import { useWorkoutPages } from './useWorkoutPages';
 import { loadedScope, numeric, summarizeWorkouts, text, typeLabel, volumeBuckets, workoutType, type Workout } from './summary';
@@ -42,38 +47,102 @@ function WorkoutSummary({ rows, partial, period }: { rows: Workout[]; partial: b
   const scope = loadedScope(rows.length, partial);
   const unitValues = (values: typeof summary.distance.values) => values.length
     ? values.map(item => `${formatNumber(item.value)} ${item.unit}`).join('\n') : null;
+  const types = new Map<string, { name: string; count: number; seconds: number | null }>();
+  for (const row of rows) {
+    const type = workoutType(row);
+    const entry = types.get(type) ?? { name: typeLabel(row), count: 0, seconds: null };
+    entry.count += 1;
+    const seconds = numeric(row.duration_seconds);
+    if (seconds !== null && seconds >= 0) entry.seconds = (entry.seconds ?? 0) + seconds;
+    types.set(type, entry);
+  }
+  const typeRows = [...types].map(([type, entry]) => ({ type, ...entry }))
+    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+  const longest = Math.max(0, ...typeRows.flatMap(item => item.seconds === null ? [] : [item.seconds]));
+  const scopeNote = (missing: number, unit: string) => partial || missing > 0
+    ? `Known ${unit} total is a lower bound; ${missing} without recorded ${unit}; ${scope}.`
+    : `Recorded ${unit} total ${scope}.`;
   return <>
     <div className="workouts-stats" aria-label="Workout summary">
-      <StatTile label="Workouts" value={summary.count} note={scope} />
-      <StatTile label="Active days" value={summary.activeDays} note={`Distinct workout_date values ${scope}; missing dates excluded.`} />
-      <StatTile label="Total time" value={formatDuration(summary.durationSeconds)}
-        note={`${summary.missingDuration} workouts without duration; ${scope}.`} />
-      <StatTile label="Distance" value={unitValues(summary.distance.values)}
-        note={`${summary.distance.missing} workouts without distance; ${scope}.`} />
-      <StatTile label="Active energy" value={unitValues(summary.energy.values)}
-        note={`${summary.energy.missing} workouts without active energy; ${scope}.`} />
+      <StatTile compact label="Workouts" value={summary.count} note={partial ? `Loaded workouts; more may exist.` : 'Returned records only; source completeness is unknown.'} />
+      <StatTile compact label="Active days" value={summary.activeDays}
+        note={`Distinct recorded workout dates; missing dates excluded${partial ? `, ${scope}` : ''}.`} />
+      <StatTile compact label="Total time" value={summary.durationSeconds === null ? null : formatDuration(summary.durationSeconds)}
+        note={scopeNote(summary.missingDuration, 'duration')}
+        sparkline={{ values: volume.buckets.map(bucket => bucket.minutes), label: `Recorded workout minutes per ${volume.grain}; gaps are not zero` }} />
+      <StatTile compact label="Distance" value={unitValues(summary.distance.values)}
+        note={scopeNote(summary.distance.missing, 'distance')} />
+      <StatTile compact label="Active energy" value={unitValues(summary.energy.values)}
+        note={scopeNote(summary.energy.missing, 'active energy')} />
     </div>
-    <p className="daily-meta">Units are kept separate. Values without a unit are listed individually, not summed.</p>
-    <section aria-labelledby="workouts-volume">
-      <h3 id="workouts-volume">Workout volume</h3>
-      <p>Total recorded minutes per {volume.grain} {scope}. Weeks start on Monday; dates use Europe/Copenhagen.
-        Missing durations are excluded, not treated as zero.</p>
-      <DailyChart kind="bar" name={`Workout minutes per ${volume.grain} ${scope}`} series={[{
-        name: 'Recorded minutes',
-        points: volume.buckets.flatMap(bucket => bucket.minutes === null ? [] : [{ x: bucket.start, y: bucket.minutes }]),
-      }]} />
-      {volume.buckets.some(bucket => bucket.minutes === null || bucket.missingDuration > 0) &&
-        <ScrollTable label="Workout volume missing observations">
-          <table><caption>Volume coverage by {volume.grain}</caption>
-            <thead><tr><th scope="col">Starting</th><th scope="col">Recorded coverage</th></tr></thead>
-            <tbody>{volume.buckets.filter(bucket => bucket.minutes === null || bucket.missingDuration > 0).map(bucket =>
-              <tr key={bucket.start}><th scope="row">{bucket.start}</th>
-                <td>{bucket.count === 0 ? `No workouts recorded${partial ? ' in the loaded workouts' : ''}`
-                  : `${bucket.missingDuration} workouts without duration`}</td></tr>)}</tbody>
-          </table>
-        </ScrollTable>}
-    </section>
+    <DailyGrid columns="twelve" className="workouts-analysis">
+      <DailyGridItem span={8}>
+        <section aria-labelledby="workouts-volume">
+          <h3 id="workouts-volume">Workout volume</h3>
+          <DailyChart kind="bar" name={`Recorded workout minutes per ${volume.grain}`} series={[{
+            name: 'Recorded minutes',
+            points: volume.buckets.map(bucket => ({ x: bucket.start, y: bucket.minutes })),
+          }]} />
+          {volume.buckets.some(bucket => bucket.minutes === null || bucket.missingDuration > 0) &&
+            <details className="workouts-coverage-detail">
+              <summary>View volume coverage</summary>
+              <ScrollTable label="Workout volume coverage">
+                <table><caption>Workout coverage by {volume.grain}</caption>
+                  <thead><tr><th scope="col">Starting</th><th scope="col">Loaded workouts</th><th scope="col">Durations not recorded</th></tr></thead>
+                  <tbody>{volume.buckets.filter(bucket => bucket.minutes === null || bucket.missingDuration > 0).map(bucket =>
+                    <tr key={bucket.start}><th scope="row">{bucket.start}</th>
+                      <td>{bucket.count}</td><td>{bucket.missingDuration}</td></tr>)}</tbody>
+                </table>
+              </ScrollTable>
+            </details>}
+        </section>
+      </DailyGridItem>
+      <DailyGridItem span={4}>
+        <section className="workouts-by-type" aria-labelledby="workouts-by-type-heading">
+          <h3 id="workouts-by-type-heading">By type</h3>
+          <p>{partial ? 'Loaded workouts' : `Returned workouts ${scope}`}</p>
+          {typeRows.length ? <ul>{typeRows.map(item => <li key={item.type}>
+            <div className="workouts-type-label"><WorkoutGlyph type={item.type} /><span>{item.name}</span><strong>{item.count}</strong></div>
+            <div className="workouts-type-volume">
+              {item.seconds === null
+                ? <span>Not recorded</span>
+                : <><span className="workouts-type-track" aria-hidden="true"><span style={{ width: `${longest > 0 ? item.seconds / longest * 100 : 0}%` }} /></span>
+                  <span>{formatDuration(item.seconds)}</span></>}
+            </div>
+          </li>)}</ul> : <p>No workouts in the selected type.</p>}
+        </section>
+      </DailyGridItem>
+    </DailyGrid>
   </>;
+}
+
+function WorkoutTable({ rows, onOpen }: { rows: Workout[]; onOpen: (row: Workout, button: HTMLButtonElement) => void }) {
+  const [tableOpen, setTableOpen] = useState(false);
+  const open = (row: Workout) => text(row.id) ? <button type="button" className="secondary-button"
+    data-workout-id={String(row.id)} onClick={event => onOpen(row, event.currentTarget)}
+    aria-label={`Open ${typeLabel(row)}, ${workoutTime(row)}`}>Open</button> : <span>Detail unavailable: unknown id</span>;
+  return <details className="workouts-view-table">
+    <summary onClick={event => {
+      const details = event.currentTarget.parentElement;
+      setTableOpen(!(details instanceof HTMLDetailsElement && details.open));
+    }}>View as table</summary>
+    {tableOpen && <ScrollTable label="Workouts in the loaded rows">
+      <table><caption>Recorded workouts; unknown values are not zero</caption>
+        <thead><tr>{['Date and time', 'Type', 'Duration', 'Distance', 'Active energy', 'Average HR (bpm)', 'Maximum HR (bpm)', 'Environment', 'Source', 'Detail']
+          .map(label => <th scope="col" key={label}>{label}</th>)}</tr></thead>
+        <tbody>{rows.map((row, index) => <tr key={text(row.id) ?? `unknown-${index}`}>
+          <th scope="row"><UnknownCell value={workoutTime(row)} /></th><td>{typeLabel(row)}</td>
+          <td><UnknownCell value={formatDuration(numeric(row.duration_seconds))} /></td>
+          <td><UnknownCell value={measurement(row.distance_value, row.distance_unit)} /></td>
+          <td><UnknownCell value={measurement(row.active_energy_value, row.active_energy_unit)} /></td>
+          <td><UnknownCell value={numeric(row.avg_heart_rate) === null ? null : `${formatNumber(numeric(row.avg_heart_rate))} bpm`} /></td>
+          <td><UnknownCell value={numeric(row.max_heart_rate) === null ? null : `${formatNumber(numeric(row.max_heart_rate))} bpm`} /></td>
+          <td><UnknownCell value={setting(row.is_indoor)} /></td>
+          <td><UnknownCell value={text(row.source_name)} /></td><td>{open(row)}</td>
+        </tr>)}</tbody>
+      </table>
+    </ScrollTable>}
+  </details>;
 }
 
 function WorkoutList({ rows, onOpen }: { rows: Workout[]; onOpen: (row: Workout, button: HTMLButtonElement) => void }) {
@@ -81,39 +150,28 @@ function WorkoutList({ rows, onOpen }: { rows: Workout[]; onOpen: (row: Workout,
     data-workout-id={String(row.id)} onClick={event => onOpen(row, event.currentTarget)}
     aria-label={`Open ${typeLabel(row)}, ${workoutTime(row)}`}>Open</button> : <span>Detail unavailable: unknown id</span>;
   return <>
-    <div className="workouts-wide">
-      <ScrollTable label="Workouts in the loaded rows">
-        <table><caption>Recorded workouts; unknown values are not zero</caption>
-          <thead><tr>{['Date and time', 'Type', 'Duration', 'Distance', 'Active energy', 'Average HR (bpm)', 'Maximum HR (bpm)', 'Environment', 'Source', 'Detail']
-            .map(label => <th scope="col" key={label}>{label}</th>)}</tr></thead>
-          <tbody>{rows.map((row, index) => <tr key={text(row.id) ?? `unknown-${index}`}>
-            <th scope="row"><UnknownCell value={workoutTime(row)} /></th><td>{typeLabel(row)}</td>
-            <td><UnknownCell value={formatDuration(numeric(row.duration_seconds))} /></td>
-            <td><UnknownCell value={measurement(row.distance_value, row.distance_unit)} /></td>
-            <td><UnknownCell value={measurement(row.active_energy_value, row.active_energy_unit)} /></td>
-            <td><UnknownCell value={numeric(row.avg_heart_rate) === null ? null : formatNumber(numeric(row.avg_heart_rate))} /></td>
-            <td><UnknownCell value={numeric(row.max_heart_rate) === null ? null : formatNumber(numeric(row.max_heart_rate))} /></td>
-            <td><UnknownCell value={setting(row.is_indoor)} /></td>
-            <td><UnknownCell value={text(row.source_name)} /></td><td>{open(row)}</td>
-          </tr>)}</tbody>
-        </table>
-      </ScrollTable>
-    </div>
-    <ul className="workouts-narrow">
-      {rows.map((row, index) => <li key={text(row.id) ?? `unknown-${index}`}>
-        <p><strong>{typeLabel(row)}</strong> · <UnknownCell value={workoutTime(row)} /></p>
-        <dl>
-          <div><dt>Duration</dt><dd><UnknownCell value={formatDuration(numeric(row.duration_seconds))} /></dd></div>
-          <div><dt>Distance</dt><dd><UnknownCell value={measurement(row.distance_value, row.distance_unit)} /></dd></div>
-          <div><dt>Active energy</dt><dd><UnknownCell value={measurement(row.active_energy_value, row.active_energy_unit)} /></dd></div>
-          <div><dt>Average / maximum HR</dt><dd><UnknownCell value={numeric(row.avg_heart_rate) === null ? null : `${formatNumber(numeric(row.avg_heart_rate))} bpm`} />
-            {' / '}<UnknownCell value={numeric(row.max_heart_rate) === null ? null : `${formatNumber(numeric(row.max_heart_rate))} bpm`} /></dd></div>
-          <div><dt>Environment</dt><dd><UnknownCell value={setting(row.is_indoor)} /></dd></div>
-          <div><dt>Source</dt><dd><UnknownCell value={text(row.source_name)} /></dd></div>
-        </dl>
-        {open(row)}
-      </li>)}
+    <ul className="workouts-history" aria-label="Recorded workout history">
+      {rows.map((row, index) => {
+        const time = workoutTime(row);
+        const average = numeric(row.avg_heart_rate);
+        const maximum = numeric(row.max_heart_rate);
+        return <li className="workouts-history-row" key={text(row.id) ?? `unknown-${index}`}>
+          <div className="workouts-history-heading">
+            <WorkoutGlyph type={workoutType(row)} />
+            <div><strong className="workouts-type-name" title={typeLabel(row)}>{typeLabel(row)}</strong><span>{time}</span></div>
+          </div>
+          <div className="workouts-history-values">
+            <span><small>Duration</small>{numeric(row.duration_seconds) === null ? 'Not recorded' : formatDuration(numeric(row.duration_seconds))}</span>
+            <span><small>Distance</small>{measurement(row.distance_value, row.distance_unit) ?? 'Not recorded'}</span>
+            <span><small>Energy</small>{measurement(row.active_energy_value, row.active_energy_unit) ?? 'Not recorded'}</span>
+            <span><small>Average HR</small>{average === null ? 'Not recorded' : `${formatNumber(average)} bpm`}</span>
+            <span><small>Maximum HR</small>{maximum === null ? 'Not recorded' : `${formatNumber(maximum)} bpm`}</span>
+          </div>
+          <div className="workouts-history-action">{open(row)}</div>
+        </li>;
+      })}
     </ul>
+    <WorkoutTable rows={rows} onOpen={onOpen} />
   </>;
 }
 
@@ -193,8 +251,16 @@ export default function WorkoutsSection(props: DailySectionProps) {
   };
 
   return <section className="workouts-section" aria-labelledby="workouts-heading">
-    <h2 id="workouts-heading" ref={heading} tabIndex={-1}>Workouts</h2>
-    <p>Recorded activity only. Logging and corrections stay in chat. Original Daily remains canonical.</p>
+    <DailySectionHeader title="Workouts" headingId="workouts-heading" headingRef={heading} actions={<DataNotes>
+      <p>Recorded activity only. Logging and corrections stay in chat. Original Daily remains canonical.</p>
+      <p>Active days count distinct recorded workout_date values; missing dates are excluded. Total time, distance and energy use recorded values only. Missing measurements are not treated as zero.</p>
+      <p>Distance and energy totals stay grouped by stored unit. Values without a unit are listed individually, not summed. Incomplete loaded totals are lower bounds.</p>
+      <p>Volume groups dates into Monday-start weeks or calendar months in Europe/Copenhagen. Missing durations are excluded from recorded minutes, not treated as zero.</p>
+      <p>Filtering and sorting apply only to loaded rows. Distance and energy sort within each stored unit. Returned records do not establish source completeness or freshness.</p>
+      <p>Heart-rate samples show recorded minute averages, minima and maxima from workout start or the first returned sample. Gaps are not zero. Recorded JSON remains the source detail.</p>
+    </DataNotes>} />
+    {result.last && <FreshnessLine observedAt={result.last.freshness.observedAt} count={result.items.length}
+      partial={partial || result.last.status === 'partial'} />}
     {selected && row && <WorkoutDetail key={String(row.id)} {...props} row={row} onBack={back} />}
     {selected && row && !loadedRow && <p role="status">
       This workout’s summary is from the previous read while the refreshed period is incomplete.
@@ -222,7 +288,6 @@ export default function WorkoutsSection(props: DailySectionProps) {
           </select>
         </label>
       </div>
-      <p className="daily-meta">Filtering and sorting apply only to loaded rows. Distance and energy sort within each unit.</p>
       {(result.status === 'idle' || result.status === 'loading') && result.items.length === 0 && <DailyState status="loading" />}
       {result.items.length > 0 && <>
         <WorkoutSummary rows={filtered} partial={partial} period={props.period} />
@@ -240,7 +305,6 @@ export default function WorkoutsSection(props: DailySectionProps) {
       {result.loadingMore && <p>Loading more workouts…</p>}
       {result.capped && <button className="secondary-button" type="button" onClick={result.loadMore}>Load more</button>}
     </div>}
-    <p className="daily-meta" role="status">{result.status === 'loading' && result.items.length > 0 ? 'Refreshing recorded workouts. ' : ''}
-      Source: daily.health.workouts. Returned records do not establish source completeness or freshness.</p>
+    {result.status === 'loading' && result.items.length > 0 && <p className="daily-meta" role="status">Refreshing recorded workouts…</p>}
   </section>;
 }
