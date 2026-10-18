@@ -1037,22 +1037,35 @@ Proactive checks (milestone 2) are on in production since P13-14 (18 October
 2026): both `JARVIS_PROACTIVE_ENABLED` and `VITE_PROACTIVE_ENABLED` are set, so the
 07:00 and 18:00 checks run, Check now works, and the Proactive page and its
 Settings section are available. A check only reads sources and stores findings.
-Todo additions and alerts or reminders (milestones 3 and 4) stay off until their
-own switch-on. Whether scheduled checks run is established by Dan's test on the
-deployed app, not by CI.
+Whether scheduled checks run is established by Dan's test on the deployed app,
+not by CI.
+
+Suggested todos, alerts and reminders (milestones 3 and 4) are on in production
+since P13-15 (18 October 2026): `JARVIS_PROACTIVE_TODO_WRITES_ENABLED` and
+`JARVIS_PROACTIVE_ALERTS_ENABLED` are set in the backend, with no web flag. After a
+check Jarvis may add new lines under "Suggested by Jarvis" in the owner's existing
+todo file; it never edits or deletes an existing line and never creates the file.
+A time-critical finding (a deadline within 24 hours or a calendar clash) found by
+the 07:00 or 18:00 check can send one push, at most 3 a day and never between 22:00
+and 07:00. About an hour before a todo with a time is due, Jarvis sends one
+reminder push; a reminder due in the quiet window is held until 07:00 and shown as
+due soon or overdue. Pause, the Todo list source switch and Notifications → Turn
+off stop them. Whether todo lines appear and pushes arrive is established by Dan's
+test on the deployed app, not by CI.
 
 ## Proactive foundation and engine (18 October 2026; P13-05, P13-06)
 
 The backend foundation provides owner-only status, settings, durable finding
 storage and feedback behind `JARVIS_PROACTIVE_ENABLED`, which defaults off.
-Separate todo-write and alert flags also default off. P13-06 adds the in-process
+Separate todo-write and alert flags also default off in code. P13-06 adds the in-process
 scheduler, manual checks and run history, deterministic deadline/clash detection,
 and one bounded, tool-less summary call; sources plug into the existing registry.
 P13-07 adds read-only todo, Factory and weather source readers, without a writer
 or proactive alert. P13-11 adds a
 separate add-only suggested-todo writer behind
 `JARVIS_PROACTIVE_TODO_WRITES_ENABLED`, which is effective only with
-`JARVIS_PROACTIVE_ENABLED`; both remain default-off. It appends sanitized,
+`JARVIS_PROACTIVE_ENABLED`; both default off in code, and production sets them in
+P13-14 and P13-15. It appends sanitized,
 credential-safe suggestions under `Suggested by Jarvis`, never changes existing
 todo lines, and observes the Todos source switch, pause state, quiet hours for
 scheduled work, and per-run/daily caps. Manual writes may run at any hour.
@@ -1093,8 +1106,8 @@ future provider. Eligible items share one generic push, capped at three accepted
 bundles per Copenhagen day. Manual checks, paused settings, quiet hours, cancelled
 runs, missing subscriptions, and findings already seen, snoozed or dismissed do
 not alert. Push payloads contain no finding text; notification wording comes from
-a closed Danish/English template table in the worker. The alert switch remains
-default-off alongside the proactive and push switches; per-class controls are not
+a closed Danish/English template table in the worker. The alert switch defaults off
+in code, like the proactive and push switches, and production sets it since P13-15; per-class controls are not
 part of this slice.
 
 ## Proactive todo reminders (18 October 2026; P13-13)
@@ -1104,8 +1117,8 @@ due when a proactive check has seen it. Date-only todos remain covered by the
 24-hour deadline alert. Reminders wait through the 22:00–07:00 Copenhagen quiet
 window and are presented as due soon or overdue after 07:00. Each reminder has a
 private Proactive item; todo text is not included in its push or logs. The shared
-proactive, push and alert switches remain default-off, with no new setting or
-web control.
+proactive, push and alert switches default off in code, are on in production since
+P13-15, and add no new setting or web control.
 
 A todo added after the last check is covered from the next check on; "Check
 now" covers it immediately.
