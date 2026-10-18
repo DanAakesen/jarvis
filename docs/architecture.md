@@ -5130,6 +5130,59 @@ files: `JARVIS_DAILY_ENABLED` in the backend container environment in
 `.github/workflows/deploy.yml` (18 October 2026). `daily/default-off.test.ts` allows
 no other configuration file to mention either name.
 
+### On-demand Daily views (18 October 2026; P12-16)
+
+`dailyShowTool(data.query)` (`apps/backend/src/daily/tools/show.ts`) is the seventh
+tool of the Daily composition, registered by `createDailyModules` right after
+`dailyQueryTool`. It adds no route, endpoint, DTO, table, migration, renderer, job
+or secret. It is `sensitive` and `denyOnPhone` with a 2 KiB body limit.
+
+One call runs in this order. `resolveDailyOwner` gives the composed owner, and a
+connector principal is refused as on the Daily routes. A pure parser checks
+`source`, `startDate`, `endDate`, `workoutId`, `metric`, `display` and `limit`;
+its refusals use static wording and never echo input, and a cursor, brief history
+or single-record read is refused toward `daily_query`. The tool refuses before
+reading when `workspaceCommands.isConnected(owner)` is false. One
+`service.query` page then runs over the read model behind `POST /daily/query`
+(at most 366 days and 200 rows, 100 for meals, favourites and plans). The pure
+`buildDailyView` (`apps/backend/src/daily/show/views.ts`) turns it into a view, and
+the tool publishes it through the workspace view lifecycle: `update` first, `create`
+when the view does not exist yet, and for a refresh a best-effort foreground `show`.
+The receipt says whether the view was created or refreshed.
+
+`buildDailyView` maps stored rows onto the existing `table`, `chart`, `detail` and
+`text` generated-view contracts and calculates nothing: values and units pass
+through, nulls stay unknown and number formatting is locale-free. Views are bounded
+(200 shown rows, a 240 KiB view budget, 2,000-character cells, 200-character titles).
+Each carries a `source` reason with the provenance, the period, `Read <date, time>
+Copenhagen time.`, the latest-record or last-processed stamp where the source has
+one, and "Completeness and freshness are not established." View IDs are
+`daily-<source>-<table|chart>` or `daily-sync`. A measurement view filtered to one
+metric adds the form and a short digest of the metric name; a heart-rate view is
+keyed by its rendered form and workout, not by its date window, so asking again
+refreshes the same view. Only sleep hours, one measurement or heart rate can be
+drawn as a chart, and any other chart request becomes a table with a note. An empty
+read becomes a `text` view carrying its own read time.
+
+The tool answers within 25 seconds overall, under the agent's 30-second default
+read timeout for tools without a longer budget, so the model sees the tool's own
+failure rather than a transport timeout. The foreground `show` is limited to 3
+seconds and is best-effort. The abort signal is rechecked after every await, so a
+read or publish that finishes after the deadline is a failure, never a success;
+an outer abort passes through unchanged.
+
+On the web, `GeneratedViewRenderer` renders `source.reason` as a footnote
+(`SourceNote`) under `table`, `detail` and `chart` views, while `list` and `text`
+views carry their own note. The stylesheet keeps table cells' words whole
+(`overflow-wrap: normal`, scrolling inside the existing wrapper) and tightens cell
+padding below 700 px. The iframe sandbox, bridge and CSP are unchanged, and
+generated content still gets no credentials, backend or network access.
+
+`show/views.test.ts` and `tools/show.test.ts` use synthetic rows and a fake
+workspace. `composition.test.ts` and `production-modules.test.ts` pin the
+seven-tool list, and `composition.test.ts` proves a mismatched owner is denied on
+the routes and on the tools with no SQL touched.
+
 ### Proactive page and web switch (18 October 2026; P13-10)
 
 `VITE_PROACTIVE_ENABLED` is loaded by name only, parsed by
@@ -5376,10 +5429,10 @@ of Jarvis without Daily.
 With the switch on it needs the shared SQL pool and a UUID owner (otherwise
 startup fails), builds `createDailyData(pool, owner)` and returns the module of
 `createDailyModules` for the nutrition rehearsal: `GET /daily/capabilities`,
-`POST /daily/query`, `GET`/`PATCH /daily/nutrition-targets` and six tools
-(`daily_query`, `daily_food`, `daily_food_review`, `daily_saved_food`,
-`daily_nutrition_targets`, `daily_nutrition_suggest`), which takes the catalogue
-to 116 of its 128-tool limit. The connector, Frida lookup, feeds and health-upload
+`POST /daily/query`, `GET`/`PATCH /daily/nutrition-targets` and seven tools
+(`daily_query`, `daily_show`, `daily_food`, `daily_food_review`, `daily_saved_food`,
+`daily_nutrition_targets`, `daily_nutrition_suggest`), which stay inside the
+catalogue's 128-tool limit (CI checks the headroom). The connector, Frida lookup, feeds and health-upload
 arguments are left out, so the module has no MCP route, provider call, Google or
 Gmail read, job or timer. The targets and health accessors also compare the
 resolved owner with the composed owner and refuse a mismatch, on top of the check
@@ -5394,7 +5447,7 @@ other environment stays off. `daily/default-off.test.ts` scans configuration fil
 for both names, allows only those two files and checks their literal values.
 `daily/composition.test.ts` builds real
 applications: it compares a Daily-off one with one built without Daily, shows the
-module adds exactly its three routes and six tools, and checks that
+module adds exactly its three routes and seven tools, and checks that
 unauthenticated, other-user, runner, connector and mismatched-owner callers are
 refused before any SQL.
 

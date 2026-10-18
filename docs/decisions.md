@@ -1,5 +1,42 @@
 # Decisions
 
+## Show Daily data on demand through the existing workspace (18 October 2026; P12-16 / #731)
+
+**Builder decision inside Dan's "ship all daily if possible. You can take decisions
+as I would", not an activation and not acceptance.** The overview page shows what
+Daily holds; Dan also wants to ask Jarvis for it in chat or voice, so the answer
+appears on screen the way other generated views do.
+
+- One tool, no new surface. `daily_show` is the seventh Daily tool. It reads through
+  the same owner-authorised read model as the page and `daily_query` and publishes
+  through the existing workspace view lifecycle. It adds no endpoint, renderer,
+  page, widget, GenUI engine, migration, account, consent, grant, secret, RBAC,
+  resource or import, and no provider, device or private read or write.
+- One bounded page, nothing calculated. A request is one page (at most 366 days and
+  200 rows) with no cursor; brief history and single-record detail stay with
+  `daily_query`. Stored values pass through with their units and dates, and a
+  missing value is unknown, never zero.
+- Provenance stays visible. Every table, chart and detail carries a footnote with the
+  source, period, read time and "completeness and freshness are not established", and
+  an empty read says so with its own read time. The renderer prints it beneath
+  those three kinds only; list and text views keep their own note. Table cells keep
+  whole words and numbers and a wide table scrolls inside its window.
+- Refresh in place. View IDs are stable and keyed by what is shown, not by the date
+  window, so asking again updates the same view instead of adding another.
+- Owner and tab gates. The tool is sensitive and phone-denied, refuses a connector or
+  a non-owner before SQL, and refuses before reading when no workspace tab is
+  connected, pointing Jarvis to `daily_query` for a text answer. A 25-second
+  deadline sits under the agent's 30-second read timeout, and a late success after
+  it is a failure.
+- Same switch as everything else in Daily. With Daily off, Jarvis is unchanged; with
+  it on, the catalogue gains one tool, inside the 128-tool limit. This change sets no
+  flag. The reserved Status, Recomp, Review and Ready view IDs stay unused and #723
+  stays withdrawn.
+- Evidence and limits. Synthetic unit tests, the web renderer tests and a headless
+  Chromium check at 390×844 and 1280×800 in both themes (DESIGN.md). That check
+  caught two defects, split table values and an empty read without a read time, both
+  fixed. It is not live data, a physical phone, keyboard or reduced-motion coverage,
+  provider acceptance or Daily acceptance. Rolling back means reverting this change.
 ## Switch Web Push milestone 1 on in production (18 October 2026; P13-03 / #934)
 
 Dan confirmed turning milestone 1 on: a user-started test notification that opens

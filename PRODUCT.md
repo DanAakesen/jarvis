@@ -1229,6 +1229,26 @@ production deployment files then set it together with the backend switch (18
 October 2026). Acceptance with real data, a physical phone and the original source
 stays open.
 
+On-demand Daily views (P12-16 / #731) let Dan ask Jarvis in chat or voice to show
+what Daily holds, and the answer appears as a table, chart or detail in the existing
+workspace window instead of a fixed native screen. The `daily_show` tool covers
+measurements, sleep, workouts, one workout's heart rate, food history, saved
+favourites, meal plans and sync status. It reads through the same
+owner-authorised read model as the Daily page and `daily_query`: one bounded page
+per request (at most 366 days and 200 rows, 100 for meals, favourites and plans;
+no paging), and it calculates nothing, so every number is a stored value with its
+unit and date. A footnote under the data names the source, the period, the read
+time and that completeness and freshness are not established. A missing value reads
+as unknown, never zero, and an empty read says so with its own read time. Asking
+for the same view again refreshes it in place rather than opening another. It works
+only while a signed-in workspace tab is connected; otherwise, or for an external
+client, Jarvis says so and uses `daily_query` for a text answer. It is private
+health data: the phone is unsupported, and nothing is changed, logged or sent. The
+tool exists only behind the default-off Daily gate (Daily off leaves Jarvis
+unchanged). It adds no page, renderer, widget, writer, provider, device or consent
+path and no Status, Recomp, Review or Ready views. Checked with synthetic data
+only; acceptance with real data and a physical phone stays open.
+
 When an existing Frida adapter is explicitly supplied, owner-authenticated
 `daily_food_lookup` exposes only its public-reference component lookup.
 Keep generic food names, requested grams or explicit unknowns, preparation,
