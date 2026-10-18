@@ -164,7 +164,7 @@ export function DailyPage({ backendUrl, getAccessToken, knownSources, initialSou
                   <DailyChart kind="bar" series={plot.series} name={`${plot.label}, recorded Copenhagen dates`}
                     dataTable={<Records source={data.source} rows={data.items} units={data.units} />} />
                   <p className="daily-meta">X: recorded observation and Copenhagen date. Y: {plot.unit}. Other pages are not included in this chart.</p>
-                </div> : <Records key={`${data.source}:${cursors.length}:${data.freshness.observedAt}`} source={data.source} rows={data.items} units={data.units} {...(canOpenRecord ? {
+                </div> : <Records key={`${data.source}:${cursors.length}`} source={data.source} rows={data.items} units={data.units} {...(canOpenRecord ? {
                   openLabel: data.source === sources.workouts ? 'Open workout' : 'Open brief',
                   onOpenRecord: (id: string) => {
                     collectionCursors.current = cursors; focusAfterLoad.current = true; setCursors([]); setView('table');

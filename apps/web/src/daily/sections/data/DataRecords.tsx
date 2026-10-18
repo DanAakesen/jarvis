@@ -1,4 +1,4 @@
-import { useId, useRef, useState, useSyncExternalStore } from 'react';
+import { useEffect, useId, useRef, useState, useSyncExternalStore } from 'react';
 import { dailyQuerySources as sources, type DailyJson, type DailySourceId } from '@jarvis/contracts';
 import { dailyColumns, dailyRowKey, readable, type Row } from '../../presentation';
 import { ScrollTable } from '../../ui/ScrollTable';
@@ -53,31 +53,50 @@ export function DataRecords({ source, rows, units = {}, onOpenRecord, openLabel 
   onOpenRecord?: (id: string) => void; openLabel?: string;
 }) {
   const phone = useSyncExternalStore(typeof window.matchMedia === 'function' ? subscribe : () => () => {}, phoneSnapshot, serverSnapshot);
-  const [selected, setSelected] = useState<number | null>(null);
+  const [selected, setSelected] = useState<string | null>(null);
   const panel = useRef<HTMLElement>(null);
+  const records = useRef<HTMLDivElement>(null);
   const id = useId();
   const columns = dailyColumns(source);
+  const occurrences = new Map<string, number>();
+  const keys = rows.map((row, index) => {
+    const base = source === sources.metrics ? JSON.stringify([source, row.metric_date, row.metric_name, row.unit]) :
+      source === sources.metricCatalog ? JSON.stringify([source, row.metric_name]) :
+        source === sources.days ? JSON.stringify([source, row.meal_date]) : dailyRowKey(row, source, index);
+    const occurrence = occurrences.get(base) ?? 0;
+    occurrences.set(base, occurrence + 1);
+    return `${base}:${occurrence}`;
+  });
+  const selectedIndex = selected === null ? -1 : keys.indexOf(selected);
+  const active = rows[selectedIndex];
+  useEffect(() => {
+    if (selected === null) return;
+    const container = records.current;
+    return () => {
+      if (container?.isConnected && document.activeElement === document.body) container.focus();
+    };
+  }, [selected]);
+  if (selected !== null && selectedIndex === -1) setSelected(null);
   const label = (row: Row) => recordValue(source, columns[0]!.key, row[columns[0]!.key]);
   const rowLabel = (row: Row, index: number) => rows.filter(item => label(item) === label(row)).length > 1
     ? `${label(row)}, record ${index + 1}` : label(row);
   const close = () => {
-    const opener = document.getElementById(`${id}-${selected}`);
+    const opener = document.getElementById(`${id}-${selectedIndex}`);
     setSelected(null);
     opener?.focus();
   };
   const details = (row: Row, index: number) => <button id={`${id}-${index}`} className="ghost-button" type="button"
-    aria-expanded={selected === index} aria-controls={`${id}-detail`} onClick={() => {
-      setSelected(index);
+    aria-expanded={selected === keys[index]} aria-controls={`${id}-detail`} onClick={() => {
+      setSelected(keys[index]!);
       requestAnimationFrame(() => { panel.current?.focus({ preventScroll: true }); panel.current?.scrollIntoView?.({ block: 'start' }); });
     }}>Details for {rowLabel(row, index)}</button>;
   const value = (row: Row, field: string) => <>
     {recordValue(source, field, row[field])}
     {(field === 'meal_name' || field === 'plan_name') && row.deleted_at != null && <span className="daily-deleted">Deleted record</span>}
   </>;
-  const active = selected === null ? undefined : rows[selected];
-  return <div className="daily-data-records">
+  return <div className="daily-data-records" ref={records} role="group" aria-label="Daily records" tabIndex={-1}>
     {phone ? <ul className="daily-record-cards" aria-label="Daily records">{rows.map((row, index) =>
-      <li key={dailyRowKey(row, source, index)}>
+      <li key={keys[index]}>
         <h3>{value(row, columns[0]!.key)}</h3>
         <p className="daily-record-summary">{columns.slice(1, 3).map(column => {
           const unit = fieldUnit(source, column.key, row, units);
@@ -97,7 +116,7 @@ export function DataRecords({ source, rows, units = {}, onOpenRecord, openLabel 
             return <th scope="col" key={column.key} className={rows.some(row => typeof row[column.key] === 'number') ? 'daily-record-number' : undefined}>
               {column.label}{unit ? ` (${unit})` : ''}</th>;
           })}<th scope="col">Details</th></tr></thead>
-          <tbody>{rows.map((row, index) => <tr key={dailyRowKey(row, source, index)}>
+          <tbody>{rows.map((row, index) => <tr key={keys[index]}>
             {columns.map(column => <td key={column.key} className={typeof row[column.key] === 'number' ? 'daily-record-number' : undefined}>
               <span className="daily-record-cell">{value(row, column.key)}</span>
             </td>)}
@@ -107,7 +126,7 @@ export function DataRecords({ source, rows, units = {}, onOpenRecord, openLabel 
       </ScrollTable>}
     {active && <section id={`${id}-detail`} ref={panel} className="daily-record-panel" role="region"
       aria-labelledby={`${id}-title`} tabIndex={-1} onKeyDown={event => { if (event.key === 'Escape') { event.stopPropagation(); close(); } }}>
-      <div className="daily-record-panel-heading"><h3 id={`${id}-title`}>Details for {rowLabel(active, selected!)}</h3>
+      <div className="daily-record-panel-heading"><h3 id={`${id}-title`}>Details for {rowLabel(active, selectedIndex)}</h3>
         <button className="secondary-button" type="button" onClick={close}>Close details</button></div>
       <RecordFields source={source} row={active} units={units} />
       {onOpenRecord && typeof active.id === 'string' && active.id.length > 0 &&

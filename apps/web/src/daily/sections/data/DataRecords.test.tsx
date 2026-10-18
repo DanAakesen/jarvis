@@ -4,6 +4,7 @@ import { dailyQuerySources as sources } from '@jarvis/contracts';
 import { DataRecords } from './DataRecords';
 import { DailyPage } from '../../DailyPage';
 import { dailyFixture, jsonResponse } from '../../test-support';
+import { DailyRefreshContext } from '../../refresh';
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 const row = { meal_date: '2026-10-17', meal_name: 'Synthetic lunch with a long recorded description',
@@ -55,6 +56,54 @@ describe('Daily Data records', () => {
     act(() => { phone = false; change(); });
     expect(screen.getByRole('table')).toBeTruthy();
     expect(screen.queryByRole('list', { name: 'Daily records' })).toBeNull();
+  });
+
+  it('keeps the selected record through refresh/reordering and recovers focus if it disappears', async () => {
+    const original = { metric_date: '2026-10-17', metric_name: 'synthetic_mass', value: 0, unit: 'kg', notes: 'Original synthetic detail' };
+    const rendered = render(<DataRecords source={sources.metrics} rows={[original]} />);
+    fireEvent.click(screen.getByRole('button', { name: /Details for/u }));
+    const panel = screen.getByRole('region', { name: /Details for/u });
+    await waitFor(() => expect(document.activeElement).toBe(panel));
+    fireEvent.click(within(panel).getByText('Raw record'));
+    const raw = within(panel).getByText('Raw record').closest('details')!;
+    const summary = within(panel).getByText('Raw record');
+    summary.focus();
+    rendered.rerender(<DataRecords source={sources.metrics} rows={[
+      { metric_date: '2026-10-18', metric_name: 'synthetic_distance', value: 10, unit: 'km' },
+      { ...original, notes: 'Updated synthetic detail' },
+    ]} />);
+    expect(screen.getByRole('region', { name: /Details for/u })).toBe(panel);
+    expect(within(panel).getByText('Updated synthetic detail')).toBeTruthy();
+    expect(raw.open).toBe(true);
+    expect(document.activeElement).toBe(summary);
+    rendered.rerender(<DataRecords source={sources.metrics} rows={[]} />);
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('group', { name: 'Daily records' })));
+    expect(screen.queryByRole('region', { name: /Details for/u })).toBeNull();
+  });
+
+  it('keeps record details and raw disclosure open when an automatic read changes the freshness timestamp', async () => {
+    let reads = 0;
+    vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => {
+      const result = dailyFixture(JSON.parse(String(init.body)), [{ ...row, id: 'synthetic-meal' }]);
+      result.freshness.observedAt = new Date(Date.UTC(2026, 9, 17, 7, reads++)).toISOString();
+      return jsonResponse(result);
+    }));
+    const token = async () => 'synthetic';
+    const page = (version: number) => <DailyRefreshContext.Provider value={version}>
+      <DailyPage embedded backendUrl="http://localhost" getAccessToken={token} knownSources={[sources.meals]} initialSource={sources.meals} />
+    </DailyRefreshContext.Provider>;
+    const rendered = render(page(0));
+    fireEvent.click(await screen.findByRole('button', { name: /Details for/u }));
+    const panel = screen.getByRole('region', { name: /Details for/u });
+    await waitFor(() => expect(document.activeElement).toBe(panel));
+    const summary = within(panel).getByText('Raw record');
+    fireEvent.click(summary); summary.focus();
+    rendered.rerender(page(1));
+    await waitFor(() => expect(reads).toBe(2));
+    await waitFor(() => expect(document.querySelector('.daily-freshness time')?.getAttribute('datetime')).toBe('2026-10-17T07:01:00.000Z'));
+    expect(screen.getByRole('region', { name: /Details for/u })).toBe(panel);
+    expect(summary.closest('details')?.open).toBe(true);
+    expect(document.activeElement).toBe(summary);
   });
 
   it('keeps shared-period reads, source callbacks, partial freshness and pagination explanations', async () => {

@@ -6120,9 +6120,12 @@ P12-34 applies the kit to the shared `DailyPage` record browser without changing
 source callbacks or workout/brief drill-down state. `sections/data/DataRecords`
 owns presentation-only record selection and the below-700px media subscription:
 it renders either a sticky `ScrollTable` or a phone list, with one labelled
-detail control per record and a focused inline region. All returned fields
-remain available, including nested facts and a collapsed raw record. Briefs'
-existing embedded `DailyPage` consumer remains supported; no Briefs section
+detail control per record and a focused inline region. Selection uses record
+identity rather than a read timestamp, so background refresh preserves open
+details and raw disclosures; removal recovers focus to the record group.
+All returned fields
+remain available, including nested facts and a collapsed raw record. The
+standalone and embedded `DailyPage` APIs remain supported; no Briefs section
 files change. The existing `dailyPlots` numeric observations feed `DailyChart`
 unchanged, with records as its disclosed data alternative. No server,
 authorization, persistence, route, flag or dependency change is involved.

@@ -9,6 +9,8 @@ phones. Put all fields and units in a labelled inline detail region, preserving
 null as “Not recorded” and zero as zero. Keep raw JSON nested and collapsed,
 and return focus to the row control on close or Escape. Workout and brief
 drill-down actions remain available inside the record detail.
+Preserve detail selection across same-query refreshes by record identity,
+including refreshed ordering; recover focus if the selected record disappears.
 
 Keep one freshness line beside the collection picker and Refresh; move loaded
 period, processing time and unknown-completeness evidence to the existing source

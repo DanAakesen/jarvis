@@ -697,6 +697,9 @@ and workout/brief actions moving into readable record details.
 The responsive tests cover phone cards, breakpoint changes, field units,
 raw-record disclosure, close/Escape focus return, shared periods, source callbacks,
 partial freshness, loading/Retry/empty states and pagination boundaries.
+Refresh regressions also verify stable detail selection after reordered records,
+raw disclosure/focus retention when the read timestamp changes, and focus
+recovery when the selected record disappears.
 
 Synthetic captures under `docs/ui/p12-34/` use the actual App with scratch-only
 sign-in and API fixtures, Chromium and an advisory-checked scratch browser driver.
