@@ -126,7 +126,7 @@ import { createSystemStatusReader } from './system-status.js';
 import { createProductionModules } from './production-modules.js';
 import { createPushStore } from './database/push-store.js';
 import { registerPushRoutes } from './push/routes.js';
-import { sendWebPush } from './push/webpush.js';
+import { createSystemPushSender } from './proactive/push-delivery.js';
 import { composeDaily } from './daily/composition.js';
 import { registerProactive } from './proactive/composition.js';
 
@@ -1111,6 +1111,19 @@ try {
     store: createPushStore(database!.pool),
     publicOrigin: config.staticWebAppOrigin!,
   }));
+  const alertPushStore = config.proactiveEnabled && config.proactiveAlertsEnabled && config.pushEnabled &&
+      database && config.staticWebAppOrigin
+    ? createPushStore(database.pool)
+    : undefined;
+  const alertPushSender = alertPushStore && config.staticWebAppOrigin
+    ? createSystemPushSender({
+      store: alertPushStore,
+      ownerObjectId: config.auth.ownerObjectId,
+      publicOrigin: config.staticWebAppOrigin,
+      now: () => new Date(),
+      logger,
+    })
+    : undefined;
   if (config.proactiveEnabled) registerProactive(app, {
     enabled: config.proactiveEnabled,
     ownerObjectId: config.auth.ownerObjectId,
@@ -1130,7 +1143,8 @@ try {
     ...(taskStore ? { taskStore } : {}),
     backgroundJobs: app.backgroundJobs,
     ...(conversationStore ? { conversationStore } : {}),
-    pushSender: sendWebPush,
+    ...(alertPushStore ? { pushStore: alertPushStore } : {}),
+    ...(alertPushSender ? { systemPushSender: alertPushSender } : {}),
     pushEnabled: config.pushEnabled,
     todoWritesEnabled: config.proactiveTodoWritesEnabled,
     alertsEnabled: config.proactiveAlertsEnabled,

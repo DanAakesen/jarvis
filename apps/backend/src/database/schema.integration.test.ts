@@ -31,6 +31,7 @@ import type { TaskEventMessage } from '../factory/task-store.js';
 import { mapGithubWebhook } from '../github/webhook-mapping.js';
 import { createPushStore } from './push-store.js';
 import { createProactiveStore } from './proactive-store.js';
+import { createProactiveAlertStore } from './proactive-alert-store.js';
 import { createProactiveTodoReceiptStore } from './proactive-todo-store.js';
 import { generateVapidKeyPair } from '../push/webpush.js';
 import { defaultProactiveSettings } from '../proactive/store.js';
@@ -47,7 +48,7 @@ const core = '0001_core_tables.sql';
 const tablesInSchema = [
   'activity', 'artifacts', 'background_job_dismissals', 'background_job_steps', 'background_jobs', 'conversation_attachments',
   'conversation_summaries', 'credential_status', 'deployment_failure_receipts', 'deployments', 'factory_task_submissions', 'folio_items', 'jarvis_sessions',
-  'memories', 'memory_deletions', 'memory_history', 'messages', 'phone_sessions', 'proactive_items',
+  'memories', 'memory_deletions', 'memory_history', 'messages', 'phone_sessions', 'proactive_alerts', 'proactive_items',
   'proactive_runs', 'proactive_settings', 'proactive_source_status', 'proactive_spend', 'proactive_todo_receipts', 'projects',
   'pull_requests', 'push_subscriptions', 'push_vapid_keys', 'releases',
   'sandbox_sessions', 'sandbox_turns', 'settings', 'task_event_archives', 'task_events', 'task_status_notifications',
@@ -168,13 +169,14 @@ describe('committed domain schema (groups 1-8)', () => {
         N'IX_sandbox_turns_sandbox_session_id_started_at', N'IX_artifacts_task_id_at',
         N'IX_task_event_archives_task_first_at', N'IX_pull_requests_project_head_sha',
         N'IX_workflow_runs_project_head_sha', N'IX_releases_project_created_at',
-        N'IX_deployments_release_id_at', N'IX_messages_at', N'UX_activity_alert_key') ORDER BY name`);
+        N'IX_deployments_release_id_at', N'IX_messages_at', N'IX_proactive_alerts_owner_day_status',
+        N'UX_activity_alert_key', N'UX_proactive_alerts_owner_alert_key') ORDER BY name`);
     expect(recordset.map((row) => row.name)).toEqual([
       'IX_artifacts_task_id_at', 'IX_deployments_release_id_at', 'IX_messages_at',
-      'IX_pull_requests_project_head_sha', 'IX_releases_project_created_at', 'IX_sandbox_sessions_task_id_status',
+      'IX_proactive_alerts_owner_day_status', 'IX_pull_requests_project_head_sha', 'IX_releases_project_created_at', 'IX_sandbox_sessions_task_id_status',
       'IX_sandbox_turns_sandbox_session_id_started_at', 'IX_task_event_archives_task_first_at',
       'IX_task_events_task_id_at', 'IX_tasks_state_next_attempt_at', 'IX_workflow_runs_project_head_sha',
-      'UX_activity_alert_key',
+      'UX_activity_alert_key', 'UX_proactive_alerts_owner_alert_key',
     ]);
   });
 
@@ -312,6 +314,26 @@ describe('committed domain schema (groups 1-8)', () => {
     expect(await store.items.list('all', 20, now)).toEqual([saved]);
   }));
 
+  it('re-reads item state in owner scope without returning item text', () => withRollbackDatabase(async (rollbackPool) => {
+    const owner = randomUUID();
+    const otherOwner = randomUUID();
+    const store = createProactiveStore(rollbackPool, owner);
+    const item = await store.items.upsertFinding({
+      dedupeKey: 'integration:get-many-state',
+      title: 'Synthetic private title',
+      body: 'Synthetic private body.',
+      category: 'deadline',
+      urgency: 'time_critical',
+      dueAt: null,
+      evidence: [],
+      runId: null,
+      language: 'en',
+    });
+    await store.items.applyFeedback(item.id, 'seen');
+    expect(await store.items.getMany([item.id, randomUUID()])).toEqual([{ id: item.id, state: 'seen' }]);
+    expect(await createProactiveStore(rollbackPool, otherOwner).items.getMany([item.id])).toEqual([]);
+  }));
+
   it('persists proactive settings, findings, feedback, leases, source status and estimated spend', () => withRollbackDatabase(async (rollbackPool) => {
     const owner = randomUUID();
     const store = createProactiveStore(rollbackPool, owner);
@@ -341,6 +363,7 @@ describe('committed domain schema (groups 1-8)', () => {
     };
     const first = await store.items.upsertFinding(finding);
     expect(first).toMatchObject({ kind: 'finding', state: 'new', dueAt: finding.dueAt, evidence: finding.evidence });
+    expect(await store.items.getMany([first.id, randomUUID()])).toEqual([{ id: first.id, state: 'new' }]);
     expect((await store.items.applyFeedback(first.id, 'dismiss'))?.state).toBe('dismissed');
     expect((await store.items.upsertFinding({ ...finding, title: 'Updated synthetic title' })).state).toBe('dismissed');
     expect((await store.items.upsertFinding({ ...finding, urgency: 'fyi' })).state).toBe('dismissed');
@@ -440,6 +463,41 @@ describe('committed domain schema (groups 1-8)', () => {
     expect(await receipts.list(['1123456789abcdef0123456789abcdef'])).toMatchObject([
       { failedAttempts: 2, added: false, skipped: false },
     ]);
+  }));
+
+  it('persists owner-scoped alert ledger attempts and Copenhagen daily sent counts', () => withRollbackDatabase(async (rollbackPool) => {
+    const owner = randomUUID();
+    const otherOwner = randomUUID();
+    const item = await createProactiveStore(rollbackPool, owner).items.upsertFinding({
+      dedupeKey: 'integration:alert-ledger',
+      title: 'Synthetic alert finding',
+      body: 'Synthetic alert body.',
+      category: 'deadline',
+      urgency: 'time_critical',
+      dueAt: '2026-10-20T12:00:00.000Z',
+      evidence: [],
+      runId: null,
+      language: 'en',
+    });
+    const ledger = createProactiveAlertStore(rollbackPool, owner);
+    const base = {
+      alertKey: '0123456789abcdef0123456789abcdef',
+      class: 'deadline_24h' as const,
+      itemId: item.id,
+      runId: randomUUID(),
+      dayKey: '2026-10-20',
+      status: 'failed' as const,
+      reason: 'provider_unavailable',
+    };
+    expect(await ledger.get(base.alertKey)).toBeUndefined();
+    expect(await ledger.upsert(base)).toMatchObject({ attempts: 1, status: 'failed' });
+    expect(await ledger.upsert(base)).toMatchObject({ attempts: 2, status: 'failed' });
+    expect(await ledger.countSent(base.dayKey)).toBe(0);
+    expect(await createProactiveAlertStore(rollbackPool, otherOwner).get(base.alertKey)).toBeUndefined();
+    const sent = await ledger.upsert({ ...base, status: 'sent', reason: null });
+    expect(sent).toMatchObject({ attempts: 3, status: 'sent', dayKey: base.dayKey });
+    expect(await ledger.countSent(base.dayKey)).toBe(1);
+    expect(await ledger.get(base.alertKey)).toEqual(sent);
   }));
 
   it('revises HTML artifacts atomically, retains every version and leaves Folio/pins intact', async () => {

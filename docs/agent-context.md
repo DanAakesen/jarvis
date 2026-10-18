@@ -75,6 +75,24 @@ coverage in `src/database/conversation-store.integration.test.ts`; run them only
 loopback SQL Server fixture via `npm run test:database --workspace @jarvis/backend -- src/database/schema.integration.test.ts`.
 Do not report SQL integration coverage unless that service ran.
 
+## P13-12 proactive run alerts (18 October 2026; default off)
+
+The alert hook is composed only when the proactive, push and alert flags are all
+on and its push store/sender dependencies exist. It alerts only on scheduled or
+catch-up runs and only for new, time-critical deadline, clash or travel findings.
+The hash-only ledger retries one failed send, settles sent/twice-failed keys and
+counts daily pushes by distinct run bundle. The sender rechecks quiet hours;
+system payloads contain no private text. No workflow, infrastructure or
+environment setting enables the alert switch.
+
+Focused synthetic checks:
+`npm test --workspace @jarvis/backend -- --run src/proactive/alerts.test.ts src/proactive/composition.test.ts src/proactive/push-delivery.test.ts src/proactive/alerts-default-off.test.ts src/database/proactive-alert-store.test.ts src/database/migrations.test.ts src/push/routes.test.ts src/push/webpush.test.ts`,
+`npm test --workspace @jarvis/web -- --run src/push.test.ts`,
+backend/web builds and lint. SQL Server checks are in
+`src/database/schema.integration.test.ts`; run only with the isolated loopback
+SQL Server fixture using `npm run test:database --workspace @jarvis/backend -- src/database/schema.integration.test.ts`.
+Do not claim the SQL integration tests ran unless that service was available.
+
 ## P13-10 proactive web client (18 October 2026)
 
 `VITE_PROACTIVE_ENABLED` is an exact-`true`, default-off build flag. Do not set

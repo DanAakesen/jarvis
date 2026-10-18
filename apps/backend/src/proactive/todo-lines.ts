@@ -16,7 +16,7 @@ export function sanitiseTodoText(value: string): string {
     .replace(taskMetadata, ' ')
     .replace(/(?:\b[a-z][a-z\d+.-]*:\/\/|www\.)[^\s]+|(?:\b[a-z\d-]+\.)+[a-z]{2,}(?:\/[^\s]*)?/giu, ' ')
     .replace(/<[^>]*(?:>|$)/gu, ' ')
-    .replace(/<!--|-->/gu, ' ')
+    .replace(/<!--|--!?>/gu, ' ')
     .replace(/[`]|(?:\[\[|\]\])/gu, '');
   const withoutLeadingMarkers = withoutMetadata
     .replace(/^\s*(?:(?:[-*+]\s+)|(?:>\s*)|(?:#{1,6}\s*)|(?:\d+[.)]\s+)|(?:\[[ xX]\]\s*))+/u, '');
