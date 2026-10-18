@@ -92,6 +92,31 @@ export function localSlotInstant(key: string): Date {
   return instant;
 }
 
+export function localDateTimeInstant(date: string, time: string): Date {
+  if (!/^\d{2}:\d{2}$/u.test(time)) throw new RangeError('Invalid Copenhagen time');
+  const [year, month, day] = dateParts(date);
+  const [hour, minute] = time.split(':').map(Number);
+  if (hour! > 23 || minute! > 59) throw new RangeError('Invalid Copenhagen time');
+  const key = `${date}T${time}`;
+  const target = Date.UTC(year, month - 1, day, hour, minute);
+  let candidate = target;
+  for (let iteration = 0; iteration < 4; iteration += 1) {
+    const value = parts(new Date(candidate));
+    const observed = Date.UTC(
+      Number(value.year), Number(value.month) - 1, Number(value.day),
+      Number(value.hour), Number(value.minute),
+    );
+    const difference = target - observed;
+    if (difference === 0) break;
+    candidate += difference;
+  }
+  const instant = new Date(candidate);
+  if (`${localDate(instant)}T${localTimeLabel(instant)}` !== key) {
+    throw new RangeError('Copenhagen time does not exist');
+  }
+  return instant;
+}
+
 function shiftDate(key: string, days: number): string {
   const [year, month, day] = dateParts(key);
   return new Date(Date.UTC(year, month - 1, day + days)).toISOString().slice(0, 10);

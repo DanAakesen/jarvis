@@ -1954,6 +1954,32 @@ Stable 32-hex content keys exclude run-local refs and urgency. Ordered optional
 facts before finish; one hook failure cannot prevent later hooks or change success.
 This slice adds no delivery or todo-writing hook and enables no flag.
 
+## Proactive read-only sources (P13-07; default off)
+
+The source registry now constructs the Factory, todo and weather readers in
+alphabetical order from the existing composition dependencies. Construction
+does not read data; the registry remains behind the default-off proactive
+composition and no dispatcher is added.
+
+The todo reader resolves exactly one case-insensitive root `task.md` or
+`tasks.md`, then uses only the vault client's `tree` and `read` methods. It
+enforces the vault file-size cap and a 20-second source deadline. `todo-file.ts`
+exports the resolver and unbounded parser for reuse; one sanitizer removes
+control characters, HTML and markdown link destinations and caps fact text at
+300 characters. Due dates resolve to Copenhagen-local instants. The source
+returns at most 40 facts, ordering the 24-hour-before/72-hour-after due window
+first.
+
+Factory uses `TaskStore.getProactiveSnapshot()`, a bounded, nontransactional
+database read through `databaseReadRequest` that returns only task/project
+status fields, open-PR metadata and the running count. It does not query task
+events, prompts or logs. Weather uses the existing settings store for saved
+home coordinates and a direct HTTPS Open-Meteo request with a 15-second
+deadline, redirect refusal and 128-KiB response limit. Missing location is
+unavailable; no fallback location or geocoding is used. All source errors are
+mapped to stable unavailable reason codes. This slice enables no flags and
+starts no source reads.
+
 ## Web push delivery (P13-02; default off)
 
 The web build exposes only the boolean result of `VITE_PUSH_ENABLED === "true"`

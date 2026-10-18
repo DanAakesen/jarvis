@@ -1019,8 +1019,9 @@ The backend foundation provides owner-only status, settings, durable finding
 storage and feedback behind `JARVIS_PROACTIVE_ENABLED`, which defaults off.
 Separate todo-write and alert flags also default off. P13-06 adds the in-process
 scheduler, manual checks and run history, deterministic deadline/clash detection,
-and one bounded, tool-less summary call. Sources plug into the existing registry;
-no real source adapter, todo writer or proactive alert is added by this slice.
+and one bounded, tool-less summary call; sources plug into the existing registry.
+P13-07 adds read-only todo, Factory and weather source readers. Neither slice adds
+a todo writer or proactive alert, and neither enables any flag.
 
 The approved schedule uses 07:00 and 18:00 Europe/Copenhagen slots; scheduled
 work is forbidden from 22:00 to 07:00. The monthly estimate limit defaults to
@@ -1031,6 +1032,13 @@ Scheduled checks still running at 22:00 are cancelled. Manual checks ignore quie
 hours but respect pause, source settings, budget and stored rate limits (one per
 five minutes, six per Copenhagen day). Runs appear in Background work with safe
 plain-language outcomes. None of these flags is enabled by this change.
+
+The todo reader matches exactly one case-insensitive root `task.md` or
+`tasks.md`, never writes, and emits at most 40 sanitized facts. The Factory
+reader reports attention/failure and open-PR status plus a running-task count;
+the weather reader uses the saved home location and makes a bounded HTTPS
+forecast request. These source implementations remain dormant until a later
+engine slice invokes them.
 
 ## Daily migration (approved P12)
 
