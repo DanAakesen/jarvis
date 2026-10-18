@@ -4,6 +4,7 @@ import type { TaskStore } from '../../factory/task-store.js';
 import type { SettingsStore } from '../../core/settings.js';
 import type { createGitHubVaultClient } from '../../vault/github-client.js';
 import { createFactorySource } from './factory.js';
+import { createNewsSource } from './news.js';
 import { createTodosSource } from './todos.js';
 import { createWeatherSource } from './weather.js';
 
@@ -27,6 +28,7 @@ const xSource: ProactiveSource = {
 export function buildSourceRegistry(dependencies: SourceDependencies): ProactiveSource[] {
   const sources: ProactiveSource[] = [
     createFactorySource(dependencies.taskStore),
+    createNewsSource(),
     createTodosSource(dependencies.vaultClient),
     createWeatherSource(dependencies.settingsStore),
   ];
