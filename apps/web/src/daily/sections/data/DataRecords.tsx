@@ -63,12 +63,12 @@ export function DataRecords({ source, rows, units = {}, onOpenRecord, openLabel 
   const close = () => {
     const opener = document.getElementById(`${id}-${selected}`);
     setSelected(null);
-    opener?.focus({ preventScroll: true });
+    opener?.focus();
   };
   const details = (row: Row, index: number) => <button id={`${id}-${index}`} className="ghost-button" type="button"
     aria-expanded={selected === index} aria-controls={`${id}-detail`} onClick={() => {
       setSelected(index);
-      requestAnimationFrame(() => { panel.current?.focus(); panel.current?.scrollIntoView?.({ block: 'nearest' }); });
+      requestAnimationFrame(() => { panel.current?.focus({ preventScroll: true }); panel.current?.scrollIntoView?.({ block: 'start' }); });
     }}>Details for {rowLabel(row, index)}</button>;
   const value = (row: Row, field: string) => <>
     {recordValue(source, field, row[field])}

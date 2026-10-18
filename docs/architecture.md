@@ -6115,6 +6115,18 @@ no item mutation or approval capability.
 
 ## Web Daily presentation kit and Workouts (18 October 2026; P12-30)
 
+P12-34 applies the kit to the shared `DailyPage` record browser without changing
+`useDailyQuery`, capability discovery, requests, cursor stacks, shared periods,
+source callbacks or workout/brief drill-down state. `sections/data/DataRecords`
+owns presentation-only record selection and the below-700px media subscription:
+it renders either a sticky `ScrollTable` or a phone list, with one labelled
+detail control per record and a focused inline region. All returned fields
+remain available, including nested facts and a collapsed raw record. Briefs'
+existing embedded `DailyPage` consumer remains supported; no Briefs section
+files change. The existing `dailyPlots` numeric observations feed `DailyChart`
+unchanged, with records as its disclosed data alternative. No server,
+authorization, persistence, route, flag or dependency change is involved.
+
 `apps/web/src/daily/ui/` owns the shared presentation primitives. Freshness and
 source caveats are separate compact-line and disclosure components. Statistic
 tiles accept optional compact, sparkline and delta presentation; `Meter`,

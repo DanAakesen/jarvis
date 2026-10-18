@@ -109,17 +109,17 @@ export function DailyPage({ backendUrl, getAccessToken, knownSources, initialSou
       </header>
       : null}
     <DailySectionHeader title={title} headingId="daily-records-heading" headingRef={heading}
-      actions={embedded && onBack ? <button className="secondary-button" type="button" onClick={onBack}>Back to overview</button> : undefined} />
+      actions={embedded && onBack ? <button className="secondary-button" type="button" aria-label="Back to overview" onClick={onBack}>Overview</button> : undefined} />
     {current.error ? <div className="daily-notice" role="alert"><p>{current.error}</p><button className="secondary-button" type="button" onClick={current.reload}>Retry availability</button></div> :
       !current.sources ? <Loader label="Checking Daily availability" variant="rows" /> : <>
         {available.length > 0 && <div className="daily-toolbar">
-          <label>Browse<select value={selected?.id ?? ''} disabled={available.length === 0} onChange={event => {
+          <label>Browse<select aria-label="Browse" value={selected?.id ?? ''} disabled={available.length === 0} onChange={event => {
             const selected = available.find(item => item.id === event.target.value); if (selected) changeSource(selected.id);
           }}>
             {available.length === 0 && <option value="">No collections available</option>}
             {available.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}
           </select></label>
-          <button className="secondary-button" type="button" disabled={result.pending || !query} onClick={result.reload}>Refresh records</button>
+          <button className="secondary-button" type="button" aria-label="Refresh records" disabled={result.pending || !query} onClick={result.reload}>Refresh</button>
           {data && <FreshnessLine observedAt={data.freshness.observedAt} count={data.coverage.returned} partial={data.coverage.hasMore} />}
           {selected?.dated && !workout && sharedPeriod === undefined && <form className="daily-period" onSubmit={applyPeriod}>
             <label>From<input type="date" value={draftPeriod.startDate} onChange={event => setDraftPeriod(value => ({ ...value, startDate: event.target.value }))} /></label>
@@ -155,12 +155,12 @@ export function DailyPage({ backendUrl, getAccessToken, knownSources, initialSou
                     <button className="secondary-button" type="button" aria-pressed={view === 'table'} onClick={() => setView('table')}>Table</button>
                     <button className="secondary-button" type="button" aria-pressed={view === 'chart'} onClick={() => setView('chart')}>Chart</button>
                   </div>
-                  {view === 'chart' && <label>Recorded measure<select value={plot?.id ?? ''} onChange={event => setPlotId(event.target.value)}>
+                  {view === 'chart' && <label>Recorded measure<select aria-label="Recorded measure" value={plot?.id ?? ''} onChange={event => setPlotId(event.target.value)}>
                     {plots.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}
                   </select></label>}
                 </div>}
                 {view === 'chart' && plot ? <div className="daily-plot">
-                  <p>{plot.label}. One bar per numeric recorded observation on this page; unknown values remain in the table. No averaging or interpolation.</p>
+                  <p>One bar per numeric recorded observation on this page; unknown values remain in the table. No averaging or interpolation.</p>
                   <DailyChart kind="bar" series={plot.series} name={`${plot.label}, recorded Copenhagen dates`}
                     dataTable={<Records source={data.source} rows={data.items} units={data.units} />} />
                   <p className="daily-meta">X: recorded observation and Copenhagen date. Y: {plot.unit}. Other pages are not included in this chart.</p>
@@ -174,10 +174,10 @@ export function DailyPage({ backendUrl, getAccessToken, knownSources, initialSou
               </>}
             <footer className="daily-pagination">
               <p role="status">Page {cursors.length + 1}, {data.coverage.returned} {data.coverage.returned === 1 ? 'record' : 'records'}, {data.coverage.hasMore ? 'more available' : 'end of returned records'}.</p>
-              <div><button className="secondary-button" type="button" aria-describedby="daily-pagination-reason" disabled={result.pending || cursors.length === 0} onClick={() => { focusAfterLoad.current = true; setCursors(value => value.slice(0, -1)); }}>Previous page</button>
-                <button className="secondary-button" type="button" aria-describedby="daily-pagination-reason" disabled={result.pending || !data.coverage.hasMore} onClick={() => {
+              <div><button className="secondary-button" type="button" aria-label="Previous page" aria-describedby="daily-pagination-reason" disabled={result.pending || cursors.length === 0} onClick={() => { focusAfterLoad.current = true; setCursors(value => value.slice(0, -1)); }}>Previous</button>
+                <button className="secondary-button" type="button" aria-label="Next page" aria-describedby="daily-pagination-reason" disabled={result.pending || !data.coverage.hasMore} onClick={() => {
                   const next = data.coverage.next; if (next) { focusAfterLoad.current = true; setCursors(value => [...value, next]); }
-                }}>Next page</button></div>
+                }}>Next</button></div>
               <p id="daily-pagination-reason" className="daily-pagination-reason">{result.pending ? 'Loading records; pagination is unavailable.' :
                 `${cursors.length === 0 ? 'Previous unavailable: this is the first page. ' : ''}${!data.coverage.hasMore ? 'Next unavailable: no more returned records.' : ''}`}</p>
             </footer>

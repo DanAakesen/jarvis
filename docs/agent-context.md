@@ -688,6 +688,30 @@ Corrected source requires normal exact-head qualification before release.
 
 ## Inactive Daily page checks (17 October 2026)
 
+P12-34 (18 October 2026) replaces the legacy presentation described below.
+From `apps/web`, run `npm test -- src/daily/DailyPage.test.tsx src/daily/sections/data/DataRecords.test.tsx src/daily/DailyHome.test.tsx src/stylesheets.test.tsx src/daily/ui/svg-cascade.test.ts`
+for focused Data coverage; `npm run lint`, `npm run build` (includes typecheck)
+and `npm test` are the existing complete web checks. Old browser assertions
+change only for the page-status wording, “Not recorded,” the kit chart markup,
+and workout/brief actions moving into readable record details.
+The responsive tests cover phone cards, breakpoint changes, field units,
+raw-record disclosure, close/Escape focus return, shared periods, source callbacks,
+partial freshness, loading/Retry/empty states and pagination boundaries.
+
+Synthetic captures under `docs/ui/p12-34/` use the actual App with scratch-only
+sign-in and API fixtures, Chromium and an advisory-checked scratch browser driver.
+No fixture configuration or browser dependency is added to the repository.
+The browser transport tool was unavailable. Desktop/mobile light/dark geometry,
+detail/raw-record keyboard behavior, chart readout/table alternative, paging
+focus, lower coverage evidence and sync facts were exercised; no console errors
+were observed. Native 320px and desktop 200% CSS zoom have no page overflow.
+Combining 320px with 200% CSS
+zoom exposes the existing shell's `body { min-width: 280px }`; shell geometry is
+outside this presentation change. Physical phones and live owner data remain
+unverified. The image viewer's one-image limit prevented a complete final
+pixel review of every capture; final browser geometry and interactions were
+checked independently of the captures.
+
 Use the existing approved x64 Node22.23.3 and pinned single-React graph; do not
 restore or stub missing backend/contract dependencies. From `apps/web`, the
 focused Vitest selection is `daily/presentation`, `daily/client`, `daily/DailyPage`,
