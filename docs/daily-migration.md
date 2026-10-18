@@ -1,5 +1,14 @@
 # Approved Daily migration to Jarvis
 
+## Offline export tooling status (18 October 2026; P12-22)
+
+The [version 1 bundle format](daily-migration-bundle.md) and
+[owner runbook](daily-migration-runbook.md) define offline validation and
+synthetic fixtures only. Real source-schema reconciliation, private export and
+import remain owner-only gates; no production records or cutover are verified.
+The reusable temporary tooling prepares P12-27's importer, not an import here.
+Refs DanAakesen/jarvis#717 and DanAakesen/jarvis#721.
+
 ## Current approved scope (15 October 2026)
 
 Dan explicitly excluded NEW P12-08/#723 coaching/recovery/recomp automation

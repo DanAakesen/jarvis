@@ -1,5 +1,36 @@
 # Decisions
 
+## Fail-closed offline Daily bundles (18 October 2026; P12-22 / #968)
+
+Use a versioned manifest, exact-byte per-table checksums/counts and streamed
+NDJSON for the 31 mapped source tables. Keep the decisions, bounded reader,
+validator and deterministic synthetic generator in one temporary directory,
+outside the production request path; remove it at P12-19. P12-27 can reuse
+these interfaces for the later resumable importer and reconciliation report.
+No source export, import, SQL migration or production activation is authorised
+by this tooling.
+
+Validation fails closed on completeness/schema/key/type failures and unknown
+mixed-source payloads. Each of the five mixed-source tables requires an owner
+ruling in the manifest (`import-sanitised` or `exclude`, with a private rule);
+free text never executes or overrides classification. The live column set,
+export route and real TickTick discriminator values remain unknown. Existing
+mapping decisions and target CHECK constraints remain authoritative. Inspection
+of migration 0041 found only case-insensitive `ticktick` substring exclusions
+for source discriminators, not the positive allowed set assumed by the issue.
+Do not invent that set or equate passing SQL checks with classification;
+nonempty source payloads need verified semantics before active import.
+
+Reports and diagnostics use fixed codes, known table names, counts and
+hashes/digests only, never source row values, raw keys, unknown identifiers or
+free-text rulings. Disk-backed digest indexes bound duplicate/reference memory.
+Expired objects are counted and never eligible for import. Source owner emails
+never select the target owner, and excluded credentials never become active
+credentials. Actual exports, reports and source-schema evidence remain
+encrypted and owner-only outside the repository, agent environments and
+GitHub artifacts. Synthetic validation is not private migration acceptance.
+Refs DanAakesen/jarvis#717 and DanAakesen/jarvis#721.
+
 ## Preserve attention dismissals across backend restarts (18 October 2026; P9-123 / #962)
 
 Policy-blocked reasons are de-duplicated transactionally against task event
