@@ -36,9 +36,9 @@
 .daily-chart-legend { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-4); padding: 0; margin: var(--space-2) 0; list-style: none; font-size: var(--type-small); }
 .daily-chart-legend li { display: inline-flex; align-items: center; gap: var(--space-2); }
 .daily-chart-legend-mark { display: inline-block; width: 1.4rem; height: 0; border-top: 2px solid currentColor; }
-.daily-chart-legend-mark--bar { height: .75rem; width: .75rem; border: 0; border-radius: 2px; background: currentColor; }
+.daily-chart-legend-mark--bar { height: .75rem; width: .75rem; border: 0; border-radius: var(--radius-control); background: currentColor; }
 .daily-chart-legend-mark--area { height: .75rem; border: 0; border-bottom: 2px solid currentColor; background: color-mix(in srgb, currentColor 16%, transparent); }
-.daily-chart-legend-range { width: 1.4rem; height: .75rem; border-radius: 2px; background: var(--text-muted); opacity: .22; }
+.daily-chart-legend-range { width: 1.4rem; height: .75rem; border-radius: var(--radius-control); background: var(--text-muted); opacity: .22; }
 .daily-chart-readout { min-height: 1.4em; margin: var(--space-1) 0; color: var(--text-muted); font-size: var(--type-small); font-variant-numeric: tabular-nums; }
 .daily-chart-table { margin-top: var(--space-2); }
 .daily-sparkline { display: block; width: min(100%, 8rem); height: 2rem; margin-top: var(--space-2); overflow: visible; }
