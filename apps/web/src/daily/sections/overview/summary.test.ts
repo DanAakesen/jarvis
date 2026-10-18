@@ -39,6 +39,28 @@ describe('Daily overview summaries', () => {
     });
   });
 
+  it('selects the latest start time when multiple workouts share a date', () => {
+    const period = { startDate: '2026-10-12', endDate: '2026-10-18' };
+    const rows = [
+      { workout_date: '2026-10-18', start_at: '2026-10-18T06:00:00Z' },
+      { workout_date: '2026-10-18', start_at: '2026-10-18T17:00:00Z' },
+      { workout_date: '2026-10-18', start_at: null },
+      { workout_date: '2026-10-17', start_at: '2026-10-17T23:00:00Z' },
+    ];
+    expect(workoutOverview(rows, period, period).latest?.row).toBe(rows[1]);
+  });
+
+  it('keeps body sparkline observations in recorded order, with null gaps and separate units', () => {
+    const recent = recentMeasurements([
+      { metric_name: 'body_mass', metric_date: '2026-10-18', value: 70, unit: 'kg' },
+      { metric_name: 'body_mass', metric_date: '2026-10-17', value: null, unit: 'kg' },
+      { metric_name: 'body_mass', metric_date: '2026-10-16', value: 69, unit: 'kg' },
+      { metric_name: 'body_mass', metric_date: '2026-10-15', value: 150, unit: 'lb' },
+    ]);
+    expect(recent[0]?.readings.map(reading => reading.value)).toEqual([69, null, 70]);
+    expect(recent[1]?.readings.map(reading => reading.value)).toEqual([150]);
+  });
+
   it('uses Body display names and the same null-aware values for recent readings', () => {
     const rows = [
       { metric_name: 'body_mass', metric_date: '2026-10-18', value: 70, unit: 'kg' },
