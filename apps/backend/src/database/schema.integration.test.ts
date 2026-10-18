@@ -32,6 +32,7 @@ import { mapGithubWebhook } from '../github/webhook-mapping.js';
 import { createPushStore } from './push-store.js';
 import { createProactiveStore } from './proactive-store.js';
 import { createProactiveAlertStore } from './proactive-alert-store.js';
+import { createProactiveTodoReceiptStore } from './proactive-todo-store.js';
 import { generateVapidKeyPair } from '../push/webpush.js';
 import { defaultProactiveSettings } from '../proactive/store.js';
 
@@ -48,7 +49,7 @@ const tablesInSchema = [
   'activity', 'artifacts', 'background_job_dismissals', 'background_job_steps', 'background_jobs', 'conversation_attachments',
   'conversation_summaries', 'credential_status', 'deployment_failure_receipts', 'deployments', 'factory_task_submissions', 'folio_items', 'jarvis_sessions',
   'memories', 'memory_deletions', 'memory_history', 'messages', 'phone_sessions', 'proactive_alerts', 'proactive_items',
-  'proactive_runs', 'proactive_settings', 'proactive_source_status', 'proactive_spend', 'projects',
+  'proactive_runs', 'proactive_settings', 'proactive_source_status', 'proactive_spend', 'proactive_todo_receipts', 'projects',
   'pull_requests', 'push_subscriptions', 'push_vapid_keys', 'releases',
   'sandbox_sessions', 'sandbox_turns', 'settings', 'task_event_archives', 'task_events', 'task_status_notifications',
   'tasks', 'teams_confirmations', 'teams_conversations', 'tool_calls', 'usage', 'vault_chunks', 'vault_links',
@@ -418,6 +419,50 @@ describe('committed domain schema (groups 1-8)', () => {
     });
     expect(await store.spend.monthTotal('2026-10')).toBe(1.2345);
     expect(await store.spend.monthTotal('2026-11')).toBe(0);
+  }));
+
+  it('persists add-only todo receipts, enforces the unique added key, and preserves todo-added findings', () => withRollbackDatabase(async (rollbackPool) => {
+    const owner = randomUUID();
+    const store = createProactiveStore(rollbackPool, owner);
+    const receipts = createProactiveTodoReceiptStore(rollbackPool, owner);
+    const finding = {
+      dedupeKey: '0123456789abcdef0123456789abcdef',
+      title: 'Synthetic suggested todo finding',
+      body: 'Synthetic evidence.',
+      category: 'suggestion' as const,
+      urgency: 'normal' as const,
+      dueAt: null,
+      evidence: [],
+      runId: null,
+      language: 'en' as const,
+    };
+    const item = await store.items.upsertFinding(finding);
+    await store.items.markTodoAdded([item.id]);
+    expect(await store.items.get(item.id)).toMatchObject({ todoAdded: true });
+    expect(await store.items.upsertFinding({ ...finding, title: 'Updated synthetic finding' }))
+      .toMatchObject({ id: item.id, todoAdded: true });
+
+    const receipt = {
+      itemId: item.id,
+      dedupeKey: finding.dedupeKey,
+      dayKey: '2026-10-18',
+      runId: randomUUID(),
+      status: 'added' as const,
+      reason: null,
+      commitSha: 'a'.repeat(40),
+    };
+    const outcomes = await Promise.all([receipts.insert(receipt), receipts.insert(receipt)]);
+    expect(outcomes.filter(Boolean)).toHaveLength(1);
+    expect(await receipts.countAdded('2026-10-18')).toBe(1);
+    expect(await receipts.list([finding.dedupeKey])).toEqual([{
+      dedupeKey: finding.dedupeKey, added: true, skipped: false, failedAttempts: 0,
+    }]);
+
+    await receipts.insert({ ...receipt, dedupeKey: '1123456789abcdef0123456789abcdef', status: 'failed', reason: 'vault_write_failed', commitSha: null });
+    await receipts.insert({ ...receipt, dedupeKey: '1123456789abcdef0123456789abcdef', status: 'failed', reason: 'vault_write_failed', commitSha: null });
+    expect(await receipts.list(['1123456789abcdef0123456789abcdef'])).toMatchObject([
+      { failedAttempts: 2, added: false, skipped: false },
+    ]);
   }));
 
   it('persists owner-scoped alert ledger attempts and Copenhagen daily sent counts', () => withRollbackDatabase(async (rollbackPool) => {
