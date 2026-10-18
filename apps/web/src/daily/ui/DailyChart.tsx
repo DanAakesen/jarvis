@@ -1,10 +1,24 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { chartLayout, xPosition, yPosition, type ChartPoint } from '../../chart-data';
 import { formatNumber } from './formatters';
 import { ScrollTable } from './ScrollTable';
 
 type DailyChartPoint = Omit<ChartPoint, 'y'> & { y: number | null; low?: number | null; high?: number | null };
 type DailyChartSeries = { name: string; points: readonly DailyChartPoint[] };
+
+function ChartDataTable({ name, series, content }: { name: string; series: readonly DailyChartSeries[]; content?: ReactNode }) {
+  return content ?? <ScrollTable label={`${name} data`}>
+    <table>
+      <caption>{name} data</caption>
+      <thead><tr><th scope="col">Series</th><th scope="col">X</th><th scope="col">Value</th><th scope="col">Minimum</th><th scope="col">Maximum</th></tr></thead>
+      <tbody>{series.flatMap((entry, seriesIndex) => entry.points.map((point, index) =>
+        <tr key={`${seriesIndex}-${index}`}><th scope="row">{entry.name}</th><td>{String(point.x)}</td>
+          <td>{point.y === null ? 'Not recorded' : formatNumber(point.y)}</td>
+          <td>{point.low == null ? 'Not recorded' : formatNumber(point.low)}</td>
+          <td>{point.high == null ? 'Not recorded' : formatNumber(point.high)}</td></tr>))}</tbody>
+    </table>
+  </ScrollTable>;
+}
 
 const width = 800;
 const height = 320;
@@ -53,12 +67,13 @@ function barPath(x: number, y: number, baseline: number, barWidth: number) {
   return `M${x},${bottom} V${top + radius} Q${x},${top} ${x + radius},${top} H${x + barWidth - radius} Q${x + barWidth},${top} ${x + barWidth},${top + radius} V${bottom} Z`;
 }
 
-export function DailyChart({ kind, name, series, target, rangeLabel }: {
+export function DailyChart({ kind, name, series, target, rangeLabel, dataTableContent }: {
   kind: 'line' | 'bar' | 'area';
   name: string;
   series: readonly DailyChartSeries[];
   target?: { value: number; label: string };
   rangeLabel?: string;
+  dataTableContent?: ReactNode;
 }) {
   const [activePoint, setActivePoint] = useState<number | null>(null);
   const [tableOpen, setTableOpen] = useState(false);
@@ -66,7 +81,13 @@ export function DailyChart({ kind, name, series, target, rangeLabel }: {
     point, seriesIndex, index, key: `${entry.name}-${index}`,
   })));
   if (!series.some(entry => entry.points.some(point => point.y !== null || point.low != null || point.high != null))) {
-    return <figure className="daily-chart"><figcaption>{name}</figcaption><p>No recorded values to chart.</p></figure>;
+    return <figure className="daily-chart">
+      <figcaption>{name}</figcaption><p>No recorded values to chart.</p>
+      <details className="daily-chart-table">
+        <summary>View data table</summary>
+        <ChartDataTable name={name} series={series} content={dataTableContent} />
+      </details>
+    </figure>;
   }
   const targetPoint = target && series.flatMap(entry => entry.points)[0];
   const layout = chartLayout([
@@ -174,17 +195,7 @@ export function DailyChart({ kind, name, series, target, rangeLabel }: {
     </p>
     <details className="daily-chart-table" open={tableOpen}>
       <summary onClick={() => setTableOpen(open => !open)}>View data table</summary>
-      {tableOpen && <ScrollTable label={`${name} data`}>
-        <table>
-          <caption>{name} data</caption>
-          <thead><tr><th scope="col">Series</th><th scope="col">X</th><th scope="col">Value</th><th scope="col">Minimum</th><th scope="col">Maximum</th></tr></thead>
-          <tbody>{series.flatMap((entry, seriesIndex) => entry.points.map((point, index) =>
-            <tr key={`${seriesIndex}-${index}`}><th scope="row">{entry.name}</th><td>{String(point.x)}</td>
-              <td>{point.y === null ? 'Not recorded' : formatNumber(point.y)}</td>
-              <td>{point.low == null ? 'Not recorded' : formatNumber(point.low)}</td>
-              <td>{point.high == null ? 'Not recorded' : formatNumber(point.high)}</td></tr>))}</tbody>
-        </table>
-      </ScrollTable>}
+      {tableOpen && <ChartDataTable name={name} series={series} content={dataTableContent} />}
     </details>
   </figure>;
 }

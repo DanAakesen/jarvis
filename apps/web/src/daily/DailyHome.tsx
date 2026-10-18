@@ -120,11 +120,11 @@ export function DailyHome({ backendUrl, getAccessToken }: AreaProps) {
         </button>)}
       </div>
     </nav>
-    <div ref={periodSlot} className="daily-period-slot" style={{ minHeight: periodSlotHeight }}>
+    {activeSection?.id !== 'body-sleep' && <div ref={periodSlot} className="daily-period-slot" style={{ minHeight: periodSlotHeight }}>
       {activeSection?.usesPeriod
         ? <DailyPeriodControl period={period} onPeriodChange={setPeriod} />
         : <p className="daily-period-hint">Period filtering applies in Data.</p>}
-    </div>
+    </div>}
     <DailySectionNavigationContext.Provider value={navigation}>
       <div className="daily-section-panel" id="daily-section-panel" role="tabpanel"
         aria-labelledby={`daily-tab-${activeSection?.id ?? 'overview'}`} tabIndex={0} key={activeSection?.id}>
