@@ -60,8 +60,24 @@ const emptyJson = (value: unknown): boolean => {
   catch { return false; }
 };
 
-function classify(table: string, row: Record<string, unknown>, ruling: Ruling | undefined, report: TableReport): boolean {
+export function isImportableRow(table: string, row: Record<string, unknown>, ruling: Ruling | undefined): boolean {
   if (!(MIXED_TABLES as readonly string[]).includes(table)) return true;
+  const check = Object.hasOwn(SOURCE_CHECKS, table) ? SOURCE_CHECKS[table as keyof typeof SOURCE_CHECKS] : undefined;
+  const discriminator = check ? row[check.column] : undefined;
+  if (check && typeof discriminator === 'string' && discriminator.toLowerCase().includes(check.excludesCaseInsensitiveSubstring)) return false;
+  if (ruling?.decision === 'exclude' || !ruling) return false;
+  // 0041 has a negative CHECK, not a positive source allowlist. Nothing else is guessed.
+  if (check || ruling.rule !== 'empty-payload-v1'
+    || Object.entries(row).some(([key, value]) => key.endsWith('_json') && !emptyJson(value))
+    || (table === 'briefing_runs' && row.preview_text !== null && row.preview_text !== undefined && row.preview_text !== '')) {
+    return false;
+  }
+  return true;
+}
+
+function classify(table: string, row: Record<string, unknown>, ruling: Ruling | undefined, report: TableReport): boolean {
+  const importable = isImportableRow(table, row, ruling);
+  if (importable || !(MIXED_TABLES as readonly string[]).includes(table)) return importable;
   const check = Object.hasOwn(SOURCE_CHECKS, table) ? SOURCE_CHECKS[table as keyof typeof SOURCE_CHECKS] : undefined;
   const discriminator = check ? row[check.column] : undefined;
   if (check && typeof discriminator === 'string' && discriminator.toLowerCase().includes(check.excludesCaseInsensitiveSubstring)) {
@@ -70,17 +86,13 @@ function classify(table: string, row: Record<string, unknown>, ruling: Ruling | 
   }
   if (ruling?.decision === 'exclude') {
     if (check) report.unclassifiedRows++;
-    report.excludedRows++; return false;
-  }
-  if (!ruling) { report.blocked = true; report.unclassifiedRows++; bump(report.errors, 'blocked-needs-ruling'); return false; }
-  // 0041 has a negative CHECK, not a positive source allowlist. Nothing else is guessed.
-  if (check || ruling.rule !== 'empty-payload-v1'
-    || Object.entries(row).some(([key, value]) => key.endsWith('_json') && !emptyJson(value))
-    || (table === 'briefing_runs' && row.preview_text !== null && row.preview_text !== undefined && row.preview_text !== '')) {
-    report.unclassifiedRows++; bump(report.errors, check ? 'unclassified-discriminator' : 'unsupported-sanitisation');
+    report.excludedRows++;
     return false;
   }
-  return true;
+  if (!ruling) { report.blocked = true; report.unclassifiedRows++; bump(report.errors, 'blocked-needs-ruling'); return false; }
+  report.unclassifiedRows++;
+  bump(report.errors, check ? 'unclassified-discriminator' : 'unsupported-sanitisation');
+  return false;
 }
 
 async function inspectRow(table: DailyTable, line: string, decision: TableDecision, ruling: Ruling | undefined,
