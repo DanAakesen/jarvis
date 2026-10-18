@@ -84,42 +84,49 @@ keep their workflow layout and consume its existing tokens.
 | Camera and voice states | `CameraPreview.tsx` / `CameraPreview.css`: `.camera-preview-picture`, `.camera-preview-live`, `.camera-status-control`, retry actions; `VoiceControls.css`: `.voice-status-label` | Partial. Preview/status geometry and retry actions diverged; voice typography and motion were raw values. | Reused panel/pill radii and caption typography, shared retry buttons, visible control focus, and tokenized voice type/motion. Camera status controls retain their explicit hover, pressed, disabled, and focus treatments. |
 | Release and task history | `factory/ReleasePage.tsx`: `.release-section`, `.release-graph-scroll`; `factory/TaskDetailPage.tsx`: `.task-meta`, `.task-detail-section`, `.timeline-payload pre` | Partial. Release/task action controls already matched; panel, graph, and payload geometry did not. | Updated only the mismatched panel, graph, and payload surfaces as described above; retained release/task interactions and scroll behavior. |
 | Attention popover | `AttentionPopover.tsx`: `.attention-popover`; `JobsChip.tsx`: `.jobs-popover` | Yes. The attention popover already shares the canonical opaque `--surface`, neutral boundary, and panel radius used by Background work. | No CSS change. Opened it with a synthetic attention event and verified the activity item and close behavior. |
-| Generated views | `GeneratedViewRenderer.tsx` and its generated-view selectors in `styles.css` | Deferred; PR #953 is still open and changes the renderer and table behavior. | Not changed or recast. Keep the generated-view footnote and table-scroll work intact; re-audit after #953 is integrated. |
+| Generated views | `GeneratedViewRenderer.tsx`: table, detail, timeline, chart and source-note renderers; `styles.css`: `.generated-view-table`, `.generated-view-details`, `.generated-view-timeline`, `.generated-chart`, `.chart-legend`, `.generated-view-source-note` | Partial. PR #953's source note, contained table scrolling and whole-cell values already use shared text, spacing and neutral rule tokens; timeline/chart spacing and axis text were still raw, and table headers lacked a muted surface. | Added the shared muted surface and weight to table headers; moved chart/timeline spacing and chart axis text to existing tokens. Preserved #953's source note and inner table scroll behavior. |
 
-The patch changes six web files and this audit plus one plan row, staying below
+The patch changes seven web files and this audit plus one plan row, staying below
 the 40-file bound. `DESIGN.md` and `docs/decisions.md` remain unchanged because
 the work reuses visual choices already recorded by Pass 1.
 
 ## Pass 2 rendered checks
 
-Compared the pre-change commit with the current app in headless Chromium using
-scratch-only auth and API fixtures. Inspected Notes/Knowledge and Folio, Usage,
-Status, healthy Daily and Proactive data, Factory release and task history, and
-the attention popover at 390×844 with touch emulation and 1440×900, in light and
-dark. The fixtures used synthetic notes, events, usage entries, status checks,
-Daily rows, Proactive findings, release records, and task history. No real
-backend, account data, or private text was used.
+Compared the pre-change and current app in headless Chromium using scratch-only
+auth and API fixtures at 390×844 with touch emulation and 1440×900, in light and
+dark. Inspected Knowledge/Folio, Notes, Usage, Status, healthy Daily and
+Proactive data, Factory release, and the attention popover at both sizes and
+themes. The fixtures used only synthetic notes, events, usage entries, status
+checks, Daily rows, Proactive findings, release records, and task history.
 
-Exercised Folio open, Usage grouping, Status refresh, opening a Daily record,
-expanding a Proactive finding, release details, the attention popover, and a
-synthetic camera preview. The Notes conflict/comparison and task-history
-workspace were also opened with synthetic responses. The attention popover
-showed the synthetic activity item; the healthy Daily/Proactive states rendered
-records and source/status details rather than an error state. No page or
-browser-console errors were observed, and document width stayed within each
-viewport. The camera preview entered its retry state under synthetic media;
-physical camera output and a connected voice session were not available to
-verify.
+Opened the Notes conflict/comparison and task-history workspace with synthetic
+responses in the same viewport/theme matrix. Exercised Folio open, Usage
+grouping, Status refresh, opening a Daily record, expanding a Proactive finding,
+release details, and the attention popover. The expected synthetic Notes 409
+response produced the conflict state; no other page or browser-console errors
+were observed, and document width stayed within each viewport.
 
-Reduced-motion emulation was enabled for a Daily/Proactive check; content stayed
-available. Before/after screenshots were captured locally under
-`/tmp/jarvis-p14-browser/`, but the available tools could not attach them to the
-PR. These are local rendered checks, not live-backend or human acceptance.
+For generated views, compared the merged #953 baseline with the current build
+using a scratch component harness containing the real `Workspace` and
+`GeneratedViewRenderer`. A synthetic table and source note were checked at both
+sizes and themes; the table remains contained and scrollable within its window
+on the phone, with no document-width overflow. A synthetic chart was also
+checked in both themes at phone width. The shared muted table header is
+theme-aware, and chart labels resolve to the shared caption size.
+
+The real `CameraPreview` and `VoiceControls` components were also rendered in a
+scratch workspace harness at both sizes and themes. The synthetic camera error
+and retry action remained visible; keyboard activation of Start voice reached
+the browser's microphone-unavailable recovery state. No camera, microphone
+stream, or connected voice session was used. Reduced-motion emulation was
+checked on Daily and Proactive, where essential content remained available.
+Screenshots were captured locally under `/tmp/jarvis-p14-browser/`; the
+available tools could not attach them to the PR. These are local rendered
+checks, not live-backend or human acceptance.
 
 ## Pass 2 not done
 
-- Generated views remain deferred while PR #953 is open. Its footnote and
-  contained table scrolling were not changed or overwritten.
-- A live camera feed, microphone input, and connected voice session were not
-  verified; the browser check used synthetic media and did not use physical
-  devices.
+- Physical camera output, microphone input, and a connected voice session were
+  not verified; no real media device was used.
+- Keyboard scrolling of a wide generated table and reduced-motion behavior for
+  an active voice status were not verified.
