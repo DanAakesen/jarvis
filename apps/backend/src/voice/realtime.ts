@@ -49,10 +49,11 @@ function englishPersonalityInstructions(
   presence: AwayModeState,
   projects: readonly ProjectContextEntry[] = [],
   memory: Settings['memory'] = defaultSettings.memory,
+  proactiveEnabled = false,
 ): string {
   return `${ENGLISH_REALTIME_INSTRUCTIONS}
 
-${additionalRealtimeInstructions(personality, presence, projects, memory)}
+${additionalRealtimeInstructions(personality, presence, projects, memory, proactiveEnabled)}
 `;
 }
 
@@ -61,8 +62,9 @@ function additionalRealtimeInstructions(
   presence: AwayModeState,
   projects: readonly ProjectContextEntry[],
   memory: Settings['memory'],
+  proactiveEnabled: boolean,
 ): string {
-  return `${capabilityInstructions(memory)}
+  return `${capabilityInstructions(memory, proactiveEnabled)}
 
 ${projectAwarenessInstructions(projects)}
 
@@ -92,8 +94,9 @@ function danishInstructions(
   presence: AwayModeState,
   projects: readonly ProjectContextEntry[] = [],
   memory: Settings['memory'] = defaultSettings.memory,
+  proactiveEnabled = false,
 ): string {
-  const rules = additionalRealtimeInstructions(personality, presence, projects, memory)
+  const rules = additionalRealtimeInstructions(personality, presence, projects, memory, proactiveEnabled)
     .replace('Preserve English as the selected language', 'Preserve Danish as the selected language');
   return `Jeg er Jarvis, Dans personlige AI-butler, og jeg driver hans softwarefabrik.
 Tal som dig selv i første person: "jeg", "mig" og "min/mit"; omtale aldrig dig selv som "Jarvis"
@@ -140,12 +143,13 @@ export function createRealtimeSessionUpdate(
   memory: Settings['memory'] = defaultSettings.memory,
 ) {
   const danish = language === 'da';
+  const proactiveEnabled = tools.get('proactive_recent_items') !== undefined;
   return {
     type: 'session.update',
     session: {
       instructions: danish
-        ? danishInstructions(personality, presence, projects, memory)
-        : englishPersonalityInstructions(personality, presence, projects, memory),
+        ? danishInstructions(personality, presence, projects, memory, proactiveEnabled)
+        : englishPersonalityInstructions(personality, presence, projects, memory, proactiveEnabled),
       modalities: ['text', 'audio'],
       input_audio_sampling_rate: 24_000,
       input_audio_noise_reduction: { type: 'azure_deep_noise_suppression' },

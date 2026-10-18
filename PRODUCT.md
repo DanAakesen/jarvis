@@ -1318,3 +1318,11 @@ may arrange workflow-specific content but do not create a second theme. This is
 a presentation-only consistency pass: routes, data, and product behavior stay
 unchanged. The requested project-policy success announcement is “Saved.”; its
 standing applicability hint remains alongside the control.
+
+## Chat and voice recall of proactive findings (18 October 2026; P13-16)
+
+When proactive checks are enabled, chat and voice can read the current findings
+through the same owner-bound store query as the Proactive page. The tool is
+read-only, returns bounded untrusted finding text, and does not change item state
+or grant action authority. It remains absent when
+`JARVIS_PROACTIVE_ENABLED` is off.

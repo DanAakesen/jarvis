@@ -5102,3 +5102,11 @@ announcement is the concise “Saved.” while its standing applicability hint
 remains visible and the success stays announced with `role="status"`. The
 bounded code audit and follow-up surfaces are recorded in
 [`docs/ui-audit.md`](ui-audit.md); browser acceptance remains separate evidence.
+
+## P13-16 owner-bound proactive recall (18 October 2026; #937)
+
+Chat and voice use one read-only tool over the same owner-scoped proactive item
+query as the Proactive page. It is composed only behind the existing
+`JARVIS_PROACTIVE_ENABLED` flag, returns only bounded display fields marked as
+untrusted data, and cannot change item state or authorize actions. Reusing the
+page's query keeps both views consistent and avoids creating a second read model.

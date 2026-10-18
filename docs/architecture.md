@@ -5713,3 +5713,20 @@ consuming those shared roles. Shared UI refinements do not change route
 registration, data ownership, API contracts or backend behavior; the reviewed
 variants and remaining component-specific layouts are listed in
 [`docs/ui-audit.md`](ui-audit.md).
+
+## Chat and voice recall of proactive findings (P13-16; default off)
+
+`index.ts` builds the `proactive` tool module only when the existing
+`JARVIS_PROACTIVE_ENABLED` flag is true. It shares the exact `ProactiveStore`
+instance with `registerProactive`; disabled composition adds no store or tool.
+The single `proactive_recent_items` tool reads through `items.list`, the same
+bounded query used by the Proactive page, with exact `new`, `seen` or `all`
+filters. SQL state filters are parameterized; the store remains owner-scoped.
+Shared chat/voice guidance mentions the tool only when it is in that catalogue.
+
+The result projects only the nine requested item fields, truncates title/body on
+code-point boundaries, caps the serialized result at 8 KiB and marks it
+`untrusted: true`. The tool is sensitive so private item text is not persisted
+in generic tool-call audit records. Raw JSON validation runs before Fastify's
+AJV coercion; failures remain explicit tool refusals/errors. The module exposes
+no item mutation or approval capability.

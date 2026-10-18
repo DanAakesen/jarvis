@@ -4692,3 +4692,15 @@ For visible style changes, verify the actual app at 390×844 touch and
 1440×900, in light and dark, then exercise focus, pressed, disabled, loading,
 empty and recovery states. Use only synthetic data in browser evidence. A
 source audit or local test run is not a substitute for rendered acceptance.
+
+## P13-16 chat and voice recall (18 October 2026)
+
+`proactive_recent_items` is part of the hosted tool catalogue only when
+`JARVIS_PROACTIVE_ENABLED === true`; this task does not enable the flag. Its
+bounded, sensitive result is marked untrusted and reads the same owner-scoped
+Proactive item query as the web page. It never marks an item seen.
+
+Focused checks:
+`npm test --workspace @jarvis/backend -- --run src/proactive/tools.test.ts src/production-modules.test.ts src/database/proactive-store.test.ts src/proactive/store.test.ts src/core/capability-instructions.test.ts src/tool-parity.test.ts src/voice/realtime.test.ts src/core/settings.test.ts`,
+`npm run build --workspace @jarvis/backend`, and
+`npm run lint --workspace @jarvis/backend`.

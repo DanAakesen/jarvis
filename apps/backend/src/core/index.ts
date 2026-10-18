@@ -160,10 +160,13 @@ export const coreModule: BackendModule = {
         schema: { body: tool.inputSchema },
         preValidation: async (request, reply) => {
           // Fastify otherwise silently removes unknown root properties.
-          const error = unexpectedToolArgument(request.body, tool.inputSchema);
+          const error = unexpectedToolArgument(request.body, tool.inputSchema) ??
+            (tool.validateInput?.(request.body) === false
+              ? { keyword: 'schema', instancePath: '', schemaPath: '#/strictInput', params: {} }
+              : undefined);
           if (error) {
             app.systemHealthDiagnostics.record('invalid');
-            const result = toolArgumentRefusal(tool, error, request.log);
+            const result = toolArgumentRefusal(tool, error, request.log, { input: request.body, app });
             return reply.send({ tool: tool.name, outcome: 'refused', result, confirmation: confirmToolCall(tool.name, 'refused', result) });
           }
         },
