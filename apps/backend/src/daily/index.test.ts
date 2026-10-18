@@ -106,12 +106,12 @@ describe('Daily integration contract', () => {
     const data: DailyData = { query: { query: vi.fn() }, changes: createDailyChanges() };
     const internal = vi.fn(() => ({ intake: vi.fn(), lookupSaved: vi.fn(), log: vi.fn(), correct: vi.fn(), remove: vi.fn() }));
     expect(createDailyModules(false, data, undefined, internal)).toEqual([]);
-    expect(createDailyModules(true, data)[0]!.tools.map(tool => tool.name)).toEqual(['daily_query']);
+    expect(createDailyModules(true, data)[0]!.tools.map(tool => tool.name)).toEqual(['daily_query', 'daily_show']);
     expect(() => createDailyModules(true, undefined, undefined, internal)).toThrow('shared Daily data');
     const app = buildApp(config, undefined, { auth, modules: [coreModule, ...createDailyModules(true, data, undefined, internal)] });
     apps.push(app);
     const response = await app.inject({ url: '/daily/capabilities', headers: headers() });
-    expect(response.json()).toMatchObject({ stage: 'internal-nutrition-rehearsal', pages: [], tools: ['daily_query', 'daily_food', 'daily_food_review'] });
+    expect(response.json()).toMatchObject({ stage: 'internal-nutrition-rehearsal', pages: [], tools: ['daily_query', 'daily_show', 'daily_food', 'daily_food_review'] });
     expect(internal).not.toHaveBeenCalled();
     const catalogue = (await app.inject({ url: '/tools', headers: headers() })).json();
     expect(JSON.stringify(catalogue)).toContain('daily_food');
@@ -125,7 +125,7 @@ describe('Daily integration contract', () => {
     const app = buildApp(config, undefined, { auth, modules: [coreModule, ...createDailyModules(true, data, undefined, undefined, saved)] });
     apps.push(app);
     const response = await app.inject({ url: '/daily/capabilities', headers: headers() });
-    expect(response.json()).toMatchObject({ stage: 'internal-nutrition-rehearsal', tools: ['daily_query', 'daily_saved_food'], pages: [] });
+    expect(response.json()).toMatchObject({ stage: 'internal-nutrition-rehearsal', tools: ['daily_query', 'daily_show', 'daily_saved_food'], pages: [] });
     expect(saved).not.toHaveBeenCalled();
   });
   it('adds owner nutrition targets only with the separate accessor, behind the same Daily gate, and keeps writes behind approval', async () => {
@@ -134,14 +134,14 @@ describe('Daily integration contract', () => {
     const write = vi.fn();
     const targets = vi.fn(() => ({ read, write }));
     expect(createDailyModules(false, data, undefined, undefined, undefined, targets)).toEqual([]);
-    expect(createDailyModules(true, data)[0]!.tools.map(tool => tool.name)).toEqual(['daily_query']);
+    expect(createDailyModules(true, data)[0]!.tools.map(tool => tool.name)).toEqual(['daily_query', 'daily_show']);
     expect(() => createDailyModules(true, undefined, undefined, undefined, undefined, targets)).toThrow('shared Daily data');
     const calls: ToolCallRecord[] = [];
     const app = buildApp(config, undefined, { auth, modules: [coreModule, ...createDailyModules(true, data, undefined, undefined, undefined, targets)],
       toolCallStore: { record: async call => { calls.push(call); } } });
     apps.push(app);
     expect((await app.inject({ url: '/daily/capabilities', headers: headers() })).json()).toMatchObject({
-      stage: 'internal-nutrition-rehearsal', tools: ['daily_query', 'daily_nutrition_targets'], pages: [],
+      stage: 'internal-nutrition-rehearsal', tools: ['daily_query', 'daily_show', 'daily_nutrition_targets'], pages: [],
     });
     expect(targets).not.toHaveBeenCalled();
     for (const kind of ['owner', 'agent']) {
@@ -208,13 +208,13 @@ describe('Daily integration contract', () => {
     expect(createDailyModules(false, data, undefined, undefined, undefined, targets, sources)).toEqual([]);
     expect(() => createDailyModules(true, undefined, undefined, undefined, undefined, targets, sources)).toThrow('shared Daily data');
     expect(() => createDailyModules(true, data, undefined, undefined, undefined, undefined, sources)).toThrow('require nutrition targets');
-    expect(createDailyModules(true, data, undefined, undefined, undefined, targets)[0]!.tools.map(tool => tool.name)).toEqual(['daily_query', 'daily_nutrition_targets']);
+    expect(createDailyModules(true, data, undefined, undefined, undefined, targets)[0]!.tools.map(tool => tool.name)).toEqual(['daily_query', 'daily_show', 'daily_nutrition_targets']);
     const calls: ToolCallRecord[] = [];
     const app = buildApp(config, undefined, { auth, modules: [coreModule, ...createDailyModules(true, data, undefined, undefined, undefined, targets, sources)],
       toolCallStore: { record: async call => { calls.push(call); } } });
     apps.push(app);
     expect((await app.inject({ url: '/daily/capabilities', headers: headers() })).json()).toMatchObject({
-      stage: 'internal-nutrition-rehearsal', tools: ['daily_query', 'daily_nutrition_targets', 'daily_nutrition_suggest'], pages: [],
+      stage: 'internal-nutrition-rehearsal', tools: ['daily_query', 'daily_show', 'daily_nutrition_targets', 'daily_nutrition_suggest'], pages: [],
     });
     for (const access of [targets, nutrition, health]) expect(access).not.toHaveBeenCalled();
     for (const kind of ['owner', 'agent']) {
@@ -268,7 +268,7 @@ describe('Daily integration contract', () => {
     const app = buildApp(config, undefined, { auth, modules: [coreModule, ...createDailyModules(true, data)] });
     apps.push(app);
     expect((await app.inject({ url: '/daily/capabilities', headers: headers() })).json()).toMatchObject({
-      stage: 'read-only', tools: ['daily_query', 'daily_food_lookup'], pages: [],
+      stage: 'read-only', tools: ['daily_query', 'daily_show', 'daily_food_lookup'], pages: [],
     });
     expect(foodLookup).not.toHaveBeenCalled();
   });
@@ -277,13 +277,13 @@ describe('Daily integration contract', () => {
     const changes = createDailyChanges();
     const data: DailyData = { query: { query: vi.fn() }, changes, feeds: { execute } };
     expect(createDailyModules(false, data)).toEqual([]);
-    expect(createDailyModules(true, { query: data.query, changes })[0]!.tools.map(tool => tool.name)).toEqual(['daily_query']);
+    expect(createDailyModules(true, { query: data.query, changes })[0]!.tools.map(tool => tool.name)).toEqual(['daily_query', 'daily_show']);
     const calls: ToolCallRecord[] = [];
     const app = buildApp(config, undefined, { auth, modules: [coreModule, ...createDailyModules(true, data)],
       toolCallStore: { record: async call => { calls.push(call); } } });
     apps.push(app);
     expect((await app.inject({ url: '/daily/capabilities', headers: headers() })).json()).toMatchObject({
-      stage: 'feed-rehearsal', tools: ['daily_query', 'daily_feed'], pages: [], sources: dailyQuerySourcesV1,
+      stage: 'feed-rehearsal', tools: ['daily_query', 'daily_show', 'daily_feed'], pages: [], sources: dailyQuerySourcesV1,
     });
     expect(execute).not.toHaveBeenCalled();
     const publish = vi.spyOn(app.nowEventHub, 'publish');

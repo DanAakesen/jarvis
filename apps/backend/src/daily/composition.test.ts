@@ -11,6 +11,7 @@ import { coreModule } from '../core/index.js';
 import { defaultSettings } from '../core/settings.js';
 import type { ToolCallRecord, ToolCallStore } from '../core/tool-calls.js';
 import type { JarvisTool } from '../core/tool-registry.js';
+import { WorkspaceCommandBroker } from '../core/workspace-commands.js';
 import type { BackendModule } from '../modules.js';
 import { createRealtimeSessionUpdate } from '../voice/realtime.js';
 import { composeDaily } from './composition.js';
@@ -20,7 +21,7 @@ const owner = config.auth.ownerObjectId;
 const agent = '11111111-1111-4111-8111-111111111111';
 const other = '22222222-2222-4222-8222-222222222222';
 const dailyToolNames = [
-  'daily_query', 'daily_food', 'daily_food_review', 'daily_saved_food', 'daily_nutrition_targets', 'daily_nutrition_suggest',
+  'daily_query', 'daily_show', 'daily_food', 'daily_food_review', 'daily_saved_food', 'daily_nutrition_targets', 'daily_nutrition_suggest',
 ];
 type App = ReturnType<typeof buildApp>;
 const apps: App[] = [];
@@ -57,9 +58,10 @@ function composed(ownerObjectId = owner) {
   return { module, touched };
 }
 
-function fixture(daily?: BackendModule, toolCallStore?: ToolCallStore) {
+function fixture(daily?: BackendModule, toolCallStore?: ToolCallStore, workspaceCommands?: WorkspaceCommandBroker) {
   const app = buildApp(config, undefined, {
-    auth, modules: [coreModule, ...(daily ? [daily] : [])], ...(toolCallStore ? { toolCallStore } : {}),
+    auth, modules: [coreModule, ...(daily ? [daily] : [])],
+    ...(toolCallStore ? { toolCallStore } : {}), ...(workspaceCommands ? { workspaceCommands } : {}),
   });
   apps.push(app);
   return app;
@@ -160,7 +162,7 @@ describe('Daily composition', () => {
     expect(await off.backgroundJobs.list()).toEqual([]);
   });
 
-  it('adds only the owner-bound nutrition module, its three routes and its six tools when Daily is on', async () => {
+  it('adds only the owner-bound nutrition module, its three routes and its seven tools when Daily is on', async () => {
     const { module, touched } = composed();
     expect(Object.keys(module).sort()).toEqual(['id', 'registerRoutes', 'tools']);
     expect(module.id).toBe('daily');
@@ -209,13 +211,17 @@ describe('Daily composition', () => {
     const thrown: unknown[] = [];
     const calls: ToolCallRecord[] = [];
     // A tool route answers 503 before it runs the tool when the app has no call store, so this app gets a minimal one.
-    const app = fixture(observed(module, thrown), { record: async (call) => { calls.push(call); } });
+    // daily_show refuses to read at all without an open workspace tab, so the app also gets one connected tab.
+    const broker = new WorkspaceCommandBroker();
+    broker.connect(owner, () => true);
+    const app = fixture(observed(module, thrown), { record: async (call) => { calls.push(call); } }, broker);
     for (const probe of dailyRoutes.filter(({ url }) => url !== '/daily/capabilities')) {
       expect((await send(app, probe, 'owner')).statusCode, `${probe.method} ${probe.url}`).toBe(403);
     }
     const toolCalls: readonly (readonly [string, object])[] = [
       ['daily_nutrition_suggest', {}],
       ['daily_nutrition_targets', { operation: 'read' }],
+      ['daily_show', { source: dailyQuerySources.metrics, startDate: '2026-10-01', endDate: '2026-10-16' }],
     ];
     for (const [name, payload] of toolCalls) {
       const response = await app.inject({ method: 'POST', url: `/tools/${name}`, headers: toolHeaders(), payload });
