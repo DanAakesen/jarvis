@@ -71,8 +71,9 @@ but enable no production work: the scheduler's in-process location and
 operating bounds are settled, but no scheduler, source run, model call or
 proactive send is active there. The
 [plan summary](../PLAN.md#proactive-assistance--proposed-scope-17-october-2026)
-separates these slices from remaining pilot gates. Daily notification-off
-remains in force.
+separates these slices from remaining pilot gates. P13-10 implements the gated
+web surface without enabling either client or server work. Daily
+notification-off remains in force.
 
 ## Confirmed M2 boundaries (18 October 2026; P13-05, P13-06)
 
@@ -138,6 +139,17 @@ or events. Weather reads only the saved home coordinates and makes a bounded
 HTTPS Open-Meteo request; it does not geocode or invent a location. All three
 sources return stable unavailable reasons and remain dormant until later engine
 work explicitly reads them.
+
+## Confirmed web slice (18 October 2026; P13-10)
+
+The Proactive page, full item detail, one Settings section, navigation entry and
+terminal Background work link are gated by the exact-string web build flag,
+which remains off. The client uses the established owner-authenticated
+contract, fixed plain-text reason copy, Copenhagen-local time formatting and
+memory-only handling for findings, feed URLs and guidance. Manual check polling
+is visibility-aware and bounded; dismiss/snooze optimistic updates are
+retryable after rollback. The P13-01 item detail remains the route target when
+only Web Push is enabled.
 
 ## Current evidence
 

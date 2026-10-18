@@ -1,5 +1,6 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { MemoryRouter, useLocation } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { BackgroundJob } from '@jarvis/contracts';
 import type { FeedAttention } from './activity';
@@ -59,6 +60,11 @@ function openHistoryJob(name: RegExp) {
   fireEvent.click(within(screen.getByRole('group', { name: 'Background work' })).getByRole('button', { name }));
 }
 
+function RoutePath() {
+  const location = useLocation();
+  return <output>{location.pathname}</output>;
+}
+
 afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
@@ -92,6 +98,34 @@ describe('job tabs', () => {
     mount();
     const chip = await screen.findByRole('button', { name: /Proactive check running/ });
     expect(chip.getAttribute('aria-label')).toContain('Proactive check (07:00)');
+  });
+
+  it.each(['done', 'failed', 'cancelled'] as const)('opens Proactive from a terminal proactive job (%s)', async (status) => {
+    stubFetch('present', [job({
+      kind: 'proactive', title: 'Proactive check (07:00)', status,
+      detail: 'Synthetic reason',
+    })]);
+    render(<MemoryRouter initialEntries={['/']}>
+      <JobsChip backendUrl="https://api.example.com" getAccessToken={getAccessToken} onResult={vi.fn(() => true)}
+        accountId="fixture-owner" proactiveEnabled />
+      <RoutePath />
+    </MemoryRouter>);
+    fireEvent.click(await screen.findByRole('button', { name: /Show background work/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /Proactive check \(07:00\).*Proactive check/ }));
+    expect(screen.getByText('Synthetic reason')).not.toBeNull();
+    const open = await screen.findByRole('link', { name: 'Open' });
+    fireEvent.click(open);
+    expect(screen.getByText('/proactive')).not.toBeNull();
+  });
+
+  it('does not add an Open link for proactive work while the feature is off', async () => {
+    stubFetch('present', [job({
+      kind: 'proactive', title: 'Proactive check (07:00)', status: 'failed',
+    })]);
+    mount();
+    fireEvent.click(await screen.findByRole('button', { name: /Show background work/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /Proactive check \(07:00\).*Proactive check/ }));
+    expect(screen.queryByRole('link', { name: 'Open' })).toBeNull();
   });
 
   it('counts each undismissed outcome with a distinct icon, accessible name and tooltip', async () => {

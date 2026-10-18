@@ -207,6 +207,22 @@ Hooks run after item upserts and before finish, never after cancellation or
 lease loss, and hook failures are isolated. No flag, source provider or proactive
 send is activated.
 
+## Keep the Proactive web client dark and private (18 October 2026; P13-10)
+
+The web client uses its own exact-string `VITE_PROACTIVE_ENABLED` build gate;
+this slice leaves it off. Route, navigation, Settings and the terminal
+Background work Open link follow that gate. When push alone is enabled, the
+M1 `/proactive/:id` target remains unchanged; with the web gate on it renders
+the full item and links back to the list.
+
+Use the shared authenticated contract, with no new dependency or contract
+change. Keep item text, feed URLs and guidance in memory only; render
+source/model content as plain text and map server reason codes to fixed copy.
+Manual checks are visibility-aware and bounded, and optimistic dismiss/snooze
+roll back with visible retry on failure. These choices do not enable backend
+work, change permissions, or settle outstanding source, todo-write or delivery
+decisions.
+
 ## Keep P13-07 sources read-only and dark (18 October 2026)
 
 The todo filename remains unsettled, so the reader resolves exactly one
