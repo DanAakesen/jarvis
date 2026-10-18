@@ -147,6 +147,26 @@ backend/web builds and lint. SQL Server checks are in
 SQL Server fixture using `npm run test:database --workspace @jarvis/backend -- src/database/schema.integration.test.ts`.
 Do not claim the SQL integration tests ran unless that service was available.
 
+## P13-13 proactive todo reminders (18 October 2026; default off)
+
+The planner and ticker reuse `JARVIS_PROACTIVE_ALERTS_ENABLED` with the existing
+proactive and push flags; do not add a new setting or enable any flag. The
+planner runs for every trigger after the successful todo read. The ticker is
+constructed only when its vault, reminder store, alert ledger, push store and
+shared sender dependencies are available. It has no database, vault or push
+work while idle or during Copenhagen quiet hours. Reminder titles stay in
+private database rows; pushes and logs contain no todo text.
+
+Focused synthetic checks:
+`npm test --workspace @jarvis/backend -- --run src/proactive/reminders.test.ts src/proactive/composition.test.ts src/proactive/alerts.test.ts src/proactive/push-delivery.test.ts src/database/migrations.test.ts`,
+`npm run build --workspace @jarvis/backend`, and
+`npm run lint --workspace @jarvis/backend`.
+The SQL store integration test is
+`npm run test:database --workspace @jarvis/backend -- src/database/proactive-reminder-store.integration.test.ts`.
+It requires the isolated loopback SQL Server fixture; do not claim it ran unless
+that service was available. A todo added after the last check is covered from
+the next check on; "Check now" covers it immediately.
+
 ## P13-10 proactive web client (18 October 2026)
 
 `VITE_PROACTIVE_ENABLED` is an exact-`true` build flag that is off by default in
