@@ -50,6 +50,7 @@ describe('app-wide control contract', () => {
   it('provides wrapping action groups with consistent responsive button targets', () => {
     expect(source).toContain('.button-group, .settings-actions, .task-dialog-actions, .action-row');
     expect(source).toContain('.button-group > .primary-button');
+    expect(source).toContain('.workspace-view-content .task-window-actions, .workspace-view-content .timeline-artifacts { padding-top: var(--space-3); }');
     expect(source).toContain('@media (max-width: 600px) {\n  .button-group, .settings-actions, .task-dialog-actions, .settings-save');
     expect(source).toContain('width: 100%; max-width: 100%;');
   });

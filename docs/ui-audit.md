@@ -144,3 +144,29 @@ The unclassed Knowledge, SettingsAdvanced, Usage and Notes buttons now use the
 ghost level. `styles.test.tsx` guards the shared variants' margin, radius,
 focus, coarse-pointer target and no-decorative-rim contracts, and checks that
 production TSX buttons have a class. The Daily CSS tree remains untouched.
+
+## Pass 3 rendered checks
+
+The scratch Vite harness stubbed auth only in `/tmp`, used synthetic API
+responses, and ran the actual app in Chromium. Before/after contact sheets show
+the same nine workflows—Settings, destructive confirmation, Factory board,
+task window, Proactive, Notes/Knowledge toolbar, chat, empty state, and busy/
+disabled—at 390×844 and 1440×900 in both themes:
+
+| Viewport | Light before | Light after | Dark before | Dark after |
+| --- | --- | --- | --- | --- |
+| 390×844 | [WebP](ui/p14-03/before-light-390x844-workflows.webp) | [WebP](ui/p14-03/after-light-390x844-workflows.webp) | [WebP](ui/p14-03/before-dark-390x844-workflows.webp) | [WebP](ui/p14-03/after-dark-390x844-workflows.webp) |
+| 1440×900 | [WebP](ui/p14-03/before-light-1440x900-workflows.webp) | [WebP](ui/p14-03/after-light-1440x900-workflows.webp) | [WebP](ui/p14-03/before-dark-1440x900-workflows.webp) | [WebP](ui/p14-03/after-dark-1440x900-workflows.webp) |
+
+Standalone Settings captures are included in the same folder. The rendered
+checks reported no browser console errors. Keyboard traversal showed a visible
+3px focus outline on all 12 shared/specialized button probes; touch emulation
+reported coarse pointers and 44px-or-larger targets. The Check now busy state
+kept its width unchanged at both viewport sizes. Reduced-motion emulation was
+active during the checks and retained the existing motion-token behavior.
+
+The 320px board check found the same pre-existing 384px document width before
+and after; overflow comes from the Kanban board's issue-list item, not from a
+button. The parallel P14-05 overflow sweep owns that non-button layout, so this
+button pass leaves it unchanged. Other checked pages had no new document-width
+increase.

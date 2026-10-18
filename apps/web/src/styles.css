@@ -742,6 +742,7 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
 .workspace-view-content { min-width: 0; min-height: 0; flex: 1; overflow: auto; overflow-wrap: anywhere; }
 .workspace-view-content p { font-size: var(--type-small); }
 
+.workspace-view-content .task-window-actions, .workspace-view-content .timeline-artifacts { padding-top: var(--space-3); }
 .workspace-view-content [role="alert"] { color: var(--error); }
 .generated-view-table { max-width: 100%; overflow: auto; }
 .generated-view-table table { width: 100%; border-collapse: collapse; text-align: left; }
@@ -1201,7 +1202,7 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
 .settings-explanation { margin-top: 12px; font-size: 14px; }
 .settings-validation-error { margin-top: 8px; color: var(--error); font-size: 14px; }
 .settings-actions { gap: var(--space-3); margin-top: var(--space-3); }
-.settings-save { display: flex; align-items: stretch; flex-wrap: wrap; gap: var(--space-4); margin-top: var(--space-4); }
+.settings-save { display: flex; align-items: stretch; flex-wrap: wrap; gap: var(--space-4); margin-top: var(--space-5); }
 .settings-save .primary-button { flex: 0 0 auto; }
 .settings-feedback { margin: 0; font-size: 15px; }
 .settings-feedback[role="alert"] { color: var(--error); }
