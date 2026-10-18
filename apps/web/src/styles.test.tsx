@@ -65,6 +65,8 @@ describe('app-wide control contract', () => {
     expect(nutrition).toContain('min-height: 44px');
     expect(ruleDeclaration(workouts, /\.workouts-detail\s*>\s*h3\s*\{([^}]*)\}/, 'margin')).toBe('0');
     expect(overview).toContain('@media (prefers-reduced-motion: reduce)');
+    expect(ruleDeclaration(overview, /\.daily-summary-facts dt\s*\{([^}]*)\}/, 'grid-column')).toBe('1');
+    expect(ruleDeclaration(overview, /\.daily-summary-facts dd\s*\{([^}]*)\}/, 'grid-column')).toBe('2');
     expect(shared).toContain('.daily-coverage-note > summary:focus-visible');
     expect(shared).toContain('min-height: 44px; align-content: center; cursor: pointer');
   });

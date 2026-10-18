@@ -11,10 +11,12 @@
 .daily-summary-tile h4 { margin: 0; font-size: var(--type-subsection); }
 .daily-summary-tile h4 a { color: var(--text); text-underline-offset: .2em; }
 .daily-summary-tile p { min-width: 0; margin: 0; overflow-wrap: anywhere; }
-.daily-summary-facts { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: var(--space-1) var(--space-3); margin: 0; }
+/* Label and value keep their own columns even when a fact carries a second value line, which would otherwise auto-place into the label column. */
+.daily-summary-facts { display: grid; grid-template-columns: fit-content(45%) minmax(0, 1fr); gap: var(--space-1) var(--space-3); margin: 0; }
 .daily-summary-facts > div { display: contents; }
-.daily-summary-facts dt { color: var(--text-muted); font-size: var(--type-small); }
-.daily-summary-facts dd { min-width: 0; margin: 0; overflow-wrap: anywhere; }
+.daily-summary-facts dt { grid-column: 1; min-width: 0; color: var(--text-muted); font-size: var(--type-small); overflow-wrap: anywhere; }
+.daily-summary-facts dd { grid-column: 2; min-width: 0; margin: 0; overflow-wrap: anywhere; }
+.daily-summary-facts > div + div > :is(dt, dd:first-of-type) { margin-top: var(--space-2); }
 .daily-overview-list { display: grid; margin: var(--space-3) 0 0; padding: 0; list-style: none; }
 .daily-overview-row {
   display: grid;
