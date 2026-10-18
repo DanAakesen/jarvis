@@ -1,4 +1,5 @@
 import { awaitWithSignal, backendFetch } from '../backend-request';
+import { runDailyRead } from './client';
 
 /**
  * Client for the owner's nutrition targets (P12-09, #724). The three figures are private health data:
@@ -132,46 +133,48 @@ async function request(
   change?: NutritionTargetChanges,
 ): Promise<NutritionTargetsState> {
   if (!backendUrl) throw new NutritionTargetsError('unavailable');
-  let token: string;
-  try {
-    token = await awaitWithSignal(getAccessToken, signal);
-  } catch {
-    signal.throwIfAborted();
-    throw new NutritionTargetsError('denied');
-  }
-  let response: Response;
-  try {
-    response = await backendFetch(`${backendUrl.replace(/\/+$/u, '')}/daily/nutrition-targets`, {
-      method: change ? 'PATCH' : 'GET',
-      signal,
-      cache: 'no-store',
-      headers: {
-        Authorization: `${['Bear', 'er'].join('')} ${token}`,
-        Accept: 'application/json',
-        ...(change ? { 'Content-Type': 'application/json' } : {}),
-      },
-      ...(change ? { body: JSON.stringify(change) } : {}),
-    });
-  } catch {
-    signal.throwIfAborted();
-    throw new NutritionTargetsError('failed');
-  }
-  if (!response.ok) {
-    await response.body?.cancel().catch(() => undefined);
-    if (response.status === 404 || response.status === 405 || response.status === 501) throw new NutritionTargetsError('unavailable');
-    if (response.status === 401 || response.status === 403) throw new NutritionTargetsError('denied');
-    throw new NutritionTargetsError(change && response.status === 400 ? 'rejected' : 'failed');
-  }
-  let body: unknown;
-  try {
-    body = await response.json();
-  } catch {
-    signal.throwIfAborted();
-    throw new NutritionTargetsError('invalid');
-  }
-  const state = parseNutritionTargets(body);
-  if (!state) throw new NutritionTargetsError('invalid');
-  return state;
+  return runDailyRead(signal, async () => {
+    let token: string;
+    try {
+      token = await awaitWithSignal(getAccessToken, signal);
+    } catch {
+      signal.throwIfAborted();
+      throw new NutritionTargetsError('denied');
+    }
+    let response: Response;
+    try {
+      response = await backendFetch(`${backendUrl.replace(/\/+$/u, '')}/daily/nutrition-targets`, {
+        method: change ? 'PATCH' : 'GET',
+        signal,
+        cache: 'no-store',
+        headers: {
+          Authorization: `${['Bear', 'er'].join('')} ${token}`,
+          Accept: 'application/json',
+          ...(change ? { 'Content-Type': 'application/json' } : {}),
+        },
+        ...(change ? { body: JSON.stringify(change) } : {}),
+      });
+    } catch {
+      signal.throwIfAborted();
+      throw new NutritionTargetsError('failed');
+    }
+    if (!response.ok) {
+      await response.body?.cancel().catch(() => undefined);
+      if (response.status === 404 || response.status === 405 || response.status === 501) throw new NutritionTargetsError('unavailable');
+      if (response.status === 401 || response.status === 403) throw new NutritionTargetsError('denied');
+      throw new NutritionTargetsError(change && response.status === 400 ? 'rejected' : 'failed');
+    }
+    let body: unknown;
+    try {
+      body = await response.json();
+    } catch {
+      signal.throwIfAborted();
+      throw new NutritionTargetsError('invalid');
+    }
+    const state = parseNutritionTargets(body);
+    if (!state) throw new NutritionTargetsError('invalid');
+    return state;
+  });
 }
 
 export function loadNutritionTargets(

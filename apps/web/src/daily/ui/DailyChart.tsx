@@ -32,7 +32,7 @@ export function DailyChart({ kind, name, series }: {
       </g>)}
       {series.map((entry, seriesIndex) => {
         const colour = colours[seriesIndex % colours.length];
-        if (kind === 'bar') return <g key={entry.name} fill={colour} className="daily-chart-bars">
+        if (kind === 'bar') return <g key={`${entry.name}-${seriesIndex}`} fill={colour} className="daily-chart-bars">
           {entry.points.map((point, index) => {
             const x = px(point) - barWidth * series.length / 2 + barWidth * seriesIndex;
             const y = py(point.y);
@@ -46,7 +46,7 @@ export function DailyChart({ kind, name, series }: {
         const line = points.map((point, index) => `${index ? 'L' : 'M'}${px(point).toFixed(1)},${py(point.y).toFixed(1)}`).join(' ');
         const first = points[0];
         const last = points.at(-1);
-        return <g key={entry.name} className="daily-chart-series" style={{ color: colour }}>
+        return <g key={`${entry.name}-${seriesIndex}`} className="daily-chart-series" style={{ color: colour }}>
           {kind === 'area' && first && last && points.length > 1 &&
             <path className="daily-chart-area" d={`${line} L${px(last).toFixed(1)},${baseline} L${px(first).toFixed(1)},${baseline} Z`} />}
           <path className="daily-chart-line" d={line} />
@@ -60,8 +60,8 @@ export function DailyChart({ kind, name, series }: {
       <table>
         <caption>{name} data</caption>
         <thead><tr><th scope="col">Series</th><th scope="col">X</th><th scope="col">Value</th></tr></thead>
-        <tbody>{series.flatMap(entry => entry.points.map((point, index) =>
-          <tr key={`${entry.name}-${index}`}><th scope="row">{entry.name}</th><td>{String(point.x)}</td><td>{formatNumber(point.y)}</td></tr>))}</tbody>
+        <tbody>{series.flatMap((entry, seriesIndex) => entry.points.map((point, index) =>
+          <tr key={`${seriesIndex}-${index}`}><th scope="row">{entry.name}</th><td>{String(point.x)}</td><td>{formatNumber(point.y)}</td></tr>))}</tbody>
       </table>
     </ScrollTable>
   </figure>;

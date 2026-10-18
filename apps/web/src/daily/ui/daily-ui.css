@@ -1,6 +1,10 @@
 .daily-state { display: grid; gap: var(--space-2); }
 .daily-state p { margin: 0; }
 .daily-state-freshness { color: var(--text-muted); font-size: var(--type-small); }
+.daily-coverage-note { min-width: 0; }
+.daily-coverage-note > summary { min-height: 44px; align-content: center; cursor: pointer; overflow-wrap: anywhere; }
+.daily-coverage-note > summary:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.daily-coverage-note-content { display: grid; gap: var(--space-2); min-width: 0; padding-block: var(--space-2); color: var(--text-muted); font-size: var(--type-small); overflow-wrap: anywhere; }
 .daily-stat-tile { min-width: 0; padding: var(--space-3); border: 1px solid var(--rule); border-radius: var(--radius-panel); background: var(--surface-translucent); }
 .daily-stat-tile h3 { margin: 0; color: var(--text-muted); font-size: var(--type-small); font-weight: 500; }
 .daily-stat-value { margin: var(--space-2) 0 0; font-size: var(--type-subheading); font-weight: 650; overflow-wrap: anywhere; }

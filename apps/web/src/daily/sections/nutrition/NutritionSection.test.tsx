@@ -127,7 +127,9 @@ describe('Nutrition section', () => {
     render(<Wrapper sources={[ids.meals, ids.favorites, ids.plans]} entry="/daily?nutritionView=library" />);
     await screen.findByText('Synthetic favourite 9001');
     await screen.findByText('Synthetic plan 9001');
-    expect(screen.getAllByText(/up to five pages/u)).toHaveLength(2);
+    expect(screen.getAllByText('Filtering covers 1 loaded record.')).toHaveLength(2);
+    fireEvent.click(screen.getAllByText('Filtering covers 1 loaded record.')[0]!);
+    expect(screen.getAllByText(/Up to five pages are loaded automatically/u)).toHaveLength(2);
     fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'Synthetic alias 9002' } });
     expect(screen.getByText('Synthetic favourite 9001')).not.toBeNull();
     expect(screen.queryByText('Synthetic plan 9001')).toBeNull();
@@ -153,7 +155,8 @@ describe('Nutrition section', () => {
     meals = [syntheticMeal, { ...syntheticMeal, id: 'synthetic-deleted-9001', meal_name: 'Synthetic deleted 9001', deleted_at: '2026-10-18T09:00:00Z' }];
     mealMore = true;
     render(<Wrapper entry="/daily?nutritionDate=2026-10-18" />);
-    await screen.findByText(/Partial day: showing/u);
+    fireEvent.click(await screen.findByText('This page is partial; nutrient totals are lower bounds.'));
+    expect(screen.getByText(/Showing 2 meals from the first page/u)).toBeTruthy();
     const deletedGroup = screen.getByText(/Deleted meals \(1/u).closest('details')!;
     expect(deletedGroup.open).toBe(false);
     expect(document.querySelector('.nutrition-stats .daily-stat-value')?.textContent).toBe('9,001 kcal');
@@ -212,9 +215,10 @@ describe('Nutrition section', () => {
         { id: `synthetic-favorite-${9000 + pages}` }));
     });
     render(<Wrapper sources={[ids.meals, ids.favorites]} entry="/daily?nutritionView=library" />);
-    await screen.findByText(/page limit reached/u);
+    fireEvent.click(await screen.findByText('Favourites history is partial.'));
+    expect(screen.getByText(/Page limit reached/u)).toBeTruthy();
     expect(pages).toBe(5);
-    expect(screen.getByText(/Filter covers 5 loaded records only/u)).not.toBeNull();
+    expect(screen.getByText('Filtering covers 5 loaded records.')).not.toBeNull();
     expect(screen.queryByRole('button', { name: 'Load more' })).toBeNull();
   });
   it('derives plan totals from items with unknown and lower-bound labels', async () => {

@@ -55,6 +55,20 @@ describe('app-wide control contract', () => {
     expect(source).toContain('width: 100%; max-width: 100%;');
   });
 
+  it('keeps Daily phone navigation, detail spacing, focus and reduced motion consistent', () => {
+    const nutrition = readFileSync('src/daily/sections/nutrition/nutrition.css', 'utf8');
+    const workouts = readFileSync('src/daily/sections/workouts/workouts.css', 'utf8');
+    const overview = readFileSync('src/daily/daily-overview.css', 'utf8');
+    const shared = readFileSync('src/daily/ui/daily-ui.css', 'utf8');
+    expect(nutrition).toContain('@media (max-width: 480px)');
+    expect(nutrition).toContain('grid-template-columns: repeat(3, minmax(0, 1fr))');
+    expect(nutrition).toContain('min-height: 44px');
+    expect(ruleDeclaration(workouts, /\.workouts-detail\s*>\s*h3\s*\{([^}]*)\}/, 'margin')).toBe('0');
+    expect(overview).toContain('@media (prefers-reduced-motion: reduce)');
+    expect(shared).toContain('.daily-coverage-note > summary:focus-visible');
+    expect(shared).toContain('min-height: 44px; align-content: center; cursor: pointer');
+  });
+
   it('does not leave production buttons without a shared class', () => {
     const unstyled: string[] = [];
     const visit = (directory: string) => {

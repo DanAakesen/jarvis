@@ -6124,3 +6124,22 @@ JSON reuses Data's escaped `<pre>`/collapsed `<details>` presentation. Heart-rat
 samples are grouped by metric and unit, use elapsed minutes, and retain separate
 average/minimum/maximum series. Existing read clients retain owner authorization,
 cancellation, response bounds and safe failure handling.
+
+## Web Daily overview and Briefs integration (18 October 2026; P12-26)
+
+`sections/overview/summary.ts` composes the sections' pure helpers for recent
+workout, nutrition, metric, sleep and Briefs summaries. `SummaryTiles` mounts a
+separate bounded `useDailyPages` reader per exposed source and hides tiles whose
+required source pair is unavailable. Each tile owns its loading, empty, error,
+retry and freshness presentation; links select the existing section through the
+shell's URL parameter. The existing source inventory remains below the tiles.
+Briefs keeps the existing history source and presents its rows as a dated list
+with an in-page detail view.
+
+`client.ts` provides a shared abort-aware read queue capped at two active
+requests. Queries, capabilities and the Nutrition target read/write boundary
+acquire the same slot; queued operations are removed on abort. Shared Daily
+coverage disclosures keep detailed provenance available on demand, and
+Nutrition chart series use human-readable names and units. These are web-only
+changes: contracts, backend authorization and the original Daily write path
+remain unchanged.
