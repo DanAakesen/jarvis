@@ -5300,6 +5300,18 @@ remains visible and the success stays announced with `role="status"`. The
 bounded code audit and follow-up surfaces are recorded in
 [`docs/ui-audit.md`](ui-audit.md); browser acceptance remains separate evidence.
 
+## P14-04 — Ratchet shared borders, radii and surfaces (18 October 2026)
+
+Keep the existing radius and surface tokens as the only shared geometry system.
+Retain only structural 1px neutral side borders, represent selection through
+shared surfaces, and replace inset-shadow pseudo-borders with real boundaries
+or no boundary. A PostCSS ratchet in the existing web tests scans every
+stylesheet; its exact-value exceptions carry reasons for the P14-03-owned
+buttons and genuine circular voice control. No dependency or theme was added.
+The Pass 3 audit records measured counts, classifications, exceptions and
+synthetic before/after Chromium evidence; this does not claim live-service or
+human acceptance.
+
 ## P13-16 owner-bound proactive recall (18 October 2026; #937)
 
 Chat and voice use one read-only tool over the same owner-scoped proactive item
