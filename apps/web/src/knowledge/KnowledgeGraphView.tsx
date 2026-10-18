@@ -244,7 +244,7 @@ export function KnowledgeGraphView({ backendUrl, getAccessToken, initialQuery = 
                 : graph.nodes.filter((node) => node.folder === folder).sort((left, right) => left.title.localeCompare(right.title)).slice(0, 60)
               ).map((node) => (
                 <li key={node.id}>
-                  <button type="button" data-folder={node.folder} aria-pressed={node.id === selectedId} onClick={() => open(node.id)}>
+                  <button className="ghost-button" type="button" data-folder={node.folder} aria-pressed={node.id === selectedId} onClick={() => open(node.id)}>
                     <span className="knowledge-dot" aria-hidden="true" />{node.title}
                   </button>
                 </li>
@@ -254,7 +254,7 @@ export function KnowledgeGraphView({ backendUrl, getAccessToken, initialQuery = 
           <ul className="knowledge-legend" aria-label="Folders">
             {folders.map((name) => (
               <li key={name} data-folder={name}>
-                <button type="button" aria-pressed={folder === name} title={folder === name ? 'Show every folder' : `Show only ${name}`}
+                <button className="ghost-button" type="button" aria-pressed={folder === name} title={folder === name ? 'Show every folder' : `Show only ${name}`}
                   onClick={() => setFolder((current) => current === name ? null : name)}>
                   <span className="knowledge-dot" aria-hidden="true" />{name || 'Vault root'}<span className="knowledge-legend-count">{counts.get(name)}</span>
                 </button>
@@ -282,7 +282,7 @@ export function KnowledgeGraphView({ backendUrl, getAccessToken, initialQuery = 
                     <h4 className="knowledge-note-subheading">Connected notes</h4>
                     <ul className="knowledge-neighbours">
                       {neighbours.map((node) => (
-                        <li key={node.id}><button type="button" data-folder={node.folder} onClick={() => open(node.id)}><span className="knowledge-dot" aria-hidden="true" />{node.title}</button></li>
+                        <li key={node.id}><button className="ghost-button" type="button" data-folder={node.folder} onClick={() => open(node.id)}><span className="knowledge-dot" aria-hidden="true" />{node.title}</button></li>
                       ))}
                     </ul>
                   </>

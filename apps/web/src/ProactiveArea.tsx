@@ -430,9 +430,10 @@ export function ProactiveArea({ backendUrl, getAccessToken, signIn, now: injecte
           <p className="proactive-status-line"><StatusSentence status={loadedStatus} /></p>
           <p><StatusOutcome run={loadedStatus.lastRun} /></p>
           <p className="proactive-check-action">
-            <button className="primary-button" type="button" disabled={Boolean(disabledReason) || checking}
+            <button className="primary-button" type="button" disabled={Boolean(disabledReason) || checking} aria-busy={checking || undefined} aria-label={checking ? 'Checking…' : undefined}
               aria-describedby={disabledReason ? 'proactive-check-reason' : undefined} onClick={() => { void startCheck(); }}>
-              {checking ? 'Checking…' : 'Check now'}
+              <span className="button-label">Check now</span>
+              {checking && <span className="button-loading-indicator" aria-hidden="true"><Loader variant="inline" announce={false} label="Checking…" /></span>}
             </button>
             {disabledReason && <span id="proactive-check-reason">{disabledReason}</span>}
           </p>

@@ -814,14 +814,17 @@ export function ProjectSettingsPage({ backendUrl, getAccessToken }: ProjectsPage
             <h2 id="archive-project-heading">Archive project</h2>
             <p>Archiving hides this project from active lists. Its task history stays available and its repository remains reserved.</p>
             {!showArchiveConfirmation ? (
-              <button className="secondary-button" type="button" disabled={disabled}
-                onClick={() => setShowArchiveConfirmation(true)}>Archive project</button>
+              <div className="button-group button-group--space-4">
+                <button className="secondary-button" type="button" disabled={disabled}
+                  onClick={() => setShowArchiveConfirmation(true)}>Archive project</button>
+              </div>
             ) : (
               <div className="project-archive-confirm" role="group" aria-label="Confirm project archive">
                 <p>Archive {values.name || 'this project'}?</p>
                 <div className="settings-actions">
-                  <button className="primary-button" type="button" disabled={disabled} onClick={() => { void archive(); }}>
-                    {archivePending ? 'Archiving…' : 'Confirm archive'}
+                  <button className="primary-button danger-button danger-button--filled" type="button" disabled={disabled} aria-busy={archivePending || undefined} aria-label={archivePending ? 'Archiving…' : undefined} onClick={() => { void archive(); }}>
+                    <span className="button-label">Confirm archive</span>
+                    {archivePending && <span className="button-loading-indicator" aria-hidden="true"><Loader variant="inline" announce={false} label="Archiving…" /></span>}
                   </button>
                   <button className="secondary-button" type="button" disabled={disabled}
                     onClick={() => setShowArchiveConfirmation(false)}>Cancel archive</button>

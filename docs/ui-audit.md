@@ -18,7 +18,7 @@ inventoried to identify route-specific exceptions.
 
 | Recurring element | Variants found (source and selector/component) | Canonical form and reason |
 | --- | --- | --- |
-| Button | `styles.css`: `.primary-button`, `.secondary-button`, `.settings-back`, `.jobs-action`, `.workspace-control`; `daily/daily.css`: `.daily-page button`; `proactive.css`: `.proactive-text-toggle`, `.proactive-snooze > summary`; Factory task/release action overrides | Use `.primary-button` for the primary action and `.secondary-button` for quiet actions. Specialized action buttons retain their workflow role but use `--radius-control`, shared hover/pressed feedback and visible focus. Preserve compact desktop exceptions only where the shared 44px touch target is restored for coarse pointers. |
+| Button | `styles.css`: `.primary-button`, `.secondary-button`, `.ghost-button`, `.danger-button`, `.danger-button--filled`, `.button-group`, `.settings-back`, `.jobs-action`, `.workspace-control`; `proactive.css`: `.proactive-text-toggle`, `.proactive-snooze > summary`; Factory task/release action overrides; Daily keeps `.daily-page button` | Use the filled primary, surfaced secondary, quiet ghost, low-emphasis danger and filled-confirmation danger levels. Shared states, radius, type, icon alignment and busy width live in `styles.css`; specialized controls keep their workflow role. Action rows own spacing and wrap/stack at phone widths. Compact actions are 36px on fine pointers and at least 44px on coarse pointers. |
 | Icon button | `styles.css`: `.rail-button`, `.topbar-icon-button`, `.workspace-icon-control`, `.workspace-tab-close`, `.modal-close`, `.folio-action`, `.release-trail-button`; `ConversationToast.css`: toast dismiss; `CameraPreview.css`: camera controls | Use the shared quiet surface treatment, `--radius-control` and visible focus. Icon-only actions remain at least 44px on touch layouts and keep an accessible name. Drag handles and media controls remain semantic exceptions. |
 | Text input | `styles.css`: `.settings-field input`, `.project-form`, `.task-form-field`, `.kanban-search input`, `.usage-field`; `daily/daily.css`: `.daily-page input`; `proactive.css`: `.proactive-feed-input input`; `notes/NotesArea.css` and `styles.css`: integrated note, Folio and knowledge searches | Standard fields use `--surface`, neutral `--control-rule`, `--radius-control`, inherited text and the shared focus outline. Integrated searches keep their transparent inner field when the surrounding search surface provides the boundary and focus treatment. |
 | Select | `styles.css`: `.settings-field select`, `.timeline-toolbar select`, `.usage-field select`, `.role-controls select`, `.kanban-select select`; `daily/daily.css`: `.daily-page select`; `proactive.css`: source controls | Use the same field surface, neutral boundary, control radius and visible focus as text inputs. Native option semantics and route-specific widths remain. |
@@ -130,6 +130,46 @@ checks, not live-backend or human acceptance.
   not verified; no real media device was used.
 - Keyboard scrolling of a wide generated table and reduced-motion behavior for
   an active voice status were not verified.
+
+## Pass 3: button system (18 October 2026; P14-03)
+
+Removed the shared primary button's 32px layout margin. Existing row and form
+spacing stays on its action container; the deployment form uses a 42px grid
+row-gap (the former 10px gap plus the removed 32px button margin). Secondary
+recovery actions that had their own top margin now use spaced `.button-group`
+wrappers. No button behavior, route or accessible name was intentionally
+changed.
+
+The unclassed Knowledge, SettingsAdvanced, Usage and Notes buttons now use the
+ghost level. `styles.test.tsx` guards the shared variants' margin, radius,
+focus, coarse-pointer target and no-decorative-rim contracts, and checks that
+production TSX buttons have a class. The Daily CSS tree remains untouched.
+
+## Pass 3 rendered checks
+
+The scratch Vite harness stubbed auth only in `/tmp`, used synthetic API
+responses, and ran the actual app in Chromium. Before/after contact sheets show
+the same nine workflows—Settings, destructive confirmation, Factory board,
+task window, Proactive, Notes/Knowledge toolbar, chat, empty state, and busy/
+disabled—at 390×844 and 1440×900 in both themes:
+
+| Viewport | Light before | Light after | Dark before | Dark after |
+| --- | --- | --- | --- | --- |
+| 390×844 | [WebP](ui/p14-03/before-light-390x844-workflows.webp) | [WebP](ui/p14-03/after-light-390x844-workflows.webp) | [WebP](ui/p14-03/before-dark-390x844-workflows.webp) | [WebP](ui/p14-03/after-dark-390x844-workflows.webp) |
+| 1440×900 | [WebP](ui/p14-03/before-light-1440x900-workflows.webp) | [WebP](ui/p14-03/after-light-1440x900-workflows.webp) | [WebP](ui/p14-03/before-dark-1440x900-workflows.webp) | [WebP](ui/p14-03/after-dark-1440x900-workflows.webp) |
+
+Standalone Settings captures are included in the same folder. The rendered
+checks reported no browser console errors. Keyboard traversal showed a visible
+3px focus outline on all 12 shared/specialized button probes; touch emulation
+reported coarse pointers and 44px-or-larger targets. The Check now busy state
+kept its width unchanged at both viewport sizes. Reduced-motion emulation was
+active during the checks and retained the existing motion-token behavior.
+
+The 320px board check found the same pre-existing 384px document width before
+and after; overflow comes from the Kanban board's issue-list item, not from a
+button. The parallel P14-05 overflow sweep owns that non-button layout, so this
+button pass leaves it unchanged. Other checked pages had no new document-width
+increase.
 
 ## Pass 3 (borders, radii, surfaces)
 

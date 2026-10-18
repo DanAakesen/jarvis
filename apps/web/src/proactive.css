@@ -48,7 +48,6 @@
 .proactive-page .secondary-button,
 .proactive-page .primary-button {
   min-height: 44px;
-  margin: 0;
 }
 
 .proactive-item-list,
@@ -168,6 +167,8 @@
   font: inherit;
   cursor: pointer;
 }
+.proactive-text-toggle:hover:not(:disabled) { background: var(--glass-hover); }
+.proactive-text-toggle:active:not(:disabled) { background: var(--glass-pressed); }
 
 .proactive-item-meta {
   margin-top: var(--space-2);
@@ -209,7 +210,7 @@
   justify-content: center;
   padding: 0 12px;
   border-radius: var(--radius-control);
-  background: var(--glass-hover);
+  background: color-mix(in srgb, var(--text) 8%, var(--surface));
   cursor: pointer;
   list-style: none;
 }
@@ -219,8 +220,9 @@
 }
 
 .proactive-snooze > summary:hover {
-  background: var(--glass-pressed);
+  background: color-mix(in srgb, var(--text) 14%, var(--surface));
 }
+.proactive-snooze > summary:active { background: color-mix(in srgb, var(--text) 18%, var(--surface)); }
 
 .proactive-snooze-menu {
   position: absolute;
@@ -359,10 +361,6 @@
 .proactive-feed-input input {
   flex: 1 1 260px;
   min-width: 0;
-}
-
-.proactive-settings form .settings-actions .primary-button {
-  margin: 0;
 }
 
 .proactive-sign-in {
