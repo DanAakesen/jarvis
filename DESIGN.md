@@ -1926,6 +1926,13 @@ and busy states remain explicit; invalid fields keep their existing linked
 message and `aria-invalid`, with a visible error symbol alongside the message.
 Notes folder-name errors now use the same description relationship.
 
+Clearance for an arrow or icon inside a field is set with the
+`--field-padding-start` and `--field-padding-end` custom properties, which the
+shared padding consumes. A plain `padding-left` or `padding-right` loses to the
+shared rule's specificity. Selects reserve `--space-6` at the end and ellipsise
+the selected text before the arrow; the Tasks board search reserves `--space-7`
+at the start for its magnifier.
+
 Native checkbox and radio marks stay semantic and use one 18px visual size;
 switches share one 44×26px track with a moving thumb. Segmented choices preserve
 their selected surface and label weight, use the common visible focus, wrap, and
