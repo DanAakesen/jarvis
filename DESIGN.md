@@ -1581,6 +1581,37 @@ composer at 320px. The six JPEG captures cover phone Day in both themes,
 desktop Trend in both themes, Library at 768px light and 320px dark. They are
 synthetic desktop-browser evidence, not live-owner or physical-phone checks.
 
+## Daily today dashboard (18 October 2026; P12-33)
+
+Overview now leads with one `DailyGrid` of section-linked workout, nutrition,
+body, sleep and brief cards: one column below 700px, two from 700px and three
+from 1200px. An odd final card spans the tablet row. Cards in the same row share
+height, retain one headline each, and place compact read freshness at the foot.
+Workouts shows its type glyph, latest start/duration and week totals; nutrition
+compares logged energy with the already-loaded resting-burn-minus-deficit
+baseline, with macros in text. Body shows the latest measurement and a same-unit
+sparkline of recorded observations, retaining null gaps. Sleep and briefs keep
+their latest date/time and recorded context. Unknowns and lower bounds stay
+explicit; partial history is not presented as a complete total.
+
+“What Daily holds today” is a compact collection/state/action strip. Purpose,
+period and read-time notes live in one native “About this data” disclosure.
+Read errors remain beside Retry, and settled empty health probes link to
+Settings, Health upload with the seven-day coverage qualification. Refresh keeps
+the cards and their last values mounted with progress text, including empty
+cards. Embedded Overview shares its Today heading row with Refresh and never
+duplicates the Daily page heading. Existing tokens and button classes are reused;
+no tokens or global styling rules are added.
+
+Ten synthetic-only JPEG captures (about 1.1 MB) are in `docs/ui/p12-33/`:
+populated light/dark at 390×844, 1440×900 and 320×844, plus empty light/dark at
+390×844 and 1440×900. Chromium exercised the real Daily shell with isolated API
+fixtures, including the shell-after-Daily SVG cascade, tablet layout, 200% CSS
+layout zoom, refresh, disclosure keyboard/focus, section links, collection
+Back/retry focus and reduced motion. No horizontal overflow or browser
+console/page errors were observed. These checks do not establish live-data,
+Microsoft sign-in, physical-device or original-site parity.
+
 ## Daily presentation kit (18 October 2026; P12-30)
 
 Daily remains inside the existing Jarvis shell and theme. The shared kit keeps
@@ -1613,6 +1644,8 @@ responses, not Microsoft sign-in, live records, physical-device behavior or
 original-site parity.
 
 ## Daily overview and Briefs integration (18 October 2026; P12-26)
+
+The Overview presentation below is superseded by P12-33 above.
 
 The Overview retains its source inventory and adds a responsive tile grid for
 available Daily sections. Each tile has its own loading, empty, retry and

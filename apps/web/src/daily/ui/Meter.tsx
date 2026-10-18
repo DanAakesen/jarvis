@@ -18,7 +18,8 @@ export function Meter({ label, value, target, unit, partial = false }: {
     <p className="daily-meter-label">{label}</p>
     {knownValue && knownTarget
       ? <div className="daily-meter-track" role="progressbar" aria-label={label} aria-valuemin={0}
-        aria-valuemax={target} aria-valuenow={value} aria-valuetext={`${valueText} of ${targetText}`}>
+        aria-valuemax={target} aria-valuenow={Math.min(target, Math.max(0, value))}
+        aria-valuetext={`${valueText}${partial ? ' (lower bound)' : ''} of ${targetText}`}>
         <span style={{ width: `${ratio * 100}%` }} />
       </div>
       : <div className="daily-meter-track daily-meter-track--unknown" aria-hidden="true"><span /></div>}

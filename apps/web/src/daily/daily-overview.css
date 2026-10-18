@@ -1,33 +1,30 @@
-/* Daily overview. Mobile-first: rows stack, with the actions under the text; from 760px the actions sit to the right. */
+/* Daily overview. Summary cards and collection coverage share the available width. */
 .daily-overview h2 { margin: 0; font-size: var(--type-subheading); }
 .daily-summary { margin-block: var(--space-3) var(--space-5); }
-.daily-summary > h3 { margin: 0 0 var(--space-3); font-size: var(--type-subsection); }
-.daily-summary-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr));
+.daily-summary .daily-summary-grid {
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--space-3);
 }
-.daily-summary-tile { display: grid; align-content: start; gap: var(--space-2); }
-.daily-summary-tile h4 { margin: 0; font-size: var(--type-subsection); }
-.daily-summary-tile h4 a { color: var(--text); text-underline-offset: .2em; }
+.daily-summary-tile { display: flex; flex-direction: column; gap: var(--space-2); }
+.daily-summary-tile h3 { margin: 0; color: var(--text); font-size: var(--type-subsection); font-weight: 650; }
+.daily-summary-tile h3 a { display: inline-flex; align-items: center; min-height: 44px; color: var(--text); text-underline-offset: .2em; }
 .daily-summary-tile p { min-width: 0; margin: 0; overflow-wrap: anywhere; }
-/* Label and value keep their own columns even when a fact carries a second value line, which would otherwise auto-place into the label column. */
-.daily-summary-facts { display: grid; grid-template-columns: fit-content(45%) minmax(0, 1fr); gap: var(--space-1) var(--space-3); margin: 0; }
-.daily-summary-facts > div { display: contents; }
-.daily-summary-facts dt { grid-column: 1; min-width: 0; color: var(--text-muted); font-size: var(--type-small); overflow-wrap: anywhere; }
-.daily-summary-facts dd { grid-column: 2; min-width: 0; margin: 0; overflow-wrap: anywhere; }
-.daily-summary-facts > div + div > :is(dt, dd:first-of-type) { margin-top: var(--space-2); }
+.daily-summary-workout { display: flex; align-items: center; gap: var(--space-2); }
+.daily-summary-tile .daily-summary-macros { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-3); font-size: var(--type-small); }
+.daily-summary-tile > .daily-freshness { padding-top: var(--space-3); margin-top: auto; }
 .daily-overview-list { display: grid; margin: var(--space-3) 0 0; padding: 0; list-style: none; }
 .daily-overview-row {
   display: grid;
-  gap: var(--space-3);
-  padding-block: var(--space-4);
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-2);
+  padding-block: var(--space-2);
   border-top: 1px solid var(--rule);
 }
 .daily-overview-body { display: grid; gap: var(--space-2); min-width: 0; }
 .daily-overview-body p { margin: 0; overflow-wrap: anywhere; }
 .daily-overview-title { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); }
-.daily-overview-title :is(h3, h4) { margin: 0; font-size: var(--type-subsection); }
+.daily-overview-title :is(h3, h4) { flex: 1 1 10rem; margin: 0; font-size: var(--type-body); }
 .daily-overview-detail { font-size: var(--type-small); }
 .daily-status {
   --status-tone: var(--text-muted);
@@ -46,8 +43,8 @@
 .daily-status[data-tone='records'] { --status-tone: var(--success); }
 .daily-status[data-tone='failed'] { --status-tone: var(--error); }
 .app-shell .daily-status svg { width: 16px; height: 16px; flex: none; color: var(--status-tone); }
-.daily-overview-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
-.daily-overview-actions > button { flex: 1 1 140px; }
+.daily-overview-actions { display: flex; flex-direction: column; flex-wrap: wrap; gap: var(--space-2); }
+.daily-overview .daily-data-notes summary:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 /* aria-disabled keeps focus on a busy control, so it needs its own disabled look. */
 .daily-overview button[aria-disabled='true'],
 .daily-overview button[aria-disabled='true']:hover,
@@ -58,9 +55,15 @@
   transform: none;
 }
 @keyframes daily-status-in { from { opacity: 0; } to { opacity: 1; } }
-@media (min-width: 760px) {
-  .daily-overview-row { grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: var(--space-5); }
-  .daily-overview-actions > button { flex: 0 0 auto; }
+@media (min-width: 700px) {
+  .daily-summary .daily-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .daily-summary-tile:last-child:nth-child(odd) { grid-column: 1 / -1; }
+  .daily-overview-row { gap: var(--space-3); }
+  .daily-overview-actions { flex-direction: row; }
+}
+@media (min-width: 1200px) {
+  .daily-summary .daily-summary-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .daily-summary-tile:last-child:nth-child(odd) { grid-column: auto; }
 }
 @media (prefers-reduced-motion: reduce) {
   .daily-status { animation: none; }

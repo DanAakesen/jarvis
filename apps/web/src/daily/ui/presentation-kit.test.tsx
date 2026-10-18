@@ -52,6 +52,15 @@ describe('Daily presentation kit', () => {
     expect(container.querySelector('.daily-grid--twelve .daily-grid-item--4')).toBeTruthy();
   });
 
+  it('keeps over-target progress in the accessible range without hiding the recorded total or lower bound', () => {
+    render(<Meter label="Energy intake against baseline allowance" value={2000} target={1700} unit="kcal" partial />);
+    const meter = screen.getByRole('progressbar', { name: 'Energy intake against baseline allowance' });
+    expect(meter.getAttribute('aria-valuenow')).toBe('1700');
+    expect(meter.getAttribute('aria-valuetext')).toBe('2,000 kcal (lower bound) of 1,700 kcal');
+    expect(screen.getByText('2,000 kcal')).toBeTruthy();
+    expect(screen.getByText('Partial value')).toBeTruthy();
+  });
+
   it('maps workout classes to six decorative glyphs', () => {
     const kinds = ['running', 'walking', 'cycling', 'swimming', 'strength', 'other'];
     const { container } = render(<>{kinds.map(kind => <WorkoutGlyph key={kind} type={kind} />)}</>);
