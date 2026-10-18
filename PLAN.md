@@ -15,6 +15,34 @@ with `agent_error`. Its immutable receipt remains `accepted=false`; #820 owns
 the functional follow-through and #880 stays open. This integration does not
 claim to fix that historical failure or complete private Daily acceptance.
 
+## Visible Daily page (18 October 2026; P12-15 / #730)
+
+Dan, after the invisible Daily slices: "I have no idea what is built and cannot
+see anything." Daily now opens on an overview before any record table. Under
+"What Daily holds today" it lists each retained collection the backend exposes
+(measurements, sleep, workouts, food history, saved favourites, meal plans, brief
+history, sync evidence) with one plain sentence on what it is for. Each row
+shows what a read-only, one-record check found: Has records, None returned
+(which never claims the original source is empty) or Could not read (with Retry).
+Open takes the row into the existing record browser and Back returns. It uses
+only the two existing owner-bound endpoints, `GET /daily/capabilities` and
+`POST /daily/query`, and adds no endpoint, writer, calculation, migration,
+provider call, account, consent, secret or import. Nothing in it is stored,
+estimated or invented.
+
+The page, route and navigation exist only when the web build sets
+`VITE_DAILY_ENABLED` to exactly `true`. It is off by default (a missing value or
+`false` is off; any other value stops the build) and no workflow or Bicep file
+sets it in this change, so every environment keeps the released navigation. Dan
+pre-authorised switching Daily on for his account once the page is live and
+checked; that is the next, separate change (`JARVIS_DAILY_ENABLED` and
+`VITE_DAILY_ENABLED`), not part of this one.
+
+Checked in a real headless Chromium at 390×844 touch (dark and light), 320, 768
+and 1280 px against synthetic responses (details in DESIGN.md). Local runs are not
+qualification, and no live backend, private data, physical phone or acceptance is
+claimed.
+
 ## Proactive assistance (17 October 2026; P13-01 / #917)
 
 The first delivery-proof milestone is approved. P13-01 builds the owner-bound
@@ -67,7 +95,7 @@ any SQL, and an agent reaches the targets only through the approved tool. No
 migration, account, consent, grant, secret, RBAC, resource or import is added, and
 no provider, device or private data is read or written.
 
-Next: the visible Daily page (P12-15 / #730).
+The visible Daily page (P12-15 / #730) is recorded in its own section.
 
 ## On-screen views authority (17 October 2026; P11-09 / #885)
 
@@ -1914,6 +1942,7 @@ Declined in the audit (do not file): verbosity and max-output-token settings, no
 | P9-115 | [#843](https://github.com/DanAakesen/jarvis/issues/843) | Align shared Status navigation instructions with the shipped page | Remove the stale unavailable-page instruction; require canonical `workspace_command` navigate/status guidance and truthful applied/refused semantics across hosted settings and English/Danish realtime, both automatic-capture values, preserving budget/BMP/tool-parity checks. Source/instruction consistency only; not live, model, or voice acceptance and not attribution of a production turn | P9-40 | Complete |
 
 | P9-119 | [#903](https://github.com/DanAakesen/jarvis/issues/903) | Icon-only navigation: Settings, presence and background-work outcome counts | Web-only gear, distinct green/yellow/blue mode icons and non-zero running/done/failed icon-count pairs; dismissed entries excluded from counts and announcements, idle and error states retained. Existing popover contents, delivery and dismissal unchanged. All 1,105 web tests, final 176 focused tests, lint/build and CodeQL pass locally; independent review found no significant issues (bundled review service unavailable). Chromium fixture matrix at 320×568, 390×844 and 1440×900 in light/dark covers all modes, mixed counts, idle, 44px targets, focus, phone windows and both reduced-motion settings; captures/measurements in `docs/ui/screenshots/p9-119/`. Synthetic auth/API and WebGL fallback only; Dan's visual check remains pending | — | Complete |
+| P9-120 | [#913](https://github.com/DanAakesen/jarvis/issues/913) | Move attention from Settings to a conditional yellow header popover | Remove Now and Backend from web Settings; keep one persistent feed connection and route only attention, credential, alert and pending confirmation data to the header. Hide the cluster only when no non-dismissed jobs and no attention items remain; keep it visible while open and retain a neutral labelled mark for interrupted history. Preserve server-synced permanent dismissal, per-row and bulk dismissal, empty note, feed endpoints and `/operations/sleep`. The full web suite passed at 1,183 tests before the final focus-timing adjustment; the 28 focused header tests and 15 backend capability tests pass on the prior revision, along with web lint/build. Scratch-auth/API Chromium checks captured 24 states at 320×568, 390×844 and 1440×900 in light/dark. Synthetic fixtures only; live identity/backend/provider and human visual acceptance remain unverified | P9-119 | Complete |
 
 #815's guarded merge caught the title bot truncating P9-101 to P9-10.
 The coordinator authorised the coupled normalizer/linked-ID/PLAN-parser

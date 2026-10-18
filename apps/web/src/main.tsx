@@ -6,7 +6,7 @@ import './styles.css';
 
 const root = document.getElementById('root');
 if (!root) throw new Error('Missing application root.');
-const router = createBrowserRouter([{ path: '*', element: <App /> }]);
+const router = createBrowserRouter([{ path: '*', element: <App dailyEnabled={__JARVIS_DAILY_ENABLED__} /> }]);
 
 createRoot(root).render(
   <StrictMode>

@@ -1,5 +1,60 @@
 # Decisions
 
+## Open Daily on an overview behind a build-time switch (18 October 2026; P12-15 / #730)
+
+**Builder decision inside Dan's "go with the daily", not an activation and not
+acceptance.** Dan could not see what Daily holds ("I have no idea what is built
+and cannot see anything"), so the page now opens on an overview.
+
+- Overview first. The page lists each retained collection the backend exposes with
+  one plain sentence on what it is for, and a status from a read-only,
+  one-record check: has records, none returned or could not read. It uses only
+  `GET /daily/capabilities` and `POST /daily/query`, so it adds no endpoint,
+  writer, calculation, migration, provider call, account, consent, secret or
+  import.
+- Honest by construction. "None returned" never says the original source is
+  empty, the sync summary alone does not count as records, and the overview shows
+  no count, total or estimate. A failed read says so and offers Retry. A settled
+  result stays visible while the next read runs, except a failure that is being
+  retried.
+- Gentle on the backend. Reads run two at a time because the SQL pool is shared
+  with chat, and the overview does not refresh on window focus.
+- One build-time switch. `VITE_DAILY_ENABLED` is read by the Vite build only:
+  absent or `false` is off, `true` is on, and any other value, including an empty
+  one, stops the build. It is baked into the bundle and never read from the URL,
+  storage or runtime configuration. This change sets it nowhere, and
+  `daily/default-off.test.ts` scans for it.
+- Enabling is a separate change. Dan pre-authorised switching Daily on for his own
+  account: "Yes, switch it on once it's live and checked." That change sets
+  `JARVIS_DAILY_ENABLED` and `VITE_DAILY_ENABLED` after this page has been merged,
+  deployed and checked in a real browser. Rolling back means reverting it or
+  leaving the switches off.
+- Evidence. A headless Chromium check against synthetic responses at phone,
+  small-phone, tablet and desktop widths. It is not live data, a physical phone,
+  provider acceptance or Daily activation.
+
+## Put attention in a conditional header popover (17 October 2026; P9-120 / #913)
+
+Remove the Now and Backend sections from web Settings. Keep the existing
+shell-owned Now feed, stream, side effects and backend sleep API unchanged.
+Publish only the already-loaded feed items in the attention, credential and
+alert categories, plus pending browser confirmations, to a yellow bell/count
+in the header background-work cluster. Its independent popover retains the
+existing item links, timestamps, dismiss endpoint and confirmation handlers.
+Running tasks stay with background work; releases/deployments and away-mode
+changes are not attention. The background-work control is empty only when there
+are no non-dismissed jobs and no attention items. Keep it visible while its
+popover is open so the empty-state note remains reachable after the last
+dismissal. Interrupted historical jobs remain reachable through the control and
+show a neutral, labelled history mark when no running/done/failed counts apply.
+
+This implements issue #913's request to remove Now and Backend from Settings
+and show attention from its own header icon. Reusing the existing feed snapshot avoids a
+second connection or request; `/operations/sleep` and shared navigation
+contracts remain unchanged. Offline focused UI tests cover the count, popover,
+unknown web anchor, permanent server-synced dismissal and empty-state behavior.
+Live provider behavior and human visual acceptance remain unverified.
+
 ## Keep the first Web Push proof dark and user-triggered (17 October 2026; P13-01 / #917)
 
 Milestone 1 proves a visible Web Push notification can point to a durable,
