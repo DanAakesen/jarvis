@@ -274,6 +274,7 @@ describe('Workouts section', () => {
     mount({}, '/daily?section=workouts&workout=synthetic-run');
     await screen.findByRole('heading', { name: /^Running ·/u });
     expect(screen.getAllByText('Loading Daily history').length).toBeGreaterThan(0);
+    await waitFor(() => expect(read.mock.calls.some(call => call[1].source === sources.heartRate)).toBe(true));
     const query = read.mock.calls.find(call => call[1].source === sources.heartRate)![1];
     await act(async () => pending.resolve(dailyFixture(query)));
     expect(await screen.findByText(/No heart-rate samples were returned/u)).toBeTruthy();

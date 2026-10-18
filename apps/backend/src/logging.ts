@@ -32,6 +32,7 @@ const failureEvents = new Set([
   'dispatcher.operation_failed', 'github.checks_loop_recovery_failed', 'pc_bridge.status_update_failed',
   'google.refresh_token_expired_alert_unavailable', 'google.refresh_token_expired_alert_persistence_failed',
   'google.calendar_batch_item_failed',
+  'daily.health_processing_retry',
   'telemetry.close_failed', 'server.shutdown_failed', 'request.failed', 'connection.upgrade_failed',
   'attachment.extraction_failed', 'away_mode.task_notification_failed', 'away_mode.task_route_failed',
   'codex.image_cancel_failed', 'codex.image_session_cleanup_failed', 'conversation_attachments.cleanup_failed',

@@ -5,6 +5,7 @@ import { buildApp } from '../../app.js';
 import { loadConfig } from '../../config.js';
 import { createLogger } from '../../logging.js';
 import { HealthConflict,HealthUnavailable,healthUploadLimit,sha256,type HealthBuffer,type HealthCapability,type HealthReceipt } from './contracts.js';
+import { SqlHealthCapabilities } from './sql-capabilities.js';
 import type { HealthUploadOptions } from './server.js';
 
 const config = loadConfig({});
@@ -137,5 +138,42 @@ describe('inactive SQL health composition in the existing backend',() => {
       expect((await post(fixture(options).app)).statusCode).toBe(503);
     }
     expect(() => fixture({ buffer: { owner: '22222222-2222-4222-8222-222222222222',accept: async () => receipt } })).toThrow('owner mismatch');
+  });
+  it('keeps credential lifecycle routes owner-authenticated, no-store and one-time revealed',async () => {
+    const lifecycle = new SqlHealthCapabilities({} as ConstructorParameters<typeof SqlHealthCapabilities>[0],config.auth.ownerObjectId);
+    const capabilities = {
+      status: vi.fn(async () => ({ state: 'empty' as const,expiresAt: null })),
+      prepare: vi.fn((input: Parameters<SqlHealthCapabilities['prepare']>[0]) => lifecycle.prepare(input)),
+      create: vi.fn(async () => ({ state: 'issued' as const })),
+      rotateCurrent: vi.fn(async () => ({ state: 'issued' as const })),
+      revokeCurrent: vi.fn(async () => ({ state: 'revoked' as const })),
+    } as unknown as SqlHealthCapabilities;
+    const auth = vi.fn(async (value: string) => ({
+      objectId: value === 'header.foreign.signature' ? '22222222-2222-4222-8222-222222222222' : config.auth.ownerObjectId,
+      tenantId: config.auth.tenantId,displayName: 'Synthetic owner',
+    }));
+    const logs: string[] = [];
+    const output = new Writable({ write(chunk: Buffer,_encoding,done) { logs.push(chunk.toString()); done(); } });
+    const app = buildApp(config,createLogger(config,undefined,output),{ auth,healthCapabilities: capabilities,healthUpload: { enabled: true } });
+    apps.push(app);
+
+    const anonymous = await app.inject('/api/health/upload-credential');
+    expect(anonymous.statusCode).toBe(401);
+    const headers = { authorization: ['Bearer','header.owner.signature'].join(' ') };
+    expect((await app.inject({ url: '/api/health/upload-credential',headers: { authorization: ['Bearer','header.foreign.signature'].join(' ') } })).statusCode).toBe(403);
+    const status = await app.inject({ url: '/api/health/upload-credential',headers });
+    expect(status.statusCode).toBe(200);
+    expect(status.headers['cache-control']).toBe('no-store');
+    expect(status.json()).toEqual({ state: 'empty',expiresAt: null });
+
+    const issued = await app.inject({ method: 'POST',url: '/api/health/upload-credential',headers,payload: { action: 'create' } });
+    expect(issued.statusCode).toBe(200);
+    expect(issued.headers['cache-control']).toBe('no-store');
+    expect(issued.json()).toMatchObject({ state: 'created' });
+    expect(issued.json().token).toMatch(/^[A-Za-z0-9_-]{43,256}$/u);
+    expect(logs.join('')).not.toContain(issued.json().token);
+    expect(capabilities.create).toHaveBeenCalledOnce();
+    expect(auth).toHaveBeenCalled();
+    expect((await app.inject({ method: 'POST',url: '/api/health/upload-credential',headers,payload: { action: 'unknown' } })).statusCode).toBe(400);
   });
 });
