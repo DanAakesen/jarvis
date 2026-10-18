@@ -193,7 +193,7 @@ function Segmented<T extends string>({ label, value, options, onChange }: {
   return (
     <div className="usage-segmented" role="group" aria-label={label}>
       {options.map((option) => (
-        <button key={option.value} type="button" aria-pressed={value === option.value} onClick={() => onChange(option.value)}>
+        <button key={option.value} className="ghost-button" type="button" aria-pressed={value === option.value} onClick={() => onChange(option.value)}>
           {option.label}
         </button>
       ))}

@@ -1,5 +1,20 @@
 # Decisions
 
+## Use one refined button hierarchy across the web app (18 October 2026; P14-03 / #969)
+
+Keep the existing class names and route behavior while making button intent
+visible in the shared stylesheet. Primary remains the existing primary fill;
+secondary is a distinct neutral surface, ghost is quiet, danger is low
+emphasis, and confirmed destructive actions use the filled danger modifier.
+All variants use the existing control radius, focus outline and semantic
+surface/state tokens; no decorative control rim or new palette is introduced.
+
+Buttons no longer carry layout margins. Shared action groups own spacing,
+wrapping, phone stacking and primary-last ordering. Busy controls keep their
+disabled state and accessible name while the shared inline Loader overlays a
+label that still reserves the button's width. This is a presentation-only
+change, not a change to actions, confirmation boundaries or API behavior.
+
 ## Notify only on P1 - High vault tasks (18 October 2026; #996)
 
 Proactive todo findings and reminders are eligible only for open vault tasks
@@ -55,6 +70,21 @@ encrypted and owner-only outside the repository, agent environments and
 GitHub artifacts. Synthetic validation is not private migration acceptance.
 Refs DanAakesen/jarvis#717 and DanAakesen/jarvis#721.
 
+## Give asynchronous test waits headroom on loaded CI runners (18 October 2026; fix-main)
+
+Web tests such as the attention popover focus return and the workspace pin
+loading recovery failed intermittently in CI at about 1.0 s, the Testing
+Library `asyncUtilTimeout` default, and passed on rerun with no code change.
+Each assertion was about to hold; a loaded runner had stalled the worker for
+longer than the budget. The web test setup now sets `asyncUtilTimeout` to 4 s,
+and Vitest's `testTimeout` is 15 s so that a wait which does fail reports its
+own assertion rather than a generic 5 s test timeout.
+
+No assertion, retry or skip was added or loosened. A wait whose condition never
+holds still fails, after at most 4 s instead of 1 s. This is a unit-test wait
+budget only; it does not change the release, acceptance-evidence or
+worker-start timeouts recorded elsewhere.
+
 ## Preserve attention dismissals across backend restarts (18 October 2026; P9-123 / #962)
 
 Policy-blocked reasons are de-duplicated transactionally against task event
@@ -66,6 +96,28 @@ PC bridge persistence changes only when the status title changes. Startup allows
 two minutes for reconnection before recording offline, and shutdown records
 nothing. Live socket status remains immediate. This separates restart noise from
 real attention changes without hiding an offline bridge indefinitely.
+
+## Draw slim desktop scrollbars and keep glass rings off scrolling surfaces (18 October 2026; fix-main)
+
+`.luminous-glass::before` is a 1px ring drawn at `inset: -1px`. Inside a scrolling
+container that overhang counts as scrollable overflow, so the Notes search results
+and every modal showed vertical and horizontal scrollbars even when their content
+fitted. A glass surface that scrolls now drops the ring (`.knowledge-results` keeps
+a hairline border instead) or stops being the scroller (`.modal` no longer sets
+`overflow`; a card taller than the viewport scrolls with its backdrop).
+
+Chromium and Safari add arrow buttons to the standard thin scrollbar and ignore
+`::-webkit-scrollbar` while `scrollbar-width` or `scrollbar-color` is set. With a
+fine pointer the standard properties are therefore reset and the bar is built from
+its parts: 10px wide, no arrow buttons, transparent track and a pill thumb that
+lights cyan while the main scroll surfaces or the thumb are hovered. Touch screens
+and Firefox keep the standard thin overlay bars. The Notes reader keeps its
+stronger resting thumb, and the deliberately hidden scrollbars (tab strips, job
+tabs, kanban pulse, phone legend) are unchanged. The hovered scroller also sets an
+empty custom property, the documented workaround for Safari not restyling the
+hovered thumb otherwise. `styles.test.tsx` pins the
+approach. Checked in headless Edge before and after, in dark and light themes, and
+with phone emulation; not checked on a physical phone or in Safari.
 
 ## Decide what Dan's approval means on the server, never with a word list (17 October 2026; P11-10 / #894)
 
@@ -5397,12 +5449,11 @@ human acceptance.
 Place each action group's primary action last in markup so keyboard traversal
 matches the displayed order at desktop and narrow widths. Confirmation groups
 keep the safe Cancel/Keep action first. Do not use CSS `order` to rearrange
-action groups. Preserve the deployment form's 10px grid gap across breakpoints;
-reset its primary button's inherited top margin instead of widening the gap.
-The TSX source guard and CSS contract tests enforce these rules. This checkout
-already had a 10px `.deployment-add` gap and no action-group `order` rules; the
-change records those contracts and restores the deployment button's margin-free
-behavior. Local browser/layout acceptance remains a separate verification.
+action groups. Preserve the deployment form's 10px column gap and set its row
+gap to 10px at every breakpoint. The shared button system owns no outer
+margins, so no local deployment-button margin is needed. The TSX source guard
+and CSS contract tests enforce these rules. Local browser/layout acceptance
+remains a separate verification.
 
 ## P13-16 owner-bound proactive recall (18 October 2026; #937)
 

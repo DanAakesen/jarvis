@@ -627,10 +627,11 @@ export function TasksPage({ backendUrl, getAccessToken }: Props) {
             <input id="create-reasoning" name="reasoningOverride" maxLength={32} />
           </div>
           {createError && <p className="tasks-feedback" role="alert">{createError}</p>}
-          <div className="task-dialog-actions">
+          <div className="task-dialog-actions button-group">
             <button className="secondary-button" type="button" onClick={closeDialog} disabled={creating}>Cancel</button>
-            <button className="primary-button" type="submit" disabled={creating || !backendUrl}>
-              {creating ? 'Creating task…' : 'Create task'}
+            <button className="primary-button" type="submit" disabled={creating || !backendUrl} aria-busy={creating || undefined} aria-label={creating ? 'Creating task…' : undefined}>
+              <span className="button-label">Create task</span>
+              {creating && <span className="button-loading-indicator" aria-hidden="true"><Loader variant="inline" announce={false} label="Creating task…" /></span>}
             </button>
           </div>
         </form>

@@ -269,8 +269,9 @@ export function MemorySettings({ backendUrl, getAccessToken }: { backendUrl: str
                       <p>Jarvis forgets it straight away; it cannot be restored.</p>
                       <div className="settings-actions">
                         <button className="secondary-button" type="button" onClick={() => setConfirmForget(false)}>Keep it</button>
-                        <button className="primary-button memory-forget-confirm" type="button" disabled={busy !== ''} onClick={() => { void forget(); }}>
-                          {busy === 'forgetting' ? 'Forgetting…' : 'Forget memory'}
+                        <button className="primary-button danger-button danger-button--filled memory-forget-confirm" type="button" disabled={busy !== ''} aria-busy={busy === 'forgetting' || undefined} aria-label={busy === 'forgetting' ? 'Forgetting…' : undefined} onClick={() => { void forget(); }}>
+                          <span className="button-label">Forget memory</span>
+                          {busy === 'forgetting' && <span className="button-loading-indicator" aria-hidden="true"><Loader variant="inline" announce={false} label="Forgetting…" /></span>}
                         </button>
                       </div>
                     </dialog>
