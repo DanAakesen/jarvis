@@ -5509,6 +5509,19 @@ query as the Proactive page. It is composed only behind the existing
 untrusted data, and cannot change item state or authorize actions. Reusing the
 page's query keeps both views consistent and avoids creating a second read model.
 
+## P14-08 — One form-control system (18 October 2026; #991)
+
+Keep field geometry and state styling in the existing shared web stylesheet,
+joining route controls through their current wrappers rather than changing
+field names, handlers or validation rules. Use 38px compact fields on fine
+pointers and 44px/16px fields on coarse pointers; preserve native select,
+checkbox and radio semantics while providing one CSS select arrow and one
+switch geometry. Invalid fields keep a linked message and `aria-invalid`;
+Notes folder-name errors now expose their existing text through
+`aria-describedby`. Guard the shared token, radius, focus and coarse-pointer
+rules in the existing stylesheet tests. The Notes source editor and integrated
+search fields remain layout exceptions, and Daily markup is unchanged.
+
 ## P12-25 — Conditional Daily section availability (18 October 2026)
 
 The owner approved an optional `isAvailable(sources)` predicate on section

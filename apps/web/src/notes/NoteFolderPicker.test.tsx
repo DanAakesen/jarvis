@@ -58,8 +58,17 @@ describe('Note destination tree', () => {
       fireEvent.change(input, { target: { value } });
       expect((screen.getByRole('button', { name: 'Add folder' }) as HTMLButtonElement).disabled).toBe(true);
     }
+    expect(input.getAttribute('aria-invalid')).toBe('true');
+    expect(input.getAttribute('aria-describedby')).toBe(`${input.id}-error`);
+    expect(document.getElementById(input.getAttribute('aria-describedby')!)?.textContent)
+      .toContain('Use a short folder name');
+    expect(document.getElementById(input.getAttribute('aria-describedby')!)?.className).toBe('field-error');
     fireEvent.change(input, { target: { value: 'Customers' } });
     expect(screen.getByText(/already exists/)).not.toBeNull();
+    expect(input.getAttribute('aria-describedby')).toBe(`${input.id}-duplicate`);
+    expect(document.getElementById(input.getAttribute('aria-describedby')!)?.textContent)
+      .toContain('already exists');
+    expect(document.getElementById(input.getAttribute('aria-describedby')!)?.className).toBe('field-error');
     fireEvent.keyDown(input, { key: 'Escape' });
     expect(screen.queryByRole('textbox')).toBeNull();
     expect(document.activeElement).toBe(screen.getByRole('button', { name: 'New folder in Vault root' }));
