@@ -1,5 +1,23 @@
 # Decisions
 
+## P12-36 — Daily responsive and consistency polish (18 October 2026)
+
+Keep this audit presentation-only: preserve the existing owner-only reads,
+loaded data, URLs, accessible names, behavior and section ownership. Reuse the
+Daily kit's space/type/surface tokens and shared primitives rather than
+normalizing content-specific empty states, freshness placement or chip meaning.
+Use visible horizontal scrollbars for overflowing Daily and Nutrition tab strips.
+At narrow widths, choose readable controls, equal-height Body shortcuts and
+wrapped stat notes without clipping or fabricating values.
+
+`DailyChart` stays in measured CSS-pixel geometry. Reserve y-axis space for the
+actual formatted ticks, and reduce categorical tick density instead of shrinking
+or overlapping its date labels. Keep the established pixel-sized SVG text
+exception and do not add scale-ratchet allowlist entries. Guard table wrappers,
+fixed-width styles, narrow grid rules and stat-note wrapping with existing web
+tests. Synthetic captures and the complete audit matrix live in
+`docs/ui/p12-36/`; they are not live-data or original-site acceptance.
+
 ## P12-32 — Daily Body & sleep presentation (18 October 2026)
 
 Keep the rebuild presentation-only: Body and Sleep use the existing parent-owned

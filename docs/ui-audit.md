@@ -432,3 +432,28 @@ for the send action). No horizontal overflow was found at 320px or at the
 
 These are local synthetic Chromium results, not live-service, physical-device
 or human acceptance.
+
+## Daily responsive and consistency audit (18 October 2026; P12-36)
+
+The Daily equivalent of the Pass 3 responsive/overflow method audited the shell,
+Overview, Workouts, Nutrition Day/Trend/Library, Body, Sleep, Briefs and Data.
+The full section × width × theme × state findings and consistency table are in
+[`docs/ui/p12-36/audit.md`](ui/p12-36/audit.md). It records every reproduced
+defect, the pre-fix and post-fix examples, and the remaining chart-label-size
+exception.
+
+Headless Chromium used synthetic API responses, the actual Daily components,
+Daily stylesheets before the shell stylesheet, and `.app-shell` around the page.
+The populated matrix covered 126 view/width/theme combinations (including a
+720 CSS-pixel viewport as a 200%-effective-width check); empty, loading and
+error coverage added 324 combinations. The final matrices had no document,
+Daily panel or section-panel overflow, clipped controls or chart labels,
+under-44px touch targets, chart tick overlaps, or console errors. A keyboard
+pass found visible focus rings. No live Daily data or original-site parity was
+claimed.
+
+The twelve linked synthetic JPEG examples in `docs/ui/p12-36/` total 1.0 MB.
+Three “before” examples restore only the old responsive CSS rules over the same
+synthetic markup; the tall desktop “after” captures expose the sections' lower
+content. No change was made to the parallel Data or Briefs rebuilds, `DailyPage`,
+or `PLAN.md`.

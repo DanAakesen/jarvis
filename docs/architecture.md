@@ -6265,6 +6265,25 @@ while coverage failures retain an inline error and Retry. Settled empty health
 probes provide the Settings upload link, qualified to their seven-day period.
 No backend, contracts, routes, source permissions or dependencies change.
 
+## P12-36 Daily responsive presentation audit (18 October 2026)
+
+This is a web-presentation-only change. Overview formats its latest workout time
+without repeating the date and adjusts the summary grid at phone and tablet
+widths. Nutrition Day uses a fixed two-column control arrangement on narrow
+screens; its local view tabs remain inside their panel's horizontal scroll
+region. Body shortcut buttons stretch evenly, the horizontal strip has a
+scrollbar affordance, and shared statistic notes wrap so they cannot enlarge a
+tile's intrinsic minimum width.
+
+`DailyChart` computes its left plot margin from the formatted y-axis ticks and
+selects a single middle categorical tick when the measured plot cannot safely
+fit two date labels. Its `ChartSeries`, data-table, and read contracts are
+unchanged. Section-authored tables still use `ScrollTable`; added source tests
+guard that invariant, fixed-width Daily CSS, the summary grid, Nutrition tab
+containment, and wrapping shared stat notes. No API, data request, route,
+contract, persistence or dependency changed. Full synthetic browser findings
+are recorded in `docs/ui/p12-36/audit.md`.
+
 ## Web Daily overview and Briefs integration (18 October 2026; P12-26)
 
 `sections/overview/summary.ts` composes the sections' pure helpers for recent

@@ -10,7 +10,7 @@ import { FreshnessLine } from '../../ui/FreshnessLine';
 import { Meter } from '../../ui/Meter';
 import { Sparkline } from '../../ui/Sparkline';
 import { WorkoutGlyph } from '../../ui/WorkoutGlyph';
-import { formatDate, formatDuration, formatNumber, formatTime } from '../../ui/formatters';
+import { formatClockTime, formatDate, formatDuration, formatNumber, formatTime } from '../../ui/formatters';
 import { dateOnly, type Row as MetricRow } from '../body-sleep/metrics';
 import { type Row as SleepRow } from '../body-sleep/metrics';
 import { sumNutrient, targetBaseline, text, type Row as NutritionRow } from '../nutrition/totals';
@@ -67,7 +67,7 @@ function WorkoutsTile({ backendUrl, getAccessToken, refreshVersion, period }: {
       <p className="daily-stat-value daily-summary-workout"><WorkoutGlyph type={workoutType(latest)} />{typeLabel(latest)}</p>
       <p>{formatDuration(typeof latest.duration_seconds === 'number' ? latest.duration_seconds : null)}
         {pages.hasMore ? ' · Partial history' : ''}</p>
-      <p className="daily-meta">Started {formatTime(typeof latest.start_at === 'string' ? latest.start_at : null)}</p>
+      <p className="daily-meta">Started {formatClockTime(typeof latest.start_at === 'string' ? latest.start_at : null)}</p>
       <p className="daily-meta">{formatDate(summary.latest?.date)}</p>
     </> : <p>Latest workout: Unknown</p>}
     <p>This week: {formatNumber(summary.week.count)} workouts · {formatNumber(summary.week.durationSeconds === null

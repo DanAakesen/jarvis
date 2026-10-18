@@ -110,14 +110,23 @@ export function DailyChart({ kind, name, series, target, rangeLabel, dataTable }
   const xMin = Math.min(...xs);
   const xMax = Math.max(...xs);
   const layout = { ...valueLayout, categorical, categories, xMin, xMax: xMax === xMin ? xMin + 1 : xMax };
-  const plotWidth = width - margin.left - margin.right;
-  const plotHeight = height - margin.top - margin.bottom;
-  const px = (point: Pick<DailyChartPoint, 'x'>) => margin.left + xPosition(layout, point.x, kind === 'bar') * plotWidth;
-  const py = (value: number) => margin.top + (1 - yPosition(layout, value)) * plotHeight;
+  const leftMargin = Math.max(margin.left, ...layout.yTicks.map(tick => formatNumber(tick).length * 8 + 16));
+  const chartMargin = { ...margin, left: leftMargin };
+  const plotWidth = width - chartMargin.left - chartMargin.right;
+  const plotHeight = height - chartMargin.top - chartMargin.bottom;
+  const px = (point: Pick<DailyChartPoint, 'x'>) => chartMargin.left + xPosition(layout, point.x, kind === 'bar') * plotWidth;
+  const py = (value: number) => chartMargin.top + (1 - yPosition(layout, value)) * plotHeight;
   const baseline = py(Math.max(layout.yMin, Math.min(0, layout.yMax)));
   const barWidth = Math.min(72, plotWidth / Math.max(1, layout.categories.length) * 0.62 / Math.max(1, series.length));
   const readout = activePoint === null ? null : interactivePoints[activePoint];
-  const tickCount = Math.max(2, Math.floor(plotWidth / 100));
+  const tickCount = Math.max(1, Math.floor(plotWidth / 140));
+  const categoryTicks = layout.categories.map((category, index) => {
+    const show = layout.categories.length <= tickCount ||
+      (tickCount === 1
+        ? index === Math.round((layout.categories.length - 1) / 2)
+        : index % Math.ceil((layout.categories.length - 1) / (tickCount - 1)) === 0 || index === layout.categories.length - 1);
+    return { x: category, position: show ? xPosition(layout, category, kind === 'bar') : null };
+  });
 
   return <figure ref={figureRef} className="daily-chart">
     <figcaption>{name}</figcaption>
@@ -142,19 +151,18 @@ export function DailyChart({ kind, name, series, target, rangeLabel, dataTable }
         }
       }}>
       {layout.yTicks.map(tick => <g className="daily-chart-grid" key={tick}>
-        <line x1={margin.left} x2={width - margin.right} y1={py(tick)} y2={py(tick)} />
-        <text x={margin.left - 8} y={py(tick)} textAnchor="end" dominantBaseline="middle">{formatNumber(tick)}</text>
+        <line x1={chartMargin.left} x2={width - chartMargin.right} y1={py(tick)} y2={py(tick)} />
+        <text x={chartMargin.left - 8} y={py(tick)} textAnchor="end" dominantBaseline="middle">{formatNumber(tick)}</text>
       </g>)}
       {target && <g className="daily-chart-target">
-        <line x1={margin.left} x2={width - margin.right} y1={py(target.value)} y2={py(target.value)} />
-        <text x={width - margin.right} y={py(target.value) - 5} textAnchor="end">{target.label}</text>
+        <line x1={chartMargin.left} x2={width - chartMargin.right} y1={py(target.value)} y2={py(target.value)} />
+        <text x={width - chartMargin.right} y={py(target.value) - 5} textAnchor="end">{target.label}</text>
       </g>}
       <g className="daily-chart-xaxis">
         {(layout.categorical
-          ? layout.categories.map((category, index) => ({ x: category, position: layout.categories.length <= tickCount || index % Math.ceil((layout.categories.length - 1) / (tickCount - 1)) === 0 || index === layout.categories.length - 1
-            ? xPosition(layout, category, kind === 'bar') : null }))
+          ? categoryTicks
           : [layout.xMin, layout.xMax].map(value => ({ x: value, position: xPosition(layout, value, kind === 'bar') }))
-        ).filter(item => item.position !== null).map(item => <text key={String(item.x)} x={margin.left + item.position! * plotWidth}
+        ).filter(item => item.position !== null).map(item => <text key={String(item.x)} x={chartMargin.left + item.position! * plotWidth}
           y={height - 7} textAnchor={item.position! < .1 ? 'start' : item.position! > .9 ? 'end' : 'middle'}>{String(item.x)}</text>)}
       </g>
       {series.map((entry, seriesIndex) => {
@@ -190,9 +198,10 @@ export function DailyChart({ kind, name, series, target, rangeLabel, dataTable }
         </g>;
       })}
       {readout && <g className="daily-chart-active-point" aria-hidden="true">
-        <circle cx={px(readout.point)} cy={readout.point.y === null ? margin.top : py(readout.point.y)} r="7" />
-        {width >= 480 && <text x={Math.min(width - margin.right, Math.max(margin.left + 90, px(readout.point)))}
-          y={Math.max(margin.top + 14, (readout.point.y === null ? margin.top : py(readout.point.y)) - 12)} textAnchor="middle">
+      <circle cx={px(readout.point)} cy={readout.point.y === null ? chartMargin.top : py(readout.point.y)} r="7" />
+      {width >= 480 && <text x={px(readout.point) > width / 2 ? width - chartMargin.right : Math.max(chartMargin.left + 90, px(readout.point))}
+        y={Math.max(chartMargin.top + 14, (readout.point.y === null ? chartMargin.top : py(readout.point.y)) - 12)}
+        textAnchor={px(readout.point) > width / 2 ? 'end' : 'start'}>
           {series[readout.seriesIndex]?.name}: {label(readout.point)}
         </text>}
       </g>}
