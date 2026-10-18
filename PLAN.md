@@ -2408,7 +2408,7 @@ unproven. Teams is not a delivery path.
 | P13-13 | [#933](https://github.com/DanAakesen/jarvis/issues/933) | Proactive todo reminders: one hour before a todo is due (dark) | Fake-based tests cover timed-todo planning, quiet-hour holds, limits, re-reads, bundling, expiry, retries and private push payloads. | P13-12, P13-06, P13-07, P13-05 | In progress |
 | P13-14 | [#935](https://github.com/DanAakesen/jarvis/issues/935) | Enable proactive checks | CI is green, including the infrastructure offline build and lint. | P13-03, P13-05 to P13-10 | In progress |
 | P13-15 | [#936](https://github.com/DanAakesen/jarvis/issues/936) | Enable suggested todos, alerts and reminders | CI is green, including the infrastructure offline build and lint. | P13-11 to P13-14 | In progress |
-| P13-16 | [#937](https://github.com/DanAakesen/jarvis/issues/937) | Chat and voice recall of proactive findings | Fake-based tests cover flag gating, owner authorization, validation, bounded results, failures and untrusted item text. | P13-05, P13-06, P13-10 | In progress |
+| P13-16 | [#937](https://github.com/DanAakesen/jarvis/issues/937) | Chat and voice recall of proactive findings | Fake-based tests cover flag gating, owner authorization, validation, bounded results, failures and untrusted item text. | P13-05, P13-06, P13-10 | Complete |
 
 ## P14 — UI unification
 

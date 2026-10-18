@@ -129,6 +129,9 @@ import { registerPushRoutes } from './push/routes.js';
 import { createSystemPushSender } from './proactive/push-delivery.js';
 import { composeDaily } from './daily/composition.js';
 import { registerProactive } from './proactive/composition.js';
+import { createProactiveStore } from './database/proactive-store.js';
+import { createMemoryProactiveStore } from './proactive/store.js';
+import { createProactiveToolsModule } from './proactive/tools.js';
 
 try {
   const config = loadConfig();
@@ -794,6 +797,16 @@ try {
         : {}),
     })
     : undefined;
+  const proactiveStore = config.proactiveEnabled
+    ? database
+      ? createProactiveStore(database.pool, config.auth.ownerObjectId)
+      : createMemoryProactiveStore(config.auth.ownerObjectId)
+    : undefined;
+  const proactiveToolsModule = createProactiveToolsModule({
+    enabled: config.proactiveEnabled,
+    ownerObjectId: config.auth.ownerObjectId,
+    ...(proactiveStore ? { store: proactiveStore } : {}),
+  });
   const modules: BackendModule[] = createProductionModules({
     core: coreModule,
     conversation: createConversationModule(frameStore),
@@ -822,6 +835,7 @@ try {
       pool: database?.pool,
       ownerObjectId: config.auth.ownerObjectId,
     }),
+    proactive: proactiveToolsModule,
   });
   const budgetAlertStore = alertActivityStore;
   const budgetReader = database && credential && config.monthlyBudgetResourceId
@@ -1127,6 +1141,7 @@ try {
   if (config.proactiveEnabled) registerProactive(app, {
     enabled: config.proactiveEnabled,
     ownerObjectId: config.auth.ownerObjectId,
+    ...(proactiveStore ? { store: proactiveStore } : {}),
     ...(database ? { pool: database.pool } : {}),
     ...(googleApiClient ? { googleApiClient } : {}),
     ...(vaultClient ? { vaultClient } : {}),

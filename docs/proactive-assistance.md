@@ -771,3 +771,10 @@ and [Rejseplanen API 2.0](https://labs.rejseplanen.dk/hc/en-us/articles/21554723
 whose documented noncommercial offer includes 50,000 free calls/month subject
 to access. These are research options, not selected integrations, cadence or
 availability guarantees.
+
+## Chat and voice recall (P13-16; 18 October 2026)
+
+When the existing proactive checks flag is on, chat and voice can retrieve the
+current owner-scoped findings with one read-only tool, using the same item query
+as the Proactive page. Results are bounded and explicitly marked as untrusted
+data; recall does not mark findings seen, approve anything or trigger work.
