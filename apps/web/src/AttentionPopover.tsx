@@ -150,6 +150,8 @@ function AttentionItems({
 
 function focusHeaderFallback() {
   const focus = () => {
+    // The frame can land after something else took focus (a newer popover, a deliberate click); only rescue focus that fell to the page.
+    if (document.activeElement && document.activeElement !== document.body) return;
     (document.querySelector<HTMLButtonElement>('.jobs-summary') ??
       document.querySelector<HTMLButtonElement>('.presence-chip-trigger') ??
       document.querySelector<HTMLAnchorElement>('.settings-link'))?.focus();
