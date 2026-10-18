@@ -163,6 +163,24 @@ describe('Workouts section', () => {
     expect(within(table()).getAllByRole('row')).toHaveLength(4);
   });
 
+  it('refreshes the whole period on focus after an explicit continuation', async () => {
+    let refreshed = false;
+    read.mockImplementation(async (_url, query) => {
+      if (refreshed) return dailyFixture(query, [{ ...workouts[0]!, id: 'synthetic-refreshed', source_name: 'Synthetic refreshed source' }]);
+      const page = 'cursor' in query && query.cursor && 'key' in query.cursor ? Number(query.cursor.key) : 0;
+      return dailyFixture(query, [{ ...workouts[0]!, id: `synthetic-${page}` }],
+        page < 10 ? { date: '2026-10-16', key: String(page + 1) } : null);
+    });
+    mount();
+    fireEvent.click(await screen.findByRole('button', { name: /^Load more$/u }));
+    await waitFor(() => expect(within(table()).getAllByRole('row')).toHaveLength(12));
+    refreshed = true;
+    fireEvent.focus(window);
+    await waitFor(() => expect(within(table()).getAllByRole('row')).toHaveLength(2));
+    expect(within(table()).getByText('Synthetic refreshed source')).toBeTruthy();
+    expect(read.mock.calls.at(-1)?.[1]).not.toHaveProperty('cursor');
+  });
+
   it('opens URL-backed detail, heart-rate lines, metric selection, and bounded recorded JSON', async () => {
     mount();
     await screen.findByRole('region', { name: 'Workouts in the loaded rows' });

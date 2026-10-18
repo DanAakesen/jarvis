@@ -6047,7 +6047,8 @@ three-section navigation scenario.
 The section uses `daily/ui/useDailyPages` with `autoLoad: true`, `maxPages: 10`
 and `limit: 500`. A local continuation wrapper retains the loaded prefix and
 starts the next bounded batch from the exact returned cursor only on Load more.
-Period/backend/refresh-version changes invalidate that continuation. Pure
+Period/backend/refresh-version changes and focus/visibility refreshes invalidate
+that continuation, so previously loaded prefixes cannot remain silently stale. Pure
 summary helpers handle per-unit observations, null-safe totals, Copenhagen
 calendar buckets and readable type labels. Charts use `DailyChart`; missing
 volume buckets appear in an additional coverage table, never as fabricated zero
