@@ -1,5 +1,29 @@
 # Decisions
 
+## Use one refined button hierarchy across the web app (18 October 2026; P14-03 / #969)
+
+Keep the existing class names and route behavior while making button intent
+visible in the shared stylesheet. Primary remains the existing primary fill;
+secondary is a distinct neutral surface, ghost is quiet, danger is low
+emphasis, and confirmed destructive actions use the filled danger modifier.
+All variants use the existing control radius, focus outline and semantic
+surface/state tokens; no decorative control rim or new palette is introduced.
+
+Buttons no longer carry layout margins. Shared action groups own spacing,
+wrapping, phone stacking and primary-last ordering. Busy controls keep their
+disabled state and accessible name while the shared inline Loader overlays a
+label that still reserves the button's width. This is a presentation-only
+change, not a change to actions, confirmation boundaries or API behavior.
+
+## Notify only on P1 - High vault tasks (18 October 2026; #996)
+
+Proactive todo findings and reminders are eligible only for open vault tasks
+explicitly marked `priority:: P1 - High` or `priority: P1 - High`. Missing and
+lower priority values are not notification-worthy. Re-check priority at reminder
+delivery; if the vault cannot establish the current priority after bounded
+retries, suppress rather than send an unverified reminder. This reuses the
+existing parser, proactive sources and reminder lifecycle without a migration.
+
 ## Discover Daily sections from folders (18 October 2026; P12-20 / #964)
 
 Daily keeps one destination and discovers section definitions from

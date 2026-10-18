@@ -134,6 +134,30 @@ selection cue.
 for future work. Header/job and mobile chat corrections have separate owners;
 this candidate does not imply their changes are integrated or released.
 
+## Button system (P14-03; 18 October 2026)
+
+`apps/web/src/styles.css` owns the shared button hierarchy. `.primary-button`
+keeps the existing primary fill with a restrained shadow; `.secondary-button`
+uses a clearly surfaced neutral tone; `.ghost-button` stays quiet until hover
+or press; `.danger-button` is a low-emphasis destructive action, and
+`.danger-button--filled` marks a confirmed destructive action. Existing
+specialized and icon button classes keep their workflow role while sharing the
+same control radius, feedback and visible focus.
+
+Text actions are 44px high by default. Compact controls are 36px only on fine
+pointers and return to at least 44px on coarse pointers. Icon-only actions stay
+square and retain their accessible names. Leading/trailing SVGs align with
+their label in the shared gap. Busy actions set `aria-busy`, stay disabled and
+overlay the shared inline `Loader` on an opacity-hidden label so the button
+keeps its measured width and accessible name.
+
+`.button-group` and the existing `.settings-actions`, `.task-dialog-actions`
+and `.action-row` patterns use tokenized gaps, wrap without clipping, and place
+the primary action last. Form and dialog groups stack full-width on narrow
+phones. Buttons own no outer spacing: the parent action row or section owns
+that spacing. The primary button's previous 32px top margin is removed; the
+deployment form preserves that separation in its grid row-gap instead.
+
 ## Gated push notifications (17 October 2026; P13-02)
 
 The Notifications Settings section is its own collapsed-by-default section and

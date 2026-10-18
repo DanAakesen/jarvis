@@ -227,10 +227,13 @@ planner runs for every trigger after the successful todo read. The ticker is
 constructed only when its vault, reminder store, alert ledger, push store and
 shared sender dependencies are available. It has no database, vault or push
 work while idle or during Copenhagen quiet hours. Reminder titles stay in
-private database rows; pushes and logs contain no todo text.
+private database rows; pushes and logs contain no todo text. Only open tasks with
+the explicit `priority:: P1 - High` or `priority: P1 - High` marker are eligible
+for task findings and reminders. The ticker cancels tasks that are no longer
+high-priority and suppresses after repeated vault-verification failures.
 
 Focused synthetic checks:
-`npm test --workspace @jarvis/backend -- --run src/proactive/reminders.test.ts src/proactive/composition.test.ts src/proactive/alerts.test.ts src/proactive/push-delivery.test.ts src/database/migrations.test.ts`,
+`npm test --workspace @jarvis/backend -- --run src/proactive/todo-file.test.ts src/proactive/sources/todos.test.ts src/proactive/reminders.test.ts src/proactive/composition.test.ts src/proactive/alerts.test.ts src/proactive/push-delivery.test.ts src/database/migrations.test.ts`,
 `npm run build --workspace @jarvis/backend`, and
 `npm run lint --workspace @jarvis/backend`.
 The SQL store integration test is
@@ -1370,6 +1373,14 @@ inset-shadow control borders or `--glass-selected-glow` on controls, including
 hover/pressed states. Preserve neutral `--control-rule` field boundaries and
 `--rule` structure, semantic error/success text/icons and `--focus` keyboard
 outlines. These are not decorative borders to remove.
+
+Shared action levels are `.primary-button`, `.secondary-button`,
+`.ghost-button`, `.danger-button`, and `.danger-button--filled`. Use
+`.button-group` or the existing action-row classes for wrapping and spacing;
+buttons themselves have no layout margin. Preserve compact 36px controls only
+for fine pointers and restore at least 44px on coarse pointers. Busy actions
+keep their label width, set `aria-busy`, remain disabled and show the shared
+inline `Loader`.
 
 Preserve existing compact desktop density and at least 44px touch targets.
 Check desktop and narrow phone layouts in both appearances, selected hover and

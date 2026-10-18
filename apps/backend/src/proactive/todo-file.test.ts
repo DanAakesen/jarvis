@@ -30,20 +30,20 @@ describe('todo parser', () => {
   it('parses the supported due markers, local times, done items, and nested lines in file order', () => {
     const todos = parseTodos([
       '\uFEFF- [ ] Emoji 📅 2026-10-30 14:30',
-      '- [ ] Dataview [due:: 2026-10-30]',
-      '- [ ] Plain due: 2026-10-30T08:05',
+      '- [ ] Dataview [due:: 2026-10-30] [priority:: P1 - High]',
+      '- [ ] Plain due: 2026-10-30T08:05 Priority: P1 - High',
       '\t  * [x] Finished due: 2026-10-31',
       '  - [ ] Nested item',
       '- [ ] Malformed due: 2026-02-30',
     ].join('\r\n'));
 
     expect(todos).toEqual([
-      { text: 'Emoji', dueAt: '2026-10-30T13:30:00.000Z', dueHasTime: true, done: false },
-      { text: 'Dataview', dueAt: '2026-10-30T22:59:00.000Z', dueHasTime: false, done: false },
-      { text: 'Plain', dueAt: '2026-10-30T07:05:00.000Z', dueHasTime: true, done: false },
-      { text: 'Finished', dueAt: '2026-10-31T22:59:00.000Z', dueHasTime: false, done: true },
-      { text: 'Nested item', dueAt: null, dueHasTime: false, done: false },
-      { text: 'Malformed', dueAt: null, dueHasTime: false, done: false },
+      { text: 'Emoji', dueAt: '2026-10-30T13:30:00.000Z', dueHasTime: true, done: false, highPriority: false },
+      { text: 'Dataview', dueAt: '2026-10-30T22:59:00.000Z', dueHasTime: false, done: false, highPriority: true },
+      { text: 'Plain', dueAt: '2026-10-30T07:05:00.000Z', dueHasTime: true, done: false, highPriority: true },
+      { text: 'Finished', dueAt: '2026-10-31T22:59:00.000Z', dueHasTime: false, done: true, highPriority: false },
+      { text: 'Nested item', dueAt: null, dueHasTime: false, done: false, highPriority: false },
+      { text: 'Malformed', dueAt: null, dueHasTime: false, done: false, highPriority: false },
     ]);
   });
 
@@ -62,7 +62,22 @@ describe('todo parser', () => {
       dueAt: null,
       dueHasTime: false,
       done: false,
+      highPriority: false,
     });
-    expect(Object.keys(instruction ?? {}).sort()).toEqual(['done', 'dueAt', 'dueHasTime', 'text']);
+    expect(Object.keys(instruction ?? {}).sort()).toEqual(['done', 'dueAt', 'dueHasTime', 'highPriority', 'text']);
+  });
+
+  it('recognizes only the explicit P1 - High priority and removes its metadata from task text', () => {
+    const todos = parseTodos([
+      '- [ ] High [priority:: p1 - high]',
+      '- [ ] Medium [priority:: P2 - Medium]',
+      '- [ ] No priority',
+    ].join('\n'));
+
+    expect(todos.map(({ text, highPriority }) => ({ text, highPriority }))).toEqual([
+      { text: 'High', highPriority: true },
+      { text: 'Medium', highPriority: false },
+      { text: 'No priority', highPriority: false },
+    ]);
   });
 });
