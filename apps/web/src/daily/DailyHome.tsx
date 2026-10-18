@@ -1,4 +1,4 @@
-import { Suspense, useContext, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { Suspense, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import type { DailySourceId } from '@jarvis/contracts';
 import type { AreaProps } from '../areas';
@@ -38,6 +38,22 @@ export function DailyHome({ backendUrl, getAccessToken }: AreaProps) {
   const sectionLoadError = loadedSections.attempt === sectionLoadAttempt && loadedSections.error === true;
   const availableSections = useMemo(() => modules ? discoverDailySections(modules, sources) : [], [modules, sources]);
   const activeSection = availableSections.find(item => item.id === activeId) ?? availableSections[0];
+  const activeSectionId = activeSection?.id;
+  const availabilityPending = capabilities.sources === undefined && capabilities.error === undefined;
+  const tabStripPositioned = useRef(false);
+
+  // Centre the selected tab by scrolling the strip only: the page's own scroll position must not move.
+  // Until availability settles the tab set is still changing, so those moves are instant.
+  useLayoutEffect(() => {
+    const strip = sectionNavigation.current;
+    const tab = activeSectionId ? document.getElementById(`daily-tab-${activeSectionId}`) : null;
+    if (!strip || !tab || typeof strip.scrollTo !== 'function') return;
+    const reduced = document.documentElement.dataset.motion === 'reduced'
+      || (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false);
+    const left = Math.max(0, tab.offsetLeft - (strip.clientWidth - tab.offsetWidth) / 2);
+    strip.scrollTo({ left, behavior: tabStripPositioned.current && !reduced ? 'smooth' : 'auto' });
+    tabStripPositioned.current = !availabilityPending;
+  }, [activeSectionId, availabilityPending]);
 
   useEffect(() => {
     let active = true;
@@ -98,7 +114,7 @@ export function DailyHome({ backendUrl, getAccessToken }: AreaProps) {
     initialSource,
     onSourceChange: setInitialSource,
     availabilityError: capabilities.error,
-    availabilityPending: capabilities.sources === undefined && capabilities.error === undefined,
+    availabilityPending,
     retryAvailability: capabilities.reload,
   };
 

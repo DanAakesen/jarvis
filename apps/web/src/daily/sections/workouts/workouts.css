@@ -29,7 +29,7 @@
 .workouts-history-heading { display: flex; align-items: center; gap: var(--space-2); min-width: 0; }
 .workouts-history-heading > div { display: grid; min-width: 0; }
 .workouts-history-heading > div > span { color: var(--text-muted); font-size: var(--type-small); }
-.workouts-type-name { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.workouts-type-name { overflow-wrap: anywhere; }
 .workouts-history-values { display: flex; flex-wrap: wrap; gap: var(--space-2); min-width: 0; }
 .workouts-history-values > span { display: grid; min-width: 0; max-width: 100%; padding: var(--space-1) var(--space-2); border-radius: var(--radius-control); background: var(--surface); overflow-wrap: anywhere; }
 .workouts-history-values small { color: var(--text-muted); font-size: var(--type-small); }

@@ -12,7 +12,7 @@
   border-radius: var(--radius-panel);
   backdrop-filter: blur(var(--surface-blur));
 }
-.daily-page a { display: inline-flex; align-items: center; min-height: 44px; }
+.daily-page a { display: inline-flex; align-items: center; min-width: 44px; min-height: 44px; }
 .daily-heading, .daily-records-heading, .daily-pagination, .daily-toolbar, .daily-period, .daily-view-options {
   display: flex;
   align-items: center;
@@ -117,7 +117,7 @@
 .daily-section-tabs { display: flex; width: max-content; min-width: 100%; gap: var(--space-1); }
 .daily-section-tab {
   flex: 0 0 auto;
-  min-width: 88px;
+  min-width: 44px;
   min-height: 44px;
   padding: var(--space-2) var(--space-3);
   border: 0;

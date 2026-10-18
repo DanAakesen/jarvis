@@ -27,7 +27,7 @@
 .body-sleep-unit > h3 { overflow-wrap: anywhere; }
 .body-sleep-note, .body-sleep-read-state { color: var(--text-muted); font-size: var(--type-small); overflow-wrap: anywhere; }
 .body-sleep-identifier { display: inline-block; max-width: 100%; overflow-wrap: anywhere; }
-.body-sleep-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); align-items: start; gap: var(--space-3); }
+.body-sleep-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); align-items: stretch; gap: var(--space-3); }
 .body-sleep-stats .daily-stat-tile { height: auto; }
 .body-sleep-last-night { display: grid; gap: var(--space-3); }
 .body-sleep-last-value { display: grid; justify-items: start; gap: var(--space-1); }
@@ -44,7 +44,7 @@
 .body-sleep-stage-breakdown li { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-1); min-width: 0; }
 .body-sleep-stage-breakdown li > span:first-child { width: .75rem; height: .75rem; flex: 0 0 .75rem; border-radius: var(--radius-control); }
 .body-sleep-stage-breakdown strong { font-size: var(--type-small); }
-.body-sleep-last-night > h3, .body-sleep-nights > h3 { font-size: var(--type-subheading); }
+.body-sleep-last-night > h3, .body-sleep-nights > h3 { font-size: var(--type-subsection); }
 .body-sleep-detail { display: grid; gap: var(--space-3); padding: var(--space-3); border: 1px solid var(--rule); border-radius: var(--radius-panel); background: var(--surface-translucent); }
 .body-sleep-detail > button { justify-self: start; }
 .body-sleep-detail dl { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-3); margin: 0; }
