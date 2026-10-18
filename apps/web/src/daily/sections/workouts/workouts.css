@@ -6,6 +6,7 @@
 .workouts-stats .daily-stat-value { white-space: pre-line; }
 .workouts-detail { display: grid; gap: var(--space-3); min-width: 0; }
 .workouts-detail > button { justify-self: start; }
+.workouts-detail > h3 { margin: 0; }
 .workouts-coverage { margin-block: var(--space-4); }
 .workouts-field { max-width: 100%; width: fit-content; }
 .workouts-narrow { display: none; }

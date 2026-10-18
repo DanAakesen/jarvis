@@ -2,6 +2,63 @@ import { dailyCapabilitiesAccept, dailyCapabilitiesVersion, dailyQuerySources, d
 import { awaitWithSignal, backendFetch } from '../backend-request';
 
 const responseLimit = 1024 * 1024;
+const concurrentReads = 2;
+let activeReads = 0;
+type ReadWaiter = {
+  signal: AbortSignal;
+  resolve: (release: () => void) => void;
+  reject: (reason: unknown) => void;
+  abort: () => void;
+};
+const readQueue: ReadWaiter[] = [];
+
+function releaseRead(): () => void {
+  let released = false;
+  return () => {
+    if (released) return;
+    released = true;
+    while (readQueue.length) {
+      const waiter = readQueue.shift()!;
+      waiter.signal.removeEventListener('abort', waiter.abort);
+      if (waiter.signal.aborted) {
+        waiter.reject(waiter.signal.reason ?? new DOMException('Aborted', 'AbortError'));
+        continue;
+      }
+      waiter.resolve(releaseRead());
+      return;
+    }
+    activeReads -= 1;
+  };
+}
+
+function acquireRead(signal: AbortSignal): Promise<() => void> {
+  if (signal.aborted) return Promise.reject(signal.reason ?? new DOMException('Aborted', 'AbortError'));
+  if (activeReads < concurrentReads) {
+    activeReads += 1;
+    return Promise.resolve(releaseRead());
+  }
+  return new Promise((resolve, reject) => {
+    const waiter: ReadWaiter = {
+      signal, resolve, reject,
+      abort: () => {
+        const index = readQueue.indexOf(waiter);
+        if (index !== -1) readQueue.splice(index, 1);
+        signal.removeEventListener('abort', waiter.abort);
+        reject(signal.reason ?? new DOMException('Aborted', 'AbortError'));
+      },
+    };
+    readQueue.push(waiter);
+    signal.addEventListener('abort', waiter.abort, { once: true });
+    if (signal.aborted) waiter.abort();
+  });
+}
+
+export async function runDailyRead<T>(signal: AbortSignal, read: () => Promise<T>): Promise<T> {
+  const release = await acquireRead(signal);
+  try { return await read(); }
+  finally { release(); }
+}
+
 export class DailyReadError extends Error {
   constructor(message: string, readonly kind: 'disabled' | 'auth' | 'unavailable' | 'invalid' = 'unavailable') {
     super(message);
@@ -129,22 +186,26 @@ async function requestJson(backendUrl: string | null, path: string, getAccessTok
   return readJson(response);
 }
 export async function loadDailySources(backendUrl: string | null, getAccessToken: () => Promise<string>, signal: AbortSignal): Promise<DailySourceId[]> {
-  const value = await requestJson(backendUrl, '/daily/capabilities', getAccessToken, signal, undefined, dailyCapabilitiesAccept);
-  const source = (input: unknown): input is DailySourceId => typeof input === 'string' &&
-    Object.values(dailyQuerySources).some(known => known === input);
-  if (!object(value) || value.module !== 'daily' ||
-      (value.version !== 1 && value.version !== 2 && value.version !== dailyCapabilitiesVersion) ||
-      !Array.isArray(value.sources) || value.sources.length === 0 || !value.sources.every(source) ||
-      new Set(value.sources).size !== value.sources.length) throw new DailyReadError('Daily data services are not available yet.', 'disabled');
-  const allowed = value.version === 1 ? dailyQuerySourcesV1 : value.version === 2 ? dailyQuerySourcesV2 : dailyQuerySourcesV3;
-  if (value.sources.some(id => !allowed.some(known => known === id))) {
-    throw new DailyReadError(`Daily returned incompatible version ${value.version} capabilities. No collections were claimed.`, 'invalid');
-  }
-  return value.sources;
+  return runDailyRead(signal, async () => {
+    const value = await requestJson(backendUrl, '/daily/capabilities', getAccessToken, signal, undefined, dailyCapabilitiesAccept);
+    const source = (input: unknown): input is DailySourceId => typeof input === 'string' &&
+      Object.values(dailyQuerySources).some(known => known === input);
+    if (!object(value) || value.module !== 'daily' ||
+        (value.version !== 1 && value.version !== 2 && value.version !== dailyCapabilitiesVersion) ||
+        !Array.isArray(value.sources) || value.sources.length === 0 || !value.sources.every(source) ||
+        new Set(value.sources).size !== value.sources.length) throw new DailyReadError('Daily data services are not available yet.', 'disabled');
+    const allowed = value.version === 1 ? dailyQuerySourcesV1 : value.version === 2 ? dailyQuerySourcesV2 : dailyQuerySourcesV3;
+    if (value.sources.some(id => !allowed.some(known => known === id))) {
+      throw new DailyReadError(`Daily returned incompatible version ${value.version} capabilities. No collections were claimed.`, 'invalid');
+    }
+    return value.sources;
+  });
 }
 export async function queryDaily(backendUrl: string | null, query: DailyQuery, getAccessToken: () => Promise<string>, signal: AbortSignal): Promise<DailyQueryResult> {
   if (!isDailyQuery(query)) throw new DailyReadError('Choose a valid period and source before loading Daily.', 'invalid');
-  const value = await requestJson(backendUrl, '/daily/query', getAccessToken, signal, query);
-  if (!isDailyResult(value, query)) throw new DailyReadError('Daily returned mismatched or incomplete evidence. No complete result is claimed.');
-  return value;
+  return runDailyRead(signal, async () => {
+    const value = await requestJson(backendUrl, '/daily/query', getAccessToken, signal, query);
+    if (!isDailyResult(value, query)) throw new DailyReadError('Daily returned mismatched or incomplete evidence. No complete result is claimed.');
+    return value;
+  });
 }

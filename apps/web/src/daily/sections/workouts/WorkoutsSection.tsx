@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { dailyQuerySources as sources } from '@jarvis/contracts';
 import type { DailySectionProps } from '../types';
 import { DailyChart } from '../../ui/DailyChart';
+import { DailyCoverageNote } from '../../ui/DailyCoverageNote';
 import { DailyState } from '../../ui/DailyState';
 import { ScrollTable } from '../../ui/ScrollTable';
 import { StatTile } from '../../ui/StatTile';
@@ -53,7 +54,9 @@ function WorkoutSummary({ rows, partial, period }: { rows: Workout[]; partial: b
       <StatTile label="Active energy" value={unitValues(summary.energy.values)}
         note={`${summary.energy.missing} workouts without active energy; ${scope}.`} />
     </div>
-    <p className="daily-meta">Units are kept separate. Values without a unit are listed individually, not summed.</p>
+    <DailyCoverageNote summary="Units are kept separate; unknown values are not summed.">
+      <p>Distance and energy are grouped only by their recorded unit. Values without a unit remain individual observations, and missing durations are not treated as zero.</p>
+    </DailyCoverageNote>
     <section aria-labelledby="workouts-volume">
       <h3 id="workouts-volume">Workout volume</h3>
       <p>Total recorded minutes per {volume.grain} {scope}. Weeks start on Monday; dates use Europe/Copenhagen.
@@ -240,7 +243,10 @@ export default function WorkoutsSection(props: DailySectionProps) {
       {result.loadingMore && <p>Loading more workouts…</p>}
       {result.capped && <button className="secondary-button" type="button" onClick={result.loadMore}>Load more</button>}
     </div>}
-    <p className="daily-meta" role="status">{result.status === 'loading' && result.items.length > 0 ? 'Refreshing recorded workouts. ' : ''}
-      Source: daily.health.workouts. Returned records do not establish source completeness or freshness.</p>
+    <DailyCoverageNote summary="Returned workout records do not prove source completeness.">
+      <p>Source: daily.health.workouts. Summaries use loaded records only; freshness and source completeness remain unknown.</p>
+    </DailyCoverageNote>
+    {result.first && <DailyState status="ready" freshness={result.first.freshness} />}
+    {result.status === 'loading' && result.items.length > 0 && <p className="daily-meta" role="status">Refreshing recorded workouts…</p>}
   </section>;
 }
