@@ -65,15 +65,15 @@ function ConfirmationList({
                 )}
               </div>
               <div className="action-row">
-                <button className="primary-button" type="button" aria-label={`Approve ${label}`}
-                  aria-describedby={onResolve ? undefined : 'attention-confirmation-unavailable'}
-                  disabled={!onResolve || busy} onClick={() => { void resolve(confirmation, 'approve'); }}>
-                  {busy ? 'Sending…' : 'Approve'}
-                </button>
                 <button className="secondary-button" type="button" aria-label={`Reject ${label}`}
                   aria-describedby={onResolve ? undefined : 'attention-confirmation-unavailable'}
                   disabled={!onResolve || busy} onClick={() => { void resolve(confirmation, 'reject'); }}>
                   Reject
+                </button>
+                <button className="primary-button" type="button" aria-label={`Approve ${label}`}
+                  aria-describedby={onResolve ? undefined : 'attention-confirmation-unavailable'}
+                  disabled={!onResolve || busy} onClick={() => { void resolve(confirmation, 'approve'); }}>
+                  {busy ? 'Sending…' : 'Approve'}
                 </button>
               </div>
             </li>

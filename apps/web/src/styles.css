@@ -1,3 +1,4 @@
+/* Viewport breakpoints: phone ≤700px, tablet >700–900px, desktop >900px, wide ≥1200px. The 380px exception keeps narrow-handset chat, voice and controls legible. */
 :root {
   /* Global order: content < panels/rail < windows < dock < menus < sheets
      < modal backdrop/card < toast < skip link. Window depth is local to
@@ -305,7 +306,7 @@ body {
 }
 a { color: inherit; text-underline-offset: 0.2em; }
 a:focus-visible { outline: 3px solid var(--focus); outline-offset: 5px; }
-.app { min-height: 100vh; }
+.app { min-height: 100vh; min-height: 100dvh; }
 .app-shell {
   position: relative;
   isolation: isolate;
@@ -659,10 +660,7 @@ dd { margin: 0; color: var(--text-muted); overflow-wrap: anywhere; }
 }
 .button-group--space-3 { margin-top: var(--space-3); }
 .button-group--space-4 { margin-top: var(--space-4); }
-.button-group > .primary-button, .settings-actions > .primary-button, .task-dialog-actions > .primary-button,
-.action-row > .primary-button, .button-group > .danger-button--filled, .settings-actions > .danger-button--filled,
-.task-dialog-actions > .danger-button--filled, .action-row > .danger-button--filled { order: 1; }
-@media (max-width: 600px) {
+@media (max-width: 700px) {
   .button-group, .settings-actions, .task-dialog-actions, .settings-save { flex-direction: column; align-items: stretch; }
   .button-group > :is(button, a), .settings-actions > :is(button, a), .task-dialog-actions > :is(button, a),
   .settings-save > :is(button, a) {
@@ -863,6 +861,7 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
 .workspace-view-content .task-window-actions, .workspace-view-content .timeline-artifacts { padding-top: var(--space-3); }
 .workspace-view-content [role="alert"] { color: var(--error); }
 .generated-view-table { max-width: 100%; overflow: auto; }
+.generated-view-table:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
 .generated-view-table table { width: 100%; border-collapse: collapse; text-align: left; }
 /* Cells keep words and numbers whole: a wide table scrolls inside its wrapper instead of splitting a value across lines. */
 .generated-view-table th, .generated-view-table td { padding: var(--space-2); border-bottom: 1px solid var(--rule); vertical-align: top; overflow-wrap: normal; }
@@ -985,7 +984,7 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
 /* The composer and its menus stay above workspace windows, so More and attach menus are never hidden. */
 .conversation-input.luminous-glass { z-index: var(--z-dock); }
 /* Shell panels keep their heading and resize handle in place while only the body scrolls. */
-@media (min-width: 701px) and (not ((max-height: 500px) and (pointer: coarse))) {
+@media (width > 700px) and (not ((max-height: 500px) and (pointer: coarse))) {
   .area-sidebar, .context-panel { position: relative; display: flex; flex-direction: column; overflow: hidden; }
   .area-sidebar > nav, .context-panel-body { flex: 1; min-height: 0; align-content: start; overflow-y: auto; }
 }
@@ -1054,7 +1053,7 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
   .topbar-feature-button, .topbar-icon-button, .topbar-feature-button.screen-control-button[aria-pressed="false"] { width: 44px; min-width: 44px; }
 }
 /* Desktop shell (every page): the top bar floats as the same glass slab as the side panels. */
-@media (min-width: 701px) and (not ((max-height: 500px) and (pointer: coarse))) {
+@media (width > 700px) and (not ((max-height: 500px) and (pointer: coarse))) {
   .app-shell:not(.app-signed-out) .app-topbar {
     position: relative;
     isolation: isolate;
@@ -1197,7 +1196,7 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
 :root[data-motion="reduced"] .conversation-input.luminous-glass::after { animation: none; background: color-mix(in srgb, var(--glass-edge-cool) 80%, var(--glass-rim-light)); }
 .workspace-window-conversation.luminous-glass:focus-within { box-shadow: 0 26px 60px -18px color-mix(in srgb, var(--ink-solid) 55%, transparent), 0 0 0 2px var(--focus); }
 /* Desktop shell (every page): rail, navigation and context stand as glass slabs angled back like opened doors. */
-@media (min-width: 701px) and (not ((max-height: 500px) and (pointer: coarse))) {
+@media (width > 700px) and (not ((max-height: 500px) and (pointer: coarse))) {
   .app-shell:not(.app-signed-out) :is(.area-rail, .area-sidebar, .context-panel) {
     position: relative;
     isolation: isolate;
@@ -1461,9 +1460,10 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
 .task-release-actions { display: flex; grid-area: actions; align-items: center; justify-content: flex-end; gap: var(--space-2); }
 .task-release-actions p { margin: 0; font-size: 13px; }
 .task-release-actions .secondary-button { min-height: 36px; padding-inline: 10px; }
-@media (min-width: 901px) {
+@media (width > 900px) {
   .task-release-commits time { display: none; }
 }
+/* The task-board container adapts to its allocated width, not the browser viewport. */
 @container task-board (max-width: 1099px) {
   .task-release-bar {
     grid-template-columns: minmax(190px, .9fr) minmax(0, 1.6fr);
@@ -1535,7 +1535,7 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
   overflow-y: auto; padding: 24px; background: var(--overlay);
 }
 .task-dialog {
-  width: min(100%, 620px); max-height: calc(100vh - 48px); overflow-y: auto; margin: auto;
+  width: min(100%, 620px); max-height: calc(100vh - 48px); max-height: calc(100dvh - 48px); overflow-y: auto; margin: auto;
   padding: 24px; border: 1px solid var(--rule); border-radius: var(--radius-window); background: var(--surface);
   box-shadow: var(--dialog-shadow);
 }
@@ -1621,7 +1621,7 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
 
 .release-page { width: 100%; max-width: 1200px; margin-inline: auto; }
 .release-page h1 { margin: 8px 0 6px; font-size: clamp(26px, 4vw, 36px); line-height: 1.2; overflow-wrap: anywhere; }
-.release-page h2 { margin: 0; font-size: 21px; line-height: 1.3; }
+.release-page h2 { margin: 0; font-size: 21px; line-height: 1.3; overflow-wrap: anywhere; }
 .release-page-header { display: flex; min-width: 0; align-items: flex-end; justify-content: space-between; flex-wrap: wrap; gap: 16px; }
 .release-page-header > div { min-width: 0; }
 .release-page-header > div > p { margin: 0; overflow-wrap: anywhere; }
@@ -1688,7 +1688,7 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
 .selected-release .release-details { margin-bottom: 16px; }
 .project-releases-link { display: inline-flex; min-height: 44px; align-items: center; }
 
-@media (min-width: 640px) {
+@media (width > 700px) {
   .task-board { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
@@ -1791,7 +1791,7 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
 .usage-table td:first-child { min-width: 12rem; overflow-wrap: anywhere; }
 .usage-table a:hover { color: var(--focus); }
 
-@media (min-width: 900px) {
+@media (width > 900px) {
   .jarvis-layout { grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); align-items: start; }
 }
 
@@ -1812,7 +1812,7 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
   .workspace-resize-edge-corner { cursor: ns-resize; }
 }
 
-@media (max-width: 980px) and (min-width: 701px) {
+@media (width > 700px) and (width <= 900px) {
   .app-shell { --sidebar-size: var(--sidebar-width, 190px); }
   .app-shell[data-navigation-open="false"] { --sidebar-size: 0px; }
   .app-shell[data-context-open="true"] { --context-size: var(--context-width, 240px); }
@@ -1927,7 +1927,7 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
   .task-release-actions .secondary-button { flex: 1 1 120px; }
   .task-detail-panel .task-meta { grid-template-columns: minmax(0, 1fr); }
   .task-dialog-backdrop { padding: 12px; }
-  .task-dialog { max-height: calc(100vh - 24px); padding: 20px 16px; }
+  .task-dialog { max-height: calc(100vh - 24px); max-height: calc(100dvh - 24px); padding: 20px 16px; }
   .task-meta, .task-disk-meta { grid-template-columns: minmax(0, 1fr); }
   .task-detail-section { padding: 20px 16px; }
   .timeline-toolbar { align-items: flex-start; flex-direction: column; }
@@ -2044,7 +2044,6 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
   backdrop-filter: blur(var(--surface-blur));
   box-shadow: var(--panel-shadow);
 }
-.settings-save .primary-button { order: 2; }
 .settings-save { width: fit-content; max-width: 100%; margin-left: auto; }
 .settings-save .settings-feedback:empty { display: none; }
 .settings-save:has(.settings-feedback:empty) { padding-left: var(--space-2); }
@@ -2268,12 +2267,12 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
 .release-trail-name > span { color: var(--text-muted); font-weight: 400; }
 .release-trail-name code { font-family: var(--font-mono); font-size: 14px; }
 .release-trail-pipeline { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 4px 0 0; padding: 0; list-style: none; color: var(--text-muted); font-size: var(--type-caption); }
-.release-trail-pipeline li { --tone: var(--text-muted); display: inline-flex; align-items: center; gap: 6px; }
+.release-trail-pipeline li { --tone: var(--text-muted); display: inline-flex; min-width: 0; max-width: 100%; align-items: center; gap: 6px; }
 .release-trail-pipeline li::before { width: 7px; height: 7px; border-radius: 50%; background: var(--tone); box-shadow: 0 0 8px var(--tone); content: ""; }
 .release-trail-pipeline li[data-tone="ok"] { --tone: var(--success); }
 .release-trail-pipeline li[data-tone="bad"] { --tone: var(--error); }
 .release-trail-pipeline li[data-tone="live"] { --tone: var(--glass-edge-cool); }
-.release-trail-pipeline a { color: var(--text); }
+.release-trail-pipeline a { color: var(--text); overflow-wrap: anywhere; }
 .release-trail-commits, .release-trail-line {
   position: relative;
   display: grid;
@@ -2349,11 +2348,11 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
 .release-trail-button:hover:not(:disabled), .release-trail-open:hover { background: var(--glass-pressed); }
 .release-trail-button:disabled { color: var(--disabled-text); cursor: wait; }
 .release-trail-button:focus-visible, .release-trail-open:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
-@media (max-width: 1100px) {
+@media (max-width: 1200px) {
   .release-trail { grid-template-columns: auto minmax(0, 1fr) auto; }
   .release-trail-commits { grid-column: 1 / -1; grid-row: 2; }
 }
-@media (max-width: 600px) {
+@media (max-width: 700px) {
   .release-trail { grid-template-columns: auto minmax(0, 1fr); }
   .release-trail-actions { grid-column: 1 / -1; }
   .release-trail-commits li:nth-last-child(n + 4) { display: none; }
@@ -2366,7 +2365,7 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
 
 /* Desktop shell: the side panels float over the page like drawers. The main area keeps one constant
    gutter, so opening, closing or resizing a panel never moves content; content passes behind the glass. */
-@media (min-width: 701px) and (not ((max-height: 500px) and (pointer: coarse))) {
+@media (width > 700px) and (not ((max-height: 500px) and (pointer: coarse))) {
   .app-shell:not(.app-signed-out) .shell-main {
     --main-gutter: clamp(24px, 4vw, 56px);
     --main-pad-start: var(--main-gutter);
@@ -2415,7 +2414,7 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
 @keyframes tab-arrive { from { opacity: 0; scale: .7; } }
 @media (prefers-reduced-motion: reduce) { .workspace-tab-item { animation: none; } }
 :root[data-motion="reduced"] .workspace-tab-item { animation: none; }
-@media (min-width: 701px) and (not ((max-height: 500px) and (pointer: coarse))) {
+@media (width > 700px) and (not ((max-height: 500px) and (pointer: coarse))) {
 
 }
 @media (max-width: 700px), (max-height: 500px) and (pointer: coarse) {
@@ -2443,6 +2442,7 @@ a.task-chip:hover { background: var(--glass-pressed); }
 .task-window-note, .task-window-actions .task-window-note { flex-basis: 100%; margin: 0; color: var(--text-muted); font-size: 13px; text-align: right; }
 .task-window-grid { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(250px, 1fr); align-items: start; gap: 12px; }
 .task-window-main, .task-window-side { display: grid; gap: 12px; min-width: 0; }
+/* The nested task-detail grid responds to its own available container width. */
 @container (max-width: 720px) { .task-window-grid { grid-template-columns: minmax(0, 1fr); } }
 .task-card { min-width: 0; padding: 12px 14px 14px; border: 1px solid var(--rule); border-radius: var(--radius-panel); background: var(--surface-translucent); box-shadow: var(--panel-shadow); }
 .task-card h4 { margin: 0 0 8px; color: var(--text); font-size: 14px; font-weight: 650; }
@@ -2640,7 +2640,7 @@ a.task-chip:hover { background: var(--glass-pressed); }
 .workspace-window-dragging .workspace-title-drag { cursor: grabbing; }
 .workspace-window .workspace-title-drag:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: var(--radius-control); }
 .workspace-window-dragging { box-shadow: 0 34px 80px -20px color-mix(in srgb, var(--ink-solid) 65%, transparent), 0 0 0 1px color-mix(in srgb, var(--glass-edge-cool) 45%, transparent) !important; }/* On the home page the window area starts below the tab bar, so windows never slide under it. */
-@media (min-width: 701px) and (not ((max-height: 500px) and (pointer: coarse))) {
+@media (width > 700px) and (not ((max-height: 500px) and (pointer: coarse))) {
 
 }
 /* Tabs in the top bar (Dan, 7 October): open windows sit between the brand and the controls; no breadcrumb.
@@ -2819,7 +2819,7 @@ a.task-chip:hover { background: var(--glass-pressed); }
 .knowledge-legend li:has(> button:hover) { background: var(--glass-hover); }
 .knowledge-legend li:has(> button[aria-pressed="true"]) { background: var(--state-selected-bg); color: var(--state-selected-fg); font-weight: 750; }
 .knowledge-legend button:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }/* Shell windows float at every desktop width (Dan, 7 October): the old ≤900 px stacking is for the classic workspace only. */
-@media (min-width: 701px) and (max-width: 900px) and (not ((max-height: 500px) and (pointer: coarse))) {
+@media (width > 700px) and (width <= 900px) and (not ((max-height: 500px) and (pointer: coarse))) {
   .app-shell:not(.app-signed-out) .workspace-canvas-layered { display: block; height: auto; min-height: 0; overflow: visible; }
   .app-shell:not(.app-signed-out) .workspace-canvas-layered .workspace-window { position: absolute; min-height: 0; }
   .app-shell:not(.app-signed-out) .workspace-canvas-layered .workspace-window:not(.workspace-window-conversation, .workspace-window-maximized) {
@@ -2891,7 +2891,7 @@ a.task-chip:hover { background: var(--glass-pressed); }
 /* No page bounce (Dan, 7 October): signed in, the shell owns every scroll area, so the document itself never scrolls,
    wobbles or rubber-bands; inner lists stop their scroll at their own edges instead of passing it to the page. */
 /* Desktop only: there the shell is exactly the viewport and inner panes scroll. On phones the page itself scrolls (Dan, 8 October). */
-@media (min-width: 701px) and (not ((max-height: 500px) and (pointer: coarse))) {
+@media (width > 700px) and (not ((max-height: 500px) and (pointer: coarse))) {
   :root:has(.app-shell:not(.app-signed-out)), :root:has(.app-shell:not(.app-signed-out)) body { height: 100%; overflow: hidden; overscroll-behavior: none; }
 }
 @media (max-width: 700px), (max-height: 500px) and (pointer: coarse) {
@@ -2952,7 +2952,7 @@ a.task-chip:hover { background: var(--glass-pressed); }
 @keyframes skeleton-in { from { opacity: 0; translate: 0 6px; } }
 @keyframes skeleton-sweep { 0% { background-position: 130% 0; } 70%, 100% { background-position: -30% 0; } }
 @keyframes skeleton-twinkle { 0%, 100% { opacity: .12; scale: .8; } 45% { opacity: .85; scale: 1.15; box-shadow: 0 0 10px var(--glass-rim-light); } }
-@media (max-width: 980px) { .skeleton-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } .skeleton-column:nth-child(n + 3) { display: none; } }
+@media (max-width: 900px) { .skeleton-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } .skeleton-column:nth-child(n + 3) { display: none; } }
 @media (max-width: 700px) { .skeleton-cards { grid-template-columns: minmax(0, 1fr); } .skeleton-column:nth-child(n + 2) { display: none; } }
 :root[data-motion="reduced"] :is(.skeleton, .skeleton-bar, .skeleton-slab, .skeleton-star) { animation: none; }
 @media (prefers-reduced-motion: reduce) { :is(.skeleton, .skeleton-bar, .skeleton-slab, .skeleton-star) { animation: none; } }
@@ -2971,8 +2971,8 @@ a.task-chip:hover { background: var(--glass-pressed); }
 @property --sidebar-size { syntax: "<length>"; inherits: true; initial-value: 0px; }
 @property --context-size { syntax: "<length>"; inherits: true; initial-value: 0px; }
 .app-shell { --sidebar-open: var(--sidebar-width, 220px); --context-open: var(--context-width, 280px); }
-@media (max-width: 980px) and (min-width: 701px) { .app-shell { --sidebar-open: var(--sidebar-width, 190px); --context-open: var(--context-width, 240px); } }
-@media (min-width: 701px) and (not ((max-height: 500px) and (pointer: coarse))) {
+@media (width > 700px) and (width <= 900px) { .app-shell { --sidebar-open: var(--sidebar-width, 190px); --context-open: var(--context-width, 240px); } }
+@media (width > 700px) and (not ((max-height: 500px) and (pointer: coarse))) {
   .app-shell:not(.app-signed-out) { transition: --sidebar-size var(--motion-panel) var(--ease-enter), --context-size var(--motion-panel) var(--ease-enter); }
   :root[data-panel-resizing] .app-shell { transition: none; }
   /* Fixed widths while the column moves, so the text inside never re-wraps mid-animation. */
@@ -3013,7 +3013,7 @@ a.task-chip:hover { background: var(--glass-pressed); }
 @media (prefers-reduced-motion: reduce) { [data-navigated] { animation: none; box-shadow: 0 0 0 2px var(--focus); } }
 /* Folio (P9-25): everything Jarvis pulled up, reopened from the left pane. It shares the sidebar slot and its hinge. */
 .app-shell[data-folio-open="true"] { --sidebar-size: 320px; --sidebar-open: 320px; }
-@media (max-width: 980px) and (min-width: 701px) { .app-shell[data-folio-open="true"] { --sidebar-size: 270px; --sidebar-open: 270px; } }
+@media (width > 700px) and (width <= 900px) { .app-shell[data-folio-open="true"] { --sidebar-size: 270px; --sidebar-open: 270px; } }
 .rail-folio[aria-pressed="true"] { background: var(--state-selected-bg); color: var(--state-selected-fg); }
 .rail-folio[aria-pressed="true"] svg {
   color: var(--state-selected-indicator);
@@ -3208,7 +3208,7 @@ a.task-chip:hover { background: var(--glass-pressed); }
   .kanban-header h1 { font-size: 30px; }
   .kanban-header .kanban-pulse { min-width: 0; flex-wrap: wrap; }
   .kanban-header .kanban-pulse li { flex: none; }
-  .kanban-header-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .kanban-header-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
   .kanban-header-actions .kanban-create { width: 100%; padding: 0 12px; }
 }
 .kanban-filter-panel { margin: 0 0 var(--space-4); border: 1px solid var(--rule); border-radius: var(--radius-panel); background: var(--surface-muted); }
@@ -3377,7 +3377,7 @@ a.task-chip:hover { background: var(--glass-pressed); }
 .usage-rank { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
 .usage-rank li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 10px; font-size: var(--type-small); }
 .usage-rank-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-transform: none; }
-.usage-rank-label a { color: var(--text); text-decoration: none; }
+.usage-rank-label a { display: block; max-width: 100%; overflow: hidden; color: var(--text); text-decoration: none; text-overflow: ellipsis; }
 .usage-rank-label a:hover { text-decoration: underline; }
 .usage-rank-value { font-weight: 650; font-variant-numeric: tabular-nums; }
 .usage-rank-track { grid-column: 1 / -1; height: 6px; overflow: hidden; border-radius: var(--radius-pill); background: color-mix(in srgb, var(--text) 6%, transparent); }
@@ -3425,7 +3425,7 @@ a.task-chip:hover { background: var(--glass-pressed); }
 .deployment-name { display: grid; min-width: 0; font-family: var(--font-mono); font-size: 13px; font-weight: 600; overflow-wrap: anywhere; }
 .deployment-meta { color: var(--text-muted); font-family: inherit; font-size: var(--type-caption); font-weight: 500; }
 .deployment-confirm { display: flex; gap: var(--space-2); }
-.deployment-add { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)) auto; align-items: end; column-gap: 10px; row-gap: 42px; padding: 12px; border-radius: 14px;
+.deployment-add { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)) auto; align-items: end; column-gap: 10px; row-gap: 10px; padding: 12px; border-radius: 14px;
   background: color-mix(in srgb, var(--glass-edge-cool) 6%, transparent); }
 .advanced-group { display: grid; gap: 12px; margin-top: 18px; }
 .advanced-field input[type="number"] { width: 100%; }
@@ -3558,8 +3558,7 @@ a.task-chip:hover { background: var(--glass-pressed); }
 .collapsible-toggle:active .collapsible-title { color: var(--text-muted); }
 .settings-page > .settings-save { position: static; width: auto; max-width: none; margin: 16px 0 0; padding: 0; border-radius: 0; background: none; backdrop-filter: none; box-shadow: none;
   justify-content: flex-end; }
-.settings-page > .settings-save .settings-feedback { order: 1; margin: 0; }
-.settings-page > .settings-save .primary-button { order: 2; }
+.settings-page > .settings-save .settings-feedback { margin: 0; }
 /* Memory: what Jarvis remembers, between the capture switch and recall tuning. The detail opens only once a memory is chosen. */
 .settings-subheading { margin: 22px 0 10px; color: var(--text); font-size: var(--type-body); font-weight: 650; }
 .memory-settings .memory-search { margin: 0 0 10px; }

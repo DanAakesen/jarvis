@@ -1,5 +1,16 @@
 # Decisions
 
+## Consolidate web viewport breakpoints (18 October 2026; P14-05 / #973)
+
+Use one non-Daily viewport set: phone through 700px, tablet above 700px through
+900px, desktop above 900px, and wide from 1200px. Keep 380px only for narrow
+handset chat, voice and control fit; preserve the task-board 1099px and task
+detail 720px thresholds as container queries because they respond to allocated
+component width. Daily's existing 640px and 760px media rules are untouched
+because that page is being built in parallel. The responsive probe and every
+boundary comparison are recorded in `docs/ui-audit.md` under "Pass 3:
+responsive and overflow".
+
 ## Discover vault tasks in source notes using native Tasks markers (18 October 2026; P13-18 / #999)
 
 Read safe Markdown notes under `Personal/` and `Work/` recursively, including
@@ -5500,6 +5511,17 @@ buttons and genuine circular voice control. No dependency or theme was added.
 The Pass 3 audit records measured counts, classifications, exceptions and
 synthetic before/after Chromium evidence; this does not claim live-service or
 human acceptance.
+
+## P14-13 — Keep action focus order in markup (18 October 2026)
+
+Place each action group's primary action last in markup so keyboard traversal
+matches the displayed order at desktop and narrow widths. Confirmation groups
+keep the safe Cancel/Keep action first. Do not use CSS `order` to rearrange
+action groups. Preserve the deployment form's 10px column gap and set its row
+gap to 10px at every breakpoint. The shared button system owns no outer
+margins, so no local deployment-button margin is needed. The TSX source guard
+and CSS contract tests enforce these rules. Local browser/layout acceptance
+remains a separate verification.
 
 ## P13-16 owner-bound proactive recall (18 October 2026; #937)
 

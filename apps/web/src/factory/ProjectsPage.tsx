@@ -804,11 +804,11 @@ export function ProjectSettingsPage({ backendUrl, getAccessToken }: ProjectsPage
             </div>
           </section>
           <div className="settings-save">
+            <Link className="secondary-button" to="/settings#projects">Cancel</Link>
+            {message && <p className="settings-feedback" role="status">{message}</p>}
             <button className="primary-button" type="submit" disabled={disabled || !dirty}>
               {saving ? 'Saving…' : 'Save project'}
             </button>
-            <Link className="secondary-button" to="/settings#projects">Cancel</Link>
-            {message && <p className="settings-feedback" role="status">{message}</p>}
           </div>
           <section className="project-archive" aria-labelledby="archive-project-heading">
             <h2 id="archive-project-heading">Archive project</h2>
@@ -822,12 +822,12 @@ export function ProjectSettingsPage({ backendUrl, getAccessToken }: ProjectsPage
               <div className="project-archive-confirm" role="group" aria-label="Confirm project archive">
                 <p>Archive {values.name || 'this project'}?</p>
                 <div className="settings-actions">
+                  <button className="secondary-button" type="button" disabled={disabled}
+                    onClick={() => setShowArchiveConfirmation(false)}>Cancel archive</button>
                   <button className="primary-button danger-button danger-button--filled" type="button" disabled={disabled} aria-busy={archivePending || undefined} aria-label={archivePending ? 'Archiving…' : undefined} onClick={() => { void archive(); }}>
                     <span className="button-label">Confirm archive</span>
                     {archivePending && <span className="button-loading-indicator" aria-hidden="true"><Loader variant="inline" announce={false} label="Archiving…" /></span>}
                   </button>
-                  <button className="secondary-button" type="button" disabled={disabled}
-                    onClick={() => setShowArchiveConfirmation(false)}>Cancel archive</button>
                 </div>
               </div>
             )}
