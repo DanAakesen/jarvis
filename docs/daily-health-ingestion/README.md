@@ -49,9 +49,10 @@ Issue is idempotent for the retained handle; revoked records never reactivate. R
 
 ## Readiness and rollback gates
 
-1. Exact-head independent review, normal full CI and isolated SQL tests remain required. This PR sets the existing backend flag in `infra/main.bicep` to `'true'` as explicitly authorized; it creates no new resource, identity or grant. Rollback is to set the flag to `'false'` and update the matching pin test in the same change, then redeploy. Stored credential hashes and ingested data remain untouched.
-2. Synthetic deployed denial/revocation/expiry, byte-exact readback, concurrent retry/conflict, SQL outage/restart, capacity and cancellation checks remain unverified, as does actual Health Auto Export/iPhone acceptance. Coding tests do not prove these.
-4. #720 processing/freshness plus complete protected backup, reconciliation, final delta and rollback gates before cutover. The #717 backup destination/preflight is a separate unresolved workflow, not required for this synthetic implementation.
+1. Exact-head independent review, normal full CI and isolated SQL tests remain required. This PR sets the existing backend flag in `infra/main.bicep` to `'true'` as explicitly authorized; it creates no new resource, identity or grant. Deployment is not evidence of successful endpoint/worker verification. Rollback sets the flag to `'false'` and updates the matching pin test in the same change, then redeploys; stored credential hashes and ingested data remain untouched.
+2. The owner creates the credential through the owner-authenticated route after deployment. Verify endpoint origin/ingress and protected one-time credential custody; no new resource, identity, grant, SAS extraction or plaintext credential in GitHub is implied.
+3. Synthetic deployed denial/revocation/expiry, byte-exact readback, concurrent retry/conflict, SQL outage/restart, capacity and cancellation checks remain unverified, as does actual Health Auto Export/iPhone acceptance. Coding tests do not prove these.
+4. #720 processing/freshness and the historical upload path's bounded grouping/limits require verification. The owner withdrew the #717 database-export/preflight route; do not revive it or treat it as a prerequisite. This synthetic implementation does not establish complete historical replay or cutover readiness.
 5. Disable upload composition on failed readiness; preserve all SQL receipts/raw/capabilities. Migration 0046 rollback refuses either nonempty table. Never delete original Daily data or automatically requeue native effects.
 
 ## Verification commands

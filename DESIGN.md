@@ -1,5 +1,15 @@
 # Design
 
+## Responsive rules (P14-05, 18 October 2026)
+
+Use the shared viewport set in `apps/web/src/styles.css`: phone through 700px,
+tablet above 700px through 900px, desktop above 900px, and wide from 1200px.
+The 380px narrow-handset exception only tightens chat, voice, metadata and
+camera controls. The 1099px task-board and 720px task-detail container queries
+remain content-scoped because their layout follows allocated component width.
+Daily's 640px and 760px media queries remain outside this pass as its page is
+being built in parallel.
+
 ## Icon-only header (P9-119)
 
 Settings is a gear only at every width, including phones, with its Settings

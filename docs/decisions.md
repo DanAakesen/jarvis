@@ -32,6 +32,17 @@ or exporter UI behavior; mark the latter unverified and do not claim replay or
 physical-phone acceptance. Evidence and unresolved field/HTTP differences are
 tracked in `docs/reference/daily-v182/source-to-jarvis-matrix.md`.
 
+## Consolidate web viewport breakpoints (18 October 2026; P14-05 / #973)
+
+Use one non-Daily viewport set: phone through 700px, tablet above 700px through
+900px, desktop above 900px, and wide from 1200px. Keep 380px only for narrow
+handset chat, voice and control fit; preserve the task-board 1099px and task
+detail 720px thresholds as container queries because they respond to allocated
+component width. Daily's existing 640px and 760px media rules are untouched
+because that page is being built in parallel. The responsive probe and every
+boundary comparison are recorded in `docs/ui-audit.md` under "Pass 3:
+responsive and overflow".
+
 ## Discover vault tasks in source notes using native Tasks markers (18 October 2026; P13-18 / #999)
 
 Read safe Markdown notes under `Personal/` and `Work/` recursively, including
@@ -128,36 +139,21 @@ The shipped set stays Overview, Briefs and Data; future Workouts, Nutrition and
 Body & sleep folders register without changes to the shell. There is no new API,
 query semantics, navigation destination or generated-view renderer.
 
-## Fail-closed offline Daily bundles (18 October 2026; P12-22 / #968)
+## Withdraw the Daily database export/import approach (18 October 2026)
 
-Use a versioned manifest, exact-byte per-table checksums/counts and streamed
-NDJSON for the 31 mapped source tables. Keep the decisions, bounded reader,
-validator and deterministic synthetic generator in one temporary directory,
-outside the production request path; remove it at P12-19. P12-27 can reuse
-these interfaces for the later resumable importer and reconciliation report.
-No source export, import, SQL migration or production activation is authorised
-by this tooling.
+The offline P12-22/#968 bundle validator was a delivered synthetic-only
+prototype; it did not read source records or establish data parity. The owner
+cancelled the Sites database-export/bundle-import approach. Its tools and
+dedicated documentation were removed under #1006. PRs #741 and #987 remain
+closed and unmerged; #717, #721 and #982 are not planned and are not migration
+prerequisites.
 
-Validation fails closed on completeness/schema/key/type failures and unknown
-mixed-source payloads. Each of the five mixed-source tables requires an owner
-ruling in the manifest (`import-sanitised` or `exclude`, with a private rule);
-free text never executes or overrides classification. The live column set,
-export route and real TickTick discriminator values remain unknown. Existing
-mapping decisions and target CHECK constraints remain authoritative. Inspection
-of migration 0041 found only case-insensitive `ticktick` substring exclusions
-for source discriminators, not the positive allowed set assumed by the issue.
-Do not invent that set or equate passing SQL checks with classification;
-nonempty source payloads need verified semantics before active import.
-
-Reports and diagnostics use fixed codes, known table names, counts and
-hashes/digests only, never source row values, raw keys, unknown identifiers or
-free-text rulings. Disk-backed digest indexes bound duplicate/reference memory.
-Expired objects are counted and never eligible for import. Source owner emails
-never select the target owner, and excluded credentials never become active
-credentials. Actual exports, reports and source-schema evidence remain
-encrypted and owner-only outside the repository, agent environments and
-GitHub artifacts. Synthetic validation is not private migration acceptance.
-Refs DanAakesen/jarvis#717 and DanAakesen/jarvis#721.
+Use the source-contract-first direction in #1005 for the original Daily API and
+schema, the corresponding Jarvis API/SQL schema, and supported historical
+ingestion/replay. Retain [Daily source-to-SQL mapping](daily-schema-mapping.md)
+as implementation evidence, not as an export manifest or authorization to
+import a database bundle. Permanent health upload/processing, SQL migrations
+and original Daily are outside this cleanup.
 
 ## Give asynchronous test waits headroom on loaded CI runners (18 October 2026; fix-main)
 
@@ -2488,9 +2484,10 @@ Normal Deploy `38638073176` already accepted that tree.
 
 Close original #720 code acceptance without a dummy PR or repeated release;
 retain closed #718/#719 dependency links. The lane did not rerun npm locally
-because of proxy/TLS failures. This does not accept or authorise activation,
-private export/import, HAE/physical-phone/source parity, backup/cutover or
-deployed health capacity. Those downstream gates remain separate.
+because of proxy/TLS failures. This does not accept or authorise activation, source-compatible historical
+ingestion, HAE/physical-phone/source parity, backup/cutover or deployed health
+capacity. Those downstream gates remain separate; the database export/import
+approach was later withdrawn on 18 October 2026.
 
 ## Consolidate the existing maintenance review queue locally (14 October 2026)
 
@@ -3126,7 +3123,7 @@ The [coordinator release](https://github.com/DanAakesen/jarvis/issues/719#issuec
 
 Correction review hold: the ready-triggered canonical node-budget finding supersedes release readiness for the affected serialization boundary. Convert all source serialization guard failures into sanitized independent errors; compose the fixed two-source run from individually guarded canonical trees instead of imposing nutrition's smaller single-tree aggregate budget. Preserve prior canonical bytes/checksums and leave shared nutrition guards unchanged. Require focused, real isolated SQL and full exact-head CI plus independent correction review; no activation or live acceptance follows from the earlier intermediate code review.
 
-Verified pure consumer semantics at original HEAD 9e193554c9c8c7c23a788ed3d2b0582580b76c0f and public producer files pinned at cc526f9d9bf158a70b17e4f7668b7d72f083852a remove the missing-source-rule blocker. Implement exact seven-state selectors/Danish holidays, producer versus consumer identity distinction, raw-number grouping versus punctuation keys, terminal Received and incoming-only revival; preserve imported keys. Reuse mapped owner-bound snapshot/suppression tables with per-owner transactions, retained-success freshness and independent errors. Only trusted explicit intent can dismiss/clear; mail has no action authority. Coordinator subsequently verified the existing configured Foundry chat-completions/managed-identity boundary: reuse its endpoint validation, canonical chat model/settings/catalogue and usage accounting in an inactive tool-free semantic factory. json_object is not strict provider-schema proof; validate exact fields/source timestamps locally and fail closed. No browser typing/image/runner relay, source credentials or guessed semantic fallback. Stage bounded Gmail work with account/history/model generation checks; process loss/change/cancellation cannot establish completeness. Independently enforce item/UTF-8 source budgets before combined ingestion so oversized calendar results cannot discard healthy Gmail. No new schema/resource/model/consent, original-source change, schedules, catalogue registration or activation. Coordinator accepted 895b7c3/full CI 38310725882 for an inactive intermediate release, with final documentation/exact-head CI before PR readiness. Refs #725 keeps the issue and native dependencies open. Manual CalendarList owner consent, deployed identity/model and Google/provider parity, protected backup/import/reconciliation and physical-device acceptance remain unverified; no activation, permission or resource change is authorized.
+Verified pure consumer semantics at original HEAD 9e193554c9c8c7c23a788ed3d2b0582580b76c0f and public producer files pinned at cc526f9d9bf158a70b17e4f7668b7d72f083852a remove the missing-source-rule blocker. Implement exact seven-state selectors/Danish holidays, producer versus consumer identity distinction, raw-number grouping versus punctuation keys, terminal Received and incoming-only revival; preserve imported keys. Reuse mapped owner-bound snapshot/suppression tables with per-owner transactions, retained-success freshness and independent errors. Only trusted explicit intent can dismiss/clear; mail has no action authority. Coordinator subsequently verified the existing configured Foundry chat-completions/managed-identity boundary: reuse its endpoint validation, canonical chat model/settings/catalogue and usage accounting in an inactive tool-free semantic factory. json_object is not strict provider-schema proof; validate exact fields/source timestamps locally and fail closed. No browser typing/image/runner relay, source credentials or guessed semantic fallback. Stage bounded Gmail work with account/history/model generation checks; process loss/change/cancellation cannot establish completeness. Independently enforce item/UTF-8 source budgets before combined ingestion so oversized calendar results cannot discard healthy Gmail. No new schema/resource/model/consent, original-source change, schedules, catalogue registration or activation. Coordinator accepted 895b7c3/full CI 38310725882 for an inactive intermediate release, with final documentation/exact-head CI before PR readiness. Refs #725 keeps the issue and native dependencies open. Manual CalendarList owner consent, deployed identity/model and Google/provider parity, source-compatible Daily ingestion and physical-device acceptance remain unverified; no activation, permission or resource change is authorized.
 
 The first checkpoint reused server owner/Google client for inactive calendar reads with explicit denied/partial/stale coverage. Current consent documents calendar.events and L125 records calendarList denial. Coordinator verified primary CalendarList:list fields/tokens and maxResults up to 250; calendar.calendarlist.readonly is the least-privilege additional scope. Owner consent stays a separate manual gate; no scope/credential changes or sandbox tokens. Only complete synthetic-tested snapshots enter the owner/range cache. The expanded services above resolve source-rule evidence while full model/live acceptance stays open.
 
@@ -3195,11 +3192,11 @@ The nine design areas and where each stands. **Confirmed** = Dan's requirement o
 
 ## Decision log
 
-12 October 2026, standing Daily migration direction: Dan authorizes completion of approved migration work through coordinator dependency/gate releases without generic re-confirmation. #717 remains protected-export blocked; no independent downstream dispatch or own-PR merge. All migrated React/rich UI must fully reuse current Jarvis layout/styling, DESIGN.md, canonical styles.css tokens, shared components, themes/density/motion and phone/workspace patterns. Legacy Daily capabilities/data survive through recomposition, not a separate navy/plum/card theme. Generated views receive safe existing-bridge theme context without expanded permissions. Browser/mobile visual acceptance is mandatory in #730/#731/#732/#726; #718 starts no frontend work.
+12 October 2026, standing Daily migration direction (historical): Dan authorized completion of approved migration work through coordinator dependency/gate releases without generic re-confirmation. At that time #717 remained protected-export blocked; the owner withdrew the database-export/import approach on 18 October and #1005 is now the source-contract-first direction. No independent downstream dispatch or own-PR merge. All migrated React/rich UI must fully reuse current Jarvis layout/styling, DESIGN.md, canonical styles.css tokens, shared components, themes/density/motion and phone/workspace patterns. Legacy Daily capabilities/data survive through recomposition, not a separate navy/plum/card theme. Generated views receive safe existing-bridge theme context without expanded permissions. Browser/mobile visual acceptance is mandatory in #730/#731/#732/#726; #718 starts no frontend work.
 
-18 October 2026, P12-29 / #1005 Run 1: keep source documentation, API, Azure SQL mapping and selected Jarvis tools in one issue and PR. The inbound health routes, owner credential controls and bounded SQL processor reuse the existing backend, SQL pool, owner auth and confirmation boundaries. `JARVIS_HEALTH_UPLOAD_ENABLED` defaults false and remains absent from infrastructure; do not issue a live endpoint/token or enable ingestion before the protected acceptance gates. The source upload contract has no verified day-completeness marker, so complete-day historical replay and multi-chunk instructions remain blocked rather than inferred. Preserve the original Daily as canonical; synthetic tests are not phone/live evidence.
+18 October 2026, P12-29 / #1005: keep the complete source documentation, API, Azure SQL mapping and selected Jarvis capabilities in one issue and PR. The upload routes, owner-created credential and bounded SQL processor reuse the existing backend, pool, authentication and confirmation boundaries. The runtime flag defaults off and infrastructure explicitly sets it true; deployment, credential issuance, private handoff and phone acceptance remain unverified. The old #717/#721 export/import route is withdrawn. Preserve complete metric/date groups and published size limits in historical upload guidance; the source contract does not prove exporter UI behavior or complete-history delivery. Synthetic tests are not live evidence. The nine requested new tool names are grouped into three registry tools to retain required catalogue headroom; the name-level mismatch is unresolved.
 
-P12-03 (#718, 12 October 2026): additive empty tables use separate SQL schema `daily`, configured server owner prefixes legacy keys/uniqueness, and only the supplied explicit relationships become owner-composite foreign keys. Existing auth resolves the user/hosted agent; runners cannot construct the inactive store. Nullable unknown values, original/sanitized raw checksums, source timestamps/local dates, revisions/tombstones and recovery measurements remain distinct. Legacy OAuth/widget/claim credentials have no active target. Mixed attention data requires explicit source/JSON exclusion before import. [Mapping and compatibility limits](daily-schema-mapping.md) are source-code evidence, not protected live column/export parity. #717 is parked; #718 does not bypass it or accept backup/import. No personal seed, source mutation or Daily activation.
+P12-03 (#718, 12 October 2026): additive empty tables use separate SQL schema `daily`, configured server owner prefixes legacy keys/uniqueness, and only the supplied explicit relationships become owner-composite foreign keys. Existing auth resolves the user/hosted agent; runners cannot construct the inactive store. Nullable unknown values, original/sanitized raw checksums, source timestamps/local dates, revisions/tombstones and recovery measurements remain distinct. Legacy OAuth/widget/claim credentials have no active target. Mixed attention data requires explicit source/JSON exclusion in any future source-compatible ingestion. [Mapping and compatibility limits](daily-schema-mapping.md) remain source-code/schema evidence, not a database export or proof of replay. The 18 October source-contract-first API/schema and historical-ingestion direction is tracked in #1005; the #717/#721 export/import approach is withdrawn. No personal seed, source mutation or Daily activation.
 
 P9-89 (#736, 12 October 2026, user-directed): make presence behavior salient
 on every chat and EN/DA voice turn, not merely when asked. Share short,
@@ -5108,9 +5105,9 @@ SQL validation caught new-column constraint compilation in migration 0043: a sta
 
 Provider-format clarification (16:17:51 UTC) resolves the earlier bootstrap/scalar questions: an empty body, response X-XSRF-TOKEN header and XSRF-TOKEN cookie; synonyms are arrays; mapped values are numbers; observed source IDs are numeric arrays. This sample does not prove global non-null provenance. Missing/null provenance stays unavailable, and unrecognized string/object structures are refused. No coordinator session values are copied. The repaired pre-format-tightening head passed full CI and all 109 SQL tests; final head still requires fresh checks/independent review before readiness.
 
-Dan approved P12 on 12 October 2026 and explicitly released only P12-01 for this worker. The later [execution authorization](https://github.com/DanAakesen/jarvis/issues/716#issuecomment-6124634183) supersedes the original backlog-only and extra cutover-approval wording: eventual production cutover is pre-authorized only after dependency, parity, reconciliation, backup and rollback gates pass. Original Daily continues ordinary authorized food/health writes and remains running/canonical before cutover. Migration tooling must not alter its application/source code/schema or rewrite its records; final-delta reconciliation accounts for ongoing normal use. Read-only export belongs in the protected migration workflow. Legacy operation may be deprecated only after all in-scope data, features and sync are migrated and verified and rollback is protected; never delete the original repository or data. New secrets/access and unapproved paid resources retain their explicit-confirmation boundaries. This issue performs no cutover or production writes.
+Dan approved P12 on 12 October 2026 and explicitly released only P12-01 for this worker. The later [execution authorization](https://github.com/DanAakesen/jarvis/issues/716#issuecomment-6124634183) supersedes the original backlog-only and extra cutover-approval wording. The cancelled database-export/bundle-import approach is withdrawn; #1005 specifies source-contract-first API/schema and supported historical ingestion/replay. Original Daily continues ordinary authorized food/health writes and remains running/canonical before any future cutover. This cleanup does not alter its application/source code/schema or records; any final-delta, cutover or eventual legacy retirement follows its separate reviewed gates. Never delete the original repository or data. New secrets/access and unapproved paid resources retain their explicit-confirmation boundaries. This issue performs no cutover or production writes.
 
-**Implemented contract, pending review/live acceptance:** default-off trusted module flag; metadata-only enabled endpoint; same server owner for existing user and hosted-agent auth; runner denial; reserved stable native view IDs. Production composition, shell, voice, login and dispatcher stay unchanged. **Planned:** owner-bound Daily data/device services, native mobile-first pages/views and protected migration/parity workflows in existing #717–#734. [Full scope and evidence gates](daily-migration.md). Synthetic checks are distinct from live providers, SQL, cutover and physical-phone acceptance. TickTick excluded; notifications default off; private health/food data and credentials excluded from public Git/coding sandboxes.
+**Implemented contract, pending review/live acceptance:** default-off trusted module flag; metadata-only enabled endpoint; same server owner for existing user and hosted-agent auth; runner denial; reserved stable native view IDs. Production composition, shell, voice, login and dispatcher stay unchanged. **Planned:** source-contract-first API/schema and supported historical ingestion/replay in #1005, owner-bound Daily data/device services, and native mobile-first pages/views; cancelled #717/#721/#982 export/import work is not a prerequisite. [Full scope and evidence gates](daily-migration.md). Synthetic checks are distinct from live providers, SQL, cutover and physical-phone acceptance. TickTick excluded; notifications default off; private health/food data and credentials excluded from public Git/coding sandboxes.
 
 - **Creation revision (Dan, 11 October):** remove Start writing and the filled
   Create new treatment. Open the blank editor immediately, with title and an
@@ -5486,7 +5483,8 @@ provider or persisted-state change is needed.
 
 This is a local source correction from released `3d3a12ab`, not full #811
 acceptance. PM owns independent review, integration and rendered readback;
-historical 502 causation remains unestablished and #717/#741 stays parked.
+historical 502 causation remains unestablished; #717/#741 was parked at that
+review, then the owner withdrew the database export/import path on 18 October.
 
 ## P9-121 — One Projects section (17 October 2026)
 

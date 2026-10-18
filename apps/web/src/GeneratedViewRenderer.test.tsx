@@ -51,6 +51,11 @@ describe('GeneratedViewRenderer source note', () => {
     { version: 1, title: 'Synthetic view', source, ...content[renderer], ...overrides } as unknown as GeneratedView
   );
 
+  it('makes wide table scrolling keyboard reachable and names the region', () => {
+    render(<GeneratedViewRenderer view={make('table')} />);
+    expect(screen.getByRole('region', { name: 'Scrollable table: Synthetic view' }).getAttribute('tabindex')).toBe('0');
+  });
+
   it.each(['table', 'chart', 'detail'] as const)('puts the note directly beneath a %s view', (renderer) => {
     const { container } = render(<GeneratedViewRenderer view={make(renderer)} />);
     const note = container.querySelector('.generated-view-source-note');
