@@ -2072,9 +2072,11 @@ control characters, HTML and markdown link destinations and caps fact text at
 high priority; `🔼`, `🔽`, `⏬`, `🔺` and missing priorities do not. `🕒 HH:mm`
 supplies the due time before or after `📅 YYYY-MM-DD`; trailing date/time,
 `due:` and `[due:: …]` remain supported. Clock, priority and Tasks metadata emoji
-are removed from fact text. Due dates resolve to Copenhagen-local instants;
+and their recognized date, recurrence, ID and completion-action payloads are
+removed from fact text. Due dates resolve to Copenhagen-local instants;
 date-only tasks remain due at 23:59. Only open high-priority tasks become facts,
-deduplicated by normalized text and due instant. The source returns at most 40 facts,
+deduplicated by normalized text and due instant, retaining explicit-time
+eligibility if any duplicate has a time. The source returns at most 40 facts,
 ordering the 24-hour-before/72-hour-after due window first.
 
 Factory uses `TaskStore.getProactiveSnapshot()`, a bounded, nontransactional

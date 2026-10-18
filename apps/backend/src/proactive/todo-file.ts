@@ -71,6 +71,10 @@ export function parseTodos(content: string): ParsedTodo[] {
     const text = sanitizeFactText(rawText
       .replace(dueMarkersPattern, ' ')
       .replace(/🕒\s*\d{2}:\d{2}/gu, ' ')
+      .replace(/[⏳🛫➕✅❌]\s*\d{4}-\d{2}-\d{2}/gu, ' ')
+      .replace(/🔁\s*[^📅⏳🛫➕✅❌🔁🏁⏫🔼🔽⏬🔺🆔⛔🕒[]*/gu, ' ')
+      .replace(/[🆔⛔]\s*[a-z\d]+(?:\s*,\s*[a-z\d]+)*/giu, ' ')
+      .replace(/🏁\s*(?:delete|keep)\b/giu, ' ')
       .replace(priorityMarkersPattern, ' ')
       .replace(taskMetadata, ' '));
     todos.push({

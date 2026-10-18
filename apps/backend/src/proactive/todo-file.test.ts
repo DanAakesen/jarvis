@@ -59,6 +59,17 @@ describe('todo parser', () => {
     ]);
   });
 
+  it('removes metadata payloads so scheduling, recurrence and IDs do not change task identity', () => {
+    const todos = parseTodos([
+      '- [ ] Synthetic task ⏫ 📅 2031-04-09 🕒 14:00 ⏳ 2031-04-08 🔁 every year 🆔 abc123 ⛔ def456, ghi789 🏁 delete',
+      '- [ ] Synthetic task ⏫ 📅 2031-04-09 🕒 14:00 ⏳ 2031-04-07 🛫 2031-04-06 ➕ 2031-04-05 ✅ 2031-04-04 ❌ 2031-04-03',
+      '- [ ] Synthetic task 🔁 every week ⏫ 📅 2031-04-09 🕒 14:00',
+    ].join('\n'));
+    expect(todos).toHaveLength(3);
+    expect(todos.every(({ text }) => text === 'Synthetic task')).toBe(true);
+    expect(todos.every(({ dueAt }) => dueAt === '2031-04-09T12:00:00.000Z')).toBe(true);
+  });
+
   it('parses the supported due markers, local times, done items, and nested lines in file order', () => {
     const todos = parseTodos([
       '\uFEFF- [ ] Emoji 📅 2026-10-30 14:30',

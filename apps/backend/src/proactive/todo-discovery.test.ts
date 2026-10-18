@@ -66,6 +66,17 @@ describe('vault task discovery', () => {
     expect(f.vault.read).toHaveBeenCalledTimes(2);
   });
 
+  it('retains timed reminder eligibility when a date-only duplicate appears first', async () => {
+    const f = fixture({
+      'Personal/Inbox.md': '- [ ] Synthetic task ⏫ 📅 2031-04-09',
+      'Work/Inbox.md': '- [ ] Synthetic task ⏫ 📅 2031-04-09 🕒 23:59',
+    });
+    expect(await f.read()).toMatchObject({
+      state: 'ok',
+      facts: [{ text: 'Synthetic task', dueAt: '2031-04-09T21:59:00.000Z', dueHasTime: true }],
+    });
+  });
+
   it('reports unavailable for file and byte caps without reading partial task lists', async () => {
     const many = fixture(Object.fromEntries(Array.from({ length: MAX_TODO_FILES + 1 }, (_, index) =>
       [`Personal/Note${index}.md`, '- [ ] Synthetic ⏫'])));

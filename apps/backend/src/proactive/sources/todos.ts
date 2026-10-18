@@ -27,13 +27,18 @@ export function createTodosSource(vaultClient?: VaultReader): ProactiveSource {
       const sourceSignal = AbortSignal.any([signal, timeout.signal]);
       try {
         const todos = await readVaultTodos(vaultClient, sourceSignal);
-        const seen = new Set<string>();
+        const seen = new Map<string, { dueHasTime: boolean }>();
         const open = todos.flatMap((todo, index) => {
           if (todo.done || !todo.highPriority) return [];
           const key = JSON.stringify([normaliseFactText(todo.text), todo.dueAt]);
-          if (seen.has(key)) return [];
-          seen.add(key);
-          return [{ todo, index, dueTime: todo.dueAt === null ? null : Date.parse(todo.dueAt) }];
+          const existing = seen.get(key);
+          if (existing) {
+            existing.dueHasTime ||= todo.dueHasTime;
+            return [];
+          }
+          const candidate = { ...todo };
+          seen.set(key, candidate);
+          return [{ todo: candidate, index, dueTime: todo.dueAt === null ? null : Date.parse(todo.dueAt) }];
         });
         const windowStart = now.getTime() - todoWindowBeforeMs;
         const windowEnd = now.getTime() + todoWindowAfterMs;

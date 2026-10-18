@@ -15,7 +15,8 @@ Assumption: `🔺` is outside the supported priority scale and is not high.
 Parse `🕒 HH:mm` independently of its position around `📅 YYYY-MM-DD`,
 using Copenhagen local time. Preserve trailing date/time and legacy due fields;
 date-only tasks remain due at 23:59. Strip clock/time, priority and the existing
-Tasks metadata emoji from reminder/finding text, and ignore fenced examples.
+Tasks metadata emoji and their recognized date, recurrence, ID and
+completion-action payloads from reminder/finding text, and ignore fenced examples.
 
 Share parsed-task caching by vault client, path and tree blob SHA between the
 source and ticker. Bound each scan to 256 files, 4 MiB total content, 256 KiB per
@@ -25,7 +26,8 @@ SHA race makes the whole scan unavailable, not empty or partially successful;
 the ticker retains its bounded verification retries and suppression policy.
 Only complete scans replace the cache. Reminder identity stays normalized text
 plus due instant, independent of path, and duplicate facts are collapsed before
-the fact cap. The 30-second ticker cadence and existing one-hour reminder lead
+the fact cap, preserving explicit-time eligibility across duplicates.
+The 30-second ticker cadence and existing one-hour reminder lead
 time, flags and release controls are unchanged.
 
 Keep the writer's root-only, add-only "Suggested by Jarvis" behavior unchanged.
