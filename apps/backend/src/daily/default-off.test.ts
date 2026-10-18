@@ -6,6 +6,8 @@ import { describe, expect, it } from 'vitest';
 const root = fileURLToPath(new URL('../../../../', import.meta.url));
 const switchName = /\b(?:JARVIS|VITE)_DAILY_ENABLED\b/u;
 // Production switches Daily on for the owner in exactly these two files; no other configuration may mention a switch.
+// Switching Daily off means reverting this whole change (both values and these assertions together), or setting both
+// values to false and updating these assertions in the same commit. Reverting only the two values fails here.
 const filesAllowedToSetTheSwitches: readonly string[] = ['.github/workflows/deploy.yml', 'infra/main.bicep'];
 const skippedDirectories = new Set(['node_modules', '.git', 'dist', 'coverage', '__pycache__']);
 const searchedDirectories = ['.github', 'infra', 'agents', 'runner', 'pc-bridge', 'scripts', 'apps', 'packages'];

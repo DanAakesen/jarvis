@@ -196,8 +196,10 @@ The visible Daily page must be deployed and checked before this change merges.
   private read or write, no new account, consent, grant, secret, RBAC or
   resource. Stored-grant and CalendarList parity (#725), physical-phone
   acceptance and cutover stay unverified and are not claimed.
-- Rollback: revert this change, or set both values to `false`; the next deploy
-  re-applies all four components. Stored Daily data is not deleted.
+- Rollback: revert the whole change, which removes the two values and the scan
+  test's new expectations together, or set both values to `false` and update the
+  scan test in the same commit. Reverting only the two values fails the scan test.
+  The next deploy re-applies all four components. Stored Daily data is not deleted.
 
 ## Link every web-created Factory task to a GitHub issue (17 October 2026; P10-08 / #902)
 

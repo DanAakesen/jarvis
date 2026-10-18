@@ -827,7 +827,7 @@ resource backendApp 'Microsoft.App/containerApps@2024-03-01' = if (deployBackend
               value: codexToolModel
             }
             {
-              // Backend half of the Daily switch; the web half is VITE_DAILY_ENABLED in deploy.yml. Set both to 'false' to turn Daily off.
+              // Backend half of the Daily switch; the web half is VITE_DAILY_ENABLED in deploy.yml. To turn Daily off, revert the whole change or set both to 'false' and update daily/default-off.test.ts in the same commit.
               name: 'JARVIS_DAILY_ENABLED'
               value: 'true'
             }

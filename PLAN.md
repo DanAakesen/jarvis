@@ -63,9 +63,10 @@ job or timer, and no provider, device or private read or write. Any change under
 `infra/` re-applies all four release components, so one Deploy carries the
 infrastructure, backend, web and agent together.
 
-Next is the live check after that Deploy; it is not claimed here. Rollback is a
-revert, or setting both switches to `false`. Acceptance with Dan's real figures,
-the original Google source and a physical phone stays open.
+Next is the live check after that Deploy; it is not claimed here. Rollback is
+reverting the whole change, scan test included, or setting both switches to
+`false` and updating the scan test in the same commit. Acceptance with Dan's real
+figures, the original Google source and a physical phone stays open.
 
 ## Proactive assistance (17 October 2026; P13-01 / #917)
 

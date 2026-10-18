@@ -568,9 +568,11 @@ build and dev server read the web switch by name only: absent or `false` is off,
 `true` is on, and any other value, including an empty one, stops them. Never set
 it in a local `.env` that is committed.
 
-To turn Daily off, revert both values or set both to `false`. Both files are
-release inputs, so the next deploy re-applies infrastructure, backend, web and
-agent; stored Daily data stays. After a deploy that sets the switches, the owner's
+To turn Daily off, revert the whole enabling change, which removes both values and
+the scan test's new expectations together, or set both to `false` and update
+`daily/default-off.test.ts` in the same commit. Reverting only the two values fails
+that test in CI before Deploy can run. Both files are release inputs, so the next
+deploy re-applies infrastructure, backend, web and agent; stored Daily data stays. After a deploy that sets the switches, the owner's
 read-only live check is: `/health` is OK, Daily appears in the side rail and the
 phone menu and opens on "What Daily holds today" with a status on each row (None
 returned is a valid answer before any data exists), and Settings shows the
