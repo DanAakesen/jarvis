@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
-import type { DailySourceId } from '@jarvis/contracts';
+import { Link } from 'react-router-dom';
+import { dailyQuerySources as sources, type DailySourceId } from '@jarvis/contracts';
 import { Loader } from '../Loader';
 import { ShellIcon, type ShellIconName } from '../ShellIcon';
 import { overviewSummary, rowView } from './overview';
@@ -72,6 +73,9 @@ export function DailyOverview({ backendUrl, getAccessToken, capabilities, onRetr
     if (recovered && (active === null || active === document.body)) openButton(root.current, recovered)?.focus();
   }, [rows]);
   const summary = rows.length > 0 && !pending ? overviewSummary(rows.map(row => row.probe)) : '';
+  const healthSources: readonly DailySourceId[] = [sources.metrics,sources.sleep,sources.workouts,sources.sync];
+  const healthRows = rows.filter(row => healthSources.includes(row.source.id));
+  const healthIsEmpty = !pending && healthRows.length > 0 && healthRows.every(row => row.probe?.state === 'none');
   return <section className={`daily-page daily-overview${embedded ? ' daily-overview-embedded' : ''}`} aria-labelledby="daily-heading" ref={root}>
     <header className="daily-heading">
       {!embedded && <div>
@@ -93,6 +97,7 @@ export function DailyOverview({ backendUrl, getAccessToken, capabilities, onRetr
             <ul className="daily-overview-list" aria-labelledby="daily-holds-heading">
               {rows.map(row => <OverviewRow key={row.source.id} row={row} onOpen={onOpen} onRetry={reload} />)}
             </ul>
+            {healthIsEmpty && <p className="daily-meta">No health records were returned. <Link to="/settings#health-upload">Set up Health Auto Export in Settings</Link>.</p>}
           </>}
     <p className="visually-hidden" role="status">{summary}</p>
   </section>;

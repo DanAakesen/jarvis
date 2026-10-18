@@ -19,7 +19,9 @@ function SyncEvidence({ item }: { item: Row }) {
     <p>Upload receipt, successful processing and phone contact are separate evidence.</p>
     <dl className="daily-facts">
       <div><dt>Phone last contacted</dt><dd>{dailyValue(object(item.heartbeat) ? item.heartbeat.last_received_at : null)}</dd></div>
-      <div><dt>Pending uploads</dt><dd>{dailyValue(object(item.inbox) ? item.inbox.pending : null)}</dd></div>
+      <div><dt>Accepted uploads</dt><dd>{dailyValue(object(item.inbox) ? item.inbox.accepted ?? item.inbox.pending : null)}</dd></div>
+      <div><dt>Processing uploads</dt><dd>{dailyValue(object(item.inbox) ? item.inbox.processing : null)}</dd></div>
+      <div><dt>Succeeded uploads</dt><dd>{dailyValue(object(item.inbox) ? item.inbox.succeeded : null)}</dd></div>
       <div><dt>Quarantined uploads</dt><dd>{dailyValue(object(item.inbox) ? item.inbox.quarantined : null)}</dd></div>
     </dl>
     <Records source={sources.sync} rows={feeds} />

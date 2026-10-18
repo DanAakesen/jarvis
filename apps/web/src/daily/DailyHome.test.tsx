@@ -96,6 +96,12 @@ describe('Daily overview', () => {
     await settled();
     expect(row('Sync evidence').getByText('Has records')).toBeTruthy();
   });
+  it('links to Health Auto Export settings only when all visible health collections are empty', async () => {
+    fixture({ answer: query => jsonResponse(dailyFixture(query, query.source === sources.sync ? [emptySync] : [])) });
+    render(home());
+    await settled();
+    expect(screen.getByRole('link', { name: 'Set up Health Auto Export in Settings' }).getAttribute('href')).toBe('/settings#health-upload');
+  });
   it('shows an availability loader until the backend answers', async () => {
     const hold = gate();
     const f = fixture({ capabilities: async () => { await hold.opened; return capabilityList(); } });

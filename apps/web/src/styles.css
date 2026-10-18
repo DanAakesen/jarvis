@@ -3454,6 +3454,13 @@ a.task-chip:hover { background: var(--glass-pressed); }
 .credential-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 6px; }
 .credential-result { font-size: var(--type-caption); color: var(--text); }
 .credential-result[data-tone="error"] { color: var(--error); }
+.health-upload-settings { display: grid; gap: 12px; min-width: 0; }
+.health-upload-contract { display: grid; gap: 8px; margin: 0; }
+.health-upload-contract > div { display: grid; grid-template-columns: minmax(110px, 150px) minmax(0, 1fr); gap: 8px; }
+.health-upload-contract dd { min-width: 0; margin: 0; overflow-wrap: anywhere; }
+.health-upload-token { width: 100%; max-width: 100%; overflow-wrap: anywhere; white-space: pre-wrap; user-select: all; }
+.health-upload-reveal { display: grid; gap: 8px; min-width: 0; }
+@media (max-width: 480px) { .health-upload-contract > div { grid-template-columns: minmax(0, 1fr); gap: 2px; } }
 /* Settings polish (Dan, 8 October). Section headers no longer paint a slab on hover: the title brightens and the chevron
    turns cyan and nudges. Save is a plain row at the end of the page, with no floating glass pill around the button. */
 .collapsible-toggle:hover, .collapsible-toggle:active { background: transparent; }

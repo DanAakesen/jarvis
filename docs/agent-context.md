@@ -4835,6 +4835,14 @@ The stylesheet geometry ratchet is part of the web tests:
 It parses every CSS file under `apps/web/src`; new exceptions need an exact
 value and a reason in the allow-list.
 
+## P12-29 Health Auto Export implementation (18 October 2026)
+
+The source-to-Jarvis inventory is `docs/reference/daily-v182/source-to-jarvis-matrix.md`; the complete original contract remains under `docs/reference/daily-v182/`. The incoming Health Auto Export API, owner credential lifecycle and restart-safe processor use the existing backend, SQL pool and owner authentication. `JARVIS_HEALTH_UPLOAD_ENABLED` defaults false and must stay absent from infrastructure until the protected deployment gates are approved. The UI derives the upload endpoint only from configured `backendUrl`; never construct a public URL from forwarded headers or document a guessed live endpoint/token.
+
+`docs/daily-health-ingestion/README.md` records the API shape, request/storage/normalization limits, activation change and rollback. Historical multi-chunk replay is not qualified: the source request has no verified complete-day marker, so do not provide day-batching instructions or claim partial-chunk protection. The pinned exporter is Health Auto Export; do not substitute Health Sync without independent contract verification. No synthetic test or local configuration is live phone acceptance.
+
+For this boundary, run backend TypeScript/build, focused `daily/health-upload` and `daily/health` tests, `database/migrations.test.ts`, and web tests for `HealthUploadSettings`/Daily overview. SQL integration tests require the existing isolated loopback SQL Server arrangement used by Database CI; never point them at production. Inspect the Settings panel at desktop and 380 px before claiming visual verification.
+
 ## P13-16 chat and voice recall (18 October 2026)
 
 `proactive_recent_items` is part of the hosted tool catalogue only when

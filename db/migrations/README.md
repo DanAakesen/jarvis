@@ -73,3 +73,9 @@ question, optional turn correlation and description). Existing rows stay null;
 deploy the migration before code that reads/writes metadata. The down batch drops the constraint and column,
 discarding visual metadata but preserving message text. Revert the dependent
 backend revision first and obtain Dan's approval before a production rollback.
+
+`0060_daily_health_processing_state.sql` makes active upload processing visible
+as `processing`, with the existing attempt deadline serving as a restart-safe
+claim lease. The down batch refuses to run while any claimed row remains in that
+state; disable the worker and let each claim complete or expire before rollback.
+Pending/quarantined evidence and processed records remain intact.

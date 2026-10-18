@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
+import type { ReactNode } from 'react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
@@ -85,10 +86,11 @@ function settingsResponse(current: typeof settings & { global: typeof settings.g
   return { settings: current, options, credentials };
 }
 
-function renderSettingsPage(url: string | null = backendUrl) {
+function renderSettingsPage(url: string | null = backendUrl, healthUpload?: ReactNode) {
   return render(
     <ThemePreferenceContext.Provider value={themePreference}>
       <SettingsPage backendUrl={url} getAccessToken={getAccessToken}
+        healthUpload={healthUpload}
         renderProjects={(projectDefaults) => (
           <section aria-labelledby="test-projects-heading">
             <h2 id="test-projects-heading">Projects</h2>
@@ -116,6 +118,12 @@ beforeEach(() => {
 afterEach(() => { vi.unstubAllGlobals(); });
 
 describe('SettingsPage', () => {
+  it('opens the Health upload section when linked from the Daily no-data state', () => {
+    window.history.replaceState({}, '', '/settings#health-upload');
+    renderSettingsPage(backendUrl, <p>Health upload test content</p>);
+    const section = screen.getByRole('heading', { name: 'Health upload' }).closest('section');
+    expect(section?.getAttribute('data-open')).toBe('true');
+  });
   it.each([
     { name: 'current Jeppe settings', voice: settings.voice.danishVoice, voices: options.danishVoices },
     { name: 'legacy Harper settings and options', voice: 'da-DK-Harper:MAI-Voice-2', voices: ['da-DK-Harper:MAI-Voice-2'] },

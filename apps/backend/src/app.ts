@@ -30,6 +30,10 @@ import type { RepositoryCreator } from './factory/new-project.js';
 import { registerModules, type BackendModule } from './modules.js';
 import { registerHealthUploadRoutes,type HealthUploadOptions } from './daily/health-upload/server.js';
 import { ownerId } from './daily/health-upload/contracts.js';
+import { HealthProcessingWorker } from './daily/health/worker.js';
+import type { SqlHealthProcessor } from './daily/health/processor.js';
+import { registerHealthCapabilityRoutes } from './daily/health-upload/capability-routes.js';
+import type { SqlHealthCapabilities } from './daily/health-upload/sql-capabilities.js';
 import type { SettingsStore } from './core/settings.js';
 import { fallbackModelCatalogue, type ModelCatalogueReader } from './core/model-catalog.js';
 import type { NowFeedEventHub, NowFeedStore, NowFeedUpdate } from './core/now.js';
@@ -63,8 +67,10 @@ export interface BuildAppOptions {
   readonly databaseStatus?: () => boolean;
   readonly auth?: TokenVerifier;
   readonly nutritionExportAuth?: import('./daily/nutrition-export/auth.js').NutritionExportCredentialVerifier;
-  /** Inactive rehearsal composition only. Production index supplies no option/flag. */
+  /** Default-off health upload composition; production supplies it only behind JARVIS_HEALTH_UPLOAD_ENABLED. */
   readonly healthUpload?: HealthUploadOptions;
+  readonly healthProcessor?: Pick<SqlHealthProcessor, 'processNext'>;
+  readonly healthCapabilities?: SqlHealthCapabilities;
   readonly modules?: readonly BackendModule[];
   readonly projectStore?: ProjectStore;
   readonly projectPolicyChanged?: (projectId: string) => Promise<void>;
@@ -402,11 +408,20 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
     issueProgressQueues.clear();
   });
   if (options.healthUpload?.enabled === true) {
+    const worker = options.healthProcessor ? new HealthProcessingWorker(options.healthProcessor, state => {
+      if (state === 'retry') app.log.warn('daily.health_processing_retry');
+    }) : undefined;
+    if (worker) {
+      app.addHook('onReady', async () => worker.start());
+      app.shutdownConnections.add(() => worker.stop());
+      app.addHook('onClose', async () => worker.stop());
+    }
     const shutdown = new AbortController();
     app.shutdownConnections.add(() => shutdown.abort());
     app.register(registerHealthUploadRoutes,{ ...options.healthUpload,shutdownSignal: AbortSignal.any([
       shutdown.signal,...(options.healthUpload.shutdownSignal ? [options.healthUpload.shutdownSignal] : []),
-    ]) });
+    ]),wakeProcessing: () => worker?.wake() });
+    if (options.healthCapabilities) app.register(registerHealthCapabilityRoutes,options.healthCapabilities);
   }
   registerModules(app, options.modules ?? [
     coreModule,

@@ -19,7 +19,8 @@ const owner = '11111111-1111-4111-8111-111111111111'; const other = '22222222-22
 const filename = '0047_daily_health_processing.sql';
 const base = Date.parse('2026-10-13T18:00:00.000Z'); let clock = base; let serial = 0;
 const now = () => clock; const signal = () => new AbortController().signal;
-const migrations = async () => (await readMigrations()).filter(({ name }) => ['0041_daily_owner_schema.sql', '0046_daily_health_upload_inbox.sql', filename].includes(name));
+const migrations = async () => (await readMigrations()).filter(({ name }) =>
+  ['0041_daily_owner_schema.sql', '0046_daily_health_upload_inbox.sql', filename, '0060_daily_health_processing_state.sql'].includes(name));
 const processor = (id = owner) => new SqlHealthProcessor(pool, id, now);
 const readModel = (id = owner) => DailyHealthReadModel.forRequest(pool, { server: { ownerObjectId: id }, principal: { objectId: id } } as unknown as FastifyRequest);
 const workout = (id = 'synthetic-workout', hr = 100) => ({ id, name: 'Traditional Strength Training', start: '2026-10-13T08:00:00Z', duration: 3600,
@@ -68,6 +69,42 @@ describe('inactive processor on real isolated SQL Server, synthetic records only
     expect(await applyMigrations(pool, await migrations())).toEqual([]);
     expect(await processor().processNext(signal())).toEqual({ state: 'idle' });
     for (const table of tableNames) expect(await rows(table)).toEqual([]);
+  });
+  it('creates, rotates and revokes hashed owner credentials without cross-owner visibility', async () => {
+    const capabilities = new SqlHealthCapabilities(pool, owner, now);
+    const otherCapabilities = new SqlHealthCapabilities(pool, other, now);
+    const first = capabilities.prepare({ deviceId: 'synthetic-phone', permissions: ['health-ingest', 'health-heartbeat'], expiresAt: '2099-01-01T00:00:00.000Z' });
+    expect(await capabilities.create(first, signal())).toEqual({ state: 'issued' });
+    const firstToken = await first.useSecret(async value => value);
+    expect(await capabilities.verify(firstToken, signal())).toMatchObject({ ownerObjectId: owner });
+    expect(await capabilities.status(signal())).toMatchObject({ state: 'active' });
+    expect(await otherCapabilities.status(signal())).toEqual({ state: 'empty', expiresAt: null });
+    expect(await otherCapabilities.verify(firstToken, signal())).toBeNull();
+    const stored = await pool.request().input('owner', sql.UniqueIdentifier, owner)
+      .query('SELECT token_hash FROM daily.health_upload_capabilities WHERE owner_object_id=@owner');
+    expect(stored.recordset).toEqual([{ token_hash: sha256(firstToken) }]);
+
+    const replacement = capabilities.prepare({ deviceId: 'synthetic-phone', permissions: ['health-ingest', 'health-heartbeat'], expiresAt: '2099-01-01T00:00:00.000Z' });
+    expect(await capabilities.rotateCurrent(replacement, signal())).toEqual({ state: 'issued' });
+    const replacementToken = await replacement.useSecret(async value => value);
+    expect(await capabilities.verify(firstToken, signal())).toBeNull();
+    expect(await capabilities.verify(replacementToken, signal())).toMatchObject({ ownerObjectId: owner });
+    expect(await capabilities.revokeCurrent(signal())).toEqual({ state: 'revoked' });
+    expect(await capabilities.verify(replacementToken, signal())).toBeNull();
+    expect(await capabilities.status(signal())).toMatchObject({ state: 'revoked' });
+    expect(await otherCapabilities.status(signal())).toEqual({ state: 'empty', expiresAt: null });
+  });
+  it('reports accepted, processing and succeeded inbox states truthfully across a processor restart', async () => {
+    const device = await provision();
+    const receipt = await accept(device);
+    expect((await readModel().sync(signal())).inbox).toMatchObject({ accepted: 1, processing: 0, succeeded: 0, quarantined: 0 });
+
+    await pool.request().input('id', sql.UniqueIdentifier, receipt.acceptanceId).input('lease', sql.DateTime2(3), new Date(clock + 45_000))
+      .query("UPDATE daily.health_upload_inbox SET processing_status='processing',processing_attempts=1,processing_next_attempt_at=@lease WHERE acceptance_id=@id;");
+    expect((await readModel().sync(signal())).inbox).toMatchObject({ accepted: 0, processing: 1, succeeded: 0, quarantined: 0 });
+    clock += 45_001;
+    expect(await processor().processNext(signal())).toMatchObject({ state: 'processed', acceptanceId: receipt.acceptanceId });
+    expect((await readModel().sync(signal())).inbox).toMatchObject({ accepted: 0, processing: 0, succeeded: 1, quarantined: 0 });
   });
   it('commits exact raw lineage, normalization and freshness together once across concurrent processors/reconstruction', async () => {
     const device = await provision(); const bytes = raw(payload()); const receipt = await accept(device, bytes, 'same');

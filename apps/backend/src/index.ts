@@ -135,6 +135,9 @@ import { registerProactive } from './proactive/composition.js';
 import { createProactiveStore } from './database/proactive-store.js';
 import { createMemoryProactiveStore } from './proactive/store.js';
 import { createProactiveToolsModule } from './proactive/tools.js';
+import { createSqlHealthUpload } from './daily/health-upload/sql-composition.js';
+import { SqlHealthProcessor } from './daily/health/processor.js';
+import { SqlHealthCapabilities } from './daily/health-upload/sql-capabilities.js';
 
 try {
   const config = loadConfig();
@@ -151,6 +154,18 @@ try {
   const telemetry = await createTelemetry(config.applicationInsightsConnectionString);
   const logger = createLogger(config, telemetry);
   const database = databaseConfig ? createDatabase(databaseConfig) : undefined;
+  if (config.healthUploadEnabled && !database) {
+    throw new ConfigurationError('JARVIS_HEALTH_UPLOAD_ENABLED requires the existing SQL pool');
+  }
+  const healthUpload = config.healthUploadEnabled && database
+    ? { ...createSqlHealthUpload(database.pool, config.auth.ownerObjectId), enabled: true }
+    : undefined;
+  const healthProcessor = config.healthUploadEnabled && database
+    ? new SqlHealthProcessor(database.pool, config.auth.ownerObjectId)
+    : undefined;
+  const healthCapabilities = config.healthUploadEnabled && database
+    ? new SqlHealthCapabilities(database.pool, config.auth.ownerObjectId)
+    : undefined;
   const conversationStore = database ? createConversationStore(database.pool) : undefined;
   const conversationSummaryStore = database ? createConversationSummaryStore(database.pool) : undefined;
   const usageStore = database ? createUsageStore(database.pool) : undefined;
@@ -1071,6 +1086,7 @@ try {
     },
   }, deployedCommit && /^[\da-f]{7,64}$/iu.test(deployedCommit) ? deployedCommit.toLowerCase() : undefined);
   const app = buildApp(config, logger, {
+    ...(healthUpload && healthProcessor && healthCapabilities ? { healthUpload, healthProcessor, healthCapabilities } : {}),
     ...(workspaceHtmlArtifactStore ? { workspaceHtmlArtifacts: workspaceHtmlArtifactStore } : {}),
     ...(conversationAttachments ? { conversationAttachments } : {}),
     ...(attachmentVision ? { attachmentVision } : {}),
