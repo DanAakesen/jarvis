@@ -18,11 +18,13 @@ inventoried to identify route-specific exceptions.
 
 | Recurring element | Variants found (source and selector/component) | Canonical form and reason |
 | --- | --- | --- |
-| Button | `styles.css`: `.primary-button`, `.secondary-button`, `.ghost-button`, `.danger-button`, `.danger-button--filled`, `.button-group`, `.settings-back`, `.jobs-action`, `.workspace-control`; `proactive.css`: `.proactive-text-toggle`, `.proactive-snooze > summary`; Factory task/release action overrides; Daily keeps `.daily-page button` | Use the filled primary, surfaced secondary, quiet ghost, low-emphasis danger and filled-confirmation danger levels. Shared states, radius, type, icon alignment and busy width live in `styles.css`; specialized controls keep their workflow role. Action rows own spacing and wrap/stack at phone widths. Compact actions are 36px on fine pointers and at least 44px on coarse pointers. |
+| Button | `styles.css`: `.primary-button`, `.secondary-button`, `.ghost-button`, `.danger-button`, `.danger-button--filled`, `.button-group`, `.settings-back`, `.jobs-action`, `.workspace-control`; `ConversationHistory.css`: `.composer-send`, `.conversation-latest`; `proactive.css`: `.proactive-text-toggle`, `.proactive-snooze > summary`; Factory task/release actions; Daily keeps `.daily-page button` | Primary and filled danger use token-based tonal fills, real tinted borders and one restrained accent shadow; secondary and unfilled danger have visible boundaries; ghost stays text-only until hover/press. Shared focus, disabled, busy and reduced-motion states live in `styles.css`. The composer send and `.jobs-action-primary` alias shared primary styling while keeping their classes and compact geometry; Factory Create task and Settings save already use shared primary. Factory Create project uses shared secondary. `.conversation-latest` stays a contextual utility with the same radius and focus. Action rows own spacing and wrap/stack at phone widths. Compact actions are 36px on fine pointers and at least 44px on coarse pointers. |
 | Icon button | `styles.css`: `.rail-button`, `.topbar-icon-button`, `.workspace-icon-control`, `.workspace-tab-close`, `.modal-close`, `.folio-action`, `.release-trail-button`; `ConversationToast.css`: toast dismiss; `CameraPreview.css`: camera controls | Use the shared quiet surface treatment, `--radius-control` and visible focus. Icon-only actions remain at least 44px on touch layouts and keep an accessible name. Drag handles and media controls remain semantic exceptions. |
-| Text input | `styles.css`: `.settings-field input`, `.project-form`, `.task-form-field`, `.kanban-search input`, `.usage-field`; `daily/daily.css`: `.daily-page input`; `proactive.css`: `.proactive-feed-input input`; `notes/NotesArea.css` and `styles.css`: integrated note, Folio and knowledge searches | Standard fields use `--surface`, neutral `--control-rule`, `--radius-control`, inherited text and the shared focus outline. Integrated searches keep their transparent inner field when the surrounding search surface provides the boundary and focus treatment. |
-| Select | `styles.css`: `.settings-field select`, `.timeline-toolbar select`, `.usage-field select`, `.role-controls select`, `.kanban-select select`; `daily/daily.css`: `.daily-page select`; `proactive.css`: source controls | Use the same field surface, neutral boundary, control radius and visible focus as text inputs. Native option semantics and route-specific widths remain. |
-| Toggle and segmented choice | `styles.css`: `.advanced-toggle input[role="switch"]`, `.advanced-segmented`; `Presence.tsx` mode choices; `daily/daily.css`: `.daily-view-switch`; `styles.css`: `.usage-segmented`; `ProjectsPage.tsx`: `.project-policy-choice` native radios | Preserve native radio/switch semantics. Selected choices use the existing selected surface and text roles; selection is not communicated by border colour alone. The project policy keeps its labelled, explained two-choice radio group. |
+| Text input | `styles.css`: `.settings-field`, `.project-form`, `.task-form-field`, `.task-filter-field`, `.task-create-form`, `.task-control-form`, `.kanban-search`, `.usage-field`, `.role-controls`, `.folio-rename`; `.proactive-feed-input`; `.daily-page`; `NotesArea.css`: note title and folder-name fields | The shared field rule uses `--surface`, `--control-rule`, `--radius-control`, `--type-body`, one placeholder treatment and the `--focus` visible outline. Fine-pointer fields are 38px minimum; coarse-pointer fields are 44px minimum with 16px text. Integrated Knowledge, Folio and chat searches keep their transparent inner fields and host-provided boundary/focus. |
+| Select | `styles.css`: `.settings-field select`, `.timeline-toolbar select`, `.usage-field select`, `.role-controls select`, `.kanban-select select`; `.daily-page select` | Use the text-field height, surface, neutral boundary, radius and focus. A CSS arrow replaces browser-specific arrow geometry; inherited `color-scheme` follows light/dark themes while native option semantics and route widths remain. |
+| Textarea | `styles.css`: settings, project/task forms, task controls, and Daily fields; `NotesArea.css`: title-adjacent fields and source editor | Form textareas share the field surface and boundary, have a 120px minimum height and resize vertically. The Notes source editor retains its editor-specific font and layout; the chat composer retains its integrated surface. |
+| Checkbox and radio | `styles.css`: `.choice`, `.theme-choice-group`, `.project-policy-choice`; `SettingsPage.tsx` and `ProjectsPage.tsx` | Keep native semantics and checked marks, use a common 18px visual size and focus outline, and preserve a 44px coarse-pointer hit area through the labelled choice. Selected project policy remains explained in plain language. |
+| Switch and segmented choice | `styles.css`: `.advanced-toggle input[role="switch"]`, `.advanced-segmented`, `.usage-segmented`; `ProactiveSettings.tsx`; `Presence.tsx` mode choices; `daily/daily.css`: `.daily-view-switch` | Switches share a 44×26px track and moving thumb. Segmented choices retain the selected surface and weight, use the common focus treatment, wrap at narrow widths, and reach 44px on coarse pointers. Native radio/switch semantics and existing selection behavior remain. |
 | Surface or card | `styles.css`: `.panel`, `.workspace`, `.settings-section`, `.project-item`, `.kanban-column`, `.kanban-card`, `.jobs-popover`, `.modal`; `daily/daily.css`: `.daily-page`, `.daily-records`; `proactive.css` and `styles.css`: `.proactive-item`, `.proactive-block` | Content panels use existing surface roles, `--rule`, panel geometry and `--panel-shadow`. Settings sections now use the same shared panel treatment as project cards; the sticky save bar uses a panel shape instead of a capsule. Stage-backed conversation glass remains distinct because it is part of the accepted workspace composition. |
 | List row | `styles.css`: `.activity-list`, `.jobs-list`, `.jobs-item`, `.kanban-card`; `daily/daily-overview.css`: `.daily-overview-row`; `daily/daily.css`: `.daily-table`; `proactive.css`: `.proactive-item-row`, `.proactive-source-row`, `.proactive-runs-list` | Scannable collections use neutral `--rule` separators and consistent spacing. Keep cards only for distinct units of work or context; tables retain their real tabular structure. |
 | Chip or badge | `styles.css`: `.task-chip`, `.task-state-chip`, `.jobs-outcome`; `daily/daily-overview.css`: `.daily-status`; `proactive.css`: `.proactive-new`, `.proactive-urgency` | Reserve `--radius-pill` for compact status and category marks. Keep a readable label, icon or other non-colour signal with status colour. Interactive tabs, filters and actions use `--radius-control`. |
@@ -253,8 +255,8 @@ an unrelated selector's exemption.
 | --- | --- | --- |
 | Radius | `0`; `50%`; `.deployment-add` at `14px` | Square edges and true circles are intentional; the deployment button is owned by P14-03. |
 | Side borders | Entries in the classification table above | Structural separators and functional grip glyph only; 1px neutral `--rule`. |
-| Inset shadows | Three `.conversation-history .composer-send` rules; two `.input-orb span` states; `.conversation-latest` and its hover state | Button rules are P14-03-owned; the orb's actual interior shading is not a pseudo-border. |
-| Raw colors | `.composer-send:not(:disabled)` background; `.input-orb span` background; `.conversation-latest` shadow | Existing button/voice-control highlights are P14-03-owned; exact values are pinned. |
+| Inset shadows | Two `.input-orb span` states | The inset shading is part of the genuine circular voice orb, not a button border. |
+| Raw colors | `.input-orb span` background | The highlight and stage surface belong to the semantic voice orb; button hierarchy colors use tokens. |
 
 Shared panels, dialogs, popovers, cards, selected rows and hover states now use
 the established surface roles, neutral `--rule`, and `--panel-shadow`. Selected
@@ -276,3 +278,43 @@ skip link. Reduced-motion emulation kept the page content available. These are
 local synthetic Chromium checks, not live-service or human acceptance. Usage,
 Status, Knowledge, Notes, and a separate healthy Factory board view were not
 captured in this bounded screenshot set.
+
+### P14-07 rendered checks (18 October 2026)
+
+Captured the five button variants in rest, hover, pressed, focus-visible,
+disabled and busy states in the scratch gallery at 390×844 (touch) and
+1440×900, light and dark. The gallery also shows Settings save, Factory task
+actions, a danger confirmation, an empty-state action and the chat composer.
+Four actual-app composites add Settings, the Factory board and chat at each
+viewport/theme. All samples use synthetic data:
+
+| View | Light | Dark |
+| --- | --- | --- |
+| Gallery, 1440×900 | [before](ui/p14-07/before-light-desktop.webp) · [after](ui/p14-07/after-light-desktop.webp) | [before](ui/p14-07/before-dark-desktop.webp) · [after](ui/p14-07/after-dark-desktop.webp) |
+| Gallery, 390×844 touch | [before](ui/p14-07/before-light-touch.webp) · [after](ui/p14-07/after-light-touch.webp) | [before](ui/p14-07/before-dark-touch.webp) · [after](ui/p14-07/after-dark-touch.webp) |
+| Actual app composite, 1440×900 | [Settings, Factory and chat](ui/p14-07/after-app-light-desktop.webp) | [Settings, Factory and chat](ui/p14-07/after-app-dark-desktop.webp) |
+| Actual app composite, 390×844 touch | [Settings, Factory and chat](ui/p14-07/after-app-light-touch.webp) | [Settings, Factory and chat](ui/p14-07/after-app-dark-touch.webp) |
+
+Chromium contrast ratios below are the minimum of top and bottom interior
+samples after state transitions settled; the tonal gradients are vertical.
+Busy labels are visually hidden beneath the inline Loader, so there is no
+visible label sample for that state; the accessible name remains unchanged.
+
+| Theme | Primary | Secondary | Ghost | Danger | Filled danger |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Light | 4.63:1 | 12.02:1 | 12.15:1 | 5.53:1 | 5.92:1 |
+| Dark | 6.96:1 | 12.25:1 | 16.13:1 | 6.32:1 | 6.24:1 |
+
+The outer focus outline measured 4.62:1 against the light page and 14.40:1
+against the dark page. The weakest of the two visible focus bands, measured
+against both its page and button, was 4.49:1 in light and 9.25:1 in dark.
+Forced-colours emulation removed gradients and resolved the boundary and focus
+to system colours ([capture](ui/p14-07/forced-colors.webp)). More-contrast
+emulation removed gradients; reduced-motion emulation produced no button
+transition or press transform, while state colours remained. Coarse-pointer
+button targets, including the composer send action, were 44px high (44×44px
+for the send action). No horizontal overflow was found at 320px or at the
+390px app viewport, and Chromium reported no console errors.
+
+These are local synthetic Chromium results, not live-service, physical-device
+or human acceptance.

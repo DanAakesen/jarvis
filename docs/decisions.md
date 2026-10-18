@@ -1,13 +1,47 @@
 # Decisions
 
+## Discover vault tasks in source notes using native Tasks markers (18 October 2026; P13-18 / #999)
+
+Read safe Markdown notes under `Personal/` and `Work/` recursively, including
+their inboxes, and the existing root `Task.md` or `Tasks.md` dashboard.
+Exclude Archive path segments (case-insensitive), hidden paths and unsafe note
+paths. Preserve ambiguous-root detection, but allow scoped notes without a root
+dashboard. This supersedes the root-only read scope of P13-07.
+
+Treat native `⏫` as P1 - High alongside legacy `priority:: P1 - High` and
+`priority: P1 - High`. `🔼` is P2 - Medium; no priority is P3 - Normal.
+Neither those values nor `🔽`/`⏬` qualifies for findings or reminders.
+Assumption: `🔺` is outside the supported priority scale and is not high.
+Parse `🕒 HH:mm` independently of its position around `📅 YYYY-MM-DD`,
+using Copenhagen local time. Preserve trailing date/time and legacy due fields;
+date-only tasks remain due at 23:59. Strip clock/time, priority and the existing
+Tasks metadata emoji and their recognized date, recurrence, ID and
+completion-action payloads from reminder/finding text, and ignore fenced examples.
+
+Share parsed-task caching by vault client, path and tree blob SHA between the
+source and ticker. Bound each scan to 256 files, 4 MiB total content, 256 KiB per
+file and four concurrent reads, retaining the 20-second deadline. Unknown blob
+sizes reserve 256 KiB. A skipped oversized file, cap, failed read or tree/content
+SHA race makes the whole scan unavailable, not empty or partially successful;
+the ticker retains its bounded verification retries and suppression policy.
+Only complete scans replace the cache. Reminder identity stays normalized text
+plus due instant, independent of path, and duplicate facts are collapsed before
+the fact cap, preserving explicit-time eligibility across duplicates.
+The 30-second ticker cadence and existing one-hour reminder lead
+time, flags and release controls are unchanged.
+
+Keep the writer's root-only, add-only "Suggested by Jarvis" behavior unchanged.
+Limitation: suggestion deduplication still checks the root file and durable
+receipts, not all source notes. Widening it would couple writes to scan limits,
+failures and snapshot freshness; defer that write-path change.
+Validation uses synthetic notes only, not private vault content or live delivery.
+
 ## Use one refined button hierarchy across the web app (18 October 2026; P14-03 / #969)
 
 Keep the existing class names and route behavior while making button intent
-visible in the shared stylesheet. Primary remains the existing primary fill;
-secondary is a distinct neutral surface, ghost is quiet, danger is low
-emphasis, and confirmed destructive actions use the filled danger modifier.
-All variants use the existing control radius, focus outline and semantic
-surface/state tokens; no decorative control rim or new palette is introduced.
+visible in the shared stylesheet. This decision's flat primary fill and lack of
+button rims are superseded by P14-07 below; its hierarchy, route behavior,
+control radius, semantic state tokens, and no-new-palette constraints remain.
 
 Buttons no longer carry layout margins. Shared action groups own spacing,
 wrapping, phone stacking and primary-last ordering. Busy controls keep their
@@ -15,10 +49,33 @@ disabled state and accessible name while the shared inline Loader overlays a
 label that still reserves the button's width. This is a presentation-only
 change, not a change to actions, confirmation boundaries or API behavior.
 
+## Redesign primary and secondary button surfaces (18 October 2026; P14-07 / #990)
+
+Dan's direct instruction on 18 October 2026 authorizes a button-only appearance
+change, superseding the flat primary fill and no-glow constraints in Shared
+control geometry and P14-03. Primary and filled danger use token-based tonal
+gradients, a real tinted border and one calm accent-colored shadow; hover
+strengthens the shadow and pressed state darkens the fill. Secondary and
+unfilled danger use visibly bounded tinted surfaces, while ghost stays
+text-only. Focus uses a two-band ring so its inner page-colored separator
+contrasts with the button and the outer `--focus` outline contrasts with the
+page. More-contrast and forced-color modes remove decorative gradients/glows;
+reduced motion removes state transitions and press movement.
+
+The composer send and Factory job “Open” controls retain their specialized
+classes and dimensions but share primary styling and states. Factory task
+creation and Settings save were already shared; the Factory “Create project”
+action now keeps shared secondary styling. “Jump to latest” stays a contextual
+utility with a surfaced neutral boundary and shared radius/focus. The voice orb
+remains specialized because it represents voice-mode entry rather than a
+primary action. Button behavior, handlers, accessible names, routes, size
+system, action-group spacing and confirmation boundaries are unchanged.
+
 ## Notify only on P1 - High vault tasks (18 October 2026; #996)
 
 Proactive todo findings and reminders are eligible only for open vault tasks
-explicitly marked `priority:: P1 - High` or `priority: P1 - High`. Missing and
+explicitly marked `priority:: P1 - High` or `priority: P1 - High` (extended to
+native `⏫` by P13-18 above). Missing and
 lower priority values are not notification-worthy. Re-check priority at reminder
 delivery; if the vault cannot establish the current priority after bounded
 retries, suppress rather than send an unverified reminder. This reuses the
@@ -5462,3 +5519,53 @@ query as the Proactive page. It is composed only behind the existing
 `JARVIS_PROACTIVE_ENABLED` flag, returns only bounded display fields marked as
 untrusted data, and cannot change item state or authorize actions. Reusing the
 page's query keeps both views consistent and avoids creating a second read model.
+
+## P14-08 — One form-control system (18 October 2026; #991)
+
+Keep field geometry and state styling in the existing shared web stylesheet,
+joining route controls through their current wrappers rather than changing
+field names, handlers or validation rules. Use 38px compact fields on fine
+pointers and 44px/16px fields on coarse pointers; preserve native select,
+checkbox and radio semantics while providing one CSS select arrow and one
+switch geometry. Invalid fields keep a linked message and `aria-invalid`;
+Notes folder-name errors now expose their existing text through
+`aria-describedby`. Guard the shared token, radius, focus and coarse-pointer
+rules in the existing stylesheet tests. The Notes source editor and integrated
+search fields remain layout exceptions, and Daily markup is unchanged.
+
+## P12-25 — Conditional Daily section availability (18 October 2026)
+
+The owner approved an optional `isAvailable(sources)` predicate on section
+definitions, combined with—not replacing—the existing all-required-sources
+check. This expresses Body & sleep's sleep-OR-metrics-and-catalogue requirement
+without a shared registry or changes to existing sections. Views independently
+check sources. Use a section-local sleep SVG rather than changing the shared
+chart: stacked stages, total-only nights and unknown values need explicit
+semantics, while existing line, grouped-bar and area output stays untouched.
+Keep summaries limited to recorded numeric days/nights, split metric units,
+and label incomplete reads. No backend, contract, write or access-control
+change is part of this decision.
+
+## P12-24 read-only Nutrition inside Daily (18 October 2026; #979)
+
+Use the merged Daily plug-in contract and shared UI rather than a new route,
+registry or nutrition read service. Day totals reconcile with the displayed
+nondeleted meals; optional daily aggregates supply Trend and known neighbouring
+logged dates, not replacement day totals. Keep missing nutrients unknown,
+partial sums labelled as lower bounds, and unlogged chart dates as gaps.
+Compare energy only with the configured resting-minus-deficit baseline and
+explicitly exclude activity; never infer a missing target. Favourites and plans
+are saved definitions, not consumed meals. Logging and corrections remain in
+chat under the existing native approval boundary. The original Daily remains
+canonical; synthetic inspection does not establish live source parity.
+
+## P12-23 — Read-only Daily Workouts (18 October 2026)
+
+Use the merged Daily plug-in, pagination and UI contracts without backend or
+shared-component changes. Continue capped reads in explicit ten-page batches;
+label incomplete totals and do not aggregate unlike or unknown units. Keep the
+selected workout in a section-owned URL parameter, retain the list for Back,
+and gate heart rate and recorded detail independently by capabilities. Render
+the merged `{ id, detail }` result using Data's existing escaped JSON pattern.
+Synthetic-only browser evidence is under `docs/ui/p12-23/`; live original-site
+parity remains unverified and original Daily stays canonical.
