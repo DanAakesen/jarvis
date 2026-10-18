@@ -214,7 +214,7 @@ export function NotesArea({ backendUrl, getAccessToken }: AreaProps) {
               {opening ? <Loader variant="inline" label="Opening note…" /> : editor ? (
                 <>
                   {editor.created && <label className="notes-title-label" htmlFor={`${id}-title`}>Title
-                    <input id={`${id}-title`} placeholder="Note title" value={editor.title} maxLength={160}
+                    <input id={`${id}-title`} className="form-control" placeholder="Note title" value={editor.title} maxLength={160}
                       disabled={saving || editor.revisionMissing || !!conflict} onChange={event => {
                         setEditor({ ...editor, title: event.target.value, path: newNotePath(newFolder, event.target.value) }); setError(''); setFeedback('');
                       }} />

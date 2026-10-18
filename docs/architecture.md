@@ -6055,7 +6055,47 @@ in generic tool-call audit records. Raw JSON validation runs before Fastify's
 AJV coercion; failures remain explicit tool refusals/errors. The module exposes
 no item mutation or approval capability.
 
-### Web Daily Workouts section (18 October 2026; P12-23)
+## Web Daily Body & sleep section (18 October 2026; P12-25)
+
+`apps/web/src/daily/sections/body-sleep/` is discovered through the existing
+section glob; no registry entry is added. `DailySectionDefinition.isAvailable`
+is an optional predicate evaluated in addition to every `requiredSources`
+entry. Definitions without it retain the previous filtering. Body & sleep uses
+an empty required-source list and accepts `daily.health.sleep` OR both
+`daily.health.metrics` and `daily.health.metric-catalog`; its views independently
+check their own sources and identify unavailable views without querying them.
+
+The section reads the existing owner-only query boundary through
+`daily/ui/useDailyPages`, automatically following cursors up to five pages over
+the shell period. Has-more, cap and errors remain visible; returned records do
+not prove complete source coverage. Section-local URL parameters preserve view,
+metric and night selection. Pure metric/sleep helpers own display names,
+unit separation and observation-only summaries. The sleep chart is local SVG,
+so shared `DailyChart` line, grouped-bar and area rendering is unchanged.
+Backend, contracts, navigation, mutation paths and refresh transport are unchanged.
+
+## Web Daily Nutrition section (18 October 2026; P12-24)
+
+`apps/web/src/daily/sections/nutrition/index.tsx` exports the auto-discovered
+section definition and lazy-loads its content. It requires only
+`daily.nutrition.meals`; the optional `daily.nutrition.days`, favourites and
+plans sources gate their own views. The merged `DailySectionDefinition` and
+`DailySectionProps` are the integration contract; no shared registry, shell
+implementation, backend or contracts are changed. The shell owns the period and
+refresh version, while Nutrition stores its active view and selected date in URL search
+parameters and preserves local inspection state during refresh.
+
+Nutrition reads through the existing Daily clients and `useDailyPages`.
+Library auto-loading is bounded to five pages per source, and filters apply
+only to loaded items. Day totals derive from displayed nondeleted meals rather
+than an independently read aggregate. Pure local helpers handle nullable
+nutrients, Copenhagen dates, target comparisons, chart gaps and Monday-start
+weekly averages. Targets use the existing `loadNutritionTargets` boundary.
+Structured source content is rendered as escaped text, with a bounded fallback.
+All reads retain the existing owner-only authorization; no writer, logging
+endpoint, migration, provider call or production switch is introduced.
+
+## Web Daily Workouts section (18 October 2026; P12-23)
 
 `apps/web/src/daily/sections/workouts/index.tsx` exports the merged
 `DailySectionDefinition` and lazy-loads its component. Existing folder discovery

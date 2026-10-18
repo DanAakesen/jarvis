@@ -82,6 +82,11 @@ decorative coloured boxes, bevels or inset-shadow control borders. Preserve
 semantic status chips, necessary neutral structure, accessible selected and
 disabled states, visible keyboard focus and usable touch targets. Reuse the
 existing visual direction; no replacement theme or control framework is needed.
+Dan's direct instruction of 18 October 2026 supersedes the earlier button
+appearance limits for buttons only: shared primary actions may use a token-based
+tonal gradient, visible rim and restrained accent glow, with equally clear
+secondary, ghost and danger treatments. Other controls retain the shared
+geometry and surface constraints.
 See `DESIGN.md` for the contract and `docs/agent-context.md` for consumed guidance.
 
 ## One balanced 3D stage budget (15 October 2026; local)
@@ -1396,7 +1401,34 @@ read-only, returns bounded untrusted finding text, and does not change item stat
 or grant action authority. It remains absent when
 `JARVIS_PROACTIVE_ENABLED` is off.
 
-### Daily page: Workouts (18 October 2026; P12-23)
+## Daily Body & sleep (18 October 2026; P12-25)
+
+The owner-only Daily page includes a read-only Body & sleep section when sleep
+or both metric sources are exposed. Body browses every recorded metric through
+a searchable catalogue and a native selector, with separate trends and daily
+tables for each unit. Summary figures use only days with numeric observations;
+missing days are not zeroes and partial reads do not establish complete coverage.
+Sleep shows recorded nights, stages and nullable figures, with an inspectable
+night detail. Totals without stages remain explicitly distinct from recorded
+stages. The selected view, metric and night belong in the URL. This extends the
+existing owner-authorised query workflow without new sources, writes, coaching,
+recovery, recomp or TickTick integration; original Daily remains canonical.
+
+## Daily Nutrition day, trend and library (18 October 2026; P12-24)
+
+The owner can browse recorded meals by Copenhagen calendar day inside Daily,
+compare null-aware totals with their own configured targets, follow energy and
+protein over the selected period, and filter loaded favourites and meal plans.
+Nutrition is read-only: logging and corrections stay in chat with the existing
+native approval rules, and the original Daily remains canonical. The section
+requires the meals source; Trend and Library appear only when their respective
+sources are exposed. Unknown values never become zero, partial totals are lower
+bounds, and days without meals remain gaps. The resting-burn-minus-deficit
+comparison is explicitly a baseline before activity, not the full allowance.
+No missing target is estimated. This adds no coaching, recovery, recomposition,
+TickTick integration or permission changes.
+
+## Daily page: Workouts (18 October 2026; P12-23)
 
 The read-only Workouts section now appears when `daily.health.workouts` is
 exposed. Over the shared period it shows loaded workout count, distinct recorded

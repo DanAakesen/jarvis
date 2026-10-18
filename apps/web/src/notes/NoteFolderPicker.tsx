@@ -91,11 +91,18 @@ export function NoteFolderPicker({ value, onChange, loadFolders, disabled = fals
     }}>
     <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
   </button>;
+  const folderNameErrorId = `${id}-folder-name-error`;
+  const folderDuplicateErrorId = `${id}-folder-name-duplicate`;
   const folderEntry = (path: string) => adding === path && <div className="notes-folder-entry">
     <label className="visually-hidden" htmlFor={`${id}-folder-name`}>New folder in {path || 'Vault root'}</label>
     <div className="notes-folder-input-row">
-      <input ref={folderInput} id={`${id}-folder-name`} value={name} maxLength={170} disabled={disabled}
-        placeholder="Folder name" aria-invalid={!!name && (!validName || duplicate)} onChange={event => setName(event.target.value)}
+      <input ref={folderInput} id={`${id}-folder-name`} className="form-control" value={name} maxLength={170} disabled={disabled}
+        placeholder="Folder name" aria-invalid={!!name && (!validName || duplicate)}
+        aria-describedby={[
+          name && !validName ? folderNameErrorId : null,
+          duplicate ? folderDuplicateErrorId : null,
+        ].filter(Boolean).join(' ') || undefined}
+        onChange={event => setName(event.target.value)}
         onKeyDown={event => {
           if (event.key === 'Enter') { event.preventDefault(); addFolder(); }
           if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); cancelFolder(); }
@@ -108,8 +115,8 @@ export function NoteFolderPicker({ value, onChange, loadFolders, disabled = fals
         <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="m6 6 12 12M18 6 6 18" /></svg>
       </button>
     </div>
-    {name && !validName && <p role="alert">Use a short folder name without slashes, a leading dot or URL characters.</p>}
-    {duplicate && <p role="alert">This folder already exists. Select it in the tree.</p>}
+    {name && !validName && <p className="field-error" id={folderNameErrorId} role="alert">Use a short folder name without slashes, a leading dot or URL characters.</p>}
+    {duplicate && <p className="field-error" id={folderDuplicateErrorId} role="alert">This folder already exists. Select it in the tree.</p>}
   </div>;
   const rows = (nodes: Folder[]) => <ul>{nodes.map(folder => <li key={folder.path}>
     <div className="notes-folder-row">

@@ -59,7 +59,13 @@
   --surface-blur: 16px;
   --soft-shadow: 0 2px 8px rgb(32 37 44 / 6%), 0 20px 50px rgb(32 37 44 / 4%);
   --panel-shadow: 0 1px 2px rgb(32 37 44 / 5%), 0 18px 48px rgb(32 37 44 / 5%);
-  --button-primary-shadow: 0 2px 4px rgb(32 37 44 / 14%);
+  --button-primary-shadow:
+    0 2px 4px color-mix(in srgb, var(--primary-action) 28%, transparent),
+    0 4px 12px color-mix(in srgb, var(--primary-action) 16%, transparent);
+  --button-danger-shadow:
+    0 2px 4px color-mix(in srgb, var(--error) 28%, transparent),
+    0 4px 12px color-mix(in srgb, var(--error) 16%, transparent);
+  --danger-action-text: var(--highlight-solid);
   --dialog-shadow: 0 20px 64px rgb(32 37 44 / 22%);
   --success-surface: #e3f2f5;
   --warning: #835000;
@@ -180,7 +186,7 @@
   --surface-blur: 24px;
   --soft-shadow: 0 22px 70px rgb(0 0 0 / 30%);
   --panel-shadow: 0 16px 46px rgb(0 0 0 / 26%);
-  --button-primary-shadow: 0 2px 6px rgb(0 0 0 / 34%);
+  --danger-action-text: var(--ink-solid);
   --dialog-shadow: 0 20px 64px rgb(0 0 0 / 62%);
   --success-surface: #14323d;
   --warning: #ffc27a;
@@ -527,44 +533,101 @@ dd { margin: 0; color: var(--text-muted); overflow-wrap: anywhere; }
 .home-link:hover { color: var(--focus); }
 .primary-button, .secondary-button, .ghost-button, .danger-button {
   display: inline-flex; max-width: 100%; min-width: 0; min-height: 44px; align-items: center; justify-content: center;
-  gap: var(--space-2); padding: 8px 16px; border: 0; border-radius: var(--radius-control); font: inherit;
+  gap: var(--space-2); padding: 8px 16px; border: 1px solid transparent; border-radius: var(--radius-control); font: inherit;
   font-weight: 650; line-height: 1.25; text-align: center; white-space: normal; overflow-wrap: anywhere;
-  cursor: pointer; transition: background-color var(--motion-press) var(--ease-standard), color var(--motion-press) var(--ease-standard),
+  cursor: pointer; transition: background var(--motion-press) var(--ease-standard), border-color var(--motion-press) var(--ease-standard),
+    box-shadow var(--motion-press) var(--ease-standard), color var(--motion-press) var(--ease-standard),
     transform var(--motion-press) var(--ease-standard);
 }
-.primary-button { padding-inline: 18px; background: var(--primary-action); color: var(--primary-action-text); box-shadow: var(--button-primary-shadow); }
-.primary-button:hover:not(:disabled, [aria-busy="true"]) { background: var(--primary-action-hover); }
-.primary-button:active:not(:disabled, [aria-busy="true"]) { transform: translateY(1px); }
-.secondary-button { background: color-mix(in srgb, var(--text) 8%, var(--surface)); color: var(--text); }
-.secondary-button:hover:not(:disabled, [aria-busy="true"]) { background: color-mix(in srgb, var(--text) 14%, var(--surface)); }
-.secondary-button:active:not(:disabled, [aria-busy="true"]) { background: color-mix(in srgb, var(--text) 18%, var(--surface)); transform: translateY(1px); }
+.primary-button, .jobs-action-primary, .conversation-history .composer-send {
+  border-color: color-mix(in srgb, var(--primary-action) 54%, var(--highlight-solid));
+  background: linear-gradient(180deg, color-mix(in srgb, var(--primary-action) 93%, var(--highlight-solid)),
+    color-mix(in srgb, var(--primary-action) 94%, var(--ink-solid)));
+  color: var(--primary-action-text); box-shadow: var(--button-primary-shadow);
+}
+.primary-button:hover:not(:disabled, [aria-busy="true"]),
+.jobs-action-primary:hover:not(:disabled, [aria-busy="true"]),
+.conversation-history .composer-send:hover:not(:disabled, [aria-busy="true"]) {
+  border-color: color-mix(in srgb, var(--primary-action-hover) 48%, var(--highlight-solid));
+  background: linear-gradient(180deg, color-mix(in srgb, var(--primary-action-hover) 94%, var(--highlight-solid)),
+    color-mix(in srgb, var(--primary-action-hover) 92%, var(--ink-solid)));
+  box-shadow: 0 3px 8px color-mix(in srgb, var(--primary-action) 40%, transparent),
+    0 0 18px color-mix(in srgb, var(--primary-action) 28%, transparent);
+}
+.primary-button:active:not(:disabled, [aria-busy="true"]),
+.jobs-action-primary:active:not(:disabled, [aria-busy="true"]),
+.conversation-history .composer-send:active:not(:disabled, [aria-busy="true"]) {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--primary-action) 84%, var(--ink-solid)),
+    color-mix(in srgb, var(--primary-action) 78%, var(--ink-solid)));
+  transform: translateY(1px);
+}
+.secondary-button, .jobs-action:not(.jobs-action-primary) {
+  border-color: var(--control-rule); background: color-mix(in srgb, var(--text) 6%, var(--surface)); color: var(--text);
+}
+.secondary-button:hover:not(:disabled, [aria-busy="true"]),
+.jobs-action:not(.jobs-action-primary):hover:not(:disabled, [aria-busy="true"]) {
+  background: color-mix(in srgb, var(--text) 12%, var(--surface));
+}
+.secondary-button:active:not(:disabled, [aria-busy="true"]),
+.jobs-action:not(.jobs-action-primary):active:not(:disabled, [aria-busy="true"]) {
+  background: color-mix(in srgb, var(--text) 18%, var(--surface)); transform: translateY(1px);
+}
 .ghost-button { background: transparent; color: var(--text); }
 .ghost-button:hover:not(:disabled, [aria-busy="true"]) { background: var(--glass-hover); }
 .ghost-button:active:not(:disabled, [aria-busy="true"]) { background: var(--glass-pressed); transform: translateY(1px); }
-.danger-button { background: color-mix(in srgb, var(--error-surface) 72%, var(--surface)); color: var(--error); }
+.danger-button {
+  border-color: color-mix(in srgb, var(--error) 42%, var(--surface));
+  background: color-mix(in srgb, var(--error-surface) 72%, var(--surface)); color: var(--error);
+}
 .danger-button:hover:not(:disabled, [aria-busy="true"]) { background: var(--error-surface); }
-.danger-button:active:not(:disabled, [aria-busy="true"]) { background: color-mix(in srgb, var(--error-surface) 76%, var(--error)); transform: translateY(1px); }
-.danger-button--filled { background: var(--error); color: var(--page); box-shadow: var(--button-primary-shadow); }
-.danger-button--filled:hover:not(:disabled, [aria-busy="true"]) { background: color-mix(in srgb, var(--error) 88%, var(--text)); }
-.danger-button--filled:active:not(:disabled, [aria-busy="true"]) { transform: translateY(1px); }
-.primary-button:focus-visible, .secondary-button:focus-visible, .ghost-button:focus-visible, .danger-button:focus-visible {
-  outline: 3px solid var(--focus); outline-offset: 3px;
+.danger-button:active:not(:disabled, [aria-busy="true"]) {
+  background: color-mix(in srgb, var(--error-surface) 76%, var(--error)); transform: translateY(1px);
+}
+.danger-button--filled {
+  border-color: color-mix(in srgb, var(--error) 52%, var(--highlight-solid));
+  background: linear-gradient(180deg, color-mix(in srgb, var(--error) 93%, var(--highlight-solid)),
+    color-mix(in srgb, var(--error) 94%, var(--ink-solid)));
+  color: var(--danger-action-text); box-shadow: var(--button-danger-shadow);
+}
+.danger-button--filled:hover:not(:disabled, [aria-busy="true"]) {
+  border-color: color-mix(in srgb, var(--error) 44%, var(--highlight-solid));
+  background: linear-gradient(180deg, color-mix(in srgb, var(--error) 88%, var(--highlight-solid)),
+    color-mix(in srgb, var(--error) 90%, var(--ink-solid)));
+  box-shadow: 0 3px 8px color-mix(in srgb, var(--error) 40%, transparent),
+    0 0 18px color-mix(in srgb, var(--error) 28%, transparent);
+}
+.danger-button--filled:active:not(:disabled, [aria-busy="true"]) {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--error) 84%, var(--ink-solid)),
+    color-mix(in srgb, var(--error) 78%, var(--ink-solid)));
+  transform: translateY(1px);
+}
+.primary-button:focus-visible, .secondary-button:focus-visible, .ghost-button:focus-visible,
+.danger-button:focus-visible, .danger-button--filled:focus-visible, .jobs-action:focus-visible,
+.conversation-history .composer-send:focus-visible {
+  outline: 3px solid var(--focus); outline-offset: 3px; box-shadow: 0 0 0 3px var(--page);
 }
 .primary-button:disabled, .secondary-button:disabled, .ghost-button:disabled, .danger-button:disabled {
-  background: var(--disabled-surface); color: var(--disabled-text); box-shadow: none; cursor: not-allowed;
+  border-color: var(--control-rule); background: var(--disabled-surface); color: var(--disabled-text); box-shadow: none; cursor: not-allowed;
 }
-.primary-button:disabled { background: var(--primary-action-disabled); color: var(--primary-action-disabled-text); }
+.primary-button:disabled, .jobs-action-primary:disabled, .conversation-history .composer-send:disabled {
+  border-color: color-mix(in srgb, var(--primary-action-disabled) 55%, var(--highlight-solid));
+  background: var(--primary-action-disabled); color: var(--primary-action-disabled-text);
+}
 .danger-button--filled:disabled { background: var(--disabled-surface); color: var(--disabled-text); }
-.primary-button[aria-busy="true"], .secondary-button[aria-busy="true"], .ghost-button[aria-busy="true"], .danger-button[aria-busy="true"] {
+.primary-button[aria-busy="true"], .secondary-button[aria-busy="true"], .ghost-button[aria-busy="true"],
+.danger-button[aria-busy="true"], .danger-button--filled[aria-busy="true"] {
   position: relative; display: inline-grid; grid-template-columns: auto; grid-template-rows: auto; place-items: center; cursor: progress;
 }
 .primary-button[aria-busy="true"] > .button-label, .secondary-button[aria-busy="true"] > .button-label,
-.ghost-button[aria-busy="true"] > .button-label, .danger-button[aria-busy="true"] > .button-label { grid-area: 1 / 1; }
+.ghost-button[aria-busy="true"] > .button-label, .danger-button[aria-busy="true"] > .button-label,
+.danger-button--filled[aria-busy="true"] > .button-label { grid-area: 1 / 1; }
 .primary-button[aria-busy="true"] > .button-label, .secondary-button[aria-busy="true"] > .button-label,
-.ghost-button[aria-busy="true"] > .button-label, .danger-button[aria-busy="true"] > .button-label { opacity: 0; }
+.ghost-button[aria-busy="true"] > .button-label, .danger-button[aria-busy="true"] > .button-label,
+.danger-button--filled[aria-busy="true"] > .button-label { opacity: 0; }
 .button-loading-indicator { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; pointer-events: none; }
 .primary-button[aria-busy="true"] > .button-loading-indicator, .secondary-button[aria-busy="true"] > .button-loading-indicator,
-.ghost-button[aria-busy="true"] > .button-loading-indicator, .danger-button[aria-busy="true"] > .button-loading-indicator {
+.ghost-button[aria-busy="true"] > .button-loading-indicator, .danger-button[aria-busy="true"] > .button-loading-indicator,
+.danger-button--filled[aria-busy="true"] > .button-loading-indicator {
   display: inline-flex; align-items: center; justify-content: center;
 }
 .primary-button > svg, .secondary-button > svg, .ghost-button > svg, .danger-button > svg {
@@ -575,9 +638,6 @@ dd { margin: 0; color: var(--text-muted); overflow-wrap: anywhere; }
 }
 .button-group--space-3 { margin-top: var(--space-3); }
 .button-group--space-4 { margin-top: var(--space-4); }
-.button-group > .primary-button, .settings-actions > .primary-button, .task-dialog-actions > .primary-button,
-.action-row > .primary-button, .button-group > .danger-button--filled, .settings-actions > .danger-button--filled,
-.task-dialog-actions > .danger-button--filled, .action-row > .danger-button--filled { order: 1; }
 @media (max-width: 600px) {
   .button-group, .settings-actions, .task-dialog-actions, .settings-save { flex-direction: column; align-items: stretch; }
   .button-group > :is(button, a), .settings-actions > :is(button, a), .task-dialog-actions > :is(button, a),
@@ -1958,7 +2018,6 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
   backdrop-filter: blur(var(--surface-blur));
   box-shadow: var(--panel-shadow);
 }
-.settings-save .primary-button { order: 2; }
 .settings-save { width: fit-content; max-width: 100%; margin-left: auto; }
 .settings-save .settings-feedback:empty { display: none; }
 .settings-save:has(.settings-feedback:empty) { padding-left: var(--space-2); }
@@ -2063,10 +2122,8 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
    --------------------------------------------------------------------------------------------- */
 .kanban-header { justify-content: flex-start; }
 .kanban-header .kanban-create-project { margin-left: auto; }
-.kanban-header .primary-button.kanban-create { box-shadow: none; }
 .kanban-header .kanban-create-project svg { width: 18px; height: 18px; }
-.kanban-create-project { display: inline-flex; align-items: center; gap: var(--space-2); min-height: 44px; background: var(--glass-hover); }
-.kanban-create-project:hover:not(:disabled) { background: var(--glass-pressed); }
+.kanban-create-project { display: inline-flex; align-items: center; gap: var(--space-2); min-height: 44px; }
 .project-dialog { display: grid; gap: var(--space-4); background: var(--surface); }
 .project-dialog h2 { margin: 0; }
 .project-dialog-part { display: grid; gap: var(--space-3); padding: var(--space-4); border: 1px solid color-mix(in srgb, var(--glass-rim-light) 30%, transparent); border-radius: var(--radius-panel); background: var(--glass-hover); }
@@ -2374,7 +2431,6 @@ a.task-chip:hover { background: var(--glass-pressed); }
 .timeline-stream-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--disabled-text); }
 .timeline-stream[data-stream="connected"] .timeline-stream-dot { background: var(--success); box-shadow: 0 0 8px var(--success); }
 .timeline-stream[data-stream="error"] .timeline-stream-dot { background: var(--error); }
-.task-timeline-filter { min-height: 30px; padding: 2px 28px 2px 10px; font-size: 13px; }
 .task-trail { position: relative; margin: 6px 0 0; padding: 0; list-style: none; }
 .task-trail::before { position: absolute; top: 8px; bottom: 8px; left: 5px; width: 2px; border-radius: 0; background: linear-gradient(var(--glass-edge-cool), color-mix(in srgb, var(--glass-edge-cool) 15%, transparent)); content: ""; }
 .task-trail > li { position: relative; display: grid; grid-template-columns: 12px minmax(0, 1fr); gap: 12px; padding: 6px 0; }
@@ -2635,13 +2691,18 @@ a.task-chip:hover { background: var(--glass-pressed); }
 .jobs-item[data-status="failed"] .jobs-item-detail { color: var(--warning-text); }
 .jobs-item-error { color: var(--error); font-size: 12.5px; }
 .jobs-item-actions { display: flex; flex-direction: column; gap: 4px; }
-.jobs-action { display: inline-flex; min-height: 36px; max-width: 100%; align-items: center; justify-content: center; gap: var(--space-1); padding: 6px 12px; border: 0; border-radius: var(--radius-control); background: color-mix(in srgb, var(--text) 8%, var(--surface)); color: var(--text); font: inherit; font-size: 12.5px; font-weight: 650; line-height: 1.25; text-align: center; white-space: normal; overflow-wrap: anywhere; cursor: pointer; transition: background-color var(--motion-press) var(--ease-standard), transform var(--motion-press) var(--ease-standard); }
-.jobs-action:hover:not(:disabled) { background: color-mix(in srgb, var(--text) 14%, var(--surface)); }
-.jobs-action:active:not(:disabled) { background: color-mix(in srgb, var(--text) 18%, var(--surface)); transform: translateY(1px); }
-.jobs-action:disabled { background: var(--disabled-surface); color: var(--disabled-text); cursor: not-allowed; }
-.jobs-action:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
-.jobs-action-primary { background: var(--primary-action); color: var(--primary-action-text); box-shadow: var(--button-primary-shadow); }
-.jobs-action-primary:is(:hover, :active):not(:disabled) { background: var(--primary-action-hover); }
+.jobs-action {
+  display: inline-flex; min-height: 36px; max-width: 100%; align-items: center; justify-content: center; gap: var(--space-1);
+  padding: 6px 12px; border-width: 1px; border-style: solid; border-radius: var(--radius-control); font: inherit;
+  font-size: 12.5px; font-weight: 650; line-height: 1.25; text-align: center; white-space: normal;
+  overflow-wrap: anywhere; cursor: pointer;
+  transition: background var(--motion-press) var(--ease-standard), border-color var(--motion-press) var(--ease-standard),
+    box-shadow var(--motion-press) var(--ease-standard), transform var(--motion-press) var(--ease-standard);
+}
+.jobs-action:hover:not(:disabled, .jobs-action-primary) { background: color-mix(in srgb, var(--text) 12%, var(--surface)); }
+.jobs-action:active:not(:disabled, .jobs-action-primary) { background: color-mix(in srgb, var(--text) 18%, var(--surface)); transform: translateY(1px); }
+.jobs-action:disabled:not(.jobs-action-primary) { background: var(--disabled-surface); color: var(--disabled-text); cursor: not-allowed; }
+.jobs-action-primary { font-size: 12.5px; padding: 6px 12px; }
 @media (pointer: coarse) { .jobs-action { min-height: 44px; } }
 @media (prefers-reduced-motion: reduce) { .jobs-popover { animation: none; } .jobs-ring-value { transition: none; } }
 :root[data-motion="reduced"] .jobs-popover { animation: none; }
@@ -3115,7 +3176,7 @@ a.task-chip:hover { background: var(--glass-pressed); }
 @media (max-width: 700px) {
   .kanban-header { grid-template-columns: minmax(0, 1fr); grid-template-areas: "title" "pulse" "actions"; gap: 12px; }
   .kanban-header h1 { font-size: 30px; }
-  .kanban-header .kanban-pulse { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  .kanban-header .kanban-pulse { min-width: 0; flex-wrap: wrap; }
   .kanban-header .kanban-pulse li { flex: none; }
   .kanban-header-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
   .kanban-header-actions .kanban-create { width: 100%; padding: 0 12px; }
@@ -3334,7 +3395,7 @@ a.task-chip:hover { background: var(--glass-pressed); }
 .deployment-name { display: grid; min-width: 0; font-family: var(--font-mono); font-size: 13px; font-weight: 600; overflow-wrap: anywhere; }
 .deployment-meta { color: var(--text-muted); font-family: inherit; font-size: var(--type-caption); font-weight: 500; }
 .deployment-confirm { display: flex; gap: var(--space-2); }
-.deployment-add { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)) auto; align-items: end; column-gap: 10px; row-gap: 42px; padding: 12px; border-radius: 14px;
+.deployment-add { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)) auto; align-items: end; column-gap: 10px; row-gap: 10px; padding: 12px; border-radius: 14px;
   background: color-mix(in srgb, var(--glass-edge-cool) 6%, transparent); }
 .advanced-group { display: grid; gap: 12px; margin-top: 18px; }
 .advanced-field input[type="number"] { width: 100%; }
@@ -3406,6 +3467,8 @@ a.task-chip:hover { background: var(--glass-pressed); }
   :is(.primary-button, .secondary-button, .ghost-button, .danger-button, .settings-back,
     .jobs-action, .workspace-control, .workspace-tab-close, .workspace-tab-pin, .modal-close,
     .folio-action, .release-trail-button, .release-trail-open) { min-height: 44px; }
+  :is(.jobs-action-primary, .conversation-history .composer-send) { min-height: 44px; }
+  .conversation-history .composer-send { width: 44px; height: 44px; }
   :is(.workspace-tab-close, .workspace-tab-pin, .modal-close, .folio-action) {
     width: 44px; min-width: 44px; height: 44px; min-height: 44px;
   }
@@ -3472,8 +3535,7 @@ a.task-chip:hover { background: var(--glass-pressed); }
 .collapsible-toggle:active .collapsible-title { color: var(--text-muted); }
 .settings-page > .settings-save { position: static; width: auto; max-width: none; margin: 16px 0 0; padding: 0; border-radius: 0; background: none; backdrop-filter: none; box-shadow: none;
   justify-content: flex-end; }
-.settings-page > .settings-save .settings-feedback { order: 1; margin: 0; }
-.settings-page > .settings-save .primary-button { order: 2; }
+.settings-page > .settings-save .settings-feedback { margin: 0; }
 /* Memory: what Jarvis remembers, between the capture switch and recall tuning. The detail opens only once a memory is chosen. */
 .settings-subheading { margin: 22px 0 10px; color: var(--text); font-size: var(--type-body); font-weight: 650; }
 .memory-settings .memory-search { margin: 0 0 10px; }
@@ -3575,3 +3637,426 @@ a.task-chip:hover { background: var(--glass-pressed); }
 }
 :root[data-motion="reduced"] .app-shell .workspace-canvas-layered .workspace-window:not(.workspace-window-conversation) { transition: none; }
 @media (prefers-reduced-motion: reduce) { .app-shell .workspace-canvas-layered .workspace-window:not(.workspace-window-conversation) { transition: none; } }
+
+@media (prefers-reduced-motion: reduce) {
+  :is(.primary-button, .secondary-button, .ghost-button, .danger-button, .danger-button--filled,
+    .jobs-action, .conversation-history .composer-send, .conversation-latest) { transition: none; }
+  :is(.primary-button, .secondary-button, .ghost-button, .danger-button, .danger-button--filled,
+    .jobs-action, .conversation-history .composer-send, .conversation-latest):active:not(:disabled) { transform: none; }
+  .conversation-latest { animation: none; }
+}
+:root[data-motion="reduced"] :is(.primary-button, .secondary-button, .ghost-button, .danger-button,
+  .danger-button--filled, .jobs-action, .conversation-history .composer-send, .conversation-latest) { transition: none; }
+:root[data-motion="reduced"] :is(.primary-button, .secondary-button, .ghost-button, .danger-button,
+  .danger-button--filled, .jobs-action, .conversation-history .composer-send, .conversation-latest):active:not(:disabled) { transform: none; }
+:root[data-motion="reduced"] .conversation-latest { animation: none; }
+
+:is(.primary-button, .secondary-button, .ghost-button, .danger-button, .danger-button--filled,
+  .jobs-action, .conversation-history .composer-send, .conversation-latest):focus-visible {
+  box-shadow: 0 0 0 3px var(--page);
+}
+
+@media (prefers-contrast: more) {
+  :is(.primary-button, .secondary-button, .ghost-button, .danger-button, .danger-button--filled,
+    .jobs-action, .conversation-history .composer-send, .conversation-latest):not(:disabled) {
+    background-image: none; border-color: currentColor; box-shadow: none;
+  }
+  :is(.primary-button, .jobs-action-primary, .conversation-history .composer-send):not(:disabled) {
+    background-color: var(--primary-action);
+  }
+  :is(.primary-button, .jobs-action-primary, .conversation-history .composer-send):hover:not(:disabled, [aria-busy="true"]) {
+    background-color: var(--primary-action-hover);
+  }
+  :is(.primary-button, .jobs-action-primary, .conversation-history .composer-send):active:not(:disabled, [aria-busy="true"]) {
+    background-color: color-mix(in srgb, var(--primary-action) 78%, var(--ink-solid));
+  }
+  :is(.secondary-button, .jobs-action:not(.jobs-action-primary), .conversation-latest):not(:disabled) {
+    background-color: color-mix(in srgb, var(--text) 6%, var(--surface));
+  }
+  :is(.secondary-button, .jobs-action:not(.jobs-action-primary), .conversation-latest):hover:not(:disabled, [aria-busy="true"]) {
+    background-color: color-mix(in srgb, var(--text) 12%, var(--surface));
+  }
+  :is(.secondary-button, .jobs-action:not(.jobs-action-primary), .conversation-latest):active:not(:disabled, [aria-busy="true"]) {
+    background-color: color-mix(in srgb, var(--text) 18%, var(--surface));
+  }
+  .ghost-button:not(:disabled) { background-color: transparent; }
+  .ghost-button:hover:not(:disabled, [aria-busy="true"]) { background-color: var(--glass-hover); }
+  .ghost-button:active:not(:disabled, [aria-busy="true"]) { background-color: var(--glass-pressed); }
+  .danger-button:not(:disabled) { background-color: var(--error-surface); }
+  .danger-button:hover:not(:disabled, [aria-busy="true"]) { background-color: var(--error-surface); }
+  .danger-button:active:not(:disabled, [aria-busy="true"]) {
+    background-color: color-mix(in srgb, var(--error-surface) 76%, var(--error));
+  }
+  .danger-button--filled:not(:disabled) { background-color: var(--error); }
+  .danger-button--filled:hover:not(:disabled, [aria-busy="true"]) {
+    background-color: color-mix(in srgb, var(--error) 88%, var(--text));
+  }
+  .danger-button--filled:active:not(:disabled, [aria-busy="true"]) {
+    background-color: color-mix(in srgb, var(--error) 78%, var(--ink-solid));
+  }
+  :is(.primary-button, .secondary-button, .ghost-button, .danger-button, .danger-button--filled,
+    .jobs-action, .conversation-history .composer-send, .conversation-latest):focus-visible {
+    box-shadow: 0 0 0 3px var(--page);
+  }
+}
+@media (forced-colors: active) {
+  :is(.primary-button, .secondary-button, .ghost-button, .danger-button, .danger-button--filled,
+    .jobs-action, .conversation-history .composer-send, .conversation-latest):not(:disabled) {
+    border-color: ButtonText; background: ButtonFace; background-image: none; color: ButtonText;
+    box-shadow: none; forced-color-adjust: auto;
+  }
+  :is(.primary-button, .secondary-button, .ghost-button, .danger-button, .danger-button--filled,
+    .jobs-action, .conversation-history .composer-send, .conversation-latest):disabled {
+    border-color: GrayText; background: ButtonFace; background-image: none; color: GrayText;
+    box-shadow: none; forced-color-adjust: auto;
+  }
+  :is(.primary-button, .secondary-button, .ghost-button, .danger-button, .danger-button--filled,
+    .jobs-action, .conversation-history .composer-send, .conversation-latest):focus-visible {
+    outline: 3px solid Highlight; outline-offset: 3px; box-shadow: none;
+  }
+}
+
+/* P14-08: one shared field and choice-control system across application routes. */
+.app-shell :is(
+  .settings-field, .project-form, .task-filter-field, .task-form-field, .task-create-form, .task-control-form,
+  .timeline-toolbar, .usage-field, .role-controls, .kanban-search, .kanban-select, .proactive-feed-input,
+  .daily-page, .notes-title-label, .notes-folder-input-row, .folio-rename
+) :is(
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]):not([type="hidden"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="image"]),
+  select
+) {
+  box-sizing: border-box;
+  min-width: 0;
+  min-height: 38px;
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--control-rule);
+  border-radius: var(--radius-control);
+  background-color: var(--surface);
+  color: var(--text);
+  font: var(--type-body)/var(--line-body) var(--font-body);
+  transition: background-color var(--motion-press) var(--ease-standard);
+}
+.app-shell :is(
+  .settings-field, .project-form, .task-filter-field, .task-form-field, .task-create-form, .task-control-form,
+  .timeline-toolbar, .usage-field, .role-controls, .kanban-search, .kanban-select, .proactive-feed-input,
+  .daily-page, .notes-title-label, .notes-folder-input-row, .folio-rename
+) textarea {
+  box-sizing: border-box;
+  min-width: 0;
+  min-height: 120px;
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--control-rule);
+  border-radius: var(--radius-control);
+  background-color: var(--surface);
+  color: var(--text);
+  font: var(--type-body)/var(--line-body) var(--font-body);
+  resize: vertical;
+  transition: background-color var(--motion-press) var(--ease-standard);
+}
+.form-control {
+  box-sizing: border-box;
+  min-width: 0;
+  min-height: 38px;
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--control-rule);
+  border-radius: var(--radius-control);
+  background-color: var(--surface);
+  color: var(--text);
+  font: var(--type-body)/var(--line-body) var(--font-body);
+  transition: background-color var(--motion-press) var(--ease-standard);
+}
+.app-shell :is(
+  .settings-field, .project-form, .task-filter-field, .task-form-field, .task-create-form, .task-control-form,
+  .timeline-toolbar, .usage-field, .role-controls, .kanban-search, .kanban-select, .proactive-feed-input,
+  .daily-page, .notes-title-label, .notes-folder-input-row, .folio-rename
+) :is(
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]):not([type="hidden"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="image"]),
+  select, textarea
+):hover:not(:disabled):not(:read-only) {
+  background-color: var(--surface-translucent);
+}
+.form-control:hover:not(:disabled) {
+  background-color: var(--surface-translucent);
+}
+.form-control::placeholder {
+  color: var(--text-muted);
+  opacity: 1;
+}
+.app-shell :is(
+  .settings-field, .project-form, .task-filter-field, .task-form-field, .task-create-form, .task-control-form,
+  .timeline-toolbar, .usage-field, .role-controls, .kanban-search, .kanban-select, .proactive-feed-input,
+  .daily-page, .notes-title-label, .notes-folder-input-row, .folio-rename
+) :is(
+    input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]):not([type="hidden"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="image"]),
+  select, textarea
+)::placeholder {
+  color: var(--text-muted);
+  opacity: 1;
+}
+.app-shell :is(
+  .settings-field, .project-form, .task-filter-field, .task-form-field, .task-create-form, .task-control-form,
+  .timeline-toolbar, .usage-field, .role-controls, .kanban-search, .kanban-select, .proactive-feed-input,
+  .daily-page, .notes-title-label, .notes-folder-input-row, .folio-rename
+) select {
+  appearance: none;
+  padding-right: 36px;
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--text-muted) 50%),
+    linear-gradient(135deg, var(--text-muted) 50%, transparent 50%);
+  background-position: calc(100% - 15px) 50%, calc(100% - 10px) 50%;
+  background-repeat: no-repeat;
+  background-size: 5px 5px;
+  color-scheme: inherit;
+}
+select.form-control {
+  appearance: none;
+  padding-right: 36px;
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--text-muted) 50%),
+    linear-gradient(135deg, var(--text-muted) 50%, transparent 50%);
+  background-position: calc(100% - 15px) 50%, calc(100% - 10px) 50%;
+  background-repeat: no-repeat;
+  background-size: 5px 5px;
+  color-scheme: inherit;
+}
+.app-shell :is(.knowledge-search input, .folio-search input) {
+  min-height: 38px;
+  font: var(--type-body)/var(--line-body) var(--font-body);
+}
+.app-shell .kanban-search input {
+  padding-left: 42px;
+}
+.app-shell .proactive-feed-input {
+  align-items: flex-start;
+}
+.app-shell :is(
+  .settings-field, .project-form, .task-filter-field, .task-form-field, .task-create-form, .task-control-form,
+  .timeline-toolbar, .usage-field, .role-controls, .kanban-search, .kanban-select, .proactive-feed-input,
+  .daily-page, .notes-title-label, .notes-folder-input-row, .folio-rename
+) :is(input, select, textarea):focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+.form-control:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+.app-shell :is(
+  .settings-field, .project-form, .task-filter-field, .task-form-field, .task-create-form, .task-control-form,
+  .timeline-toolbar, .usage-field, .role-controls, .kanban-search, .kanban-select, .proactive-feed-input,
+  .daily-page, .notes-title-label, .notes-folder-input-row, .folio-rename
+) :is(input, select, textarea):disabled {
+  background-color: var(--disabled-surface);
+  color: var(--disabled-text);
+  cursor: not-allowed;
+}
+.form-control:disabled {
+  background-color: var(--disabled-surface);
+  color: var(--disabled-text);
+  cursor: not-allowed;
+}
+.form-control:read-only:not(:disabled) {
+  background-color: var(--surface-muted);
+  cursor: default;
+}
+.app-shell :is(
+  .settings-field, .project-form, .task-filter-field, .task-form-field, .task-create-form, .task-control-form,
+  .timeline-toolbar, .usage-field, .role-controls, .kanban-search, .kanban-select, .proactive-feed-input,
+  .daily-page, .notes-title-label, .notes-folder-input-row, .folio-rename
+) :is(input, textarea):read-only:not(:disabled) {
+  background-color: var(--surface-muted);
+  cursor: default;
+}
+.app-shell :is(
+  .settings-field, .project-form, .task-filter-field, .task-form-field, .task-create-form, .task-control-form,
+  .timeline-toolbar, .usage-field, .role-controls, .kanban-search, .kanban-select, .proactive-feed-input,
+  .daily-page, .notes-title-label, .notes-folder-input-row, .folio-rename
+) :is(input, select, textarea)[aria-invalid="true"] {
+  border-color: var(--error);
+  background-color: var(--error-surface);
+}
+.form-control[aria-invalid="true"] {
+  border-color: var(--error);
+  background-color: var(--error-surface);
+}
+.app-shell :is(
+  .settings-field, .project-form, .task-filter-field, .task-form-field, .task-create-form, .task-control-form,
+  .timeline-toolbar, .usage-field, .role-controls, .kanban-search, .kanban-select, .proactive-feed-input,
+  .daily-page, .notes-title-label, .notes-folder-input-row, .folio-rename
+) :is(input, select, textarea)[aria-busy="true"] {
+  cursor: progress;
+}
+.form-control[aria-busy="true"] {
+  cursor: progress;
+}
+.form-control:autofill,
+.form-control:-webkit-autofill {
+  background-color: var(--surface) !important;
+  color: var(--text) !important;
+  -webkit-text-fill-color: var(--text);
+  caret-color: var(--text);
+}
+.app-shell :is(.knowledge-search input, .folio-search input):is(:autofill, :-webkit-autofill) {
+  background-color: transparent !important;
+  color: var(--text) !important;
+  -webkit-text-fill-color: var(--text);
+  caret-color: var(--text);
+}
+.app-shell :is(
+  .settings-field, .project-form, .task-filter-field, .task-form-field, .task-create-form, .task-control-form,
+  .timeline-toolbar, .usage-field, .role-controls, .kanban-search, .kanban-select, .proactive-feed-input,
+  .daily-page, .notes-title-label, .notes-folder-input-row, .folio-rename
+) :is(input, select, textarea):autofill,
+.app-shell :is(
+  .settings-field, .project-form, .task-filter-field, .task-form-field, .task-create-form, .task-control-form,
+  .timeline-toolbar, .usage-field, .role-controls, .kanban-search, .kanban-select, .proactive-feed-input,
+  .daily-page, .notes-title-label, .notes-folder-input-row, .folio-rename
+) :is(input, select, textarea):-webkit-autofill {
+  background-color: var(--surface) !important;
+  color: var(--text) !important;
+  -webkit-text-fill-color: var(--text);
+  caret-color: var(--text);
+}
+.app-shell input:is([type="checkbox"], [type="radio"]):not([role="switch"]) {
+  width: 18px;
+  height: 18px;
+  min-width: 18px;
+  min-height: 18px;
+  padding: 0;
+  accent-color: var(--focus);
+}
+.app-shell input:is([type="checkbox"], [type="radio"]):not([role="switch"]):focus-visible,
+.app-shell input[role="switch"]:focus-visible,
+.app-shell :is(.usage-segmented button, .advanced-segmented button, .presence-option, .presence-mode-card):focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+.app-shell input:is([type="checkbox"], [type="radio"]):not([role="switch"]):disabled {
+  cursor: not-allowed;
+}
+.app-shell input[role="switch"] {
+  appearance: none;
+  position: relative;
+  flex: none;
+  width: 44px;
+  height: 26px;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--control-rule);
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--text) 18%, transparent);
+  cursor: pointer;
+  transition: background-color var(--motion-state) var(--ease-standard);
+}
+.app-shell input[role="switch"]::after {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--text);
+  content: "";
+  transition: translate var(--motion-state) var(--ease-enter);
+}
+.app-shell input[role="switch"]:checked {
+  background: var(--focus);
+}
+.app-shell input[role="switch"]:checked::after {
+  translate: 18px 0;
+  background: var(--primary-action-text);
+}
+.app-shell input[role="switch"]:disabled {
+  background: var(--disabled-surface);
+  cursor: not-allowed;
+}
+.app-shell :is(label.choice, label.project-policy-choice):has(> input:is([type="checkbox"], [type="radio"]):not([role="switch"])) {
+  min-width: 0;
+}
+.field-error[id]::before,
+.settings-validation-error[id]::before {
+  display: inline-grid;
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  place-items: center;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  content: "!";
+  font-size: var(--type-caption);
+  font-weight: 700;
+  line-height: 1;
+}
+.field-error[id],
+.settings-validation-error[id] {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-1);
+  overflow-wrap: anywhere;
+}
+@media (prefers-reduced-motion: reduce) {
+  .app-shell input[role="switch"]::after { transition: none; }
+}
+:root[data-motion="reduced"] .app-shell input[role="switch"]::after { transition: none; }
+@media (pointer: coarse) {
+  .app-shell :is(
+    .settings-field, .project-form, .task-filter-field, .task-form-field, .task-create-form, .task-control-form,
+    .timeline-toolbar, .usage-field, .role-controls, .kanban-search, .kanban-select, .proactive-feed-input,
+    .daily-page, .notes-title-label, .notes-folder-input-row, .folio-rename
+  ) :is(
+    input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]):not([type="hidden"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="image"]),
+    select
+  ) {
+    min-height: 44px;
+    font-size: 16px;
+  }
+  .app-shell :is(
+    .settings-field, .project-form, .task-filter-field, .task-form-field, .task-create-form, .task-control-form,
+    .timeline-toolbar, .usage-field, .role-controls, .kanban-search, .kanban-select, .proactive-feed-input,
+    .daily-page, .notes-title-label, .notes-folder-input-row, .folio-rename
+  ) textarea {
+    min-height: 120px;
+    font-size: 16px;
+  }
+  .form-control {
+    min-height: 44px;
+    font-size: 16px;
+  }
+  .app-shell :is(.knowledge-search input, .folio-search input) {
+    min-height: 44px;
+    font-size: 16px;
+  }
+  .app-shell .composer textarea {
+    min-height: 44px;
+    font-size: 16px;
+  }
+  .app-shell :is(.usage-segmented button, .advanced-segmented button, .presence-option, .presence-mode-card) {
+    min-height: 44px;
+  }
+  .app-shell label.choice:has(> input:is([type="checkbox"], [type="radio"]):not([role="switch"])) {
+    min-height: 44px;
+  }
+  .app-shell label.choice:has(> input[role="switch"]) {
+    min-height: 44px;
+  }
+}
+@media (max-width: 700px) {
+  .app-shell :is(.settings-grid, .projects-form-grid, .usage-controls, .role-controls) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .app-shell .presence-modes {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.app-shell :is(.settings-field, .task-filter-field, .task-form-field, .task-create-form, .usage-field, .proactive-feed-field, .daily-page) label,
+.app-shell :is(.timeline-toolbar) label,
+.app-shell :is(.notes-title-label, .notes-source-label) {
+  color: var(--text);
+  font-size: var(--type-small);
+  font-weight: 600;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.app-shell :is(.settings-field, .task-filter-field, .task-form-field, .task-create-form, .usage-field, .proactive-feed-field) :is(.settings-explanation, .settings-validation-error, .field-error) {
+  margin: 0;
+}

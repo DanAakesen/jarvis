@@ -840,13 +840,13 @@ export function SettingsPage({ backendUrl, getAccessToken, presence, notificatio
       {backendUrl && <TaskRecipesSettings key={backendUrl} backendUrl={backendUrl} getAccessToken={getAccessToken} />}
       {state === 'ready' && settings && options && (
       <div className="settings-save">
+        <p className="settings-feedback" role={error ? 'alert' : 'status'} aria-live="polite">
+          {error || message}
+        </p>
         <button className="primary-button" type="submit" form="settings-form" disabled={saveDisabled} aria-busy={(saving && !resettingPersonality) || undefined} aria-label={saving && !resettingPersonality ? 'Saving…' : undefined}>
           <span className="button-label">Save settings</span>
           {saving && !resettingPersonality && <span className="button-loading-indicator" aria-hidden="true"><Loader variant="inline" announce={false} label="Saving settings…" /></span>}
         </button>
-        <p className="settings-feedback" role={error ? 'alert' : 'status'} aria-live="polite">
-          {error || message}
-        </p>
       </div>
       )}
     </section>

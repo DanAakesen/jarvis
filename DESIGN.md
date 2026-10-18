@@ -112,13 +112,14 @@ older capsule-action and refracted-control-rim descriptions below.
 Actions, icon buttons, navigation tabs, filters, segmented choices and form
 fields use the existing control radius from `apps/web/src/styles.css`.
 Pills identify compact noninteractive status; genuine switch tracks, orb/media
-geometry and window/panel surfaces retain their semantic shapes. Primary actions
-keep the existing primary fill. Quiet actions use borderless surfaces with
-hover/pressed feedback. Selected choices retain their existing surface/text
-roles, stronger weight and accessible state. No decorative coloured boxes,
-bevels, inset-shadow borders or glowing control outlines, including on hover.
-Neutral field boundaries and real panel/list structure remain; keyboard focus
-uses the existing visible focus outline rather than a permanent accent rim.
+geometry and window/panel surfaces retain their semantic shapes. Buttons follow
+the dedicated hierarchy below. Dan's direct instruction of 18 October 2026
+supersedes this section's earlier button appearance limits for buttons only;
+other controls keep the restrained surfaces, neutral field boundaries and
+visible keyboard focus described here. No decorative coloured boxes, bevels,
+inset-shadow borders or selected-state glows are added to non-button controls.
+Within action groups, markup order is keyboard and visual order: place the
+primary action last. CSS does not reorder action groups.
 
 Keep compact desktop controls where useful and at least 44px touch targets.
 Segmented groups wrap at narrow widths; scrolling filter rows retain keyboard
@@ -134,15 +135,34 @@ selection cue.
 for future work. Header/job and mobile chat corrections have separate owners;
 this candidate does not imply their changes are integrated or released.
 
-## Button system (P14-03; 18 October 2026)
+## Button system (P14-07; owner direction of 18 October 2026)
 
-`apps/web/src/styles.css` owns the shared button hierarchy. `.primary-button`
-keeps the existing primary fill with a restrained shadow; `.secondary-button`
-uses a clearly surfaced neutral tone; `.ghost-button` stays quiet until hover
-or press; `.danger-button` is a low-emphasis destructive action, and
-`.danger-button--filled` marks a confirmed destructive action. Existing
-specialized and icon button classes keep their workflow role while sharing the
-same control radius, feedback and visible focus.
+`apps/web/src/styles.css` owns the shared button hierarchy. Dan's direct
+instruction on 18 October 2026 supersedes the flat-fill and no-glow button
+constraints from Shared control geometry and P14-03; it does not change other
+controls. `.primary-button` uses a tonal, top-lit gradient derived from
+`--primary-action`, a real lighter-tint border and one soft accent-tinted ambient
+shadow that strengthens on hover. Press settles to a darker fill. `.secondary-button`
+uses a neutral tinted surface with a visible `--control-rule` boundary;
+`.ghost-button` stays text-only until hover or press. `.danger-button` and
+`.danger-button--filled` use the same surfaced and filled constructions in the
+error hue. These calm, finite state changes do not pulse or loop.
+
+The composer send action and Factory job “Open” actions keep their specialized
+class names and compact geometry, but alias the shared primary styling and
+states. Factory “Create task” already uses the shared primary; its “Create
+project” secondary now keeps the shared neutral surface. Settings save actions
+already use the shared primary. “Jump to latest” is a contextual utility, not a
+main action; it keeps its placement behavior with the shared-radius surfaced
+neutral boundary and focus treatment. The voice orb remains specialized because
+its circular core is a voice-mode affordance, not an action button.
+
+All variants retain a visible focus ring with a page-colored separator and
+outer `--focus` outline. Contrast and forced-color/reduced-motion behavior use
+the existing theme and system colors; gradients and glows are removed for more
+contrast and forced colors. Reduced motion removes transitions and pressed
+movement while preserving color feedback. Specialized controls that remain
+outside the hierarchy keep the shared radius, state contrast and focus.
 
 Text actions are 44px high by default. Compact controls are 36px only on fine
 pointers and return to at least 44px on coarse pointers. Icon-only actions stay
@@ -1475,7 +1495,61 @@ inspection covered the phone and desktop sizes in both themes, plus reduced
 motion. The attention event and healthy Daily/Proactive data states were not
 available in the harness; screenshot captures could not be attached to the PR.
 
-### Daily Workouts (18 October 2026; P12-23)
+## Daily Body & sleep (18 October 2026; P12-25)
+
+Reuse the Daily shell, shared controls, statistic tiles, chart and scroll-table
+patterns. One section heading precedes a keyboard-operated Body/Sleep tab list.
+A labelled search and native metric selector keep catalogue browsing usable on
+narrow screens; unknown metric names remain visible. Each unit has its own
+trend and daily table, with explicit daily-average fallback and observed-day
+coverage. Sleep uses a section-local stacked SVG with a text legend and the full
+night table: unknown stages are never presented as recorded zeroes, and a
+total-only night is labelled “Stages not recorded”. Night details stay in-page
+and return focus to their opening control. Route CSS owns spacing and responsive
+layout, not a second control geometry or theme.
+
+Synthetic Chromium inspection covered 320px, 390×844, 768px and 1440×900 in
+light and dark, including keyboard tabs, metric selection, refresh scroll
+retention, night detail/focus return and reduced motion. No horizontal page
+overflow was observed; controls met 44px targets and metric switching retained
+layout position. Six synthetic-only captures are in `docs/ui/p12-25/`
+(1,351,644 bytes combined). These checks do not verify live sign-in, private
+records, import completeness or a physical phone.
+
+## Daily Nutrition (18 October 2026; P12-24)
+
+Nutrition stays within the existing Daily surface and shared control geometry.
+A compact keyboard-operated Day / Trend / Library tab list separates meal
+inspection, period comparisons and saved definitions. The day stepper precedes
+five shared statistic tiles; meal-type groups provide chronological rows with
+collapsed components and provenance, while deleted meals remain separately
+collapsed. Target comparisons use explicit text as well as protein progress;
+the energy baseline excludes activity. Unknown and lower-bound values are
+labelled in text, never conveyed by colour alone.
+
+Trend uses the shared line charts and their data tables, with gaps between
+unlogged dates, a selectable daily table and Monday-start weekly averages.
+Library uses filterable read-only lists and explicitly limits filtering to
+loaded records. Layout CSS consumes existing spacing and typography tokens,
+uses tabular numerals, and keeps wide tables in labelled scrolling regions.
+Buttons retain the shared classes without local border or radius overrides.
+Synthetic browser evidence belongs in `docs/ui/p12-24/`; it is not live-data or
+physical-device acceptance.
+
+Synthetic Chromium inspection exercised Day, Trend and Library at 320,
+390×844, 768 and 1440×900 in both light and dark appearances. All 24 combinations
+kept page content within the viewport, one Nutrition `h2`, and at least 44px
+visible button, input and disclosure targets. Date stepping retained the
+stepper position; refocus refresh retained the selected date, open meal and
+scroll position. Inspection also exercised Back/reload, keyboard tabs, escaped
+provenance, empty-day neighbours, unset targets, independent capability gates,
+filtering loaded records, five-page library capping, per-view recovery and
+reduced motion. Expanded plan content remained reachable above the mobile
+composer at 320px. The six JPEG captures cover phone Day in both themes,
+desktop Trend in both themes, Library at 768px light and 320px dark. They are
+synthetic desktop-browser evidence, not live-owner or physical-phone checks.
+
+## Daily Workouts (18 October 2026; P12-23)
 
 Workouts extends the existing Daily section shell, not navigation or a separate
 theme. One section heading leads to a type filter, loaded-row sort, unknown-safe
@@ -1504,3 +1578,27 @@ Selected and status states use shared surfaces, text or icons, never a colored
 edge alone. Use real neutral borders instead of inset-shadow borders. Panels,
 popovers, rows and hover states reuse the existing surface roles and
 `--panel-shadow`. Keep exact, reasoned exceptions in the stylesheet ratchet.
+
+## Form controls (P14-08, 18 October 2026)
+
+The shared field rules in `apps/web/src/styles.css` own text fields, selects and
+textareas across routes. They use the body type role, one neutral
+`--control-rule` boundary, `--surface`, `--radius-control` and the existing
+`--focus` visible outline. Fine-pointer fields are compact at 38px; coarse
+pointer fields retain a 44px minimum and 16px text. Textareas share the field
+surface, remain vertically resizable and start at a 120px minimum height.
+
+Selects use a CSS-drawn arrow and inherit the page's light/dark `color-scheme`.
+Autofill retains the field surface and text colors. Disabled, read-only, invalid
+and busy states remain explicit; invalid fields keep their existing linked
+message and `aria-invalid`, with a visible error symbol alongside the message.
+Notes folder-name errors now use the same description relationship.
+
+Native checkbox and radio marks stay semantic and use one 18px visual size;
+switches share one 44×26px track with a moving thumb. Segmented choices preserve
+their selected surface and label weight, use the common visible focus, wrap, and
+reach 44px on coarse pointers. The Notes source editor and integrated search
+fields retain their intentional editor/search layouts; only the Notes title and
+other surrounding form fields join the shared field look. Daily controls inherit
+the system without changing Daily markup. Buttons and non-field surfaces remain
+owned by their existing P14 work.
