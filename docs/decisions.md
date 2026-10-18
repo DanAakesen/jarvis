@@ -1,5 +1,19 @@
 # Decisions
 
+## P12-40 — Field clearance through custom properties (19 October 2026)
+
+Fix select arrow and search icon overlap at the shared field rule, not per page.
+That rule's `:is()` list takes the specificity of its most specific entry, so
+its `padding` shorthand out-ranked every per-control padding override and the
+clearance never applied. The shared rule now reads `--field-padding-start` and
+`--field-padding-end` with the previous 12px default; selects set the end value
+to `--space-6` and ellipsise the selected text, and the Tasks board search sets
+the start value to `--space-7`. Custom properties cascade independently of the
+competing shorthand, so no selector needs to out-rank the shared rule and
+neither the rule's specificity nor any other field style changes. The Body &
+sleep picker stacks to one column at 520px and narrower. No markup, copy,
+route, token, dependency or data read changes.
+
 ## P12-37 — Daily accessibility and keyboard audit (18 October 2026)
 
 Keep Daily's routes, visible copy, reads and switch behavior unchanged. Give

@@ -64,6 +64,11 @@ describe('Daily phone stat layouts', () => {
     expect(css).toMatch(/\.daily-stat-note,\s*\.daily-stat-comparison\s*\{[^}]*min-width:\s*0;[^}]*overflow-wrap:\s*anywhere;/u);
   });
 
+  it('stacks the Body picker controls on phones so the search placeholder and select text are not clipped', () => {
+    const css = readFileSync('src/daily/sections/body-sleep/body-sleep.css', 'utf8');
+    expect(css).toMatch(/@media\s*\(max-width:\s*520px\)\s*\{\s*\.body-sleep-picker\s*\{\s*grid-template-columns:\s*minmax\(0,\s*1fr\);\s*\}\s*\}/u);
+  });
+
   it('keeps section-authored Daily tables inside the shared scroll wrapper', () => {
     const sources = [
       ...filesUnder('src/daily/sections').filter(file => file.endsWith('.tsx') && !file.includes('.test.')),

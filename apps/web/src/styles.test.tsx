@@ -368,6 +368,9 @@ describe('app-wide control contract', () => {
     expect(sharedFields).toContain('var(--type-body)');
     expect(sharedFields).toContain('var(--focus)');
     expect(sharedFields).toContain('min-height: 38px;');
+    expect(sharedFields).toContain('padding: var(--space-1) var(--field-padding-end, var(--space-3)) var(--space-1) var(--field-padding-start, var(--space-3));');
+    expect(sharedFields).toMatch(/\) select \{\s*appearance: none;\s*--field-padding-end: var\(--space-6\);\s*text-overflow: ellipsis;/);
+    expect(sharedFields).toMatch(/\.app-shell \.kanban-search input \{\s*--field-padding-start: var\(--space-7\);\s*\}/);
     expect(sharedFields).toContain('min-height: 120px;');
     expect(sharedFields).toContain('resize: vertical;');
     expect(sharedFields).toMatch(/:focus-visible/);
