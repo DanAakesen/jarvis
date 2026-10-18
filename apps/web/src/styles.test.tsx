@@ -142,8 +142,12 @@ describe('app-wide control contract', () => {
     const workouts = readFileSync('src/daily/sections/workouts/workouts.css', 'utf8');
     const overview = readFileSync('src/daily/daily-overview.css', 'utf8');
     const shared = readFileSync('src/daily/ui/daily-ui.css', 'utf8');
-    expect(nutrition).toContain('@media (max-width: 480px)');
-    expect(nutrition).toContain('grid-template-columns: repeat(3, minmax(0, 1fr))');
+    expect(ruleDeclaration(nutrition, /\.nutrition-controls\s*\{([^}]*)\}/, 'display')).toBe('flex');
+    expect(ruleDeclaration(nutrition, /\.nutrition-controls\s*\{([^}]*)\}/, 'flex-wrap')).toBe('wrap');
+    expect(ruleDeclaration(nutrition, /\.nutrition-controls\s*\{([^}]*)\}/, 'align-items')).toBe('flex-end');
+    expect(ruleDeclaration(nutrition, /\.nutrition-controls label\s*\{([^}]*)\}/, 'min-width')).toBe('0');
+    expect(ruleDeclaration(nutrition, /\.nutrition-weekly-list dl > div\s*\{([^}]*)\}/, 'grid-template-columns'))
+      .toBe('max-content minmax(0, 1fr)');
     expect(nutrition).toContain('min-height: 44px');
     expect(ruleDeclaration(workouts, /\.workouts-detail\s*>\s*h3\s*\{([^}]*)\}/, 'margin')).toBe('0');
     expect(overview).toContain('@media (prefers-reduced-motion: reduce)');

@@ -1,5 +1,21 @@
 # Decisions
 
+## P12-31 — Nutrition presentation and phone-safe kit (18 October 2026)
+
+Compose Nutrition from the existing Daily kit without changing its reads, URL
+state, paging or configured-target calculations. Present calories and macros
+as text-backed meters, retain unknown totals rather than zero, and qualify
+lower bounds beside the value. Keep the calorie comparison explicitly a
+baseline before activity, not a full allowance. Do not infer carbohydrate or
+fat targets. Group expandable meal rows with their subtotals and put unknown
+secondary nutrients in one closed disclosure rather than empty tiles.
+
+Use per-macro trend charts and chart-local data tables, with compact weekly
+averages retaining their known-day counts. Preserve gaps and all record details.
+Make shared chart geometry container-width-aware, use matching line-pattern
+legend marks, and fill the last phone statistic row. No new dependency, token,
+backend behavior or original-site cutover is part of this change.
+
 ## Share overlay stacking and modal lifecycle (18 October 2026; P14-09 / #992)
 
 Keep the existing React overlays and controls; add no UI library. Name stacking
