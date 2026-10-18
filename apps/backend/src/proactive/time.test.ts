@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { dayKey, isQuietHour, latestSlotAtOrBefore, localSlotInstant, localTimeLabel, monthKey, nextSlotAfter, slotKey } from './time.js';
+import {
+  dayKey, isQuietHour, latestSlotAtOrBefore, localDateTimeInstant, localSlotInstant, localTimeLabel, monthKey,
+  nextSlotAfter, slotKey,
+} from './time.js';
 
 describe('Copenhagen proactive time', () => {
   it('formats local day, time, quiet window and month on an ordinary day', () => {
@@ -36,6 +39,12 @@ describe('Copenhagen proactive time', () => {
     expect(localSlotInstant('2027-03-28T07:00').getTime() -
       localSlotInstant('2027-03-27T07:00').getTime()).toBe(23 * 60 * 60_000);
     expect(latestSlotAtOrBefore(after).key).toBe('2027-03-28T07:00');
+  });
+
+  it('resolves todo due times against the Copenhagen offset on both DST transition dates', () => {
+    expect(localDateTimeInstant('2026-10-25', '14:30').toISOString()).toBe('2026-10-25T13:30:00.000Z');
+    expect(localDateTimeInstant('2027-03-28', '14:30').toISOString()).toBe('2027-03-28T12:30:00.000Z');
+    expect(() => localDateTimeInstant('2027-03-28', '02:30')).toThrow('does not exist');
   });
 
   it('crosses year and local month boundaries using Copenhagen calendar time', () => {
