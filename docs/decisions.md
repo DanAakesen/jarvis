@@ -98,9 +98,11 @@ its parts: 10px wide, no arrow buttons, transparent track and a pill thumb that
 lights cyan while the main scroll surfaces or the thumb are hovered. Touch screens
 and Firefox keep the standard thin overlay bars. The Notes reader keeps its
 stronger resting thumb, and the deliberately hidden scrollbars (tab strips, job
-tabs, kanban pulse, phone legend) are unchanged. `styles.test.tsx` pins the
+tabs, kanban pulse, phone legend) are unchanged. The hovered scroller also sets an
+empty custom property, the documented workaround for Safari not restyling the
+hovered thumb otherwise. `styles.test.tsx` pins the
 approach. Checked in headless Edge before and after, in dark and light themes, and
-with phone emulation; not checked on a physical phone.
+with phone emulation; not checked on a physical phone or in Safari.
 
 ## Decide what Dan's approval means on the server, never with a word list (17 October 2026; P11-10 / #894)
 

@@ -142,6 +142,8 @@ describe('app-wide control contract', () => {
     expect(ruleDeclaration(source, /\* \{ (scrollbar-width: thin;[^}]*)\}/, 'scrollbar-width')).toBe('thin');
     const parts = source.match(/@supports selector\(::-webkit-scrollbar\) \{\s*@media \(pointer: fine\) \{([\s\S]*?)\n {2}\}\n\}/)?.[1] ?? '';
     expect(parts).toContain('* { scrollbar-width: auto; scrollbar-color: auto; }');
+    // Safari only restyles the hovered thumb when a custom property changes on the scroller.
+    expect(parts).toMatch(/:hover \{\s*scrollbar-color: auto;\s*--scrollbar-hover-sync: ;/);
     expect(ruleDeclaration(parts, /\n\s*::-webkit-scrollbar-button\s*\{([^}]*)\}/, 'display')).toBe('none');
     expect(ruleDeclaration(parts, /\n\s*::-webkit-scrollbar-thumb\s*\{([^}]*)\}/, 'border-radius')).toBe('var(--radius-pill)');
     // The 1px glass ring overhangs its box, so a glass surface that scrolls must drop the ring or stop being the scroller.
