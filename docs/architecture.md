@@ -1980,6 +1980,34 @@ unavailable; no fallback location or geocoding is used. All source errors are
 mapped to stable unavailable reason codes. This slice enables no flags and
 starts no source reads.
 
+## Proactive suggested-todo writer (P13-11; default off)
+
+The writer is appended to the existing ordered `onFindingsStored` hooks only
+when proactive composition is enabled and
+`JARVIS_PROACTIVE_TODO_WRITES_ENABLED` is exactly `true`. It reads the persisted
+pause/Todos source settings and receipt counts before any vault call. Manual runs
+may write at any hour; scheduled and catch-up runs recheck the Copenhagen quiet
+window. Per-run and per-Copenhagen-day limits are three and five additions.
+
+Only model findings with a suggested todo and a non-`todo` category qualify.
+Suggestions are reduced to one plain-text line, bounded to 200 Unicode code
+points, checked by the vault's existing credential/secret/sensitive-data
+patterns, and compared against every parsed task and Jarvis marker before
+writing. The shared P13-07 resolver selects one existing root file; the writer
+uses only `tree`, `read`, and a single `write` per successful run. It never
+creates or deletes a note. Writes preserve the original bytes, BOM and line
+ending, append below `## Suggested by Jarvis`, and retry a write conflict at most
+twice using freshly-read content and SHA.
+
+Migration 0058 adds `proactive_todo_receipts`, retaining item/run IDs, a 32-hex
+finding key, Copenhagen date, outcome/reason codes and commit SHA, but no todo
+text. The filtered owner/key index prevents a finding from being marked added
+twice; the owner/day/status index supports the daily cap. Successful commits
+record added receipts and set `proactive_items.todo_added`; marker recovery
+repairs a lost receipt. Two failed attempts settle a finding. Hook and receipt
+failures are isolated from run completion, and diagnostics contain only IDs,
+counts, durations and reason codes.
+
 ## Proactive calendar, mail and travel sources (P13-08; default off)
 
 The source registry also constructs the `calendar`, `mail` and `travel` sources

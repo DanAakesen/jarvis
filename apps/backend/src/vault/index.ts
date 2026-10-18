@@ -553,6 +553,10 @@ function assertCaptureIsSafe(source: string, text: string): void {
   }
 }
 
+export function isVaultLineSafe(text: string): boolean {
+  return !credentialPattern.test(text) && !secretPattern.test(text) && !sensitivePattern.test(text);
+}
+
 export function createVaultModule(options: {
   readonly client: ReturnType<typeof createGitHubVaultClient>;
   readonly indexStore: VaultIndexStore;

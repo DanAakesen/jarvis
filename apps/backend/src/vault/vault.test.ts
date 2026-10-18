@@ -13,7 +13,7 @@ import type {
 } from '../database/memory-store.js';
 import { MemoryEmbeddingHttpError, type MemoryEmbedder } from '../core/memory-embeddings.js';
 import { createGitHubVaultClient, VAULT_BRANCH, VAULT_REPOSITORY } from './github-client.js';
-import { createVaultModule } from './index.js';
+import { createVaultModule, isVaultLineSafe } from './index.js';
 import { buildApp } from '../app.js';
 import { coreModule } from '../core/index.js';
 import { loadConfig } from '../config.js';
@@ -25,6 +25,15 @@ import type { WorkspaceCommand } from '@jarvis/contracts';
 
 const sha = (character: string) => character.repeat(40);
 const signal = () => new AbortController().signal;
+
+describe('vault line safety', () => {
+  it('applies credential, secret, and sensitive-data patterns to one line only', () => {
+    expect(isVaultLineSafe('Review the synthetic release checklist')).toBe(true);
+    expect(isVaultLineSafe('Store the password in the note')).toBe(false);
+    expect(isVaultLineSafe('Add api-key: abcdefgh1234')).toBe(false);
+    expect(isVaultLineSafe('Call the bank')).toBe(false);
+  });
+});
 
 interface RemoteFile {
   sha: string;

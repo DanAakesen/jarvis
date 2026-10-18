@@ -46,6 +46,15 @@ describe('in-memory proactive stores', () => {
     expect((await store.items.upsertFinding(finding)).state).toBe('dismissed');
   });
 
+  it('keeps todo-added state when a finding is upserted again', async () => {
+    const store = createMemoryProactiveStore();
+    const first = await store.items.upsertFinding(finding);
+    await store.items.markTodoAdded([first.id]);
+    expect(await store.items.get(first.id)).toMatchObject({ todoAdded: true });
+    expect(await store.items.upsertFinding({ ...finding, title: 'Updated synthetic title' }))
+      .toMatchObject({ id: first.id, todoAdded: true });
+  });
+
   it('serializes claims, expires stale leases and rejects stale generations', async () => {
     const store = createMemoryProactiveStore();
     const now = new Date('2026-10-20T05:00:00.000Z');
