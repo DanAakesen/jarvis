@@ -663,9 +663,10 @@ export function createVaultModule(options: {
     filters: { query?: string; state: VaultTaskState; dueWindowDays?: number },
     limit: number,
   ) {
+    const todos = await readVaultTasks(options.client, signal);
     const readAt = new Date();
     const today = dayKey(readAt);
-    const tasks = (await readVaultTasks(options.client, signal)).map((todo) => {
+    const tasks = todos.map((todo) => {
       const text = sanitizeFactText(todo.text);
       return { ...todo, text: shouldRedact(text) ? '[redacted]' : text };
     });

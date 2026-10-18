@@ -1,6 +1,6 @@
 import { useCallback, useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { useBlocker } from 'react-router-dom';
+import { useBlocker, useLocation } from 'react-router-dom';
 import type { AreaProps } from '../areas';
 import { KnowledgeGraphView, KnowledgeNoteReader } from '../knowledge/KnowledgeGraphView';
 import { connectedNotes, withoutFrontMatter, type KnowledgeGraph, type KnowledgeNode } from '../knowledge/knowledge-data';
@@ -34,6 +34,8 @@ export function NotesArea({ backendUrl, getAccessToken }: AreaProps) {
   const [saving, setSaving] = useState(false);
   const savePending = useRef(false);
   const readController = useRef<AbortController | null>(null);
+  const openedQueryNote = useRef<string | null>(null);
+  const location = useLocation();
   const alive = useRef(true);
   const editorInput = useRef<HTMLTextAreaElement>(null);
   const popup = useRef<HTMLElement>(null);
@@ -96,7 +98,7 @@ export function NotesArea({ backendUrl, getAccessToken }: AreaProps) {
     if (dirty) setPendingChange(() => action);
     else action();
   };
-  const openNote = async (notePath: string, noteTitle: string, showPreview = true) => {
+  const openNote = useCallback(async (notePath: string, noteTitle: string, showPreview = true) => {
     if (!client) return;
     readController.current?.abort();
     const controller = new AbortController();
@@ -112,7 +114,17 @@ export function NotesArea({ backendUrl, getAccessToken }: AreaProps) {
     } finally {
       if (!controller.signal.aborted) setOpening(false);
     }
-  };
+  }, [client]);
+  const queryNote = new URLSearchParams(location.search).get('note');
+  useEffect(() => {
+    if (!queryNote) { openedQueryNote.current = null; return; }
+    if (!client || openedQueryNote.current === queryNote) return;
+    openedQueryNote.current = queryNote;
+    const title = queryNote.split('/').at(-1)?.replace(/\.md$/iu, '').replace(/[-_]/gu, ' ') || 'Vault note';
+    const open = () => { void openNote(queryNote, title); };
+    if (dirty || saving) setPendingChange(() => open);
+    else open();
+  }, [client, dirty, openNote, queryNote, saving]);
   const save = async () => {
     if (!client || !editor || savePending.current || !dirty || editor.revisionMissing || conflict) return;
     if (!safeNotePath(editor.path)) { setError('Give your note a title with letters or numbers and a short, safe location before saving.'); return; }
@@ -180,6 +192,7 @@ export function NotesArea({ backendUrl, getAccessToken }: AreaProps) {
       <h1 className="visually-hidden">Notes</h1>
       <KnowledgeGraphView backendUrl={backendUrl} getAccessToken={getAccessToken}
         onOpenNote={openGraphNote} {...(editorPath ? { selectedPath: editorPath } : {})} refreshKey={reload}
+        showTaskMatches
         searchAction={<button className="notes-create-button" type="button" disabled={!client || saving}
           aria-label="Create new" title="Create new note"
           onClick={() => {

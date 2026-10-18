@@ -1105,13 +1105,14 @@ describe('App shell', () => {
     expect(screen.queryByRole('heading', { name: 'Tasks' })).toBeNull();
   });
 
-  it('offers the Software Factory, Notes, Usage and Status areas with a settings entry', async () => {
+  it('offers Software Factory, Tasks, Notes, Usage and Status areas with a settings entry', async () => {
     await renderSignedIn();
 
     const areas = screen.getByRole('navigation', { name: 'Areas' });
     expect(within(areas).getAllByRole('link').map((link) => link.getAttribute('aria-label'))).toEqual([
       'Conversation',
       'Software Factory',
+      'Tasks',
       'Notes',
       'Usage',
       'Status',
@@ -1547,6 +1548,9 @@ describe('App shell', () => {
     const sheet = screen.getByRole('dialog', { name: 'Go to' });
     const home = within(sheet).getByRole('link', { name: 'Jarvis' });
     const usage = within(sheet).getByRole('link', { name: 'Usage' });
+    const tasks = within(sheet).getByRole('link', { name: 'Tasks' });
+    const notes = within(sheet).getByRole('link', { name: 'Notes' });
+    expect(tasks.compareDocumentPosition(notes) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(home.getAttribute('aria-current')).toBe('page');
     expect(usage.hasAttribute('aria-current')).toBe(false);
     await user.click(usage);

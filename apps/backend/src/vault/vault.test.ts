@@ -371,8 +371,137 @@ describe('GitHub vault', () => {
     expect(indexStore.entry('General/old.md')).toBeUndefined();
     expect(indexStore.entry('General/new.md')).toBeDefined();
     expect(module.tools.map(({ name }) => name)).toEqual([
-      'vault_search', 'show_knowledge', 'vault_read', 'vault_write', 'vault_delete',
+      'vault_search', 'vault_tasks', 'show_knowledge', 'vault_read', 'vault_write', 'vault_delete',
     ]);
+  });
+
+  it('returns bounded, redacted vault tasks through a sensitive read-only tool', async () => {
+    const { github, module } = moduleFor({
+      remote: {
+        'Personal/Inbox.md': {
+          sha: sha('a'),
+          content: '# Home\n- [ ] Buy a mirror ⏫ 📅 2031-04-09 14:00\n- [ ] Password: hunter2\n- [x] Finished',
+        },
+      },
+    });
+    const result = await tool(module, 'vault_tasks').execute(
+      { query: 'mirror', state: 'open' }, {} as FastifyRequest, signal(),
+    ) as { items: Array<Record<string, unknown>>; total: number; truncated: boolean };
+    expect(result).toMatchObject({
+      total: 1,
+      truncated: false,
+      items: [{
+        text: 'Buy a mirror', done: false, dueDate: '2031-04-09', dueTime: '14:00',
+        priority: 'high', path: 'Personal/Inbox.md', line: 2, heading: 'Home',
+      }],
+    });
+    expect(tool(module, 'vault_tasks').sensitive).toBe(true);
+    expect(github.calls.every(({ method }) => method === 'GET')).toBe(true);
+    expect(github.calls.some(({ url }) => url.includes('/git/trees/'))).toBe(true);
+
+    const bounded = moduleFor({ remote: { 'Personal/Inbox.md': {
+      sha: sha('b'),
+      content: Array.from({ length: 41 }, (_, index) => `- [ ] Synthetic tool item ${index}`).join('\n'),
+    } } });
+    const boundedResult = await tool(bounded.module, 'vault_tasks').execute(
+      {}, {} as FastifyRequest, signal(),
+    ) as { items: unknown[]; total: number; truncated: boolean };
+    expect(boundedResult).toMatchObject({ total: 41, truncated: true });
+    expect(boundedResult.items).toHaveLength(40);
+    expect(bounded.github.calls.every(({ method }) => method === 'GET')).toBe(true);
+  });
+
+  it('serves owner-only vault tasks with no-store, filters, and a visible truncation marker', async () => {
+    const { github, module } = moduleFor({
+      remote: {
+        'Personal/Inbox.md': {
+          sha: sha('a'),
+          content: '# Home\n- [ ] Buy a mirror ⏫ 📅 2031-04-09 14:00\n- [x] Finished task\n- [ ] Password: hunter2',
+        },
+        'Work/Projects.md': { sha: sha('b'), content: '- [ ] Plan a garden' },
+        'General/Notes.md': { sha: sha('c'), content: '- [ ] Not in the task scope' },
+      },
+    });
+    const app = memoryApiApp(module);
+    const response = await app.inject({ url: '/vault/tasks', headers: apiAuthorization });
+    expect(response.statusCode).toBe(200);
+    expect(response.headers['cache-control']).toBe('no-store');
+    expect(response.json()).toMatchObject({
+      today: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/u),
+      total: 3,
+      truncated: false,
+      items: [
+        { text: 'Buy a mirror', path: 'Personal/Inbox.md', line: 2, heading: 'Home' },
+        { text: '[redacted]', done: false },
+        { text: 'Plan a garden', path: 'Work/Projects.md' },
+      ],
+    });
+    expect((await app.inject({
+      url: '/vault/tasks?q=mirror', headers: apiAuthorization,
+    })).json()).toMatchObject({ total: 1, items: [{ text: 'Buy a mirror' }] });
+    expect((await app.inject({
+      url: '/vault/tasks?state=done', headers: apiAuthorization,
+    })).json()).toMatchObject({ total: 1, items: [{ text: 'Finished task', done: true }] });
+    expect((await app.inject({ url: '/vault/tasks?state=invalid', headers: apiAuthorization })).statusCode).toBe(400);
+    expect((await app.inject({ url: '/vault/tasks' })).statusCode).toBe(401);
+    const nonOwner = memoryApiApp(module, { auth: async () => ({
+      objectId: 'not-dan', tenantId: apiConfig.auth.tenantId, displayName: 'Other',
+    }) });
+    expect((await nonOwner.inject({ url: '/vault/tasks', headers: apiAuthorization })).statusCode).toBe(403);
+    expect(github.calls.every(({ method }) => method === 'GET')).toBe(true);
+
+    const many = moduleFor({
+      remote: { 'Personal/Inbox.md': {
+        sha: sha('d'),
+        content: Array.from({ length: 501 }, (_, index) => `- [ ] Synthetic task ${index}`).join('\n'),
+      } },
+    });
+    const truncated = await memoryApiApp(many.module).inject({ url: '/vault/tasks', headers: apiAuthorization });
+    expect(truncated.statusCode).toBe(200);
+    expect(truncated.json()).toMatchObject({ total: 501, truncated: true });
+    expect(truncated.json().items).toHaveLength(500);
+  });
+
+  it('maps task source failures to stable 503 reasons', async () => {
+    const assertReason = async (module: ReturnType<typeof createVaultModule>, reason: string) => {
+      const response = await memoryApiApp(module).inject({ url: '/vault/tasks', headers: apiAuthorization });
+      expect(response.statusCode).toBe(503);
+      expect(response.json()).toMatchObject({ reason, error: expect.any(String) });
+    };
+
+    await assertReason(moduleFor({ remote: {} }).module, 'todo_file_missing');
+    await assertReason(moduleFor({ remote: {
+      'task.md': { sha: sha('a'), content: '- [ ] Synthetic one' },
+      'tasks.md': { sha: sha('b'), content: '- [ ] Synthetic two' },
+    } }).module, 'todo_file_ambiguous');
+
+    const limited = Object.fromEntries(Array.from({ length: 257 }, (_, index) =>
+      [`Personal/Note${index}.md`, { sha: sha(String(index % 16)), content: '- [ ] Synthetic' }]));
+    await assertReason(moduleFor({ remote: limited }).module, 'scan_limit');
+    await assertReason(moduleFor({ remote: {
+      'Personal/Large.md': { sha: sha('c'), content: '- [ ] '.concat('x'.repeat(256 * 1024)) },
+    } }).module, 'too_large');
+
+    const tokenFailure = moduleFor({ remote: { 'Personal/Inbox.md': { sha: sha('d'), content: '- [ ] Synthetic' } } });
+    tokenFailure.tokenIssuer.issueForContentsWrite.mockRejectedValueOnce(new Error('synthetic token failure'));
+    await assertReason(tokenFailure.module, 'token_failed');
+    const appMissing = moduleFor({ remote: { 'Personal/Inbox.md': { sha: sha('e'), content: '- [ ] Synthetic' } } });
+    appMissing.tokenIssuer.issueForContentsWrite.mockRejectedValueOnce({ status: 404 });
+    await assertReason(appMissing.module, 'app_not_installed');
+
+    const timedOut = moduleFor({ remote: { 'Personal/Inbox.md': { sha: sha('f'), content: '- [ ] Synthetic' } } });
+    timedOut.github.fetcher.mockRejectedValueOnce(Object.assign(new Error('synthetic timeout'), { name: 'TimeoutError' }));
+    await assertReason(timedOut.module, 'timeout');
+    const readFailed = moduleFor({ remote: { 'Personal/Inbox.md': { sha: sha('1'), content: '- [ ] Synthetic' } } });
+    readFailed.github.fetcher.mockRejectedValueOnce(new Error('synthetic read failure'));
+    await assertReason(readFailed.module, 'read_failed');
+
+    const disconnected = createVaultModule({
+      client: null as unknown as ReturnType<typeof createGitHubVaultClient>,
+      indexStore: new FakeIndexStore(),
+      memoryStore: { getSourceMessage: async () => null },
+    });
+    await assertReason(disconnected, 'not_connected');
   });
 
   it('returns semantic results in index ranking order with a bounded snippet and source URL', async () => {

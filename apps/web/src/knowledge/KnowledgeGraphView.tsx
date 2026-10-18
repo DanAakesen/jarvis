@@ -7,11 +7,22 @@ import {
 import type { KnowledgeScene } from './knowledge-scene';
 import { useKnowledgeBackend } from './knowledge-context';
 import { Loader } from '../Loader';
+import { loadVaultTasks, VaultTasksUnavailable, vaultTaskRecovery, type VaultTaskRead } from '../tasks/tasks-data';
 
 type Load = { status: 'loading' } | { status: 'unavailable' } | { status: 'error'; message: string } | { status: 'ready'; graph: KnowledgeGraph };
 
 const reducedMotion = () => (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false) ||
   document.documentElement.dataset.motion === 'reduced';
+
+function taskDateLabel(dueDate: string | null, dueTime: string | null, dueAt: string | null): string {
+  if (!dueDate) return 'No due date';
+  const [year, month, day] = dueDate.split('-').map(Number);
+  const date = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeZone: 'UTC' })
+    .format(new Date(Date.UTC(year!, month! - 1, day!, 12)));
+  const time = dueAt ? new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' })
+    .format(new Date(dueAt)) : dueTime;
+  return time ? `${date}, ${time}` : date;
+}
 
 export function KnowledgeNoteReader({ children }: { children: ReactNode }) {
   const viewport = useRef<HTMLDivElement>(null);
@@ -48,7 +59,7 @@ export function KnowledgeNoteReader({ children }: { children: ReactNode }) {
  * matches and flies to them; a star opens its note. Used by the Knowledge page and by the window Jarvis opens.
  */
 export function KnowledgeGraphView({ backendUrl, getAccessToken, initialQuery = '', initialHighlight, compact = false,
-  onOpenNote, selectedPath, refreshKey = 0, searchAction, children }: {
+  onOpenNote, selectedPath, refreshKey = 0, searchAction, showTaskMatches = false, children }: {
   backendUrl: string | null;
   getAccessToken: () => Promise<string>;
   initialQuery?: string;
@@ -58,6 +69,7 @@ export function KnowledgeGraphView({ backendUrl, getAccessToken, initialQuery = 
   selectedPath?: string;
   refreshKey?: number;
   searchAction?: ReactNode;
+  showTaskMatches?: boolean;
   children?: ReactNode;
 }) {
   const ids = useId();
@@ -68,6 +80,8 @@ export function KnowledgeGraphView({ backendUrl, getAccessToken, initialQuery = 
   const [sceneFailed, setSceneFailed] = useState(false);
   const [query, setQuery] = useState(initialQuery);
   const [hits, setHits] = useState<string[]>(initialHighlight ? [...initialHighlight] : []);
+  const [noteSnippets, setNoteSnippets] = useState<Record<string, string>>({});
+  const [taskSearch, setTaskSearch] = useState<{ result: VaultTaskRead | null; error: string }>({ result: null, error: '' });
   // Jarvis can update an open knowledge window with a new query and highlight; adopt them when they change.
   const externalKey = `${initialQuery}\n${(initialHighlight ?? []).join(',')}`;
   const [external, setExternal] = useState({ key: externalKey, query: initialQuery, highlight: initialHighlight ? [...initialHighlight] : [] });
@@ -144,6 +158,9 @@ export function KnowledgeGraphView({ backendUrl, getAccessToken, initialQuery = 
   useEffect(() => {
     if (!graph) return;
     const trimmed = query.trim();
+    setSearching(false);
+    setNoteSnippets({});
+    setTaskSearch({ result: null, error: '' });
     // Jarvis's own search result stands for the query it sent; Dan's own typing searches afresh.
     if (external.highlight.length && trimmed === external.query.trim()) {
       const timer = window.setTimeout(() => setHits(external.highlight.filter((id) => nodesById.has(id))), 0);
@@ -156,12 +173,28 @@ export function KnowledgeGraphView({ backendUrl, getAccessToken, initialQuery = 
     const remote = window.setTimeout(() => {
       setSearching(true);
       void searchKnowledge(backendUrl, getAccessToken, trimmed, controller.signal)
-        .then((found) => { if (found.length) setHits(found.filter((id) => nodesById.has(id))); })
+        .then((found) => {
+          if (controller.signal.aborted) return;
+          if (found.length) {
+            const matching = found.filter(({ nodeId }) => nodesById.has(nodeId));
+            setHits(matching.map(({ nodeId }) => nodeId));
+            setNoteSnippets(Object.fromEntries(matching.map(({ nodeId, snippet }) => [nodeId, snippet])));
+          }
+        })
         .catch(() => { /* Title matches stay when the search service is unavailable. */ })
-        .finally(() => setSearching(false));
+        .finally(() => { if (!controller.signal.aborted) setSearching(false); });
+      if (showTaskMatches) {
+        void loadVaultTasks(backendUrl, getAccessToken, trimmed, 'open', controller.signal)
+          .then((result) => { if (!controller.signal.aborted) setTaskSearch({ result, error: '' }); })
+          .catch((error: unknown) => {
+            if (controller.signal.aborted) return;
+            const recovery = error instanceof VaultTasksUnavailable ? vaultTaskRecovery(error.reason) : 'Try again later.';
+            setTaskSearch({ result: null, error: `Task matches are unavailable. ${recovery}` });
+          });
+      }
     }, 300);
     return () => { window.clearTimeout(timer); window.clearTimeout(remote); controller.abort(); };
-  }, [backendUrl, external, getAccessToken, graph, nodesById, query]);
+  }, [backendUrl, external, getAccessToken, graph, nodesById, query, showTaskMatches]);
 
   useEffect(() => {
     let active = true;
@@ -237,19 +270,48 @@ export function KnowledgeGraphView({ backendUrl, getAccessToken, initialQuery = 
               {nodesById.get(hover.id)!.title}
             </span>
           )}
-          {(query.trim() ? hits.length > 0 : folder !== null) && (
-            <ol className="knowledge-results luminous-glass" aria-label={query.trim() ? 'Matching notes' : `${folder || 'Vault root'} notes`}>
-              {(query.trim()
-                ? hits.slice(0, compact ? 6 : 12).flatMap((id) => nodesById.get(id) ?? [])
-                : graph.nodes.filter((node) => node.folder === folder).sort((left, right) => left.title.localeCompare(right.title)).slice(0, 60)
-              ).map((node) => (
-                <li key={node.id}>
-                  <button className="ghost-button" type="button" data-folder={node.folder} aria-pressed={node.id === selectedId} onClick={() => open(node.id)}>
-                    <span className="knowledge-dot" aria-hidden="true" />{node.title}
-                  </button>
-                </li>
-              ))}
-            </ol>
+          {(query.trim()
+            ? hits.length > 0 || (showTaskMatches && (!!taskSearch.result || !!taskSearch.error))
+            : folder !== null) && (
+            <div className="knowledge-results luminous-glass">
+              {query.trim() && showTaskMatches && taskSearch.result && taskSearch.result.total > 0 && (
+                <section className="knowledge-task-results" aria-labelledby={`${ids}-task-results`}>
+                  <h2 id={`${ids}-task-results`}>Tasks</h2>
+                  <a className="knowledge-task-results-count" href={`/tasks?${new URLSearchParams({ q: query.trim() })}`}>
+                    {taskSearch.result.total} matching {taskSearch.result.total === 1 ? 'task' : 'tasks'}
+                  </a>
+                  <ol>
+                    {taskSearch.result.items.slice(0, 3).map((task) => (
+                      <li key={task.id}>
+                        <span>{task.text}</span>
+                        <time dateTime={task.dueAt ?? task.dueDate ?? undefined}>
+                          {taskDateLabel(task.dueDate, task.dueTime, task.dueAt)}
+                        </time>
+                      </li>
+                    ))}
+                  </ol>
+                </section>
+              )}
+              {query.trim() && taskSearch.error && <p className="knowledge-task-search-error" role="status">{taskSearch.error}</p>}
+              {(query.trim() ? hits.length > 0 : folder !== null) && (
+                <ol className="knowledge-result-list" aria-label={query.trim() ? 'Matching notes' : `${folder || 'Vault root'} notes`}>
+                  {(query.trim()
+                    ? hits.slice(0, compact ? 6 : 12).flatMap((id) => nodesById.get(id) ?? [])
+                    : graph.nodes.filter((node) => node.folder === folder).sort((left, right) => left.title.localeCompare(right.title)).slice(0, 60)
+                  ).map((node) => (
+                    <li key={node.id}>
+                      <button className="ghost-button" type="button" data-folder={node.folder} aria-pressed={node.id === selectedId} onClick={() => open(node.id)}>
+                        <span className="knowledge-dot" aria-hidden="true" />
+                        <span className="knowledge-result-note-text">
+                          <span>{node.title}</span>
+                          {noteSnippets[node.id] && <span className="knowledge-result-snippet">{noteSnippets[node.id]}</span>}
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ol>
+              )}
+            </div>
           )}
           <ul className="knowledge-legend" aria-label="Folders">
             {folders.map((name) => (

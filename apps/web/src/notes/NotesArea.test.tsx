@@ -71,6 +71,15 @@ async function openFixture() {
 const saveCalls = () => fetchMock.mock.calls.filter(([, init]) => init?.method === 'POST' || init?.method === 'PUT');
 
 describe('Notes workflow', () => {
+  it('opens a source note from its vault-task deep link', async () => {
+    mount(['/notes?note=Work%2Ffixture.md']);
+    expect(await screen.findByRole('dialog', { name: 'fixture' })).not.toBeNull();
+    expect(fetchMock.mock.calls.some(([input]) => {
+      const url = new URL(String(input));
+      return url.pathname === '/notes/note' && url.searchParams.get('path') === path;
+    })).toBe(true);
+  });
+
   it('defaults to the original graph, opens its familiar reader and edits only after selecting a note', async () => {
     mount();
     expect(await screen.findByLabelText('Search your knowledge')).not.toBeNull();

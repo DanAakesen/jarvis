@@ -5,6 +5,21 @@
 .notes-create-button:focus-visible, .notes-location button:focus-visible { outline: 3px solid var(--focus); outline-offset: -3px; }
 .notes-create-button:disabled, .notes-location button:disabled { opacity: .5; cursor: default; }
 .notes-page .knowledge-search, .notes-page .knowledge-results { left: 50%; width: min(560px, calc(100% - 32px)); translate: -50% 0; }
+.knowledge-results { display: flex; flex-direction: column; }
+.knowledge-result-list { display: grid; gap: 2px; padding: 0; margin: 0; list-style: none; }
+.knowledge-results .knowledge-result-list button { width: 100%; min-width: 0; text-align: left; }
+.knowledge-result-note-text { display: grid; min-width: 0; gap: 2px; }
+.knowledge-result-snippet { color: var(--text-muted); font-size: var(--type-caption); font-weight: 400; overflow-wrap: anywhere; }
+.knowledge-task-results { display: grid; gap: 6px; padding: 4px 8px 10px; border-bottom: 1px solid var(--rule); }
+.knowledge-task-results h2 { margin: 0; font-size: var(--type-small); }
+.knowledge-task-results-count { width: fit-content; color: var(--text); font-size: var(--type-caption); text-underline-offset: 2px; }
+.knowledge-task-results-count:hover { color: var(--text-muted); }
+.knowledge-task-results-count:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; border-radius: var(--radius-control); }
+.knowledge-task-results ol { display: grid; gap: 6px; padding: 0; margin: 0; list-style: none; }
+.knowledge-task-results li { display: flex; min-width: 0; justify-content: space-between; gap: 8px; font-size: var(--type-caption); }
+.knowledge-task-results li span { min-width: 0; overflow-wrap: anywhere; }
+.knowledge-task-results li time { flex: 0 0 auto; color: var(--text-muted); }
+.knowledge-task-search-error { margin: 4px 8px; color: var(--text-muted); font-size: var(--type-caption); }
 .notes-page .knowledge-reset { min-height: 44px; }
 .knowledge-note.notes-popup { position: fixed; z-index: 40; top: calc(var(--rail-size, 56px) + 76px); bottom: 88px; }
 .knowledge-note.notes-popup-creating { width: min(820px, calc(100vw - var(--rail-size, 56px) - 48px)); }
