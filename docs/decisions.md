@@ -23,6 +23,25 @@ before/after matrix, token values and exceptions are in
 `docs/ui/p14-12/contrast-table.json`; synthetic Chromium captures are in
 `docs/ui/p14-12/screenshots.md`.
 
+## P12-34 — Daily Data presentation (18 October 2026)
+
+Keep the existing record-browser state machine and reads; replace only its
+presentation with the Daily kit. Use a sticky table at 700px and above and
+compact record cards below it, rather than requiring sideways table reading on
+phones. Put all fields and units in a labelled inline detail region, preserving
+null as “Not recorded” and zero as zero. Keep raw JSON nested and collapsed,
+and return focus to the row control on close or Escape. Workout and brief
+drill-down actions remain available inside the record detail.
+Preserve detail selection across same-query refreshes by record identity,
+including refreshed ordering; recover focus if the selected record disappears.
+
+Keep one freshness line beside the collection picker and Refresh; move loaded
+period, processing time and unknown-completeness evidence to the existing source
+disclosure. Reuse `DailyChart` without changing plot choices or observations.
+State unavailable pagination directions in text. Keep sync facts and brief
+bodies readable without nested panel boxes. No new dependencies, tokens,
+backend behavior, real-data acceptance or original-site cutover follows.
+
 ## P12-32 — Daily Body & sleep presentation (18 October 2026)
 
 Keep the rebuild presentation-only: Body and Sleep use the existing parent-owned
