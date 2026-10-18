@@ -1,5 +1,15 @@
 # Design
 
+## Responsive rules (P14-05, 18 October 2026)
+
+Use the shared viewport set in `apps/web/src/styles.css`: phone through 700px,
+tablet above 700px through 900px, desktop above 900px, and wide from 1200px.
+The 380px narrow-handset exception only tightens chat, voice, metadata and
+camera controls. The 1099px task-board and 720px task-detail container queries
+remain content-scoped because their layout follows allocated component width.
+Daily's 640px and 760px media queries remain outside this pass as its page is
+being built in parallel.
+
 ## Icon-only header (P9-119)
 
 Settings is a gear only at every width, including phones, with its Settings
@@ -118,6 +128,8 @@ supersedes this section's earlier button appearance limits for buttons only;
 other controls keep the restrained surfaces, neutral field boundaries and
 visible keyboard focus described here. No decorative coloured boxes, bevels,
 inset-shadow borders or selected-state glows are added to non-button controls.
+Within action groups, markup order is keyboard and visual order: place the
+primary action last. CSS does not reorder action groups.
 
 Keep compact desktop controls where useful and at least 44px touch targets.
 Segmented groups wrap at narrow widths; scrolling filter rows retain keyboard
@@ -1610,7 +1622,9 @@ raw exception text, identifiers or codes. Loading, empty and partial states use
 polite status announcements; errors use an alert. Recovery actions reuse the
 shared button classes and busy state.
 
-The shared state surface reserves a 10rem minimum block size. Use the ordinary
+The shared state surface reserves a 10rem minimum block size for loading, empty
+and error states so the page does not jump when they resolve; a partial notice
+sits beside existing content and reserves none. Use the ordinary
 Loader unless the final collection layout is known well enough for a matching
 skeleton. Explain the real empty condition and, for stale, partial or capped
 data, explain how to refresh. Daily retains its existing `DailyState` treatment

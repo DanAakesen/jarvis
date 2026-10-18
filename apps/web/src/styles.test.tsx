@@ -4,8 +4,87 @@ import { describe, expect, it } from 'vitest';
 
 type Color = [number, number, number];
 
+// Daily has parallel responsive work and remains outside this pass's breakpoint contract.
+function stylesheetFiles(directory: string): string[] {
+  return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    const path = join(directory, entry.name);
+    if (entry.isDirectory()) return entry.name === 'daily' ? [] : stylesheetFiles(path);
+    return entry.name.endsWith('.css') ? [path] : [];
+  });
+}
+
+const stylesheets = stylesheetFiles('src').map((path) => readFileSync(path, 'utf8'));
+const sharedStyles = readFileSync('src/styles.css', 'utf8');
+
+function mediaBlocks(source: string): Array<{ query: string; body: string }> {
+  const blocks: Array<{ query: string; body: string }> = [];
+  const media = /@media\s*([^{}]+)\{/g;
+  let match: RegExpExecArray | null;
+  while ((match = media.exec(source))) {
+    let depth = 1;
+    let end = media.lastIndex;
+    for (; end < source.length && depth > 0; end += 1) {
+      if (source[end] === '{') depth += 1;
+      else if (source[end] === '}') depth -= 1;
+    }
+    blocks.push({ query: match[1]!, body: source.slice(media.lastIndex, end - 1) });
+    media.lastIndex = end;
+  }
+  return blocks;
+}
+
+describe('responsive stylesheet contract', () => {
+  it('uses only the canonical viewport breakpoints and documented narrow-phone exception', () => {
+    const values = new Set<number>();
+    for (const source of stylesheets) {
+      for (const { query } of mediaBlocks(source)) {
+        for (const match of query.matchAll(/(?:min|max)-width\s*:\s*(\d+(?:\.\d+)?)px|\bwidth\s*(?:<=|>=|<|>)\s*(\d+(?:\.\d+)?)px/g)) {
+          values.add(Number(match[1] ?? match[2]));
+        }
+      }
+    }
+    expect([...values].sort((a, b) => a - b)).toEqual([380, 700, 900, 1200]);
+  });
+
+  it('pairs every full-height 100vh declaration with a dynamic viewport declaration', () => {
+    for (const source of stylesheets) {
+      for (const [, rule] of source.matchAll(/[^{}]*\{([^{}]*)\}/gs)) {
+        if (!/(?:^|;)\s*(?:min-|max-)?height\s*:[^;]*100vh\b/.test(rule!)) continue;
+        expect(rule).toMatch(/(?:^|;)\s*(?:min-|max-)?height\s*:[^;]*100dvh\b/);
+      }
+    }
+    expect(sharedStyles).toContain('.app { min-height: 100vh; min-height: 100dvh; }');
+  });
+
+  it('uses shrinkable tracks in fixed-column phone grids', () => {
+    for (const source of stylesheets) {
+      for (const { query, body } of mediaBlocks(source)) {
+        if (!/max-width:\s*700px|max-height:\s*500px/.test(query)) continue;
+        for (const match of body.matchAll(/grid-template-columns\s*:\s*repeat\(\s*\d+\s*,\s*([^;]+)\)/g)) {
+          expect(match[0]!.replace(/\s+/g, '')).toMatch(/^grid-template-columns:repeat\(\d+,minmax\(0,1fr\)\)$/);
+        }
+      }
+    }
+    expect(sharedStyles).toContain('grid-template-columns: repeat(2, minmax(0, 1fr))');
+  });
+
+  it('keeps table scrolling focusable and the narrow action grid shrinkable', () => {
+    expect(ruleDeclaration(sharedStyles, /\.generated-view-table:focus-visible\s*\{([^}]*)\}/, 'outline'))
+      .toBe('3px solid var(--focus)');
+    expect(ruleDeclaration(readFileSync('src/ConversationHistory.css', 'utf8'),
+      /\.conversation-history \.composer textarea\s*\{([^}]*)\}/, 'min-height')).toBe('44px');
+    expect(ruleDeclaration(sharedStyles, /\.usage-rank-label a\s*\{([^}]*)\}/, 'display')).toBe('block');
+    expect(ruleDeclaration(sharedStyles, /\.usage-rank-label a\s*\{([^}]*)\}/, 'max-width')).toBe('100%');
+    expect(ruleDeclaration(sharedStyles, /\.release-page h2\s*\{([^}]*)\}/, 'overflow-wrap')).toBe('anywhere');
+    expect(ruleDeclaration(sharedStyles, /\.release-trail-pipeline li\s*\{([^}]*)\}/, 'min-width')).toBe('0');
+    expect(ruleDeclaration(sharedStyles, /\.release-trail-pipeline a\s*\{([^}]*)\}/, 'overflow-wrap')).toBe('anywhere');
+    expect(sharedStyles).toContain('.kanban-header-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));');
+    expect(sharedStyles).toContain('.deployment-add { grid-template-columns: repeat(2, minmax(0, 1fr)); }');
+  });
+});
+
 describe('app-wide control contract', () => {
-  const source = readFileSync('src/styles.css', 'utf8');
+  const source = sharedStyles;
 
   it.each([
     'settings-back', 'signin-button',
@@ -52,9 +131,9 @@ describe('app-wide control contract', () => {
 
   it('provides wrapping action groups with consistent responsive button targets', () => {
     expect(source).toContain('.button-group, .settings-actions, .task-dialog-actions, .action-row');
-    expect(source).toContain('.button-group > .primary-button');
+    expect(source).toContain('.button-group > :is(button, a), .settings-actions > :is(button, a), .task-dialog-actions > :is(button, a),');
     expect(source).toContain('.workspace-view-content .task-window-actions, .workspace-view-content .timeline-artifacts { padding-top: var(--space-3); }');
-    expect(source).toContain('@media (max-width: 600px) {\n  .button-group, .settings-actions, .task-dialog-actions, .settings-save');
+    expect(source).toContain('@media (max-width: 700px) {\n  .button-group, .settings-actions, .task-dialog-actions, .settings-save');
     expect(source).toContain('width: 100%; max-width: 100%;');
   });
 
@@ -124,6 +203,53 @@ describe('app-wide control contract', () => {
     expect(ruleDeclaration(shared, /\.state-message--error\s*\{([^}]*)\}/, 'border')).toBe('1px solid var(--rule)');
   });
 
+  it('keeps action group order in markup and the deployment form gap at 10px', () => {
+    const actionGroups = ['button-group', 'settings-actions', 'task-dialog-actions', 'action-row', 'settings-save'];
+    const rules = [...source.matchAll(/([^{}]+)\{([^{}]*)\}/g)];
+    for (const [, selectors, declarations] of rules) {
+      if (actionGroups.some((name) => new RegExp(`\\.${name}(?![\\w-])`).test(selectors!))) {
+        expect(declarations).not.toMatch(/(?:^|;)\s*order\s*:/);
+      }
+    }
+
+    expect(ruleDeclaration(source, /\.deployment-add\s*\{([^}]*)\}/, 'row-gap')).toBe('10px');
+  });
+
+  it('keeps primary actions after sibling controls in shared action groups', () => {
+    const classes = new Set(['button-group', 'settings-actions', 'task-dialog-actions', 'action-row', 'settings-save']);
+    const violations: string[] = [];
+
+    const visit = (directory: string) => {
+      for (const entry of readdirSync(directory, { withFileTypes: true })) {
+        const path = join(directory, entry.name);
+        if (entry.isDirectory()) {
+          visit(path);
+        } else if (entry.isFile() && entry.name.endsWith('.tsx') && !entry.name.includes('.test.')) {
+          const component = readFileSync(path, 'utf8');
+          const groupOpenings = /<div\b[^>]*className=(?:"([^"]*)"|{`([^`]*)`})[^>]*>/g;
+          for (const match of component.matchAll(groupOpenings)) {
+            const groupClasses = (match[1] ?? match[2] ?? '').split(/\s+/);
+            if (!groupClasses.some((name) => classes.has(name))) continue;
+
+            const start = match.index! + match[0].length;
+            const close = matchingDivClose(component, match.index!, match[0].length);
+            const controls = [...component.slice(start, close).matchAll(/<(?:button|a)\b[^>]*>/g)];
+            if (controls.length < 2) continue;
+
+            const primaryIndex = controls.findIndex(([control]) =>
+              /className=(?:"[^"]*\b(?:primary-button|danger-button--filled)\b[^"]*"|{[^}]*\b(?:primary-button|danger-button--filled)\b[^}]*})/.test(control));
+            if (primaryIndex !== -1 && primaryIndex !== controls.length - 1) {
+              violations.push(`${path}: primary action precedes another control in .${groupClasses.find((name) => classes.has(name))}`);
+            }
+          }
+        }
+      }
+    };
+    visit('src');
+
+    expect(violations).toEqual([]);
+  });
+
   it('removes decorative control rims without removing neutral field structure or focus', () => {
     for (const selector of [
       /\.kanban-card-action\s*\{([^}]*)\}/,
@@ -145,6 +271,22 @@ describe('app-wide control contract', () => {
     expect(source).toContain('.knowledge-search:has(input:focus-visible) { outline: 3px solid var(--focus);');
     expect(source).toContain('.folio-search:has(input:focus-visible) { outline: 3px solid var(--focus);');
   });
+
+  function matchingDivClose(source: string, openingIndex: number, openingLength: number): number {
+    const tags = /<\/?div\b[^>]*>/g;
+    tags.lastIndex = openingIndex + openingLength;
+    let depth = 1;
+    for (const match of source.matchAll(tags)) {
+      const tag = match[0];
+      if (tag.startsWith('</')) {
+        depth -= 1;
+        if (depth === 0) return match.index!;
+      } else if (!tag.endsWith('/>')) {
+        depth += 1;
+      }
+    }
+    throw new Error(`No closing div for opening at ${openingIndex} (${openingLength} characters)`);
+  }
 
   it('draws slim arrowless desktop scrollbars and keeps the glass ring from adding phantom ones', () => {
     expect(ruleDeclaration(source, /\* \{ (scrollbar-width: thin;[^}]*)\}/, 'scrollbar-width')).toBe('thin');
@@ -556,7 +698,7 @@ describe('shared glass tokens', () => {
     expect(emptyTranscriptLayout).toBe('flex');
     expect(styles).not.toContain('.conversation-overview');
     expect(styles).toContain('padding: clamp(16px, 12vh, 100px) 12px');
-    expect(styles).toContain('@media (max-width: 600px)');
+    expect(styles).toContain('@media (max-width: 700px)');
   });
 
   it('keeps the shared composer grid without inline voice feedback', () => {
@@ -587,7 +729,7 @@ describe('shared glass tokens', () => {
     expect(ruleDeclaration(history, dock, 'z-index')).toBe('43');
     expect(ruleDeclaration(history, dock, 'background')).toBe('transparent');
     expect(ruleDeclaration(history, dock, 'backdrop-filter')).toBe('none');
-    expect(history).toContain('@media (min-width: 701px) and (not ((max-height: 500px) and (pointer: coarse))) {\n.app-shell[data-voice-active="true"]');
+    expect(history).toContain('@media (width > 700px) and (not ((max-height: 500px) and (pointer: coarse))) {\n.app-shell[data-voice-active="true"]');
     expect(voice).toContain('.app-shell[data-phone="true"][data-voice-active="true"] {\n    --jarvis-orb-dock-radius:');
     expect(history).toContain('.conversation-input::after { content: none; }');
     expect(history).toContain('.workspace { height: 100%; min-height: 0; margin: 0; padding: 0; border: 0; background: transparent; box-shadow: none; backdrop-filter: none; }');
@@ -607,7 +749,7 @@ describe('shared glass tokens', () => {
     expect(stageStyles).not.toContain('voice-orb');
     expect(historyStyles).not.toContain('voice-orb');
     expect(historyStyles).not.toContain('.composer-language');
-    expect(historyStyles).toContain('@media (max-width: 360px) {\n  .voice-bar { gap: 4px; padding: 6px; }');
+    expect(historyStyles).toContain('@media (max-width: 380px) {\n  .voice-bar { gap: 4px; padding: 6px; }');
     expect(historyStyles).not.toContain('.voice-bar-status');
     expect(historyStyles).not.toContain('.voice-bar-action');
     expect(ruleDeclaration(historyStyles, /\.voice-end-control\s*\{([^}]*)\}/, 'min-height')).toBe('44px');
