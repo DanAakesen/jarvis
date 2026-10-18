@@ -137,6 +137,14 @@ travel disruption, plus a reminder about an hour before a todo is due. Quiet-hou
 reminders wait until 07:00 and appear as due soon or overdue; each run sends one
 bundled push within daily caps. This limits interruptions; Dan can change it.
 
+P13-12 implements only scheduled/catch-up time-critical run alerts. The bundle
+contains only the most urgent item ID, kind, count and language; the worker uses
+fixed localized copy, never payload title/body text. A maximum of three sent
+bundles is counted per Copenhagen day, and an item alerts once per class/key
+unless its first send failed, in which case it may retry once. Manual checks,
+paused settings, quiet hours and non-new items do not notify. No per-class
+settings are added now; Dan may choose per-class toggles as a later addition.
+
 ## Show every proactive run in Background work (17 October 2026; P13 / #930)
 
 Dan decided every scheduled or manual proactive run appears in the header

@@ -15,6 +15,7 @@ provider accepting a notification is not proof that an iPhone displayed it.
 - Estimated spend has a hard limit of 100 DKK per Copenhagen month and a warning at 80%; it is labelled as an estimate ([decision](decisions.md)).
 - The vault todo file is canonical; Jarvis may add todos under its own heading but never edits, completes, reorders or deletes existing todos ([decision](decisions.md)).
 - Push alerts cover only a deadline within 24 hours, a calendar clash or a travel disruption, plus a reminder about an hour before a todo is due; quiet-hour reminders wait until 07:00, with one bundled push per run and daily caps ([decision](decisions.md)).
+- P13-12 sends only scheduled/catch-up time-critical alerts for new items, in one generic bundle with a cap of three bundles per Copenhagen day; it remains behind the alert, proactive and push switches.
 - Every scheduled or manual run appears in the header Background work popover as running, then done or failed ([decision](decisions.md)).
 - Each milestone has its own exact-`true`, default-off switch; enable push, then checks, then todo writes and alerts/reminders, only after the prior deployment is accepted ([decision](decisions.md)).
 
