@@ -33,27 +33,21 @@ and cannot see anything"), so the page now opens on an overview.
   small-phone, tablet and desktop widths. It is not live data, a physical phone,
   provider acceptance or Daily activation.
 
-## No Teams messages, ever (17 October 2026; P13 / #939)
-
-Dan decided Jarvis never sends a Teams message for proactive work or anything
-else; push is the only delivery path. This extends the [push delivery decision](#keep-the-first-web-push-proof-dark-17-october-2026-p13-01-917)
-without repeating its delivery details and keeps delivery policy unambiguous.
-Dan asked the dispatcher to decide remaining details as he would; he can change
-this choice.
-
 ## Proactive checks use an in-process fixed schedule (17 October 2026; P13 / #926)
 
-Dan chose 07:00 and 18:00 Europe/Copenhagen and a manual “Check now.” The
-dispatcher chose a small in-process loop and an atomic slot claim on Dan's
-behalf: the idle loop must not wake serverless SQL, and replicas must not claim
-the same slot. Dan can change either choice.
+Dan chose 07:00 and 18:00 Europe/Copenhagen and a manual “Check now” request at
+any time. On Dan's behalf, the dispatcher chose a small in-process loop and an
+atomic slot claim: the idle loop must not touch the database, which would wake
+serverless SQL, and replicas must not claim the same slot. Dan can change either
+choice.
 
 ## Quiet hours and language (17 October 2026; P13 / #926)
 
 Dan decided that proactive work and delivery stop from 22:00 to 07:00
 Europe/Copenhagen, with no emergency exception, and that output follows the
 language of his last chat message. This keeps the quiet window clear without
-restricting interactive requests; Dan can change either choice.
+restricting interactive requests; quiet hours also apply to manual checks. Dan
+can change either choice.
 
 ## Sources are read-only and untrusted (17 October 2026; P13 / #928)
 
@@ -64,9 +58,9 @@ from changing policy or authorising actions. Dan can change this choice.
 
 ## Monthly proactive budget (17 October 2026; P13 / #924)
 
-Dan set a 100 DKK monthly hard stop and an 80% warning. Spend is an estimate and
-must be labelled as one, so the displayed amount does not imply a settled bill.
-Dan can change the limit or warning.
+Dan set a 100 DKK monthly hard stop and an 80% warning. The warning leaves room
+to adjust before the limit; spend is an estimate and must be labelled as one so
+it does not imply a settled bill. Dan can change the limit or warning.
 
 ## Todos are canonical and add-only (17 October 2026; P13 / #927)
 
@@ -97,9 +91,9 @@ Dan chose exact-`true`, default-off flags: push (`JARVIS_PUSH_ENABLED`,
 (`JARVIS_PROACTIVE_TODO_WRITES_ENABLED`), and alerts/reminders
 (`JARVIS_PROACTIVE_ALERTS_ENABLED`). The order is push (#934), checks (#935),
 then todo writes, alerts and reminders (#936); the dispatcher enables each only
-after the previous deployment is accepted. Rollback is switching its flag off
-or reverting the enabling change. Dan chose the staged rollout; the dispatcher
-owns each switch-on on his behalf.
+after the previous deployment is accepted, so rollback stays isolated to that
+milestone. Rollback is switching its flag off or reverting the enabling change.
+Dan chose the staged rollout; the dispatcher owns each switch-on on his behalf.
 
 ## Put attention in a conditional header popover (17 October 2026; P9-120 / #913)
 
@@ -136,7 +130,8 @@ the public key. Keep RFC 8030 delivery, RFC 8291 `aes128gcm` encryption and
 RFC 8292 VAPID in a small `node:crypto` module without a new dependency. Store
 subscriptions and durable items separately from Now/activity. Push text stays
 generic; provider acceptance is not delivery evidence, and `opened_at` means
-loaded, not read. There is no Teams delivery path.
+loaded, not read. Dan decided no Teams messages are ever sent; push is the only
+delivery path, keeping notification and alert delivery on one route.
 
 The test send is user-started, so quiet hours do not block it. Do not add the
 22:00–07:00 Europe/Copenhagen guard or an emergency exception now; all later

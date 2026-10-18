@@ -979,7 +979,8 @@ Dan decided that GitHub issues are the single backlog. When Dan asks Jarvis to c
 
 ## Proactive assistance (17 October 2026; P13)
 
-- Run checks at 07:00 and 18:00 Europe/Copenhagen, with a manual “Check now.”
+- Run checks at 07:00 and 18:00 Europe/Copenhagen, and let Dan request
+  “Check now” at any time subject to quiet hours.
   Do no proactive work or delivery from 22:00 to 07:00; there is no emergency
   exception, and interactive requests remain available.
 - Read todos, Factory, weather, calendar, mail headers, calendar-derived travel
@@ -989,7 +990,9 @@ Dan decided that GitHub issues are the single backlog. When Dan asks Jarvis to c
 - Push only for deadlines within 24 hours, calendar clashes, travel disruptions
   and reminders about an hour before a todo is due. Hold a quiet-hour reminder
   until 07:00 and show it as due soon or overdue. Bundle at most one push per
-  run and enforce daily caps. Teams is not used.
+  run and enforce daily caps. Pushes are generic alerts for durable,
+  owner-protected items; they carry no private details and never approve an
+  action. A user-triggered test is not proactive delivery. Teams is not used.
 - Cap estimated spend at 100 DKK per Copenhagen month, warn at 80%, and label
   spend as an estimate.
 - Show every scheduled, catch-up or manual run in the header Background work
