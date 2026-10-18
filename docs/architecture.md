@@ -1866,10 +1866,10 @@ integrations are not part of the personal-tenant deployment.
 ## Proactive Web Push backend (P13-01, 17 October 2026)
 
 The backend registers the owner-authenticated push routes only when
-`JARVIS_PUSH_ENABLED` is exactly `true`; the default is off. Disabled composition
+`JARVIS_PUSH_ENABLED` is exactly `true`; the code default is off. Disabled composition
 does not construct the push store, read or write push tables, create signing keys,
-or send provider requests, and the routes return ordinary 404s. No deployment,
-workflow or infrastructure setting enables this flag.
+or send provider requests, and the routes return ordinary 404s. Production sets
+the flag in `infra/main.bicep` (P13-03, below).
 
 `push_vapid_keys`, `push_subscriptions` and `proactive_items` are separate SQL
 tables. The store uses the process-owned SQL pool and
@@ -1890,7 +1890,7 @@ bounded by per-request/overall timeouts.
 P13-01 sends only a direct user-requested test. It adds no scheduler or quiet-hour
 guard; every future system-started send must enforce 22:00–07:00
 Europe/Copenhagen with no emergency exception. There is no Teams delivery path.
-The feature remains dark, and actual iPhone delivery is not yet proven.
+Actual iPhone delivery is not yet proven.
 
 ## Proactive foundation (P13-05; default off)
 
@@ -1939,6 +1939,32 @@ grant no authorization. The sign-in path is stored as a validated same-origin
 session-storage value and consumed after MSAL returns to `/`. P13-02 changes no
 backend, deployment flag, identity or permission configuration; live phone
 permission, lock-screen delivery and tap-through remain unverified.
+
+## Web Push production switch (P13-03; 18 October 2026)
+
+Production sets both gates; the code defaults above are unchanged.
+`infra/main.bicep` adds `JARVIS_PUSH_ENABLED` as `'true'` to the backend container
+app environment, beside `STATIC_WEB_APP_ORIGIN`, which an enabled backend
+requires. `config.ts` reads it as `pushEnabled` and `index.ts` hands it to
+`registerPushRoutes`. The Deploy workflow's web job writes `VITE_PUSH_ENABLED=true`
+to `$GITHUB_ENV` beside `VITE_BACKEND_URL`, and Vite's `define` injects the boolean
+into the production bundle.
+
+A change to `infra/main.bicep` re-plans infrastructure, backend, web and agent, so
+the bundle is rebuilt with the gate. The web job needs the backend job, so the
+routes exist before the Notifications section does. The environment change
+creates a new backend revision. No secret, identity, resource, dependency or
+permission is added: the VAPID key pair is still generated on first use and kept
+in SQL. Rollback is reverting the whole P13-03 change, which removes the two gate
+lines and the pin test together, or setting both values to `false` and updating
+the pin test in the same commit; reverting only the two lines fails the pin test
+in CI before Deploy can run. Either way the routes unregister and the
+Notifications section and worker registration drop; stored subscriptions and the
+key stay in SQL, and nothing can send while the routes are off.
+`apps/backend/src/push/enabled-switch.test.ts` pins both values and fails if any
+other workflow, Dockerfile, package file, web config or Bicep/parameter file names
+a switch. CI proves this wiring only; iPhone delivery still needs Dan's device
+test.
 
 ## Presence modes (P6-23; replaces P7-02 away mode)
 
