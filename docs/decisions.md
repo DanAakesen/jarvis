@@ -1,5 +1,41 @@
 # Decisions
 
+## Discover vault tasks in source notes using native Tasks markers (18 October 2026; P13-18 / #999)
+
+Read safe Markdown notes under `Personal/` and `Work/` recursively, including
+their inboxes, and the existing root `Task.md` or `Tasks.md` dashboard.
+Exclude Archive path segments (case-insensitive), hidden paths and unsafe note
+paths. Preserve ambiguous-root detection, but allow scoped notes without a root
+dashboard. This supersedes the root-only read scope of P13-07.
+
+Treat native `⏫` as P1 - High alongside legacy `priority:: P1 - High` and
+`priority: P1 - High`. `🔼` is P2 - Medium; no priority is P3 - Normal.
+Neither those values nor `🔽`/`⏬` qualifies for findings or reminders.
+Assumption: `🔺` is outside the supported priority scale and is not high.
+Parse `🕒 HH:mm` independently of its position around `📅 YYYY-MM-DD`,
+using Copenhagen local time. Preserve trailing date/time and legacy due fields;
+date-only tasks remain due at 23:59. Strip clock/time, priority and the existing
+Tasks metadata emoji and their recognized date, recurrence, ID and
+completion-action payloads from reminder/finding text, and ignore fenced examples.
+
+Share parsed-task caching by vault client, path and tree blob SHA between the
+source and ticker. Bound each scan to 256 files, 4 MiB total content, 256 KiB per
+file and four concurrent reads, retaining the 20-second deadline. Unknown blob
+sizes reserve 256 KiB. A skipped oversized file, cap, failed read or tree/content
+SHA race makes the whole scan unavailable, not empty or partially successful;
+the ticker retains its bounded verification retries and suppression policy.
+Only complete scans replace the cache. Reminder identity stays normalized text
+plus due instant, independent of path, and duplicate facts are collapsed before
+the fact cap, preserving explicit-time eligibility across duplicates.
+The 30-second ticker cadence and existing one-hour reminder lead
+time, flags and release controls are unchanged.
+
+Keep the writer's root-only, add-only "Suggested by Jarvis" behavior unchanged.
+Limitation: suggestion deduplication still checks the root file and durable
+receipts, not all source notes. Widening it would couple writes to scan limits,
+failures and snapshot freshness; defer that write-path change.
+Validation uses synthetic notes only, not private vault content or live delivery.
+
 ## Use one refined button hierarchy across the web app (18 October 2026; P14-03 / #969)
 
 Keep the existing class names and route behavior while making button intent
@@ -18,7 +54,8 @@ change, not a change to actions, confirmation boundaries or API behavior.
 ## Notify only on P1 - High vault tasks (18 October 2026; #996)
 
 Proactive todo findings and reminders are eligible only for open vault tasks
-explicitly marked `priority:: P1 - High` or `priority: P1 - High`. Missing and
+explicitly marked `priority:: P1 - High` or `priority: P1 - High` (extended to
+native `⏫` by P13-18 above). Missing and
 lower priority values are not notification-worthy. Re-check priority at reminder
 delivery; if the vault cannot establish the current priority after bounded
 retries, suppress rather than send an unverified reminder. This reuses the
