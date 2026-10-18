@@ -43,6 +43,7 @@ Use this as the single frontend workflow. The project entrypoint contains the ma
 - Extend the existing CSS variables, theme, and shared components. Keep shared color, typography, spacing, radius, state, and motion values in one canonical code source.
 - Use existing semantic roles. Add tokens only for real reusable decisions; avoid duplicate aliases or a second token inventory in `DESIGN.md`. Name tokens by role, such as `--surface-default`, `--text-muted`, and `--focus-ring`. Local exceptions may use raw values.
 - Equivalent headings, buttons, navigation items, panels, rows, forms, and status messages should share anatomy and behavior across routes. Change them only for a workflow reason.
+- For Jarvis actions, use `.primary-button`, `.secondary-button`, `.ghost-button`, `.danger-button`, or `.danger-button--filled`; put spacing on `.button-group` or its container, not on the button.
 - Use color for brand, hierarchy, and state, paired with labels, icons, shapes, or position when meaning matters. Respect the established brand; do not add a new palette or component library for one screen.
 - Add chart or asset tokens only when those elements exist. Keep `DESIGN.md` aligned with implementation: stable intent, important conventions, and the location of canonical values.
 - Polish component geometry: optically align icons and labels, balance padding, and relate corner treatment to size and nesting. Use consistent icon size and stroke within a family; inspect alignment at the actual rendered size.

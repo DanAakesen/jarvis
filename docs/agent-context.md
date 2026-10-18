@@ -1382,6 +1382,14 @@ hover/pressed states. Preserve neutral `--control-rule` field boundaries and
 `--rule` structure, semantic error/success text/icons and `--focus` keyboard
 outlines. These are not decorative borders to remove.
 
+Shared action levels are `.primary-button`, `.secondary-button`,
+`.ghost-button`, `.danger-button`, and `.danger-button--filled`. Use
+`.button-group` or the existing action-row classes for wrapping and spacing;
+buttons themselves have no layout margin. Preserve compact 36px controls only
+for fine pointers and restore at least 44px on coarse pointers. Busy actions
+keep their label width, set `aria-busy`, remain disabled and show the shared
+inline `Loader`.
+
 Preserve existing compact desktop density and at least 44px touch targets.
 Check desktop and narrow phone layouts in both appearances, selected hover and
 press, keyboard focus, disabled/loading/recovery states and reduced motion.
