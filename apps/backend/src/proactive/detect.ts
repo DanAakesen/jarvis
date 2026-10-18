@@ -37,7 +37,11 @@ function snippet(text: string, limit: number): string {
   return `${text.slice(0, limit - 1).replace(/[\uD800-\uDBFF]$/u, '')}…`;
 }
 
-export function todosDueWithin(facts: SourceFact[], now: Date, minutes: number): SourceFact[] {
+export function todosDueWithin<T extends Pick<SourceFact, 'kind' | 'dueAt'>>(
+  facts: readonly T[],
+  now: Date,
+  minutes: number,
+): T[] {
   if (!Number.isFinite(minutes) || minutes <= 0) return [];
   const from = now.getTime();
   const until = from + minutes * 60_000;

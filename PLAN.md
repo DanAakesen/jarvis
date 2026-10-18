@@ -78,8 +78,11 @@ user-triggered test, in the production deploy by setting `JARVIS_PUSH_ENABLED` i
 `infra/main.bicep` and `VITE_PUSH_ENABLED` in the web build step; the code
 defaults stay off. P13-14 (#935, 18 October 2026) enables milestone 2, the silent
 read-only checks, the same way, by setting `JARVIS_PROACTIVE_ENABLED` and
-`VITE_PROACTIVE_ENABLED`. Milestones 3 and 4 (the todo-write pilot and opt-in
-alerts) stay dark, and neither change adds a proactive send or Teams path.
+`VITE_PROACTIVE_ENABLED`. P13-15 (#936, 18 October 2026) enables milestones 3 and
+4, the add-only suggested todos and the time-critical alerts and reminders, the same
+way, by setting `JARVIS_PROACTIVE_TODO_WRITES_ENABLED` and
+`JARVIS_PROACTIVE_ALERTS_ENABLED` in `infra/main.bicep` only (no web flag). No
+change adds a Teams path.
 Provider acceptance and local tests do not prove that an iPhone displayed the
 notification. Physical-device delivery remains unverified.
 
@@ -2383,8 +2386,9 @@ a time, only after the previous deployment is accepted. The first milestone is a
 direct, user-triggered Web Push test linking to a durable owner-protected item.
 P13-01 and P13-02 built it dark; P13-03 (#934) enables it in the production
 deploy, so push milestone 1 is on. P13-14 (#935) enables milestone 2, the
-read-only checks, the same way, while milestones 3 and 4 stay
-dark. The user test is not proactive delivery, and real iPhone delivery remains
+read-only checks, the same way, and P13-15 (#936) enables milestones 3 and 4, the
+suggested todos, alerts and reminders, with backend flags only. The user test is
+not proactive delivery, and real iPhone delivery remains
 unproven. Teams is not a delivery path.
 
 | ID | Issue | Task | Acceptance criteria | Depends on | Status |
@@ -2401,7 +2405,7 @@ unproven. Teams is not a delivery path.
 | P13-10 | [#930](https://github.com/DanAakesen/jarvis/issues/930) | Proactive web: page, Settings section and Background work entries (dark) | Mocked web tests cover flag states, loading, empty and error states, actions, budget, sources and Background work links; browser checks cover phone and desktop layouts. | P13-05 | Complete |
 | P13-11 | [#931](https://github.com/DanAakesen/jarvis/issues/931) | Proactive todo writer: add-only suggested todos (dark) | Synthetic-data tests cover flag gating, safe add-only writes, conflicts, duplicates, limits and recovery; no existing todo is changed or deleted. | P13-05, P13-06, P13-07 | Complete |
 | P13-12 | [#932](https://github.com/DanAakesen/jarvis/issues/932) | Proactive run alerts: time-critical push with a shared sender (dark) | Tests cover gates, alert selection, deduplication, caps, bundled pushes, generic payloads, delivery outcomes, quiet hours and text-free logs. | P13-01, P13-02, P13-05, P13-06 | Complete |
-| P13-13 | [#933](https://github.com/DanAakesen/jarvis/issues/933) | Proactive todo reminders: one hour before a todo is due (dark) | Fake-based tests cover timed-todo planning, quiet-hour holds, limits, re-reads, bundling, expiry, retries and private push payloads. | P13-12, P13-06, P13-07, P13-05 | In progress |
+| P13-13 | [#933](https://github.com/DanAakesen/jarvis/issues/933) | Proactive todo reminders: one hour before a todo is due (dark) | Fake-based tests cover timed-todo planning, quiet-hour holds, limits, re-reads, bundling, expiry, retries and private push payloads. | P13-12, P13-06, P13-07, P13-05 | Complete |
 | P13-14 | [#935](https://github.com/DanAakesen/jarvis/issues/935) | Enable proactive checks | CI is green, including the infrastructure offline build and lint. | P13-03, P13-05 to P13-10 | In progress |
 | P13-15 | [#936](https://github.com/DanAakesen/jarvis/issues/936) | Enable suggested todos, alerts and reminders | CI is green, including the infrastructure offline build and lint. | P13-11 to P13-14 | In progress |
 | P13-16 | [#937](https://github.com/DanAakesen/jarvis/issues/937) | Chat and voice recall of proactive findings | Fake-based tests cover flag gating, owner authorization, validation, bounded results, failures and untrusted item text. | P13-05, P13-06, P13-10 | Complete |

@@ -1980,7 +1980,7 @@ unavailable; no fallback location or geocoding is used. All source errors are
 mapped to stable unavailable reason codes. This slice enables no flags and
 starts no source reads.
 
-## Proactive suggested-todo writer (P13-11; default off)
+## Proactive suggested-todo writer (P13-11; default off in code, on in production since P13-15)
 
 The writer is appended to the existing ordered `onFindingsStored` hooks only
 when proactive composition is enabled and
@@ -2030,7 +2030,7 @@ and excludes starts in the calendar's half-open 48-hour window. All sources
 bound fact text, treat provider text as untrusted data, and return stable
 unavailable reason codes without logging it.
 
-## Proactive run alerts and shared push sender (P13-12; default off)
+## Proactive run alerts and shared push sender (P13-12; default off in code, on in production since P13-15)
 
 Composition appends the alert hook only when proactive, push and alert gates are
 all exactly enabled and both push-store and sender dependencies exist. It runs
@@ -2056,6 +2056,41 @@ System sends are rejected inside quiet hours at the sender boundary. The worker
 selects only fixed templates for validated kinds, languages and counts, ignoring
 payload-supplied title/body text. Provider acceptance is recorded per item and
 remains distinct from device display.
+
+## Proactive todo reminders (P13-13; default off in code, on in production since P13-15)
+
+Composition adds the reminder planner after the P13-12 alert hook only when the
+proactive, push and shared alert gates, vault, reminder store, push store and
+system sender are present. The planner runs for scheduled, catch-up and manual
+checks, but only plans timed todos when the todo source succeeded. It hashes
+normalized text and the due instant for identity, saves only a sanitized,
+80-unit title, inserts at most 20 rows per run and 100 pending rows per owner,
+and removes terminal rows older than 30 days. It never cancels a row based on a
+partial source-fact list.
+
+The owner-scoped `proactive_reminders` table is added by migration 0059, with a
+unique owner/key index and pending-fire and sent-day indexes. Planning inserts
+and retention cleanup share one owner-locked transaction; SQL read paths use
+`databaseReadRequest`. The in-memory store follows the same caps and terminal
+state behavior for tests.
+
+The self-rescheduling, unreferenced ticker reads the earliest pending time once
+at startup. Future or absent work and the Copenhagen quiet window are pure
+in-memory checks; after a due scan it refreshes the wake time once. Errors back
+off five minutes. For due rows it expires late work, applies pause and
+subscription suppression, then resolves and parses the canonical todo file
+again with a 20-second bound. It cancels changed todos, retries failed
+verification twice, and after the third verification failure may send with an
+`unverified` reason. It suppresses deadline alerts sent within two hours and
+enforces eight sent reminders per Copenhagen day.
+
+Each remaining row upserts an idempotent, private `todo` finding with a fixed
+Danish/English body. One generic `proactive_reminder` push is bundled per tick
+through the shared system sender. Push delivery and reminder state are separate
+writes, so a process crash between acceptance and state update can send again;
+a brief overlap of revisions during deployment can also duplicate a reminder
+and is accepted. A todo added after the last check is covered from the next
+check on; "Check now" covers it immediately.
 
 ## Web push delivery (P13-02; default off)
 
@@ -2171,10 +2206,10 @@ flag; `apps/web/config/public-config.ts` carries only the push configuration. Wi
 both web flags on, `/proactive/:id` opens the full item detail page rather than the
 M1 push item page.
 
-`JARVIS_PROACTIVE_TODO_WRITES_ENABLED` and `JARVIS_PROACTIVE_ALERTS_ENABLED` stay
-set nowhere (milestones 3 and 4, P13-15), so a check reads its sources, stores
-findings and records its Background work entry; it writes no todo and sends no
-push. A change to `infra/main.bicep` re-plans infrastructure, backend, web and agent,
+`JARVIS_PROACTIVE_TODO_WRITES_ENABLED` and `JARVIS_PROACTIVE_ALERTS_ENABLED` were
+set nowhere when this change shipped (milestones 3 and 4 came with P13-15, below),
+so a check read its sources, stored findings and recorded its Background work
+entry; it wrote no todo and sent no push. A change to `infra/main.bicep` re-plans infrastructure, backend, web and agent,
 as for P13-03, so one Deploy carries the new backend revision and the rebuilt
 bundle; the web job needs the backend job, so the routes exist before the page does.
 No secret, identity, resource, dependency or permission is added.
@@ -2185,11 +2220,55 @@ the same commit; removing only the two lines fails the pin tests in CI before De
 can run. Either way the routes and scheduler are not registered, and the Proactive
 page, Settings section and Background work link drop out of the web build. Stored
 findings, feedback and settings stay in SQL. `apps/backend/src/proactive/enabled-switch.test.ts`
-pins the backend value and fails if its name appears in another file (the alert flag
-keeps its own pin, `alerts-default-off.test.ts`); `apps/web/config/proactive-switch.test.ts`
+pins the backend value and fails if its name appears in another file (the todo-writes
+and alert flags keep their own pins, `todo-writes-default-off.test.ts` and
+`alerts-default-off.test.ts`); `apps/web/config/proactive-switch.test.ts`
 pins the web value and fails if any other workflow, Dockerfile, package file, web
 config or Bicep/parameter file names it. CI proves this wiring only; whether
 scheduled and manual checks run in production is for Dan's test on the deployed app.
+
+## Proactive todo, alert and reminder production switch (P13-15; 18 October 2026)
+
+Production sets the two backend gates for milestones 3 and 4; the code defaults
+above are unchanged. `infra/main.bicep` adds `JARVIS_PROACTIVE_TODO_WRITES_ENABLED`
+and `JARVIS_PROACTIVE_ALERTS_ENABLED`, each `'true'`, to the backend container app
+environment, beside `JARVIS_PUSH_ENABLED` and `JARVIS_PROACTIVE_ENABLED`. `config.ts`
+reads them as `proactiveTodoWritesEnabled` and `proactiveAlertsEnabled`. The
+composition P13-14 turned on then appends the todo writer hook (P13-11) when the
+todo-writes flag is on and the SQL pool and vault client exist, and the alert hook
+(P13-12) when the alert and push flags are on and the push store and sender exist.
+The reminder planner and ticker (P13-13) ride the alert flag, so they add no flag of
+their own. There is no web flag: the Proactive page and its Settings section already
+show what these hooks produce, so `deploy.yml` and the web build are unchanged.
+
+At runtime, after each check the writer may append new lines under
+`## Suggested by Jarvis` in the one existing todo file: add-only, never creating,
+editing or deleting, at most three per run and five per Copenhagen day, in one vault
+commit per run. A scheduled or catch-up run may send one generic alert push for a
+new, time-critical deadline or clash finding: at most one per check and three per
+Copenhagen day, and never in the 22:00 to 07:00 quiet window, which is enforced in
+the hook and again at the sender. Reminders send one generic push about an hour
+before a todo with an explicit time is due (at most eight per Copenhagen day), and
+a reminder due in the quiet window is held until 07:00. The pause switch and the
+Todo list source switch are read before any vault call. Pause also suppresses
+reminders already planned, while the source switch only stops new ones being
+planned. A device turns its own pushes off in Settings. As with P13-03 and
+P13-14, a change to `infra/main.bicep` re-plans infrastructure, backend, web and
+agent, so one Deploy carries the new backend revision. No secret, identity,
+resource, dependency or permission is added.
+
+Rollback is to revert the whole P13-15 change (removes the gate lines and the pin
+test updates together), or to set the value(s) to `false` AND update the pin tests in
+the same commit; removing only a line fails the pin tests in CI before Deploy can
+run. One feature can be switched off on its own the same way: set only its value to
+`false` and update only its pin (`todo-writes-default-off.test.ts` for todo
+additions, `alerts-default-off.test.ts` for alerts and reminders). Either way the
+hook is not composed; lines already added to the todo file stay, and findings,
+feedback, settings and send history stay in SQL. Each pin names its flag once, in
+`infra/main.bicep`, with the exact value `'true'`, and `config.test.ts` keeps proving
+both default off in code. CI proves this wiring only; whether a todo line is added
+and whether an alert or reminder push reaches a device is for Dan's test on the
+deployed app.
 
 ## Presence modes (P6-23; replaces P7-02 away mode)
 

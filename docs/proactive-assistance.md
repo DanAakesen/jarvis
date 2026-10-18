@@ -1,6 +1,6 @@
 # Proactive assistance
 
-Status: **Decided; web push and read-only checks are on in production, todo writes and alerts are off** (17 October 2026; updated 18 October 2026).
+Status: **Decided; web push, read-only checks, suggested todos, alerts and reminders are on in production** (17 October 2026; updated 18 October 2026).
 
 The decisions below define the intended behaviour. Each feature stays off until
 its own enabling change follows acceptance of the previous deployment. A push
@@ -70,8 +70,10 @@ switches both on in production. The P13-05 backend foundation, the read-only
 source implementations (P13-07 onwards, described below) and the P13-10 web
 surface shipped dark. P13-14 (18 October 2026) switches proactive checks,
 milestone 2, on in production, so the in-process scheduler, the source reads and
-one tool-less model call per run are active there. Todo writes and proactive
-alerts and reminders (milestones 3 and 4) stay off, so no proactive push is sent.
+one tool-less model call per run are active there. P13-15 (18 October 2026)
+switches milestones 3 and 4 on the same way: Jarvis may add suggested todos, and a
+time-critical alert or a one-hour reminder may send a push, within the caps and
+quiet hours decided below. Alerts and reminders never run from 22:00 to 07:00.
 The
 [plan summary](../PLAN.md#proactive-assistance--proposed-scope-17-october-2026)
 separates these slices from remaining pilot gates. Daily
@@ -85,9 +87,9 @@ Dan's confirmed decisions supersede the proposals below. The server flags
 sets none. P13-05 adds contracts, owner-bound routes, operational stores,
 time/language/budget helpers and a background-job kind, but no scheduler, source
 read, model call, timer or proactive send. P13-06 extends that foundation with
-the scheduler and run pipeline without enabling any flag. P13-14 later sets only
-`JARVIS_PROACTIVE_ENABLED` (and the web flag) in production; the todo-writes and
-alerts flags stay set nowhere.
+the scheduler and run pipeline without enabling any flag. P13-14 later sets
+`JARVIS_PROACTIVE_ENABLED` (and the web flag) in production, and P13-15 sets the
+todo-writes and alerts flags in `infra/main.bicep` only.
 
 Scheduled work runs in-process in the backend, which retains its minimum
 one replica. Slots are 07:00 and 18:00 Europe/Copenhagen, computed using the IANA
@@ -146,10 +148,11 @@ them once checks are on (P13-14).
 
 ## Suggested-todo writer (18 October 2026; P13-11)
 
-The writer is a dark, separately gated `onFindingsStored` hook. The exact string
+The writer is a separately gated `onFindingsStored` hook, built dark in P13-11 and
+switched on in production by P13-15. The exact string
 `true` is required for `JARVIS_PROACTIVE_TODO_WRITES_ENABLED`, and the main
-`JARVIS_PROACTIVE_ENABLED` gate must also be on. No workflow, infrastructure or
-environment file sets the writer flag. Existing pause and Todos source settings
+`JARVIS_PROACTIVE_ENABLED` gate must also be on. Only `infra/main.bicep` sets the
+writer flag. Existing pause and Todos source settings
 remain controls; scheduled and catch-up work rechecks the 22:00–07:00
 Europe/Copenhagen quiet window, while manual writes may run at any hour.
 
@@ -207,6 +210,26 @@ uses HTTPS only, rejects IP and local hostnames, DNS-pins public answers,
 forbids redirects and non-XML/compressed responses, and caps each read at ten
 seconds and 2 MiB. It rejects DTD/entity declarations and outputs only sanitized
 titles with publication time and feed host. Feed content remains untrusted.
+
+## Proactive todo reminders (18 October 2026; P13-13)
+
+Reminders reuse the P13-12 alert flag and are constructed only with the
+proactive, push and alert gates and their vault, store and sender dependencies;
+all three default off in code and are on in production since P13-15. The planner
+runs after every check, but only when the
+todo source succeeded, and records explicit-time todos due within 48 hours for
+one hour before their deadline. A date-only todo remains covered by the
+24-hour deadline alert.
+
+The in-process ticker reads the earliest pending time once at startup, remains
+silent while idle, and does no reminder work from 22:00 to 07:00 Copenhagen
+time. At send time it re-reads and parses the todo file; changed, completed or
+deleted todos are cancelled. It creates one private Proactive item per reminder
+and sends one generic bundled push. The daily cap is eight. Titles remain in
+the private reminder/item database rows, never in push payloads or logs.
+
+A todo added after the last check is covered from the next check on; "Check
+now" covers it immediately.
 
 ## Current evidence
 
