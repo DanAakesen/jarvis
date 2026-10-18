@@ -120,6 +120,18 @@ check. The SQL snapshot is covered by the isolated database integration suite
 only when its loopback SQL Server fixture is available; do not claim it ran
 otherwise. No source flag is enabled by these checks.
 
+## P13-08 proactive calendar, mail and travel sources (18 October 2026)
+
+P13-08 adds registered read-only calendar, metadata-only mail and
+calendar-derived travel sources, but does not invoke them or enable any flag.
+Calendar facts use Europe/Copenhagen midnights and bounded pagination; Gmail
+reads no body, snippet or attachment; travel has no external provider.
+
+Focused checks:
+`npm test --workspace @jarvis/backend -- --run src/proactive/time.test.ts src/proactive/sources/registry.test.ts src/proactive/sources/calendar-reader.test.ts src/proactive/sources/calendar.test.ts src/proactive/sources/mail.test.ts src/proactive/sources/travel.test.ts src/google/tools.test.ts`,
+`npm run build --workspace @jarvis/backend`, and
+`npm run lint --workspace @jarvis/backend`.
+
 ## Chat acceptance failure labels and one bounded retry (#820, 17 October 2026)
 
 Read a failed chat check's safe reason in the acceptance artifact first; never

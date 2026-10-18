@@ -1059,6 +1059,15 @@ the weather reader uses the saved home location and makes a bounded HTTPS
 forecast request. These source implementations remain dormant until a later
 engine slice invokes them.
 
+## Proactive calendar, mail and travel sources (18 October 2026; P13-08)
+
+P13-08 registers bounded read-only Google Calendar and Gmail metadata sources and
+a calendar-derived travel source. Calendar reads use a 48-hour window; mail lists
+at most 15 unread primary-inbox messages from the prior two days and reads only
+selected headers; travel reads up to seven calendar days and makes no
+travel-provider request. These changes enable no flag, run no source, add no OAuth
+scope and leave the server entry point unchanged.
+
 ## Proactive web (18 October 2026; P13-10)
 
 The web page and Settings section are independently dark behind
