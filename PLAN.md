@@ -2421,6 +2421,24 @@ Dan approved P12 on 12 October 2026 and explicitly released only P12-01 for this
 | P12-17 | [#732](https://github.com/DanAakesen/jarvis/issues/732) | End-to-end, mobile & real-iPhone acceptance | Data manifest reconciled; real devices and existing Jarvis workflows pass; SQL availability and reverse-delta rollback verified. Dan reviews cutover evidence. | P12-06, P12-11, P12-12, P12-13, P12-14, P12-15, P12-16 | Not started |
 | P12-18 | [#733](https://github.com/DanAakesen/jarvis/issues/733) | Final delta, cutover & rollback window | Post-switch sync / food / UI pass; window agreed; new Azure writes can be recovered if rollback is needed. | P12-17 | Not started |
 | P12-19 | [#734](https://github.com/DanAakesen/jarvis/issues/734) | Retire legacy and migration-only tooling | Permanent Azure services and original source/data remain; full verified migration, rollback/retention gates met before legacy deprecation or temporary-tool cleanup; no hidden old canonical writer. | P12-18 | Not started |
+| P12-20 | [#964](https://github.com/DanAakesen/jarvis/issues/964) | Daily page shell: sectioned page, switcher, shared period and building blocks | One sectioned Daily page (Overview, Briefs, Data) where a new section is a folder with no shared registry edit; shared state, stat, chart and table blocks; nothing existing is lost; inspected in a real browser at 320, 390x844, 768 and 1440x900 in light and dark. | P12-15 | In progress |
+| P12-21 | [#966](https://github.com/DanAakesen/jarvis/issues/966) | Daily read model: per-metric filter, metric catalogue and per-day nutrition totals | Additive, owner-only, read-only sources behind a version 3 capability negotiation; version 1 and 2 responses stay byte-identical; real-SQL tests; an unknown total is null, never 0. | P12-05, P12-07 | In progress |
+| P12-22 | [#968](https://github.com/DanAakesen/jarvis/issues/968) | Offline migration tooling: export-bundle format, validator, synthetic fixtures and runbook | Documented bundle format; fail-closed offline validator; digest-only reports; deterministic synthetic bundle with negative variants; owner runbook; temporary code in one removable directory. Refs P12-02 and P12-06; closes neither. | P12-03 | In progress |
+| P12-23 | [#978](https://github.com/DanAakesen/jarvis/issues/978) | Daily Workouts section | Per-unit summary, volume chart, type filter, sortable list and a workout detail with heart rate; honest nulls and partial loads; inspected in a real browser. | P12-20, P12-28 | Not started |
+| P12-24 | [#979](https://github.com/DanAakesen/jarvis/issues/979) | Daily Nutrition section | Day view with null-aware totals and the owner's targets, trend with gaps shown as gaps, and a read-only library of favourites and plans; inspected in a real browser. | P12-20, P12-21, P12-28 | Not started |
+| P12-25 | [#980](https://github.com/DanAakesen/jarvis/issues/980) | Daily Body & sleep section | Metric picker with trends and honest summaries, per-unit charts, and nightly sleep with recorded stages; inspected in a real browser. | P12-20, P12-21, P12-28 | Not started |
+| P12-26 | [#981](https://github.com/DanAakesen/jarvis/issues/981) | Daily Overview summary, Briefs polish and cross-section audit | Independent summary tiles linking to each section, polished Briefs, and a written audit of keyboard, focus, motion, small-screen, dark-theme and request-abort behaviour with fixes. | P12-23, P12-24, P12-25 | Not started |
+| P12-27 | [#982](https://github.com/DanAakesen/jarvis/issues/982) | Resumable idempotent Daily importer and digest-only reconciliation | Offline, synthetic-proven tooling: dry run by default, never overwrites, resumable, real-SQL tests, digest-only reconciliation. No real data. Refs P12-02 and P12-06; closes neither. | P12-22, P12-03 | Not started |
+| P12-28 | [#976](https://github.com/DanAakesen/jarvis/issues/976) | Shared paging hook for Daily sections | `useDailyPages` follows cursors with a cap, aborts on change, keeps items while reloading and never claims completeness; tested; no existing behaviour changes. | — | Complete |
+
+18 October 2026, owner direct instruction: the whole Daily page is to be built so
+that workouts, nutrition and body data can be browsed like the original site, and
+the data is to be migrated. P12-20 to P12-28 build the page (shell, read-model
+additions, paging hook, then the Workouts, Nutrition and Body & sleep sections in
+parallel, then the Overview integration). P12-22 and P12-27 build and prove the
+migration tooling offline with synthetic data. The real export, the owner's
+rulings and the protected import remain with P12-02, P12-06 and P12-18 and need
+the owner's access; nothing here is run against real data.
 
 ## P13 — Proactive assistance
 
@@ -2463,6 +2481,15 @@ when the backlog is near empty.
 | --- | --- | --- | --- | --- | --- |
 | P14-01 | [#938](https://github.com/DanAakesen/jarvis/issues/938) | Unify UI styles and add small refinements | Inspect changed surfaces before and after in a real browser at 390x844 and 1440x900, in light and dark, and exercise the changed controls and states. | Other in-flight web pull requests: Daily page, Proactive page and Settings section, attention icon, per-project policy control | Complete |
 | P14-02 | [#957](https://github.com/DanAakesen/jarvis/issues/957) | Finish the UI unification on the remaining surfaces | Audit and unify the deferred surfaces with existing tokens; inspect synthetic before/after states at 390x844 and 1440x900, in light and dark. | PR #953: defer GeneratedViewRenderer until its footnote and table-scroll changes are integrated | Complete |
+| P14-03 | [#969](https://github.com/DanAakesen/jarvis/issues/969) | Refined button system | One button hierarchy with all states, sizes and groups; no baked-in margin; measured before and after at 390x844 and 1440x900 in light and dark; stylesheet ratchet tests. | P14-02 | In progress |
+| P14-04 | [#971](https://github.com/DanAakesen/jarvis/issues/971) | Consistent borders, radii, shadows and surfaces | Token-only radii and surfaces, every side border classified, a ratchet test with a reasoned allow-list; before and after evidence. | P14-02 | In progress |
+| P14-05 | [#973](https://github.com/DanAakesen/jarvis/issues/973) | Responsive and overflow audit and fixes | Scripted probe at 320, 375, 390, 768, 1024, 1440 and 844x390; one documented breakpoint set; defects fixed at the root; regression tests. | P14-02 | In progress |
+
+18 October 2026, owner direct instruction: buttons look basic, and borders, radii
+and responsive behaviour still differ between surfaces. P14-03 to P14-05 are
+measured passes (before and after) over the shared button system, the surface
+rules and the responsive behaviour. They run in parallel and share
+`apps/web/src/styles.css`, so they merge one at a time.
 
 ## Factory canonical-status parity (16 October 2026)
 
