@@ -136,6 +136,13 @@
 }
 .daily-section-tab[aria-selected="true"]:hover { background: var(--state-selected-hover); }
 .daily-section-tab[aria-selected="true"]:active { background: var(--state-selected-pressed); }
+.daily-view-switch .daily-section-tab[aria-pressed="true"] {
+  background: var(--state-selected-bg);
+  color: var(--state-selected-fg);
+  font-weight: 650;
+}
+.daily-view-switch .daily-section-tab[aria-pressed="true"]:hover { background: var(--state-selected-hover); }
+.daily-view-switch .daily-section-tab[aria-pressed="true"]:active { background: var(--state-selected-pressed); }
 .daily-section-tab:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 .daily-section-panel { min-width: 0; min-height: 12rem; }
 .daily-section-panel:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; border-radius: var(--radius-control); }

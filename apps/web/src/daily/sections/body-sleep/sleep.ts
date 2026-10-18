@@ -1,5 +1,6 @@
 import type { DailyPeriod } from '../types';
 import { dateOnly, finite, periodDays, type Row } from './metrics';
+import { formatTime } from '../../ui/formatters';
 
 export const stages = [
   { key: 'deep_hours', label: 'Deep', mark: '1' },
@@ -56,10 +57,8 @@ export function sleepSummary(rows: readonly Row[], period: DailyPeriod) {
 }
 
 // Only offset-qualified instants can be converted safely; naive source times stay verbatim.
-export function sleepTime(value: Row[string] | undefined) {
+export function sleepTime(value: Row[string] | undefined, locale?: string) {
   if (typeof value !== 'string' || !value.trim()) return null;
   if (!/(?:Z|[+-]\d{2}:\d{2})$/u.test(value) || !Number.isFinite(Date.parse(value))) return value;
-  return new Intl.DateTimeFormat('en-GB', {
-    timeZone: 'Europe/Copenhagen', dateStyle: 'medium', timeStyle: 'short',
-  }).format(new Date(value));
+  return formatTime(value, locale);
 }

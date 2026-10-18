@@ -6,6 +6,7 @@ import { DailyPeriodControl } from '../../DailyPeriodControl';
 import { ScrollTable } from '../../ui/ScrollTable';
 import { StatTile } from '../../ui/StatTile';
 import { DailyCoverageNote } from '../../ui/DailyCoverageNote';
+import { DailySectionHeader } from '../../ui/DailySectionHeader';
 import { FreshnessLine } from '../../ui/FreshnessLine';
 import { formatDate, formatNumber } from '../../ui/formatters';
 import { useDailyPages } from '../../ui/useDailyPages';
@@ -50,16 +51,16 @@ export function SleepView({ backendUrl, getAccessToken, period, onPeriodChange, 
     return next;
   });
   return <div className="body-sleep-view">
-    <div className="body-sleep-toolbar">
+    <DailySectionHeader controls={<div className="body-sleep-toolbar">
       <DailyPeriodControl period={period} onPeriodChange={onPeriodChange} />
-    </div>
-    {pages.last && <FreshnessLine observedAt={pages.last.freshness.observedAt} count={pages.items.length}
+    </div>}
+    freshness={pages.last && <FreshnessLine observedAt={pages.last.freshness.observedAt} count={pages.items.length}
       partial={pages.hasMore || pages.error !== null || pages.loadingMore} />}
-    <ReadState pages={pages} name="sleep" />
-    <DailyCoverageNote summary="About this data">
+    aboutData={<DailyCoverageNote summary="About this data">
       <p>Only recorded sleep values are summarized. Unknown stages and missing nights are not zero. An unknown asleep value never falls back to total sleep. Returned records do not establish source completeness or freshness.</p>
       <p>Sleep stage details and source labels reflect fields returned for each night. Missing stage values are omitted, not estimated.</p>
-    </DailyCoverageNote>
+    </DailyCoverageNote>} />
+    <ReadState pages={pages} name="sleep" />
     {pages.status === 'ready' && pages.items.length === 0 && <HealthEmptyState name="sleep" />}
     {pages.items.length > 0 && <>
       {lastNight && stageSummary && <section className="body-sleep-last-night" aria-labelledby="body-sleep-last-night-heading">

@@ -1,6 +1,7 @@
 import { dailyQuerySources as sources, isDailyQuery, type DailyCursor, type DailyJson, type DailyQuery, type DailySourceId } from '@jarvis/contracts';
 import type { ChartSeries } from '../chart-data';
 import { isDailyPeriod } from './period';
+import { dailyLocale, formatDate, formatNumber, formatTime } from './ui/formatters';
 
 /** `purpose` is static plain-English copy for the overview: what the collection is for, never a figure. */
 export const dailySources: readonly { id: DailySourceId; label: string; dated: boolean; purpose: string }[] = [
@@ -40,9 +41,6 @@ const columns: Record<DailySourceId, readonly Column[]> = {
 };
 export function dailyColumns(source: DailySourceId) { return columns[source]; }
 const calendar = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Copenhagen', year: 'numeric', month: '2-digit', day: '2-digit' });
-const recordedDate = new Intl.DateTimeFormat(undefined, { timeZone: 'UTC', dateStyle: 'medium' });
-const recordedTime = new Intl.DateTimeFormat(undefined, { timeZone: 'Europe/Copenhagen', dateStyle: 'medium', timeStyle: 'short' });
-const chartTime = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Copenhagen', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
 export function initialDailyPeriod(now = new Date()) {
   const parts = Object.fromEntries(calendar.formatToParts(now).map(part => [part.type, part.value]));
   const endDate = `${parts.year}-${parts.month}-${parts.day}`;
@@ -62,13 +60,13 @@ export function readable(value: string) {
   const text = value.replace(/_/gu, ' ');
   return text.charAt(0).toUpperCase() + text.slice(1);
 }
-export function dailyValue(value: DailyJson | undefined): string {
+export function dailyValue(value: DailyJson | undefined, locale = dailyLocale()): string {
   if (value === undefined || value === null) return 'Unknown';
-  if (typeof value === 'number') return value.toLocaleString(undefined, { maximumFractionDigits: 3 });
+  if (typeof value === 'number') return formatNumber(value, 3, locale);
   if (typeof value === 'boolean') return value ? 'Yes' : 'No';
   if (typeof value === 'string') {
-    if (/^\d{4}-\d{2}-\d{2}$/u.test(value) && Number.isFinite(Date.parse(value))) return recordedDate.format(new Date(`${value}T12:00:00Z`));
-    if (/^\d{4}-\d{2}-\d{2}T/u.test(value) && Number.isFinite(Date.parse(value))) return recordedTime.format(new Date(value));
+    if (/^\d{4}-\d{2}-\d{2}$/u.test(value) && Number.isFinite(Date.parse(value))) return formatDate(value, locale);
+    if (/^\d{4}-\d{2}-\d{2}T/u.test(value) && Number.isFinite(Date.parse(value))) return formatTime(value, locale);
     return value;
   }
   if (Array.isArray(value) && value.every(item => typeof item === 'string')) return value.length ? value.join(', ') : 'None';
@@ -87,7 +85,7 @@ export function dailyRowKey(row: Row, source: DailySourceId, ordinal: number) {
   return `${source}:${ordinal}`;
 }
 export interface DailyPlot { id: string; label: string; unit: string; series: ChartSeries[] }
-export function dailyPlots(source: DailySourceId, rows: readonly Row[]): DailyPlot[] {
+export function dailyPlots(source: DailySourceId, rows: readonly Row[], locale = dailyLocale()): DailyPlot[] {
   const groups = new Map<string, { label: string; unit: string; points: ChartSeries['points'] }>();
   rows.forEach((row, index) => {
     const fields = source === sources.metrics ? ['value', 'avg_value'] : source === sources.sleep ? ['asleep_hours', 'total_sleep_hours'] :
@@ -103,7 +101,7 @@ export function dailyPlots(source: DailySourceId, rows: readonly Row[]): DailyPl
       const date = row.metric_date ?? row.sleep_date ?? row.sample_minute;
       // Observation ordinals keep same-date points distinct; bars never imply interpolation over missing values.
       const axisLabel = source === sources.heartRate && typeof date === 'string' && Number.isFinite(Date.parse(date))
-        ? chartTime.format(new Date(date)).replace(',', '') : dailyValue(date);
+        ? formatTime(date, locale) : dailyValue(date, locale);
       group.points.push({ x: `${index + 1}: ${axisLabel}`, y: value });
       groups.set(id, group);
     }

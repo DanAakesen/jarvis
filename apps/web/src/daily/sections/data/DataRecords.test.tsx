@@ -5,6 +5,7 @@ import { DataRecords } from './DataRecords';
 import { DailyPage } from '../../DailyPage';
 import { dailyFixture, jsonResponse } from '../../test-support';
 import { DailyRefreshContext } from '../../refresh';
+import { dailyLocale, formatDate } from '../../ui/formatters';
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 const row = { meal_date: '2026-10-17', meal_name: 'Synthetic lunch with a long recorded description',
@@ -16,11 +17,12 @@ describe('Daily Data records', () => {
     const table = screen.getByRole('table');
     expect(container.querySelector('.daily-scroll-table-sticky')).toBeTruthy();
     expect(within(table).getByRole('columnheader', { name: 'Energy (kcal)' })).toBeTruthy();
-    const rowHeader = within(table).getByRole('rowheader', { name: 'Oct 17, 2026' });
+    const rowHeader = within(table).getByRole('rowheader', { name: formatDate('2026-10-17', dailyLocale()) });
     expect(rowHeader.classList.contains('daily-record-row-header')).toBe(true);
     expect(within(table).getByText('0').closest('td')?.className).toBe('daily-record-number');
     expect(screen.queryByRole('region', { name: /Details for/u })).toBeNull();
     const opener = screen.getByRole('button', { name: /Details for/u });
+    expect(opener.classList.contains('secondary-button')).toBe(true);
     const detailPanel = document.getElementById(opener.getAttribute('aria-controls')!);
     expect(opener.getAttribute('aria-expanded')).toBe('false');
     expect(detailPanel?.hidden).toBe(true);
@@ -50,6 +52,18 @@ describe('Daily Data records', () => {
     expect(document.activeElement).toBe(opener);
   });
 
+  it('aligns missing values with the numeric column and renders Details as a secondary control', () => {
+    const { container } = render(<DataRecords source={sources.meals} rows={[
+      row, { ...row, meal_date: '2026-10-16', confidence: 0 },
+    ]} />);
+    const table = screen.getByRole('table');
+    const confidence = within(table).getByRole('columnheader', { name: 'Confidence' });
+    expect(confidence.classList.contains('daily-record-number')).toBe(true);
+    const missing = within(table).getAllByText('Not recorded').find(element => element.closest('td'));
+    expect(missing?.closest('td')?.classList.contains('daily-record-number')).toBe(true);
+    expect(container.querySelector('tbody .secondary-button')).toBeTruthy();
+  });
+
   it('replaces the table with phone cards and responds to the 700px breakpoint', () => {
     let phone = true;
     let change = () => {};
@@ -63,6 +77,7 @@ describe('Daily Data records', () => {
     expect(cards.querySelector('.daily-record-summary')?.textContent).toContain('Energy: 0 kcal');
     expect(cards.querySelector('dt')?.textContent).toBe('Confidence');
     expect(within(cards).getByText('Not recorded')).toBeTruthy();
+    expect(within(cards).getByRole('button', { name: /Details for/u }).classList.contains('secondary-button')).toBe(true);
     act(() => { phone = false; change(); });
     expect(screen.getByRole('table')).toBeTruthy();
     expect(screen.queryByRole('list', { name: 'Daily records' })).toBeNull();

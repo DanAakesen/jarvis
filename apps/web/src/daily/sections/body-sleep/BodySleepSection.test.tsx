@@ -8,6 +8,7 @@ import type { DailySectionProps } from '../types';
 import BodySleepSection from './BodySleepSection';
 import { section } from './index';
 import type { Row } from './metrics';
+import { dailyLocale, formatTime } from '../../ui/formatters';
 
 const period = { startDate: '2026-10-01', endDate: '2026-10-07' };
 const props: DailySectionProps = {
@@ -151,13 +152,39 @@ describe('Body & sleep section (synthetic records only)', () => {
     expect(sourceQuery).toMatchObject({ ...period, metric: 'body_mass', limit: 500 });
   });
 
-  it('does not bridge missing calendar days in the trend', async () => {
+  it('connects short gaps while retaining one metric legend and every sparse reading', async () => {
     stub();
     const result = mount();
     await screen.findByRole('img', { name: 'Body mass — kg' });
     const kg = screen.getByRole('img', { name: 'Body mass — kg' });
-    expect(kg.querySelectorAll('.daily-chart-line')).toHaveLength(2);
+    expect(kg.querySelectorAll('.daily-chart-line')).toHaveLength(1);
+    expect(kg.querySelector('.daily-chart-line')?.getAttribute('d')?.match(/M/gu)).toHaveLength(1);
+    expect(kg.querySelector('.daily-chart-line')?.getAttribute('d')?.match(/L/gu)).toHaveLength(1);
     expect(result.container.querySelector('h2')?.textContent).toBe('Body & sleep');
+  });
+
+  it('shows all seven alternate-day readings with one legend entry over a 14-day period', async () => {
+    const sparsePeriod = { startDate: '2026-10-01', endDate: '2026-10-14' };
+    const sparseRows: Row[] = Array.from({ length: 7 }, (_, index) => ({
+      metric_name: 'body_mass', metric_date: `2026-10-${String(index * 2 + 1).padStart(2, '0')}`,
+      value: index, unit: 'kg',
+    }));
+    stub(query => jsonResponse(dailyFixture(query, query.source === sources.metricCatalog ? [{
+      metric_name: 'body_mass', units: ['kg'], first_date: sparsePeriod.startDate,
+      last_date: '2026-10-13', day_count: 7, latest_updated_at: '2026-10-17T07:00:00Z',
+    }] : query.source === sources.metrics ? sparseRows : [])));
+    mount({ period: sparsePeriod });
+    const chart = await screen.findByRole('img', { name: 'Body mass — kg' });
+    const figure = chart.closest('figure')!;
+    expect(within(figure).getByRole('list', { name: 'Body mass — kg legend' }).querySelectorAll('li')).toHaveLength(1);
+    expect(figure.querySelectorAll('.daily-chart-series circle')).toHaveLength(7);
+    const line = figure.querySelector('.daily-chart-line')?.getAttribute('d') ?? '';
+    expect(line.match(/M/gu)).toHaveLength(1);
+    expect(line.match(/L/gu)).toHaveLength(6);
+    expect(chart.getAttribute('aria-describedby')).toBeTruthy();
+    expect(document.getElementById(chart.getAttribute('aria-describedby')!)?.textContent)
+      .toContain('wider gaps remain disconnected');
+    expect(document.getElementById(chart.getAttribute('aria-describedby')!)?.textContent).toContain('not interpolated');
   });
 
   it('uses keyboard roving tabs, URL state and browser history', async () => {
@@ -190,7 +217,7 @@ describe('Body & sleep section (synthetic records only)', () => {
     expect(screen.getByText(/Partial stages; unrecorded stages are unknown/)).toBeTruthy();
     expect(screen.getByRole('heading', { name: 'Average asleep' })).toBeTruthy();
     expect(screen.getByText(/2 of 7 nights with asleep data/)).toBeTruthy();
-    expect(within(table).getByText('1 Oct 2026, 23:30')).toBeTruthy();
+    expect(within(table).getByText(formatTime('2026-10-01T21:30:00Z', dailyLocale()))).toBeTruthy();
   });
 
   it('shows an unrecorded latest night as Not recorded without inventing stage values', async () => {

@@ -2,6 +2,7 @@ import { dailyQuerySources as sources } from '@jarvis/contracts';
 import { useEffect, type KeyboardEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import type { DailySectionProps } from '../types';
+import { DailySectionHeader } from '../../ui/DailySectionHeader';
 import { BodyView } from './BodyView';
 import { SleepView } from './SleepView';
 import './body-sleep.css';
@@ -39,7 +40,7 @@ export default function BodySleepSection(props: DailySectionProps) {
     document.getElementById(`body-sleep-tab-${views[next]}`)?.focus();
   };
   return <section className="body-sleep" aria-labelledby="body-sleep-heading">
-    <h2 id="body-sleep-heading">Body &amp; sleep</h2>
+    <DailySectionHeader title={'Body & sleep'} headingId="body-sleep-heading" headingTabIndex={null} />
     <div className="daily-section-tabs" role="tablist" aria-label="Body and sleep views" onKeyDown={onKeyDown}>
       {views.map(item => <button type="button" className="daily-section-tab" key={item} role="tab"
         id={`body-sleep-tab-${item}`} aria-controls={`body-sleep-panel-${item}`}

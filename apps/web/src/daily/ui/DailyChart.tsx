@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { chartLayout, xPosition, yPosition, type ChartPoint } from '../../chart-data';
 import { formatNumber } from './formatters';
 import { ScrollTable } from './ScrollTable';
@@ -15,28 +15,45 @@ function label(point: DailyChartPoint) {
   return `${String(point.x)}: ${value}`;
 }
 
-function pathSegments(points: readonly DailyChartPoint[], px: (point: DailyChartPoint) => number, py: (value: number) => number) {
+function exceedsDateGap(previous: DailyChartPoint | undefined, point: DailyChartPoint, maxGapDays?: number) {
+  if (maxGapDays === undefined || typeof previous?.x !== 'string' || typeof point.x !== 'string' ||
+      !/^\d{4}-\d{2}-\d{2}$/u.test(previous.x) || !/^\d{4}-\d{2}-\d{2}$/u.test(point.x)) return false;
+  const previousDate = Date.parse(`${previous.x}T00:00:00Z`);
+  const pointDate = Date.parse(`${point.x}T00:00:00Z`);
+  return Number.isFinite(previousDate) && Number.isFinite(pointDate) &&
+    pointDate - previousDate > maxGapDays * 86_400_000;
+}
+
+function pathSegments(points: readonly DailyChartPoint[], px: (point: DailyChartPoint) => number, py: (value: number) => number, maxGapDays?: number) {
   let drawing = false;
+  let previous: DailyChartPoint | undefined;
   return points.map(point => {
     if (point.y === null) {
       drawing = false;
+      previous = undefined;
       return '';
     }
+    if (exceedsDateGap(previous, point, maxGapDays)) drawing = false;
     const command = `${drawing ? 'L' : 'M'}${px(point).toFixed(1)},${py(point.y).toFixed(1)}`;
     drawing = true;
+    previous = point;
     return command;
   }).filter(Boolean).join(' ');
 }
 
-function bandSegments(points: readonly DailyChartPoint[], px: (point: DailyChartPoint) => number, py: (value: number) => number) {
+function bandSegments(points: readonly DailyChartPoint[], px: (point: DailyChartPoint) => number, py: (value: number) => number, maxGapDays?: number) {
   const segments: DailyChartPoint[][] = [];
+  let previous: DailyChartPoint | undefined;
   for (const point of points) {
     if (point.low == null || point.high == null) {
       if (segments.at(-1)?.length) segments.push([]);
+      previous = undefined;
       continue;
     }
+    if (exceedsDateGap(previous, point, maxGapDays) && segments.at(-1)?.length) segments.push([]);
     if (!segments.length) segments.push([]);
     segments.at(-1)!.push(point);
+    previous = point;
   }
   return segments.filter(points => points.length).map(points => {
     const upper = points.map(point => `${px(point).toFixed(1)},${py(point.high!).toFixed(1)}`).join(' L');
@@ -52,14 +69,18 @@ function barPath(x: number, y: number, baseline: number, barWidth: number) {
   return `M${x},${bottom} V${top + radius} Q${x},${top} ${x + radius},${top} H${x + barWidth - radius} Q${x + barWidth},${top} ${x + barWidth},${top + radius} V${bottom} Z`;
 }
 
-export function DailyChart({ kind, name, series, target, rangeLabel, dataTable }: {
+export function DailyChart({ kind, name, series, target, rangeLabel, dataTable, description, maxGapDays }: {
   kind: 'line' | 'bar' | 'area';
   name: string;
   series: readonly DailyChartSeries[];
   target?: { value: number; label: string };
   rangeLabel?: string;
   dataTable?: ReactNode;
+  description?: string;
+  maxGapDays?: number;
 }) {
+  const descriptionId = useId();
+  const gapLimit = maxGapDays !== undefined && Number.isFinite(maxGapDays) && maxGapDays >= 0 ? maxGapDays : undefined;
   const figureRef = useRef<HTMLElement>(null);
   const [width, setWidth] = useState(800);
   const [activePoint, setActivePoint] = useState<number | null>(null);
@@ -86,6 +107,7 @@ export function DailyChart({ kind, name, series, target, rangeLabel, dataTable }
   if (!series.some(entry => entry.points.some(point => point.y !== null || point.low != null || point.high != null))) {
     return <figure ref={figureRef} className="daily-chart">
       <figcaption>{name}</figcaption>
+      {description && <p id={descriptionId} className="visually-hidden">{description}</p>}
       <p>No recorded values to chart.</p>
       {dataTable != null && <details className="daily-chart-table" open={tableOpen}>
         <summary onClick={event => { event.preventDefault(); setTableOpen(open => !open); }}>View data table</summary>
@@ -130,7 +152,9 @@ export function DailyChart({ kind, name, series, target, rangeLabel, dataTable }
 
   return <figure ref={figureRef} className="daily-chart">
     <figcaption>{name}</figcaption>
+    {description && <p id={descriptionId} className="visually-hidden">{description}</p>}
     <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label={name} tabIndex={0} aria-roledescription="chart"
+      {...(description ? { 'aria-describedby': descriptionId } : {})}
       onFocus={() => setActivePoint(current => current ?? (interactivePoints.length ? 0 : null))}
       onBlur={() => setActivePoint(null)}
       onKeyDown={event => {
@@ -181,12 +205,12 @@ export function DailyChart({ kind, name, series, target, rangeLabel, dataTable }
           })}
         </g>;
         const orderedPoints = layout.categorical ? entry.points : [...entry.points].sort((a, b) => Number(a.x) - Number(b.x));
-        const line = pathSegments(orderedPoints, px, py);
+        const line = pathSegments(orderedPoints, px, py, gapLimit);
         const last = orderedPoints.filter(point => point.y !== null).at(-1);
         const first = orderedPoints.find(point => point.y !== null);
         return <g key={`${entry.name}-${seriesIndex}`} className="daily-chart-series" style={{ color: colour }} data-series-index={seriesIndex}>
           {orderedPoints.some(point => point.low != null && point.high != null) &&
-            <g className="daily-chart-range">{bandSegments(orderedPoints, px, py).map((path, index) => <path key={index} d={path} />)}</g>}
+            <g className="daily-chart-range">{bandSegments(orderedPoints, px, py, gapLimit).map((path, index) => <path key={index} d={path} />)}</g>}
           {kind === 'area' && first && last && first !== last && first.y !== null && last.y !== null &&
             <path className="daily-chart-area" d={`${line} L${px(last)},${baseline} L${px(first)},${baseline} Z`} />}
           <path className="daily-chart-line" d={line} strokeDasharray={linePatterns[seriesIndex]} />

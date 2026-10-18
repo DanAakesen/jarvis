@@ -58,6 +58,7 @@ export function DataRecords({ source, rows, units = {}, onOpenRecord, openLabel 
   const records = useRef<HTMLDivElement>(null);
   const id = useId();
   const columns = dailyColumns(source);
+  const numericColumns = new Set(columns.filter(column => rows.some(row => typeof row[column.key] === 'number')).map(column => column.key));
   const occurrences = new Map<string, number>();
   const keys = rows.map((row, index) => {
     const base = source === sources.metrics ? JSON.stringify([source, row.metric_date, row.metric_name, row.unit]) :
@@ -85,7 +86,7 @@ export function DataRecords({ source, rows, units = {}, onOpenRecord, openLabel 
     setSelected(null);
     opener?.focus();
   };
-  const details = (row: Row, index: number) => <button id={`${id}-${index}`} className="ghost-button" type="button"
+  const details = (row: Row, index: number) => <button id={`${id}-${index}`} className="secondary-button" type="button"
     aria-expanded={selected === keys[index]} aria-controls={`${id}-detail`} onClick={() => {
       setSelected(keys[index]!);
       requestAnimationFrame(() => { panel.current?.focus({ preventScroll: true }); panel.current?.scrollIntoView?.({ block: 'start' }); });
@@ -113,13 +114,13 @@ export function DataRecords({ source, rows, units = {}, onOpenRecord, openLabel 
           <caption className="visually-hidden">Recorded Daily values; unknown values are not zero</caption>
           <thead><tr>{columns.map(column => {
             const unit = fieldUnit(source, column.key, {}, units);
-            return <th scope="col" key={column.key} className={rows.some(row => typeof row[column.key] === 'number') ? 'daily-record-number' : undefined}>
+            return <th scope="col" key={column.key} className={numericColumns.has(column.key) ? 'daily-record-number' : undefined}>
               {column.label}{unit ? ` (${unit})` : ''}</th>;
           })}<th scope="col">Details</th></tr></thead>
           <tbody>{rows.map((row, index) => <tr key={keys[index]}>
             {columns.map((column, columnIndex) => {
               const cell = <span className="daily-record-cell">{value(row, column.key)}</span>;
-              const className = typeof row[column.key] === 'number' ? 'daily-record-number' : undefined;
+              const className = numericColumns.has(column.key) ? 'daily-record-number' : undefined;
               return columnIndex === 0
                 ? <th key={column.key} scope="row"
                   className={`daily-record-row-header${className ? ` ${className}` : ''}`}>{cell}</th>

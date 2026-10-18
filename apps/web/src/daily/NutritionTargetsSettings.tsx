@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { CollapsibleSection } from '../CollapsibleSection';
 import { Loader } from '../Loader';
+import { formatTime } from './ui/formatters';
 import {
   draftText,
   loadNutritionTargets,
@@ -45,7 +46,7 @@ function failureKind(error: unknown): NutritionTargetsFailure {
 }
 
 function formatSavedAt(value: string): string {
-  return new Date(value).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+  return formatTime(value);
 }
 
 /**
