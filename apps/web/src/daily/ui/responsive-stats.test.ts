@@ -33,9 +33,12 @@ describe('Daily phone stat layouts', () => {
     expect(css).toMatch(/\.daily-nutrition > \.daily-section-tabs\s*\{[^}]*width:\s*100%;[^}]*min-width:\s*0;[^}]*overflow-x:\s*auto;/u);
   });
 
-  it('cues overflow in the Daily section tabs without showing a native scrollbar', () => {
+  it('cues overflow in the Daily section tabs with an edge mask, without showing a native scrollbar', () => {
     const css = readFileSync('src/daily/daily.css', 'utf8');
-    expect(css).toMatch(/\.daily-section-nav\[data-overflow='true'\]::after\s*\{[^}]*linear-gradient/u);
+    expect(css).toMatch(/\.daily-section-nav\[data-overflow-end='true'\]\s*\{[^}]*mask-image:\s*linear-gradient\(to right/u);
+    expect(css).toMatch(/\.daily-section-nav\[data-overflow-start='true'\]\s*\{[^}]*mask-image:\s*linear-gradient\(to left/u);
+    expect(css).toMatch(/\.daily-section-nav\[data-overflow-start='true'\]\[data-overflow-end='true'\]\s*\{[^}]*mask-image:\s*linear-gradient\(to right, transparent/u);
+    expect(css).not.toMatch(/\.daily-section-nav[^{]*::after/u);
     expect(css).toMatch(/\.daily-section-nav\s*\{[^}]*scrollbar-width:\s*none;/u);
     expect(css).toMatch(/\.daily-section-nav::-webkit-scrollbar\s*\{\s*display:\s*none;/u);
   });

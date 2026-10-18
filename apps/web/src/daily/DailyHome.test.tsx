@@ -269,6 +269,33 @@ describe('Daily overview', () => {
     }
   });
 
+  it('flags which edges of the tab strip have more tabs beyond them as it scrolls', async () => {
+    fixture();
+    render(home());
+    await settled();
+    const strip = screen.getByRole('navigation', { name: 'Daily sections' });
+    const edges = () => [strip.dataset.overflowStart, strip.dataset.overflowEnd];
+    expect(edges()).toEqual([undefined, undefined]);
+
+    let scrollLeft = 0;
+    Object.defineProperty(strip, 'scrollWidth', { configurable: true, value: 600 });
+    Object.defineProperty(strip, 'clientWidth', { configurable: true, value: 300 });
+    Object.defineProperty(strip, 'scrollLeft', { configurable: true, get: () => scrollLeft });
+    const scrollTo = (left: number) => {
+      scrollLeft = left;
+      fireEvent.scroll(strip);
+    };
+
+    scrollTo(0);
+    expect(edges()).toEqual([undefined, 'true']);
+    scrollTo(120);
+    expect(edges()).toEqual(['true', 'true']);
+    scrollTo(300);
+    expect(edges()).toEqual(['true', undefined]);
+    scrollTo(0);
+    expect(edges()).toEqual([undefined, 'true']);
+  });
+
   it('aborts old requests during twenty rapid section switches without warnings or a request backlog', async () => {
     let active = 0;
     let maximumActive = 0;

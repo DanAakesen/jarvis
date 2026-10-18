@@ -26,7 +26,7 @@ export function DailyHome({ backendUrl, getAccessToken }: AreaProps) {
   const [periodSlotHeight, setPeriodSlotHeight] = useState(70);
   const periodSlot = useRef<HTMLDivElement>(null);
   const sectionNavigation = useRef<HTMLElement>(null);
-  const [sectionTabsOverflow, setSectionTabsOverflow] = useState(false);
+  const [sectionTabsEdges, setSectionTabsEdges] = useState({ start: false, end: false });
   const [sectionLoadAttempt, setSectionLoadAttempt] = useState(0);
   const [loadedSections, setLoadedSections] = useState<{
     attempt: number;
@@ -77,13 +77,21 @@ export function DailyHome({ backendUrl, getAccessToken }: AreaProps) {
   useEffect(() => {
     const navigation = sectionNavigation.current;
     if (!navigation) return;
-    const measure = () => setSectionTabsOverflow(navigation.scrollWidth > navigation.clientWidth + 1);
+    const measure = () => {
+      const offset = Math.abs(navigation.scrollLeft);
+      const start = offset > 1;
+      const end = navigation.scrollWidth - navigation.clientWidth - offset > 1;
+      setSectionTabsEdges(previous => previous.start === start && previous.end === end ? previous : { start, end });
+    };
     measure();
-    if (typeof ResizeObserver !== 'function') return;
-    const observer = new ResizeObserver(measure);
-    observer.observe(navigation);
-    if (navigation.firstElementChild) observer.observe(navigation.firstElementChild);
-    return () => observer.disconnect();
+    navigation.addEventListener('scroll', measure, { passive: true });
+    const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(measure) : undefined;
+    observer?.observe(navigation);
+    if (navigation.firstElementChild) observer?.observe(navigation.firstElementChild);
+    return () => {
+      navigation.removeEventListener('scroll', measure);
+      observer?.disconnect();
+    };
   }, [availableSections.length]);
 
   const setSection = (id: string, replace = false) => {
@@ -142,7 +150,7 @@ export function DailyHome({ backendUrl, getAccessToken }: AreaProps) {
       </div>
     </header>
     <nav ref={sectionNavigation} className="daily-section-nav" aria-label="Daily sections"
-      data-overflow={sectionTabsOverflow || undefined}>
+      data-overflow-start={sectionTabsEdges.start || undefined} data-overflow-end={sectionTabsEdges.end || undefined}>
       <div className="daily-section-tabs" role="tablist" aria-label="Daily sections" onKeyDown={onTabKeyDown}>
         {availableSections.map(item => <button key={item.id} id={`daily-tab-${item.id}`} className="daily-section-tab" type="button" role="tab"
           aria-selected={item.id === activeSection?.id} aria-controls="daily-section-panel"
