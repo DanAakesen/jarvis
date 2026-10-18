@@ -107,7 +107,7 @@ export function ContextPanel({ closeIcon, resizeHandle, modal = false }: { close
     </aside>
   );
   return modal ? (
-    <div ref={backdrop} className="context-panel-modal-backdrop" hidden={!isOpen}
+    <div ref={backdrop} className="context-panel-modal-backdrop" hidden={!isOpen} inert={!isOpen}
       onPointerDown={(event) => { pressStartedOutside.current = event.target === event.currentTarget; }}
       onClick={(event) => {
         if (event.target === event.currentTarget && pressStartedOutside.current) dismiss();

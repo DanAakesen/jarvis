@@ -8,6 +8,8 @@ inert-background, viewport and scroll-lock handling. Keep dialog actions in
 their existing order contract and associate footer submit buttons with their
 original forms. Protect edited forms from implicit dismissal without removing
 explicit cancel/close actions. Keep nonmodal menu keyboard behavior separate.
+Exit copies are inert and hidden from accessibility; persistent sheets become
+inert immediately on close, without waiting for their visual transition.
 
 Portal workspace pin feedback into an in-flow shell host before route content.
 The previous fixed workspace placement overprinted page headings and could

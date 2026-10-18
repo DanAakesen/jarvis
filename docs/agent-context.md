@@ -194,6 +194,45 @@ Engine checks:
 `npm test --workspace @jarvis/backend -- --run src/proactive src/database/conversation-store.test.ts`,
 `npm run build --workspace @jarvis/backend`, and
 `npm run lint --workspace @jarvis/backend`.
+
+## P14-09 overlay verification (18 October 2026)
+
+Local web checks passed: `npm test --workspace @jarvis/web` (1,623 tests,
+118 files), `npm run lint --workspace @jarvis/web`,
+`npm run build --workspace @jarvis/web`, and `npx tsc --noEmit` from
+`apps/web`. The build reports its existing chunk-size warning.
+
+Scratch Chromium used the actual App with scratch-only auth and synthetic API
+fixtures. Rendered checks passed at 320×844 and 390×844 touch (71 assertions
+each), and 1440×900 dark (56 assertions): focus entry/wrapping/return,
+Escape/outside dismissal, dirty-form protection, scroll locking, internal
+scrolling, no horizontal overflow, reduced motion and a simulated 400px
+keyboard viewport. Pin feedback preceded content without overlap on Settings,
+Factory, Notes, Usage and Status. All four capture configurations had no
+console errors.
+
+Exit tests cover inert, ID-free visual copies, cancellation on reopening and
+both reduced-motion preferences. Closed persistent sheets become inert before
+their visual exit finishes. Feedback is excluded from page entrance transforms.
+
+The 24 WebP contact sheets below total 1,486,292 bytes. Each contains actual
+browser screenshots with external synthetic-state labels. Dialog sheets show
+the project and danger confirmations; overlay sheets show More and its flyout,
+Background work and attention, plus navigation/context sheets on phones.
+
+| Viewport/theme | Before | After |
+| --- | --- | --- |
+| 390×844 light | [Settings](ui/p14-09/before-390-light-settings.webp), [dialogs](ui/p14-09/before-390-light-dialogs.webp), [overlays](ui/p14-09/before-390-light-overlays.webp) | [Settings](ui/p14-09/after-390-light-settings.webp), [dialogs](ui/p14-09/after-390-light-dialogs.webp), [overlays](ui/p14-09/after-390-light-overlays.webp) |
+| 390×844 dark | [Settings](ui/p14-09/before-390-dark-settings.webp), [dialogs](ui/p14-09/before-390-dark-dialogs.webp), [overlays](ui/p14-09/before-390-dark-overlays.webp) | [Settings](ui/p14-09/after-390-dark-settings.webp), [dialogs](ui/p14-09/after-390-dark-dialogs.webp), [overlays](ui/p14-09/after-390-dark-overlays.webp) |
+| 1440×900 light | [Settings](ui/p14-09/before-1440-light-settings.webp), [dialogs](ui/p14-09/before-1440-light-dialogs.webp), [overlays](ui/p14-09/before-1440-light-overlays.webp) | [Settings](ui/p14-09/after-1440-light-settings.webp), [dialogs](ui/p14-09/after-1440-light-dialogs.webp), [overlays](ui/p14-09/after-1440-light-overlays.webp) |
+| 1440×900 dark | [Settings](ui/p14-09/before-1440-dark-settings.webp), [dialogs](ui/p14-09/before-1440-dark-dialogs.webp), [overlays](ui/p14-09/before-1440-dark-overlays.webp) | [Settings](ui/p14-09/after-1440-dark-settings.webp), [dialogs](ui/p14-09/after-1440-dark-dialogs.webp), [overlays](ui/p14-09/after-1440-dark-overlays.webp) |
+
+Pixel inspection covered the phone/light overlay contact sheet; remaining
+captures have geometry checks, not complete visual sign-off. Physical keyboards,
+live authentication/providers and hardware rendering remain unverified.
+The aggregate CI run is draft-skipped; the PR title gate requires `P14-09:`.
+Local automated review was unavailable and CodeQL skipped its oversized database.
+A separate read-only review found the closed-sheet inertness issue, now fixed.
 Proactive SQL contracts are in
 `src/database/schema.integration.test.ts` and the narrow conversation reader has
 coverage in `src/database/conversation-store.integration.test.ts`; run them only with the isolated

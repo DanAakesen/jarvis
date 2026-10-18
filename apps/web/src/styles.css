@@ -2070,7 +2070,7 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
   background-image: radial-gradient(circle 140px at var(--light-x, 50%) var(--light-y, 50%),
     color-mix(in srgb, var(--glass-rim-light) 26%, transparent), transparent 72%);
 }
-.shell-main > :not(.jarvis-page, .jarvis-stage, .jarvis-stage-fallback, .workspace-shell-area, .browser-presence-error, [hidden]) {
+.shell-main > :not(.jarvis-page, .jarvis-stage, .jarvis-stage-fallback, .workspace-shell-area, .workspace-feedback-host, .browser-presence-error, [hidden]) {
   animation: page-enter calc(var(--motion-panel) * 1.3) var(--ease-enter) both;
 }
 @keyframes page-enter {

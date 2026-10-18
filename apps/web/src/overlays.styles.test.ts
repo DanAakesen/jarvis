@@ -66,6 +66,7 @@ describe('shared overlay contract', () => {
 
   it('keeps feedback in document flow rather than over page content', () => {
     expect(feedbackViolations(styles)).toBe(false);
+    expect(styles).toContain('.workspace-shell-area, .workspace-feedback-host, .browser-presence-error');
   });
 
   it('shares the backdrop and disables sheet transitions for either reduced-motion preference', () => {

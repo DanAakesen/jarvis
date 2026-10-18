@@ -29,7 +29,7 @@ export function MobileMenu({ open, onClose, onNavigate, onFolio, onContext, dail
   const { onKeyDown } = useModalLifecycle({ active: open, dialog: sheet, boundary: root, onDismiss: onClose });
 
   return (
-    <div ref={root} className="mobile-menu" hidden={!open}>
+    <div ref={root} className="mobile-menu" hidden={!open} inert={!open}>
       <div className="mobile-menu-backdrop" aria-hidden="true" onClick={onClose} />
       <div ref={sheet} id="mobile-menu" className="mobile-menu-sheet" role="dialog" aria-modal="true" aria-labelledby="mobile-menu-heading" tabIndex={-1} onKeyDown={onKeyDown}>
         <span className="mobile-menu-grip" aria-hidden="true" />

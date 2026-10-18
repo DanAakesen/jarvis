@@ -102,6 +102,7 @@ describe('ContextPanel', () => {
     fireEvent.pointerDown(backdrop);
     fireEvent.click(backdrop);
     expect(screen.queryByRole('dialog')).toBeNull();
+    expect(backdrop.hasAttribute('inert')).toBe(true);
     expect(document.activeElement).toBe(trigger);
   });
   it('uses a focus-trapped modal sheet on phones and returns focus on Escape', async () => {

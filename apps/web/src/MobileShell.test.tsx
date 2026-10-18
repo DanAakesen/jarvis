@@ -19,12 +19,14 @@ describe('mobile menu modal behavior', () => {
     render(<Harness />);
     const trigger = screen.getByRole('button', { name: 'Open menu' });
     await user.click(trigger);
-    expect(screen.getByRole('dialog', { name: 'Go to' })).not.toBeNull();
+    const sheet = screen.getByRole('dialog', { name: 'Go to' }).parentElement!;
+    expect(sheet.hasAttribute('inert')).toBe(false);
     expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Close menu' }));
     await user.tab({ shift: true });
     expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Context panel' }));
     await user.keyboard('{Escape}');
     expect(screen.queryByRole('dialog')).toBeNull();
+    expect(sheet.hasAttribute('inert')).toBe(true);
     expect(document.activeElement).toBe(trigger);
     expect(document.body.style.overflow).not.toBe('hidden');
     await user.click(trigger);
