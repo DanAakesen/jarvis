@@ -6,6 +6,7 @@ import type { createGitHubVaultClient } from '../../vault/github-client.js';
 import { createCalendarSource } from './calendar.js';
 import { createFactorySource } from './factory.js';
 import { createMailSource } from './mail.js';
+import { createNewsSource } from './news.js';
 import { createTodosSource } from './todos.js';
 import { createTravelSource } from './travel.js';
 import { createWeatherSource } from './weather.js';
@@ -32,6 +33,7 @@ export function buildSourceRegistry(dependencies: SourceDependencies): Proactive
     createCalendarSource(dependencies.googleApiClient),
     createFactorySource(dependencies.taskStore),
     createMailSource(dependencies.googleApiClient),
+    createNewsSource(),
     createTodosSource(dependencies.vaultClient),
     createTravelSource(dependencies.googleApiClient),
     createWeatherSource(dependencies.settingsStore),

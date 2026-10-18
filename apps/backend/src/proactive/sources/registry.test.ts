@@ -5,7 +5,7 @@ import { defaultProactiveSettings } from '../store.js';
 describe('proactive source registry', () => {
   it('registers the sources alphabetically and keeps X as a non-throwing placeholder', async () => {
     const sources = buildSourceRegistry({});
-    expect(sources.map(({ id }) => id)).toEqual(['calendar', 'factory', 'mail', 'todos', 'travel', 'weather', 'x']);
+    expect(sources.map(({ id }) => id)).toEqual(['calendar', 'factory', 'mail', 'news', 'todos', 'travel', 'weather', 'x']);
     const source = sources.at(-1);
     expect(source?.id).toBe('x');
     const result = await source!.read({

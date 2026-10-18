@@ -168,6 +168,16 @@ is visibility-aware and bounded; dismiss/snooze optimistic updates are
 retryable after rollback. The P13-01 item detail remains the route target when
 only Web Push is enabled.
 
+## News feed reader (18 October 2026; P13-09)
+
+P13-09 adds the dark news-source implementation and registry entry, but no
+scheduler or engine call reads it; no model call or proactive send is activated.
+The news adapter defaults to the GitHub changelog and OpenAI news RSS feeds. It
+uses HTTPS only, rejects IP and local hostnames, DNS-pins public answers,
+forbids redirects and non-XML/compressed responses, and caps each read at ten
+seconds and 2 MiB. It rejects DTD/entity declarations and outputs only sanitized
+titles with publication time and feed host. Feed content remains untrusted.
+
 ## Current evidence
 
 Repository checks used main `fa4e52f9307a8b88d63497e4a83e4b636b36c933`,
