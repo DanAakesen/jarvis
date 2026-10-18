@@ -77,15 +77,20 @@ export async function loadKnowledgeGraph(backendUrl: string, getAccessToken: () 
 }
 
 /** Search returns the matching node ids in rank order. */
-export async function searchKnowledge(backendUrl: string, getAccessToken: () => Promise<string>, query: string, signal?: AbortSignal) {
+export interface KnowledgeSearchHit { nodeId: string; snippet: string }
+
+export async function searchKnowledge(backendUrl: string, getAccessToken: () => Promise<string>, query: string, signal?: AbortSignal): Promise<KnowledgeSearchHit[]> {
   const body = record(await request(backendUrl, getAccessToken, `/knowledge/search?q=${encodeURIComponent(query.slice(0, 200))}`, signal));
   const hits = Array.isArray(body?.hits) ? body.hits : Array.isArray(body?.nodeIds) ? body.nodeIds : [];
-  const ids: string[] = [];
+  const results: KnowledgeSearchHit[] = [];
   for (const hit of hits.slice(0, 200)) {
-    const id = typeof hit === 'string' ? hit : record(hit)?.nodeId ?? record(hit)?.id;
-    if (typeof id === 'string' || typeof id === 'number') ids.push(String(id));
+    const value = record(hit);
+    const id = typeof hit === 'string' ? hit : value?.nodeId ?? value?.id;
+    if (typeof id === 'string' || typeof id === 'number') {
+      results.push({ nodeId: String(id), snippet: text(value?.snippet, 500) });
+    }
   }
-  return ids;
+  return results;
 }
 
 /** Graph node ids are path hashes; the memory API reads vault notes by `vault_` plus the base64url path. */

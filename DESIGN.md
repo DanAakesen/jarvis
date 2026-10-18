@@ -1,5 +1,36 @@
 # Design
 
+## Overlays and stacking (P14-09)
+
+18 October 2026.
+
+Overlay surfaces share `--surface`, `--rule`, `--radius-panel` and
+`--panel-shadow`. Dialogs keep one heading and their existing named close
+action above an internally scrolling body. Footer actions reuse existing
+button groups, with secondary actions before the primary in DOM order and
+full-width stacking on phones. Do not restyle buttons or fields here.
+
+The named `--z-*` scale lives only in `apps/web/src/styles.css`: content,
+panels/rail, workspace windows, dock, menus, sheets, modal backdrop/card, toasts,
+then the skip link. Window depth and maximised/Arrange ordering remain local
+to the isolated workspace canvas. Component-local decoration may use -1 or 0–5.
+
+Modal focus enters, stays inside the topmost dialog and returns on close.
+Nested dialogs share scroll locking and background inertness. Escape and
+backdrop dismissal do not discard edited forms or interrupt pending actions;
+explicit existing close/cancel actions remain available. Nonmodal menus retain
+their own keyboard navigation and return focus on dismissal.
+
+Workspace pin errors and retry feedback are portalled into an in-flow host
+before route content, not into the floating window layer. Phone sheets use
+safe-area margins, dynamic viewport bounds and internal scrolling. App and OS
+reduced-motion preferences disable overlay motion.
+
+Enter/exit motion uses existing state/easing tokens. Unmounted dialogs and
+popovers fade inert, ID-free copies; reopening cancels the copy. Persistent
+phone sheets use interruptible discrete display/opacity transitions. Focus and
+action cleanup never wait for animation.
+
 ## Responsive rules (P14-05, 18 October 2026)
 
 Use the shared viewport set in `apps/web/src/styles.css`: phone through 700px,
@@ -263,6 +294,28 @@ The settings slot is a single collapsed Proactive section with its own Save;
 the Pause switch commits immediately. Private feed and guidance values are not
 persisted with disclosure state. The exact-string web flag controls its route,
 navigation, Settings slot and Background work Open link.
+
+## Vault Tasks separate from Notes (P13-19; 18 October 2026)
+
+The Tasks area is a focused, read-only list, not another board or note editor.
+One `Tasks` headline leads the explanatory copy, Refresh and the shared search
+and completed-task controls. Open rows group under Overdue, Today, Upcoming and
+No date; Done appears only when completed tasks are requested. Every row pairs
+its Open/Done glyph with text, shows due date/time and a linked source note, and
+pairs the high-priority icon with its label. Keep rows scannable, text readable
+at narrow widths, and use existing control tokens and button/field systems.
+
+Show vault freshness and truncation near the list. Loading, no-open-tasks,
+no-matches, unavailable and retry states remain explicit; task text is never
+editable from Jarvis. Notes search keeps notes labelled as notes and places
+plain-text snippets below titles; matching open tasks use a separate Tasks
+section above the note results. These links retain the query or source path.
+Synthetic Chromium captures (reduced motion): Tasks [390×844 light](docs/ui/p13-19/tasks-390-light.jpg),
+[390×844 dark](docs/ui/p13-19/tasks-390-dark.jpg), [1440×900 light](docs/ui/p13-19/tasks-1440-light.jpg),
+[1440×900 dark](docs/ui/p13-19/tasks-1440-dark.jpg); Notes search
+[390×844 light](docs/ui/p13-19/notes-390-light.jpg), [390×844 dark](docs/ui/p13-19/notes-390-dark.jpg),
+[1440×900 light](docs/ui/p13-19/notes-1440-light.jpg), [1440×900 dark](docs/ui/p13-19/notes-1440-dark.jpg).
+The fixtures use synthetic vault responses and temporary authentication only.
 
 ## Header tab overflow correction (15 October 2026; combined candidate)
 
@@ -1559,6 +1612,37 @@ composer at 320px. The six JPEG captures cover phone Day in both themes,
 desktop Trend in both themes, Library at 768px light and 320px dark. They are
 synthetic desktop-browser evidence, not live-owner or physical-phone checks.
 
+## Daily today dashboard (18 October 2026; P12-33)
+
+Overview now leads with one `DailyGrid` of section-linked workout, nutrition,
+body, sleep and brief cards: one column below 700px, two from 700px and three
+from 1200px. An odd final card spans the tablet row. Cards in the same row share
+height, retain one headline each, and place compact read freshness at the foot.
+Workouts shows its type glyph, latest start/duration and week totals; nutrition
+compares logged energy with the already-loaded resting-burn-minus-deficit
+baseline, with macros in text. Body shows the latest measurement and a same-unit
+sparkline of recorded observations, retaining null gaps. Sleep and briefs keep
+their latest date/time and recorded context. Unknowns and lower bounds stay
+explicit; partial history is not presented as a complete total.
+
+“What Daily holds today” is a compact collection/state/action strip. Purpose,
+period and read-time notes live in one native “About this data” disclosure.
+Read errors remain beside Retry, and settled empty health probes link to
+Settings, Health upload with the seven-day coverage qualification. Refresh keeps
+the cards and their last values mounted with progress text, including empty
+cards. Embedded Overview shares its Today heading row with Refresh and never
+duplicates the Daily page heading. Existing tokens and button classes are reused;
+no tokens or global styling rules are added.
+
+Ten synthetic-only JPEG captures (about 1.1 MB) are in `docs/ui/p12-33/`:
+populated light/dark at 390×844, 1440×900 and 320×844, plus empty light/dark at
+390×844 and 1440×900. Chromium exercised the real Daily shell with isolated API
+fixtures, including the shell-after-Daily SVG cascade, tablet layout, 200% CSS
+layout zoom, refresh, disclosure keyboard/focus, section links, collection
+Back/retry focus and reduced motion. No horizontal overflow or browser
+console/page errors were observed. These checks do not establish live-data,
+Microsoft sign-in, physical-device or original-site parity.
+
 ## Daily presentation kit (18 October 2026; P12-30)
 
 Daily remains inside the existing Jarvis shell and theme. The shared kit keeps
@@ -1618,6 +1702,8 @@ Body and Sleep at 320, 390×844 and 1440×900 in light and dark are in
 not live health records or original-site parity.
 
 ## Daily overview and Briefs integration (18 October 2026; P12-26)
+
+The Overview presentation below is superseded by P12-33 above.
 
 The Overview retains its source inventory and adds a responsive tile grid for
 available Daily sections. Each tile has its own loading, empty, retry and

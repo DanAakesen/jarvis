@@ -42,7 +42,7 @@ describe('header job control styling', () => {
     const actions = styles.match(/\.jobs-popover \.jobs-history-actions\s*\{([^}]+)\}/u)![1]!;
     expect(actions).toContain('display: flex;');
     expect(actions).toContain('flex-wrap: wrap;');
-    expect(actions).toContain('gap: 8px;');
+    expect(actions).toContain('gap: var(--space-2);');
   });
 
   it('uses distinct semantic colours, 44px targets and opt-in motion for icon counts', () => {

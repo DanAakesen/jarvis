@@ -1,4 +1,5 @@
 import { useContext, useEffect, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { dailyQuerySources as sources, type DailySourceId } from '@jarvis/contracts';
 import { Loader } from '../Loader';
 import { ShellIcon, type ShellIconName } from '../ShellIcon';
@@ -7,6 +8,7 @@ import { dailyValue } from './presentation';
 import { useDailyProbes, type ProbeRow } from './useDailyProbes';
 import { OverviewSummaryTiles } from './sections/overview/SummaryTiles';
 import { DailyRefreshContext } from './refresh';
+import { DataNotes } from './ui/DataNotes';
 import './daily.css';
 import './daily-overview.css';
 
@@ -16,27 +18,22 @@ function openButton(root: HTMLElement | null, id: DailySourceId) {
   return root?.querySelector<HTMLButtonElement>(`[data-daily-open="${id}"]`) ?? null;
 }
 
-function OverviewRow({ row, onOpen, onRetry, headingLevel = 3 }: {
-  row: ProbeRow; onOpen: (id: DailySourceId) => void; onRetry: () => void; headingLevel?: 3 | 4;
+function OverviewRow({ row, onOpen, onRetry }: {
+  row: ProbeRow; onOpen: (id: DailySourceId) => void; onRetry: () => void;
 }) {
   const { source, probe, pending } = row;
   const view = rowView(probe, pending, source.dated);
-  const observedAt = probe && probe.state !== 'failed' ? probe.observedAt : null;
-  const Heading = headingLevel === 4 ? 'h4' : 'h3';
   return <li className="daily-overview-row" aria-busy={pending || undefined}>
     <div className="daily-overview-body">
       <div className="daily-overview-title">
-        <Heading>{source.label}</Heading>
+        <h3>{source.label}</h3>
         <span className="daily-status" data-tone={view.tone} key={view.tone}>
           {view.tone === 'checking'
             ? <Loader variant="text" size="inline" text="Checking" label={`Checking ${source.label}`} announce={false} />
-            : <><ShellIcon name={icons[view.tone]} />{view.label}</>}
+            : <><ShellIcon name={icons[view.tone]} />{view.tone === 'none' ? 'No records' : view.tone === 'failed' ? 'Could not be read' : view.label}</>}
         </span>
       </div>
-      <p>{source.purpose}</p>
-      <p className="daily-meta">{source.dated ? 'Checked for the last 7 days (Europe/Copenhagen).' : 'Not limited to a period.'}</p>
-      {'detail' in view && <p className="daily-overview-detail">{view.detail}</p>}
-      {observedAt && <p className="daily-meta">Read <time dateTime={observedAt}>{dailyValue(observedAt)}</time>.</p>}
+      {view.tone === 'failed' && <p className="daily-overview-detail" role="alert">{view.detail}</p>}
     </div>
     <div className="daily-overview-actions">
       <button className="secondary-button" type="button" data-daily-open={source.id} aria-label={`Open ${source.label}`}
@@ -49,8 +46,7 @@ function OverviewRow({ row, onOpen, onRetry, headingLevel = 3 }: {
 }
 
 /**
- * The Daily landing view: each collection the backend exposes, whether it holds anything, and what it is for.
- * Every figure comes from a read-only one-record query; nothing here is stored, estimated or invented.
+ * The Daily landing view: recent section summaries and read-only collection coverage.
  */
 export function DailyOverview({ backendUrl, getAccessToken, capabilities, onRetryAvailability, onOpen, returnFocusTo, embedded = false }: {
   backendUrl: string | null;
@@ -79,6 +75,9 @@ export function DailyOverview({ backendUrl, getAccessToken, capabilities, onRetr
   }, [rows]);
   const refreshVersion = useContext(DailyRefreshContext);
   const summary = rows.length > 0 && !pending ? overviewSummary(rows.map(row => row.probe)) : '';
+  const healthSources: readonly DailySourceId[] = [sources.metrics,sources.sleep,sources.workouts,sources.sync];
+  const healthRows = rows.filter(row => healthSources.includes(row.source.id));
+  const healthIsEmpty = !pending && healthRows.length > 0 && healthRows.every(row => row.probe?.state === 'none');
   const refreshOverview = () => {
     if (pending) return;
     reload();
@@ -95,8 +94,9 @@ export function DailyOverview({ backendUrl, getAccessToken, capabilities, onRetr
     <header className="daily-heading">
       {!embedded && <div>
         <h1 id="daily-heading">Daily</h1>
-        <p>Your health, food, workout and brief records. Each collection is checked read-only when this page opens.</p>
+        <p>Your workouts, nutrition, body, sleep and latest brief at a glance.</p>
       </div>}
+      {embedded && hasSummarySource && <h2 id="daily-summary-heading">Today</h2>}
       {rows.length > 0 && <div className="daily-heading-actions">
         <button className="secondary-button" type="button" aria-disabled={pending || undefined}
           onClick={refreshOverview}>{pending ? 'Refreshing…' : 'Refresh overview'}</button>
@@ -109,18 +109,27 @@ export function DailyOverview({ backendUrl, getAccessToken, capabilities, onRetr
         : rows.length === 0 && !hasSummarySource ? <p className="daily-empty" role="status">This backend has not exposed a browsable Daily collection.</p>
           : <>
             {hasSummarySource && <>
-              <h2 id="daily-summary-heading">Daily overview</h2>
+              {!embedded && <h2 id="daily-summary-heading">Today</h2>}
               <OverviewSummaryTiles backendUrl={backendUrl} getAccessToken={getAccessToken}
                 refreshVersion={refreshVersion + summaryRefresh} available={available} />
             </>}
             {rows.length > 0 && <>
-              {hasSummarySource
-                ? <h3 id="daily-holds-heading">What Daily holds today</h3>
-                : <h2 id="daily-holds-heading">What Daily holds today</h2>}
+              <h2 id="daily-holds-heading">What Daily holds today</h2>
               <ul className="daily-overview-list" aria-labelledby="daily-holds-heading">
-                {rows.map(row => <OverviewRow key={row.source.id} row={row} onOpen={onOpen} onRetry={reload}
-                  headingLevel={hasSummarySource ? 4 : 3} />)}
+                {rows.map(row => <OverviewRow key={row.source.id} row={row} onOpen={onOpen} onRetry={reload} />)}
               </ul>
+              {healthIsEmpty && <p className="daily-empty">No health records returned in the last 7 days.
+                {' '}<Link to="/settings#health-upload">Set up Health Auto Export in Settings</Link></p>}
+              <DataNotes>
+                <p>Coverage checks read one record per collection. Dated collections cover the last 7 days (Europe/Copenhagen);
+                  other collections are not limited to a period. No records in this period does not prove the original source is empty.</p>
+                <p>Summaries use the last 30 days for workouts and body, the last 7 days for nutrition and sleep,
+                  and the latest returned brief. Source freshness and completeness remain unknown; partial history is labelled.</p>
+                <p>Nutrition compares logged energy with resting burn minus deficit (before activity),
+                  not an activity-adjusted allowance.</p>
+                {rows.map(row => <p key={row.source.id}><strong>{row.source.label}.</strong> {row.source.purpose}
+                  {row.probe && row.probe.state !== 'failed' && <> Read <time dateTime={row.probe.observedAt}>{dailyValue(row.probe.observedAt)}</time>.</>}</p>)}
+              </DataNotes>
             </>}
           </>}
     <p className="visually-hidden" role="status">{summary}</p>

@@ -727,6 +727,16 @@ Jarvis is one backend with a shared core and one module per area, a static web a
 
 ## Web skeleton and configuration
 
+- `Modal` shares `useModalLifecycle` with mobile navigation and context sheets:
+  topmost focus trapping/return, inert background, nested scroll locks and
+  visual-viewport bounds. Its header, scrolling body and action footer remain
+  inside a body portal; footer submit buttons explicitly target their forms.
+  Stacking roles are `--z-*` tokens in `styles.css`, with dynamic window depth
+  confined to an isolated canvas. `Workspace` portals pin feedback into the
+  shell's in-flow `feedbackHost` before the route outlet; persistence and retry
+  ownership stay in `Workspace`.
+  `overlay-motion.ts` reuses visual-only window ghosts for token-timed exits;
+  copies are inert and hidden from accessibility, and reopening cancels them.
 - P9-77 mounts `NotesArea` at `/notes`, redirecting `/knowledge/*` with replace.
   The existing `KnowledgeGraphView` remains the default, with its search and
   section filters. Notes owns the transient Markdown draft, preview and save
@@ -3480,6 +3490,40 @@ view and focuses it through the existing workspace command broker. The shared
 bounded query text and unique SHA-256 node IDs. This backend issue does not add
 the browser renderer; its UI implementation is a separate session.
 
+### Read-only vault tasks and Notes search (P13-19; 18 October 2026)
+
+`GET /vault/tasks` is owner-only and sets `Cache-Control: no-store`. It reads the
+current vault tree and task-note blobs through the existing GitHub vault client,
+not the potentially stale knowledge index. It shares `inScope`, the contextual
+todo parser, and path/blob-SHA task cache with proactive discovery, so reminders
+and the visible task list use the same definition of a task. Concurrent reads
+coalesce; each request performs at most one tree listing. The shared scope is
+recursive `Personal/` and `Work/`, plus the root `task.md` or `tasks.md`; hidden
+paths and Archive segments remain excluded.
+
+The route accepts `q` (up to 200 characters) and `state` (`open`, default;
+`done`; or `all`), and returns at most 500 matching task rows with source path,
+line, nearest heading, completion, due fields, priority, owner-local `today`,
+`readAt`, total and truncation state. Scans retain the shared 256-file, 4-MiB
+total-content, 256-KiB-per-file, four-concurrent-read and 20-second limits.
+Task text is sanitized and secret-redacted before filtering or returning, and
+never written to logs. Connection, GitHub App/token, missing/ambiguous task
+source, limit, timeout and read failures return stable 503 reason codes rather
+than empty task lists.
+
+The read-only sensitive `vault_search` chat/voice tool serves both reads through a
+flat `kind` argument: `notes` (the default) searches the knowledge index, and
+`tasks` uses the same model and scope as the route, with query, state and
+optional bounded due window, returning at most 40 items. The schema has no
+combinators, so voice schemas stay valid, and no catalogue entry is added: the
+all-features production catalogue is held at 120 tools, leaving the required
+eight-tool headroom below the 128-tool platform limit. Task requests route to
+`kind` tasks; note requests continue through `vault_search` (notes) and
+`vault_read`. The Notes page retains search snippets and fetches
+matching open tasks separately; its task group links to `/tasks?q=...`. Task
+source links use `/notes?note=<path>`, which opens the note in the existing
+Notes read flow. Neither screen nor tool writes or changes task state.
+
 ### New project creation (P3-12)
 
 The `create_project` tool accepts only a repository name and description. It reads
@@ -5999,19 +6043,37 @@ Existing core validation, processed freshness, source-compatible API/schema and
 historical-ingestion, authoritative-source/parity, device/provider, final-delta,
 rollback and cutover gates remain distinct; original Daily stays canonical.
 
-P12-05's unregistered `daily/health` library consumes the existing SQL inbox through an explicit one-row invocation and shared owner transaction lock. Additive 0047 records claim generations/deadlines and bounded retry/quarantine; no new queue, pool or scheduler. Pure normalization precedes one atomic domain/lineage/feed/receipt commit. Heartbeat writes only phone-sync state; accepted evidence and processing time remain distinct. Parameterized binary-identity upserts preserve newer accepted snapshots and never delete absent workout history. Existing root owner resolution protects bounded history/minute-HR/detail reads. [Source contract, recovery, limits and gates](../apps/backend/src/daily/health/README.md); no production composition or private source read.
+P12-05's `daily/health` library consumes the existing SQL inbox through a one-row invocation and shared owner transaction lock. The runtime-default-off `JARVIS_HEALTH_UPLOAD_ENABLED` production composition runs a bounded worker over that processor; the reviewed backend deployment setting is explicitly true. Migration 0060 adds truthful `processing` state, a 45-second lease, restart recovery and bounded retries. No new queue or pool is created. Pure normalization precedes one atomic domain/lineage/feed/receipt commit. Heartbeat writes only phone-sync state; accepted evidence and processing time remain distinct. Parameterized binary-identity upserts prevent older accepted snapshots from replacing newer keys and never delete absent workout history. Existing root owner resolution protects bounded history/minute-HR/detail reads. Historical batching limits and conservative complete metric/date-group guidance are documented in [the ingestion contract](daily-health-ingestion/README.md); exporter controls and complete-history acceptance remain unverified because the source request has no verified completeness marker.
 
 Summary extraction and known heart-rate series share strict BPM unit validation before SQL finalization; incompatible declared units quarantine the entire upload. Legacy summary-only implicit BPM does not assign units to unknown series or reinterpret heart-rate variability.
 
 Body-fat percentage also uses the shared strict known-dimension mapping: string `%`/`percent` stay percent and `fraction`/`1` scale by 100. Raw group/sample/workout declarations are checked before sanitization and alias/fallback selection; unsupported strings and non-string values quarantine atomically even when shadowed. Absent/null/blank units retain existing missing-unit semantics. No new persistence or runtime boundary is introduced.
 
-P12-04's inactive `daily/health-upload` uses the existing backend/pool/SQL. `createSqlHealthUpload` returns disabled dependencies; explicit `buildApp.healthUpload` rehearsal composition installs only the two upload/heartbeat POST paths. Root auth delegates only those opt-in paths to early rate guards and a hashed owner/scope/expiry/revocation verifier; ordinary Jarvis authentication is unchanged. Production `index.ts` has no option/flag/credential registration. [Contract and gates](daily-health-ingestion/README.md); #720 owns processing.
+P12-04's `daily/health-upload` uses the existing backend/pool/SQL and is composed only when `JARVIS_HEALTH_UPLOAD_ENABLED === "true"`; the runtime default remains false and the reviewed backend infrastructure explicitly sets it true. Root auth delegates only the exact opted-in upload/heartbeat paths to early rate guards and a hashed owner/scope/expiry/revocation verifier; ordinary Jarvis authentication is unchanged. Owner credential status/create/rotate/revoke routes are registered within that same switch and use existing owner JWT auth. The bearer is stored as a hash and revealed only in the authenticated `no-store` response. No second API, pool or auth service is introduced. The owner creates the credential after deployment; no endpoint deployment, credential issuance or private handoff is established by local implementation. [Contract and gates](daily-health-ingestion/README.md).
 
-Migration 0046 adds owner-keyed `health_upload_capabilities` and `health_upload_inbox`, separate from source-mapped historical ledgers. Owner-local SQL transaction locks serialize capability lifecycle and acceptance. Acceptance rechecks the hashed capability after reading the body, then commits byte-exact raw JSON and an idempotent session/checksum receipt together. `202` follows commit; `503` requires exact phone retry on SQL outage/capacity. SQL pending is not processed or an external queue. The inactive operator library makes issue/revoke/one-replacement rotation retry-safe and rotation atomic, but not secret delivery. No operator endpoint, credential factory or secret channel is supplied.
+Migration 0046 adds owner-keyed `health_upload_capabilities` and `health_upload_inbox`, separate from source-mapped historical ledgers. Owner-local SQL transaction locks serialize capability lifecycle and acceptance. Acceptance rechecks the hashed capability after reading the body, then commits byte-exact raw JSON and an idempotent session/checksum receipt together. `202` follows commit; `503` requires exact phone retry on SQL outage/capacity. Migration 0060 adds the processing lease state and refuses rollback while work remains in flight. SQL pending is not processed or an external queue. Credential lifecycle operations persist hash-only references and atomically reserve/revoke/issue rotations; the route never persists plaintext.
 
-The inbox caps original JSON at 8 MiB/request and retained raw at 256 MiB/10,000 rows per owner; exact duplicate receipts remain available at capacity. No raw deletion/compaction is registered. Verified processing and approved retention/rollback must precede future compaction/activation. SQL migration rollback refuses nonempty inbox or capability tables. The old standalone host, Blob/Queue/recovery library and unreferenced Bicep proposal are explicitly superseded regression assets, not production choices or outstanding resource approvals.
+The inbox caps original JSON at 8 MiB/request and retained raw at 256 MiB/10,000 rows per owner; normalized output is capped at 10,000 rows and 8 MiB. Exact duplicate receipts remain available at capacity. No raw deletion/compaction is registered. Complete-day historical replay remains blocked: older snapshots cannot replace newer keys, but the source request does not prove a later chunk is a complete-day snapshot. SQL migration rollback refuses nonempty inbox/capability tables; 0060 also refuses rollback while processing rows exist. The old standalone host, Blob/Queue/recovery library and unreferenced Bicep proposal are superseded regression assets, not production choices or outstanding resource approvals.
 
-Both scoped POST routes retain `@fastify/rate-limit` before credential/SQL work, bounded client/instance budgets and eight active requests. Existing backend socket identity is used without trusting forwarded headers; deployment-wide/multi-replica quotas and real ingress identity remain unverified. Scoped parsers preserve source heartbeat/body/checksum limits. Fixed errors/observations exclude health bytes, bearers, identity headers and provider diagnostics. Shutdown cancels SQL work; no processor, polling loop or schedule is added.
+Both scoped POST routes retain `@fastify/rate-limit` before credential/SQL work, bounded client/instance budgets and eight active requests. Existing backend socket identity is used without trusting forwarded headers; deployment-wide/multi-replica quotas and real ingress identity remain unverified. Scoped parsers preserve source heartbeat/body/checksum limits. Fixed errors/observations exclude health bytes, bearers, identity headers and provider diagnostics. Shutdown cancels SQL work and stops the bounded processor worker; no separate scheduler/queue service is added.
+
+### #1005 selected Daily v182 source port (18 October 2026)
+
+For this delivery, the owner withdrew the Daily export/import route. The source
+contract, selected-capability mapping and known differences are in
+`docs/reference/daily-v182/`; implementation remains within the existing API,
+SQL pool, Daily stores, owner authorization and native tool confirmation flow.
+The selected set includes conversational Status/profile/preference/recovery
+reads and writes, but not coach commitments, orders, experiments, meal plans,
+fixed renderers or Apple Health meal write-back. The nine remaining source
+operations are currently grouped into three registered tools to retain the
+catalogue's required eight-tool headroom; this does not satisfy the requested
+distinct tool names and is a recorded mismatch. Local tool/read-model and
+isolated-SQL tests do not prove exact source HTTP-path parity, all 31-table
+field parity, deployed acceptance, physical-phone use or owner handoff. The
+historical exporter limits are 8 MiB ingress; normalized output capped at 10,000
+rows/8 MiB; retained inbox capped at 256 MiB/10,000 rows per owner. Date-range
+controls and app screens are source-contract-unverified.
 
 P12-12 adds inactive `daily/nutrition-export` owner/device services and an explicitly callable route factory, never production composition. A root-auth optional verifier contract is scoped to the two POST claim/complete routes; absent/revoked/expired/wrong-owner capability denies access and ordinary routes retain existing JWT handling. No verifier/provisioning is installed by `index.ts`. Additive 0044 supplies request/claim/receipt/reconciliation evidence over existing temporary queue snapshots, not another meal store. Canonical nutrition writers invalidate only export status metadata; export transactions recheck all source revisions/tombstones. Owner-local app locks, conditional selection, bounded requests/outputs/deadlock retry/cancellation and no-instruction claim replay protect SQL state. Native Health effects remain outside SQL transactions; [protocol/gates](../apps/backend/src/daily/nutrition-export/README.md).
 
@@ -6162,6 +6224,27 @@ JSON reuses Data's escaped `<pre>`/collapsed `<details>` presentation. Heart-rat
 samples are grouped by metric and unit, use elapsed minutes, and retain separate
 average/minimum/maximum series. Existing read clients retain owner authorization,
 cancellation, response bounds and safe failure handling.
+
+## Web Daily today dashboard (18 October 2026; P12-33)
+
+Overview composes `DailyGrid`, `FreshnessLine`, `WorkoutGlyph`, `Meter`,
+`Sparkline` and `DataNotes` around the existing section-summary readers.
+Its responsive card layout and compact coverage strip are scoped to
+`daily-overview.css`; shared chart, legend and grid implementations are unchanged.
+Only the newest Body metric/unit group is charted, in chronological observation
+order with null gaps. Latest workouts use their recorded start time to break
+same-day ties. Nutrition uses only its existing target request and day rows;
+pending/failed targets never appear as unset, and nonpositive baselines stay
+text rather than an invalid progress range. The shared meter bounds its ARIA
+position while retaining the actual total and lower-bound text.
+
+Per-source probes, summary queries/limits, refresh signal, concurrency bound,
+section URLs and focus-return ownership remain unchanged. Existing card nodes
+and empty results survive refresh; progress and errors remain visible. One
+overview disclosure holds collection purposes, read times and source caveats,
+while coverage failures retain an inline error and Retry. Settled empty health
+probes provide the Settings upload link, qualified to their seven-day period.
+No backend, contracts, routes, source permissions or dependencies change.
 
 ## Web Daily overview and Briefs integration (18 October 2026; P12-26)
 

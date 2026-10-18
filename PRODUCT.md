@@ -1,5 +1,14 @@
 # Product
 
+## Shared overlays (18 October 2026; P14-09)
+
+Dialogs, sheets and menus use one stacking order without covering modal actions
+with background windows or feedback. Dialogs retain their existing actions,
+trap focus while modal, return focus on close and protect unsaved input from
+accidental Escape/backdrop dismissal. Phone overlays fit the visible viewport
+and scroll internally. Workspace pin errors remain readable in page flow with
+their existing alert and retry action.
+
 ## Voice result previews (16 October 2026; P11-07)
 
 Voice tool results use the existing automatic workspace presentation path.
@@ -642,6 +651,23 @@ long titles. Open-window tabs use a consistent window icon, one pin toggle where
 pinning is available, and Close for unpinned windows. Crowded tabs remain
 scrollable; phone window-list actions remain reachable above content windows.
 Persistent-pin semantics are still part of the unfinished P8-42 implementation.
+
+#### Vault tasks and Notes (P13-19; 18 October 2026)
+
+Personal to-dos and notes are separate concepts. The `/tasks` page reads native
+Obsidian checkbox items from the shared proactive scope: `Personal/` and `Work/`
+notes plus the root `task.md` or `tasks.md` dashboard. It groups open tasks by
+Overdue, Today, Upcoming and No date; completed tasks are opt-in. Search filters
+task text, and each task links to its source note. Jarvis never creates, edits,
+completes, reorders or deletes these tasks; Dan completes them in Obsidian.
+Agent work remains on the Software Factory board.
+
+Notes remains a notes surface. Search shows the matching plain-text snippet under
+each note title and, when open tasks match, a separate Tasks result group linking
+to `/tasks?q=...`. In chat and voice, task/to-do/reminder requests use the
+read-only tasks kind of `vault_search`; note searches use its default notes kind
+and `vault_read`.
+All reads are owner-only and treat vault content as untrusted data.
 
 #### Software Factory — task view
 
@@ -1360,17 +1386,29 @@ provider. Missing provider capability contributes no tool; failures stay
 unavailable rather than falling back to invented nutrition. This read neither
 logs intake nor enables Daily, and does not establish live-provider acceptance.
 
-P12-05 adds an inactive, explicitly invoked health processor over the existing SQL inbox: metrics/sleep/workouts/detail/minute HR, canonical physical units, Copenhagen dates, exact session/checksum replay and bounded retry/quarantine. Domain changes, ingestion lineage and processed-feed freshness commit together; phone heartbeat stays separate. Empty workout exports cannot erase history, missing values stay unknown, and native nutrition cannot feed back into canonical meals. Owner history/detail reads are bounded and unregistered. No scheduler, source import, live device changes or activation; protected/live parity remains gated.
+P12-05 processes the existing SQL inbox through a bounded restart-recoverable worker only when the new `JARVIS_HEALTH_UPLOAD_ENABLED` switch is explicitly true; code defaults off, while the reviewed backend deployment setting is explicitly true. Processing records accepted, in-progress, succeeded and quarantined outcomes distinctly, with retry leases and retained evidence. Metrics/sleep/workouts/detail/minute HR keep canonical units, Copenhagen dates, exact session/checksum replay and bounded reads. Domain changes, ingestion lineage and processed-feed freshness commit together; phone heartbeat stays separate. Empty workout exports cannot erase history, missing values stay unknown, and native nutrition cannot feed back into canonical meals. Older accepted snapshots cannot replace newer keys. Historical batching limits and cautious grouping guidance are documented in `docs/daily-health-ingestion/README.md`; exporter-specific date-range/chunking controls and complete-history verification remain unverified.
+
+18 October 2026, owner-approved #1005 / P12-29 scope supersedes the earlier
+export/import route for this delivery: source Daily uploads reach Jarvis through
+the existing authenticated Health Auto Export endpoint, SQL inbox, processor
+and selected native tools. Do not build or rely on a Daily export/import path,
+second API/store/auth service, or new Azure resource. Port the 16 selected
+source capabilities (including nutrition history/analysis/balance, conversational
+Status, profile, preference and recovery) using existing services and confirmed
+owner writes; do not add excluded commitments/orders/experiments, meal plans,
+fixed Status renderers or Apple Health meal write-back. This is not evidence of
+deployment, complete API parity, replay, phone acceptance, token handoff, or a
+cutover; all remain separately verified gates.
 
 Heart-rate summaries and series must validate declared units consistently. Unsupported rate units quarantine without changing processed freshness; only established legacy summary fields imply BPM when their unit is absent. Missing samples and summaries remain unknown, not inferred.
 
 Body-fat percentage accepts string `%`/`percent` or `fraction`/`1` and normalizes to percent. Unsupported strings and non-string unit declarations quarantine even when another unit could override them. Absent/null/blank units remain missing; without a supported inherited unit they stay unknown without inferred conversion. Preserve zero, missing values and raw evidence.
 
-P12-04 reuses the existing backend and SQL for an inactive Health Auto Export upload/heartbeat boundary. Owner-bound hashed, scoped, revocable device credentials remain separate from human login. An 8-MiB upload is accepted only after the SQL raw inbox transaction commits; SQL outage/capacity returns 503 for the phone to retry. Exact sessions/checksums deduplicate and changed bytes conflict. The bounded inbox retains raw evidence without automatic deletion; processing/approved compaction belong downstream. No separate Blob/Queue/host or new resources are needed. Accepted and processed freshness stay distinct. Source/device settings and production enablement remain unchanged; protected/live/phone acceptance remains gated.
+P12-04 reuses the existing backend and SQL for the Health Auto Export upload/heartbeat boundary. The runtime switch defaults off in code; the reviewed backend infrastructure explicitly enables it. Owner-bound hashed, scoped, revocable device credentials remain separate from human login; the signed-in owner can create, rotate or revoke one through Settings, with a one-time no-store reveal. An 8-MiB upload is accepted only after the SQL raw inbox transaction commits; SQL outage/capacity returns 503 for the phone to retry. Exact sessions/checksums deduplicate and changed bytes conflict. The bounded inbox retains raw evidence without automatic deletion. No separate Blob/Queue/host or new resources are needed. Accepted and processed freshness stay distinct. The infrastructure change has not been deployed; no endpoint/token handoff or phone acceptance is claimed.
 
-Its protected device-capability lifecycle library remains unregistered: conditional issuance, terminal revocation and reserved revoke-before-issue rotation use the existing owner/device permissions. Rotation can temporarily deny both credentials, and interrupted operations require protected exact-operation reconciliation. Synthetic evidence grants no production issuance, operator access or secret-storage/delivery channel; ordinary Jarvis human authentication is unchanged.
+Its device-capability lifecycle uses conditional issuance, terminal revocation and reserved revoke-before-issue rotation with the existing owner/device permissions. Rotation can temporarily deny both credentials, and a lost one-time reveal requires status review and rotation. The owner route exists only behind the explicit switch; no real credential or protected handoff has occurred, and ordinary Jarvis human authentication is unchanged.
 
-Its continuation prepares a separate explicit host, bounded lifecycle/leased resumable outbox recovery and a deployment proposal outside `infra/`. Host/recovery default off. Reliable recovery during scale-to-zero needs a separately approved minimum instance or external invocation mechanism; a dormant helper is not automatic recovery. No resource, spending ceiling, permission, device or activation approval follows from this code-only slice.
+The previous standalone host, Blob/Queue recovery proposal and deployment proposal remain superseded regression assets. The existing backend owns a bounded worker when explicitly enabled; it adds no host, queue, resource, permission or device. Reliable production availability, ingress quotas and scale-to-zero behavior remain unverified.
 
 P12-12's inactive optional nutrition export is independent of ordinary ChatGPT logging. Only a trusted owner-confirmed exact period queues canonical SQL meal snapshots. Scoped revocable device capability is separate from login/upload credentials, and absent capability fails closed. Conditional claims, source revisions, tombstones, expiry-to-uncertain and identical ACK replay preserve retry safety without asserting exactly-once native Health effects. Corrections/deletions and partial writes never automatically requeue. Recovery records checked-in-Health evidence without issuing another write. Optional [phone guidance](docs/nutrition-export-shortcut.md) is not an installed/tested Shortcut; provisioning, activation and physical-iPhone/sample acceptance remain open. No native re-ingestion or routine auto-export.
 

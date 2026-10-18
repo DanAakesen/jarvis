@@ -1,8 +1,10 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter, useSearchParams } from 'react-router-dom';
+import userEvent from '@testing-library/user-event';
 import { dailyQuerySources as sources, isDailyQuery, type DailyJson, type DailyQuery, type DailySourceId } from '@jarvis/contracts';
 import { DailyHome } from './DailyHome';
+import { DailyOverview } from './DailyOverview';
 import { dailySources } from './presentation';
 import { DailyRefreshContext } from './refresh';
 import { dailyFixture, jsonResponse } from './test-support';
@@ -65,27 +67,32 @@ function row(name: string) {
 const flush = () => act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); });
 
 describe('Daily overview', () => {
-  it('lists each collection with what it is for and what a one-record read found, through the two Daily endpoints only', async () => {
+  it('lists compact coverage and discloses collection purposes, through the two Daily endpoints only', async () => {
     const f = fixture();
     render(home());
     await settled();
     await screen.findByText('No meals recorded in the last 7 days');
     await screen.findByText('No sleep recorded in the last 7 days');
     expect(screen.getByRole('heading', { level: 1, name: 'Daily' })).toBeTruthy();
-    expect(screen.getByRole('heading', { level: 3, name: 'What Daily holds today' })).toBeTruthy();
+    expect(screen.getByRole('heading', { level: 2, name: 'What Daily holds today' })).toBeTruthy();
     expect(screen.getAllByRole('listitem')).toHaveLength(dailySources.length);
-    for (const source of dailySources) expect(row(source.label).getByText(source.purpose)).toBeTruthy();
+    const notes = screen.getByText('About this data').closest('details')!;
+    expect(notes.open).toBe(false);
+    for (const source of dailySources) {
+      expect(row(source.label).queryByText(source.purpose)).toBeNull();
+      expect(notes.textContent).toContain(source.purpose);
+    }
     expect(dailySources.map(source => source.id)).not.toContain(sources.metricCatalog);
     expect(dailySources.map(source => source.id)).not.toContain(sources.days);
     expect(row('Measurements').getByText('Has records')).toBeTruthy();
-    expect(row('Measurements').getByText('Checked for the last 7 days (Europe/Copenhagen).')).toBeTruthy();
+    expect(notes.textContent).toContain('last 7 days (Europe/Copenhagen)');
     expect(row('Meal plans').getByText('Has records')).toBeTruthy();
-    expect(row('Meal plans').getByText('Not limited to a period.')).toBeTruthy();
-    expect(row('Sleep').getByText('None returned')).toBeTruthy();
-    expect(row('Sleep').getByText(/No records in this period; older ones may exist\. This does not prove the original source is empty\./u)).toBeTruthy();
-    expect(row('Saved favourites').getByText(/No records are stored\./u)).toBeTruthy();
-    expect(row('Sync evidence').getByText('None returned')).toBeTruthy();
-    expect(row('Measurements').getByText(/^Read /u).querySelector('time')?.getAttribute('datetime')).toBe('2026-10-17T07:00:00Z');
+    expect(notes.textContent).toContain('other collections are not limited to a period');
+    expect(row('Sleep').getByText('No records')).toBeTruthy();
+    expect(notes.textContent).toContain('does not prove the original source is empty');
+    expect(row('Saved favourites').getByText('No records')).toBeTruthy();
+    expect(row('Sync evidence').getByText('No records')).toBeTruthy();
+    expect(notes.querySelector('time')?.getAttribute('datetime')).toBe('2026-10-17T07:00:00Z');
     expect(screen.getByText('Checked 8 collections: 3 with records, 5 with none returned, 0 that could not be read.')).toBeTruthy();
     expect(new Set(probes(f.queries).map(query => query.source))).toEqual(new Set(dailySources.map(source => source.id)));
     expect(f.queries.some(query => query.source === sources.days && 'limit' in query && query.limit === 400)).toBe(true);
@@ -99,6 +106,12 @@ describe('Daily overview', () => {
     render(home());
     await settled();
     expect(row('Sync evidence').getByText('Has records')).toBeTruthy();
+  });
+  it('links to Health Auto Export settings only when all visible health collections are empty', async () => {
+    fixture({ answer: query => jsonResponse(dailyFixture(query, query.source === sources.sync ? [emptySync] : [])) });
+    render(home());
+    await settled();
+    expect(screen.getByRole('link', { name: 'Set up Health Auto Export in Settings' }).getAttribute('href')).toBe('/settings#health-upload');
   });
   it('shows an availability loader until the backend answers', async () => {
     const hold = gate();
@@ -128,7 +141,7 @@ describe('Daily overview', () => {
     render(home());
     await settled();
     expect(screen.getByText('Checked 8 collections: 3 with records, 4 with none returned, 1 that could not be read.')).toBeTruthy();
-    expect(row('Sleep').getByText('Could not read')).toBeTruthy();
+    expect(row('Sleep').getByText('Could not be read')).toBeTruthy();
     expect(row('Sleep').getByText('Daily is unavailable (HTTP 503). Retry without changing your records.')).toBeTruthy();
     expect(row('Measurements').getByText('Has records')).toBeTruthy();
     expect(screen.getAllByRole('button', { name: /^Retry / })).toHaveLength(1);
@@ -136,7 +149,7 @@ describe('Daily overview', () => {
     retry.focus();
     sleepFails = false;
     fireEvent.click(retry);
-    await waitFor(() => expect(row('Sleep').getByText('None returned')).toBeTruthy());
+    await waitFor(() => expect(row('Sleep').getByText('No records')).toBeTruthy());
     await settled();
     expect(screen.queryByRole('button', { name: /^Retry / })).toBeNull();
     await waitFor(() => expect(document.activeElement).toBe(row('Sleep').getByRole('button', { name: 'Open Sleep' })));
@@ -284,5 +297,57 @@ describe('Daily overview', () => {
     await screen.findByText('This backend has not exposed a browsable Daily collection.');
     expect(f.queries).toHaveLength(0);
     expect(screen.queryByRole('button', { name: 'Refresh overview' })).toBeNull();
+  });
+  it('keeps a single page heading when Overview is embedded in the Daily shell', async () => {
+    fixture();
+    render(home());
+    await settled();
+    expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
+    expect(screen.getByRole('heading', { name: 'Today', level: 2 })).toBeTruthy();
+    expect(screen.queryByText('Your workouts, nutrition, body, sleep and latest brief at a glance.')).toBeNull();
+  });
+  it('shows the health-upload recovery link only for settled empty health probes, not failed or populated reads', async () => {
+    let state: 'empty' | 'failed' | 'populated' = 'empty';
+    fixture({ answer: query => state === 'failed' ? jsonResponse({}, 503) :
+      jsonResponse(dailyFixture(query, state === 'populated' ? items(query) : [])) });
+    render(home());
+    await settled();
+    expect(screen.getByRole('link', { name: 'Set up Health Auto Export in Settings' }).getAttribute('href')).toBe('/settings#health-upload');
+    state = 'failed';
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh overview' }));
+    await screen.findByRole('button', { name: 'Retry Measurements' });
+    await settled();
+    expect(screen.queryByRole('link', { name: 'Set up Health Auto Export in Settings' })).toBeNull();
+    state = 'populated';
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh overview' }));
+    await waitFor(() => expect(row('Measurements').getByText('Has records')).toBeTruthy());
+    expect(screen.queryByRole('link', { name: 'Set up Health Auto Export in Settings' })).toBeNull();
+  });
+  it('keeps keyboard order as refresh, section cards, collection actions and the data disclosure', async () => {
+    fixture({ answer: query => jsonResponse(dailyFixture(query)) });
+    const open = vi.fn();
+    render(<MemoryRouter><DailyOverview backendUrl={backendUrl} getAccessToken={token}
+      capabilities={{ sources: Object.values(sources) }} onRetryAvailability={() => {}} onOpen={open} /></MemoryRouter>);
+    await settled();
+    await screen.findByText('No briefs returned');
+    const user = userEvent.setup();
+    await user.tab();
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Refresh overview' }));
+    for (const name of ['Workouts', 'Nutrition', 'Body', 'Sleep', 'Briefs']) {
+      await user.tab();
+      expect(document.activeElement).toBe(screen.getByRole('link', { name }));
+    }
+    for (const source of dailySources) {
+      await user.tab();
+      expect(document.activeElement).toBe(screen.getByRole('button', { name: `Open ${source.label}` }));
+    }
+    await user.keyboard('{Enter}');
+    expect(open).toHaveBeenCalledWith(sources.sync);
+    await user.tab();
+    expect(document.activeElement).toBe(screen.getByRole('link', { name: 'Set up Health Auto Export in Settings' }));
+    await user.tab();
+    expect(document.activeElement).toBe(screen.getByText('About this data'));
+    await user.click(screen.getByText('About this data'));
+    expect(screen.getByText('About this data').closest('details')?.open).toBe(true);
   });
 });

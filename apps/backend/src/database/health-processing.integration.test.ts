@@ -9,6 +9,12 @@ import { SqlHealthCapabilities } from '../daily/health-upload/sql-capabilities.j
 import { HealthConflict, HealthUnavailable, sha256, type HealthCapability, type HealthKind } from '../daily/health-upload/contracts.js';
 import { SqlHealthProcessor, processingRetryDelays } from '../daily/health/processor.js';
 import { DailyHealthReadModel } from '../daily/health/read-model.js';
+import { buildApp } from '../app.js';
+import { loadConfig } from '../config.js';
+import { dailySourceTools } from '../daily/tools/source-tools.js';
+import type { NutritionStore } from '../daily/nutrition/store.js';
+import type { DailyCoachStore } from '../daily/coach-store.js';
+import { healthUploadLimit } from '../daily/health-upload/contracts.js';
 
 const configuration = loadDatabaseConfig();
 if (!configuration || process.env.NODE_ENV !== 'test' || configuration.server !== '127.0.0.1') throw new Error('Health tests require isolated loopback SQL Server');
@@ -19,7 +25,8 @@ const owner = '11111111-1111-4111-8111-111111111111'; const other = '22222222-22
 const filename = '0047_daily_health_processing.sql';
 const base = Date.parse('2026-10-13T18:00:00.000Z'); let clock = base; let serial = 0;
 const now = () => clock; const signal = () => new AbortController().signal;
-const migrations = async () => (await readMigrations()).filter(({ name }) => ['0041_daily_owner_schema.sql', '0046_daily_health_upload_inbox.sql', filename].includes(name));
+const migrations = async () => (await readMigrations()).filter(({ name }) =>
+  ['0041_daily_owner_schema.sql', '0046_daily_health_upload_inbox.sql', filename, '0060_daily_health_processing_state.sql'].includes(name));
 const processor = (id = owner) => new SqlHealthProcessor(pool, id, now);
 const readModel = (id = owner) => DailyHealthReadModel.forRequest(pool, { server: { ownerObjectId: id }, principal: { objectId: id } } as unknown as FastifyRequest);
 const workout = (id = 'synthetic-workout', hr = 100) => ({ id, name: 'Traditional Strength Training', start: '2026-10-13T08:00:00Z', duration: 3600,
@@ -31,6 +38,7 @@ const payload = (qty = 100, workouts = [workout('one'), workout('two')]) => ({ d
 const raw = (value: unknown) => Buffer.from(JSON.stringify(value));
 const tableNames = ['health_workout_heart_rate_minute', 'health_workout_metrics', 'health_workouts', 'health_daily_metrics', 'health_sleep_daily', 'health_sync_feeds', 'health_sync_state', 'health_phone_sync_state', 'health_ingestions', 'health_upload_inbox', 'health_upload_capabilities'] as const;
 const rows = async (table: typeof tableNames[number]) => (await pool.request().query(`SELECT * FROM daily.[${table}]`)).recordset;
+const apps: ReturnType<typeof buildApp>[] = [];
 const inbox = () => rows('health_upload_inbox');
 async function provision(id = owner) {
   const capabilities = new SqlHealthCapabilities(pool, id, now);
@@ -58,6 +66,7 @@ beforeEach(async () => {
   for (const table of tableNames) await pool.request().batch(`DELETE daily.[${table}];`);
 });
 afterAll(async () => {
+  await Promise.all(apps.map(app => app.close()));
   await pool.close();
   if (admin.connected) await admin.request().batch(`IF DB_ID(N'${database}') IS NOT NULL BEGIN ALTER DATABASE [${database}] SET SINGLE_USER WITH ROLLBACK IMMEDIATE; DROP DATABASE [${database}]; END;`);
   await admin.close();
@@ -68,6 +77,142 @@ describe('inactive processor on real isolated SQL Server, synthetic records only
     expect(await applyMigrations(pool, await migrations())).toEqual([]);
     expect(await processor().processNext(signal())).toEqual({ state: 'idle' });
     for (const table of tableNames) expect(await rows(table)).toEqual([]);
+  });
+  it('creates, rotates and revokes hashed owner credentials without cross-owner visibility', async () => {
+    const capabilities = new SqlHealthCapabilities(pool, owner, now);
+    const otherCapabilities = new SqlHealthCapabilities(pool, other, now);
+    const first = capabilities.prepare({ deviceId: 'synthetic-phone', permissions: ['health-ingest', 'health-heartbeat'], expiresAt: '2099-01-01T00:00:00.000Z' });
+    expect(await capabilities.create(first, signal())).toEqual({ state: 'issued' });
+    const firstToken = await first.useSecret(async value => value);
+    expect(await capabilities.verify(firstToken, signal())).toMatchObject({ ownerObjectId: owner });
+    expect(await capabilities.status(signal())).toMatchObject({ state: 'active' });
+    expect(await otherCapabilities.status(signal())).toEqual({ state: 'empty', expiresAt: null });
+    expect(await otherCapabilities.verify(firstToken, signal())).toBeNull();
+    const stored = await pool.request().input('owner', sql.UniqueIdentifier, owner)
+      .query('SELECT token_hash FROM daily.health_upload_capabilities WHERE owner_object_id=@owner');
+    expect(stored.recordset).toEqual([{ token_hash: sha256(firstToken) }]);
+
+    const replacement = capabilities.prepare({ deviceId: 'synthetic-phone', permissions: ['health-ingest', 'health-heartbeat'], expiresAt: '2099-01-01T00:00:00.000Z' });
+    expect(await capabilities.rotateCurrent(replacement, signal())).toEqual({ state: 'issued' });
+    const replacementToken = await replacement.useSecret(async value => value);
+    expect(await capabilities.verify(firstToken, signal())).toBeNull();
+    expect(await capabilities.verify(replacementToken, signal())).toMatchObject({ ownerObjectId: owner });
+    expect(await capabilities.revokeCurrent(signal())).toEqual({ state: 'revoked' });
+    expect(await capabilities.verify(replacementToken, signal())).toBeNull();
+    expect(await capabilities.status(signal())).toMatchObject({ state: 'revoked' });
+    expect(await otherCapabilities.status(signal())).toEqual({ state: 'empty', expiresAt: null });
+  });
+  it('proves owner credential → HTTP upload → worker → read model and native summary with replay safeguards', async () => {
+    const backendConfig = loadConfig({});
+    const capabilityStore = new SqlHealthCapabilities(pool, owner, now);
+    // The authentication hook only forwards tokens shaped like a JWT (three base64url segments).
+    const ownerJwt = 'synthetic.owner.jwt';
+    const foreignJwt = 'synthetic.foreign.jwt';
+    const ownerAuth = {
+      authorization: ['Bearer', ownerJwt].join(' '),
+    };
+    const foreignAuth = {
+      authorization: ['Bearer', foreignJwt].join(' '),
+    };
+    const instance = buildApp({ ...backendConfig, auth: { ...backendConfig.auth, ownerObjectId: owner } }, undefined, {
+      modules: [],
+      auth: async token => {
+        if (token === ownerJwt) return { objectId: owner, tenantId: backendConfig.auth.tenantId, displayName: 'Synthetic owner' };
+        if (token === foreignJwt) return { objectId: other, tenantId: backendConfig.auth.tenantId, displayName: 'Synthetic foreign owner' };
+        return null;
+      },
+      healthUpload: {
+        enabled: true,
+        buffer: new SqlHealthBuffer(pool, owner, { now }),
+        verifier: capabilityStore.verify,
+      },
+      healthProcessor: processor(),
+      healthCapabilities: capabilityStore,
+    });
+    apps.push(instance);
+    await instance.ready();
+    const credential = await instance.inject({
+      method: 'POST', url: '/api/health/upload-credential', headers: ownerAuth, payload: { action: 'create' },
+    });
+    expect(credential.statusCode).toBe(200);
+    expect(credential.headers['cache-control']).toBe('no-store');
+    const token = credential.json().token as string;
+    expect(token).toMatch(/^[A-Za-z0-9_-]{43,256}$/u);
+
+    const bytes = raw(payload(120, [workout('synthetic-e2e-workout', 120)]));
+    const upload = (bearer: string, sessionId: string, body: Buffer = bytes) => instance.inject({
+      method: 'POST',
+      url: '/api/health/ingest',
+      headers: {
+        authorization: ['Bearer', bearer].join(' '),
+        'content-type': 'application/json',
+        'automation-id': 'synthetic-automation',
+        'session-id': sessionId,
+      },
+      payload: body,
+    });
+
+    expect((await instance.inject({ method: 'GET', url: '/api/health/upload-credential', headers: foreignAuth })).statusCode).toBe(403);
+    expect((await upload('synthetic-invalid-token', 'synthetic-bad-token')).statusCode).toBe(403);
+    const first = await upload(token, 'synthetic-e2e-session');
+    expect(first.statusCode).toBe(202);
+    expect(first.json()).toMatchObject({ status: 'accepted', storage: 'sql', processing: 'not-confirmed', duplicate: false });
+    expect((await upload(token, 'synthetic-e2e-session')).json()).toMatchObject({ duplicate: true });
+    expect((await upload(token, 'synthetic-e2e-session', raw(payload(121)))).statusCode).toBe(409);
+    expect((await upload(token, 'synthetic-oversize', Buffer.alloc(healthUploadLimit + 1, 0x20))).statusCode).toBe(413);
+
+    const foreignCapabilities = new SqlHealthCapabilities(pool, other, now);
+    const foreignOperation = foreignCapabilities.prepare({
+      deviceId: 'synthetic-foreign-phone',
+      permissions: ['health-ingest'],
+      expiresAt: '2099-01-01T00:00:00.000Z',
+    });
+    await foreignCapabilities.create(foreignOperation, signal());
+    const foreignToken = await foreignOperation.useSecret(value => value);
+    expect((await upload(foreignToken, 'synthetic-wrong-owner')).statusCode).toBe(403);
+
+    const request = {
+      server: { ownerObjectId: owner },
+      principal: { objectId: owner },
+    } as unknown as FastifyRequest;
+    const read = readModel();
+    const data = { query: {} as never, changes: {} as never, health: () => read };
+    const sourceTools = dailySourceTools(data, () => ({} as NutritionStore), () => ({} as DailyCoachStore), now);
+    await vi.waitFor(async () => {
+      expect((await read.sync(signal())).inbox).toMatchObject({ accepted: 0, processing: 0, succeeded: 1, quarantined: 0 });
+    }, { timeout: 10_000, interval: 25 });
+    const metricRows = await read.history('metrics', { startDate: '2026-10-13', endDate: '2026-10-13', limit: 100 }, signal());
+    expect(metricRows.items).toEqual(expect.arrayContaining([expect.objectContaining({ metric_name: 'step_count', value: 120 })]));
+    const summary = await sourceTools[0]!.execute({ operation: 'get_health_summary' }, request, signal()) as Record<string, unknown>;
+    expect(summary).toMatchObject({ status: 'available', today: { date: '2026-10-13' } });
+
+    clock = base - 1000;
+    const partial = raw({ data: { metrics: [{ name: 'step_count', units: 'count', data: [{ date: '2026-10-13', qty: 40 }] }], workouts: [] } });
+    expect((await upload(token, 'synthetic-older-partial', partial)).statusCode).toBe(202);
+    await vi.waitFor(async () => {
+      expect((await read.sync(signal())).inbox).toMatchObject({ accepted: 0, processing: 0, succeeded: 2, quarantined: 0 });
+    }, { timeout: 10_000, interval: 25 });
+    const afterReplay = await read.history('metrics', { startDate: '2026-10-13', endDate: '2026-10-13', limit: 100 }, signal());
+    expect(afterReplay.items).toEqual(expect.arrayContaining([expect.objectContaining({ metric_name: 'step_count', value: 120 })]));
+
+    const revoked = await instance.inject({ method: 'POST', url: '/api/health/upload-credential', headers: ownerAuth, payload: { action: 'revoke' } });
+    expect(revoked.statusCode).toBe(200);
+    expect((await upload(token, 'synthetic-revoked')).statusCode).toBe(403);
+    // Stop this app's background worker now so it cannot claim rows created by later tests.
+    await instance.close();
+    apps.splice(apps.indexOf(instance), 1);
+  });
+  it('reports accepted, processing and succeeded inbox states truthfully across a processor restart', async () => {
+    const device = await provision();
+    const receipt = await accept(device);
+    expect((await readModel().sync(signal())).inbox).toMatchObject({ accepted: 1, processing: 0, succeeded: 0, quarantined: 0 });
+
+    await pool.request().input('id', sql.UniqueIdentifier, receipt.acceptanceId).input('lease', sql.DateTime2(3), new Date(clock + 45_000))
+      .query("UPDATE daily.health_upload_inbox SET processing_status='processing',processing_attempts=1,processing_next_attempt_at=@lease WHERE acceptance_id=@id;");
+    expect((await readModel().sync(signal())).inbox).toMatchObject({ accepted: 0, processing: 1, succeeded: 0, quarantined: 0 });
+    clock += 45_001;
+    expect(await processor().processNext(signal())).toMatchObject({ state: 'processed', acceptanceId: receipt.acceptanceId });
+    expect((await readModel().sync(signal())).inbox).toMatchObject({ accepted: 0, processing: 0, succeeded: 1, quarantined: 0 });
   });
   it('commits exact raw lineage, normalization and freshness together once across concurrent processors/reconstruction', async () => {
     const device = await provision(); const bytes = raw(payload()); const receipt = await accept(device, bytes, 'same');
@@ -255,7 +400,8 @@ describe('inactive processor on real isolated SQL Server, synthetic records only
     const lost = vi.spyOn(sql.Transaction.prototype, 'commit').mockImplementation(async function(this: sql.Transaction) {
       await original.call(this); if (++commits === 2) throw new Error('synthetic-commit-response-lost');
     });
-    try { expect(await processor().processNext(signal())).toMatchObject({ state: 'retry' }); } finally { lost.mockRestore(); }
+    // The retry transaction finds the committed row and reports it processed instead of scheduling a second run.
+    try { expect(await processor().processNext(signal())).toMatchObject({ state: 'processed' }); } finally { lost.mockRestore(); }
     expect((await inbox())[0].processing_status).toBe('processed');
     expect(await processor().processNext(signal())).toEqual({ state: 'idle' });
     expect(await rows('health_ingestions')).toHaveLength(1); expect(await rows('health_workouts')).toHaveLength(2);
@@ -333,7 +479,10 @@ describe('inactive processor on real isolated SQL Server, synthetic records only
     expect((await inbox())[0].processing_attempts).toBe(0);
     const offline = new sql.ConnectionPool({ ...configuration, database });
     try { await expect(new SqlHealthProcessor(offline, owner).processNext(signal())).rejects.toBeInstanceOf(HealthUnavailable); } finally { await offline.close(); }
-    await processor().processNext(signal()); const down = await readDownMigration(filename);
+    await processor().processNext(signal());
+    const down = await readDownMigration(filename);
+    // Only the newest applied migration can be reverted, so the processing-state migration goes first.
+    await revertMigration(pool, await migrations(), await readDownMigration('0060_daily_health_processing_state.sql'));
     await expect(revertMigration(pool, await migrations(), down)).rejects.toThrow('no processing evidence');
     expect((await inbox())[0].processing_status).toBe('processed');
     // Only this synthetic isolated test database is cleaned; no runtime cleanup operation exists.

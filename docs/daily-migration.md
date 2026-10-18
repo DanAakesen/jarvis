@@ -16,6 +16,19 @@ off, alter its API, or change permanent health ingestion/processing or SQL
 migrations. Keep the [source-to-SQL mapping](daily-schema-mapping.md) as
 implementation evidence, not as an export manifest or bundle-import plan.
 
+## Owner-approved #1005 scope (18 October 2026)
+
+For the sixteen selected source capabilities only, this scope supersedes the
+15 October exclusion below: nutrition history, analysis and calorie balance,
+conversational coach status, profile, meal-preference and recovery-period reads
+and confirmed owner writes are delivered as data-only native tools on the
+existing services. The exclusion still stands for new coaching, recomposition
+and recovery automation, commitments, orders, weekly experiments, meal plans,
+fixed Status renderers and Apple Health meal write-back. The decision is
+recorded in [the decision log](decisions.md) and `PRODUCT.md`, and the
+source-to-Jarvis mapping is in
+[the implementation matrix](reference/daily-v182/source-to-jarvis-matrix.md).
+
 ## Current approved scope (15 October 2026)
 
 Dan explicitly excluded NEW P12-08/#723 coaching/recovery/recomp automation

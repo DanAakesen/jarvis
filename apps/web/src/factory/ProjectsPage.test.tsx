@@ -144,6 +144,24 @@ describe('Projects page', () => {
     expect(JSON.parse(String(manage?.[1]?.body))).toEqual({ repository: 'DanAakesen/second-project' });
   });
 
+  it('keeps project drafts on Escape and associates the fixed footer action with its form', async () => {
+    const user = userEvent.setup();
+    renderFactory('/factory/kanban');
+    await user.click(await screen.findByRole('button', { name: 'Create project' }));
+    const dialog = screen.getByRole('dialog', { name: 'Create project' });
+    const idea = within(dialog).getByLabelText('What should Jarvis build?');
+    const submit = within(dialog).getByRole('button', { name: 'Ask Jarvis to create it' }) as HTMLButtonElement;
+    expect(submit.form).toBe(idea.closest('form'));
+    expect(submit.closest('.modal-footer')).not.toBeNull();
+    expect(idea.closest('.modal-body')).not.toBeNull();
+    await user.type(idea, 'A project draft');
+    await user.keyboard('{Escape}');
+    expect(screen.getByRole('dialog', { name: 'Create project' })).toBe(dialog);
+    expect(idea).toHaveProperty('value', 'A project draft');
+    await user.click(within(dialog).getByRole('button', { name: 'Close Create project' }));
+    expect(screen.queryByRole('dialog', { name: 'Create project' })).toBeNull();
+  });
+
   it('lists project settings, running tasks, and honest release availability', async () => {
     renderFactory();
 

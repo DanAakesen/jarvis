@@ -1,31 +1,31 @@
 .composer-attachments { grid-column: 1 / -1; grid-row: 2; min-width: 0; }
 .composer-attachments:not(:has(.attachment-chips, .attachment-hint, .chat-error)) { display: contents; }
-.attachment-chips, .message-attachments { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 4px 6px; padding: 0; list-style: none; }
-.attachment-chip { position: relative; display: flex; align-items: center; gap: 8px; min-width: 0; max-width: 100%; padding: 6px 4px 6px 6px; border-radius: var(--radius-control); background: var(--glass-hover); color: var(--text); }
+.attachment-chips, .message-attachments { display: flex; flex-wrap: wrap; gap: var(--space-2); margin: var(--space-1) var(--space-1) var(--space-2); padding: 0; list-style: none; }
+.attachment-chip { position: relative; display: flex; align-items: center; gap: var(--space-2); min-width: 0; max-width: 100%; padding: var(--space-2) var(--space-1) var(--space-2) var(--space-2); border-radius: var(--radius-control); background: var(--glass-hover); color: var(--text); }
 .attachment-chip[data-status="failed"] { background: var(--error-wash); }
 .attachment-thumb { flex: none; display: grid; place-items: center; width: 40px; height: 40px; border-radius: var(--radius-control); background: var(--surface-muted); object-fit: cover; color: var(--text-muted); }
 .attachment-thumb svg { width: 20px; height: 20px; }
 .attachment-text { display: flex; flex-direction: column; min-width: 0; max-width: 16rem; font-size: var(--type-small); }
 .attachment-name { overflow: hidden; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
 .attachment-meta { color: var(--text-muted); }
-.attachment-note { margin-top: 2px; color: var(--text-muted); font-size: var(--type-small); overflow-wrap: anywhere; }
+.attachment-note { margin-top: var(--space-1); color: var(--text-muted); font-size: var(--type-small); overflow-wrap: anywhere; }
 .attachment-note[data-error] { color: var(--error); }
-.attachment-progress { width: 100%; height: 4px; margin-top: 4px; border: 0; border-radius: var(--radius-pill); background: var(--surface-muted); accent-color: var(--success); }
-.attachment-hint { margin: 0 6px 4px; color: var(--text-muted); font-size: var(--type-small); }
-.attachment-remove { flex: none; display: grid; place-items: center; width: 44px; height: 44px; margin: -6px 0; padding: 0; border: 0; border-radius: var(--radius-control); background: transparent; color: var(--text-muted); cursor: pointer; }
+.attachment-progress { width: 100%; height: 4px; margin-top: var(--space-1); border: 0; border-radius: var(--radius-pill); background: var(--surface-muted); accent-color: var(--success); }
+.attachment-hint { margin: 0 var(--space-2) var(--space-1); color: var(--text-muted); font-size: var(--type-small); }
+.attachment-remove { flex: none; display: grid; place-items: center; width: 44px; height: 44px; margin: calc(var(--space-2) * -1) 0; padding: 0; border: 0; border-radius: var(--radius-control); background: transparent; color: var(--text-muted); cursor: pointer; }
 .attachment-remove svg { width: 16px; height: 16px; }
 .attachment-remove:hover { background: var(--glass-hover); color: var(--text); }
 .attachment-remove:focus-visible, .message-attachment-open:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
-.message-attachments { margin: 0 0 8px; }
+.message-attachments { margin: 0 0 var(--space-2); }
 .message-attachment { display: flex; flex-direction: column; min-width: 0; max-width: 100%; }
-.message-attachment-open { display: flex; align-items: center; gap: 8px; min-height: 44px; max-width: 100%; padding: 6px 12px; border: 0; border-radius: var(--radius-control); background: var(--glass-hover); color: var(--text); font: inherit; font-size: var(--type-small); text-align: left; cursor: pointer; }
+.message-attachment-open { display: flex; align-items: center; gap: var(--space-2); min-height: 44px; max-width: 100%; padding: var(--space-2) var(--space-3); border: 0; border-radius: var(--radius-control); background: var(--glass-hover); color: var(--text); font: inherit; font-size: var(--type-small); text-align: left; cursor: pointer; }
 .message-attachment-open:hover:not(:disabled) { background: var(--surface-muted); }
 .message-attachment-open:disabled { cursor: default; opacity: .7; }
 .message-attachment-open svg { flex: none; width: 18px; height: 18px; }
 .message-attachment-open .attachment-name { min-width: 0; max-width: 14rem; }
-.public-image-confirmation { margin: 12px 0 0; }
+.public-image-confirmation { margin: var(--space-3) 0 0; }
 .public-image-confirmation img { display: block; max-width: min(100%, 24rem); max-height: 18rem; border-radius: var(--radius-control); object-fit: contain; }
-.public-image-confirmation figcaption { margin-top: var(--space-2); padding: 8px 12px; border-radius: var(--radius-control); background: var(--warning-surface); color: var(--warning-text); font-size: var(--type-small); }
+.public-image-confirmation figcaption { margin-top: var(--space-2); padding: var(--space-2) var(--space-3); border-radius: var(--radius-control); background: var(--warning-surface); color: var(--warning-text); font-size: var(--type-small); }
 .conversation-history[data-file-drag] .composer { background: var(--state-selected-bg); }
-.composer-drop-hint { grid-column: 1 / -1; margin: 2px 6px 4px; color: var(--text); font-size: var(--type-small); font-weight: 600; }
+.composer-drop-hint { grid-column: 1 / -1; margin: var(--space-1) var(--space-2) var(--space-1); color: var(--text); font-size: var(--type-small); font-weight: 600; }
 @media (max-width: 700px) { .attachment-text { max-width: 11rem; } }

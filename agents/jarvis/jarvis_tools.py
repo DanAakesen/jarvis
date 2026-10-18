@@ -755,7 +755,10 @@ class BackendToolClient:
         try:
             if name == "daily_feed":
                 read_timeout = DAILY_FEED_TIMEOUT_SECONDS
-            elif name in {"daily_food_review", "daily_saved_food", "daily_nutrition_targets"}:
+            elif name in {
+                "daily_food_review", "daily_saved_food", "daily_nutrition_targets",
+                "daily_nutrition_history", "daily_coach_status",
+            }:
                 read_timeout = FOOD_REVIEW_TIMEOUT_SECONDS
             elif name == "web_research":
                 read_timeout = self._settings.long_tool_timeout_seconds

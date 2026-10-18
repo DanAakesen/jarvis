@@ -1,7 +1,7 @@
 import type { createGitHubVaultClient } from '../vault/github-client.js';
 import { MAX_VAULT_FILE_BYTES, VaultFileTooLargeError } from '../vault/github-client.js';
 import { isVaultNotePath } from '../vault/index.js';
-import { parseTodos, type ParsedTodo } from './todo-file.js';
+import { parseTodosWithContext, type ParsedTodo, type ParsedVaultTodo } from './todo-file.js';
 
 type VaultReader = Pick<ReturnType<typeof createGitHubVaultClient>, 'tree' | 'read'>;
 export const MAX_TODO_FILES = 256;
@@ -17,10 +17,10 @@ export class TodoDiscoveryError extends Error {
 interface CachedFile {
   sha: string;
   bytes: number;
-  todos: ParsedTodo[];
+  todos: ParsedVaultTodo[];
 }
 
-function inScope(path: string): boolean {
+export function inScope(path: string): boolean {
   return isVaultNotePath(path) && !path.split('/').some((part) => part.startsWith('.') || part.toLowerCase() === 'archive') &&
     (/^(?:Personal|Work)\//u.test(path) || /^(?:task|tasks)\.md$/iu.test(path));
 }
@@ -29,7 +29,8 @@ const readers = new WeakMap<VaultReader, ReturnType<typeof createReader>>();
 
 function createReader(vault: VaultReader) {
   let cache = new Map<string, CachedFile>();
-  return async (signal: AbortSignal): Promise<ParsedTodo[]> => {
+  let inFlight: Promise<ParsedVaultTodo[]> | undefined;
+  const scan = async (signal: AbortSignal): Promise<ParsedVaultTodo[]> => {
     const controller = new AbortController();
     const boundedSignal = AbortSignal.any([signal, controller.signal]);
     const scan = async () => {
@@ -65,7 +66,7 @@ function createReader(vault: VaultReader) {
             }
             const bytes = Buffer.byteLength(file.content, 'utf8');
             if (bytes > MAX_VAULT_FILE_BYTES) throw new VaultFileTooLargeError();
-            parsed = { sha: entry.sha, bytes, todos: parseTodos(file.content) };
+            parsed = { sha: entry.sha, bytes, todos: parseTodosWithContext(file.content, entry.path) };
           }
           totalBytes += parsed.bytes;
           if (totalBytes > MAX_TODO_SCAN_BYTES) throw new TodoDiscoveryError('scan_limit');
@@ -91,13 +92,46 @@ function createReader(vault: VaultReader) {
       controller.abort();
     }
   };
+  return (signal: AbortSignal): Promise<ParsedVaultTodo[]> => {
+    if (inFlight) return inFlight;
+    const pending = scan(signal);
+    inFlight = pending;
+    void pending.finally(() => {
+      if (inFlight === pending) inFlight = undefined;
+    }).catch(() => {});
+    return pending;
+  };
 }
 
-export function readVaultTodos(vault: VaultReader, signal: AbortSignal): Promise<ParsedTodo[]> {
+export function readVaultTasks(vault: VaultReader, signal: AbortSignal): Promise<ParsedVaultTodo[]> {
   let reader = readers.get(vault);
   if (!reader) {
     reader = createReader(vault);
     readers.set(vault, reader);
   }
   return reader(signal);
+}
+
+export async function readVaultTodos(vault: VaultReader, signal: AbortSignal): Promise<ParsedTodo[]> {
+  return (await readVaultTasks(vault, signal)).map(({ text, dueAt, dueHasTime, done, highPriority }) =>
+    ({ text, dueAt, dueHasTime, done, highPriority }));
+}
+
+export type VaultTaskState = 'open' | 'done' | 'all';
+
+export function filterVaultTasks(
+  todos: readonly ParsedVaultTodo[],
+  options: { query?: string; state: VaultTaskState; dueWindowDays?: number; today?: string },
+): ParsedVaultTodo[] {
+  const query = options.query?.trim().toLocaleLowerCase('en');
+  let latestDate: string | undefined;
+  if (options.dueWindowDays !== undefined && options.today !== undefined) {
+    const [year, month, day] = options.today.split('-').map(Number);
+    latestDate = new Date(Date.UTC(year!, month! - 1, day! + options.dueWindowDays)).toISOString().slice(0, 10);
+  }
+  return todos.filter((todo) =>
+    (options.state === 'all' || todo.done === (options.state === 'done')) &&
+    (!query || todo.text.toLocaleLowerCase('en').includes(query)) &&
+    (options.dueWindowDays === undefined ||
+      (todo.dueDate !== null && todo.dueDate >= options.today! && todo.dueDate <= latestDate!)));
 }

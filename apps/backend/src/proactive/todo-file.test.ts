@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { parseTodos, resolveTodoFile } from './todo-file.js';
+import { parseTodos, parseTodosWithContext, resolveTodoFile } from './todo-file.js';
 
 const signal = () => new AbortController().signal;
 const file = (path: string) => ({ path, sha: 'a'.repeat(40) });
@@ -87,6 +87,31 @@ describe('todo parser', () => {
       { text: 'Finished', dueAt: '2026-10-31T22:59:00.000Z', dueHasTime: false, done: true, highPriority: false },
       { text: 'Nested item', dueAt: null, dueHasTime: false, done: false, highPriority: false },
       { text: 'Malformed', dueAt: null, dueHasTime: false, done: false, highPriority: false },
+    ]);
+  });
+
+  it('adds source path, line, heading and date/time fields without changing the legacy parser shape', () => {
+    const content = [
+      '# Inbox',
+      '',
+      '- [ ] Buy a mirror 🕒 14:30 📅 2026-10-20',
+      '## Home',
+      '- [x] Hang the frame 📅 2026-10-21',
+    ].join('\n');
+    expect(parseTodosWithContext(content, 'Personal/Inbox.md')).toEqual([
+      {
+        text: 'Buy a mirror', dueAt: '2026-10-20T12:30:00.000Z', dueHasTime: true,
+        done: false, highPriority: false, dueDate: '2026-10-20', dueTime: '14:30',
+        path: 'Personal/Inbox.md', line: 3, heading: 'Inbox',
+      },
+      {
+        text: 'Hang the frame', dueAt: '2026-10-21T21:59:00.000Z', dueHasTime: false,
+        done: true, highPriority: false, dueDate: '2026-10-21', dueTime: null,
+        path: 'Personal/Inbox.md', line: 5, heading: 'Home',
+      },
+    ]);
+    expect(Object.keys(parseTodos(content)[0]!).sort()).toEqual([
+      'done', 'dueAt', 'dueHasTime', 'highPriority', 'text',
     ]);
   });
 
