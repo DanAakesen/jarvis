@@ -34,6 +34,13 @@ export class VaultAppNotInstalledError extends Error {
   }
 }
 
+export class VaultTokenError extends Error {
+  constructor(cause?: unknown) {
+    super('The vault GitHub App token could not be issued', { cause });
+    this.name = 'VaultTokenError';
+  }
+}
+
 export class VaultWriteConflictError extends Error {
   constructor() {
     super('The vault note changed during the write.');
@@ -122,7 +129,7 @@ export function createGitHubVaultClient(options: {
     tokenRequest ??= options.tokenIssuer.issueForContentsWrite(VAULT_REPOSITORY)
       .catch((error: unknown) => {
         if (object(error)?.status === 404) throw new VaultAppNotInstalledError();
-        throw error;
+        throw new VaultTokenError(error);
       })
       .then((value) => {
         token = value;

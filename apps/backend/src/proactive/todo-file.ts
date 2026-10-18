@@ -12,6 +12,14 @@ export interface ParsedTodo {
   highPriority: boolean;
 }
 
+export interface ParsedVaultTodo extends ParsedTodo {
+  dueDate: string | null;
+  dueTime: string | null;
+  path: string;
+  line: number;
+  heading: string | null;
+}
+
 const dueMarkerPattern = /(?:📅\s*|\[due::\s*|\bdue:\s*)(\d{4}-\d{2}-\d{2})(?:(?:\s+|T)(\d{2}:\d{2}))?\]?/iu;
 const dueMarkersPattern = /(?:📅\s*|\[due::\s*|\bdue:\s*)(\d{4}-\d{2}-\d{2})(?:(?:\s+|T)(\d{2}:\d{2}))?\]?/giu;
 const highPriorityPattern = /\bpriority\s*::?\s*P1\s*-\s*High\b/iu;
@@ -48,11 +56,12 @@ function dueDate(date: string, time: string | undefined): string | null {
   }
 }
 
-export function parseTodos(content: string): ParsedTodo[] {
+export function parseTodosWithContext(content: string, path: string): ParsedVaultTodo[] {
   const lines = content.replace(/^\uFEFF/u, '').split(/\r?\n/u);
-  const todos: ParsedTodo[] = [];
+  const todos: ParsedVaultTodo[] = [];
   let fence: string | undefined;
-  for (const line of lines) {
+  let heading: string | null = null;
+  for (const [index, line] of lines.entries()) {
     const delimiter = /^ {0,3}(`{3,}|~{3,})/u.exec(line)?.[1];
     if (delimiter) {
       if (!fence) fence = delimiter;
@@ -60,6 +69,11 @@ export function parseTodos(content: string): ParsedTodo[] {
       continue;
     }
     if (fence) continue;
+    const headingMatch = /^ {0,3}#{1,6}\s+(.+?)\s*#*\s*$/u.exec(line);
+    if (headingMatch) {
+      heading = sanitizeFactText(headingMatch[1] ?? '') || null;
+      continue;
+    }
     const task = /^\s*[-*]\s+\[([ xX])\]\s*(.*)$/u.exec(line);
     if (!task) continue;
     const rawText = task[2] ?? '';
@@ -83,9 +97,19 @@ export function parseTodos(content: string): ParsedTodo[] {
       dueHasTime: time !== undefined && dueAt !== null,
       done: task[1]!.toLowerCase() === 'x',
       highPriority: rawText.includes('⏫') || highPriorityPattern.test(rawText),
+      dueDate: dueAt === null ? null : dueMarker?.[1] ?? null,
+      dueTime: dueAt !== null && time !== undefined ? time : null,
+      path,
+      line: index + 1,
+      heading,
     });
   }
   return todos;
+}
+
+export function parseTodos(content: string): ParsedTodo[] {
+  return parseTodosWithContext(content, '').map(({ text, dueAt, dueHasTime, done, highPriority }) =>
+    ({ text, dueAt, dueHasTime, done, highPriority }));
 }
 
 export { MAX_VAULT_FILE_BYTES };

@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { createMemoryRouter, RouterProvider } from 'react-router-dom';
 import { matchTitles, readKnowledgeGraph, sampleKnowledgeGraph, vaultMemoryId } from './knowledge-data';
 import { GeneratedViewRenderer } from '../GeneratedViewRenderer';
 import { KnowledgeBackendContext } from './knowledge-context';
@@ -143,6 +144,43 @@ describe('knowledge graph view', () => {
     expect(screen.getByRole('link', { name: 'Open in GitHub' })).not.toBeNull();
     expect(screen.getByRole('button', { name: 'Roadmap' })).not.toBeNull();
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('https://api.example.com/knowledge/search?q=anna', expect.anything()));
+  });
+
+  it('shows task matches and plain note snippets as separate search results', async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      if (url.pathname === '/knowledge/graph') return json({
+        nodes: [{ id: 'home', path: 'Personal/Home.md', title: 'Home note', folder: 'Personal' }],
+        edges: [],
+      });
+      if (url.pathname === '/knowledge/search') {
+        return json({ hits: [{ nodeId: 'home', snippet: 'The hallway is ready for a new mirror.' }] });
+      }
+      if (url.pathname === '/vault/tasks') return json({
+        items: [{
+          id: 'c'.repeat(64), text: 'Buy a mirror', done: false,
+          dueDate: '2031-04-09', dueTime: '14:30', dueAt: '2031-04-09T12:30:00.000Z',
+          priority: 'normal', path: 'Personal/Inbox.md', line: 4, heading: 'Home',
+        }],
+        readAt: '2031-04-09T12:00:00.000Z', today: '2031-04-09', total: 3, truncated: false,
+      });
+      return json({}, 404);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const router = createMemoryRouter([{
+      path: '/',
+      element: <KnowledgeGraphView backendUrl="https://api.example.com" getAccessToken={getAccessToken} showTaskMatches />,
+    }]);
+    render(<RouterProvider router={router} />);
+    fireEvent.change(await screen.findByLabelText('Search your knowledge'), { target: { value: 'mirror' } });
+    expect(await screen.findByText('The hallway is ready for a new mirror.')).not.toBeNull();
+    const taskHeading = await screen.findByRole('heading', { name: 'Tasks' });
+    expect(screen.getByRole('link', { name: '3 matching tasks' }).getAttribute('href')).toBe('/tasks?q=mirror');
+    expect(screen.getByText('Buy a mirror')).not.toBeNull();
+    expect(screen.getByText(/Apr 9, 2031, 12:30 PM|9 Apr 2031, 12:30/)).not.toBeNull();
+    const notes = screen.getByRole('list', { name: 'Matching notes' });
+    expect(taskHeading.compareDocumentPosition(notes) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(within(notes).getByRole('button', { name: /Home note/ })).not.toBeNull();
   });
 });
 
