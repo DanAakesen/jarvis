@@ -68,6 +68,19 @@ describe('shared overlay contract', () => {
     expect(feedbackViolations(styles)).toBe(false);
   });
 
+  it('shares the backdrop and disables sheet transitions for either reduced-motion preference', () => {
+    for (const selector of ['.modal-backdrop', '.mobile-menu-backdrop', '.context-panel-modal-backdrop']) {
+      expect(declarations(styles, selector).get('background')).toBe('var(--overlay)');
+      expect(declarations(styles, selector).get('backdrop-filter')).toBe('blur(6px)');
+    }
+    expect(styles).toContain('display var(--motion-state) allow-discrete');
+    expect(styles).toContain('.mobile-menu[hidden], .context-panel-modal-backdrop[hidden] { opacity: 0; pointer-events: none; }');
+    for (const preference of ['@media (prefers-reduced-motion: reduce)', ':root[data-motion="reduced"]']) {
+      expect(styles.slice(styles.lastIndexOf(preference))).toContain('.context-panel-modal-backdrop');
+      expect(styles.slice(styles.lastIndexOf(preference))).toContain('animation: none; transition: none;');
+    }
+  });
+
   it('rejects removed or regressed stacking, surface and feedback rules', () => {
     expect(stackingViolations('.popover { z-index: 1200; }')).toEqual(['1200']);
     expect(stackingViolations('.popover { z-index: calc(10 + var(--workspace-depth)); }')).not.toEqual([]);

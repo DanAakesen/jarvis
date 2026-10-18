@@ -19,7 +19,8 @@ describe('mobile menu modal behavior', () => {
     render(<Harness />);
     const trigger = screen.getByRole('button', { name: 'Open menu' });
     await user.click(trigger);
-    expect(document.activeElement).toBe(screen.getByRole('link', { name: 'Jarvis' }));
+    expect(screen.getByRole('dialog', { name: 'Go to' })).not.toBeNull();
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Close menu' }));
     await user.tab({ shift: true });
     expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Context panel' }));
     await user.keyboard('{Escape}');
@@ -27,11 +28,15 @@ describe('mobile menu modal behavior', () => {
     expect(document.activeElement).toBe(trigger);
     expect(document.body.style.overflow).not.toBe('hidden');
     await user.click(trigger);
-    const backdrop = screen.getByRole('button', { name: 'Close menu' });
+    const backdrop = screen.getByRole('dialog').parentElement!.querySelector<HTMLElement>('.mobile-menu-backdrop')!;
     expect(backdrop.closest('[inert]')).toBeNull();
     await user.click(backdrop);
     expect(document.activeElement).toBe(trigger);
     expect(screen.queryByRole('dialog')).toBeNull();
+    await user.click(trigger);
+    await user.click(screen.getByRole('button', { name: 'Close menu' }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(document.activeElement).toBe(trigger);
   });
 
   it('preserves page navigation and closes the sheet', async () => {

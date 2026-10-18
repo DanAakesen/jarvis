@@ -2562,9 +2562,6 @@ a.task-chip:hover { background: var(--glass-pressed); }
 .memory-history-heading { margin: 16px 0 6px; font-size: 14px; }
 .memory-history { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
 .memory-history li { display: grid; gap: 2px; font-size: 13px; }
-.memory-forget-dialog { max-width: min(460px, calc(100vw - 32px)); padding: 20px 22px; border: 1px solid var(--rule); border-radius: var(--radius-window); background: var(--surface); box-shadow: var(--dialog-shadow); color: var(--text); }
-.memory-forget-dialog::backdrop { background: var(--overlay); backdrop-filter: blur(4px); }
-.memory-forget-dialog h3 { margin: 0 0 8px; }
 @media (max-width: 900px) { .memory-browser { grid-template-columns: minmax(0, 1fr); } .memory-toolbar { grid-template-columns: minmax(0, 1fr); } }.memory-status li.memory-status-warning { background: color-mix(in srgb, var(--warning) 18%, transparent); color: var(--text); }
 
 /* Signed-out views use the full viewport: the room remains clear, and the greeting owns the focus. */
@@ -2589,7 +2586,7 @@ a.task-chip:hover { background: var(--glass-pressed); }
 /* Modal (Modal.tsx): rendered at the document root, near the top of the viewport, over a dimmed and blurred room.
    Close with the X, Escape or a click outside. */
 .modal-backdrop {
-  position: fixed; z-index: var(--z-modal-backdrop); inset: 0; display: grid; align-items: start; justify-items: center;
+  position: fixed; z-index: var(--z-modal-backdrop); inset: var(--overlay-viewport-top, 0px) 0 auto; display: grid; align-items: start; justify-items: center;
   height: var(--overlay-viewport-height, 100dvh); overflow: hidden;
   padding: max(env(safe-area-inset-top), clamp(16px, 6dvh, 56px)) max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
   background: var(--overlay); backdrop-filter: blur(6px);
@@ -4094,14 +4091,38 @@ select.form-control {
 }
 .mobile-menu { height: var(--overlay-viewport-height, 100dvh); top: var(--overlay-viewport-top, 0px); bottom: auto; }
 .mobile-menu-sheet {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
   max-height: calc(var(--overlay-viewport-height, 100dvh) - var(--dock-space, 84px) - env(safe-area-inset-top) - var(--space-4));
   overscroll-behavior: contain;
   overflow-wrap: anywhere;
   animation-duration: var(--motion-state);
 }
-.mobile-menu-backdrop { animation-duration: var(--motion-state); }
-.app-shell .context-panel[aria-modal="true"] {
+.mobile-menu-sheet > :not(.mobile-menu-body) { flex: 0 0 auto; }
+.mobile-menu-sheet .mobile-menu-grip { align-self: center; }
+.mobile-menu-body { min-height: 0; overflow: auto; overscroll-behavior: contain; }
+.mobile-menu-backdrop { animation-duration: var(--motion-state); backdrop-filter: blur(6px); }
+.context-panel-modal-backdrop {
   position: fixed;
+  z-index: var(--z-sheet);
+  inset: var(--overlay-viewport-top, 0px) 0 auto;
+  height: var(--overlay-viewport-height, 100dvh);
+  background: var(--overlay);
+  backdrop-filter: blur(6px);
+}
+.context-panel-modal-backdrop[hidden] { display: none; }
+.mobile-menu, .context-panel-modal-backdrop {
+  opacity: 1;
+  transition: opacity var(--motion-state) var(--ease-enter), display var(--motion-state) allow-discrete;
+}
+.mobile-menu[hidden], .context-panel-modal-backdrop[hidden] { opacity: 0; pointer-events: none; }
+@starting-style {
+  .mobile-menu, .context-panel-modal-backdrop { opacity: 0; }
+}
+:root .overlay-exit-ghost, :root .overlay-exit-ghost * { animation: none; transition: none; }
+.app-shell .context-panel[aria-modal="true"] {
+  position: absolute;
   z-index: var(--z-sheet);
   inset: auto max(8px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left));
   display: flex;
@@ -4115,12 +4136,13 @@ select.form-control {
 }
 .app-shell .context-panel[aria-modal="true"][hidden] { display: none; }
 .context-panel[aria-modal="true"] .context-panel-heading { flex: 0 0 auto; }
+.context-panel[aria-modal="true"] .context-panel-heading h2 { font-size: var(--type-subheading); }
 .context-panel[aria-modal="true"] .context-panel-body { min-height: 0; overflow: auto; overscroll-behavior: contain; }
 @media (max-width: 700px) {
   .modal-backdrop { padding: max(var(--space-3), env(safe-area-inset-top)) max(var(--space-3), env(safe-area-inset-right)) max(var(--space-3), env(safe-area-inset-bottom)) max(var(--space-3), env(safe-area-inset-left)); }
   .modal { padding: var(--space-3); }
 }
 @media (prefers-reduced-motion: reduce) {
-  :is(.modal, .modal-backdrop, .jobs-popover, .more-menu-list, .more-menu-flyout, .presence-menu, .mobile-menu, .mobile-menu-sheet, .mobile-menu-backdrop, .context-panel[aria-modal="true"]) { animation: none; transition: none; }
+  :root :is(.modal, .modal-backdrop, .jobs-popover, .more-menu-list, .more-menu-flyout, .presence-menu, .mobile-menu, .mobile-menu-sheet, .mobile-menu-backdrop, .context-panel-modal-backdrop, .context-panel[aria-modal="true"]) { animation: none; transition: none; }
 }
-:root[data-motion="reduced"] :is(.modal, .modal-backdrop, .jobs-popover, .more-menu-list, .more-menu-flyout, .presence-menu, .mobile-menu, .mobile-menu-sheet, .mobile-menu-backdrop, .context-panel[aria-modal="true"]) { animation: none; transition: none; }
+:root[data-motion="reduced"] :is(.modal, .modal-backdrop, .jobs-popover, .more-menu-list, .more-menu-flyout, .presence-menu, .mobile-menu, .mobile-menu-sheet, .mobile-menu-backdrop, .context-panel-modal-backdrop, .context-panel[aria-modal="true"]) { animation: none; transition: none; }

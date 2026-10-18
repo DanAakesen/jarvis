@@ -1,5 +1,20 @@
 # Decisions
 
+## Share overlay stacking and modal lifecycle (18 October 2026; P14-09 / #992)
+
+Keep the existing React overlays and controls; add no UI library. Name stacking
+roles once in `styles.css`, isolate workspace depth, and share modal focus,
+inert-background, viewport and scroll-lock handling. Keep dialog actions in
+their existing order contract and associate footer submit buttons with their
+original forms. Protect edited forms from implicit dismissal without removing
+explicit cancel/close actions. Keep nonmodal menu keyboard behavior separate.
+
+Portal workspace pin feedback into an in-flow shell host before route content.
+The previous fixed workspace placement overprinted page headings and could
+intercept the Factory Create project action. Persistence, alert copy and retry
+behavior are unchanged. Synthetic browser evidence is not live-provider or
+physical on-screen-keyboard verification.
+
 ## Consolidate web viewport breakpoints (18 October 2026; P14-05 / #973)
 
 Use one non-Daily viewport set: phone through 700px, tablet above 700px through

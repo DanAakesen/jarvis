@@ -153,12 +153,26 @@ describe('modal lifecycle', () => {
     vi.stubGlobal('visualViewport', viewport);
     const page = render(<EmptyDialog />);
     const dialog = screen.getByRole('dialog');
-    expect(dialog.style.getPropertyValue('--modal-viewport-height')).toBe('420px');
+    expect(dialog.style.getPropertyValue('--overlay-viewport-height')).toBe('420px');
     Object.assign(viewport, { height: 300 });
     act(() => viewport.dispatchEvent(new Event('resize')));
-    expect(dialog.style.getPropertyValue('--modal-viewport-height')).toBe('300px');
+    expect(dialog.style.getPropertyValue('--overlay-viewport-height')).toBe('300px');
     page.unmount();
-    expect(dialog.style.getPropertyValue('--modal-viewport-height')).toBe('');
+    expect(dialog.style.getPropertyValue('--overlay-viewport-height')).toBe('');
+    vi.unstubAllGlobals();
+  });
+
+  it('places viewport sizing on the backdrop boundary so both backdrop and dialog inherit it', () => {
+    const viewport = new EventTarget() as VisualViewport;
+    Object.assign(viewport, { height: 380, offsetTop: 24 });
+    vi.stubGlobal('visualViewport', viewport);
+    const page = render(<Modal title="Keyboard" titleId="keyboard" onClose={() => {}}>Content</Modal>);
+    const backdrop = screen.getByRole('dialog').parentElement!;
+    expect(backdrop.style.getPropertyValue('--overlay-viewport-height')).toBe('380px');
+    expect(backdrop.style.getPropertyValue('--overlay-viewport-top')).toBe('24px');
+    page.unmount();
+    expect(backdrop.style.getPropertyValue('--overlay-viewport-height')).toBe('');
+    expect(backdrop.style.getPropertyValue('--overlay-viewport-top')).toBe('');
     vi.unstubAllGlobals();
   });
 

@@ -96,8 +96,8 @@ export function useModalLifecycle({
     const viewport = window.visualViewport;
     const resize = () => {
       if (!viewport) return;
-      element.style.setProperty('--modal-viewport-height', `${viewport.height}px`);
-      element.style.setProperty('--modal-viewport-top', `${viewport.offsetTop}px`);
+      layer.boundary.style.setProperty('--overlay-viewport-height', `${viewport.height}px`);
+      layer.boundary.style.setProperty('--overlay-viewport-top', `${viewport.offsetTop}px`);
     };
     resize();
     viewport?.addEventListener('resize', resize);
@@ -110,8 +110,8 @@ export function useModalLifecycle({
       document.removeEventListener('focusin', onFocus);
       viewport?.removeEventListener('resize', resize);
       viewport?.removeEventListener('scroll', resize);
-      element.style.removeProperty('--modal-viewport-height');
-      element.style.removeProperty('--modal-viewport-top');
+      layer.boundary.style.removeProperty('--overlay-viewport-height');
+      layer.boundary.style.removeProperty('--overlay-viewport-top');
       const wasTop = isTopModal(element);
       layers.splice(layers.indexOf(layer), 1);
       syncInert();

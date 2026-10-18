@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom';
 import type { BrowserConfirmation, FeedAttention, ActivityItem } from './activity';
 import { activityHref, formatTime } from './activity';
 import { ShellIcon } from './ShellIcon';
+import { returnFocusAfterOutsidePress } from './overlay-focus';
+import { useOverlayMotion } from './overlay-motion';
 
 function confirmationLabel(kind: BrowserConfirmation['actionKind']): string {
   const words = kind.replaceAll('_', ' ');
@@ -166,6 +168,7 @@ function AttentionPopoverContent({ attention, count }: { attention: FeedAttentio
   const root = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
   const popover = useRef<HTMLDivElement>(null);
+  const popoverRef = useOverlayMotion(popover, 'menu');
   const popoverId = useId();
   const label = `${count} ${count === 1 ? 'item needs' : 'items need'} attention`;
 
@@ -173,7 +176,7 @@ function AttentionPopoverContent({ attention, count }: { attention: FeedAttentio
     if (!open) return;
     const closeOutside = (event: PointerEvent) => {
       if (!root.current?.contains(event.target as Node)) {
-        if (popover.current?.contains(document.activeElement)) trigger.current?.focus();
+        if (root.current?.contains(document.activeElement)) returnFocusAfterOutsidePress(trigger.current);
         setOpen(false);
       }
     };
@@ -213,7 +216,7 @@ function AttentionPopoverContent({ attention, count }: { attention: FeedAttentio
         </button>
       )}
       {open && count > 0 && attention && (
-        <div ref={popover} tabIndex={-1} id={popoverId} className="jobs-popover attention-popover"
+        <div ref={popoverRef} tabIndex={-1} id={popoverId} className="jobs-popover attention-popover"
           role="group" aria-label="Items needing attention">
           <div className="jobs-popover-heading">
             <span>Needs attention</span>

@@ -1,6 +1,8 @@
 import { Fragment, useCallback, useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import type { VoiceLanguage } from './voice-client';
 import { voiceLanguages } from './voice-language';
+import { returnFocusAfterOutsidePress } from './overlay-focus';
+import { useOverlayMotion } from './overlay-motion';
 
 export type MoreMenuAction = {
   id: string;
@@ -73,8 +75,10 @@ export function ConversationMoreMenu({
   const root = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
   const menu = useRef<HTMLDivElement>(null);
+  const menuRef = useOverlayMotion(menu, 'menu');
   const languageItem = useRef<HTMLButtonElement>(null);
   const languageMenu = useRef<HTMLDivElement>(null);
+  const languageMenuRef = useOverlayMotion(languageMenu, 'menu');
   const [open, setOpen] = useState(false);
   const [languageOpen, setLanguageOpen] = useState(false);
   const pendingFocus = useRef<'first' | 'last' | 'checked' | null>(null);
@@ -90,7 +94,9 @@ export function ConversationMoreMenu({
     if (!open) return;
     const onPointerDown = (event: PointerEvent) => {
       if (event.target instanceof Node && root.current?.contains(event.target)) return;
-      close(Boolean(root.current?.contains(document.activeElement)));
+      const restore = Boolean(root.current?.contains(document.activeElement));
+      close(false);
+      if (restore) returnFocusAfterOutsidePress(trigger.current);
     };
     document.addEventListener('pointerdown', onPointerDown);
     return () => document.removeEventListener('pointerdown', onPointerDown);
@@ -204,7 +210,7 @@ export function ConversationMoreMenu({
         <MenuIcon name={icon} />
       </button>
       {open && (
-        <div ref={menu} id={menuId} className="more-menu-list luminous-glass" role="menu" aria-label={label}
+        <div ref={menuRef} id={menuId} className="more-menu-list luminous-glass" role="menu" aria-label={label}
           onKeyDown={(event) => onMenuKeyDown(event, false)}>
           {language !== undefined && onLanguageChange && <div role="none" className="more-menu-language">
             <button
@@ -223,7 +229,7 @@ export function ConversationMoreMenu({
               <MenuIcon name="chevron" />
             </button>
             {languageOpen && (
-              <div ref={languageMenu} id={languageMenuId} className="more-menu-flyout luminous-glass" role="menu"
+              <div ref={languageMenuRef} id={languageMenuId} className="more-menu-flyout luminous-glass" role="menu"
                 aria-label="Language" aria-describedby={languageNote ? languageNoteId : undefined}
                 onKeyDown={(event) => onMenuKeyDown(event, true)}>
                 {voiceLanguages.map((option) => (

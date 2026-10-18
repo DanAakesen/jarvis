@@ -1,6 +1,7 @@
 import { useRef } from 'react';
 import { NavLink } from 'react-router-dom';
 import { useModalLifecycle } from './useModalLifecycle';
+import { ShellIcon } from './ShellIcon';
 
 /**
  * Phone shell pieces (Dan, 8 October): voice first, so the screen stays clear. A bottom sheet replaces the rail for
@@ -29,10 +30,14 @@ export function MobileMenu({ open, onClose, onNavigate, onFolio, onContext, dail
 
   return (
     <div ref={root} className="mobile-menu" hidden={!open}>
-      <button className="mobile-menu-backdrop" type="button" aria-label="Close menu" tabIndex={-1} onClick={onClose} />
-      <div ref={sheet} id="mobile-menu" className="mobile-menu-sheet" role="dialog" aria-modal="true" aria-label="Go to" tabIndex={-1} onKeyDown={onKeyDown}>
+      <div className="mobile-menu-backdrop" aria-hidden="true" onClick={onClose} />
+      <div ref={sheet} id="mobile-menu" className="mobile-menu-sheet" role="dialog" aria-modal="true" aria-labelledby="mobile-menu-heading" tabIndex={-1} onKeyDown={onKeyDown}>
         <span className="mobile-menu-grip" aria-hidden="true" />
-        <nav aria-label="Pages">
+        <header className="modal-heading">
+          <h2 id="mobile-menu-heading">Go to</h2>
+          <button className="modal-close" type="button" aria-label="Close menu" onClick={onClose}><ShellIcon name="close" /></button>
+        </header>
+        <nav className="mobile-menu-body" aria-label="Pages">
           {(dailyEnabled ? [pages[0], { to: '/daily', label: 'Daily' }, ...pages.slice(1)] : pages).map((page) => (
             <NavLink key={page.to} className="mobile-menu-link" to={page.to} end={'end' in page} onClick={() => { onNavigate(); onClose(); }}>{page.label}</NavLink>
           ))}

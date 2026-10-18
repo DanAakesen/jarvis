@@ -1,6 +1,7 @@
 import { useRef, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { isTopModal, useModalLifecycle } from './useModalLifecycle';
+import { useOverlayMotion } from './overlay-motion';
 
 /**
  * One modal for the app: rendered at the document root (so page transforms never move it), near the top of the
@@ -19,6 +20,7 @@ export function Modal({ title, titleId, onClose, busy = false, dirty = false, cl
 }) {
   const dialog = useRef<HTMLElement>(null);
   const backdrop = useRef<HTMLDivElement>(null);
+  const backdropRef = useOverlayMotion(backdrop, 'modal-backdrop');
   const pressStartedOutside = useRef(false);
   const edited = useRef(false);
   const close = () => { if (!busy) onClose(); };
@@ -26,7 +28,7 @@ export function Modal({ title, titleId, onClose, busy = false, dirty = false, cl
   const { onKeyDown } = useModalLifecycle({ dialog, boundary: backdrop, onDismiss: dismiss });
 
   return createPortal(
-    <div ref={backdrop} className="modal-backdrop"
+    <div ref={backdropRef} className="modal-backdrop"
       onPointerDown={(event) => { pressStartedOutside.current = event.target === event.currentTarget; }}
       onClick={(event) => {
         // Only a press that starts and ends on the backdrop closes, so selecting text never dismisses the modal.
