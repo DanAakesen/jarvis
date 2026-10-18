@@ -186,8 +186,17 @@ describe('Daily SQL owner schema on real SQL Server', () => {
     await insertMeal(owner, 'day-three', '2026-02-03', { energy: 250, protein: 10, carbohydrates: 30, fat: 5, fiber: 2 });
     await insertMeal(other, 'foreign-day', '2026-02-01', { energy: 999, protein: 999, carbohydrates: 999, fat: 999, fiber: 999 });
 
+    // This fixture applies only migration 0041; sync() also reads the upload inbox created by a later migration.
+    const health = (request: FastifyRequest) => {
+      const model = DailyHealthReadModel.forRequest(pool, request);
+      return {
+        history: model.history.bind(model), metricCatalog: model.metricCatalog.bind(model),
+        workoutDetail: model.workoutDetail.bind(model), heartRate: model.heartRate.bind(model),
+        sync: async () => ({ feeds: [], heartbeat: null, inbox: {} }) as unknown as Awaited<ReturnType<DailyHealthReadModel['sync']>>,
+      };
+    };
     const service = new DailyQueryService({
-      health: request => DailyHealthReadModel.forRequest(pool, request),
+      health,
       nutrition: request => NutritionStore.forRequest(pool, request),
       briefs: () => { throw new Error('No brief read is expected'); },
     }, () => Date.parse('2026-02-04T00:00:00Z'));
