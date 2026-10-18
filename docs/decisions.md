@@ -5567,3 +5567,17 @@ and gate heart rate and recorded detail independently by capabilities. Render
 the merged `{ id, detail }` result using Data's existing escaped JSON pattern.
 Synthetic-only browser evidence is under `docs/ui/p12-23/`; live original-site
 parity remains unverified and original Daily stays canonical.
+
+## P12-26 — Daily overview summaries and integration audit (18 October 2026)
+
+Use independently loaded Overview tiles for each exposed section, importing
+the same pure date, display and calculation helpers as the section views.
+Keep the inventory, hide summaries when their required source is absent, and
+isolate failures and retries per tile. Retain the existing Briefs source and
+replace its generic presentation with a history/detail workflow. Share a
+two-request abort-aware queue across Daily query, capability and Nutrition
+target calls so rapid section changes do not create unbounded reads. Preserve
+unknown and partial semantics, owner-only access and original Daily as
+canonical. The integration audit corrected raw chart-series labels, repeated
+coverage copy, narrow Nutrition navigation and workout-detail spacing; no
+backend, contract, navigation or write-path changes are included.

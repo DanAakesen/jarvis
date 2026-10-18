@@ -9,7 +9,7 @@ import { dailyFixture, jsonResponse } from './test-support';
 
 const token = async () => 'synthetic-fixture';
 const backendUrl = 'http://localhost:3999';
-afterEach(() => { cleanup(); vi.unstubAllGlobals(); window.history.replaceState({}, '', '/'); });
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.restoreAllMocks(); window.history.replaceState({}, '', '/'); });
 
 const records: Partial<Record<DailySourceId, Record<string, DailyJson>>> = {
   [sources.metrics]: { metric_name: 'synthetic_scan_mass', metric_date: '2026-10-17', value: 2, unit: 'kg' },
@@ -56,8 +56,9 @@ function home(refreshVersion = 0, initialPath = '/daily') {
   </MemoryRouter>;
 }
 const settled = () => screen.findByText(/^Checked \d+ collections?:/u);
+const probes = (queries: readonly DailyQuery[]) => queries.filter(query => !('limit' in query) || query.limit === 1);
 function row(name: string) {
-  const item = screen.getByRole('heading', { level: 3, name }).closest('li');
+  const item = screen.getAllByRole('heading', { name }).map(heading => heading.closest('li')).find(Boolean) ?? null;
   if (item === null) throw new Error(`No overview row for ${name}`);
   return within(item);
 }
@@ -68,8 +69,10 @@ describe('Daily overview', () => {
     const f = fixture();
     render(home());
     await settled();
+    await screen.findByText('No meals recorded in the last 7 days');
+    await screen.findByText('No sleep recorded in the last 7 days');
     expect(screen.getByRole('heading', { level: 1, name: 'Daily' })).toBeTruthy();
-    expect(screen.getByRole('heading', { level: 2, name: 'What Daily holds today' })).toBeTruthy();
+    expect(screen.getByRole('heading', { level: 3, name: 'What Daily holds today' })).toBeTruthy();
     expect(screen.getAllByRole('listitem')).toHaveLength(dailySources.length);
     for (const source of dailySources) expect(row(source.label).getByText(source.purpose)).toBeTruthy();
     expect(dailySources.map(source => source.id)).not.toContain(sources.metricCatalog);
@@ -84,8 +87,9 @@ describe('Daily overview', () => {
     expect(row('Sync evidence').getByText('None returned')).toBeTruthy();
     expect(row('Measurements').getByText(/^Read /u).querySelector('time')?.getAttribute('datetime')).toBe('2026-10-17T07:00:00Z');
     expect(screen.getByText('Checked 8 collections: 3 with records, 5 with none returned, 0 that could not be read.')).toBeTruthy();
-    expect(new Set(f.queries.map(query => query.source))).toEqual(new Set(dailySources.map(source => source.id)));
-    expect(f.queries.every(query => !('limit' in query) || query.limit === 1)).toBe(true);
+    expect(new Set(probes(f.queries).map(query => query.source))).toEqual(new Set(dailySources.map(source => source.id)));
+    expect(f.queries.some(query => query.source === sources.days && 'limit' in query && query.limit === 400)).toBe(true);
+    expect(probes(f.queries).every(query => !('limit' in query) || query.limit === 1)).toBe(true);
     expect(new Set(f.fetch.mock.calls.map(([url, init]) => `${init?.method} ${new URL(String(url)).pathname}`)))
       .toEqual(new Set(['GET /daily/capabilities', 'POST /daily/query']));
   });
@@ -115,7 +119,7 @@ describe('Daily overview', () => {
     expect(f.queries).toHaveLength(2);
     hold.open();
     await settled();
-    expect(f.queries).toHaveLength(dailySources.length);
+    expect(f.queries).toHaveLength(dailySources.length + 5);
   });
   it('shows a failed collection on its own row, keeps the rest, and Retry reads again and keeps keyboard focus in that row', async () => {
     let sleepFails = true;
@@ -136,7 +140,7 @@ describe('Daily overview', () => {
     await settled();
     expect(screen.queryByRole('button', { name: /^Retry / })).toBeNull();
     await waitFor(() => expect(document.activeElement).toBe(row('Sleep').getByRole('button', { name: 'Open Sleep' })));
-    expect(f.queries.filter(query => query.source === sources.sleep)).toHaveLength(2);
+    expect(probes(f.queries).filter(query => query.source === sources.sleep)).toHaveLength(2);
   });
   it('refreshes every collection on request and keeps settled rows on screen while it reads', async () => {
     const hold = gate();
@@ -144,18 +148,19 @@ describe('Daily overview', () => {
     const f = fixture({ answer: async query => { if (gated) await hold.opened; return jsonResponse(dailyFixture(query, items(query))); } });
     render(home());
     await settled();
+    await waitFor(() => expect(f.queries).toHaveLength(dailySources.length + 5));
     gated = true;
     fireEvent.click(screen.getByRole('button', { name: 'Refresh overview' }));
     const busy = await screen.findByRole('button', { name: 'Refreshing…' });
     expect(busy.getAttribute('aria-disabled')).toBe('true');
     expect(row('Measurements').getByText('Has records')).toBeTruthy();
-    await waitFor(() => expect(f.queries).toHaveLength(dailySources.length + 2));
+    await waitFor(() => expect(probes(f.queries).length).toBe(dailySources.length + 2));
     fireEvent.click(busy);
     await flush();
-    expect(f.queries).toHaveLength(dailySources.length + 2);
+    expect(probes(f.queries)).toHaveLength(dailySources.length + 2);
     hold.open();
     await screen.findByRole('button', { name: 'Refresh overview' });
-    expect(f.queries).toHaveLength(dailySources.length * 2);
+    await waitFor(() => expect(f.queries).toHaveLength((dailySources.length + 5) * 2));
     expect(screen.queryByRole('button', { name: 'Refreshing…' })).toBeNull();
   });
   it('re-reads when the existing Daily refresh stream advances', async () => {
@@ -163,7 +168,7 @@ describe('Daily overview', () => {
     const { rerender } = render(home(0));
     await settled();
     rerender(home(1));
-    await waitFor(() => expect(f.queries).toHaveLength(dailySources.length * 2));
+    await waitFor(() => expect(f.queries).toHaveLength((dailySources.length + 5) * 2));
     await settled();
   });
   it('shows only implemented sections and keeps the shared period when switching sections', async () => {
@@ -206,6 +211,36 @@ describe('Daily overview', () => {
     expect(screen.getByTestId('daily-section-url').textContent).toBe('data');
     fireEvent.keyDown(screen.getByRole('tab', { name: 'Data' }), { key: 'Home' });
     expect(screen.getByRole('tab', { name: 'Overview' }).getAttribute('aria-selected')).toBe('true');
+  });
+
+  it('aborts old requests during twenty rapid section switches without warnings or a request backlog', async () => {
+    let active = 0;
+    let maximumActive = 0;
+    let aborted = 0;
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const fetch = vi.fn((url: string | URL, init?: RequestInit) => {
+      if (String(url).endsWith('/daily/capabilities')) return Promise.resolve(capabilityList());
+      active += 1;
+      maximumActive = Math.max(maximumActive, active);
+      const signal = init?.signal as AbortSignal;
+      return new Promise<Response>((_resolve, reject) => {
+        signal.addEventListener('abort', () => {
+          active -= 1;
+          aborted += 1;
+          reject(signal.reason);
+        }, { once: true });
+      });
+    });
+    vi.stubGlobal('fetch', fetch);
+    render(home());
+    const names = ['Overview', 'Briefs', 'Workouts', 'Nutrition', 'Body & sleep'];
+    for (let index = 0; index < 20; index += 1) {
+      fireEvent.click(await screen.findByRole('tab', { name: names[index % names.length]! }));
+      await flush();
+    }
+    await waitFor(() => expect(aborted).toBeGreaterThan(0));
+    expect(maximumActive).toBeLessThanOrEqual(2);
+    expect(consoleError).not.toHaveBeenCalled();
   });
 
   it('opens one collection in the record browser without another availability request, and Back returns to that row', async () => {

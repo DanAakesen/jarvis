@@ -14,6 +14,11 @@ describe('DailyState', () => {
     expect(screen.getByText(/None returned does not prove the original source is empty/u)).toBeTruthy();
   });
 
+  it('allows a specific empty-state sentence without changing the shared presentation', () => {
+    render(<DailyState status="empty" emptyMessage="No meals recorded in the last 7 days" />);
+    expect(screen.getByRole('status').textContent).toBe('No meals recorded in the last 7 days');
+  });
+
   it('makes errors retryable and partial results loadable with freshness', () => {
     const retry = vi.fn();
     const loadMore = vi.fn();
