@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { CollapsibleSection } from './CollapsibleSection';
 import { Loader } from './Loader';
+import { saveSignInReturnPath } from './auth';
 import {
-  isProactiveSettings, isRecord, proactiveJson, proactiveRequest, sourceLabels,
+  isProactiveSettings, isRecord, proactiveJson, proactiveRequest, ProactiveRequestError, sourceLabels,
   type ProactiveSettings as SettingsValue, type SourceId,
 } from './proactive-data';
 
@@ -12,7 +13,12 @@ type View =
   | { state: 'error'; message: string }
   | { state: 'unavailable' };
 
-type Draft = Omit<SettingsValue, 'paused'>;
+type Draft = Omit<SettingsValue, 'paused' | 'monthlyBudgetDkk'> & { monthlyBudgetDkk: string };
+
+function needsSignIn(error: unknown): boolean {
+  return error instanceof ProactiveRequestError && error.status === 401 ||
+    error instanceof Error && error.message.includes('sign-in needs attention');
+}
 
 function normalizedSettings(value: SettingsValue): SettingsValue {
   const ids: SourceId[] = ['todos', 'calendar', 'mail', 'weather', 'factory', 'news', 'travel', 'x'];
@@ -27,7 +33,7 @@ function normalizedSettings(value: SettingsValue): SettingsValue {
 
 function draftFrom(value: SettingsValue): Draft {
   return {
-    monthlyBudgetDkk: value.monthlyBudgetDkk,
+    monthlyBudgetDkk: String(value.monthlyBudgetDkk),
     sources: value.sources.map((source) => ({ ...source })),
     newsFeeds: [...value.newsFeeds],
     guidance: value.guidance,
@@ -38,7 +44,7 @@ function canonicalFeed(value: string): string | null {
   if (!value || value.length > 300) return null;
   try {
     const url = new URL(value);
-    return url.protocol === 'https:' && url.hostname && !url.username && !url.password ? url.href.toLowerCase() : null;
+    return url.protocol === 'https:' && url.hostname && !url.username && !url.password ? url.href : null;
   } catch {
     return null;
   }
@@ -61,9 +67,10 @@ function validateFeeds(feeds: string[]): Record<number, string> {
   return errors;
 }
 
-export function ProactiveSettings({ backendUrl, getAccessToken }: {
+export function ProactiveSettings({ backendUrl, getAccessToken, signIn }: {
   backendUrl: string | null;
   getAccessToken: () => Promise<string>;
+  signIn?: () => Promise<void>;
 }) {
   const [view, setView] = useState<View>(() => backendUrl
     ? { state: 'loading' } : { state: 'error', message: 'Proactive settings are unavailable.' });
@@ -75,6 +82,7 @@ export function ProactiveSettings({ backendUrl, getAccessToken }: {
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [notice, setNotice] = useState('');
   const requestRef = useRef<AbortController | null>(null);
+  const [signInRequired, setSignInRequired] = useState(false);
 
   const load = useCallback(async () => {
     if (!backendUrl) { setView({ state: 'error', message: 'Proactive settings are unavailable.' }); return; }
@@ -93,16 +101,25 @@ export function ProactiveSettings({ backendUrl, getAccessToken }: {
       setSaved(clean);
       setDraft(draftFrom(clean));
       setView({ state: 'loaded' });
-    } catch {
-      if (!controller.signal.aborted) setView({ state: 'error', message: 'Proactive settings could not be loaded. Try again.' });
+    } catch (error) {
+      if (!controller.signal.aborted) {
+        if (needsSignIn(error)) setSignInRequired(true);
+        setView({ state: 'error', message: needsSignIn(error)
+          ? 'Your sign-in has expired. Sign in again to manage proactive settings.'
+          : 'Proactive settings could not be loaded. Try again.' });
+      }
     } finally {
       if (requestRef.current === controller) requestRef.current = null;
     }
   }, [backendUrl, getAccessToken]);
 
   useEffect(() => {
-    void load();
-    return () => requestRef.current?.abort();
+    let active = true;
+    void Promise.resolve().then(() => { if (active) void load(); });
+    return () => {
+      active = false;
+      requestRef.current?.abort();
+    };
   }, [load]);
 
   const setPaused = async (paused: boolean) => {
@@ -122,10 +139,16 @@ export function ProactiveSettings({ backendUrl, getAccessToken }: {
       setNotice(paused ? 'Proactive checks paused.' : 'Proactive checks resumed.');
     } catch (error) {
       const status = isRecord(error) && typeof error.status === 'number' ? error.status : 0;
+      if (needsSignIn(error)) setSignInRequired(true);
       setFieldErrors({ paused: status === 400 ? 'Check this setting and try again.' : 'Could not save this setting. Try again.' });
     } finally {
       setPauseSaving(false);
     }
+  };
+
+  const beginSignIn = () => {
+    saveSignInReturnPath(`${window.location.pathname}${window.location.search}${window.location.hash}`);
+    void signIn?.();
   };
 
   const updateSource = (id: SourceId, enabled: boolean) => {
@@ -137,14 +160,15 @@ export function ProactiveSettings({ backendUrl, getAccessToken }: {
   };
 
   const dirty = Boolean(saved && draft && (
-    saved.monthlyBudgetDkk !== draft.monthlyBudgetDkk ||
+    saved.monthlyBudgetDkk !== Number(draft.monthlyBudgetDkk) ||
     saved.guidance !== draft.guidance ||
     JSON.stringify(saved.newsFeeds) !== JSON.stringify(draft.newsFeeds) ||
     saved.sources.some((source) => source.id !== 'x' &&
       draft.sources.find((next) => next.id === source.id)?.enabled !== source.enabled)
   ));
-  const budgetValue = draft ? Number(String(draft.monthlyBudgetDkk)) : 0;
-  const budgetValid = Number.isSafeInteger(budgetValue) && budgetValue >= 0 && budgetValue <= 1000;
+  const budgetValue = draft ? Number(draft.monthlyBudgetDkk) : 0;
+  const budgetValid = Boolean(draft?.monthlyBudgetDkk !== '') &&
+    Number.isSafeInteger(budgetValue) && budgetValue >= 0 && budgetValue <= 1000;
   const feedsValid = Boolean(draft && Object.keys(validateFeeds(draft.newsFeeds)).length === 0);
   const guidanceValid = Boolean(draft && draft.guidance.length <= 1000);
   const validationErrors = draft ? validateFeeds(draft.newsFeeds) : {};
@@ -178,6 +202,7 @@ export function ProactiveSettings({ backendUrl, getAccessToken }: {
       setNotice('Proactive settings saved.');
     } catch (error) {
       const status = isRecord(error) && typeof error.status === 'number' ? error.status : 0;
+      if (needsSignIn(error)) setSignInRequired(true);
       const copy = status === 400 ? 'Check this value and try again.' : 'Could not save this setting. Try again.';
       const errors: Record<string, string> = {};
       if ('monthlyBudgetDkk' in patch) errors.monthlyBudgetDkk = copy;
@@ -195,8 +220,12 @@ export function ProactiveSettings({ backendUrl, getAccessToken }: {
     {view.state === 'loading' && <p role="status"><Loader variant="inline" announce={false} label="Loading proactive settings…" /></p>}
     {view.state === 'unavailable' && <p role="status">Proactive is not turned on for this backend.</p>}
     {view.state === 'error' && <div role="alert"><p>{view.message}</p>
-      <button className="secondary-button" type="button" onClick={() => { void load(); }}>Retry</button></div>}
+      {signInRequired
+        ? <button className="secondary-button" type="button" onClick={beginSignIn}>Sign in again</button>
+        : <button className="secondary-button" type="button" onClick={() => { void load(); }}>Retry</button>}</div>}
     {view.state === 'loaded' && saved && draft && <>
+      {signInRequired && <p role="alert">Your sign-in has expired.
+        <button className="secondary-button" type="button" onClick={beginSignIn}>Sign in again</button></p>}
       <label className="choice proactive-pause-choice">
         <input type="checkbox" role="switch" checked={saved.paused} disabled={pauseSaving}
           onChange={(event) => { void setPaused(event.target.checked); }} />
@@ -213,7 +242,7 @@ export function ProactiveSettings({ backendUrl, getAccessToken }: {
             aria-describedby="proactive-budget-help proactive-budget-error"
             onChange={(event) => {
               setBudgetTouched(true);
-              setDraft((current) => current ? { ...current, monthlyBudgetDkk: Number(event.target.value) } : current);
+              setDraft((current) => current ? { ...current, monthlyBudgetDkk: event.target.value } : current);
               setFieldErrors({});
             }} />
           <p className="settings-explanation" id="proactive-budget-help">Whole number from 0 to 1,000 DKK. Proactive spend is an estimate.</p>

@@ -8,8 +8,9 @@ neither enables production work. The scheduler's in-process location and
 operating bounds are settled, but no scheduler, source read, model call or
 proactive send is implemented here. The
 [plan summary](../PLAN.md#proactive-assistance--proposed-scope-17-october-2026)
-separates these slices from remaining pilot gates. Daily notification-off
-remains in force.
+separates these slices from remaining pilot gates. P13-10 implements the gated
+web surface without enabling either client or server work. Daily
+notification-off remains in force.
 
 ## Confirmed M2 boundaries (17 October 2026; P13-05)
 
@@ -37,6 +38,17 @@ reminder that falls in quiet hours waits until 07:00. The monthly estimated
 spend cap is 100 DKK by default, editable in settings, with warning at 80% and a
 hard stop at 100%. Findings and push text use deterministic Danish/English
 detection from the last user chat messages without storing or logging them.
+
+## Confirmed web slice (18 October 2026; P13-10)
+
+The Proactive page, full item detail, one Settings section, navigation entry and
+terminal Background work link are gated by the exact-string web build flag,
+which remains off. The client uses the established owner-authenticated
+contract, fixed plain-text reason copy, Copenhagen-local time formatting and
+memory-only handling for findings, feed URLs and guidance. Manual check polling
+is visibility-aware and bounded; dismiss/snooze optimistic updates are
+retryable after rollback. The P13-01 item detail remains the route target when
+only Web Push is enabled.
 
 Jarvis is Dan's Microsoft-first personal platform and a learning/demo project
 for his Microsoft ATS role. The proposed next step is bounded assistance across
@@ -398,9 +410,9 @@ compatibility with Jarvis's account. Sources were checked on 17 October 2026.
 Still open: the exact canonical todo path, allowed edit operations and review/
 undo design; source identities, access/coverage and actual provider costs;
 operational retention; subscription/device lifecycle; durable inbox/conversation
-linkage; and any expansion beyond the confirmed bounded assistance. P13-05 does
-not activate the feature or implement the future scheduler, sources, reasoning,
-todo writer or alert delivery.
+linkage; and any expansion beyond the confirmed bounded assistance. P13-10
+implements only the client; server-side scheduling, source reads, reasoning,
+todo writing and alert delivery remain separately gated and are not enabled.
 
 ## Appendix — optional execution, cost and source research
 

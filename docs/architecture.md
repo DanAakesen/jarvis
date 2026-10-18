@@ -1940,6 +1940,27 @@ session-storage value and consumed after MSAL returns to `/`. P13-02 changes no
 backend, deployment flag, identity or permission configuration; live phone
 permission, lock-screen delivery and tap-through remain unverified.
 
+## Proactive web client (P13-10; default off)
+
+`apps/web/config/proactive-switch.ts` parses only the exact string `true`.
+`vite.config.ts` exposes the resulting boolean as
+`__JARVIS_PROACTIVE_ENABLED__`; `main.tsx` passes it to `App({ proactiveEnabled })`.
+The off-by-default client conditionally registers the Proactive area, full detail
+page, Settings section and terminal proactive-job Open link. The existing
+`/proactive/:id` M1 push route keeps its legacy page when only push is enabled.
+The flag does not enable backend routes or relax owner authentication.
+
+`ProactiveArea` independently loads status, open items and recent runs using
+authenticated `no-store` requests. Status supplies source and estimated-budget
+views. Manual runs poll status every three seconds only while visible, abort on
+unmount/terminal status, and stop after four minutes. Item feedback is optimistic
+with rollback; the detail page records `seen` once for a newly loaded item.
+Settings reads and PATCHes the existing contract, sending only changed fields.
+Item text, feeds and guidance live only in component state, are rendered as text,
+and are not stored in browser persistence or placed in URLs. Recent-run and
+Settings disclosure state is not persisted. The web flag policy test scans
+workflow/environment files to ensure the flag stays unset.
+
 ## Presence modes (P6-23; replaces P7-02 away mode)
 
 `createAwayModeStore` persists `{ mode, source, changedAt }` as JSON in the
@@ -5017,6 +5038,24 @@ or the public bootstrap response; `App` itself still defaults to off. The switch
 grants no access: the backend composition switch and the owner checks above still
 decide every read. No workflow, Bicep or environment file sets either name in this
 change, and `daily/default-off.test.ts` enforces that.
+
+### Proactive page and web switch (18 October 2026; P13-10)
+
+`VITE_PROACTIVE_ENABLED` is loaded by name only, parsed by
+`config/proactive-switch.ts` as exact-string `true`, and exposed as
+`__JARVIS_PROACTIVE_ENABLED__`. `App` defaults the prop off for tests and
+conditionally registers the Proactive navigation area, Settings node, proactive
+detail client and JobsChip link. A push-only build continues to route
+`/proactive/:id` through the M1 item page.
+
+`proactive-data.ts` validates response shapes and maps reason codes to fixed
+copy; dates use explicit `Europe/Copenhagen` and `da-DK`/`en-GB` formatting.
+The page owns independent status, open-item and run load states; its Earlier
+items disclosure fetches once on demand. Check now owns a cancellable,
+visibility-aware status poll and bounded timeout. The Settings section owns
+drafts and field-level validation, saves changed fields only, and never
+persists its private values or its disclosure state. `proactive-switch.test.ts`
+ensures no workflow or environment file enables the gate.
 
 ### Inactive internal direct intake (17 October 2026)
 

@@ -134,7 +134,8 @@ export function isProactiveStatus(value: unknown): value is ProactiveStatus {
     (value.nextSlotAt === null || isDate(value.nextSlotAt)) &&
     (value.lastRun === null || isRun(value.lastRun)) &&
     typeof budget.month === 'string' && Number.isFinite(budget.monthlyLimitDkk) &&
-    Number.isFinite(budget.estimatedSpendDkk) &&
+    Number(budget.monthlyLimitDkk) >= 0 && Number.isFinite(budget.estimatedSpendDkk) &&
+    Number(budget.estimatedSpendDkk) >= 0 &&
     (budget.state === 'ok' || budget.state === 'warn' || budget.state === 'exhausted') &&
     Array.isArray(value.sources) && value.sources.every(isSourceStatus);
 }
@@ -211,11 +212,11 @@ const runReasons: Record<string, string> = {
 };
 
 export function sourceReason(code: string | null): string {
-  return code ? sourceReasons[code] ?? 'Unavailable' : 'Unavailable';
+  return code && Object.hasOwn(sourceReasons, code) ? sourceReasons[code]! : 'Unavailable';
 }
 
 export function runReason(code: string | null): string | null {
-  return code ? runReasons[code] ?? null : null;
+  return code && Object.hasOwn(runReasons, code) ? runReasons[code]! : null;
 }
 
 export function formatTime(value: string, language: 'da' | 'en' = 'en'): string {

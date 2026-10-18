@@ -1,10 +1,22 @@
 import { readdirSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { isProactiveEnabled } from './proactive-switch';
 
-const root = fileURLToPath(new URL('../../', import.meta.url));
+const root = resolve(process.cwd(), '../..');
+
+function* policyFiles(directory: string, inWorkflows = false): Generator<string> {
+  for (const entry of readdirSync(directory, { withFileTypes: true })) {
+    if (['.git', 'node_modules', 'dist', 'coverage'].includes(entry.name)) continue;
+    const path = join(directory, entry.name);
+    if (entry.isDirectory()) {
+      yield* policyFiles(path, inWorkflows || path === join(root, '.github/workflows'));
+    } else if (entry.isFile() &&
+        (entry.name.startsWith('.env') || inWorkflows && /\.ya?ml$/u.test(entry.name))) {
+      yield path;
+    }
+  }
+}
 
 describe('Proactive web switch', () => {
   it('is on only for the exact string true', () => {
@@ -15,11 +27,7 @@ describe('Proactive web switch', () => {
   });
 
   it('is not enabled by a repository workflow or environment file', () => {
-    const files = [
-      ...readdirSync(join(root, '.github/workflows')).map((file) => join(root, '.github/workflows', file)),
-      ...readdirSync(root).filter((file) => file.startsWith('.env')).map((file) => join(root, file)),
-      ...readdirSync(join(root, 'apps/web')).filter((file) => file.startsWith('.env')).map((file) => join(root, 'apps/web', file)),
-    ];
-    expect(files.filter((file) => /(?:^|\s)(?:export\s+)?VITE_PROACTIVE_ENABLED\s*=\s*true(?:\s|$)/mu.test(readFileSync(file, 'utf8')))).toEqual([]);
+    const files = [...policyFiles(root)];
+    expect(files.filter((file) => /\bVITE_PROACTIVE_ENABLED\b/u.test(readFileSync(file, 'utf8')))).toEqual([]);
   });
 });

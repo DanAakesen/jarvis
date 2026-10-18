@@ -102,6 +102,22 @@ The new `proactive` background-job kind makes future runs visible in the
 existing Background work control. Existing embedding result-window exclusions
 remain specific to embedding jobs.
 
+## Keep the Proactive web client dark and private (18 October 2026; P13-10)
+
+The web client uses its own exact-string `VITE_PROACTIVE_ENABLED` build gate;
+this slice leaves it off. Route, navigation, Settings and the terminal
+Background work Open link follow that gate. When push alone is enabled, the
+M1 `/proactive/:id` target remains unchanged; with the web gate on it renders
+the full item and links back to the list.
+
+Use the shared authenticated contract, with no new dependency or contract
+change. Keep item text, feed URLs and guidance in memory only; render
+source/model content as plain text and map server reason codes to fixed copy.
+Manual checks are visibility-aware and bounded, and optimistic dismiss/snooze
+roll back with visible retry on failure. These choices do not enable backend
+work, change permissions, or settle outstanding source, todo-write or delivery
+decisions.
+
 ## Keep web push default-off and notification taps owner-authenticated (17 October 2026; P13-02)
 
 Implement the web half of the delivery proof behind the exact-string

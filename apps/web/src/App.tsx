@@ -854,7 +854,8 @@ function SettingsRoute({ config, session, nutritionKey, pushEnabled, proactiveEn
         <ProjectsPage backendUrl={config.backendUrl} getAccessToken={session.getAccessToken} projectDefaults={projectDefaults} />
       )}
       {...(nutritionKey ? { nutrition: <NutritionTargetsSettings key={nutritionKey} backendUrl={config.backendUrl} getAccessToken={session.getAccessToken} /> } : {})}
-      {...(proactiveEnabled ? { proactive: <ProactiveSettings backendUrl={config.backendUrl} getAccessToken={session.getAccessToken} /> } : {})}
+      {...(proactiveEnabled ? { proactive: <ProactiveSettings backendUrl={config.backendUrl}
+        getAccessToken={session.getAccessToken} signIn={session.signIn} /> } : {})}
       memory={<MemorySettings backendUrl={config.backendUrl} getAccessToken={session.getAccessToken} />}
     />
   );

@@ -17,6 +17,7 @@ type Load<T> =
   | { state: 'loading'; value: null }
   | { state: 'loaded'; value: T }
   | { state: 'error'; value: null; message: string }
+  | { state: 'sign-in'; value: null }
   | { state: 'unavailable'; value: null };
 
 const pending = (): Load<never> => ({ state: 'loading', value: null });
@@ -30,12 +31,6 @@ const urgencyLabels: Record<ProactiveItem['urgency'], string> = {
   time_critical: 'Time-critical',
   normal: 'Normal',
   fyi: 'FYI',
-};
-
-const urgencyIcons: Record<ProactiveItem['urgency'], string> = {
-  time_critical: '!',
-  normal: '•',
-  fyi: 'i',
 };
 
 function authError(error: unknown): boolean {
@@ -74,13 +69,21 @@ function SourceRow({ source, now }: { source: ProactiveStatus['sources'][number]
 
 function Urgency({ urgency }: { urgency: ProactiveItem['urgency'] }) {
   return <span className="proactive-urgency">
-    <span className="proactive-urgency-icon" aria-hidden="true">{urgencyIcons[urgency]}</span>
+    <svg className="proactive-urgency-icon" aria-hidden="true" viewBox="0 0 16 16">
+      <circle cx="8" cy="8" r="6.5" fill="none" stroke="currentColor" />
+      {urgency === 'time_critical' ? <path d="M8 4.5v4M8 11.1v.2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+        : urgency === 'normal' ? <circle cx="8" cy="8" r="1.4" fill="currentColor" />
+          : <><path d="M8 7v4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" /><circle cx="8" cy="4.7" r=".8" fill="currentColor" /></>}
+    </svg>
     {urgencyLabels[urgency]}
   </span>;
 }
 
-function ItemContent({ item }: { item: ProactiveItem }) {
-  const [expanded, setExpanded] = useState(false);
+function ItemContent({ item, showTitle = true, expanded = false }: {
+  item: ProactiveItem;
+  showTitle?: boolean;
+  expanded?: boolean;
+}) {
   const evidence = [...new Set(item.evidence.map(({ label }) => label).filter(Boolean))];
   return <>
     <div className="proactive-item-heading">
@@ -89,10 +92,8 @@ function ItemContent({ item }: { item: ProactiveItem }) {
       {item.kind === 'test' && <span>Test notification</span>}
       {item.todoAdded && <span>Todo added</span>}
     </div>
-    <h3 lang={item.language ?? undefined}>{item.title}</h3>
+    {showTitle && <h3 lang={item.language ?? undefined}>{item.title}</h3>}
     <p className={`proactive-item-text${expanded ? ' is-expanded' : ''}`} lang={item.language ?? undefined}>{item.body}</p>
-    {item.body.length > 220 && <button type="button" className="proactive-text-toggle" aria-expanded={expanded}
-      onClick={() => setExpanded((value) => !value)}>{expanded ? 'Show less' : 'Show more'}</button>}
     <div className="proactive-item-meta">
       {item.category && <span>{categoryLabels[item.category]}</span>}
       {item.dueAt && <span>Due <time dateTime={item.dueAt}>{formatTime(item.dueAt, item.language ?? 'en')}</time></span>}
@@ -108,10 +109,16 @@ function ItemContent({ item }: { item: ProactiveItem }) {
 }
 
 function ItemLink({ item }: { item: ProactiveItem }) {
-  return <Link className="proactive-item-link" to={`/proactive/${encodeURIComponent(item.id)}`}
-    data-item-link={item.id} aria-label={`Open ${item.title}`} lang={item.language ?? undefined}>
-    <ItemContent item={item} />
-  </Link>;
+  const [expanded, setExpanded] = useState(false);
+  return <>
+    <Link className="proactive-item-link" to={`/proactive/${encodeURIComponent(item.id)}`}
+      data-item-link={item.id} aria-label={`Open ${item.title}`} lang={item.language ?? undefined}>
+      <ItemContent item={item} expanded={expanded} />
+    </Link>
+    {item.body.length > 220 && <button type="button" className="proactive-text-toggle"
+      aria-expanded={expanded} aria-label={`${expanded ? 'Show less' : 'Show more'} ${item.title}`}
+      onClick={() => setExpanded((value) => !value)}>{expanded ? 'Show less' : 'Show more'}</button>}
+  </>;
 }
 
 function StatusOutcome({ run }: { run: RunSummary | null }) {
@@ -135,7 +142,7 @@ function sourceStateReason(status: ProactiveStatus | null): string | null {
   if (status.lastRun?.status === 'running') return 'A check is running.';
   if (status.paused) return 'Proactive is paused.';
   if (status.budget.state === 'exhausted') return 'The monthly budget is used up.';
-  if (status.sources.length > 0 && status.sources.every(({ enabled }) => !enabled)) return 'Every source is switched off.';
+  if (status.sources.length === 0 || status.sources.every(({ enabled }) => !enabled)) return 'Every source is switched off.';
   return null;
 }
 
@@ -159,6 +166,7 @@ export function ProactiveArea({ backendUrl, getAccessToken, signIn, now: injecte
   const activePoll = useRef<AbortController | null>(null);
   const itemHeading = useRef<HTMLHeadingElement>(null);
   const rowFocusId = useRef<string | null>(null);
+  const rowFocusPending = useRef(false);
   const itemsValue = useRef<ProactiveItem[]>([]);
 
   const loadStatus = useCallback(async (signal?: AbortSignal, background = false) => {
@@ -169,7 +177,10 @@ export function ProactiveArea({ backendUrl, getAccessToken, signIn, now: injecte
     if (!background) setStatus(pending());
     try {
       const response = await proactiveRequest(backendUrl, getAccessToken, '/proactive/status', { signal: requestSignal });
-      if (response.status === 404) { setStatus({ state: 'unavailable', value: null }); return null; }
+      if (response.status === 404) {
+        if (!requestSignal.aborted) setStatus({ state: 'unavailable', value: null });
+        return 'unavailable' as const;
+      }
       const value: unknown = await proactiveJson(response);
       if (requestSignal.aborted) return null;
       if (!isProactiveStatus(value)) throw new Error('Invalid status');
@@ -237,10 +248,15 @@ export function ProactiveArea({ backendUrl, getAccessToken, signIn, now: injecte
   }, [backendUrl, getAccessToken]);
 
   useEffect(() => {
-    void loadStatus();
-    void loadItems();
-    void loadRuns();
+    let active = true;
+    void Promise.resolve().then(() => {
+      if (!active) return;
+      void loadStatus();
+      void loadItems();
+      void loadRuns();
+    });
     return () => {
+      active = false;
       statusRequest.current?.abort();
       itemsRequest.current?.abort();
       runsRequest.current?.abort();
@@ -249,10 +265,13 @@ export function ProactiveArea({ backendUrl, getAccessToken, signIn, now: injecte
   }, [loadItems, loadRuns, loadStatus]);
 
   useEffect(() => {
-    if (!rowFocusId.current) return;
+    if (!rowFocusPending.current) return;
     const id = rowFocusId.current;
     rowFocusId.current = null;
-    document.querySelector<HTMLAnchorElement>(`[data-item-link="${id}"]`)?.focus() ?? itemHeading.current?.focus();
+    rowFocusPending.current = false;
+    const next = id ? document.querySelector<HTMLAnchorElement>(`[data-item-link="${id}"]`) : null;
+    if (next) next.focus();
+    else itemHeading.current?.focus();
   }, [items]);
 
   const beginSignIn = () => {
@@ -263,10 +282,12 @@ export function ProactiveArea({ backendUrl, getAccessToken, signIn, now: injecte
   const actionItem = useCallback(async (item: ProactiveItem, action: ItemAction, snoozeUntil?: string) => {
     const before = itemsValue.current;
     const index = before.findIndex(({ id }) => id === item.id);
-    const nextId = index >= 0 ? before[index + 1]?.id ?? null : null;
+    const nextId = index >= 0 ? before[index + 1]?.id ?? before[index - 1]?.id ?? null : null;
     if (action === 'dismiss' || action === 'snooze') {
-      rowFocusId.current = nextId;
-      itemsValue.current = before.filter(({ id }) => id !== item.id);
+      const optimistic = action === 'dismiss'
+        ? { ...item, state: 'dismissed' as const }
+        : { ...item, state: 'snoozed' as const, snoozedUntil: snoozeUntil ?? null };
+      itemsValue.current = before.map((current) => current.id === item.id ? optimistic : current);
       setItems({ state: 'loaded', value: itemsValue.current });
     } else {
       itemsValue.current = before.map((current) => current.id === item.id
@@ -281,7 +302,12 @@ export function ProactiveArea({ backendUrl, getAccessToken, signIn, now: injecte
       if (response.status === 401) throw new Error('Your Microsoft sign-in needs attention.');
       const value: unknown = await proactiveJson(response);
       if (!isProactiveItem(value)) throw new Error('Invalid item');
-      if (action !== 'dismiss' && action !== 'snooze') {
+      if (action === 'dismiss' || action === 'snooze') {
+        itemsValue.current = itemsValue.current.filter(({ id }) => id !== item.id);
+        rowFocusId.current = nextId;
+        rowFocusPending.current = true;
+        setItems({ state: 'loaded', value: itemsValue.current });
+      } else {
         itemsValue.current = itemsValue.current.map((current) => current.id === item.id ? value : current);
         setItems({ state: 'loaded', value: itemsValue.current });
       }
@@ -291,7 +317,6 @@ export function ProactiveArea({ backendUrl, getAccessToken, signIn, now: injecte
       itemsValue.current = [...itemsValue.current.filter(({ id }) => id !== item.id), item]
         .sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt));
       setItems({ state: 'loaded', value: itemsValue.current });
-      if (action === 'dismiss' || action === 'snooze') rowFocusId.current = item.id;
       throw error;
     }
   }, [backendUrl, getAccessToken]);
@@ -325,7 +350,6 @@ export function ProactiveArea({ backendUrl, getAccessToken, signIn, now: injecte
       const run = isRecord(body) ? body.run : null;
       if (!isRun(run)) throw new Error('Invalid run');
       if (status.state === 'loaded') setStatus({ state: 'loaded', value: { ...status.value, lastRun: run as RunSummary } });
-      setChecking(false);
       const controller = new AbortController();
       activePoll.current?.abort();
       activePoll.current = controller;
@@ -365,7 +389,8 @@ export function ProactiveArea({ backendUrl, getAccessToken, signIn, now: injecte
         if (controller.signal.aborted) break;
         if (document.hidden) continue;
         const latest = await loadStatus(controller.signal, true);
-        if (latest?.lastRun && latest.lastRun.id === run.id && latest.lastRun.status !== 'running') {
+        if (latest === 'unavailable') break;
+        if (latest && latest.lastRun && latest.lastRun.id === run.id && latest.lastRun.status !== 'running') {
           await Promise.all([loadItems(), loadRuns()]);
           break;
         }
@@ -406,7 +431,7 @@ export function ProactiveArea({ backendUrl, getAccessToken, signIn, now: injecte
           <p><StatusOutcome run={loadedStatus.lastRun} /></p>
           <p className="proactive-check-action">
             <button className="primary-button" type="button" disabled={Boolean(disabledReason) || checking}
-              aria-describedby="proactive-check-reason" onClick={() => { void startCheck(); }}>
+              aria-describedby={disabledReason ? 'proactive-check-reason' : undefined} onClick={() => { void startCheck(); }}>
               {checking ? 'Checking…' : 'Check now'}
             </button>
             {disabledReason && <span id="proactive-check-reason">{disabledReason}</span>}
@@ -441,9 +466,6 @@ export function ProactiveArea({ backendUrl, getAccessToken, signIn, now: injecte
           {earlier?.state === 'loaded' && earlier.value.length > 0 && <ul className="proactive-item-list">
             {earlier.value.map((item) => <li key={item.id} className="proactive-item-row proactive-earlier-row">
               <ItemLink item={item} />
-              <p>{item.state === 'dismissed' ? 'Dismissed' : item.state === 'snoozed' && item.snoozedUntil
-                ? `Snoozed until ${formatTime(item.snoozedUntil, item.language ?? 'en')}`
-                : item.state === 'new' ? 'New' : 'Seen'}</p>
             </li>)}
           </ul>}
         </details>
@@ -452,7 +474,9 @@ export function ProactiveArea({ backendUrl, getAccessToken, signIn, now: injecte
       <section className="proactive-block" aria-labelledby="proactive-sources-heading">
         <h2 id="proactive-sources-heading">Sources</h2>
         {status.state === 'loading' && <Loader variant="rows" label="Loading source status…" />}
-        {status.state === 'error' && <p role="alert">Source status could not be loaded.</p>}
+        {status.state === 'error' && <div role="alert"><p>Source status could not be loaded.</p>
+          <button className="secondary-button" type="button" aria-label="Retry source status"
+            onClick={() => { void loadStatus(); }}>Retry</button></div>}
         {loadedStatus && <>
           <ul className="proactive-source-list">{loadedStatus.sources.map((source) =>
             <SourceRow key={source.id} source={source} now={now()} />)}</ul>
@@ -463,9 +487,16 @@ export function ProactiveArea({ backendUrl, getAccessToken, signIn, now: injecte
       <section className="proactive-block" aria-labelledby="proactive-budget-heading">
         <h2 id="proactive-budget-heading">Budget</h2>
         {status.state === 'loading' && <Loader variant="inline" label="Loading monthly budget…" />}
-        {status.state === 'error' && <p role="alert">Budget status could not be loaded.</p>}
+        {status.state === 'error' && <div role="alert"><p>Budget status could not be loaded.</p>
+          <button className="secondary-button" type="button" aria-label="Retry budget status"
+            onClick={() => { void loadStatus(); }}>Retry</button></div>}
         {loadedStatus && <div className="proactive-budget" data-state={loadedStatus.budget.state}>
-          <p><span aria-hidden="true">{loadedStatus.budget.state === 'ok' ? '○' : loadedStatus.budget.state === 'warn' ? '!' : '■'}</span>{' '}
+          <p><svg className="proactive-budget-icon" viewBox="0 0 16 16" aria-hidden="true">
+            <circle cx="8" cy="8" r="6.5" fill="none" stroke="currentColor" />
+            {loadedStatus.budget.state === 'ok' ? <path d="m4.5 8.2 2.1 2.1 4.7-4.8" fill="none" stroke="currentColor" strokeWidth="1.5" />
+              : loadedStatus.budget.state === 'warn' ? <path d="M8 4.5v4M8 11.1v.2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                : <path d="M5 5h6v6H5z" fill="currentColor" />}
+          </svg>{' '}
             {loadedStatus.budget.state === 'ok' ? 'Within the monthly limit'
               : loadedStatus.budget.state === 'warn' ? 'Close to the monthly limit' : 'Limit reached'}
           </p>
@@ -531,7 +562,11 @@ function FullProactiveItemPage({ backendUrl, getAccessToken, signIn, proactiveEn
     try {
       const response = await proactiveRequest(backendUrl, getAccessToken,
         `/proactive/items/${encodeURIComponent(id)}`, { signal });
-      if (response.status === 401) { setSignInRequired(true); return; }
+      if (response.status === 401) {
+        setSignInRequired(true);
+        setItem({ state: 'sign-in', value: null });
+        return;
+      }
       if (response.status === 404) { setItem({ state: 'unavailable', value: null }); return; }
       const value: unknown = await proactiveJson(response);
       if (signal.aborted || !isProactiveItem(value) || value.id !== id) throw new Error('Invalid item');
@@ -545,15 +580,18 @@ function FullProactiveItemPage({ backendUrl, getAccessToken, signIn, proactiveEn
       }
     } catch (error) {
       if (signal.aborted) return;
-      if (authError(error)) setSignInRequired(true);
-      setItem({ state: 'error', value: null, message: 'This item could not be loaded. Try again.' });
+      if (authError(error)) {
+        setSignInRequired(true);
+        setItem({ state: 'sign-in', value: null });
+      } else setItem({ state: 'error', value: null, message: 'This item could not be loaded. Try again.' });
     }
   }, [backendUrl, getAccessToken, id, proactiveEnabled]);
 
   useEffect(() => {
     const controller = new AbortController();
-    void load(controller.signal);
-    return () => { controller.abort(); };
+    let active = true;
+    void Promise.resolve().then(() => { if (active) void load(controller.signal); });
+    return () => { active = false; controller.abort(); };
   }, [load, requestKey]);
 
   const action = async (current: ProactiveItem, type: ItemAction, snoozeUntil?: string) => {
@@ -584,7 +622,9 @@ function FullProactiveItemPage({ backendUrl, getAccessToken, signIn, proactiveEn
   };
 
   return <main className="proactive-page proactive-detail" aria-labelledby="proactive-detail-heading">
-    <h1 id="proactive-detail-heading">{item.state === 'loaded' ? item.value.title : 'Proactive item'}</h1>
+    <h1 id="proactive-detail-heading" lang={item.state === 'loaded' ? item.value.language ?? undefined : undefined}>
+      {item.state === 'loaded' ? item.value.title : 'Proactive item'}
+    </h1>
     <Link to="/proactive">All open items</Link>
     {signInRequired && <div role="alert"><p>Your sign-in has expired. Sign in again to open this item.</p>
       <button className="secondary-button" type="button" onClick={beginSignIn}>Sign in again</button></div>}
@@ -593,8 +633,8 @@ function FullProactiveItemPage({ backendUrl, getAccessToken, signIn, proactiveEn
     {item.state === 'error' && <div role="alert"><p>{item.message}</p>
       <button className="secondary-button" type="button" onClick={() => setRequestKey((value) => value + 1)}>Retry</button></div>}
     {item.state === 'loaded' && <>
-      <article className="proactive-detail-item">
-        <ItemContent item={item.value} />
+      <article className="proactive-detail-item" lang={item.value.language ?? undefined}>
+        <ItemContent item={item.value} showTitle={false} />
         <ItemActionControls item={item.value} now={now()} onAction={action} />
       </article>
     </>}
