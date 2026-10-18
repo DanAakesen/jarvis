@@ -759,6 +759,10 @@ resource backendApp 'Microsoft.App/containerApps@2024-03-01' = if (deployBackend
               value: 'true'
             }
             {
+              name: 'JARVIS_PROACTIVE_ENABLED'
+              value: 'true'
+            }
+            {
               name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
               value: appInsights.properties.ConnectionString
             }

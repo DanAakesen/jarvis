@@ -592,8 +592,9 @@ Settings adds one separately saved Proactive section for pause, the monthly DKK
 limit, source switches, HTTPS news feeds and low-priority writing guidance.
 Changed fields only are sent. Feed URLs and guidance remain in component state
 and are never written to browser storage, URLs, titles, analytics or logs.
-`VITE_PROACTIVE_ENABLED` is exact-string `true`, defaults off, and grants no
+`VITE_PROACTIVE_ENABLED` is exact-string `true`, defaults off in code, and grants no
 backend access; when off, routes, navigation, settings and requests remain absent.
+Production sets it since P13-14 (18 October 2026).
 The header links terminal proactive Background work entries to the page only
 when the web gate is on.
 
@@ -1032,6 +1033,14 @@ push and send a test. The user-triggered test is not proactive delivery. Teams i
 not a delivery option. Real iPhone delivery remains unproven until separately
 observed on the installed Home Screen app.
 
+Proactive checks (milestone 2) are on in production since P13-14 (18 October
+2026): both `JARVIS_PROACTIVE_ENABLED` and `VITE_PROACTIVE_ENABLED` are set, so the
+07:00 and 18:00 checks run, Check now works, and the Proactive page and its
+Settings section are available. A check only reads sources and stores findings.
+Todo additions and alerts or reminders (milestones 3 and 4) stay off until their
+own switch-on. Whether scheduled checks run is established by Dan's test on the
+deployed app, not by CI.
+
 ## Proactive foundation and engine (18 October 2026; P13-05, P13-06)
 
 The backend foundation provides owner-only status, settings, durable finding
@@ -1070,8 +1079,9 @@ scope and leave the server entry point unchanged.
 
 ## Proactive web (18 October 2026; P13-10)
 
-The web page and Settings section are independently dark behind
-`VITE_PROACTIVE_ENABLED === "true"`. They use the shared authenticated HTTP
+The web page and Settings section are independently gated by
+`VITE_PROACTIVE_ENABLED === "true"`, which is off by default in code and set in
+production by P13-14. They use the shared authenticated HTTP
 contract, keep returned item/settings content in memory only, and render all
 model/source text as plain text. Manual check polling is visible-page-only and
 bounded; item actions can be retried after rollback. This web slice does not set
@@ -1079,11 +1089,11 @@ the flag or grant permissions.
 
 ## Proactive news source (18 October 2026; P13-09)
 
-The backend registry includes a dark, read-only RSS/Atom source for configured
+The backend registry includes a read-only RSS/Atom source for configured
 feeds, defaulting to the GitHub changelog and OpenAI news. It validates hosts, pins HTTPS
 connections to vetted public DNS addresses, rejects redirects and unsafe XML,
-and returns only bounded, sanitized titles. The source does not activate a
-scheduler, model call or proactive delivery; all proactive flags remain off.
+and returns only bounded, sanitized titles. The source does not itself activate a
+scheduler, model call or proactive delivery, and this slice sets no proactive flag.
 
 ## Daily migration (approved P12)
 

@@ -76,11 +76,12 @@ default-off `JARVIS_PUSH_ENABLED` gate. The parallel web work is P13-02. Neither
 sets a deployment value. P13-03 (#934, 18 October 2026) enables milestone 1, the
 user-triggered test, in the production deploy by setting `JARVIS_PUSH_ENABLED` in
 `infra/main.bicep` and `VITE_PUSH_ENABLED` in the web build step; the code
-defaults stay off. Proactive milestones 2 to 4 (the silent read-only pilot, the
-todo-write pilot and opt-in alerts) stay dark, and P13-03 adds no scheduler,
-proactive send or Teams path. Provider acceptance and local tests do not prove
-that an iPhone displayed the notification. Physical-device delivery remains
-unverified.
+defaults stay off. P13-14 (#935, 18 October 2026) enables milestone 2, the silent
+read-only checks, the same way, by setting `JARVIS_PROACTIVE_ENABLED` and
+`VITE_PROACTIVE_ENABLED`. Milestones 3 and 4 (the todo-write pilot and opt-in
+alerts) stay dark, and neither change adds a proactive send or Teams path.
+Provider acceptance and local tests do not prove that an iPhone displayed the
+notification. Physical-device delivery remains unverified.
 
 ## Owner nutrition targets (17 October 2026; P12-09 / #724)
 
@@ -2381,7 +2382,8 @@ exact-`true`, default-off flag and is enabled by a separate small change, one at
 a time, only after the previous deployment is accepted. The first milestone is a
 direct, user-triggered Web Push test linking to a durable owner-protected item.
 P13-01 and P13-02 built it dark; P13-03 (#934) enables it in the production
-deploy, so push milestone 1 is on while the proactive milestones 2 to 4 stay
+deploy, so push milestone 1 is on. P13-14 (#935) enables milestone 2, the
+read-only checks, the same way, while milestones 3 and 4 stay
 dark. The user test is not proactive delivery, and real iPhone delivery remains
 unproven. Teams is not a delivery path.
 
