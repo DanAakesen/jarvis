@@ -55,6 +55,27 @@ const rawColorAllowlist: AllowlistEntry[] = [
   { file: 'ConversationHistory.css', selector: '.input-orb span', property: 'background', value: 'radial-gradient(circle at 34% 28%, rgb(255 255 255 / 18%), transparent 42%), radial-gradient(circle, var(--stage-background) 52%, color-mix(in srgb, var(--stage-orb) 55%, var(--stage-background)) 100%)', reason: 'The orb highlight is part of the P14-03-owned circular voice control.' },
 ];
 
+const typeSpacingAllowlist: AllowlistEntry[] = [
+  { file: 'ConversationHistory.css', selector: '.markdown-content :not(pre) > code', property: 'font-size', value: '.9em', reason: 'Inline Markdown code scales with the surrounding heading or prose.' },
+  { file: 'ConversationHistory.css', selector: '.markdown-content pre', property: 'font-size', value: '.9em', reason: 'Fenced Markdown code scales with the surrounding prose while retaining its readable monospace treatment.' },
+  { file: 'ConversationHistory.css', selector: '.conversation-message .markdown-content :is(h1, h2, h3, h4, h5, h6)', property: 'font-size', value: '1.15em', reason: 'Message Markdown headings remain proportionate to their surrounding message text.' },
+  { file: 'proactive.css', selector: '.proactive-urgency-icon', property: 'font-size', value: '.9em', reason: 'The urgency glyph scales with its adjacent urgency label.' },
+  { file: 'ConversationHistory.css', selector: '.conversation-message.live-turn::before, .conversation-message[data-speaker="jarvis"][data-latest]::before', property: 'padding', value: '1.5px', reason: 'This pseudo-element padding creates the conversation glass rim, not content spacing.' },
+  { file: 'ConversationHistory.css', selector: '.visually-hidden', property: 'margin', value: '-1px', reason: 'The one-pixel inset is part of the accessible visually-hidden clipping pattern.' },
+  { file: 'ConversationHistory.css', selector: '.conversation-transcript', property: 'padding', value: '0 max(var(--space-1), calc((100% - 760px) / 2)) var(--space-6)', reason: 'The 760px value caps the centered transcript line length; it is not a spacing step.' },
+  { file: 'styles.css', selector: '.visually-hidden', property: 'margin', value: '-1px', reason: 'The one-pixel inset is part of the accessible visually-hidden clipping pattern.' },
+  { file: 'styles.css', selector: '.luminous-glass::before', property: 'padding', value: '1px', reason: 'This pseudo-element padding creates the shared glass rim, not content spacing.' },
+  { file: 'styles.css', selector: '.workspace-window.luminous-glass::before', property: 'padding', value: '1.5px', reason: 'This pseudo-element padding creates the workspace glass rim, not content spacing.' },
+  { file: 'styles.css', selector: '.app-shell[data-voice-active="false"] .workspace-window-conversation.luminous-glass::before', property: 'padding', value: '1.5px 1.5px 0', reason: 'This pseudo-element padding creates the conversation glass rim, not content spacing.' },
+  { file: 'styles.css', selector: '.conversation-input.luminous-glass::before', property: 'padding', value: '1.5px', reason: 'This pseudo-element padding creates the composer glass rim, not content spacing.' },
+  { file: 'styles.css', selector: '.app-shell:not(.app-signed-out) .app-topbar::before', property: 'padding', value: '1px', reason: 'This pseudo-element padding creates the topbar glass rim, not content spacing.' },
+  { file: 'styles.css', selector: '.app-shell:not(.app-signed-out) :is(.area-rail, .area-sidebar, .context-panel)::before', property: 'padding', value: '1px', reason: 'These pseudo-element paddings create shell glass rims, not content spacing.' },
+  { file: 'styles.css', selector: '.conversation-input.luminous-glass:not(:hover, :focus-within)::after', property: 'padding', value: '1.25px', reason: 'This pseudo-element padding creates the composer glass rim, not content spacing.' },
+  { file: 'proactive.css', selector: '.proactive-page', property: 'padding-bottom', value: 'max(160px, calc(env(safe-area-inset-bottom) + 144px))', reason: 'The fixed lower reserve keeps Proactive content clear of the phone dock and voice controls.' },
+  { file: 'styles.css', selector: '.workspace-window.luminous-glass:not(.workspace-window-conversation)::before', property: 'padding', value: '1px', reason: 'This pseudo-element padding creates a workspace glass rim, not content spacing.' },
+  { file: 'styles.css', selector: '.folio-item:hover .folio-title, .folio-item:focus-within .folio-title', property: 'margin-right', value: '100px', reason: 'This reserve keeps the Folio title clear of its inline hover/focus actions.' },
+];
+
 const literalRadiusAllowlist = [
   { value: '0', reason: 'Zero is required for square geometry or an intentionally unrounded edge.' },
   { value: '50%', reason: 'Percentage radii are reserved for true circles and circular controls.' },
@@ -144,9 +165,46 @@ function stylesheetViolations(file: string, source: string): string[] {
       && !matchesAllowlist(rawColorAllowlist, file, selector, property, value)) {
       violations.push(`${location}: raw color literal must use a named token`);
     }
+
+    if (property === 'font-size' && !/^var\(--type-[\w-]+\)$/u.test(value)
+      && !/^(?:inherit|initial|unset|revert|revert-layer)$/iu.test(value)
+      && !matchesAllowlist(typeSpacingAllowlist, file, selector, property, value)) {
+      violations.push(`${location}: font size must use a type role or a reasoned exception`);
+    }
+
+    if (property === 'line-height' && !/^var\(--line-[\w-]+\)$/u.test(value)
+      && !/^(?:inherit|initial|unset|revert|revert-layer)$/iu.test(value)
+      && !matchesAllowlist(typeSpacingAllowlist, file, selector, property, value)) {
+      violations.push(`${location}: line height must use a line role or a reasoned exception`);
+    }
+
+    const isSpacing = /^(?:margin(?:-[\w-]+)?|padding(?:-[\w-]+)?|gap|row-gap|column-gap)$/u.test(property);
+    const hasNonzeroPixelSpacing = isSpacing
+      && [...value.matchAll(/(-?(?:\d+\.?\d*|\.\d+))px/giu)]
+        .some(([, amount]) => Number.parseFloat(amount ?? '0') !== 0);
+    if (hasNonzeroPixelSpacing && !matchesAllowlist(typeSpacingAllowlist, file, selector, property, value)) {
+      violations.push(`${location}: spacing must use a --space-* role or a reasoned exception`);
+    }
   });
 
   return violations;
+}
+
+function stylesheetScaleInventory(file: string, source: string) {
+  const inventory = { fontSize: 0, lineHeight: 0, spacing: 0 };
+  const root = postcss.parse(source, { from: file });
+  root.walkDecls((declaration) => {
+    const property = declaration.prop.toLowerCase();
+    const value = normalize(declaration.value);
+    if (property === 'font-size' && !/^var\(--type-[\w-]+\)$/u.test(value)
+      && !/^(?:inherit|initial|unset|revert|revert-layer)$/iu.test(value)) inventory.fontSize += 1;
+    if (property === 'line-height' && !/^var\(--line-[\w-]+\)$/u.test(value)
+      && !/^(?:inherit|initial|unset|revert|revert-layer)$/iu.test(value)) inventory.lineHeight += 1;
+    if (/^(?:margin(?:-[\w-]+)?|padding(?:-[\w-]+)?|gap|row-gap|column-gap)$/u.test(property)
+      && [...value.matchAll(/(-?(?:\d+\.?\d*|\.\d+))px/giu)]
+        .some(([, amount]) => Number.parseFloat(amount ?? '0') !== 0)) inventory.spacing += 1;
+  });
+  return inventory;
 }
 
 function braceBalance(css: string): { depth: number; firstUnderflow: number | null } {
@@ -181,8 +239,19 @@ describe('stylesheets', () => {
     expect(braceBalance(readFileSync(join(sourceDirectory, file), 'utf8'))).toEqual({ depth: 0, firstUnderflow: null });
   });
 
-  it.each(stylesheets)('%s follows the shared geometry and surface rules', (file) => {
+  it.each(stylesheets)('%s follows the shared geometry, typography, spacing and surface rules', (file) => {
     expect(stylesheetViolations(file, readFileSync(join(sourceDirectory, file), 'utf8'))).toEqual([]);
+  });
+
+  it('reports the remaining raw type and spacing exceptions', () => {
+    const inventory = stylesheets.reduce((total, file) => {
+      const result = stylesheetScaleInventory(file, readFileSync(join(sourceDirectory, file), 'utf8'));
+      total.fontSize += result.fontSize;
+      total.lineHeight += result.lineHeight;
+      total.spacing += result.spacing;
+      return total;
+    }, { fontSize: 0, lineHeight: 0, spacing: 0 });
+    expect(inventory).toEqual({ fontSize: 4, lineHeight: 0, spacing: 14 });
   });
 
   it('rejects reintroduced stylesheet violations', () => {
@@ -201,8 +270,15 @@ describe('stylesheets', () => {
     expect(stylesheetViolations('styles.css', '.area-rail { border-right: 2px solid #fff; }')).toHaveLength(2);
   });
 
+  it('rejects raw type, line-height and spacing values unless exactly reasoned', () => {
+    const css = '.probe { font-size: 16px; line-height: 1.4; gap: 8px; }';
+    expect(stylesheetViolations('probe.css', css)).toHaveLength(3);
+    expect(stylesheetViolations('ConversationHistory.css', '.markdown-content pre { font-size: .9em; }')).toEqual([]);
+    expect(stylesheetViolations('styles.css', '.luminous-glass::before { padding: 1px; }')).toEqual([]);
+  });
+
   it('gives every exception an explicit reason', () => {
-    const exceptions = [...sideBorderAllowlist, ...insetShadowAllowlist, ...rawColorAllowlist, ...radiusAllowlist];
+    const exceptions = [...sideBorderAllowlist, ...insetShadowAllowlist, ...rawColorAllowlist, ...typeSpacingAllowlist, ...radiusAllowlist];
     expect(exceptions.every((entry) => entry.reason.trim().length > 0)).toBe(true);
     expect(literalRadiusAllowlist.every((entry) => entry.reason.trim().length > 0)).toBe(true);
   });

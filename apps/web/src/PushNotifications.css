@@ -19,7 +19,7 @@
   min-height: 44px;
 }
 .push-notifications .primary-button {
-  padding: 0 18px;
+  padding: 0 var(--space-4);
 }
 .push-notification-feedback {
   display: grid;
