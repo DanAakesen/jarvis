@@ -6,14 +6,15 @@ const markerPattern = /<!--\s*jarvis:p:([a-f\d]{16})\s*-->/giu;
 const taskMetadata = /[📅⏳🛫➕✅❌🔁🏁⏫🔼🔽⏬🔺🆔⛔]/gu;
 
 export function sanitiseTodoText(value: string): string {
-  const oneLine = value.replace(/[\t\n\r\f\v]/gu, ' ').replace(/\p{Cc}/gu, '');
+  const oneLine = value.replace(/[\t\n\r\f\v]/gu, ' ').replace(/[\p{Cc}\p{Cf}]/gu, '');
   const withoutComments = oneLine.replace(/<!--[\s\S]*?(?:-->|$)/gu, ' ');
   const withoutLinks = withoutComments.replace(/!?\[([^\]]*)\]\((?:<[^>]*>|[^)]*)\)/gu, '$1');
   const withoutMetadata = withoutLinks
     .replace(/(?:📅|\bdue::?)\s*(?:\[[^\]]*\]|\d{4}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2})?|\S+)?/giu, ' ')
-    .replace(/\b[\w.+-]+@[\w.-]+\.[a-z]{2,}\b/giu, ' ')
+    .replace(/\bmailto:[^\s]+/giu, ' ')
+    .replace(/(?<![\p{L}\p{N}._%+-])[\p{L}\p{N}._%+-]+@[\p{L}\p{N}.-]+\.[\p{L}]{2,}(?![\p{L}\p{N}-])/gu, ' ')
     .replace(taskMetadata, ' ')
-    .replace(/(?:https?:\/\/|ftp:\/\/|www\.)[^\s]+|(?:\b[a-z\d-]+\.)+[a-z]{2,}(?:\/[^\s]*)?/giu, ' ')
+    .replace(/(?:\b[a-z][a-z\d+.-]*:\/\/|www\.)[^\s]+|(?:\b[a-z\d-]+\.)+[a-z]{2,}(?:\/[^\s]*)?/giu, ' ')
     .replace(/<[^>]*(?:>|$)/gu, ' ')
     .replace(/<!--|-->/gu, ' ')
     .replace(/[`]|(?:\[\[|\]\])/gu, '');
@@ -63,15 +64,25 @@ function lineEnding(existing: string): string {
 }
 
 function hasJarvisHeading(existing: string): boolean {
-  const headings = existing.split(/\r?\n/u)
-    .map((line) => /^ {0,3}#{1,6}\s+(.+?)\s*#*\s*$/u.exec(line)?.[1]?.trim())
-    .filter((heading): heading is string => heading !== undefined);
-  return headings.at(-1)?.toLocaleLowerCase('en') === 'suggested by jarvis';
+  const lines = existing.replace(/^\uFEFF/u, '').split(/\r?\n/u);
+  let lastHeading: string | undefined;
+  for (let index = 0; index < lines.length; index += 1) {
+    const atx = /^ {0,3}#{1,6}\s+(.+?)\s*#*\s*$/u.exec(lines[index]!);
+    if (atx) lastHeading = atx[1]!.trim();
+    else if (index > 0 && /^ {0,3}(?:=+|-+)\s*$/u.test(lines[index]!) && lines[index - 1]!.trim()) {
+      lastHeading = lines[index - 1]!.trim();
+    }
+  }
+  return lastHeading?.toLocaleLowerCase('en') === 'suggested by jarvis';
 }
 
 function isInsideCodeFence(existing: string): boolean {
   const fences = existing.split(/\r?\n/u).filter((line) => /^\s*(?:`{3,}|~{3,})/u.test(line));
   return fences.length % 2 === 1;
+}
+
+export function isTodoFileWritable(existing: string): boolean {
+  return !isInsideCodeFence(existing);
 }
 
 export function appendTodos(existing: string, lines: readonly string[]): string {
@@ -86,7 +97,7 @@ export function appendTodos(existing: string, lines: readonly string[]): string 
     if (!existing.endsWith(ending)) prefix = ending;
   }
   if (!heading) {
-    const trailingEndings = existing.match(/(?:\r?\n)+$/u)?.[0].match(/\r?\n/gu).length ?? 0;
+    const trailingEndings = existing.match(/(?:\r?\n)+$/u)?.[0].match(/\r?\n/gu)?.length ?? 0;
     if (existing.length === 0) prefix = ending;
     else if (trailingEndings < 2) prefix = ending.repeat(2 - trailingEndings);
     prefix += `## Suggested by Jarvis${ending}`;

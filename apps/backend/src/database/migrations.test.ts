@@ -62,7 +62,7 @@ describe('committed SQL manifest', () => {
     expect(migration?.sql).toContain('WHERE status = N\'added\'');
     expect(migration?.sql).toContain('IX_proactive_todo_receipts_owner_day_status');
     const down = await readDownMigration('0057_proactive_todo_receipts.sql');
-    expect(down.sql).toContain('proactive todo receipts are durable evidence');
+    expect(down.sql).toContain('Proactive todo receipts are durable evidence');
     expect(down.sql).toContain('DROP TABLE dbo.proactive_todo_receipts');
   });
 
@@ -207,6 +207,7 @@ describe('committed SQL manifest', () => {
       '0054_proactive_push.sql',
       '0055_proactive_foundation.sql',
       '0056_background_job_kind_proactive.sql',
+      '0057_proactive_todo_receipts.sql',
     ]);
     for (const migration of migrations) await expect(readDownMigration(migration.name)).resolves.toMatchObject({ name: migration.name });
   });

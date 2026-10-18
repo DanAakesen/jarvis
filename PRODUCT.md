@@ -1020,8 +1020,14 @@ storage and feedback behind `JARVIS_PROACTIVE_ENABLED`, which defaults off.
 Separate todo-write and alert flags also default off. P13-06 adds the in-process
 scheduler, manual checks and run history, deterministic deadline/clash detection,
 and one bounded, tool-less summary call; sources plug into the existing registry.
-P13-07 adds read-only todo, Factory and weather source readers. Neither slice adds
-a todo writer or proactive alert, and neither enables any flag.
+P13-07 adds read-only todo, Factory and weather source readers, without a writer
+or proactive alert. P13-11 adds a
+separate add-only suggested-todo writer behind
+`JARVIS_PROACTIVE_TODO_WRITES_ENABLED`, which is effective only with
+`JARVIS_PROACTIVE_ENABLED`; both remain default-off. It appends sanitized,
+credential-safe suggestions under `Suggested by Jarvis`, never changes existing
+todo lines, and observes the Todos source switch, pause state, quiet hours for
+scheduled work, and per-run/daily caps. Manual writes may run at any hour.
 
 The approved schedule uses 07:00 and 18:00 Europe/Copenhagen slots; scheduled
 work is forbidden from 22:00 to 07:00. The monthly estimate limit defaults to
@@ -1034,11 +1040,13 @@ five minutes, six per Copenhagen day). Runs appear in Background work with safe
 plain-language outcomes. None of these flags is enabled by this change.
 
 The todo reader matches exactly one case-insensitive root `task.md` or
-`tasks.md`, never writes, and emits at most 40 sanitized facts. The Factory
+`tasks.md` and emits at most 40 sanitized facts. The P13-11 writer reuses that
+resolver/parser, writes only to an existing resolved file, and records hashed
+receipts so completed or deleted suggestions are not re-added. The Factory
 reader reports attention/failure and open-PR status plus a running-task count;
 the weather reader uses the saved home location and makes a bounded HTTPS
-forecast request. These source implementations remain dormant until a later
-engine slice invokes them.
+forecast request. Their reads remain governed by the existing proactive engine;
+the todo writer is a separate gated after-storage hook.
 
 ## Daily migration (approved P12)
 

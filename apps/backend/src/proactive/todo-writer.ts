@@ -5,7 +5,14 @@ import {
 } from '../vault/github-client.js';
 import { isVaultLineSafe } from '../vault/index.js';
 import type { FindingsStoredContext } from './engine.js';
-import { appendTodos, buildSuggestedTodoLine, hasDuplicateTodo, hasTodoMarker, sanitiseTodoText } from './todo-lines.js';
+import {
+  appendTodos,
+  buildSuggestedTodoLine,
+  hasDuplicateTodo,
+  hasTodoMarker,
+  isTodoFileWritable,
+  sanitiseTodoText,
+} from './todo-lines.js';
 import type { ProactiveStore } from './store.js';
 import type { ProactiveTodoReceiptStore, TodoReceiptInput, TodoReceiptSummary } from './todo-store.js';
 import { dayKey, isQuietHour } from './time.js';
@@ -22,8 +29,11 @@ const perDayLimit = 5;
 interface PreparedTodo {
   itemId: string;
   dedupeKey: string;
-  text: string;
   line: string;
+}
+
+function safeWarn(logger: WriterLogger | undefined, data: Parameters<WriterLogger['warn']>[0]): void {
+  try { logger?.warn(data, 'proactive.todo_writer'); } catch { /* A logging failure cannot fail the run. */ }
 }
 
 export interface ProactiveTodoWriterOptions {
@@ -49,28 +59,50 @@ function sortedCandidates(context: FindingsStoredContext): FindingsStoredContext
 export function createProactiveTodoWriter(options: ProactiveTodoWriterOptions) {
   const now = options.now ?? (() => new Date());
   const log = (context: FindingsStoredContext, reason: string, itemIds?: string[], count?: number, startedAt = now()) => {
-    options.logger?.warn({
+    safeWarn(options.logger, {
       runId: context.runId,
       reason,
       ...(itemIds === undefined ? {} : { itemIds }),
       ...(count === undefined ? {} : { count }),
       durationMs: Math.max(0, now().getTime() - startedAt.getTime()),
-    }, 'proactive.todo_writer');
+    });
   };
 
   return async function onFindingsStored(context: FindingsStoredContext): Promise<void> {
     const startedAt = now();
     const candidates = sortedCandidates(context);
-    if (candidates.length === 0 || context.signal.aborted) return;
+    if (candidates.length === 0) return;
+    if (context.signal.aborted) {
+      log(context, 'run_aborted', candidates.map(({ itemId }) => itemId), 0, startedAt);
+      return;
+    }
+    let stage: 'settings' | 'receipts' | 'vault' = 'settings';
     try {
       const settings = await options.store.settings.read();
-      if (settings.paused || !settings.sources.todos || context.signal.aborted ||
-          (context.trigger !== 'manual' && isQuietHour(now()))) return;
+      if (settings.paused) {
+        log(context, 'paused', candidates.map(({ itemId }) => itemId), 0, startedAt);
+        return;
+      }
+      if (!settings.sources.todos) {
+        log(context, 'todos_disabled', candidates.map(({ itemId }) => itemId), 0, startedAt);
+        return;
+      }
+      if (context.signal.aborted) {
+        log(context, 'run_aborted', candidates.map(({ itemId }) => itemId), 0, startedAt);
+        return;
+      }
+      if (context.trigger !== 'manual' && isQuietHour(now())) {
+        log(context, 'quiet_hours', candidates.map(({ itemId }) => itemId), 0, startedAt);
+        return;
+      }
 
-      const currentDay = dayKey(now());
-      const addedToday = await options.receipts.countAdded(currentDay);
-      const roomToday = perDayLimit - addedToday;
-      if (roomToday <= 0) return;
+      let currentDay = dayKey(now());
+      stage = 'receipts';
+      let roomToday = perDayLimit - await options.receipts.countAdded(currentDay);
+      if (roomToday <= 0) {
+        log(context, 'todo_daily_cap', candidates.map(({ itemId }) => itemId), 0, startedAt);
+        return;
+      }
       const summaries = await options.receipts.list(candidates.map(({ dedupeKey }) => dedupeKey));
       const settled = new Map(summaries.map((summary) => [summary.dedupeKey, summary]));
       const eligible = candidates.filter(({ dedupeKey }) => {
@@ -87,6 +119,7 @@ export function createProactiveTodoWriter(options: ProactiveTodoWriterOptions) {
             itemId: finding.itemId, dedupeKey: finding.dedupeKey, dayKey: currentDay,
             runId: context.runId, status: 'skipped', reason: 'invalid_text', commitSha: null,
           }, options.logger, context);
+          log(context, 'invalid_text', [finding.itemId], 1, startedAt);
           continue;
         }
         if (!isVaultLineSafe(text)) {
@@ -94,18 +127,23 @@ export function createProactiveTodoWriter(options: ProactiveTodoWriterOptions) {
             itemId: finding.itemId, dedupeKey: finding.dedupeKey, dayKey: currentDay,
             runId: context.runId, status: 'skipped', reason: 'unsafe_text', commitSha: null,
           }, options.logger, context);
+          log(context, 'unsafe_text', [finding.itemId], 1, startedAt);
           continue;
         }
         prepared.push({
           itemId: finding.itemId,
           dedupeKey: finding.dedupeKey,
-          text,
           line: buildSuggestedTodoLine(text, finding.dueAt, finding.dedupeKey),
         });
       }
-      if (prepared.length === 0 || context.signal.aborted ||
-          (context.trigger !== 'manual' && isQuietHour(now()))) return;
+      if (prepared.length === 0) return;
+      if (context.signal.aborted || (context.trigger !== 'manual' && isQuietHour(now()))) {
+        log(context, context.signal.aborted ? 'run_aborted' : 'quiet_hours',
+          candidates.map(({ itemId }) => itemId), 0, startedAt);
+        return;
+      }
 
+      stage = 'vault';
       const resolved = await resolveTodoFile(options.vault, context.signal);
       if ('reason' in resolved) {
         log(context, resolved.reason, undefined, 0, startedAt);
@@ -116,18 +154,49 @@ export function createProactiveTodoWriter(options: ProactiveTodoWriterOptions) {
         log(context, 'todo_file_missing', undefined, 0, startedAt);
         return;
       }
+      if (!isTodoFileWritable(file.content)) {
+        log(context, 'todo_file_unwritable', undefined, 0, startedAt);
+        return;
+      }
 
       const recovered = new Set<string>();
       let add: PreparedTodo[] = [];
       for (let attempt = 0; attempt < 3; attempt += 1) {
-        if (context.signal.aborted || (context.trigger !== 'manual' && isQuietHour(now()))) return;
+        if (context.signal.aborted || (context.trigger !== 'manual' && isQuietHour(now()))) {
+          log(context, context.signal.aborted ? 'run_aborted' : 'quiet_hours', undefined, 0, startedAt);
+          return;
+        }
+        const nextDay = dayKey(now());
+        if (nextDay !== currentDay) {
+          currentDay = nextDay;
+          stage = 'receipts';
+          roomToday = perDayLimit - await options.receipts.countAdded(currentDay);
+          stage = 'vault';
+          recovered.clear();
+        }
+        if (roomToday <= 0) {
+          log(context, 'todo_daily_cap', prepared.map(({ itemId }) => itemId), 0, startedAt);
+          return;
+        }
+        if (!isTodoFileWritable(file.content)) {
+          log(context, 'todo_file_unwritable', undefined, 0, startedAt);
+          return;
+        }
         let remainingDay = roomToday - recovered.size;
         let remainingRun = perRunLimit - recovered.size;
         add = [];
-        for (const todo of prepared) {
+        let droppedForCap: PreparedTodo[] = [];
+        for (let index = 0; index < prepared.length; index += 1) {
+          const todo = prepared[index]!;
           const receipt = settled.get(todo.dedupeKey);
           if (receipt?.added || receipt?.skipped || (receipt?.failedAttempts ?? 0) >= 2) continue;
-          if (remainingDay <= 0 || remainingRun <= 0) break;
+          if (remainingDay <= 0 || remainingRun <= 0) {
+            droppedForCap = prepared.slice(index).filter(({ dedupeKey }) => {
+              const summary = settled.get(dedupeKey);
+              return !summary?.added && !summary?.skipped && (summary?.failedAttempts ?? 0) < 2;
+            });
+            break;
+          }
           if (hasTodoMarker(file.content, todo.dedupeKey)) {
             await recoverReceipt(options, context, todo, currentDay, settled, startedAt);
             recovered.add(todo.dedupeKey);
@@ -140,11 +209,16 @@ export function createProactiveTodoWriter(options: ProactiveTodoWriterOptions) {
               itemId: todo.itemId, dedupeKey: todo.dedupeKey, dayKey: currentDay,
               runId: context.runId, status: 'skipped', reason: 'duplicate', commitSha: null,
             }, options.logger, context);
+            log(context, 'duplicate', [todo.itemId], 1, startedAt);
             continue;
           }
           add.push(todo);
           remainingDay -= 1;
           remainingRun -= 1;
+        }
+        if (droppedForCap.length) {
+          log(context, remainingDay <= 0 ? 'todo_daily_cap' : 'todo_run_cap',
+            droppedForCap.map(({ itemId }) => itemId), droppedForCap.length, startedAt);
         }
         if (add.length === 0) return;
 
@@ -159,11 +233,14 @@ export function createProactiveTodoWriter(options: ProactiveTodoWriterOptions) {
           log(context, 'todo_file_too_large', add.map(({ itemId }) => itemId), add.length, startedAt);
           return;
         }
-        if (context.signal.aborted || (context.trigger !== 'manual' && isQuietHour(now()))) return;
+        if (context.signal.aborted || (context.trigger !== 'manual' && isQuietHour(now()))) {
+          log(context, context.signal.aborted ? 'run_aborted' : 'quiet_hours', undefined, 0, startedAt);
+          return;
+        }
 
         try {
           const commitSha = await options.vault.write(
-            file.path,
+            resolved.path,
             content,
             `jarvis: add ${add.length} suggested todos from a proactive check\n\nCo-authored-by: Jarvis`,
             file.sha,
@@ -191,7 +268,9 @@ export function createProactiveTodoWriter(options: ProactiveTodoWriterOptions) {
       }
     } catch (error) {
       const reason = error instanceof VaultAppNotInstalledError
-        ? 'vault_app_not_installed' : context.signal.aborted ? 'run_aborted' : 'vault_unavailable';
+        ? 'vault_app_not_installed' : context.signal.aborted ? 'run_aborted'
+          : stage === 'settings' ? 'settings_unavailable'
+            : stage === 'receipts' ? 'receipt_read_failed' : 'vault_unavailable';
       log(context, reason, candidates.map(({ itemId }) => itemId), 0, startedAt);
     }
   };
@@ -214,11 +293,11 @@ async function insertReceipt(
     else summary.failedAttempts += 1;
     settled.set(input.dedupeKey, summary);
   } catch {
-    logger?.warn({
+    safeWarn(logger, {
       runId: context.runId,
       reason: 'receipt_write_failed',
       ...(input.itemId ? { itemIds: [input.itemId] } : {}),
-    }, 'proactive.todo_writer');
+    });
   }
 }
 
@@ -237,11 +316,15 @@ async function recoverReceipt(
   try {
     await options.store.items.markTodoAdded([todo.itemId]);
   } catch {
-    options.logger?.warn({
+    safeWarn(options.logger, {
       runId: context.runId, reason: 'todo_item_update_failed', itemIds: [todo.itemId],
       durationMs: Math.max(0, (options.now?.() ?? new Date()).getTime() - startedAt.getTime()),
-    }, 'proactive.todo_writer');
+    });
   }
+  safeWarn(options.logger, {
+    runId: context.runId, reason: 'todo_recovered', itemIds: [todo.itemId], count: 1,
+    durationMs: Math.max(0, (options.now?.() ?? new Date()).getTime() - startedAt.getTime()),
+  });
 }
 
 async function recordCommittedTodos(
@@ -262,12 +345,17 @@ async function recordCommittedTodos(
   try {
     await options.store.items.markTodoAdded(todos.map(({ itemId }) => itemId));
   } catch {
-    options.logger?.warn({
+    safeWarn(options.logger, {
       runId: context.runId, reason: 'todo_item_update_failed',
       itemIds: todos.map(({ itemId }) => itemId),
       durationMs: Math.max(0, (options.now?.() ?? new Date()).getTime() - startedAt.getTime()),
-    }, 'proactive.todo_writer');
+    });
   }
+  safeWarn(options.logger, {
+    runId: context.runId, reason: 'todo_added', itemIds: todos.map(({ itemId }) => itemId),
+    count: todos.length,
+    durationMs: Math.max(0, (options.now?.() ?? new Date()).getTime() - startedAt.getTime()),
+  });
 }
 
 async function recordFailedTodos(
@@ -285,9 +373,9 @@ async function recordFailedTodos(
       runId: context.runId, status: 'failed', reason, commitSha: null,
     }, options.logger, context);
   }
-  options.logger?.warn({
+  safeWarn(options.logger, {
     runId: context.runId, reason, itemIds: todos.map(({ itemId }) => itemId),
     count: todos.length,
     durationMs: Math.max(0, (options.now?.() ?? new Date()).getTime() - startedAt.getTime()),
-  }, 'proactive.todo_writer');
+  });
 }

@@ -4,6 +4,7 @@ import {
   buildSuggestedTodoLine,
   hasDuplicateTodo,
   hasTodoMarker,
+  isTodoFileWritable,
   normaliseTodoText,
   sanitiseTodoText,
 } from './todo-lines.js';
@@ -16,7 +17,7 @@ describe('suggested todo text', () => {
     expect(sanitiseTodoText([
       '- [ ] Keep [useful link](https://example.invalid/path) [[Wiki page]]',
       '<!-- forged <!-- jarvis:p:0123456789abcdef --> --> visit www.example.invalid',
-      'person@example.invalid 📅 2026-10-30 due:: 2026-10-31',
+      'person@example.invalid 📅 2026-10-30 due:: 2026-10-31\u202e',
       'line\u0001 break',
     ].join(' '))).toBe('Keep useful link Wiki page visit line break');
   });
@@ -90,6 +91,18 @@ describe('appendTodos', () => {
   it('does not add a heading when the last heading is Dan’s own Jarvis heading', () => {
     const existing = '## Personal notes\n### Suggested by Jarvis  \n';
     expect(appendTodos(existing, [line])).toBe(`${existing}${line}`);
+  });
+
+  it('recognizes a Jarvis heading after a leading byte-order mark', () => {
+    const existing = '\uFEFF## Suggested by Jarvis\n';
+    expect(appendTodos(existing, [line])).toBe(`${existing}${line}`);
+  });
+
+  it('recognizes a setext Jarvis heading and refuses an unclosed code fence', () => {
+    const existing = 'Suggested by Jarvis\r\n----------------- \r\n';
+    expect(appendTodos(existing, [line])).toBe(`${existing}${line}`);
+    expect(isTodoFileWritable('```md\n- [ ] task')).toBe(false);
+    expect(isTodoFileWritable('~~~md\n- [ ] task\n~~~')).toBe(true);
   });
 
   it('reuses the existing Jarvis heading and honors zero or several lines', () => {

@@ -223,6 +223,17 @@ Open-Meteo request; no default location or geocoding is allowed. Each source is
 registered, but no source is invoked and no proactive flag is enabled by this
 slice.
 
+## Keep suggested todos add-only and dark (18 October 2026; P13-11 / #931)
+
+The writer uses the existing todo-file resolver/parser and may append only
+sanitized, safe model suggestions under its own heading. It preserves every
+existing byte and refuses missing, ambiguous, oversized or unwritable files.
+Deduplication markers contain only a short finding hash; SQL receipts retain
+codes and identifiers, never todo text. Pause/Todos settings, quiet hours for
+scheduled work, and the three-per-run/five-per-day caps are enforced before
+vault access. The independent exact-`true` writer flag remains off, and the
+main proactive flag is still required.
+
 ## Keep web push default-off and notification taps owner-authenticated (17 October 2026; P13-02)
 
 Implement the web half of the delivery proof behind the exact-string

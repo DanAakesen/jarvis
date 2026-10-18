@@ -14,7 +14,6 @@ import { ConfigurationError } from '../configuration-error.js';
 import { createProactiveStore } from '../database/proactive-store.js';
 import { createProactiveTodoReceiptStore } from '../database/proactive-todo-store.js';
 import { createMemoryProactiveStore } from './store.js';
-import { createMemoryProactiveTodoReceiptStore } from './todo-store.js';
 import { createProactiveTodoWriter } from './todo-writer.js';
 import { buildSourceRegistry } from './sources/registry.js';
 import { registerProactiveRoutes } from './routes.js';
@@ -81,13 +80,11 @@ export function registerProactive<Logger extends FastifyBaseLogger>(
       },
     });
   }
-  const todoWriter = options.todoWritesEnabled === true && options.vaultClient
+  const todoWriter = options.todoWritesEnabled === true && options.vaultClient && options.pool
     ? createProactiveTodoWriter({
       vault: options.vaultClient,
       store,
-      receipts: options.pool
-        ? createProactiveTodoReceiptStore(options.pool, options.ownerObjectId)
-        : createMemoryProactiveTodoReceiptStore(),
+      receipts: createProactiveTodoReceiptStore(options.pool, options.ownerObjectId),
       now,
       ...(options.logger ? { logger: options.logger } : {}),
     })

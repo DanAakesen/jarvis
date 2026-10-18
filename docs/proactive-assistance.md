@@ -139,6 +139,31 @@ HTTPS Open-Meteo request; it does not geocode or invent a location. All three
 sources return stable unavailable reasons and remain dormant until later engine
 work explicitly reads them.
 
+## Suggested-todo writer (18 October 2026; P13-11)
+
+The writer is a dark, separately gated `onFindingsStored` hook. The exact string
+`true` is required for `JARVIS_PROACTIVE_TODO_WRITES_ENABLED`, and the main
+`JARVIS_PROACTIVE_ENABLED` gate must also be on. No workflow, infrastructure or
+environment file sets the writer flag. Existing pause and Todos source settings
+remain controls; scheduled and catch-up work rechecks the 22:00–07:00
+Europe/Copenhagen quiet window, while manual writes may run at any hour.
+
+Only model suggestions outside the `todo` category qualify. The sanitizer strips
+markup, links, URLs, email addresses, control characters, and Tasks metadata,
+then truncates to 200 Unicode code points. Vault safety checks apply only to the
+new text. The line is an unchecked task with an optional Copenhagen due date and
+a 16-hex finding marker. Suggestions go under `## Suggested by Jarvis`, with
+three additions maximum per run and five added receipts per Copenhagen day.
+Existing content is never edited, completed, reordered or deleted.
+
+The existing P13-07 root-file resolver is reused; absent/ambiguous files are
+never created. One commit writes all additions for a run. A conflict triggers a
+fresh read and complete duplicate/marker recheck, with three write attempts
+maximum. Marker recovery records an `added` receipt without rewriting. Added,
+skipped and failed receipts contain IDs, hashes and reason codes only; `added`
+is unique per owner/finding, and two failures settle a finding. The item’s
+`todo_added` bit is set only after a successful commit or marker recovery.
+
 ## Current evidence
 
 Repository checks used main `fa4e52f9307a8b88d63497e4a83e4b636b36c933`,
