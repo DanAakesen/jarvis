@@ -52,7 +52,7 @@ describe('app-wide control contract', () => {
 
   it('provides wrapping action groups with consistent responsive button targets', () => {
     expect(source).toContain('.button-group, .settings-actions, .task-dialog-actions, .action-row');
-    expect(source).toContain('.button-group > .primary-button');
+    expect(source).toContain('.button-group > :is(button, a), .settings-actions > :is(button, a), .task-dialog-actions > :is(button, a),');
     expect(source).toContain('.workspace-view-content .task-window-actions, .workspace-view-content .timeline-artifacts { padding-top: var(--space-3); }');
     expect(source).toContain('@media (max-width: 600px) {\n  .button-group, .settings-actions, .task-dialog-actions, .settings-save');
     expect(source).toContain('width: 100%; max-width: 100%;');
@@ -123,6 +123,53 @@ describe('app-wide control contract', () => {
     expect(ruleDeclaration(proactive, /\.proactive-page \[role="alert"\]\s*\{([^}]*)\}/, 'border')).toBe('1px solid var(--rule)');
   });
 
+  it('keeps action group order in markup and the deployment form gap at 10px', () => {
+    const actionGroups = ['button-group', 'settings-actions', 'task-dialog-actions', 'action-row', 'settings-save'];
+    const rules = [...source.matchAll(/([^{}]+)\{([^{}]*)\}/g)];
+    for (const [, selectors, declarations] of rules) {
+      if (actionGroups.some((name) => new RegExp(`\\.${name}(?![\\w-])`).test(selectors!))) {
+        expect(declarations).not.toMatch(/(?:^|;)\s*order\s*:/);
+      }
+    }
+
+    expect(ruleDeclaration(source, /\.deployment-add\s*\{([^}]*)\}/, 'row-gap')).toBe('10px');
+  });
+
+  it('keeps primary actions after sibling controls in shared action groups', () => {
+    const classes = new Set(['button-group', 'settings-actions', 'task-dialog-actions', 'action-row', 'settings-save']);
+    const violations: string[] = [];
+
+    const visit = (directory: string) => {
+      for (const entry of readdirSync(directory, { withFileTypes: true })) {
+        const path = join(directory, entry.name);
+        if (entry.isDirectory()) {
+          visit(path);
+        } else if (entry.isFile() && entry.name.endsWith('.tsx') && !entry.name.includes('.test.')) {
+          const component = readFileSync(path, 'utf8');
+          const groupOpenings = /<div\b[^>]*className=(?:"([^"]*)"|{`([^`]*)`})[^>]*>/g;
+          for (const match of component.matchAll(groupOpenings)) {
+            const groupClasses = (match[1] ?? match[2] ?? '').split(/\s+/);
+            if (!groupClasses.some((name) => classes.has(name))) continue;
+
+            const start = match.index! + match[0].length;
+            const close = matchingDivClose(component, match.index!, match[0].length);
+            const controls = [...component.slice(start, close).matchAll(/<(?:button|a)\b[^>]*>/g)];
+            if (controls.length < 2) continue;
+
+            const primaryIndex = controls.findIndex(([control]) =>
+              /className=(?:"[^"]*\b(?:primary-button|danger-button--filled)\b[^"]*"|{[^}]*\b(?:primary-button|danger-button--filled)\b[^}]*})/.test(control));
+            if (primaryIndex !== -1 && primaryIndex !== controls.length - 1) {
+              violations.push(`${path}: primary action precedes another control in .${groupClasses.find((name) => classes.has(name))}`);
+            }
+          }
+        }
+      }
+    };
+    visit('src');
+
+    expect(violations).toEqual([]);
+  });
+
   it('removes decorative control rims without removing neutral field structure or focus', () => {
     for (const selector of [
       /\.kanban-card-action\s*\{([^}]*)\}/,
@@ -144,6 +191,22 @@ describe('app-wide control contract', () => {
     expect(source).toContain('.knowledge-search:has(input:focus-visible) { outline: 3px solid var(--focus);');
     expect(source).toContain('.folio-search:has(input:focus-visible) { outline: 3px solid var(--focus);');
   });
+
+  function matchingDivClose(source: string, openingIndex: number, openingLength: number): number {
+    const tags = /<\/?div\b[^>]*>/g;
+    tags.lastIndex = openingIndex + openingLength;
+    let depth = 1;
+    for (const match of source.matchAll(tags)) {
+      const tag = match[0];
+      if (tag.startsWith('</')) {
+        depth -= 1;
+        if (depth === 0) return match.index!;
+      } else if (!tag.endsWith('/>')) {
+        depth += 1;
+      }
+    }
+    throw new Error(`No closing div for opening at ${openingIndex} (${openingLength} characters)`);
+  }
 
   it('draws slim arrowless desktop scrollbars and keeps the glass ring from adding phantom ones', () => {
     expect(ruleDeclaration(source, /\* \{ (scrollbar-width: thin;[^}]*)\}/, 'scrollbar-width')).toBe('thin');

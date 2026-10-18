@@ -638,9 +638,6 @@ dd { margin: 0; color: var(--text-muted); overflow-wrap: anywhere; }
 }
 .button-group--space-3 { margin-top: var(--space-3); }
 .button-group--space-4 { margin-top: var(--space-4); }
-.button-group > .primary-button, .settings-actions > .primary-button, .task-dialog-actions > .primary-button,
-.action-row > .primary-button, .button-group > .danger-button--filled, .settings-actions > .danger-button--filled,
-.task-dialog-actions > .danger-button--filled, .action-row > .danger-button--filled { order: 1; }
 @media (max-width: 600px) {
   .button-group, .settings-actions, .task-dialog-actions, .settings-save { flex-direction: column; align-items: stretch; }
   .button-group > :is(button, a), .settings-actions > :is(button, a), .task-dialog-actions > :is(button, a),
@@ -2021,7 +2018,6 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
   backdrop-filter: blur(var(--surface-blur));
   box-shadow: var(--panel-shadow);
 }
-.settings-save .primary-button { order: 2; }
 .settings-save { width: fit-content; max-width: 100%; margin-left: auto; }
 .settings-save .settings-feedback:empty { display: none; }
 .settings-save:has(.settings-feedback:empty) { padding-left: var(--space-2); }
@@ -3399,7 +3395,7 @@ a.task-chip:hover { background: var(--glass-pressed); }
 .deployment-name { display: grid; min-width: 0; font-family: var(--font-mono); font-size: 13px; font-weight: 600; overflow-wrap: anywhere; }
 .deployment-meta { color: var(--text-muted); font-family: inherit; font-size: var(--type-caption); font-weight: 500; }
 .deployment-confirm { display: flex; gap: var(--space-2); }
-.deployment-add { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)) auto; align-items: end; column-gap: 10px; row-gap: 42px; padding: 12px; border-radius: 14px;
+.deployment-add { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)) auto; align-items: end; column-gap: 10px; row-gap: 10px; padding: 12px; border-radius: 14px;
   background: color-mix(in srgb, var(--glass-edge-cool) 6%, transparent); }
 .advanced-group { display: grid; gap: 12px; margin-top: 18px; }
 .advanced-field input[type="number"] { width: 100%; }
@@ -3532,8 +3528,7 @@ a.task-chip:hover { background: var(--glass-pressed); }
 .collapsible-toggle:active .collapsible-title { color: var(--text-muted); }
 .settings-page > .settings-save { position: static; width: auto; max-width: none; margin: 16px 0 0; padding: 0; border-radius: 0; background: none; backdrop-filter: none; box-shadow: none;
   justify-content: flex-end; }
-.settings-page > .settings-save .settings-feedback { order: 1; margin: 0; }
-.settings-page > .settings-save .primary-button { order: 2; }
+.settings-page > .settings-save .settings-feedback { margin: 0; }
 /* Memory: what Jarvis remembers, between the capture switch and recall tuning. The detail opens only once a memory is chosen. */
 .settings-subheading { margin: 22px 0 10px; color: var(--text); font-size: var(--type-body); font-weight: 650; }
 .memory-settings .memory-search { margin: 0 0 10px; }

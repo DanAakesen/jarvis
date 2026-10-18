@@ -118,6 +118,8 @@ supersedes this section's earlier button appearance limits for buttons only;
 other controls keep the restrained surfaces, neutral field boundaries and
 visible keyboard focus described here. No decorative coloured boxes, bevels,
 inset-shadow borders or selected-state glows are added to non-button controls.
+Within action groups, markup order is keyboard and visual order: place the
+primary action last. CSS does not reorder action groups.
 
 Keep compact desktop controls where useful and at least 44px touch targets.
 Segmented groups wrap at narrow widths; scrolling filter rows retain keyboard
