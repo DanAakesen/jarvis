@@ -5345,23 +5345,18 @@ P8-33 scratch Chromium checks cover the adaptive quality thresholds, compact pho
 The reference lockfile is standalone, outside root workspaces, and contains the prototype's dependencies only. Bundled Three.js/Phosphor notices are retained. Physical/hardware performance, live activity/voice behavior and normal-rate flicker acceptance remain unverified; P8-31 adds no production Three.js dependency.
 ## Daily integration boundary (P12-01)
 
-### Temporary offline migration tooling (18 October 2026; P12-22)
+### Withdrawn database export/import tooling (18 October 2026)
 
-`apps/backend/src/daily/migration/` contains the removable export-bundle
-manifest/reader, table decisions, validator, deterministic synthetic generator
-and standalone CLI. It uses existing backend TypeScript build conventions and
-Node built-ins, with no new dependency, SQL access or network access.
-Production server entrypoints must not import it; it is outside the production
-request path and does not change Daily reads/writes or migrations.
-Validation streams private bytes with bounded buffers and disk-backed digest
-indexes, emits value-free reports, and blocks unruled/unclassified mixed-source
-payloads. Source owner emails never select an identity; legacy credentials
-never become active credentials. Real exports remain encrypted, owner-only and
-outside repositories, agents and GitHub artifacts. This is synthetic evidence,
-not live-schema or data parity. P12-27 reuses the decisions/reader/generator;
-P12-19 removes this temporary directory following its README. See the
-[bundle format](daily-migration-bundle.md) and
-[owner runbook](daily-migration-runbook.md).
+The Sites database-export and bundle-import approach was cancelled. PRs #741
+and #987 remain closed and unmerged; #717, #721 and #982 are not planned. The
+merged offline validator/generator and its bundle/runbook documentation were
+removed under #1006. No source records were read or moved by that tooling.
+
+The current direction is source-contract-first in #1005: implement the
+corresponding API and SQL schema from the original Daily API/schema, then
+support historical ingestion through that contract. This cleanup leaves the
+permanent health-upload/processor path, schema mapping, SQL schema migrations
+and original Daily untouched.
 
 ### Inactive shared feed workflow (17 October 2026; P12-09)
 
@@ -5989,9 +5984,10 @@ No new visible frontend layout is implemented by this backend slice.
 This does not complete #724's hosted authenticated ChatGPT food-client path:
 restricted connector OAuth/consumer policy and trusted nutrition
 intent/proposal-acceptance derivation remain unapproved boundaries, not
-client/model booleans. Original health-source identity/parity, protected
-export/import, physical device/provider and cutover acceptance remain gated.
-Older contract-only descriptions below describe the prior release.
+client/model booleans. Source-compatible historical ingestion, original
+health-source identity/parity, physical device/provider and cutover acceptance
+remain gated under #1005 and its downstream acceptance.
+Older contract-only descriptions below describe prior releases.
 
 ### Confirmed core-only scope (15 October 2026)
 
@@ -6009,9 +6005,9 @@ Reserved IDs and older scope descriptions below are historical, not a mandate
 to implement withdrawn views. No new service, API, table, dispatcher or model.
 Missing coaching-specific maintenance/TDEE, completeness, expiry or readiness
 interpretation is not a core completion gate and must not be guessed.
-Existing core validation, processed freshness and protected export/backup,
-authoritative-source/parity, device/provider, final-delta, rollback and cutover
-gates remain unchanged; original Daily stays canonical before cutover.
+Existing core validation, processed freshness, source-compatible API/schema and
+historical-ingestion, authoritative-source/parity, device/provider, final-delta,
+rollback and cutover gates remain distinct; original Daily stays canonical.
 
 P12-05's unregistered `daily/health` library consumes the existing SQL inbox through an explicit one-row invocation and shared owner transaction lock. Additive 0047 records claim generations/deadlines and bounded retry/quarantine; no new queue, pool or scheduler. Pure normalization precedes one atomic domain/lineage/feed/receipt commit. Heartbeat writes only phone-sync state; accepted evidence and processing time remain distinct. Parameterized binary-identity upserts preserve newer accepted snapshots and never delete absent workout history. Existing root owner resolution protects bounded history/minute-HR/detail reads. [Source contract, recovery, limits and gates](../apps/backend/src/daily/health/README.md); no production composition or private source read.
 
@@ -6033,7 +6029,7 @@ P12-10's inactive `daily/feeds` services inject the existing Google client and r
 
 P12-07's inactive `daily/nutrition` services/typed handlers use existing server-owner resolution and mapped SQL tables. Transactions/range locks protect operation-key idempotency and revisions, retry only deadlock 1205 (three attempts), and sanitize errors. Reads/feedback are bounded. P12-09 supplies trusted existing text/voice/attachment/frame evidence and intent/proposal metadata; clients/models cannot supply authority. Plans snapshot owned favourites/server-sum totals separately from intake/queues. The public Frida adapter pins release 10 / 5.5 and coordinator-verified empty bootstrap/header/cookie, synonym arrays and numeric nutrient DTOs; missing/null provenance is unavailable. Attribution, per-100-g units, bounded validation/cache/deadline and incomplete-total separation remain explicit. Cloud CONNECT is denied with HTTP 403. No production composition import, new auth/media model/dispatcher/infrastructure. [Boundary and checks](../apps/backend/src/daily/nutrition/README.md).
 
-P12-03 adds an inactive module-owned `daily/store` registry and exact-key owner-scoped read boundary using the existing P12-01 owner resolver. The additive `daily` SQL schema is separate from existing `dbo` tables; no service/UI/device/import module or route/tool is registered. Source-to-target compatibility and legacy credential/mixed-source exclusions are documented in [Daily schema mapping](daily-schema-mapping.md). Normal deployment may create only empty tables; protected live reconciliation remains a later gate.
+P12-03 adds an inactive module-owned `daily/store` registry and exact-key owner-scoped read boundary using the existing P12-01 owner resolver. The additive `daily` SQL schema is separate from existing `dbo` tables; no service/UI/device/import module or route/tool is registered. Source-to-target compatibility and legacy credential/mixed-source exclusions are documented in [Daily schema mapping](daily-schema-mapping.md). Source-compatible API/schema implementation and historical replay are tracked in #1005; this schema work does not imply a database exporter or bundle importer.
 
 [Migration contract](daily-migration.md) adds `daily/createDailyModules(enabled = false)` to the existing BackendModule pattern. Production composition remains unchanged. Explicit enabled test composition exposes only private `GET /daily/capabilities`, no data/tools/pages; disabled composition contributes nothing. Existing root user/hosted-agent authentication precedes `resolveDailyOwner`, which maps both allowed callers to the server-configured owner and refuses runners/other service identities. Shared contracts reserve four stable native view IDs without changing the renderer/navigation allowlists. Actual services, SQL/device auth, activation wiring and native frontend are downstream P12 work. No new login, dispatcher, voice stack, Azure resource or direct Azure access.
 
