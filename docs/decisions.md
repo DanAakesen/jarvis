@@ -1,5 +1,57 @@
 # Decisions
 
+## Switch proactive todo additions, alerts and reminders (milestones 3 and 4) on in production (18 October 2026; P13-15 / #936)
+
+Dan said "Ship all proactive if possible, you can take decisions as I would, as
+good as you can, we can always change it". That delegates the decision and
+authorises switching milestones 3 and 4 on once they shipped dark; #936 records it.
+The gate is that the todo writer (P13-11), alerts (P13-12) and reminders (P13-13,
+#954) are merged and deployed with their switches off, and that the P13-14 checks
+deployment is accepted, before this change merges. The Dispatcher merges it. This
+supersedes the "dark" and "default-off" decisions below for todo additions, alerts
+and reminders in production only; the code defaults stay off.
+
+Two lines do it. `infra/main.bicep` sets `JARVIS_PROACTIVE_TODO_WRITES_ENABLED` and
+`JARVIS_PROACTIVE_ALERTS_ENABLED` to `'true'` in the backend container app, beside
+`JARVIS_PUSH_ENABLED` and `JARVIS_PROACTIVE_ENABLED`. There is no web flag,
+parameter, secret, resource, identity, dependency or application code change.
+Reminders ride the alert flag, so they add no flag of their own. The existing pins,
+`todo-writes-default-off.test.ts` and `alerts-default-off.test.ts`, are updated in
+place (names kept, as `daily/default-off.test.ts` was when Daily went on) from
+"named nowhere" to "named once, in `infra/main.bicep`, with the exact value
+`'true'`". `config.test.ts` still proves both default off in code.
+
+What Jarvis may now do, and the limits that stay:
+
+- Todos: add new lines under a `## Suggested by Jarvis` heading in the owner's
+  existing todo file, each ending with a small hidden marker. It never edits or
+  deletes an existing line and never creates the file. At most 3 lines per check and
+  5 per Copenhagen day. It follows the pause and Todo list source switches.
+- Alerts: send a push only for a time-critical finding (a todo due within 24 hours,
+  or a calendar clash starting within 48 hours) found by the 07:00 or 18:00 check or
+  its catch-up; at most one push per check, at most 3 a day, never between 22:00 and
+  07:00, never for "Check now". Everything else waits on the Proactive page.
+- Reminders: one push about an hour before a todo with a time is due. A reminder due
+  in the quiet window is held until 07:00 and shown as due soon or overdue.
+
+Dan can switch it off without a deploy (Settings → Proactive → "Pause proactive
+checks", the "Todo list" source switch, or Settings → Notifications → "Turn off" on a
+device). Rollback by deploy: revert the whole P13-15 change (removes the gate lines
+and the pin test updates together), or set the value(s) to `false` AND update the
+pin tests in the same commit. Removing only a line would fail the pin tests in CI
+before Deploy could run. Either way no todo is added and no alert or reminder is
+sent; lines Jarvis already added stay in the todo file, and findings, feedback,
+settings and send history stay in SQL.
+
+CI proves this wiring only. Whether a todo line is added, and whether an alert or
+reminder push reaches the iPhone, is for Dan's test on the deployed app. Open,
+unchanged here and already noted in the P13-14 entry: Dan's 17 October decision
+("Quiet hours and language", #926) says quiet hours also apply to manual checks, but
+the shipped engine lets "Check now" run at any time, so the writer can add todo
+lines on a manual check at night. Pushes never go out between 22:00 and 07:00.
+Making manual checks respect quiet hours would be a separate code change that Dan or
+the Dispatcher decides.
+
 ## Switch proactive checks (milestone 2) on in production (18 October 2026; P13-14 / #935)
 
 Dan asked for all of proactive assistance to ship and authorised switching
@@ -16,13 +68,14 @@ secret, resource, identity, dependency or code change. Startup cannot newly fail
 the owner object ID the proactive routes need is already validated when the
 backend starts. Two pin tests (`apps/backend/src/proactive/enabled-switch.test.ts`
 and `apps/web/config/proactive-switch.test.ts`) pin both values and fail if
-anything else sets a switch. The alert flag keeps the pin P13-12 added
-(`alerts-default-off.test.ts`), and this change sets neither it nor the todo-writes
-flag.
+anything else sets a switch. The alert and todo-writes flags kept their own pins
+(`alerts-default-off.test.ts`, `todo-writes-default-off.test.ts`), and this change
+set neither; P13-15 (the entry above) switched them on.
 
-Scope does not grow. Milestones 3 and 4 (todo additions, alerts and reminders)
-stay off until P13-15, so a check reads its sources and stores findings: it
-writes no todo and sends no push. Estimated spend keeps its decided limit: 100 DKK
+Scope does not grow in this change. Milestones 3 and 4 (todo additions, alerts and
+reminders) stay off here and are switched on separately by P13-15, so a check here
+only reads its sources and stores findings: it writes no todo and sends no push.
+Estimated spend keeps its decided limit: 100 DKK
 a month by default, a warning at 80% and a stop at the cap, which Dan can change in
 Settings. The first scheduled check runs at the next 07:00 or 18:00
 Europe/Copenhagen slot, or once as a catch-up when the latest slot is under 12

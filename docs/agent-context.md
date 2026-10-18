@@ -1,5 +1,70 @@
 # Agent context
 
+## Suggested todos, alerts and reminders are on in production (P13-15; 18 October 2026)
+
+Dan delegated the decision and switched proactive milestones 3 and 4 on after the
+todo writer (P13-11), alerts (P13-12) and reminders (P13-13) shipped dark. Two
+lines do it, and the code defaults stay off. Both are backend only: there is no
+web flag, parameter, secret, resource or dependency, and `deploy.yml` is unchanged.
+Each is set in `infra/main.bicep` as a backend container app `env` entry with the
+exact value `'true'`, beside the two switches that came before it.
+
+| Flag | Set in | Gates |
+| --- | --- | --- |
+| `JARVIS_PUSH_ENABLED` | `infra/main.bicep`; `VITE_PUSH_ENABLED` in `deploy.yml` | Web Push subscriptions and sends (P13-03) |
+| `JARVIS_PROACTIVE_ENABLED` | `infra/main.bicep`; `VITE_PROACTIVE_ENABLED` in `deploy.yml` | Checks, the Proactive page and its Settings section (P13-14) |
+| `JARVIS_PROACTIVE_TODO_WRITES_ENABLED` | `infra/main.bicep` | Todo additions (milestone 3, P13-15) |
+| `JARVIS_PROACTIVE_ALERTS_ENABLED` | `infra/main.bicep` | Alert and reminder pushes (milestone 4, P13-15) |
+
+Todo additions run only inside an enabled check. Alerts and reminders also need
+push switched on and a subscribed device, and they share the one alert flag.
+
+What now happens, exactly:
+
+- Todos: after a check, Jarvis may add new lines under a `## Suggested by Jarvis`
+  heading in the owner's existing todo file in the vault repository. Each added
+  line ends with a small hidden marker. It never edits, moves or deletes an
+  existing line and never creates the file: if the file is missing it writes
+  nothing, and the Proactive page shows "Todo file not found" for the Todo list
+  source. It adds at most 3 lines per check and 5 per Copenhagen day, in one
+  commit per check, and it follows the pause switch and the Todo list source
+  switch.
+- Alerts: only a time-critical finding (a todo due within 24 hours, or a calendar
+  clash starting within 48 hours) found by the scheduled 07:00 or 18:00 check, or
+  its catch-up, can send a push. At most one push per check and 3 a day, never
+  between 22:00 and 07:00, and never for "Check now". The text is generic and
+  tapping it opens the item. Everything else waits on the Proactive page.
+- Reminders: about one hour before a todo with a time is due, Jarvis sends one
+  push. A reminder that falls in the quiet window is held until 07:00 and shown as
+  due soon or overdue.
+
+To switch these off:
+
+- No deploy: Settings → Proactive → "Pause proactive checks" stops scheduled
+  checks, todo additions, alerts and reminders. The "Todo list" source switch in
+  the same section stops todo additions. Settings → Notifications → "Turn off"
+  stops pushes on that device.
+- Deploy: revert the whole P13-15 change (removes the gate lines and the pin test
+  updates together), or set the value(s) to `false` AND update the pin tests in the
+  same commit. To switch one feature off on its own, set only its value to `false`
+  and update only its pin: `todo-writes-default-off.test.ts` for todo additions,
+  `alerts-default-off.test.ts` for alerts and reminders. Removing only a line fails
+  the pin in CI before Deploy can run. Lines Jarvis already added stay in the todo
+  file (it never deletes them), and findings, feedback, settings and send history
+  stay in SQL.
+
+Open point: Dan's 17 October decision in `docs/decisions.md` says quiet hours also
+apply to manual checks, but the shipped engine lets "Check now" run at any hour
+(see the P13-14 section), so the writer can add todo lines on a manual check at
+night. Pushes never go out between 22:00 and 07:00. This change alters neither; a
+stricter rule would be its own code change.
+
+CI proves the wiring only. Whether a todo line is added, and whether an alert or
+reminder push reaches the iPhone, is established by Dan's test on the deployed
+app, not by any check here. Local checks:
+`npm test --workspace @jarvis/backend -- --run src/proactive/todo-writes-default-off.test.ts src/proactive/alerts-default-off.test.ts src/proactive/enabled-switch.test.ts src/push/enabled-switch.test.ts src/daily/default-off.test.ts src/config.test.ts`.
+The Bicep compile and lint (`az bicep build` and `az bicep lint`) run in CI only.
+
 ## Proactive checks are on in production (P13-14; 18 October 2026)
 
 Dan switched proactive milestone 2 (read-only checks) on after the P13-05 to
@@ -13,12 +78,13 @@ P13-10 slices shipped dark. Two lines do it, and the code defaults stay off:
   Proactive page, its Settings section and the Background work link.
   `vite.config.ts` reads the flag; `apps/web/config/public-config.ts` does not.
 
-`JARVIS_PROACTIVE_TODO_WRITES_ENABLED` and `JARVIS_PROACTIVE_ALERTS_ENABLED` stay
-set nowhere, so todo additions and alerts/reminders (milestones 3 and 4) stay off
-until P13-15. A check reads sources and stores findings; it writes no todo and
-pushes nothing. `apps/backend/src/proactive/enabled-switch.test.ts` pins the
-backend value and fails if its name appears in any other file (the alert flag keeps
-its own pin, `alerts-default-off.test.ts`);
+`JARVIS_PROACTIVE_TODO_WRITES_ENABLED` and `JARVIS_PROACTIVE_ALERTS_ENABLED` were
+set nowhere when this change shipped, so a check read sources and stored findings
+but wrote no todo and pushed nothing; P13-15 (the section above) switches
+milestones 3 and 4 on. `apps/backend/src/proactive/enabled-switch.test.ts` pins the
+backend value and fails if its name appears in any other file (the todo-writes and
+alert flags keep their own pins, `todo-writes-default-off.test.ts` and
+`alerts-default-off.test.ts`);
 `apps/web/config/proactive-switch.test.ts` pins the web value and fails if any
 other workflow, Dockerfile, package file, web config or Bicep/parameter file names
 it. Changing a gate is therefore a reviewed edit to those two files and to the pins.
@@ -105,8 +171,8 @@ service. A green local test or build does not establish real iPhone delivery.
 `JARVIS_PROACTIVE_ENABLED`, `JARVIS_PROACTIVE_TODO_WRITES_ENABLED` and
 `JARVIS_PROACTIVE_ALERTS_ENABLED` are independent exact-`true` flags, all off by
 default in code. The latter two do not activate work unless the main proactive flag is
-on. P13-14 (above) sets only the main flag in deployment; do not set the todo-writes or
-alerts flag in deployment, workflows or infrastructure until their own tasks do. This
+on. P13-14 and P13-15 (above) set all three in deployment, each only in
+`infra/main.bicep`; do not set them in any other workflow or infrastructure file. This
 composition registers owner-bound status/settings/items/run routes and starts
 the in-process scheduler only when enabled. Idle ticks do not query SQL. The
 engine supports fake sources and a fake model; real source adapters and proactive
@@ -129,15 +195,15 @@ coverage in `src/database/conversation-store.integration.test.ts`; run them only
 loopback SQL Server fixture via `npm run test:database --workspace @jarvis/backend -- src/database/schema.integration.test.ts`.
 Do not report SQL integration coverage unless that service ran.
 
-## P13-12 proactive run alerts (18 October 2026; default off)
+## P13-12 proactive run alerts (18 October 2026; default off in code, on in production since P13-15)
 
 The alert hook is composed only when the proactive, push and alert flags are all
 on and its push store/sender dependencies exist. It alerts only on scheduled or
 catch-up runs and only for new, time-critical deadline, clash or travel findings.
 The hash-only ledger retries one failed send, settles sent/twice-failed keys and
 counts daily pushes by distinct run bundle. The sender rechecks quiet hours;
-system payloads contain no private text. No workflow, infrastructure or
-environment setting enables the alert switch.
+system payloads contain no private text. Since P13-15 only `infra/main.bicep` sets
+the alert switch, and `alerts-default-off.test.ts` pins that.
 
 Focused synthetic checks:
 `npm test --workspace @jarvis/backend -- --run src/proactive/alerts.test.ts src/proactive/composition.test.ts src/proactive/push-delivery.test.ts src/proactive/alerts-default-off.test.ts src/database/proactive-alert-store.test.ts src/database/migrations.test.ts src/push/routes.test.ts src/push/webpush.test.ts`,
@@ -198,9 +264,9 @@ otherwise. No source flag is enabled by these checks.
 
 The writer is constructed only inside the enabled proactive composition and
 only when `JARVIS_PROACTIVE_TODO_WRITES_ENABLED` is exactly `true`. The flag
-defaults off and is not set in workflows, Bicep, infrastructure or environment
-files; `src/proactive/todo-writes-default-off.test.ts` scans those locations.
-The existing pause/Todos switches and independent writer flag are the controls.
+defaults off in code; since P13-15 only `infra/main.bicep` sets it, and
+`src/proactive/todo-writes-default-off.test.ts` pins that. The existing
+pause/Todos switches and independent writer flag are the controls.
 The writer also requires the SQL pool for durable receipt and daily-cap storage.
 The hook reuses the P13-07 resolver/parser, does not create or delete files, and
 logs no suggestion text or vault path. SQL receipts are covered by the isolated
