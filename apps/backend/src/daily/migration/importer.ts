@@ -409,7 +409,8 @@ async function verifyLiveSchema(pool: ConnectionPool, tables: readonly DailyTabl
 function keyWhere(table: DailyTable, request: sql.Request, values: Record<string, unknown>): string {
   const definition = dailyTables[table];
   if (definition.keys.length === 0) return 'owner_object_id = @owner';
-  return definition.keys.map((column, index) => {
+  // Keys are only unique per owner: without the owner filter another owner's row looks like a conflict.
+  return ['owner_object_id = @owner', ...definition.keys.map((column, index) => {
     const metadata = textKeyMetadata(table, column);
     const type = metadata?.type === 'bigint' ? sql.BigInt : metadata?.type === 'date' ? sql.Date : sql.NVarChar(metadata?.maxLength ?? 256);
     const value = metadata?.type === 'bigint' ? BigInt(String(values[column]))
@@ -419,7 +420,7 @@ function keyWhere(table: DailyTable, request: sql.Request, values: Record<string
     return metadata?.type === 'text'
       ? `[${column}] = @key${index} AND DATALENGTH([${column}]) = DATALENGTH(@key${index})`
       : `[${column}] = @key${index}`;
-  }).join(' AND ');
+  })].join(' AND ');
 }
 
 function bindRow(request: sql.Request, table: DailyTable, values: Record<string, unknown>): void {

@@ -170,7 +170,8 @@ describe('resumable Daily import and reconciliation on synthetic SQL data', () =
     const { bundle, workoutRows } = await bundleFixture(path);
     const owner = '33333333-3333-4333-8333-333333333333';
     const uninterruptedOwner = '44444444-4444-4444-8444-444444444444';
-    await pool.request().query(`ALTER TABLE daily.health_workouts ADD CONSTRAINT CK_daily_migration_interrupt CHECK (id <> N'SYNTHETIC_22_1');`);
+    // NOCHECK: earlier tests already stored SYNTHETIC_22_1 for other owners; the rule only has to stop new inserts.
+    await pool.request().query(`ALTER TABLE daily.health_workouts WITH NOCHECK ADD CONSTRAINT CK_daily_migration_interrupt CHECK (id <> N'SYNTHETIC_22_1');`);
     await expect(importBundle({
       bundle, ownerObjectId: owner, stateDir: join(path, 'resumable'), batchSize: 1, execute: true, tables: ['health_workouts'],
     }, pool, owner)).rejects.toMatchObject({ message: 'import-failed' });
