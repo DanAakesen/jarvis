@@ -24,7 +24,7 @@ import { systemSmokeHttpResponse, systemSmokeResponseSchema, systemStatusRespons
 import { toolArgumentRefusal, unexpectedToolArgument } from './tool-arguments.js';
 import { startWorkPresentation } from './work-presentation.js';
 
-const readOnlyToolsWithoutMessage = new Set(['memory_search', 'vault_search', 'vault_read']);
+const readOnlyToolsWithoutMessage = new Set(['memory_search', 'vault_search', 'vault_read', 'vault_tasks']);
 const smokeTools = new Set(['get_system_health', 'github_read', 'list_jobs', 'workspace_command']);
 
 function smokeToolAllowed(toolName: string, input: unknown): boolean {

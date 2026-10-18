@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
 import { MAX_VAULT_FILE_BYTES } from '../vault/github-client.js';
-import { MAX_TODO_FILES, MAX_TODO_SCAN_BYTES, readVaultTodos, TODO_READ_CONCURRENCY } from './todo-discovery.js';
+import { filterVaultTasks, inScope, MAX_TODO_FILES, MAX_TODO_SCAN_BYTES, readVaultTasks, readVaultTodos, TODO_READ_CONCURRENCY } from './todo-discovery.js';
 import { createTodosSource } from './sources/todos.js';
 import { defaultProactiveSettings } from './store.js';
 
@@ -28,6 +28,40 @@ function fixture(notes: Record<string, string>) {
 }
 
 describe('vault task discovery', () => {
+  it('shares the proactive scope and coalesces concurrent scans into one tree listing', async () => {
+    expect([
+      'Personal/Inbox.md', 'Work/Projects/Inbox.md', 'tasks.MD',
+    ].every(inScope)).toBe(true);
+    expect([
+      'Other/Inbox.md', 'Personal/.hidden/Inbox.md', 'Work/Archive/Inbox.md', 'Personal/Inbox.txt',
+    ].some(inScope)).toBe(false);
+    const f = fixture({ 'Personal/Inbox.md': '# Home\n- [ ] Synthetic task' });
+    const [first, second] = await Promise.all([
+      readVaultTasks(f.vault, new AbortController().signal),
+      readVaultTasks(f.vault, new AbortController().signal),
+    ]);
+    expect(first).toEqual(second);
+    expect(first).toMatchObject([{ path: 'Personal/Inbox.md', line: 2, heading: 'Home' }]);
+    expect(f.vault.tree).toHaveBeenCalledTimes(1);
+  });
+
+  it('filters read-model tasks by state, query and an optional date window', async () => {
+    const f = fixture({
+      'Personal/Inbox.md': [
+        '- [ ] Synthetic overdue 📅 2031-04-08',
+        '- [ ] Synthetic today 📅 2031-04-09',
+        '- [x] Synthetic done',
+      ].join('\n'),
+    });
+    const tasks = await readVaultTasks(f.vault, new AbortController().signal);
+    expect(filterVaultTasks(tasks, { query: 'TODAY', state: 'open' }).map(({ text }) => text))
+      .toEqual(['Synthetic today']);
+    expect(filterVaultTasks(tasks, { state: 'done' }).map(({ text }) => text))
+      .toEqual(['Synthetic done']);
+    expect(filterVaultTasks(tasks, { state: 'all', dueWindowDays: 1, today: '2031-04-09' })
+      .map(({ text }) => text)).toEqual(['Synthetic today']);
+  });
+
   it('discovers scoped notes and root tasks, excludes archives and unsafe paths, and reuses unchanged SHAs', async () => {
     const task = (text: string) => `- [ ] Synthetic ${text} 🕒 14:00 ⏫ 📅 2031-04-09`;
     const f = fixture({
