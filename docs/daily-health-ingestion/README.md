@@ -34,7 +34,7 @@ Issue is idempotent for the retained handle; revoked records never reactivate. R
 1. Exact-head independent review, normal full CI and isolated SQL tests; keep #719 open for remaining acceptance. Normal main-only deployment may add empty tables, not activate the path.
 2. Approved protected credential custody/delivery, owner/ingress verification, retention/capacity policy and production composition. No new resource, identity, grant, SAS extraction or plaintext credential is implied.
 3. Synthetic deployed denial/revocation/expiry, byte-exact readback, concurrent retry/conflict, SQL outage/restart, capacity and cancellation checks; then actual Health Auto Export/iPhone acceptance. Coding tests do not prove these.
-4. #720 processing/freshness plus complete protected backup, reconciliation, final delta and rollback gates before cutover. The #717 backup destination/preflight is a separate unresolved workflow, not required for this synthetic implementation.
+4. #720 processing/freshness plus separately approved source-coverage, final-delta and rollback gates before any future cutover. The #717 database-export/preflight workflow was withdrawn; this synthetic implementation does not establish historical replay or cutover readiness.
 5. Disable upload composition on failed readiness; preserve all SQL receipts/raw/capabilities. Migration 0046 rollback refuses either nonempty table. Never delete original Daily data or automatically requeue native effects.
 
 ## Verification commands
