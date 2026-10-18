@@ -18,7 +18,8 @@ export function sanitizeFactText(value: string): string {
   const withoutControls = value.replace(/\p{Cc}/gu, '');
   const withoutHtml = withoutControls.replace(/<[^>]*(?:>|$)/gu, '');
   const withoutLinks = withoutHtml.replace(/!?\[([^\]]*)\]\((?:<[^>]*>|[^)]*)\)/gu, '$1');
-  return Array.from(withoutLinks.replace(/\s+/gu, ' ').trim()).slice(0, 300).join('');
+  const withoutAngles = withoutLinks.replace(/</gu, '');
+  return Array.from(withoutAngles.replace(/\s+/gu, ' ').trim()).slice(0, 300).join('');
 }
 
 export async function resolveTodoFile(

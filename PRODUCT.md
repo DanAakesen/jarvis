@@ -249,7 +249,7 @@ Only phase 1 is in scope now, extended by P7 (Jarvis everywhere: web and voice c
 | Area | Requirement |
 | --- | --- |
 | **Jarvis** | Jarvis is the app and its main page. Dan talks to Jarvis in one continuous conversation (chat and voice), with saved messages and streamed chat replies. Chat turns save the source message before invoking the hosted agent; only a completed reply is saved, and tool calls link to that source message. Dan can discuss Jarvis's code and features through read-only repository tools; files and issues are untrusted data, and Jarvis proposes tracked code changes conversationally, creating a task only after Dan confirms. |
-| **Notifications and approvals** | Notifications appear in the authenticated Now feed; gated actions await Dan's single-use approval in the browser. When an English browser voice session is active, Jarvis speaks concise task-status and pending-approval notices. Teams and Microsoft 365 integrations are not used in Dan's personal tenant. |
+| **Notifications and approvals** | Notifications appear in the authenticated Now feed; gated actions await Dan's single-use approval in the browser in every presence mode. When an English browser voice session is active, Jarvis speaks concise task-status and pending-approval notices. Jarvis does not send external messages. |
 | **Board** | Kanban-style task view: add, start, steer, pause, resume, cancel, and follow tasks. |
 | **Updates** | Events update state and progress live, without manual refresh. Automatic board updates preserve an in-flight read in the same scope and coalesce into one follow-up; project, backend, identity and unmount changes still cancel obsolete reads. |
 | **Assignment** | One active coding agent per task. |
@@ -329,7 +329,7 @@ stateDiagram-v2
 - **Steer** submits a bounded text correction to the current turn, or starts a new session on the task branch when the completed turn's session has expired. **Pause** requests a safe stop and remains `PauseRequested` until the backend confirms the turn has stopped; the heartbeat resolves an unsuccessful pause to `Running` or `NeedsAttention`. **Resume** continues the same Foundry session after a clean pause; **cancel** ends the task and requests deletion of its Foundry session.
 - Task controls are offered only for valid task states, with pending and failure feedback beside the action. The backend enforces every transition; a browser cannot set task state directly.
 - Needs attention, including an agent question, offers the same confirmed Cancel action. Cancellation stops only the task's current owned invocation, awaits session-end recording and owned-session deletion, and reports cleanup failures rather than success. Unknown runtime ownership blocks cancellation. Crash Recover and expired-session Continue remain separate actions; cancellation never answers the question or starts another turn.
-- Chat-created tasks retain their originating message. When a task becomes Done, Needs attention, or Cancelled, or opens a pull request, Jarvis posts one task-ID/outcome update with the PR link when available to that conversation. An active voice session speaks the update; away mode uses the existing Teams notification path.
+- Chat-created tasks retain their originating message. When a task becomes Done, Needs attention, or Cancelled, or opens a pull request, Jarvis posts one task-ID/outcome update with the PR link when available to that in-app conversation in every mode. Away task-state notifications appear in Now; an active voice session speaks the update.
 - If writable disk falls below the configured threshold, the runner reports `disk_low`, stops the current turn, and the backend moves the task to Needs attention with reason `disk_low`.
 - If Codex rejects a turn because the Jarvis login's usage limit is reached, the runner reports the failure as `Codex usage limit reached` (reason `codex_usage_limit`) instead of a generic runner error. The task moves to Needs attention, and other tasks keep running.
 - **Sandbox heartbeat:** while a task runs, the backend checks its active invocation about once a minute and updates the session heartbeat timestamp. HTTP 424/404/5xx on two polls (or persisting for 30 seconds) signals failure only while the invocation is active; a gap in runner events alone never signals a crash. If that invocation already completed, confirmed session expiry ends the sandbox as `Ended`/`idle_expired` without changing task state. **Continue** starts a fresh sandbox from the existing task branch with the original task, recorded steering messages, and a bounded event summary. **Recover** remains for actual crashes. When a provider turn completes, the backend uses the repository-scoped GitHub App token to open or reuse a pull request only if the task branch is ahead of the project default branch; it records the outcome and leaves the task Running for the signed webhook and project policy. Missing commits or a GitHub refusal moves the task to Needs attention with a reason.
@@ -555,11 +555,12 @@ unavailable, including after backend restart.
 
 Jarvis writes bounded text notifications to the Now activity feed. Gated actions appear as browser approval requests with Approve and Reject controls and normally expire after five minutes. Internal food-review cards explicitly expire after two minutes to keep the whole operation inside the hosting request limit; the visible expiry matches persistence and cancellation. Unknown, replayed, rejected, cancelled, expired, or unverified responses never run the action. A pending approval is announced to an active browser voice session; the authenticated Now feed remains the approval channel.
 
-P13-02 adds an optional, default-off web push opt-in for a visible generic alert
-that links to a durable owner-protected item. Notifications never approve an
-action or carry sensitive item text. Opening an item requires the usual
-authenticated session; after sign-in, Jarvis returns to that same-origin item
-path. Provider acceptance is not proof that a phone displayed the notification.
+P13-02 adds an optional web push opt-in, on in production since P13-03, for a
+visible generic alert that links to a durable owner-protected item.
+Notifications never approve an action or carry sensitive item text. Opening an
+item requires the usual authenticated session; after sign-in, Jarvis returns to
+that same-origin item path. Provider acceptance is not proof that a phone
+displayed the notification.
 
 Manual gated actions—including a merge initiated through GitHub tools, deletion, sending mail, calendar changes, repository creation, destructive or externally consequential computer use outside the browser, and anything that spends money—always require Dan's confirmation. The automatic project-policy merge under **Complete without deployment** is distinct: selecting that policy is approval, and its automatic merge asks for no additional confirmation or message. Other gated actions fail closed if Jarvis approval is unavailable or expires. Provider credentials remain server-side; notification content, audio, tokens, and images are not written to logs, task events, or errors.
 
@@ -977,15 +978,40 @@ Dan approved these after a gap audit. They are planned, not built.
 
 Dan decided that GitHub issues are the single backlog. When Dan asks Jarvis to change code, Jarvis drafts an issue, confirms it with him and creates it; the Software Factory then picks it up with the Codex agent (worker label `Jarvis`), or Copilot when Dan chooses. Factory progress shows on the issue, its pull request uses `Fixes #N`, and the Factory board uses the same columns as the GitHub Project: Backlog, Needs Dan, Ready, In progress, In review, Done. ([#573](https://github.com/DanAakesen/jarvis/issues/573)–[#577](https://github.com/DanAakesen/jarvis/issues/577))
 
-## Proactive Web Push (17 October 2026; P13-01 / #917)
+## Proactive assistance (17 October 2026; P13)
+
+- Run checks at 07:00 and 18:00 Europe/Copenhagen, and let Dan request
+  “Check now” at any time subject to quiet hours.
+  Do no proactive work or delivery from 22:00 to 07:00; there is no emergency
+  exception, and interactive requests remain available.
+- Read todos, Factory, weather, calendar, mail headers, calendar-derived travel
+  and news. Treat all source content as untrusted data, never as instructions.
+- Use the vault todo file as canonical. Jarvis may add new todos under its own
+  heading; it never edits, completes, reorders or deletes Dan's todos.
+- Push only for deadlines within 24 hours, calendar clashes, travel disruptions
+  and reminders about an hour before a todo is due. Hold a quiet-hour reminder
+  until 07:00 and show it as due soon or overdue. Bundle at most one push per
+  run and enforce daily caps. Pushes are generic alerts for durable,
+  owner-protected items; they carry no private details and never approve an
+  action. A user-triggered test is not proactive delivery. Teams is not used.
+- Cap estimated spend at 100 DKK per Copenhagen month, warn at 80%, and label
+  spend as an estimate.
+- Show every scheduled, catch-up or manual run in the header Background work
+  popover as running, then done or failed.
+- Write findings and push text in the language of Dan's last chat message.
+- Keep every milestone off by default and enable one at a time, only after the
+  previous deployment is accepted.
+- Real-device iPhone delivery remains unverified until observed in the
+  installed Home Screen app.
 
 Web Push is an opt-in visible alert for a durable, owner-protected item; it
 carries no private details, performs no silent work and never approves an
 action. The backend defaults off and registers no push routes unless
-`JARVIS_PUSH_ENABLED` is exactly `true`; this milestone does not enable it. The
-user-triggered test is not proactive delivery. Teams is not a delivery option.
-Real iPhone delivery remains unproven until separately observed on the installed
-Home Screen app.
+`JARVIS_PUSH_ENABLED` is exactly `true`; production has set it since P13-03
+(18 October 2026), so milestone 1 is live: Notifications in Settings can turn on
+push and send a test. The user-triggered test is not proactive delivery. Teams is
+not a delivery option. Real iPhone delivery remains unproven until separately
+observed on the installed Home Screen app.
 
 ## Proactive foundation (17 October 2026; P13-05)
 
@@ -1029,7 +1055,8 @@ no mail/calendar/order-provider mutation, original workflow dispatch or schedule
 Changed targets are refused under the owner transaction; acknowledged changes
 refresh existing consumers. Missing Google/model configuration and failed,
 limited or incomplete refreshes cannot establish fresh coverage. The separate
-nutrition-only connector has no feed access. Daily remains off; stored grants,
+nutrition-only connector has no feed access. The feed is not part of the
+owner-only Daily module that production switches on; stored grants,
 CalendarList/live-model parity and #725 acceptance remain unverified.
 Active suppressions are limited to1,000 per type under the owner lock. Updating
 an existing suppression and native-reviewed exact-key restoration remain usable
@@ -1059,8 +1086,8 @@ that same read path, not another service. These periodless collections use
 exact ID-only cursors and at most 100 records per page. Preserve display aliases,
 saved nutrient provenance, plan snapshots/revisions/tombstones and nullable
 values; definitions and plans are not consumed meals. Their acknowledged writes
-invalidate their own source through the same refresh hub. Daily stays off and
-the hosted ChatGPT food-write/connector requirement remains unfinished.
+invalidate their own source through the same refresh hub. The hosted ChatGPT
+food-write/connector requirement remains unfinished.
 
 The next inactive hosted nutrition adapter exposes only nutrition reads,
 Frida lookup and explicitly reviewed intake logging/correction/soft deletion.
@@ -1074,7 +1101,7 @@ logging; internal exact/favourite logging keeps its no-redundant-confirmation
 requirement. This conservative external limitation is not full retained-workflow
 parity. Unsupported clients refuse writes; actual ChatGPT compatibility,
 account linking, scopes/grants and mobile acceptance are not established by
-synthetic protocol tests. Production Daily stays off.
+synthetic protocol tests. Production composes no hosted adapter.
 
 The inactive saved-food continuation supports native-reviewed favourite/alias
 saves, server-resolved plan saves/soft deletion and persistent canonical
@@ -1104,8 +1131,7 @@ macros, occurrence/Copenhagen date and target revision. Model proposals remain
 estimates; approval does not make them independently verified. Direct supported
 exact labels and actual saved favourites are routed back to the one-step tool.
 This initial reviewed path requires a present chat/voice session and a browser
-approval within its displayed two-minute window; a spoken "yes" alone is not acceptance. Browser-only delivery prevents
-meal details being routed into Teams even if presence changes. Rejected,
+approval within its displayed two-minute window; a spoken "yes" alone is not acceptance. Confirmations always remain in the browser app even if presence changes. Rejected,
 cancelled, expired or stale reviews cannot mutate intake. Existing canonical
 storage, exact operation/revision replay, tombstones and commit refresh remain
 shared. No Health write, production activation or physical-phone acceptance is
@@ -1139,8 +1165,8 @@ estimate and no coaching, recovery or recomposition automation. The values are
 private health data and stay out of source, fixtures, documents and logs. The
 stored targets, their approved tool and the read-only `daily_nutrition_suggest`
 tool exist only behind the default-off Daily gate (Daily off leaves Jarvis
-unchanged). The gate is one server switch that is off by default and set in no
-environment; turning it on is a separate, reviewed change. The suggest tool
+unchanged). The gate is one server switch that is off by default in code; only the
+reviewed production deployment files turn it on (18 October 2026). The suggest tool
 reports energy and protein left and the saved
 favourites that fit, using the stored active energy and only the meals logged in
 Jarvis, so food eaten but never logged is not counted. The Settings section
@@ -1148,7 +1174,7 @@ appears only while Daily is on. It shows the three targets as whole-number field
 with their allowed ranges, saves on its own rather than with Save settings, and
 clears a target when its field is emptied. It ships no defaults, placeholders or
 example figures, and a failed load or save shows page-owned wording, never server
-text. No activation or acceptance is implied.
+text. Checking it with his real figures is Dan's own step.
 
 The Daily page (P12-15 / #730) opens on an overview so Dan can see what is
 actually stored before he browses it. For each retained collection the backend
@@ -1161,11 +1187,12 @@ to the existing record browser, which keeps its periods, paging, details, units
 and source/freshness labels. The page uses only the existing owner-authorised
 `/daily/capabilities` and `/daily/query` reads, so it adds no writer, provider,
 device, private-data or consent path. It exists only when the web build switch
-`VITE_DAILY_ENABLED` is exactly `true`; the switch is off by default and this
-change sets it in no environment, so Daily off leaves the released navigation
-unchanged. Switching it on for Dan's account is a separate, reviewed change that
-he pre-authorised once the page is live and checked. No activation or acceptance
-is implied.
+`VITE_DAILY_ENABLED` is exactly `true`; the switch is off by default in code, so a
+build without it leaves the released navigation unchanged. Dan pre-authorised
+switching Daily on for his account once the page is live and checked, and the
+production deployment files then set it together with the backend switch (18
+October 2026). Acceptance with real data, a physical phone and the original source
+stays open.
 
 When an existing Frida adapter is explicitly supplied, owner-authenticated
 `daily_food_lookup` exposes only its public-reference component lookup.

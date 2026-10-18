@@ -3,8 +3,8 @@ import type { FastifyRequest } from 'fastify';
 import sql from 'mssql';
 import { ToolFailure, ToolRefusal } from '../../core/tool-registry.js';
 import { confirmToolCall } from '../../core/tool-calls.js';
-import { createTeamsNotificationService } from '../../teams/service.js';
-import type { ConfirmationStatus, TeamsNotificationStore } from '../../database/teams-notification-store.js';
+import { createOwnerInteractionService } from '../../core/owner-interactions.js';
+import type { ConfirmationStatus, ConfirmationStore } from '../../database/confirmation-store.js';
 import type { GoogleApiClient } from '../../google/api-client.js';
 import { createDailyChanges } from '../revisions.js';
 import { dailyResultByteLimit } from '../records.js';
@@ -31,8 +31,7 @@ const suppression: FeedSuppression = { type: 'order', key: 'synthetic:order key'
   messageId: null, incomingAt: null, orderUpdatedAt: '2026-10-15T10:00:00Z' };
 function fixture(configured = true, now = () => at.getTime()) {
   const confirmations = new Map<string, ConfirmationStatus | 'pending'>();
-  const notificationStore: TeamsNotificationStore = {
-    getConversation: vi.fn(async () => null), saveConversation: vi.fn(async () => undefined),
+  const notificationStore: ConfirmationStore = {
     createConfirmation: vi.fn(async id => { confirmations.set(id, 'pending'); }),
     resolveConfirmation: vi.fn(async (id, _owner, channel, decision) => {
       if (channel !== 'browser' || confirmations.get(id) !== 'pending') return null;
@@ -45,9 +44,9 @@ function fixture(configured = true, now = () => at.getTime()) {
       confirmations.set(id, 'executing'); return true;
     }),
   };
-  const send = vi.fn(async () => undefined);
-  const notifications = createTeamsNotificationService({ ownerObjectId: owner, tenantId: owner,
-    store: notificationStore, connector: { send }, isAway: async () => true });
+  const notifications = createOwnerInteractionService({
+    ownerObjectId: owner, store: notificationStore, onWebNotification: async () => {},
+  });
   const sources: SourceView[] = [
     { source: 'Gmail', status: 'Stale', capturedAt: '2026-10-16T10:00:00Z', attemptedAt: at.toISOString(), error: 'semantic-unavailable', items: [target] },
     { source: 'GoogleCalendar', status: 'Missing', capturedAt: null, attemptedAt: null, error: null, items: [] },
@@ -71,7 +70,7 @@ function fixture(configured = true, now = () => at.getTime()) {
   const session = { id: 'session', channel: 'voice', startedAt: at, endedAt: null as Date | null };
   const message = { id: '42', role: 'dan' as const, sessionId: session.id, text: 'Please review this Daily action.', model: null, at };
   const request = { principal: { objectId: owner }, headers: {}, jarvisConversationMessage: message,
-    server: { ownerObjectId: owner, teamsNotifications: notifications, conversationStore: {
+    server: { ownerObjectId: owner, ownerInteractions: notifications, conversationStore: {
       getSession: vi.fn(async () => session), getHistory: vi.fn(async () => ({ messages: [message] })),
     }, awayModeStore: { read: vi.fn(async () => mode) } } } as unknown as FastifyRequest;
   const storeFor = vi.fn(() => store);
@@ -88,7 +87,7 @@ function fixture(configured = true, now = () => at.getTime()) {
       return result.value;
     }, settled };
   };
-  return { tool, request, store, sources, storeFor, refresh, notifications, notificationStore, send, mode, session, begin };
+  return { tool, request, store, sources, storeFor, refresh, notifications, notificationStore, mode, session, begin };
 }
 describe('inactive shared Daily feed workflow', () => {
   it('reads retained attention with separate freshness, no provider calls or approval, and no invented calendar range', async () => {
@@ -119,7 +118,7 @@ describe('inactive shared Daily feed workflow', () => {
       conflicts: { status: 'available', pairs: [['cal:one', 'cal:two']], truncated: false },
     });
   });
-  it('uses actual one-time browser approval, freezes selectors, binds the stored target and never sends to Teams', async () => {
+  it('uses actual one-time browser approval, freezes selectors, and binds the stored target', async () => {
     const f = fixture(); const input = { operation: 'dismiss_thread', id: thread.id };
     const pending = await f.begin(input); input.id = 'another';
     expect(f.store.suppress).not.toHaveBeenCalled();
@@ -128,7 +127,7 @@ describe('inactive shared Daily feed workflow', () => {
     expect(await pending.resolve()).toMatchObject({ status: 'committed', operation: 'dismiss_thread' });
     expect(f.store.suppress).toHaveBeenCalledWith('thread', thread.id, true, expect.any(AbortSignal), feedRevision(target));
     expect(await f.notifications.resolveBrowserConfirmation(pending.card.id, 'approve')).toBe(false);
-    expect(f.store.suppress).toHaveBeenCalledOnce(); expect(f.send).not.toHaveBeenCalled();
+    expect(f.store.suppress).toHaveBeenCalledOnce();
   });
   it('uses the producer order ID for Received and the exact consumer key for restoration', async () => {
     const f = fixture();
@@ -164,7 +163,6 @@ describe('inactive shared Daily feed workflow', () => {
     if (mode === 'failure') f.store.suppress.mockRejectedValueOnce(new ToolFailure('Commit is uncertain; read retained state.'));
     await expect(pending.resolve(mode === 'reject' ? 'reject' : 'approve')).rejects.toThrow();
     if (['reject', 'away', 'closed'].includes(mode)) expect(f.store.suppress).not.toHaveBeenCalled();
-    expect(f.send).not.toHaveBeenCalled();
   });
   it('reports actual bounded refresh outcomes, recovers durable replay and never calls refresh before approval', async () => {
     const f = fixture(); const payload = { operation: 'refresh', ...range };
@@ -269,7 +267,7 @@ describe('inactive shared Daily feed workflow', () => {
     if (context === 'phone') f.session.channel = 'phone';
     if (context === 'away') f.mode.mode = 'away';
     const request = context === 'missing-review'
-      ? { ...f.request, server: { ...f.request.server, teamsNotifications: undefined } } as FastifyRequest : f.request;
+      ? { ...f.request, server: { ...f.request.server, ownerInteractions: undefined } } as FastifyRequest : f.request;
     await expect(f.tool.execute({ operation: 'dismiss_thread', id: thread.id }, request, signal())).rejects.toThrow();
     expect(f.notificationStore.createConfirmation).not.toHaveBeenCalled(); expect(f.store.suppress).not.toHaveBeenCalled();
   });

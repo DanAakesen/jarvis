@@ -62,7 +62,7 @@ export async function applySettingsPatch(
   };
 
   if (!summary) return save();
-  const notifications = request.server.teamsNotifications;
+  const notifications = request.server.ownerInteractions;
   if (!notifications) throw new ToolRefusal('Now confirmation is unavailable; no settings were changed.');
   return notifications.runConfirmed('other', summary, save, signal);
 }

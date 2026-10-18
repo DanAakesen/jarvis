@@ -209,7 +209,7 @@ function folioTools(
             const item = await store.update(ownerId, id, patch, signal);
             return { id: item.id, title: item.title, kind: item.kind, pinned: item.pinned, action: input.action, untrusted: true };
           }
-          const service = request.server.teamsNotifications;
+          const service = request.server.ownerInteractions;
           if (!service) throw new ToolRefusal('Dan’s Now approval service is unavailable; the Folio item was not deleted.');
           if (pendingDeletions.has(id)) throw new ToolRefusal('This Folio item is already awaiting deletion approval.');
           pendingDeletions.add(id);

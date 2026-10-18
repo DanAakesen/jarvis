@@ -43,12 +43,42 @@ and 1280 px against synthetic responses (details in DESIGN.md). Local runs are n
 qualification, and no live backend, private data, physical phone or acceptance is
 claimed.
 
+## Daily switched on for the owner (18 October 2026; P12-15 / #730)
+
+Dan pre-authorised this twice: "Yes, switch it on once it's live and checked",
+then, asleep and on autopilot, "Yes, ship all daily if possible. You can take
+decisions as I would, as good as you can, we can always change it." The page
+above is merged, so this one change turns Daily on in production through exactly
+two reviewed files: `JARVIS_DAILY_ENABLED` in the backend container environment
+in `infra/main.bicep`, and `VITE_DAILY_ENABLED` in the web build step of
+`deploy.yml`. The code defaults stay off, and the scan test now allows only those
+two files and checks their literal values.
+
+What appears for Dan's own account: the Daily overview page ("What Daily holds
+today"), its side-rail and phone-menu entry, the Nutrition targets section in
+Settings (empty until he enters his own values) and the six owner-bound Daily
+tools. Nothing else is added: no migration, account, consent, grant, secret,
+RBAC, resource or import, no MCP connector, Google or Gmail feed, health upload,
+job or timer, and no provider, device or private read or write. Any change under
+`infra/` re-applies all four release components, so one Deploy carries the
+infrastructure, backend, web and agent together.
+
+Next is the live check after that Deploy; it is not claimed here. Rollback is
+reverting the whole change, scan test included, or setting both switches to
+`false` and updating the scan test in the same commit. Acceptance with Dan's real
+figures, the original Google source and a physical phone stays open.
+
 ## Proactive assistance (17 October 2026; P13-01 / #917)
 
 The first delivery-proof milestone is approved. P13-01 builds the owner-bound
 backend, SQL records and encrypted Web Push path behind the exact-true,
-default-off `JARVIS_PUSH_ENABLED` gate. The parallel web work is P13-02. No
-deployment setting is changed; provider acceptance and local tests do not prove
+default-off `JARVIS_PUSH_ENABLED` gate. The parallel web work is P13-02. Neither
+sets a deployment value. P13-03 (#934, 18 October 2026) enables milestone 1, the
+user-triggered test, in the production deploy by setting `JARVIS_PUSH_ENABLED` in
+`infra/main.bicep` and `VITE_PUSH_ENABLED` in the web build step; the code
+defaults stay off. Proactive milestones 2 to 4 (the silent read-only pilot, the
+todo-write pilot and opt-in alerts) stay dark, and P13-03 adds no scheduler,
+proactive send or Teams path. Provider acceptance and local tests do not prove
 that an iPhone displayed the notification. Physical-device delivery remains
 unverified.
 
@@ -78,10 +108,9 @@ activation or acceptance is claimed.
 Dan gave the go for Daily. This is the last invisible slice: one composition
 module, `daily/composition.ts`, behind `JARVIS_DAILY_ENABLED`. Absent or `false`
 is off, exactly `true` is on, and anything else stops startup with a
-configuration error that never echoes the value. No workflow, Bicep,
-infrastructure, environment or deploy file sets it, so Daily is off in every
-environment and a scan test fails if one ever does. Turning it on is a separate
-reviewed change.
+configuration error that never echoes the value. The code default is off. Only
+two reviewed production deployment files set it (next sections), and a scan test
+fails if any other configuration file ever mentions it.
 
 Off composes nothing: the route table, tool catalogue, capability instructions,
 voice session tools, health response, startup, jobs and timers stay those of
@@ -1978,6 +2007,7 @@ Goal: GitHub issues are the single backlog. The Software Factory (worker label `
 | P10-07 | [#793](https://github.com/DanAakesen/jarvis/issues/793) | UI session consumes the canonical GitHub Factory board, replacing the legacy task-state columns | Six ordered Project columns, issue/PR links and real task overlays, local filters, bounded display, Now-stream invalidations/reconnect, stale/error recovery, focused checks and desktop/320px inspection; spot-check live Project placement | P10-04 | Complete |
 | P10-08 | [#902](https://github.com/DanAakesen/jarvis/issues/902) | Web task creation creates and links one GitHub issue | Issue-first creation preserves dialog fields; durable submission claims prevent duplicate issues/tasks; failures identify partial creation; confirmation links to the issue; board overlays work before a PR and delivery includes `Fixes #N`. Offline backend/web checks pass; live GitHub acceptance remains unverified | P10-02 | Complete |
 | P10-09 | [#908](https://github.com/DanAakesen/jarvis/issues/908) | Complete without deployment merges eligible PRs without confirmation and recovers open work after restart | Project-policy selection is approval; App squash merge retains existing safety guards, `deliver_pr` never merges, no-check grace survives restart, startup/minute and policy-change sweeps are idempotent, transient GitHub retries are bounded, refusals remain task events, and Done follows the signed merge webhook | P3-06 | Complete |
+| P10-10 | [#909](https://github.com/DanAakesen/jarvis/issues/909) | Remove every Teams message/card/notification sender; keep confirmations and task updates in the app | Teams configuration is ignored; Away confirmations use the authenticated browser queue; task status events and phone approvals/calls remain; existing tables and rows are untouched | P6-22 | Complete |
 | P10-11 | [#911](https://github.com/DanAakesen/jarvis/issues/911) | Make each project's completion policy visible and immediately changeable | Descriptive two-choice control on project cards, project settings, and Create task; server-confirmed save, pending/error/retry/success states; clearly scoped new-project default; focused tests and responsive keyboard/browser inspection | P9-121, P10-09 | Complete |
 
 P10-07's board shipped in #806. The subsequently requested issue-number
@@ -2346,15 +2376,42 @@ Dan approved P12 on 12 October 2026 and explicitly released only P12-01 for this
 
 ## P13 — Proactive assistance
 
-The first milestone is a direct, user-triggered Web Push test linking to a
-durable owner-protected item. P13 is built dark: enabling the backend flag is a
-separate change, the user test is not proactive delivery, and real iPhone
-delivery remains unproven. Teams is not a delivery path.
+Proactive assistance is built dark in milestones. Each milestone has its own
+exact-`true`, default-off flag and is enabled by a separate small change, one at
+a time, only after the previous deployment is accepted. The first milestone is a
+direct, user-triggered Web Push test linking to a durable owner-protected item.
+P13-01 and P13-02 built it dark; P13-03 (#934) enables it in the production
+deploy, so push milestone 1 is on while the proactive milestones 2 to 4 stay
+dark. The user test is not proactive delivery, and real iPhone delivery remains
+unproven. Teams is not a delivery path.
 
 | ID | Issue | Task | Acceptance criteria | Depends on | Status |
 | --- | --- | --- | --- | --- | --- |
 | P13-01 | [#917](https://github.com/DanAakesen/jarvis/issues/917) | Push delivery proof, backend | Exact-true default-off gate; authenticated owner-scoped subscriptions/items; server-only VAPID key and encrypted generic payload; bounded retry and rate limits; durable item open is owner-only; no Teams, scheduler or activation. Unit, lint and type checks pass; SQL integration runs in CI. Real iPhone delivery remains unproven. | — | Complete |
 | P13-02 | [#919](https://github.com/DanAakesen/jarvis/issues/919) | Push delivery proof: web worker, opt-in and durable item page | Exact-string push gate defaults off; worker always displays generic alerts and opens only validated same-origin item paths; authenticated opt-in/test/off states and owner-protected item page work; deep links return after sign-in. Physical iOS delivery remains a separate acceptance gate. | — | Complete |
+| P13-03 | [#934](https://github.com/DanAakesen/jarvis/issues/934) | Enable web push | CI is green, including the infrastructure offline build and lint. | P13-01, P13-02 | Not started |
+| P13-04 | [#939](https://github.com/DanAakesen/jarvis/issues/939) | Record the proactive decisions and plan (docs only) | `PLAN.md` has exactly the P13-03 to P13-16 rows, each linked to its issue, with non-empty task, acceptance criteria and dependencies, and status `Not started`. | none | Not started |
+| P13-05 | [#924](https://github.com/DanAakesen/jarvis/issues/924) | Proactive foundation: flags, settings, findings store, status route, time and language helpers (dark) | Unit tests with a fake clock and in-memory stores cover the flag matrix, route gating, owner authorization, settings validation, feedback state, time boundaries, budget, language and job visibility. | P13-01, P13-02 | Not started |
+| P13-06 | [#926](https://github.com/DanAakesen/jarvis/issues/926) | Proactive engine: scheduler, run pipeline, detection, budget and job visibility (dark) | Fake-clock tests cover scheduling, quiet hours, catch-up, exclusive slot claims, the run pipeline, budget, detection and job visibility. | P13-05 | Not started |
+| P13-07 | [#927](https://github.com/DanAakesen/jarvis/issues/927) | Proactive sources: todo file, Factory and weather (dark) | Fake-based tests cover the todo resolver and parser, ordering and bounds, Factory and weather sources, time zones, and prove the todo source never writes. | P13-05 | Not started |
+| P13-08 | [#928](https://github.com/DanAakesen/jarvis/issues/928) | Proactive sources: calendar, mail and travel (dark) | Fake-client tests cover calendar normalization, mail headers, travel rules, bounds, errors, privacy and prompt-injection fixtures. | P13-05 | Not started |
+| P13-09 | [#929](https://github.com/DanAakesen/jarvis/issues/929) | Proactive source: news (dark) | Fake-only tests cover URL and network safety, bounded fetching and parsing, feed selection, failures and inert prompt-injection content. | P13-05 | Not started |
+| P13-10 | [#930](https://github.com/DanAakesen/jarvis/issues/930) | Proactive web: page, Settings section and Background work entries (dark) | Mocked web tests cover flag states, loading, empty and error states, actions, budget, sources and Background work links; browser checks cover phone and desktop layouts. | P13-05 | Not started |
+| P13-11 | [#931](https://github.com/DanAakesen/jarvis/issues/931) | Proactive todo writer: add-only suggested todos (dark) | Synthetic-data tests cover flag gating, safe add-only writes, conflicts, duplicates, limits and recovery; no existing todo is changed or deleted. | P13-05, P13-06, P13-07 | Not started |
+| P13-12 | [#932](https://github.com/DanAakesen/jarvis/issues/932) | Proactive run alerts: time-critical push with a shared sender (dark) | Tests cover gates, alert selection, deduplication, caps, bundled pushes, generic payloads, delivery outcomes, quiet hours and text-free logs. | P13-01, P13-02, P13-05, P13-06 | Not started |
+| P13-13 | [#933](https://github.com/DanAakesen/jarvis/issues/933) | Proactive todo reminders: one hour before a todo is due (dark) | Fake-based tests cover timed-todo planning, quiet-hour holds, limits, re-reads, bundling, expiry, retries and private push payloads. | P13-12, P13-06, P13-07, P13-05 | Not started |
+| P13-14 | [#935](https://github.com/DanAakesen/jarvis/issues/935) | Enable proactive checks | CI is green, including the infrastructure offline build and lint. | P13-03, P13-05 to P13-10 | Not started |
+| P13-15 | [#936](https://github.com/DanAakesen/jarvis/issues/936) | Enable suggested todos, alerts and reminders | CI is green, including the infrastructure offline build and lint. | P13-11 to P13-14 | Not started |
+| P13-16 | [#937](https://github.com/DanAakesen/jarvis/issues/937) | Chat and voice recall of proactive findings | Fake-based tests cover flag gating, owner authorization, validation, bounded results, failures and untrusted item text. | P13-05, P13-06, P13-10 | Not started |
+
+## P14 — UI unification
+
+One pass over backgrounds, buttons, borders, text and small refinements, run
+when the backlog is near empty.
+
+| ID | Issue | Task | Acceptance criteria | Depends on | Status |
+| --- | --- | --- | --- | --- | --- |
+| P14-01 | [#938](https://github.com/DanAakesen/jarvis/issues/938) | Unify UI styles and add small refinements | Inspect changed surfaces before and after in a real browser at 390x844 and 1440x900, in light and dark, and exercise the changed controls and states. | Other in-flight web pull requests: Daily page, Proactive page and Settings section, attention icon, per-project policy control | Not started |
 
 ## Factory canonical-status parity (16 October 2026)
 
