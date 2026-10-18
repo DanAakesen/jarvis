@@ -20,8 +20,8 @@ const sources = dailyQuerySources;
 export type DailyShowDisplay = 'table' | 'chart';
 
 export const dailyShowSources = [
-  sources.metrics, sources.sleep, sources.workouts, sources.heartRate,
-  sources.meals, sources.favorites, sources.plans, sources.sync,
+  sources.metrics, sources.metricCatalog, sources.sleep, sources.workouts, sources.heartRate,
+  sources.meals, sources.days, sources.favorites, sources.plans, sources.sync,
 ] as const;
 export type DailyShowSource = typeof dailyShowSources[number];
 type TabularSource = Exclude<DailyShowSource, typeof sources.sync>;
@@ -157,6 +157,11 @@ const metas: Record<TabularSource, Meta> = {
     label: 'Measurements', noun: 'measurement', slug: 'metrics',
     columns: [field('Date', 'metric_date'), measurement('Measurement'), field('Value', 'value'), field('Average', 'avg_value'), field('Unit', 'unit')],
   },
+  [sources.metricCatalog]: {
+    label: 'Measurement catalogue', noun: 'measurement', slug: 'metric-catalog',
+    columns: [measurement('Measurement'), field('Units', 'units'), field('First date', 'first_date'),
+      field('Last date', 'last_date'), field('Days measured', 'day_count'), field('Latest update', 'latest_updated_at')],
+  },
   [sources.sleep]: {
     label: 'Sleep', noun: 'sleep', slug: 'sleep',
     columns: [field('Date', 'sleep_date'), field('Asleep (h)', 'asleep_hours'), field('Total sleep (h)', 'total_sleep_hours'), field('In bed (h)', 'in_bed_hours')],
@@ -172,6 +177,13 @@ const metas: Record<TabularSource, Meta> = {
   [sources.meals]: {
     label: 'Food history', noun: 'meal', slug: 'meals',
     columns: [field('Date', 'meal_date'), named('Food', 'meal_name'), field('Energy (kcal)', 'energy_kcal'), field('Protein (g)', 'protein_grams'), field('Confidence', 'confidence')],
+  },
+  [sources.days]: {
+    label: 'Nutrition by day', noun: 'nutrition day', slug: 'nutrition-days',
+    columns: [field('Date', 'meal_date'), field('Meals', 'meal_count'), field('Energy (kcal)', 'energy_kcal'),
+      field('Protein (g)', 'protein_grams'), field('Carbohydrates (g)', 'carbohydrates_grams'),
+      field('Fat (g)', 'fat_grams'), field('Fiber (g)', 'fiber_grams'),
+      field('Unknown nutrients', 'unknown_nutrients'), field('Partial nutrients', 'partial_nutrients')],
   },
   [sources.favorites]: {
     label: 'Saved favourites', noun: 'saved favourite', slug: 'favourites',
@@ -207,6 +219,9 @@ function periodPhrase(period: DailyQueryResult['period']): string | null {
 
 function scopeSentence(result: DailyQueryResult): string {
   const period = periodPhrase(result.period);
+  if (result.source === sources.days) {
+    return `Per-day totals derived from retained, non-deleted meals${period ? `, ${period} (Copenhagen dates)` : ''}. Partial nutrient totals are lower bounds.`;
+  }
   if (period) return `Retained Daily records, ${period} (Copenhagen dates).`;
   return result.source === sources.heartRate ? 'Retained Daily records for one workout.' : 'Retained Daily records.';
 }

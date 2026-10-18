@@ -20,8 +20,8 @@ import { createDailyFeeds, type DailyFeedProviders, type DailyFeedService } from
 export { projectNutritionRecord, dailyResultByteLimit } from './records.js';
 
 export interface DailyReaders {
-  health(request: FastifyRequest): Pick<DailyHealthReadModel, 'history' | 'workoutDetail' | 'heartRate' | 'sync'>;
-  nutrition(request: FastifyRequest): Pick<NutritionStore, 'history' | 'favorites' | 'plans'>;
+  health(request: FastifyRequest): Pick<DailyHealthReadModel, 'history' | 'metricCatalog' | 'workoutDetail' | 'heartRate' | 'sync'>;
+  nutrition(request: FastifyRequest): Pick<NutritionStore, 'history' | 'days' | 'favorites' | 'plans'>;
   briefs(request: FastifyRequest): Pick<DailyBriefReadModel, 'history' | 'detail'>;
 }
 const feedFields = ['feed_kind', 'accepted_evidence_at', 'processed_committed_at', 'metric_rows', 'sleep_rows', 'workout_rows', 'heart_rate_minutes'];
@@ -71,6 +71,18 @@ export class DailyQueryService {
       const row = await this.readers.briefs(request).detail(input.briefId, signal);
       if (row) items = [project(row, briefDetailFields)];
       units = {};
+    } else if (input.source === sources.days) {
+      const page = await this.readers.nutrition(request).days({
+        from: input.startDate, to: input.endDate, limit: input.limit ?? 50,
+        ...(input.cursor ? { after: input.cursor } : {}),
+      }, signal);
+      items = page.rows.map(row => project(row, [
+        'meal_date', 'meal_count', 'energy_kcal', 'protein_grams', 'carbohydrates_grams',
+        'fat_grams', 'fiber_grams', 'unknown_nutrients', 'partial_nutrients', 'latest_updated_at',
+      ]));
+      next = page.next;
+      units = { meal_count: 'retained non-deleted meals', energy_kcal: 'kcal', '*_grams': 'g',
+        meal_date: 'Europe/Copenhagen calendar date' };
     } else if (input.source === sources.meals) {
       const page = await this.readers.nutrition(request).history({
         from: input.startDate, to: input.endDate, limit: input.limit ?? 50,
@@ -105,10 +117,20 @@ export class DailyQueryService {
           }, signal);
           items = page.items.map(row => project(row, ['sample_minute', 'metric_name', 'min_value', 'avg_value', 'max_value', 'unit', 'sample_count']));
           next = page.next;
+        } else if (input.source === sources.metricCatalog) {
+          const page = await health.metricCatalog({
+            startDate: input.startDate, endDate: input.endDate, limit: input.limit ?? 100,
+            ...(input.cursor ? { after: input.cursor } : {}),
+          }, signal);
+          items = page.items.map(row => project(row, [
+            'metric_name', 'units', 'first_date', 'last_date', 'day_count', 'latest_updated_at',
+          ]));
+          next = page.next;
         } else {
           const kind = input.source === sources.metrics ? 'metrics' : input.source === sources.sleep ? 'sleep' : 'workouts';
           const page = await health.history(kind, {
             startDate: input.startDate, endDate: input.endDate, limit: input.limit ?? 50,
+            ...(input.source === sources.metrics && input.metric !== undefined ? { metric: input.metric } : {}),
             ...(input.cursor ? { after: input.cursor } : {}),
           }, signal);
           items = page.items.map(row => project(row, [
@@ -116,23 +138,24 @@ export class DailyQueryService {
           ]));
           next = page.next;
         }
-        const feed = input.source === sources.metrics || input.source === sources.sleep ? 'metrics' : 'workouts';
+        const feed = input.source === sources.metrics || input.source === sources.sleep || input.source === sources.metricCatalog ? 'metrics' : 'workouts';
         const sync = await health.sync(signal);
         sourceProcessedCommittedAt = latest(sync.feeds.filter(row => row.feed_kind === feed).map(row => row.processed_committed_at));
       }
       units = input.source === sources.sleep ? { '*_hours': 'h' }
         : input.source === sources.workouts ? { duration_seconds: 's', '*_unit': 'retained per-record unit', '*_heart_rate': 'bpm' }
-          : { unit: 'retained per-record unit' };
+            : { unit: 'retained per-record unit' };
     }
     signal.throwIfAborted();
     const result: DailyQueryResult = {
       source: input.source,
       period: 'startDate' in input ? { startDate: input.startDate, endDate: input.endDate, timeZone: 'Europe/Copenhagen' } : null,
       items, status: next ? 'partial' : items.length ? 'available' : 'empty', units,
-      provenance: { store: 'daily-sql', detail: 'retained-record', calculations: 'existing-read-model',
+      provenance: { store: 'daily-sql', detail: 'retained-record',
+        calculations: input.source === sources.days ? 'derived-from-retained-meals' : 'existing-read-model',
         consistency: 'independent-committed-reads' },
       freshness: { observedAt: new Date(this.now()).toISOString(), sourceProcessedCommittedAt,
-        latestReturnedRecordUpdatedAt: brief ? null : latest(items.map(row => row.updated_at)), staleness: 'unknown' },
+        latestReturnedRecordUpdatedAt: brief ? null : latest(items.map(row => row.updated_at ?? row.latest_updated_at)), staleness: 'unknown' },
       coverage: { returned: items.length, hasMore: next !== null, next, sourceCompleteness: 'unknown' },
       revision: '0'.repeat(64), // Reserve the final fingerprint bytes in the response budget.
     };

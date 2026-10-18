@@ -4819,6 +4819,11 @@ For visible style changes, verify the actual app at 390×844 touch and
 empty and recovery states. Use only synthetic data in browser evidence. A
 source audit or local test run is not a substitute for rendered acceptance.
 
+The stylesheet geometry ratchet is part of the web tests:
+`npm test --workspace @jarvis/web -- --run src/stylesheets.test.tsx`.
+It parses every CSS file under `apps/web/src`; new exceptions need an exact
+value and a reason in the allow-list.
+
 ## P13-16 chat and voice recall (18 October 2026)
 
 `proactive_recent_items` is part of the hosted tool catalogue only when

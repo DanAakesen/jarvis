@@ -1,5 +1,6 @@
 import { dailyQuerySources as sources, isDailyQuery, type DailyCursor, type DailyJson, type DailyQuery, type DailySourceId } from '@jarvis/contracts';
 import type { ChartSeries } from '../chart-data';
+import { isDailyPeriod } from './period';
 
 /** `purpose` is static plain-English copy for the overview: what the collection is for, never a figure. */
 export const dailySources: readonly { id: DailySourceId; label: string; dated: boolean; purpose: string }[] = [
@@ -24,11 +25,13 @@ export type Row = Record<string, DailyJson>;
 export interface Column { key: string; label: string; unit?: string }
 const columns: Record<DailySourceId, readonly Column[]> = {
   [sources.metrics]: [{ key: 'metric_date', label: 'Date' }, { key: 'metric_name', label: 'Measurement' }, { key: 'value', label: 'Value' }, { key: 'avg_value', label: 'Average' }, { key: 'unit', label: 'Unit' }],
+  [sources.metricCatalog]: [{ key: 'metric_name', label: 'Measurement' }, { key: 'units', label: 'Units' }, { key: 'first_date', label: 'First date' }, { key: 'last_date', label: 'Last date' }, { key: 'day_count', label: 'Days measured' }],
   [sources.sleep]: [{ key: 'sleep_date', label: 'Date' }, { key: 'asleep_hours', label: 'Asleep', unit: 'h' }, { key: 'total_sleep_hours', label: 'Total sleep', unit: 'h' }, { key: 'in_bed_hours', label: 'In bed', unit: 'h' }],
   [sources.workouts]: [{ key: 'workout_date', label: 'Date' }, { key: 'workout_type', label: 'Workout' }, { key: 'duration_seconds', label: 'Duration', unit: 's' }, { key: 'avg_heart_rate', label: 'Average heart rate', unit: 'bpm' }],
   [sources.workout]: [{ key: 'id', label: 'Workout ID' }],
   [sources.heartRate]: [{ key: 'sample_minute', label: 'Minute' }, { key: 'min_value', label: 'Minimum' }, { key: 'avg_value', label: 'Average' }, { key: 'max_value', label: 'Maximum' }, { key: 'unit', label: 'Unit' }],
   [sources.meals]: [{ key: 'meal_date', label: 'Date' }, { key: 'meal_name', label: 'Food' }, { key: 'energy_kcal', label: 'Energy', unit: 'kcal' }, { key: 'confidence', label: 'Confidence' }],
+  [sources.days]: [{ key: 'meal_date', label: 'Date' }, { key: 'meal_count', label: 'Meals' }, { key: 'energy_kcal', label: 'Energy', unit: 'kcal' }, { key: 'protein_grams', label: 'Protein', unit: 'g' }, { key: 'carbohydrates_grams', label: 'Carbohydrates', unit: 'g' }, { key: 'fat_grams', label: 'Fat', unit: 'g' }, { key: 'fiber_grams', label: 'Fiber', unit: 'g' }, { key: 'unknown_nutrients', label: 'Unknown nutrients' }, { key: 'partial_nutrients', label: 'Partial nutrients' }],
   [sources.favorites]: [{ key: 'favorite_name', label: 'Favourite' }, { key: 'aliases_json', label: 'Aliases' }, { key: 'energy_kcal', label: 'Energy', unit: 'kcal' }, { key: 'confidence', label: 'Confidence' }],
   [sources.plans]: [{ key: 'plan_name', label: 'Plan' }, { key: 'energy_kcal', label: 'Energy', unit: 'kcal' }, { key: 'protein_grams', label: 'Protein', unit: 'g' }, { key: 'revision', label: 'Revision' }],
   [sources.briefs]: [{ key: 'started_at', label: 'Started as recorded' }, { key: 'trigger', label: 'Trigger' }, { key: 'status', label: 'Historical status' }, { key: 'delivery_status', label: 'Historical delivery' }],
@@ -47,6 +50,7 @@ export function initialDailyPeriod(now = new Date()) {
   return { startDate: start.toISOString().slice(0, 10), endDate };
 }
 export function dailyRequest(source: DailySourceId, period: { startDate: string; endDate: string }, cursor?: DailyCursor, recordId?: string): DailyQuery | null {
+  if ([sources.metrics, sources.sleep, sources.workouts, sources.meals].some(id => id === source) && !isDailyPeriod(period)) return null;
   const value = source === sources.sync ? { source } : source === sources.workout ? { source, workoutId: recordId } :
     source === sources.brief ? { source, briefId: recordId } :
     source === sources.heartRate ? { source, workoutId: recordId, limit: 50, ...(cursor ? { cursor } : {}) } :

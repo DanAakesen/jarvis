@@ -47,13 +47,14 @@ function OverviewRow({ row, onOpen, onRetry }: { row: ProbeRow; onOpen: (id: Dai
  * The Daily landing view: each collection the backend exposes, whether it holds anything, and what it is for.
  * Every figure comes from a read-only one-record query; nothing here is stored, estimated or invented.
  */
-export function DailyOverview({ backendUrl, getAccessToken, capabilities, onRetryAvailability, onOpen, returnFocusTo }: {
+export function DailyOverview({ backendUrl, getAccessToken, capabilities, onRetryAvailability, onOpen, returnFocusTo, embedded = false }: {
   backendUrl: string | null;
   getAccessToken: () => Promise<string>;
   capabilities: { sources?: DailySourceId[] | undefined; error?: string | undefined };
   onRetryAvailability: () => void;
   onOpen: (id: DailySourceId) => void;
   returnFocusTo?: DailySourceId | undefined;
+  embedded?: boolean;
 }) {
   const { rows, pending, reload } = useDailyProbes(backendUrl, getAccessToken, capabilities.sources);
   const root = useRef<HTMLElement>(null);
@@ -71,12 +72,12 @@ export function DailyOverview({ backendUrl, getAccessToken, capabilities, onRetr
     if (recovered && (active === null || active === document.body)) openButton(root.current, recovered)?.focus();
   }, [rows]);
   const summary = rows.length > 0 && !pending ? overviewSummary(rows.map(row => row.probe)) : '';
-  return <section className="daily-page daily-overview" aria-labelledby="daily-heading" ref={root}>
+  return <section className={`daily-page daily-overview${embedded ? ' daily-overview-embedded' : ''}`} aria-labelledby="daily-heading" ref={root}>
     <header className="daily-heading">
-      <div>
+      {!embedded && <div>
         <h1 id="daily-heading">Daily</h1>
         <p>Your health, food, workout and brief records. Each collection is checked read-only when this page opens.</p>
-      </div>
+      </div>}
       {rows.length > 0 && <div className="daily-heading-actions">
         <button className="secondary-button" type="button" aria-disabled={pending || undefined}
           onClick={() => { if (!pending) reload(); }}>{pending ? 'Refreshing…' : 'Refresh overview'}</button>

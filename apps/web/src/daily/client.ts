@@ -1,4 +1,4 @@
-import { dailyCapabilitiesAccept, dailyCapabilitiesVersion, dailyQuerySources, dailyQuerySourcesV1, isDailyQuery, type DailyJson, type DailyQuery, type DailyQueryResult, type DailySourceId } from '@jarvis/contracts';
+import { dailyCapabilitiesAccept, dailyCapabilitiesVersion, dailyQuerySources, dailyQuerySourcesV1, dailyQuerySourcesV2, dailyQuerySourcesV3, isDailyQuery, type DailyJson, type DailyQuery, type DailyQueryResult, type DailySourceId } from '@jarvis/contracts';
 import { awaitWithSignal, backendFetch } from '../backend-request';
 
 const responseLimit = 1024 * 1024;
@@ -15,6 +15,10 @@ function time(value: unknown): value is string {
   return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T/u.test(value) && Number.isFinite(Date.parse(value));
 }
 function nullableTime(value: unknown): boolean { return value === null || time(value); }
+function date(value: unknown): value is string {
+  return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/u.test(value) && !value.startsWith('0000-') &&
+    Number.isFinite(Date.parse(value)) && new Date(`${value}T00:00:00Z`).toISOString().slice(0, 10) === value;
+}
 function json(value: unknown, depth = 0): value is DailyJson {
   if (depth > 32) return false;
   if (value === null || typeof value === 'string' || typeof value === 'boolean') return true;
@@ -23,13 +27,15 @@ function json(value: unknown, depth = 0): value is DailyJson {
   return object(value) && Object.values(value).every(item => json(item, depth + 1));
 }
 export function isDailyResult(value: unknown, query: DailyQuery): value is DailyQueryResult {
-  const limit = query.source === dailyQuerySources.sync || query.source === dailyQuerySources.workout || query.source === dailyQuerySources.brief ? 1 : 'limit' in query ? query.limit ?? 50 : 50;
+  const limit = query.source === dailyQuerySources.sync || query.source === dailyQuerySources.workout || query.source === dailyQuerySources.brief ? 1
+    : query.source === dailyQuerySources.metricCatalog ? query.limit ?? 100 : 'limit' in query ? query.limit ?? 50 : 50;
   if (!object(value) || value.source !== query.source || !Array.isArray(value.items) ||
       value.items.length > limit ||
       !value.items.every(item => object(item) && json(item)) ||
       !object(value.units) || !Object.values(value.units).every(unit => typeof unit === 'string') ||
       !object(value.provenance) || value.provenance.store !== 'daily-sql' ||
-      value.provenance.detail !== 'retained-record' || value.provenance.calculations !== 'existing-read-model' ||
+      value.provenance.detail !== 'retained-record' ||
+      value.provenance.calculations !== (query.source === dailyQuerySources.days ? 'derived-from-retained-meals' : 'existing-read-model') ||
       value.provenance.consistency !== 'independent-committed-reads' ||
       !object(value.freshness) || !time(value.freshness.observedAt) ||
       !nullableTime(value.freshness.sourceProcessedCommittedAt) ||
@@ -37,6 +43,7 @@ export function isDailyResult(value: unknown, query: DailyQuery): value is Daily
       !object(value.coverage) || value.coverage.returned !== value.items.length ||
       typeof value.coverage.hasMore !== 'boolean' || value.coverage.sourceCompleteness !== 'unknown' ||
       typeof value.revision !== 'string' || !/^[a-f0-9]{64}$/u.test(value.revision)) return false;
+  const items = value.items as Record<string, unknown>[];
   if ('startDate' in query) {
     if (!object(value.period) || value.period.startDate !== query.startDate ||
         value.period.endDate !== query.endDate || value.period.timeZone !== 'Europe/Copenhagen') return false;
@@ -46,6 +53,33 @@ export function isDailyResult(value: unknown, query: DailyQuery): value is Daily
     const first: unknown = value.items[0];
     if (!object(first) || first.id !== query.briefId) return false;
   }
+  if (query.source === dailyQuerySources.metrics && query.metric !== undefined &&
+      items.some(item => item.metric_name !== query.metric)) return false;
+  if (query.source === dailyQuerySources.metricCatalog && !items.every((item, index) =>
+    typeof item.metric_name === 'string' && item.metric_name.length > 0 && item.metric_name.length <= 256 &&
+    (!query.cursor || item.metric_name > query.cursor.key) &&
+    (index === 0 || (items[index - 1]!.metric_name as string) < item.metric_name) &&
+    Array.isArray(item.units) && item.units.length <= 5 && item.units.every(unit => typeof unit === 'string') &&
+    item.units.every((unit, unitIndex, units) => unitIndex === 0 || units[unitIndex - 1]! < unit) &&
+    date(item.first_date) && date(item.last_date) && item.first_date <= item.last_date &&
+    item.first_date >= query.startDate && item.last_date <= query.endDate &&
+    Number.isInteger(item.day_count) && Number(item.day_count) > 0 && time(item.latest_updated_at))) return false;
+  if (query.source === dailyQuerySources.days && !items.every((item, index) => {
+    const nutrients = ['energy_kcal', 'protein_grams', 'carbohydrates_grams', 'fat_grams', 'fiber_grams'];
+    const unknown = item.unknown_nutrients;
+    const partial = item.partial_nutrients;
+    return date(item.meal_date) && item.meal_date >= query.startDate && item.meal_date <= query.endDate &&
+      (!query.cursor || item.meal_date > query.cursor.date) &&
+      (index === 0 || (items[index - 1]!.meal_date as string) < item.meal_date) &&
+      Number.isInteger(item.meal_count) && Number(item.meal_count) > 0 &&
+      nutrients.every(nutrient => item[nutrient] === null || typeof item[nutrient] === 'number' && Number.isFinite(item[nutrient])) &&
+      Array.isArray(unknown) && unknown.every(nutrient => typeof nutrient === 'string' && nutrients.includes(nutrient)) &&
+      new Set(unknown).size === unknown.length &&
+      Array.isArray(partial) && partial.every(nutrient => typeof nutrient === 'string' && nutrients.includes(nutrient)) &&
+      new Set(partial).size === partial.length && !partial.some(nutrient => unknown.includes(nutrient)) &&
+      nutrients.every(nutrient => unknown.includes(nutrient) === (item[nutrient] === null)) &&
+      time(item.latest_updated_at);
+  })) return false;
   if (query.source === dailyQuerySources.sleep && value.units['*_hours'] !== 'h') return false;
   if (value.coverage.hasMore) {
     if (!object(value.coverage.next) || !isDailyQuery({ ...query, cursor: value.coverage.next }) || value.status !== 'partial') return false;
@@ -98,11 +132,13 @@ export async function loadDailySources(backendUrl: string | null, getAccessToken
   const value = await requestJson(backendUrl, '/daily/capabilities', getAccessToken, signal, undefined, dailyCapabilitiesAccept);
   const source = (input: unknown): input is DailySourceId => typeof input === 'string' &&
     Object.values(dailyQuerySources).some(known => known === input);
-  if (!object(value) || value.module !== 'daily' || (value.version !== 1 && value.version !== dailyCapabilitiesVersion) ||
+  if (!object(value) || value.module !== 'daily' ||
+      (value.version !== 1 && value.version !== 2 && value.version !== dailyCapabilitiesVersion) ||
       !Array.isArray(value.sources) || value.sources.length === 0 || !value.sources.every(source) ||
       new Set(value.sources).size !== value.sources.length) throw new DailyReadError('Daily data services are not available yet.', 'disabled');
-  if (value.version === 1 && value.sources.some(id => !dailyQuerySourcesV1.some(legacy => legacy === id))) {
-    throw new DailyReadError('Daily returned incompatible legacy capabilities. No collections were claimed.', 'invalid');
+  const allowed = value.version === 1 ? dailyQuerySourcesV1 : value.version === 2 ? dailyQuerySourcesV2 : dailyQuerySourcesV3;
+  if (value.sources.some(id => !allowed.some(known => known === id))) {
+    throw new DailyReadError(`Daily returned incompatible version ${value.version} capabilities. No collections were claimed.`, 'invalid');
   }
   return value.sources;
 }

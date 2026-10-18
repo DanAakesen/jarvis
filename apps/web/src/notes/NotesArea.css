@@ -64,6 +64,7 @@
 @media (max-width: 700px), (max-height: 500px) and (pointer: coarse) {
   .notes-page .knowledge-search, .notes-page .knowledge-results { width: calc(100% - 16px); }
   .notes-page .knowledge-search { top: 8px; gap: 4px; }
+  .notes-page .knowledge-search input { font-size: 16px; }
   .notes-page .knowledge-results { top: 70px; }
   .notes-page .knowledge-reset { padding: 0 8px; font-size: 11px; }
   .notes-page .knowledge-count { font-size: 11px; }

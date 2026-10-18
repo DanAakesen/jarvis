@@ -14,8 +14,8 @@
 /* Messages scroll up under the controls and fade out at the top edge of the window. */
 .conversation-window-host > .conversation-transcript {
   padding: 40px var(--space-5) var(--space-4);
-  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 64px);
-  mask-image: linear-gradient(to bottom, transparent 0, #000 64px);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, var(--ink-solid) 64px);
+  mask-image: linear-gradient(to bottom, transparent 0, var(--ink-solid) 64px);
 }
 .conversation-latest { position: absolute; bottom: var(--space-3); left: 50%; display: inline-flex; min-height: 40px; align-items: center; gap: 6px; padding: 0 14px 0 12px; border: 1px solid var(--rule); border-radius: var(--radius-pill); background: var(--glass-selected); box-shadow: var(--panel-shadow); color: var(--text); font: inherit; font-size: var(--type-small); font-weight: 650; cursor: pointer; transform: translateX(-50%); animation: conversation-enter var(--motion-state) var(--ease-enter); }
 .conversation-latest svg { width: 18px; height: 18px; flex: 0 0 auto; }
@@ -70,7 +70,7 @@
 .conversation-loading, .conversation-history-error { padding-block: var(--space-3); }
 .conversation-loading > p, .conversation-empty { color: var(--text-muted); font-size: var(--type-small); }
 .conversation-history-error > p { color: var(--error); }
-.conversation-input { position: relative; display: grid; grid-template-columns: 40px minmax(0, 1fr); align-items: center; gap: 22px; flex: 0 0 auto; width: 100%; max-width: var(--chat-width); margin: 0 auto; padding: 5px 6px 5px 7px; border: 1px solid var(--rule); border-radius: 26px; background: var(--surface-translucent); backdrop-filter: blur(var(--surface-blur)); box-shadow: var(--dialog-shadow); }
+.conversation-input { position: relative; display: grid; grid-template-columns: 40px minmax(0, 1fr); align-items: center; gap: 22px; flex: 0 0 auto; width: 100%; max-width: var(--chat-width); margin: 0 auto; padding: 5px 6px 5px 7px; border: 1px solid var(--rule); border-radius: var(--radius-window); background: var(--surface-translucent); backdrop-filter: blur(var(--surface-blur)); box-shadow: var(--dialog-shadow); }
 .conversation-input-slot { display: contents; }
 .conversation-input-slot[data-positioned] { display: block; flex: 0 0 auto; height: var(--conversation-composer-height, 52px); }
 /* The desktop composer and maximised transcript share their page gutters. Restore keeps the normal dock width. */
@@ -86,8 +86,8 @@
 .conversation-history > p, .history-feedback p, .history-error { font-size: 16px; }
 .conversation-messages { margin: 20px 0; padding: 0; list-style: none; }
 .conversation-message { position: relative; width: fit-content; max-width: min(88%, 62ch); margin: var(--space-4) 0; padding: var(--space-3) var(--space-5) var(--space-2); border-radius: var(--radius-panel); animation: conversation-enter var(--motion-state) var(--ease-enter); }
-.conversation-message[data-speaker="dan"] { margin-left: auto; border: 1px solid color-mix(in srgb, var(--glass-glow-warm) 75%, transparent); background: var(--surface-translucent); background-image: linear-gradient(var(--message-dan-tint), var(--message-dan-tint)); box-shadow: 0 0 18px -4px color-mix(in srgb, var(--glass-glow-warm) 45%, transparent), inset 0 0 12px -6px var(--glass-glow-warm); }
-.conversation-message[data-speaker="jarvis"] { margin-right: auto; padding-left: var(--space-5); border: 1px solid color-mix(in srgb, var(--glass-edge-cool) 26%, transparent); background: var(--surface-translucent); background-image: linear-gradient(var(--message-jarvis-tint), var(--message-jarvis-tint)); box-shadow: var(--soft-shadow), inset 0 1px 0 var(--glass-rim-light); }
+.conversation-message[data-speaker="dan"] { margin-left: auto; border: 1px solid color-mix(in srgb, var(--glass-glow-warm) 75%, transparent); background: var(--surface-translucent); background-image: linear-gradient(var(--message-dan-tint), var(--message-dan-tint)); box-shadow: 0 0 18px -4px color-mix(in srgb, var(--glass-glow-warm) 45%, transparent); }
+.conversation-message[data-speaker="jarvis"] { margin-right: auto; padding-left: var(--space-5); border: 1px solid color-mix(in srgb, var(--glass-edge-cool) 26%, transparent); background: var(--surface-translucent); background-image: linear-gradient(var(--message-jarvis-tint), var(--message-jarvis-tint)); box-shadow: var(--soft-shadow); }
 .conversation-message:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
 .message-heading { margin-bottom: var(--space-2); font-size: var(--type-small); }
 .queue-count, .conversation-message[data-speaker="dan"] > .queued-state { color: var(--text-muted); font-size: var(--type-small); }
@@ -110,7 +110,7 @@
 .markdown-content p { margin: var(--space-2) 0; color: inherit; white-space: normal; }
 .markdown-content ul, .markdown-content ol { margin: var(--space-2) 0; padding-left: 1.4em; }
 .markdown-content li + li { margin-top: var(--space-1); }
-.markdown-content :not(pre) > code { padding: .12em .35em; border-radius: 5px; background: var(--code-surface); font-family: var(--font-mono); font-size: .9em; }
+.markdown-content :not(pre) > code { padding: .12em .35em; border-radius: var(--radius-control); background: var(--code-surface); font-family: var(--font-mono); font-size: .9em; }
 .markdown-content pre { max-width: 100%; margin: var(--space-3) 0; padding: var(--space-3) var(--space-4); overflow-x: auto; border-radius: var(--radius-control); background: var(--code-surface); color: var(--text); font-size: .9em; line-height: 1.45; }
 .markdown-content pre code { font-family: var(--font-mono); font-size: inherit; white-space: pre; }
 .markdown-content a { text-decoration-thickness: .08em; text-underline-offset: .2em; }
@@ -191,7 +191,7 @@
 .voice-end-control:active:not(:disabled) { background: var(--glass-pressed); }
 .voice-end-control:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 .voice-end-control:disabled { color: var(--disabled-text); cursor: wait; }
-.voice-end-glyph { width: 12px; height: 12px; flex: 0 0 auto; border-radius: 3px; background: var(--state-unavailable); }
+.voice-end-glyph { width: 12px; height: 12px; flex: 0 0 auto; border-radius: 0; background: var(--state-unavailable); }
 .voice-end-control:disabled .voice-end-glyph { background: var(--disabled-text); }
 @media (min-width: 701px) and (not ((max-height: 500px) and (pointer: coarse))) {
 .app-shell[data-voice-active="true"] { position: fixed; inset: 0; display: block; width: 100vw; height: 100vh; height: 100dvh; min-height: 0; overflow: hidden; }
@@ -244,7 +244,7 @@
   .conversation-message, .streaming-message { max-width: 96%; }
   .conversation-message { padding: var(--space-3) var(--space-4); }
   .conversation-window-host > .conversation-transcript { padding: 48px var(--space-3) var(--space-3); }
-  .conversation-input { border-radius: 26px; padding: 6px 8px; }
+  .conversation-input { border-radius: var(--radius-window); padding: 6px 8px; }
   .conversation-input[data-voice-active="false"] .voice-controls[data-active="false"] > .action-row { padding-right: var(--space-1); }
   .conversation-history .composer-attach, .conversation-history .composer-more { padding-right: 2px; }
   .conversation-history .composer { gap: var(--space-1); }
@@ -343,21 +343,21 @@
 
 /* Bubbles v2 (Dan, 7 October): smaller and quieter. Softer tinted glass with a thin rim, a tighter corner on the
    speaker's side, smaller type, and tighter spacing between consecutive messages from the same speaker. */
-.conversation-message { max-width: min(80%, 58ch); margin: 8px 0; padding: 8px 12px; border-radius: 18px; font-size: var(--type-small); line-height: 1.45; }
+.conversation-message { max-width: min(80%, 58ch); margin: 8px 0; padding: 8px 12px; border-radius: var(--radius-panel); font-size: var(--type-small); line-height: 1.45; }
 .conversation-message :where(p, li, blockquote) { font-size: inherit; line-height: inherit; }
 .conversation-message .markdown-content :is(h1, h2, h3, h4, h5, h6) { font-size: 1.15em; line-height: 1.35; }
 .conversation-message[data-speaker="dan"] {
   border: 1px solid color-mix(in srgb, var(--glass-glow-warm) 45%, transparent);
   border-bottom-right-radius: 6px;
   background-image: linear-gradient(160deg, color-mix(in srgb, var(--glass-glow-warm) 16%, transparent), color-mix(in srgb, var(--glass-glow-warm) 6%, transparent));
-  box-shadow: 0 6px 18px -12px color-mix(in srgb, var(--glass-glow-warm) 70%, transparent), inset 0 1px 0 color-mix(in srgb, var(--glass-rim-light) 70%, transparent);
+  box-shadow: 0 6px 18px -12px color-mix(in srgb, var(--glass-glow-warm) 70%, transparent);
 }
 .conversation-message[data-speaker="jarvis"] {
   padding-left: 12px;
   border: 1px solid color-mix(in srgb, var(--glass-edge-cool) 22%, transparent);
   border-bottom-left-radius: 6px;
   background-image: linear-gradient(160deg, color-mix(in srgb, var(--glass-edge-cool) 10%, transparent), transparent 70%);
-  box-shadow: 0 6px 18px -14px rgb(0 0 0 / 60%), inset 0 1px 0 var(--glass-rim-light);
+  box-shadow: 0 6px 18px -14px color-mix(in srgb, var(--ink-solid) 60%, transparent);
 }
 .conversation-message[data-speaker="dan"] + .conversation-message[data-speaker="dan"],
 .conversation-message[data-speaker="jarvis"] + .conversation-message[data-speaker="jarvis"] { margin-top: 4px; }
@@ -369,14 +369,14 @@
 .message-tools > li { gap: 6px; }
 .tool-chip {
   display: inline-flex; height: 26px; align-items: center; gap: 6px; padding: 0 10px 0 6px; border-radius: var(--radius-pill);
-  background: var(--glass-hover); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--glass-rim-light) 28%, transparent);
+  border: 1px solid var(--rule); background: var(--glass-hover);
   color: var(--text); font-size: 12.5px; font-weight: 600; line-height: 1; white-space: nowrap;
 }
 .tool-chip-outcome { color: var(--text-muted); font-weight: 500; }
 .tool-chip[data-state="running"] {
   position: relative; overflow: hidden;
   background: color-mix(in srgb, var(--glass-edge-cool) 14%, var(--glass-hover));
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--glass-edge-cool) 55%, transparent), 0 0 14px -4px var(--glass-edge-cool);
+  box-shadow: 0 0 14px -4px var(--glass-edge-cool);
 }
 .tool-chip[data-state="running"]::after {
   position: absolute; inset: 0; content: ""; pointer-events: none;
@@ -422,7 +422,7 @@
 .conversation-message .message-metadata {
   position: absolute; z-index: 1; top: -9px; right: 12px; display: block; margin: 0; padding: 1px 8px;
   border-radius: var(--radius-pill); background: var(--stage-slab); backdrop-filter: blur(10px);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--glass-rim-light) 30%, transparent);
+  border: 1px solid var(--rule);
   color: var(--text-muted); font-size: 11px; line-height: 16px; white-space: nowrap; pointer-events: none;
 }
 .conversation-message .message-metadata:has(> time:only-child:empty) { display: none; }
@@ -440,7 +440,7 @@
 .live-turn-status .assembling-j { width: 18px; height: 20px; filter: drop-shadow(0 0 3px var(--glass-edge-cool)); }
 .live-turn-status .assembling-j-block { fill: color-mix(in srgb, var(--glass-edge-cool) 75%, var(--text)); animation: j-assemble 1.6s cubic-bezier(.5, 0, .3, 1) infinite; animation-delay: calc(var(--i) * 55ms); }
 .live-turn-tools { position: relative; display: grid; gap: 6px; margin: 8px 0 2px 8px; padding: 0 0 0 14px; list-style: none; }
-.live-turn-tools::before { position: absolute; top: 6px; bottom: 6px; left: 0; width: 2px; border-radius: 2px; content: "";
+.live-turn-tools::before { position: absolute; top: 6px; bottom: 6px; left: 0; width: 2px; border-radius: 0; content: "";
   background: linear-gradient(color-mix(in srgb, var(--glass-edge-cool) 70%, transparent), color-mix(in srgb, var(--glass-edge-cool) 15%, transparent)); }
 .live-turn-tools > li { position: relative; animation: conversation-enter var(--motion-state) var(--ease-enter); }
 .live-turn-tools > li::before { position: absolute; top: 50%; left: -14px; width: 10px; height: 2px; content: ""; background: color-mix(in srgb, var(--glass-edge-cool) 50%, transparent); }
@@ -487,7 +487,7 @@
 .live-phrase-caret { display: inline-block; width: 1.5px; height: 1em; margin-left: 2px; vertical-align: -0.12em; background: var(--glass-glow-warm); box-shadow: 0 0 6px var(--glass-glow-warm); }
 .live-phrase[data-typed] {
   color: transparent;
-  background: linear-gradient(100deg, var(--text-muted) 0%, var(--text-muted) 38%, #fff 46%, var(--glass-glow-warm) 50%, #fff 54%, var(--text-muted) 62%, var(--text-muted) 100%);
+  background: linear-gradient(100deg, var(--text-muted) 0%, var(--text-muted) 38%, var(--highlight-solid) 46%, var(--glass-glow-warm) 50%, var(--highlight-solid) 54%, var(--text-muted) 62%, var(--text-muted) 100%);
   background-size: 300% 100%;
   background-position: 100% 0;
   -webkit-background-clip: text;
@@ -548,12 +548,12 @@
 .conversation-message.live-turn::before,
 .conversation-message[data-speaker="jarvis"][data-latest]::before {
   position: absolute; inset: -1px; padding: 1.5px; border-radius: inherit; content: ""; pointer-events: none;
-  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask: linear-gradient(var(--ink-solid) 0 0) content-box, linear-gradient(var(--ink-solid) 0 0);
   -webkit-mask-composite: xor;
-  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+  mask: linear-gradient(var(--ink-solid) 0 0) content-box exclude, linear-gradient(var(--ink-solid) 0 0);
 }
 .conversation-message.live-turn::before {
-  background: conic-gradient(from var(--rim-sweep), transparent 0 62%, color-mix(in srgb, var(--glass-glow-warm) 40%, transparent) 78%, #fff3dd 88%, var(--glass-glow-warm) 92%, transparent 100%);
+  background: conic-gradient(from var(--rim-sweep), transparent 0 62%, color-mix(in srgb, var(--glass-glow-warm) 40%, transparent) 78%, var(--highlight-warm) 88%, var(--glass-glow-warm) 92%, transparent 100%);
   filter: drop-shadow(0 0 4px var(--glass-glow-warm));
   animation: rim-sweep 2.2s linear infinite;
 }

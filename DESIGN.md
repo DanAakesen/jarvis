@@ -1276,6 +1276,7 @@ camera correction. Reduced motion retains solid text without the sweep.
 - **Job tabs (P8-43):** each background job is a tab in the top bar strip: a cyan progress ring with the short title and step (or "N running"), a peek with the current step, elapsed time and Cancel; a green ✓ pulse when ready while the result window grows out of the chip (it waits in the chip with Open while Dan is Away or On the move); amber with the reason, Retry and Dismiss when it fails. Research progress windows start as tabs while the chip tracks them.
 - **Knowledge (P7-43):** a rail page and a window Jarvis opens with `show_knowledge`, showing Dan's vault as a 3D star cloud. Stars are coloured by folder (People blue, Work amber, Personal green, General violet) and sized by connections, with fine additive lines for links and fainter lines for similarity. Since 8 October it is a flat 2D map (Dan found the spinning 3D cloud too much in his face): every note lies on one plane seen straight on, dragging pans and the wheel zooms, and stars are crisp with only a faint halo. It never goes fully still: each note floats a few pixels on its own slow orbit with its links following, each star breathes, and every second or two one link lights up and fades. It stops drawing off-screen or hidden; reduced motion keeps it still. Search lights the matches, dims the rest and flies the camera to them; the accessible results list, labels and a glass note reader (front matter stripped, GitHub link, connected notes) sit over it. One draw call for stars and one for lines, at 30 fps. Development builds can show a labelled sample graph when the service is missing.
 - **Knowledge reader (P9-74):** hide properties, including malformed YAML after leading comments. Titles and paths wrap. The path, Markdown and connected notes share one keyboard-focusable scroll region; a bottom fade and labelled Scroll down button appear only while content remains below. The button scrolls directly under reduced motion.
+- **Mobile Notes search (#984):** use 16px search-input text to avoid iPhone focus zoom clipping the search and dropdown. Keep graph camera zoom on matches and user-controlled page zoom unchanged.
 - **Notes (P9-77, Dan; creation revised locally on 11 October):** keep the existing full-room graph as the default Notes page, including search, stars and folder filters; no list-first browser or Notes/Graph switch. Selecting a note opens the familiar floating reader with Edit Markdown, Preview and explicit Save. Connected notes stay reachable. Search stays centred at desktop, medium and phone widths. Create new is a named, plus-only 44 px action inside the right end of search, transparent at rest. It opens a blank draft immediately with writing focus, no Start writing gate and no generated source text. Desktop creation widens the same popup: an Obsidian-like nested folder tree on the left, title and Markdown on the right. Phones stack the destination disclosure above the editor, initially folded; the focused Markdown area scrolls into view without animation so writing is immediately reachable. Folder rows have separate expansion and selection controls, a selected surface/checkmark, and inline New folder under the current destination. New folders are marked New and persist only when a note is saved inside them. Dan requires all normal vault folders and root notes, with his explicit exception for hidden dot-folders; the repeated exclusion notice is removed, not the safety rule. The picker loads `/notes/tree`, adds the implicit Vault root locally, and offers Retry on absent/not-ready data without reverting to inferred graph/index folders. Last-sync text belongs in the popup header, not the folder body, and remains visible with a folded phone picker; truncation remains near the tree. Deployed #699 includes attachment-only folders with the same contract; the local picker loads the refreshed live inventory. Existing note readers remain narrow; content scrolls above the dock. Source preserves front matter and whitespace; preview hides properties like the old reader. Dirty/saving/saved feedback and conflict comparison accompany explicit saves. An untouched new draft closes freely; actual title/source edits guard closing, changing notes, navigation and reload. The generated `show_knowledge` window stays read-only.
 - **Room colour:** the room's amber strips, ring accents, floor arcs, the lamp by the orb and the 3D orb's brain all use the bright `--glass-glow-warm` amber of the chat orb. Strips and ring inlays are thin, unlit lines so they stay crisp.
 - **Voice keeps the shell (7 October):** on desktop, voice no longer hides the top bar, tabs, job tabs, rail or panels; they stay over the full-screen voice room, windows float across it as while typing, and only the chat bar becomes the voice bar.
@@ -1411,6 +1412,28 @@ private data or real sign-in; the harness has no 3D stage, header or MSAL;
 `prefers-reduced-motion` was not emulated; the Daily-off path is covered by the
 App tests, not the browser. Local runs are not qualification.
 
+18 October 2026 (P12-20): Daily now keeps that overview inside one page-level
+heading and body line, followed by Overview, Briefs and Data tabs and the active
+section. The tabs expose selected state semantically and by stronger text weight
+and a complete selected surface; narrow screens get a contained horizontal tab
+scroller, with 44 px controls and visible focus. Data alone shows the shared
+period control. Preset and custom date changes use Europe/Copenhagen calendar
+dates and reject reversed, impossible or over-366-day ranges before a read.
+The period slot retains its height while switching tabs so section content does
+not jump when the Data control appears or disappears. Sections keep their
+existing page and control geometry; each owns its content
+stylesheet and separately lazy-loaded component. Workouts, Nutrition and Body &
+sleep remain absent until their follow-up sections exist.
+
+Checked the section shell in isolated Chromium against only synthetic capability
+and query responses at 320, 390×844, 768 and 1440×900 in light and dark, with
+reduced motion. Overview, Data and brief detail, keyboard/URL switching, shared
+period retention, custom-range rejection and the chart were exercised. The page
+did not scroll sideways, tab and Open targets measured 44 px, the section panel
+kept the same top position across a tab switch, and the browser console had no
+page errors. Scratch screenshots were kept outside the repository; this is not
+signed-in shell, live-backend or private-data acceptance.
+
 18 October on-demand views (P12-16 / #731): when Jarvis shows Daily data on
 request, it reuses the existing generated-view renderer, workspace window and theme.
 There is no Daily renderer, skin or page. Under every table, chart or detail view
@@ -1451,3 +1474,13 @@ variants and remaining workflow-specific layouts. Local synthetic Chromium
 inspection covered the phone and desktop sizes in both themes, plus reduced
 motion. The attention event and healthy Daily/Proactive data states were not
 available in the harness; screenshot captures could not be attached to the PR.
+
+## Border, radius and surface rules (P14-04, 18 October 2026)
+
+Use `--radius-control`, `--radius-panel`, `--radius-window` and `--radius-pill`
+for their matching roles; reserve `50%` for circles and `0` for square edges.
+Structural separators use a single 1px `--rule` or `--control-rule` border.
+Selected and status states use shared surfaces, text or icons, never a colored
+edge alone. Use real neutral borders instead of inset-shadow borders. Panels,
+popovers, rows and hover states reuse the existing surface roles and
+`--panel-shadow`. Keep exact, reasoned exceptions in the stylesheet ratchet.

@@ -15,6 +15,52 @@ disabled state and accessible name while the shared inline Loader overlays a
 label that still reserves the button's width. This is a presentation-only
 change, not a change to actions, confirmation boundaries or API behavior.
 
+## Discover Daily sections from folders (18 October 2026; P12-20 / #964)
+
+Daily keeps one destination and discovers section definitions from
+`sections/*/index.tsx`, not a shared hand-maintained registry. Definitions are
+loaded from the lazy glob's small entry chunks because the tab switcher must
+know each label, order, period behavior and source requirements before a section
+is selected. Each entry lazy-loads its actual content component and queries.
+Required-source filtering prevents dead tabs, and `?section=` preserves the
+selected section across reloads.
+
+One page-owned Copenhagen period is shared only with sections that opt into it.
+The shipped set stays Overview, Briefs and Data; future Workouts, Nutrition and
+Body & sleep folders register without changes to the shell. There is no new API,
+query semantics, navigation destination or generated-view renderer.
+
+## Fail-closed offline Daily bundles (18 October 2026; P12-22 / #968)
+
+Use a versioned manifest, exact-byte per-table checksums/counts and streamed
+NDJSON for the 31 mapped source tables. Keep the decisions, bounded reader,
+validator and deterministic synthetic generator in one temporary directory,
+outside the production request path; remove it at P12-19. P12-27 can reuse
+these interfaces for the later resumable importer and reconciliation report.
+No source export, import, SQL migration or production activation is authorised
+by this tooling.
+
+Validation fails closed on completeness/schema/key/type failures and unknown
+mixed-source payloads. Each of the five mixed-source tables requires an owner
+ruling in the manifest (`import-sanitised` or `exclude`, with a private rule);
+free text never executes or overrides classification. The live column set,
+export route and real TickTick discriminator values remain unknown. Existing
+mapping decisions and target CHECK constraints remain authoritative. Inspection
+of migration 0041 found only case-insensitive `ticktick` substring exclusions
+for source discriminators, not the positive allowed set assumed by the issue.
+Do not invent that set or equate passing SQL checks with classification;
+nonempty source payloads need verified semantics before active import.
+
+Reports and diagnostics use fixed codes, known table names, counts and
+hashes/digests only, never source row values, raw keys, unknown identifiers or
+free-text rulings. Disk-backed digest indexes bound duplicate/reference memory.
+Expired objects are counted and never eligible for import. Source owner emails
+never select the target owner, and excluded credentials never become active
+credentials. Actual exports, reports and source-schema evidence remain
+encrypted and owner-only outside the repository, agent environments and
+GitHub artifacts. Synthetic validation is not private migration acceptance.
+Refs DanAakesen/jarvis#717 and DanAakesen/jarvis#721.
+
 ## Preserve attention dismissals across backend restarts (18 October 2026; P9-123 / #962)
 
 Policy-blocked reasons are de-duplicated transactionally against task event
@@ -92,6 +138,31 @@ plumbing, provenance and fail-closed behaviour, not model judgment. Real model
 quality is unverified until Dan's live re-test, which closes #894. This supersedes
 the whole-message-match safeguard of 12 October and the "plain approval" wording of
 P11-01 and P11-03; every other safeguard there stands.
+
+## Version Daily read-model additions without changing the page (18 October 2026; P12-21 / #966)
+
+The owner-fixed source names and shapes are implemented additively through the
+existing `DailyQueryService`. Capability v1 and v2 responses keep their original
+source lists and serialized capability response bodies; only an explicit
+version-3 Accept negotiation advertises the new source IDs in Daily
+capabilities. The web client requests v3 but validates each version against its
+own allowlist.
+
+Metric filtering is exact by retained metric name. The catalogue aggregates
+only retained health measurements inside the requested period and exposes at
+most five sorted non-null units per metric. Per-day nutrition totals aggregate
+only retained, non-deleted meals: all-null nutrient sums stay null, partial
+totals are marked lower bounds, and dates without meals remain absent. These
+totals are derived evidence, not retained source records. Completeness and
+freshness remain unknown.
+
+Both reads reuse the current owner authorization, SQL connection and query
+limits. No table, index, migration, refresh event or visible Daily Overview
+row/layout is added; a measured query-plan need would be reviewed separately
+before changing indexes. The existing generated-view tool can render these
+version-3 results, and the nutrition-only MCP connector exposes per-day reads
+under its existing read scope. No real health/food data, activation or change
+to original Daily is included.
 
 ## Show Daily data on demand through the existing workspace (18 October 2026; P12-16 / #731)
 
@@ -5314,6 +5385,18 @@ announcement is the concise “Saved.” while its standing applicability hint
 remains visible and the success stays announced with `role="status"`. The
 bounded code audit and follow-up surfaces are recorded in
 [`docs/ui-audit.md`](ui-audit.md); browser acceptance remains separate evidence.
+
+## P14-04 — Ratchet shared borders, radii and surfaces (18 October 2026)
+
+Keep the existing radius and surface tokens as the only shared geometry system.
+Retain only structural 1px neutral side borders, represent selection through
+shared surfaces, and replace inset-shadow pseudo-borders with real boundaries
+or no boundary. A PostCSS ratchet in the existing web tests scans every
+stylesheet; its exact-value exceptions carry reasons for the P14-03-owned
+buttons and genuine circular voice control. No dependency or theme was added.
+The Pass 3 audit records measured counts, classifications, exceptions and
+synthetic before/after Chromium evidence; this does not claim live-service or
+human acceptance.
 
 ## P13-16 owner-bound proactive recall (18 October 2026; #937)
 

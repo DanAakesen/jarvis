@@ -5315,6 +5315,24 @@ P8-33 scratch Chromium checks cover the adaptive quality thresholds, compact pho
 The reference lockfile is standalone, outside root workspaces, and contains the prototype's dependencies only. Bundled Three.js/Phosphor notices are retained. Physical/hardware performance, live activity/voice behavior and normal-rate flicker acceptance remain unverified; P8-31 adds no production Three.js dependency.
 ## Daily integration boundary (P12-01)
 
+### Temporary offline migration tooling (18 October 2026; P12-22)
+
+`apps/backend/src/daily/migration/` contains the removable export-bundle
+manifest/reader, table decisions, validator, deterministic synthetic generator
+and standalone CLI. It uses existing backend TypeScript build conventions and
+Node built-ins, with no new dependency, SQL access or network access.
+Production server entrypoints must not import it; it is outside the production
+request path and does not change Daily reads/writes or migrations.
+Validation streams private bytes with bounded buffers and disk-backed digest
+indexes, emits value-free reports, and blocks unruled/unclassified mixed-source
+payloads. Source owner emails never select an identity; legacy credentials
+never become active credentials. Real exports remain encrypted, owner-only and
+outside repositories, agents and GitHub artifacts. This is synthetic evidence,
+not live-schema or data parity. P12-27 reuses the decisions/reader/generator;
+P12-19 removes this temporary directory following its README. See the
+[bundle format](daily-migration-bundle.md) and
+[owner runbook](daily-migration-runbook.md).
+
 ### Inactive shared feed workflow (17 October 2026; P12-09)
 
 The optional fifth `createDailyData(pool, owner, now, frida, feeds)` argument
@@ -5438,6 +5456,37 @@ and returning from the browser reads them again. Aborted and superseded reads ar
 ignored. The overview adds no endpoint, DTO, writer, calculation, provider call,
 login or storage.
 
+### Daily section shell and extension contract (18 October 2026; P12-20)
+
+`DailyHome` owns the active section (`?section=<id>`), one Copenhagen-calendar
+period and the known capability source IDs. `sections/*/index.tsx` modules are
+discovered with the lazy `import.meta.glob`; each exports its
+`DailySectionDefinition`. The shell loads these small entry modules to discover
+labels, order, period use and source requirements before rendering the switcher.
+Each entry lazy-loads its own content component, so section UI and its queries
+remain split into a separate chunk and are loaded only when selected. Discovery
+filters out definitions whose required source IDs are not exposed.
+
+To add a section, create `apps/web/src/daily/sections/<id>/index.tsx` exporting
+`section: DailySectionDefinition`, define its id/label/order/`usesPeriod` and
+`requiredSources`, and lazy-load a section component from that module. The
+component receives the backend URL, token supplier, known sources, shared period
+and change callback, and refresh version; it owns its queries, stylesheet and
+tests. Add a folder-scoped fixture test. No shared section registry changes are
+needed. The shipped folders are `overview`, `briefs` and `data`; Briefs is gated
+on both history and detail sources. Workouts, Nutrition and Body & sleep are
+future sections, not placeholder tabs.
+
+`DailyPeriodControl` offers Last 7/30/90 days, This year and custom dates. The
+date-only validator checks real calendar dates, chronological order and at most
+366 inclusive dates before `dailyRequest` can create a query. `daily/ui/` holds
+the shared empty/loading/error/partial/freshness state, unknown-safe statistic
+tile, token-colored SVG chart with a data table, labelled scroll region and
+Copenhagen/user-locale formatters. It does not change the generated-view chart
+renderer or backend/query contracts. The shell retains the period slot's measured
+height between section changes so the shared control does not move the section
+content when it appears or disappears.
+
 `main.tsx` passes the build constant `__JARVIS_DAILY_ENABLED__` to
 `App({ dailyEnabled })`. `apps/web/vite.config.ts` loads `VITE_DAILY_ENABLED` by
 name only and `config/daily-switch.ts` parses it: absent or `false` is off, `true`
@@ -5450,6 +5499,15 @@ files: `JARVIS_DAILY_ENABLED` in the backend container environment in
 `infra/main.bicep` and `VITE_DAILY_ENABLED` on the web build step of
 `.github/workflows/deploy.yml` (18 October 2026). `daily/default-off.test.ts` allows
 no other configuration file to mention either name.
+
+**Paging.** `daily/ui/useDailyPages.ts` concatenates server-ordered pages through
+the validated `queryDaily` client, one request at a time. It loads one page by
+default, or automatically follows cursors up to `maxPages` (default 10, ceiling
+50). `hasMore` and `capped` identify partial totals; source completeness remains
+unknown. Query/backend changes abort and clear the old read. Debounced refreshes
+retain records until the new first page arrives; later-page failures retain the
+cursor for retry, while auth/disabled failures clear records. Existing overview
+probes and the single-page Data browser are unchanged.
 
 ### On-demand Daily views (18 October 2026; P12-16)
 
@@ -5851,13 +5909,27 @@ Fingerprint serialization uses the bounded read DTO, not nutrition's per-write
 node/depth budget; supported full pages and retained nested JSON stay readable.
 The response byte budget includes the final 64-byte revision before hashing.
 
-Favourites and meal plans add two source IDs to the existing version-1 contract.
-They have no calendar period and reuse the store's ID-keyset pages, limited to
-100 rows. DTOs decode retained aliases/plan items and preserve snapshots, unknown
-macros, revisions and tombstones without counting plans as intake. The same
-768 KiB bound, owner checks, sensitive audit, content fingerprint and unknown
-completeness/freshness semantics apply. No SQL schema or production registration
-changes.
+Capability negotiation preserves the exact v1 nine-source and v2 eleven-source
+advertisements. Version 2 remains opt-in for established brief history/detail;
+version 3 adds only `daily.health.metric-catalog` and `daily.nutrition.days`.
+Unversioned/unknown clients still receive v1. The web client requests v3 but
+validates each response against its version's source allowlist.
+
+`daily.health.metrics` accepts an optional exact `metric` name while preserving
+its date/name keyset order. The owner-scoped metric catalogue groups retained
+daily measurements by exact name for a bounded 366-day period, sorts its
+distinct non-null units (at most five), and pages names with a key cursor;
+default/max page sizes are 100/500. Nutrition days groups only retained,
+non-deleted meals by Copenhagen calendar date. It returns SQL sums, meal count,
+unknown nutrients (no values in any meal) and partial nutrients (a lower-bound
+sum over some but not all meals); null sums stay null, deleted records do not
+contribute, and empty dates are never emitted. Date cursors page at most 400
+days (default 50). Both additions use parameterized, owner-filtered
+`TOP(@limit + 1)` reads through `DailyQueryService`, preserve the 30-second and
+768 KiB limits and add no table, index or migration. Nutrition-day provenance
+identifies totals as derived from retained meals; completeness and freshness
+remain unknown. The generated-view tool may display either source, while the
+Daily Overview's collection rows and visible page layout remain unchanged.
 
 `createDailyData` shares one process-local change hub between the existing
 explicit health processor and owner-bound nutrition store. Optional handler
@@ -5882,7 +5954,7 @@ revision fingerprints an exact query result, not a durable/global ordering
 token or an atomic snapshot across separate page/freshness reads. Future page
 and GenUI consumers refetch on existing `now` events, connect/reconnect and
 refocus, so missed process-local notifications are recovered from SQL.
-No frontend consumer is implemented by this backend slice.
+No new visible frontend layout is implemented by this backend slice.
 
 This does not complete #724's hosted authenticated ChatGPT food-client path:
 restricted connector OAuth/consumer policy and trusted nutrition

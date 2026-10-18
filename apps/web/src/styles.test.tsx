@@ -141,7 +141,7 @@ describe('app-wide control contract', () => {
   it('reserves pills for labelled status and genuine switch tracks', () => {
     expect(ruleDeclaration(source, /\.task-chip, \.task-state-chip\s*\{([^}]*)\}/, 'border-radius')).toBe('var(--radius-pill)');
     expect(ruleDeclaration(source, /\.kanban-pulse li\s*\{([^}]*)\}/, 'border-radius')).toBe('var(--radius-pill)');
-    expect(ruleDeclaration(source, /\.advanced-toggle input\[role="switch"\]\s*\{([^}]*)\}/, 'border-radius')).toBe('999px');
+    expect(ruleDeclaration(source, /\.advanced-toggle input\[role="switch"\]\s*\{([^}]*)\}/, 'border-radius')).toBe('var(--radius-pill)');
     expect(ruleDeclaration(source, /\.advanced-toggle input\[role="switch"\]:checked::after\s*\{([^}]*)\}/, 'translate')).toBe('18px 0');
   });
 
@@ -652,7 +652,7 @@ describe('shared glass tokens', () => {
       { name: 'dark', tokens: source.match(/:root, :root\[data-theme="dark"\] \{([^}]*--presence-present[^}]*)\}/)?.[1], surfaces: ':root\\[data-theme="dark"\\]', ring: 1 },
       { name: 'light', tokens: source.match(/:root\[data-theme="light"\] \{([^}]*--presence-present[^}]*)\}/)?.[1], surfaces: ':root', ring: 0.55 },
     ];
-    expect(source).toContain(':root[data-theme="light"] .presence-dot { --presence-ring: color-mix(in srgb, var(--tone) 55%, #000); }');
+    expect(source).toContain(':root[data-theme="light"] .presence-dot { --presence-ring: color-mix(in srgb, var(--tone) 55%, var(--ink-solid)); }');
 
     for (const { name, tokens, surfaces: selector, ring } of themes) {
       expect(tokens, `${name} presence tokens`).toBeDefined();
