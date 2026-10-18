@@ -342,8 +342,9 @@ describe('Factory task board', () => {
     expect(deliver).toHaveProperty('checked', true);
     await user.click(complete);
 
-    expect(await within(policy).findByText('Applies now, including pull requests that are already open.', {
-      selector: '[role="status"]',
+    expect(await within(policy).findByRole('status')).toHaveProperty('textContent', 'Saved.');
+    expect(within(policy).getByText('Applies now, including pull requests that are already open.', {
+      selector: '.project-policy-applies',
     })).not.toBeNull();
     expect(complete).toHaveProperty('checked', true);
     const patch = fetchMock.mock.calls.find(([url, init]) =>

@@ -5,6 +5,18 @@
   color: var(--text);
 }
 
+.proactive-page [role="alert"] {
+  padding: var(--space-3);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-control);
+  background: var(--error-surface);
+  color: var(--error);
+}
+
+.proactive-page [role="alert"] p {
+  color: inherit;
+}
+
 .proactive-page > h1 {
   margin: 0 0 var(--space-5);
 }

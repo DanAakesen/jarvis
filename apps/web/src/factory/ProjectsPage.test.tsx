@@ -213,8 +213,9 @@ describe('Projects page', () => {
     await act(async () => {
       confirmPatch(response({ ...project, policy: 'complete_without_deployment' }));
     });
-    expect(await within(policy).findByText('Applies now, including pull requests that are already open.', {
-      selector: '[role="status"]',
+    expect(await within(policy).findByRole('status')).toHaveProperty('textContent', 'Saved.');
+    expect(within(policy).getByText('Applies now, including pull requests that are already open.', {
+      selector: '.project-policy-applies',
     })).not.toBeNull();
     expect(complete).toHaveProperty('checked', true);
     expect(complete).toHaveProperty('disabled', false);
@@ -247,8 +248,9 @@ describe('Projects page', () => {
     expect(complete).toHaveProperty('checked', false);
     await user.click(within(failure).getByRole('button', { name: 'Retry policy change' }));
 
-    expect(await within(policy).findByText('Applies now, including pull requests that are already open.', {
-      selector: '[role="status"]',
+    expect(await within(policy).findByRole('status')).toHaveProperty('textContent', 'Saved.');
+    expect(within(policy).getByText('Applies now, including pull requests that are already open.', {
+      selector: '.project-policy-applies',
     })).not.toBeNull();
     expect(complete).toHaveProperty('checked', true);
     expect(patchCount).toBe(2);

@@ -21,7 +21,7 @@
 }
 .daily-heading { align-items: flex-start; margin-bottom: var(--space-5); }
 .daily-heading h1 { font-size: var(--type-title); margin: 0; }
-.daily-heading h1:focus-visible { outline: 2px solid var(--focus); outline-offset: 4px; border-radius: var(--radius-control); }
+.daily-heading h1:focus-visible { outline: 3px solid var(--focus); outline-offset: 4px; border-radius: var(--radius-control); }
 .daily-heading p { color: var(--text-muted); margin: var(--space-2) 0 0; }
 .daily-heading-actions { display: flex; gap: var(--space-2); flex-wrap: wrap; }
 .daily-page button, .daily-page select, .daily-page input, .daily-page summary {
@@ -68,7 +68,8 @@
 .daily-page summary:active { background: var(--glass-pressed); }
 .daily-page summary::before { content: '+'; margin-inline-end: var(--space-2); }
 .daily-page details[open] > summary::before { content: '-'; }
-.daily-page summary:focus-visible, .daily-table-wrap:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.daily-page summary:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.daily-table-wrap:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .daily-page pre { font: var(--type-caption)/1.5 var(--font-mono); white-space: pre-wrap; overflow-wrap: anywhere; max-width: 64ch; }
 .daily-brief-text { white-space: pre-wrap; overflow-wrap: anywhere; }
 .daily-deleted { display: block; color: var(--text-muted); font-size: var(--type-caption); }
@@ -87,6 +88,8 @@
 .daily-notice, .daily-empty { padding: var(--space-4); background: var(--surface-muted); border-radius: var(--radius-panel); }
 .daily-notice { display: grid; gap: var(--space-3); justify-items: start; }
 .daily-notice p { margin: 0; }
+.daily-notice[role="alert"] { border: 1px solid var(--rule); background: var(--error-surface); }
+.daily-notice[role="alert"] > p:first-child { color: var(--error); font-weight: 600; }
 .daily-contract-details { margin-top: var(--space-4); }
 @media (max-width: 640px) {
   .daily-page { padding: var(--space-3); }

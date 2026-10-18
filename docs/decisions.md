@@ -5167,6 +5167,19 @@ policy default is separate: it only pre-fills projects Jarvis registers later,
 and each project keeps its own changeable policy. This is web-only; the PATCH
 contract, default values, and P10-09 merge behavior do not change.
 
+## P14-01 — Preserve one shared web visual system (18 October 2026)
+
+Keep the established Jarvis visual direction and `apps/web/src/styles.css`
+tokens as the only shared style source. Normalize equivalent Settings cards,
+header popovers, fields, error blocks and focus states by reusing existing
+surface, rule, radius, type and interaction roles; keep route-specific content
+geometry where it serves a different workflow. Do not add a library, theme,
+route, data behavior or copy-meaning change. The per-project policy's success
+announcement is the concise “Saved.” while its standing applicability hint
+remains visible and the success stays announced with `role="status"`. The
+bounded code audit and follow-up surfaces are recorded in
+[`docs/ui-audit.md`](ui-audit.md); browser acceptance remains separate evidence.
+
 ## P13-16 owner-bound proactive recall (18 October 2026; #937)
 
 Chat and voice use one read-only tool over the same owner-scoped proactive item

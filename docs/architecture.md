@@ -5782,6 +5782,17 @@ P12-03 adds an inactive module-owned `daily/store` registry and exact-key owner-
 
 [Migration contract](daily-migration.md) adds `daily/createDailyModules(enabled = false)` to the existing BackendModule pattern. Production composition remains unchanged. Explicit enabled test composition exposes only private `GET /daily/capabilities`, no data/tools/pages; disabled composition contributes nothing. Existing root user/hosted-agent authentication precedes `resolveDailyOwner`, which maps both allowed callers to the server-configured owner and refuses runners/other service identities. Shared contracts reserve four stable native view IDs without changing the renderer/navigation allowlists. Actual services, SQL/device auth, activation wiring and native frontend are downstream P12 work. No new login, dispatcher, voice stack, Azure resource or direct Azure access.
 
+## Web UI style ownership (18 October 2026; P14-01)
+
+The React web app owns presentation in `apps/web/src`. `styles.css` is the
+shared owner for theme-aware color, type, spacing, radius, focus, motion,
+buttons, shell surfaces and common overlays. Route stylesheets such as
+`daily/daily.css` and `proactive.css` own page layout and workflow states while
+consuming those shared roles. Shared UI refinements do not change route
+registration, data ownership, API contracts or backend behavior; the reviewed
+variants and remaining component-specific layouts are listed in
+[`docs/ui-audit.md`](ui-audit.md).
+
 ## Chat and voice recall of proactive findings (P13-16; default off)
 
 `index.ts` builds the `proactive` tool module only when the existing
