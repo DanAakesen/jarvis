@@ -26,6 +26,9 @@ export interface BackendConfig {
   googleTimeZone?: string;
   monthlyBudgetResourceId?: string;
   pushEnabled: boolean;
+  proactiveEnabled: boolean;
+  proactiveTodoWritesEnabled: boolean;
+  proactiveAlertsEnabled: boolean;
   phone?: {
     acsEndpoint: string;
     acsResourceId: string;
@@ -242,6 +245,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BackendConfig 
     ...(googleTimeZone === undefined ? {} : { googleTimeZone }),
     ...(monthlyBudgetResourceId === undefined ? {} : { monthlyBudgetResourceId }),
     pushEnabled: env.JARVIS_PUSH_ENABLED === 'true',
+    proactiveEnabled: env.JARVIS_PROACTIVE_ENABLED === 'true',
+    proactiveTodoWritesEnabled: env.JARVIS_PROACTIVE_TODO_WRITES_ENABLED === 'true',
+    proactiveAlertsEnabled: env.JARVIS_PROACTIVE_ALERTS_ENABLED === 'true',
     ...(phone ? { phone } : {}),
     ...(dailySetting === 'true' ? { dailyEnabled: true as const } : {}),
   };

@@ -23,6 +23,16 @@ const item: ProactiveItem = {
   kind: 'test',
   title: 'Jarvis',
   body: 'New item',
+  category: null,
+  urgency: 'normal',
+  dueAt: null,
+  evidence: [],
+  state: 'new',
+  snoozedUntil: null,
+  feedback: null,
+  runId: null,
+  todoAdded: false,
+  language: null,
   createdAt: '2026-10-17T22:00:00.000Z',
 };
 

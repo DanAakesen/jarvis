@@ -28,8 +28,31 @@ describe('backend configuration', () => {
       port: 3000, logLevel: 'info', codexToolModel: 'gpt-5.5',
       codexImageModel: 'gpt-5.5',
       pushEnabled: false,
+      proactiveEnabled: false,
+      proactiveTodoWritesEnabled: false,
+      proactiveAlertsEnabled: false,
       auth: loadAuthConfig({}),
     });
+  });
+  it.each([
+    'JARVIS_PROACTIVE_ENABLED',
+    'JARVIS_PROACTIVE_TODO_WRITES_ENABLED',
+    'JARVIS_PROACTIVE_ALERTS_ENABLED',
+  ])('enables %s only for the exact true string', (flag) => {
+    for (const value of [undefined, 'false', 'TRUE', ' true']) {
+      const config = loadConfig(value === undefined ? {} : { [flag]: value });
+      expect(config).toHaveProperty(flag === 'JARVIS_PROACTIVE_ENABLED'
+        ? 'proactiveEnabled'
+        : flag === 'JARVIS_PROACTIVE_TODO_WRITES_ENABLED'
+          ? 'proactiveTodoWritesEnabled'
+          : 'proactiveAlertsEnabled', false);
+    }
+    const config = loadConfig({ [flag]: 'true' });
+    expect(config).toHaveProperty(flag === 'JARVIS_PROACTIVE_ENABLED'
+      ? 'proactiveEnabled'
+      : flag === 'JARVIS_PROACTIVE_TODO_WRITES_ENABLED'
+        ? 'proactiveTodoWritesEnabled'
+        : 'proactiveAlertsEnabled', true);
   });
   it('does not configure an external OneDrive notes folder', () => {
     expect(loadConfig({ JARVIS_NOTES_FOLDER_PATH: '/obsolete/path' })).not.toHaveProperty('notesFolderPath');
@@ -63,6 +86,9 @@ describe('backend configuration', () => {
       codexToolModel: 'gpt-5.5',
       codexImageModel: 'gpt-5.5',
       pushEnabled: false,
+      proactiveEnabled: false,
+      proactiveTodoWritesEnabled: false,
+      proactiveAlertsEnabled: false,
     });
   });
   it('validates the configurable ChatGPT Codex tool model', () => {

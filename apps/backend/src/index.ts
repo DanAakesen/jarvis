@@ -126,7 +126,9 @@ import { createSystemStatusReader } from './system-status.js';
 import { createProductionModules } from './production-modules.js';
 import { createPushStore } from './database/push-store.js';
 import { registerPushRoutes } from './push/routes.js';
+import { sendWebPush } from './push/webpush.js';
 import { composeDaily } from './daily/composition.js';
+import { registerProactive } from './proactive/composition.js';
 
 try {
   const config = loadConfig();
@@ -1109,6 +1111,32 @@ try {
     store: createPushStore(database!.pool),
     publicOrigin: config.staticWebAppOrigin!,
   }));
+  if (config.proactiveEnabled) registerProactive(app, {
+    enabled: config.proactiveEnabled,
+    ownerObjectId: config.auth.ownerObjectId,
+    ...(database ? { pool: database.pool } : {}),
+    ...(googleApiClient ? { googleApiClient } : {}),
+    ...(vaultClient ? { vaultClient } : {}),
+    ...(settingsStore ? { settingsStore } : {}),
+    modelCatalogue,
+    ...(credential ? {
+      getCredentialToken: async (scope: string, signal?: AbortSignal) => {
+        const token = await credential.getToken(scope, signal ? { abortSignal: signal } : {});
+        return token?.token;
+      },
+    } : {}),
+    ...(config.foundryProjectEndpoint ? { foundryProjectEndpoint: config.foundryProjectEndpoint } : {}),
+    ...(usageStore ? { usageStore } : {}),
+    ...(taskStore ? { taskStore } : {}),
+    backgroundJobs: app.backgroundJobs,
+    ...(conversationStore ? { conversationStore } : {}),
+    pushSender: sendWebPush,
+    pushEnabled: config.pushEnabled,
+    todoWritesEnabled: config.proactiveTodoWritesEnabled,
+    alertsEnabled: config.proactiveAlertsEnabled,
+    now: () => new Date(),
+    logger,
+  });
   runtime.app = app;
   if (checksLoop || projectPolicyEvaluator) {
     app.addHook('onClose', async () => {
