@@ -93,8 +93,15 @@ as small PRs:
    Google result the tool reports as truncated, or that the presenter cuts to
    fit, shows a static note in the view and a `partial` source, so free time
    from an incomplete event list is never presented as complete.
-3. Offline end-to-end (after). Fake Gmail/Calendar: find, show view, stage
-   (`awaiting_confirmation`), plain yes, confirm.
+3. Offline end-to-end (PR 3). `apps/backend/src/google/hotel-booking-flow.test.ts`
+   drives in-memory Gmail and Calendar through find, show view, stage
+   (`awaiting_confirmation`), a later plain "yes" and confirm, in chat (the Jarvis
+   agent over `/tools/*`) and in voice (the owner's session inside the relay's
+   call scope, with the relay answering the reply from backend state). It also
+   covers a decline, a confirm attempted by the staging message or a non-approval
+   message being refused with nothing written, a repeated yes writing nothing
+   again, no raw ids, bodies or codes on screen or in the audit record, and the
+   owner's browser being refused while Jarvis creates the same view.
 
 No provider call, live probe or replay of Dan's mail. Dan's live re-test closes
 #885; merged source is not acceptance.
@@ -1907,6 +1914,7 @@ Declined in the audit (do not file): verbosity and max-output-token settings, no
 | P9-115 | [#843](https://github.com/DanAakesen/jarvis/issues/843) | Align shared Status navigation instructions with the shipped page | Remove the stale unavailable-page instruction; require canonical `workspace_command` navigate/status guidance and truthful applied/refused semantics across hosted settings and English/Danish realtime, both automatic-capture values, preserving budget/BMP/tool-parity checks. Source/instruction consistency only; not live, model, or voice acceptance and not attribution of a production turn | P9-40 | Complete |
 
 | P9-119 | [#903](https://github.com/DanAakesen/jarvis/issues/903) | Icon-only navigation: Settings, presence and background-work outcome counts | Web-only gear, distinct green/yellow/blue mode icons and non-zero running/done/failed icon-count pairs; dismissed entries excluded from counts and announcements, idle and error states retained. Existing popover contents, delivery and dismissal unchanged. All 1,105 web tests, final 176 focused tests, lint/build and CodeQL pass locally; independent review found no significant issues (bundled review service unavailable). Chromium fixture matrix at 320×568, 390×844 and 1440×900 in light/dark covers all modes, mixed counts, idle, 44px targets, focus, phone windows and both reduced-motion settings; captures/measurements in `docs/ui/screenshots/p9-119/`. Synthetic auth/API and WebGL fallback only; Dan's visual check remains pending | — | Complete |
+| P9-120 | [#913](https://github.com/DanAakesen/jarvis/issues/913) | Move attention from Settings to a conditional yellow header popover | Remove Now and Backend from web Settings; keep one persistent feed connection and route only attention, credential, alert and pending confirmation data to the header. Hide the cluster only when no non-dismissed jobs and no attention items remain; keep it visible while open and retain a neutral labelled mark for interrupted history. Preserve server-synced permanent dismissal, per-row and bulk dismissal, empty note, feed endpoints and `/operations/sleep`. The full web suite passed at 1,183 tests before the final focus-timing adjustment; the 28 focused header tests and 15 backend capability tests pass on the prior revision, along with web lint/build. Scratch-auth/API Chromium checks captured 24 states at 320×568, 390×844 and 1440×900 in light/dark. Synthetic fixtures only; live identity/backend/provider and human visual acceptance remain unverified | P9-119 | Complete |
 
 #815's guarded merge caught the title bot truncating P9-101 to P9-10.
 The coordinator authorised the coupled normalizer/linked-ID/PLAN-parser
