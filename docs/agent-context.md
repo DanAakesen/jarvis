@@ -194,6 +194,25 @@ check. The SQL snapshot is covered by the isolated database integration suite
 only when its loopback SQL Server fixture is available; do not claim it ran
 otherwise. No source flag is enabled by these checks.
 
+## P13-11 proactive suggested-todo writer (18 October 2026)
+
+The writer is constructed only inside the enabled proactive composition and
+only when `JARVIS_PROACTIVE_TODO_WRITES_ENABLED` is exactly `true`. The flag
+defaults off and is not set in workflows, Bicep, infrastructure or environment
+files; `src/proactive/todo-writes-default-off.test.ts` scans those locations.
+The existing pause/Todos switches and independent writer flag are the controls.
+The writer also requires the SQL pool for durable receipt and daily-cap storage.
+The hook reuses the P13-07 resolver/parser, does not create or delete files, and
+logs no suggestion text or vault path. SQL receipts are covered by the isolated
+schema integration suite.
+
+Focused checks:
+`npm test --workspace @jarvis/backend -- --run src/config.test.ts src/logging.test.ts src/logging-source.test.ts src/proactive/todo-lines.test.ts src/proactive/todo-writer.test.ts src/proactive/composition.test.ts src/proactive/todo-writes-default-off.test.ts src/proactive/store.test.ts src/database/proactive-todo-store.test.ts src/database/migrations.test.ts src/vault/vault.test.ts`,
+`npm run build --workspace @jarvis/backend`, and
+`npm run lint --workspace @jarvis/backend`. SQL Server checks use
+`npm run test:database --workspace @jarvis/backend -- src/database/schema.integration.test.ts`
+with the isolated loopback database; do not claim them without that service.
+
 ## P13-08 proactive calendar, mail and travel sources (18 October 2026)
 
 P13-08 adds registered read-only calendar, metadata-only mail and
