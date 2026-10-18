@@ -154,7 +154,7 @@ export default function BriefsSection(props: DailySectionProps) {
     <DailySectionHeader title="Briefs" headingId="briefs-heading" />
     <FreshnessLine {...(history.first ? { observedAt: history.first.freshness.observedAt } : {})}
       count={loadedCount} recordLabel="briefs" partial={history.hasMore || history.error !== null} />
-    <DailyCoverageNote summary="Briefs are historical records, not current health or a new delivery.">
+    <DailyCoverageNote summary="Past briefs—not current health or a new delivery.">
       <p>Stored timestamps are displayed by their recorded date. No timezone is inferred.</p>
     </DailyCoverageNote>
     <section className="daily-brief-history" aria-label="Brief history" hidden={selectedId !== null}
@@ -244,12 +244,12 @@ export default function BriefsSection(props: DailySectionProps) {
       {detail.error && <DailyState status="error" message={detail.error} retryLabel="Retry brief details" onRetry={detail.reload} />}
       {detail.data && !item && <DailyState status="empty" emptyMessage="No brief details were returned for this record." />}
       {item && <>
-        <dl className="daily-brief-meta">
-          <div><dt>Date</dt><dd>{briefDate(item.started_at)}</dd></div>
-          <div><dt>Status</dt><dd>{displayStored(item.status)}</dd></div>
-          <div><dt>Delivery</dt><dd>{displayStored(item.delivery_status)}</dd></div>
-          <div><dt>Trigger</dt><dd>{displayStored(item.trigger)}</dd></div>
-        </dl>
+        <ul className="daily-brief-meta" aria-label="Brief facts">
+          <li><span>Date</span><span>{briefDate(item.started_at)}</span></li>
+          <li><span>Status</span><span>{displayStored(item.status)}</span></li>
+          <li><span>Delivery</span><span>{displayStored(item.delivery_status)}</span></li>
+          <li><span>Trigger</span><span>{displayStored(item.trigger)}</span></li>
+        </ul>
         <BriefBody item={item} />
       </>}
     </section>}

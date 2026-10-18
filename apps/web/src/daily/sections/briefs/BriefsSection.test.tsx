@@ -59,6 +59,7 @@ describe('Briefs section', () => {
     expect(screen.getByRole('heading', { level: 4, name: 'Overview' })).toBeTruthy();
     expect(screen.getByText('Synthetic brief body.')).toBeTruthy();
     expect(screen.getByRole('heading', { level: 4, name: 'Next' })).toBeTruthy();
+    expect(screen.getByRole('list', { name: 'Brief facts' }).textContent).toContain('Triggerscheduled');
     expect(queries.map(query => query.source)).toEqual([sources.briefs, sources.brief]);
 
     fireEvent.click(screen.getByRole('button', { name: 'Back to brief history' }));
@@ -69,7 +70,7 @@ describe('Briefs section', () => {
     renderBriefs([
       { ...brief, id: 'october', started_at: '2026-10-01T00:30:00+14:00' },
       { ...brief, id: 'september', started_at: '2026-09-30T23:30:00-12:00' },
-      { ...brief, id: 'unknown-date', started_at: null },
+      { ...brief, id: 'unknown-date', started_at: null, status: null, delivery_status: null },
     ]);
 
     expect(await screen.findByRole('heading', { level: 3, name: 'October 2026' })).toBeTruthy();
@@ -77,6 +78,9 @@ describe('Briefs section', () => {
     expect(screen.getByRole('heading', { level: 3, name: 'Date unknown' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Open brief Scheduled brief, 2026-10-01' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Open brief Scheduled brief, 2026-09-30' })).toBeTruthy();
+    expect(screen.getByText('Status: Unknown')).toBeTruthy();
+    expect(screen.getByText('Delivery: Unknown')).toBeTruthy();
+    expect(screen.getAllByRole('button', { name: /^Open brief/u })).toHaveLength(3);
   });
 
   it('shows a plain empty state instead of a blank history panel', async () => {
@@ -103,6 +107,19 @@ describe('Briefs section', () => {
     expect(await screen.findByText(/HTTP 503/u)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Retry brief history' }));
     expect(await screen.findByRole('button', { name: 'Open brief Scheduled brief, 2026-10-18' })).toBeTruthy();
+  });
+
+  it('offers Retry after a detail error and recovers the selected brief', async () => {
+    let detailRequests = 0;
+    mockFetch(query => {
+      if (query.source === sources.brief && detailRequests++ === 0) return jsonResponse({}, 503);
+      return jsonResponse(dailyFixture(query, query.source === sources.briefs ? [brief] : [brief]));
+    });
+    render(<MemoryRouter><BriefsSection {...props} /></MemoryRouter>);
+    fireEvent.click(await screen.findByRole('button', { name: 'Open brief Scheduled brief, 2026-10-18' }));
+    expect(await screen.findByText(/HTTP 503/u)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry brief details' }));
+    expect(await screen.findByText('Synthetic brief body.')).toBeTruthy();
   });
 
   it('keeps partial history and its load-more control visible while the next page is pending', async () => {
