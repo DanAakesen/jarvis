@@ -5488,3 +5488,14 @@ query as the Proactive page. It is composed only behind the existing
 `JARVIS_PROACTIVE_ENABLED` flag, returns only bounded display fields marked as
 untrusted data, and cannot change item state or authorize actions. Reusing the
 page's query keeps both views consistent and avoids creating a second read model.
+
+## P12-23 — Read-only Daily Workouts (18 October 2026)
+
+Use the merged Daily plug-in, pagination and UI contracts without backend or
+shared-component changes. Continue capped reads in explicit ten-page batches;
+label incomplete totals and do not aggregate unlike or unknown units. Keep the
+selected workout in a section-owned URL parameter, retain the list for Back,
+and gate heart rate and recorded detail independently by capabilities. Render
+the merged `{ id, detail }` result using Data's existing escaped JSON pattern.
+Synthetic-only browser evidence is under `docs/ui/p12-23/`; live original-site
+parity remains unverified and original Daily stays canonical.

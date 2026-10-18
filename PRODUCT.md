@@ -1395,3 +1395,22 @@ through the same owner-bound store query as the Proactive page. The tool is
 read-only, returns bounded untrusted finding text, and does not change item state
 or grant action authority. It remains absent when
 `JARVIS_PROACTIVE_ENABLED` is off.
+
+### Daily page: Workouts (18 October 2026; P12-23)
+
+The read-only Workouts section now appears when `daily.health.workouts` is
+exposed. Over the shared period it shows loaded workout count, distinct recorded
+workout dates, known duration, distance and active energy by unit, weekly or
+monthly recorded-minute volume, and filterable/sortable history. Missing values
+are not zero, unlike units are never added, and values without units remain
+individual observations. Automatically read at most ten 500-row pages per
+batch; a visible continuation loads another bounded batch. Incomplete totals
+explicitly say “in the N loaded”; returned records never establish original
+source completeness.
+
+A URL-selected workout shows its recorded figures and, only when their sources
+are exposed, bounded recorded detail and paged heart-rate samples. Browser Back,
+reload and refresh retain the selected ID; returning to history restores focus
+and scroll. Logging and corrections stay in chat. Original Daily remains
+canonical; no coaching, recovery, recomp, TickTick or new writer is introduced.
+Synthetic browser checks do not establish live-data or original-site acceptance.
