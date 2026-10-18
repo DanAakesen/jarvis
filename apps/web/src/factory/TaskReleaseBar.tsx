@@ -308,9 +308,11 @@ export function TaskReleaseBar({
         {currentView.releases.length === 0
           ? <p>No releases have been recorded for this project.</p>
           : null}
-        <button className="secondary-button" type="button" disabled={loading}
+        <button className="secondary-button" type="button" disabled={loading} aria-busy={loading || undefined}
+          aria-label={loading ? currentView ? 'Refreshing…' : 'Loading…' : undefined}
           onClick={() => setRefreshKey((key) => key + 1)}>
-          {loading ? <Loader variant="inline" announce={false} label={currentView ? 'Refreshing…' : 'Loading…'} /> : 'Refresh'}
+          <span className="button-label">Refresh</span>
+          {loading && <span className="button-loading-indicator" aria-hidden="true"><Loader variant="inline" announce={false} label={currentView ? 'Refreshing…' : 'Loading…'} /></span>}
         </button>
         <Link className="secondary-button" to={releaseUrl}>Open release</Link>
       </div>
