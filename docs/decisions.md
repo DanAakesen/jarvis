@@ -1,5 +1,27 @@
 # Decisions
 
+## P12-38 — Daily visual QA corrections (18 October 2026)
+
+Use `dailyLocale()` in `ui/formatters.ts` as the one source for displayed Daily
+dates and times. Keep the locale an explicit argument on the formatters so tests
+can pin both en-US and en-GB without inheriting the CI host locale; retain the
+existing Europe/Copenhagen display timezone and source-specific handling of
+unqualified historical timestamps.
+
+Standardize section presentation through the shared title → controls/filters →
+freshness → “About this data” slot order. Use the established pill-tab class for
+Data’s Table/Chart choice while preserving its button-group semantics, selected
+pressed state, names and keyboard behavior. Align every value within a numeric
+column alike, including “Not recorded,” and use the shared secondary button for
+record-detail actions.
+
+For sparse Body metric charts, keep one series and legend entry per metric/unit,
+plot every recorded value, connect readings no more than three calendar days
+apart, and start a new line segment after a wider gap. State that rule and that
+values are not interpolated in the chart text alternative. This presents
+short-interval readings without disguising larger missing-data gaps or creating
+observations; existing summaries, routes and contracts remain unchanged.
+
 ## P12-37 — Daily accessibility and keyboard audit (18 October 2026)
 
 Keep Daily's routes, visible copy, reads and switch behavior unchanged. Give

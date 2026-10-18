@@ -5,6 +5,34 @@ treatments selected from the existing Jarvis design system. The shared source
 of truth is `apps/web/src/styles.css`; route stylesheets own workflow layout,
 not parallel palettes or control systems.
 
+## Daily visual QA pass (P12-38; 18 October 2026)
+
+Rendered the parent revision and the corrected Daily page in synthetic Chromium
+fixtures. The parent pass covered Overview, Workouts, Nutrition, Body & sleep,
+Briefs and Data at 390×844, 1440×900, 320×844 and 720×450, in light and dark,
+with en-US and en-GB (96 combinations). At 390×844, the parent reproduced
+separate “About this data” placement and missing disclosures in Briefs and Data,
+three Body legend entries for three alternate-day readings, and the inset,
+text-only Data detail action. The corrected pass checked the same matrix:
+document and body widths matched the viewport throughout, and no console or
+page errors were reported.
+
+At 390×844, both locales exercised Workouts detail, Nutrition’s Trend/Day tabs,
+Body/Sleep tabs and a 30-day Body selection, Briefs detail, and Data’s
+Table/Chart and record-detail controls. The alternate-day Body fixture retained
+all seven readings as points under one legend entry. The Data Chart choice
+retained its borderless pill styling, numeric header and cells both computed to
+right alignment, and keyboard focus on Chart showed a visible 3px outline.
+For the same synthetic instant, the corrected page showed “Oct 18, 2026,
+10:30 AM” in en-US and “18 Oct 2026, 10:30” in en-GB; Workouts list and detail
+used the same locale-specific value.
+
+The 720px-wide render is the CSS viewport equivalent of 1440px at 200% zoom;
+headless Chromium keyboard zoom did not alter its CSS viewport, so true browser
+zoom was not directly verified. No personal records or original-site data were
+used, and the screenshots and fixture results remain in the scratch harness,
+not in the repository.
+
 ## Daily accessibility and keyboard audit (18 October 2026; P12-37)
 
 The Daily keyboard, focus, naming, state-announcement and table/chart semantics

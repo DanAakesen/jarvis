@@ -86,7 +86,7 @@ export function BodyView({ backendUrl, getAccessToken, period, onPeriodChange, r
     aboutData={selected && <DailyCoverageNote summary="About this data">
       <p>Recorded identifier: <code className="body-sleep-identifier">{selected}</code></p>
       <p>Missing values, gaps and units remain explicit. Daily values use the recorded average only as a labelled fallback. Missing days are not zero or interpolated. Each recorded unit group has its own summary and chart; units are not converted or combined.</p>
-      <p>Summaries use one value per day, averaging retained observations when a date repeats. Minimum and maximum refer to daily values; recorded ranges remain in the data table, and date gaps break trend lines. Coverage and freshness are not established by returned records.</p>
+      <p>Summaries use one value per day, averaging retained observations when a date repeats. Minimum and maximum refer to daily values; recorded ranges remain in the data table. Readings no more than 3 calendar days apart connect; wider gaps remain disconnected. Coverage and freshness are not established by returned records.</p>
     </DailyCoverageNote>} />
     {search && <p role="status">{filtered.length} measurements match. The current selection stays available.</p>}
     <ReadState pages={catalogue} name="catalogue" />
