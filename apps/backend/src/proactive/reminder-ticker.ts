@@ -148,13 +148,12 @@ export function createReminderTicker(options: {
     let verifiedKeys: Set<string> | undefined;
     try {
       const todos = await readTodos(options.vault, controller.signal);
-      verifiedKeys = new Set(todos.filter((todo) => !todo.done && todo.dueHasTime &&
+      verifiedKeys = new Set(todos.filter((todo) => !todo.done && todo.highPriority && todo.dueHasTime &&
         typeof todo.dueAt === 'string' && Number.isFinite(Date.parse(todo.dueAt)))
         .map((todo) => reminderKey(todo.text, new Date(todo.dueAt!).toISOString())));
     } catch {
       if (controller.signal.aborted) return;
       const verifiedAt = options.now();
-      const retry: ReminderRow[] = [];
       for (const row of remaining) {
         const verifyAttempts = Math.min(255, row.verifyAttempts + 1);
         if (verifyAttempts < 3) {
@@ -163,36 +162,32 @@ export function createReminderTicker(options: {
             fireAt: new Date(verifiedAt.getTime() + retryDelayMs),
           });
         } else {
-          await update(row, { verifyAttempts });
-          retry.push({ ...row, verifyAttempts });
+          await update(row, { state: 'suppressed', reason: 'unverified', verifyAttempts });
         }
       }
-      remaining.splice(0, remaining.length, ...retry);
     }
 
-    const sendable: { row: ReminderRow; unverified: boolean }[] = [];
+    const sendable: ReminderRow[] = [];
     if (verifiedKeys) {
       for (const row of remaining) {
         if (!verifiedKeys.has(row.reminderKey)) {
           await update(row, { state: 'cancelled', reason: 'todo_changed' });
-        } else sendable.push({ row, unverified: false });
+        } else sendable.push(row);
       }
-    } else {
-      sendable.push(...remaining.map((row) => ({ row, unverified: true })));
     }
     if (sendable.length === 0 || controller.signal.aborted) return;
 
-    const eligible: typeof sendable = [];
-    for (const candidate of sendable) {
-      if (candidate.row.deadlineAlertKey) {
-        const alert = await options.ledger.get(candidate.row.deadlineAlertKey);
+    const eligible: ReminderRow[] = [];
+    for (const row of sendable) {
+      if (row.deadlineAlertKey) {
+        const alert = await options.ledger.get(row.deadlineAlertKey);
         const sentAt = alert?.status === 'sent' ? Date.parse(alert.updatedAt) : Number.NaN;
         if (Number.isFinite(sentAt) && sentAt <= now.getTime() && sentAt >= now.getTime() - 2 * 60 * 60_000) {
-          await update(candidate.row, { state: 'suppressed', reason: 'already_alerted' });
+          await update(row, { state: 'suppressed', reason: 'already_alerted' });
           continue;
         }
       }
-      eligible.push(candidate);
+      eligible.push(row);
     }
     if (eligible.length === 0 || controller.signal.aborted) return;
 
@@ -200,8 +195,7 @@ export function createReminderTicker(options: {
     const alreadySent = await options.reminders.countSent(today);
     const allowance = Math.max(0, maxDailyReminders - alreadySent);
     const capped = eligible.slice(allowance);
-    await Promise.all(capped.map(({ row }) =>
-      update(row, { state: 'suppressed', reason: 'daily_cap' })));
+    await Promise.all(capped.map((row) => update(row, { state: 'suppressed', reason: 'daily_cap' })));
     const allowed = eligible.slice(0, allowance);
     if (allowed.length === 0 || controller.signal.aborted) return;
 
@@ -215,8 +209,8 @@ export function createReminderTicker(options: {
     for (const candidate of allowed) {
       if (controller.signal.aborted) return;
       items.push({
-        ...candidate,
-        item: await options.store.items.upsertFinding(findingFor(candidate.row, now, language)),
+        row: candidate,
+        item: await options.store.items.upsertFinding(findingFor(candidate, now, language)),
       });
     }
     if (items.length === 0 || controller.signal.aborted) return;
@@ -235,10 +229,9 @@ export function createReminderTicker(options: {
 
     if (outcome.status === 'sent') {
       const sentDayKey = dayKey(options.now());
-      await Promise.all(items.flatMap(({ row, item, unverified }) => [
+      await Promise.all(items.flatMap(({ row, item }) => [
         update(row, {
           state: 'sent',
-          reason: unverified ? 'unverified' : null,
           itemId: item.id,
           sentDayKey,
         }),

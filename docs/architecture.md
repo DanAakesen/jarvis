@@ -2058,9 +2058,11 @@ The todo reader resolves exactly one case-insensitive root `task.md` or
 enforces the vault file-size cap and a 20-second source deadline. `todo-file.ts`
 exports the resolver and unbounded parser for reuse; one sanitizer removes
 control characters, HTML and markdown link destinations and caps fact text at
-300 characters. Due dates resolve to Copenhagen-local instants. The source
-returns at most 40 facts, ordering the 24-hour-before/72-hour-after due window
-first.
+300 characters. It recognizes explicit `priority:: P1 - High` or
+`priority: P1 - High` task metadata, and exposes only open P1 - High tasks to
+proactive findings and reminders. Missing or lower priorities are excluded. Due
+dates resolve to Copenhagen-local instants. The source returns at most 40 facts,
+ordering the 24-hour-before/72-hour-after due window first.
 
 Factory uses `TaskStore.getProactiveSnapshot()`, a bounded, nontransactional
 database read through `databaseReadRequest` that returns only task/project
@@ -2171,10 +2173,11 @@ at startup. Future or absent work and the Copenhagen quiet window are pure
 in-memory checks; after a due scan it refreshes the wake time once. Errors back
 off five minutes. For due rows it expires late work, applies pause and
 subscription suppression, then resolves and parses the canonical todo file
-again with a 20-second bound. It cancels changed todos, retries failed
-verification twice, and after the third verification failure may send with an
-`unverified` reason. It suppresses deadline alerts sent within two hours and
-enforces eight sent reminders per Copenhagen day.
+again with a 20-second bound. It cancels changed or no-longer-P1-high todos,
+retries failed verification twice, and suppresses after a third verification
+failure rather than sending without current priority evidence. It suppresses
+deadline alerts sent within two hours and enforces eight sent reminders per
+Copenhagen day.
 
 Each remaining row upserts an idempotent, private `todo` finding with a fixed
 Danish/English body. One generic `proactive_reminder` push is bundled per tick

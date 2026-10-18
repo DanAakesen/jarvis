@@ -133,9 +133,10 @@ export function TaskRecipesSettings({ backendUrl, getAccessToken }: {
     <CollapsibleSection storageKey="settings.recipes" headingId="routines-heading" title="Routines">
       <p className="settings-explanation">Typed text and page content are not stored.</p>
       <div className="settings-actions">
-        <button className="secondary-button" type="button"
+        <button className="secondary-button" type="button" aria-busy={loading || undefined} aria-label={loading ? 'Refreshing…' : undefined}
           disabled={loading || deleting !== null || !backendUrl} onClick={() => { void load(); }}>
-          {loading ? <Loader variant="inline" announce={false} label="Refreshing…" /> : error && !loaded ? 'Retry routines' : 'Refresh routines'}
+          <span className="button-label">{error && !loaded ? 'Retry routines' : 'Refresh routines'}</span>
+          {loading && <span className="button-loading-indicator" aria-hidden="true"><Loader variant="inline" announce={false} label="Refreshing…" /></span>}
         </button>
       </div>
       <p className="settings-feedback" role={error ? 'alert' : 'status'}>
