@@ -550,19 +550,34 @@ locally; the route, composition and tool tests that load Fastify or `jose` need
 the pinned CI graph where those packages are unavailable locally. The
 `active_energy` metric name is not verified against a live export.
 
-## Daily switch checks (17 October 2026; P12-09)
+## Daily switch checks (17 October 2026; P12-09; updated 18 October 2026, P12-15)
 
 The backend composes Daily only when the environment variable
 `JARVIS_DAILY_ENABLED` is exactly `true`. Absent or `false` leaves Jarvis
 unchanged and any other value stops startup. It is a server switch, not a secret,
-and it is off by default **with nothing setting it**: no workflow, Bicep,
-infrastructure, `.env` or deploy file may carry it, and no session sets it for
-an environment. Only the separate, reviewed change that turns Daily on edits the
-deploy files, and it must update the allow-list in `daily/default-off.test.ts` in
-the same change. The web switch `VITE_DAILY_ENABLED` follows the same rule. The Vite
-build and dev server read it by name only: absent or `false` is off, `true` is on,
-and any other value, including an empty one, stops them. Set it only in the
-reviewed enabling change, and never in a local `.env` that is committed.
+and it is off by default in code, so local runs, tests and any other environment
+stay off. Production turns Daily on for the owner in exactly two reviewed files:
+`JARVIS_DAILY_ENABLED: 'true'` in the backend container environment in
+`infra/main.bicep`, and `VITE_DAILY_ENABLED: 'true'` on the web build step of
+`.github/workflows/deploy.yml`. No other workflow, Bicep, infrastructure, `.env`
+or deploy file may mention either name, and no session sets one anywhere else.
+`daily/default-off.test.ts` allows only those two files and checks that each sets
+only its own switch, once, to the exact string `true`; changing the allow-list is
+turning Daily on or off somewhere else and needs its own reviewed change. The Vite
+build and dev server read the web switch by name only: absent or `false` is off,
+`true` is on, and any other value, including an empty one, stops them. Never set
+it in a local `.env` that is committed.
+
+To turn Daily off, revert the whole enabling change, which removes both values and
+the scan test's new expectations together, or set both to `false` and update
+`daily/default-off.test.ts` in the same commit. Reverting only the two values fails
+that test in CI before Deploy can run. Both files are release inputs, so the next
+deploy re-applies infrastructure, backend, web and agent; stored Daily data stays. After a deploy that sets the switches, the owner's
+read-only live check is: `/health` is OK, Daily appears in the side rail and the
+phone menu and opens on "What Daily holds today" with a status on each row (None
+returned is a valid answer before any data exists), and Settings shows the
+Nutrition targets section, empty until Dan enters his own values. None of it needs
+a write, and a failed read is a finding to record.
 
 Check the composition with
 `npm test --workspace @jarvis/backend -- src/config.test.ts src/production-modules.test.ts src/daily/default-off.test.ts src/daily/composition.test.ts`.
@@ -578,7 +593,7 @@ and that the tool count stays inside the 128-tool limit.
 The current inactive continuation registers `daily_food_review` only with the
 explicit internal nutrition factory. Use synthetic owned meals and persisted
 chat/voice metadata. Exercise actual browser-only Now approval: no mutation
-before acceptance, no Teams send even with away routing, one-time consumption,
+before acceptance, browser confirmation in Away as well as Present, one-time consumption,
 rejection/cancellation, changed presence/revision, immutable proposals,
 matching uncertain-result recovery, exact/favourite one-step routing and
 old-history correction/deletion. No live food/Health write or activation.
@@ -2451,7 +2466,7 @@ Every task issue ends with the same "Before you start" and "Definition of done" 
 | Bootstrap IDs | [`infra/bootstrap.output.json`](../infra/bootstrap.output.json); also Actions variables in `DanAakesen/jarvis` |
 
 - `infra/main.bicep` deploys into the existing `rg-jarvis`; it does not create the group or bootstrap identities. Run `az bicep build --file infra/main.bicep` and `az bicep lint --file infra/main.bicep` in PRs; the build writes `infra/main.json`, which is generated output and must not be committed. These checks need no Azure access.
-- The 6 October P6-22 decision reflects Dan's personal tenant: no Microsoft 365 or Teams. `infra/bootstrap.ps1` and Bicep no longer register or declare Bot Service, a Teams channel, or the separate Speech F0 resource. The optional backend Teams adapter remains unconfigured; approvals and notifications use the authenticated Now feed, and active English browser voice sessions announce pending approvals and task status. The normal Bicep deployment is incremental, so omission does not delete resources from prior deployments; any Azure cleanup requires separate authorization.
+- P6-22 records that production does not configure Microsoft 365 or Teams; P10-10 removes the backend Teams bot, messaging sender, cards, audio route, and Teams-specific configuration parsing. Away and Present confirmations both wait in the authenticated Now feed, and active English browser voice sessions announce pending approvals and task status. Existing database tables/rows and installed packages remain; no migration, data cleanup, or infra change is made. Any prior Bot/Speech resources or role assignments require separate authorization to clean up.
 - The Bicep deployment must supply `backendIdentityResourceId`, `sqlAdminGroupObjectId` and `foundryNameTimestamp`; `backendImage` is optional (empty skips the backend app, used only before the first backend image exists). The timestamp is fixed at `20261003200000` in `infra/main.parameters.json`, so every deploy updates the existing Foundry account and project in place. Change it only to recover from a deleted account, and then to a fresh value (L2).
 - Bicep sets `BACKEND_CONTAINER_APP_RESOURCE_ID` and grants `id-jarvis-backend` a custom role limited to Container App read/write on that app. The sleep API uses this fixed target and the existing `SQL_MANAGED_IDENTITY_CLIENT_ID` for ARM authentication. Local tests inject the scaler; a local app without an Azure managed identity cannot perform live scaling, and the Bicep build/lint checks do not verify the deployed role.
 - `sqlAdminGroupName` defaults to `jarvis-sql-admins`; the budget defaults to 300 in the subscription billing currency. Deploy requires the `JARVIS_BUDGET_CONTACT_EMAILS` GitHub secret, a comma-separated list including Dan's email. It passes the values through a mode-0600 temporary parameters file to the required Bicep `budgetContactEmails` parameter, then deletes the file. Do not commit email addresses. The first Azure deployment and real resource behavior are verified by Deploy, not by local Bicep build/lint.
@@ -4099,7 +4114,7 @@ chat/realtime model image delivery has been verified.
   gates; it is not a force-rebuild escape hatch.
 - After the first successful deploy only (P0-16): run `./infra/bootstrap.ps1 -WebRedirectUris 'https://<Static Web App host>/redirect.html'` so sign-in works there (the redirect URI is MSAL's redirect bridge page, L63) (existing URIs are kept), set `backendUrl` in `apps/web/config.json` to the backend URL so `npm run dev` signs in, and set the Actions variable `JARVIS_INFRA_DEPLOYMENT_NAME` to `jarvis-infra` (`gh variable set JARVIS_INFRA_DEPLOYMENT_NAME --body jarvis-infra`). The Deploy run summary lists both URLs.
 - No manual infrastructure portal changes.
-- **P6-22 coordinator check after merge:** wait for Deploy to finish; verify Teams settings are absent from the backend and Bicep does not provision Teams Bot or separate Speech F0 resources. In the signed-in Now panel, verify an away task update and a browser approval appear while away, Approve runs only the confirmed test action, Reject does not, and an unanswered approval expires after five minutes. If an English browser voice session is active, verify it announces the pending approval and task status. Any leftover Azure resources from prior deployments require separate cleanup authorization.
+- **P6-22 coordinator check after merge:** wait for Deploy to finish; verify the backend starts with and without legacy Teams environment variables and Bicep does not provision Teams Bot or separate Speech F0 resources. In the signed-in Now panel, verify an away task update and a browser approval appear while away, Approve runs only the confirmed test action, Reject does not, and an unanswered approval expires after five minutes. If an English browser voice session is active, verify it announces the pending approval and task status. Any leftover Azure resources from prior deployments require separate cleanup authorization.
 - Managed-project workflow examples and Azure OIDC adoption steps are in [github-actions-templates.md](github-actions-templates.md). The templates assume npm/Node defaults that adopters must match or customize; no Azure access is available to verify an adopting project's federation or deployment.
 
 ## Documentation rules

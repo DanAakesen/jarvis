@@ -43,6 +43,31 @@ and 1280 px against synthetic responses (details in DESIGN.md). Local runs are n
 qualification, and no live backend, private data, physical phone or acceptance is
 claimed.
 
+## Daily switched on for the owner (18 October 2026; P12-15 / #730)
+
+Dan pre-authorised this twice: "Yes, switch it on once it's live and checked",
+then, asleep and on autopilot, "Yes, ship all daily if possible. You can take
+decisions as I would, as good as you can, we can always change it." The page
+above is merged, so this one change turns Daily on in production through exactly
+two reviewed files: `JARVIS_DAILY_ENABLED` in the backend container environment
+in `infra/main.bicep`, and `VITE_DAILY_ENABLED` in the web build step of
+`deploy.yml`. The code defaults stay off, and the scan test now allows only those
+two files and checks their literal values.
+
+What appears for Dan's own account: the Daily overview page ("What Daily holds
+today"), its side-rail and phone-menu entry, the Nutrition targets section in
+Settings (empty until he enters his own values) and the six owner-bound Daily
+tools. Nothing else is added: no migration, account, consent, grant, secret,
+RBAC, resource or import, no MCP connector, Google or Gmail feed, health upload,
+job or timer, and no provider, device or private read or write. Any change under
+`infra/` re-applies all four release components, so one Deploy carries the
+infrastructure, backend, web and agent together.
+
+Next is the live check after that Deploy; it is not claimed here. Rollback is
+reverting the whole change, scan test included, or setting both switches to
+`false` and updating the scan test in the same commit. Acceptance with Dan's real
+figures, the original Google source and a physical phone stays open.
+
 ## Proactive assistance (17 October 2026; P13-01 / #917)
 
 The first delivery-proof milestone is approved. P13-01 builds the owner-bound
@@ -83,10 +108,9 @@ activation or acceptance is claimed.
 Dan gave the go for Daily. This is the last invisible slice: one composition
 module, `daily/composition.ts`, behind `JARVIS_DAILY_ENABLED`. Absent or `false`
 is off, exactly `true` is on, and anything else stops startup with a
-configuration error that never echoes the value. No workflow, Bicep,
-infrastructure, environment or deploy file sets it, so Daily is off in every
-environment and a scan test fails if one ever does. Turning it on is a separate
-reviewed change.
+configuration error that never echoes the value. The code default is off. Only
+two reviewed production deployment files set it (next sections), and a scan test
+fails if any other configuration file ever mentions it.
 
 Off composes nothing: the route table, tool catalogue, capability instructions,
 voice session tools, health response, startup, jobs and timers stay those of
@@ -1983,6 +2007,7 @@ Goal: GitHub issues are the single backlog. The Software Factory (worker label `
 | P10-07 | [#793](https://github.com/DanAakesen/jarvis/issues/793) | UI session consumes the canonical GitHub Factory board, replacing the legacy task-state columns | Six ordered Project columns, issue/PR links and real task overlays, local filters, bounded display, Now-stream invalidations/reconnect, stale/error recovery, focused checks and desktop/320px inspection; spot-check live Project placement | P10-04 | Complete |
 | P10-08 | [#902](https://github.com/DanAakesen/jarvis/issues/902) | Web task creation creates and links one GitHub issue | Issue-first creation preserves dialog fields; durable submission claims prevent duplicate issues/tasks; failures identify partial creation; confirmation links to the issue; board overlays work before a PR and delivery includes `Fixes #N`. Offline backend/web checks pass; live GitHub acceptance remains unverified | P10-02 | Complete |
 | P10-09 | [#908](https://github.com/DanAakesen/jarvis/issues/908) | Complete without deployment merges eligible PRs without confirmation and recovers open work after restart | Project-policy selection is approval; App squash merge retains existing safety guards, `deliver_pr` never merges, no-check grace survives restart, startup/minute and policy-change sweeps are idempotent, transient GitHub retries are bounded, refusals remain task events, and Done follows the signed merge webhook | P3-06 | Complete |
+| P10-10 | [#909](https://github.com/DanAakesen/jarvis/issues/909) | Remove every Teams message/card/notification sender; keep confirmations and task updates in the app | Teams configuration is ignored; Away confirmations use the authenticated browser queue; task status events and phone approvals/calls remain; existing tables and rows are untouched | P6-22 | Complete |
 | P10-11 | [#911](https://github.com/DanAakesen/jarvis/issues/911) | Make each project's completion policy visible and immediately changeable | Descriptive two-choice control on project cards, project settings, and Create task; server-confirmed save, pending/error/retry/success states; clearly scoped new-project default; focused tests and responsive keyboard/browser inspection | P9-121, P10-09 | Complete |
 
 P10-07's board shipped in #806. The subsequently requested issue-number
