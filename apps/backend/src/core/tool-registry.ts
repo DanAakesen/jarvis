@@ -20,6 +20,8 @@ export interface JarvisTool {
    * it reaches the model and the logs. Return undefined when nothing concrete can be said.
    */
   readonly explainInvalidInput?: (input: unknown, app: FastifyInstance) => string | undefined;
+  /** Validates raw tool JSON before Fastify's AJV type coercion. */
+  readonly validateInput?: (input: unknown) => boolean;
   /** The core dispatcher supplies validated input, the request and a cancellation signal. */
   readonly execute: (input: unknown, request: FastifyRequest, signal: AbortSignal) => Promise<unknown>;
 }
