@@ -34,16 +34,21 @@ What now happens, exactly:
   its catch-up, can send a push. At most one push per check and 3 a day, never
   between 22:00 and 07:00, and never for "Check now". The text is generic and
   tapping it opens the item. Everything else waits on the Proactive page.
-- Reminders: about one hour before a todo with a time is due, Jarvis sends one
-  push. A reminder that falls in the quiet window is held until 07:00 and shown as
-  due soon or overdue.
+- Reminders: about one hour before a todo with an explicit time is due, Jarvis
+  sends one push. A date-only todo is covered by the 24-hour deadline alert
+  instead. The push says only "Jarvis" and "New item"; tapping it opens a private
+  Proactive item with the todo title and its due time. At most 8 reminders per
+  Copenhagen day. A reminder that falls in the quiet window is held until 07:00
+  and shown as due soon or overdue. A todo added after the last check is covered
+  from the next check on; "Check now" covers it immediately.
 
 To switch these off:
 
 - No deploy: Settings → Proactive → "Pause proactive checks" stops scheduled
-  checks, todo additions, alerts and reminders. The "Todo list" source switch in
-  the same section stops todo additions. Settings → Notifications → "Turn off"
-  stops pushes on that device.
+  checks, todo additions, alerts and reminders, including reminders already
+  planned. The "Todo list" source switch in the same section stops todo additions
+  and stops new reminders from being planned. Settings → Notifications → "Turn
+  off" stops pushes on that device.
 - Deploy: revert the whole P13-15 change (removes the gate lines and the pin test
   updates together), or set the value(s) to `false` AND update the pin tests in the
   same commit. To switch one feature off on its own, set only its value to `false`
@@ -213,10 +218,11 @@ backend/web builds and lint. SQL Server checks are in
 SQL Server fixture using `npm run test:database --workspace @jarvis/backend -- src/database/schema.integration.test.ts`.
 Do not claim the SQL integration tests ran unless that service was available.
 
-## P13-13 proactive todo reminders (18 October 2026; default off)
+## P13-13 proactive todo reminders (18 October 2026; default off in code, on in production since P13-15)
 
 The planner and ticker reuse `JARVIS_PROACTIVE_ALERTS_ENABLED` with the existing
-proactive and push flags; do not add a new setting or enable any flag. The
+proactive and push flags and have no setting of their own; P13-15 (the section at
+the top of this file) sets the alert flag in production. The
 planner runs for every trigger after the successful todo read. The ticker is
 constructed only when its vault, reminder store, alert ledger, push store and
 shared sender dependencies are available. It has no database, vault or push

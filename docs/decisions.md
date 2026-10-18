@@ -31,12 +31,15 @@ What Jarvis may now do, and the limits that stay:
   or a calendar clash starting within 48 hours) found by the 07:00 or 18:00 check or
   its catch-up; at most one push per check, at most 3 a day, never between 22:00 and
   07:00, never for "Check now". Everything else waits on the Proactive page.
-- Reminders: one push about an hour before a todo with a time is due. A reminder due
-  in the quiet window is held until 07:00 and shown as due soon or overdue.
+- Reminders: one generic push about an hour before a todo with an explicit time is
+  due, at most 8 a day; the todo title and due time sit in the private Proactive
+  item it opens. A reminder due in the quiet window is held until 07:00 and shown as
+  due soon or overdue.
 
-Dan can switch it off without a deploy (Settings → Proactive → "Pause proactive
-checks", the "Todo list" source switch, or Settings → Notifications → "Turn off" on a
-device). Rollback by deploy: revert the whole P13-15 change (removes the gate lines
+Dan can switch it off without a deploy: Settings → Proactive → "Pause proactive
+checks" stops all of it, including reminders already planned; the "Todo list" source
+switch stops todo additions and new reminders; Settings → Notifications → "Turn off"
+stops pushes on that device. Rollback by deploy: revert the whole P13-15 change (removes the gate lines
 and the pin test updates together), or set the value(s) to `false` AND update the
 pin tests in the same commit. Removing only a line would fail the pin tests in CI
 before Deploy could run. Either way no todo is added and no alert or reminder is

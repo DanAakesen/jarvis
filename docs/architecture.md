@@ -2057,7 +2057,7 @@ selects only fixed templates for validated kinds, languages and counts, ignoring
 payload-supplied title/body text. Provider acceptance is recorded per item and
 remains distinct from device display.
 
-## Proactive todo reminders (P13-13; default off)
+## Proactive todo reminders (P13-13; default off in code, on in production since P13-15)
 
 Composition adds the reminder planner after the P13-12 alert hook only when the
 proactive, push and shared alert gates, vault, reminder store, push store and
@@ -2248,9 +2248,11 @@ commit per run. A scheduled or catch-up run may send one generic alert push for 
 new, time-critical deadline or clash finding: at most one per check and three per
 Copenhagen day, and never in the 22:00 to 07:00 quiet window, which is enforced in
 the hook and again at the sender. Reminders send one generic push about an hour
-before a todo with a time is due, and a reminder due in the quiet window is held
-until 07:00. The pause switch and the Todo list source switch are read before any
-vault call, and a device turns its own pushes off in Settings. As with P13-03 and
+before a todo with an explicit time is due (at most eight per Copenhagen day), and
+a reminder due in the quiet window is held until 07:00. The pause switch and the
+Todo list source switch are read before any vault call. Pause also suppresses
+reminders already planned, while the source switch only stops new ones being
+planned. A device turns its own pushes off in Settings. As with P13-03 and
 P13-14, a change to `infra/main.bicep` re-plans infrastructure, backend, web and
 agent, so one Deploy carries the new backend revision. No secret, identity,
 resource, dependency or permission is added.

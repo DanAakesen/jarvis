@@ -215,7 +215,8 @@ titles with publication time and feed host. Feed content remains untrusted.
 
 Reminders reuse the P13-12 alert flag and are constructed only with the
 proactive, push and alert gates and their vault, store and sender dependencies;
-all remain default-off. The planner runs after every check, but only when the
+all three default off in code and are on in production since P13-15. The planner
+runs after every check, but only when the
 todo source succeeded, and records explicit-time todos due within 48 hours for
 one hour before their deadline. A date-only todo remains covered by the
 24-hour deadline alert.

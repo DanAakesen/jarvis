@@ -1117,8 +1117,8 @@ due when a proactive check has seen it. Date-only todos remain covered by the
 24-hour deadline alert. Reminders wait through the 22:00–07:00 Copenhagen quiet
 window and are presented as due soon or overdue after 07:00. Each reminder has a
 private Proactive item; todo text is not included in its push or logs. The shared
-proactive, push and alert switches remain default-off, with no new setting or
-web control.
+proactive, push and alert switches default off in code, are on in production since
+P13-15, and add no new setting or web control.
 
 A todo added after the last check is covered from the next check on; "Check
 now" covers it immediately.
