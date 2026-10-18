@@ -1,5 +1,58 @@
 # Agent context
 
+## Proactive checks are on in production (P13-14; 18 October 2026)
+
+Dan switched proactive milestone 2 (read-only checks) on after the P13-05 to
+P13-10 slices shipped dark. Two lines do it, and the code defaults stay off:
+
+- Backend: `infra/main.bicep` sets `JARVIS_PROACTIVE_ENABLED` to `'true'` in the
+  backend container app's `env`, beside `JARVIS_PUSH_ENABLED`.
+- Web: the web job's "Load infrastructure outputs" step in
+  `.github/workflows/deploy.yml` writes `VITE_PROACTIVE_ENABLED=true` to
+  `$GITHUB_ENV` beside `VITE_PUSH_ENABLED`, so the production build includes the
+  Proactive page, its Settings section and the Background work link.
+  `vite.config.ts` reads the flag; `apps/web/config/public-config.ts` does not.
+
+`JARVIS_PROACTIVE_TODO_WRITES_ENABLED` and `JARVIS_PROACTIVE_ALERTS_ENABLED` stay
+set nowhere, so todo additions and alerts/reminders (milestones 3 and 4) stay off
+until P13-15. A check reads sources and stores findings; it writes no todo and
+pushes nothing. `apps/backend/src/proactive/enabled-switch.test.ts` pins the
+backend value and fails if its name appears in any other file (the alert flag keeps
+its own pin, `alerts-default-off.test.ts`);
+`apps/web/config/proactive-switch.test.ts` pins the web value and fails if any
+other workflow, Dockerfile, package file, web config or Bicep/parameter file names
+it. Changing a gate is therefore a reviewed edit to those two files and to the pins.
+
+To switch proactive checks off, revert the whole P13-14 change (removes the two
+gate lines and the pin tests together), or set both values to `false` AND update
+the pin tests in the same commit. Removing only the two lines fails the pin tests
+in CI before Deploy can run. Once Deploy has run, the backend registers no
+proactive routes and starts no scheduler, and the web build drops the Proactive
+page and Settings section. Stored findings, feedback and settings stay in SQL and
+are reused if checks are switched on again. No secret, identity, resource or
+dependency is involved.
+
+First-run behaviour: the first scheduled check runs at the next 07:00 or 18:00
+Europe/Copenhagen slot, or as one catch-up when the latest slot is under 12 hours
+old and the clock is outside 22:00 to 07:00. Scheduled work is cancelled at 22:00.
+"Check now" on the Proactive page runs one check at any time, including during
+quiet hours, unless checks are paused, no source is on, the monthly budget is used
+up, a check is already running, or the limits of one manual check per five minutes
+and six per Copenhagen day are reached. (Dan's 17 October decision in
+`docs/decisions.md` says quiet hours also apply to manual checks, but the shipped
+engine and route do not enforce that, as `PRODUCT.md` and #935 state; this change
+alters neither, and a stricter rule would be its own code change.) Spend is an
+estimate; the monthly cap defaults to 100 DKK and Dan can change it in Settings
+(0 to 1,000 DKK). A source that cannot be read, such as a todo file that is not
+found, is reported as unavailable with a reason; that is expected, not a fault.
+
+CI proves the wiring only. Whether a scheduled check runs, what it finds and
+whether each source reads correctly in production is established by Dan's test on
+the deployed app, not by any check here. Local checks:
+`npm test --workspace @jarvis/backend -- --run src/proactive/enabled-switch.test.ts src/push/enabled-switch.test.ts src/daily/default-off.test.ts src/config.test.ts`
+and `npm test --workspace @jarvis/web -- --run config/proactive-switch.test.ts`.
+The Bicep compile and lint (`az bicep build` and `az bicep lint`) run in CI only.
+
 ## Web Push is on in production (P13-03; 18 October 2026)
 
 Dan switched Web Push milestone 1 on after the P13-01 backend and the P13-02 web
@@ -51,13 +104,14 @@ service. A green local test or build does not establish real iPhone delivery.
 
 `JARVIS_PROACTIVE_ENABLED`, `JARVIS_PROACTIVE_TODO_WRITES_ENABLED` and
 `JARVIS_PROACTIVE_ALERTS_ENABLED` are independent exact-`true` flags, all off by
-default. The latter two do not activate work unless the main proactive flag is
-on. Do not set any of them in deployment, workflows or infrastructure. This
+default in code. The latter two do not activate work unless the main proactive flag is
+on. P13-14 (above) sets only the main flag in deployment; do not set the todo-writes or
+alerts flag in deployment, workflows or infrastructure until their own tasks do. This
 composition registers owner-bound status/settings/items/run routes and starts
 the in-process scheduler only when enabled. Idle ticks do not query SQL. The
 engine supports fake sources and a fake model; real source adapters and proactive
-sends remain separate slices. No index, workflow or infrastructure activation
-is needed.
+sends remain separate slices. P13-05 and P13-06 themselves needed no index,
+workflow or infrastructure activation.
 
 Focused checks:
 `npm test --workspace @jarvis/backend -- --run src/config.test.ts src/proactive/routes.test.ts src/proactive/store.test.ts src/proactive/time.test.ts src/proactive/budget.test.ts src/proactive/language.test.ts src/proactive/sources/registry.test.ts src/database/migrations.test.ts src/push/routes.test.ts`,
@@ -95,10 +149,12 @@ Do not claim the SQL integration tests ran unless that service was available.
 
 ## P13-10 proactive web client (18 October 2026)
 
-`VITE_PROACTIVE_ENABLED` is an exact-`true`, default-off build flag. Do not set
-it in a workflow or environment file. Its web-only implementation does not
-change the backend, contracts or authorization. The feature gate test scans the
-repository's environment files and workflow YAML.
+`VITE_PROACTIVE_ENABLED` is an exact-`true` build flag that is off by default in
+code. P13-14 (above) sets it in the production web build only; do not set it in any
+other workflow or environment file. Its web-only implementation does not
+change the backend, contracts or authorization. The feature gate test
+(`config/proactive-switch.test.ts`) scans the repository's configuration files and
+pins that one reviewed setting.
 
 Focused web validation:
 `npm test --workspace @jarvis/web -- --run config/proactive-switch.test.ts src/ProactiveArea.test.tsx src/ProactiveSettings.test.tsx src/App.test.tsx src/JobsChip.test.tsx src/ProactiveItemPage.test.tsx`,

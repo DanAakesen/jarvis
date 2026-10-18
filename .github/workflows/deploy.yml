@@ -368,6 +368,7 @@ jobs:
           {
             echo "VITE_BACKEND_URL=https://$fqdn"
             echo "VITE_PUSH_ENABLED=true"
+            echo "VITE_PROACTIVE_ENABLED=true"
             echo "STATIC_WEB_APP=$(jq -er .staticWebAppName.value "$RUNNER_TEMP/infra-outputs.json")"
             echo "STATIC_WEB_APP_HOST=$(jq -er .staticWebAppHostname.value "$RUNNER_TEMP/infra-outputs.json")"
           } >>"$GITHUB_ENV"
