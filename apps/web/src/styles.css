@@ -1955,7 +1955,6 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
   backdrop-filter: blur(var(--surface-blur));
   box-shadow: var(--panel-shadow);
 }
-.settings-save .primary-button { order: 2; }
 .settings-save { width: fit-content; max-width: 100%; margin-left: auto; }
 .settings-save .settings-feedback:empty { display: none; }
 .settings-save:has(.settings-feedback:empty) { padding-left: var(--space-2); }
@@ -3462,8 +3461,7 @@ a.task-chip:hover { background: var(--glass-pressed); }
 .collapsible-toggle:active .collapsible-title { color: var(--text-muted); }
 .settings-page > .settings-save { position: static; width: auto; max-width: none; margin: 16px 0 0; padding: 0; border-radius: 0; background: none; backdrop-filter: none; box-shadow: none;
   justify-content: flex-end; }
-.settings-page > .settings-save .settings-feedback { order: 1; margin: 0; }
-.settings-page > .settings-save .primary-button { order: 2; }
+.settings-page > .settings-save .settings-feedback { margin: 0; }
 /* Memory: what Jarvis remembers, between the capture switch and recall tuning. The detail opens only once a memory is chosen. */
 .settings-subheading { margin: 22px 0 10px; color: var(--text); font-size: var(--type-body); font-weight: 650; }
 .memory-settings .memory-search { margin: 0 0 10px; }

@@ -804,11 +804,11 @@ export function ProjectSettingsPage({ backendUrl, getAccessToken }: ProjectsPage
             </div>
           </section>
           <div className="settings-save">
+            <Link className="secondary-button" to="/settings#projects">Cancel</Link>
+            {message && <p className="settings-feedback" role="status">{message}</p>}
             <button className="primary-button" type="submit" disabled={disabled || !dirty}>
               {saving ? 'Saving…' : 'Save project'}
             </button>
-            <Link className="secondary-button" to="/settings#projects">Cancel</Link>
-            {message && <p className="settings-feedback" role="status">{message}</p>}
           </div>
           <section className="project-archive" aria-labelledby="archive-project-heading">
             <h2 id="archive-project-heading">Archive project</h2>

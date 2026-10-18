@@ -121,7 +121,7 @@ describe('app-wide control contract', () => {
   });
 
   it('keeps action group order in markup and the deployment form gap at 10px', () => {
-    const actionGroups = ['button-group', 'settings-actions', 'task-dialog-actions', 'action-row'];
+    const actionGroups = ['button-group', 'settings-actions', 'task-dialog-actions', 'action-row', 'settings-save'];
     const rules = [...source.matchAll(/([^{}]+)\{([^{}]*)\}/g)];
     for (const [, selectors, declarations] of rules) {
       if (actionGroups.some((name) => new RegExp(`\\.${name}(?![\\w-])`).test(selectors!))) {
@@ -132,8 +132,8 @@ describe('app-wide control contract', () => {
     expect(ruleDeclaration(source, /\.deployment-add\s*\{([^}]*)\}/, 'row-gap')).toBe('10px');
   });
 
-  it('keeps primary buttons after sibling buttons in shared action groups', () => {
-    const classes = new Set(['button-group', 'settings-actions', 'task-dialog-actions', 'action-row']);
+  it('keeps primary actions after sibling controls in shared action groups', () => {
+    const classes = new Set(['button-group', 'settings-actions', 'task-dialog-actions', 'action-row', 'settings-save']);
     const violations: string[] = [];
 
     const visit = (directory: string) => {
@@ -150,13 +150,13 @@ describe('app-wide control contract', () => {
 
             const start = match.index! + match[0].length;
             const close = matchingDivClose(component, match.index!, match[0].length);
-            const buttons = [...component.slice(start, close).matchAll(/<button\b[^>]*>/g)];
-            if (buttons.length < 2) continue;
+            const controls = [...component.slice(start, close).matchAll(/<(?:button|a)\b[^>]*>/g)];
+            if (controls.length < 2) continue;
 
-            const primaryIndex = buttons.findIndex(([button]) =>
-              /className=(?:"[^"]*\b(?:primary-button|danger-button--filled)\b[^"]*"|{[^}]*\b(?:primary-button|danger-button--filled)\b[^}]*})/.test(button));
-            if (primaryIndex !== -1 && primaryIndex !== buttons.length - 1) {
-              violations.push(`${path}: primary button precedes another button in .${groupClasses.find((name) => classes.has(name))}`);
+            const primaryIndex = controls.findIndex(([control]) =>
+              /className=(?:"[^"]*\b(?:primary-button|danger-button--filled)\b[^"]*"|{[^}]*\b(?:primary-button|danger-button--filled)\b[^}]*})/.test(control));
+            if (primaryIndex !== -1 && primaryIndex !== controls.length - 1) {
+              violations.push(`${path}: primary action precedes another control in .${groupClasses.find((name) => classes.has(name))}`);
             }
           }
         }
