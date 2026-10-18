@@ -1980,6 +1980,34 @@ unavailable; no fallback location or geocoding is used. All source errors are
 mapped to stable unavailable reason codes. This slice enables no flags and
 starts no source reads.
 
+## Proactive suggested-todo writer (P13-11; default off)
+
+The writer is appended to the existing ordered `onFindingsStored` hooks only
+when proactive composition is enabled and
+`JARVIS_PROACTIVE_TODO_WRITES_ENABLED` is exactly `true`. It reads the persisted
+pause/Todos source settings and receipt counts before any vault call. Manual runs
+may write at any hour; scheduled and catch-up runs recheck the Copenhagen quiet
+window. Per-run and per-Copenhagen-day limits are three and five additions.
+
+Only model findings with a suggested todo and a non-`todo` category qualify.
+Suggestions are reduced to one plain-text line, bounded to 200 Unicode code
+points, checked by the vault's existing credential/secret/sensitive-data
+patterns, and compared against every parsed task and Jarvis marker before
+writing. The shared P13-07 resolver selects one existing root file; the writer
+uses only `tree`, `read`, and a single `write` per successful run. It never
+creates or deletes a note. Writes preserve the original bytes, BOM and line
+ending, append below `## Suggested by Jarvis`, and retry a write conflict at most
+twice using freshly-read content and SHA.
+
+Migration 0058 adds `proactive_todo_receipts`, retaining item/run IDs, a 32-hex
+finding key, Copenhagen date, outcome/reason codes and commit SHA, but no todo
+text. The filtered owner/key index prevents a finding from being marked added
+twice; the owner/day/status index supports the daily cap. Successful commits
+record added receipts and set `proactive_items.todo_added`; marker recovery
+repairs a lost receipt. Two failed attempts settle a finding. Hook and receipt
+failures are isolated from run completion, and diagnostics contain only IDs,
+counts, durations and reason codes.
+
 ## Proactive calendar, mail and travel sources (P13-08; default off)
 
 The source registry also constructs the `calendar`, `mail` and `travel` sources
@@ -2072,8 +2100,9 @@ with rollback; the detail page records `seen` once for a newly loaded item.
 Settings reads and PATCHes the existing contract, sending only changed fields.
 Item text, feeds and guidance live only in component state, are rendered as text,
 and are not stored in browser persistence or placed in URLs. Recent-run and
-Settings disclosure state is not persisted. The web flag policy test scans
-workflow/environment files to ensure the flag stays unset.
+Settings disclosure state is not persisted. The web flag policy test
+(`config/proactive-switch.test.ts`) scans the repository's configuration files and
+pins the one reviewed production setting (P13-14, below).
 
 ## Proactive news source (P13-09; default off)
 
@@ -2121,6 +2150,46 @@ key stay in SQL, and nothing can send while the routes are off.
 other workflow, Dockerfile, package file, web config or Bicep/parameter file names
 a switch. CI proves this wiring only; iPhone delivery still needs Dan's device
 test.
+
+## Proactive production switch (P13-14; 18 October 2026)
+
+Production sets both gates for milestone 2, the read-only checks; the code
+defaults above are unchanged. `infra/main.bicep` adds `JARVIS_PROACTIVE_ENABLED` as
+`'true'` to the backend container app environment, beside `JARVIS_PUSH_ENABLED`.
+`config.ts` reads it as `proactiveEnabled`, and `index.ts` calls `registerProactive`
+only then. That composition builds the source registry, the findings store (SQL
+when the pool exists, otherwise in memory), the engine with the Foundry model (a
+`model_unavailable` stub when no model can be built), the owner-bound `/proactive`
+routes and the in-process scheduler, which starts on `onReady` and stops on
+`onClose`. Startup cannot newly fail: the owner object ID the routes need is
+already validated as a UUID when auth configuration loads.
+
+The Deploy workflow's web job writes `VITE_PROACTIVE_ENABLED=true` to `$GITHUB_ENV`
+beside `VITE_BACKEND_URL` and `VITE_PUSH_ENABLED`, and Vite's `define` injects
+`__JARVIS_PROACTIVE_ENABLED__` into the production bundle. `vite.config.ts` reads the
+flag; `apps/web/config/public-config.ts` carries only the push configuration. With
+both web flags on, `/proactive/:id` opens the full item detail page rather than the
+M1 push item page.
+
+`JARVIS_PROACTIVE_TODO_WRITES_ENABLED` and `JARVIS_PROACTIVE_ALERTS_ENABLED` stay
+set nowhere (milestones 3 and 4, P13-15), so a check reads its sources, stores
+findings and records its Background work entry; it writes no todo and sends no
+push. A change to `infra/main.bicep` re-plans infrastructure, backend, web and agent,
+as for P13-03, so one Deploy carries the new backend revision and the rebuilt
+bundle; the web job needs the backend job, so the routes exist before the page does.
+No secret, identity, resource, dependency or permission is added.
+
+Rollback is to revert the whole P13-14 change (removes the two gate lines and the
+pin tests together), or to set both values to `false` AND update the pin tests in
+the same commit; removing only the two lines fails the pin tests in CI before Deploy
+can run. Either way the routes and scheduler are not registered, and the Proactive
+page, Settings section and Background work link drop out of the web build. Stored
+findings, feedback and settings stay in SQL. `apps/backend/src/proactive/enabled-switch.test.ts`
+pins the backend value and fails if its name appears in another file (the alert flag
+keeps its own pin, `alerts-default-off.test.ts`); `apps/web/config/proactive-switch.test.ts`
+pins the web value and fails if any other workflow, Dockerfile, package file, web
+config or Bicep/parameter file names it. CI proves this wiring only; whether
+scheduled and manual checks run in production is for Dan's test on the deployed app.
 
 ## Presence modes (P6-23; replaces P7-02 away mode)
 
@@ -5219,7 +5288,7 @@ items disclosure fetches once on demand. Check now owns a cancellable,
 visibility-aware status poll and bounded timeout. The Settings section owns
 drafts and field-level validation, saves changed fields only, and never
 persists its private values or its disclosure state. `proactive-switch.test.ts`
-ensures no workflow or environment file enables the gate.
+pins the production web build as the only place that sets the gate (P13-14).
 
 ### Inactive internal direct intake (17 October 2026)
 

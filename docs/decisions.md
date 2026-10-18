@@ -1,5 +1,49 @@
 # Decisions
 
+## Switch proactive checks (milestone 2) on in production (18 October 2026; P13-14 / #935)
+
+Dan asked for all of proactive assistance to ship and authorised switching
+milestone 2, the read-only checks, on once the slices (P13-05 to P13-10) shipped
+dark; #935 records both. The gate is that those slices are deployed with the
+switch off and accepted before this change merges, and that web push (P13-03) is
+live. This supersedes the "dark" and "default-off" decisions below for checks in
+production only; the code defaults stay off.
+
+Two lines do it. `infra/main.bicep` sets `JARVIS_PROACTIVE_ENABLED` to `'true'` in
+the backend container app, beside `JARVIS_PUSH_ENABLED`, and the web build step in
+`deploy.yml` sets `VITE_PROACTIVE_ENABLED=true`. There is no new parameter,
+secret, resource, identity, dependency or code change. Startup cannot newly fail:
+the owner object ID the proactive routes need is already validated when the
+backend starts. Two pin tests (`apps/backend/src/proactive/enabled-switch.test.ts`
+and `apps/web/config/proactive-switch.test.ts`) pin both values and fail if
+anything else sets a switch. The alert flag keeps the pin P13-12 added
+(`alerts-default-off.test.ts`), and this change sets neither it nor the todo-writes
+flag.
+
+Scope does not grow. Milestones 3 and 4 (todo additions, alerts and reminders)
+stay off until P13-15, so a check reads its sources and stores findings: it
+writes no todo and sends no push. Estimated spend keeps its decided limit: 100 DKK
+a month by default, a warning at 80% and a stop at the cap, which Dan can change in
+Settings. The first scheduled check runs at the next 07:00 or 18:00
+Europe/Copenhagen slot, or once as a catch-up when the latest slot is under 12
+hours old and the clock is outside 22:00 to 07:00; "Check now" runs one at any
+time.
+
+Rollback: revert the whole P13-14 change (removes the two gate lines and the pin
+tests together), or set both values to `false` AND update the pin tests in the same
+commit. Removing only the two lines would fail the pin tests in CI before Deploy
+could run. Either way the routes and scheduler are not registered and the Proactive
+page and Settings section drop out of the web build; stored findings, feedback and
+settings stay in SQL.
+
+CI proves this wiring only. Whether scheduled and manual checks run, what they find
+and whether each source reads correctly in production is for Dan's test on the
+deployed app. Open, unchanged here: Dan's 17 October decision ("Quiet hours and
+language", #926) says quiet hours also apply to manual checks, but the shipped
+engine and route let "Check now" run at any time, as `PRODUCT.md`, the architecture
+notes and #935 state. Making manual checks respect quiet hours would be a separate
+code change that Dan or the Dispatcher decides.
+
 ## Switch Web Push milestone 1 on in production (18 October 2026; P13-03 / #934)
 
 Dan confirmed turning milestone 1 on: a user-started test notification that opens
@@ -258,6 +302,17 @@ prompts or logs. Weather uses only saved home coordinates and a bounded HTTPS
 Open-Meteo request; no default location or geocoding is allowed. Each source is
 registered, but no source is invoked and no proactive flag is enabled by this
 slice.
+
+## Keep suggested todos add-only and dark (18 October 2026; P13-11 / #931)
+
+The writer uses the existing todo-file resolver/parser and may append only
+sanitized, safe model suggestions under its own heading. It preserves every
+existing byte and refuses missing, ambiguous, oversized or unwritable files.
+Deduplication markers contain only a short finding hash; SQL receipts retain
+codes and identifiers, never todo text. Pause/Todos settings, quiet hours for
+scheduled work, and the three-per-run/five-per-day caps are enforced before
+vault access. The independent exact-`true` writer flag remains off, and the
+main proactive flag is still required.
 
 ## Keep P13-08 sources read-only and dark (18 October 2026)
 
