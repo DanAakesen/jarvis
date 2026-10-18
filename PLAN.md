@@ -43,6 +43,30 @@ and 1280 px against synthetic responses (details in DESIGN.md). Local runs are n
 qualification, and no live backend, private data, physical phone or acceptance is
 claimed.
 
+## Daily switched on for the owner (18 October 2026; P12-15 / #730)
+
+Dan pre-authorised this twice: "Yes, switch it on once it's live and checked",
+then, asleep and on autopilot, "Yes, ship all daily if possible. You can take
+decisions as I would, as good as you can, we can always change it." The page
+above is merged, so this one change turns Daily on in production through exactly
+two reviewed files: `JARVIS_DAILY_ENABLED` in the backend container environment
+in `infra/main.bicep`, and `VITE_DAILY_ENABLED` in the web build step of
+`deploy.yml`. The code defaults stay off, and the scan test now allows only those
+two files and checks their literal values.
+
+What appears for Dan's own account: the Daily overview page ("What Daily holds
+today"), its side-rail and phone-menu entry, the Nutrition targets section in
+Settings (empty until he enters his own values) and the six owner-bound Daily
+tools. Nothing else is added: no migration, account, consent, grant, secret,
+RBAC, resource or import, no MCP connector, Google or Gmail feed, health upload,
+job or timer, and no provider, device or private read or write. Any change under
+`infra/` re-applies all four release components, so one Deploy carries the
+infrastructure, backend, web and agent together.
+
+Next is the live check after that Deploy; it is not claimed here. Rollback is a
+revert, or setting both switches to `false`. Acceptance with Dan's real figures,
+the original Google source and a physical phone stays open.
+
 ## Proactive assistance (17 October 2026; P13-01 / #917)
 
 The first delivery-proof milestone is approved. P13-01 builds the owner-bound
@@ -78,10 +102,9 @@ activation or acceptance is claimed.
 Dan gave the go for Daily. This is the last invisible slice: one composition
 module, `daily/composition.ts`, behind `JARVIS_DAILY_ENABLED`. Absent or `false`
 is off, exactly `true` is on, and anything else stops startup with a
-configuration error that never echoes the value. No workflow, Bicep,
-infrastructure, environment or deploy file sets it, so Daily is off in every
-environment and a scan test fails if one ever does. Turning it on is a separate
-reviewed change.
+configuration error that never echoes the value. The code default is off. Only
+two reviewed production deployment files set it (next sections), and a scan test
+fails if any other configuration file ever mentions it.
 
 Off composes nothing: the route table, tool catalogue, capability instructions,
 voice session tools, health response, startup, jobs and timers stay those of
