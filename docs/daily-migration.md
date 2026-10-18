@@ -381,6 +381,19 @@ and nutrition-targets routes and six tools (116 of 128), fail-closed on the
 owner, with no connector, Google or Gmail feed, provider call, upload, job or
 timer. No activation, parity or acceptance is claimed.
 
+18 October source (P12-15): the page opens on an overview, "What Daily holds
+today". For each collection the backend exposes it says in plain English what the
+collection is for and shows the result of a read-only, one-record check (has
+records, none returned, could not read). Open goes to the record browser above and
+Back returns. It uses only `GET /daily/capabilities` and `POST /daily/query`,
+shows no invented count or estimate, and never treats "none returned" as proof
+that the original source is empty. The page, route and navigation exist only when
+the web build switch `VITE_DAILY_ENABLED` is exactly `true`; it is off by default
+and no workflow or Bicep file sets it, so navigation stays the released one.
+Switching Daily on for Dan's account is a separate reviewed change that he
+pre-authorised once the page is live and checked. No activation, parity or
+physical-phone/provider acceptance is claimed, and #730 is not complete.
+
 One gated Daily destination in the existing Jarvis app (side rail and mobile navigation) for Dan to browse retained health, food, workout and scan history himself, from the same owner-authorised sources as P12-16. Keep existing shell and voice workflow.
 
 Reuse the existing side rail (canonical gym/dumbbell icon), mobile navigation, login, module gate, styling and shared components. Make retained history usable through the shared data contracts: period/filter selection, inspectable records, charts with correct units/dates/axes, every actual scan point, and visible source freshness/coverage; missing or partial data stays explicit. Mobile first, no overflow at narrow phone widths. The legacy card deck, separate Daily/Workouts/Nutrition pages, fixed Status/Recomp/Review/Ready screens and the iPhone widget are not required, and detailed composition is not fixed. Requests for particular summaries or visuals use P12-16. No second shell, sidebar, login or rendering framework; TickTick stays excluded. Disabled Daily preserves existing navigation.

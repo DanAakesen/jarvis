@@ -1,15 +1,24 @@
 import { dailyQuerySources as sources, isDailyQuery, type DailyCursor, type DailyJson, type DailyQuery, type DailySourceId } from '@jarvis/contracts';
 import type { ChartSeries } from '../chart-data';
 
-export const dailySources: readonly { id: DailySourceId; label: string; dated: boolean }[] = [
-  { id: sources.metrics, label: 'Measurements', dated: true },
-  { id: sources.sleep, label: 'Sleep', dated: true },
-  { id: sources.workouts, label: 'Workouts', dated: true },
-  { id: sources.meals, label: 'Food history', dated: true },
-  { id: sources.favorites, label: 'Saved favourites', dated: false },
-  { id: sources.plans, label: 'Meal plans', dated: false },
-  { id: sources.briefs, label: 'Brief history', dated: false },
-  { id: sources.sync, label: 'Sync evidence', dated: false },
+/** `purpose` is static plain-English copy for the overview: what the collection is for, never a figure. */
+export const dailySources: readonly { id: DailySourceId; label: string; dated: boolean; purpose: string }[] = [
+  { id: sources.metrics, label: 'Measurements', dated: true,
+    purpose: 'Health readings synced from your phone, by date. Each reading keeps the unit it was recorded in.' },
+  { id: sources.sleep, label: 'Sleep', dated: true,
+    purpose: 'Nightly sleep totals: time asleep and time in bed, one entry per date.' },
+  { id: sources.workouts, label: 'Workouts', dated: true,
+    purpose: 'Workouts recorded by your phone, with type, date, duration and average heart rate. Open one to see its details.' },
+  { id: sources.meals, label: 'Food history', dated: true,
+    purpose: 'Meals you have logged, with the energy for each entry. Deleted entries stay visible and are marked as deleted.' },
+  { id: sources.favorites, label: 'Saved favourites', dated: false,
+    purpose: 'Foods you saved to log again quickly, with their energy and any alternative names.' },
+  { id: sources.plans, label: 'Meal plans', dated: false,
+    purpose: 'Meal plans you saved, with their planned energy and protein.' },
+  { id: sources.briefs, label: 'Brief history', dated: false,
+    purpose: 'Past daily briefs exactly as stored: when each started, what triggered it and how delivery ended. History only; nothing new is created here.' },
+  { id: sources.sync, label: 'Sync evidence', dated: false,
+    purpose: 'Whether your phone is sending health data: when it last made contact, and how many uploads are waiting or set aside.' },
 ];
 export type Row = Record<string, DailyJson>;
 export interface Column { key: string; label: string; unit?: string }
