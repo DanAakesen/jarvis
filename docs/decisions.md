@@ -16,7 +16,9 @@ secret, resource, identity, dependency or code change. Startup cannot newly fail
 the owner object ID the proactive routes need is already validated when the
 backend starts. Two pin tests (`apps/backend/src/proactive/enabled-switch.test.ts`
 and `apps/web/config/proactive-switch.test.ts`) pin both values and fail if
-anything else sets a switch or if the todo-writes or alerts flag is set anywhere.
+anything else sets a switch. The alert flag keeps the pin P13-12 added
+(`alerts-default-off.test.ts`), and this change sets neither it nor the todo-writes
+flag.
 
 Scope does not grow. Milestones 3 and 4 (todo additions, alerts and reminders)
 stay off until P13-15, so a check reads its sources and stores findings: it

@@ -17,7 +17,8 @@ P13-10 slices shipped dark. Two lines do it, and the code defaults stay off:
 set nowhere, so todo additions and alerts/reminders (milestones 3 and 4) stay off
 until P13-15. A check reads sources and stores findings; it writes no todo and
 pushes nothing. `apps/backend/src/proactive/enabled-switch.test.ts` pins the
-backend value and fails if any of the three names appears in another file;
+backend value and fails if its name appears in any other file (the alert flag keeps
+its own pin, `alerts-default-off.test.ts`);
 `apps/web/config/proactive-switch.test.ts` pins the web value and fails if any
 other workflow, Dockerfile, package file, web config or Bicep/parameter file names
 it. Changing a gate is therefore a reviewed edit to those two files and to the pins.

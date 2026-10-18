@@ -2157,11 +2157,11 @@ the same commit; removing only the two lines fails the pin tests in CI before De
 can run. Either way the routes and scheduler are not registered, and the Proactive
 page, Settings section and Background work link drop out of the web build. Stored
 findings, feedback and settings stay in SQL. `apps/backend/src/proactive/enabled-switch.test.ts`
-pins the backend value and fails if any of the three backend flag names appears in
-another file; `apps/web/config/proactive-switch.test.ts` pins the web value and fails
-if any other workflow, Dockerfile, package file, web config or Bicep/parameter file
-names it. CI proves this wiring only; whether scheduled and manual checks run in
-production is for Dan's test on the deployed app.
+pins the backend value and fails if its name appears in another file (the alert flag
+keeps its own pin, `alerts-default-off.test.ts`); `apps/web/config/proactive-switch.test.ts`
+pins the web value and fails if any other workflow, Dockerfile, package file, web
+config or Bicep/parameter file names it. CI proves this wiring only; whether
+scheduled and manual checks run in production is for Dan's test on the deployed app.
 
 ## Presence modes (P6-23; replaces P7-02 away mode)
 

@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 const root = fileURLToPath(new URL('../../../../', import.meta.url));
-const proactiveSwitches = /\bJARVIS_PROACTIVE_(?:ENABLED|TODO_WRITES_ENABLED|ALERTS_ENABLED)\b/gu;
+const proactiveSwitch = /\bJARVIS_PROACTIVE_ENABLED\b/gu;
 const skippedDirectories = new Set(['node_modules', '.git', 'dist', 'coverage', '__pycache__']);
 const searchedDirectories = ['.github', 'infra', 'agents', 'runner', 'pc-bridge', 'scripts', 'apps', 'packages'];
 const configurationFile = /\.(?:ya?ml|json|bicep|bicepparam|sh|ps1|toml|mjs|cjs)$|^\.env|^Dockerfile/u;
@@ -41,16 +41,16 @@ describe('Proactive checks are switched on in exactly one reviewed backend setti
     ]));
   });
 
-  it('names the checks switch once, in the Bicep backend settings, and the todo-write and alert switches nowhere', () => {
+  it('names the checks switch once, in the Bicep backend settings, and in no other configuration file', () => {
     const mentions: Record<string, string[]> = {};
     for (const file of scannedFiles()) {
-      const names = read(file).match(proactiveSwitches);
+      const names = read(file).match(proactiveSwitch);
       if (names) mentions[file] = names;
     }
     // Switching proactive checks off means reverting the whole P13-14 change (it removes the two gate lines and the pin
     // tests together), or setting both values to false AND updating the pin tests in the same commit. Removing only the
-    // lines fails here, as does naming any of these switches in another file. The todo-write and alert switches stay
-    // set nowhere until their own tasks switch them on. The web half is pinned in apps/web/config/proactive-switch.test.ts.
+    // lines fails here, as does naming the switch in any other file. The alert switch keeps its own pin in
+    // alerts-default-off.test.ts. The web half is pinned in apps/web/config/proactive-switch.test.ts.
     expect(mentions).toEqual({ 'infra/main.bicep': ['JARVIS_PROACTIVE_ENABLED'] });
   });
 
