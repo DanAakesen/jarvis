@@ -28,4 +28,4 @@
 .public-image-confirmation figcaption { margin-top: var(--space-2); padding: 8px 12px; border-radius: var(--radius-control); background: var(--warning-surface); color: var(--warning-text); font-size: var(--type-small); }
 .conversation-history[data-file-drag] .composer { box-shadow: inset 0 0 0 2px var(--focus); }
 .composer-drop-hint { grid-column: 1 / -1; margin: 2px 6px 4px; color: var(--text); font-size: var(--type-small); font-weight: 600; }
-@media (max-width: 600px) { .attachment-text { max-width: 11rem; } }
+@media (max-width: 700px) { .attachment-text { max-width: 11rem; } }

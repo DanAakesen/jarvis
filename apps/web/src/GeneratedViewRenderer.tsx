@@ -59,7 +59,7 @@ export function GeneratedViewRenderer({  view,
     case 'table':
       return (
         <>
-          <div className="generated-view-table">
+          <div className="generated-view-table" role="region" aria-label={`Scrollable table: ${view.title}`} tabIndex={0}>
             <table aria-label={view.title}>
               <thead><tr>{view.data.columns.map((column) => <th key={column} scope="col">{column}</th>)}</tr></thead>
               <tbody>
