@@ -3,6 +3,7 @@ import { Link, useLocation, useParams } from 'react-router-dom';
 import type { AreaProps } from './areas';
 import { CollapsibleSection } from './CollapsibleSection';
 import { Loader } from './Loader';
+import { StateMessage } from './StateMessage';
 import { saveSignInReturnPath } from './auth';
 import { ItemActionControls } from './ProactiveItemActions';
 import { ProactiveItemPage as LegacyProactiveItemPage } from './ProactiveItemPage';
@@ -416,16 +417,15 @@ export function ProactiveArea({ backendUrl, getAccessToken, signIn, now: injecte
   return (
     <main className="proactive-page" aria-labelledby="proactive-page-heading">
       <h1 id="proactive-page-heading">Proactive</h1>
-      {signInRequired && <div className="proactive-sign-in" role="alert">
-        <p>Your sign-in has expired. Sign in again to check proactive items.</p>
-        <button className="secondary-button" type="button" onClick={beginSignIn}>Sign in again</button>
-      </div>}
+      {signInRequired && <StateMessage variant="error" className="proactive-sign-in"
+        message="Your sign-in has expired." detail="Sign in again to check proactive items."
+        actionLabel="Sign in again" onAction={beginSignIn} />}
       <section className="proactive-block" aria-labelledby="proactive-status-heading">
         <h2 id="proactive-status-heading">Status</h2>
-        {status.state === 'loading' && <Loader variant="inline" label="Loading proactive status…" />}
+        {status.state === 'loading' && <StateMessage variant="loading" message="Loading proactive status" />}
         {status.state === 'unavailable' && <p role="status">Proactive is not turned on for this backend.</p>}
-        {status.state === 'error' && <div role="alert"><p>{status.message}</p>
-          <button className="secondary-button" type="button" onClick={() => { void loadStatus(); }}>Retry</button></div>}
+        {status.state === 'error' && <StateMessage variant="error" message={status.message}
+          actionLabel="Retry" onAction={() => { void loadStatus(); }} />}
         {loadedStatus && <>
           <p className="proactive-status-line"><StatusSentence status={loadedStatus} /></p>
           <p><StatusOutcome run={loadedStatus.lastRun} /></p>
@@ -443,13 +443,14 @@ export function ProactiveArea({ backendUrl, getAccessToken, signIn, now: injecte
 
       <section className="proactive-block" aria-labelledby="proactive-items-heading">
         <h2 id="proactive-items-heading" ref={itemHeading} tabIndex={-1}>Open items</h2>
-        {items.state === 'loading' && <Loader variant="rows" label="Loading open items…" />}
-        {items.state === 'error' && <div role="alert"><p>{items.message}</p>
-          <button className="secondary-button" type="button" onClick={() => { void loadItems(); }}>Retry</button></div>}
-        {items.state === 'loaded' && items.value.length === 0 && <p>Nothing needs you right now. {loadedStatus?.lastRun
-          ? <>Last check <time dateTime={loadedStatus.lastRun.finishedAt ?? loadedStatus.lastRun.startedAt}>
-            {formatTime(loadedStatus.lastRun.finishedAt ?? loadedStatus.lastRun.startedAt)}</time>.</>
-          : 'No check has run yet.'}</p>}
+        {items.state === 'loading' && <StateMessage variant="loading" loaderVariant="rows" message="Loading open items" />}
+        {items.state === 'error' && <StateMessage variant="error" message={items.message}
+          actionLabel="Retry" onAction={() => { void loadItems(); }} />}
+        {items.state === 'loaded' && items.value.length === 0 && <StateMessage variant="empty"
+          message="Nothing needs you right now." detail={loadedStatus?.lastRun
+            ? <>Last check <time dateTime={loadedStatus.lastRun.finishedAt ?? loadedStatus.lastRun.startedAt}>
+              {formatTime(loadedStatus.lastRun.finishedAt ?? loadedStatus.lastRun.startedAt)}</time>.</>
+            : 'No check has run yet.'} />}
         {items.state === 'loaded' && items.value.length > 0 && <ul className="proactive-item-list">
           {items.value.map((item) => <li key={item.id} className="proactive-item-row">
             <ItemLink item={item} />
@@ -460,10 +461,10 @@ export function ProactiveArea({ backendUrl, getAccessToken, signIn, now: injecte
           if ((event.currentTarget as HTMLDetailsElement).open && earlier === null) void loadItems('all');
         }}>
           <summary>Earlier items</summary>
-          {earlier?.state === 'loading' && <Loader variant="rows" label="Loading earlier items…" />}
-          {earlier?.state === 'error' && <div role="alert"><p>{earlier.message}</p>
-            <button className="secondary-button" type="button" onClick={() => { void loadItems('all'); }}>Retry</button></div>}
-          {earlier?.state === 'loaded' && earlier.value.length === 0 && <p>No earlier items.</p>}
+          {earlier?.state === 'loading' && <StateMessage variant="loading" loaderVariant="rows" message="Loading earlier items" />}
+          {earlier?.state === 'error' && <StateMessage variant="error" message={earlier.message}
+            actionLabel="Retry" onAction={() => { void loadItems('all'); }} />}
+          {earlier?.state === 'loaded' && earlier.value.length === 0 && <StateMessage variant="empty" message="No earlier items." />}
           {earlier?.state === 'loaded' && earlier.value.length > 0 && <ul className="proactive-item-list">
             {earlier.value.map((item) => <li key={item.id} className="proactive-item-row proactive-earlier-row">
               <ItemLink item={item} />
@@ -474,10 +475,9 @@ export function ProactiveArea({ backendUrl, getAccessToken, signIn, now: injecte
 
       <section className="proactive-block" aria-labelledby="proactive-sources-heading">
         <h2 id="proactive-sources-heading">Sources</h2>
-        {status.state === 'loading' && <Loader variant="rows" label="Loading source status…" />}
-        {status.state === 'error' && <div role="alert"><p>Source status could not be loaded.</p>
-          <button className="secondary-button" type="button" aria-label="Retry source status"
-            onClick={() => { void loadStatus(); }}>Retry</button></div>}
+        {status.state === 'loading' && <StateMessage variant="loading" loaderVariant="rows" message="Loading source status" />}
+        {status.state === 'error' && <StateMessage variant="error" message="Source status could not be loaded."
+          actionLabel="Retry" actionAriaLabel="Retry source status" onAction={() => { void loadStatus(); }} />}
         {loadedStatus && <>
           <ul className="proactive-source-list">{loadedStatus.sources.map((source) =>
             <SourceRow key={source.id} source={source} now={now()} />)}</ul>
@@ -487,10 +487,9 @@ export function ProactiveArea({ backendUrl, getAccessToken, signIn, now: injecte
 
       <section className="proactive-block" aria-labelledby="proactive-budget-heading">
         <h2 id="proactive-budget-heading">Budget</h2>
-        {status.state === 'loading' && <Loader variant="inline" label="Loading monthly budget…" />}
-        {status.state === 'error' && <div role="alert"><p>Budget status could not be loaded.</p>
-          <button className="secondary-button" type="button" aria-label="Retry budget status"
-            onClick={() => { void loadStatus(); }}>Retry</button></div>}
+        {status.state === 'loading' && <StateMessage variant="loading" message="Loading monthly budget" />}
+        {status.state === 'error' && <StateMessage variant="error" message="Budget status could not be loaded."
+          actionLabel="Retry" actionAriaLabel="Retry budget status" onAction={() => { void loadStatus(); }} />}
         {loadedStatus && <div className="proactive-budget" data-state={loadedStatus.budget.state}>
           <p><svg className="proactive-budget-icon" viewBox="0 0 16 16" aria-hidden="true">
             <circle cx="8" cy="8" r="6.5" fill="none" stroke="currentColor" />
@@ -513,10 +512,10 @@ export function ProactiveArea({ backendUrl, getAccessToken, signIn, now: injecte
 
       <CollapsibleSection storageKey="proactive.recent-runs" headingId="proactive-runs-heading"
         title="Recent checks" className="proactive-block" persist={false} initiallyOpen={false}>
-        {runs.state === 'loading' && <Loader variant="rows" label="Loading recent checks…" />}
-        {runs.state === 'error' && <div role="alert"><p>{runs.message}</p>
-          <button className="secondary-button" type="button" onClick={() => { void loadRuns(); }}>Retry</button></div>}
-        {runs.state === 'loaded' && runs.value.length === 0 && <p>No checks yet.</p>}
+        {runs.state === 'loading' && <StateMessage variant="loading" loaderVariant="rows" message="Loading recent checks" />}
+        {runs.state === 'error' && <StateMessage variant="error" message={runs.message}
+          actionLabel="Retry" onAction={() => { void loadRuns(); }} />}
+        {runs.state === 'loaded' && runs.value.length === 0 && <StateMessage variant="empty" message="No checks yet." />}
         {runs.state === 'loaded' && runs.value.length > 0 && <ul className="proactive-runs-list">
           {runs.value.map((run) => <li key={run.id}>
             <strong>{runTitle(run)}</strong>
@@ -627,12 +626,12 @@ function FullProactiveItemPage({ backendUrl, getAccessToken, signIn, proactiveEn
       {item.state === 'loaded' ? item.value.title : 'Proactive item'}
     </h1>
     <Link to="/proactive">All open items</Link>
-    {signInRequired && <div role="alert"><p>Your sign-in has expired. Sign in again to open this item.</p>
-      <button className="secondary-button" type="button" onClick={beginSignIn}>Sign in again</button></div>}
-    {item.state === 'loading' && <Loader variant="lines" label="Loading item…" />}
-    {item.state === 'unavailable' && <p role="status">This item was not found or is not available to this account.</p>}
-    {item.state === 'error' && <div role="alert"><p>{item.message}</p>
-      <button className="secondary-button" type="button" onClick={() => setRequestKey((value) => value + 1)}>Retry</button></div>}
+    {signInRequired && <StateMessage variant="error" message="Your sign-in has expired."
+      detail="Sign in again to open this item." actionLabel="Sign in again" onAction={beginSignIn} />}
+    {item.state === 'loading' && <StateMessage variant="loading" loaderVariant="lines" message="Loading item" />}
+    {item.state === 'unavailable' && <StateMessage variant="empty" message="This item was not found or is not available to this account." />}
+    {item.state === 'error' && <StateMessage variant="error" message={item.message}
+      actionLabel="Retry" onAction={() => setRequestKey((value) => value + 1)} />}
     {item.state === 'loaded' && <>
       <article className="proactive-detail-item" lang={item.value.language ?? undefined}>
         <ItemContent item={item.value} showTitle={false} />

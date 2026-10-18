@@ -1,5 +1,16 @@
 # Decisions
 
+## Share non-Daily loading, empty, error and partial states (18 October 2026; P14-11 / #994)
+
+Use one `StateMessage` component around the existing Loader for non-Daily
+loading, empty, error and partial states. Keep one plain sentence, optional
+detail, and at most one shared-button recovery action. Loading, empty and
+partial states announce politely; errors use alerts. Reserve a 10rem minimum
+block size for loading, empty and error states (partial notices reserve none),
+use skeletons only for known final layouts, and keep error copy
+free of raw exception text, identifiers and codes. Daily retains `DailyState`
+until its separate follow-up; this avoids crossing the parallel page boundary.
+
 ## Consolidate web viewport breakpoints (18 October 2026; P14-05 / #973)
 
 Use one non-Daily viewport set: phone through 700px, tablet above 700px through

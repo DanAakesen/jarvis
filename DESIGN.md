@@ -1637,3 +1637,20 @@ fields retain their intentional editor/search layouts; only the Notes title and
 other surrounding form fields join the shared field look. Daily controls inherit
 the system without changing Daily markup. Buttons and non-field surfaces remain
 owned by their existing P14 work.
+
+## State messages (P14-11, 18 October 2026)
+
+Non-Daily loading, empty, error and partial states use `StateMessage` beside
+`Loader`. Keep the state message to one plain sentence, optional supporting
+detail and at most one useful recovery action; do not add a heading or expose
+raw exception text, identifiers or codes. Loading, empty and partial states use
+polite status announcements; errors use an alert. Recovery actions reuse the
+shared button classes and busy state.
+
+The shared state surface reserves a 10rem minimum block size for loading, empty
+and error states so the page does not jump when they resolve; a partial notice
+sits beside existing content and reserves none. Use the ordinary
+Loader unless the final collection layout is known well enough for a matching
+skeleton. Explain the real empty condition and, for stale, partial or capped
+data, explain how to refresh. Daily retains its existing `DailyState` treatment
+until its separate follow-up.

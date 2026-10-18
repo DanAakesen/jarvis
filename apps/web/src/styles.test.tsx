@@ -210,12 +210,13 @@ describe('app-wide control contract', () => {
   it('pairs Daily and Proactive block alerts with the shared error surface', () => {
     const daily = readFileSync('src/daily/daily.css', 'utf8');
     const proactive = readFileSync('src/proactive.css', 'utf8');
+    const shared = readFileSync('src/styles.css', 'utf8');
     expect(ruleDeclaration(daily, /\.daily-notice\[role="alert"\]\s*\{([^}]*)\}/, 'background'))
       .toBe('var(--error-surface)');
     expect(ruleDeclaration(daily, /\.daily-notice\[role="alert"\]\s*\{([^}]*)\}/, 'border')).toBe('1px solid var(--rule)');
-    expect(ruleDeclaration(proactive, /\.proactive-page \[role="alert"\]\s*\{([^}]*)\}/, 'background'))
-      .toBe('var(--error-surface)');
-    expect(ruleDeclaration(proactive, /\.proactive-page \[role="alert"\]\s*\{([^}]*)\}/, 'border')).toBe('1px solid var(--rule)');
+    expect(proactive).toContain('.proactive-page [role="alert"]');
+    expect(ruleDeclaration(shared, /\.state-message--error\s*\{([^}]*)\}/, 'background')).toBe('var(--error-surface)');
+    expect(ruleDeclaration(shared, /\.state-message--error\s*\{([^}]*)\}/, 'border')).toBe('1px solid var(--rule)');
   });
 
   it('keeps action group order in markup and the deployment form gap at 10px', () => {

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { PublicClientApplication } from '@azure/msal-browser';
 import type { PublicConfig } from '../config/public-config';
-import { Loader } from './Loader';
+import { StateMessage } from './StateMessage';
 import {
   AttachmentExpiredError,
   formatBytes,
@@ -160,7 +160,7 @@ export function PublicImageConfirmation({ client, config, attachment }: {
         ? <p className="attachment-note" data-error role="alert">The image preview is unavailable. Do not approve publication until you can review the image.</p>
         : url
           ? <img src={url} alt={`Image to publish: ${attachment.name}`} />
-          : <Loader variant="image" label={`Loading ${attachment.name}…`} />}
+          : <StateMessage variant="loading" loaderVariant="image" message="Loading image preview" />}
       <figcaption>
         <strong>This repository is public.</strong> Approving makes {attachment.name} readable by anyone and keeps it in Git history.
       </figcaption>

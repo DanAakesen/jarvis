@@ -26,6 +26,7 @@ import { ComposerAttachments, MessageAttachments, PublicImageConfirmation } from
 import { ATTACHMENT_ACCEPT, MAX_ATTACHMENTS, publicPublicationImage, type ChatAttachment } from './chat-attachments';
 import { useChatAttachments } from './useChatAttachments';
 import { Loader } from './Loader';
+import { StateMessage } from './StateMessage';
 import {
   accessToken,
   createChatSession,
@@ -136,7 +137,7 @@ function ConversationImageArtifact({
   }, [artifactId, client, config]);
 
   if (unavailable) return <span role="status">Generated image is unavailable.</span>;
-  if (!url) return <Loader variant="image" label="Loading generated image…" />;
+  if (!url) return <StateMessage variant="loading" loaderVariant="image" message="Loading generated image" />;
   return (
     <figure className="message-artifact">
       <img src={url} alt="Generated image" loading="lazy" />
@@ -756,17 +757,13 @@ export function ConversationHistory({
   const transcriptContent = (
     <>
         {loading && messages.length === 0 ? (
-          <div className="conversation-loading">
-            <p>Loading messages...</p>
-            <Loader variant="lines" label="Loading conversation history…" />
-          </div>
+         <StateMessage variant="loading" loaderVariant="lines" className="conversation-loading"
+           message="Loading conversation history." />
         ) : historyError && messages.length === 0 ? (
-          <div className="conversation-history-error" role="alert">
-            <p>{historyError}</p>
-            <button type="button" className="history-button" onClick={retry}>Retry</button>
-          </div>
+         <StateMessage variant="error" className="conversation-history-error" message={historyError}
+           actionLabel="Retry" actionClassName="history-button secondary-button" onAction={retry} />
         ) : messages.length === 0 && !sending && queue.length === 0 && failedTurns.length === 0 ? (
-          conversationWindow ? <p className="conversation-empty">No messages yet.</p> :
+         conversationWindow ? <StateMessage variant="empty" className="conversation-empty" message="No messages yet." /> :
           <div className="conversation-greeting visually-hidden">
             {/* Dan, 8 October: no greeting card; screen readers still hear that the conversation is empty. */}
             <h2>What’s on your mind?</h2>
