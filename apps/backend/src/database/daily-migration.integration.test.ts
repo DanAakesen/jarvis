@@ -53,6 +53,13 @@ async function bundleFixture(path: string, workouts = 2): Promise<{ bundle: stri
     updated_at: '2026-10-18T00:00:00Z',
   }));
   await rewriteRows(bundle, 'health_workouts', workoutRows);
+  // Children must follow the renamed parent key or the bundle fails validation (missing-parent).
+  for (const table of ['health_workout_metrics', 'health_workout_heart_rate_minute']) {
+    const children = (await readFile(join(bundle, `${table}.ndjson`), 'utf8')).trim().split('\n')
+      .map(line => JSON.parse(line) as Record<string, unknown>)
+      .map(row => row.workout_id === 'SYNTHETIC_22_0' ? { ...row, workout_id: workoutRows[0]!.id } : row);
+    await rewriteRows(bundle, table, children);
+  }
   const mealLines = (await readFile(join(bundle, 'nutrition_meals.ndjson'), 'utf8')).trim().split('\n');
   const mealRow = {
     ...JSON.parse(mealLines[0]!) as Record<string, unknown>,
