@@ -60,6 +60,11 @@ const typeSpacingAllowlist: AllowlistEntry[] = [
   { file: 'ConversationHistory.css', selector: '.markdown-content pre', property: 'font-size', value: '.9em', reason: 'Fenced Markdown code scales with the surrounding prose while retaining its readable monospace treatment.' },
   { file: 'ConversationHistory.css', selector: '.conversation-message .markdown-content :is(h1, h2, h3, h4, h5, h6)', property: 'font-size', value: '1.15em', reason: 'Message Markdown headings remain proportionate to their surrounding message text.' },
   { file: 'proactive.css', selector: '.proactive-urgency-icon', property: 'font-size', value: '.9em', reason: 'The urgency glyph scales with its adjacent urgency label.' },
+  { file: 'styles.css', selector: '.release-graph-lane text', property: 'font', value: '12px system-ui, sans-serif', reason: 'The SVG release-graph labels retain their pixel-exact chart scale.' },
+  { file: 'daily/ui/daily-ui.css', selector: '.daily-chart-grid text', property: 'font', value: '12px var(--font-body)', reason: 'The Daily chart axis labels retain their pixel-exact chart scale.' },
+  { file: 'daily/sections/body-sleep/body-sleep.css', selector: '.body-sleep-axis-label', property: 'font', value: '12px var(--font-body)', reason: 'The Daily chart axis labels retain their pixel-exact chart scale.' },
+  { file: 'daily/sections/body-sleep/body-sleep.css', selector: '.body-sleep-stage-mark', property: 'font', value: 'bold 12px var(--font-body)', reason: 'The Daily stage marks retain their pixel-exact chart scale.' },
+  { file: 'daily/daily.css', selector: '.daily-page pre', property: 'font', value: 'var(--type-caption)/1.5 var(--font-mono)', reason: 'The ongoing Daily work owns its preformatted text line-height; the type size already uses the shared caption role.' },
   { file: 'ConversationHistory.css', selector: '.conversation-message.live-turn::before, .conversation-message[data-speaker="jarvis"][data-latest]::before', property: 'padding', value: '1.5px', reason: 'This pseudo-element padding creates the conversation glass rim, not content spacing.' },
   { file: 'ConversationHistory.css', selector: '.visually-hidden', property: 'margin', value: '-1px', reason: 'The one-pixel inset is part of the accessible visually-hidden clipping pattern.' },
   { file: 'ConversationHistory.css', selector: '.conversation-transcript', property: 'padding', value: '0 max(var(--space-1), calc((100% - 760px) / 2)) var(--space-6)', reason: 'The 760px value caps the centered transcript line length; it is not a spacing step.' },
@@ -178,6 +183,12 @@ function stylesheetViolations(file: string, source: string): string[] {
       violations.push(`${location}: line height must use a line role or a reasoned exception`);
     }
 
+    if (property === 'font' && !/^(?:inherit|initial|unset|revert|revert-layer)$/iu.test(value)
+      && (!/var\(--type-[\w-]+\)/u.test(value) || (value.includes('/') && !/\/var\(--line-[\w-]+\)/u.test(value)))
+      && !matchesAllowlist(typeSpacingAllowlist, file, selector, property, value)) {
+      violations.push(`${location}: font shorthand must use type and line roles or a reasoned exception`);
+    }
+
     const isSpacing = /^(?:margin(?:-[\w-]+)?|padding(?:-[\w-]+)?|gap|row-gap|column-gap)$/u.test(property);
     const hasNonzeroPixelSpacing = isSpacing
       && [...value.matchAll(/(-?(?:\d+\.?\d*|\.\d+))px/giu)]
@@ -191,7 +202,7 @@ function stylesheetViolations(file: string, source: string): string[] {
 }
 
 function stylesheetScaleInventory(file: string, source: string) {
-  const inventory = { fontSize: 0, lineHeight: 0, spacing: 0 };
+  const inventory = { fontSize: 0, lineHeight: 0, fontShorthand: 0, spacing: 0 };
   const root = postcss.parse(source, { from: file });
   root.walkDecls((declaration) => {
     const property = declaration.prop.toLowerCase();
@@ -200,6 +211,10 @@ function stylesheetScaleInventory(file: string, source: string) {
       && !/^(?:inherit|initial|unset|revert|revert-layer)$/iu.test(value)) inventory.fontSize += 1;
     if (property === 'line-height' && !/^var\(--line-[\w-]+\)$/u.test(value)
       && !/^(?:inherit|initial|unset|revert|revert-layer)$/iu.test(value)) inventory.lineHeight += 1;
+    if (property === 'font' && !/^(?:inherit|initial|unset|revert|revert-layer)$/iu.test(value)
+      && (!/var\(--type-[\w-]+\)/u.test(value) || (value.includes('/') && !/\/var\(--line-[\w-]+\)/u.test(value)))) {
+      inventory.fontShorthand += 1;
+    }
     if (/^(?:margin(?:-[\w-]+)?|padding(?:-[\w-]+)?|gap|row-gap|column-gap)$/u.test(property)
       && [...value.matchAll(/(-?(?:\d+\.?\d*|\.\d+))px/giu)]
         .some(([, amount]) => Number.parseFloat(amount ?? '0') !== 0)) inventory.spacing += 1;
@@ -248,10 +263,11 @@ describe('stylesheets', () => {
       const result = stylesheetScaleInventory(file, readFileSync(join(sourceDirectory, file), 'utf8'));
       total.fontSize += result.fontSize;
       total.lineHeight += result.lineHeight;
+      total.fontShorthand += result.fontShorthand;
       total.spacing += result.spacing;
       return total;
-    }, { fontSize: 0, lineHeight: 0, spacing: 0 });
-    expect(inventory).toEqual({ fontSize: 4, lineHeight: 0, spacing: 14 });
+    }, { fontSize: 0, lineHeight: 0, fontShorthand: 0, spacing: 0 });
+    expect(inventory).toEqual({ fontSize: 4, lineHeight: 0, fontShorthand: 5, spacing: 14 });
   });
 
   it('rejects reintroduced stylesheet violations', () => {
@@ -273,8 +289,11 @@ describe('stylesheets', () => {
   it('rejects raw type, line-height and spacing values unless exactly reasoned', () => {
     const css = '.probe { font-size: 16px; line-height: 1.4; gap: 8px; }';
     expect(stylesheetViolations('probe.css', css)).toHaveLength(3);
+    expect(stylesheetViolations('probe.css', '.probe { font: 12px/1.5 Arial; }')).toHaveLength(1);
+    expect(stylesheetViolations('probe.css', '.probe { font: var(--type-body)/var(--line-body) var(--font-body); }')).toEqual([]);
     expect(stylesheetViolations('ConversationHistory.css', '.markdown-content pre { font-size: .9em; }')).toEqual([]);
     expect(stylesheetViolations('styles.css', '.luminous-glass::before { padding: 1px; }')).toEqual([]);
+    expect(stylesheetViolations('styles.css', '.release-graph-lane text { font: 12px system-ui, sans-serif; }')).toEqual([]);
   });
 
   it('gives every exception an explicit reason', () => {

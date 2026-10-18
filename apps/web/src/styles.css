@@ -1727,7 +1727,7 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
 .task-timeline > li { min-width: 0; }
 .timeline-payload { margin-top: var(--space-3); font-size: var(--type-small); }
 .timeline-payload summary { min-height: 44px; width: fit-content; display: flex; align-items: center; cursor: pointer; font-weight: 600; }
-.timeline-payload pre { max-width: 100%; max-height: 28rem; overflow: auto; padding: var(--space-3); background: var(--code-surface); border: 1px solid var(--rule); border-radius: var(--radius-control); font: 13px/1.5 ui-monospace, SFMono-Regular, Consolas, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
+.timeline-payload pre { max-width: 100%; max-height: 28rem; overflow: auto; padding: var(--space-3); background: var(--code-surface); border: 1px solid var(--rule); border-radius: var(--radius-control); font: var(--type-caption)/var(--line-prose) var(--font-mono); white-space: pre-wrap; overflow-wrap: anywhere; }
 .timeline-payload-note, .timeline-error, .timeline-artifacts p { margin-top: var(--space-2); font-size: var(--type-small); }
 .timeline-more { margin-top: var(--space-3); }
 .timeline-error { color: var(--error); }
@@ -3269,7 +3269,7 @@ a.task-chip:hover { background: var(--glass-pressed); }
 .collapsible-section[data-open="true"] .collapsible-inner { padding-bottom: var(--space-5); }
 .collapsible-section[data-open="true"] .collapsible-body { overflow: visible; }
 .collapsible-section[data-open="true"] .collapsible-inner:has(select:open, .more-menu[data-open="true"]) { overflow: visible; }
-/* One even stack of folded cards: same padding, same height, same 10 px rhythm. */
+/* One even stack of folded cards: same padding, same height and spacing role. */
 .collapsible-section.collapsible-section { padding: var(--space-1) var(--space-3); }
 .collapsible-section h2.collapsible-heading { margin: 0; font-size: inherit; }
 .settings-page form { gap: var(--space-3); margin-top: var(--space-3); }
