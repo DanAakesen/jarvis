@@ -1,5 +1,27 @@
 # Decisions
 
+## Put attention in a conditional header popover (17 October 2026; P9-120 / #913)
+
+Remove the Now and Backend sections from web Settings. Keep the existing
+shell-owned Now feed, stream, side effects and backend sleep API unchanged.
+Publish only the already-loaded feed items in the attention, credential and
+alert categories, plus pending browser confirmations, to a yellow bell/count
+in the header background-work cluster. Its independent popover retains the
+existing item links, timestamps, dismiss endpoint and confirmation handlers.
+Running tasks stay with background work; releases/deployments and away-mode
+changes are not attention. The background-work control is empty only when there
+are no non-dismissed jobs and no attention items. Keep it visible while its
+popover is open so the empty-state note remains reachable after the last
+dismissal. Interrupted historical jobs remain reachable through the control and
+show a neutral, labelled history mark when no running/done/failed counts apply.
+
+This implements issue #913's request to remove Now and Backend from Settings
+and show attention from its own header icon. Reusing the existing feed snapshot avoids a
+second connection or request; `/operations/sleep` and shared navigation
+contracts remain unchanged. Offline focused UI tests cover the count, popover,
+unknown web anchor, permanent server-synced dismissal and empty-state behavior.
+Live provider behavior and human visual acceptance remain unverified.
+
 ## Keep the first Web Push proof dark and user-triggered (17 October 2026; P13-01 / #917)
 
 Milestone 1 proves a visible Web Push notification can point to a durable,
@@ -4761,3 +4783,15 @@ shows unsaved, pending, confirmed, and failed states with an in-section retry,
 without changing the endpoint or project PATCH contract. Add project previews
 the saved defaults that the backend applies, and each registered project keeps
 its own editable settings.
+
+## P10-11 — Per-project completion policy controls (17 October 2026)
+
+Show the active completion policy as a labelled, descriptive two-choice radio
+group on project cards and project settings, and reuse that group beside the
+project choice in Create task. A choice uses the existing project PATCH; keep
+the saved choice visible until the server confirms the update, disable both
+options while saving, and provide an inline retry on failure. State that the
+change applies now, including to already-open pull requests. The new-project
+policy default is separate: it only pre-fills projects Jarvis registers later,
+and each project keeps its own changeable policy. This is web-only; the PATCH
+contract, default values, and P10-09 merge behavior do not change.

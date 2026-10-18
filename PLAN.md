@@ -93,8 +93,15 @@ as small PRs:
    Google result the tool reports as truncated, or that the presenter cuts to
    fit, shows a static note in the view and a `partial` source, so free time
    from an incomplete event list is never presented as complete.
-3. Offline end-to-end (after). Fake Gmail/Calendar: find, show view, stage
-   (`awaiting_confirmation`), plain yes, confirm.
+3. Offline end-to-end (PR 3). `apps/backend/src/google/hotel-booking-flow.test.ts`
+   drives in-memory Gmail and Calendar through find, show view, stage
+   (`awaiting_confirmation`), a later plain "yes" and confirm, in chat (the Jarvis
+   agent over `/tools/*`) and in voice (the owner's session inside the relay's
+   call scope, with the relay answering the reply from backend state). It also
+   covers a decline, a confirm attempted by the staging message or a non-approval
+   message being refused with nothing written, a repeated yes writing nothing
+   again, no raw ids, bodies or codes on screen or in the audit record, and the
+   owner's browser being refused while Jarvis creates the same view.
 
 No provider call, live probe or replay of Dan's mail. Dan's live re-test closes
 #885; merged source is not acceptance.
@@ -1907,6 +1914,7 @@ Declined in the audit (do not file): verbosity and max-output-token settings, no
 | P9-115 | [#843](https://github.com/DanAakesen/jarvis/issues/843) | Align shared Status navigation instructions with the shipped page | Remove the stale unavailable-page instruction; require canonical `workspace_command` navigate/status guidance and truthful applied/refused semantics across hosted settings and English/Danish realtime, both automatic-capture values, preserving budget/BMP/tool-parity checks. Source/instruction consistency only; not live, model, or voice acceptance and not attribution of a production turn | P9-40 | Complete |
 
 | P9-119 | [#903](https://github.com/DanAakesen/jarvis/issues/903) | Icon-only navigation: Settings, presence and background-work outcome counts | Web-only gear, distinct green/yellow/blue mode icons and non-zero running/done/failed icon-count pairs; dismissed entries excluded from counts and announcements, idle and error states retained. Existing popover contents, delivery and dismissal unchanged. All 1,105 web tests, final 176 focused tests, lint/build and CodeQL pass locally; independent review found no significant issues (bundled review service unavailable). Chromium fixture matrix at 320×568, 390×844 and 1440×900 in light/dark covers all modes, mixed counts, idle, 44px targets, focus, phone windows and both reduced-motion settings; captures/measurements in `docs/ui/screenshots/p9-119/`. Synthetic auth/API and WebGL fallback only; Dan's visual check remains pending | — | Complete |
+| P9-120 | [#913](https://github.com/DanAakesen/jarvis/issues/913) | Move attention from Settings to a conditional yellow header popover | Remove Now and Backend from web Settings; keep one persistent feed connection and route only attention, credential, alert and pending confirmation data to the header. Hide the cluster only when no non-dismissed jobs and no attention items remain; keep it visible while open and retain a neutral labelled mark for interrupted history. Preserve server-synced permanent dismissal, per-row and bulk dismissal, empty note, feed endpoints and `/operations/sleep`. The full web suite passed at 1,183 tests before the final focus-timing adjustment; the 28 focused header tests and 15 backend capability tests pass on the prior revision, along with web lint/build. Scratch-auth/API Chromium checks captured 24 states at 320×568, 390×844 and 1440×900 in light/dark. Synthetic fixtures only; live identity/backend/provider and human visual acceptance remain unverified | P9-119 | Complete |
 
 #815's guarded merge caught the title bot truncating P9-101 to P9-10.
 The coordinator authorised the coupled normalizer/linked-ID/PLAN-parser
@@ -1942,6 +1950,7 @@ Goal: GitHub issues are the single backlog. The Software Factory (worker label `
 | P10-07 | [#793](https://github.com/DanAakesen/jarvis/issues/793) | UI session consumes the canonical GitHub Factory board, replacing the legacy task-state columns | Six ordered Project columns, issue/PR links and real task overlays, local filters, bounded display, Now-stream invalidations/reconnect, stale/error recovery, focused checks and desktop/320px inspection; spot-check live Project placement | P10-04 | Complete |
 | P10-08 | [#902](https://github.com/DanAakesen/jarvis/issues/902) | Web task creation creates and links one GitHub issue | Issue-first creation preserves dialog fields; durable submission claims prevent duplicate issues/tasks; failures identify partial creation; confirmation links to the issue; board overlays work before a PR and delivery includes `Fixes #N`. Offline backend/web checks pass; live GitHub acceptance remains unverified | P10-02 | Complete |
 | P10-09 | [#908](https://github.com/DanAakesen/jarvis/issues/908) | Complete without deployment merges eligible PRs without confirmation and recovers open work after restart | Project-policy selection is approval; App squash merge retains existing safety guards, `deliver_pr` never merges, no-check grace survives restart, startup/minute and policy-change sweeps are idempotent, transient GitHub retries are bounded, refusals remain task events, and Done follows the signed merge webhook | P3-06 | Complete |
+| P10-11 | [#911](https://github.com/DanAakesen/jarvis/issues/911) | Make each project's completion policy visible and immediately changeable | Descriptive two-choice control on project cards, project settings, and Create task; server-confirmed save, pending/error/retry/success states; clearly scoped new-project default; focused tests and responsive keyboard/browser inspection | P9-121, P10-09 | Complete |
 
 P10-07's board shipped in #806. The subsequently requested issue-number
 navigation follow-up shipped in #810 at `b4915164`; Deploy 38479582927 passed.
@@ -2316,7 +2325,7 @@ delivery remains unproven. Teams is not a delivery path.
 
 | ID | Issue | Task | Acceptance criteria | Depends on | Status |
 | --- | --- | --- | --- | --- | --- |
-| P13-01 | [#917](https://github.com/DanAakesen/jarvis/issues/917) | Push delivery proof, backend | Exact-true default-off gate; authenticated owner-scoped subscriptions/items; server-only VAPID key and encrypted generic payload; bounded retry and rate limits; durable item open is owner-only; no Teams, scheduler or activation. Unit, lint and type checks pass; SQL integration runs in CI. Real iPhone delivery remains unproven. | — | In progress |
+| P13-01 | [#917](https://github.com/DanAakesen/jarvis/issues/917) | Push delivery proof, backend | Exact-true default-off gate; authenticated owner-scoped subscriptions/items; server-only VAPID key and encrypted generic payload; bounded retry and rate limits; durable item open is owner-only; no Teams, scheduler or activation. Unit, lint and type checks pass; SQL integration runs in CI. Real iPhone delivery remains unproven. | — | Complete |
 | P13-02 | [#919](https://github.com/DanAakesen/jarvis/issues/919) | Push delivery proof: web worker, opt-in and durable item page | Exact-string push gate defaults off; worker always displays generic alerts and opens only validated same-origin item paths; authenticated opt-in/test/off states and owner-protected item page work; deep links return after sign-in. Physical iOS delivery remains a separate acceptance gate. | — | Complete |
 
 ## Factory canonical-status parity (16 October 2026)

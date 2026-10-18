@@ -1,9 +1,11 @@
 import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
+import { useState } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { NowFeed } from './activity';
+import type { FeedAttention, NowFeed } from './activity';
 import { NowFeedPanel } from './NowFeedPanel';
+import { AttentionPopover } from './AttentionPopover';
 import { WorkspaceCommandContext } from './workspace-command-state';
 import { useFactoryBoardLiveState, resetFactoryBoardForTests } from './factory-board-store';
 
@@ -52,6 +54,19 @@ const feed: Extract<NowFeed, { status: 'ready' }> = {
 const config = { backendUrl: 'https://api.example.com', apiScope: 'api://test/access' } as never;
 const client = {} as never;
 const getAccessToken = vi.fn(async () => 'test-access-token');
+
+function HeaderFeed(props: {
+  client: typeof client;
+  config: typeof config;
+  getAccessToken: typeof getAccessToken;
+  applyWorkspaceCommand: () => false;
+}) {
+  const [attention, setAttention] = useState<FeedAttention | null>(null);
+  return <>
+    <NowFeedPanel {...props} onAttentionChange={setAttention} />
+    <AttentionPopover attention={attention} />
+  </>;
+}
 
 afterEach(() => {
   resetFactoryBoardForTests();
@@ -158,16 +173,54 @@ describe('live Now panel', () => {
       onStatus('connected');
       await new Promise<void>((resolve) => signal.addEventListener('abort', () => resolve(), { once: true }));
     });
+    const onAttentionChange = vi.fn();
     const view = render(
-      <MemoryRouter><NowFeedPanel client={client} config={config} getAccessToken={getAccessToken} applyWorkspaceCommand={() => false} /></MemoryRouter>,
+      <MemoryRouter><NowFeedPanel client={client} config={config} getAccessToken={getAccessToken}
+        applyWorkspaceCommand={() => false} onAttentionChange={onAttentionChange} /></MemoryRouter>,
     );
 
-    expect(await screen.findByRole('link', { name: 'Ship the feed' })).not.toBeNull();
-    expect(await screen.findByText('Live updates connected.')).not.toBeNull();
+    await waitFor(() => expect(onAttentionChange).toHaveBeenCalledWith(expect.objectContaining({
+      items: [feed.items[0]],
+      confirmations: [],
+    })));
+    expect(view.container.firstChild).toBeNull();
     expect(loadNowFeed).toHaveBeenCalledOnce();
 
     streamCallbacks.onUpdate?.();
     await waitFor(() => expect(loadNowFeed).toHaveBeenCalledTimes(2));
+    view.unmount();
+  });
+
+  it('publishes only attention, credential and alert items plus all pending confirmations', async () => {
+    const confirmation = { id: 'confirm-1', actionKind: 'delete' as const, summary: 'Delete it', expiresAt: '2026-10-03T12:00:00Z' };
+    loadNowFeed.mockResolvedValue({
+      ...feed,
+      items: [
+        ...feed.items,
+        { id: 'release', category: 'release', title: 'Release', link: null, at: feed.updatedAt },
+        { id: 'credential', category: 'credential', title: 'Credential', link: null, at: feed.updatedAt },
+        { id: 'alert', category: 'alert', title: 'Alert', link: null, at: feed.updatedAt },
+        { id: 'mode', category: 'mode', title: 'Away', link: null, at: feed.updatedAt },
+      ],
+      confirmations: [confirmation],
+    });
+    streamNowFeed.mockImplementation(async ({ signal }) =>
+      new Promise<void>((resolve) => signal.addEventListener('abort', () => resolve(), { once: true })));
+    const onAttentionChange = vi.fn();
+    const view = render(<MemoryRouter><NowFeedPanel client={client} config={config} getAccessToken={getAccessToken}
+      applyWorkspaceCommand={() => false} onAttentionChange={onAttentionChange} /></MemoryRouter>);
+    await waitFor(() => expect(onAttentionChange).toHaveBeenCalledWith(expect.objectContaining({
+      items: expect.arrayContaining([
+        expect.objectContaining({ id: '7' }),
+        expect.objectContaining({ id: 'credential' }),
+        expect.objectContaining({ id: 'alert' }),
+      ]),
+      confirmations: [confirmation],
+    })));
+    const attention = onAttentionChange.mock.lastCall?.[0];
+    expect(attention.items.map((item: { id: string }) => item.id)).toEqual(['7', 'credential', 'alert']);
+    expect(attention.items.map((item: { id: string }) => item.id)).not.toContain('release');
+    expect(attention.items.map((item: { id: string }) => item.id)).not.toContain('mode');
     view.unmount();
   });
 
@@ -333,21 +386,23 @@ describe('live Now panel', () => {
 
   it('persists dismissal before hiding the activity item and refreshes the snapshot', async () => {
     const user = userEvent.setup();
-    loadNowFeed.mockResolvedValue(feed);
+    loadNowFeed.mockResolvedValueOnce(feed).mockResolvedValue({ ...feed, items: [] });
     dismissNowActivity.mockResolvedValue(undefined);
     streamNowFeed.mockImplementation(async ({ signal }) =>
       new Promise<void>((resolve) => signal.addEventListener('abort', () => resolve(), { once: true })),
     );
     render(
-      <MemoryRouter><NowFeedPanel client={client} config={config} getAccessToken={getAccessToken} applyWorkspaceCommand={() => false} /></MemoryRouter>,
+      <MemoryRouter><HeaderFeed client={client} config={config} getAccessToken={getAccessToken} applyWorkspaceCommand={() => false} /></MemoryRouter>,
     );
 
-    await user.click(await screen.findByRole('button', { name: 'Dismiss Sandbox crashed' }));
+    await user.click(await screen.findByRole('button', { name: '1 item needs attention' }));
+    await user.click(screen.getByRole('button', { name: 'Dismiss Sandbox crashed' }));
     await waitFor(() => expect(dismissNowActivity).toHaveBeenCalledWith(
       'https://api.example.com', '7', getAccessToken,
     ));
     await waitFor(() => expect(loadNowFeed).toHaveBeenCalledTimes(2));
     expect(screen.queryByRole('link', { name: 'Sandbox crashed' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /need attention/ })).toBeNull();
   });
 
   it('shows browser approvals, records the owner’s choice, and refreshes the queue', async () => {
@@ -358,15 +413,15 @@ describe('live Now panel', () => {
       summary: 'Merge the reviewed change.',
       expiresAt: '2026-10-04T00:05:00.000Z',
     };
-    loadNowFeed.mockResolvedValue({ ...feed, confirmations: [confirmation] });
+    loadNowFeed.mockResolvedValueOnce({ ...feed, confirmations: [confirmation] })
+      .mockResolvedValue({ ...feed, confirmations: [] });
     resolveNowConfirmation.mockResolvedValue(undefined);
     streamNowFeed.mockImplementation(async ({ signal }) =>
       new Promise<void>((resolve) => signal.addEventListener('abort', () => resolve(), { once: true })),
     );
-    render(
-      <MemoryRouter><NowFeedPanel client={client} config={config} getAccessToken={getAccessToken} applyWorkspaceCommand={() => false} /></MemoryRouter>,
-    );
+    render(<MemoryRouter><HeaderFeed client={client} config={config} getAccessToken={getAccessToken} applyWorkspaceCommand={() => false} /></MemoryRouter>);
 
+    await user.click(await screen.findByRole('button', { name: '2 items need attention' }));
     await user.click(await screen.findByRole('button', { name: 'Approve Merge' }));
 
     await waitFor(() => expect(resolveNowConfirmation).toHaveBeenCalledWith(
@@ -390,10 +445,9 @@ describe('live Now panel', () => {
     streamNowFeed.mockImplementation(async ({ signal }) =>
       new Promise<void>((resolve) => signal.addEventListener('abort', () => resolve(), { once: true })),
     );
-    render(
-      <MemoryRouter><NowFeedPanel client={client} config={config} getAccessToken={getAccessToken} applyWorkspaceCommand={() => false} /></MemoryRouter>,
-    );
+    render(<MemoryRouter><HeaderFeed client={client} config={config} getAccessToken={getAccessToken} applyWorkspaceCommand={() => false} /></MemoryRouter>);
 
+    await user.click(await screen.findByRole('button', { name: '2 items need attention' }));
     const rejectButton = await screen.findByRole('button', { name: 'Reject Delete' });
     await user.click(rejectButton);
     expect((await screen.findByRole('alert')).textContent).toContain('could not record your response');

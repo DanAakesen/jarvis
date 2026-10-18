@@ -4,6 +4,8 @@ import { usePresence } from './presence-store';
 import { useJobs, type JobEntry } from './jobs-store';
 import { WorkingCore } from './ToolCallChip';
 import { ShellIcon } from './ShellIcon';
+import { AttentionPopover } from './AttentionPopover';
+import type { FeedAttention } from './activity';
 
 /** Opens (or just reveals) a job's result window; returns false while the window does not exist yet. */
 export type ResultWindowAction = (viewId: string, mode: 'open' | 'park') => boolean;
@@ -74,11 +76,12 @@ function jobLabel(job: JobEntry) {
   return `${job.title} · ${job.jobId.slice(0, 8)}`;
 }
 
-export function JobsChip({ backendUrl, getAccessToken, onResult, accountId = null }: {
+export function JobsChip({ backendUrl, getAccessToken, onResult, accountId = null, attention = null }: {
   backendUrl: string | null;
   getAccessToken: () => Promise<string>;
   onResult: ResultWindowAction;
   accountId?: string | null;
+  attention?: FeedAttention | null;
 }) {
   const { jobs, error, refresh, cancel, dismiss, dismissMany, dismissing, syncingDismissals, headerHiddenJobIds } = useJobs(backendUrl, getAccessToken, accountId);
   const { presence } = usePresence(backendUrl, getAccessToken);
@@ -177,11 +180,17 @@ export function JobsChip({ backendUrl, getAccessToken, onResult, accountId = nul
   const failures = outcomes.find(({ status }) => status === 'failed')?.count ?? 0;
   const needsAttention = Boolean(error) || jobs.some((job) => Boolean(errors[job.jobId]));
   const summary = outcomes.map(({ status, count }) => `${count} ${status} background ${count === 1 ? 'job' : 'jobs'}`).join(', ');
+  const attentionCount = (attention?.items.length ?? 0) + (attention?.confirmations.length ?? 0);
+  const hasHistory = jobs.length > 0;
 
   const closePopover = () => {
     setOpenId(null);
     setShowHistory(false);
-    (returnFocus.current?.isConnected ? returnFocus.current : historyButton.current)?.focus();
+    const target = returnFocus.current?.isConnected ? returnFocus.current
+      : historyButton.current ?? root.current?.querySelector<HTMLButtonElement>('.attention-summary') ??
+        document.querySelector<HTMLButtonElement>('.presence-chip-trigger') ??
+        document.querySelector<HTMLAnchorElement>('.settings-link');
+    target?.focus();
   };
 
   const hide = (job: JobEntry) => {
@@ -193,7 +202,9 @@ export function JobsChip({ backendUrl, getAccessToken, onResult, accountId = nul
     }));
     else void dismiss(job.jobId);
     setOpenId(null);
-    (next ?? historyButton.current)?.focus();
+    (next ?? historyButton.current ?? root.current?.querySelector<HTMLButtonElement>('.attention-summary') ??
+      document.querySelector<HTMLButtonElement>('.presence-chip-trigger') ??
+      document.querySelector<HTMLAnchorElement>('.settings-link'))?.focus();
   };
 
   const openResult = (job: JobEntry) => {
@@ -209,7 +220,7 @@ export function JobsChip({ backendUrl, getAccessToken, onResult, accountId = nul
   };
 
   return (
-    <div ref={root} className="job-tabs" onKeyDown={(event) => {
+    <div ref={root} className="job-tabs" hidden={!hasHistory && !needsAttention && attentionCount === 0 && !syncingDismissals && !open && !showList} onKeyDown={(event) => {
       if (event.key !== 'Escape' || (!open && !showList)) return;
       event.preventDefault();
       event.stopPropagation();
@@ -240,10 +251,10 @@ export function JobsChip({ backendUrl, getAccessToken, onResult, accountId = nul
           );
         })}
       </div>
-      <span className="workspace-tab-item job-history-tab" data-selected={showList || open}>
+      {(hasHistory || needsAttention || syncingDismissals) && <span className="workspace-tab-item job-history-tab" data-selected={showList || open}>
         <button ref={historyButton} type="button" className="workspace-tab jobs-summary" aria-label={`Show background work${needsAttention ? ': needs attention' : failures ? `: ${failures} failed` : ''}`}
-          aria-description={summary || (needsAttention ? 'Needs attention' : 'Idle')}
-          title={`Background work${needsAttention ? ': needs attention' : ''}${summary ? `: ${summary}` : needsAttention ? '' : ': idle'}`}
+          aria-description={summary || (needsAttention ? 'Needs attention' : undefined)}
+          title={`Background work${needsAttention ? ': needs attention' : ''}${summary ? `: ${summary}` : ''}`}
           aria-expanded={showList || open} aria-controls={popoverId} onClick={(event) => {
             returnFocus.current = event.currentTarget;
             setOpenId(null);
@@ -255,10 +266,10 @@ export function JobsChip({ backendUrl, getAccessToken, onResult, accountId = nul
               <ShellIcon name={status} /><span aria-hidden="true">{count}</span>
             </span>;
           })}
-          {outcomes.length === 0 && !needsAttention && <span className="jobs-outcome" role="img" aria-label="Background work: idle"><ShellIcon name="idle" /></span>}
-          {needsAttention && failures === 0 && <span className="jobs-outcome" data-status="failed" role="img" aria-label="Background work needs attention" title="Background work needs attention"><ShellIcon name="failed" /></span>}
+          {(hasHistory || syncingDismissals) && outcomes.length === 0 && <span className="jobs-outcome" data-status="idle" role="img" aria-label={hasHistory ? 'Background work history available' : 'Background work dismissals syncing'} title={hasHistory ? 'Background work history available' : 'Background work dismissals syncing'}><ShellIcon name="idle" /></span>}
         </button>
-      </span>
+      </span>}
+      <AttentionPopover attention={attention} />
       <span className="visually-hidden" role="status" aria-live="polite">
         {jobs.some((job) => job.status === 'running') ? `${jobs.filter((job) => job.status === 'running').length} background jobs running` : ''}
       </span>
