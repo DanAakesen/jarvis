@@ -101,7 +101,7 @@ describe('daily_show descriptor', () => {
     expect(tool.bodyLimit).toBeLessThanOrEqual(4096);
     expect(tool.description.length).toBeLessThanOrEqual(4000);
     expect(tool.description).toContain('daily_query');
-    expect(tool.description).toMatch(/nothing is calculated/iu);
+    expect(tool.description).toMatch(/adds no calculations/iu);
     expect(tool.description).toMatch(/never zero/iu);
   });
 
@@ -111,7 +111,8 @@ describe('daily_show descriptor', () => {
     expect(schema.required).toEqual(['source']);
     expect(schema.additionalProperties).toBe(false);
     expect([...(schema.properties.source?.enum ?? [])].sort()).toEqual([
-      sources.favorites, sources.heartRate, sources.meals, sources.metrics, sources.plans, sources.sleep, sources.sync, sources.workouts,
+      sources.days, sources.favorites, sources.heartRate, sources.meals, sources.metricCatalog, sources.metrics,
+      sources.plans, sources.sleep, sources.sync, sources.workouts,
     ].sort());
     expect(schema.properties.source?.enum).toEqual([...dailyShowSources]);
     expect(Object.keys(schema.properties).sort()).toEqual(['display', 'endDate', 'limit', 'metric', 'source', 'startDate', 'workoutId']);
@@ -178,7 +179,7 @@ describe('daily_show input', () => {
     ['a display that is not offered', { ...sleepWeek, display: 'canary-display' }],
     ['a blank measurement', { source: sources.metrics, ...week, metric: '   ' }],
     ['a measurement that is not text', { source: sources.metrics, ...week, metric: 5 }],
-    ['a measurement that is too long', { source: sources.metrics, ...week, metric: `canary${'x'.repeat(100)}` }],
+    ['a measurement that is too long', { source: sources.metrics, ...week, metric: `canary${'x'.repeat(256)}` }],
     ['a measurement with a control character', { source: sources.metrics, ...week, metric: 'canary\nmetric' }],
     ['no dates', { source: sources.sleep }],
     ['one date', { source: sources.sleep, startDate: week.startDate }],

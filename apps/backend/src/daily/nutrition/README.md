@@ -206,10 +206,17 @@ does not deserialize the trusted execution context from model input.
 Its all-write review requirement is an explicit external limitation, not a
 change to internal exact-label logging. Production composition stays off.
 
-The inactive P12-09 shared query service reads bounded meal history, favourites
-and meal plans. Collection sources use exact ID-only cursors (at most 100 rows),
-not invented date periods or intake totals. Whitelisted DTOs preserve raw display
-aliases, saved nutrient provenance and plan snapshots/revisions/tombstones.
+The inactive P12-09 shared query service reads bounded meal history, favourites,
+meal plans and version-3 per-day totals. Meal/favourite/plan collections use
+their existing ID/time cursors (at most 100 rows); `daily.nutrition.days` uses
+an ascending date cursor, defaults to 50 rows and allows at most 400 dates over
+a 366-day period. It groups only retained, non-deleted meals and never creates
+rows for empty dates. SQL `SUM` preserves null when a nutrient has no values;
+`unknown_nutrients` names nutrients absent from all meals and
+`partial_nutrients` marks totals with values on only some meals, which are lower
+bounds. The totals are identified as derived from retained meals, not as new
+source records. Whitelisted DTOs preserve raw display aliases, saved nutrient
+provenance and plan snapshots/revisions/tombstones.
 That read-only composition registers no intake/write route or tool. The separate
 internal composition above is explicit. An optional fourth
 `NutritionStore.forRequest` argument (third `createNutritionHandlers` argument)

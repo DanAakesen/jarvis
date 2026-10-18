@@ -34,19 +34,53 @@ export class DailyHealthReadModel {
       return { feeds, heartbeat, inbox }; // Heartbeat is distinct and cannot establish a processed feed timestamp.
     });
   }
-  async history(kind: HistoryKind, range: { startDate: string; endDate: string; limit?: number; after?: HealthCursor }, signal: AbortSignal) {
+  async metricCatalog(range: { startDate: string; endDate: string; limit?: number; after?: { key: string } }, signal: AbortSignal) {
+    const start = dateOnly(range.startDate); const end = dateOnly(range.endDate); const limit = pageLimit(range.limit ?? 100);
+    if (limit > 500 || end < start || Date.parse(end) - Date.parse(start) > 366 * 86400000) throw new TypeError('Invalid health metric catalogue range');
+    const after = range.after;
+    if (after && key(after.key) !== after.key) throw new TypeError('Invalid health metric catalogue cursor');
+    return healthSqlTransaction(this.pool, this.owner, signal, async (tx, bounded) => {
+      const rows = (await healthSqlQuery(new sql.Request(tx).input('owner', sql.UniqueIdentifier, this.owner)
+        .input('start', sql.Date, new Date(start)).input('end', sql.Date, new Date(end)).input('limit', sql.Int, limit)
+        .input('afterName', sql.NVarChar(256), after?.key ?? null),
+      `SELECT TOP(@limit + 1) metrics.metric_name,
+          COALESCE((SELECT TOP(5) units.unit COLLATE Latin1_General_100_BIN2 AS unit FROM daily.health_daily_metrics AS units
+            WHERE units.owner_object_id=@owner AND units.metric_name=metrics.metric_name
+              AND units.metric_date BETWEEN @start AND @end AND units.unit IS NOT NULL
+            GROUP BY units.unit COLLATE Latin1_General_100_BIN2
+            ORDER BY units.unit COLLATE Latin1_General_100_BIN2 FOR JSON PATH),N'[]') AS units_json,
+          MIN(metrics.metric_date) AS first_date,MAX(metrics.metric_date) AS last_date,
+          COUNT(DISTINCT metrics.metric_date) AS day_count,MAX(metrics.updated_at) AS latest_updated_at
+        FROM daily.health_daily_metrics AS metrics
+        WHERE metrics.owner_object_id=@owner AND metrics.metric_date BETWEEN @start AND @end
+          AND (@afterName IS NULL OR metrics.metric_name>@afterName)
+        GROUP BY metrics.metric_name ORDER BY metrics.metric_name;`, bounded)).recordset;
+      const truncated = rows.length > limit; const items = rows.slice(0, limit).map(row => ({
+        metric_name: row.metric_name,
+        units: (JSON.parse(String(row.units_json)) as { unit: string }[]).map(unit => unit.unit),
+        first_date: row.first_date, last_date: row.last_date, day_count: row.day_count,
+        latest_updated_at: row.latest_updated_at,
+      }));
+      const last = items.at(-1);
+      return { items, next: truncated && last ? { key: String(last.metric_name) } : null };
+    });
+  }
+  async history(kind: HistoryKind, range: { startDate: string; endDate: string; limit?: number; after?: HealthCursor; metric?: string }, signal: AbortSignal) {
     if (!Object.hasOwn(dimensions, kind)) throw new TypeError('Invalid health history kind');
     const start = dateOnly(range.startDate); const end = dateOnly(range.endDate); const limit = pageLimit(range.limit ?? 200);
     if (end < start || Date.parse(end) - Date.parse(start) > 366 * 86400000) throw new TypeError('Invalid health history range');
+    if (range.metric !== undefined && (kind !== 'metrics' || key(range.metric) !== range.metric)) throw new TypeError('Invalid health metric filter');
     const after = range.after;
     if (after) { dateOnly(after.date); key(after.key); if (after.date < start || after.date > end) throw new TypeError('Invalid health cursor'); }
     const definition = healthDefinitions[kind]; const [dateColumn, keyColumn] = dimensions[kind];
     return healthSqlTransaction(this.pool, this.owner, signal, async (tx, bounded) => {
       const request = new sql.Request(tx).input('owner', sql.UniqueIdentifier, this.owner).input('start', sql.Date, new Date(start)).input('end', sql.Date, new Date(end)).input('limit', sql.Int, limit + 1)
-        .input('afterDate', sql.Date, after ? new Date(after.date) : null).input('afterKey', sql.NVarChar(256), after?.key ?? null);
+        .input('afterDate', sql.Date, after ? new Date(after.date) : null).input('afterKey', sql.NVarChar(256), after?.key ?? null)
+        .input('metric', sql.NVarChar(256), range.metric ?? null);
       // Lists omit unbounded JSON detail; exact workout detail has a separate bounded read below.
       const rows = (await healthSqlQuery(request, `SELECT TOP(@limit) ${Object.keys(definition.fields).filter(k => !k.endsWith('_json')).map(k => `[${k}]`).join(',')},ingestion_id,updated_at FROM daily.[${definition.table}]
         WHERE owner_object_id=@owner AND [${dateColumn}] BETWEEN @start AND @end
+          AND ${kind === 'metrics' ? '(@metric IS NULL OR [metric_name]=@metric)' : '@metric IS NULL'}
           AND (@afterDate IS NULL OR [${dateColumn}]>@afterDate${kind === 'sleep' ? '' : ` OR ([${dateColumn}]=@afterDate AND [${keyColumn}]>@afterKey)`})
         ORDER BY [${dateColumn}]${kind === 'sleep' ? '' : `,[${keyColumn}]`};`, bounded)).recordset;
       const truncated = rows.length > limit; const items = rows.slice(0, limit); const last = items.at(-1);

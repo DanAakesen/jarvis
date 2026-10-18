@@ -20,6 +20,10 @@ function fixture() {
   const history = vi.fn().mockResolvedValue({ items: [{ metric_name: 'waist_circumference', metric_date: '2026-10-16',
     value: 0.88, unit: 'm', min_value: null, ingestion_id: 'synthetic-ingestion', updated_at: '2026-10-16T07:00:00Z',
     owner_object_id: owner, raw_bytes: 'must-not-escape' }], next: null });
+  const metricCatalog = vi.fn().mockResolvedValue({ items: [{
+    metric_name: 'weight', units: ['kg', 'lb'], first_date: '2026-10-01', last_date: '2026-10-16',
+    day_count: 2, latest_updated_at: '2026-10-16T07:00:00Z',
+  }], next: null });
   const sync = vi.fn().mockResolvedValue({
     feeds: [{ feed_kind: 'metrics', accepted_evidence_at: '2026-10-16T07:00:00Z', processed_committed_at: '2026-10-16T07:05:00Z' }],
     heartbeat: { last_received_at: '2026-10-16T07:29:00Z' }, inbox: { pending: 1, quarantined: 0 },
@@ -29,6 +33,12 @@ function fixture() {
   const meals = vi.fn().mockResolvedValue({ rows: [{ id: '01', meal_date: new Date('2026-10-16'), energy_kcal: 123, protein_grams: null,
     components_json: '[]', nutrient_provenance_json: '{"kind":"synthetic-label"}', revision: 2n, deleted_at: null,
     owner_object_id: owner, apple_health_claim_token_hash: 'must-not-escape' }], next: null });
+  const days = vi.fn().mockResolvedValue({ rows: [{
+    meal_date: new Date('2026-10-16'), meal_count: 2, energy_kcal: 123, protein_grams: null,
+    carbohydrates_grams: 20, fat_grams: 3, fiber_grams: null, unknown_nutrients: ['protein_grams'],
+    partial_nutrients: ['energy_kcal', 'carbohydrates_grams'], latest_updated_at: '2026-10-16T07:00:00Z',
+    owner_object_id: owner, internal_metadata: 'must-not-escape',
+  }], next: null });
   const favorites = vi.fn().mockResolvedValue({ rows: [{ id: '001', favorite_name: 'Synthetic favourite',
     aliases_json: '["Raw Alias"]', energy_kcal: 123, protein_grams: null, components_json: '[]',
     nutrient_provenance_json: '{"kind":"synthetic-label"}', owner_object_id: owner,
@@ -47,11 +57,11 @@ function fixture() {
     updated_at: 'legacy-unverified-time', owner_object_id: owner,
     source_snapshots_json: '{"credential":"must-not-escape"}', delivery_evidence_json: '{"token":"must-not-escape"}' });
   const readers: DailyReaders = {
-    health: vi.fn(() => ({ history, sync, workoutDetail, heartRate })),
-    nutrition: vi.fn(() => ({ history: meals, favorites, plans })),
+    health: vi.fn(() => ({ history, metricCatalog, sync, workoutDetail, heartRate })),
+    nutrition: vi.fn(() => ({ history: meals, days, favorites, plans })),
     briefs: vi.fn(() => ({ history: briefHistory, detail: briefDetail })),
   };
-  return { service: new DailyQueryService(readers, () => clock), advance: () => { clock += 60000; }, readers, history, sync, workoutDetail, heartRate, meals, favorites, plans, briefHistory, briefDetail };
+  return { service: new DailyQueryService(readers, () => clock), advance: () => { clock += 60000; }, readers, history, metricCatalog, sync, workoutDetail, heartRate, meals, days, favorites, plans, briefHistory, briefDetail };
 }
 describe('one shared Daily read contract', () => {
   it('shares historical brief metadata/body through HTTP and the same sensitive tool, without interpreting time or delivering', async () => {
@@ -166,6 +176,45 @@ describe('one shared Daily read contract', () => {
     expect((await f.service.query(input, request(), signal())).revision).toBe(result.revision);
     f.sync.mockResolvedValue({ feeds: [], heartbeat: { last_received_at: '2026-10-16T07:31:00Z' }, inbox: {} });
     expect((await f.service.query(input, request(), signal())).freshness.sourceProcessedCommittedAt).toBeNull();
+  });
+  it('filters one exact measurement and exposes a paged metric catalogue with sorted mixed units', async () => {
+    const f = fixture();
+    const filtered = await f.service.query({ ...input, metric: 'waist_circumference', limit: 1,
+      cursor: { date: '2026-10-15', key: 'waist_circumference' } }, request(), signal());
+    expect(f.history).toHaveBeenCalledWith('metrics', {
+      startDate: input.startDate, endDate: input.endDate, limit: 1, metric: 'waist_circumference',
+      after: { date: '2026-10-15', key: 'waist_circumference' },
+    }, expect.any(AbortSignal));
+    expect(filtered.items[0]).toHaveProperty('metric_name', 'waist_circumference');
+    const catalogQuery = { source: sources.metricCatalog, startDate: input.startDate, endDate: input.endDate, limit: 1, cursor: { key: 'steps' } } as const;
+    f.metricCatalog.mockResolvedValue({ items: [{ metric_name: 'weight', units: ['kg', 'lb'], first_date: '2026-10-01',
+      last_date: '2026-10-16', day_count: 2, latest_updated_at: '2026-10-16T07:00:00Z' }], next: { key: 'weight' } });
+    const catalog = await f.service.query(catalogQuery, request(), signal());
+    expect(f.metricCatalog).toHaveBeenCalledWith({
+      startDate: input.startDate, endDate: input.endDate, limit: 1, after: { key: 'steps' },
+    }, expect.any(AbortSignal));
+    expect(catalog.items[0]).toMatchObject({ metric_name: 'weight', units: ['kg', 'lb'], day_count: 2 });
+    expect(catalog).toMatchObject({ coverage: { hasMore: true, next: { key: 'weight' } },
+      freshness: { latestReturnedRecordUpdatedAt: '2026-10-16T07:00:00.000Z' },
+      provenance: { calculations: 'existing-read-model' } });
+  });
+  it('returns retained-meal day totals with null, partial and complete nutrients and derived provenance', async () => {
+    const f = fixture();
+    const query = { source: sources.days, startDate: input.startDate, endDate: input.endDate, limit: 50 } as const;
+    const result = await f.service.query(query, request(), signal());
+    expect(f.days).toHaveBeenCalledWith({ from: input.startDate, to: input.endDate, limit: 50 }, expect.any(AbortSignal));
+    expect(result.items[0]).toMatchObject({
+      meal_date: '2026-10-16', meal_count: 2, energy_kcal: 123, protein_grams: null,
+      unknown_nutrients: ['protein_grams'], partial_nutrients: ['energy_kcal', 'carbohydrates_grams'],
+      latest_updated_at: '2026-10-16T07:00:00Z',
+    });
+    expect(result).toMatchObject({
+      provenance: { calculations: 'derived-from-retained-meals' },
+      freshness: { latestReturnedRecordUpdatedAt: '2026-10-16T07:00:00.000Z', staleness: 'unknown' },
+      coverage: { sourceCompleteness: 'unknown', hasMore: false, next: null },
+    });
+    expect(JSON.stringify(result)).not.toContain(owner);
+    expect(JSON.stringify(result)).not.toContain('internal_metadata');
   });
   it('preserves meal tombstones, unknown macros and revisions without exposing device metadata or inventing totals', async () => {
     const f = fixture();

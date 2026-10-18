@@ -45,6 +45,14 @@ Commit tests use synthetic transaction doubles, not real SQL acceptance.
 
 `sync` distinguishes latest committed upload evidence, actual processing time, inbox pending/quarantine counts and phone heartbeat. Acceptance and heartbeat cannot establish a processed feed timestamp. History uses keyset pages, a maximum 366-day span and 500 rows; list reads omit large JSON detail. Minute HR uses a separate bounded cursor. Exact workout detail is capped at 8 MiB and remains owner-bound. P12-09 supplies public contracts/routes/tools and activation later.
 
+The shared query contract optionally filters `daily.health.metrics` by the
+exact retained `metric_name`, preserving its date/name cursor order.
+`daily.health.metric-catalog` pages retained metric names for the same
+366-day maximum; each item reports sorted distinct non-null units (up to five),
+first/last dates, distinct day count and latest update time. Catalogue pages
+default to 100 and cap at 500 rows. Both reads use the existing owner-scoped SQL
+boundary; capability versions 1 and 2 do not advertise the version-3 source.
+
 The inactive nutrition suggestion adapter reads only today's `active_energy` metric through `history('metrics', ...)` and takes freshness from `updated_at`; `start_at`/`end_at` are not a reliable last-sample time. It never reads resting, basal or total energy, and the exact metric name and daily-total semantics are not verified against a live export.
 
 ## Checks and remaining gates

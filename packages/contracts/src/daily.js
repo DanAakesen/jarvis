@@ -20,13 +20,19 @@ const legacyQuerySources = Object.freeze({
   sync: 'daily.sync',
 });
 export const dailyQuerySourcesV1 = Object.freeze(Object.values(legacyQuerySources));
-export const dailyCapabilitiesVersion = 2;
-export const dailyCapabilitiesAccept = 'application/json;version=2, application/json';
+export const dailyCapabilitiesVersion = 3;
+export const dailyCapabilitiesAccept = 'application/json;version=3, application/json;version=2, application/json';
 export const dailyQuerySources = Object.freeze({
   ...legacyQuerySources,
   briefs: 'daily.briefs.history',
   brief: 'daily.briefs.detail',
+  metricCatalog: 'daily.health.metric-catalog',
+  days: 'daily.nutrition.days',
 });
+export const dailyQuerySourcesV2 = Object.freeze([
+  ...dailyQuerySourcesV1, dailyQuerySources.briefs, dailyQuerySources.brief,
+]);
+export const dailyQuerySourcesV3 = Object.freeze(Object.values(dailyQuerySources));
 const record = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 const keys = (v, allowed) => Object.keys(v).every((key) => allowed.includes(key));
 const key = (v) => typeof v === 'string' && v.length > 0 && v.length <= 256 &&
@@ -59,14 +65,25 @@ export function isDailyQuery(v) {
   }
   const heartRate = v.source === dailyQuerySources.heartRate;
   const meals = v.source === dailyQuerySources.meals;
-  if (!keys(v, heartRate ? ['source', 'workoutId', 'limit', 'cursor'] : ['source', 'startDate', 'endDate', 'limit', 'cursor'])) return false;
-  if (v.limit !== undefined && (!Number.isInteger(v.limit) || v.limit < 1 || v.limit > (meals ? 100 : 500))) return false;
+  const metricCatalog = v.source === dailyQuerySources.metricCatalog;
+  const days = v.source === dailyQuerySources.days;
+  const metric = v.source === dailyQuerySources.metrics;
+  const allowed = heartRate ? ['source', 'workoutId', 'limit', 'cursor']
+    : ['source', 'startDate', 'endDate', 'limit', 'cursor',
+      ...(metric ? ['metric'] : [])];
+  if (!keys(v, allowed)) return false;
+  const maxLimit = meals ? 100 : metricCatalog ? 500 : days ? 400 : 500;
+  if (v.limit !== undefined && (!Number.isInteger(v.limit) || v.limit < 1 || v.limit > maxLimit)) return false;
+  if (metric && v.metric !== undefined && !key(v.metric)) return false;
   if (heartRate ? !key(v.workoutId) : !date(v.startDate) || !date(v.endDate) ||
       v.endDate < v.startDate || Date.parse(v.endDate) - Date.parse(v.startDate) > 366 * 86400000) return false;
   if (v.cursor === undefined) return true;
   if (!record(v.cursor)) return false;
   if (heartRate) return keys(v.cursor, ['minute', 'metric']) && instant(v.cursor.minute) && key(v.cursor.metric);
   if (meals) return keys(v.cursor, ['createdAt', 'id']) && instant(v.cursor.createdAt) && key(v.cursor.id);
+  if (metricCatalog) return keys(v.cursor, ['key']) && key(v.cursor.key);
+  if (days) return keys(v.cursor, ['date']) && date(v.cursor.date) &&
+    v.cursor.date >= v.startDate && v.cursor.date <= v.endDate;
   return keys(v.cursor, ['date', 'key']) && date(v.cursor.date) && key(v.cursor.key) &&
     v.cursor.date >= v.startDate && v.cursor.date <= v.endDate;
 }
@@ -75,11 +92,12 @@ export const dailyQuerySchema = Object.freeze({
   type: 'object',
   properties: {
     source: { type: 'string', enum: Object.values(dailyQuerySources) },
-    startDate: { type: 'string', description: 'Inclusive Europe/Copenhagen date, YYYY-MM-DD; required for health/meal history, not briefs.' },
+    startDate: { type: 'string', description: 'Inclusive Europe/Copenhagen date, YYYY-MM-DD; required for health/nutrition history, not briefs.' },
     endDate: { type: 'string', description: 'Inclusive calendar date; at most 366 days after startDate.' },
+    metric: { type: 'string', minLength: 1, maxLength: 256, description: 'Exact metric_name filter; only for daily.health.metrics.' },
     workoutId: { type: 'string', maxLength: 256 },
     briefId: { type: 'string', minLength: 1, maxLength: 256, description: 'Exact returned legacy brief ID, without trimming; only for brief detail.' },
-    limit: { type: 'integer', minimum: 1, maximum: 500, description: 'Nutrition and brief history allow at most 100; default 50.' },
+    limit: { type: 'integer', minimum: 1, maximum: 500, description: 'Meals and brief history allow at most 100; daily.nutrition.days at most 400; default 50 (metric catalogue defaults to 100).' },
     // Per-source validation deliberately runs on the original cursor, not Ajv-stripped fields.
     cursor: { type: 'object', additionalProperties: true, description: 'Replay exactly the previous result coverage.next cursor.' },
   },

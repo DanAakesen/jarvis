@@ -23,7 +23,7 @@ function items(query: DailyQuery): Record<string, DailyJson>[] {
   const record = records[query.source];
   return record ? [record] : [];
 }
-const capabilityList = (ids: readonly DailySourceId[] = Object.values(sources)) => jsonResponse({ module: 'daily', version: 2, sources: ids });
+const capabilityList = (ids: readonly DailySourceId[] = Object.values(sources)) => jsonResponse({ module: 'daily', version: 3, sources: ids });
 function gate() {
   let open = () => {};
   const opened = new Promise<void>(resolve => { open = resolve; });
@@ -72,6 +72,8 @@ describe('Daily overview', () => {
     expect(screen.getByRole('heading', { level: 2, name: 'What Daily holds today' })).toBeTruthy();
     expect(screen.getAllByRole('listitem')).toHaveLength(dailySources.length);
     for (const source of dailySources) expect(row(source.label).getByText(source.purpose)).toBeTruthy();
+    expect(dailySources.map(source => source.id)).not.toContain(sources.metricCatalog);
+    expect(dailySources.map(source => source.id)).not.toContain(sources.days);
     expect(row('Measurements').getByText('Has records')).toBeTruthy();
     expect(row('Measurements').getByText('Checked for the last 7 days (Europe/Copenhagen).')).toBeTruthy();
     expect(row('Meal plans').getByText('Has records')).toBeTruthy();
