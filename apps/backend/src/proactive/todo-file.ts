@@ -16,7 +16,7 @@ const dueMarkersPattern = /(?:📅\s*|\[due::\s*|\bdue:\s*)(\d{4}-\d{2}-\d{2})(?
 
 export function sanitizeFactText(value: string): string {
   const withoutControls = value.replace(/\p{Cc}/gu, '');
-  const withoutHtml = withoutControls.replace(/<[^>]*>/gu, '');
+  const withoutHtml = withoutControls.replace(/<[^>]*(?:>|$)/gu, '');
   const withoutLinks = withoutHtml.replace(/!?\[([^\]]*)\]\((?:<[^>]*>|[^)]*)\)/gu, '$1');
   return Array.from(withoutLinks.replace(/\s+/gu, ' ').trim()).slice(0, 300).join('');
 }
