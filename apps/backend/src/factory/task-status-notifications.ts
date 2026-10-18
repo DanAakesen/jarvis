@@ -1,6 +1,4 @@
 import type { ConversationStore } from '../core/conversation-store.js';
-import type { AwayModeStore } from '../core/away-mode.js';
-import type { TeamsNotificationService } from '../teams/service.js';
 import type { TaskStatusNotificationStore, TaskNotificationState } from '../database/task-status-notification-store.js';
 import type { TaskEventMessage, TaskStore } from './task-store.js';
 
@@ -77,12 +75,10 @@ export function taskStatusMessage(
 export function createTaskStatusNotificationHandler(options: {
   readonly tasks: Pick<TaskStore, 'get'>;
   readonly conversations: ConversationStore;
-  readonly awayMode: AwayModeStore;
-  readonly teams: TeamsNotificationService | null;
   readonly notifications: TaskStatusNotificationStore;
   readonly onError: () => void;
 }) {
-  return async (event: TaskEventMessage, awayOverride?: boolean): Promise<boolean> => {
+  return async (event: TaskEventMessage): Promise<boolean> => {
     const notification = taskStatusNotification(event);
     if (!notification) return false;
     const { state } = notification;
@@ -94,16 +90,9 @@ export function createTaskStatusNotificationHandler(options: {
       if (!sessionId) return false;
       const session = await options.conversations.getSession(sessionId);
       if (!session) return false;
-      const away = awayOverride ?? ((await options.awayMode.read()).mode !== 'present');
-      if (away && !options.teams) return false;
       if (!await options.notifications.claim(event.taskId, state)) return true;
 
       const text = taskStatusMessage(event.taskId, state, notification.url ?? pullRequestUrl(event, task), session.language);
-      if (away) {
-        const kind = state === 'NeedsAttention' ? 'warning' : state === 'Done' ? 'success' : 'info';
-        await options.teams!.notify(kind, text);
-        return true;
-      }
       await options.conversations.addMessage({
         sessionId,
         role: 'jarvis',

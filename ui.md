@@ -360,7 +360,7 @@ voice-mode access and mobile overflow need separate design.
 | Runbook | Help/operations navigation; document shown in the workspace when requested. |
 | Teams calling | Teams phone experience; related setup in Settings. |
 | Away mode | Top bar: compact present/away control; details in Settings. |
-| Phone confirmations | Teams approval cards and related attention items. |
+| Phone confirmations | Authenticated browser-app approval requests and related attention items. |
 | Screen sharing | Confirmed top-bar control; active sharing/stop treatment still a proposal. |
 | Local PC bridge | Existing feature's connection status in a requested status view or relevant compact status; integration design deferred. |
 | Computer use | Voice/input action; progress and stop feedback in the relevant view; implementation design deferred. |

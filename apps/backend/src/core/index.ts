@@ -251,7 +251,7 @@ export const coreModule: BackendModule = {
               sessionId: phoneSessionId,
               callerId: app.ownerObjectId,
               store: app.phoneSessionStore,
-              notifications: app.teamsNotifications,
+              notifications: app.ownerInteractions,
               signal: controller.signal,
               execute: () => tool.execute(request.body, request, controller.signal),
             });

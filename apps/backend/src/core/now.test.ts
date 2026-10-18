@@ -5,7 +5,7 @@ import type { TokenVerifier } from '../auth/verify.js';
 import { createEventHub } from './event-hub.js';
 import type { NowFeed, NowFeedEventHub, NowFeedStore } from './now.js';
 import type { AwayModeStore } from './away-mode.js';
-import type { TeamsNotificationService } from '../teams/service.js';
+import type { OwnerInteractionService } from './owner-interactions.js';
 import type { TaskEventHub, TaskEventMessage } from '../factory/task-store.js';
 
 const config = { ...loadConfig({}), logLevel: 'silent' as const };
@@ -216,15 +216,15 @@ describe('Now feed API', () => {
       set: vi.fn(),
     };
     const resolveBrowserConfirmation = vi.fn(async () => true);
-    const teamsNotifications = {
+    const ownerInteractions = {
       pendingBrowserConfirmations: () => [confirmation],
       resolveBrowserConfirmation,
-    } as unknown as TeamsNotificationService;
+    } as unknown as OwnerInteractionService;
     const app = buildApp({ ...config, staticWebAppOrigin: 'https://fixture.azurestaticapps.net' }, undefined, {
       auth: async () => ({ objectId: config.auth.ownerObjectId, tenantId: config.auth.tenantId, displayName: 'Dan' }),
       nowFeedStore: { read: vi.fn(async () => feed), dismiss: vi.fn(async () => true) },
       awayModeStore,
-      teamsNotifications,
+      ownerInteractions,
     });
     apps.push(app);
 
@@ -273,10 +273,10 @@ describe('Now feed API', () => {
         markPresent,
         set: vi.fn(),
       } as unknown as AwayModeStore,
-      teamsNotifications: {
+      ownerInteractions: {
         pendingBrowserConfirmations: () => [],
         resolveBrowserConfirmation,
-      } as unknown as TeamsNotificationService,
+      } as unknown as OwnerInteractionService,
     });
     apps.push(app);
 
@@ -294,7 +294,7 @@ describe('Now feed API', () => {
     expect(resolveBrowserConfirmation).not.toHaveBeenCalled();
   });
 
-  it('routes away task-state updates through the browser notification service', async () => {
+  it('routes away task-state updates through Now and refreshes the app', async () => {
     const nowEventHub = createEventHub();
     const update = vi.fn();
     nowEventHub.subscribe(update);
@@ -310,7 +310,7 @@ describe('Now feed API', () => {
       eventHub,
       nowEventHub,
       awayModeStore,
-      teamsNotifications: { notify } as unknown as TeamsNotificationService,
+      ownerInteractions: { notify } as unknown as OwnerInteractionService,
     });
     apps.push(app);
 
@@ -326,7 +326,7 @@ describe('Now feed API', () => {
     });
 
     await vi.waitFor(() => expect(notify).toHaveBeenCalledWith('info', 'Task 42 is now Running.'));
-    expect(update).not.toHaveBeenCalled();
+    expect(update).toHaveBeenCalledWith({ type: 'refresh' });
   });
 
   it('protects the read and returns unavailable when its store is missing', async () => {
