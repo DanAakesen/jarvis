@@ -1450,3 +1450,36 @@ variants and remaining workflow-specific layouts. Local synthetic Chromium
 inspection covered the phone and desktop sizes in both themes, plus reduced
 motion. The attention event and healthy Daily/Proactive data states were not
 available in the harness; screenshot captures could not be attached to the PR.
+
+## Daily Nutrition (18 October 2026; P12-24)
+
+Nutrition stays within the existing Daily surface and shared control geometry.
+A compact keyboard-operated Day / Trend / Library tab list separates meal
+inspection, period comparisons and saved definitions. The day stepper precedes
+five shared statistic tiles; meal-type groups provide chronological rows with
+collapsed components and provenance, while deleted meals remain separately
+collapsed. Target comparisons use explicit text as well as protein progress;
+the energy baseline excludes activity. Unknown and lower-bound values are
+labelled in text, never conveyed by colour alone.
+
+Trend uses the shared line charts and their data tables, with gaps between
+unlogged dates, a selectable daily table and Monday-start weekly averages.
+Library uses filterable read-only lists and explicitly limits filtering to
+loaded records. Layout CSS consumes existing spacing and typography tokens,
+uses tabular numerals, and keeps wide tables in labelled scrolling regions.
+Buttons retain the shared classes without local border or radius overrides.
+Synthetic browser evidence belongs in `docs/ui/p12-24/`; it is not live-data or
+physical-device acceptance.
+
+Synthetic Chromium inspection exercised Day, Trend and Library at 320,
+390×844, 768 and 1440×900 in both light and dark appearances. All 24 combinations
+kept page content within the viewport, one Nutrition `h2`, and at least 44px
+visible button, input and disclosure targets. Date stepping retained the
+stepper position; refocus refresh retained the selected date, open meal and
+scroll position. Inspection also exercised Back/reload, keyboard tabs, escaped
+provenance, empty-day neighbours, unset targets, independent capability gates,
+filtering loaded records, five-page library capping, per-view recovery and
+reduced motion. Expanded plan content remained reachable above the mobile
+composer at 320px. The six JPEG captures cover phone Day in both themes,
+desktop Trend in both themes, Library at 768px light and 320px dark. They are
+synthetic desktop-browser evidence, not live-owner or physical-phone checks.

@@ -5378,3 +5378,16 @@ query as the Proactive page. It is composed only behind the existing
 `JARVIS_PROACTIVE_ENABLED` flag, returns only bounded display fields marked as
 untrusted data, and cannot change item state or authorize actions. Reusing the
 page's query keeps both views consistent and avoids creating a second read model.
+
+## P12-24 read-only Nutrition inside Daily (18 October 2026; #979)
+
+Use the merged Daily plug-in contract and shared UI rather than a new route,
+registry or nutrition read service. Day totals reconcile with the displayed
+nondeleted meals; optional daily aggregates supply Trend and known neighbouring
+logged dates, not replacement day totals. Keep missing nutrients unknown,
+partial sums labelled as lower bounds, and unlogged chart dates as gaps.
+Compare energy only with the configured resting-minus-deficit baseline and
+explicitly exclude activity; never infer a missing target. Favourites and plans
+are saved definitions, not consumed meals. Logging and corrections remain in
+chat under the existing native approval boundary. The original Daily remains
+canonical; synthetic inspection does not establish live source parity.
