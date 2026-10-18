@@ -1,10 +1,10 @@
 import { constants } from 'node:fs';
 import { createReadStream } from 'node:fs';
 import { createHash, randomUUID } from 'node:crypto';
-import { mkdir, open, lstat, mkdtemp, readdir, rename, rm, unlink } from 'node:fs/promises';
+import { mkdir, open, mkdtemp, readdir, rename, rm, unlink, type FileHandle } from 'node:fs/promises';
 import { createInterface } from 'node:readline';
 import { tmpdir } from 'node:os';
-import { dirname, isAbsolute, join, resolve, sep } from 'node:path';
+import { basename, dirname, isAbsolute, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import sql from 'mssql';
 import type { ConnectionPool, Transaction } from 'mssql';
@@ -13,7 +13,7 @@ import { loadAuthConfig } from '../../auth/config.js';
 import { resolveDailyOwner } from '../owner.js';
 import { dailyTables, type DailyTable } from '../store/schema.js';
 import { columnTypes, decisions, EXCLUDED_TABLES, IMPORT_ORDER } from './decisions.js';
-import { BundleReader, safeDirectory, sha256 } from './io.js';
+import { BundleReader, sha256 } from './io.js';
 import { parseManifest, type Manifest, type Ruling } from './manifest.js';
 import { isImportableRow, validateBundle } from './validate.js';
 
@@ -281,28 +281,42 @@ async function snapshotValidatedTables(
   }
 }
 
-// The next two helpers check the open descriptor rather than the path, so the file cannot be swapped between check and read.
-async function readLockPid(lockPath: string): Promise<number | undefined> {
-  let handle: Awaited<ReturnType<typeof open>>;
-  try { handle = await open(lockPath, constants.O_RDONLY | constants.O_NOFOLLOW); }
-  catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined;
-    throw new Error('state-running', { cause: error });
-  }
+async function openDirectoryAnchored(path: string, create = false): Promise<FileHandle> {
+  let current = await open('/', constants.O_RDONLY | constants.O_DIRECTORY);
   try {
-    const info = await handle.stat();
-    if (!info.isFile() || info.nlink !== 1) throw new Error('state-running');
-    let lock: unknown;
-    try { lock = JSON.parse(await handle.readFile('utf8')); } catch { throw new Error('state-running'); }
-    const pid = typeof lock === 'object' && lock !== null ? (lock as { pid?: unknown }).pid : undefined;
-    if (typeof pid !== 'number' || !Number.isSafeInteger(pid) || pid < 1) throw new Error('state-running');
-    return pid;
-  } finally { await handle.close(); }
+    for (const part of resolve(path).split('/').filter(Boolean)) {
+      const child = `/proc/self/fd/${current.fd}/${part}`;
+      if (create) {
+        await mkdir(child, { mode: 0o700 }).catch((error: NodeJS.ErrnoException) => {
+          if (error.code !== 'EEXIST') throw error;
+        });
+      }
+      const next = await open(child, constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW);
+      await current.close();
+      current = next;
+    }
+    return current;
+  } catch (error) {
+    await current.close();
+    throw error;
+  }
 }
 
-async function readPrivateState(statePath: string): Promise<string> {
-  let handle: Awaited<ReturnType<typeof open>>;
-  try { handle = await open(statePath, constants.O_RDONLY | constants.O_NOFOLLOW); }
+async function openPrivateDirectory(path: string, create = false): Promise<FileHandle> {
+  const handle = /^\/proc\/self\/fd\/\d+$/.test(path)
+    ? await open(path, constants.O_RDONLY | constants.O_DIRECTORY)
+    : await openDirectoryAnchored(path, create);
+  const info = await handle.stat();
+  if ((info.mode & 0o077) !== 0 || (typeof process.getuid === 'function' && info.uid !== process.getuid())) {
+    await handle.close();
+    throw new Error('state-permissions-invalid');
+  }
+  return handle;
+}
+
+async function readStateFile(directory: string): Promise<string> {
+  let handle: FileHandle;
+  try { handle = await open(join(directory, STATE_FILE), constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK); }
   catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ELOOP') throw new Error('state-invalid', { cause: error });
     throw error;
@@ -313,7 +327,17 @@ async function readPrivateState(statePath: string): Promise<string> {
       || (info.mode & 0o077) !== 0 || (typeof process.getuid === 'function' && info.uid !== process.getuid())) {
       throw new Error('state-invalid');
     }
-    return await handle.readFile('utf8');
+    const chunks: Buffer[] = [];
+    let size = 0;
+    while (size <= MAX_STATE_BYTES) {
+      const chunk = Buffer.alloc(Math.min(16_384, MAX_STATE_BYTES + 1 - size));
+      const { bytesRead } = await handle.read(chunk, 0, chunk.length, size);
+      if (!bytesRead) break;
+      size += bytesRead;
+      if (size > MAX_STATE_BYTES) throw new Error('state-invalid');
+      chunks.push(chunk.subarray(0, bytesRead));
+    }
+    return Buffer.concat(chunks).toString('utf8');
   } finally { await handle.close(); }
 }
 
@@ -322,76 +346,73 @@ export async function acquireState(stateDirectory: string, manifestDigest: strin
 }> {
   const directory = resolve(stateDirectory);
   if (!isAbsolute(stateDirectory) || isWithin(repositoryRoot, directory)) throw new Error('state-location-invalid');
-  await safeDirectory(directory, true);
-  const directoryInfo = await lstat(directory);
-  if ((directoryInfo.mode & 0o077) !== 0 || (typeof process.getuid === 'function' && directoryInfo.uid !== process.getuid())) {
-    throw new Error('state-permissions-invalid');
-  }
-  const entries = await readdir(directory);
-  for (const name of entries) {
-    if (name.startsWith('.checkpoint-')) {
-      const path = join(directory, name);
-      const info = await lstat(path);
-      if (!info.isFile() || info.isSymbolicLink() || info.nlink !== 1) throw new Error('state-invalid');
-      await unlink(path);
-    } else if (![STATE_FILE, LOCK_FILE].includes(name)) throw new Error('state-unknown');
-  }
-  const lockPath = join(directory, LOCK_FILE);
-  const recordedPid = await readLockPid(lockPath);
-  if (recordedPid !== undefined) {
-    try { process.kill(recordedPid, 0); throw new Error('state-running'); }
-    catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'ESRCH') throw error;
-    }
-    await unlink(lockPath).catch((error: NodeJS.ErrnoException) => { if (error.code !== 'ENOENT') throw error; });
-  }
-  let lock: Awaited<ReturnType<typeof open>>;
-  try { lock = await open(lockPath, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600); }
-  catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'EEXIST') throw new Error('state-running', { cause: error });
-    throw error;
-  }
-  try { await lock.writeFile(JSON.stringify({ pid: process.pid })); await lock.close(); }
-  catch (error) {
-    await lock.close().catch(() => undefined);
-    await unlink(lockPath).catch(() => undefined);
-    throw error;
-  }
-  const release = async () => { await unlink(lockPath).catch((error: NodeJS.ErrnoException) => { if (error.code !== 'ENOENT') throw error; }); };
-  let checkpoint: ImportCheckpoint = { version: 1, manifestDigest, batchSize, tables: {} };
-  const statePath = join(directory, STATE_FILE);
+  const directoryHandle = await openPrivateDirectory(directory, true);
+  const directoryPath = `/proc/self/fd/${directoryHandle.fd}`;
+  const lockPath = join(directoryPath, LOCK_FILE);
+  let lockCreated = false;
   try {
-    checkpoint = JSON.parse(await readPrivateState(statePath)) as ImportCheckpoint;
-    if (checkpoint.version !== 1 || checkpoint.manifestDigest !== manifestDigest || checkpoint.batchSize !== batchSize
-      || !checkpoint.tables || typeof checkpoint.tables !== 'object'
-      || Object.keys(checkpoint).some(key => !['version', 'manifestDigest', 'batchSize', 'tables'].includes(key))
-      || Object.keys(checkpoint.tables).some(table => !Object.hasOwn(dailyTables, table))) {
-      throw new Error('state-bundle-mismatch');
+    const entries = await readdir(directoryPath);
+    const hasCheckpoint = entries.includes(STATE_FILE);
+    for (const name of entries) {
+      if (/^\.checkpoint-[\da-f-]{36}$/i.test(name)) {
+        await unlink(join(directoryPath, name));
+      } else if (![STATE_FILE, LOCK_FILE].includes(name)) throw new Error('state-unknown');
     }
-    for (const table of Object.keys(checkpoint.tables) as DailyTable[]) validateCheckpointTable(table, checkpoint.tables[table]);
+    let lock: FileHandle;
+    try { lock = await open(lockPath, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600); }
+    catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'EEXIST') throw new Error('state-running', { cause: error });
+      throw error;
+    }
+    lockCreated = true;
+    try { await lock.writeFile(JSON.stringify({ pid: process.pid })); } finally { await lock.close(); }
+    let checkpoint: ImportCheckpoint = { version: 1, manifestDigest, batchSize, tables: {} };
+    try {
+      checkpoint = JSON.parse(await readStateFile(directoryPath)) as ImportCheckpoint;
+      if (checkpoint.version !== 1 || checkpoint.manifestDigest !== manifestDigest || checkpoint.batchSize !== batchSize
+        || !checkpoint.tables || typeof checkpoint.tables !== 'object'
+        || Object.keys(checkpoint).some(key => !['version', 'manifestDigest', 'batchSize', 'tables'].includes(key))
+        || Object.keys(checkpoint.tables).some(table => !Object.hasOwn(dailyTables, table))) {
+        throw new Error('state-bundle-mismatch');
+      }
+      for (const table of Object.keys(checkpoint.tables) as DailyTable[]) validateCheckpointTable(table, checkpoint.tables[table]);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT' || hasCheckpoint) {
+        if ((error as NodeJS.ErrnoException).code === 'ENOENT') throw new Error('state-invalid', { cause: error });
+        throw error;
+      }
+    }
+    let released = false;
+    const release = async () => {
+      if (released) return;
+      released = true;
+      try { await unlink(lockPath); }
+      catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
+      finally { await directoryHandle.close(); }
+    };
+    return { directory: directoryPath, checkpoint, release };
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') { await release(); throw error; }
+    if (lockCreated) await unlink(lockPath).catch(() => undefined);
+    await directoryHandle.close();
+    throw error;
   }
-  return { directory, checkpoint, release };
 }
 
 export async function writeCheckpoint(directory: string, checkpoint: ImportCheckpoint): Promise<void> {
-  const destination = join(directory, STATE_FILE);
-  try {
-    const info = await lstat(destination);
-    if (!info.isFile() || info.isSymbolicLink() || info.nlink !== 1 || info.size > MAX_STATE_BYTES
-      || (info.mode & 0o077) !== 0 || (typeof process.getuid === 'function' && info.uid !== process.getuid())) {
-      throw new Error('state-invalid');
-    }
-  } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
-  const staging = join(directory, `.checkpoint-${randomUUID()}`);
+  const directoryHandle = await openPrivateDirectory(directory);
+  const directoryPath = `/proc/self/fd/${directoryHandle.fd}`;
+  const destination = join(directoryPath, STATE_FILE);
+  const staging = join(directoryPath, `.checkpoint-${randomUUID()}`);
   try {
     const contents = `${JSON.stringify(checkpoint)}\n`;
     if (Buffer.byteLength(contents) > MAX_STATE_BYTES) throw new Error('state-too-large');
     const handle = await open(staging, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600);
     try { await handle.writeFile(contents); await handle.sync(); } finally { await handle.close(); }
     await rename(staging, destination);
-  } finally { await unlink(staging).catch((error: NodeJS.ErrnoException) => { if (error.code !== 'ENOENT') throw error; }); }
+  } finally {
+    await unlink(staging).catch((error: NodeJS.ErrnoException) => { if (error.code !== 'ENOENT') throw error; });
+    await directoryHandle.close();
+  }
 }
 
 function validateCheckpointTable(table: DailyTable, checkpoint: TableCheckpoint | undefined): TableCheckpoint {
@@ -1031,15 +1052,16 @@ export async function writeMigrationReport(path: string, bundle: string, stateDi
   const destination = resolve(path);
   if (isWithin(repositoryRoot, destination) || isWithin(resolve(bundle), destination)
     || (stateDir && isWithin(resolve(stateDir), destination))) throw new Error('report-location-invalid');
-  await safeDirectory(dirname(destination), true);
-  try {
-    const existing = await lstat(destination);
-    if (!existing.isFile() || existing.isSymbolicLink() || existing.nlink !== 1) throw new Error('report-file-invalid');
-  } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
-  const staging = join(dirname(destination), `.daily-report-${randomUUID()}`);
+  const directoryHandle = await openDirectoryAnchored(dirname(destination), true);
+  const directoryPath = `/proc/self/fd/${directoryHandle.fd}`;
+  const staging = join(directoryPath, `.daily-report-${randomUUID()}`);
+  const anchoredDestination = join(directoryPath, basename(destination));
   try {
     const handle = await open(staging, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600);
     try { await handle.writeFile(`${JSON.stringify(report, null, 2)}\n`); await handle.sync(); } finally { await handle.close(); }
-    await rename(staging, destination);
-  } finally { await unlink(staging).catch((error: NodeJS.ErrnoException) => { if (error.code !== 'ENOENT') throw error; }); }
+    await rename(staging, anchoredDestination);
+  } finally {
+    await unlink(staging).catch((error: NodeJS.ErrnoException) => { if (error.code !== 'ENOENT') throw error; });
+    await directoryHandle.close();
+  }
 }

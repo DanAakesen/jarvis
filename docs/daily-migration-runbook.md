@@ -174,7 +174,9 @@ Only synthetic bundles may enter a coding-agent environment.
    existing row is not overwritten; processing continues through that table,
    checkpoints are preserved, and exit code 3 reports conflicts. After a
    transient failure, resume from the same private state directory only after
-   verifying the process lock is stale. Do not remove a live lock.
+   verifying the process lock is stale. The CLI refuses every existing lock;
+   after confirming its recorded process is no longer running, remove the stale
+   lock manually from the private state directory. Never remove a live lock.
    **Expected:** a digest-only report of committed batch counts, conflicts and
    checksums. The command never prints row content or credentials.
 

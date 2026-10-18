@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, readdir, rename, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { ConnectionPool } from 'mssql';
@@ -8,7 +8,7 @@ import { columnTypes, decisions, IMPORT_ORDER } from './decisions.js';
 import { generateBundle } from './generate.js';
 import {
   acquireState, assertConfiguredOwner, canonicalValue, classifyImportRow, importBundle, isTransientSqlError,
-  selectedTables, writeCheckpoint, type ImportCheckpoint,
+  selectedTables, writeCheckpoint, writeMigrationReport, type ImportCheckpoint,
 } from './importer.js';
 
 const owned = '11111111-1111-4111-8111-111111111111';
@@ -90,6 +90,66 @@ describe('private importer state', () => {
     await writeFile(join(path, 'unknown'), '');
     await expect(acquireState(path, 'a'.repeat(64), 500)).rejects.toThrow('state-unknown');
     await expect(acquireState(process.cwd(), 'a'.repeat(64), 500)).rejects.toThrow('state-location-invalid');
+  });
+
+  it('does not reclaim a stale lock by pathname and admits only one concurrent importer', async () => {
+    const path = await directory();
+    const lockPath = join(path, '.daily-import.lock');
+    const staleLock = JSON.stringify({ pid: Number.MAX_SAFE_INTEGER });
+    await writeFile(lockPath, staleLock, { mode: 0o600 });
+    await expect(acquireState(path, 'a'.repeat(64), 500)).rejects.toThrow('state-running');
+    expect(await readFile(lockPath, 'utf8')).toBe(staleLock);
+    await rm(lockPath);
+
+    const attempts = await Promise.allSettled([
+      acquireState(path, 'a'.repeat(64), 500),
+      acquireState(path, 'a'.repeat(64), 500),
+    ]);
+    const acquired = attempts.filter((attempt): attempt is PromiseFulfilledResult<Awaited<ReturnType<typeof acquireState>>> =>
+      attempt.status === 'fulfilled');
+    expect(acquired).toHaveLength(1);
+    expect(attempts.filter(attempt => attempt.status === 'rejected')).toHaveLength(1);
+    await acquired[0]!.value.release();
+  });
+
+  it('opens checkpoint state without following links and keeps writes anchored to the acquired directory', async () => {
+    const root = await directory();
+    const path = join(root, 'state');
+    await mkdir(path, { mode: 0o700 });
+    const sentinel = join(root, 'sentinel');
+    await writeFile(sentinel, 'synthetic external state', { mode: 0o600 });
+    await symlink(sentinel, join(path, '.daily-import-state.json'));
+    await expect(acquireState(path, 'a'.repeat(64), 500)).rejects.toThrow('state-invalid');
+    expect(await readFile(sentinel, 'utf8')).toBe('synthetic external state');
+
+    await rm(join(path, '.daily-import-state.json'));
+    const state = await acquireState(path, 'a'.repeat(64), 500);
+    const moved = join(root, 'moved-state');
+    await rename(path, moved);
+    await symlink(sentinel, path);
+    await writeCheckpoint(state.directory, {
+      version: 1, manifestDigest: 'a'.repeat(64), batchSize: 500, tables: {},
+    });
+    expect(await readdir(moved)).toContain('.daily-import-state.json');
+    expect(await readFile(sentinel, 'utf8')).toBe('synthetic external state');
+    await state.release();
+    expect(await readdir(moved)).not.toContain('.daily-import.lock');
+  });
+
+  it('writes a report over a symlink without changing its target', async () => {
+    const root = await directory();
+    const reports = join(root, 'reports');
+    await mkdir(reports, { mode: 0o700 });
+    const sentinel = join(root, 'sentinel');
+    await writeFile(sentinel, 'synthetic external report', { mode: 0o600 });
+    const output = join(reports, 'report.json');
+    await symlink(sentinel, output);
+    await writeMigrationReport(output, join(root, 'bundle'), undefined, {
+      formatVersion: 1, operation: 'import', status: 'complete', bundleDigest: 'a'.repeat(64),
+      tables: {}, excludedTables: 0, excludedRows: 0,
+    });
+    expect(JSON.parse(await readFile(output, 'utf8'))).toMatchObject({ bundleDigest: 'a'.repeat(64) });
+    expect(await readFile(sentinel, 'utf8')).toBe('synthetic external report');
   });
 });
 
