@@ -38,9 +38,11 @@ const text = (v: unknown): v is string => typeof v === 'string' && v.length <= 4
 export const timestamp = (v: unknown): v is string => {
   if (typeof v !== 'string'
     || !/^\d{4}-\d\d-\d\dT(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d{1,3})?(?:Z|[+-](?:[01]\d|2[0-3]):[0-5]\d)$/.test(v)
-    || !Number.isFinite(Date.parse(v)) || v.startsWith('0000')) return false;
-  const date = v.slice(0, 10);
-  return new Date(`${date}T00:00:00Z`).toISOString().slice(0, 10) === date;
+    || v.startsWith('0000')) return false;
+  const year = Number(v.slice(0, 4)), month = Number(v.slice(5, 7)), day = Number(v.slice(8, 10));
+  const leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+  const days = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][month - 1] ?? 0;
+  return day >= 1 && day <= days && Number.isFinite(Date.parse(v));
 };
 const exact = (v: Record<string, unknown>, required: string[], optional: string[] = []): boolean =>
   required.every(k => Object.hasOwn(v, k)) && Object.keys(v).every(k => [...required, ...optional].includes(k));

@@ -132,6 +132,32 @@ describe('strict manifest runtime boundary', () => {
       expect(() => parseObjectEntry(value)).toThrow('object-entry-invalid');
     }
   });
+  it.each([
+    '2026-02-30T00:00:00Z',
+    '2026-02-29T00:00:00Z',
+    '2026-04-31T00:00:00Z',
+    '2026-10-18T24:00:00Z',
+    '2026-10-18T00:60:00Z',
+    '2026-10-18T00:00:60Z',
+    '2026-10-18T00:00:00+24:00',
+    '2026-10-18T00:00:00-02:60',
+    '2026-10-18T00:00:00',
+    '0000-01-01T00:00:00Z',
+  ])('rejects invalid control timestamp %s in both manifest and object index', invalid => {
+    const manifest: Manifest = { formatVersion: 1, createdAt: invalid, exporter: { name: 'SYNTHETIC', version: '1' },
+      sourceSchemaRef: 'unknown', tables: {} };
+    expect(() => parseManifest(manifest)).toThrow('manifest-invalid');
+    expect(() => parseObjectEntry({ file: 'objects/SYNTHETIC.bin', ingestionId: 'SYNTHETIC',
+      bytes: 0, sha256: '0'.repeat(64), expiresAt: invalid })).toThrow('object-entry-invalid');
+  });
+  it('accepts real leap-day control timestamps and preserves explicit offsets exactly', () => {
+    const date = '2024-02-29T23:59:59.123-02:30';
+    const manifest: Manifest = { formatVersion: 1, createdAt: date, exporter: { name: 'SYNTHETIC', version: '1' },
+      sourceSchemaRef: 'unknown', tables: {} };
+    expect(parseManifest(manifest).createdAt).toBe(date);
+    expect(parseObjectEntry({ file: 'objects/SYNTHETIC.bin', ingestionId: 'SYNTHETIC',
+      bytes: 0, sha256: '0'.repeat(64), expiresAt: date }).expiresAt).toBe(date);
+  });
 });
 
 describe('streaming validation and negative fixtures', () => {
