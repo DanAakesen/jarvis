@@ -2439,6 +2439,9 @@ Dan approved P12 on 12 October 2026 and explicitly released only P12-01 for this
 | P12-34 | [#1025](https://github.com/DanAakesen/jarvis/issues/1025) | Rebuild the Daily Data section on the presentation kit | Records browsed in a readable explorer on the kit: toolbar and freshness line, a scrollable table that becomes a card list on phones, a readable record detail with the raw JSON behind a disclosure, the kit chart view and paging; no horizontal overflow at 320px; synthetic screenshots. | P12-20, P12-30 | Complete |
 | P12-35 | [#1026](https://github.com/DanAakesen/jarvis/issues/1026) | Rebuild the Daily Briefs section on the presentation kit | Brief history grouped by month with a comfortable reading view, compact metadata, the raw brief behind a disclosure, newer and older navigation and an empty state; no horizontal overflow at 320px; synthetic screenshots. | P12-26, P12-30 | Complete |
 | P12-36 | [#1029](https://github.com/DanAakesen/jarvis/issues/1029) | Audit and polish the whole Daily page for responsive, overflow and consistency defects | A committed audit table across six widths in light and dark for every section; each listed defect fixed or recorded as not reproducing; no horizontal overflow at 320px, no clipped chart labels and touch targets of 44px or more on coarse pointers; guard tests that need no layout measurement. | P12-31, P12-32, P12-33 | Complete |
+| P12-37 | [#1033](https://github.com/DanAakesen/jarvis/issues/1033) | Audit and fix Daily accessibility, keyboard and screen-reader behaviour | A committed audit table for every section and shell control (keyboard operation, visible focus, tab order, roles, names and states, headings, table and chart text alternatives, drawer focus, announced states, reduced motion); each failing row fixed or justified; guard tests that need no layout measurement; a keyboard walkthrough in a real browser. | P12-33, P12-34, P12-35 | Complete |
+| P12-38 | [#1037](https://github.com/DanAakesen/jarvis/issues/1037) | Fix the Daily structural and data-presentation inconsistencies found by the visual QA pass | One shared section-header slot order, one locale source for every Daily date and time, aligned Data details buttons, numeric cells and Table and Chart switch, a dedicated glyph for every workout type and one legend entry per metric for sparse chart series; each finding fixed or recorded as not reproducing; guard tests that need no layout measurement. | P12-36, P12-37 | In progress |
+| P12-39 | [#1036](https://github.com/DanAakesen/jarvis/issues/1036) | Fix the Daily stylesheet inconsistencies found by the visual QA pass | The active section tab scrolled into view, even tab padding, equal-height Body and Sleep tiles, consistent heading sizes and spacing in Nutrition, Briefs and Overview, aligned Nutrition date-row controls, 44px link widths and a wrapping workout type name at 320px; each finding checked in a real browser at 390 and 1440px in light and dark; stylesheet ratchets unchanged. | P12-36, P12-37 | In progress |
 
 18 October 2026, owner direct instruction: build the Daily page so workouts,
 nutrition and body data can be browsed like the original site, and implement
@@ -2446,7 +2449,9 @@ historical health/nutrition ingestion from the original source API/schema.
 P12-20 to P12-28 build the page (shell, read-model additions, paging hook, then
 the Workouts, Nutrition and Body & sleep sections in parallel, then the Overview
 integration). P12-30 to P12-36 rebuild every section on one presentation kit and
-then audit the whole page for responsive, overflow and consistency defects. The
+then audit the whole page for responsive, overflow and consistency defects;
+P12-37 audits its accessibility and keyboard behaviour; P12-38 and P12-39 fix
+the findings of a rendered visual QA pass over every section. The
 owner withdrew the Sites database-export/bundle-import path;
 the synthetic P12-22 validator is removed and P12-27 importer work is cancelled.
 #1005 is the source-contract-first direction. This cleanup reads or changes no

@@ -14,6 +14,7 @@ The complete list of what Jarvis does or will do, for UI design and planning. Ea
 | **In progress** | A task is being implemented |
 | **Planned** | A task exists in PLAN.md; not started or waiting for a decision |
 | **Gap** | Described in the docs but missing in the code; a task is linked |
+| **Not planned** | Cancelled or out of scope; kept in the index so the decision stays visible |
 
 | Surface | Meaning |
 | --- | --- |
@@ -295,24 +296,27 @@ These accepted changes are implemented offline together in P8-40 [#417](https://
 | Direct voice sharing | Native-permission screen/camera start, requested inspection and stop; sharing alone sends no frame | More in voice controls | Local implementation; live physical capture/backend pending |  | P8-43 (#435) |
 | Transient notifications | Dismissible bottom-right toast; no menu overlay or composer text leakage | Outside chat/voice layout | Local implementation; browser verification recorded with the PR |  | P8-43 (#435) |
 | Projected status and living dormancy | White text without badge/dot; gentle dormant cyan pulse and stirring amber core, stronger awake movement; preserve wake and real state/audio responses | Under orb and existing Jarvis stage | Local implementation; hardware motion acceptance pending |  | P8-43 (#435) |
-## Daily migration (P12)
+## Daily (P12)
 
-Daily follows the accepted direction to reuse Jarvis's existing SQL Server; P12-03 adds its separate schema there, with no new database service or infrastructure (`docs/architecture.md`, P12-03).
+Daily reuses Jarvis's existing backend, SQL Server (a separate `daily` schema), owner authentication and tool confirmation flow, with no new database service, API, auth service or Azure resource ([boundary](architecture.md#daily-integration-boundary-p12-01)). On 18 October 2026 the owner cancelled the database export/import route; data now reaches Daily directly from the owner's phone through the health upload endpoint, including bounded historical batches (#1005, #1008). The original Daily is untouched, and retiring it (#734) has not started. [Source mapping](daily-schema-mapping.md) is implementation evidence, not an import plan.
 
-P12-07 has inactive source-compatible nutrition handlers, idempotency-key history/corrections, confirmed favourites/aliases, server-resolved plans and persisted-dislike budget suggestions. Frida pins release 10 / 5.5 with verified public formats, attribution, unavailable provenance and honest partial totals. Final CI/independent review and real provider/phone acceptance remain separate; no runtime registration, activation or Apple Health queue. Exact-head SQL/container/CI evidence belongs to #743.
-
-P12-03 adds only the empty owner-bound persistence schema and inactive exact-key read contract; target schema/ownership tests require real SQL validation. Health/food/coaching services, imports and pages remain planned and disabled. [Source mapping and later reconciliation gates](daily-schema-mapping.md); parked #717 backup acceptance is unchanged.
+Daily rows are current as of 18 October 2026. Daily is switched on for the owner's production by `JARVIS_DAILY_ENABLED` and `VITE_DAILY_ENABLED`, and health upload by `JARVIS_HEALTH_UPLOAD_ENABLED`. No owner acceptance is recorded yet, so no Daily row is Live. The page opens on a today dashboard and has Workouts, Nutrition, Body & sleep, Briefs and Data sections.
 
 | Feature | Surface | Status | Tasks |
 | --- | --- | --- | --- |
-| Default-off Daily integration metadata, shared server owner and reserved view IDs | Backend contract | Built offline; pending review | P12-01 (#716) |
-| Private export/inventory, SQL mapping and reconciliation | Background | Protected export/reconciliation gated; empty SQL mapping implemented | P12-02, P12-03, P12-06 |
-| Existing-backend health upload/heartbeat with hashed device permissions and SQL raw inbox | Device HTTP/background | Inactive #805 reviewed/CI-tested/deployed; private/live/phone acceptance still gated; no new resources | P12-04 (#719) |
-| SQL health processing, bounded retry/quarantine, owner history/detail and distinct processed/heartbeat freshness | Unregistered backend library | Inactive synthetic implementation; exact-head CI/review and protected/live/device parity pending; no scheduler or activation | P12-05 (#720) |
-| Nutrition/Frida/plans and coaching/recovery/recomp | Both | Planned; gated | P12-07–P12-09 |
-| Existing Google feeds, scoped widget/Shortcut, football and brief history | Both/Phone | Planned; recurring notifications off | P12-10–P12-14 |
-| Daily overview page (what Daily holds today, over the existing record browser) and on-demand Daily views (`daily_show`, no fixed native screens) | Both | Overview page built (read-only, owner-bound) and switched on for the owner's production by the two deployment files, live check pending; `daily_show` built (read-only, owner-bound, same Daily switch, synthetic and headless-browser checked), live check pending | P12-15 (#730), P12-16 (#731) |
-| Parity, physical-phone acceptance, protected cutover/rollback and legacy deprecation | Background/Phone | Planned; evidence gates apply | P12-17–P12-19 |
+| Default-off Daily integration metadata, shared server owner and reserved view IDs | Backend contract | Built, not verified live; deployed with the Daily switch on | P12-01 (#716) |
+| Daily SQL schema and source-to-SQL mapping | Background | Built, not verified live; the additive schema and its migrations apply at backend start-up. The database export, import and reconciliation route is not planned and its validator was removed (#1006) | P12-03 (#718); P12-02, P12-06, P12-22, P12-27 |
+| Direct phone sync: health upload and heartbeat endpoints, an owner-created credential (only its hash is stored) and bounded historical batches | Background | Built, not verified live; switched on by #1008. No data arrives until the owner creates the credential in Settings, Health upload and points Health Auto Export at the endpoint shown | P12-04 (#719), P12-29 (#1005) |
+| Background health processing, owner history and detail, per-metric filter, metric catalogue and per-day nutrition totals; processed and heartbeat freshness shown separately | Background | Built, not verified live; the processing worker runs only with the upload switch on, and the page shows nothing until data arrives | P12-05 (#720), P12-21 (#966), P12-28 (#976) |
+| Nutrition tools and the Nutrition page: intake history, daily totals and owner-set targets | Both | Built, not verified live; Frida lookup and the hosted nutrition connector stay off | P12-07 (#722), P12-24 (#979), P12-31 (#1019) |
+| Coach status, profile, meal-preference and recovery-period reads and confirmed owner writes, as data-only tools | Voice/chat | Built, not verified live (#1005). The coaching, recomposition and recovery services of P12-08 are not planned: there is no new coaching or recovery automation, commitments, orders, experiments, meal plans or Apple Health meal write-back | P12-29 (#1005); P12-08 (#723) |
+| Daily page: today dashboard, Workouts, Nutrition, Body & sleep, Briefs and Data sections on one presentation kit | Screen | Built, not verified live; the contrast and theme (P14-12), responsive and overflow (P12-36) and accessibility and keyboard (P12-37) audits are done | P12-15 (#730), P12-20 (#964), P12-23–P12-26, P12-30–P12-37; P14-12 |
+| On-demand Daily views in chat and voice (`daily_query`, `daily_show`, no fixed native screens) | Both | Built, not verified live | P12-16 (#731) |
+| Brief history: list and detail of recorded past briefs | Both | Built, not verified live; no brief import or scheduled brief is planned, so the list shows what is recorded and otherwise an empty state. Notification support is deferred | P12-14 (#729) |
+| Google feeds: Gmail and calendar attention snapshots | Both | Offline only; services built but unregistered and default-off, waiting for the owner's Google confirmation | P12-10 (#725) |
+| Apple Health nutrition export through an iPhone Shortcut | Phone | Offline only; claim/complete protocol, store and phone guide shipped inactive (#758). The Shortcut itself, a device credential and physical acceptance remain, and the write-back is deferred | P12-12 (#727) |
+| iPhone widget and football table | Phone | Not planned; both tasks are closed as not planned | P12-11 (#726), P12-13 (#728) |
+| Parity, physical-phone acceptance, cutover/rollback and legacy retirement | Background/Phone | Planned; not started. Each issue carries a revised-direction note because the export/import route is cancelled | P12-17–P12-19 (#732–#734) |
 
 [Approved scope and existing issue URLs](daily-migration.md). No TickTick integration or original Daily repository/data deletion.
 
