@@ -1,20 +1,31 @@
 {
   "date": "2026-10-18",
   "generatedBy": "P14_CONTRAST_REPORT=1 npm test --workspace @jarvis/web -- --run src/contrast-audit.test.ts",
-  "method": "WCAG relative luminance contrast; translucent backgrounds composited over black and white stage extremes.",
+  "method": "WCAG relative luminance contrast; shared-token backgrounds composited over black and white stage extremes, plus Kanban text over sampled hero pixels.",
+  "heroSampleMethod": {
+    "screenshots": [
+      "docs/ui/p14-07/after-app-light-desktop.webp",
+      "docs/ui/p14-07/after-app-dark-desktop.webp"
+    ],
+    "dimensions": "1440x2732",
+    "sampling": "150 pixels per screenshot across six exposed side-margin x positions (16, 40, 64, 1376, 1400, 1424) and 25 y positions from 60 through 1260 at 50px intervals; the lowest-contrast sample for each theme/text role is recorded below.",
+    "fixtureData": "Synthetic screenshot content only."
+  },
   "thresholds": {
     "normalText": "4.5:1",
     "largeTextAndMeaningfulNonText": "3:1"
   },
   "summary": {
-    "pairingLabels": 197,
+    "pairingLabels": 201,
+    "sharedTokenPairingLabels": 197,
+    "sampledHeroPairingLabels": 4,
     "themes": [
       "light",
       "dark"
     ],
     "stageExtremesPerPairing": 2,
-    "measurements": 788,
-    "baselineUnallowlistedFailures": 102,
+    "measurements": 796,
+    "baselineUnallowlistedFailures": 110,
     "afterUnallowlistedFailures": 0,
     "afterAllowlistedMeasurements": 28
   },
@@ -7518,6 +7529,128 @@
         "afterRatio": 7.98,
         "afterResult": "Pass"
       }
+    }
+  ],
+  "heroSceneMeasurements": [
+    {
+      "pairing": "Kanban page helper and link text — --surface-translucent over sampled hero pixels",
+      "theme": "light",
+      "sampledHeroPixel": {
+        "screenshot": "docs/ui/p14-07/after-app-light-desktop.webp",
+        "x": 1424,
+        "y": 560,
+        "color": "#3f4646"
+      },
+      "threshold": 4.5,
+      "beforeRatio": 1.70,
+      "beforeResult": "Fail",
+      "afterRatio": 13.19,
+      "afterResult": "Pass"
+    },
+    {
+      "pairing": "Kanban live status and caption — --surface-translucent over sampled hero pixels",
+      "theme": "light",
+      "sampledHeroPixel": {
+        "screenshot": "docs/ui/p14-07/after-app-light-desktop.webp",
+        "x": 1424,
+        "y": 710,
+        "color": "#4c5b5f"
+      },
+      "threshold": 4.5,
+      "beforeRatio": 1.02,
+      "beforeResult": "Fail",
+      "afterRatio": 5.89,
+      "afterResult": "Pass"
+    },
+    {
+      "pairing": "Kanban empty-state copy — --board-slab over sampled hero pixels",
+      "theme": "light",
+      "sampledHeroPixel": {
+        "screenshot": "docs/ui/p14-07/after-app-light-desktop.webp",
+        "x": 1424,
+        "y": 560,
+        "color": "#3f4646"
+      },
+      "threshold": 4.5,
+      "beforeRatio": 1.70,
+      "beforeResult": "Fail",
+      "afterRatio": 13.19,
+      "afterResult": "Pass"
+    },
+    {
+      "pairing": "Kanban empty-state detail and caption — --board-slab over sampled hero pixels",
+      "theme": "light",
+      "sampledHeroPixel": {
+        "screenshot": "docs/ui/p14-07/after-app-light-desktop.webp",
+        "x": 1424,
+        "y": 710,
+        "color": "#4c5b5f"
+      },
+      "threshold": 4.5,
+      "beforeRatio": 1.02,
+      "beforeResult": "Fail",
+      "afterRatio": 5.89,
+      "afterResult": "Pass"
+    },
+    {
+      "pairing": "Kanban page helper and link text — --surface-translucent over sampled hero pixels",
+      "theme": "dark",
+      "sampledHeroPixel": {
+        "screenshot": "docs/ui/p14-07/after-app-dark-desktop.webp",
+        "x": 1400,
+        "y": 910,
+        "color": "#f3f3e5"
+      },
+      "threshold": 4.5,
+      "beforeRatio": 1.09,
+      "beforeResult": "Fail",
+      "afterRatio": 14.79,
+      "afterResult": "Pass"
+    },
+    {
+      "pairing": "Kanban live status and caption — --surface-translucent over sampled hero pixels",
+      "theme": "dark",
+      "sampledHeroPixel": {
+        "screenshot": "docs/ui/p14-07/after-app-dark-desktop.webp",
+        "x": 16,
+        "y": 910,
+        "color": "#f7f0e5"
+      },
+      "threshold": 4.5,
+      "beforeRatio": 1.45,
+      "beforeResult": "Fail",
+      "afterRatio": 9.27,
+      "afterResult": "Pass"
+    },
+    {
+      "pairing": "Kanban empty-state copy — --board-slab over sampled hero pixels",
+      "theme": "dark",
+      "sampledHeroPixel": {
+        "screenshot": "docs/ui/p14-07/after-app-dark-desktop.webp",
+        "x": 1400,
+        "y": 910,
+        "color": "#f3f3e5"
+      },
+      "threshold": 4.5,
+      "beforeRatio": 1.09,
+      "beforeResult": "Fail",
+      "afterRatio": 14.79,
+      "afterResult": "Pass"
+    },
+    {
+      "pairing": "Kanban empty-state detail and caption — --board-slab over sampled hero pixels",
+      "theme": "dark",
+      "sampledHeroPixel": {
+        "screenshot": "docs/ui/p14-07/after-app-dark-desktop.webp",
+        "x": 16,
+        "y": 910,
+        "color": "#f7f0e5"
+      },
+      "threshold": 4.5,
+      "beforeRatio": 1.45,
+      "beforeResult": "Fail",
+      "afterRatio": 9.27,
+      "afterResult": "Pass"
     }
   ],
   "tokenChanges": [

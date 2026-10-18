@@ -11,6 +11,8 @@ the top bar uses that full surface rather than fading to an under-contrasted
 gradient stop. A chart-specific warm series token keeps data marks separate
 from decorative amber glow. Preserve the existing palette character with the
 smallest token changes documented in `docs/ui/p14-12/contrast-table.json`.
+Kanban helper and live-status copy over the open stage uses that same glass
+surface; empty-state copy remains within the board's existing glass.
 
 Use 4.5:1 for normal text and 3:1 for large text and meaningful non-text marks.
 Disabled controls remain legible and visually distinct. Status meaning never

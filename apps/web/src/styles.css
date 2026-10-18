@@ -1573,6 +1573,13 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
 .kanban-search input:focus-visible, .kanban-select select:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 .kanban-page .task-release-bar { background: var(--board-slab); box-shadow: none; }
 .kanban-live-status { margin: var(--space-2) 0; font-size: var(--type-caption); }
+.kanban-page > .tasks-help, .kanban-page > .kanban-live-status {
+  width: fit-content;
+  max-width: 100%;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-control);
+  background: var(--surface-translucent);
+}
 .kanban-board { margin-top: var(--space-2); }
 .kanban-column {
   position: relative;

@@ -10,6 +10,8 @@ type Pairing = {
   backgrounds: Background[];
   threshold: number;
   allowlistReason?: string;
+  beforeLayers?: string[];
+  heroSample?: 'body' | 'muted';
 };
 
 const source = readFileSync('src/styles.css', 'utf8');
@@ -17,6 +19,16 @@ const stageSamples = [
   { label: 'darkest stage sample', color: '#000000' },
   { label: 'lightest stage sample', color: '#ffffff' },
 ] as const;
+const heroSamples: Record<Theme, Record<'body' | 'muted', { label: string; color: string }>> = {
+  light: {
+    body: { label: 'light hero sample for body text at (1424, 560)', color: '#3f4646' },
+    muted: { label: 'light hero sample for muted text at (1424, 710)', color: '#4c5b5f' },
+  },
+  dark: {
+    body: { label: 'dark hero sample for body text at (1400, 910)', color: '#f3f3e5' },
+    muted: { label: 'dark hero sample for muted text at (16, 910)', color: '#f7f0e5' },
+  },
+};
 const surfaces = [
   '--page', '--surface', '--surface-muted', '--surface-translucent',
   '--report-surface', '--code-surface', '--stage-slab', '--shell-slab',
@@ -151,19 +163,25 @@ function measure(
     threshold: number;
     result: string;
     allowlistReason?: string;
+    beforeRatio?: number;
   }>,
+  samples: readonly { label: string; color: string }[] = stageSamples,
 ): void {
   const foreground = resolveColor(pairing.foreground.startsWith('--')
     ? `var(${pairing.foreground})`
     : pairing.foreground, theme);
   for (const background of pairing.backgrounds) {
-    for (const stage of stageSamples) {
+    for (const stage of samples) {
       const backdrop = parseColor(stage.color);
       const renderedBackground = background.layers.reduce(
         (result, layer) => composite(resolveColor(layer.startsWith('--') ? `var(${layer})` : layer, theme), result),
         backdrop,
       );
       const ratio = contrast(composite(foreground, renderedBackground), renderedBackground);
+      const beforeBackground = pairing.beforeLayers?.reduce(
+        (result, layer) => composite(resolveColor(layer.startsWith('--') ? `var(${layer})` : layer, theme), result),
+        backdrop,
+      );
       report.push({
         pairing: `${pairing.label} — ${background.label}`,
         theme,
@@ -174,6 +192,7 @@ function measure(
         ...(ratio < pairing.threshold && pairing.allowlistReason
           ? { allowlistReason: pairing.allowlistReason }
           : {}),
+        ...(beforeBackground ? { beforeRatio: contrast(composite(foreground, beforeBackground), beforeBackground) } : {}),
       });
     }
   }
@@ -312,6 +331,19 @@ const buttonPairings: Pairing[] = [
 
 function semanticPairings(): Pairing[] {
   const pairings: Pairing[] = [
+    ...([
+      { label: 'Kanban page helper and link text', foreground: 'var(--text)', surface: '--surface-translucent', sample: 'body' },
+      { label: 'Kanban live status and caption', foreground: 'var(--text-muted)', surface: '--surface-translucent', sample: 'muted' },
+      { label: 'Kanban empty-state copy', foreground: 'var(--text)', surface: '--board-slab', sample: 'body' },
+      { label: 'Kanban empty-state detail and caption', foreground: 'var(--text-muted)', surface: '--board-slab', sample: 'muted' },
+    ] as const).map(({ label, foreground, surface, sample }) => ({
+      label,
+      foreground,
+      backgrounds: [{ label: `${surface} over sampled hero pixels`, layers: tokens(surface) }],
+      threshold: 4.5,
+      beforeLayers: [],
+      heroSample: sample,
+    })),
     { label: 'Body text', foreground: 'var(--text)', backgrounds: surfaces.map((name) => ({ label: name, layers: tokens(name) })), threshold: 4.5 },
     { label: 'Links (inherit body text)', foreground: 'var(--text)', backgrounds: ['--page', '--surface', '--surface-translucent', '--stage-slab', '--shell-slab', '--board-slab', '--stage-glass'].map((name) => ({ label: name, layers: tokens(name) })), threshold: 4.5 },
     { label: 'Muted, caption and placeholder text', foreground: 'var(--text-muted)', backgrounds: surfaces.map((name) => ({ label: name, layers: tokens(name) })), threshold: 4.5 },
@@ -375,7 +407,10 @@ describe('app-wide theme contrast audit', () => {
     const pairings = semanticPairings();
 
     for (const theme of ['light', 'dark'] as const) {
-      for (const pairing of pairings) measure(theme, pairing, report);
+      for (const pairing of pairings) {
+        const samples = pairing.heroSample ? [heroSamples[theme][pairing.heroSample]] : stageSamples;
+        measure(theme, pairing, report, samples);
+      }
       for (const [name, token] of [
         ['Present', '--presence-present'], ['Away', '--presence-away'], ['On the move', '--presence-move'],
       ]) {
@@ -400,6 +435,20 @@ describe('app-wide theme contrast audit', () => {
     expect(failures, `Contrast failures:\n${JSON.stringify(failures, null, 2)}`).toEqual([]);
     expect(report.filter(({ result }) => result === 'Allow-listed')
       .every(({ allowlistReason }) => Boolean(allowlistReason?.trim()))).toBe(true);
+  });
+
+  it('keeps Kanban helper, live-status and empty-state text on measured glass surfaces', () => {
+    expect(declaration(source, '.kanban-page > .tasks-help', 'background'))
+      .toBe('var(--surface-translucent)');
+    expect(declaration(source, '.kanban-page > .kanban-live-status', 'background'))
+      .toBe('var(--surface-translucent)');
+    expect(declaration(source, '.kanban-column', 'background')).toBe('var(--board-slab)');
+    expect(declaration(source, '.task-live-status', 'color')).toBe('var(--text-muted)');
+    expect(declaration(source, '.kanban-column .task-column-empty', 'color')).toBe('var(--text-muted)');
+    const tasksPage = readFileSync('src/factory/TasksPage.tsx', 'utf8');
+    expect(tasksPage).toContain('<p className="tasks-help">');
+    expect(tasksPage).toContain('className="task-live-status kanban-live-status"');
+    expect(tasksPage).toContain('className="task-column-empty"');
   });
 
   it('keeps disabled controls legible and visibly distinct from enabled controls', () => {

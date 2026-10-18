@@ -7,9 +7,11 @@ not parallel palettes or control systems.
 
 ## Colour and contrast (P14-12, 18 October 2026)
 
-The contrast ratchet reads the canonical tokens and measures 197 labeled
-pairings in light and dark against both black and white stage extremes. It
-covers body, muted, caption and placeholder text; links; status and selected
+The contrast ratchet reads the canonical tokens and measures 197 shared-token
+pairings in light and dark against both black and white stage extremes, plus
+four Kanban helper/status/empty-state pairings against worst sampled hero pixels
+in each theme (201 labels, 796 measurements total). It covers body, muted,
+caption and placeholder text; links; status and selected
 states; button variants and states; fields, boundaries and focus; Daily and
 generated chart marks and text; graph marks; and disabled controls. Normal text
 uses a 4.5:1 threshold; large text and meaningful non-text use 3:1. The complete
@@ -39,6 +41,15 @@ light, 90% dark); the top bar no longer fades to a low-contrast stop. The light
 graph People, Work and Personal tokens are darkened only enough to reach 3:1.
 The new `--chart-series-warm` is a chart role: light changes from decorative
 amber `#c98a3a` to `#985a18`; dark retains `#ffb45c`.
+
+The Kanban source/fetched helper and live-update caption previously sat directly
+over the moving scene. A 150-pixel sample of each synthetic 1440×2732 theme
+capture found worst text ratios of 1.02:1 (light muted text) and 1.09:1 (dark
+body text). The helper and status now use `--surface-translucent`; empty-state
+copy remains on the existing `--board-slab`. All sampled pairings pass 4.5:1;
+coordinates, pixel colors, and before/after ratios are in the
+`heroSceneMeasurements` table. The guard test checks these selectors and
+measures the shared surfaces against each recorded worst-case pixel.
 
 The pairing list is identical in both themes. Explicit theme-only rules change
 colors for light presence indicators and the done icon; the dark-only
