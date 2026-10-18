@@ -5451,6 +5451,15 @@ files: `JARVIS_DAILY_ENABLED` in the backend container environment in
 `.github/workflows/deploy.yml` (18 October 2026). `daily/default-off.test.ts` allows
 no other configuration file to mention either name.
 
+**Paging.** `daily/ui/useDailyPages.ts` concatenates server-ordered pages through
+the validated `queryDaily` client, one request at a time. It loads one page by
+default, or automatically follows cursors up to `maxPages` (default 10, ceiling
+50). `hasMore` and `capped` identify partial totals; source completeness remains
+unknown. Query/backend changes abort and clear the old read. Debounced refreshes
+retain records until the new first page arrives; later-page failures retain the
+cursor for retry, while auth/disabled failures clear records. Existing overview
+probes and the single-page Data browser are unchanged.
+
 ### On-demand Daily views (18 October 2026; P12-16)
 
 `dailyShowTool(data.query)` (`apps/backend/src/daily/tools/show.ts`) is the seventh
