@@ -1,4 +1,4 @@
-export type ShellIconName = 'home' | 'factory' | 'knowledge' | 'usage' | 'status' | 'navigation' | 'screen' | 'camera' | 'context' | 'settings' | 'close' | 'folio' | 'daily' | 'present' | 'away' | 'on_the_move' | 'running' | 'done' | 'failed' | 'idle';
+export type ShellIconName = 'home' | 'factory' | 'knowledge' | 'usage' | 'status' | 'navigation' | 'screen' | 'camera' | 'context' | 'settings' | 'close' | 'folio' | 'daily' | 'present' | 'away' | 'on_the_move' | 'running' | 'done' | 'failed' | 'idle' | 'attention';
 
 export function ShellIcon({ name }: { name: ShellIconName }) {
   const common = { 'aria-hidden': true as const, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
@@ -43,5 +43,7 @@ export function ShellIcon({ name }: { name: ShellIconName }) {
       return <svg {...common}><path d="m12 3 10 18H2Z" /><path d="M12 9v5m0 3v.2" /></svg>;
     case 'idle':
       return <svg {...common}><path d="M4 4h16v16H4Z" /><path d="M4 14h5l2 3h2l2-3h5" /></svg>;
+    case 'attention':
+      return <svg {...common}><path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" /><path d="M10 21h4" /></svg>;
   }
 }

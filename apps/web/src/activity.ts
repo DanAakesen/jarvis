@@ -40,6 +40,13 @@ export interface ActivityItem {
   at: string;
 }
 
+export interface FeedAttention {
+  items: readonly ActivityItem[];
+  confirmations: readonly BrowserConfirmation[];
+  onDismiss?: (id: string) => Promise<void>;
+  onResolveConfirmation?: (id: string, decision: 'approve' | 'reject') => Promise<void>;
+}
+
 export type NowFeed =
   | { status: 'loading' }
   | { status: 'unavailable'; message: string }
