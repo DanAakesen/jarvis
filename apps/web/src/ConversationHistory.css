@@ -17,11 +17,11 @@
   -webkit-mask-image: linear-gradient(to bottom, transparent 0, var(--ink-solid) 64px);
   mask-image: linear-gradient(to bottom, transparent 0, var(--ink-solid) 64px);
 }
-.conversation-latest { position: absolute; bottom: var(--space-3); left: 50%; display: inline-flex; min-height: 40px; align-items: center; gap: 6px; padding: 0 14px 0 12px; border: 1px solid var(--rule); border-radius: var(--radius-pill); background: var(--glass-selected); box-shadow: var(--panel-shadow); color: var(--text); font: inherit; font-size: var(--type-small); font-weight: 650; cursor: pointer; transform: translateX(-50%); animation: conversation-enter var(--motion-state) var(--ease-enter); }
+.conversation-latest { position: absolute; bottom: var(--space-3); left: 50%; display: inline-flex; min-height: 40px; align-items: center; gap: 6px; padding: 0 14px 0 12px; border: 1px solid var(--control-rule); border-radius: var(--radius-control); background: color-mix(in srgb, var(--text) 6%, var(--surface)); box-shadow: var(--panel-shadow); color: var(--text); font: inherit; font-size: var(--type-small); font-weight: 650; cursor: pointer; transform: translateX(-50%); animation: conversation-enter var(--motion-state) var(--ease-enter); }
 .conversation-latest svg { width: 18px; height: 18px; flex: 0 0 auto; }
-.conversation-latest:hover { box-shadow: var(--panel-shadow), var(--glass-selected-glow); }
-.conversation-latest:active { transform: translateX(-50%) scale(.97); }
-.conversation-latest:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.conversation-latest:hover { background: color-mix(in srgb, var(--text) 12%, var(--surface)); }
+.conversation-latest:active { transform: translateX(-50%) translateY(1px); background: color-mix(in srgb, var(--text) 18%, var(--surface)); }
+.conversation-latest:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; box-shadow: 0 0 0 3px var(--page), var(--panel-shadow); }
 /* Typing mode on the Jarvis page: the workspace fills the stage above the composer without its own panel chrome. */
 .app-shell[data-voice-active="false"] .shell-main:is([data-home="true"] > *) { display: flex; flex-direction: column; }
 .app-shell[data-voice-active="false"] .jarvis-page { flex: 1; height: auto; min-height: 0; }
@@ -131,29 +131,15 @@
 .conversation-history .composer { display: grid; grid-template-columns: minmax(0, 1fr) auto 36px; align-items: center; gap: 4px; min-width: 0; margin: 0; }
 .conversation-history .composer[hidden] { display: none; }
 .conversation-history .composer label { margin: -1px; }
-.conversation-history .composer textarea { min-height: 40px; max-height: 160px; padding: 8px 2px; border: 0; border-radius: 0; background: transparent; resize: none; font-size: var(--type-body); line-height: 24px; }
+.conversation-history .composer textarea { min-height: 44px; max-height: 160px; padding: 8px 2px; border: 0; border-radius: 0; background: transparent; resize: none; font-size: var(--type-body); line-height: 24px; }
 .conversation-history .composer textarea::placeholder { color: var(--text-muted); opacity: 1; }
 .conversation-history .composer textarea:focus-visible { outline: none; }
-/* Send is a small lit glass lens: quiet until there is a message, then it warms up like the orb's core. */
+/* The composer send action uses the shared primary treatment with compact icon geometry. */
 .conversation-history .composer-send {
-  position: relative; display: grid; place-items: center; width: 36px; height: 36px; min-height: 36px; padding: 0; margin: 0;
-  border: 0; border-radius: 50%; cursor: pointer; color: var(--text-muted);
-  background: radial-gradient(circle at 50% 30%, color-mix(in srgb, var(--glass-rim-light) 30%, transparent), transparent 70%), var(--glass-hover);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--glass-rim-light) 35%, transparent);
-  transition: background-color var(--motion-press) var(--ease-standard), color var(--motion-press) var(--ease-standard), box-shadow var(--motion-state) var(--ease-standard), transform var(--motion-press) var(--ease-standard);
+  display: grid; place-items: center; width: 36px; height: 36px; min-height: 36px; padding: 0; margin: 0;
+  border-radius: var(--radius-control);
 }
-.conversation-history .composer-send:not(:disabled) {
-  color: var(--text);
-  background: radial-gradient(circle at 50% 28%, color-mix(in srgb, #fff 34%, transparent), transparent 62%),
-    radial-gradient(circle at 50% 100%, color-mix(in srgb, var(--glass-glow-warm) 75%, transparent), color-mix(in srgb, var(--glass-glow-warm) 28%, transparent) 70%);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--glass-glow-warm) 80%, transparent), 0 0 14px -2px color-mix(in srgb, var(--glass-glow-warm) 70%, transparent);
-}
-.conversation-history .composer-send:hover:not(:disabled) { box-shadow: inset 0 0 0 1px var(--glass-glow-warm), 0 0 20px 0 color-mix(in srgb, var(--glass-glow-warm) 80%, transparent); }
-.conversation-history .composer-send:hover:not(:disabled) svg { translate: 0 -1.5px; }
-.conversation-history .composer-send:active:not(:disabled) { transform: scale(.92); }
-.conversation-history .composer-send:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
-.conversation-history .composer-send:disabled { cursor: default; opacity: .7; }
-.composer-send svg { width: 18px; height: 18px; stroke-width: 2.2; transition: translate var(--motion-press) var(--ease-standard); }
+.composer-send svg { width: 18px; height: 18px; stroke-width: 2.2; }
 .composer-status { grid-column: 1 / -1; margin: 0 4px 4px; font-size: var(--type-small); }
 .chat-guidance { margin: 6px 0 0; color: var(--text-muted); font-size: 13px; }
 .chat-error { margin-top: 12px; color: var(--error); font-size: 15px; }
@@ -193,7 +179,7 @@
 .voice-end-control:disabled { color: var(--disabled-text); cursor: wait; }
 .voice-end-glyph { width: 12px; height: 12px; flex: 0 0 auto; border-radius: 0; background: var(--state-unavailable); }
 .voice-end-control:disabled .voice-end-glyph { background: var(--disabled-text); }
-@media (min-width: 701px) and (not ((max-height: 500px) and (pointer: coarse))) {
+@media (width > 700px) and (not ((max-height: 500px) and (pointer: coarse))) {
 .app-shell[data-voice-active="true"] { position: fixed; inset: 0; display: block; width: 100vw; height: 100vh; height: 100dvh; min-height: 0; overflow: hidden; }
 .app-shell[data-voice-active="true"]::before { animation: aurora-drift var(--motion-ambient) var(--ease-standard) infinite alternate; }
 .app-shell[data-voice-active="true"] .app-topbar,
@@ -234,7 +220,7 @@
 .history-feedback { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; }
 .history-error { margin: 12px 0; }
 
-@media (max-width: 600px) {
+@media (max-width: 700px) {
   .jarvis-page { padding: var(--space-3); }
   .conversation-transcript:has(.conversation-greeting) { padding: 0 8px var(--space-6); }
   .conversation-greeting { padding: var(--space-3); }
@@ -250,7 +236,7 @@
   .conversation-history .composer { gap: var(--space-1); }
 }
 
-@media (max-width: 360px) {
+@media (max-width: 380px) {
   .conversation-greeting { padding: var(--space-2); }
   .conversation-greeting h2 { font-size: 18px; line-height: 1.1; }
   .conversation-greeting p { margin-top: var(--space-1); font-size: 12px; line-height: 1.2; }
@@ -291,7 +277,7 @@
   .message-metadata { opacity: 1; }
 }
 
-@media (max-width: 360px) {
+@media (max-width: 380px) {
   .voice-bar { gap: 4px; padding: 6px; }
 }
 @media (hover: none) {
@@ -517,23 +503,20 @@
 .conversation-message:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; }
 /* Jump to latest (Dan, 7 October): a compact glass pill like the tabs and job tabs, gliding up from the bottom edge. */
 .conversation-latest {
-  z-index: 3; bottom: 12px; min-height: 30px; gap: 6px; padding: 0 12px 0 9px; border: 0; border-radius: var(--radius-pill);
-  background: var(--stage-glass); backdrop-filter: blur(12px) saturate(1.3);
-  box-shadow: inset 0 1px 0 var(--glass-rim-light), inset 0 0 0 1px color-mix(in srgb, var(--glass-rim-light) 28%, transparent), 0 8px 20px -12px rgb(0 0 0 / 70%);
+  z-index: 3; bottom: 12px; min-height: 30px; gap: 6px; padding: 0 12px 0 9px;
+  background: color-mix(in srgb, var(--text) 6%, var(--surface));
   color: var(--text); font-size: 12.5px; font-weight: 650;
   animation: latest-in var(--motion-state) var(--ease-enter);
-  transition: background-color var(--motion-press) var(--ease-standard), box-shadow var(--motion-press) var(--ease-standard), transform var(--motion-press) var(--ease-standard);
+  transition: background-color var(--motion-press) var(--ease-standard), transform var(--motion-press) var(--ease-standard);
 }
-.conversation-latest svg { width: 15px; height: 15px; color: var(--glass-edge-cool); filter: drop-shadow(0 0 3px color-mix(in srgb, var(--glass-edge-cool) 70%, transparent)); }
-.conversation-latest:hover {
-  background: var(--glass-hover);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--glass-rim-light) 40%, transparent), 0 0 14px color-mix(in srgb, var(--glass-edge-cool) 14%, transparent);
-}
-.conversation-latest:active { transform: translateX(-50%) scale(.96); background: var(--glass-pressed); }
-.conversation-latest:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.conversation-latest svg { width: 15px; height: 15px; color: var(--text); }
+.conversation-latest:hover { background: color-mix(in srgb, var(--text) 12%, var(--surface)); }
+.conversation-latest:active { transform: translateX(-50%) translateY(1px); background: color-mix(in srgb, var(--text) 18%, var(--surface)); }
+.conversation-latest:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; box-shadow: 0 0 0 3px var(--page), var(--panel-shadow); }
 @keyframes latest-in { from { opacity: 0; translate: 0 8px; } }
 @media (prefers-reduced-motion: reduce) { .conversation-latest { animation: none; } }
 :root[data-motion="reduced"] .conversation-latest { animation: none; }
+@media (pointer: coarse) { .conversation-history .composer-send { width: 44px; height: 44px; min-height: 44px; } }
 /* Rim colours swapped (Dan, 7 October): Dan's bubble is cool cyan, Jarvis's is the bright amber of its core. */
 .conversation-message[data-speaker="dan"] {
   border-color: color-mix(in srgb, var(--glass-edge-cool) 42%, transparent);
@@ -571,7 +554,7 @@
 :root[data-motion="reduced"] .conversation-message[data-speaker="jarvis"][data-latest]::before { animation: none; opacity: .35; }
 /* Voice keeps the shell (Dan, 7 October): on desktop the top bar (tabs and job tabs), rail and panels stay in place
    over the full-screen voice room, and windows float across the room exactly as while typing. */
-@media (min-width: 701px) and (not ((max-height: 500px) and (pointer: coarse))) {
+@media (width > 700px) and (not ((max-height: 500px) and (pointer: coarse))) {
   .app-shell.app-shell[data-voice-active="true"] .app-topbar { position: fixed; z-index: 20; top: 0; right: 0; left: 0; display: flex; }
   .app-shell.app-shell[data-voice-active="true"] .area-rail { position: fixed; z-index: 20; top: var(--rail-size); bottom: var(--slab-gap); left: 0; display: flex; width: var(--rail-size); }
   .app-shell.app-shell[data-voice-active="true"] .area-sidebar:not([hidden]) { position: fixed; z-index: 19; top: var(--rail-size); bottom: var(--slab-gap); left: var(--rail-size); display: flex; width: var(--sidebar-width, 220px); }

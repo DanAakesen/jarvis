@@ -1374,14 +1374,16 @@ noninteractive status, with genuine switches, orb/media and panel/window
 geometry as semantic exceptions. Do not add arbitrary route-specific radii,
 another token inventory, a theme, a component framework or a blanket reset.
 
-Quiet actions are borderless with existing `--glass-hover`/`--glass-pressed`
-feedback; primary actions keep `--primary-action`. Selected choices use the
-existing `--state-selected-*` surfaces/text, weight and semantic ARIA state.
-Do not reintroduce decorative coloured outlines, boxed/bevelled tab chrome,
-inset-shadow control borders or `--glass-selected-glow` on controls, including
-hover/pressed states. Preserve neutral `--control-rule` field boundaries and
-`--rule` structure, semantic error/success text/icons and `--focus` keyboard
-outlines. These are not decorative borders to remove.
+Non-button quiet actions are borderless with existing `--glass-hover`/
+`--glass-pressed` feedback. Selected choices use the existing
+`--state-selected-*` surfaces/text, weight and semantic ARIA state. Dan's direct
+instruction of 18 October 2026 supersedes the earlier button appearance limits:
+buttons use the P14-07 hierarchy in `DESIGN.md` and token-based tonal primary
+and danger fills with visible borders and restrained accent shadows. This
+exception applies to buttons only; do not add `--glass-selected-glow`, bevels or
+inset-shadow borders to buttons or other controls. Preserve neutral
+`--control-rule` field boundaries and `--rule` structure, semantic
+error/success text/icons and `--focus` keyboard outlines.
 
 Shared action levels are `.primary-button`, `.secondary-button`,
 `.ghost-button`, `.danger-button`, and `.danger-button--filled`. Use

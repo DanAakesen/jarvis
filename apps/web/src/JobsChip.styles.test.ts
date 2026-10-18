@@ -19,7 +19,8 @@ describe('header job control styling', () => {
     expect(styles).toContain('.workspace-tab-item[data-state="front"]:active { background: var(--state-selected-pressed);');
     expect(styles).toContain('.workspace-tab-pin[aria-pressed="true"]:hover { background: var(--state-selected-hover);');
     expect(styles).toContain('.workspace-tab-pin[aria-pressed="true"]:active { background: var(--state-selected-pressed);');
-    expect(styles).toContain('.jobs-action-primary:is(:hover, :active):not(:disabled) { background: var(--primary-action-hover);');
+    expect(styles).toContain('.jobs-action-primary:hover:not(:disabled, [aria-busy="true"])');
+    expect(styles).toContain('color: var(--primary-action-text); box-shadow: var(--button-primary-shadow);');
     const selectedJob = styles.match(/\.job-tabs \.workspace-tab-item\[data-selected="true"\]\s*\{([^}]+)\}/u)![1]!;
     expect(selectedJob).toContain('--selection-hover: var(--state-selected-hover);');
     expect(selectedJob).toContain('--selection-pressed: var(--state-selected-pressed);');
