@@ -44,11 +44,11 @@ export function CameraPreview({ camera }: { camera: CameraController }) {
     </div>
     {playbackError && <div className="camera-preview-error" role="alert">
       <span>{playbackError}</span>
-      <button type="button" onClick={() => setAttempt((current) => current + 1)}>Retry preview</button>
+      <button className="secondary-button" type="button" onClick={() => setAttempt((current) => current + 1)}>Retry preview</button>
     </div>}
     <CameraStatus camera={camera} />
     {camera.observationNotice && <p className="camera-preview-notice" role="status">{camera.observationNotice}</p>}
-    {!camera.sharing && !camera.starting && <button type="button" className="camera-preview-retry" onClick={() => { void camera.start(); }}>
+    {!camera.sharing && !camera.starting && <button type="button" className="secondary-button camera-preview-retry" onClick={() => { void camera.start(); }}>
       Retry camera
     </button>}
     <span className="visually-hidden">

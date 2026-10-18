@@ -67,3 +67,66 @@ visual review rather than being folded into this bounded patch.
 This is local rendered evidence, not live or human acceptance. Before/after
 screenshots remain unattached; the uninspected attention popover and healthy
 Daily/Proactive data states are also open visual follow-up.
+
+## Pass 2
+
+This pass follows the canonical forms above and the bounded follow-up from
+P14-01. The shared source remains `apps/web/src/styles.css`; component styles
+keep their workflow layout and consume its existing tokens.
+
+| Recurring element | Variants found (source and selector/component) | Pass 1 match? | Pass 2 change |
+| --- | --- | --- | --- |
+| Panels and cards | `styles.css`: `.usage-hero`, `.usage-card`, `.usage-details`, `.usage-empty`, `.system-status-panel`, `.release-section`, `.task-meta`, `.task-detail-section`; `notes/NotesArea.css`: `.notes-conflict`, `.notes-comparison pre` | Partial. Usage and Status used stage slabs with oversized radii; Factory history used 8px panels; Notes comparison used unstructured one-off surfaces. | Moved Usage, Status, release and task panels to the shared translucent surface, neutral `--rule`, `--radius-panel`, `--panel-shadow`, and spacing tokens. Notes conflict/comparison now use structural rules and panel/control radii. |
+| Search, fields, and actions | `styles.css`: `.folio-search`, `.folio-rename input`, `.folio-action`, `.folio-kind`, `.knowledge-results`; `CameraPreview.tsx`: preview/camera retry buttons; `CameraPreview.css`: `.camera-status-control`; Usage segmented buttons | Partial. Shared button treatment was already present in most controls, but Folio search/rename were below 44px, Folio actions lacked a focus rule, and camera retries had a parallel style. | Raised Folio search/rename controls to 44px, added explicit Folio action focus, and reused `.secondary-button` for both camera retries. The Knowledge results surface now uses `--radius-panel`. Existing Usage selected, hover, pressed, and focus states remain. |
+| Graph and timeline surfaces | `styles.css`: `.release-graph-scroll`, `.timeline-payload pre`, `.knowledge-results` | Partial. Graph scrolling had a hard-coded light background and 6px radius; timeline payloads used a second 6px radius. | The graph scroll surface now uses `--surface` and `--radius-control`; timeline payloads use the same control radius. Existing contained horizontal scrolling and focus indication remain. |
+| Typography and spacing | `styles.css`: Usage/Status headings, `.usage-page`, `.usage-results`, `.usage-grid`, `.usage-tiles li`; `CameraPreview.css`: `.camera-preview-live`; `VoiceControls.css`: `.voice-status-label` | Partial. Several Usage/Status sizes and gaps were raw values; camera status text used a one-off size; voice arrival used a fixed duration. | Reused the existing `--type-lead`, `--type-caption`, `--space-*`, and `--motion-state` tokens. Other text and spacing already use the canonical type roles and were left unchanged. |
+| Status, rows, and recovery | `daily/DailyOverview.tsx` / `daily-overview.css`: `.daily-overview-row`, `.daily-status`; `ProactiveArea.tsx` / `proactive.css`: `.proactive-item`, `.proactive-block`; `status/StatusPage.tsx`: `.system-status-row`, `.system-status-feedback`; `usage/UsagePage.tsx`: `.usage-empty` | Mostly. Daily and Proactive already use the shared status, row, empty/error, and tokenized control forms; Status feedback and Usage surfaces were the exception. | Status feedback now uses a neutral structural rule and `--error-surface` with an explicit error-text role. Usage empty/loading treatment is unchanged apart from its shared panel surface. Healthy Daily and Proactive states required no CSS changes. |
+| Camera and voice states | `CameraPreview.tsx` / `CameraPreview.css`: `.camera-preview-picture`, `.camera-preview-live`, `.camera-status-control`, retry actions; `VoiceControls.css`: `.voice-status-label` | Partial. Preview/status geometry and retry actions diverged; voice typography and motion were raw values. | Reused panel/pill radii and caption typography, shared retry buttons, visible control focus, and tokenized voice type/motion. Camera status controls retain their explicit hover, pressed, disabled, and focus treatments. |
+| Release and task history | `factory/ReleasePage.tsx`: `.release-section`, `.release-graph-scroll`; `factory/TaskDetailPage.tsx`: `.task-meta`, `.task-detail-section`, `.timeline-payload pre` | Partial. Release/task action controls already matched; panel, graph, and payload geometry did not. | Updated only the mismatched panel, graph, and payload surfaces as described above; retained release/task interactions and scroll behavior. |
+| Attention popover | `AttentionPopover.tsx`: `.attention-popover`; `JobsChip.tsx`: `.jobs-popover` | Yes. The attention popover already shares the canonical opaque `--surface`, neutral boundary, and panel radius used by Background work. | No CSS change. Opened it with a synthetic attention event and verified the activity item and close behavior. |
+| Generated views | `GeneratedViewRenderer.tsx`: table, detail, timeline, chart and source-note renderers; `styles.css`: `.generated-view-table`, `.generated-view-details`, `.generated-view-timeline`, `.generated-chart`, `.chart-legend`, `.generated-view-source-note` | Partial. PR #953's source note, contained table scrolling and whole-cell values already use shared text, spacing and neutral rule tokens; timeline/chart spacing and axis text were still raw, and table headers lacked a muted surface. | Added the shared muted surface and weight to table headers; moved chart/timeline spacing and chart axis text to existing tokens. Preserved #953's source note and inner table scroll behavior. |
+
+The patch changes seven web files and this audit plus one plan row, staying below
+the 40-file bound. `DESIGN.md` and `docs/decisions.md` remain unchanged because
+the work reuses visual choices already recorded by Pass 1.
+
+## Pass 2 rendered checks
+
+Compared the pre-change and current app in headless Chromium using scratch-only
+auth and API fixtures at 390×844 with touch emulation and 1440×900, in light and
+dark. Inspected Knowledge/Folio, Notes, Usage, Status, healthy Daily and
+Proactive data, Factory release, and the attention popover at both sizes and
+themes. The fixtures used only synthetic notes, events, usage entries, status
+checks, Daily rows, Proactive findings, release records, and task history.
+
+Opened the Notes conflict/comparison and task-history workspace with synthetic
+responses in the same viewport/theme matrix. Exercised Folio open, Usage
+grouping, Status refresh, opening a Daily record, expanding a Proactive finding,
+release details, and the attention popover. The expected synthetic Notes 409
+response produced the conflict state; no other page or browser-console errors
+were observed, and document width stayed within each viewport.
+
+For generated views, compared the merged #953 baseline with the current build
+using a scratch component harness containing the real `Workspace` and
+`GeneratedViewRenderer`. A synthetic table and source note were checked at both
+sizes and themes; the table remains contained and scrollable within its window
+on the phone, with no document-width overflow. A synthetic chart was also
+checked in both themes at phone width. The shared muted table header is
+theme-aware, and chart labels resolve to the shared caption size.
+
+The real `CameraPreview` and `VoiceControls` components were also rendered in a
+scratch workspace harness at both sizes and themes. The synthetic camera error
+and retry action remained visible; keyboard activation of Start voice reached
+the browser's microphone-unavailable recovery state. No camera, microphone
+stream, or connected voice session was used. Reduced-motion emulation was
+checked on Daily and Proactive, where essential content remained available.
+Screenshots were captured locally under `/tmp/jarvis-p14-browser/`; the
+available tools could not attach them to the PR. These are local rendered
+checks, not live-backend or human acceptance.
+
+## Pass 2 not done
+
+- Physical camera output, microphone input, and a connected voice session were
+  not verified; no real media device was used.
+- Keyboard scrolling of a wide generated table and reduced-motion behavior for
+  an active voice status were not verified.

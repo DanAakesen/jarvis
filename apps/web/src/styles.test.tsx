@@ -110,6 +110,23 @@ describe('app-wide control contract', () => {
   });
 });
 
+describe('generated view styling', () => {
+  const source = readFileSync('src/styles.css', 'utf8');
+
+  it('keeps table scrolling and source notes while using shared surface, type, and spacing tokens', () => {
+    expect(ruleDeclaration(source, /\.generated-view-table\s*\{([^}]*)\}/, 'overflow')).toBe('auto');
+    expect(ruleDeclaration(source, /\.generated-view-table th, \.generated-view-table td\s*\{([^}]*)\}/, 'overflow-wrap'))
+      .toBe('normal');
+    expect(ruleDeclaration(source, /\.generated-view-table th\s*\{([^}]*)\}/, 'background')).toBe('var(--surface-muted)');
+    expect(ruleDeclaration(source, /\.generated-view-source-note\.generated-view-source-note\s*\{([^}]*)\}/, 'font-size'))
+      .toBe('var(--type-caption)');
+    expect(ruleDeclaration(source, /\.generated-view-timeline\.generated-view-timeline\s*\{([^}]*)\}/, 'gap'))
+      .toBe('var(--space-4)');
+    expect(ruleDeclaration(source, /\.generated-chart\s*\{([^}]*)\}/, 'gap')).toBe('var(--space-2)');
+    expect(ruleDeclaration(source, /\.generated-chart text\s*\{([^}]*)\}/, 'font-size')).toBe('var(--type-caption)');
+  });
+});
+
 function tokenValue(source: string, selector: string, name: string): string {
   const rule = source.match(new RegExp(`${selector}\\s*\\{([^}]*)\\}`))?.[1];
   const value = rule?.match(new RegExp(`${name}:\\s*([^;]+);`))?.[1];
