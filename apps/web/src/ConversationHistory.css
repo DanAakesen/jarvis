@@ -274,6 +274,7 @@
   .workspace-window .workspace-icon-control, .sidebar-close { transition: none; }
   .conversation-message, .streaming-message, .streaming-caret, .thinking-dot, .tool-call-running,
   .conversation-latest { animation: none; }
+  .voice-status-glyph * { animation: none !important; }
   .message-metadata { opacity: 1; }
 }
 

@@ -1,5 +1,28 @@
 # Decisions
 
+## P14-12 — Shared colour tokens and contrast (18 October 2026)
+
+Resolve contrast at shared token roles, not route-specific CSS. Tie the
+text-bearing stage slabs to `--surface-translucent`, give chart series a
+dedicated warm token, and adjust only the light graph marks and failing
+success/error colors plus the dark error surface. Keep status and selection
+meaning available through labels, icons, state text, line patterns and data
+tables; allow low-opacity chart fills only as secondary cues with explicit
+reasons.
+Kanban page-level helper and live-status text uses `--surface-translucent`
+instead of relying on scene-dependent contrast; empty-state text stays within
+the existing `--board-slab`.
+
+Normal text must measure at least 4.5:1 and large text/meaningful non-text at
+least 3:1 over both stage extremes. Keep disabled states legible and distinct.
+Shared layout and state coverage stay the same across themes; the dark-only
+stage animation is decorative. More-contrast and forced-colors modes strengthen
+focus and controls with system-aware colors, and system reduced motion disables
+the active voice-status glyph animation. The reproducible 796-measurement
+before/after matrix, token values and exceptions are in
+`docs/ui/p14-12/contrast-table.json`; synthetic Chromium captures are in
+`docs/ui/p14-12/screenshots.md`.
+
 ## P12-34 — Daily Data presentation (18 October 2026)
 
 Keep the existing record-browser state machine and reads; replace only its
