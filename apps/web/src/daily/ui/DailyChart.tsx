@@ -7,7 +7,7 @@ type DailyChartPoint = Omit<ChartPoint, 'y'> & { y: number | null; low?: number 
 type DailyChartSeries = { name: string; points: readonly DailyChartPoint[] };
 
 const margin = { top: 12, right: 16, bottom: 32, left: 48 };
-const colours = ['var(--glass-edge-cool)', 'var(--glass-glow-warm)'];
+const colours = ['var(--glass-edge-cool)', 'var(--chart-series-warm)'];
 const linePatterns = [undefined, '6 3', '2 4'];
 
 function label(point: DailyChartPoint) {
