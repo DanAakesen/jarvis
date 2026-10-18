@@ -26,7 +26,7 @@ real-SQL execution in this environment, deployment, or owner acceptance.
 | `health_daily_metrics` | `daily.health_daily_metrics` | existing | SQL Server `date`/`float` and JSON adaptations; preserve source units and day semantics. |
 | `health_ingestions` | `daily.health_ingestions` | existing | SQL Server owner-scoped lineage; inbound processor writes succeeded state. |
 | `health_phone_sync_state` | `daily.health_phone_sync_state` | existing | Heartbeat evidence only, distinct from processed health data. |
-| `health_raw_objects` | `daily.health_upload_inbox` raw bytes, temporarily | required in PR #1008 | No source object-store duplicate; accepted source bytes remain in bounded SQL inbox under existing limits. |
+| `health_raw_objects` | `daily.health_upload_inbox` raw bytes, temporarily | implemented | No source object-store duplicate; accepted source bytes remain in bounded SQL inbox under existing limits. |
 | `health_sleep_daily` | `daily.health_sleep_daily` | existing | SQL Server `date`/`float`; offsets normalize through the existing processor. |
 | `health_sync_feeds` | `daily.health_sync_feeds` | existing | Per-feed successful processing freshness. |
 | `health_sync_state` | `daily.health_sync_state` | existing | Owner-scoped ingestion and processing summary. |
@@ -120,11 +120,11 @@ registered.
 
 | Source capability | Existing Jarvis capability and evidence | Coverage |
 | --- | --- | --- |
-| `search` | `conversation_search`, `memory_search`, `vault_search`, and `repo_search`; health/meals are separately available through selected Daily operations. | Partial; no universal source-Daily search. |
-| `fetch` | `daily_query`/`daily_show` retrieve Daily records; `get_task` and `get_status_summary` retrieve their own domains. | Partial; no universal cross-domain source `fetch`. |
-| `get_daily_overview` | `daily_coach_status` / `get_coach_status`, `get_status_summary` and selected Daily reads. | Partial; conversational facts are supplied, but source scoreboard/fixed renderer is not reproduced. |
-| `get_attention_items` | Factory task tools and Google calendar tools cover their own records; no Daily attention snapshot service is selected. | Deliberately partial; source snapshot/rule engine is not ported. |
-| `get_calendar_window` | Google Calendar native tools include `calendar_list_events` and `calendar_today_agenda` in `apps/backend/src/google/tools.ts`. | Reused for ordinary calendar queries; source wrapper is not duplicated. |
+| `search` | `conversation_search`, `memory_search`, `vault_search`, and `repo_search`; health/meals are separately available through selected Daily operations. Evidence: `core/conversation.test.ts`, `core/memory.test.ts`, `vault/vault.test.ts`, and Daily `source-tools.test.ts`. | Partial; no universal source-Daily search or combined health/meal search. |
+| `fetch` | `daily_query`/`daily_show` retrieve Daily records; Factory `get_task` and `get_status_summary` retrieve their own domains. Evidence: `daily/tools/show.test.ts`, `daily/routes/query.test.ts`, `factory/tools.test.ts`, and `core/status.test.ts`. | Partial; no universal cross-domain source `fetch`. |
+| `get_daily_overview` | `daily_coach_status` / `get_coach_status`, `get_status_summary` and selected Daily reads. Evidence: `source-tools.test.ts` and `core/status.test.ts`. | Partial; conversational facts are supplied, but source scoreboard/fixed renderer is not reproduced. |
+| `get_attention_items` | Factory task tools and Google calendar tools cover their own records; no Daily attention snapshot service is selected. Evidence: `factory/tools.test.ts`, `google/tools.test.ts`, and absence of an attention service in this matrix. | Deliberately partial; source snapshot/rule engine is not ported. |
+| `get_calendar_window` | Google Calendar native tools include `calendar_list_events` and `calendar_today_agenda` in `apps/backend/src/google/tools.ts`; evidence: `google/tools.test.ts`. | Reused for ordinary calendar queries; source wrapper is not duplicated. |
 
 ## Field-level mapping and verification evidence
 
