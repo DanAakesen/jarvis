@@ -29,7 +29,7 @@
 .workspace[data-phone="true"] .workspace-canvas { position: relative; }
 .workspace[data-phone="true"] .camera-preview-picture { min-height: 40px; }
 .workspace[data-phone="true"] .workspace-window.workspace-window-camera-preview.workspace-window-camera-preview:not([hidden], .workspace-window-minimized) {
-  position: absolute; z-index: 100; inset: 8px 0 auto auto; width: min(300px, 100%); height: min(280px, 48%); min-height: 180px; flex: none;
+  position: absolute; z-index: var(--z-window-front); inset: 8px 0 auto auto; width: min(300px, 100%); height: min(280px, 48%); min-height: 180px; flex: none;
 }
 @media (max-height: 500px) and (pointer: coarse) {
   .workspace[data-phone="true"] .workspace-window.workspace-window-camera-preview.workspace-window-camera-preview:not([hidden], .workspace-window-minimized) { width: min(260px, 48%); height: 100%; min-height: 0; top: 0; }

@@ -369,7 +369,9 @@ describe('Factory task board', () => {
     expect(screen.getByRole('textbox', { name: 'Task title' })).toHaveProperty('value', 'Add coverage');
     expect(screen.getByRole('textbox', { name: 'Request' })).toHaveProperty('value', 'Cover retries');
     expect(screen.queryByRole('link', { name: 'issue #108' })).toBeNull();
-    expect(within(form).getByRole('button', { name: 'Create task' }).hasAttribute('disabled')).toBe(false);
+    const submit = within(screen.getByRole('dialog')).getByRole('button', { name: 'Create task' }) as HTMLButtonElement;
+    expect(submit.form).toBe(form);
+    expect(submit.hasAttribute('disabled')).toBe(false);
   });
 
   it('reuses the submission id after a network failure, dialog dismissal and remount', async () => {
@@ -480,7 +482,9 @@ describe('Factory task board', () => {
       fireEvent.submit(form);
     });
     await waitFor(() => expect(submittedTasks()).toHaveLength(1));
-    expect(within(form).getByRole('button', { name: 'Creating task…' }).hasAttribute('disabled')).toBe(true);
+    const submit = screen.getByRole('button', { name: 'Creating task…' }) as HTMLButtonElement;
+    expect(submit.form).toBe(form);
+    expect(submit.hasAttribute('disabled')).toBe(true);
     fireEvent.submit(form);
     expect(submittedTasks()).toHaveLength(1);
     finish(response({

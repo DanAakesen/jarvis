@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useState } from 'react';
 import { backendFetch } from './backend-request';
 import { Loader } from './Loader';
+import { Modal } from './Modal';
 import { StateMessage } from './StateMessage';
 
 // Only memories Jarvis keeps from conversations are shown here; vault notes live in Knowledge (Dan, 8 October).
@@ -81,7 +82,6 @@ export function MemorySettings({ backendUrl, getAccessToken }: { backendUrl: str
   const [error, setError] = useState('');
   const [confirmForget, setConfirmForget] = useState(false);
   const [reload, setReload] = useState(0);
-  const forgetDialog = useRef<HTMLDialogElement>(null);
 
   const call = useCallback(async (path: string, init?: { method: 'PATCH' | 'DELETE'; body?: unknown }) => {
     if (!backendUrl) throw new Unavailable();
@@ -135,13 +135,6 @@ export function MemorySettings({ backendUrl, getAccessToken }: { backendUrl: str
     });
     return () => { active = false; };
   }, [call, selectedId]);
-
-  useEffect(() => {
-    const dialog = forgetDialog.current;
-    if (!dialog) return;
-    if (confirmForget && !dialog.open) dialog.showModal?.();
-    if (!confirmForget && dialog.open) dialog.close();
-  }, [confirmForget]);
 
   // Opening an entry resets its pane here rather than in the fetch effect, so the effect only synchronises with the API.
   const openMemory = (id: string) => {
@@ -261,18 +254,17 @@ export function MemorySettings({ backendUrl, getAccessToken }: { backendUrl: str
                     </div>
                     {notice && <p className="settings-feedback" role="status">{notice}</p>}
                     {error && <p className="settings-validation-error" role="alert">{error}</p>}
-                    <dialog ref={forgetDialog} className="memory-forget-dialog luminous-glass" aria-labelledby={`${ids}-forget`}
-                      onCancel={(event) => { event.preventDefault(); setConfirmForget(false); }}>
-                      <h3 id={`${ids}-forget`}>Forget this memory?</h3>
-                      <p>Jarvis forgets it straight away; it cannot be restored.</p>
-                      <div className="settings-actions">
-                        <button className="secondary-button" type="button" onClick={() => setConfirmForget(false)}>Keep it</button>
+                    {confirmForget && <Modal title="Forget this memory?" titleId={`${ids}-forget`} busy={busy !== ''}
+                      onClose={() => setConfirmForget(false)}
+                      footer={<div className="task-dialog-actions button-group">
+                        <button className="secondary-button" type="button" disabled={busy !== ''} onClick={() => setConfirmForget(false)}>Keep it</button>
                         <button className="primary-button danger-button danger-button--filled memory-forget-confirm" type="button" disabled={busy !== ''} aria-busy={busy === 'forgetting' || undefined} aria-label={busy === 'forgetting' ? 'Forgetting…' : undefined} onClick={() => { void forget(); }}>
                           <span className="button-label">Forget memory</span>
                           {busy === 'forgetting' && <span className="button-loading-indicator" aria-hidden="true"><Loader variant="inline" announce={false} label="Forgetting…" /></span>}
                         </button>
-                      </div>
-                    </dialog>
+                      </div>}>
+                      <p>Jarvis forgets it straight away; it cannot be restored.</p>
+                    </Modal>}
                   </>
                 )}
               </div>

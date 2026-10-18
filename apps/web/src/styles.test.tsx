@@ -318,8 +318,10 @@ describe('app-wide control contract', () => {
     expect(ruleDeclaration(parts, /\n\s*::-webkit-scrollbar-thumb\s*\{([^}]*)\}/, 'border-radius')).toBe('var(--radius-pill)');
     // The 1px glass ring overhangs its box, so a glass surface that scrolls must drop the ring or stop being the scroller.
     expect(ruleDeclaration(source, /\.knowledge-results\.luminous-glass::before\s*\{([^}]*)\}/, 'content')).toBe('none');
-    expect(ruleDeclaration(source, /\n\.modal\s*\{([^}]*)\}/, 'overflow')).toBe('visible');
-    expect(ruleDeclaration(source, /\n\.modal\s*\{([^}]*)\}/, 'max-height')).toBe('none');
+    expect(ruleDeclaration(source, /\n\.modal\s*\{([^}]*)\}/, 'overflow')).toBe('hidden');
+    expect(ruleDeclaration(source, /\n\.modal\s*\{([^}]*)\}/, 'max-height')).toBe('100%');
+    expect(ruleDeclaration(source, /\.modal\.luminous-glass::before\s*\{([^}]*)\}/, 'content')).toBe('none');
+    expect(ruleDeclaration(source, /\.modal-body\s*\{([^}]*)\}/, 'overflow')).toBe('auto');
   });
 
   it('reserves pills for labelled status and genuine switch tracks', () => {
@@ -700,7 +702,7 @@ describe('shared glass tokens', () => {
     expect(source).toContain('.workspace-tab-pin[aria-pressed="true"] svg { transform: none; }');
     expect(source).toContain('.workspace-tab-close, .workspace-tab-pin { width: 44px; min-width: 44px; height: 44px; min-height: 44px; }');
     expect(source).toContain(':root[data-motion="reduced"] .workspace-tab-pin svg { transition: none; }');
-    expect(source).toContain('.app-shell[data-phone="true"][data-windows-open="true"] .app-topbar { z-index: 1200; }');
+    expect(source).toContain('.app-shell[data-phone="true"][data-windows-open="true"] .app-topbar { z-index: var(--z-menu); }');
   });
 
   it('gives the empty conversation readable glass placement clear of the orb', () => {
@@ -746,7 +748,7 @@ describe('shared glass tokens', () => {
     expect(ruleDeclaration(history, dock, 'inset')).toBe('auto 12px var(--phone-dock-bottom)');
     expect(ruleDeclaration(history, dock, 'height')).toBe('calc(var(--voice-dock-top) - var(--phone-dock-bottom))');
     expect(ruleDeclaration(history, dock, 'pointer-events')).toBe('none');
-    expect(ruleDeclaration(history, dock, 'z-index')).toBe('43');
+    expect(ruleDeclaration(history, dock, 'z-index')).toBe('var(--z-voice-controls)');
     expect(ruleDeclaration(history, dock, 'background')).toBe('transparent');
     expect(ruleDeclaration(history, dock, 'backdrop-filter')).toBe('none');
     expect(history).toContain('@media (width > 700px) and (not ((max-height: 500px) and (pointer: coarse))) {\n.app-shell[data-voice-active="true"]');

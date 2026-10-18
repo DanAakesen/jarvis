@@ -1,4 +1,4 @@
-import { act, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
 import { ContextPanel, ContextPanelProvider } from './ContextPanel';
@@ -63,6 +63,68 @@ function renderPanel() {
 }
 
 describe('ContextPanel', () => {
+  it('keeps edited mobile content on implicit dismissal and resets protection after close', async () => {
+    const user = userEvent.setup();
+    function EditableContext() {
+      const panel = useContextPanel();
+      return <button type="button" onClick={() => panel.show({
+        title: 'Edit context', status: 'custom', content: <label>Context note<input /></label>,
+      })}>Edit context</button>;
+    }
+    render(<ContextPanelProvider><EditableContext /><ContextPanel modal closeIcon="×" /></ContextPanelProvider>);
+    await user.click(screen.getByRole('button', { name: 'Edit context' }));
+    await user.type(screen.getByRole('textbox', { name: 'Context note' }), 'Synthetic note');
+    await user.keyboard('{Escape}');
+    const dialog = screen.getByRole('dialog');
+    fireEvent.pointerDown(dialog.parentElement!);
+    fireEvent.click(dialog.parentElement!);
+    expect(screen.getByRole('dialog')).toBe(dialog);
+    await user.click(screen.getByRole('button', { name: 'Close context panel' }));
+    await user.click(screen.getByRole('button', { name: 'Edit context' }));
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+  it('dismisses the mobile context backdrop only when the press starts outside the sheet', async () => {
+    const user = userEvent.setup();
+    render(<ContextPanelProvider>
+      <PanelToggle />
+      <ContextPanel modal closeIcon={<span aria-hidden="true">×</span>} />
+    </ContextPanelProvider>);
+    const trigger = screen.getByRole('button', { name: 'Toggle contextual panel' });
+    await user.click(trigger);
+    const dialog = screen.getByRole('dialog', { name: 'Context' });
+    const backdrop = dialog.parentElement!;
+    expect(backdrop.className).toBe('context-panel-modal-backdrop');
+    expect(backdrop.closest('[inert]')).toBeNull();
+    fireEvent.pointerDown(dialog);
+    fireEvent.click(backdrop);
+    expect(screen.getByRole('dialog')).toBe(dialog);
+    fireEvent.pointerDown(backdrop);
+    fireEvent.click(backdrop);
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(backdrop.hasAttribute('inert')).toBe(true);
+    expect(document.activeElement).toBe(trigger);
+  });
+  it('uses a focus-trapped modal sheet on phones and returns focus on Escape', async () => {
+    const user = userEvent.setup();
+    render(<ContextPanelProvider>
+      <PanelToggle />
+      <ContextPanel modal closeIcon={<span aria-hidden="true">×</span>} />
+    </ContextPanelProvider>);
+    const trigger = screen.getByRole('button', { name: 'Toggle contextual panel' });
+    await user.click(trigger);
+    const dialog = screen.getByRole('dialog', { name: 'Context' });
+    expect(dialog.getAttribute('aria-modal')).toBe('true');
+    const close = screen.getByRole('button', { name: 'Close context panel' });
+    expect(document.activeElement).toBe(close);
+    await user.tab();
+    expect(document.activeElement).toBe(close);
+    expect(document.body.style.overflow).toBe('hidden');
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(document.activeElement).toBe(trigger);
+    expect(document.body.style.overflow).not.toBe('hidden');
+  });
   it('shows and replaces agent-provided context while preserving the main view', async () => {
     const user = userEvent.setup();
     renderPanel();

@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { ConversationMoreMenu } from './ConversationMoreMenu';
@@ -27,6 +28,18 @@ function Harness({ onSelect = vi.fn(), disabled = false }: { onSelect?: () => vo
 }
 
 describe('ConversationMoreMenu', () => {
+  it('returns focus after an outside press on nonfocusable content without stealing a clicked control', async () => {
+    const user = userEvent.setup();
+    render(<Harness />);
+    const trigger = screen.getByRole('button', { name: 'More options' });
+    await user.click(trigger);
+    fireEvent.pointerDown(document.body);
+    expect(document.activeElement).toBe(trigger);
+    expect(screen.queryByRole('menu')).toBeNull();
+    await user.click(trigger);
+    await user.click(screen.getByRole('button', { name: 'Outside' }));
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Outside' }));
+  });
   it('opens a Language flyout with Danish and English and a checked current choice', () => {
     render(<Harness />);
     const trigger = screen.getByRole('button', { name: 'More options' });

@@ -85,7 +85,9 @@ describe('attention popover', () => {
     expect(trigger).toBe(document.activeElement);
 
     await user.click(trigger);
-    await user.click(document.body);
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('group', { name: 'Items needing attention' })));
+    fireEvent.pointerDown(document.body);
     expect(screen.queryByRole('group', { name: 'Items needing attention' })).toBeNull();
+    expect(document.activeElement).toBe(trigger);
   });
 });

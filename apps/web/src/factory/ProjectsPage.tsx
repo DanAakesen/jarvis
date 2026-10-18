@@ -917,7 +917,10 @@ export function CreateProjectDialog({ backendUrl, getAccessToken, onClose, onAdd
   };
 
   return (
-    <Modal title="Create project" titleId="create-project-heading" onClose={onClose} busy={!!managing} className="task-dialog project-dialog">
+    <Modal title="Create project" titleId="create-project-heading" onClose={onClose} busy={!!managing} dirty={!!idea} className="task-dialog project-dialog"
+      footer={<div className="task-dialog-actions button-group">
+        <button className="primary-button" type="submit" form="new-project-form" disabled={!idea.trim() || !!managing}>Ask Jarvis to create it</button>
+      </div>}>
         <section className="project-dialog-part" aria-labelledby="project-existing-heading">
           <h3 id="project-existing-heading">From an existing repository</h3>
           {state === 'loading' && <StateMessage variant="loading" loaderVariant="rows" message="Loading repositories" />}
@@ -943,7 +946,7 @@ export function CreateProjectDialog({ backendUrl, getAccessToken, onClose, onAdd
           )}
           {manageError && <p className="tasks-feedback" role="alert">{manageError}</p>}
         </section>
-        <form className="project-dialog-part task-create-form" onSubmit={askJarvis}>
+        <form id="new-project-form" className="project-dialog-part task-create-form" onSubmit={askJarvis}>
           <h3>Start a new repository</h3>
           <p className="settings-explanation">
             The policy default only pre-fills projects Jarvis registers later. Every project keeps its own policy and can be changed any time.
@@ -965,9 +968,6 @@ export function CreateProjectDialog({ backendUrl, getAccessToken, onClose, onAdd
           <div className="task-form-field">
             <label htmlFor="new-project-idea">What should Jarvis build?</label>
             <textarea id="new-project-idea" rows={3} maxLength={2_000} value={idea} onChange={(event) => setIdea(event.target.value)} />
-          </div>
-          <div className="task-dialog-actions">
-            <button className="primary-button" type="submit" disabled={!idea.trim()}>Ask Jarvis to create it</button>
           </div>
         </form>
     </Modal>
