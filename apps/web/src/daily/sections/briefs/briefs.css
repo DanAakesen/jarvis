@@ -1,21 +1,77 @@
-.daily-briefs-embedded { height: auto; min-height: 0; overflow: visible; padding: 0; border: 0; border-radius: 0; background: none; backdrop-filter: none; }
 .daily-briefs { display: grid; align-content: start; gap: var(--space-4); min-width: 0; }
-.daily-briefs h2, .daily-briefs h3, .daily-briefs h4, .daily-briefs p { margin: 0; }
-.daily-briefs h2 { font-size: var(--type-subheading); }
+.daily-briefs [hidden] { display: none; }
+.daily-briefs h3, .daily-briefs h4, .daily-briefs p { margin: 0; }
 .daily-briefs h3 { font-size: var(--type-subsection); }
-.daily-briefs h4 { font-size: var(--type-body); }
 .daily-briefs > section { display: grid; align-content: start; gap: var(--space-3); min-width: 0; }
-.daily-brief-list { display: grid; gap: var(--space-4); margin: 0; padding-inline-start: var(--space-5); }
-.daily-brief-list li, .daily-brief-list article { min-width: 0; }
-.daily-brief-list article, .daily-brief-detail { display: grid; align-content: start; gap: var(--space-3); }
-.daily-brief-list article p, .daily-brief-facts dd { color: var(--text-muted); overflow-wrap: anywhere; }
-.daily-brief-detail-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-3); }
-.daily-brief-detail-heading h3 { overflow-wrap: anywhere; }
-.daily-brief-detail-heading h3:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
-.daily-brief-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 11rem), 1fr)); gap: var(--space-3); margin: 0; }
-.daily-brief-facts > div { min-width: 0; }
-.daily-brief-facts dt { color: var(--text-muted); font-size: var(--type-small); }
-.daily-brief-facts dd { margin: var(--space-1) 0 0; }
-.daily-briefs-detail-content { display: grid; gap: var(--space-4); min-width: 0; }
-.daily-briefs-detail-content section { display: grid; gap: var(--space-2); min-width: 0; }
+.daily-brief-history { gap: var(--space-4); }
+.daily-brief-month { gap: var(--space-2); }
+.daily-brief-list { display: grid; grid-auto-rows: minmax(8.5rem, 1fr); gap: var(--space-2); margin: 0; padding: 0; list-style: none; }
+.daily-brief-list li { min-width: 0; }
+.daily-briefs .daily-brief-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: start;
+  align-content: start;
+  gap: var(--space-2);
+  width: 100%;
+  height: 100%;
+  min-height: 8rem;
+  text-align: start;
+  white-space: normal;
+}
+.daily-brief-date { color: var(--text-muted); font-size: var(--type-small); font-variant-numeric: tabular-nums; }
+.daily-brief-label { font-size: var(--type-body); font-weight: 650; overflow-wrap: anywhere; }
+.daily-brief-chips { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-2); min-width: 0; }
+.daily-brief-chips > span {
+  max-width: 100%;
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-pill);
+  background: var(--surface-muted);
+  color: var(--text);
+  font-size: var(--type-small);
+  overflow-wrap: anywhere;
+}
+.daily-brief-unavailable { color: var(--text-muted); font-size: var(--type-small); overflow-wrap: anywhere; }
+.daily-brief-count, .daily-brief-refresh, .daily-brief-coverage { color: var(--text-muted); font-size: var(--type-small); }
+.daily-brief-coverage { display: grid; justify-items: start; gap: var(--space-2); }
+.daily-brief-empty { display: grid; gap: var(--space-2); }
+.daily-brief-detail { gap: var(--space-3); }
+.daily-brief-detail h3 { font-size: var(--type-subheading); overflow-wrap: anywhere; }
+.daily-brief-detail h3:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
+.daily-brief-announcement {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+.daily-brief-navigation { display: flex; flex-wrap: wrap; gap: var(--space-3) var(--space-5); }
+.daily-brief-navigation > div { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); min-width: 0; }
+.daily-brief-navigation span { color: var(--text-muted); font-size: var(--type-small); overflow-wrap: anywhere; }
+.daily-brief-meta { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-4); margin: 0; padding: 0; list-style: none; }
+.daily-brief-meta li { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-1) var(--space-2); min-width: 0; }
+.daily-brief-meta li span:first-child { color: var(--text-muted); font-size: var(--type-small); }
+.daily-brief-meta li span:last-child { overflow-wrap: anywhere; }
+.daily-brief-article { display: grid; align-content: start; gap: var(--space-4); max-width: 65ch; min-width: 0; line-height: var(--line-prose); }
+.daily-brief-preview { font-size: var(--type-lead); }
+.daily-brief-article-section { display: grid; align-content: start; gap: var(--space-2); min-width: 0; }
+.daily-brief-article-section h4 { font-size: var(--type-body); }
 .daily-brief-text { white-space: pre-wrap; overflow-wrap: anywhere; }
+.daily-brief-content-facts { display: grid; gap: var(--space-2); margin: 0; }
+.daily-brief-content-facts > div { display: grid; grid-template-columns: minmax(6rem, 1fr) minmax(0, 2fr); gap: var(--space-2); min-width: 0; }
+.daily-brief-content-facts dt { color: var(--text-muted); font-size: var(--type-small); overflow-wrap: anywhere; }
+.daily-brief-content-facts dd { min-width: 0; margin: 0; overflow-wrap: anywhere; }
+.daily-brief-content-facts dd p { margin: 0; }
+.daily-brief-article ul { display: grid; gap: var(--space-2); margin: 0; padding-inline-start: var(--space-5); }
+.daily-brief-raw { min-width: 0; }
+.daily-brief-raw summary { min-height: 44px; align-content: center; cursor: pointer; }
+.daily-brief-raw summary:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.daily-brief-raw pre { max-width: 100%; margin: var(--space-2) 0 0; padding: var(--space-3); border: 1px solid var(--rule); border-radius: var(--radius-control); white-space: pre-wrap; overflow-wrap: anywhere; }
+@media (max-width: 380px) {
+  .daily-brief-navigation { display: grid; }
+  .daily-brief-content-facts > div { grid-template-columns: minmax(0, 1fr); }
+}

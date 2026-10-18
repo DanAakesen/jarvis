@@ -141,6 +141,20 @@ canonical, and Nutrition/Body & sleep section ownership is unchanged.
 Synthetic Chromium evidence is saved in `docs/ui/p12-33/`; it verifies local
 fixtures and responsive/keyboard behavior, not live records or physical devices.
 
+## P12-35 — Daily Briefs as a reading experience (18 October 2026)
+
+Keep brief history and detail on their existing owner-only readers and make the
+stored record readable without changing its meaning. Group by the date text as
+stored, not by a timezone-adjusted calendar date; keep unknown values labeled.
+Use one full-row control per openable history item and keep status/delivery
+meaning in text. Render structured body values as readable lists, with original
+JSON available only on demand. Adjacent navigation is constrained to already
+loaded history and moves focus to the new reading heading; Back restores focus
+to the opener. No new reads, dependencies or tokens are introduced.
+
+Synthetic browser captures are in `docs/ui/p12-35/`; they verify the local
+synthetic presentation, not live data, original-site parity or physical devices.
+
 ## P12-30 — Daily presentation kit and Workouts (18 October 2026)
 
 Move long retained-data caveats into the native “About this data” disclosure,

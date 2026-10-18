@@ -1727,6 +1727,40 @@ They mount the real Daily shell with synthetic API responses, loading Daily
 CSS before the shell stylesheet. They are not live-provider or physical-device
 acceptance.
 
+## Daily Briefs reading experience (18 October 2026; P12-35)
+
+Brief history uses one title-only Daily header, one compact freshness/count line
+and a single disclosure for its historical-record caveat. Rows are grouped by
+the month in their stored date text, use one full-row open control and keep
+status and delivery values labeled in text. Unknown dates and values remain
+explicit. Loading, empty, error, partial and capped-history states stay visible.
+
+The reading view leads with the stored preview and compact date/status/delivery/
+trigger metadata, then presents body sections in a roughly 65-character measure.
+Nested stored objects and arrays become readable key/value and bullet lists;
+the original body remains available in a closed “Raw brief” disclosure. Newer
+and Older navigate only loaded history; the heading receives focus and a polite
+announcement follows selection. Back returns focus to the opening row. Existing
+tokens and controls are reused; no new design tokens or data requests are added.
+
+Synthetic Chromium captures in [`docs/ui/p12-35/`](docs/ui/p12-35/) show history
+and an open brief at 390×844 and 1440×900 in both themes, plus both views at
+320×844 in both themes. They use the real `DailyHome` and Briefs components with
+synthetic responses in a scratch harness; detail captures scroll the existing
+Daily pane to include the reading text while retaining the back control and
+brief heading. They do not establish live-data, sign-in, physical-device or
+original-site parity. Chromium reported no horizontal overflow at 320px or in
+a 720×450 CSS viewport at device scale 2 (1440×900 equivalent at 200% scale).
+
+| Viewport/theme | History | Open brief |
+| --- | --- | --- |
+| 390×844 light | [History](docs/ui/p12-35/history-390-light.jpg) | [Detail](docs/ui/p12-35/detail-390-light.jpg) |
+| 390×844 dark | [History](docs/ui/p12-35/history-390-dark.jpg) | [Detail](docs/ui/p12-35/detail-390-dark.jpg) |
+| 1440×900 light | [History](docs/ui/p12-35/history-1440-light.jpg) | [Detail](docs/ui/p12-35/detail-1440-light.jpg) |
+| 1440×900 dark | [History](docs/ui/p12-35/history-1440-dark.jpg) | [Detail](docs/ui/p12-35/detail-1440-dark.jpg) |
+| 320×844 light | [History](docs/ui/p12-35/history-320-light.jpg) | [Detail](docs/ui/p12-35/detail-320-light.jpg) |
+| 320×844 dark | [History](docs/ui/p12-35/history-320-dark.jpg) | [Detail](docs/ui/p12-35/detail-320-dark.jpg) |
+
 ## Daily Body & sleep presentation (18 October 2026; P12-32)
 
 Body keeps search, metric and period controls together, then presents the

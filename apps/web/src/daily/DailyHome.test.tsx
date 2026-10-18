@@ -201,7 +201,7 @@ describe('Daily overview', () => {
     await waitFor(() => expect(f.queries.at(-1)).toMatchObject({ source: sources.metrics }));
     expect((screen.getByLabelText('Period') as HTMLSelectElement).value).toBe('30');
     fireEvent.click(screen.getByRole('tab', { name: 'Briefs' }));
-    await screen.findByRole('heading', { name: 'Brief history' });
+    await screen.findByRole('heading', { level: 2, name: 'Briefs' });
     fireEvent.click(screen.getByRole('tab', { name: 'Data' }));
     await screen.findByLabelText('Browse');
     expect((screen.getByLabelText('Period') as HTMLSelectElement).value).toBe('30');
