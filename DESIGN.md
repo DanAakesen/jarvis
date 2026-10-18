@@ -194,6 +194,22 @@ without another backdrop blur. Pause the ambient CSS field behind work pages.
 This supersedes the older adaptive-tier and route-only descriptions below;
 historical measurements are not results for this revision.
 
+## Gated Proactive web (18 October 2026; P13-10)
+
+The Proactive page follows the shared smoky-glass surfaces without repeating
+decorative cards. One page headline leads distinct Status, Open items, Sources
+and Budget blocks; Recent checks and Earlier items use native disclosures.
+Urgency and budget states pair words with icons, never colour alone. Finding
+text stays plain, with a clamped expandable body and a separate full-detail
+route. Actions and settings keep visible success/error copy, retry behavior,
+keyboard focus and 44px touch targets. The small-screen layout is phone-first,
+and all state remains readable with reduced motion and in either theme.
+
+The settings slot is a single collapsed Proactive section with its own Save;
+the Pause switch commits immediately. Private feed and guidance values are not
+persisted with disclosure state. The exact-string web flag controls its route,
+navigation, Settings slot and Background work Open link.
+
 ## Header tab overflow correction (15 October 2026; combined candidate)
 
 Keep the existing glass header, fixed brand and fixed action group. Tabs

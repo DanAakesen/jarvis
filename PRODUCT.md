@@ -578,6 +578,25 @@ Data points and actions per page. The look is decided in [DESIGN.md](DESIGN.md).
 | Voice state: connecting, waiting for microphone, listening, thinking, tool work, speaking, muted and reconnecting; accessible status beneath the orb. History and composer hide during voice; exit restores the draft and typing focus | Start voice requests microphone permission and prepares audio; capture begins after permission and authenticated session readiness. End voice; interrupt by speaking; mute/unmute or exceptional microphone retry in More |
 | Header attention (P9-120): undismissed task-attention, credential-warning and alert items, plus every pending browser confirmation; background-work history stays reachable for every non-dismissed job, including interrupted jobs | Open a linked task, release or project; dismiss an item or finished job; approve or reject a browser confirmation |
 
+#### Proactive page (P13-10; default off)
+
+The `/proactive` page has one headline and separate Status, Open items, Sources,
+Budget and collapsible Recent checks sections. It shows Copenhagen-local check
+times, fixed-copy errors, a manually triggerable check, accessible budget state,
+source coverage and recent outcomes. Open findings are plain text with urgency,
+evidence labels, arrival time and state markers; users can open, dismiss, snooze
+or rate them. Earlier items are read-only. The item detail remains the push tap
+target and links back to open items.
+
+Settings adds one separately saved Proactive section for pause, the monthly DKK
+limit, source switches, HTTPS news feeds and low-priority writing guidance.
+Changed fields only are sent. Feed URLs and guidance remain in component state
+and are never written to browser storage, URLs, titles, analytics or logs.
+`VITE_PROACTIVE_ENABLED` is exact-string `true`, defaults off, and grants no
+backend access; when off, routes, navigation, settings and requests remain absent.
+The header links terminal proactive Background work entries to the page only
+when the web gate is on.
+
 The persistent shell consumes the existing authenticated Now feed without a second stream or request. Its header shows a yellow, counted attention control only while non-dismissed attention, credential or alert items, or pending browser confirmations exist. Its popover retains linked activity, timestamps, dismissal and confirmation actions. Running tasks remain in the background-work counts; releases, deployments and away-mode changes do not count as attention. The background-work control is hidden only when there are no non-dismissed jobs and no attention items; it remains visible while its popover is open, and interrupted history uses a labelled neutral mark. Neither the Now nor Backend section is part of Settings. The backend `/operations/sleep` API is unchanged.
 Deployment failures represent deploy workflows or real release deployments, not
 board/plan maintenance. Cancelled runs are not failures. Repeated failures for
@@ -1051,6 +1070,15 @@ not alert. Push payloads contain no finding text; notification wording comes fro
 a closed Danish/English template table in the worker. The alert switch remains
 default-off alongside the proactive and push switches; per-class controls are not
 part of this slice.
+
+## Proactive web (18 October 2026; P13-10)
+
+The web page and Settings section are independently dark behind
+`VITE_PROACTIVE_ENABLED === "true"`. They use the shared authenticated HTTP
+contract, keep returned item/settings content in memory only, and render all
+model/source text as plain text. Manual check polling is visible-page-only and
+bounded; item actions can be retried after rollback. This web slice does not set
+the flag or grant permissions.
 
 ## Daily migration (approved P12)
 

@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState, type CSSProperties } from 'react';
+import { Link } from 'react-router-dom';
 import type { BackgroundJob } from '@jarvis/contracts';
 import { usePresence } from './presence-store';
 import { useJobs, type JobEntry } from './jobs-store';
@@ -76,12 +77,13 @@ function jobLabel(job: JobEntry) {
   return `${job.title} · ${job.jobId.slice(0, 8)}`;
 }
 
-export function JobsChip({ backendUrl, getAccessToken, onResult, accountId = null, attention = null }: {
+export function JobsChip({ backendUrl, getAccessToken, onResult, accountId = null, attention = null, proactiveEnabled = false }: {
   backendUrl: string | null;
   getAccessToken: () => Promise<string>;
   onResult: ResultWindowAction;
   accountId?: string | null;
   attention?: FeedAttention | null;
+  proactiveEnabled?: boolean;
 }) {
   const { jobs, error, refresh, cancel, dismiss, dismissMany, dismissing, syncingDismissals, headerHiddenJobIds } = useJobs(backendUrl, getAccessToken, accountId);
   const { presence } = usePresence(backendUrl, getAccessToken);
@@ -343,6 +345,9 @@ export function JobsChip({ backendUrl, getAccessToken, onResult, accountId = nul
                 }}>{cancelling.has(peek.jobId) ? 'Cancelling…' : 'Cancel'}</button>
               )}
               {peek.status === 'done' && peek.viewId && peek.kind !== 'embedding' && <button type="button" className="jobs-action jobs-action-primary" onClick={() => openResult(peek)}>Open</button>}
+              {proactiveEnabled && peek.kind === 'proactive' &&
+                (peek.status === 'done' || peek.status === 'failed' || peek.status === 'cancelled') &&
+                <Link className="jobs-action jobs-action-primary" to="/proactive" onClick={closePopover}>Open</Link>}
               {peek.status === 'failed' && (
                 <button type="button" className="jobs-action" disabled aria-describedby={`${popoverId}-retry`}>Retry</button>
               )}

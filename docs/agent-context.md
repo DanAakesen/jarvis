@@ -93,6 +93,26 @@ backend/web builds and lint. SQL Server checks are in
 SQL Server fixture using `npm run test:database --workspace @jarvis/backend -- src/database/schema.integration.test.ts`.
 Do not claim the SQL integration tests ran unless that service was available.
 
+## P13-10 proactive web client (18 October 2026)
+
+`VITE_PROACTIVE_ENABLED` is an exact-`true`, default-off build flag. Do not set
+it in a workflow or environment file. Its web-only implementation does not
+change the backend, contracts or authorization. The feature gate test scans the
+repository's environment files and workflow YAML.
+
+Focused web validation:
+`npm test --workspace @jarvis/web -- --run config/proactive-switch.test.ts src/ProactiveArea.test.tsx src/ProactiveSettings.test.tsx src/App.test.tsx src/JobsChip.test.tsx src/ProactiveItemPage.test.tsx`,
+`npm run lint --workspace @jarvis/web`, and
+`npm run build --workspace @jarvis/web`. Run the full web tests with
+`npm test --workspace @jarvis/web`.
+
+For visual inspection, use a scratch-only auth/API fixture and the actual web
+application in Chromium at 390×844 and 1440×900, light and dark. Exercise the
+feature with synthetic responses and reduced motion; never create a production
+auth stub, persist fixture content, or use real personal data. Browser fixtures
+and screenshots belong outside tracked application assets unless explicitly
+approved.
+
 ## P13-07 proactive read-only sources (18 October 2026)
 
 Focused synthetic checks:
