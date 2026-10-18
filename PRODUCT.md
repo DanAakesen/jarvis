@@ -1456,7 +1456,7 @@ recovery, recomp or TickTick integration; original Daily remains canonical.
 
 The owner can browse recorded meals by Copenhagen calendar day inside Daily,
 compare null-aware totals with their own configured targets, follow energy and
-protein over the selected period, and filter loaded favourites and meal plans.
+macros over the selected period, and filter loaded favourites and meal plans.
 Nutrition is read-only: logging and corrections stay in chat with the existing
 native approval rules, and the original Daily remains canonical. The section
 requires the meals source; Trend and Library appear only when their respective

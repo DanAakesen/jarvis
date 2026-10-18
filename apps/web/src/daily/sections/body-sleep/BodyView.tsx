@@ -157,7 +157,7 @@ function MetricUnit({ name, unit, rows, period }: {
         note={summary.maximum ? formatDate(summary.maximum.date) : 'No numeric days recorded'} />
     </div>
     <DailyChart kind="line" name={chartName} {...(hasRanges ? { rangeLabel: `Recorded minimum–maximum (${unitLabel})` } : {})}
-      series={series} dataTableContent={
+      series={series} dataTable={
         <ScrollTable label={`${chartName} recorded daily rows`}>
           <table><caption>{chartName}: newest first</caption>
             <thead><tr>{['Date', 'Shown value', 'Basis', 'Unit', 'Recorded minimum', 'Recorded average', 'Recorded maximum', 'Samples'].map(label =>

@@ -6161,7 +6161,7 @@ active; the same parent-owned period and `onPeriodChange` remain in use. Body
 still reads the catalogue and only the selected metric through `useDailyPages`,
 with the same five-page cap and URL-selected metric. Summaries separate unit
 groups, preserve gaps, and pass recorded daily min/max pairs to `DailyChart`;
-the chart's optional `dataTableContent` slot keeps the full retained-row table
+the chart's optional `dataTable` slot keeps the full retained-row table
 behind its existing disclosure without changing other consumers. Shortcuts use
 the catalogue's last-date ordering and do not prefetch values.
 
@@ -6175,6 +6175,25 @@ refresh and page-cap behavior remain section-owned. No backend, contract,
 read-model, route or authorization boundary changed.
 
 ## Web Daily Nutrition section (18 October 2026; P12-24)
+
+P12-31 rebuilds only this section's presentation with the shared Daily kit.
+Day uses nullable meters and known-only secondary nutrient tiles, grouped
+expandable meal rows and a single unavailable-nutrient disclosure. Trend keeps
+the same loaded-day calculations and gaps, adds carbohydrate and fat charts,
+and attaches the existing day/weekly tables to chart disclosures. Library keeps
+its existing source gates, bounded paging and loaded-record filter. Existing
+date/view URL state, target reads and navigation remain unchanged.
+
+The shared chart measures its figure with `ResizeObserver` and falls back to
+its initial geometry when measurement is unavailable. SVG axis geometry follows
+the measured width; legend swatches share plotted dash patterns. Shared phone
+statistic rows flex to fill the last row. These changes add no backend reads,
+dependencies, persistence or authorization changes.
+
+Nullable chart observations retain their x-domain positions without entering
+the numeric y scale. Chart table disclosures cancel the native summary toggle
+before updating their controlled open state; supplied tables remain available
+even when every observation is unknown.
 
 `apps/web/src/daily/sections/nutrition/index.tsx` exports the auto-discovered
 section definition and lazy-loads its content. It requires only

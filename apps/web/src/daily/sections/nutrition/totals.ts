@@ -92,13 +92,16 @@ export function groupedMeals(rows: readonly Row[]) {
     const second = Date.parse(text(b.occurred_at, ''));
     return (Number.isFinite(first) ? first : Infinity) - (Number.isFinite(second) ? second : Infinity);
   })) {
-    const type = text(row.meal_type, '').toLowerCase();
-    const group = known.includes(type) ? type[0]!.toUpperCase() + type.slice(1) : 'Other';
+    const recordedType = text(row.meal_type, 'Other').trim();
+    const type = recordedType.toLowerCase();
+    const group = known.includes(type) ? type[0]!.toUpperCase() + type.slice(1) : recordedType;
     groups.set(group, [...(groups.get(group) ?? []), row]);
   }
   return [...groups].sort(([a], [b]) => {
     const order = ['Breakfast', 'Lunch', 'Dinner', 'Snack', 'Other'];
-    return order.indexOf(a) - order.indexOf(b);
+    const aIndex = order.indexOf(a);
+    const bIndex = order.indexOf(b);
+    return (aIndex < 0 ? order.length : aIndex) - (bIndex < 0 ? order.length : bIndex) || a.localeCompare(b);
   });
 }
 
@@ -123,10 +126,21 @@ export function weeklyAverages(rows: readonly Row[]) {
   }));
 }
 
+export function trendPoints(rows: readonly Row[], key: Nutrient) {
+  const sorted = [...rows].sort((a, b) => text(a.meal_date).localeCompare(text(b.meal_date)));
+  return sorted.flatMap((row, index) => {
+    const date = text(row.meal_date);
+    const previous = index > 0 ? text(sorted[index - 1]!.meal_date) : null;
+    const point = { x: date, y: numeric(row[key]) };
+    return previous !== null && dateStep(previous, 1) < date
+      ? [{ x: dateStep(previous, 1), y: null }, point] : [point];
+  });
+}
+
 /** Separate runs stop the shared chart from drawing through an unlogged/unknown day. */
 export function trendSeries(rows: readonly Row[], key: Nutrient, target: number | null): ChartSeries[] {
   const unit = key === 'energy_kcal' ? 'kcal' : 'g';
-  const label = key === 'energy_kcal' ? 'Energy' : 'Protein';
+  const label = nutrients.find(nutrient => nutrient.key === key)!.label;
   const recordedName = `${label} (${unit})`;
   const sorted = [...rows].sort((a, b) => text(a.meal_date).localeCompare(text(b.meal_date)));
   const runs: ChartSeries[] = [];
@@ -147,7 +161,7 @@ export function trendSeries(rows: readonly Row[], key: Nutrient, target: number 
   // so every observed run keeps the same color and never impersonates the target.
   // Its categories follow series traversal, so the target seeds all returned dates first,
   // including initial unknown observations. A target second would reorder those dates.
-  return [{ name: key === 'energy_kcal' ? 'Resting burn minus deficit (before activity) (kcal)' : 'Protein target (g)',
+  return [{ name: key === 'energy_kcal' ? 'Resting burn minus deficit (before activity) (kcal)' : `${label} target (${unit})`,
     points: target === null ? [] : sorted.map(row => ({ x: text(row.meal_date), y: target })) },
     ...runs.flatMap((entry, index) => index === 0 ? [entry] : [{ name: `Gap before ${entry.name}`, points: [] }, entry])];
 }

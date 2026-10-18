@@ -12,12 +12,28 @@ missing-night gaps, refresh state and focus return.
 
 Use the kit's “About this data” disclosure and `DailyChart` data-table disclosure
 instead of visible record-browser status/caveat blocks and tables under every
-chart. The optional `dataTableContent` argument only replaces a chart's
+chart. The shared chart's optional `dataTable` argument only replaces its
 disclosed generic table for that consumer; existing chart consumers retain the
 default. The period control moves into Body & Sleep while the same period state
 and callback remain in `DailyHome`. Synthetic-only visual captures are in
 `docs/ui/p12-32/`; they do not establish original-site parity or live-data
 acceptance.
+
+## P12-31 — Nutrition presentation and phone-safe kit (18 October 2026)
+
+Compose Nutrition from the existing Daily kit without changing its reads, URL
+state, paging or configured-target calculations. Present calories and macros
+as text-backed meters, retain unknown totals rather than zero, and qualify
+lower bounds beside the value. Keep the calorie comparison explicitly a
+baseline before activity, not a full allowance. Do not infer carbohydrate or
+fat targets. Group expandable meal rows with their subtotals and put unknown
+secondary nutrients in one closed disclosure rather than empty tiles.
+
+Use per-macro trend charts and chart-local data tables, with compact weekly
+averages retaining their known-day counts. Preserve gaps and all record details.
+Make shared chart geometry container-width-aware, use matching line-pattern
+legend marks, and fill the last phone statistic row. No new dependency, token,
+backend behavior or original-site cutover is part of this change.
 
 ## Share overlay stacking and modal lifecycle (18 October 2026; P14-09 / #992)
 

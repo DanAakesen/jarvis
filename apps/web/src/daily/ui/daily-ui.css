@@ -44,6 +44,7 @@
 .daily-chart-legend-mark--bar { height: .75rem; width: .75rem; border: 0; border-radius: var(--radius-control); background: currentColor; }
 .daily-chart-legend-mark--area { height: .75rem; border: 0; border-bottom: 2px solid currentColor; background: color-mix(in srgb, currentColor 16%, transparent); }
 .daily-chart-legend-range { width: 1.4rem; height: .75rem; border-radius: var(--radius-control); background: var(--text-muted); opacity: .22; }
+.app-shell .daily-chart-legend .daily-chart-legend-swatch { flex: 0 0 auto; width: 1.4rem; height: .75rem; }
 .daily-chart-readout { min-height: 1.4em; margin: var(--space-1) 0; color: var(--text-muted); font-size: var(--type-small); font-variant-numeric: tabular-nums; }
 .daily-chart-table { margin-top: var(--space-2); }
 .app-shell .daily-sparkline { display: block; width: min(100%, 8rem); height: 2rem; margin-top: var(--space-2); overflow: visible; }
@@ -53,6 +54,7 @@
 .daily-meter-label, .daily-meter-values, .daily-meter-note { margin: 0; }
 .daily-meter-values { display: flex; justify-content: space-between; flex-wrap: wrap; gap: var(--space-2); font-size: var(--type-small); font-variant-numeric: tabular-nums; }
 .daily-meter-note { color: var(--text-muted); font-size: var(--type-small); }
+.daily-meter-value { display: inline-flex; flex-wrap: wrap; gap: var(--space-1); }
 .daily-meter-track { height: .75rem; overflow: hidden; border-radius: var(--radius-pill); background: var(--surface); }
 .daily-meter-track span { display: block; height: 100%; border-radius: inherit; background: var(--focus); }
 .daily-meter-track--unknown span { width: 35%; background: repeating-linear-gradient(135deg, var(--text-muted) 0 3px, transparent 3px 6px); }
@@ -73,6 +75,10 @@
 .daily-scroll-table caption { text-align: start; padding: var(--space-2) var(--space-3); }
 @media (pointer: coarse) {
   .daily-data-notes summary, .daily-chart-table summary { min-height: 44px; }
+}
+@media (max-width: 640px) {
+  .app-shell :is(.workouts-stats, .workouts-detail-stats, .nutrition-stats, .body-sleep-stats, .daily-grid):has(> .daily-stat-tile) { display: flex; flex-wrap: wrap; }
+  .app-shell :is(.workouts-stats, .workouts-detail-stats, .nutrition-stats, .body-sleep-stats, .daily-grid) > .daily-stat-tile { flex: 1 1 calc(50% - var(--space-3)); height: auto; }
 }
 @media (min-width: 900px) {
   .daily-grid--two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
