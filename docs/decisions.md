@@ -150,7 +150,7 @@ introduce a Jarvis-only rule that rejects partial metric/day batches?
 
 **Recommendation:** Option A, with no claim that accepted history is complete.
 The authored synthetic SQL test asserts later replacement and protection from
-an older replay; it still needs an exact-head Database CI run. Neither result
+an older replay and runs in the required Database CI job. Neither result
 establishes source-device completeness.
 
 ### Partial reuse boundaries
@@ -177,6 +177,21 @@ reused capabilities, or should the port add source-specific behavior?
 **Recommendation:** Option A unless an owner workflow depends on a named
 missing behavior. Do not add a second cross-domain registry merely to imitate
 source naming.
+
+## P14-36 — Match Azure application alert types (19 October 2026; #1097)
+
+Use `replace()` with an explicit placeholder in each application alert query;
+Bicep does not interpolate multi-line strings. The three `appAlertTypes` match
+the backend's `jarvis.alert` trace `alertType` property: `credential_expiry`,
+`deployment_failure` and `sandbox_crash`. The additional backend type
+`budget_threshold` has a separate Azure Consumption budget notification path.
+No other affected multi-line strings were found in `infra/`. Reject literal `${`
+in compiled scheduled-query rules in the existing infrastructure CI check.
+
+Keep thresholds, evaluation frequency, action group and all other resources
+unchanged. Restored matching may notify that action group for previously silent
+alerts. Azure Monitor read-back of the three concrete type filters remains
+required after the normal Deploy; offline validation is not live acceptance.
 
 ## P14-33 — Harden the first live vault-mirror run (19 October 2026; #1090)
 

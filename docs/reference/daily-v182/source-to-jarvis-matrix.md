@@ -117,11 +117,11 @@ unverified. See the [delivery status report](delivery-status.md).
 | Meal duplicate/HTTP behavior | owner question | The source's idempotent insert and HTTP 200 response are documented; no Jarvis source-path contract test establishes equivalence. |
 | API compatibility | owner question | All 19 paths are listed above; source requests have not all been exercised against Jarvis request/response/error contracts. |
 | Sixteen capabilities | owner question | Capability mappings and registration tests exist; source contract parity is incomplete and three tools group nine operations. |
-| Historical per-key replay | unverified | The [`health-processing.integration.test.ts`](../../../apps/backend/src/database/health-processing.integration.test.ts) asserts later partial replacement and older replay protection, matching the pinned per-key rule. The assertion has not yet executed against SQL Server on this PR head. |
+| Historical per-key replay | verified | The [`health-processing.integration.test.ts`](../../../apps/backend/src/database/health-processing.integration.test.ts) asserts later partial replacement and older replay protection, matching the pinned per-key rule; it runs in the required Database CI job. |
 | Complete-day protection | owner question | Neither contract defines a complete-day marker; any stronger Jarvis-only guard needs an explicit ruling. |
 | Five reused capabilities | owner question | Exact partial differences are listed in [reuse coverage](#reuse-coverage-five-capabilities); whether to accept or extend them remains open. |
 | CI/deployment baseline | verified | Prior PR #1008 CI and deployment runs are linked from the [delivery status](delivery-status.md); they do not verify the current head or live upload. |
-| Credential, history and phone acceptance | owner step | The checklist is in the [delivery status](delivery-status.md#remaining-ci-and-owner-only-acceptance-steps). |
+| Credential, history and phone acceptance | owner step | The checklist is in the [delivery status](delivery-status.md#remaining-owner-only-acceptance-steps). |
 
 ## Selected native tools
 

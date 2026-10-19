@@ -167,14 +167,14 @@ resource appAlertRules 'Microsoft.Insights/scheduledQueryRules@2023-12-01' = [fo
     criteria: {
       allOf: [
         {
-          query: '''
+          query: replace('''
             AppTraces
             | where TimeGenerated >= ago(10m)
             | where Message == "jarvis.alert"
             | extend alertType = tostring(Properties.alertType), alertKey = tostring(Properties.alertKey)
-            | where alertType == "${alertType}"
+            | where alertType == "__ALERT_TYPE__"
             | summarize alertCount = count() by alertKey
-          '''
+          ''', '__ALERT_TYPE__', alertType)
           timeAggregation: 'Total'
           metricMeasureColumn: 'alertCount'
           operator: 'GreaterThan'
