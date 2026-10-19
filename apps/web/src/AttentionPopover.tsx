@@ -1,7 +1,8 @@
 import { useEffect, useId, useRef, useState, type RefObject } from 'react';
 import { Link } from 'react-router-dom';
 import type { BrowserConfirmation, FeedAttention, ActivityItem } from './activity';
-import { activityHref, formatTime } from './activity';
+import { activityHref } from './activity';
+import { formatDateTime } from './format/date-time';
 import { ShellIcon } from './ShellIcon';
 import { returnFocusAfterOutsidePress } from './overlay-focus';
 import { useOverlayMotion } from './overlay-motion';
@@ -60,7 +61,7 @@ function ConfirmationList({
                 <h4>{label}</h4>
                 <p className="confirmation-summary">{confirmation.summary}</p>
                 <p className="activity-time">
-                  Expires <time dateTime={confirmation.expiresAt}>{formatTime(confirmation.expiresAt)}</time>
+                  Expires <time dateTime={confirmation.expiresAt}>{formatDateTime(confirmation.expiresAt)}</time>
                 </p>
                 {failed.has(confirmation.id) && (
                   <p className="error-text" role="alert">Jarvis could not record your response. Try again.</p>
@@ -129,7 +130,7 @@ function AttentionItems({
               <div>
                 {href ? <Link className="activity-title" to={href}>{item.title}</Link>
                   : <span className="activity-title">{item.title}</span>}
-                <p className="activity-time"><time dateTime={item.at}>{formatTime(item.at)}</time></p>
+                <p className="activity-time"><time dateTime={item.at}>{formatDateTime(item.at)}</time></p>
                 {failed.has(item.id) && (
                   <p className="error-text" role="alert">Jarvis could not dismiss this item. Try again.</p>
                 )}

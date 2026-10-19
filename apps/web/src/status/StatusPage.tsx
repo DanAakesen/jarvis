@@ -3,6 +3,7 @@ import { isSystemSmokeStatus, type SystemStatus, type SystemStatusEntry, type Sy
 import type { AreaProps } from '../areas';
 import { awaitWithSignal, backendFetch } from '../backend-request';
 import { StateMessage } from '../StateMessage';
+import { formatDateTime } from '../format/date-time';
 
 const checks: Readonly<Record<SystemStatusSubsystem, string>> = {
   database: 'SQL database',
@@ -19,7 +20,6 @@ const checks: Readonly<Record<SystemStatusSubsystem, string>> = {
 };
 const statuses: Record<SystemStatusValue, string> = { ok: 'OK', degraded: 'Degraded', down: 'Failing', unknown: 'Unknown' };
 const staleAfterMs = 5 * 60_000;
-const dateTime = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' });
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -81,7 +81,7 @@ function StatusBadge({ value }: { value: SystemStatusValue }) {
 
 function CheckedAt({ value, now }: { value: string; now: number }) {
   return <span className="system-status-time">
-    <time dateTime={value} title={value}>{dateTime.format(new Date(value))}</time>
+    <time dateTime={value} title={formatDateTime(value)}>{formatDateTime(value)}</time>
     {now - Date.parse(value) >= staleAfterMs && <span className="system-status-stale">Stale</span>}
   </span>;
 }

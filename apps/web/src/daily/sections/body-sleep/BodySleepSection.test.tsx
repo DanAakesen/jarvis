@@ -8,7 +8,7 @@ import type { DailySectionProps } from '../types';
 import BodySleepSection from './BodySleepSection';
 import { section } from './index';
 import type { Row } from './metrics';
-import { dailyLocale, formatTime } from '../../ui/formatters';
+import { formatTime } from '../../ui/formatters';
 
 const period = { startDate: '2026-10-01', endDate: '2026-10-07' };
 const props: DailySectionProps = {
@@ -138,8 +138,8 @@ describe('Body & sleep section (synthetic records only)', () => {
     fireEvent.click(within(screen.getByRole('region', { name: 'Body mass — kg' })).getByText('View data table'));
     const table = screen.getByRole('table', { name: 'Body mass — kg: newest first' });
     const rows = within(table).getAllByRole('row');
-    expect(rows[1]?.textContent).toContain('Oct 3');
-    expect(rows[2]?.textContent).toContain('Oct 1');
+    expect(rows[1]?.textContent).toContain('3 Oct');
+    expect(rows[2]?.textContent).toContain('1 Oct');
     expect(within(table).getByText('Recorded average (fallback)')).toBeTruthy();
     const kg = screen.getByRole('region', { name: 'Body mass — kg' });
     expect(within(kg).getByRole('heading', { name: 'Average' })).toBeTruthy();
@@ -235,7 +235,7 @@ describe('Body & sleep section (synthetic records only)', () => {
     expect(screen.getByText(/Partial stages; unrecorded stages are unknown/)).toBeTruthy();
     expect(screen.getByRole('heading', { name: 'Average asleep' })).toBeTruthy();
     expect(screen.getByText(/2 of 7 nights with asleep data/)).toBeTruthy();
-    expect(within(table).getByText(formatTime('2026-10-01T21:30:00Z', dailyLocale()))).toBeTruthy();
+    expect(within(table).getByText(formatTime('2026-10-01T21:30:00Z'))).toBeTruthy();
   });
 
   it('shows an unrecorded latest night as Not recorded without inventing stage values', async () => {
@@ -263,7 +263,7 @@ describe('Body & sleep section (synthetic records only)', () => {
   it('opens a URL-linked night, focuses detail and returns focus to its row on close', async () => {
     stub();
     mount({}, '/daily?view=sleep&metric=body_mass');
-    const open = await screen.findByRole('button', { name: /Open.*Oct 2/ });
+    const open = await screen.findByRole('button', { name: 'Open 2 Oct 2026' });
     fireEvent.click(open);
     await waitFor(() => expect(document.activeElement?.getAttribute('aria-labelledby')).toBe('body-sleep-night-heading'));
     expect(url()).toContain('night=2026-10-02');

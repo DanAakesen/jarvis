@@ -21,7 +21,7 @@ function storedDate(value: DailyJson | undefined): string | null {
 }
 
 function briefDate(value: DailyJson | undefined) {
-  return storedDate(value) ?? 'Unknown';
+  return typeof value === 'string' && value ? value : 'Unknown';
 }
 
 function briefMonth(value: DailyJson | undefined) {

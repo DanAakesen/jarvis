@@ -13,6 +13,7 @@ import {
   advancedProblems, isRoleOptions, isRoleSettings,
   type MemorySettings, type ModelRole, type ResearchSettings, type RoleSettings, type TimeoutSettings, type VoiceTuningSettings,
 } from './settings-advanced-data';
+import { formatDateTime, formatTimeOnly } from './format/date-time';
 
 interface Settings {
   appearance: { theme: 'light' | 'dark' | 'system' };
@@ -213,9 +214,7 @@ const credentialStatusLabels: Record<CredentialStatus['status'], string> = {
 
 function formatCredentialDate(value: string | null): string {
   if (value === null) return 'Not recorded';
-  return `${new Intl.DateTimeFormat(undefined, {
-    dateStyle: 'medium', timeStyle: 'short', timeZone: 'UTC',
-  }).format(new Date(value))} UTC`;
+  return `${formatDateTime(value, { timeZone: 'UTC' })} UTC`;
 }
 
 function changedSettings(before: Settings, after: Settings): SettingsPatch {
@@ -672,7 +671,7 @@ export function SettingsPage({ backendUrl, getAccessToken, presence, notificatio
                   aria-invalid={!personalityInstructionsValid}
                   onChange={(event) => update('personality', 'customInstructions', event.target.value)} />
                 <p className="settings-explanation" id="personality-instructions-help">
-                  {settings.personality.customInstructions.length.toLocaleString()} / 2,000 characters
+                  {settings.personality.customInstructions.length} / 2,000 characters
                 </p>
                 {!personalityInstructionsValid && (
                   <p className="settings-validation-error" id="personality-instructions-error" role="alert">
@@ -732,7 +731,7 @@ export function SettingsPage({ backendUrl, getAccessToken, presence, notificatio
             <p className="wake-status" role="status" data-outcome={wakeStatus?.outcome ?? 'none'}>
               <strong>Wake word</strong>
               <span>{wakeStatus
-                ? `Last heard ${new Date(wakeStatus.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}. ${wakeStatus.message}`
+                ? `Last heard ${formatTimeOnly(wakeStatus.at)}. ${wakeStatus.message}`
                 : 'Not heard in this session.'}</span>
             </p>
             {hasVoiceTuning && <VoiceTuningFields voice={settings.voice as VoiceTuningSettings} problems={problems} disabled={saving}

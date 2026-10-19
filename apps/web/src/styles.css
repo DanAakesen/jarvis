@@ -2752,7 +2752,7 @@ a.task-chip:hover { background: var(--glass-pressed); }
 .knowledge-stage { position: absolute; inset: 0; background: radial-gradient(ellipse at 50% 45%, color-mix(in srgb, var(--stage-background) 30%, transparent), color-mix(in srgb, var(--stage-background) 70%, transparent)); }
 .knowledge-canvas { display: block; width: 100%; height: 100%; cursor: grab; touch-action: none; }
 .knowledge-canvas:active { cursor: grabbing; }
-.knowledge-status { position: absolute; z-index: 2; top: 50%; left: 50%; display: grid; max-width: min(420px, 90%); justify-items: center; gap: var(--space-3); margin: 0; color: var(--text-muted); text-align: center; translate: -50% -50%; }
+.knowledge-status, .knowledge-loader { position: absolute; z-index: 2; top: 50%; left: 50%; display: grid; width: max-content; max-width: min(420px, 90%); justify-items: center; gap: var(--space-3); margin: 0; color: var(--text-muted); text-align: center; translate: -50% -50%; }
 .knowledge-status p { margin: 0; }
 .knowledge-search {
   position: absolute; z-index: 3; top: 16px; left: 50%; display: flex; width: min(560px, calc(100% - 32px)); min-height: 44px; align-items: center; gap: var(--space-2);
@@ -2932,8 +2932,28 @@ a.task-chip:hover { background: var(--glass-pressed); }
   color: var(--error);
 }
 .state-message--error .state-message-detail, .state-message--error .state-message-mark { color: var(--error); }
+/* Empty and loading messages get the error variant's surface. Zero specificity lets a component's own surface win. */
+:where(.state-message--empty, .state-message--loading) {
+  padding-inline: var(--space-3);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-panel);
+  background: var(--surface-translucent);
+}
+/* Inside a container that already has a surface the message stays flat, so a card never sits in a card.
+   Add a container to this list when it gains a surface and hosts a state message. */
+:where(
+  .settings-section, .workspace-window, .folio-pane, .release-section, .release-trail, .task-release-bar,
+  .task-card, .memory-detail, .conversation-message, .context-panel, .knowledge-note, .proactive-page,
+  .kanban-column, .task-column, .modal, .project-dialog-part, .jobs-popover
+) :where(.state-message--empty, .state-message--loading) {
+  padding-inline: 0;
+  border: 0;
+  background: none;
+}
 .state-message-loader { display: inline-grid; width: auto; min-height: 0; padding: 0; color: inherit; font: inherit; }
 .state-message-actions { margin-top: var(--space-1); }
+/* The skeleton wrapper is a grid item of the shrink-wrapping message, so it must stretch for the placeholder to fill the width. */
+.state-message-skeleton { justify-self: stretch; min-width: 0; }
 .loader-dots { display: inline-block; white-space: nowrap; }
 .loader-dots > :nth-child(2) { animation: loader-dot-two 2s step-end infinite; }
 .loader-dots > :nth-child(3) { animation: loader-dot-three 2s step-end infinite; }
@@ -2979,12 +2999,12 @@ a.task-chip:hover { background: var(--glass-pressed); }
 .skeleton-star { position: absolute; left: var(--x); top: var(--y); width: var(--s); height: var(--s); border-radius: 50%;
   background: color-mix(in srgb, var(--text) 45%, transparent); opacity: .15;
   animation: skeleton-twinkle 2.6s var(--ease-standard) calc(var(--i, 0) * 97ms) infinite; }
-.knowledge-loader { position: absolute; z-index: 2; inset: 0; }
 @keyframes skeleton-in { from { opacity: 0; translate: 0 6px; } }
 @keyframes skeleton-sweep { 0% { background-position: 130% 0; } 70%, 100% { background-position: -30% 0; } }
 @keyframes skeleton-twinkle { 0%, 100% { opacity: .12; scale: .8; } 45% { opacity: .85; scale: 1.15; box-shadow: 0 0 10px var(--glass-rim-light); } }
-@media (max-width: 900px) { .skeleton-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } .skeleton-column:nth-child(n + 3) { display: none; } }
-@media (max-width: 700px) { .skeleton-cards { grid-template-columns: minmax(0, 1fr); } .skeleton-column:nth-child(n + 2) { display: none; } }
+/* Sibling combinators skip the visually hidden label, which would shift an nth-child count and hide every column. */
+@media (max-width: 900px) { .skeleton-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } .skeleton-column + .skeleton-column + .skeleton-column { display: none; } }
+@media (max-width: 700px) { .skeleton-cards { grid-template-columns: minmax(0, 1fr); } .skeleton-column + .skeleton-column { display: none; } }
 :root[data-motion="reduced"] :is(.skeleton, .skeleton-bar, .skeleton-slab, .skeleton-star) { animation: none; }
 @media (prefers-reduced-motion: reduce) { :is(.skeleton, .skeleton-bar, .skeleton-slab, .skeleton-star) { animation: none; } }
 /* Data arrival: what replaces the loader rises gently into place instead of popping in. */

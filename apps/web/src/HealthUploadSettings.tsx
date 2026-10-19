@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { backendFetch } from './backend-request';
 import { Loader } from './Loader';
+import { formatDateTime } from './format/date-time';
 
 type CredentialStatus = { state: 'loading' | 'active' | 'revoked' | 'expired' | 'empty' | 'error'; expiresAt?: string | null };
 
@@ -113,7 +114,7 @@ export function HealthUploadSettings({ backendUrl, getAccessToken }: {
     {credential.state === 'error' && <div role="alert"><p>{error || 'Health upload status is unavailable.'}</p>
       <button className="secondary-button" type="button" disabled={busyAction !== null || !backendUrl} onClick={retryStatus}>Retry status</button></div>}
     {credential.state !== 'loading' && credential.state !== 'error' && <div>
-      <p role="status">Credential status: {credential.state}{credential.expiresAt ? `; expires ${new Date(credential.expiresAt).toISOString()}` : ''}.</p>
+      <p role="status">Credential status: {credential.state}{credential.expiresAt ? `; expires ${formatDateTime(credential.expiresAt)}` : ''}.</p>
       <div className="credential-actions" aria-busy={busyAction !== null || undefined}>
         {(credential.state === 'empty' || credential.state === 'revoked' || credential.state === 'expired')
           ? <button className="primary-button" type="button" disabled={busyAction !== null || !endpoint}

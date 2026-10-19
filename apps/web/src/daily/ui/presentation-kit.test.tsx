@@ -88,8 +88,8 @@ describe('Daily presentation kit', () => {
       const progress = screen.getByRole('progressbar');
       expect(progress.getAttribute('aria-valuenow')).toBe(bounded);
       expect(progress.getAttribute('aria-valuemax')).toBe(String(target));
-      expect(progress.getAttribute('aria-valuetext')).toContain(`${value.toLocaleString()} kcal`);
-      expect(screen.getAllByText(`${value.toLocaleString()} kcal`).length).toBeGreaterThan(0);
+      expect(progress.getAttribute('aria-valuetext')).toContain(`${new Intl.NumberFormat().format(value)} kcal`);
+      expect(screen.getAllByText(`${new Intl.NumberFormat().format(value)} kcal`).length).toBeGreaterThan(0);
     },
   );
 

@@ -7,6 +7,7 @@ import { WorkingCore } from './ToolCallChip';
 import { ShellIcon } from './ShellIcon';
 import { AttentionPopover } from './AttentionPopover';
 import type { FeedAttention } from './activity';
+import { formatDateTime } from './format/date-time';
 import { returnFocusAfterOutsidePress } from './overlay-focus';
 import { useOverlayMotion } from './overlay-motion';
 
@@ -312,7 +313,7 @@ export function JobsChip({ backendUrl, getAccessToken, onResult, accountId = nul
                   {job.status === 'running' ? <ProgressRing value={job.step / Math.max(1, job.steps)} /> : <StatusMark status={interrupted(job) ? 'cancelled' : job.status} />}
                   <span><span className="jobs-item-title">{job.title}{group.length > 1 ? ` · ${group.length} runs` : ''}</span>{' '}
                     <span className="jobs-item-meta">{kindLabel[job.kind]} · {interrupted(job) ? 'interrupted' : job.status} · {job.jobId.slice(0, 8)}</span>{' '}
-                    <span className="jobs-item-meta">Started <time dateTime={job.startedAt}>{new Date(job.startedAt).toLocaleString()}</time>{group.length > 1 ? ' · latest run' : ''}</span>
+                    <span className="jobs-item-meta">Started <time dateTime={job.startedAt}>{formatDateTime(job.startedAt)}</time>{group.length > 1 ? ' · latest run' : ''}</span>
                     {reason(job) && <span className="jobs-item-detail">{reason(job)}</span>}
                     {errors[job.jobId] && <span className="jobs-item-error">{errors[job.jobId]}</span>}
                   </span>
@@ -330,7 +331,7 @@ export function JobsChip({ backendUrl, getAccessToken, onResult, accountId = nul
             <span className="jobs-item-icon">{peek.status === 'running' ? <WorkingCore /> : <StatusMark status={interrupted(peek) ? 'cancelled' : peek.status} />}</span>
             <span className="jobs-item-body">
               <span className="jobs-item-title">{peek.title}{peekGroup.length > 1 ? ` · ${peekGroup.length} runs` : ''}</span>
-              <span className="jobs-item-meta">Run {peek.jobId} · Started <time dateTime={peek.startedAt}>{new Date(peek.startedAt).toLocaleString()}</time></span>
+              <span className="jobs-item-meta">Run {peek.jobId} · Started <time dateTime={peek.startedAt}>{formatDateTime(peek.startedAt)}</time></span>
               <span className="jobs-item-meta">
                 {kindLabel[peek.kind]}
                 {peek.status === 'running' ? ` · step ${peek.step} of ${peek.steps}` : peek.status === 'done' ? ' · ready' : interrupted(peek) ? ' · interrupted' : peek.status === 'failed' ? ' · failed' : ' · cancelled'}

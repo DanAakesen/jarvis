@@ -4,6 +4,7 @@ import { TaskWindowLink } from '../TaskWindowLink';
 import type { AreaProps } from '../areas';
 import { StateMessage } from '../StateMessage';
 import { CollapsibleSection } from '../CollapsibleSection';
+import { formatDateTime } from '../format/date-time';
 
 type UsagePeriod = '7d' | '30d' | '90d' | 'all';
 type UsageGroupBy = 'project' | 'agent' | 'source';
@@ -156,7 +157,7 @@ function taskLabel(entry: UsageEntry): string {
 }
 
 function dateTime(value: string): string {
-  return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value));
+  return formatDateTime(value);
 }
 
 async function fetchUsageReport(

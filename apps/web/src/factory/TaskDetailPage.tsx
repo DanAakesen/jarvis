@@ -8,6 +8,7 @@ import { TaskControls } from './TaskControls';
 import { TaskWindowLink } from '../TaskWindowLink';
 import { Loader } from '../Loader';
 import { StateMessage } from '../StateMessage';
+import { formatDateTime } from '../format/date-time';
 
 type TaskState = 'Ready' | 'Running' | 'PauseRequested' | 'Paused' | 'NeedsAttention' | 'Done' | 'Cancelled';
 type TaskEventSource = 'runner' | 'backend' | 'github' | 'dan';
@@ -174,7 +175,7 @@ function formatDisk(bytes: unknown): string {
 }
 
 function formatDate(value: string | null): string {
-  return value ? new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) : 'Not started';
+  return value ? formatDateTime(value) : 'Not started';
 }
 
 function usageLabel(metric: TaskUsageRecord['metric']): string {
