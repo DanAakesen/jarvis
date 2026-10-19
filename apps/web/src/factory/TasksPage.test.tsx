@@ -237,6 +237,8 @@ describe('Factory task board', () => {
       expect(within(board).getByRole('heading', { level: 2, name })).not.toBeNull();
     }
     const running = within(board).getByRole('heading', { level: 2, name: 'In progress' }).closest('section')!;
+    expect(within(running).getByLabelText('1 issue')).not.toBeNull();
+    expect(within(board).getAllByLabelText('0 issues')).toHaveLength(5);
     const card = within(running).getByRole('article', { name: 'Fix the bug' });
     expect(within(card).getByRole('list', { name: 'Worker and task state' }).textContent).toContain('Running');
     expect(within(card).getByRole('link', { name: '#42' }).getAttribute('href')).toBe('https://github.com/DanAakesen/jarvis/issues/42');

@@ -797,7 +797,7 @@ export function TasksPage({ backendUrl, getAccessToken }: Props) {
                           <span className="kanban-chevron" aria-hidden="true"><KanbanIcon name="chevron" /></span>
                         </button>
                       </h2>
-                      <span className="kanban-count" aria-label={`${items.length} issues`}>{items.length}</span>
+                      <span className="kanban-count" aria-label={`${items.length} ${items.length === 1 ? 'issue' : 'issues'}`}>{items.length}</span>
                     </header>
                     <div id={`${headingId}-cards`} className="kanban-column-body" hidden={collapsedColumns.has(column.label)}>
                     {items.length === 0

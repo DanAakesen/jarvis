@@ -126,7 +126,7 @@ function StatusOutcome({ run }: { run: RunSummary | null }) {
   if (!run) return <span>No check yet</span>;
   return <span>Last check <time dateTime={run.finishedAt ?? run.startedAt}>
     {formatTime(run.finishedAt ?? run.startedAt)}
-  </time> · {outcomeLabel(run.status)}{run.findingCount ? ` · ${run.findingCount} findings` : ''}</span>;
+  </time> · {outcomeLabel(run.status)}{run.findingCount ? ` · ${run.findingCount} ${run.findingCount === 1 ? 'finding' : 'findings'}` : ''}</span>;
 }
 
 function StatusSentence({ status }: { status: ProactiveStatus }) {

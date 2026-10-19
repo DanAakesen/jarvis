@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
 import { SettingsPage } from './SettingsPage';
+import { ResearchSection } from './SettingsAdvanced';
 import { ProjectsPage } from './factory/ProjectsPage';
 import { ThemePreferenceContext, type ThemeMode, type ThemePreference } from './theme-preference-context';
 
@@ -642,6 +643,10 @@ describe('SettingsPage', () => {
     renderSettingsPage();
 
     await screen.findByRole('heading', { name: 'Models', level: 2 });
+    const modelsToggle = screen.getByRole('button', { name: /^Models/ });
+    await user.click(modelsToggle);
+    expect(await within(modelsToggle).findByText(/ · 1 deployment$/)).not.toBeNull();
+    await user.click(modelsToggle);
     // The older Jarvis model section gives way to Models when the backend sends roles.
     expect(screen.queryByRole('heading', { name: 'Jarvis', level: 2 })).toBeNull();
     await user.selectOptions(screen.getByRole('combobox', { name: 'Chat model' }), 'gpt-6-luna');
@@ -672,6 +677,21 @@ describe('SettingsPage', () => {
     await user.click(screen.getByRole('button', { name: 'Remove gpt-6-luna' }));
     await user.click(screen.getByRole('button', { name: 'Remove' }));
     expect(await screen.findByText(/Removal of gpt-6-luna requested\. Approve it in Teams\./)).not.toBeNull();
+  });
+
+  it.each([
+    [1, 'Quick · up to 1 source'],
+    [2, 'Quick · up to 2 sources'],
+  ])('words the folded research summary for %i source(s) in the right number', async (maxSources, summary) => {
+    const user = userEvent.setup();
+    try {
+      render(<ResearchSection research={{ depth: 'quick', maxSources, timeoutSeconds: 60 }} problems={{}}
+        disabled={false} onChange={vi.fn()} />);
+      await user.click(screen.getByRole('button', { name: /^Research/ }));
+      expect(screen.getByText(summary)).not.toBeNull();
+    } finally {
+      localStorage.removeItem('jarvis.sections.settings.research');
+    }
   });
 
   it('still loads when the backend reports a credential this page does not know yet', async () => {

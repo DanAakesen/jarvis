@@ -216,13 +216,19 @@ describe('camera frame capture', () => {
     const cached = result.mock.calls[1]?.[0];
     expect(cached.frameId).toBeUndefined();
     expect(cached.question).toBe('Count fingers');
-    expect(cached.description).toContain('1 seconds ago');
+    expect(cached.description).toContain('(1 second ago)');
     expect(cached.description).toContain('cannot confirm changes');
     expect(screen.getByTestId('observation-notice').textContent).toContain('rate-limited');
+    expect(screen.getByTestId('observation-notice').textContent).toContain('from 1 second ago.');
+    act(() => vi.advanceTimersByTime(1_000));
+    await request();
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(result.mock.calls[2]?.[0].description).toContain('(2 seconds ago)');
+    expect(screen.getByTestId('observation-notice').textContent).toContain('from 2 seconds ago.');
     act(() => vi.advanceTimersByTime(3_000));
     await request();
     expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(result.mock.calls[2]?.[0].question).toBe('And now?');
+    expect(result.mock.calls[3]?.[0].question).toBe('And now?');
     expect(screen.queryByTestId('observation-notice')).toBeNull();
   });
 
