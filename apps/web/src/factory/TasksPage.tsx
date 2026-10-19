@@ -794,7 +794,8 @@ export function TasksPage({ backendUrl, getAccessToken }: Props) {
         {visibleProjectState === 'ready' && projects.length === 0 &&
           <StateMessage variant="empty" className="tasks-feedback"
             message="No active projects are available for a GitHub board." detail="Create a project to begin." />}
-        {visibleTaskState === 'error' && (
+        {/* A retained board reports a failed refresh through the strip notice and refresh icon; the full message is for a page with no board. */}
+        {visibleTaskState === 'error' && !board && (
           <StateMessage variant="error" className="tasks-feedback" message={visibleTaskError}
             actionLabel="Retry board" actionBusy={refreshing}
             onAction={() => setReloadKey((value) => value + 1)} />

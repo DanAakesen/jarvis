@@ -630,6 +630,7 @@ describe('Factory task board', () => {
   });
 
   it('shows a live refresh failure beside the retained board without replacing its cards', async () => {
+    const user = userEvent.setup();
     renderFactory();
     const board = await screen.findByRole('region', { name: 'Issues by GitHub Project column' });
     const card = screen.getByRole('article', { name: 'Fix the bug' });
@@ -644,6 +645,17 @@ describe('Factory task board', () => {
     expect(screen.getByRole('article', { name: 'Fix the bug' })).toBe(card);
     expect(screen.queryByText('Loading GitHub board…')).toBeNull();
     expect(document.querySelector('.loader-core')).toBeNull();
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.queryByText('Board data could not be loaded. Try again.')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Retry board' })).toBeNull();
+
+    fetchMock.mockImplementation(originalFetch);
+    const refresh = within(boardStrip()).getByRole('button', { name: 'Refresh board' });
+    expect(refresh.hasAttribute('disabled')).toBe(false);
+    await user.click(refresh);
+    await waitFor(() => expect(screen.queryByText('Board not connected')).toBeNull());
+    expect(screen.getByRole('region', { name: 'Issues by GitHub Project column' })).toBe(board);
+    expect(screen.getByRole('article', { name: 'Fix the bug' })).not.toBeNull();
   });
 
   it('shows a recoverable error when the GitHub board cannot be loaded', async () => {
@@ -656,6 +668,7 @@ describe('Factory task board', () => {
 
     expect((await screen.findByRole('alert')).textContent).toContain('Board data could not be loaded. Try again.');
     expect(screen.getByRole('button', { name: 'Retry board' })).not.toBeNull();
+    expect(within(boardStrip()).queryByText('Board not connected')).toBeNull();
   });
 
   it('opens task details in the shared panel and returns focus to the selected card', async () => {

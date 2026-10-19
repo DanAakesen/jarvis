@@ -7,8 +7,11 @@ well” lines a trend to avoid. While the board works the page now shows no
 repository line, no fetch time and no “connected” message. Only a fault shows,
 as a small red dot with “Board not connected”, and the detail (failed refresh,
 cached board, GitHub unavailable, last fetched time) sits in its tooltip and
-the screen-reader text, so the words, not the colour, carry the meaning. The
-header lost its Refresh board button. A slim glass strip directly above the
+the screen-reader text, so the words, not the colour, carry the meaning. A
+failed refresh with a board already loaded shows only that notice, and the
+refresh icon is the retry path; the full error with “Retry board” appears only
+when there is no board to keep. The header lost its Refresh board button. A
+slim glass strip directly above the
 board holds a bare refresh icon (no fill, border or shadow in any state, like
 the composer send icon; it spins and is named “Refreshing board…” while a read
 is pending) with Create project and Create task. The filter form reflows by the
