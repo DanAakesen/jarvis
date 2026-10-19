@@ -21,10 +21,13 @@ a 360px query adds a fifth value and fails that contract, and 380px is the
 documented narrow-handset exception. The cost is that 361px to 380px phones
 lose the presence chip too. The DOM is unchanged, so accessible names, the tab
 order of the remaining controls and every handler are as before; `display: none`
-takes the hidden controls out of the tab order and accessibility tree. The two
-header focus fallbacks that look up `.presence-chip-trigger` or `.settings-link`
-run only after the popover trigger and the summary are gone, and focusing a
-hidden element does nothing, so they leave focus where the page put it.
+takes the hidden controls out of the tab order and accessibility tree. The header
+focus fallback (`focusHeaderFallback`, used when the last attention item is
+dismissed and its trigger unmounts) looked up `.jobs-summary`,
+`.presence-chip-trigger` and `.settings-link` in turn, and focusing a hidden
+element does nothing, so on a narrow phone with no background-work summary focus
+would have fallen to the page. It now tries the Menu button before the Settings
+link and takes the first control that accepts focus.
 
 The phone Menu takes a `proactiveEnabled` flag (default off) and lists Proactive
 after the first area, the order of the rail (`appAreas`): after Daily when Daily

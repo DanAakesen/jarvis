@@ -19,6 +19,9 @@ The Settings gear is now hidden on phones, because the Menu already has a
 Settings row, and the presence chip is hidden at 380px and narrower, because
 Settings, Presence still switches the mode. Hidden controls leave the tab order
 and the accessibility tree; the markup, handlers and names are unchanged. The
+focus fallback that runs when the last attention item is dismissed now tries the
+Menu button before the Settings link and takes the first control that accepts
+focus, because focusing a hidden control does nothing. The
 issue proposed 360px for the presence rule, but `styles.test.tsx` allows only the
 380, 700, 900 and 1200px breakpoints, so 380px is used and presence is also
 hidden from 361 to 380px.
