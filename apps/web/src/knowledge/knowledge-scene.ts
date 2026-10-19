@@ -281,12 +281,20 @@ export function createKnowledgeScene(host: HTMLElement, graph: KnowledgeGraph, c
   };
   const driftScratch = { x: 0, y: 0 };
   const probe = new THREE.Vector3();
+  // Where a star is drawn right now: its layout position plus the idle drift the shader applies (none under reduced motion).
+  const drawnAt = (index: number) => {
+    const x = layout.positions[index * 3]!;
+    const y = layout.positions[index * 3 + 1]!;
+    driftAt(x, y, phases[index]!, pointMaterial.uniforms.time!.value as number, driftScratch);
+    const amount = pointMaterial.uniforms.drift!.value as number;
+    return probe.set(x + driftScratch.x * amount, y + driftScratch.y * amount, layout.positions[index * 3 + 2]!);
+  };
 
   const labelled = () => [...new Set([...highlighted.slice(0, 12), ...(selected ? [selected] : [])])];
   const project = (id: string) => {
     const index = indexOf.get(id);
     if (index === undefined) return null;
-    const vector = new THREE.Vector3().fromArray(layout.positions, index * 3).project(camera);
+    const vector = drawnAt(index).project(camera);
     if (vector.z > 1) return null;
     const bounds = renderer.domElement.getBoundingClientRect();
     return { id, x: (vector.x + 1) / 2 * bounds.width, y: (1 - vector.y) / 2 * bounds.height };
@@ -396,19 +404,14 @@ export function createKnowledgeScene(host: HTMLElement, graph: KnowledgeGraph, c
     const bounds = renderer.domElement.getBoundingClientRect();
     const px = event.clientX - bounds.left;
     const py = event.clientY - bounds.top;
-    const time = pointMaterial.uniforms.time!.value as number;
-    const amount = pointMaterial.uniforms.drift!.value as number;
     let best = -1;
     let bestDistance = pickRadius * pickRadius;
     for (let index = 0; index < count; index += 1) {
       if (shown[index] !== 1) continue;
-      const x = layout.positions[index * 3]!;
-      const y = layout.positions[index * 3 + 1]!;
-      driftAt(x, y, phases[index]!, time, driftScratch);
-      probe.set(x + driftScratch.x * amount, y + driftScratch.y * amount, 0).project(camera);
-      if (probe.z > 1) continue;
-      const dx = (probe.x + 1) / 2 * bounds.width - px;
-      const dy = (1 - probe.y) / 2 * bounds.height - py;
+      const star = drawnAt(index).project(camera);
+      if (star.z > 1) continue;
+      const dx = (star.x + 1) / 2 * bounds.width - px;
+      const dy = (1 - star.y) / 2 * bounds.height - py;
       const distance = dx * dx + dy * dy;
       if (distance < bestDistance) { bestDistance = distance; best = index; }
     }

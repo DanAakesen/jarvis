@@ -93,7 +93,7 @@ describe('Notes workflow', () => {
   it('shows tasks on request, opens a task’s note in place and puts the list away again', async () => {
     mount();
     const toggle = await screen.findByRole('button', { name: 'Show tasks' });
-    expect(toggle.closest('.knowledge-search')).not.toBeNull();
+    expect(toggle.closest('.knowledge-search')).toBeNull();
     expect(screen.queryByRole('region', { name: 'Task list' })).toBeNull();
     expect(fetchMock.mock.calls.some(([input]) => new URL(String(input)).pathname === '/vault/tasks')).toBe(false);
 
@@ -108,7 +108,7 @@ describe('Notes workflow', () => {
     expect(screen.getByRole('region', { name: 'Task list' })).not.toBeNull();
 
     fireEvent.click(screen.getByRole('button', { name: 'Hide tasks' }));
-    expect(screen.queryByRole('region', { name: 'Task list' })).toBeNull();
+    await waitFor(() => expect(screen.queryByRole('region', { name: 'Task list' })).toBeNull());
     expect(screen.getByRole('button', { name: 'Show tasks' })).not.toBeNull();
   });
 
@@ -122,13 +122,48 @@ describe('Notes workflow', () => {
     })).toBe(true));
   });
 
+  it('closes the task list when the browser goes back from it', async () => {
+    const { router } = mount();
+    fireEvent.click(await screen.findByRole('button', { name: 'Show tasks' }));
+    await screen.findByRole('region', { name: 'Task list' });
+    expect(router.state.location.search).toBe('?tasks=1');
+    await act(async () => { await router.navigate(-1); });
+    expect(router.state.location.search).toBe('');
+    expect(screen.queryByRole('region', { name: 'Task list' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Show tasks' })).not.toBeNull();
+  });
+
+  it('follows a task link to this page: it opens the list and applies the search, even when the list is already open', async () => {
+    const { router } = mount();
+    await screen.findByRole('button', { name: 'Show tasks' });
+    const searchbox = () => within(screen.getByRole('region', { name: 'Task list' })).getByRole('searchbox', { name: 'Search tasks' }) as HTMLInputElement;
+    await act(async () => { await router.navigate('/notes?tasks=1&q=mirror'); });
+    await screen.findByRole('region', { name: 'Task list' });
+    expect(searchbox().value).toBe('mirror');
+    await act(async () => { await router.navigate('/notes?tasks=1&q=frame'); });
+    await waitFor(() => expect(searchbox().value).toBe('frame'));
+    await waitFor(() => expect(fetchMock.mock.calls.some(([input]) => new URL(String(input)).searchParams.get('q') === 'frame')).toBe(true));
+  });
+
+  it('does not treat opening or closing the task list as leaving an unsaved draft', async () => {
+    mount();
+    const input = await openFixture();
+    fireEvent.change(input, { target: { value: 'Unsaved draft' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Show tasks' }));
+    await screen.findByRole('region', { name: 'Task list' });
+    fireEvent.click(screen.getByRole('button', { name: 'Hide tasks' }));
+    await waitFor(() => expect(screen.queryByRole('region', { name: 'Task list' })).toBeNull());
+    expect(screen.queryByRole('dialog', { name: 'Unsaved changes' })).toBeNull();
+    expect((screen.getByRole('textbox', { name: 'Markdown' }) as HTMLTextAreaElement).value).toBe('Unsaved draft');
+  });
+
   it('closes the task list with Escape and hands focus back to its button', async () => {
     mount();
     fireEvent.click(await screen.findByRole('button', { name: 'Show tasks' }));
     const list = await screen.findByRole('region', { name: 'Task list' });
     expect(document.activeElement).toBe(list);
     fireEvent.keyDown(list, { key: 'Escape' });
-    expect(screen.queryByRole('region', { name: 'Task list' })).toBeNull();
+    await waitFor(() => expect(screen.queryByRole('region', { name: 'Task list' })).toBeNull());
     expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Show tasks' }));
   });
 
@@ -140,7 +175,7 @@ describe('Notes workflow', () => {
     const list = await screen.findByRole('region', { name: 'Task list' });
     fireEvent.click(await within(list).findByRole('link', { name: 'Open source note Work/fixture.md, line 3' }));
     await screen.findByRole('dialog', { name: 'fixture' });
-    expect(screen.queryByRole('region', { name: 'Task list' })).toBeNull();
+    await waitFor(() => expect(screen.queryByRole('region', { name: 'Task list' })).toBeNull());
   });
 
   it('asks before a task’s note replaces an unsaved draft', async () => {

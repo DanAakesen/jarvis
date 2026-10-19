@@ -1,6 +1,6 @@
 import { useCallback, useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { useBlocker, useLocation } from 'react-router-dom';
+import { useBlocker, useLocation, useSearchParams } from 'react-router-dom';
 import type { AreaProps } from '../areas';
 import { KnowledgeGraphView, KnowledgeNoteReader } from '../knowledge/KnowledgeGraphView';
 import { connectedNotes, withoutFrontMatter, type KnowledgeGraph, type KnowledgeNode } from '../knowledge/knowledge-data';
@@ -25,6 +25,12 @@ interface Editor {
   revisionMissing?: boolean;
 }
 const message = (error: unknown) => error instanceof Error ? error.message : 'Notes could not be loaded. Try again.';
+// The task list lives in the address (tasks, q), so opening or closing it never counts as leaving a note draft.
+const withoutTaskParams = (search: string) => {
+  const params = new URLSearchParams(search);
+  params.delete('tasks'); params.delete('q');
+  return params.toString();
+};
 
 export function NotesArea({ backendUrl, getAccessToken }: AreaProps) {
   const id = useId();
@@ -39,10 +45,9 @@ export function NotesArea({ backendUrl, getAccessToken }: AreaProps) {
   const readController = useRef<AbortController | null>(null);
   const openedQueryNote = useRef<string | null>(null);
   const location = useLocation();
-  const [tasks, setTasks] = useState(() => {
-    const params = new URLSearchParams(location.search);
-    return { open: params.has('tasks'), query: (params.get('q') ?? '').slice(0, 200), key: 0 };
-  });
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tasksOpen = searchParams.has('tasks');
+  const tasksQuery = (searchParams.get('q') ?? '').slice(0, 200);
   const tasksToggle = useRef<HTMLButtonElement>(null);
   const alive = useRef(true);
   const editorInput = useRef<HTMLTextAreaElement>(null);
@@ -61,7 +66,8 @@ export function NotesArea({ backendUrl, getAccessToken }: AreaProps) {
   const dirty = !!editor && (editor.created ? !!editor.title || editor.draft !== '' : editor.draft !== editor.original);
   const guardRef = useContext(NavigationGuardContext);
   const blocker = useBlocker(({ currentLocation, nextLocation }) =>
-    (dirty || saving) && (currentLocation.pathname !== nextLocation.pathname || currentLocation.search !== nextLocation.search));
+    (dirty || saving) && (currentLocation.pathname !== nextLocation.pathname
+      || withoutTaskParams(currentLocation.search) !== withoutTaskParams(nextLocation.search)));
   const bytes = editor ? new TextEncoder().encode(editor.draft).length : 0;
   const invalidContent = !!editor && !validNoteText(editor.draft);
   const editorPath = editor?.path;
@@ -189,10 +195,17 @@ export function NotesArea({ backendUrl, getAccessToken }: AreaProps) {
       void openNote(node.path, node.title);
     });
   };
-  const toggleTasks = () => setTasks(current => current.open ? { ...current, open: false } : { open: true, query: '', key: current.key + 1 });
-  const showTasks = (query: string) => setTasks(current => ({ open: true, query, key: current.key + 1 }));
+  // Opening pushes an entry so Back closes the list; changing its search or closing it replaces the entry.
+  const setTasks = (open: boolean, query = '') => {
+    const next = new URLSearchParams(searchParams);
+    next.delete('tasks'); next.delete('q');
+    if (open) { next.set('tasks', '1'); if (query) next.set('q', query.slice(0, 200)); }
+    setSearchParams(next, { replace: !open || tasksOpen });
+  };
+  const toggleTasks = () => setTasks(!tasksOpen);
+  const showTasks = (query: string) => setTasks(true, query);
   const closeTasks = () => {
-    setTasks(current => ({ ...current, open: false }));
+    setTasks(false);
     tasksToggle.current?.focus();
   };
   const openTaskNote = (path: string) => {
@@ -202,7 +215,7 @@ export function NotesArea({ backendUrl, getAccessToken }: AreaProps) {
     const narrow = window.matchMedia?.('(max-width: 900px)').matches ?? false;
     change(() => {
       if (!editor) returnFocus.current = narrow ? tasksToggle.current : origin;
-      if (narrow) setTasks(current => ({ ...current, open: false }));
+      if (narrow) setTasks(false);
       void openNote(path, noteTitleFromPath(path));
     });
   };
@@ -219,10 +232,7 @@ export function NotesArea({ backendUrl, getAccessToken }: AreaProps) {
       <KnowledgeGraphView backendUrl={backendUrl} getAccessToken={getAccessToken}
         onOpenNote={openGraphNote} {...(editorPath ? { selectedPath: editorPath } : {})} refreshKey={reload}
         showTaskMatches onShowTasks={showTasks}
-        searchAction={<><button className="notes-tasks-toggle" type="button" ref={tasksToggle} data-open={tasks.open || undefined}
-          aria-controls={tasks.open ? `${id}-tasks` : undefined} onClick={toggleTasks}>
-          <ShellIcon name="tasks" /><span className="notes-tasks-toggle-label">{tasks.open ? 'Hide tasks' : 'Show tasks'}</span>
-        </button><button className="notes-create-button" type="button" disabled={!client || saving}
+        searchAction={<button className="notes-create-button" type="button" disabled={!client || saving}
           aria-label="Create new" title="Create new note"
           onClick={() => {
             const origin = document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -233,9 +243,13 @@ export function NotesArea({ backendUrl, getAccessToken }: AreaProps) {
               setEditor({ path: '', title: '', draft: '', original: '', sha: null, created: true });
               setDraftNumber(value => value + 1); setPreview(false); setError(''); setFeedback(''); setCommitUrl(''); setConflict(null); setCompare(false);
             });
-          }}><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg></button></>}>
-        {tasks.open && <TasksPanel key={tasks.key} id={`${id}-tasks`} backendUrl={backendUrl} getAccessToken={getAccessToken}
-          initialQuery={tasks.query} onOpenNote={openTaskNote} onClose={closeTasks} />}
+          }}><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg></button>}>
+        <button className="notes-tasks-toggle luminous-glass" type="button" ref={tasksToggle} data-open={tasksOpen || undefined}
+          aria-controls={tasksOpen ? `${id}-tasks` : undefined} onClick={toggleTasks}>
+          <ShellIcon name="tasks" /><span className="notes-tasks-toggle-label">{tasksOpen ? 'Hide tasks' : 'Show tasks'}</span>
+        </button>
+        {tasksOpen && <TasksPanel key={location.key} id={`${id}-tasks`} backendUrl={backendUrl} getAccessToken={getAccessToken}
+          initialQuery={tasksQuery} onOpenNote={openTaskNote} onClose={closeTasks} />}
         {(editor || opening || error) && createPortal(<aside ref={popup} className={`knowledge-note luminous-glass notes-popup${editor?.created ? ' notes-popup-creating' : ''}`} role="dialog"
           aria-labelledby={`${id}-note`} aria-busy={saving || opening} onKeyDown={event => {
             if (event.key === 'Escape' && !pendingChange && blocker.state !== 'blocked') { event.preventDefault(); change(clearEditor); }

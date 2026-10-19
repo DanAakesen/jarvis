@@ -102,7 +102,7 @@ export function HealthUploadSettings({ backendUrl, getAccessToken }: {
   };
 
   return <div className="health-upload-settings">
-    <p>Send each metric/date group in one upload, up to 8 MiB.</p>
+    <p>Send each metric/date group in one upload, up to 8 MiB. Processor output must stay within 10,000 normalized rows and 8 MiB. Never split a group.</p>
     <dl className="health-upload-contract">
       <div><dt>Request</dt><dd><code>POST</code></dd></div>
       <div><dt>Upload URL</dt><dd><code className="health-upload-url">{endpoint ?? 'API URL not configured'}</code></dd></div>

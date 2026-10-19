@@ -417,8 +417,12 @@ navigation, Settings slot and Background work Open link.
 ## Vault tasks on the Notes page (P13-19; one page since 19 October 2026)
 
 There is no Tasks page. A **Show tasks** button (task icon and text; **Hide tasks**
-while open) in the Notes search bar opens a task panel beside the map. The panel is
-a focused, read-only list, not another board or note editor: a search field, an
+while open) is its own glass button at the top left of the map, outside the search
+bar, and opens a task panel beside the map. The Notes search bar is compact (380px
+at most, centred) and holds the search field, Reset view and Create; it shows no
+note total, only a match count while searching. On a phone the button shrinks to
+its icon (still a 44px target) and the bar sits to its right. The panel is a
+focused, read-only list, not another board or note editor: a search field, an
 icon-only Refresh and a Completed toggle sit above the list, with no headline or
 explanatory copy. Open rows group under Overdue, Today, Upcoming and No date; Done
 appears only when completed tasks are requested. Every row pairs its Open/Done

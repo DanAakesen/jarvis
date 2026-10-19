@@ -2,18 +2,26 @@
 
 ## P14-32 — One Notes page, a livelier map and quieter copy (19 October 2026; #1085)
 
-The Tasks page is gone. Notes is the one page: a Show tasks button in its search
-bar opens the read-only task panel beside the map, and `/tasks` redirects to
+The Tasks page is gone. Notes is the one page: a Show tasks button beside its
+search bar opens the read-only task panel beside the map, and `/tasks` redirects to
 `/notes?tasks=1` (keeping the search), so old links and the Notes search task
-group still work. This is the interim step before the design-led one-page layout
+group still work. The address is the source of truth for the panel: opening pushes
+a history entry so Back closes it, and a link to a task search on the same page
+opens it and applies the search. Those parameters do not count as leaving an
+unsaved note draft. This is the interim step before the design-led one-page layout
 tracked in #1085.
+
+The Notes search bar is compact (380px at most) and holds only the search, Reset
+view and Create. It shows no note total; a match count appears only while
+searching. The jobs chip in the top bar is vertically centred with its neighbours.
 
 The knowledge map opens centred on the mass of the notes and fitted to the window,
 follows the layout while it settles, and stops at the first pan, zoom or search
 flight; Reset view returns to the same fit. Its idle motion is stronger (drift, a
 swell through the cloud, brighter breathing, pulses along links, flaring notes);
-the constants are at the top of `knowledge-scene.ts`. Picking mirrors the drift, so
-a star is found where it is drawn. Reduced motion keeps it still.
+the constants are at the top of `knowledge-scene.ts`. Picking and label positions
+mirror the drift, so a star and its label are found where they are drawn. Reduced
+motion keeps it still.
 
 Copy that restates a heading, a label or a visible state is removed, along with
 reassurance about what is not stored, unless it is consent, a destructive-action
@@ -21,6 +29,7 @@ warning or recovery guidance; success is quiet. `copy-cleanup.test.ts` now scans
 every non-test source file for the removed strings. Data-honesty markers are not
 filler: freshness, stale, partial, failed-refresh and estimated states keep a short
 visible note (for example "Showing the last loaded records." and "This page only").
+Health upload guidance keeps the enforced limits.
 
 ## P14-33 — Harden the first live vault-mirror run (19 October 2026; #1090)
 

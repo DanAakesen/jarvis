@@ -683,9 +683,11 @@ Persistent-pin semantics are still part of the unfinished P8-42 implementation.
 #### Vault tasks on the Notes page (P13-19; 18 October 2026; one page since 19 October 2026)
 
 Notes and personal to-dos share one page; there is no Tasks page. A **Show tasks**
-button in the Notes search bar opens a task panel beside the map (**Hide tasks** or
-Escape closes it), and the old `/tasks` address redirects to `/notes?tasks=1`,
-keeping a `q` search. The panel reads native Obsidian checkbox items from the
+button at the top left of the map, beside the search bar rather than inside it,
+opens a task panel beside the map (**Hide tasks**, Escape or Back closes it), and
+the old `/tasks` address redirects to `/notes?tasks=1`, keeping a `q` search. The
+address holds the panel's state, so a link to a task search opens it. The panel
+reads native Obsidian checkbox items from the
 shared proactive scope: `Personal/` and `Work/` notes plus the root `task.md` or
 `tasks.md` dashboard. It groups open tasks by Overdue, Today, Upcoming and No date;
 completed tasks are opt-in. Search filters task text, and each task opens its source
@@ -700,10 +702,11 @@ kind of `vault_search`; note searches use its default notes kind and `vault_read
 All reads are owner-only and treat vault content as untrusted data.
 
 The knowledge map opens centred on the notes and fitted to the window, and its idle
-motion is clearly alive (drifting notes, breathing stars, pulses along links).
-Screens carry as little copy as the task allows: no sentence repeats a heading,
-label or visible state, and none reassures about what is not stored or not done
-unless it is consent, a destructive-action warning or recovery guidance.
+motion is clearly alive (drifting notes, breathing stars, pulses along links). The
+Notes search bar is compact and shows no note total, only a match count while
+searching. Screens carry as little copy as the task allows: no sentence repeats a
+heading, label or visible state, and none reassures about what is not stored or not
+done unless it is consent, a destructive-action warning or recovery guidance.
 Freshness, stale, partial, failed-refresh and estimated states keep a short
 visible marker.
 

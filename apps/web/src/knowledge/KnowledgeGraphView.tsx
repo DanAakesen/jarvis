@@ -254,8 +254,8 @@ export function KnowledgeGraphView({ backendUrl, getAccessToken, initialQuery = 
         <input id={`${ids}-query`} type="search" placeholder="Search your knowledge…" value={query} maxLength={200} autoComplete="off"
           disabled={!graph} onChange={(event) => setQuery(event.target.value)}
           onKeyDown={(event) => { if (event.key === 'Escape' && query) { event.preventDefault(); setQuery(''); } }} />
-        {graph && <span className="knowledge-count" role="status" aria-live="polite">
-          {query.trim() ? `${hits.length} ${hits.length === 1 ? 'match' : 'matches'}${searching ? '…' : ''}` : `${graph.nodes.length} ${graph.nodes.length === 1 ? 'note' : 'notes'}`}
+        {graph && <span className={query.trim() ? 'knowledge-count' : 'knowledge-count visually-hidden'} role="status" aria-live="polite">
+          {query.trim() ? `${hits.length} ${hits.length === 1 ? 'match' : 'matches'}${searching ? '…' : ''}` : ''}
         </span>}
         {(query || selectedId || folder !== null) && (
           <button className="knowledge-reset" type="button" onClick={() => { setQuery(''); setSelectedId(null); setFolder(null); scene.current?.resetView(); }}>Reset view</button>

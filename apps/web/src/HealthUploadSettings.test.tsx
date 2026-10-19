@@ -29,6 +29,7 @@ describe('Health upload settings', () => {
     expect(screen.getByText(/session-id/u)).toBeTruthy();
     expect(screen.getByText(/each metric\/date group in one upload/u)).toBeTruthy();
     expect(screen.getByText(/up to 8 MiB/u)).toBeTruthy();
+    expect(screen.getByText(/10,000 normalized rows and 8 MiB/u)).toBeTruthy();
     expect(screen.queryByText(/batching guidance is not yet qualified/u)).toBeNull();
 
     fireEvent.click(screen.getByRole('button', { name: 'Create credential' }));
