@@ -78,7 +78,7 @@ describe('responsive stylesheet contract', () => {
     expect(ruleDeclaration(sharedStyles, /\.release-page h2\s*\{([^}]*)\}/, 'overflow-wrap')).toBe('anywhere');
     expect(ruleDeclaration(sharedStyles, /\.release-trail-pipeline li\s*\{([^}]*)\}/, 'min-width')).toBe('0');
     expect(ruleDeclaration(sharedStyles, /\.release-trail-pipeline a\s*\{([^}]*)\}/, 'overflow-wrap')).toBe('anywhere');
-    expect(sharedStyles).toContain('.kanban-header-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));');
+    expect(sharedStyles).toContain('.kanban-strip-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));');
     expect(sharedStyles).toContain('.deployment-add { grid-template-columns: repeat(2, minmax(0, 1fr)); }');
   });
 });
