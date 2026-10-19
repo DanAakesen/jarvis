@@ -1,5 +1,111 @@
 # Decisions
 
+## P14-27 — Azure vault mirror runner and Headless CLI wrapper (19 October 2026; #1078)
+
+Add a one-run runner around the P14-26 pure planner; do not add infrastructure or
+change the shared status/policy contract. The existing desktop task remains and
+this image is not deployed or connected to the live vault. Azure access uses the
+job's user-assigned managed identity for Key Vault and private Blob containers.
+The `vault-mirror-state/state.zip` blob is the single-flight lease; verify its
+SHA-256 metadata and 200 MB limit after leasing, then update it once at the end
+with both its original ETag and lease ID. Status is a separate
+`vault-mirror-status/status.json` blob. A missing state blob is initialized only
+with an `If-None-Match: *` create.
+
+The GitHub App token is minted for only `DanAakesen/vault` with `contents:write`.
+Every run verifies the repository is private and its default branch is `master`
+before taking the state lease. Read the branch ref and recursive tree once per
+snapshot; reject truncated/incomplete trees. Build Git blobs/tree/commit and
+update the ref with `force:false`, using the fixed message `Update vault mirror`.
+If the ref update rejects a moved branch, read the new snapshot and replan once;
+a second rejection is `push-rejected`. Omit explicit author/committer so the
+GitHub App installation identity is used for the commit.
+
+Keep runtime I/O outside `src/engine`. The runner persists the working copy,
+Headless CLI configuration, common-base text, conflict first-seen times and
+pending write-back paths together. The working copy and config home use the same
+fixed per-user absolute paths below the OS temp directory on every invocation.
+After taking the state lease, the runner removes and recreates those directories
+with mode 0700, then restores their archived contents; this preserves `ob`'s
+configured `vaultPath` while avoiding reliance on repeating `sync-setup`. The
+paths are private to the single-purpose non-root job/container. It checks the
+lease before each external or local write. GitHub changes happen atomically
+before local write-back. Local write-back uses a same-directory temporary file
+and rename, then compares the entire working-copy diff with the planned O-side
+paths before upload; a mismatch restores the prior copy and reports
+`guard-tripped`.
+
+At run start, the runner best-effort reads `status.json` with a 5-second timeout,
+a 32 KiB cap and strict schema validation. Invalid, absent or unavailable status
+is ignored. Until the state archive is loaded, its previous success timestamp
+and failure count seed early outcomes; once loaded, the later success timestamp
+and larger failure count from status and state are retained. A busy run carries
+both values unchanged. Early failures increment the carried failure count, and
+successful `ok`/`ok-noop` runs reset it; both success outcomes advance
+`lastSuccessAt`.
+
+Failed/unconfirmed O writes and deletes remain pending and do not advance the
+base. Before retrying in `on`, compare each pending target with both its prior
+base and intended result. Apply only when it still matches the base; clear an
+already-landed write/delete without another upload; if it differs from both,
+drop the stale retry and let normal planning reconcile the newer edit. Upload
+only if at least one pending mutation was applied. In `dry-run`, pending paths
+are excluded from planning and remain pending; no bidirectional mode is
+requested. Fresh state and guard trips still suppress O writes.
+
+The wrapper pins official `obsidian-headless` **0.0.14** in the isolated
+`apps/vault-mirror/tools` lockfile, invokes `ob` with an argv array, supplies
+`OBSIDIAN_AUTH_TOKEN` only in its child's environment, bounds each invocation to
+60 seconds within a 420-second run, captures bounded output without printing it,
+and terminates the child process group on timeout. Runner logging is restricted
+to run ID, outcome, fixed reason, duration and counts; paths appear only in
+private conflict status. `dry-run` is the default and only an explicit `on` value
+enables write-back. The image uses a pinned Node 22 base and runs as non-root;
+CI builds but does not publish it, then smoke-tests `ob --version` and a fake
+service run. The optional vault password is passed in the `ob sync-setup`
+argument array because this CLI provides no password environment-variable or
+stdin input; the job's single-purpose non-root container limits other local
+process exposure.
+
+All assumptions below are **not yet verified against the live service**:
+
+- The pinned package README says `sync-setup` needs a password only for
+  end-to-end encrypted vaults, but the inspected 0.0.14 CLI source appears to
+  exit with code 2 when `--json` is used without any password (unless the
+  service response supplies one). A first setup without the optional password
+  secret may therefore fail even for a standard vault. This source/documentation
+  discrepancy has no verified workaround and must be checked before live use.
+- The npm package source/README advertises `sync-setup`, `sync-config --mode
+  pull-only|bidirectional`, one-shot `sync`, `--json` on setup/config commands,
+  and `OBSIDIAN_AUTH_TOKEN`. The runner assumes these commands and option
+  semantics are accepted by the owner's service/account.
+- Repeating `sync-setup` for the configured vault is treated as idempotent. The
+  inspected source rewrites local setup configuration rather than creating a
+  remote vault, but this has not been confirmed against the live account.
+- `ob sync` has no documented JSON mode. A successful zero exit is treated as
+  confirmation of all pending uploads; a non-zero exit is unconfirmed and keeps
+  every pending path. The CLI does not document per-file upload receipts, so
+  partial-success behavior is unknown.
+- CLI error text is inspected only in memory to classify auth failures; other
+  failures map to fixed pull/upload reasons. Exact service error strings and
+  exit-code behavior may change; neither is logged or exposed.
+- On Linux the inspected source puts `state.db`, `config.json`, and `sync.log`
+  below `$XDG_CONFIG_HOME/obsidian-headless/sync/<vault-id>`. The archive
+  preserves this directory. It also preserves the derived encryption key that
+  `ob` stores in its config for an end-to-end encrypted vault; the raw password
+  is supplied only to `sync-setup` when present and is not archived by the
+  runner. The official source does not state an auth-token lifetime or refresh
+  behavior, so the runner reads the Key Vault token every invocation and does
+  not attempt an undocumented refresh.
+- The official CLI documentation describes `pull-only` as ignoring local
+  changes and `bidirectional` as uploading and downloading; those protections
+  and the timing/meaning of an upload's success need live verification.
+
+The official package README and bundled source inspected were npm
+`obsidian-headless@0.0.14`; the official Help Center page was unavailable during
+research. No Obsidian credential, password, policy or vault content is included
+in source or fixtures.
+
 ## P14-29 — Quiet mirror freshness and owner findings (19 October 2026; #1081)
 
 Consume the merged runner status contract rather than changing it. Add a

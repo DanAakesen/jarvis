@@ -29,25 +29,33 @@ Keep browser fixtures synthetic and outside the repository; never capture real
 vault conflict paths. Local fixtures do not verify Azure identity/RBAC,
 production storage or the live Obsidian service.
 
-## Offline vault mirror engine checks (19 October 2026; P14-26)
+## Vault mirror runner checks (19 October 2026; P14-27)
 
 From the repository root: `npm run build:vault-mirror`,
 `npm run typecheck:vault-mirror`, `npm run lint:vault-mirror` and
-`npm run test:vault-mirror`. The workspace uses the existing pinned Node/npm,
-TypeScript, ESLint and Vitest toolchain; root `npm ci` installs its dependencies.
-Shared status checks use `npm test --workspace @jarvis/contracts`.
+`npm run test:vault-mirror`. Shared status checks use
+`npm test --workspace @jarvis/contracts`. Build and smoke-test the image from the
+repository root with:
 
-This is only the pure engine/policy/status boundary, not a runnable Azure job.
-No entry point, CLI access, deployment, live vault test or secret provisioning
-belongs to P14-26. Future configuration must retain `VAULT_MIRROR_WRITE_BACK`
-default `dry-run` (unrecognized values also mean `dry-run`), `MAX_CHANGED`
-default 25/hard max 100 and `MAX_DELETES` default 3/hard max 10, with the
-`VAULT_MIRROR_` prefix on both cap variables. Freshly initialized bases suppress
-O writes even in `on`. Do not log plans, policies, content or skipped paths.
-Only counters/fixed reasons are log-safe; conflict paths belong only in private
-status and authenticated UI. Live Obsidian service behavior is **not yet verified
-against the live service**. See the workspace README for action ordering,
-conflict persistence and one-run first-sync cap recovery.
+```sh
+docker build --file apps/vault-mirror/Dockerfile --tag jarvis-vault-mirror:local .
+docker run --rm --entrypoint ob jarvis-vault-mirror:local --version
+docker run --rm \
+  --mount "type=bind,source=$PWD/apps/vault-mirror/test/container-smoke.mjs,target=/tmp/container-smoke.mjs,readonly" \
+  --entrypoint node jarvis-vault-mirror:local /tmp/container-smoke.mjs
+```
+
+`node apps/vault-mirror/dist/main.js` performs one run and exits. The runtime
+requires `KEY_VAULT_URI`, `AZURE_CLIENT_ID`, `GITHUB_APP_ID` and
+`VAULT_MIRROR_STORAGE_URL`; secrets are read from Key Vault at runtime. Keep
+`VAULT_MIRROR_WRITE_BACK` at `dry-run` (unrecognized values also mean `dry-run`)
+unless the owner explicitly enables `on`. The caps default to 25/3 and hard max
+at 100/10. Freshly initialized bases suppress Obsidian writes even in `on`.
+Never log plans, policies, note content or paths; only conflict paths are allowed
+in private status. The image builds only; no Azure job or live secret provisioning
+is part of this change. Headless behavior is **not yet verified against the live
+service**. See the workspace README and P14-27 decision for runner ordering,
+recovery and CLI assumptions.
 
 CI has a reusable `vault-mirror-ci.yml`, impact mapping and a required aggregate
 result dependency. Changes to this wiring require the dispatcher's explicit

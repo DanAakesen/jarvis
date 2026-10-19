@@ -1,9 +1,10 @@
-# Vault mirror decision engine
+# Vault mirror runner
 
-P14-26 implements the **pure planning boundary only**. The Azure job, CLI,
-network access, state storage, entry point and deployment belong to later issues.
-Nothing here can reach the owner's vault. Obsidian Headless Sync and Azure
-behavior are **not yet verified against the live service**.
+P14-27 adds a one-run runner around the pure P14-26 planner. It uses Obsidian
+Headless Sync, GitHub's Git Data API and Azure Key Vault/Blob Storage. The runner
+and image are **not deployed or connected to the live vault**; the existing
+desktop task remains. Obsidian Headless Sync behavior is **not yet verified
+against the live service**.
 
 ## Run the checks
 
@@ -15,11 +16,79 @@ npm run build:vault-mirror
 npm run typecheck:vault-mirror
 npm run lint:vault-mirror
 npm run test:vault-mirror
+docker build --file apps/vault-mirror/Dockerfile --tag jarvis-vault-mirror:local .
 ```
 
-The reusable component workflow runs these checks and the shared contracts tests.
-Only mirror + Python qualification is selected for a mirror-only code change.
-No production deployment is selected for mirror-only files.
+The reusable component workflow runs the checks, builds the image without
+pushing, verifies `ob --version`, and runs the runner against in-memory fakes
+inside the image. Mirror-only changes qualify this component; they do not deploy
+an existing application or the Azure job.
+
+## Runtime
+
+`node apps/vault-mirror/dist/main.js` performs one run and exits. The image
+defaults to that command. Required non-secret environment: `KEY_VAULT_URI`,
+`AZURE_CLIENT_ID`, `GITHUB_APP_ID`, and `VAULT_MIRROR_STORAGE_URL`.
+`VAULT_MIRROR_WRITE_BACK` is `dry-run` unless its value is exactly `on`.
+`VAULT_MIRROR_MAX_CHANGED` defaults to 25 (hard maximum 100) and
+`VAULT_MIRROR_MAX_DELETES` defaults to 3 (hard maximum 10).
+
+Each run reads `obsidian-auth-token`, `obsidian-vault`,
+`obsidian-vault-password` (optional), `vault-mirror-policy`, and
+`github-app-private-key` from Key Vault using the job's managed identity. The
+GitHub App installation token is restricted to the vault repository and
+`contents:write`. No credentials, Key Vault references or owner policy are part
+of the image or repository.
+
+The state container is `vault-mirror-state`; its `state.zip` blob holds the
+working copy, Headless Sync configuration, common-base content and pending
+write-back. Runs take a blob lease, verify the archive checksum and 200 MB cap,
+and upload state with both the original ETag and active lease. Status is written
+to `vault-mirror-status/status.json` using the strict shared contract. Logs use
+an explicit allow-list of run ID, outcome, fixed reason, duration and counts.
+Conflict paths appear only in private status, never in logs.
+
+The working copy and configuration home use fixed absolute paths below the
+container's temp directory on every run. After taking the lease, the runner
+removes and recreates them with mode 0700, then restores their archived contents.
+This keeps the `vaultPath` saved by `ob sync-setup` matched to the path passed to
+later commands; setup is not repeated just to compensate for a changing temp
+directory.
+
+At startup, the runner best-effort reads the previous status with a five-second
+timeout, 32 KiB limit and strict schema validation. Missing or invalid status is
+ignored. Its last-success time and failure count seed outcomes before state loads;
+after state loads, the runner retains the later success time and larger failure
+count from the status and archive. Busy runs preserve both values, early failures
+increment the carried count, and `ok`/`ok-noop` reset it and advance the success
+time.
+
+The runner sets `pull-only` before every sync. `dry-run` never switches to
+`bidirectional` and never writes planned changes to the working copy; status
+counts show pending write-back. In `on`, it writes planned local files through
+temporary files and atomic rename, verifies the resulting path set, uploads, and
+returns to `pull-only`. A failed/unconfirmed upload remains pending in state and
+is retried before planning on the next `on` run. A retry is applied only if the
+current file still matches its saved base; an already-landed write/delete is
+cleared without another upload, and a newer edit drops the stale retry so normal
+planning can reconcile it. A retry upload runs only when a mutation was applied.
+Fresh state suppresses all Obsidian writes even when configured `on`.
+
+The optional vault password is passed to `ob sync-setup` through its argument
+array because the pinned CLI exposes no password environment-variable or stdin
+input. The container is single-purpose and runs as non-root.
+
+The container can be smoke-tested locally with:
+
+```sh
+docker run --rm --entrypoint ob jarvis-vault-mirror:local --version
+docker run --rm \
+  --mount "type=bind,source=$PWD/apps/vault-mirror/test/container-smoke.mjs,target=/tmp/container-smoke.mjs,readonly" \
+  --entrypoint node jarvis-vault-mirror:local /tmp/container-smoke.mjs
+```
+
+These tests use synthetic values and in-memory services; they do not contact
+Azure, GitHub or Obsidian.
 
 ## Inputs and policy
 
@@ -71,19 +140,19 @@ present files, a missing base is a conflict; one unchanged side accepts the
 changed side; two changed sides use the injected three-way merge. A clean merge
 writes identical merged content to both sides. A conflict skips both.
 
-Skipped conflicts carry a first-seen timestamp. The future runner must persist
-it without advancing the common content base, including no-base conflicts via
+Skipped conflicts carry a first-seen timestamp persisted in the state archive
+without advancing the common content base, including no-base conflicts via
 `conflictFirstSeenAt`. At 24 hours an unresolved conflict pushes O to G only.
 The GitHub version remains in history; count these resolutions separately.
 Clear conflict metadata after successful common-base recording.
 
-Apply actions **in their returned order**, persisting each common-base update
-only after its preceding writes succeed. A failed write must stop application;
-never apply its `recordBase` or `forgetBase`. Use expected snapshots/preconditions
-in the future runner to prevent overwriting changes made after planning.
-Crash recovery reads fresh snapshots and replans; never blindly resumes a stale
-plan. The tests exhaust 216 synthetic O/G/B states and crash after each action,
-including between both merged writes and base persistence.
+The runner applies GitHub actions as one atomic commit and only then applies
+planned Obsidian writes. It records a common base only after the required side
+writes succeed. A failed write never advances or forgets its base. GitHub's
+non-force ref update rejects a moved branch; the runner reads and replans once.
+After a crash, the next run reads fresh snapshots and replans rather than
+resuming a stale plan. Engine tests exhaust 216 synthetic O/G/B states; runner
+tests cover retries and partial completion.
 
 ## Write-back and guards
 
@@ -98,9 +167,9 @@ Two acceptance-property wordings conflict with the explicit decision table:
 the same content to both. Tests use these explicit semantics.
 
 `maxChanged` counts all proposed file mutations per direction, including deletes;
-`maxDeletes` counts deletes per direction. The future configuration boundary
-defaults them to 25 / 3 and enforces hard maxima 100 / 10. Limits supplied here
-must be nonnegative integers within those maxima. Exceeding either cap, deleting
+`maxDeletes` counts deletes per direction. Runner configuration defaults them to
+25 / 3 and enforces hard maxima 100 / 10. Limits supplied here must be
+nonnegative integers within those maxima. Exceeding either cap, deleting
 more than 10% of distinct base paths across both directions, an empty side versus
 at least ten approved files, or more than 20% of base paths missing on either
 side empties **all** actions, including base updates. Threshold equality is
@@ -131,6 +200,19 @@ Status contains no note text or credential, and permits paths only in
 `conflictPaths`; those belong solely in private status storage and the
 authenticated Status page. The runner must construct status explicitly, not
 spread a plan into it. Tests use synthetic fixtures only.
+
+## Obsidian CLI assumptions
+
+The tools lock pins `obsidian-headless` 0.0.14, whose binary is `ob`. Source and
+README findings, including command names, environment authentication, global
+configuration location, and mode settings, are recorded in
+`docs/decisions.md`. Every interaction assumption remains **not yet verified
+against the live service**. The wrapper captures bounded output for internal
+classification but never logs it; `ob sync` output may contain local paths.
+The pinned README says a password is needed only for end-to-end encrypted vaults,
+but the inspected CLI source appears to reject `sync-setup --json` without one
+unless the service response supplies it. First setup without the optional
+password secret may fail; verify this discrepancy before live use.
 
 The purity test scans every engine source import using the TypeScript AST,
 allowing only engine-local imports, Zod and the named SHA-256 `createHash`

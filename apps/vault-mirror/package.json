@@ -19,6 +19,13 @@
     "vitest": "5.0.3"
   },
   "dependencies": {
+    "@azure/identity": "4.13.3",
+    "@azure/keyvault-secrets": "4.11.2",
+    "@azure/storage-blob": "12.31.0",
+    "@jarvis/contracts": "0.0.0",
+    "diff": "9.0.0",
+    "fflate": "0.8.3",
+    "jose": "6.2.12",
     "zod": "4.6.5"
   }
 }
