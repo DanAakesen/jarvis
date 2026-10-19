@@ -192,6 +192,9 @@ describe('Projects page', () => {
     renderFactory('/factory/projects/7');
 
     const policy = await screen.findByRole('group', { name: 'Completion policy for Jarvis' });
+    const intro = screen.getByText('Other project settings apply to new tasks. Completion policy applies now, including pull requests that are already open.');
+    expect(intro.closest('.settings-section')).not.toBeNull();
+    expect(policy.closest('.settings-section')).not.toBeNull();
     expect(within(policy).getByRole('radio', { name: /Deliver a pull request/ })).toHaveProperty('checked', true);
     expect(within(policy).getByRole('radio', { name: /Complete without deployment/ })).toHaveProperty('checked', false);
     expect(within(policy).getByText('Applies now, including pull requests that are already open.')).not.toBeNull();
