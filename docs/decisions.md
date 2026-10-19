@@ -1,5 +1,46 @@
 # Decisions
 
+## P14-17 — Empty and loading messages share the error surface, with a scoped reset list (19 October 2026)
+
+`StateMessage` gave only its error variant a surface, so the empty and loading
+variants were faint muted text directly on the 3D scene (A22), and the wrapper
+around every skeleton loader was a grid item of the shrink-wrapping message, so
+the `rows`, `lines`, `image`, `panel` and `cards` placeholders collapsed to their
+content (A49). The surface now belongs to the empty and loading variants too
+(`--surface-translucent` fill, 1px `--rule` border, `--radius-panel`, `--space-3`
+inline padding), declared inside `:where()` so its specificity is zero and a
+component's own surface (`.usage-empty`, `.project-empty`,
+`.workspace-pin-feedback`) wins without an override.
+
+Inside a container that already has a surface the message must stay flat or a
+card sits inside a card. The issue proposed a reset for two containers
+(`.settings-section`, `.jobs-popover`) on `.state-message`. That selector would
+also strip the error variant's own surface, and a census of the 68 call sites
+found fifteen more surfaced containers that host an empty or loading message:
+chat windows and bubbles, Folio, release sections, the task card and release
+bar, the memory detail, the context panel, the knowledge note, the Proactive
+page, Kanban columns, modals and the Create-project dialog parts. The reset
+therefore names 17 containers and only the `--empty` and `--loading` variants.
+The list lives in `styles.css` next to the default; a container that gains a
+surface and hosts a state message has to be added to it, and a stylesheet test
+pins the list. `.jobs-popover` has no call site today and stays on the list
+because the issue named it. The `partial` variant sits beside existing content
+and is not surfaced.
+
+The wrapper gets a class, `state-message-skeleton`, instead of a
+`:has()` selector on its `aria-hidden` attribute: the class is stable, can be
+asserted in tests and keeps the markup's accessibility attributes unchanged.
+The `image` placeholder keeps its own `min(320px, 100%)` cap, which the loader
+sets on purpose for a fixed 4:3 slab, so it fills the width of a narrow message
+but not of a wide one. The `.knowledge-loader` overlay covered the whole graph
+pane, so a surface on it would have hidden the pane; it is now a compact card
+centred like `.knowledge-status`, sized to its content (`width: max-content`,
+`max-width: min(420px, 90%)`), because an absolutely positioned box at
+`left: 50%` otherwise shrink-wraps to half of the pane. The `cards` loader hid
+every column at 700px and narrower because `.skeleton-column:nth-child(n + 2)`
+counted the visually hidden label as the first child; sibling combinators skip
+it, and no breakpoint was added.
+
 ## P14-15 — Nested section titles wrap, the save row has no frame, touch targets in the task window (19 October 2026)
 
 The whole-app pass found five small CSS defects in Settings and the task window
