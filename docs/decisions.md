@@ -1,5 +1,183 @@
 # Decisions
 
+## P14-35 — Daily v182 unresolved delivery questions (19 October 2026; #1095)
+
+**Proposed only; owner ruling required.** This entry records evidence gaps and
+options; it does not change runtime behavior or mark source parity complete.
+
+### Schema field-mapping scope
+
+**Question:** Should the 21 source columns without an exact migration-column
+match remain individually marked not mapped, or should additional mappings be
+verified before the schema row is accepted?
+
+- **Option A — retain scoped unknowns:** keep the 31-table/360-column inventory
+  with 248 exact-name matches, 0 evidence-backed renames, 91 explicitly excluded
+  columns, and 21 individually reasoned not-mapped columns. This preserves the
+  approved feature scope without claiming data or behavior parity.
+- **Option B — map every field:** document source-to-Jarvis column mappings
+  and SQL adaptations for the 21 unmatched columns, including source
+  `owner_email`, raw-object lifecycle fields, and `nutrition_queue.claim_token`.
+  This expands analysis beyond the selected capabilities and still must not
+  change or delete existing owner data.
+
+**Recommendation:** Option A, with every not-mapped field visible and no claim
+of semantic parity. Evidence: [`source-schema.test.ts`](../apps/backend/src/daily/source-schema.test.ts)
+and the [P14-35 schema inventory](reference/daily-v182/source-to-jarvis-matrix.md#machine-checked-schema-classification).
+
+### Sleep date and DST oracle
+
+**Question:** When a sleep record's explicit source date and its end timestamp
+fall on different calendar dates, which should Jarvis use at DST boundaries?
+
+- **Option A — source precedence:** use the pinned source's documented key
+  precedence (`date`, then sleep/in-bed/end date fields) and verify the result
+  with synthetic SQL boundary vectors. This favors source compatibility.
+- **Option B — Jarvis day rule:** derive the key from Jarvis's existing
+  Copenhagen/wake-date behavior. This may differ from source selection.
+
+**Recommendation:** Option A, but do not change persistence until tests
+demonstrate the pinned precedence for overnight, DST-gap and DST-fold records.
+The reference documents the source helper rules but the current Jarvis SQL
+tests do not prove cross-boundary equivalence.
+
+### Missing coach-profile bootstrap
+
+**Question:** Should a missing Jarvis profile stay `not-configured`, or should
+Jarvis return the source code-default profile at revision 0?
+
+- **Option A — remain unconfigured:** never present configured source defaults
+  as this owner's profile; updates remain revision-checked against an existing
+  row.
+- **Option B — reproduce source default:** return a revision-0 profile using
+  the exact pinned configuration values. The pinned reference documents the
+  revision-0 fallback but does not list those values, so they must first be
+  verified from the allowed source reference.
+
+**Recommendation:** Option A until the exact source default values and their
+owner-facing meaning are established. The source fallback is documented, but
+Jarvis has not reproduced or tested it.
+
+### Preference clear semantics
+
+**Question:** Should clearing a meal preference delete its row like Daily v182,
+or retain Jarvis's revisioned row with a null preference?
+
+- **Option A — delete:** matches the source's absent-row semantics but removes
+  Jarvis revision history for that key.
+- **Option B — retain null:** preserves Jarvis's revisioned write history and
+  distinguishes an explicit clear from no prior row, but differs from source.
+
+**Recommendation:** Option B, preserving existing data and retry semantics.
+Do not describe the two behaviors as equivalent.
+
+### Meal duplicate and HTTP response contract
+
+**Question:** Should Jarvis expose a source-compatible HTTP contract for
+`/api/gpt-actions/nutrition/log`, including duplicate replay and response
+fields, or keep this capability native-tool/service only?
+
+- **Option A — compatibility endpoint:** add a selected-path alias and tests
+  for the pinned owner/idempotency behavior (`INSERT OR IGNORE`, retained meal,
+  `duplicate:true`, HTTP 200 response), plus documented error fields.
+- **Option B — native only:** keep Jarvis's existing tool/confirmation
+  contracts and do not promise source HTTP compatibility to external callers.
+
+**Recommendation:** Option B unless an owner-approved external caller requires
+the old endpoint. The source contract is specific; current tool mapping alone
+does not demonstrate its HTTP response parity.
+
+### Published API paths
+
+**Question:** For selected source operations mapped to Jarvis services, should
+the original `/api/gpt-actions/*` paths be aliased, or should the source-path
+difference remain intentional?
+
+- **Option A — selected aliases:** implement only owner-selected paths (never
+  restore the 15 excluded tools) and contract-test documented requests,
+  required response fields and errors against each equivalent service.
+- **Option B — native-only:** retain the existing Jarvis routes/tools and
+  explicitly accept that clients cannot call source paths.
+
+**Recommendation:** Option B, consistent with the approved reuse/native-tool
+design. In either case, tests must not imply parity for the 19 paths until
+their documented shapes have been exercised or intentionally ruled out.
+
+### Selected tool packaging
+
+**Question:** Keep the nine selected source operations grouped into three
+registry tools, or register nine distinct names?
+
+- **Option A — nine names:** matches source names directly but reduces the
+  existing catalogue headroom and may require revisiting its enforced limit.
+- **Option B — three grouped tools:** preserves the current catalogue
+  headroom, but remains a name-level mismatch.
+
+**Recommendation:** Option B under the current tool limit. Keep the mismatch
+visible; grouping is not proof of request/response/error parity.
+
+### Favorites query contract
+
+**Question:** Should Jarvis add a native `get_favorites` query/limit operation
+that returns the source favorites-list shape, or keep the current exact-name/
+alias lookup as a deliberately partial mapping?
+
+- **Option A — source-shaped list:** accept the source's bounded `query` and
+  `limit` inputs and return a favorites collection with `hasMore` and `source`.
+  This fills the selected capability's search/list gap but adds a new tool
+  contract.
+- **Option B — exact lookup only:** retain Jarvis's existing lookup by exact
+  saved name/alias and do not claim it implements the source list operation.
+  This keeps the current native tool contract but leaves `get_favorites`
+  partial.
+
+**Recommendation:** Option B unless the owner requires a favorites-list
+workflow. The pinned MCP schema documents `query`/`limit` and a list response;
+the existing Jarvis test covers only exact-name lookup.
+
+### Historical partial replay
+
+**Question:** Should Jarvis keep source-compatible per-key replacement, or
+introduce a Jarvis-only rule that rejects partial metric/day batches?
+
+- **Option A — per-key replacement:** a later batch replaces each supplied
+  metric/date key; this matches the pinned source and permits corrected values,
+  but cannot establish full-day completeness.
+- **Option B — require a completeness signal:** reject batches without an
+  explicit complete-day marker. The pinned source contract defines no such
+  marker, so this would be a Jarvis-specific restriction and needs a trusted
+  signal contract first.
+
+**Recommendation:** Option A, with no claim that accepted history is complete.
+The authored synthetic SQL test asserts later replacement and protection from
+an older replay and runs in the required Database CI job. Neither result
+establishes source-device completeness.
+
+### Partial reuse boundaries
+
+**Question:** Are these exact partial differences acceptable for the five
+reused capabilities, or should the port add source-specific behavior?
+
+- `search` has separate conversation, memory, vault and repository indexes;
+  it does not combine Daily health/meals with task/calendar search.
+- `fetch` reads Daily or Factory records through separate resolvers; there is
+  no cross-domain source-reference fetch.
+- `get_daily_overview` supplies conversational facts, not the source
+  scoreboard/fixed renderer.
+- `get_attention_items` has no Daily source snapshots, status aggregation or
+  fixed attention rules; ordinary tasks/calendar are not those derived items.
+- `get_calendar_window` reuses event-list/agenda reads without the source
+  window wrapper or response contract.
+
+- **Option A — accept reuse boundaries:** preserve the existing general
+  tools and explicitly label this coverage partial.
+- **Option B — extend parity:** add only the missing source behaviors approved
+  by the owner, with contract tests.
+
+**Recommendation:** Option A unless an owner workflow depends on a named
+missing behavior. Do not add a second cross-domain registry merely to imitate
+source naming.
+
 ## P14-37 — Deploy the vault mirror image when its source changes (19 October 2026; #1099)
 
 Treat the mirror Dockerfile and all its local copy inputs, plus `.dockerignore`,

@@ -73,6 +73,8 @@ describe('inactive SQL health composition in the existing backend',() => {
     const { app,accept } = fixture({ verifier: async () => ({ ...capability,permissions: ['health-heartbeat'] }) });
     const response = await app.inject({ method: 'POST',url: '/api/health/heartbeat',headers: { authorization: `Bearer ${token}`,'shortcut-name': 'Synthetic shortcut' } });
     expect(response.statusCode).toBe(202);
+    expect(response.json()).toEqual(receipt);
+    expect(response.headers['cache-control']).toBe('no-store');
     expect(accept.mock.calls[0]?.[0]).toBe('heartbeat');
     expect(accept.mock.calls[0]?.[3]).toEqual(Buffer.from(JSON.stringify({ shortcutName: 'Synthetic shortcut',checkedFeeds: ['metrics','workouts'] })));
   });
@@ -141,13 +143,12 @@ describe('inactive SQL health composition in the existing backend',() => {
   });
   it('keeps credential lifecycle routes owner-authenticated, no-store and one-time revealed',async () => {
     const lifecycle = new SqlHealthCapabilities({} as ConstructorParameters<typeof SqlHealthCapabilities>[0],config.auth.ownerObjectId);
-    const capabilities = {
-      status: vi.fn(async () => ({ state: 'empty' as const,expiresAt: null })),
-      prepare: vi.fn((input: Parameters<SqlHealthCapabilities['prepare']>[0]) => lifecycle.prepare(input)),
-      create: vi.fn(async () => ({ state: 'issued' as const })),
-      rotateCurrent: vi.fn(async () => ({ state: 'issued' as const })),
-      revokeCurrent: vi.fn(async () => ({ state: 'revoked' as const })),
-    } as unknown as SqlHealthCapabilities;
+    const getStatus = vi.fn(async () => ({ state: 'empty' as const,expiresAt: null }));
+    const prepare = vi.fn((input: Parameters<SqlHealthCapabilities['prepare']>[0]) => lifecycle.prepare(input));
+    const create = vi.fn(async () => ({ state: 'issued' as const }));
+    const rotateCurrent = vi.fn(async () => ({ state: 'issued' as const }));
+    const revokeCurrent = vi.fn(async () => ({ state: 'revoked' as const }));
+    const capabilities = { status: getStatus,prepare,create,rotateCurrent,revokeCurrent } as unknown as SqlHealthCapabilities;
     const auth = vi.fn(async (value: string) => ({
       objectId: value === 'header.foreign.signature' ? '22222222-2222-4222-8222-222222222222' : config.auth.ownerObjectId,
       tenantId: config.auth.tenantId,displayName: 'Synthetic owner',
@@ -171,9 +172,27 @@ describe('inactive SQL health composition in the existing backend',() => {
     expect(issued.headers['cache-control']).toBe('no-store');
     expect(issued.json()).toMatchObject({ state: 'created' });
     expect(issued.json().token).toMatch(/^[A-Za-z0-9_-]{43,256}$/u);
+    expect(issued.json().expiresAt).toMatch(/^\d{4}-\d{2}-\d{2}T/u);
     expect(logs.join('')).not.toContain(issued.json().token);
-    expect(capabilities.create).toHaveBeenCalledOnce();
+    expect(create).toHaveBeenCalledOnce();
     expect(auth).toHaveBeenCalled();
     expect((await app.inject({ method: 'POST',url: '/api/health/upload-credential',headers,payload: { action: 'unknown' } })).statusCode).toBe(400);
+
+    const rotated = await app.inject({ method: 'POST',url: '/api/health/upload-credential',headers,payload: { action: 'rotate' } });
+    expect(rotated.statusCode).toBe(200);
+    expect(rotated.headers['cache-control']).toBe('no-store');
+    expect(rotated.json()).toMatchObject({ state: 'rotated',token: expect.stringMatching(/^[A-Za-z0-9_-]{43,256}$/u) });
+    expect(rotateCurrent).toHaveBeenCalledOnce();
+
+    rotateCurrent.mockResolvedValueOnce({ state: 'conflict' } as never);
+    const conflict = await app.inject({ method: 'POST',url: '/api/health/upload-credential',headers,payload: { action: 'rotate' } });
+    expect(conflict.statusCode).toBe(409);
+    expect(conflict.json()).toEqual({ error: 'Health credential changed' });
+
+    const revoked = await app.inject({ method: 'POST',url: '/api/health/upload-credential',headers,payload: { action: 'revoke' } });
+    expect(revoked.statusCode).toBe(200);
+    expect(revoked.headers['cache-control']).toBe('no-store');
+    expect(revoked.json()).toEqual({ state: 'revoked' });
+    expect(revokeCurrent).toHaveBeenCalledOnce();
   });
 });

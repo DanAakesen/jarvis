@@ -195,6 +195,15 @@ describe('inactive processor on real isolated SQL Server, synthetic records only
     const afterReplay = await read.history('metrics', { startDate: '2026-10-13', endDate: '2026-10-13', limit: 100 }, signal());
     expect(afterReplay.items).toEqual(expect.arrayContaining([expect.objectContaining({ metric_name: 'step_count', value: 120 })]));
 
+    clock = base + 1000;
+    const laterPartial = raw({ data: { metrics: [{ name: 'step_count', units: 'count', data: [{ date: '2026-10-13', qty: 40 }] }], workouts: [] } });
+    expect((await upload(token, 'synthetic-later-partial', laterPartial)).statusCode).toBe(202);
+    await vi.waitFor(async () => {
+      expect((await read.sync(signal())).inbox).toMatchObject({ accepted: 0, processing: 0, succeeded: 3, quarantined: 0 });
+    }, { timeout: 10_000, interval: 25 });
+    const afterLaterPartial = await read.history('metrics', { startDate: '2026-10-13', endDate: '2026-10-13', limit: 100 }, signal());
+    expect(afterLaterPartial.items).toEqual(expect.arrayContaining([expect.objectContaining({ metric_name: 'step_count', value: 40 })]));
+
     const revoked = await instance.inject({ method: 'POST', url: '/api/health/upload-credential', headers: ownerAuth, payload: { action: 'revoke' } });
     expect(revoked.statusCode).toBe(200);
     expect((await upload(token, 'synthetic-revoked')).statusCode).toBe(403);
