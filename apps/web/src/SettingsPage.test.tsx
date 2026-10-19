@@ -187,8 +187,7 @@ describe('SettingsPage', () => {
     const danishVoice = await screen.findByRole('textbox', { name: 'Danish voice' });
     expect(danishVoice).toHaveProperty('value', 'Jeppe (Danish)');
     expect(danishVoice).toHaveProperty('readOnly', true);
-    expect(danishVoice.getAttribute('aria-describedby')).toBe('danish-voice-help');
-    expect(screen.getByText('Fixed for Danish voice sessions.')).not.toBeNull();
+    expect(danishVoice.getAttribute('aria-describedby')).toBeNull();
     expect(screen.queryByRole('combobox', { name: 'Danish voice' })).toBeNull();
     expect(screen.queryByText(/Harper/)).toBeNull();
     expect(screen.getByRole('button', { name: 'Save settings' })).toHaveProperty('disabled', true);
@@ -198,7 +197,7 @@ describe('SettingsPage', () => {
     await user.selectOptions(screen.getByRole('combobox', { name: 'Default language' }), 'en');
     await user.click(screen.getByRole('button', { name: 'Save settings' }));
 
-    expect(await screen.findByText(/Saved\. These are defaults for new sessions and tasks/)).not.toBeNull();
+    expect(await screen.findByText('Saved')).not.toBeNull();
     expect(JSON.parse(String(fetchMock.mock.calls[1]![1]?.body))).toEqual({
       settings: { voice: { defaultLanguage: 'en' } },
     });
@@ -226,7 +225,7 @@ describe('SettingsPage', () => {
     await user.type(screen.getByRole('spinbutton', { name: 'Daily screen inspection limit' }), '240');
     await user.click(screen.getByRole('button', { name: 'Save settings' }));
 
-    expect(await screen.findByText(/Saved\. These are defaults for new sessions and tasks/)).not.toBeNull();
+    expect(await screen.findByText('Saved')).not.toBeNull();
     expect(getAccessToken).toHaveBeenCalledTimes(3);
     expect(fetchMock).toHaveBeenCalledTimes(2);
     const [, request] = fetchMock.mock.calls[1]!;
@@ -261,7 +260,6 @@ describe('SettingsPage', () => {
     expect(await screen.findByRole('heading', { name: 'Jarvis Personality', level: 2 })).not.toBeNull();
     expect(screen.getByRole('combobox', { name: 'Tone' })).toHaveProperty('value', 'british_butler');
     expect(screen.getByRole('combobox', { name: 'Response style' })).toHaveProperty('value', 'concise');
-    expect(screen.getByText('Applies to new sessions.')).not.toBeNull();
     const instructions = screen.getByRole('textbox', { name: 'Custom instructions' });
     expect(instructions).toHaveProperty('maxLength', 2_000);
     expect(instructions.getAttribute('aria-describedby')).toBe('personality-instructions-help');
@@ -277,7 +275,7 @@ describe('SettingsPage', () => {
     await user.type(screen.getByRole('textbox', { name: 'Custom instructions' }), updated.personality.customInstructions);
     await user.click(screen.getByRole('button', { name: 'Save settings' }));
 
-    expect(await screen.findByText(/Saved\. These are defaults for new sessions and tasks/)).not.toBeNull();
+    expect(await screen.findByText('Saved')).not.toBeNull();
     const [, request] = fetchMock.mock.calls[1]!;
     expect(request).toMatchObject({ method: 'PATCH' });
     expect(JSON.parse(String(request?.body))).toEqual({ settings: { personality: updated.personality } });
@@ -297,7 +295,7 @@ describe('SettingsPage', () => {
     expect(screen.getByRole('button', { name: 'Saving…' })).toHaveProperty('disabled', true);
     expect(screen.getByRole('combobox', { name: 'Tone' })).toHaveProperty('disabled', true);
     resolveSave(response(settingsResponse(updated)));
-    expect(await screen.findByText(/Saved\. These are defaults for new sessions and tasks/)).not.toBeNull();
+    expect(await screen.findByText('Saved')).not.toBeNull();
   });
 
   it('resets personality to the current defaults and preserves edits when reset fails', async () => {
@@ -328,7 +326,7 @@ describe('SettingsPage', () => {
     expect(screen.getByRole('combobox', { name: 'Tone' })).toHaveProperty('value', settings.personality.tone);
     expect(screen.getByRole('combobox', { name: 'Response style' })).toHaveProperty('value', settings.personality.responseStyle);
     expect(screen.getByRole('textbox', { name: 'Custom instructions' })).toHaveProperty('value', '');
-    expect(await screen.findByText(/Personality reset and saved/)).not.toBeNull();
+    expect(await screen.findByText('Reset')).not.toBeNull();
     expect(screen.getByRole('button', { name: 'Save settings' })).toHaveProperty('disabled', true);
     expect(screen.getByText('The default personality is already selected.')).not.toBeNull();
     const [, request] = fetchMock.mock.calls[2]!;
@@ -397,7 +395,7 @@ describe('SettingsPage', () => {
     expect(screen.getByRole('button', { name: 'Save settings' })).toHaveProperty('disabled', false);
 
     await user.click(screen.getByRole('button', { name: 'Save settings' }));
-    expect(await screen.findByText(/Saved\. These are defaults for new sessions and tasks/)).not.toBeNull();
+    expect(await screen.findByText('Saved')).not.toBeNull();
     const [, request] = fetchMock.mock.calls[1]!;
     expect(JSON.parse(String(request?.body))).toEqual({
       settings: { personality: { customInstructions: updated.personality.customInstructions } },
@@ -450,10 +448,8 @@ describe('SettingsPage', () => {
     expect(await screen.findByRole('heading', { name: 'Projects', level: 2 })).not.toBeNull();
     expect(screen.queryByRole('heading', { name: 'New projects' })).toBeNull();
     expect(screen.getByRole('heading', { name: 'Defaults for new projects' })).not.toBeNull();
-    expect(screen.getByText('These defaults pre-fill the Add project dialog; every project keeps its own settings and can change them any time.')).not.toBeNull();
     const policy = screen.getByRole('combobox', { name: 'Policy' });
-    expect(policy.getAttribute('aria-describedby')).toBe('new-project-policy-help');
-    expect(screen.getByText('The policy default only pre-fills projects Jarvis registers later. Every project keeps its own policy and can be changed any time.')).not.toBeNull();
+    expect(policy.getAttribute('aria-describedby')).toBeNull();
     await user.clear(await screen.findByRole('textbox', { name: 'Owner' }));
     await user.type(screen.getByRole('textbox', { name: 'Owner' }), 'jarvis-org');
     await user.selectOptions(screen.getByRole('combobox', { name: 'Visibility' }), 'public');
@@ -546,7 +542,7 @@ describe('SettingsPage', () => {
     await user.click(toggle);
     await user.click(screen.getByRole('button', { name: 'Save settings' }));
 
-    expect(await screen.findByText(/Saved\. These are defaults for new sessions and tasks/)).not.toBeNull();
+    expect(await screen.findByText('Saved')).not.toBeNull();
     expect(await screen.findByRole('checkbox', { name: 'Minimise all windows when starting voice' }))
       .toHaveProperty('checked', true);
     const [, request] = fetchMock.mock.calls[1]!;
@@ -575,7 +571,7 @@ describe('SettingsPage', () => {
     await user.selectOptions(select, 'microsoft');
     await user.click(screen.getByRole('button', { name: 'Save settings' }));
 
-    expect(await screen.findByText(/Saved\./)).not.toBeNull();
+    expect(await screen.findByText('Saved')).not.toBeNull();
     expect(JSON.parse(String(fetchMock.mock.calls[1]![1]?.body))).toEqual({
       settings: { decisions: { provider: 'microsoft' } },
     });
@@ -623,7 +619,7 @@ describe('SettingsPage', () => {
     expect(screen.getByRole('button', { name: 'Save settings' })).toHaveProperty('disabled', false);
 
     await user.click(screen.getByRole('button', { name: 'Save settings' }));
-    expect(await screen.findByText(/Saved\. These are defaults for new sessions and tasks/)).not.toBeNull();
+    expect(await screen.findByText('Saved')).not.toBeNull();
   });
 
   it('settles into a visible unavailable state without a backend URL', async () => {
@@ -709,7 +705,7 @@ describe('SettingsPage', () => {
     await user.type(screen.getByRole('spinbutton', { name: 'Tools' }), '45');
     await user.click(screen.getByRole('button', { name: 'Save settings' }));
 
-    expect(await screen.findByText(/Saved\. These are defaults/)).not.toBeNull();
+    expect(await screen.findByText('Saved')).not.toBeNull();
     const patch = fetchMock.mock.calls.find(([, request]) => request?.method === 'PATCH')!;
     expect(JSON.parse(String(patch[1]?.body))).toEqual({ settings: {
       roles: { chat: { model: 'gpt-6-luna', reasoningEffort: 'xhigh' } },
@@ -763,7 +759,7 @@ describe('SettingsPage', () => {
     await user.clear(budget);
     await user.type(budget, '2.5');
     await user.click(screen.getByRole('button', { name: 'Save settings' }));
-    await screen.findByText(/Saved\. These are defaults/);
+    await screen.findByText('Saved');
     expect(JSON.parse(String(fetchMock.mock.calls[1]![1]?.body))).toEqual({ settings: { global: { maxCheckAttempts: 5, visionDailyBudgetUsd: 2.5 } } });
   });
 

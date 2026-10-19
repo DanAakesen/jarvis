@@ -106,7 +106,7 @@ export function ModelsSection({ roles, options, onChange, disabled, backendUrl, 
           const models = options[role].models.includes(current.model) ? options[role].models : [current.model, ...options[role].models];
           return (
             <li key={role} className="role-row">
-              <span className="role-name">{roleLabels[role].label}<span className="role-hint">{roleLabels[role].hint}</span></span>
+              <span className="role-name">{roleLabels[role].label}</span>
               <span className="role-controls">
                 <label className="visually-hidden" htmlFor={`role-${role}-model`}>{roleLabels[role].label} model</label>
                 <select id={`role-${role}-model`} value={current.model} disabled={disabled}
@@ -251,7 +251,7 @@ export function VoiceTuningFields({ voice, problems, disabled, onChange }: {
           min={bounds.voice.maxSpokenReplyTokens.minimum} max={bounds.voice.maxSpokenReplyTokens.maximum}
           problem={problems['voice.maxSpokenReplyTokens']} disabled={disabled} onChange={(value) => onChange('maxSpokenReplyTokens', value)} />
       </div>
-      <Toggle id="voice-barge-in" label="Interrupt Jarvis by speaking" hint="Jarvis stops talking when you start"
+      <Toggle id="voice-barge-in" label="Interrupt Jarvis by speaking"
         checked={voice.bargeInEnabled} disabled={disabled} onChange={(value) => onChange('bargeInEnabled', value)} />
     </div>
   );
@@ -298,10 +298,9 @@ export function RetrievalSection({ memory, problems, disabled, onChange, childre
   return (
     <CollapsibleSection storageKey="settings.memory" id="memory" headingId="memory-settings-heading" title="Memory"
       summary={memory.automaticCapture ? 'Remembers automatically' : 'Remembers on request'}>
-      <Toggle id="memory-capture" label="Remember things automatically" hint="Jarvis saves useful facts about you from conversations"
+      <Toggle id="memory-capture" label="Remember things automatically"
         checked={memory.automaticCapture} disabled={disabled} onChange={(value) => onChange('automaticCapture', value)} />
       {children}
-      <h3 className="settings-subheading">How Jarvis recalls</h3>
       <RangeField id="memory-similarity" label="How close a memory must match" value={memory.similarityThreshold} min={0} max={1} step={0.01}
         disabled={disabled} onChange={(value) => onChange('similarityThreshold', value)} low="Loose" high="Strict" />
       <RangeField id="memory-graph-similarity" label="Knowledge graph links" value={memory.graphTextSimilarityThreshold} min={0} max={1} step={0.01}
@@ -388,7 +387,6 @@ export function AppearanceDetails() {
   );
   return (
     <div className="advanced-group">
-      <h3>Look and feel</h3>
       <Choice label="Motion" value={appearance.motion ?? 'full'} disabled={disabled} onChange={(motion) => save({ motion })}
         options={[{ value: 'full', label: 'Full' }, { value: 'calm', label: 'Calm' }, { value: 'reduced', label: 'Reduced' }]} />
       <Choice label="Density" value={appearance.density ?? 'comfortable'} disabled={disabled} onChange={(density) => save({ density })}

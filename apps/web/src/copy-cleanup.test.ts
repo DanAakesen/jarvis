@@ -1,5 +1,10 @@
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+
+const productionSource = readdirSync('src', { recursive: true, encoding: 'utf8' })
+  .filter((path) => /\.(ts|tsx)$/u.test(path) && !/\.test\.(ts|tsx)$/u.test(path))
+  .map((path) => readFileSync(`src/${path}`, 'utf8'))
+  .join('\n');
 
 const sources = [
   'src/MobileShell.tsx',
@@ -56,6 +61,33 @@ describe('production interface copy', () => {
       expect(sources).not.toContain(copy);
     }
     expect(readFileSync('src/ConversationHistory.tsx', 'utf8')).toContain('Ask Jarvis');
+  });
+
+  it('keeps explainer paragraphs that only restate the obvious out of every page', () => {
+    for (const copy of [
+      'Typed text and page content are not stored.',
+      'Secret values are never shown.',
+      'Applies to new sessions.',
+      'Fixed for Danish voice sessions.',
+      'Pausing stops scheduled checks, todo additions and alerts.',
+      'This also saves any other changed Settings.',
+      'Choose a whole number from 1 to 100.',
+      'Up to 10 unique HTTPS feed URLs',
+      'Unsaved project defaults.',
+      'Archiving hides this project from active lists.',
+      'Sandbox cost is estimated from session time.',
+      'Marker shapes show record type',
+      'Browse your recorded workouts, nutrition, body measurements, sleep and briefs.',
+      'Your workouts, nutrition, body, sleep and latest brief at a glance.',
+      'Upload receipt, successful processing and phone contact are separate evidence.',
+      'Retained records are read-only.',
+      'Past briefs—not current health or a new delivery.',
+      'Briefs will appear here after the first one is recorded.',
+      'Recorded activity only. Logging and corrections stay in chat.',
+      'Tasks come from checkbox items in your Personal and Work notes.',
+    ]) {
+      expect(productionSource).not.toContain(copy);
+    }
   });
 
   it('keeps sign-in to its personal greeting and provider-accessible action', () => {

@@ -1,0 +1,85 @@
+.tasks-panel {
+  position: absolute; z-index: 4; top: 76px; left: 16px; display: flex; width: min(380px, calc(100% - 32px)); max-height: calc(100% - 140px); min-height: 0;
+  flex-direction: column; gap: var(--space-3); padding: var(--space-3); overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain;
+  border-radius: var(--radius-panel); animation: tasks-panel-in var(--motion-state) var(--ease-enter);
+}
+/* Like the search results beside it, the panel drops the glass ring: that ring overhangs its box by 1px and adds phantom scrollbars to a scroller. */
+.tasks-panel.luminous-glass { border-color: var(--control-rule); }
+.tasks-panel.luminous-glass::before { content: none; }
+.tasks-panel:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+.tasks-panel > * { flex: 0 0 auto; }
+.tasks-panel-bar { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: var(--space-1) var(--space-2); }
+.tasks-panel-search { display: flex; min-width: 0; min-height: 44px; align-items: center; gap: var(--space-2); padding: 0 var(--space-3); border-radius: var(--radius-control); background: var(--surface-muted); color: var(--text-muted); }
+.tasks-panel-search svg { width: 18px; height: 18px; flex: 0 0 auto; }
+.tasks-panel-search input { flex: 1 1 auto; min-width: 0; height: 36px; padding: 0; border: 0; background: transparent; color: var(--text); font: inherit; font-size: var(--type-small); }
+.tasks-panel-search input:focus-visible { outline: none; }
+.tasks-panel-search:has(input:focus-visible) { outline: 3px solid var(--focus); outline-offset: 2px; }
+/* The refresh action is a bare icon: no fill, border or shadow in any state. Hover tints it and turns it a quarter; while a refresh runs it spins. */
+.tasks-panel-refresh {
+  display: grid; place-items: center; width: 36px; height: 36px; padding: 0; border: 0; border-radius: var(--radius-control);
+  background: none; box-shadow: none; color: var(--text); cursor: pointer; transition: color var(--motion-press) var(--ease-standard);
+}
+.tasks-panel-refresh svg { width: 20px; height: 20px; transition: rotate var(--motion-state) var(--ease-enter), scale var(--motion-press) var(--ease-standard); }
+.tasks-panel-refresh:hover:not(:disabled) { color: var(--focus); }
+.tasks-panel-refresh:hover:not(:disabled) svg { rotate: 90deg; }
+.tasks-panel-refresh:active:not(:disabled) svg { rotate: 180deg; scale: .9; }
+.tasks-panel-refresh:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.tasks-panel-refresh:disabled { color: var(--disabled-text); cursor: progress; }
+.tasks-panel-refresh[aria-busy="true"] svg { animation: tasks-panel-spin 900ms linear infinite; }
+.tasks-panel-toggle {
+  justify-self: start; min-height: 32px; padding: 0 var(--space-3); border: 0; border-radius: var(--radius-pill); background: transparent; color: var(--text-muted);
+  font: inherit; font-size: var(--type-caption); font-weight: 650; cursor: pointer;
+  transition: background-color var(--motion-press) var(--ease-standard), color var(--motion-press) var(--ease-standard);
+}
+.tasks-panel-toggle:hover { background: var(--glass-hover); color: var(--text); }
+.tasks-panel-toggle:active { background: var(--glass-pressed); }
+.tasks-panel-toggle[aria-pressed="true"] { background: var(--state-selected-bg); color: var(--state-selected-fg); }
+.tasks-panel-toggle[aria-pressed="true"]:hover { background: var(--state-selected-hover); }
+.tasks-panel-toggle[aria-pressed="true"]:active { background: var(--state-selected-pressed); }
+.tasks-panel-toggle:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.tasks-panel-read { justify-self: end; padding-inline: var(--space-2); color: var(--text-muted); font-size: var(--type-caption); font-variant-numeric: tabular-nums; }
+.tasks-panel-groups { display: grid; gap: var(--space-4); }
+.tasks-panel-group { min-width: 0; }
+.tasks-panel-group h2 { margin: 0 0 var(--space-1); color: var(--text-muted); font-size: var(--type-caption); font-weight: 650; }
+.tasks-panel-group ul { padding: 0; margin: 0; list-style: none; }
+.tasks-panel-row { display: grid; min-width: 0; grid-template-columns: auto minmax(0, 1fr) auto; align-items: start; gap: var(--space-3); padding: var(--space-2) 0; }
+.tasks-panel-state, .tasks-panel-priority { display: inline-flex; height: calc(var(--type-small) * var(--line-body)); align-items: center; }
+.tasks-panel-state svg, .tasks-panel-priority svg { width: 18px; height: 18px; }
+.tasks-panel-state { color: var(--text-muted); }
+.tasks-panel-priority { color: var(--text); }
+.tasks-panel-task { min-width: 0; }
+.tasks-panel-task p { margin: 0; font-size: var(--type-small); overflow-wrap: anywhere; }
+.tasks-panel-row[data-done] .tasks-panel-task p { color: var(--text-muted); text-decoration: line-through; }
+.tasks-panel-meta { display: flex; min-width: 0; flex-wrap: wrap; gap: 0 var(--space-3); color: var(--text-muted); font-size: var(--type-caption); }
+.tasks-panel-meta a { min-width: 0; color: inherit; overflow-wrap: anywhere; text-decoration-thickness: 1px; text-underline-offset: 2px; }
+.tasks-panel-meta a:hover { color: var(--text); }
+.tasks-panel-meta a:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; border-radius: var(--radius-control); }
+.tasks-panel-note, .tasks-panel-empty { margin: 0; color: var(--text-muted); font-size: var(--type-caption); }
+.tasks-panel-error { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); color: var(--error); font-size: var(--type-small); }
+.tasks-panel-error p { min-width: 0; margin: 0; overflow-wrap: anywhere; }
+.tasks-panel-retry { flex: 0 0 auto; min-height: 36px; padding: 0 var(--space-3); border: 0; border-radius: var(--radius-control); background: var(--glass-hover); color: var(--text); font: inherit; font-size: var(--type-caption); font-weight: 650; cursor: pointer; }
+.tasks-panel-retry:hover { background: var(--glass-pressed); }
+.tasks-panel-retry:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+@keyframes tasks-panel-in { from { opacity: 0; translate: -8px 0; } }
+@keyframes tasks-panel-spin { to { rotate: 360deg; } }
+@media (pointer: coarse) {
+  .tasks-panel-refresh { width: 44px; height: 44px; }
+  .tasks-panel-toggle, .tasks-panel-retry { min-height: 44px; }
+  .tasks-panel-meta a { display: inline-flex; min-height: 44px; align-items: center; }
+}
+@media (max-width: 700px), (max-height: 500px) and (pointer: coarse) {
+  .tasks-panel {
+    top: auto; right: calc(env(safe-area-inset-right) + 8px); bottom: calc(68px + var(--phone-dock-bottom, 16px) + 36px); left: calc(env(safe-area-inset-left) + 8px); width: auto;
+    max-height: min(65dvh, calc(100dvh - env(safe-area-inset-top) - var(--rail-size, 48px) - 68px - var(--phone-dock-bottom, 16px) - 48px));
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tasks-panel { animation: none; }
+  .tasks-panel-refresh, .tasks-panel-refresh svg, .tasks-panel-toggle { transition: none; }
+  .tasks-panel-refresh:is(:hover, :active):not(:disabled) svg { rotate: none; scale: none; }
+  .tasks-panel-refresh[aria-busy="true"] svg { animation: none; }
+}
+:root[data-motion="reduced"] .tasks-panel { animation: none; }
+:root[data-motion="reduced"] :is(.tasks-panel-refresh, .tasks-panel-refresh svg, .tasks-panel-toggle) { transition: none; }
+:root[data-motion="reduced"] .tasks-panel-refresh:is(:hover, :active):not(:disabled) svg { rotate: none; scale: none; }
+:root[data-motion="reduced"] .tasks-panel-refresh[aria-busy="true"] svg { animation: none; }

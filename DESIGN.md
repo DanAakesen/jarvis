@@ -414,27 +414,41 @@ the Pause switch commits immediately. Private feed and guidance values are not
 persisted with disclosure state. The exact-string web flag controls its route,
 navigation, Settings slot and Background work Open link.
 
-## Vault Tasks separate from Notes (P13-19; 18 October 2026)
+## Vault tasks on the Notes page (P13-19; one page since 19 October 2026)
 
-The Tasks area is a focused, read-only list, not another board or note editor.
-One `Tasks` headline leads the explanatory copy, Refresh and the shared search
-and completed-task controls. Open rows group under Overdue, Today, Upcoming and
-No date; Done appears only when completed tasks are requested. Every row pairs
-its Open/Done glyph with text, shows due date/time and a linked source note, and
-pairs the high-priority icon with its label. Keep rows scannable, text readable
-at narrow widths, and use existing control tokens and button/field systems.
+There is no Tasks page. A **Show tasks** button (task icon and text; **Hide tasks**
+while open) is its own glass button at the top left of the map, outside the search
+bar, and opens a task panel beside the map. The Notes search bar is compact (380px
+at most, centred) and holds the search field, Reset view and Create; it shows no
+note total, only a match count while searching. On a phone the button shrinks to
+its icon (still a 44px target) and the bar sits to its right. The panel is a
+focused, read-only list, not another board or note editor: a search field, an
+icon-only Refresh and a Completed toggle sit above the list, with no headline or
+explanatory copy. Open rows group under Overdue, Today, Upcoming and No date; Done
+appears only when completed tasks are requested. Every row pairs its Open/Done
+glyph with text, shows due date/time and a linked source note, and pairs the
+high-priority icon with its label. A source link opens the note in place; Escape
+closes the panel and returns focus to the button, and on a narrow screen the panel
+gives way to the note it opens. Keep rows scannable, text readable at narrow
+widths, and use existing control tokens and button/field systems.
 
 Show vault freshness and truncation near the list. Loading, no-open-tasks,
 no-matches, unavailable and retry states remain explicit; task text is never
 editable from Jarvis. Notes search keeps notes labelled as notes and places
-plain-text snippets below titles; matching open tasks use a separate Tasks
-section above the note results. These links retain the query or source path.
-Synthetic Chromium captures (reduced motion): Tasks [390×844 light](docs/ui/p13-19/tasks-390-light.jpg),
-[390×844 dark](docs/ui/p13-19/tasks-390-dark.jpg), [1440×900 light](docs/ui/p13-19/tasks-1440-light.jpg),
-[1440×900 dark](docs/ui/p13-19/tasks-1440-dark.jpg); Notes search
-[390×844 light](docs/ui/p13-19/notes-390-light.jpg), [390×844 dark](docs/ui/p13-19/notes-390-dark.jpg),
-[1440×900 light](docs/ui/p13-19/notes-1440-light.jpg), [1440×900 dark](docs/ui/p13-19/notes-1440-dark.jpg).
-The fixtures use synthetic vault responses and temporary authentication only.
+plain-text snippets below titles; matching open tasks use a Tasks result group
+whose count opens the panel with the same query. The full one-page layout is
+design-led (#1085) and follows once a design exists.
+
+## Quiet copy (19 October 2026)
+
+Say a thing once, and only when the person needs it. No sentence repeats what a
+heading, label or visible state already shows, and none states what is not stored
+or not done unless it is consent, a destructive-action warning or recovery
+guidance. Success is quiet; errors keep their reason and the way to recover.
+Freshness, stale, partial, failed-refresh and estimated states are data honesty,
+not filler, and keep a short visible marker.
+Descriptions are one short phrase or absent, and lists of explanatory sentences
+become labels, values or icons. `copy-cleanup.test.ts` guards the removed strings.
 
 ## Header tab overflow correction (15 October 2026; combined candidate)
 
@@ -477,8 +491,7 @@ Controlled actual-component Chromium checks are not physical Safari proof.
 
 ## Fixed Danish voice in Settings (13 October 2026)
 
-The Voice section shows **Jeppe (Danish)** in a labelled read-only field,
-with "Fixed for Danish voice sessions." as its accessible explanation.
+The Voice section shows **Jeppe (Danish)** in a labelled read-only field.
 Reuse the existing Settings grid, field styling and collapsible section.
 There is no selectable Danish voice, new animation or additional save action.
 Legacy Harper payloads still display the actual live voice without dirtying
@@ -1486,7 +1499,7 @@ camera correction. Reduced motion retains solid text without the sweep.
   Side resize regions sit outside the transcript, on the rim and its outer side. Corner hit regions exclude their inward quadrant so the entire native scrollbar track stays usable, including beside the corners. Scrollbar dragging and touch scrolling do not change window geometry.
 - **Modals:** one Modal component, rendered at the document root near the top of the viewport, with an X, Escape and click-outside to close. The card never scrolls itself; a card taller than the viewport scrolls with its backdrop.
 - **Job tabs (P8-43):** each background job is a tab in the top bar strip: a cyan progress ring with the short title and step (or "N running"), a peek with the current step, elapsed time and Cancel; a green ✓ pulse when ready while the result window grows out of the chip (it waits in the chip with Open while Dan is Away or On the move); amber with the reason, Retry and Dismiss when it fails. Research progress windows start as tabs while the chip tracks them.
-- **Knowledge (P7-43):** a rail page and a window Jarvis opens with `show_knowledge`, showing Dan's vault as a 3D star cloud. Stars are coloured by folder (People blue, Work amber, Personal green, General violet) and sized by connections, with fine additive lines for links and fainter lines for similarity. Since 8 October it is a flat 2D map (Dan found the spinning 3D cloud too much in his face): every note lies on one plane seen straight on, dragging pans and the wheel zooms, and stars are crisp with only a faint halo. It never goes fully still: each note floats a few pixels on its own slow orbit with its links following, each star breathes, and every second or two one link lights up and fades. It stops drawing off-screen or hidden; reduced motion keeps it still. Search lights the matches, dims the rest and flies the camera to them; the accessible results list, labels and a glass note reader (front matter stripped, GitHub link, connected notes) sit over it. One draw call for stars and one for lines, at 30 fps. Development builds can show a labelled sample graph when the service is missing.
+- **Knowledge (P7-43):** a rail page and a window Jarvis opens with `show_knowledge`, showing Dan's vault as a 3D star cloud. Stars are coloured by folder (People blue, Work amber, Personal green, General violet) and sized by connections, with fine additive lines for links and fainter lines for similarity. Since 8 October it is a flat 2D map (Dan found the spinning 3D cloud too much in his face): every note lies on one plane seen straight on, dragging pans and the wheel zooms, and stars are crisp with only a faint halo. It opens centred on the mass of the notes and fitted to the window (following the layout while it settles, until the first pan, zoom or search flight; Reset view returns to that fit) and never goes fully still: each note floats on its own orbit while a soft swell runs through the whole cloud, each star breathes, and a few times a second a pulse runs along a link and flares the note it reaches. It stops drawing off-screen or hidden; reduced motion keeps it still. Search lights the matches, dims the rest and flies the camera to them; the accessible results list, labels and a glass note reader (front matter stripped, GitHub link, connected notes) sit over it. One draw call for stars and one for lines, at 30 fps. Development builds can show a labelled sample graph when the service is missing.
 - **Knowledge reader (P9-74):** hide properties, including malformed YAML after leading comments. Titles and paths wrap. The path, Markdown and connected notes share one keyboard-focusable scroll region; a bottom fade and labelled Scroll down button appear only while content remains below. The button scrolls directly under reduced motion.
 - **Mobile Notes search (#984):** use 16px search-input text to avoid iPhone focus zoom clipping the search and dropdown. Keep graph camera zoom on matches and user-controlled page zoom unchanged.
 - **Notes (P9-77, Dan; creation revised locally on 11 October):** keep the existing full-room graph as the default Notes page, including search, stars and folder filters; no list-first browser or Notes/Graph switch. Selecting a note opens the familiar floating reader with Edit Markdown, Preview and explicit Save. Connected notes stay reachable. Search stays centred at desktop, medium and phone widths. Create new is a named, plus-only 44 px action inside the right end of search, transparent at rest. It opens a blank draft immediately with writing focus, no Start writing gate and no generated source text. Desktop creation widens the same popup: an Obsidian-like nested folder tree on the left, title and Markdown on the right. Phones stack the destination disclosure above the editor, initially folded; the focused Markdown area scrolls into view without animation so writing is immediately reachable. Folder rows have separate expansion and selection controls, a selected surface/checkmark, and inline New folder under the current destination. New folders are marked New and persist only when a note is saved inside them. Dan requires all normal vault folders and root notes, with his explicit exception for hidden dot-folders; the repeated exclusion notice is removed, not the safety rule. The picker loads `/notes/tree`, adds the implicit Vault root locally, and offers Retry on absent/not-ready data without reverting to inferred graph/index folders. Last-sync text belongs in the popup header, not the folder body, and remains visible with a folded phone picker; truncation remains near the tree. Deployed #699 includes attachment-only folders with the same contract; the local picker loads the refreshed live inventory. Existing note readers remain narrow; content scrolls above the dock. Source preserves front matter and whitespace; preview hides properties like the old reader. Dirty/saving/saved feedback and conflict comparison accompany explicit saves. An untouched new draft closes freely; actual title/source edits guard closing, changing notes, navigation and reload. The generated `show_knowledge` window stays read-only.

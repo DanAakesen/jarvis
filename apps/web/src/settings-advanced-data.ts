@@ -13,15 +13,15 @@ export interface RoleOptions { models: string[]; reasoningEffortsByModel: Record
 export type { MemorySettings, ModelCatalogue, ModelRole, ResearchSettings, TimeoutSettings, VoiceTuningSettings };
 export { modelRoles, researchDepths };
 
-export const roleLabels: Record<ModelRole, { label: string; hint: string }> = {
-  chat: { label: 'Chat', hint: 'Conversations and Danish voice' },
-  vision: { label: 'Vision', hint: 'Screen, camera and images' },
-  research: { label: 'Research', hint: 'Deep research jobs' },
-  voice: { label: 'Voice', hint: 'English speech-to-speech' },
-  transcription: { label: 'Transcription', hint: 'Speech to text' },
-  embedding: { label: 'Embeddings', hint: 'Memory and knowledge search' },
-  codex: { label: 'Codex', hint: 'Software Factory agent' },
-  copilot: { label: 'Copilot', hint: 'Software Factory agent' },
+export const roleLabels: Record<ModelRole, { label: string }> = {
+  chat: { label: 'Chat' },
+  vision: { label: 'Vision' },
+  research: { label: 'Research' },
+  voice: { label: 'Voice' },
+  transcription: { label: 'Transcription' },
+  embedding: { label: 'Embeddings' },
+  codex: { label: 'Codex' },
+  copilot: { label: 'Copilot' },
 };
 
 export const effortLabels: Record<string, string> = {

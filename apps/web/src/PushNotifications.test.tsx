@@ -221,7 +221,7 @@ describe('push notification settings', () => {
   });
 
   it.each([
-    { status: 409, message: 'No subscription is saved for this device.' },
+    { status: 409, message: 'No subscription for this device.' },
     { status: 429, message: 'Test notifications are rate limited. Try again later.' },
   ])('explains test endpoint status $status', async ({ status, message }) => {
     permission = 'granted';
@@ -240,9 +240,9 @@ describe('push notification settings', () => {
   });
 
   it.each([
-    { delivery: { attempted: 1, accepted: 1, failed: 0 }, counts: '1 of 1 attempt; 0 failed' },
-    { delivery: { attempted: 3, accepted: 2, failed: 1 }, counts: '2 of 3 attempts; 1 failed' },
-  ])('shows delivery counts ($counts), the acceptance caveat and the phone test instruction', async ({ delivery, counts }) => {
+    { delivery: { attempted: 1, accepted: 1, failed: 0 }, counts: '1/1; 0 failed' },
+    { delivery: { attempted: 3, accepted: 2, failed: 1 }, counts: '2/3; 1 failed' },
+  ])('shows delivery counts ($counts) and that acceptance is not delivery', async ({ delivery, counts }) => {
     permission = 'granted';
     localSubscription = makeSubscription();
     const user = userEvent.setup();
@@ -256,7 +256,7 @@ describe('push notification settings', () => {
     openSection();
     await user.click(await screen.findByRole('button', { name: 'Send test notification' }));
     expect((await screen.findByRole('status')).textContent).toBe(
-      `The push service accepted ${counts}. “Accepted” does not mean it was shown on the phone. Lock the phone, close the app and tap the notification.`,
+      `Accepted ${counts}. Delivery is not confirmed.`,
     );
   });
 

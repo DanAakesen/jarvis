@@ -146,7 +146,6 @@ export function DailyHome({ backendUrl, getAccessToken }: AreaProps) {
     <header className="daily-heading">
       <div>
         <h1 id="daily-heading" tabIndex={-1}>Daily</h1>
-        <p>Browse your recorded workouts, nutrition, body measurements, sleep and briefs.</p>
       </div>
     </header>
     <nav ref={sectionNavigation} className="daily-section-nav" aria-label="Daily sections"
@@ -159,16 +158,14 @@ export function DailyHome({ backendUrl, getAccessToken }: AreaProps) {
         </button>)}
       </div>
     </nav>
-    {activeSection?.id !== 'body-sleep' && <div ref={periodSlot} className="daily-period-slot" style={{ minHeight: periodSlotHeight }}>
-      {activeSection?.usesPeriod
-        ? <DailyPeriodControl period={period} onPeriodChange={setPeriod} />
-        : <p className="daily-period-hint">Period filtering applies in Data.</p>}
+    {activeSection?.id !== 'body-sleep' && activeSection?.usesPeriod && <div ref={periodSlot} className="daily-period-slot" style={{ minHeight: periodSlotHeight }}>
+      <DailyPeriodControl period={period} onPeriodChange={setPeriod} />
     </div>}
     <DailySectionNavigationContext.Provider value={navigation}>
       <div className="daily-section-panel" id="daily-section-panel" role="tabpanel"
         aria-labelledby={`daily-tab-${activeSection?.id ?? 'overview'}`} tabIndex={0} key={activeSection?.id}>
         {!activeSection && sectionLoadError && <div className="daily-notice" role="alert">
-          <p>Daily sections could not be loaded. Retry without changing your records.</p>
+          <p>Sections unavailable.</p>
           <button className="secondary-button" type="button" onClick={() => setSectionLoadAttempt(attempt => attempt + 1)}>Retry sections</button>
         </div>}
         {!activeSection && !sectionLoadError && <Loader

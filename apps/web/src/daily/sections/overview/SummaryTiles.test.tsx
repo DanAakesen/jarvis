@@ -109,7 +109,6 @@ describe('Daily overview summary tiles', () => {
     expect(tile('Sleep').getByText(/Deep: 1 h/u)).toBeTruthy();
     expect(tile('Sleep').getByRole('link', { name: 'Sleep' }).getAttribute('href')).toBe('/?section=body-sleep');
     expect(tile('Briefs').getByText('Scheduled brief')).toBeTruthy();
-    expect(tile('Briefs').getByText('Trigger: scheduled')).toBeTruthy();
     expect(tile('Briefs').getByText(formatTime('2026-10-18T07:00:00'))).toBeTruthy();
     expect(tile('Briefs').getByRole('link', { name: 'Briefs' }).getAttribute('href')).toBe('/?section=briefs');
     expect(screen.getAllByText(/^Read /u)).toHaveLength(5);
@@ -252,7 +251,6 @@ describe('Daily overview summary tiles', () => {
     expect(tile('Body').getByText('Unknown kg')).toBeTruthy();
     expect(tile('Body').getByText('No trend available')).toBeTruthy();
     expect(tile('Sleep').getByText('Unknown h asleep')).toBeTruthy();
-    expect(tile('Briefs').getByText('Trigger: Unknown')).toBeTruthy();
   });
 
   it('uses singular wording for one workout and one minute this week', async () => {
@@ -275,7 +273,7 @@ describe('Daily overview summary tiles', () => {
     });
     const articles = [...rendered.container.querySelectorAll('article')];
     rendered.rerender(view(available, 1));
-    await waitFor(() => expect(screen.getAllByText('Refreshing this summary…')).toHaveLength(5));
+    await waitFor(() => expect(screen.getAllByText('Refreshing…')).toHaveLength(5));
     expect(screen.getByText('This week: 2 workouts · 40 minutes')).toBeTruthy();
     expect(screen.getByText('No sleep recorded in the last 7 days')).toBeTruthy();
     expect(screen.queryByText('Loading workouts summary')).toBeNull();

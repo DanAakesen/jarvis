@@ -1126,14 +1126,13 @@ describe('App shell', () => {
     expect(screen.queryByRole('heading', { name: 'Tasks' })).toBeNull();
   });
 
-  it('offers Software Factory, Tasks, Notes, Usage and Status areas with a settings entry', async () => {
+  it('offers Software Factory, Notes, Usage and Status areas with a settings entry', async () => {
     await renderSignedIn();
 
     const areas = screen.getByRole('navigation', { name: 'Areas' });
     expect(within(areas).getAllByRole('link').map((link) => link.getAttribute('aria-label'))).toEqual([
       'Conversation',
       'Software Factory',
-      'Tasks',
       'Notes',
       'Usage',
       'Status',
@@ -1161,6 +1160,21 @@ describe('App shell', () => {
       String(url).endsWith('/now/workspace/state') &&
       (JSON.parse(String(init?.body)) as { view?: { page: string } }).view?.page === 'notes',
     )).toBe(true));
+  });
+
+  it.each(['/tasks', '/tasks/old'])('sends %s to Notes with the task list open and no Tasks area left', async path => {
+    await renderSignedIn(path);
+    await screen.findByRole('heading', { name: 'Notes', level: 1 });
+    expect(await screen.findByRole('region', { name: 'Task list' })).not.toBeNull();
+    expect(screen.getByRole('link', { name: 'Notes' }).getAttribute('aria-current')).toBe('page');
+    expect(screen.queryByRole('link', { name: 'Tasks' })).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Page not found' })).toBeNull();
+  });
+
+  it('carries the search from an old Tasks link into the task list', async () => {
+    await renderSignedIn('/tasks?q=mirror');
+    const search = await screen.findByRole('searchbox', { name: 'Search tasks' });
+    expect((search as HTMLInputElement).value).toBe('mirror');
   });
 
   it.each([
@@ -1569,9 +1583,10 @@ describe('App shell', () => {
     const sheet = screen.getByRole('dialog', { name: 'Go to' });
     const home = within(sheet).getByRole('link', { name: 'Jarvis' });
     const usage = within(sheet).getByRole('link', { name: 'Usage' });
-    const tasks = within(sheet).getByRole('link', { name: 'Tasks' });
+    const factory = within(sheet).getByRole('link', { name: 'Software Factory' });
     const notes = within(sheet).getByRole('link', { name: 'Notes' });
-    expect(tasks.compareDocumentPosition(notes) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(factory.compareDocumentPosition(notes) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(within(sheet).queryByRole('link', { name: 'Tasks' })).toBeNull();
     expect(home.getAttribute('aria-current')).toBe('page');
     expect(usage.hasAttribute('aria-current')).toBe(false);
     await user.click(usage);

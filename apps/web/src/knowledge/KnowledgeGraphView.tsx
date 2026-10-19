@@ -58,7 +58,7 @@ export function KnowledgeNoteReader({ children }: { children: ReactNode }) {
  * matches and flies to them; a star opens its note. Used by the Knowledge page and by the window Jarvis opens.
  */
 export function KnowledgeGraphView({ backendUrl, getAccessToken, initialQuery = '', initialHighlight, compact = false,
-  onOpenNote, selectedPath, refreshKey = 0, searchAction, showTaskMatches = false, children }: {
+  onOpenNote, selectedPath, refreshKey = 0, searchAction, showTaskMatches = false, onShowTasks, children }: {
   backendUrl: string | null;
   getAccessToken: () => Promise<string>;
   initialQuery?: string;
@@ -69,6 +69,7 @@ export function KnowledgeGraphView({ backendUrl, getAccessToken, initialQuery = 
   refreshKey?: number;
   searchAction?: ReactNode;
   showTaskMatches?: boolean;
+  onShowTasks?: (query: string) => void;
   children?: ReactNode;
 }) {
   const ids = useId();
@@ -253,8 +254,8 @@ export function KnowledgeGraphView({ backendUrl, getAccessToken, initialQuery = 
         <input id={`${ids}-query`} type="search" placeholder="Search your knowledge…" value={query} maxLength={200} autoComplete="off"
           disabled={!graph} onChange={(event) => setQuery(event.target.value)}
           onKeyDown={(event) => { if (event.key === 'Escape' && query) { event.preventDefault(); setQuery(''); } }} />
-        {graph && <span className="knowledge-count" role="status" aria-live="polite">
-          {query.trim() ? `${hits.length} ${hits.length === 1 ? 'match' : 'matches'}${searching ? '…' : ''}` : `${graph.nodes.length} ${graph.nodes.length === 1 ? 'note' : 'notes'}`}
+        {graph && <span className={query.trim() ? 'knowledge-count' : 'knowledge-count visually-hidden'} role="status" aria-live="polite">
+          {query.trim() ? `${hits.length} ${hits.length === 1 ? 'match' : 'matches'}${searching ? '…' : ''}` : ''}
         </span>}
         {(query || selectedId || folder !== null) && (
           <button className="knowledge-reset" type="button" onClick={() => { setQuery(''); setSelectedId(null); setFolder(null); scene.current?.resetView(); }}>Reset view</button>
@@ -285,9 +286,13 @@ export function KnowledgeGraphView({ backendUrl, getAccessToken, initialQuery = 
               {query.trim() && showTaskMatches && taskSearch.result && taskSearch.result.total > 0 && (
                 <section className="knowledge-task-results" aria-labelledby={`${ids}-task-results`}>
                   <h2 id={`${ids}-task-results`}>Tasks</h2>
-                  <a className="knowledge-task-results-count" href={`/tasks?${new URLSearchParams({ q: query.trim() })}`}>
-                    {taskSearch.result.total} matching {taskSearch.result.total === 1 ? 'task' : 'tasks'}
-                  </a>
+                  {(() => {
+                    const total = taskSearch.result.total;
+                    const label = `${total} matching ${total === 1 ? 'task' : 'tasks'}`;
+                    return onShowTasks
+                      ? <button className="knowledge-task-results-count" type="button" onClick={() => onShowTasks(query.trim())}>{label}</button>
+                      : <span className="knowledge-task-results-count">{label}</span>;
+                  })()}
                   <ol>
                     {taskSearch.result.items.slice(0, 3).map((task) => (
                       <li key={task.id}>

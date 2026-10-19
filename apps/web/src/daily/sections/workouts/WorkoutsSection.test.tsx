@@ -93,7 +93,7 @@ describe('Workouts section', () => {
   it('uses the standard empty sentence without inventing totals', async () => {
     read.mockImplementation(async (_url, query) => dailyFixture(query));
     mount();
-    expect(await screen.findByText(/History appears after an import/u)).toBeTruthy();
+    expect(await screen.findByText('No records')).toBeTruthy();
     expect(screen.queryByLabelText('Workout summary')).toBeNull();
   });
 
@@ -104,7 +104,6 @@ describe('Workouts section', () => {
     expect(screen.getByRole('heading', { name: 'By type' })).toBeTruthy();
     expect(screen.getByRole('img', { name: 'Recorded workout minutes per week' })).toBeTruthy();
     expect(screen.getAllByText('Not recorded').length).toBeGreaterThan(0);
-    expect(screen.getByText('About this data').closest('details')?.open).toBe(false);
     expect(screen.queryByRole('region', { name: 'Workouts in the loaded rows' })).toBeNull();
     table();
     expect(screen.getByRole('region', { name: 'Workouts in the loaded rows' })).toBeTruthy();
@@ -166,11 +165,11 @@ describe('Workouts section', () => {
         page < 10 ? { date: '2026-10-16', key: String(page + 1) } : null);
     });
     mount();
-    expect(await screen.findByText('Showing 10 workouts; more exist in this period')).toBeTruthy();
+    expect(await screen.findByText('Showing 10 workouts; more exist')).toBeTruthy();
     expect(read).toHaveBeenCalledTimes(10);
     expect(screen.getAllByText(/in the 10 loaded/u).length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole('button', { name: /^Load more$/u }));
-    await waitFor(() => expect(screen.queryByText(/more exist in this period/u)).toBeNull());
+    await waitFor(() => expect(screen.queryByText(/more exist/u)).toBeNull());
     expect(within(table()).getAllByRole('row')).toHaveLength(12);
   });
 
@@ -283,7 +282,7 @@ describe('Workouts section', () => {
     await waitFor(() => expect(read.mock.calls.some(call => call[1].source === sources.heartRate)).toBe(true));
     const query = read.mock.calls.find(call => call[1].source === sources.heartRate)![1];
     await act(async () => pending.resolve(dailyFixture(query)));
-    expect(await screen.findByText(/No heart-rate samples were returned/u)).toBeTruthy();
+    expect(await screen.findByText('No heart-rate samples')).toBeTruthy();
     cleanup();
     let failed = true;
     read.mockImplementation(async (_url, input) => {

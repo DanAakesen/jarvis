@@ -194,7 +194,7 @@ describe('Daily Data records', () => {
   it('shows a plain unavailable-collection state with a Health upload link and no query', () => {
     const fetch = vi.fn(); vi.stubGlobal('fetch', fetch);
     render(<DailyPage embedded backendUrl="http://localhost" getAccessToken={async () => 'synthetic'} knownSources={[]} />);
-    expect(screen.getByRole('status').textContent).toContain('not exposed a browsable');
+    expect(screen.getByRole('status').textContent).toContain('No Daily data');
     expect(screen.getByRole('link', { name: 'Settings, Health upload' }).getAttribute('href')).toBe('/settings#health-upload');
     expect(screen.queryByRole('combobox')).toBeNull();
     expect(fetch).not.toHaveBeenCalled();
@@ -228,7 +228,7 @@ describe('Daily Data records', () => {
     await act(async () => { finish(jsonResponse({}, 503)); });
     expect((await screen.findByRole('alert')).textContent).toContain('HTTP 503');
     fireEvent.click(screen.getByRole('button', { name: 'Retry records' }));
-    await screen.findByText(/History appears after an import or a phone upload/u);
+    await screen.findByText('No records');
     expect(screen.getByRole('link', { name: 'Settings, Health upload' })).toBeTruthy();
     expect(screen.queryByRole('table')).toBeNull();
   });

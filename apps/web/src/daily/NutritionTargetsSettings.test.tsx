@@ -61,7 +61,7 @@ beforeEach(() => {
 afterEach(() => { vi.unstubAllGlobals(); });
 
 describe('NutritionTargetsSettings', () => {
-  it('loads the stored targets as an authenticated, uncached owner read and says when they were saved', async () => {
+  it('loads the stored targets as an authenticated, uncached owner read', async () => {
     const pending = deferred<Response>();
     fetchMock.mockReturnValueOnce(pending.promise);
     renderSettings();
@@ -71,9 +71,7 @@ describe('NutritionTargetsSettings', () => {
     expect(field('Resting energy burn (kcal)').value).toBe('1750');
     expect(field('Daily deficit (kcal)').value).toBe('350');
     expect(field('Protein target (g)').value).toBe('110');
-    expect(screen.getByText(/Whole number from 1000 to 4000 kcal\./u)).not.toBeNull();
-    expect(screen.getByText(/^Last saved .+\.$/u)).not.toBeNull();
-    expect(screen.queryByText(/Not set yet/u)).toBeNull();
+    expect(screen.queryByText(/Last saved|Not set yet|Whole number from/u)).toBeNull();
     expect(saveButton().disabled).toBe(true);
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(fetchMock.mock.calls[0]?.[0]).toBe('https://api.example.com/daily/nutrition-targets');
@@ -92,8 +90,7 @@ describe('NutritionTargetsSettings', () => {
       expect(field(label).value).toBe('');
       expect(field(label).hasAttribute('placeholder')).toBe(false);
     }
-    expect(screen.getByText(/Not set yet: Resting energy burn, Daily deficit, Protein target\./u)).not.toBeNull();
-    expect(screen.queryByText(/Last saved/u)).toBeNull();
+    expect(screen.queryByText(/Not set yet|Last saved/u)).toBeNull();
     expect(saveButton().disabled).toBe(true);
   });
 
@@ -126,7 +123,7 @@ describe('NutritionTargetsSettings', () => {
     const resting = await replace(user, 'Resting energy burn (kcal)', '1800');
     expect(saveButton().disabled).toBe(false);
     await user.click(saveButton());
-    expect(await screen.findByText('Nutrition targets saved.')).not.toBeNull();
+    expect(await screen.findByText('Saved')).not.toBeNull();
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(fetchMock.mock.calls[1]?.[0]).toBe('https://api.example.com/daily/nutrition-targets');
     expect(fetchMock.mock.calls[1]?.[1]).toMatchObject({
@@ -141,7 +138,7 @@ describe('NutritionTargetsSettings', () => {
     expect(resting.value).toBe('1800');
     expect(saveButton().disabled).toBe(true);
     await user.type(resting, '1');
-    expect(screen.queryByText('Nutrition targets saved.')).toBeNull();
+    expect(screen.queryByText('Saved')).toBeNull();
   });
 
   it('clears a target when its field is emptied and nothing else is sent', async () => {
@@ -152,10 +149,9 @@ describe('NutritionTargetsSettings', () => {
     await screen.findByLabelText('Protein target (g)');
     await replace(user, 'Protein target (g)', '');
     await user.click(saveButton());
-    expect(await screen.findByText('Nutrition targets saved.')).not.toBeNull();
+    expect(await screen.findByText('Saved')).not.toBeNull();
     expect(fetchMock.mock.calls[1]?.[1]).toMatchObject({ method: 'PATCH', body: '{"proteinGrams":null}' });
     expect(field('Protein target (g)').value).toBe('');
-    expect(screen.getByText(/Not set yet: Protein target\./u)).not.toBeNull();
   });
 
   it('explains a value outside its range after the field is left and sends nothing when saving anyway', async () => {
@@ -169,7 +165,7 @@ describe('NutritionTargetsSettings', () => {
     const message = 'Resting energy burn: enter a whole number from 1000 to 4000 kcal, or leave it empty.';
     expect((await screen.findByText(message)).getAttribute('role')).toBe('alert');
     expect(resting.getAttribute('aria-invalid')).toBe('true');
-    expect(resting.getAttribute('aria-describedby')).toBe('nutrition-restingKcal-hint nutrition-restingKcal-error');
+    expect(resting.getAttribute('aria-describedby')).toBe('nutrition-restingKcal-error');
 
     await user.click(field('Daily deficit (kcal)'));
     await user.click(saveButton());
@@ -211,7 +207,7 @@ describe('NutritionTargetsSettings', () => {
     expect(form.getAttribute('aria-busy')).toBe('true');
     expect(fetchMock).toHaveBeenCalledTimes(2);
     await act(async () => { pending.resolve(reply({ ...filled, restingKcal: 1800 })); });
-    expect(await screen.findByText('Nutrition targets saved.')).not.toBeNull();
+    expect(await screen.findByText('Saved')).not.toBeNull();
     expect(resting.readOnly).toBe(false);
     expect(form.getAttribute('aria-busy')).toBe('false');
   });
@@ -244,7 +240,7 @@ describe('NutritionTargetsSettings', () => {
     expect((await screen.findByRole('alert')).textContent).toBe(
       'Nutrition targets were sent, but the reply could not be read. Reload Settings to see what is stored.',
     );
-    expect(screen.queryByText('Nutrition targets saved.')).toBeNull();
+    expect(screen.queryByText('Saved')).toBeNull();
   });
 
   it('offers a retry when the first read fails and never shows the server text', async () => {

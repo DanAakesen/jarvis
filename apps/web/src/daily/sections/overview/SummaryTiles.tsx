@@ -44,7 +44,7 @@ function SummaryTile({ title, section, pages, children, emptyMessage }: {
         : pages.first && !hasItems
           ? <DailyState status="empty" emptyMessage={emptyMessage} />
           : children}
-    {pages.status === 'loading' && pages.first && <p role="status">Refreshing this summary…</p>}
+    {pages.status === 'loading' && pages.first && <p role="status">Refreshing…</p>}
     {pages.error && hasItems && <DailyState status="error" message={pages.error} onRetry={pages.reload} />}
     {pages.hasMore && <DailyState status="partial" coverage={{ returned: pages.items.length, hasMore: true }}
       {...(!pages.capped && !pages.loadingMore ? { onLoadMore: pages.loadMore } : {})} />}
@@ -116,7 +116,7 @@ function NutritionTile({ backendUrl, getAccessToken, refreshVersion, period }: {
       {currentTargetResult?.state && (baseline === null || baseline > 0
         ? <Meter label="Energy intake against baseline allowance" value={values.energy.value}
           target={baseline} unit="kcal" partial={partial('energy_kcal')} />
-        : <p>Resting burn minus deficit (before activity): {formatNumber(baseline)} kcal baseline allowance.</p>)}
+        : <p>Baseline allowance: {formatNumber(baseline)} kcal.</p>)}
       <p className="daily-summary-macros">
         <span>Protein: {formatNumber(values.protein.value)} g{partial('protein_grams') ? ' (lower bound)' : ''}.</span>
         <span>Carbohydrate: {formatNumber(sumNutrient([latest], 'carbohydrates_grams').value)} g{partial('carbohydrates_grams') ? ' (lower bound)' : ''}.</span>
@@ -183,7 +183,6 @@ function BriefsTile({ backendUrl, getAccessToken, refreshVersion }: {
     {latest && <>
       <p className="daily-stat-value">{briefLabel(latest)}{pages.hasMore ? ' (partial history)' : ''}</p>
       <p>{formatTime(text(latest.started_at, ''))}</p>
-      <p>Trigger: {text(latest.trigger, 'Unknown')}</p>
     </>}
   </SummaryTile>;
 }

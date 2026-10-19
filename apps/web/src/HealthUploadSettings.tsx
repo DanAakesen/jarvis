@@ -79,7 +79,7 @@ export function HealthUploadSettings({ backendUrl, getAccessToken }: {
         expiresAt: typeof value.expiresAt === 'string' ? value.expiresAt : null,
       });
       if (action !== 'revoke') setToken(value.token as string);
-      setMessage(action === 'revoke' ? 'Upload credential revoked.' : 'Credential created. Copy it now; Jarvis will not show it again.');
+      setMessage(action === 'revoke' ? 'Revoked' : 'Shown once. Copy it now.');
     } catch {
       setError(`The ${action} request did not complete. Refresh status before retrying.`);
     } finally {
@@ -94,7 +94,7 @@ export function HealthUploadSettings({ backendUrl, getAccessToken }: {
     }
     try {
       await navigator.clipboard.writeText(token);
-      setMessage('Credential copied. Store it in Health Auto Export; this screen cannot retrieve it again.');
+      setMessage('Copied');
       setError('');
     } catch {
       setError('Copy failed. Select the token and copy it manually.');
@@ -102,19 +102,18 @@ export function HealthUploadSettings({ backendUrl, getAccessToken }: {
   };
 
   return <div className="health-upload-settings">
-    <p>Configure Health Auto Export to send the original JSON payload to this Jarvis API. Keep each metric/date group intact in one upload: the source has no completeness marker, so do not split an oversized group. Limits are 8 MiB ingress, 10,000 normalized rows or 8 MiB output, and 256 MiB or 10,000 retained inbox rows per owner. Exporter-specific batching controls are unverified; stop if a complete group cannot fit.</p>
+    <p>Send each metric/date group in one upload, up to 8 MiB. Processor output must stay within 10,000 normalized rows and 8 MiB. Never split a group.</p>
     <dl className="health-upload-contract">
       <div><dt>Request</dt><dd><code>POST</code></dd></div>
-      <div><dt>Upload URL</dt><dd><code className="health-upload-url">{endpoint ?? 'Unavailable until the Jarvis API URL is configured'}</code></dd></div>
+      <div><dt>Upload URL</dt><dd><code className="health-upload-url">{endpoint ?? 'API URL not configured'}</code></dd></div>
       <div><dt>Required headers</dt><dd><code>Authorization: {['Bear', 'er'].join('')} {'<token>'}</code><br /><code>Content-Type: application/json</code><br /><code>automation-id</code> (stable per automation)<br /><code>session-id</code> (unique per upload)</dd></div>
       <div><dt>Optional checksum</dt><dd><code>checksum</code> or <code>x-payload-checksum</code>: SHA-256 of the exact request bytes.</dd></div>
     </dl>
-    {!endpoint && <p className="settings-explanation">Actions are disabled because no configured API base URL is available.</p>}
     {credential.state === 'loading' && <Loader label="Loading health upload status" variant="rows" />}
     {credential.state === 'error' && <div role="alert"><p>{error || 'Health upload status is unavailable.'}</p>
       <button className="secondary-button" type="button" disabled={busyAction !== null || !backendUrl} onClick={retryStatus}>Retry status</button></div>}
     {credential.state !== 'loading' && credential.state !== 'error' && <div>
-      <p role="status">Credential status: {credential.state}{credential.expiresAt ? `; expires ${formatDateTime(credential.expiresAt)}` : ''}.</p>
+      <p role="status">Credential: {credential.state}{credential.expiresAt ? ` · expires ${formatDateTime(credential.expiresAt)}` : ''}</p>
       <div className="credential-actions" aria-busy={busyAction !== null || undefined}>
         {(credential.state === 'empty' || credential.state === 'revoked' || credential.state === 'expired')
           ? <button className="primary-button" type="button" disabled={busyAction !== null || !endpoint}

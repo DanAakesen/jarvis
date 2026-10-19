@@ -101,7 +101,7 @@ export function ProactiveItemPage({ backendUrl, getAccessToken, signIn }: {
     <article className="proactive-item" aria-labelledby="proactive-item-heading">
       <h1 id="proactive-item-heading">{state.status === 'loaded' ? state.item.title : 'Jarvis item'}</h1>
       {state.status === 'loading' && <p role="status">Loading item…</p>}
-      {state.status === 'not-found' && <p role="status">This item was not found or is not available to this account.</p>}
+      {state.status === 'not-found' && <p role="status">Item not found.</p>}
       {state.status === 'sign-in' && (
         <>
           <p>Your sign-in has expired. Sign in again to open this item.</p>
@@ -110,7 +110,7 @@ export function ProactiveItemPage({ backendUrl, getAccessToken, signIn }: {
       )}
       {state.status === 'error' && (
         <div className="proactive-item-feedback" role="alert">
-          <p>This item could not be loaded. Try again.</p>
+          <p>Item could not be loaded.</p>
           <button className="secondary-button" type="button" onClick={() => setRequestKey((value) => value + 1)}>Retry</button>
         </div>
       )}

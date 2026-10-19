@@ -84,7 +84,7 @@ describe('TaskReleaseBar', () => {
     vi.stubGlobal('fetch', fetchMock);
     renderBar('');
 
-    expect(screen.getByText('No project selected.')).not.toBeNull();
+    expect(screen.getByText('No project')).not.toBeNull();
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
@@ -121,7 +121,7 @@ describe('TaskReleaseBar', () => {
     expect(screen.getByRole('link', { name: 'Build v8' })).not.toBeNull();
     expect(screen.getByRole('link', { name: /bbbbbbb/ })).not.toBeNull();
     expect(screen.getAllByText('failure').length).toBeGreaterThanOrEqual(2);
-    expect(screen.getByText(/Commit data may be stale/)).not.toBeNull();
+    expect(screen.getByText(/Stale, fetched/)).not.toBeNull();
 
     finishOldRequest?.();
     await waitFor(() => {
@@ -141,7 +141,7 @@ describe('TaskReleaseBar', () => {
     vi.stubGlobal('fetch', fetchMock);
     renderBar('9');
 
-    expect(await screen.findByText('No releases have been recorded for this project.')).not.toBeNull();
+    expect(await screen.findByText('No releases')).not.toBeNull();
     expect(screen.getByText('Commit history is unavailable.')).not.toBeNull();
     expect(screen.getAllByText('Not reported').length).toBe(2);
   });

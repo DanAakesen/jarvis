@@ -3703,9 +3703,29 @@ all-features production catalogue is held at 120 tools, leaving the required
 eight-tool headroom below the 128-tool platform limit. Task requests route to
 `kind` tasks; note requests continue through `vault_search` (notes) and
 `vault_read`. The Notes page retains search snippets and fetches
-matching open tasks separately; its task group links to `/tasks?q=...`. Task
-source links use `/notes?note=<path>`, which opens the note in the existing
-Notes read flow. Neither screen nor tool writes or changes task state.
+matching open tasks separately; the count on its task group calls
+`KnowledgeGraphView`'s `onShowTasks`, which opens the Tasks panel with that query.
+
+Since 19 October 2026 there is no Tasks page. `NotesArea` owns the panel
+(`tasks/TasksPanel.tsx`, opened by the Show tasks button or by
+`/notes?tasks=1[&q=...]`), and `App.tsx` redirects `/tasks` and `/tasks/*` to
+`/notes?tasks=1`, carrying `q`. The address is the source of truth: `NotesArea`
+reads `tasks` and `q` from the search params, opening pushes an entry so Back closes
+the panel, changing the search or closing replaces it, and `TasksPanel` is keyed by
+`location.key` so a same-page link to a task search remounts it with the new query.
+The unsaved-draft blocker ignores changes to those two parameters. The area registry
+and phone menu no longer list Tasks. A task's source link opens the note in place
+through the Notes read flow and its unsaved-draft guard, and on a narrow screen the
+panel closes first. Neither screen nor tool writes or changes task state.
+
+`knowledge/knowledge-scene.ts` frames the map: `measureFit` takes the mean of the
+visible notes and their 98th-percentile reach, and sets the camera to centre them
+at `fitFill` of the limiting window dimension. The camera follows that fit while
+the layout settles and on resize until the first pan or zoom (OrbitControls
+`start`) or any search or selection flight; Reset view flies back to it. Idle life
+(drift, swell, breathing, link pulses and per-note flares) is tuned by constants
+at the top of the file; `driftAt` mirrors the shader's drift so picking and label
+projection use the drawn position. Reduced motion keeps the map still.
 
 ### New project creation (P3-12)
 
