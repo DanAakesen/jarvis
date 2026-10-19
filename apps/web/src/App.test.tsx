@@ -319,6 +319,7 @@ describe('Jarvis routes', () => {
     const user = userEvent.setup();
     render(<MemoryRouter initialEntries={['/unknown/nested']}><App /></MemoryRouter>);
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Page not found');
+    expect(screen.getByRole('region', { name: 'Page not found' }).classList.contains('panel')).toBe(true);
     await user.click(screen.getByRole('link', { name: 'Return to Jarvis' }));
     expect((await screen.findByRole('heading', { level: 1 })).textContent).toBe(getSignInGreeting());
   });
@@ -427,6 +428,26 @@ describe('App shell', () => {
       new URL(String(url)).pathname === '/proactive/settings')).toBe(true));
     expect(fetchMock.mock.calls.some(([url]) =>
       new URL(String(url)).pathname === '/push/config')).toBe(false);
+  });
+
+  it.each([
+    { daily: false, proactive: true },
+    { daily: true, proactive: true },
+    { daily: true, proactive: false },
+  ])('lists the same pages in the phone menu as the rail (daily $daily, proactive $proactive)', async ({ daily, proactive }) => {
+    vi.stubGlobal('matchMedia', vi.fn((query: string) => ({
+      matches: query.includes('max-width: 700px'),
+      media: query, addEventListener: vi.fn(), removeEventListener: vi.fn(),
+    })));
+    restoreProfile.mockResolvedValue({ name: 'Test User' });
+    const user = userEvent.setup();
+    render(<MemoryRouter><App config={config} dailyEnabled={daily} pushEnabled={false} proactiveEnabled={proactive} /></MemoryRouter>);
+    const rail = within(await screen.findByRole('navigation', { name: 'Areas' }));
+    await user.click(screen.getByRole('button', { name: 'Menu' }));
+    const pages = within(within(screen.getByRole('dialog', { name: 'Go to' })).getByRole('navigation', { name: 'Pages' }));
+    const railPages = rail.getAllByRole('link').map((link) => link.getAttribute('aria-label')!.replace('Conversation', 'Jarvis'));
+    expect(pages.getAllByRole('link').map((link) => link.textContent)).toEqual([...railPages, 'Settings']);
+    expect(pages.queryByRole('link', { name: 'Proactive' }) !== null).toBe(proactive);
   });
 
   it('restores the notification deep link after sign-in returns to the site root', async () => {

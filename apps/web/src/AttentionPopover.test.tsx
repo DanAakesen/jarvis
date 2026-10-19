@@ -137,4 +137,38 @@ describe('attention popover', () => {
       frame.mockRestore();
     }
   });
+
+  it('falls back to the phone Menu button when the presence chip and Settings link cannot take focus', async () => {
+    const frames: FrameRequestCallback[] = [];
+    const frame = vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => frames.push(callback));
+    try {
+      const user = userEvent.setup();
+      function Harness() {
+        const [remaining, setRemaining] = useState<FeedAttention['items']>([items[0]!]);
+        const attention: FeedAttention = {
+          items: remaining,
+          confirmations: [],
+          onDismiss: async (id) => setRemaining((current) => current.filter((item) => item.id !== id)),
+        };
+        // A disabled button stands in for a control that narrow phones hide: neither can take focus.
+        return (
+          <>
+            <button className="presence-chip-trigger" type="button" disabled>Presence</button>
+            <button className="mobile-menu-button" type="button" aria-label="Menu">Menu</button>
+            <a className="settings-link" href="/settings">Settings</a>
+            <AttentionPopover attention={attention} />
+          </>
+        );
+      }
+      render(<MemoryRouter><Harness /></MemoryRouter>);
+      await user.click(screen.getByRole('button', { name: '1 item needs attention' }));
+      await user.click(screen.getByRole('button', { name: 'Dismiss Sandbox crashed' }));
+      await waitFor(() => expect(screen.queryByRole('button', { name: '1 item needs attention' })).toBeNull());
+      expect(frames).toHaveLength(1);
+      frames.forEach((callback) => callback(0));
+      expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Menu' }));
+    } finally {
+      frame.mockRestore();
+    }
+  });
 });
