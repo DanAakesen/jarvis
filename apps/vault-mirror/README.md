@@ -187,6 +187,10 @@ configuration location, and mode settings, are recorded in
 `docs/decisions.md`. Every interaction assumption remains **not yet verified
 against the live service**. The wrapper captures bounded output for internal
 classification but never logs it; `ob sync` output may contain local paths.
+The pinned README says a password is needed only for end-to-end encrypted vaults,
+but the inspected CLI source appears to reject `sync-setup --json` without one
+unless the service response supplies it. First setup without the optional
+password secret may fail; verify this discrepancy before live use.
 
 The purity test scans every engine source import using the TypeScript AST,
 allowing only engine-local imports, Zod and the named SHA-256 `createHash`

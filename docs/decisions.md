@@ -46,6 +46,12 @@ service run.
 
 All assumptions below are **not yet verified against the live service**:
 
+- The pinned package README says `sync-setup` needs a password only for
+  end-to-end encrypted vaults, but the inspected 0.0.14 CLI source appears to
+  exit with code 2 when `--json` is used without any password (unless the
+  service response supplies one). A first setup without the optional password
+  secret may therefore fail even for a standard vault. This source/documentation
+  discrepancy has no verified workaround and must be checked before live use.
 - The npm package source/README advertises `sync-setup`, `sync-config --mode
   pull-only|bidirectional`, one-shot `sync`, `--json` on setup/config commands,
   and `OBSIDIAN_AUTH_TOKEN`. The runner assumes these commands and option
