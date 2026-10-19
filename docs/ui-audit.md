@@ -5,19 +5,48 @@ treatments selected from the existing Jarvis design system. The shared source
 of truth is `apps/web/src/styles.css`; route stylesheets own workflow layout,
 not parallel palettes or control systems.
 
-## Tasks and Notes corrections (P14-20; 19 October 2026)
+## Whole-app visual QA pass (19 October 2026)
 
-Tasks now use the same en-GB 24-hour clock for due times and vault freshness;
-the source-note and task-results links reach 44px on coarse pointers. Notes
-search announces settled no-match queries without an empty results shell. Note
-body padding is balanced, popup titles clamp to two lines while retaining the
-full accessible/hover title, and the phone search count is visually clipped
-but remains a live status for assistive technology.
+Rendered the real app at `b02eeb66` in headless Chromium with sign-in stubbed
+and synthetic fixtures only. 72 scenarios across chat, Tasks, Notes, Settings,
+the Factory pages, Proactive, Usage, Status and the shared overlays produced
+369 screenshots and 355 measurement files. Scenarios were measured at 320, 390,
+768, 1024 and 1440 in light (1440 also in dark) and screenshotted at 390 and
+1440 in light and dark; coarse pointers were emulated at 768 and below. The
+findings were judged against `DESIGN.md` and this audit.
 
-Synthetic Chromium checks covered 320×640, 390×844, 768×1024 and 1440×900 in
-light and dark, with coarse-pointer checks at 390 and 768. Times, empty-search
-announcement, title/padding, placeholder width and touch-target heights were
-verified; no horizontal overflow or browser console errors were found.
+Measured clean: no horizontal overflow at 768, 1024 or 1440; no page, render
+or console errors; select text clears the arrow on every Settings and Factory
+select; primary and secondary buttons are 44px high with a 10px radius; shell
+and overlay touch targets at 320 and 390 are at least 44px; every H1 is 40px at
+weight 650.
+
+The pass found 50 defects (3 High, 21 Medium, 26 Low). The most visible: at
+320px every route is 45px wider than the viewport because of the top bar; the
+Snooze menu overflows the viewport by 114px at 390px; several blocks (the
+Proactive page, Usage, Status, the 404 page, project settings and the release
+header) put muted text directly on the 3D scene, which is close to unreadable in
+light; and the Settings deep links to Projects, Proactive and Nutrition targets
+neither open nor scroll to their section.
+
+| Task | Defects |
+| --- | --- |
+| P14-14 | A29 to A34, A36 to A38, A40, A42 (Proactive, Usage, Status, 404, overlays) |
+| P14-15 | A44 to A47, A50 (Settings and task window) |
+| P14-16 | A1, A35 (top bar at 320px, mobile menu) |
+| P14-17 | A22, A49 (state messages and skeleton loaders) |
+| P14-18 | A7, A13 to A16 (the whole destructive-button change, including Routines Delete), A48 (Settings) |
+| P14-19 | A2, A3, A8, A43 (chat and composer) |
+| P14-20 | A5, A6, A9 to A12 (Tasks and Notes) |
+| P14-21 | A17 to A21, A23 to A25 (Factory board and task window) |
+| P14-22 | A26 to A28, A39 (Factory projects and releases) |
+| Follow-up | A4: one shared date-time format; it touches call sites owned by the tasks above, so it follows them |
+| Not fixed | A41: title position alignment is a design decision, not a defect fix |
+
+Not checked: hover, pressed and focus states, voice, signed-out screens, real
+devices, the Presence and More menus, generic modals, views created through a
+stream, `html_app` and chart views, and the Factory board and task window
+skeleton loaders. The harness is not part of the repository.
 
 ## Daily visual QA pass (P12-38; 18 October 2026)
 
@@ -110,6 +139,20 @@ or main-element overflow, no Daily touch target under 44 px at widths up to
 request, and every tab at 1440 px had equal padding. The data is synthetic.
 No live records, physical device or human review were involved, and the section
 tab focus rings were not re-inspected in this pass.
+
+## Tasks and Notes corrections (P14-20; 19 October 2026)
+
+Tasks now use the same en-GB 24-hour clock for due times and vault freshness;
+the source-note and task-results links reach 44px on coarse pointers. Notes
+search announces settled no-match queries without an empty results shell. Note
+body padding is balanced, popup titles clamp to two lines while retaining the
+full accessible/hover title, and the phone search count is visually clipped
+but remains a live status for assistive technology.
+
+Synthetic Chromium checks covered 320×640, 390×844, 768×1024 and 1440×900 in
+light and dark, with coarse-pointer checks at 390 and 768. Times, empty-search
+announcement, title/padding, placeholder width and touch-target heights were
+verified; no horizontal overflow or browser console errors were found.
 
 ## Field clearance (P12-40, 19 October 2026)
 
