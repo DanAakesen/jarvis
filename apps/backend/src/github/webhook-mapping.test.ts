@@ -1,11 +1,31 @@
 import { describe, expect, it } from 'vitest';
-import { mapGithubWebhook } from './webhook-mapping.js';
+import { isVaultDefaultBranchPush, mapGithubWebhook } from './webhook-mapping.js';
+import { VAULT_BRANCH, VAULT_REPOSITORY } from '../vault/github-client.js';
 
 const sha = 'a'.repeat(40);
 const repository = { full_name: 'DanAakesen/jarvis-test-target' };
 const timestamp = '2026-10-04T12:00:00.000Z';
 
 describe('GitHub webhook mapping', () => {
+  it('recognizes only pushes to the vault default branch', () => {
+    const push = {
+      kind: 'push',
+      repository: VAULT_REPOSITORY,
+      ref: `refs/heads/${VAULT_BRANCH}`,
+      sha,
+      at: timestamp,
+    } as const;
+    expect(isVaultDefaultBranchPush(push)).toBe(true);
+    expect(isVaultDefaultBranchPush({ ...push, repository: 'synthetic/other' })).toBe(false);
+    expect(isVaultDefaultBranchPush({ ...push, ref: 'refs/heads/other' })).toBe(false);
+    expect(isVaultDefaultBranchPush({
+      kind: 'issue_labeled',
+      repository: 'synthetic/other',
+      number: 1,
+      label: 'Jarvis',
+    })).toBe(false);
+  });
+
   it('maps only issues labeled Jarvis to an allowlisted start event', () => {
     const payload = {
       repository,
