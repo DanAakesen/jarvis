@@ -102,6 +102,15 @@ describe('Proactive area', () => {
     expect(screen.getByText('1 finding')).not.toBeNull();
   });
 
+  it.each([[1, '1 finding'], [3, '3 findings']])('words the last check outcome for %i finding(s) in the right number', async (findingCount, text) => {
+    const original = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation(async (input, init) => new URL(String(input)).pathname === '/proactive/status'
+      ? response({ ...status, lastRun: { ...run, findingCount } })
+      : original(input, init));
+    renderArea();
+    expect((await screen.findByText(/Last check/)).textContent).toMatch(new RegExp(` · ${text}$`));
+  });
+
   it('loads Earlier items only when opened and keeps them read-only', async () => {
     const user = userEvent.setup();
     renderArea();

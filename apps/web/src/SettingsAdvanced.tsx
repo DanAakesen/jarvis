@@ -93,7 +93,8 @@ export function ModelsSection({ roles, options, onChange, disabled, backendUrl, 
   }, [call, reload]);
 
   const capabilitiesFor = (model: string) => catalogue?.deployments.find((deployment) => deployment.model === model || deployment.name === model)?.capabilities ?? [];
-  const summary = `${modelRoles.length} roles${catalogue ? ` · ${catalogue.deployments.length} deployments` : ''}`;
+  const deploymentCount = catalogue?.deployments.length ?? 0;
+  const summary = `${modelRoles.length} roles${catalogue ? ` · ${deploymentCount} ${deploymentCount === 1 ? 'deployment' : 'deployments'}` : ''}`;
 
   return (
     <CollapsibleSection storageKey="settings.models" headingId="models-settings-heading" title="Models" summary={summary}>
@@ -268,7 +269,7 @@ export function ResearchSection({ research, problems, disabled, onChange }: {
 }) {
   return (
     <Section storageKey="settings.research" headingId="research-settings-heading" title="Research"
-      summary={`${depthLabels[research.depth] ?? research.depth} · up to ${research.maxSources} sources`}>
+      summary={`${depthLabels[research.depth] ?? research.depth} · up to ${research.maxSources} ${research.maxSources === 1 ? 'source' : 'sources'}`}>
       <div className="advanced-segmented" role="group" aria-label="Research depth">
         {researchDepths.map((depth) => (
           <button key={depth} className="ghost-button" type="button" aria-pressed={research.depth === depth} disabled={disabled} onClick={() => onChange('depth', depth)}>

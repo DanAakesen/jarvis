@@ -255,7 +255,7 @@ export function KnowledgeGraphView({ backendUrl, getAccessToken, initialQuery = 
           disabled={!graph} onChange={(event) => setQuery(event.target.value)}
           onKeyDown={(event) => { if (event.key === 'Escape' && query) { event.preventDefault(); setQuery(''); } }} />
         {graph && <span className="knowledge-count" role="status" aria-live="polite">
-          {query.trim() ? `${hits.length} ${hits.length === 1 ? 'match' : 'matches'}${searching ? '…' : ''}` : `${graph.nodes.length} notes`}
+          {query.trim() ? `${hits.length} ${hits.length === 1 ? 'match' : 'matches'}${searching ? '…' : ''}` : `${graph.nodes.length} ${graph.nodes.length === 1 ? 'note' : 'notes'}`}
         </span>}
         {(query || selectedId || folder !== null) && (
           <button className="knowledge-reset" type="button" onClick={() => { setQuery(''); setSelectedId(null); setFolder(null); scene.current?.resetView(); }}>Reset view</button>

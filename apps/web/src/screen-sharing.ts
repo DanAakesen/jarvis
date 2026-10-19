@@ -464,9 +464,10 @@ function useVisionCapture(
         throw new VisionInspectionError(`${reason} No previous camera observation is available.`, 429, code);
       }
       const age = Math.max(0, Math.floor((Date.now() - Date.parse(cached.capturedAt)) / 1_000));
-      setObservationNotice(`${reason} Using an observation from ${age} seconds ago.`);
+      const ageLabel = `${age} ${age === 1 ? 'second' : 'seconds'} ago`;
+      setObservationNotice(`${reason} Using an observation from ${ageLabel}.`);
       const prefix = `No fresh image for this turn: ${reason} The following is an earlier real camera observation ` +
-        `from ${cached.capturedAt} (${age} seconds ago), for the original question ${JSON.stringify(cached.question ?? '')}. ` +
+        `from ${cached.capturedAt} (${ageLabel}), for the original question ${JSON.stringify(cached.question ?? '')}. ` +
         'It cannot confirm changes or new details in the current question. Earlier observation: ';
       return { ...cached, description: prefix + cached.description.slice(0, 5_000 - prefix.length) };
     };

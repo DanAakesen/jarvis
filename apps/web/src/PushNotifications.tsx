@@ -247,7 +247,7 @@ export function PushNotifications({ backendUrl, getAccessToken }: {
       }
       const [attempted, accepted, failed] = counts as [number, number, number];
       setFeedback({
-        message: `The push service accepted ${accepted} of ${attempted} attempts; ${failed} failed. “Accepted” does not mean it was shown on the phone. Lock the phone, close the app and tap the notification.`,
+        message: `The push service accepted ${accepted} of ${attempted} ${attempted === 1 ? 'attempt' : 'attempts'}; ${failed} failed. “Accepted” does not mean it was shown on the phone. Lock the phone, close the app and tap the notification.`,
         error: false,
       });
     } catch {

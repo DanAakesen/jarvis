@@ -239,15 +239,24 @@ describe('push notification settings', () => {
     expect((await screen.findByRole('alert')).textContent).toContain(message);
   });
 
-  it('shows delivery counts, the acceptance caveat and the phone test instruction', async () => {
+  it.each([
+    { delivery: { attempted: 1, accepted: 1, failed: 0 }, counts: '1 of 1 attempt; 0 failed' },
+    { delivery: { attempted: 3, accepted: 2, failed: 1 }, counts: '2 of 3 attempts; 1 failed' },
+  ])('shows delivery counts ($counts), the acceptance caveat and the phone test instruction', async ({ delivery, counts }) => {
     permission = 'granted';
     localSubscription = makeSubscription();
     const user = userEvent.setup();
+    fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
+      const path = new URL(String(input)).pathname;
+      if (path === '/push/config') return jsonResponse({ publicKey });
+      if (path === '/push/test') return jsonResponse({ itemId, delivery });
+      return emptyResponse();
+    });
     renderSettings();
     openSection();
     await user.click(await screen.findByRole('button', { name: 'Send test notification' }));
     expect((await screen.findByRole('status')).textContent).toBe(
-      'The push service accepted 1 of 1 attempts; 0 failed. “Accepted” does not mean it was shown on the phone. Lock the phone, close the app and tap the notification.',
+      `The push service accepted ${counts}. “Accepted” does not mean it was shown on the phone. Lock the phone, close the app and tap the notification.`,
     );
   });
 
