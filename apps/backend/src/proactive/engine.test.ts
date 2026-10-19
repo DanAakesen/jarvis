@@ -108,15 +108,21 @@ function setup(overrides: Partial<ProactiveEngineOptions> = {}) {
     usageStore: { recordFoundryUsage }, now: () => new Date(), logger: { warn }, ...overrides,
   };
   const engine = createProactiveEngine(options);
-  async function claim(trigger: RunSummary['trigger'] = 'manual') {
+  async function claim(
+    trigger: RunSummary['trigger'] = 'manual',
+    slot = trigger === 'manual' ? null : '2026-10-20T07:00',
+  ) {
     const claimed = await store.runs.claim({
-      trigger, slot: trigger === 'manual' ? null : '2026-10-20T07:00', now: new Date(),
+      trigger, slot, now: new Date(),
     });
     expect(claimed).not.toBeNull();
     return claimed!;
   }
-  async function run(trigger: RunSummary['trigger'] = 'manual') {
-    await engine(await claim(trigger));
+  async function run(
+    trigger: RunSummary['trigger'] = 'manual',
+    slot?: string,
+  ) {
+    await engine(await claim(trigger, slot));
     return store.runs.latest();
   }
   return { store, events, todoSource, model, job, start, recordFoundryUsage, warn, engine, claim, run };
@@ -133,6 +139,47 @@ afterEach(() => {
 });
 
 describe('proactive engine pipeline', () => {
+  it('deduplicates unchanged undated-task digests per Copenhagen day and adds one for a changed set', async () => {
+    const fixture = setup();
+    let undated = [
+      fact({ ref: 'todo:first', text: 'Prepare notes', dueAt: null }),
+      fact({ ref: 'todo:second', text: 'Send report', dueAt: null }),
+    ];
+    fixture.todoSource.read.mockImplementation(async ({ now }) => ({
+      source: 'todos', state: 'ok', reason: null, facts: undated, observedAt: now.toISOString(),
+    }));
+    fixture.model.summarize.mockResolvedValue({ findings: [] });
+
+    expect(await fixture.run('scheduled', '2026-10-20T07:00'))
+      .toMatchObject({ status: 'done', findingCount: 1 });
+    const first = (await fixture.store.items.list('all', 20, new Date()))
+      .filter(({ category }) => category === 'todo');
+    expect(first).toHaveLength(1);
+    expect(first[0]).toMatchObject({
+      title: 'Tasks without due dates',
+      body: '2 open high-priority tasks have no due date: "Prepare notes"; "Send report".',
+      urgency: 'normal', dueAt: null,
+    });
+
+    expect(await fixture.run('scheduled', '2026-10-20T18:00'))
+      .toMatchObject({ status: 'done', findingCount: 1 });
+    expect((await fixture.store.items.list('all', 20, new Date()))
+      .filter(({ category }) => category === 'todo')).toHaveLength(1);
+
+    undated = [
+      undated[0]!,
+      fact({ ref: 'todo:third', text: 'Book travel', dueAt: null }),
+    ];
+    expect(await fixture.run()).toMatchObject({ status: 'done', findingCount: 1 });
+    const changed = (await fixture.store.items.list('all', 20, new Date()))
+      .filter(({ category }) => category === 'todo');
+    expect(changed).toHaveLength(2);
+    expect(changed.find(({ id }) => id !== first[0]!.id)).toMatchObject({
+      body: '2 open high-priority tasks have no due date: "Book travel"; "Prepare notes".',
+      urgency: 'normal', dueAt: null,
+    });
+  });
+
   it('accounts spend, stores every finding, runs hooks, then finishes the run and job', async () => {
     const hook = vi.fn(async (context: FindingsStoredContext) => {
       fixture.events.push('hook');

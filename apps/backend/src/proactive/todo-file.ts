@@ -22,8 +22,8 @@ export interface ParsedVaultTodo extends ParsedTodo {
 
 const dueMarkerPattern = /(?:📅\s*|\[due::\s*|\bdue:\s*)(\d{4}-\d{2}-\d{2})(?:(?:\s+|T)(\d{2}:\d{2}))?\]?/iu;
 const dueMarkersPattern = /(?:📅\s*|\[due::\s*|\bdue:\s*)(\d{4}-\d{2}-\d{2})(?:(?:\s+|T)(\d{2}:\d{2}))?\]?/giu;
-const highPriorityPattern = /\bpriority\s*::?\s*P1\s*-\s*High\b/iu;
-const priorityMarkersPattern = /\s*\[\s*priority\s*::?\s*[^\]]*\]|\s+\bpriority\s*::?.*$/iu;
+const highPriorityPattern = /(?:🔺|⏫|\[\s*priority\s*::\s*(?:highest|high)\s*\]|\(\s*priority\s*::\s*(?:highest|high)\s*\)|\bpriority\s*::?\s*P1\s*-\s*High\b)/iu;
+const priorityMarkersPattern = /\s*\[\s*priority\s*::?\s*[^\]]*\]|\s*\(\s*priority\s*::?\s*[^)]*\)|\s+\bpriority\s*::?.*$/giu;
 const timeMarkerPattern = /🕒\s*(\d{2}:\d{2})/u;
 export const taskMetadata = /[📅⏳🛫➕✅❌🔁🏁⏫🔼🔽⏬🔺🆔⛔🕒]/gu;
 
@@ -96,7 +96,7 @@ export function parseTodosWithContext(content: string, path: string): ParsedVaul
       dueAt,
       dueHasTime: time !== undefined && dueAt !== null,
       done: task[1]!.toLowerCase() === 'x',
-      highPriority: rawText.includes('⏫') || highPriorityPattern.test(rawText),
+      highPriority: highPriorityPattern.test(rawText),
       dueDate: dueAt === null ? null : dueMarker?.[1] ?? null,
       dueTime: dueAt !== null && time !== undefined ? time : null,
       path,

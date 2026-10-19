@@ -2096,9 +2096,12 @@ Each run owns cancellation, a three-minute deadline and 60-second lease
 heartbeats. Enabled registered sources read in parallel with 20-second bounds.
 Quiet hours cancel scheduled/catch-up work, not manual work; generation and
 quiet-hour checks precede item writes and hooks. Detection is pure and shares
-the 24-hour deadline and 48-hour clash constants with future consumers. Language
-uses a narrow SQL read of recent user-message text, never chat history fields;
-chat messages are not model input.
+the 24-hour deadline and 48-hour clash constants with future consumers. It also
+creates one normal-urgency, no-due-date todo finding for the undated high-priority
+facts; the dedupe key includes the Copenhagen day and normalized task set, so
+unchanged 07:00 and 18:00 checks reuse the finding while a changed set gets a new
+one. Language uses a narrow SQL read of recent user-message text, never chat
+history fields; chat messages are not model input.
 
 Finding writes also fence the claim inside the SQL transaction by locking the
 owner/run row and checking status, generation and lease. Cancellation cancels
@@ -2137,12 +2140,13 @@ partial success. Unknown sizes reserve the per-file maximum against the budget.
 `todo-file.ts` keeps the root-only writer resolver and shared parser; fenced
 examples/query blocks are ignored. One sanitizer removes
 control characters, HTML and markdown link destinations and caps fact text at
-300 characters. `⏫`, `priority:: P1 - High` and `priority: P1 - High` qualify as
-high priority; `🔼`, `🔽`, `⏬`, `🔺` and missing priorities do not. `🕒 HH:mm`
-supplies the due time before or after `📅 YYYY-MM-DD`; trailing date/time,
-`due:` and `[due:: …]` remain supported. Clock, priority and Tasks metadata emoji
-and their recognized date, recurrence, ID and completion-action payloads are
-removed from fact text. Due dates resolve to Copenhagen-local instants;
+300 characters. `🔺`, `⏫`, bracketed or parenthesized `priority:: highest` and
+`priority:: high` (case-insensitive), and legacy `priority:: P1 - High` qualify
+as high priority; `🔼`, `🔽`, `⏬`, medium, low, lowest and missing priorities do
+not. `🕒 HH:mm` supplies the due time before or after `📅 YYYY-MM-DD`; trailing
+date/time, `due:` and `[due:: …]` remain supported. Clock, priority and Tasks
+metadata emoji and their recognized date, recurrence, ID and completion-action
+payloads are removed from fact text. Due dates resolve to Copenhagen-local instants;
 date-only tasks remain due at 23:59. Only open high-priority tasks become facts,
 deduplicated by normalized text and due instant, retaining explicit-time
 eligibility if any duplicate has a time. The source returns at most 40 facts,

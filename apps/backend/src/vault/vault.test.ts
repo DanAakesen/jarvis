@@ -380,7 +380,7 @@ describe('GitHub vault', () => {
       remote: {
         'Personal/Inbox.md': {
           sha: sha('a'),
-          content: '# Home\n- [ ] Buy a mirror ⏫ 📅 2031-04-09 14:00\n- [ ] Password: hunter2\n- [x] Finished',
+          content: '# Home\n- [ ] Buy a mirror 🔺 📅 2031-04-09 14:00\n- [ ] Password: hunter2\n- [x] Finished',
         },
       },
     });
@@ -444,7 +444,7 @@ describe('GitHub vault', () => {
       remote: {
         'Personal/Inbox.md': {
           sha: sha('a'),
-          content: '# Home\n- [ ] Buy a mirror ⏫ 📅 2031-04-09 14:00\n- [x] Finished task\n- [ ] Password: hunter2',
+          content: '# Home\n- [ ] Buy a mirror 🔺 📅 2031-04-09 14:00\n- [x] Finished task\n- [ ] Password: hunter2',
         },
         'Work/Projects.md': { sha: sha('b'), content: '- [ ] Plan a garden' },
         'General/Notes.md': { sha: sha('c'), content: '- [ ] Not in the task scope' },
@@ -459,7 +459,7 @@ describe('GitHub vault', () => {
       total: 3,
       truncated: false,
       items: [
-        { text: 'Buy a mirror', path: 'Personal/Inbox.md', line: 2, heading: 'Home' },
+        { text: 'Buy a mirror', priority: 'high', path: 'Personal/Inbox.md', line: 2, heading: 'Home' },
         { text: '[redacted]', done: false },
         { text: 'Plan a garden', path: 'Work/Projects.md' },
       ],
