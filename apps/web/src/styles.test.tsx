@@ -551,6 +551,14 @@ describe('shared glass tokens', () => {
     expect(source).toContain('.app-shell[data-phone="true"] .job-tabs { flex: 0 0 auto; margin-left: auto; }');
   });
 
+  it('keeps the phone top bar inside 320px: Settings lives in the menu and presence yields on narrow handsets', () => {
+    const source = readFileSync('src/styles.css', 'utf8');
+    expect(ruleDeclaration(source, /\.app-shell\[data-phone="true"\] \.settings-link\s*\{([^}]*)\}/, 'display')).toBe('none');
+    const narrow = mediaBlocks(source).filter(({ query }) => /max-width:\s*380px/.test(query)).map(({ body }) => body).join('\n');
+    expect(narrow).toMatch(/\.app-shell\[data-phone="true"\] \.presence-chip\s*\{\s*display:\s*none;\s*\}/);
+    expect(ruleDeclaration(source, /\.app-shell\[data-phone="true"\] \.topbar-actions\s*\{([^}]*)\}/, 'gap')).toBe('0');
+  });
+
   it('keeps phone window rows at their natural touch height rather than the desktop tab basis', () => {
     const source = readFileSync('src/styles.css', 'utf8');
     const phoneRow = /\.app-shell\[data-phone="true"\]\[data-windows-open="true"\] \.window-tabstrip \.workspace-tab-item\s*\{([^}]*)\}/;

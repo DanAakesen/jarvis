@@ -5,6 +5,39 @@ treatments selected from the existing Jarvis design system. The shared source
 of truth is `apps/web/src/styles.css`; route stylesheets own workflow layout,
 not parallel palettes or control systems.
 
+## Phone top bar at 320px and the phone menu (P14-16; 19 October 2026)
+
+The 320px overflow (A1) was the phone top bar needing 353px of the 300px content
+box a 320px phone leaves: the context title (47px), the job tabs (122px), four
+44px actions (windows, presence, Menu, Settings) and two 4px gaps. The Settings
+link ended at x=365, so `document.scrollWidth` was 365 against a `clientWidth`
+of 320 on every route (45px, 38 of 38 light and dark measurements at 320). With
+the database-waking mark (32px) the bar also overflowed at 375 and 390px (22px
+and 7px); that case was not in the first report.
+
+The Settings gear is now hidden on phones, because the Menu already has a
+Settings row, and the presence chip is hidden at 380px and narrower, because
+Settings, Presence still switches the mode. Hidden controls leave the tab order
+and the accessibility tree; the markup, handlers and names are unchanged. The
+focus fallback that runs when the last attention item is dismissed now tries the
+Menu button before the Settings link and takes the first control that accepts
+focus, because focusing a hidden control does nothing. The
+issue proposed 360px for the presence rule, but `styles.test.tsx` allows only the
+380, 700, 900 and 1200px breakpoints, so 380px is used and presence is also
+hidden from 361 to 380px.
+
+The phone Menu now lists Proactive exactly when the Proactive flag is on, in the
+rail's position (after Daily, or after Jarvis when Daily is off), and keeps it
+current on `/proactive/<id>` (A35). An App test compares the Menu with the rail
+for three flag combinations.
+
+After the change all 148 measurements (19 scenarios at 320, 375, 390 and 768 in
+light and dark) have `document.scrollWidth` equal to `clientWidth`, including the
+waking case, and the top bar actions end at x=312 at 320px (365 before). The
+shell, main and overlay touch-target counts are identical to the baseline in all
+93 shared measurements. Not covered: three-digit job counts together with the
+waking mark at 320px (about 3px to spare), and real devices.
+
 ## Whole-app visual QA pass (19 October 2026)
 
 Rendered the real app at `b02eeb66` in headless Chromium with sign-in stubbed

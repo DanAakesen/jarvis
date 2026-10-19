@@ -3166,6 +3166,10 @@ a.task-chip:hover { background: var(--glass-pressed); }
 .app-shell[data-phone="true"] .topbar-context { flex: 0 0 auto; }
 .app-shell[data-phone="true"] .brand { font-size: var(--type-lead); }
 .app-shell[data-phone="true"] .topbar-actions { gap: 0; }
+/* P14-16: windows, presence, Menu and Settings need 353px of the 300px a 320px phone leaves the top bar. Settings is a row
+   of the Menu sheet, so the gear is dropped on phones; presence (also in Settings) yields on the narrowest handsets. */
+.app-shell[data-phone="true"] .settings-link { display: none; }
+@media (max-width: 380px) { .app-shell[data-phone="true"] .presence-chip { display: none; } }
 .app-shell[data-phone="true"] .job-tabs { flex: 0 0 auto; margin-left: auto; }
 .app-shell[data-phone="true"] .job-tab-list { display: none; }
 .app-shell[data-phone="true"] .job-tabs .jobs-summary { padding-inline: var(--space-1); gap: var(--space-1); }
