@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { dayKey } from './time.js';
 import type { SourceFact } from './types.js';
 
 export const DEADLINE_WINDOW_HOURS = 24;
@@ -8,7 +9,7 @@ const HOUR_MS = 60 * 60 * 1_000;
 export interface DeterministicFinding {
   title: string;
   body: string;
-  category: 'deadline' | 'clash';
+  category: 'deadline' | 'clash' | 'todo';
   urgency: 'time_critical' | 'normal';
   dueAt: string | null;
   evidence: string[];
@@ -55,6 +56,29 @@ export function detectFindings(facts: SourceFact[], now: Date, language: 'da' | 
   const at = now.getTime();
   if (!Number.isFinite(at)) return [];
   const findings: DeterministicFinding[] = [];
+  const undatedTodos = facts.filter((fact) => fact.kind === 'todo' && fact.dueAt == null);
+  if (undatedTodos.length > 0) {
+    const titles = undatedTodos.map(({ text }) => normaliseFactText(text) || 'untitled task').sort();
+    const listedTitles = undatedTodos
+      .map(({ text }) => ({ key: normaliseFactText(text) || 'untitled task', text: snippet(text || 'Untitled task', 64) }))
+      .sort((left, right) => left.key < right.key ? -1 : left.key > right.key ? 1 : 0)
+      .slice(0, 5)
+      .map(({ text }) => `"${text}"`)
+      .join('; ');
+    findings.push({
+      title: language === 'da' ? 'Opgaver uden frist' : 'Tasks without due dates',
+      body: language === 'da'
+        ? `${undatedTodos.length} åbne opgaver med høj prioritet mangler en frist: ${listedTitles}.`
+        : `${undatedTodos.length} open high-priority tasks have no due date: ${listedTitles}.`,
+      category: 'todo',
+      urgency: 'normal',
+      dueAt: null,
+      evidence: undatedTodos.map(({ ref }) => ref),
+      dedupeKey: deterministicDedupeKey(
+        'todo', `undated_high_priority_tasks|${JSON.stringify(titles)}`, dayKey(now),
+      ),
+    });
+  }
   for (const fact of facts) {
     const due = instant(fact.dueAt);
     if (fact.kind !== 'todo' || !Number.isFinite(due) || due > at + DEADLINE_WINDOW_HOURS * HOUR_MS) continue;
