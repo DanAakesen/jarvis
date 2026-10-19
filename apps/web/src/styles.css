@@ -562,15 +562,14 @@ dd { margin: 0; color: var(--text-muted); overflow-wrap: anywhere; }
     box-shadow var(--motion-press) var(--ease-standard), color var(--motion-press) var(--ease-standard),
     transform var(--motion-press) var(--ease-standard);
 }
-.primary-button, .jobs-action-primary, .conversation-history .composer-send {
+.primary-button, .jobs-action-primary {
   border-color: color-mix(in srgb, var(--primary-action) 54%, var(--highlight-solid));
   background: linear-gradient(180deg, color-mix(in srgb, var(--primary-action) 93%, var(--highlight-solid)),
     color-mix(in srgb, var(--primary-action) 94%, var(--ink-solid)));
   color: var(--primary-action-text); box-shadow: var(--button-primary-shadow);
 }
 .primary-button:hover:not(:disabled, [aria-busy="true"]),
-.jobs-action-primary:hover:not(:disabled, [aria-busy="true"]),
-.conversation-history .composer-send:hover:not(:disabled, [aria-busy="true"]) {
+.jobs-action-primary:hover:not(:disabled, [aria-busy="true"]) {
   border-color: color-mix(in srgb, var(--primary-action-hover) 48%, var(--highlight-solid));
   background: linear-gradient(180deg, color-mix(in srgb, var(--primary-action-hover) 94%, var(--highlight-solid)),
     color-mix(in srgb, var(--primary-action-hover) 92%, var(--ink-solid)));
@@ -578,8 +577,7 @@ dd { margin: 0; color: var(--text-muted); overflow-wrap: anywhere; }
     0 0 18px color-mix(in srgb, var(--primary-action) 28%, transparent);
 }
 .primary-button:active:not(:disabled, [aria-busy="true"]),
-.jobs-action-primary:active:not(:disabled, [aria-busy="true"]),
-.conversation-history .composer-send:active:not(:disabled, [aria-busy="true"]) {
+.jobs-action-primary:active:not(:disabled, [aria-busy="true"]) {
   background: linear-gradient(180deg, color-mix(in srgb, var(--primary-action) 84%, var(--ink-solid)),
     color-mix(in srgb, var(--primary-action) 78%, var(--ink-solid)));
   transform: translateY(1px);
@@ -625,14 +623,13 @@ dd { margin: 0; color: var(--text-muted); overflow-wrap: anywhere; }
   transform: translateY(1px);
 }
 .primary-button:focus-visible, .secondary-button:focus-visible, .ghost-button:focus-visible,
-.danger-button:focus-visible, .danger-button--filled:focus-visible, .jobs-action:focus-visible,
-.conversation-history .composer-send:focus-visible {
+.danger-button:focus-visible, .danger-button--filled:focus-visible, .jobs-action:focus-visible {
   outline: 3px solid var(--focus); outline-offset: 3px; box-shadow: 0 0 0 3px var(--page);
 }
 .primary-button:disabled, .secondary-button:disabled, .ghost-button:disabled, .danger-button:disabled {
   border-color: var(--control-rule); background: var(--disabled-surface); color: var(--disabled-text); box-shadow: none; cursor: not-allowed;
 }
-.primary-button:disabled, .jobs-action-primary:disabled, .conversation-history .composer-send:disabled {
+.primary-button:disabled, .jobs-action-primary:disabled {
   border-color: color-mix(in srgb, var(--primary-action-disabled) 55%, var(--highlight-solid));
   background: var(--primary-action-disabled); color: var(--primary-action-disabled-text);
 }
@@ -1170,15 +1167,14 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
 .conversation-input.luminous-glass:has(textarea:focus-visible) {
   box-shadow:
     0 26px 60px -18px color-mix(in srgb, var(--ink-solid) 55%, transparent),
-    0 14px 40px -22px var(--glass-glow-warm),
-    0 0 0 2px var(--focus);
+    0 14px 40px -22px var(--glass-glow-warm);
 }
-/* Hover and typing: a thin light runs around the rim instead of a thick ring; focus brightens it. */
+/* Typing: a thin (2px) light runs around the rim, with no solid focus ring (Dan, 19 October: slim and subtle, as before 18 October). Hovering the composer does nothing. */
 @property --rim-sweep { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
 .conversation-input.luminous-glass::after {
   position: absolute;
   inset: -1px;
-  padding: var(--space-1);
+  padding: calc(var(--space-1) / 2);
   border-radius: inherit;
   background: conic-gradient(from var(--rim-sweep),
     transparent 0 62%,
@@ -1194,7 +1190,6 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
   -webkit-mask-composite: xor;
   mask: linear-gradient(var(--ink-solid) 0 0) content-box exclude, linear-gradient(var(--ink-solid) 0 0);
 }
-.conversation-input.luminous-glass:hover::after { opacity: .7; animation: rim-sweep 7s linear infinite; }
 .conversation-input.luminous-glass:focus-within::after { opacity: 1; animation: rim-sweep 6s linear infinite; }
 @keyframes rim-sweep { to { --rim-sweep: 360deg; } }
 :root[data-motion="reduced"] .conversation-input.luminous-glass::after { animation: none; background: color-mix(in srgb, var(--glass-edge-cool) 80%, var(--glass-rim-light)); }
@@ -2082,7 +2077,7 @@ a.task-card-title { text-decoration: none; }
    surface Jarvis is acting on glows so Dan can see it change.
    --------------------------------------------------------------------------------------------- */
 :is(.workspace-window, .kanban-column, .kanban-card, .settings-section, .area-sidebar,
-  .context-panel, .app-topbar, .area-rail, .conversation-input.luminous-glass, .task-release-bar, .signin-button)[data-lit] {
+  .context-panel, .app-topbar, .area-rail, .task-release-bar, .signin-button)[data-lit] {
   background-image: radial-gradient(circle 140px at var(--light-x, 50%) var(--light-y, 50%),
     color-mix(in srgb, var(--glass-rim-light) 26%, transparent), transparent 72%);
 }
@@ -3304,15 +3299,15 @@ a.task-chip:hover { background: var(--glass-pressed); }
 }
 :root[data-motion="reduced"] :is(.kanban-filter-body, .kanban-filter-body > .kanban-filters, .kanban-chevron) { transition: none; }
 @media (prefers-reduced-motion: reduce) { :is(.kanban-filter-body, .kanban-filter-body > .kanban-filters, .kanban-chevron) { transition: none; } }
-/* Chat bar idle lap (Dan, 8 October): one thin, unhurried light runs the rim every 10 s, easing from slow to moderate. */
-.conversation-input.luminous-glass:not(:hover, :focus-within)::after { padding: 1.25px; animation: rim-idle 10s infinite; }
+/* Chat bar idle lap (Dan, 8 October): one thin, unhurried light runs the rim every 10 s, easing from slow to moderate. Hover does not change it. */
+.conversation-input.luminous-glass:not(:focus-within)::after { padding: 1.25px; animation: rim-idle 10s infinite; }
 @keyframes rim-idle {
   0% { --rim-sweep: -40deg; opacity: 0; animation-timing-function: cubic-bezier(.45, 0, .7, .6); }
   8% { opacity: .85; }
   60% { --rim-sweep: 400deg; opacity: .8; }
   70%, 100% { --rim-sweep: 400deg; opacity: 0; }
 }:root[data-motion="reduced"] .conversation-input.luminous-glass::after { animation: none; }
-@media (prefers-reduced-motion: reduce) { .conversation-input.luminous-glass:not(:hover, :focus-within)::after { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .conversation-input.luminous-glass:not(:focus-within)::after { animation: none; } }
 
 /* Knowledge folder filters on phones: one touch-sized row that scrolls sideways if needed. */
 .app-shell[data-phone="true"] .knowledge-legend { right: 8px; flex-wrap: nowrap; gap: var(--space-1); overflow-x: auto; scrollbar-width: none; overscroll-behavior-x: contain; }
@@ -3750,7 +3745,7 @@ a.task-chip:hover { background: var(--glass-pressed); }
 :root[data-motion="reduced"] .conversation-latest { animation: none; }
 
 :is(.primary-button, .secondary-button, .ghost-button, .danger-button, .danger-button--filled,
-  .jobs-action, .conversation-history .composer-send, .conversation-latest):focus-visible {
+  .jobs-action, .conversation-latest):focus-visible {
   box-shadow: 0 0 0 3px var(--page);
 }
 
@@ -3760,16 +3755,16 @@ a.task-chip:hover { background: var(--glass-pressed); }
     --control-rule: var(--text);
   }
   :is(.primary-button, .secondary-button, .ghost-button, .danger-button, .danger-button--filled,
-    .jobs-action, .conversation-history .composer-send, .conversation-latest):not(:disabled) {
+    .jobs-action, .conversation-latest):not(:disabled) {
     background-image: none; border-color: currentColor; box-shadow: none;
   }
-  :is(.primary-button, .jobs-action-primary, .conversation-history .composer-send):not(:disabled) {
+  :is(.primary-button, .jobs-action-primary):not(:disabled) {
     background-color: var(--primary-action);
   }
-  :is(.primary-button, .jobs-action-primary, .conversation-history .composer-send):hover:not(:disabled, [aria-busy="true"]) {
+  :is(.primary-button, .jobs-action-primary):hover:not(:disabled, [aria-busy="true"]) {
     background-color: var(--primary-action-hover);
   }
-  :is(.primary-button, .jobs-action-primary, .conversation-history .composer-send):active:not(:disabled, [aria-busy="true"]) {
+  :is(.primary-button, .jobs-action-primary):active:not(:disabled, [aria-busy="true"]) {
     background-color: color-mix(in srgb, var(--primary-action) 78%, var(--ink-solid));
   }
   :is(.secondary-button, .jobs-action:not(.jobs-action-primary), .conversation-latest):not(:disabled) {
@@ -3797,23 +3792,23 @@ a.task-chip:hover { background: var(--glass-pressed); }
     background-color: color-mix(in srgb, var(--error) 78%, var(--ink-solid));
   }
   :is(.primary-button, .secondary-button, .ghost-button, .danger-button, .danger-button--filled,
-    .jobs-action, .conversation-history .composer-send, .conversation-latest):focus-visible {
+    .jobs-action, .conversation-latest):focus-visible {
     box-shadow: 0 0 0 3px var(--page);
   }
 }
 @media (forced-colors: active) {
   :is(.primary-button, .secondary-button, .ghost-button, .danger-button, .danger-button--filled,
-    .jobs-action, .conversation-history .composer-send, .conversation-latest):not(:disabled) {
+    .jobs-action, .conversation-latest):not(:disabled) {
     border-color: ButtonText; background: ButtonFace; background-image: none; color: ButtonText;
     box-shadow: none; forced-color-adjust: auto;
   }
   :is(.primary-button, .secondary-button, .ghost-button, .danger-button, .danger-button--filled,
-    .jobs-action, .conversation-history .composer-send, .conversation-latest):disabled {
+    .jobs-action, .conversation-latest):disabled {
     border-color: GrayText; background: ButtonFace; background-image: none; color: GrayText;
     box-shadow: none; forced-color-adjust: auto;
   }
   :is(.primary-button, .secondary-button, .ghost-button, .danger-button, .danger-button--filled,
-    .jobs-action, .conversation-history .composer-send, .conversation-latest):focus-visible {
+    .jobs-action, .conversation-latest):focus-visible {
     outline: 3px solid Highlight; outline-offset: 3px; box-shadow: none;
   }
   .app-shell :is(

@@ -1,5 +1,21 @@
 # Decisions
 
+## P14-32 — The composer is quiet: no hover rim, a slim focus rim, a bare send icon (19 October 2026; #1085)
+
+The owner asked for three changes to the composer, directly. Hovering it no
+longer starts the rim sweep or the pointer glow, and the resting idle lap is
+unchanged. Focus is slim again: the solid 2px focus-colour ring that P14-04
+added on 18 October is gone, and the focus sweep is back to a 2px rim (P14-10
+had doubled it to 4px), so typing shows one thin travelling light as the design
+always intended. Under reduced motion the same 2px rim is steady. This reverses
+those two choices for the composer only; other controls keep the shared 3px
+focus outline. The send action is a bare arrow icon with no
+fill, border or shadow in any state: hover warms it to the focus colour and
+lifts it 2px, press settles it, disabled dims it. It keeps a 36px target (44px
+on coarse pointers), the “Send” name and a visible keyboard focus outline, and
+it no longer aliases the shared primary button. This is a scoped exception to the
+shared primary alias rule for this one control.
+
 ## P14-24 — Plan todo reminders after default-branch vault pushes (19 October 2026; #1073)
 
 A verified push to the vault repository's default branch starts a bounded,
