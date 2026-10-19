@@ -1,5 +1,17 @@
 # Architecture
 
+## Shared web date-time formatting (19 October 2026; P14-23)
+
+`apps/web/src/format/date-time.ts` is the web client’s shared date-time
+presentation boundary. Date-time, date-only and time-only calls default to
+`en-GB` and the browser timezone; optional locale and timezone arguments are
+reserved for content-language formatting and surfaces with an established
+display zone. Invalid or missing values return an en dash rather than throwing
+during render. Daily and Proactive keep thin wrappers only for their explicit
+timezone and content-language rules. `dailyLocale()` remains for numeric and
+duration values, and calculation-only `Intl` calls stay in the static guard’s
+small allowlist.
+
 ## Daily visual QA presentation changes (18 October 2026; P12-38)
 
 P12-38 changes only the Daily web presentation. `DailySectionHeader` emits the
@@ -14,13 +26,14 @@ declared unit) with observed numeric values as a fallback, so an all-missing
 page keeps its alignment; row/card detail actions use the shared secondary
 button.
 
-`ui/formatters.ts` is the single Daily display-locale source, including saved
-nutrition-target timestamps and sleep times; its formatter functions accept an
-explicit locale for deterministic tests. The Body chart still consumes only the
-existing per-unit daily summaries: it now sends one series per metric/unit to
-`DailyChart`, with a three-calendar-day maximum connecting interval. Wider date
-gaps create a new line segment; each recorded value remains a point and no
-missing value is filled. The limit is included in the chart description.
+`ui/formatters.ts` delegates displayed Daily dates and times to the shared web
+date-time formatters while retaining the established Europe/Copenhagen display
+timezone. `dailyLocale()` is used for numbers and durations, not date output.
+The Body chart still consumes only the existing per-unit daily summaries: it
+now sends one series per metric/unit to `DailyChart`, with a three-calendar-day
+maximum connecting interval. Wider date gaps create a new line segment; each
+recorded value remains a point and no missing value is filled. The limit is
+included in the chart description.
 Routes, reads, contracts, data ownership and persisted data are unchanged.
 
 ## Daily accessibility and keyboard audit (18 October 2026; P12-37)

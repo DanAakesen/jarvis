@@ -1,5 +1,17 @@
 # Decisions
 
+## P14-23 — One shared web date-time format (19 October 2026)
+
+Use `apps/web/src/format/date-time.ts` for user-visible web date-time, date-only
+and time-only values. Default to `en-GB`, medium date plus short 24-hour time,
+and the browser timezone; use `hourCycle: 'h23'` so midnight stays in the
+00–23 hour range. Optional locale and timezone arguments preserve deliberate
+content-language and display-zone choices. Return an en dash for missing or
+invalid values so rendering never throws. Keep relative times, chart/calendar
+labels, data values and non-web formatting outside this presentation helper.
+Daily and Proactive wrappers remain thin to preserve their explicit
+Europe/Copenhagen zone and Danish content behavior.
+
 ## P14-15 — Nested section titles wrap, the save row has no frame, touch targets in the task window (19 October 2026)
 
 The whole-app pass found five small CSS defects in Settings and the task window

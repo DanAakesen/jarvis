@@ -455,6 +455,31 @@ overflow; reduced motion removed the Loader animation, and the gallery emitted
 no console errors. This measures the shared gallery transition, not route-level
 loading-to-ready transitions or live backend behavior.
 
+## Shared date-time format (P14-23; 19 October 2026)
+
+The shared formatter now owns user-visible web date-time, date-only and
+time-only output. An en-GB format, browser timezone default and safe en-dash
+fallback replace the scattered browser-locale and ISO display paths. Daily
+wrappers retain Copenhagen time; Proactive keeps its Copenhagen and
+content-language choices. The static guard allows only three calculation-only
+files with checked call counts: `daily/period.ts` and `daily/presentation.ts`
+extract calendar parts, while `proactive-data.ts` converts Copenhagen wall
+times. The chat message label remains relative (out of scope); its absolute
+timestamp tooltip uses the shared format.
+
+Chromium rendered synthetic Kanban card/trail, task window, release page,
+Settings health-credential expiry and chat content at 390×844 and 1440×900 in
+light and dark. The displayed dates and credential expiry used the same
+`19 Oct 2026, 00:05` / `30 Oct 2026, 12:34` shape; chat tooltips had the shared
+absolute format. The phone credential status and deployment record wrapped
+without clipping, and the task timeline’s longer date labels fit their rows.
+The document width matched the viewport in all 20 combinations, with no
+uncaught page errors. The phone check opened the chat using its Show
+conversation control. Synthetic API fixtures and a local sign-in stub were
+used; this is rendered local evidence, not live-backend or human acceptance.
+Screenshots were retained under `/tmp/p14-23-browser/screenshots/`, not in the
+repository.
+
 ## Bounded follow-up
 
 The app has more than 40 independently styled route and component surfaces, so
