@@ -252,6 +252,46 @@ every option together (713 px at 768 and 1440 px), so a test pins the column. Th
 data is synthetic; no live records, physical device or human review were
 involved.
 
+## Settings save row, nested sections, feed rows and task window targets (P14-15; 19 October 2026)
+
+Five findings from the whole-app pass (A44 to A47 and A50) were all in
+`styles.css`; no markup changed.
+
+- Save settings (A47): `.settings-page > .settings-save` reset padding, radius,
+  background and shadow but not the 1px border of the base `.settings-save`
+  block, so a frame surrounded the button in every Settings state. It now sets
+  `border: 0` and stays the plain end-of-page row.
+- Nested section title (A45): inside another section the title was `flex: none`
+  and its chevron sat in a clipped box, so at 320px "Defaults for new projects"
+  read "Defaults for new projec" with no visible chevron. A title inside a nested
+  section now shrinks and wraps, and nested toggles use the subsection size (17px
+  against 22px for top-level titles) so the nested heading reads as a child.
+- Folded nested section (A50): the padding under an open section matched every
+  descendant inner, so a folded section nested in an open one kept about 24px of
+  dead space under its title. The rule now matches only a section's own inner
+  (`> .collapsible-body > .collapsible-inner`). With Projects open the 390px page
+  is 26px shorter (3963px to 3937px: the 24px plus the 2px save row frame).
+- News feeds (A46): the URL input was top-aligned beside the 44px Remove button
+  and "Add feed" stretched to the panel width. The row now stretches its controls
+  to one height and "Add feed" keeps its content width at the start of the row.
+- Task window (A44): the 44px coarse-pointer minimum for "View event payload" was
+  undone by an override fused onto the end of another rule, and the project and
+  branch chips kept a 28px minimum. The fused rule is on its own line and
+  `(pointer: coarse)` restores 44px for both; fine pointers keep the compact sizes.
+
+Rendered with the whole-app harness on the base (b02eeb66) and on this change.
+Of the 29 scenario and width measurements present in both runs, 6 differ and 23
+are identical. At 320px `settings`, `projects-defaults` and `projects-open` each
+lose their 2 wide elements and their one hidden-clip entry. At 390px the three
+task windows drop from 43, 43 and 44 targets under 44px to 34 each; the
+remaining 34 are the board and release links of A25 and A26 (P14-21, P14-22).
+The screenshots confirm the Save row has no frame at 390px, the nested title
+wraps beside its chevron at 320px, the folded Defaults section flows straight
+into Nutrition targets, "Add feed" is content width, and the payload disclosure
+and chips are 44px tall. Not covered: the 1440px captures stop at 1600px, so the
+News feeds row and the Save row were not rendered at 1440px by this change (the
+QA pass rendered the same rules there), and real touch devices.
+
 ## Colour and contrast (P14-12, 18 October 2026)
 
 The contrast ratchet reads the canonical tokens and measures 197 shared-token
