@@ -63,6 +63,8 @@ export function useRailTip() {
       if (!stillOnRail(event.relatedTarget)) hide();
     },
     onPointerDown: hide,
+    // Keyboard activation arrives as a click; the label would otherwise keep the pre-action name.
+    onClick: hide,
     onFocus: (event: FocusEvent<HTMLElement>) => {
       const item = itemOf(event.target);
       if (!item) return;

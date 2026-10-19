@@ -92,6 +92,25 @@ describe('rail label', () => {
     }
   });
 
+  it('closes when a focused control is activated from the keyboard', async () => {
+    const matches = Element.prototype.matches;
+    const spy = vi.spyOn(Element.prototype, 'matches').mockImplementation(function (this: Element, selector: string) {
+      return selector === ':focus-visible' ? true : matches.call(this, selector);
+    });
+    try {
+      const user = userEvent.setup();
+      render(<Harness />);
+      await user.tab();
+      await user.tab();
+      expect(document.activeElement).toBe(folio());
+      expect(tip().getAttribute('data-open')).toBe('true');
+      await user.keyboard('{Enter}');
+      expect(tip().getAttribute('data-open')).toBe('false');
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
   it('keeps the label closed when focus came from a pointer', () => {
     render(<Harness />);
     fireEvent.pointerOver(folio(), mouse);
