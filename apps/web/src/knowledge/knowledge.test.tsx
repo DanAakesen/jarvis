@@ -107,7 +107,9 @@ describe('knowledge graph view', () => {
     })));
     render(<KnowledgeGraphView backendUrl="https://api.example.com" getAccessToken={getAccessToken} />);
 
-    const toggle = await screen.findByRole('button', { name: 'Tasks, 1 note with open tasks, partial' });
+    const toggle = await screen.findByRole('button', { name: 'Tasks, 1 note with open tasks' });
+    expect(toggle.textContent).not.toMatch(/partial/i);
+    expect(toggle.getAttribute('title')).toBeNull();
     expect(toggle.getAttribute('aria-pressed')).toBe('true');
     await waitFor(() => expect(sceneMocks.create).toHaveBeenCalledOnce());
     expect(sceneMocks.create.mock.calls[0]?.[1].nodes[0]?.openTaskCount).toBe(2);
@@ -132,11 +134,13 @@ describe('knowledge graph view', () => {
     })));
     render(<KnowledgeGraphView backendUrl="https://api.example.com" getAccessToken={getAccessToken} />);
 
-    const toggle = await screen.findByRole('button', { name: 'Tasks, count unavailable, partial' });
+    const toggle = await screen.findByRole('button', { name: 'Tasks, count unavailable' });
     expect(toggle.getAttribute('aria-pressed')).toBe('true');
     expect((toggle as HTMLButtonElement).disabled).toBe(true);
     expect(toggle.textContent).toContain('—');
-    expect(toggle.textContent).toContain('partial');
+    expect(toggle.textContent).not.toMatch(/partial/i);
+    expect(toggle.getAttribute('aria-label')).not.toMatch(/partial/i);
+    expect(toggle.getAttribute('title')).toBe('Task marks are unavailable right now');
   });
   it.each([
     ['front matter first', '---\ntags: [fixture]\ncreated: 2026-10-10\n---\n'],

@@ -1,5 +1,15 @@
 # Decisions
 
+## P14-39 — Remove the Tasks legend partial label (19 October 2026; #1107)
+
+Keep the additive `taskCountsPartial` API field unchanged, but do not surface it
+as text in the Notes map legend. The Tasks count means notes currently on the map
+with open tasks; if no count is available, show an em dash, disable the toggle
+and explain that task marks are unavailable right now. The accessible name
+retains the count's meaning.
+
+Refs #1107
+
 ## P14-32 — The send icon is a paper plane that moves (19 October 2026; #1085)
 
 The composer send action stays a bare icon, with no fill, border or shadow in any
