@@ -48,6 +48,7 @@ import { readPageWindows, useReadback } from './window-readback';
 import { readWorkspaceDevice } from './workspace-device';
 import { JobsChip } from './JobsChip';
 import { ShellIcon } from './ShellIcon';
+import { useRailTip } from './RailTip';
 import { hasRunningJob, useJobs } from './jobs-store';
 import type { FeedAttention } from './activity';
 import { KnowledgeBackendContext } from './knowledge/knowledge-context';
@@ -381,6 +382,7 @@ function ShellLayout({ signedIn, config, session, camera, screenShare, dailyEnab
   // On phones there is no rail: the chat bar is the dock at the bottom of every page (Dan, 8 October).
   const chatPlace: 'home' | 'out' | 'rail' = !signedIn || home ? 'home' : phone || chatOut ? 'out' : 'rail';
   const railOrb = useRef<HTMLButtonElement>(null);
+  const { railTipProps, railTip } = useRailTip();
   const previousChatPlace = useRef(chatPlace);
   useLayoutEffect(() => {
     const previous = previousChatPlace.current;
@@ -652,13 +654,14 @@ function ShellLayout({ signedIn, config, session, camera, screenShare, dailyEnab
       data-home={home} data-chat={chatPlace} data-phone={signedIn && phone} data-windows-open={signedIn && phone && windowsSheetOpen && headerEntryCount > 0}>
       <a className="skip-link" href="#content">Skip to content</a>
       {signedIn && (
-        <nav className="area-rail" aria-label="Areas">
+        <nav className="area-rail" aria-label="Areas" {...railTipProps}>
           {navigationAvailable && (
             <button
               ref={navigationToggle}
               className="rail-button navigation-toggle"
               type="button"
               aria-label={navigationShown ? 'Collapse area navigation' : 'Expand area navigation'}
+              data-rail-tip={navigationShown ? 'Collapse navigation' : 'Expand navigation'}
               aria-expanded={navigationShown}
               aria-controls="area-navigation"
               onClick={() => { setFolioOpen(false); setNavigationOpen((open) => !open); }}
@@ -666,27 +669,28 @@ function ShellLayout({ signedIn, config, session, camera, screenShare, dailyEnab
               <ShellIcon name="navigation" />
             </button>
           )}
-          <NavLink className="rail-link" to="/" end aria-label="Conversation" onClick={closePagePanels}>
+          <NavLink className="rail-link" data-tone="home" data-rail-tip="Jarvis" to="/" end aria-label="Conversation" onClick={closePagePanels}>
             <ShellIcon name="home" /><span className="visually-hidden">Jarvis</span>
           </NavLink>
           {areas.map((area) => (
-            <NavLink key={area.id} className="rail-link" to={`/${area.path}`} aria-label={area.label} onClick={() => { setFolioOpen(false); setNavigationOpen(area.navigation.length > 1); }}>
+            <NavLink key={area.id} className="rail-link" data-tone={area.id} data-rail-tip={area.label} to={`/${area.path}`} aria-label={area.label} onClick={() => { setFolioOpen(false); setNavigationOpen(area.navigation.length > 1); }}>
               <ShellIcon name={area.id === 'daily' ? 'daily' : area.id === 'factory' ? 'factory' : area.id === 'notes' ? 'knowledge' : area.id === 'status' ? 'status' : 'usage'} /><span className="visually-hidden">{area.label}</span>
             </NavLink>
           ))}
-          <button className={`rail-link rail-folio${folioOpen ? ' active' : ''}`} type="button" aria-label="Folio" aria-pressed={folioOpen}
-            aria-controls="folio-pane" title="Folio" onClick={() => setFolioOpen((open) => !open)}>
+          <button className={`rail-link rail-folio${folioOpen ? ' active' : ''}`} data-tone="folio" data-rail-tip="Folio" type="button" aria-label="Folio" aria-pressed={folioOpen}
+            aria-controls="folio-pane" onClick={() => setFolioOpen((open) => !open)}>
             <ShellIcon name="folio" /><span className="visually-hidden">Folio</span>
           </button>
           {!home && (
             <button ref={railOrb} className="input-orb rail-chat-orb" type="button" aria-expanded={chatOut} aria-controls="conversation-composer"
-              aria-label={chatOut ? 'Hide the chat bar' : 'Chat with Jarvis'} title={chatOut ? 'Hide the chat bar' : 'Chat with Jarvis'}
+              aria-label={chatOut ? 'Hide the chat bar' : 'Chat with Jarvis'} data-rail-tip={chatOut ? 'Hide chat' : 'Chat with Jarvis'}
               onClick={() => setChatOut((open) => !open)}>
               <span aria-hidden="true"><InputOrbCore /></span>
             </button>
           )}
         </nav>
       )}
+      {signedIn && railTip}
       {signedIn && (
         <aside id="area-navigation" className="area-sidebar" hidden={!navigationShown}>
           <div className="sidebar-heading">

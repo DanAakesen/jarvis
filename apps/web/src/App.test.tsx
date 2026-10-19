@@ -450,6 +450,24 @@ describe('App shell', () => {
     expect(pages.queryByRole('link', { name: 'Proactive' }) !== null).toBe(proactive);
   });
 
+  it('names every rail control in a hover label and gives each page its own selected tone', async () => {
+    restoreProfile.mockResolvedValue({ name: 'Test User' });
+    render(<MemoryRouter><App config={config} dailyEnabled pushEnabled={false} /></MemoryRouter>);
+    const rail = within(await screen.findByRole('navigation', { name: 'Areas' }));
+    const folio = rail.getByRole('button', { name: 'Folio' });
+    for (const control of [...rail.getAllByRole('link'), folio]) {
+      const name = control.getAttribute('aria-label')!;
+      expect(control.getAttribute('data-rail-tip'), name).toBeTruthy();
+      expect(control.getAttribute('data-tone'), name).toBeTruthy();
+      expect(control.hasAttribute('title'), name).toBe(false);
+    }
+    expect(new Set(rail.getAllByRole('link').map((link) => link.getAttribute('data-tone'))).size).toBe(rail.getAllByRole('link').length);
+    fireEvent.pointerOver(folio, { pointerType: 'mouse' });
+    const tip = document.body.querySelector('.rail-tip')!;
+    expect(tip.textContent).toBe('Folio');
+    expect(tip.getAttribute('data-open')).toBe('true');
+  });
+
   it('restores the notification deep link after sign-in returns to the site root', async () => {
     const itemId = '11111111-1111-4111-8111-111111111111';
     restoreProfile.mockResolvedValue({ name: 'Test User' });

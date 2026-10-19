@@ -1,5 +1,20 @@
 # Decisions
 
+## P14-32 — Rail icons light in their own tone and name themselves on hover (19 October 2026; #1085)
+
+Each left-rail icon now lights in its own tone when its page is selected, and
+hovering or keyboard-focusing a rail control shows its name in a small label to the
+right. Tones are fixed per icon at one lightness per theme, so the rail looks even
+rather than a rainbow; they feed the existing selected-state roles on the rail link
+only, so the app-wide selection tokens, the tile tint and the stroke weight are
+unchanged and colour is never the only marker. The label is a flat portal on the
+document body rather than a child of the rail, because the rail is deliberately
+tilted in 3D, clips its children and sits under menus. The label is hoverable,
+dismissible with Escape, press or resize, hidden from touch and from assistive
+technology (it repeats the accessible name), and replaces the native tooltips on
+Folio and the chat orb. A single shared tone remains a one-token change if the
+per-icon colours prove too busy.
+
 ## P14-39 — Remove the Tasks legend partial label (19 October 2026; #1107)
 
 Keep the additive `taskCountsPartial` API field unchanged, but do not surface it
