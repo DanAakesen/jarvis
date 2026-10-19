@@ -3,14 +3,18 @@ import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
 import { readMirrorConfig } from './runner/config.js';
 import { runProduction } from './runner/production.js';
+import type { MirrorConfig } from './runner/config.js';
 
-async function main(): Promise<void> {
+export async function main(
+  env: NodeJS.ProcessEnv = process.env,
+  run: (config: MirrorConfig) => Promise<number> = runProduction,
+  output: (line: string) => void = console.log,
+): Promise<number> {
   const runId = randomUUID();
   try {
-    const exitCode = await runProduction(readMirrorConfig(process.env));
-    process.exitCode = exitCode;
+    return await run(readMirrorConfig(env));
   } catch {
-    console.log(JSON.stringify({
+    output(JSON.stringify({
       runId,
       outcome: 'failed',
       reason: 'unexpected',
@@ -24,8 +28,10 @@ async function main(): Promise<void> {
       credentialMatches: 0,
       pendingWriteBack: 0,
     }));
-    process.exitCode = 1;
+    return 1;
   }
 }
 
-if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1])) await main();
+if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1])) {
+  process.exitCode = await main();
+}

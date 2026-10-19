@@ -157,6 +157,16 @@ describe('normalisation and collisions', () => {
 });
 
 describe('per-path safety', () => {
+  it.each(['Notes/CON.md', 'Notes/aux.txt', 'Notes/trailing. ', 'Notes/bad:name.md'])(
+    'counts Windows-incompatible name %s as a skip', path => {
+      const { input } = fixture();
+      const O = new Map(input.O).set(path, record('unsafe'));
+      const plan = planReconcile({ ...input, O });
+      expect(plan.skipped).toEqual([{ path, reason: 'windows-path' }]);
+      expect(plan.counters.skipped).toBe(1);
+      expect(plan.actions.some(action => action.path === path)).toBe(false);
+    },
+  );
   it.each(['100755', '120000', '040000', 'unknown'])('non-regular, executable or symlinked mode %s skips', mode => {
     const { input } = fixture('ours');
     const O = new Map(input.O).set(note, record('ours', mode));

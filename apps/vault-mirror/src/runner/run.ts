@@ -1,13 +1,17 @@
 import { randomUUID } from 'node:crypto';
+import { mkdtemp, rm } from 'node:fs/promises';
 import { vaultMirrorStatusSchema } from '@jarvis/contracts';
+import { tmpdir } from 'node:os';
+import { resolve } from 'node:path';
 import { planReconcile } from '../engine/index.js';
+import { isSafePath, normalizePath } from '../engine/normalize.js';
 import type { Action, FileRecord, Plan, ReconcileInput } from '../engine/types.js';
 import { GitHubMirrorError } from './github.js';
 import { mergeThreeWay } from './merge.js';
 import { ObCommandError } from './obsidian.js';
 import { checksum, decodeState, emptyState, encodeState, mapBaseRecords, recordForState, type MirrorState, type PendingWrite, type StoredFile } from './state.js';
 import { StateCorruptError } from './storage.js';
-import { emptyCounts, isMirrorReason, OVERALL_RUN_MS, type MirrorReason, type RunDependencies, type RunOptions, type RunResult, type StateLease } from './types.js';
+import { emptyCounts, isMirrorReason, MAX_ARCHIVE_BYTES, OVERALL_RUN_MS, type MirrorReason, type RunDependencies, type RunOptions, type RunResult, type StateLease } from './types.js';
 import { deleteWorkspaceFile, restoreWorkspace, samePaths, snapshotWorkspace, workspaceDiff, writeWorkspaceFile, type WorkspaceSnapshot } from './workspace.js';
 import type { ValidatedPolicy } from '../engine/policy.js';
 
@@ -153,6 +157,7 @@ async function bidirectionalUpload(
 async function applyPending(
   state: MirrorState,
   workingCopy: string,
+  configHome: string,
   obsidian: ReturnType<RunDependencies['createObsidian']>,
   assertLease: () => Promise<void>,
 ): Promise<void> {
@@ -172,7 +177,6 @@ async function applyPending(
         state.base[path] = pending.file;
         delete state.pendingWriteBack[path];
       } else if (matches(current, base)) {
-        await writeWorkspaceFile(workingCopy, path, pending.file.text);
         applied.push([path, pending]);
       } else {
         delete state.pendingWriteBack[path];
@@ -181,13 +185,32 @@ async function applyPending(
       delete state.base[path];
       delete state.pendingWriteBack[path];
     } else if (matches(current, base)) {
-      await deleteWorkspaceFile(workingCopy, path);
       applied.push([path, pending]);
     } else {
       delete state.pendingWriteBack[path];
     }
   }
   if (applied.length === 0) return;
+  const archiveActions: Action[] = [];
+  for (const [path, pending] of applied) {
+    if (pending.kind === 'write') {
+      archiveActions.push(
+        { kind: 'updateOnO', path, text: pending.file.text, record: pending.file },
+        { kind: 'recordBase', path, text: pending.file.text, record: pending.file },
+      );
+    } else {
+      archiveActions.push({ kind: 'deleteOnO', path }, { kind: 'forgetBase', path });
+    }
+  }
+  try {
+    await preflightPlanArchives(state, configHome, before, archiveActions, 'on');
+  } catch {
+    throw new RunFailure('state-corrupt', 'needs-attention');
+  }
+  for (const [path, pending] of applied) {
+    if (pending.kind === 'write') await writeWorkspaceFile(workingCopy, path, pending.file.text);
+    else await deleteWorkspaceFile(workingCopy, path);
+  }
   await bidirectionalUpload(obsidian, assertLease);
   const after = await snapshotWorkspace(workingCopy);
   for (const [path, pending] of applied) {
@@ -210,6 +233,43 @@ function failedUploadReason(error: unknown): MirrorReason {
   if (error instanceof RunFailure) return error.reason;
   if (error instanceof ObCommandError) return error.reason;
   return 'unexpected';
+}
+
+async function preflightPlanArchives(
+  state: MirrorState,
+  configHome: string,
+  before: WorkspaceSnapshot,
+  actions: readonly Action[],
+  writeBack: RunOptions['config']['writeBack'],
+): Promise<void> {
+  const writes = obActions(actions);
+  const failedState = structuredClone(state);
+  for (const action of writes) {
+    const pending = pendingAction(action);
+    if (pending) failedState.pendingWriteBack[action.path] = pending;
+  }
+  applyBaseActions(failedState, actions);
+  const staging = await mkdtemp(resolve(tmpdir(), 'vault-mirror-preflight-'));
+  try {
+    await restoreWorkspace(staging, before);
+    if (writeBack === 'on') {
+      for (const action of writes) {
+        if (action.kind === 'createOnO' || action.kind === 'updateOnO') {
+          await writeWorkspaceFile(staging, action.path, action.text);
+        } else if (action.kind === 'deleteOnO') {
+          await deleteWorkspaceFile(staging, action.path);
+        }
+      }
+    }
+    await encodeState(failedState, staging, configHome);
+    if (writeBack !== 'on' || writes.length === 0) return;
+    const successState = structuredClone(state);
+    for (const action of writes) delete successState.pendingWriteBack[action.path];
+    applyBaseActions(successState, actions);
+    await encodeState(successState, staging, configHome);
+  } finally {
+    await rm(staging, { recursive: true, force: true });
+  }
 }
 
 export async function runMirror(options: RunOptions): Promise<RunResult> {
@@ -238,6 +298,12 @@ export async function runMirror(options: RunOptions): Promise<RunResult> {
   let renewTimer: NodeJS.Timeout | undefined;
   let ownedPlan: Plan | undefined;
   let approvedPending = 0;
+  const invalidPendingPaths = new Set<string>();
+  const skippedCount = (plan?: Plan): number => {
+    const planned = new Set(plan?.skipped.map(item => normalizePath(item.path)) ?? []);
+    return (plan?.counters.skipped ?? 0) +
+      [...invalidPendingPaths].filter(path => !planned.has(normalizePath(path))).length;
+  };
 
   const status = (): RunResult['status'] => vaultMirrorStatusSchema.parse({
     runId,
@@ -289,7 +355,7 @@ export async function runMirror(options: RunOptions): Promise<RunResult> {
       stateCorrupt = true;
       throw new RunFailure('state-corrupt');
     }
-    if (archive.byteLength > 200 * 1024 * 1024) {
+    if (archive.byteLength > MAX_ARCHIVE_BYTES) {
       stateCorrupt = true;
       throw new RunFailure('state-corrupt');
     }
@@ -326,7 +392,7 @@ export async function runMirror(options: RunOptions): Promise<RunResult> {
       state = emptyState();
     } else {
       try {
-        if (lease.archive.byteLength > 200 * 1024 * 1024) throw new Error('too-large');
+        if (lease.archive.byteLength > MAX_ARCHIVE_BYTES) throw new Error('too-large');
         workspace = await dependencies.createWorkspace(signal);
         state = await decodeState(lease.archive, workspace.workingCopy, workspace.configHome);
       } catch {
@@ -335,6 +401,13 @@ export async function runMirror(options: RunOptions): Promise<RunResult> {
       }
     }
     stateLoaded = true;
+    for (const path of Object.keys(state.pendingWriteBack)) {
+      if (!isSafePath(path)) {
+        delete state.pendingWriteBack[path];
+        invalidPendingPaths.add(path);
+      }
+    }
+    counts.skipped = invalidPendingPaths.size;
     if (state.lastSuccessAt && (!lastSuccessAt || Date.parse(state.lastSuccessAt) > Date.parse(lastSuccessAt))) {
       lastSuccessAt = state.lastSuccessAt;
     }
@@ -349,6 +422,7 @@ export async function runMirror(options: RunOptions): Promise<RunResult> {
       configHome: workspace.configHome,
       signal,
       remainingMs: () => Math.max(0, OVERALL_RUN_MS - (now() - startedMs)),
+      excludedFolders: secrets.policy.syncExcludedFolders,
     });
     if (!state.setupComplete) {
       try { await obsidian.setup(secrets.vaultName, assertLease); }
@@ -369,7 +443,7 @@ export async function runMirror(options: RunOptions): Promise<RunResult> {
       throw new RunFailure('state-corrupt');
     }
     if (Object.keys(state.pendingWriteBack).length > 0 && options.config.writeBack === 'on') {
-      await applyPending(state, workspace.workingCopy, obsidian, assertLease);
+      await applyPending(state, workspace.workingCopy, workspace.configHome, obsidian, assertLease);
     }
     const before = await snapshotWorkspace(workspace.workingCopy);
     const githubSnapshot = await github.snapshot(signal);
@@ -383,9 +457,17 @@ export async function runMirror(options: RunOptions): Promise<RunResult> {
     );
     conflictPaths = syncConflictState(state, plan);
     ownedPlan = plan;
+    try {
+      await preflightPlanArchives(
+        state, workspace.configHome, before, plan.actions, options.config.writeBack,
+      );
+    } catch {
+      stateCorrupt = true;
+      throw new RunFailure('state-corrupt', 'needs-attention');
+    }
     const setCounts = (): void => {
       counts.approved = plan.counters.approved;
-      counts.skipped = plan.counters.skipped;
+      counts.skipped = skippedCount(plan);
       counts.conflicts = plan.counters.conflicts;
       counts.credentialMatches = plan.counters.credentialMatches;
       approvedPending = plan.counters.pendingWriteBack;
@@ -411,6 +493,14 @@ export async function runMirror(options: RunOptions): Promise<RunResult> {
           );
           conflictPaths = syncConflictState(state, plan);
           ownedPlan = plan;
+          try {
+            await preflightPlanArchives(
+              state, workspace.configHome, before, plan.actions, options.config.writeBack,
+            );
+          } catch {
+            stateCorrupt = true;
+            throw new RunFailure('state-corrupt', 'needs-attention');
+          }
           setCounts();
           if (plan.verdict === 'guard-tripped') {
             outcome = 'needs-attention';
@@ -449,13 +539,11 @@ export async function runMirror(options: RunOptions): Promise<RunResult> {
           }
           await bidirectionalUpload(obsidian, assertLease);
           const uploaded = await snapshotWorkspace(workspace.workingCopy);
-          const changedAfterUpload = workspaceDiff(before, uploaded);
-          if (!samePaths(changedAfterUpload, expected) ||
-            writesToObsidian.some(action => {
+          if (writesToObsidian.some(action => {
               const file = uploaded.files.get(action.path);
               if (action.kind === 'deleteOnO') return file !== undefined;
               return !file || !('record' in action) || file.record.hash !== action.record.hash;
-            })) throw new RunFailure('upload-failed');
+          })) throw new RunFailure('upload-failed');
           for (const action of writesToObsidian) delete state.pendingWriteBack[action.path];
           counts.writtenBack = writesToObsidian.filter(action =>
             action.kind === 'createOnO' || action.kind === 'updateOnO').length;
@@ -495,12 +583,13 @@ export async function runMirror(options: RunOptions): Promise<RunResult> {
     reason = reasonFor(error, signal, leaseLost);
     outcome = error instanceof RunFailure ? error.outcome : 'failed';
     if (reason === 'guard-tripped') outcome = 'needs-attention';
+    if (reason === 'state-corrupt') outcome = 'needs-attention';
     if (reason === 'auth' || reason === 'policy-missing' || reason === 'repo-not-private' ||
-      reason === 'state-corrupt' || reason === 'pull-failed' || reason === 'upload-failed' ||
+      reason === 'pull-failed' || reason === 'upload-failed' ||
       reason === 'push-rejected' || reason === 'timeout') outcome = 'failed';
     if (ownedPlan) {
       counts.approved = ownedPlan.counters.approved;
-      counts.skipped = ownedPlan.counters.skipped;
+      counts.skipped = skippedCount(ownedPlan);
       counts.conflicts = ownedPlan.counters.conflicts;
       counts.credentialMatches = ownedPlan.counters.credentialMatches;
     }

@@ -1,8 +1,10 @@
 import { Readable } from 'node:stream';
 import { describe, expect, it, vi } from 'vitest';
-import type { BlobClient } from '@azure/storage-blob';
+import type { TokenCredential } from '@azure/core-auth';
+import type { BlobClient, ContainerClient } from '@azure/storage-blob';
 import type { VaultMirrorStatus } from '@jarvis/contracts';
-import { readMirrorStatusBlob } from '../src/runner/storage.js';
+import { AzureMirrorStorage, readMirrorStatusBlob, StateCorruptError } from '../src/runner/storage.js';
+import { checksum } from '../src/runner/state.js';
 
 const status: VaultMirrorStatus = {
   runId: 'synthetic-run',
@@ -40,6 +42,75 @@ describe('readMirrorStatusBlob', () => {
       abortSignal: expect.any(AbortSignal),
       maxRetryRequests: 0,
     }));
+  });
+
+  describe('AzureMirrorStorage state lease', () => {
+    function storageWithStateBlob(bytes: Uint8Array, expectedChecksum = checksum(bytes)) {
+      const lease = {
+        leaseId: 'synthetic-lease',
+        acquireLease: vi.fn(async () => {}),
+        renewLease: vi.fn(async () => {}),
+        releaseLease: vi.fn(async () => {}),
+      };
+      const blob = {
+        uploadData: vi.fn(async () => {}),
+        getBlobLeaseClient: () => lease,
+        getProperties: vi.fn(async () => ({
+          etag: 'synthetic-etag',
+          contentLength: bytes.byteLength,
+          metadata: bytes.byteLength === 0 ? {} : { sha256: expectedChecksum },
+        })),
+        downloadToBuffer: vi.fn(async () => Buffer.from(bytes)),
+      };
+      const container = { getBlockBlobClient: () => blob } as unknown as ContainerClient;
+      const storage = new AzureMirrorStorage(
+        'https://example.blob.core.windows.net',
+        {} as TokenCredential,
+      );
+      Object.defineProperty(storage, 'state', { value: container });
+      return { storage, blob, lease };
+    }
+
+    it('acquires the state lease and verifies the stored checksum', async () => {
+      const bytes = Buffer.from('synthetic archive');
+      const { storage, blob, lease } = storageWithStateBlob(bytes);
+
+      const result = await storage.acquireLease(new AbortController().signal);
+
+      expect(result.busy).toBe(false);
+      if (result.busy) return;
+      expect(result.lease.archive).toEqual(bytes);
+      expect(result.lease.checksum).toBe(checksum(bytes));
+      expect(lease.acquireLease).toHaveBeenCalledWith(60, expect.any(Object));
+      expect(blob.downloadToBuffer).toHaveBeenCalledWith(0, bytes.byteLength, expect.any(Object));
+    });
+
+    it.each(['checksum', 'size'] as const)('rejects a corrupt state archive (%s)', async problem => {
+      const bytes = Buffer.from('synthetic archive');
+      const { storage, lease } = storageWithStateBlob(
+        bytes,
+        problem === 'checksum' ? '0'.repeat(64) : checksum(bytes),
+      );
+      if (problem === 'size') {
+        const state = storage as unknown as { state: ContainerClient };
+        Object.defineProperty(state, 'state', {
+          value: {
+            getBlockBlobClient: () => ({
+              uploadData: vi.fn(async () => {}),
+              getBlobLeaseClient: () => lease,
+              getProperties: vi.fn(async () => ({
+                etag: 'synthetic-etag',
+                contentLength: 64 * 1024 * 1024 + 1,
+                metadata: {},
+              })),
+            }),
+          },
+        });
+      }
+
+      await expect(storage.acquireLease(new AbortController().signal)).rejects.toBeInstanceOf(StateCorruptError);
+      expect(lease.releaseLease).toHaveBeenCalledOnce();
+    });
   });
 
   it('rejects an advertised oversized body without consuming it', async () => {

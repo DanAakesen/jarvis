@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { chmod, lstat, mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
-import { contentHash, contentSize, isSafePath, normalizeContent } from '../engine/normalize.js';
+import { contentHash, contentSize, isSafePathShape, normalizeContent } from '../engine/normalize.js';
 import type { BaseRecord, FileRecord } from '../engine/types.js';
 import { MAX_ARCHIVE_BYTES } from './types.js';
 
@@ -48,13 +48,13 @@ function validStoredFile(value: unknown): value is StoredFile {
 
 function validRecords(value: unknown): value is Record<string, StoredFile> {
   return value !== null && typeof value === 'object' && !Array.isArray(value) &&
-    Object.entries(value).every(([path, record]) => isSafePath(path) && validStoredFile(record));
+    Object.entries(value).every(([path, record]) => isSafePathShape(path) && validStoredFile(record));
 }
 
 function validPending(value: unknown): value is Record<string, PendingWrite> {
   return value !== null && typeof value === 'object' && !Array.isArray(value) &&
     Object.entries(value).every(([path, pending]) => {
-      if (!isSafePath(path) || !pending || typeof pending !== 'object' || Array.isArray(pending)) return false;
+      if (!isSafePathShape(path) || !pending || typeof pending !== 'object' || Array.isArray(pending)) return false;
       const record = pending as Record<string, unknown>;
       return (record.kind === 'write' && Object.keys(record).length === 2 &&
           Object.keys(record).every(key => ['kind', 'file'].includes(key)) &&
@@ -74,7 +74,7 @@ function parseState(value: unknown): MirrorState {
     state.conflictFirstSeenAt === null || typeof state.conflictFirstSeenAt !== 'object' ||
     Array.isArray(state.conflictFirstSeenAt) ||
     !Object.entries(state.conflictFirstSeenAt).every(([path, timestamp]) =>
-      isSafePath(path) && typeof timestamp === 'number' && Number.isFinite(timestamp) && timestamp >= 0) ||
+      isSafePathShape(path) && typeof timestamp === 'number' && Number.isFinite(timestamp) && timestamp >= 0) ||
     !Number.isSafeInteger(state.consecutiveFailures) || (state.consecutiveFailures as number) < 0 ||
     state.lastSuccessAt !== null && (typeof state.lastSuccessAt !== 'string' || state.lastSuccessAt.length > 64 ||
       !Number.isFinite(Date.parse(state.lastSuccessAt)))) throw new TypeError('Corrupt mirror state');
@@ -84,7 +84,7 @@ function parseState(value: unknown): MirrorState {
 function safeArchivePath(name: string): boolean {
   return !name.startsWith('/') && !name.includes('\\') &&
     name.split('/').filter((part, index, all) => !(part === '' && index === all.length - 1))
-      .every(part => part !== '' && part !== '.' && part !== '..' && !part.includes(':'));
+      .every(part => part !== '' && part !== '.' && part !== '..');
 }
 
 function inspectZip(bytes: Uint8Array): void {
