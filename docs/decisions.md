@@ -17,7 +17,15 @@ Details are opt-in through one keyboard-operable compact Status row.
 
 Use existing proactive scheduling and persistent finding deduplication for one
 normal-urgency finding per Copenhagen day and fixed reason, after one hour
-without success or when the mirror needs the owner. No push, new flag, tool,
+without success or immediately for needs-attention. Failed runs alert only
+with no last success or one older than an hour; stale views with no last
+success report that the mirror has not succeeded yet. Recent transient
+failures stay quiet. A mirror finding never clears the proactive run's
+`no_sources` reason or turns failed reads into a successful background job.
+Keep one disclosure instance across loading and loaded snapshots so expansion
+and keyboard focus survive. A successful snapshot without a mirror field is
+not set up (including older backends); fetch/backend read errors remain errors.
+No push, new flag, tool,
 migration or write-back change. Missing/read-error status creates no finding.
 Live Azure and Obsidian behavior is **not yet verified against the live service**.
 

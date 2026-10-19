@@ -11,12 +11,23 @@ describe('vault mirror proactive rule', () => {
     ['not-set-up', null, false], ['read-error', null, false],
     ['healthy', '2026-10-19T11:00:00Z', false],
     ['stale', '2026-10-19T10:59:59Z', true],
-    ['stale', null, false], ['needs-attention', null, true], ['failed', null, true],
+    ['stale', '2026-10-19T11:00:00Z', false],
+    ['stale', null, true], ['needs-attention', null, true],
+    ['needs-attention', '2026-10-19T11:55:00Z', true],
+    ['failed', null, true],
+    ['failed', '2026-10-19T11:55:00Z', false],
+    ['failed', '2026-10-19T11:00:00Z', false],
+    ['failed', '2026-10-19T10:59:59Z', true],
   ] as const)('applies threshold and owner precedence: %s %s', (state, lastSuccessAt, expected) => {
     const result = vaultMirrorFinding({ state, lastSuccessAt }, now);
     expect(Boolean(result)).toBe(expected);
     if (result) expect(result).toMatchObject({ urgency: 'normal', category: 'status', evidence: [] });
     expect(JSON.stringify(result ?? null)).not.toContain('conflictPaths');
+  });
+
+  it('explains a mirror that has never succeeded without inventing an age', () => {
+    expect(vaultMirrorFinding({ state: 'stale', lastSuccessAt: null }, now)?.body)
+      .toBe('The vault mirror has not succeeded yet. Open System status and review the vault mirror.');
   });
 
   it('deduplicates by Copenhagen day and reason across DST and ignores private paths', async () => {
@@ -83,6 +94,7 @@ describe('vault mirror proactive rule', () => {
     expect(items).toHaveLength(1);
     expect(items[0]).toMatchObject({ urgency: 'normal', category: 'status', language: 'en' });
     expect((await store.runs.latest())?.status).toBe('done');
+    expect((await store.runs.latest())?.reason).toBe('no_sources');
     expect(summarize).not.toHaveBeenCalled();
     expect(listSubscriptions).not.toHaveBeenCalled();
     expect(send).not.toHaveBeenCalled();

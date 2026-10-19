@@ -55,7 +55,7 @@ export function VaultMirrorRow({ value, loading = false, unavailable = false, no
   const detailsId = useId();
   const stateId = useId();
   const timeId = useId();
-  const state = loading ? 'loading' : unavailable || !value ? 'read-error' :
+  const state = loading ? 'loading' : unavailable ? 'read-error' : !value ? 'not-set-up' :
     value.state === 'healthy' && value.lastSuccessAt && now - Date.parse(value.lastSuccessAt) > 30 * 60_000
       ? 'stale' : value.state;
   const tone = state === 'healthy' ? 'ok' : state === 'stale' || state === 'needs-attention' ? 'degraded' :
@@ -89,7 +89,7 @@ export function VaultMirrorRow({ value, loading = false, unavailable = false, no
         </>}
       </> : <p className="system-status-reason">
         {state === 'loading' ? 'Waiting for mirror status.' : state === 'not-set-up'
-          ? 'No mirror status document yet.' : 'Mirror status could not be read. Use Refresh status to try again.'}
+          ? 'No mirror status document yet.' : 'Mirror status could not be read. Try loading status again.'}
       </p>)}
     </div>
   </div>;

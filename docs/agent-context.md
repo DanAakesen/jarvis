@@ -2,6 +2,16 @@
 
 ## Vault mirror freshness checks (19 October 2026; P14-29)
 
+Review corrections: `npm test --workspace @jarvis/backend -- src/proactive`
+passed 506 tests; `npm test --workspace @jarvis/web -- src/status` passed
+46 tests. Backend/web lint and builds passed (existing web chunk-size warning).
+Synthetic Chromium checked 48 loading-to-result cases at 1280×900, 390×900 and
+320×900, normal/reduced motion: all six reported states, omitted mirror field
+and failed fetch. It verified one stable node, expanded/focused state retention,
+Enter/Space, recovery text and overflow. This is the actual Status component
+and stylesheet in a scratch harness, not live auth, Azure RBAC/storage,
+Obsidian, a physical phone or Safari.
+
 Focused web checks from the repository root:
 `npm test --workspace @jarvis/web -- src/status`,
 `npm run lint --workspace @jarvis/web` and

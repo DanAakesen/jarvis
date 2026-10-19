@@ -21,16 +21,19 @@ const ownerReasons: Record<NonNullable<VaultMirrorStatus['reason']> | 'needs-att
 
 export function vaultMirrorFinding(status: VaultMirrorStatusView, now: Date): FindingInput | undefined {
   if (status.state === 'not-set-up' || status.state === 'read-error') return undefined;
-  const reason = status.state === 'needs-attention' || status.state === 'failed'
+  const overdue = status.lastSuccessAt === null || now.getTime() - Date.parse(status.lastSuccessAt) > 60 * 60_000;
+  const reason = status.state === 'needs-attention' || (status.state === 'failed' && overdue)
     ? status.reason ?? status.state
-    : status.lastSuccessAt !== null && now.getTime() - Date.parse(status.lastSuccessAt) > 60 * 60_000
+    : status.state !== 'failed' && overdue
       ? 'stale' : undefined;
   if (!reason) return undefined;
   return {
     dedupeKey: `vault-mirror:${dayKey(now)}:${reason}`,
     title: 'Vault mirror needs attention',
     body: `${reason === 'stale'
-      ? 'The vault mirror has not succeeded for over an hour.'
+      ? status.lastSuccessAt === null
+        ? 'The vault mirror has not succeeded yet.'
+        : 'The vault mirror has not succeeded for over an hour.'
       : ownerReasons[reason]} Open System status and review the vault mirror.`,
     category: 'status',
     urgency: 'normal',

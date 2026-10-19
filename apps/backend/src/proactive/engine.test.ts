@@ -397,6 +397,23 @@ describe('proactive source failures', () => {
     expect(hook).not.toHaveBeenCalled();
     expect(fixture.job.fail).toHaveBeenCalledExactlyOnceWith('No source could be read');
   });
+
+  it('retains no_sources and fails the job while storing a mirror finding', async () => {
+    const failed = source();
+    failed.read.mockRejectedValue(new Error('unavailable'));
+    const hook = vi.fn();
+    const fixture = setup({
+      sources: [failed], onFindingsStored: [hook],
+      vaultMirrorStatusReader: { read: async () => ({ state: 'needs-attention', lastSuccessAt: null }) },
+    });
+    expect(await fixture.run()).toMatchObject({ status: 'done', reason: 'no_sources', findingCount: 1 });
+    expect(await fixture.store.items.list('all', 10, new Date())).toHaveLength(1);
+    expect(fixture.model.summarize).not.toHaveBeenCalled();
+    expect(fixture.store.spend.record).not.toHaveBeenCalled();
+    expect(hook).toHaveBeenCalledOnce();
+    expect(fixture.job.done).not.toHaveBeenCalled();
+    expect(fixture.job.fail).toHaveBeenCalledExactlyOnceWith('No source could be read');
+  });
 });
 
 describe('proactive cancellation and leases', () => {

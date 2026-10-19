@@ -1,4 +1,5 @@
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { systemSmokeCheckIds, type SystemStatus } from '@jarvis/contracts';
 import { StatusPage } from './StatusPage';
@@ -34,6 +35,45 @@ beforeEach(() => {
 afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
 
 describe('Status page', () => {
+  it('preserves the expanded loading row and keyboard focus when the first snapshot arrives', async () => {
+    let finish!: (value: Response) => void;
+    fetchMock.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    const user = userEvent.setup();
+    render(<StatusPage backendUrl="https://api.example.com" getAccessToken={getAccessToken} />);
+    const toggle = screen.getByRole('button', { name: 'Vault mirror details' });
+    await user.tab();
+    expect(document.activeElement).toBe(toggle);
+    await user.keyboard('{Enter}');
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    expect(screen.getByText('Waiting for mirror status.')).not.toBeNull();
+    await act(async () => { finish(response(snapshot())); });
+    expect(screen.getByRole('button', { name: 'Vault mirror details' })).toBe(toggle);
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    expect(document.activeElement).toBe(toggle);
+    expect(screen.getByText('Not set up')).not.toBeNull();
+    expect(screen.getByText('No mirror status document yet.')).not.toBeNull();
+  });
+
+  it('shows not set up for a successful older backend snapshot without a mirror field', async () => {
+    const report = snapshot();
+    delete report.vaultMirror;
+    fetchMock.mockResolvedValue(response(report));
+    render(<StatusPage backendUrl="https://api.example.com" getAccessToken={getAccessToken} />);
+    await screen.findByRole('listitem', { name: 'SQL database' });
+    expect(within(screen.getByRole('group', { name: 'Vault mirror' })).getByText('Not set up')).not.toBeNull();
+    expect(screen.queryByText('Read error')).toBeNull();
+  });
+
+  it('keeps read error and accurate recovery copy on a failed fetch', async () => {
+    fetchMock.mockResolvedValueOnce(response({}, 503));
+    render(<StatusPage backendUrl="https://api.example.com" getAccessToken={getAccessToken} />);
+    await screen.findByRole('button', { name: 'Retry status' });
+    const row = screen.getByRole('group', { name: 'Vault mirror' });
+    expect(within(row).getByText('Read error')).not.toBeNull();
+    fireEvent.click(within(row).getByRole('button', { name: 'Vault mirror details' }));
+    expect(within(row).getByText('Mirror status could not be read. Try loading status again.')).not.toBeNull();
+  });
+
   it('shows all recorded checks, real failures, bridge metadata and the retained smoke report without rerunning it', async () => {
     render(<StatusPage backendUrl="https://api.example.com/" getAccessToken={getAccessToken} />);
     const github = await screen.findByRole('listitem', { name: 'GitHub App' });

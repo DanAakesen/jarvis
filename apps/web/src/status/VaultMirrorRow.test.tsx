@@ -39,6 +39,12 @@ describe('Vault mirror row', () => {
     expect(screen.getByText('Read error')).not.toBeNull();
   });
 
+  it('treats a successful snapshot without a mirror view as not set up', () => {
+    render(<VaultMirrorRow now={now} />);
+    expect(screen.getByText('Not set up')).not.toBeNull();
+    expect(screen.queryByText('Read error')).toBeNull();
+  });
+
   it('keeps dry-run visible, with relative success time and exact time on request', () => {
     render(<VaultMirrorRow value={mirror()} now={now} />);
     expect(screen.getByText('Dry-run')).not.toBeNull();
@@ -99,6 +105,6 @@ describe('Vault mirror row', () => {
     await user.click(screen.getByRole('button', { name: 'Vault mirror details' }));
     await act(async () => view.rerender(<VaultMirrorRow value={mirror()} unavailable now={now} />));
     expect(screen.queryByText('Notes/synthetic-conflict.md')).toBeNull();
-    expect(screen.getByText(/Use Refresh status/)).not.toBeNull();
+    expect(screen.getByText(/Try loading status again/)).not.toBeNull();
   });
 });

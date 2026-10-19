@@ -165,18 +165,16 @@ export function StatusPage({ backendUrl, getAccessToken }: AreaProps) {
         detail="The latest refresh failed; this snapshot does not establish current health. Use Retry status to check again." />
       : <StateMessage variant="error" className="system-status-feedback" message={safeErrorMessage(error)} />)}
     {!data && pending && <StateMessage variant="loading" message="Loading system status" />}
-    {!data && <VaultMirrorRow loading={pending} unavailable={!!error} now={now} />}
-    {data && <>
-      <p className="system-status-snapshot">
+    {data && <p className="system-status-snapshot">
         {error ? 'Previous snapshot' : pending ? 'Refreshing the recorded snapshot' : 'Backend responded with a status snapshot'}.
         {' '}Checked <CheckedAt value={data.checkedAt} now={now} />.
         {' '}The backend caches checks for up to one minute.
-      </p>
+      </p>}
       <section className="system-status-panel" aria-labelledby="system-checks-heading" aria-busy={pending}>
         <h2 id="system-checks-heading">System checks</h2>
         <p className="system-status-note">Foundry checks describe configured deployments, not a live model turn. The last backend error is historical evidence, not a claim that the backend is currently failing.</p>
-        <VaultMirrorRow value={data.vaultMirror} unavailable={!!error} now={now} />
-        <ul className="system-status-list">
+        <VaultMirrorRow value={data?.vaultMirror} loading={!data && pending} unavailable={!!error} now={now} />
+        {data && <ul className="system-status-list">
           {data.entries.map(entry => <li className="system-status-row" key={entry.id} aria-label={checks[entry.id]}>
             <div className="system-status-row-heading">
               <strong>{checks[entry.id]}</strong><StatusBadge value={entry.status} />
@@ -196,9 +194,9 @@ export function StatusPage({ backendUrl, getAccessToken }: AreaProps) {
               </div>)}</dl>
             </details>}
           </li>)}
-        </ul>
+        </ul>}
       </section>
-      <section className="system-status-panel" aria-labelledby="system-smoke-heading">
+      {data && <section className="system-status-panel" aria-labelledby="system-smoke-heading">
         <h2 id="system-smoke-heading">Recorded smoke check</h2>
         <p className="system-status-note">The latest report retained by the backend. It has no deployment ID or commit association; refreshing this page does not run smoke checks or model canaries.</p>
         {data.smoke ? <>
@@ -211,7 +209,6 @@ export function StatusPage({ backendUrl, getAccessToken }: AreaProps) {
             </li>)}
           </ul>
         </> : <p>Unavailable: the backend has no recorded smoke report. Reports are not retained across a backend restart.</p>}
-      </section>
-    </>}
+      </section>}
   </div>;
 }

@@ -9,10 +9,11 @@ without success. Dry-run is always visible when reported: the mirror is not
 writing into Obsidian. Expand the row for counts, write-back mode, a short fixed
 reason and up to ten conflict paths. No status document is normal, not a failure.
 
-The existing proactive checks create a normal-urgency finding when success is
-over an hour old or the mirror needs the owner, at most once per Copenhagen day
-and reason, with no push notification. Missing/unreadable status does not create
-a mirror finding. No new flag or change to default-off write-back is introduced.
+The existing proactive checks create a normal-urgency finding immediately for
+needs-attention, or for failed/stale status when success is over an hour old or
+has never occurred, at most once per Copenhagen day and reason, with no push
+notification. A recent transient failure stays quiet. Missing/unreadable status
+does not create a mirror finding. No new flag or change to default-off write-back is introduced.
 Azure/Obsidian operation is **not yet verified against the live service**.
 
 ## Planned vault mirror safety boundary (19 October 2026; P14-26)

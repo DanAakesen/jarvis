@@ -198,9 +198,9 @@ export function createProactiveEngine(options: ProactiveEngineOptions) {
       const mirror = options.vaultMirrorStatusReader
         ? vaultMirrorFinding(await abortable(options.vaultMirrorStatusReader.read(), controller.signal), now())
         : undefined;
-      if (!results.some((result) => result.state === 'ok') && !mirror) {
+      if (!results.some((result) => result.state === 'ok')) {
         reason = 'no_sources';
-        return;
+        if (!mirror) return;
       }
       // Refs are local to this bundle, never a persistent identity.
       const facts: ReadFact[] = results.flatMap((result) => result.state === 'ok'

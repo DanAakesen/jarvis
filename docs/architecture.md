@@ -16,11 +16,16 @@ Conflict paths are confined to this owner response and the expanded web row;
 agent status tools, proactive facts and logs do not receive them. Contracts add
 `vaultMirrorStatusViewSchema` without changing the shared runner document.
 The web validates the view and ages healthy status locally after 30 minutes.
+A successful snapshot without the optional view means not set up, including
+during deployment skew. The disclosure stays mounted across the first load.
 
 The existing proactive engine uses a deterministic normal-urgency mirror
 finding with persistent Copenhagen-day/reason deduplication. It fires after
-one hour without success or on needs-attention/failed status, never for absent
-or unreadable status, and is excluded from push delivery. Existing proactive
+one hour without success, immediately on needs-attention, or for failed/stale
+status with no success yet. Recent transient failures, absent and unreadable
+status stay quiet; findings are excluded from push delivery. Storing a mirror
+finding preserves `no_sources` when every source read fails, so the background
+job still reports the failed reads. Existing proactive
 scheduling/settings still apply; no new timer, flag, tool or migration is added.
 Azure/Obsidian behavior is **not yet verified against the live service**.
 
