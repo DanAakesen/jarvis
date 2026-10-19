@@ -96,12 +96,15 @@ gated by `on`, rechecked against the planned paths, uploaded, and returned to
 verification. Unsuccessful paths remain pending and retry before the next plan.
 The existing desktop task stays in place.
 
-This code is **not deployed or connected to the live vault**; the separate Azure
-job/infrastructure is not implemented here. Headless CLI behavior and upload
-confirmation assumptions, including filtering, checkpoint recovery and
-configuration updates, are **not yet verified against the live service**.
-Mirror-only code qualifies through `vault-mirror-ci.yml` and does not deploy an
-existing application. See
+Since P14-28, the mirror image is built by the infrastructure deployment when
+`JARVIS_VAULT_MIRROR_ENABLED=true`. Its Dockerfile copy inputs and `.dockerignore`
+are infrastructure fingerprint inputs, so changing them selects infrastructure
+and re-applies all four deploy components under the existing receipt model.
+Markdown and documentation-only changes select no deployment. With the switch
+off, the workflow still skips the image build and mirror resources. Headless CLI
+behavior and upload confirmation assumptions, including filtering, checkpoint
+recovery and configuration updates, are **not yet verified against the live
+service**. See
 [`apps/vault-mirror/README.md`](../apps/vault-mirror/README.md).
 
 ## Shared web date-time formatting (19 October 2026; P14-23)

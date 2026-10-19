@@ -582,6 +582,9 @@ conversation acceptance. The latest trusted main receipt, not the latest
 wholly green release, controls reuse. Missing/expired/invalid state is not a
 cache hit; a newer unknown/partial state cannot be bypassed with an older green
 receipt. Bicep/configuration changes invalidate downstream application state.
+Vault-mirror Dockerfile copy inputs and `.dockerignore` select infrastructure;
+the existing infrastructure invalidation then reapplies all components. Docs-
+only changes do not select deployment, and the image/resources remain opt-in.
 Superseded source cannot deploy, including manual dispatch.
 Sensitive budget-contact configuration is not hashed into either receipt.
 Only after exact qualification, a candidate infrastructure reuse reads the

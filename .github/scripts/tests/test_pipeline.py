@@ -5,6 +5,7 @@ import io
 import json
 import os
 from pathlib import Path
+import shlex
 import subprocess
 import tempfile
 import unittest
@@ -78,12 +79,28 @@ class ImpactTests(unittest.TestCase):
                 self.assertTrue(selection([path])["vault-mirror"])
         self.assertTrue(selection(None)["vault-mirror"])
 
-    def test_vault_mirror_has_no_deployment_or_existing_application_inputs(self):
+    def test_vault_mirror_image_inputs_select_infrastructure_deployment(self):
         self.assertEqual(PARTS, ("infra", "backend", "web", "agent"))
-        for path in ("apps/vault-mirror/src/index.ts", "apps/vault-mirror/package.json",
-                     ".github/workflows/vault-mirror-ci.yml"):
+        for path in ("apps/vault-mirror/src/main.ts", "apps/vault-mirror/Dockerfile",
+                     "packages/contracts/src/status.js", "package-lock.json",
+                     "apps/backend/package.json", "apps/web/package.json", ".dockerignore"):
             with self.subTest(path=path):
-                self.assertEqual(deploy_parts(path), set())
+                self.assertIn("infra", deploy_parts(path))
+        self.assertEqual(deploy_parts("docs/architecture.md"), set())
+
+    def test_every_local_dockerfile_copy_input_is_an_infrastructure_input(self):
+        dockerfile = (ROOT / "apps/vault-mirror/Dockerfile").read_text(encoding="utf-8")
+        for line in dockerfile.splitlines():
+            if not line.lstrip().startswith("COPY "):
+                continue
+            instruction = shlex.split(line)
+            sources = instruction[1:-1]
+            if any(source.startswith("--from=") for source in instruction[1:-1]):
+                continue
+            sources = [source for source in sources if not source.startswith("--")]
+            for source in sources:
+                with self.subTest(source=source):
+                    self.assertIn("infra", deploy_parts(source.rstrip("/")))
 
     def test_shared_unknown_and_missing_base_fail_conservatively(self):
         for paths in (None, ["new-runtime/config"], [".github/workflows/ci.yml"],
@@ -97,9 +114,10 @@ class ImpactTests(unittest.TestCase):
         self.assertEqual(selection(["README.md"]), dict.fromkeys(CHECKS, False) | {"python": True})
         self.assertEqual(deploy_parts("docs/features.md"), {"backend"})
         self.assertEqual(deploy_parts("agents/jarvis/presence-instructions.json"), {"backend", "agent"})
-        self.assertEqual(deploy_parts("apps/web/package.json"), {"web", "backend"})
-        self.assertEqual(deploy_parts("package-lock.json"), {"web", "backend"})
-        self.assertEqual(deploy_parts("packages/contracts/src/index.js"), {"web", "backend"})
+        self.assertEqual(deploy_parts("apps/web/package.json"), {"web", "backend", "infra"})
+        self.assertEqual(deploy_parts("package-lock.json"), {"web", "backend", "infra"})
+        self.assertEqual(deploy_parts("packages/contracts/src/index.js"),
+                         {"web", "backend", "infra"})
 
     def test_workflow_only_changes_do_not_rebuild_applications(self):
         for path in (".github/workflows/ci.yml", ".github/workflows/codeql.yml",
@@ -125,9 +143,18 @@ class ImpactTests(unittest.TestCase):
         infra = values([*records[:2], records[2].replace("c" * 40, "d" * 40)])
         self.assertTrue(all(initial[part] != infra[part] for part in PARTS))
         self.assertEqual(initial, values(records, workflow=recipe + "\n  smoke:\n    run: changed"))
+        for path in ("apps/vault-mirror/src/main.ts", "apps/vault-mirror/Dockerfile",
+                     "packages/contracts/src/status.js", "package-lock.json"):
+            with self.subTest(path=path):
+                changed = values([*records, "100644 blob " + "d" * 40 + "\t" + path])
+                self.assertTrue(all(initial[part] != changed[part] for part in PARTS))
+                prior = previous()
+                for part in PARTS:
+                    prior["components"][part]["fingerprint"] = initial[part]
+                self.assertEqual(component_selection(changed, prior, True),
+                                 dict.fromkeys(PARTS, True))
         self.assertEqual(initial, values([
-            *records, "100644 blob " + "d" * 40 + "\tapps/vault-mirror/src/index.ts",
-            "100644 blob " + "e" * 40 + "\t.github/workflows/vault-mirror-ci.yml",
+            *records, "100644 blob " + "e" * 40 + "\t.github/workflows/vault-mirror-ci.yml",
         ]))
         own_job = values(records, workflow=recipe.replace("run: web", "run: new-web"))
         self.assertNotEqual(initial["web"], own_job["web"])

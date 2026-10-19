@@ -39,20 +39,25 @@ def deploy_parts(path: str) -> set[str]:
         return set()
     if path.startswith("infra/"):
         return {"infra"}
-    # Vault mirror is qualified separately; no production deployment exists yet.
-    # Keep it out of existing applications' fingerprints and the deploy fallback.
+    # The mirror image is built during infrastructure deployment.
     if path.startswith("apps/vault-mirror/"):
-        return set()
-    if path.startswith("apps/backend/") or path.startswith("db/") or path == ".dockerignore":
-        return {"backend"}
+        return {"infra"}
+    if path == "apps/backend/package.json":
+        return {"backend", "infra"}
     if path == "apps/web/package.json":
-        return {"web", "backend"}
+        return {"web", "backend", "infra"}
+    if path == ".dockerignore":
+        return {"backend", "infra"}
+    if path.startswith("apps/backend/") or path.startswith("db/"):
+        return {"backend"}
+    if path.startswith("packages/contracts/"):
+        return {"backend", "web", "infra"}
+    if path in {"package.json", "package-lock.json", "tsconfig.base.json"}:
+        return {"backend", "web", "infra"}
+    if path == ".nvmrc":
+        return {"backend", "web"}
     if path.startswith("apps/web/"):
         return {"web"}
-    if path.startswith("packages/contracts/") or path in {
-        "package.json", "package-lock.json", "tsconfig.base.json", ".nvmrc",
-    }:
-        return {"backend", "web"}
     if path.startswith("agents/jarvis/"):
         return {"agent"}
     if path == ".github/scripts/deploy_bicep.sh":
