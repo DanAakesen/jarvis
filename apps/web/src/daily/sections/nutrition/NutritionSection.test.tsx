@@ -327,10 +327,25 @@ describe('Nutrition section', () => {
     fireEvent.click(within(protein).getByText('View data table'));
     const weekly = screen.getByRole('table', { name: 'Monday-based weekly averages over logged days only' });
     expect(weekly.textContent).toContain('0 known days');
+    expect(weekly.textContent).toContain('Average over 1 logged day');
+    expect(weekly.textContent).toContain('excludes 1 unknown logged day)');
     expect(weekly.textContent).toContain('Not recorded');
     fireEvent.click(screen.getByRole('button', { name: '2026-10-12' }));
     expect((screen.getByLabelText('Meal date') as HTMLInputElement).value).toBe('2026-10-12');
     expect(screen.getByLabelText('URL').textContent).toContain('nutritionView=day');
+  });
+  it('uses singular wording for a single logged and known day', async () => {
+    rows[ids.days] = [{
+      meal_date: '2026-10-12', meal_count: 1, energy_kcal: 9001, protein_grams: 9002,
+      carbohydrates_grams: 9003, fat_grams: 9004, fiber_grams: 9005, unknown_nutrients: [],
+      partial_nutrients: [], latest_updated_at: '2026-10-18T09:00:00Z',
+    }];
+    render(<Wrapper sources={[ids.meals, ids.days]} entry="/daily?nutritionView=trend" />);
+    await screen.findByText('Average over 1 logged day');
+    expect(screen.getByText('1 of 7 days in this period has meals; missing days remain unknown.')).toBeTruthy();
+    const weekly = document.querySelector('.nutrition-weekly-list')!.textContent!;
+    expect(weekly).toContain('1 known day');
+    expect(weekly).not.toMatch(/\b1 (known|logged) days\b/u);
   });
   it('shows failed meal reads and recovers on Retry without changing date', async () => {
     pending = () => Promise.reject(new Error('synthetic-read-failure-9001'));
@@ -399,9 +414,9 @@ describe('Nutrition section', () => {
     render(<Wrapper sources={[ids.meals, ids.plans]} entry="/daily?nutritionView=library" />);
     fireEvent.click(await screen.findByText('Synthetic plan 9001'));
     expect(screen.getByText('18,003 kcal')).not.toBeNull();
-    expect(screen.getByText(/9,003 g \(lower bound: at least, 1 items have no value\)/u)).not.toBeNull();
-    expect(screen.getByText(/9,004 g \(lower bound: at least, 1 items have no value\)/u)).not.toBeNull();
-    expect(screen.getByText(/9,005 g \(lower bound: at least, 1 items have no value\)/u)).not.toBeNull();
+    expect(screen.getByText(/9,003 g \(lower bound: at least, 1 item has no value\)/u)).not.toBeNull();
+    expect(screen.getByText(/9,004 g \(lower bound: at least, 1 item has no value\)/u)).not.toBeNull();
+    expect(screen.getByText(/9,005 g \(lower bound: at least, 1 item has no value\)/u)).not.toBeNull();
     expect(screen.getAllByText(/Not recorded \(unknown: at least, 2 items have no value\)/u)).toHaveLength(1);
     expect(screen.queryByText('99,999 kcal')).toBeNull();
   });

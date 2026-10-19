@@ -96,6 +96,7 @@ describe('Body & sleep section (synthetic records only)', () => {
     await waitFor(() => expect(url()).toContain('metric=body_mass'));
     fireEvent.change(screen.getByLabelText('Search'), { target: { value: 'synthetic_other' } });
     expect(screen.getByRole('option', { name: /Body mass — current selection/ })).toBeTruthy();
+    expect(screen.getByText(/1 measurement matches/)).toBeTruthy();
     fireEvent.change(screen.getByLabelText('Measurement'), { target: { value: 'synthetic_other' } });
     await screen.findByRole('img', { name: 'synthetic_other — count' });
     expect(url()).toContain('metric=synthetic_other');
@@ -150,6 +151,23 @@ describe('Body & sleep section (synthetic records only)', () => {
     const sourceQuery = JSON.parse(String(vi.mocked(fetch).mock.calls.find(([, init]) =>
       JSON.parse(String(init?.body)).source === sources.metrics)?.[1]?.body));
     expect(sourceQuery).toMatchObject({ ...period, metric: 'body_mass', limit: 500 });
+  });
+
+  it('uses singular day wording for a one-day Body period', async () => {
+    const day = '2026-10-01';
+    stub(query => jsonResponse(dailyFixture(query, query.source === sources.metricCatalog
+      ? [{ metric_name: 'body_mass', units: ['kg'], first_date: day, last_date: day, day_count: 1, latest_updated_at: '2026-10-07T00:00:00Z' }]
+      : [{ metric_name: 'body_mass', metric_date: day, value: 70, unit: 'kg' }])));
+    mount({ period: { startDate: day, endDate: day } });
+    const kg = await screen.findByRole('region', { name: 'Body mass — kg' });
+    expect(within(kg).getByText('1 of 1 day with numeric values')).toBeTruthy();
+  });
+
+  it('uses singular night wording for a one-night Sleep period', async () => {
+    stub();
+    mount({ period: { startDate: '2026-10-02', endDate: '2026-10-02' } }, '/daily?view=sleep');
+    await screen.findByRole('heading', { name: 'Nights' });
+    expect(screen.getByText('1 of 1 night with asleep data')).toBeTruthy();
   });
 
   it('connects short gaps while retaining one metric legend and every sparse reading', async () => {
