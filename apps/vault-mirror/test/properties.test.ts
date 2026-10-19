@@ -46,7 +46,9 @@ describe('exhaustive model properties (216 three-way states)', () => {
         O.set(path, record('ours')); G.set(path, record('theirs')); B.set(path, record('base'));
       }
       const plan = planReconcile({ ...input, O, G, B });
-      expect([...plan.actions, ...plan.skipped].every(action => isApprovedPath(input.policy, action.path))).toBe(true);
+      expect([...plan.actions, ...plan.skipped].every(action =>
+        isApprovedPath(input.policy, action.path) ||
+        ('reason' in action && action.reason === 'windows-path'))).toBe(true);
     }
   });
   it('no path has opposing directional writes outside an explicit clean merge', () => {

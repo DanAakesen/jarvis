@@ -46,7 +46,8 @@ export type Action =
   | { kind: 'recordBase'; path: string; record: FileRecord; text: string };
 
 export type SkipReason = 'path-collision' | 'oversized' | 'non-regular' |
-  'invalid-record' | 'content-unavailable' | 'content-mismatch' | 'secret-match' | 'conflict';
+  'invalid-record' | 'content-unavailable' | 'content-mismatch' | 'secret-match' |
+  'conflict' | 'windows-path';
 export type GuardReason = 'invalid-input' | 'max-changed-G' | 'max-changed-O' |
   'max-deletes-G' | 'max-deletes-O' | 'base-deletion-ratio' |
   'empty-side' | 'missing-base-O' | 'missing-base-G';

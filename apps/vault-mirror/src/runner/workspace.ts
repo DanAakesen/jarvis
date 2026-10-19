@@ -31,8 +31,21 @@ function safePath(path: string): string {
   return normalized;
 }
 
-async function ensureParent(root: string, path: string, preserveSpelling = false): Promise<string> {
-  if (!isSafePath(normalizePath(path))) throw new TypeError('Unsafe vault path');
+function safePosixPath(path: string): boolean {
+  return path.length > 0 && !path.includes('\\') &&
+    ![...path].some(character => character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127) &&
+    path.split('/').every(segment => segment !== '' && segment !== '.' && segment !== '..');
+}
+
+async function ensureParent(
+  root: string,
+  path: string,
+  preserveSpelling = false,
+  allowWindowsInvalid = false,
+): Promise<string> {
+  if (!(allowWindowsInvalid ? safePosixPath(normalizePath(path)) : isSafePath(normalizePath(path)))) {
+    throw new TypeError('Unsafe vault path');
+  }
   const safe = preserveSpelling ? path : safePath(path);
   const target = resolve(root, ...safe.split('/'));
   const rel = relative(root, target);
@@ -127,7 +140,7 @@ export async function restoreWorkspace(root: string, snapshot: WorkspaceSnapshot
     if (!saved.has(path)) await rm(await existingFile(root, path));
   }
   for (const [path, value] of snapshot.bytes) {
-    const target = await ensureParent(root, path, true);
+    const target = await ensureParent(root, path, true, true);
     const temporary = resolve(dirname(target), `.jarvis-mirror-${randomUUID()}`);
     try {
       await writeFile(temporary, value, { mode: 0o600, flag: 'wx' });
