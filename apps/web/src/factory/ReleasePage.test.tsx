@@ -74,7 +74,7 @@ describe('project release view', () => {
     expect(screen.getAllByRole('link', { name: 'Task #11' }).every((link) => link.getAttribute('href') === '/factory/tasks/11'))
       .toBe(true);
     expect(releaseLink.getAttribute('href')).toBe('/factory/projects/42/releases/7');
-    expect(screen.getByText(/production · success · Oct 4, 2026/)).not.toBeNull();
+    expect(screen.getByText('production · success · 4 Oct 2026, 11:15')).not.toBeNull();
     expect(fetchMock).toHaveBeenCalledWith(
       'https://backend.example/factory/projects/42/releases',
       expect.objectContaining({ cache: 'no-store' }),

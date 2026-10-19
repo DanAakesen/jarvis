@@ -50,7 +50,7 @@ export function StateMessage({
             </div>
             : <>
               <p className="state-message-copy">{message}</p>
-              <span aria-hidden="true">
+              <span className="state-message-skeleton" aria-hidden="true">
                 <Loader variant={loaderVariant} label="" announce={false} className="state-message-loader" />
               </span>
             </>}

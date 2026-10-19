@@ -15,6 +15,78 @@ triggers collapse to one trailing pass, starts are at least 60 seconds apart,
 and shutdown or a 60-second timeout aborts the pass. Existing reminder-key
 deduplication keeps a later scheduled check from inserting a duplicate.
 
+## P14-25 — Recognize every high-priority task marker and surface undated tasks (19 October 2026; #1074)
+
+Treat `🔺`, `⏫`, `[priority:: highest]`, `[priority:: high]`, and their
+parenthesized forms as high priority, case-insensitively with flexible spacing.
+Keep the legacy `priority:: P1 - High` form. `🔼`, `🔽`, `⏬`, medium, low,
+lowest, plain prose and missing priority remain normal. The shared todo parser
+strips these markers from displayed task text; the existing two-level
+high/normal contract stays unchanged.
+
+For open high-priority tasks without a due date, create one deterministic digest
+finding per Copenhagen day and unchanged normalized task set, listing the count
+and up to five titles. Use the existing `todo` category with `normal` urgency and
+no due time: it fits a task digest, remains outside the time-critical alert
+mapping, and requires no schema migration. The digest is deterministic and adds
+no model call; reminder rules and deadline alerts are unchanged.
+
+## P14-23 — One shared web date-time format (19 October 2026)
+
+Use `apps/web/src/format/date-time.ts` for user-visible web date-time, date-only
+and time-only values. Default to `en-GB`, medium date plus short 24-hour time,
+and the browser timezone for instants; date-only strings are calendar dates and
+format as UTC so their day never shifts. Use `hourCycle: 'h23'` so midnight
+stays in the 00–23 hour range. Optional locale and timezone arguments preserve
+deliberate content-language and display-zone choices for instants. Return an en
+dash for missing or invalid values by default so rendering never throws; callers
+may supply a display fallback for valid-but-unparseable legacy values. Keep
+relative times, chart/calendar labels, data values and non-web formatting
+outside this presentation helper. Daily brief timestamps remain verbatim
+because their timezone is unknown. Daily and Proactive wrappers remain thin to
+preserve their explicit Europe/Copenhagen zone and Danish content behavior.
+
+## P14-17 — Empty and loading messages share the error surface, with a scoped reset list (19 October 2026)
+
+`StateMessage` gave only its error variant a surface, so the empty and loading
+variants were faint muted text directly on the 3D scene (A22), and the wrapper
+around every skeleton loader was a grid item of the shrink-wrapping message, so
+the `rows`, `lines`, `image`, `panel` and `cards` placeholders collapsed to their
+content (A49). The surface now belongs to the empty and loading variants too
+(`--surface-translucent` fill, 1px `--rule` border, `--radius-panel`, `--space-3`
+inline padding), declared inside `:where()` so its specificity is zero and a
+component's own surface (`.usage-empty`, `.project-empty`,
+`.workspace-pin-feedback`) wins without an override.
+
+Inside a container that already has a surface the message must stay flat or a
+card sits inside a card. The issue proposed a reset for two containers
+(`.settings-section`, `.jobs-popover`) on `.state-message`. That selector would
+also strip the error variant's own surface, and a census of the 68 call sites
+found fifteen more surfaced containers that host an empty or loading message:
+chat windows and bubbles, Folio, release sections, the task card and release
+bar, the memory detail, the context panel, the knowledge note, the Proactive
+page, Kanban columns, modals and the Create-project dialog parts. The reset
+therefore names 17 containers and only the `--empty` and `--loading` variants.
+The list lives in `styles.css` next to the default; a container that gains a
+surface and hosts a state message has to be added to it, and a stylesheet test
+pins the list. `.jobs-popover` has no call site today and stays on the list
+because the issue named it. The `partial` variant sits beside existing content
+and is not surfaced.
+
+The wrapper gets a class, `state-message-skeleton`, instead of a
+`:has()` selector on its `aria-hidden` attribute: the class is stable, can be
+asserted in tests and keeps the markup's accessibility attributes unchanged.
+The `image` placeholder keeps its own `min(320px, 100%)` cap, which the loader
+sets on purpose for a fixed 4:3 slab, so it fills the width of a narrow message
+but not of a wide one. The `.knowledge-loader` overlay covered the whole graph
+pane, so a surface on it would have hidden the pane; it is now a compact card
+centred like `.knowledge-status`, sized to its content (`width: max-content`,
+`max-width: min(420px, 90%)`), because an absolutely positioned box at
+`left: 50%` otherwise shrink-wraps to half of the pane. The `cards` loader hid
+every column at 700px and narrower because `.skeleton-column:nth-child(n + 2)`
+counted the visually hidden label as the first child; sibling combinators skip
+it, and no breakpoint was added.
+
 ## P14-15 — Nested section titles wrap, the save row has no frame, touch targets in the task window (19 October 2026)
 
 The whole-app pass found five small CSS defects in Settings and the task window
@@ -119,11 +191,10 @@ route, token, dependency or data read changes.
 
 ## P12-38 — Daily visual QA corrections (18 October 2026)
 
-Use `dailyLocale()` in `ui/formatters.ts` as the one source for displayed Daily
-dates and times. Keep the locale an explicit argument on the formatters so tests
-can pin both en-US and en-GB without inheriting the CI host locale; retain the
-existing Europe/Copenhagen display timezone and source-specific handling of
-unqualified historical timestamps.
+Use the shared date-time helper for displayed Daily dates and times, retaining
+the existing Europe/Copenhagen display timezone where it is known. Daily brief
+timestamps have no known timezone and remain verbatim. Keep `dailyLocale()` for
+number and duration formatting, not dates.
 
 Standardize section presentation through the shared title → controls/filters →
 freshness → “About this data” slot order, with the embedded Overview navigation

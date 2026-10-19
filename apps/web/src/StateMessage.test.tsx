@@ -56,4 +56,40 @@ describe('StateMessage', () => {
     expect(styles).toContain('@media (prefers-reduced-motion: reduce) { .loader .loader-dots > span { animation: none; } }');
     expect(styles).not.toMatch(/state-message[^{}]*animation|animation[^{}]*state-message/u);
   });
+
+  it.each(['lines', 'rows', 'cards', 'panel', 'image'] as const)(
+    'wraps the %s placeholder in a hidden skeleton wrapper that can stretch to the message width',
+    (loaderVariant) => {
+      render(<StateMessage variant="loading" message="Loading items" loaderVariant={loaderVariant} />);
+      const message = screen.getByRole('status');
+      const wrapper = message.querySelector('.state-message-skeleton');
+      expect(wrapper?.parentElement).toBe(message);
+      expect(wrapper?.getAttribute('aria-hidden')).toBe('true');
+      expect(wrapper?.firstElementChild?.className).toContain(`skeleton-${loaderVariant}`);
+      expect(wrapper?.querySelector('.state-message-loader')).toBe(wrapper?.firstElementChild);
+      expect(message.getAttribute('aria-live')).toBe('polite');
+      expect(message.querySelector('.state-message-copy')?.textContent).toBe('Loading items');
+    });
+
+  it('keeps the text loader on one row without a skeleton wrapper', () => {
+    const { container } = render(<StateMessage variant="loading" message="Loading settings" />);
+    expect(container.querySelector('.state-message-skeleton')).toBeNull();
+    expect(container.querySelector('.state-message-loading > .state-message-copy')).not.toBeNull();
+  });
+
+  it('stretches the skeleton wrapper to the width of the message', () => {
+    expect(styles).toMatch(/\.state-message-skeleton\s*\{[^}]*justify-self:\s*stretch;/u);
+    expect(styles).toMatch(/\.state-message-skeleton\s*\{[^}]*min-width:\s*0;/u);
+  });
+
+  it('keeps the cards placeholder from hiding every column on narrow screens', () => {
+    const { container } = render(<StateMessage variant="loading" message="Loading board" loaderVariant="cards" />);
+    expect(container.querySelectorAll('.skeleton-column')).toHaveLength(4);
+    // The visually hidden label is the first child, so an nth-child count would hide the first column too.
+    const hiding = [...styles.matchAll(/(\.skeleton-column[^{}]*)\{\s*display:\s*none;\s*\}/gu)].map((match) => match[1]!.trim());
+    expect(hiding).toHaveLength(2);
+    const visible = hiding.map((selector) => 4 - container.querySelectorAll(selector).length);
+    // Two columns up to 900px and one up to 700px, matching the grid tracks declared beside them.
+    expect(visible).toEqual([2, 1]);
+  });
 });

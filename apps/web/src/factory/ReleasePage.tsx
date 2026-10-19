@@ -9,6 +9,7 @@ import { StateMessage } from '../StateMessage';
 import type {
   Deployment, DeploymentStatus, GitGraph, PullRequest, Release, ReleaseView, WorkflowRun,
 } from './release-data';
+import { formatDateTime } from '../format/date-time';
 
 async function fetchReleaseProjectId(
   backendUrl: string,
@@ -38,10 +39,7 @@ interface MarkerState {
 
 function formatDate(value: string | null): string {
   if (!value) return 'Not released';
-  const date = new Date(value);
-  return Number.isFinite(date.getTime())
-    ? new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(date)
-    : 'Unknown time';
+  return formatDateTime(value);
 }
 
 function formatDuration(startedAt: string | null, completedAt: string | null): string {

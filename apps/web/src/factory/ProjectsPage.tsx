@@ -6,6 +6,7 @@ import { useConversationIntents } from '../conversation-intents';
 import { Loader } from '../Loader';
 import { StateMessage } from '../StateMessage';
 import { CollapsibleSection } from '../CollapsibleSection';
+import { formatDateTime } from '../format/date-time';
 
 interface Project {
   id: string;
@@ -378,7 +379,7 @@ export function CompletionPolicyControl({
 }
 
 function repositoryDate(value: string): string {
-  return new Date(value).toLocaleString();
+  return formatDateTime(value);
 }
 
 export function ProjectsPage({ backendUrl, getAccessToken, projectDefaults }: ProjectsPageViewProps) {

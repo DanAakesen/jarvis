@@ -1,4 +1,5 @@
 import { backendFetch } from './backend-request';
+import { formatDateTime, formatTimeOnly } from './format/date-time';
 
 export type SourceId = 'todos' | 'calendar' | 'mail' | 'weather' | 'factory' | 'news' | 'travel' | 'x';
 export type ItemState = 'new' | 'seen' | 'dismissed' | 'snoozed';
@@ -220,9 +221,10 @@ export function runReason(code: string | null): string | null {
 }
 
 export function formatTime(value: string, language: 'da' | 'en' = 'en'): string {
-  return new Intl.DateTimeFormat(language === 'da' ? 'da-DK' : 'en-GB', {
-    dateStyle: 'medium', timeStyle: 'short', timeZone: 'Europe/Copenhagen',
-  }).format(new Date(value));
+  return formatDateTime(value, {
+    locale: language === 'da' ? 'da-DK' : 'en-GB',
+    timeZone: 'Europe/Copenhagen',
+  });
 }
 
 function copenhagenParts(timestamp: number): { year: number; month: number; day: number } {
@@ -266,9 +268,7 @@ export function tomorrowAtSeven(now: number): Date {
 }
 
 export function copenhagenClock(value: string): string {
-  return new Intl.DateTimeFormat('en-GB', {
-    hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Copenhagen', hourCycle: 'h23',
-  }).format(new Date(value));
+  return formatTimeOnly(value, { timeZone: 'Europe/Copenhagen' });
 }
 
 export function timeAgo(value: string, now: number): string {

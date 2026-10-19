@@ -72,8 +72,10 @@ export function formatChartX(value: number) {
 
 export function formatChartNumber(value: number) {
   const absolute = Math.abs(value);
-  if (absolute >= 1e9) return `${(value / 1e9).toLocaleString(undefined, { maximumFractionDigits: 1 })}B`;
-  if (absolute >= 1e6) return `${(value / 1e6).toLocaleString(undefined, { maximumFractionDigits: 1 })}M`;
-  if (absolute >= 1e4) return `${(value / 1e3).toLocaleString(undefined, { maximumFractionDigits: 1 })}k`;
-  return value.toLocaleString(undefined, { maximumFractionDigits: 2 });
+  const format = (number: number, maximumFractionDigits: number) =>
+    new Intl.NumberFormat(undefined, { maximumFractionDigits }).format(number);
+  if (absolute >= 1e9) return `${format(value / 1e9, 1)}B`;
+  if (absolute >= 1e6) return `${format(value / 1e6, 1)}M`;
+  if (absolute >= 1e4) return `${format(value / 1e3, 1)}k`;
+  return format(value, 2);
 }

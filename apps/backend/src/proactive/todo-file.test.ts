@@ -34,10 +34,15 @@ describe('todo parser', () => {
     ['🔼 📅 2031-04-09', false, false, '2031-04-09T21:59:00.000Z'],
     ['🔽 📅 2031-04-09', false, false, '2031-04-09T21:59:00.000Z'],
     ['⏬ 📅 2031-04-09', false, false, '2031-04-09T21:59:00.000Z'],
-    ['🔺 📅 2031-04-09', false, false, '2031-04-09T21:59:00.000Z'],
+    ['🔺 📅 2031-04-09', true, false, '2031-04-09T21:59:00.000Z'],
     ['📅 2031-04-09', false, false, '2031-04-09T21:59:00.000Z'],
     ['📅 2031-04-09 14:00', false, true, '2031-04-09T12:00:00.000Z'],
     ['[priority:: P1 - High] [due:: 2031-04-09 14:00]', true, true, '2031-04-09T12:00:00.000Z'],
+    ['[priority:: highest]', true, false, null],
+    ['[priority:: high]', true, false, null],
+    ['(priority:: highest)', true, false, null],
+    ['(Priority :: HIGH)', true, false, null],
+    ['[priority:: medium]', false, false, null],
     ['🕒 14:00 ⏫ due: 2031-04-09', true, true, '2031-04-09T12:00:00.000Z'],
   ])('parses native and legacy task markers: %s', (markers, highPriority, dueHasTime, dueAt) => {
     expect(parseTodos(`- [ ] Synthetic task ${markers}`)).toEqual([
@@ -135,17 +140,38 @@ describe('todo parser', () => {
     expect(Object.keys(instruction ?? {}).sort()).toEqual(['done', 'dueAt', 'dueHasTime', 'highPriority', 'text']);
   });
 
-  it('recognizes only the explicit P1 - High priority and removes its metadata from task text', () => {
+  it('recognizes only explicit high-priority markers and removes them from task text', () => {
     const todos = parseTodos([
-      '- [ ] High [priority:: p1 - high]',
+      '- [ ] Native highest 🔺',
+      '- [ ] Native high ⏫',
+      '- [ ] Dataview highest [priority:: highest]',
+      '- [ ] Dataview high [priority:: high]',
+      '- [ ] Parenthesized high (priority:: high)',
+      '- [ ] Legacy high [priority:: p1 - high]',
       '- [ ] Medium [priority:: P2 - Medium]',
-      '- [ ] No priority',
+      '- [ ] Medium [priority:: medium]',
+      '- [ ] Lower 🔼',
+      '- [ ] Lower 🔽',
+      '- [ ] Lowest ⏬',
+      '- [ ] Plain high priority prose',
+      '- [x] Done high [priority:: highest]',
     ].join('\n'));
 
     expect(todos.map(({ text, highPriority }) => ({ text, highPriority }))).toEqual([
-      { text: 'High', highPriority: true },
+      { text: 'Native highest', highPriority: true },
+      { text: 'Native high', highPriority: true },
+      { text: 'Dataview highest', highPriority: true },
+      { text: 'Dataview high', highPriority: true },
+      { text: 'Parenthesized high', highPriority: true },
+      { text: 'Legacy high', highPriority: true },
       { text: 'Medium', highPriority: false },
-      { text: 'No priority', highPriority: false },
+      { text: 'Medium', highPriority: false },
+      { text: 'Lower', highPriority: false },
+      { text: 'Lower', highPriority: false },
+      { text: 'Lowest', highPriority: false },
+      { text: 'Plain high priority prose', highPriority: false },
+      { text: 'Done high', highPriority: true },
     ]);
+    expect(todos.at(-1)?.done).toBe(true);
   });
 });

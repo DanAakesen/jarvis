@@ -1,5 +1,20 @@
 # Architecture
 
+## Shared web date-time formatting (19 October 2026; P14-23)
+
+`apps/web/src/format/date-time.ts` is the web client’s shared date-time
+presentation boundary. Date-time, date-only and time-only calls default to
+`en-GB`; instants use the browser timezone by default, while date-only strings
+are interpreted as UTC calendar dates to avoid shifting their day. Optional
+locale and timezone arguments preserve content-language formatting and
+established display zones for instants. Invalid or missing values return an en
+dash by default rather than throwing during render; callers may supply a
+fallback for valid-but-unparseable legacy values. Daily and Proactive keep thin
+wrappers only for their explicit timezone and content-language rules; Daily
+brief timestamps remain verbatim because their timezone is unknown.
+`dailyLocale()` remains for numeric and duration values, and calculation-only
+`Intl` calls stay in the static guard’s small allowlist.
+
 ## Daily visual QA presentation changes (18 October 2026; P12-38)
 
 P12-38 changes only the Daily web presentation. `DailySectionHeader` emits the
@@ -14,13 +29,16 @@ declared unit) with observed numeric values as a fallback, so an all-missing
 page keeps its alignment; row/card detail actions use the shared secondary
 button.
 
-`ui/formatters.ts` is the single Daily display-locale source, including saved
-nutrition-target timestamps and sleep times; its formatter functions accept an
-explicit locale for deterministic tests. The Body chart still consumes only the
-existing per-unit daily summaries: it now sends one series per metric/unit to
-`DailyChart`, with a three-calendar-day maximum connecting interval. Wider date
-gaps create a new line segment; each recorded value remains a point and no
-missing value is filled. The limit is included in the chart description.
+`ui/formatters.ts` delegates displayed Daily dates and times to the shared web
+date-time formatters while retaining the established Europe/Copenhagen display
+timezone for known-zone values. Daily brief timestamps remain verbatim because
+their timezone is unknown. `dailyLocale()` is used for numbers and durations,
+not date output.
+The Body chart still consumes only the existing per-unit daily summaries: it
+now sends one series per metric/unit to `DailyChart`, with a three-calendar-day
+maximum connecting interval. Wider date gaps create a new line segment; each
+recorded value remains a point and no missing value is filled. The limit is
+included in the chart description.
 Routes, reads, contracts, data ownership and persisted data are unchanged.
 
 ## Daily accessibility and keyboard audit (18 October 2026; P12-37)
@@ -2078,9 +2096,12 @@ Each run owns cancellation, a three-minute deadline and 60-second lease
 heartbeats. Enabled registered sources read in parallel with 20-second bounds.
 Quiet hours cancel scheduled/catch-up work, not manual work; generation and
 quiet-hour checks precede item writes and hooks. Detection is pure and shares
-the 24-hour deadline and 48-hour clash constants with future consumers. Language
-uses a narrow SQL read of recent user-message text, never chat history fields;
-chat messages are not model input.
+the 24-hour deadline and 48-hour clash constants with future consumers. It also
+creates one normal-urgency, no-due-date todo finding for the undated high-priority
+facts; the dedupe key includes the Copenhagen day and normalized task set, so
+unchanged 07:00 and 18:00 checks reuse the finding while a changed set gets a new
+one. Language uses a narrow SQL read of recent user-message text, never chat
+history fields; chat messages are not model input.
 
 Finding writes also fence the claim inside the SQL transaction by locking the
 owner/run row and checking status, generation and lease. Cancellation cancels
@@ -2119,12 +2140,13 @@ partial success. Unknown sizes reserve the per-file maximum against the budget.
 `todo-file.ts` keeps the root-only writer resolver and shared parser; fenced
 examples/query blocks are ignored. One sanitizer removes
 control characters, HTML and markdown link destinations and caps fact text at
-300 characters. `⏫`, `priority:: P1 - High` and `priority: P1 - High` qualify as
-high priority; `🔼`, `🔽`, `⏬`, `🔺` and missing priorities do not. `🕒 HH:mm`
-supplies the due time before or after `📅 YYYY-MM-DD`; trailing date/time,
-`due:` and `[due:: …]` remain supported. Clock, priority and Tasks metadata emoji
-and their recognized date, recurrence, ID and completion-action payloads are
-removed from fact text. Due dates resolve to Copenhagen-local instants;
+300 characters. `🔺`, `⏫`, bracketed or parenthesized `priority:: highest` and
+`priority:: high` (case-insensitive), and legacy `priority:: P1 - High` qualify
+as high priority; `🔼`, `🔽`, `⏬`, medium, low, lowest and missing priorities do
+not. `🕒 HH:mm` supplies the due time before or after `📅 YYYY-MM-DD`; trailing
+date/time, `due:` and `[due:: …]` remain supported. Clock, priority and Tasks
+metadata emoji and their recognized date, recurrence, ID and completion-action
+payloads are removed from fact text. Due dates resolve to Copenhagen-local instants;
 date-only tasks remain due at 23:59. Only open high-priority tasks become facts,
 deduplicated by normalized text and due instant, retaining explicit-time
 eligibility if any duplicate has a time. The source returns at most 40 facts,

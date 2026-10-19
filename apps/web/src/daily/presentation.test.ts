@@ -23,13 +23,11 @@ describe('retained Daily record presentation', () => {
     expect(dailyValue(false)).toBe('No');
     expect(dailyValue([])).toBe('None');
   });
-  it('formats the same instant through the shared locale source in both locale conventions', () => {
+  it('formats date-time values with the shared format regardless of the numeric locale', () => {
     const instant = '2026-10-18T08:30:00Z';
-    for (const locale of ['en-US', 'en-GB']) {
-      expect(dailyValue(instant, locale)).toBe(formatTime(instant, locale));
-    }
-    expect(dailyValue(instant, 'en-US')).toBe('Oct 18, 2026, 10:30 AM');
-    expect(dailyValue(instant, 'en-GB')).toBe('18 Oct 2026, 10:30');
+    expect(dailyValue(instant, 'en-US')).toBe(formatTime(instant));
+    expect(dailyValue(instant, 'en-GB')).toBe(formatTime(instant));
+    expect(dailyValue(instant, 'en-US')).toBe('18 Oct 2026, 10:30');
   });
   it('keeps historical brief timestamps verbatim and uses exact stored-text cursors without guessed periods', () => {
     const period = { startDate: '2026-10-01', endDate: '2026-10-07' };
@@ -67,7 +65,7 @@ describe('retained Daily record presentation', () => {
       { sample_minute: '2026-10-17T07:02:00Z', avg_value: 0, unit: 'bpm' },
     ], 'en-US');
     expect(plot!.series[0]!.points.map(point => point.y)).toEqual([80, 0]);
-    expect(plot!.series[0]!.points[0]!.x).toBe('1: Oct 17, 2026, 9:00 AM');
+    expect(plot!.series[0]!.points[0]!.x).toBe('1: 17 Oct 2026, 09:00');
     expect(dailyPlots(sources.heartRate, [
       { sample_minute: '2026-10-17T07:00:00Z', avg_value: 80, unit: 'bpm' },
     ], 'en-GB')[0]!.series[0]!.points[0]!.x).toBe('1: 17 Oct 2026, 09:00');

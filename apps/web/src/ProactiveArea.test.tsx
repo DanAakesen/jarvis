@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { appAreas } from './areas';
 import { ProactiveArea, ProactiveItemPage } from './ProactiveArea';
 import {
-  copenhagenClock, runReason, sourceReason, tomorrowAtSeven,
+  copenhagenClock, formatTime, runReason, sourceReason, tomorrowAtSeven,
   type ProactiveItem, type ProactiveStatus, type RunSummary,
 } from './proactive-data';
 
@@ -376,6 +376,11 @@ describe('Proactive area', () => {
     expect(spring.toISOString()).toBe('2027-03-28T05:00:00.000Z');
     expect(copenhagenClock(autumn.toISOString())).toBe('07:00');
     expect(copenhagenClock(spring.toISOString())).toBe('07:00');
+  });
+
+  it('uses Danish for Danish proactive items and en-GB otherwise', () => {
+    expect(formatTime('2026-10-17T12:00:00.000Z')).toBe('17 Oct 2026, 14:00');
+    expect(formatTime('2026-10-17T12:00:00.000Z', 'da')).toBe('17. okt. 2026, 14.00');
   });
 
   it('loads a full detail item, sends seen once and renders markup-looking content inert', async () => {

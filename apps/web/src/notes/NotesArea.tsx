@@ -10,6 +10,7 @@ import { Modal } from '../Modal';
 import { NavigationGuardContext } from '../page-navigation';
 import { createNotesClient, maxNoteBytes, newNotePath, NoteConflict, NoteSaveUnverified, safeNotePath, validNoteText } from './notes-data';
 import { NoteFolderPicker } from './NoteFolderPicker';
+import { formatDateTime } from '../format/date-time';
 import './NotesArea.css';
 
 interface Editor {
@@ -216,7 +217,7 @@ export function NotesArea({ backendUrl, getAccessToken }: AreaProps) {
               {!editor?.created && <span className="knowledge-dot" data-folder={editor?.path.split('/')[0]} aria-hidden="true" />}
               <span className="knowledge-note-title">{editor?.created ? 'New note' : editor?.title ?? openingTitle}</span>
             </h3>
-            {editor?.created && folderUpdatedAt && <p className="notes-folder-updated">Vault folders. Updated <time dateTime={folderUpdatedAt}>{new Date(folderUpdatedAt).toLocaleString()}</time>.</p>}
+            {editor?.created && folderUpdatedAt && <p className="notes-folder-updated">Vault folders. Updated <time dateTime={folderUpdatedAt}>{formatDateTime(folderUpdatedAt)}</time>.</p>}
             <button className="modal-close" type="button" disabled={saving} aria-label={`Close ${editor?.created ? 'New note' : editor?.title ?? openingTitle}`}
               onClick={() => change(clearEditor)}>
               <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="m6 6 12 12M18 6 6 18" /></svg>

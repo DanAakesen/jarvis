@@ -92,12 +92,44 @@ describe('deterministic deadlines', () => {
     }]);
   });
 
-  it('omits later, undated, invalid and non-todo deadlines', () => {
+  it('omits later, invalid and non-todo deadlines', () => {
     expect(detectFindings([
-      todo(24 * hour + 1), todo(0, { dueAt: null }), todo(0, { dueAt: undefined }),
-      todo(0, { dueAt: 'not a date' }), todo(0, { kind: 'mail' }),
+      todo(24 * hour + 1), todo(0, { dueAt: 'not a date' }),
+      todo(0, { kind: 'mail' }),
       todo(0, { kind: 'factory' }),
     ], now, 'en')).toEqual([]);
+  });
+
+  it('summarizes undated todos once, with bounded titles and a stable Copenhagen-day key', () => {
+    const tasks = [
+      todo(0, { ref: 'todos:a', dueAt: null, text: 'Prepare notes' }),
+      todo(0, { ref: 'todos:b', dueAt: undefined, text: 'Send report' }),
+      event(hour, 2 * hour, { dueAt: null }),
+    ];
+    const first = detectFindings(tasks, now, 'en');
+    expect(first).toEqual([{
+      title: 'Tasks without due dates',
+      body: '2 open high-priority tasks have no due date: "Prepare notes"; "Send report".',
+      category: 'todo',
+      urgency: 'normal',
+      dueAt: null,
+      evidence: ['todos:a', 'todos:b'],
+      dedupeKey: expect.stringMatching(/^[a-f0-9]{32}$/u),
+    }]);
+    expect(detectFindings([
+      { ...tasks[1]!, ref: 'todos:new-b', text: ' SEND  REPORT ' },
+      { ...tasks[0]!, ref: 'todos:new-a', text: 'prepare notes' },
+    ], new Date(now.getTime() + hour), 'da')[0]?.dedupeKey).toBe(first[0]?.dedupeKey);
+
+    const changed = detectFindings([
+      tasks[0]!,
+      todo(0, { ref: 'todos:c', dueAt: null, text: 'Book travel' }),
+    ], now, 'en')[0]!;
+    expect(changed.dedupeKey).not.toBe(first[0]?.dedupeKey);
+    expect(detectFindings(tasks, new Date('2026-10-19T00:00:00.000Z'), 'en')[0]?.dedupeKey)
+      .not.toBe(first[0]?.dedupeKey);
+    expect(detectFindings([todo(hour)], now, 'en')).toHaveLength(1);
+    expect(detectFindings([], now, 'en')).toEqual([]);
   });
 
   it('uses injected time, not the wall clock, and does not mutate facts', () => {

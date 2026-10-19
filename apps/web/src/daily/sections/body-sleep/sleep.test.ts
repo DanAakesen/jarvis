@@ -33,11 +33,11 @@ describe('Sleep evidence (synthetic)', () => {
   });
 
   it('renders midnight-crossing instants in Copenhagen without averaging clock times', () => {
-    expect(sleepTime('2026-10-01T21:30:00Z', 'en-GB')).toBe('1 Oct 2026, 23:30');
-    expect(sleepTime('2026-10-02T05:00:00Z', 'en-GB')).toBe('2 Oct 2026, 07:00');
-    expect(sleepTime('2026-10-02T22:30:00Z', 'en-GB')).toBe('3 Oct 2026, 00:30');
-    expect(sleepTime('2026-10-25T00:30:00Z', 'en-GB')).toBe('25 Oct 2026, 02:30');
-    expect(sleepTime('2026-10-25T01:30:00Z', 'en-GB')).toBe('25 Oct 2026, 02:30');
+    expect(sleepTime('2026-10-01T21:30:00Z')).toBe('1 Oct 2026, 23:30');
+    expect(sleepTime('2026-10-02T05:00:00Z')).toBe('2 Oct 2026, 07:00');
+    expect(sleepTime('2026-10-02T22:30:00Z')).toBe('3 Oct 2026, 00:30');
+    expect(sleepTime('2026-10-25T00:30:00Z')).toBe('25 Oct 2026, 02:30');
+    expect(sleepTime('2026-10-25T01:30:00Z')).toBe('25 Oct 2026, 02:30');
   });
 
   it('preserves naive or opaque stored times verbatim instead of assuming a timezone', () => {
