@@ -88,7 +88,7 @@ export function BodyView({ backendUrl, getAccessToken, period, onPeriodChange, r
       <p>Missing values, gaps and units remain explicit. Daily values use the recorded average only as a labelled fallback. Missing days are not zero or interpolated. Each recorded unit group has its own summary and chart; units are not converted or combined.</p>
       <p>Summaries use one value per day, averaging retained observations when a date repeats. Minimum and maximum refer to daily values; recorded ranges remain in the data table. Readings no more than 3 calendar days apart connect; wider gaps remain disconnected. Coverage and freshness are not established by returned records.</p>
     </DailyCoverageNote>} />
-    {search && <p role="status">{filtered.length} measurements match. The current selection stays available.</p>}
+    {search && <p role="status">{filtered.length} {filtered.length === 1 ? 'measurement matches' : 'measurements match'}. The current selection stays available.</p>}
     <ReadState pages={catalogue} name="catalogue" />
     {selected && <ReadState pages={records} name="measurements" />}
     {recent.length > 1 && <nav className="body-sleep-shortcuts" aria-label="Recently recorded measurements">
@@ -141,7 +141,7 @@ function MetricUnit({ name, unit, rows, period }: {
         }}
         sparkline={{ values: days.map(date => values.get(date) ?? null), label: `${chartName} daily trend with missing days shown as gaps` }} />
       <StatTile label="Average" value={summary.average} unit={unit ?? ''}
-        note={`${summary.count} of ${summary.total} days with numeric values`} />
+        note={`${summary.count} of ${summary.total} ${summary.total === 1 ? 'day' : 'days'} with numeric values`} />
       <StatTile label="Minimum" value={summary.minimum?.value} unit={unit ?? ''}
         note={summary.minimum ? formatDate(summary.minimum.date) : 'No numeric days recorded'} />
       <StatTile label="Maximum" value={summary.maximum?.value} unit={unit ?? ''}

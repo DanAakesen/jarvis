@@ -74,7 +74,7 @@ export function SleepView({ backendUrl, getAccessToken, period, onPeriodChange, 
       </section>}
       <div className="body-sleep-stats">
         <StatTile label="Average asleep" value={summary.average} unit="h"
-          note={`${summary.count} of ${summary.total} nights with asleep data`} />
+          note={`${summary.count} of ${summary.total} ${summary.total === 1 ? 'night' : 'nights'} with asleep data`} />
         <StatTile label="Longest night asleep" value={summary.longest?.value} unit="h"
           note={summary.longest ? formatDate(summary.longest.date) : 'No asleep values recorded'} />
         <StatTile label="Shortest night asleep" value={summary.shortest?.value} unit="h"

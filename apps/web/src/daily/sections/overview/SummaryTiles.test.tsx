@@ -243,6 +243,7 @@ describe('Daily overview summary tiles', () => {
     render(view());
     expect(await tile('Workouts').findByText('Started Unknown')).toBeTruthy();
     expect(tile('Workouts').getByText(/minutes \(partial\)/u)).toBeTruthy();
+    expect(tile('Workouts').getByText('1 workout has unknown duration.')).toBeTruthy();
     expect(tile('Nutrition').getByText('Energy: Unknown kcal')).toBeTruthy();
     expect(tile('Nutrition').getByText('Protein: 0 g (lower bound).')).toBeTruthy();
     expect(tile('Nutrition').getByText('Carbohydrate: 12 g (lower bound).')).toBeTruthy();
@@ -252,6 +253,13 @@ describe('Daily overview summary tiles', () => {
     expect(tile('Body').getByText('No trend available')).toBeTruthy();
     expect(tile('Sleep').getByText('Unknown h asleep')).toBeTruthy();
     expect(tile('Briefs').getByText('Trigger: Unknown')).toBeTruthy();
+  });
+
+  it('uses singular wording for one workout and one minute this week', async () => {
+    fixture({ rows: { ...summaryRows, [sources.workouts]: [{ ...latestWorkout, duration_seconds: 60 }] } });
+    render(view());
+    expect(await screen.findByText('This week: 1 workout · 1 minute')).toBeTruthy();
+    expect(screen.queryByText(/unknown duration/u)).toBeNull();
   });
 
   it('retains populated and empty cards while refreshing instead of returning to skeletons', async () => {

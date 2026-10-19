@@ -61,6 +61,7 @@ function WorkoutsTile({ backendUrl, getAccessToken, refreshVersion, period }: {
     source: sources.workouts, ...period.thirtyDays, limit: 500,
   }, refreshVersion, { autoLoad: true, maxPages: 10 });
   const summary = workoutOverview(pages.items as Workout[], period.thirtyDays, period.thisWeek);
+  const weekMinutes = summary.week.durationSeconds === null ? null : summary.week.durationSeconds / 60;
   const latest = summary.latest?.row;
   return <SummaryTile title="Workouts" section="workouts" pages={pages} emptyMessage="No workout in the last 30 days">
     {latest ? <>
@@ -70,9 +71,8 @@ function WorkoutsTile({ backendUrl, getAccessToken, refreshVersion, period }: {
       <p className="daily-meta">Started {formatClockTime(typeof latest.start_at === 'string' ? latest.start_at : null)}</p>
       <p className="daily-meta">{formatDate(summary.latest?.date)}</p>
     </> : <p>Latest workout: Unknown</p>}
-    <p>This week: {formatNumber(summary.week.count)} workouts · {formatNumber(summary.week.durationSeconds === null
-      ? null : summary.week.durationSeconds / 60)} minutes{pages.hasMore || summary.week.missingDuration > 0 ? ' (partial)' : ''}</p>
-    {summary.week.missingDuration > 0 && <p>{summary.week.missingDuration} workouts have unknown duration.</p>}
+    <p>This week: {formatNumber(summary.week.count)} {summary.week.count === 1 ? 'workout' : 'workouts'} · {formatNumber(weekMinutes)} {weekMinutes === 1 ? 'minute' : 'minutes'}{pages.hasMore || summary.week.missingDuration > 0 ? ' (partial)' : ''}</p>
+    {summary.week.missingDuration > 0 && <p>{summary.week.missingDuration} {summary.week.missingDuration === 1 ? 'workout has' : 'workouts have'} unknown duration.</p>}
   </SummaryTile>;
 }
 

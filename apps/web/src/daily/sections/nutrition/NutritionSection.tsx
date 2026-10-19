@@ -25,6 +25,7 @@ type View = typeof tabs[number];
 const display = (value: number | null, unit: string) => value === null ? 'Not recorded' : `${formatNumber(value)} ${unit}`;
 const macros = nutrients.slice(0, 4);
 const nutrientLabel = (key: string, label: string) => key === 'energy_kcal' ? 'Calories' : label;
+const dayWord = (count: number) => count === 1 ? 'day' : 'days';
 
 function NutrientList({ row }: { row: Row }) {
   return <dl>{nutrients.map(nutrient => <div key={nutrient.key}>
@@ -43,7 +44,7 @@ function PlanTotals({ row }: { row: Row }) {
     <dl>{nutrients.map(nutrient => {
       const total = sumNutrient(items, nutrient.key);
       return <div key={nutrient.key}><dt>{nutrient.label}</dt><dd>{display(total.value, nutrient.unit)}
-        {total.missing > 0 ? ` (${total.value === null ? 'unknown' : 'lower bound'}: at least, ${total.missing} items have no value)` : ''}</dd></div>;
+        {total.missing > 0 ? ` (${total.value === null ? 'unknown' : 'lower bound'}: at least, ${total.missing} ${total.missing === 1 ? 'item has' : 'items have'} no value)` : ''}</dd></div>;
     })}</dl>
   </>;
 }
@@ -213,16 +214,16 @@ function Trend({ days, select, targets, period }: { days: DailyPages; select: (d
     <p>The chart shows daily protein totals; this table shows Monday-based weekly averages with a known-day count for each nutrient.</p>
     <ScrollTable label="Weekly nutrition averages"><table><caption>Monday-based weekly averages over logged days only</caption>
         <thead><tr><th scope="col">Week starting</th><th scope="col">Logged days</th>{nutrients.map(nutrient => <th scope="col" key={nutrient.key}>{nutrient.label}</th>)}</tr></thead>
-        <tbody>{weeks.map(week => <tr key={week.week}><th scope="row">{week.week}</th><td>Average over {week.days} logged days</td>
+        <tbody>{weeks.map(week => <tr key={week.week}><th scope="row">{week.week}</th><td>Average over {week.days} logged {dayWord(week.days)}</td>
           {week.values.map((value, index) => <td key={value.key}>{display(value.value, nutrients[index]!.unit)}
-            {value.missing > 0 ? ` (partial: excludes ${value.missing} unknown logged days)` : ''}
-            {value.lowerBound ? ' (includes lower-bound day totals)' : ''} · {value.count} known days</td>)}</tr>)}</tbody>
+            {value.missing > 0 ? ` (partial: excludes ${value.missing} unknown logged ${dayWord(value.missing)})` : ''}
+            {value.lowerBound ? ' (includes lower-bound day totals)' : ''} · {value.count} known {dayWord(value.count)}</td>)}</tr>)}</tbody>
       </table></ScrollTable>
   </>;
   return <div className="nutrition-block">
     <PagesState pages={days} label="Trend" />
     {(days.status === 'ready' || rows.length > 0) && <>
-      <p>{rows.length} of {periodDays} days in this period have meals; missing days remain unknown.</p>
+      <p>{rows.length} of {periodDays} {dayWord(periodDays)} in this period {rows.length === 1 ? 'has' : 'have'} meals; missing days remain unknown.</p>
       <DataNotes>
        <p>Dates use Europe/Copenhagen. Missing days are not zero, lines do not bridge gaps, and partial nutrients are lower bounds. Loaded history does not establish source completeness.</p>
        <BaselineNote state={targets} />
@@ -245,11 +246,11 @@ function Trend({ days, select, targets, period }: { days: DailyPages; select: (d
       <section className="nutrition-block" aria-labelledby="nutrition-weekly-heading">
        <h3 id="nutrition-weekly-heading">Weekly averages</h3>
        <ul className="nutrition-weekly-list">{weeks.map(week => <li key={week.week}>
-         <div><strong>Week of {week.week}</strong><span>Average over {week.days} logged days</span></div>
+         <div><strong>Week of {week.week}</strong><span>Average over {week.days} logged {dayWord(week.days)}</span></div>
          <dl>{week.values.map((value, index) => <div key={value.key}>
            <dt>{nutrientLabel(value.key, nutrients[index]!.label)}</dt>
-           <dd>{display(value.value, nutrients[index]!.unit)} · {value.count} known days
-             {value.missing > 0 ? ` (partial: excludes ${value.missing} unknown logged days)` : ''}
+           <dd>{display(value.value, nutrients[index]!.unit)} · {value.count} known {dayWord(value.count)}
+             {value.missing > 0 ? ` (partial: excludes ${value.missing} unknown logged ${dayWord(value.missing)})` : ''}
              {value.lowerBound ? ' (includes lower-bound day totals)' : ''}</dd>
          </div>)}</dl>
        </li>)}</ul>
