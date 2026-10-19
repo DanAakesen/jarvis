@@ -1,5 +1,24 @@
 # Architecture
 
+## Planned Azure vault mirror decision boundary (19 October 2026; P14-26)
+
+`apps/vault-mirror` (`@jarvis/vault-mirror`) is an offline TypeScript workspace,
+**planned and not yet deployed**. Its pure `planReconcile` engine takes approved
+Obsidian/GitHub/base inventories, supplied time and in-memory readers/merge;
+it returns guarded directional writes and common-base updates, without I/O.
+Private Zod policy validation, NFC paths, CRLF-normalized SHA-256 comparison,
+collision refusal, credential filtering and default-off Obsidian write-back
+are separate from any future runner. The existing desktop scheduled task stays.
+
+The strict `vaultMirrorStatusSchema` in `packages/contracts` defines bounded,
+content-free status with fixed reasons/counts and at most ten private conflict
+paths. Mirror-only changes qualify mirror + Python checks, not an existing
+application deployment. No CLI, Azure job, storage, image or entry point is
+implemented here; the future runner owns snapshot preconditions, action ordering,
+conflict timestamps and durable state. Obsidian Headless Sync behavior is
+**not yet verified against the live service**. See
+[`apps/vault-mirror/README.md`](../apps/vault-mirror/README.md).
+
 ## Shared web date-time formatting (19 October 2026; P14-23)
 
 `apps/web/src/format/date-time.ts` is the web client’s shared date-time

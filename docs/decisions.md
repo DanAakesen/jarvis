@@ -37,6 +37,65 @@ on coarse pointers), the “Send” name and a visible keyboard focus outline, a
 it no longer aliases the shared primary button. This is a scoped exception to the
 shared primary alias rule for this one control.
 
+## P14-26 — Pure vault mirror policy, reconcile and status contract (19 October 2026; #1077)
+
+Implement only the offline decision boundary in `apps/vault-mirror`, not a
+runner or deployment. The existing desktop task remains. Obsidian Headless Sync
+and Azure integration are **not yet verified against the live service**.
+The private policy is required, strict Zod-validated and fails closed with fixed
+errors; regex compilation uses `i` and invalid patterns report `policy-missing`.
+Paths compare after NFC and conservative Unicode caseless collision checks;
+file/descendant collisions also skip, including approved descendants blocked
+by an excluded ancestor file.
+Content compares as SHA-256 of UTF-8 with CRLF converted to LF. Policy-approved
+root/nested paths still require regular non-executable mode `100644`, bounded
+bytes and no outgoing credential-pattern match. Skips never reveal a match.
+
+| O / G / B | Decision |
+| --- | --- |
+| O equals G | Record common base if missing/stale; otherwise no action |
+| Both absent | Forget base if present |
+| O only, no B | Create G |
+| O only, equals B | G deletion: delete O, subject to write-back gating |
+| O only, differs from B | Preserve edit: recreate G |
+| G only, no B | Create O, subject to write-back gating |
+| G only, equals B | O deletion: delete G |
+| G only, differs from B | Preserve edit: recreate O, subject to write-back gating |
+| Different present O/G, no B | Conflict: skip |
+| Different present O/G, B equals O | Write G back to O |
+| Different present O/G, B equals G | Push O to G |
+| Different present O/G, B equals neither | Injected three-way merge; clean writes identical text to both, otherwise skip |
+
+Unresolved conflicts never modify O. Persist first-seen conflict times separately
+when no base exists. At 24 hours, a still-conflicting path resolves in O's favour
+by pushing O to G only, counted separately; GitHub retains the other version in
+history. Apply writes before their common-base action, stop on failure and replan
+fresh snapshots after crashes. The injected merge must be lossless/idempotent.
+
+Any per-direction change/delete cap breach, deletions of more than 10% of
+distinct base paths, an empty side against at least ten approved files, or more
+than 20% of base paths missing on either side empties the whole plan, including
+state actions. Proposed changes include deletes and are counted before gating.
+Caps default to 25 changes / 3 deletes; hard maxima are 100 / 10. The owner may
+raise a cap for one complete first-run snapshot, then restore it; ratio/empty
+guards have no override. Per-path invalid/oversized/non-regular/collision/content
+failures skip and count; credential matches flag `needs-attention/secret-match`.
+
+Write-back remains `dry-run` by default, also suppressed for freshly initialized
+state and all guard trips. Pending O writes never advance/forget the base.
+Two acceptance-property phrases are interpreted according to the explicit
+shared contract: dry-run forbids **O writes**, not G uploads; opposing-direction
+writes are forbidden **except identical clean-merge output**. These are explicit
+clarifications, not a change to the shared decision table or default.
+
+The shared strict status schema uses exactly the contract's fields and enums,
+nonnegative integer counts, at most ten conflict paths, run IDs ≤128 characters,
+paths ≤1024 and ISO timestamps ≤64. `lastSuccessAt` is required and nullable
+until the first success. These bounds/null representation settle unspecified
+status details for later issues. Plans contain private text/paths and are never
+log data; only counters and fixed reasons are log-safe. No live vault fixtures,
+Obsidian credentials, network calls or clock reads are part of this workspace.
+
 ## P14-24 — Plan todo reminders after default-branch vault pushes (19 October 2026; #1073)
 
 A verified push to the vault repository's default branch starts a bounded,

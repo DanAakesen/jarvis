@@ -1,3 +1,28 @@
+import type { ZodType } from 'zod';
+
+export interface VaultMirrorStatus {
+  runId: string;
+  startedAt: string;
+  finishedAt: string;
+  outcome: 'ok' | 'ok-noop' | 'skipped-busy' | 'needs-attention' | 'failed';
+  reason?: 'auth' | 'policy-missing' | 'repo-not-private' | 'pull-failed' | 'guard-tripped'
+    | 'conflict' | 'secret-match' | 'push-rejected' | 'upload-failed' | 'state-corrupt'
+    | 'timeout' | 'unexpected';
+  writeBack: 'dry-run' | 'on';
+  approved: number;
+  pushed: number;
+  writtenBack: number;
+  deleted: number;
+  conflicts: number;
+  skipped: number;
+  credentialMatches: number;
+  pendingWriteBack: number;
+  consecutiveFailures: number;
+  lastSuccessAt: string | null;
+  conflictPaths: string[];
+}
+export const vaultMirrorStatusSchema: ZodType<VaultMirrorStatus>;
+
 /** Reserved IDs only; native Daily renderers are implemented in P12-16. */
 export const dailyViewIds: Readonly<{
   status: 'daily-status'; recomp: 'daily-recomp'; review: 'daily-review'; ready: 'daily-ready';
