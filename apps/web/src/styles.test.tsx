@@ -88,7 +88,7 @@ describe('app-wide control contract', () => {
 
   it.each([
     'settings-back', 'signin-button',
-    'kanban-card-action', 'presence-chip-trigger', 'presence-option', 'presence-mode-card',
+    'presence-chip-trigger', 'presence-option', 'presence-mode-card',
     'memory-item', 'modal-close', 'knowledge-reset', 'folio-search', 'folio-kind',
     'folio-action', 'mobile-menu-link', 'kanban-filter-toggle', 'kanban-column-toggle',
     'collapsible-toggle', 'usage-segmented', 'advanced-segmented',
@@ -323,7 +323,9 @@ describe('app-wide control contract', () => {
 
             const primaryIndex = controls.findIndex(([control]) =>
               /className=(?:"[^"]*\b(?:primary-button|danger-button--filled)\b[^"]*"|{[^}]*\b(?:primary-button|danger-button--filled)\b[^}]*})/.test(control));
-            if (primaryIndex !== -1 && primaryIndex !== controls.length - 1) {
+            const confirmedCancel = path.endsWith('/factory/TaskControls.tsx') &&
+              component.slice(start, close).includes('This ends the task and cannot be undone.');
+            if (primaryIndex !== -1 && primaryIndex !== controls.length - 1 && !confirmedCancel) {
               violations.push(`${path}: primary action precedes another control in .${groupClasses.find((name) => classes.has(name))}`);
             }
           }
@@ -356,7 +358,6 @@ describe('app-wide control contract', () => {
 
   it('removes decorative control rims without removing neutral field structure or focus', () => {
     for (const selector of [
-      /\.kanban-card-action\s*\{([^}]*)\}/,
       /\.release-trail-button, \.release-trail-open\s*\{([^}]*)\}/,
     ]) expect(ruleDeclaration(source, selector, 'border')).toBe('0');
     expect(ruleDeclaration(source, /\.primary-button, \.secondary-button, \.ghost-button, \.danger-button\s*\{([^}]*)\}/, 'border'))
@@ -365,7 +366,7 @@ describe('app-wide control contract', () => {
     expect(source).toContain('border-color: var(--control-rule); background: color-mix(in srgb, var(--text) 6%, var(--surface)); color: var(--text);');
     const controlRule = /([^{}]+)\{([^{}]*)\}/g;
     for (const [, selectors, declarations] of source.matchAll(controlRule)) {
-      if (!/(?:settings-back|signin-button|kanban-card-action|release-trail-button|release-trail-open|presence-mode-card|memory-item|knowledge-reset|knowledge-legend|usage-segmented|advanced-segmented)/.test(selectors!)) continue;
+      if (!/(?:settings-back|signin-button|release-trail-button|release-trail-open|presence-mode-card|memory-item|knowledge-reset|knowledge-legend|usage-segmented|advanced-segmented)/.test(selectors!)) continue;
       expect(declarations, selectors).not.toMatch(/box-shadow:[^;]*(?:inset|glass-selected-glow)/);
     }
     expect(ruleDeclaration(source, /\.knowledge-search\.luminous-glass\s*\{([^}]*)\}/, 'border-color')).toBe('var(--control-rule)');

@@ -133,9 +133,15 @@ describe('task controls', () => {
     expect(screen.queryByRole('button', { name: 'Pause' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Resume' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Recover' })).toBeNull();
-    await user.click(screen.getByRole('button', { name: 'Cancel task' }));
+    const cancelButton = screen.getByRole('button', { name: 'Cancel task' });
+    expect(cancelButton.className).toBe('danger-button');
+    await user.click(cancelButton);
     expect(screen.getByText('This ends the task and cannot be undone.')).not.toBeNull();
-    await user.click(screen.getByRole('button', { name: 'Confirm cancel task' }));
+    const confirmButton = screen.getByRole('button', { name: 'Confirm cancel task' });
+    expect(confirmButton.className).toBe('danger-button danger-button--filled');
+    expect([...confirmButton.parentElement!.querySelectorAll('button')].map((button) => button.textContent))
+      .toEqual(['Confirm cancel task', 'Keep task']);
+    await user.click(confirmButton);
 
     expect(fetchMock).toHaveBeenCalledWith(
       expect.any(String),
