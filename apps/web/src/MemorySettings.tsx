@@ -3,6 +3,7 @@ import { backendFetch } from './backend-request';
 import { Loader } from './Loader';
 import { Modal } from './Modal';
 import { StateMessage } from './StateMessage';
+import { formatDateTime } from './format/date-time';
 
 // Only memories Jarvis keeps from conversations are shown here; vault notes live in Knowledge (Dan, 8 October).
 // The memory API files them under General and lists them before vault notes (docs/architecture.md, P7-40/P7-42).
@@ -20,7 +21,7 @@ class Unavailable extends Error {}
 const record = (value: unknown): Record<string, unknown> | null => typeof value === 'object' && value !== null ? value as Record<string, unknown> : null;
 const text = (value: unknown, max = maxText) => typeof value === 'string' ? value.slice(0, max) : '';
 const date = (value: unknown) => typeof value === 'string' && !Number.isNaN(Date.parse(value)) ? value : null;
-const formatDate = (value: string | null) => value ? new Date(value).toLocaleString() : 'Not reported';
+const formatDate = (value: string | null) => value ? formatDateTime(value) : 'Not reported';
 const githubUrl = (value: unknown) => typeof value === 'string' && /^https:\/\/github\.com\//u.test(value) ? value : null;
 const maxDurableText = 2_000;
 
@@ -250,7 +251,7 @@ export function MemorySettings({ backendUrl, getAccessToken }: { backendUrl: str
                       <button className="primary-button" type="button" disabled={busy !== '' || redacted || !draft.trim() || draft.trim() === current.text.trim()}
                         onClick={() => { void saveCorrection(); }}>{busy === 'saving' ? 'Saving…' : 'Save correction'}</button>
                       <button className="secondary-button danger-button" type="button" disabled={busy !== ''} onClick={() => setConfirmForget(true)}>Forget…</button>
-                      <span className="memory-item-meta">{draft.length.toLocaleString()} / 2,000</span>
+                      <span className="memory-item-meta">{draft.length} / 2,000</span>
                     </div>
                     {notice && <p className="settings-feedback" role="status">{notice}</p>}
                     {error && <p className="settings-validation-error" role="alert">{error}</p>}

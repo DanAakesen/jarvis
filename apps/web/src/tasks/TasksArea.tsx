@@ -3,18 +3,15 @@ import { useSearchParams } from 'react-router-dom';
 import type { AreaProps } from '../areas';
 import { Loader } from '../Loader';
 import { loadVaultTasks, VaultTasksUnavailable, vaultTaskRecovery, type VaultTask, type VaultTaskRead } from './tasks-data';
+import { formatDateOnly, formatTimeOnly } from '../format/date-time';
 import './TasksArea.css';
 
 type LoadState = 'loading' | 'loaded' | 'error';
-const dateFormat = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeZone: 'UTC' });
-const timeFormat = new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
-const clockFormat = new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
 
 function taskDueLabel(task: VaultTask): string {
   if (!task.dueDate) return 'No due date';
-  const [year, month, day] = task.dueDate.split('-').map(Number);
-  const date = dateFormat.format(new Date(Date.UTC(year!, month! - 1, day!, 12)));
-  const time = task.dueAt ? timeFormat.format(new Date(task.dueAt)) : task.dueTime;
+  const date = formatDateOnly(task.dueDate, { timeZone: 'UTC' });
+  const time = task.dueAt ? formatTimeOnly(task.dueAt) : task.dueTime;
   return time ? `${date}, ${time}` : date;
 }
 
@@ -142,7 +139,7 @@ export function TasksArea({ backendUrl, getAccessToken }: AreaProps) {
         </label>
       </div>
       {result && <div className="vault-task-freshness">
-        <p>Read from your vault at <time dateTime={result.readAt}>{clockFormat.format(new Date(result.readAt))}</time></p>
+        <p>Read from your vault at <time dateTime={result.readAt}>{formatTimeOnly(result.readAt)}</time></p>
         {result.truncated && <p role="status">Showing the first {result.items.length} of {result.total} matching tasks. Search to narrow the results.</p>}
       </div>}
       {error && <p className="vault-task-error" role="alert">{error}</p>}

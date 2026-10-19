@@ -6,6 +6,7 @@ import { CollapsibleSection } from './CollapsibleSection';
 import { ShellIcon } from './ShellIcon';
 import { returnFocusAfterOutsidePress } from './overlay-focus';
 import { useOverlayMotion } from './overlay-motion';
+import { formatDateTime } from './format/date-time';
 
 type ModeInstructions = Record<PresenceMode, string>;
 const maxInstruction = 2_000;
@@ -163,7 +164,7 @@ export function PresenceSettings({ backendUrl, getAccessToken }: { backendUrl: s
             ))}
           </div>
           <p className="settings-explanation" role="status">
-            {presenceLabel(presence.mode)}{presence.changedAt ? ` since ${new Date(presence.changedAt).toLocaleString()}` : ''}
+            {presenceLabel(presence.mode)}{presence.changedAt ? ` since ${formatDateTime(presence.changedAt)}` : ''}
             {presence.source ? ` · set by ${sourceLabel(presence.source)}` : ''}
           </p>
           {presence.error && <p className="settings-validation-error" role="alert">{presence.error}</p>}
@@ -186,7 +187,7 @@ export function PresenceSettings({ backendUrl, getAccessToken }: { backendUrl: s
                   aria-describedby={`${ids}-${mode}-count`}
                   onChange={(event) => setDraft((current) => current ? { ...current, [mode]: event.target.value } : current)} />
                 <p className="settings-explanation" id={`${ids}-${mode}-count`}>
-                  {draft[mode].length.toLocaleString()} / 2,000 characters
+                  {draft[mode].length} / 2,000 characters
                 </p>
               </div>
             ))}

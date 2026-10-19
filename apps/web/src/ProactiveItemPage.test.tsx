@@ -50,7 +50,7 @@ describe('proactive item page', () => {
 
     expect(await screen.findByRole('heading', { name: 'Synthetic notification item' })).not.toBeNull();
     expect(screen.getByText('This is synthetic item content.')).not.toBeNull();
-    expect(screen.getByText(new Date(itemResponse().createdAt).toLocaleString()).closest('time')?.getAttribute('dateTime'))
+    expect(screen.getByText('17 Oct 2026, 12:00').closest('time')?.getAttribute('dateTime'))
       .toBe(itemResponse().createdAt);
     expect(fetchMock).toHaveBeenCalledWith(`${backendUrl}/proactive/items/${itemId}`, expect.objectContaining({
       headers: { Authorization: `${['Bear', 'er'].join('')} fixture-token`, Accept: 'application/json' },

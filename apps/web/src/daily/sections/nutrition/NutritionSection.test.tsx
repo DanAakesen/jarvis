@@ -440,5 +440,5 @@ describe('Nutrition section', () => {
     expect(readableJson({ source: '<script>synthetic</script>' })).toContain('<script>');
   });
 
-  function formatSynthetic(value: number) { return value.toLocaleString('en-US'); }
+  function formatSynthetic(value: number) { return new Intl.NumberFormat('en-US').format(value); }
 });

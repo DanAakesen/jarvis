@@ -8,6 +8,7 @@ import type { KnowledgeScene } from './knowledge-scene';
 import { useKnowledgeBackend } from './knowledge-context';
 import { loadVaultTasks, VaultTasksUnavailable, vaultTaskRecovery, type VaultTaskRead } from '../tasks/tasks-data';
 import { StateMessage } from '../StateMessage';
+import { formatDateOnly, formatTimeOnly } from '../format/date-time';
 
 type Load = { status: 'loading' } | { status: 'unavailable' } | { status: 'error'; message: string } | { status: 'ready'; graph: KnowledgeGraph };
 
@@ -17,10 +18,8 @@ const reducedMotion = () => (window.matchMedia?.('(prefers-reduced-motion: reduc
 function taskDateLabel(dueDate: string | null, dueTime: string | null, dueAt: string | null): string {
   if (!dueDate) return 'No due date';
   const [year, month, day] = dueDate.split('-').map(Number);
-  const date = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeZone: 'UTC' })
-    .format(new Date(Date.UTC(year!, month! - 1, day!, 12)));
-  const time = dueAt ? new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' })
-    .format(new Date(dueAt)) : dueTime;
+  const date = formatDateOnly(new Date(Date.UTC(year!, month! - 1, day!, 12)), { timeZone: 'UTC' });
+  const time = dueAt ? formatTimeOnly(dueAt) : dueTime;
   return time ? `${date}, ${time}` : date;
 }
 

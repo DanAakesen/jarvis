@@ -5,7 +5,7 @@ import { DataRecords } from './DataRecords';
 import { DailyPage } from '../../DailyPage';
 import { dailyFixture, jsonResponse } from '../../test-support';
 import { DailyRefreshContext } from '../../refresh';
-import { dailyLocale, formatDate } from '../../ui/formatters';
+import { formatDate } from '../../ui/formatters';
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 const row = { meal_date: '2026-10-17', meal_name: 'Synthetic lunch with a long recorded description',
@@ -17,7 +17,7 @@ describe('Daily Data records', () => {
     const table = screen.getByRole('table');
     expect(container.querySelector('.daily-scroll-table-sticky')).toBeTruthy();
     expect(within(table).getByRole('columnheader', { name: 'Energy (kcal)' })).toBeTruthy();
-    const rowHeader = within(table).getByRole('rowheader', { name: formatDate('2026-10-17', dailyLocale()) });
+    const rowHeader = within(table).getByRole('rowheader', { name: formatDate('2026-10-17') });
     expect(rowHeader.classList.contains('daily-record-row-header')).toBe(true);
     expect(within(table).getByText('0').closest('td')?.className).toBe('daily-record-number');
     expect(screen.queryByRole('region', { name: /Details for/u })).toBeNull();

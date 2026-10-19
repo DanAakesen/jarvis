@@ -57,8 +57,8 @@ export function sleepSummary(rows: readonly Row[], period: DailyPeriod) {
 }
 
 // Only offset-qualified instants can be converted safely; naive source times stay verbatim.
-export function sleepTime(value: Row[string] | undefined, locale?: string) {
+export function sleepTime(value: Row[string] | undefined) {
   if (typeof value !== 'string' || !value.trim()) return null;
   if (!/(?:Z|[+-]\d{2}:\d{2})$/u.test(value) || !Number.isFinite(Date.parse(value))) return value;
-  return formatTime(value, locale);
+  return formatTime(value);
 }

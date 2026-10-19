@@ -4,6 +4,7 @@ import { fetchReleaseView } from './release-data';
 import type { ReleaseView } from './release-data';
 import { Loader } from '../Loader';
 import { StateMessage } from '../StateMessage';
+import { formatDateTime } from '../format/date-time';
 
 const idPattern = /^[1-9]\d{0,18}$/u;
 const releaseStatuses = ['building', 'deploying', 'released', 'failed'];
@@ -54,7 +55,7 @@ function statusLabel(status: string): string {
 }
 
 function formatDate(value: string): string {
-  return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value));
+  return formatDateTime(value);
 }
 
 function latestByDate<T>(values: T[], date: (value: T) => string | null): T | undefined {

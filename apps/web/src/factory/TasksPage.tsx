@@ -13,6 +13,7 @@ import { FactoryIssueNavigationContext } from '../page-navigation';
 import { TaskDetailPage } from './TaskDetailPage';
 import { TaskReleaseBar } from './TaskReleaseBar';
 import { TaskControls } from './TaskControls';
+import { formatDateTime } from '../format/date-time';
 import { CompletionPolicyControl, CreateProjectDialog } from './ProjectsPage';
 import { Loader } from '../Loader';
 import { StateMessage } from '../StateMessage';
@@ -779,7 +780,7 @@ export function TasksPage({ backendUrl, getAccessToken }: Props) {
           <>
             <p className="tasks-help">
               <a href={`https://github.com/${board.project.repo}`} target="_blank" rel="noopener noreferrer">{board.project.repo}</a>
-              {' · '}Fetched <time dateTime={board.fetchedAt}>{new Date(board.fetchedAt).toLocaleString()}</time>.
+              {' · '}Fetched <time dateTime={board.fetchedAt}>{formatDateTime(board.fetchedAt)}</time>.
               {' '}Open issues and issues closed in the last 14 days.
             </p>
             <div className="task-live-status kanban-live-status" role="status" aria-live="polite">{liveStatusText}</div>
@@ -848,7 +849,7 @@ export function TasksPage({ backendUrl, getAccessToken }: Props) {
                                 <p className="kanban-meta">
                                   <KanbanIcon name="clock" />
                                   <span>{card.task.attemptCount} attempt{card.task.attemptCount === 1 ? '' : 's'}
-                                    {' · '}{card.task.startedAt ? <>Started <time dateTime={card.task.startedAt}>{new Date(card.task.startedAt).toLocaleString()}</time></> : 'Start not reported'}</span>
+                                    {' · '}{card.task.startedAt ? <>Started <time dateTime={card.task.startedAt}>{formatDateTime(card.task.startedAt)}</time></> : 'Start not reported'}</span>
                                 </p>
                                 <p className="kanban-meta">
                                   <KanbanIcon name="branch" />

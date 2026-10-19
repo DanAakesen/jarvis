@@ -1357,7 +1357,7 @@ describe('ConversationHistory', () => {
     expect(reply?.getAttribute('tabindex')).toBe('0');
     expect(reply?.querySelector('time')?.textContent).toBe('2 minutes ago');
     expect(reply?.querySelector('time')?.getAttribute('datetime')).toBe(message.at);
-    expect(reply?.querySelector('time')?.getAttribute('title')).toBe(new Date(message.at).toLocaleString());
+    expect(reply?.querySelector('time')?.getAttribute('title')).toBe('3 Oct 2026, 12:00');
     expect(screen.getByText('Sure.').closest('li')?.getAttribute('data-speaker')).toBe('dan');
   });
 

@@ -419,8 +419,8 @@ describe('SettingsPage', () => {
     renderSettingsPage();
 
     expect(await screen.findByText('Status: Renew soon')).not.toBeNull();
-    expect(screen.getByText(/Expires: Oct 5, 2026/)).not.toBeNull();
-    expect(screen.getByText(/Last renewed: Sep 25, 2026/)).not.toBeNull();
+    expect(screen.getByText('Expires: 5 Oct 2026, 12:00 UTC')).not.toBeNull();
+    expect(screen.getByText(/Last renewed:\s*25 Sept 2026, 12:00 UTC/u)).not.toBeNull();
     expect(screen.getByText('Copilot token (jarvis-copilot)')).not.toBeNull();
     expect(screen.getByText('Expires: Not recorded')).not.toBeNull();
     expect(document.body.textContent).not.toContain('SECRET');

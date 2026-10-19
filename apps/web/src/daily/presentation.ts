@@ -67,8 +67,8 @@ export function dailyValue(value: DailyJson | undefined, locale = dailyLocale())
   if (typeof value === 'number') return formatNumber(value, 3, locale);
   if (typeof value === 'boolean') return value ? 'Yes' : 'No';
   if (typeof value === 'string') {
-    if (/^\d{4}-\d{2}-\d{2}$/u.test(value) && Number.isFinite(Date.parse(value))) return formatDate(value, locale);
-    if (/^\d{4}-\d{2}-\d{2}T/u.test(value) && Number.isFinite(Date.parse(value))) return formatTime(value, locale);
+    if (/^\d{4}-\d{2}-\d{2}$/u.test(value) && Number.isFinite(Date.parse(value))) return formatDate(value);
+    if (/^\d{4}-\d{2}-\d{2}T/u.test(value) && Number.isFinite(Date.parse(value))) return formatTime(value);
     return value;
   }
   if (Array.isArray(value) && value.every(item => typeof item === 'string')) return value.length ? value.join(', ') : 'None';
@@ -103,7 +103,7 @@ export function dailyPlots(source: DailySourceId, rows: readonly Row[], locale =
       const date = row.metric_date ?? row.sleep_date ?? row.sample_minute;
       // Observation ordinals keep same-date points distinct; bars never imply interpolation over missing values.
       const axisLabel = source === sources.heartRate && typeof date === 'string' && Number.isFinite(Date.parse(date))
-        ? formatTime(date, locale) : dailyValue(date, locale);
+        ? formatTime(date) : dailyValue(date, locale);
       group.points.push({ x: `${index + 1}: ${axisLabel}`, y: value });
       groups.set(id, group);
     }

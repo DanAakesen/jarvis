@@ -6,7 +6,7 @@ describe('Daily formatters', () => {
     expect(formatNumber(null)).toBe('Unknown');
     expect(formatNumber(Number.NaN)).toBe('Unknown');
     expect(formatUnit(undefined, 'kg')).toBe('Unknown');
-    expect(formatDate('2026-02-30', 'en-US')).toBe('Unknown');
+    expect(formatDate('2026-02-30')).toBe('—');
   });
 
   it('formats numbers, units and durations without treating zero as missing', () => {
@@ -17,14 +17,11 @@ describe('Daily formatters', () => {
     expect(formatDuration(-1, 'en-US')).toBe('Unknown');
   });
 
-  it('formats calendar dates and timestamps with a Copenhagen timezone', () => {
-    expect(formatDate('2026-10-17', 'en-US')).toBe('Oct 17, 2026');
-    expect(formatDate('2026-10-17', 'en-GB')).toBe('17 Oct 2026');
-    expect(formatTime('2026-10-17T07:00:00Z', 'en-US')).toBe('Oct 17, 2026, 9:00 AM');
-    expect(formatTime('2026-10-17T07:00:00Z', 'en-GB')).toBe('17 Oct 2026, 09:00');
-    expect(formatClockTime('2026-10-17T07:00:00Z', 'en-US')).toBe('9:00 AM');
-    expect(formatClockTime('2026-10-17T07:00:00Z', 'en-GB')).toBe('09:00');
-    expect(formatClockTime('not-a-date', 'en-US')).toBe('Unknown');
-    expect(formatTime('not-a-date', 'en-GB')).toBe('Unknown');
+  it('formats calendar dates and timestamps with the shared en-GB format and Copenhagen timezone', () => {
+    expect(formatDate('2026-10-17')).toBe('17 Oct 2026');
+    expect(formatTime('2026-10-17T07:00:00Z')).toBe('17 Oct 2026, 09:00');
+    expect(formatClockTime('2026-10-17T07:00:00Z')).toBe('09:00');
+    expect(formatClockTime('not-a-date')).toBe('—');
+    expect(formatTime('not-a-date')).toBe('—');
   });
 });
