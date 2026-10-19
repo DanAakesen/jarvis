@@ -1,6 +1,6 @@
 import { chmod, mkdtemp, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { generateKeyPairSync, randomUUID } from 'node:crypto';
 import { zipSync, strToU8 } from 'fflate';
 import { describe, expect, it, vi } from 'vitest';
@@ -12,10 +12,10 @@ import { mergeThreeWay } from '../src/runner/merge.js';
 import { ObCommandError, runOb } from '../src/runner/obsidian.js';
 import { createMirrorWorkspace } from '../src/runner/production.js';
 import { runMirror } from '../src/runner/run.js';
-import { checksum, decodeState, emptyState, encodeState } from '../src/runner/state.js';
+import { checksum, decodeState, emptyState, encodeState, recordForState } from '../src/runner/state.js';
 import type { MirrorStorage, MirrorSecrets, RemoteFile, RunDependencies, StateLease } from '../src/runner/types.js';
 import { MAX_ARCHIVE_BYTES, VAULT_BRANCH, VAULT_REPOSITORY } from '../src/runner/types.js';
-import { snapshotWorkspace, writeWorkspaceFile } from '../src/runner/workspace.js';
+import { fileRecord, snapshotWorkspace, writeWorkspaceFile } from '../src/runner/workspace.js';
 import { policyData } from './fixtures.js';
 
 const validated = validatePolicy(policyData);
@@ -145,7 +145,7 @@ class FakeObsidian {
   authNextUpload = false;
   failNextPull = false;
   timeoutNextPull = false;
-  afterPull?: () => void;
+  afterPull?: (workingCopy: string) => void | Promise<void>;
   afterUpload?: (workingCopy: string) => Promise<void>;
   readonly remote = new Map<string, string>();
   private knownRemotePaths = new Set<string>();
@@ -197,7 +197,7 @@ class FakeObsidian {
           }
           for (const [path, text] of this.remote) await writeWorkspaceFile(workingCopy, path, text);
           this.knownRemotePaths = new Set(this.remote.keys());
-          this.afterPull?.();
+          await this.afterPull?.(workingCopy);
           if (this.timeoutNextPull) {
             this.timeoutNextPull = false;
             throw new ObCommandError('timeout');
@@ -832,6 +832,47 @@ describe('vault mirror runner', () => {
     expect(result.status.outcome).toBe('needs-attention');
     expect(github.commits).toBe(0);
     expect(obsidian.uploadCalls).toBe(0);
+  });
+
+  it('skips and counts legacy Windows names without corrupting saved state', async () => {
+    const github = new FakeGitHub();
+    const obsidian = new FakeObsidian();
+    const storage = new FakeStorage();
+    const root = await mkdtemp(join(tmpdir(), 'mirror-legacy-windows-path-'));
+    const workingCopy = resolve(root, 'working');
+    const configHome = resolve(root, 'config');
+    await Promise.all([
+      mkdir(workingCopy, { recursive: true }),
+      mkdir(configHome, { recursive: true }),
+    ]);
+    const legacy = emptyState();
+    const file = recordForState('legacy note', fileRecord('legacy note'));
+    legacy.initialized = true;
+    legacy.base['Notes/CON.md'] = file;
+    legacy.pendingWriteBack['Notes/CON.md'] = { kind: 'write', file };
+    storage.archive = await encodeState(legacy, workingCopy, configHome);
+    obsidian.afterPull = async copy => {
+      const path = resolve(copy, 'Notes/CON.md');
+      await mkdir(dirname(path), { recursive: true });
+      await writeFile(path, 'legacy note');
+    };
+    const deps = dependencies(github, obsidian, storage);
+
+    try {
+      const first = await runMirror(options(deps));
+      expect(first.status.reason).toBeUndefined();
+      expect(first.status.skipped).toBe(1);
+      expect(first.status.outcome).toBe('needs-attention');
+      expect(github.commits).toBe(0);
+      expect(obsidian.uploadCalls).toBe(0);
+
+      const next = await runMirror(options(deps));
+      expect(next.status.reason).toBeUndefined();
+      expect(next.status.skipped).toBe(1);
+      expect(next.status.outcome).toBe('needs-attention');
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
   });
 
   it('treats an oversized saved archive as owner-needed before any external write', async () => {

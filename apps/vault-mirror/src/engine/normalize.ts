@@ -17,7 +17,12 @@ export function isWindowsCompatiblePath(path: string): boolean {
     });
 }
 
+export function isSafePathShape(path: string): boolean {
+    return path.length > 0 && !/[\\:]/u.test(path) &&
+      ![...path].some(character => character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127) &&
+      path.split('/').every(segment => segment !== '' && segment !== '.' && segment !== '..');
+}
+
 export function isSafePath(path: string): boolean {
-  return path.length > 0 && isWindowsCompatiblePath(path) &&
-    path.split('/').every(segment => segment !== '' && segment !== '.' && segment !== '..');
+    return isSafePathShape(path) && isWindowsCompatiblePath(path);
 }

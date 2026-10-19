@@ -4,6 +4,7 @@ import { vaultMirrorStatusSchema } from '@jarvis/contracts';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import { planReconcile } from '../engine/index.js';
+import { isSafePath, normalizePath } from '../engine/normalize.js';
 import type { Action, FileRecord, Plan, ReconcileInput } from '../engine/types.js';
 import { GitHubMirrorError } from './github.js';
 import { mergeThreeWay } from './merge.js';
@@ -297,6 +298,12 @@ export async function runMirror(options: RunOptions): Promise<RunResult> {
   let renewTimer: NodeJS.Timeout | undefined;
   let ownedPlan: Plan | undefined;
   let approvedPending = 0;
+  const invalidPendingPaths = new Set<string>();
+  const skippedCount = (plan?: Plan): number => {
+    const planned = new Set(plan?.skipped.map(item => normalizePath(item.path)) ?? []);
+    return (plan?.counters.skipped ?? 0) +
+      [...invalidPendingPaths].filter(path => !planned.has(normalizePath(path))).length;
+  };
 
   const status = (): RunResult['status'] => vaultMirrorStatusSchema.parse({
     runId,
@@ -394,6 +401,13 @@ export async function runMirror(options: RunOptions): Promise<RunResult> {
       }
     }
     stateLoaded = true;
+    for (const path of Object.keys(state.pendingWriteBack)) {
+      if (!isSafePath(path)) {
+        delete state.pendingWriteBack[path];
+        invalidPendingPaths.add(path);
+      }
+    }
+    counts.skipped = invalidPendingPaths.size;
     if (state.lastSuccessAt && (!lastSuccessAt || Date.parse(state.lastSuccessAt) > Date.parse(lastSuccessAt))) {
       lastSuccessAt = state.lastSuccessAt;
     }
@@ -453,7 +467,7 @@ export async function runMirror(options: RunOptions): Promise<RunResult> {
     }
     const setCounts = (): void => {
       counts.approved = plan.counters.approved;
-      counts.skipped = plan.counters.skipped;
+      counts.skipped = skippedCount(plan);
       counts.conflicts = plan.counters.conflicts;
       counts.credentialMatches = plan.counters.credentialMatches;
       approvedPending = plan.counters.pendingWriteBack;
@@ -575,7 +589,7 @@ export async function runMirror(options: RunOptions): Promise<RunResult> {
       reason === 'push-rejected' || reason === 'timeout') outcome = 'failed';
     if (ownedPlan) {
       counts.approved = ownedPlan.counters.approved;
-      counts.skipped = ownedPlan.counters.skipped;
+      counts.skipped = skippedCount(ownedPlan);
       counts.conflicts = ownedPlan.counters.conflicts;
       counts.credentialMatches = ownedPlan.counters.credentialMatches;
     }
