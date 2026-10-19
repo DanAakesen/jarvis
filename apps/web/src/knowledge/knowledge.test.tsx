@@ -147,6 +147,30 @@ describe('knowledge graph view', () => {
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('https://api.example.com/knowledge/search?q=anna', expect.anything()));
   });
 
+  it('announces an empty search without rendering an empty results shell', async () => {
+    const query = '<fixture> & no matches';
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      if (url.pathname === '/knowledge/graph') return json({
+        nodes: [{ id: 'fixture', path: 'Work/Fixture.md', title: 'Fixture note', folder: 'Work' }],
+        edges: [],
+      });
+      if (url.pathname === '/knowledge/search') return json({ hits: [] });
+      if (url.pathname === '/vault/tasks') return json({
+        items: [], readAt: '2031-04-09T20:28:00.000Z', today: '2031-04-09', total: 0, truncated: false,
+      });
+      return json({}, 404);
+    }));
+    const { container } = render(<KnowledgeGraphView backendUrl="https://api.example.com" getAccessToken={getAccessToken} showTaskMatches />);
+
+    fireEvent.change(await screen.findByLabelText('Search your knowledge'), { target: { value: query } });
+
+    const message = await screen.findByText(`No notes or tasks match “${query}”.`);
+    expect(message.getAttribute('role')).toBe('status');
+    expect(message.querySelector('fixture')).toBeNull();
+    expect(container.querySelector('.knowledge-results')).toBeNull();
+  });
+
   it('shows task matches and plain note snippets as separate search results', async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = new URL(String(input));

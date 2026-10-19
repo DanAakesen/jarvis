@@ -10,7 +10,7 @@ const json = (value: unknown, status = 200) =>
 const task = (id: string, text: string, dueDate: string | null, done = false, priority: VaultTask['priority'] = 'normal',
   path = 'Personal/Inbox.md'): VaultTask => ({
   id: id.padStart(64, '0'), text, done, dueDate, dueTime: null,
-  dueAt: dueDate ? `${dueDate}T12:00:00.000Z` : null, priority,
+  dueAt: dueDate ? `${dueDate}T20:28:00.000Z` : null, priority,
   path, line: Number(id), heading: 'Inbox',
 });
 const allTasks = [
@@ -41,7 +41,7 @@ beforeEach(() => {
       (!query || item.text.toLowerCase().includes(query)));
     return json({
       items: matches,
-      readAt: '2031-04-09T12:30:00.000Z',
+      readAt: '2031-04-09T20:28:00.000Z',
       today: '2031-04-09',
       total: matches.length,
       truncated: false,
@@ -63,7 +63,9 @@ describe('vault Tasks area', () => {
     expect(screen.getAllByText('Open')).toHaveLength(4);
     expect(screen.getByText('High priority')).not.toBeNull();
     expect(screen.getByText((_content, element) => element?.tagName === 'P' &&
-      /Read from your vault at\s+12:30/u.test(element.textContent ?? ''))).not.toBeNull();
+      /Read from your vault at\s+20:28/u.test(element.textContent ?? ''))).not.toBeNull();
+    expect(screen.getByText((_content, element) => element?.tagName === 'TIME' &&
+      element.textContent?.trim() === '20:28')).not.toBeNull();
     expect(screen.getByRole('link', { name: 'Open source note Personal/Mirror & Frame.md, line 2' }).getAttribute('href'))
       .toBe('/notes?note=Personal%2FMirror+%26+Frame.md');
     expect(screen.getByText(/checkbox items in your Personal and Work notes/)).not.toBeNull();

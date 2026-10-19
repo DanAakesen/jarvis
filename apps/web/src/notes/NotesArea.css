@@ -15,6 +15,9 @@
 .knowledge-task-results-count { width: fit-content; color: var(--text); font-size: var(--type-caption); text-underline-offset: 2px; }
 .knowledge-task-results-count:hover { color: var(--text-muted); }
 .knowledge-task-results-count:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; border-radius: var(--radius-control); }
+@media (pointer: coarse) {
+  .knowledge-task-results-count { display: inline-flex; min-height: 44px; align-items: center; }
+}
 .knowledge-task-results ol { display: grid; gap: var(--space-2); padding: 0; margin: 0; list-style: none; }
 .knowledge-task-results li { display: flex; min-width: 0; justify-content: space-between; gap: var(--space-2); font-size: var(--type-caption); }
 .knowledge-task-results li span { min-width: 0; overflow-wrap: anywhere; }
@@ -83,6 +86,9 @@
   .notes-page .knowledge-results { top: 70px; }
   .notes-page .knowledge-reset { padding: 0 var(--space-2); font-size: var(--type-caption); }
   .notes-page .knowledge-count { font-size: var(--type-caption); }
+  .notes-page .knowledge-search:has(.knowledge-reset) .knowledge-count {
+    position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap;
+  }
   .knowledge-note.notes-popup { top: auto; right: calc(env(safe-area-inset-right) + 8px); bottom: calc(68px + var(--phone-dock-bottom, 16px) + 36px); left: calc(env(safe-area-inset-left) + 8px); width: auto; max-height: min(65dvh, calc(100dvh - env(safe-area-inset-top) - var(--rail-size, 48px) - 68px - var(--phone-dock-bottom, 16px) - 48px)); }
   .notes-draft-layout { grid-template-columns: minmax(0, 1fr); gap: var(--space-4); }
   .notes-folder-tree { max-height: 220px; }
