@@ -1,7 +1,12 @@
-import base from '../backend/eslint.config.js';
+import js from '@eslint/js';
+import globals from 'globals';
+import tseslint from 'typescript-eslint';
 
 export default [
-  ...base,
+  { ignores: ['dist/**', 'coverage/**'] },
+  js.configs.recommended,
+  ...tseslint.configs.recommended,
+  { languageOptions: { globals: globals.node } },
   {
     files: ['src/engine/**/*.ts'],
     rules: {

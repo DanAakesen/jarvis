@@ -1,4 +1,4 @@
-import { contentHash, contentSize, foldPath, normalizeContent, normalizePath } from './normalize.js';
+import { contentHash, contentSize, foldPath, isSafePath, normalizeContent, normalizePath } from './normalize.js';
 import { isApprovedPath } from './policy.js';
 import type { Action, BaseRecord, FileRecord, GuardReason, Plan, ReconcileInput, Side, SkipReason } from './types.js';
 
@@ -34,10 +34,12 @@ export function planReconcile(input: ReconcileInput): Plan {
 
   const spellings = new Map<string, Set<string>>();
   const collisions = new Set<string>();
+  const filePaths = new Set<string>();
   const index = (files: ReadonlyMap<string, FileRecord>): Index => {
     const result: Index = new Map();
     for (const [sourcePath, record] of files) {
       const path = normalizePath(sourcePath);
+      if (isSafePath(path) && record.mode !== '040000') filePaths.add(foldPath(path));
       if (!isApprovedPath(input.policy, path)) { counts.excluded++; continue; }
       const folded = foldPath(path);
       const variants = spellings.get(folded) ?? new Set<string>();
@@ -51,6 +53,16 @@ export function planReconcile(input: ReconcileInput): Plan {
   const O = index(input.O);
   const G = index(input.G);
   const B = index(input.B);
+  for (const path of filePaths) {
+    const segments = path.split('/');
+    for (let end = 1; end < segments.length; end++) {
+      const ancestor = segments.slice(0, end).join('/');
+      if (filePaths.has(ancestor)) {
+        collisions.add(ancestor);
+        collisions.add(path);
+      }
+    }
+  }
   const paths = [...new Set([...O.keys(), ...G.keys(), ...B.keys()])].sort();
   counts.approved = new Set([...O.keys(), ...G.keys()]).size;
   if ((O.size === 0 && G.size >= 10) || (G.size === 0 && O.size >= 10)) guard('empty-side');

@@ -102,6 +102,22 @@ describe('normalisation and collisions', () => {
     const O = new Map(input.O).set('Notes/straße.md', record('a')).set('Notes/STRASSE.md', record('b'));
     expect(planReconcile({ ...input, O }).counters.skipReasons['path-collision']).toBe(2);
   });
+  it('file/descendant collisions across sides skip both instead of planning impossible writes', () => {
+    const { input } = fixture();
+    const O = new Map(input.O).set('Notes/parent.md', record('parent'));
+    const G = new Map(input.G).set('Notes/parent.md/child.md', record('child'));
+    const plan = planReconcile({ ...input, O, G });
+    expect(plan.actions).toEqual([]);
+    expect(plan.counters.skipReasons['path-collision']).toBe(2);
+  });
+  it('an excluded ancestor file still blocks writes to its approved descendants', () => {
+    const { input } = fixture();
+    const O = new Map(input.O).set('Notes/PRIVATE.MD', record('excluded'));
+    const G = new Map(input.G).set('Notes/private.md/child.md', record('child'));
+    const plan = planReconcile({ ...input, O, G });
+    expect(plan.actions).toEqual([]);
+    expect(plan.skipped).toEqual([{ path: 'Notes/private.md/child.md', reason: 'path-collision' }]);
+  });
 });
 
 describe('per-path safety', () => {

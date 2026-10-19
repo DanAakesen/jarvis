@@ -8,7 +8,9 @@ and Azure integration are **not yet verified against the live service**.
 The private policy is required, strict Zod-validated and fails closed with fixed
 errors; regex compilation uses `i` and invalid patterns report `policy-missing`.
 Paths compare after NFC and conservative Unicode caseless collision checks;
-content compares as SHA-256 of UTF-8 with CRLF converted to LF. Policy-approved
+file/descendant collisions also skip, including approved descendants blocked
+by an excluded ancestor file.
+Content compares as SHA-256 of UTF-8 with CRLF converted to LF. Policy-approved
 root/nested paths still require regular non-executable mode `100644`, bounded
 bytes and no outgoing credential-pattern match. Skips never reveal a match.
 
