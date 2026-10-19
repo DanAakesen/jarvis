@@ -17,9 +17,9 @@ $script:inputs = [System.Collections.Queue]::new()
 @(
     'n',
     'synthetic-auth-token',
-    'Synthetic Vault',
-    'synthetic-password',
-    '{"allowedRoots":["Notes"],"allowedExtensions":[".md"],"excludedPrefixes":[],"excludedNames":[],"excludedNamePattern":"","secretPatterns":["synthetic-policy-sentinel"],"maxNoteBytes":10000}',
+    'Café ø',
+    'synthetic-password-ø',
+    '{"allowedRoots":["Notes"],"allowedExtensions":[".md"],"excludedPrefixes":["Café"],"excludedNames":[],"excludedNamePattern":"","secretPatterns":["synthetic-policy-sentinel"],"maxNoteBytes":10000}',
     '25',
     '3'
 ) | ForEach-Object { $script:inputs.Enqueue($_) }
@@ -46,10 +46,11 @@ function az {
     if ($command -like 'role assignment list*') { return '[]' }
     if ($command -like 'role assignment create*') { return '{"id":"/roleAssignments/temporary"}' }
     if ($command -like 'account get-access-token*') { return 'synthetic-access-token' }
-    if ($command -like 'keyvault secret list*') {
-        $queryIndex = [Array]::IndexOf($args, '--query')
-        $name = [regex]::Match($args[$queryIndex + 1], "name=='([^']+)'").Groups[1].Value
-        return ConvertTo-Json -InputObject @("https://kv-test.vault.azure.net/secrets/$name/version-1") -Compress
+    if ($command -like 'keyvault secret list*') { return ConvertTo-Json -InputObject @('https://kv-test.vault.azure.net/secrets/obsidian-auth-token') -Compress }
+    if ($command -like 'keyvault secret show*') {
+        $nameIndex = [Array]::IndexOf($args, '--name')
+        $name = $args[$nameIndex + 1]
+        return "https://kv-test.vault.azure.net/secrets/$name/version-1"
     }
     if ($command -like 'role assignment delete*') { $script:roleDeleted = $true; return }
     throw 'Unexpected mocked Azure CLI command.'
@@ -62,7 +63,14 @@ function gh {
 function Invoke-RestMethod {
     param($Method, $Uri, $Headers, $ContentType, $Body, $TimeoutSec, $ErrorAction)
     if ($Headers.Authorization -ne ('Bearer ' + 'synthetic-access-token')) { throw 'Unexpected authorization header.' }
-    $script:requestBodies += [string]$Body
+    if ($ContentType -ne 'application/json; charset=utf-8' -or $Body -isnot [byte[]]) {
+        throw 'Key Vault request body was not sent as UTF-8 bytes.'
+    }
+    $decodedBody = [Text.Encoding]::UTF8.GetString($Body)
+    if ($decodedBody -match 'Café ø' -and [BitConverter]::ToString($Body) -notmatch '43-61-66-C3-A9-20-C3-B8') {
+        throw 'Non-ASCII values were not preserved in UTF-8 request bytes.'
+    }
+    $script:requestBodies += ,$Body
     if ($env:FAIL_KV -eq 'true') { throw 'synthetic provider failure' }
     return @{}
 }
@@ -79,13 +87,14 @@ if ($env:FAIL_KV -eq 'true') {
     if ($result -ne 'SCRIPT_FAILED' -or -not $script:roleDeleted) { exit 1 }
 }
 else {
-    $values = @($script:requestBodies | ForEach-Object { (ConvertFrom-Json $_).value })
+    $values = @($script:requestBodies | ForEach-Object { (ConvertFrom-Json ([Text.Encoding]::UTF8.GetString($_))).value })
     if ($result -ne 'SCRIPT_OK' -or -not $script:roleDeleted -or $values.Count -ne 4 -or
-        $values -notcontains 'synthetic-auth-token' -or $values -notcontains 'synthetic-password' -or
-        $values -notcontains 'Synthetic Vault' -or ($values -join '') -notmatch 'synthetic-policy-sentinel') {
+        $values -notcontains 'synthetic-auth-token' -or
+        $values -notcontains 'Café ø' -or $values -notcontains 'synthetic-password-ø' -or
+        ($values -join '') -notmatch 'synthetic-policy-sentinel') {
         $tokenFound = $values -contains 'synthetic-auth-token'
-        $passwordFound = $values -contains 'synthetic-password'
-        $vaultFound = $values -contains 'Synthetic Vault'
+        $passwordFound = $values -contains 'synthetic-password-ø'
+        $vaultFound = $values -contains 'Café ø'
         $policyFound = ($values -join '') -match 'synthetic-policy-sentinel'
         Write-Output "setup result=$result; temporary role removed=$($script:roleDeleted); stored value count=$($values.Count); values=$tokenFound,$passwordFound,$vaultFound,$policyFound"
         exit 1
@@ -131,12 +140,19 @@ class VaultMirrorSetupTests(unittest.TestCase):
         self.assertIn("SCRIPT_OK", result.stdout)
         for value in (
             "synthetic-auth-token",
-            "synthetic-password",
+            "synthetic-password-ø",
+            "Café ø",
             "synthetic-policy-sentinel",
             "synthetic-access-token",
         ):
             self.assertNotIn(value, result.stdout + result.stderr)
         self.assertIn("version version-1", result.stdout)
+        self.assertNotIn("version obsidian-auth-token", result.stdout)
+
+    def test_key_vault_payload_bytes_preserve_non_ascii_utf8(self):
+        result = self.run_setup()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("SCRIPT_OK", result.stdout)
 
     def test_temporary_role_is_removed_after_key_vault_failure(self):
         result = self.run_setup(fail=True)

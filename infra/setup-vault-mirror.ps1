@@ -192,12 +192,13 @@ try {
 
     foreach ($secret in $secrets) {
         $body = ConvertTo-Json -InputObject @{ value = $secret.Value; contentType = 'text/plain' } -Compress
+        $bodyBytes = [Text.Encoding]::UTF8.GetBytes($body)
         $stored = $false
         for ($attempt = 1; $attempt -le 24; $attempt++) {
             try {
                 $null = Invoke-RestMethod -Method Put -Uri "$($vaultUri.TrimEnd('/'))/secrets/$($secret.Name)?api-version=7.4" `
-                    -Headers @{ Authorization = ('Bearer ' + $accessToken) } -ContentType 'application/json' `
-                    -Body $body -TimeoutSec 30 -ErrorAction Stop
+                    -Headers @{ Authorization = ('Bearer ' + $accessToken) } -ContentType 'application/json; charset=utf-8' `
+                    -Body $bodyBytes -TimeoutSec 30 -ErrorAction Stop
                 $stored = $true
                 break
             }
@@ -214,11 +215,14 @@ try {
     Set-GitHubVariable 'JARVIS_VAULT_MIRROR_MAX_DELETES' $maxDeletesInput $GitHubRepo
 
     foreach ($secret in $secrets) {
-        $ids = Invoke-Az keyvault secret list --vault-name $keyVaultName --subscription $subscriptionId `
-            --query "[?name=='$($secret.Name)'].id" --output json | ConvertFrom-Json
-        $secretId = [string](@($ids | Where-Object { $_ } | Select-Object -First 1))
+        $secretId = [string](Invoke-Az keyvault secret show --vault-name $keyVaultName --name $secret.Name `
+            --subscription $subscriptionId --query id --output tsv)
         if (-not $secretId) { throw "Key Vault did not report secret '$($secret.Name)' as present." }
-        $version = ($secretId.TrimEnd('/') -split '/')[-1]
+        $secretIdParts = $secretId.TrimEnd('/') -split '/'
+        if ($secretIdParts.Count -lt 2 -or $secretIdParts[-2] -ne $secret.Name) {
+            throw "Key Vault returned an invalid version identifier for secret '$($secret.Name)'."
+        }
+        $version = $secretIdParts[-1]
         Write-Host "Stored $($secret.Name); present with version $version."
     }
     Write-Host "Vault-mirror settings are stored. Write-back remains dry-run; the enable switch was not changed."
@@ -241,6 +245,7 @@ finally {
     $policyJson = $null
     $accessToken = $null
     $body = $null
+    $bodyBytes = $null
     $secrets = $null
     $secret = $null
 }

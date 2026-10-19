@@ -37,19 +37,42 @@ printf '%s\\n' "$*" >>"$AZ_LOG"
 if [[ "$1 $2 $3" == "deployment group show" ]]; then
   if [[ "$*" == *containerRegistryName.value* ]]; then
     echo '{"name":"crjarvis","host":"crjarvis.azurecr.io"}'
+  elif [[ "$*" == *properties.outputs* ]]; then
+    echo '{"containerRegistryName":{"value":"crjarvis"},"keyVaultName":{"value":"kv-jarvis-test"},"storageAccountName":{"value":"stjarvistest"}}'
   else
     echo '{}'
   fi
-elif [[ "$1 $2 $3" == "containerapp job list" && "${FAKE_MIRROR_PRESENT:-false}" == true ]]; then
-  echo 'job-jarvis-vault-mirror'
+elif [[ "$1 $2 $3" == "containerapp job list" ]]; then
+  if [[ "${FAKE_MIRROR_PRESENT:-false}" == true ]]; then echo 'job-jarvis-vault-mirror'; fi
 elif [[ "$1 $2" == "identity list" ]]; then
   if [[ "${FAKE_MIRROR_PRESENT:-false}" == true ]]; then
     echo '[{"name":"id-jarvis-vault-mirror-test","principalId":"principal"}]'
   else
     echo '[]'
   fi
-elif [[ "$1 $2 $3" == "role assignment list" && "${FAKE_MIRROR_PRESENT:-false}" == true ]]; then
-  echo '/subscriptions/test/roleAssignments/assignment'
+elif [[ "$1 $2 $3" == "role assignment list" ]]; then
+  [[ "$*" != *" --all "* ]] || exit 91
+  [[ "$*" == *" --scope "* ]] || exit 92
+  [[ "${FAKE_ROLE_LIST_FAIL:-false}" != true ]] || exit 93
+  scope=''
+  for ((i=1; i<=$#; i++)); do
+    if [[ "${!i}" == --scope ]]; then
+      j=$((i + 1))
+      scope="${!j}"
+      break
+    fi
+  done
+  if [[ "${FAKE_MIRROR_PRESENT:-false}" == true && "$scope" != */resourceGroups/rg-test ]]; then
+    echo "/subscriptions/test/roleAssignments/${scope##*/}"
+  fi
+elif [[ "$1 $2" == "acr show" ]]; then
+  echo '/subscriptions/test/resourceGroups/rg-test/providers/Microsoft.ContainerRegistry/registries/crjarvis'
+elif [[ "$1 $2" == "keyvault show" ]]; then
+  echo '/subscriptions/test/resourceGroups/rg-test/providers/Microsoft.KeyVault/vaults/kv-jarvis-test'
+elif [[ "$1 $2 $3" == "storage account show" ]]; then
+  echo '/subscriptions/test/resourceGroups/rg-test/providers/Microsoft.Storage/storageAccounts/stjarvistest'
+elif [[ "$1 $2" == "group show" ]]; then
+  echo '/subscriptions/test/resourceGroups/rg-test'
 elif [[ "$1 $2" == "acr build" && "${FAKE_ACR_FAIL:-false}" == true ]]; then
   exit 42
 elif [[ "$1 $2 $3" == "acr manifest show-metadata" ]]; then
@@ -103,8 +126,47 @@ fi
         self.assertIn("containerapp job delete", log)
         self.assertIn("role assignment delete", log)
         self.assertIn("identity delete", log)
-        self.assertNotIn("vault-mirror-state", log)
         self.assertIn("retained private state/status containers", result.stdout)
+        role_listing_calls = [line for line in log.splitlines() if line.startswith("role assignment list")]
+        self.assertEqual(len(role_listing_calls), 5)
+        for call in role_listing_calls:
+            self.assertIn("--scope", call)
+            self.assertIn("--fill-principal-name false", call)
+            self.assertNotIn("--all", call)
+        self.assertNotIn("storage container delete", log)
+
+    def test_workflow_dispatch_with_unset_or_empty_switch_does_not_teardown(self):
+        for value in (None, ""):
+            with self.subTest(value=value):
+                self.log.unlink(missing_ok=True)
+                environment = {"GITHUB_EVENT_NAME": "workflow_dispatch", "FAKE_MIRROR_PRESENT": "true"}
+                if value is not None:
+                    environment["JARVIS_VAULT_MIRROR_ENABLED"] = value
+                result, log = self.deploy(**environment)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertNotIn("containerapp job delete", log)
+                self.assertNotIn("identity delete", log)
+
+    def test_push_with_explicit_false_tears_down(self):
+        result, log = self.deploy(
+            FAKE_MIRROR_PRESENT="true",
+            JARVIS_VAULT_MIRROR_ENABLED="false",
+            GITHUB_EVENT_NAME="push",
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("containerapp job delete", log)
+        self.assertIn("identity delete", log)
+
+    def test_push_teardown_failure_warns_and_does_not_block_deployment(self):
+        result, log = self.deploy(
+            FAKE_MIRROR_PRESENT="true",
+            JARVIS_VAULT_MIRROR_ENABLED="false",
+            GITHUB_EVENT_NAME="push",
+            FAKE_ROLE_LIST_FAIL="true",
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("::warning title=Vault mirror::Teardown is incomplete", result.stdout)
+        self.assertIn("deployment group create", log)
 
     def test_missing_dockerfile_is_visible_and_does_not_block_deployment(self):
         result, log = self.deploy(
@@ -140,8 +202,30 @@ fi
             FAKE_ACR_FAIL="true",
         )
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("image build failed", result.stdout)
+        self.assertIn("::warning title=Vault mirror::The image build failed", result.stdout)
         self.assertIn("vaultMirrorEnabled=false", log)
+
+    def test_invalid_mirror_configuration_disables_mirror_with_warning(self):
+        invalid_settings = (
+            {"GITHUB_APP_ID": "not-an-id"},
+            {"JARVIS_VAULT_MIRROR_WRITE_BACK": "sometimes"},
+            {"JARVIS_VAULT_MIRROR_MAX_CHANGED": "101"},
+            {"JARVIS_VAULT_MIRROR_MAX_DELETES": "11"},
+            {"JARVIS_VAULT_MIRROR_MAX_CHANGED": "9" * 100},
+        )
+        for settings in invalid_settings:
+            with self.subTest(settings=settings):
+                self.log.unlink(missing_ok=True)
+                environment = {
+                    "JARVIS_VAULT_MIRROR_ENABLED": "true",
+                    "GITHUB_APP_ID": "123",
+                }
+                environment.update(settings)
+                result, log = self.deploy(**environment)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn("::warning title=Vault mirror::", result.stdout)
+                self.assertIn("vaultMirrorEnabled=false", log)
+                self.assertNotIn("acr build", log)
 
 
 if __name__ == "__main__":

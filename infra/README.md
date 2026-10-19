@@ -106,6 +106,10 @@ no unresolved conflicts or credential matches. To go live, set
 `JARVIS_VAULT_MIRROR_MAX_CHANGED` and `JARVIS_VAULT_MIRROR_MAX_DELETES`, then
 dispatch **Deploy** again.
 
+To roll back writes without stopping reads, set
+`JARVIS_VAULT_MIRROR_WRITE_BACK` back to `dry-run` and dispatch **Deploy**
+again. The scheduled job remains active but does not write changes to Obsidian.
+
 To stop the mirror, explicitly set `JARVIS_VAULT_MIRROR_ENABLED` to `false` and
 dispatch **Deploy** from `main`. The deployment deletes the scheduled
 job, its dedicated identity and that identity's role assignments. The private
@@ -113,6 +117,9 @@ state/status containers remain in the existing storage account so the state
 can be recovered if the mirror is enabled again. Do not delete those containers
 unless the owner has separately backed up the state and approved permanent
 teardown.
+Deploy retries the idempotent teardown on every later infrastructure run while
+the switch remains explicitly `false`; a push-triggered teardown failure emits a
+warning and does not block the rest of infrastructure deployment.
 
 ## Google Calendar and Gmail setup
 
