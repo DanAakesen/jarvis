@@ -1,5 +1,17 @@
 # Decisions
 
+## P14-37 — Deploy the vault mirror image when its source changes (19 October 2026; #1099)
+
+Treat the mirror Dockerfile and all its local copy inputs, plus `.dockerignore`,
+as infrastructure fingerprint inputs. This keeps the image build in the existing
+infrastructure job and preserves exact-tree qualification, deployment receipts
+and acceptance. A separate mirror deployment component would require expanding
+the release plan, receipt schema and workflow; it is not justified for this
+change. The existing infrastructure invalidation rule therefore re-applies
+backend, web and agent alongside infrastructure, which is the accepted redeploy
+cost. The image build and mirror resources remain opt-in; documentation-only
+changes remain excluded.
+
 ## P14-33 — Harden the first live vault-mirror run (19 October 2026; #1090)
 
 Keep the engine and `@jarvis/contracts` status schema unchanged. Each `ob` call
