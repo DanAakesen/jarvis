@@ -2521,6 +2521,7 @@ when the backlog is near empty.
 | P14-20 | [#1055](https://github.com/DanAakesen/jarvis/issues/1055) | Tasks and Notes: clock style, touch targets, empty search and note header | One clock style on the Tasks page; the listed links are at least 44px on coarse pointers; a Notes search with no matches shows a message instead of an empty bar; an open note has balanced padding and a bounded title; the search placeholder is readable at 390 with a note open. | P14-12 | Complete |
 | P14-21 | [#1057](https://github.com/DanAakesen/jarvis/issues/1057) | Factory board and task window: card meta, danger buttons, usage table and empty search | Card meta keeps its icon and text together; Cancel task and Confirm cancel task have the danger look; card titles, card actions and the project filter are consistent; the task usage table never breaks inside a word or number; a search or filter with no results shows one board-level message with a recovery action; board targets are at least 44px on coarse pointers. | P14-12 | Complete |
 | P14-22 | [#1059](https://github.com/DanAakesen/jarvis/issues/1059) | Factory projects and releases: surfaces, touch targets and one release label | Every block on the project settings page and the release page header is on a surface with text contrast of at least 4.5:1 in light and dark; release and build links are at least 44px on coarse pointers; one label for a version in the task release bar, the release page header and the release rows. | P14-12 | Complete |
+| P14-23 | [#1069](https://github.com/DanAakesen/jarvis/issues/1069) | One shared date and time format across the web app | Every absolute date, time and date-time shown to the user goes through one shared helper (en-GB, 24-hour clock) with date-time, date-only and time-only variants; date-time is medium date plus short time in the browser time zone unless a surface pins one; date-only values show no clock and never shift the day; relative times and timezone-less source text such as Daily brief timestamps keep their own shape; the credential expiry that printed raw ISO is readable; the duplicate helpers are gone; tests assert the strings and a static guard stops new ad-hoc formatters; the same shape renders at 390 and 1440 in light and dark without overflow. | P14-12 | In progress |
 
 18 October 2026, owner direct instruction: buttons look basic, and borders, radii
 and responsive behaviour still differ between surfaces. P14-03 to P14-05 are
@@ -2537,8 +2538,8 @@ synthetic fixtures) found 50 defects, recorded in `docs/ui-audit.md`. P14-14 to
 P14-22 fix them in disjoint batches (Proactive and overlays, Settings and the
 task window, the top bar, state messages, further Settings fixes, chat, Tasks
 and Notes, the Factory board and the Factory projects and releases). They share
-`apps/web/src/styles.css`, so they merge one at a time. A follow-up task will
-move every date and time onto one shared format.
+`apps/web/src/styles.css`, so they merge one at a time. P14-23 then moves every
+date and time onto one shared format.
 
 ## Factory canonical-status parity (16 October 2026)
 
