@@ -1,5 +1,20 @@
 # Decisions
 
+## P14-36 — Match Azure application alert types (19 October 2026; #1097)
+
+Use `replace()` with an explicit placeholder in each application alert query;
+Bicep does not interpolate multi-line strings. The three `appAlertTypes` match
+the backend's `jarvis.alert` trace `alertType` property: `credential_expiry`,
+`deployment_failure` and `sandbox_crash`. The additional backend type
+`budget_threshold` has a separate Azure Consumption budget notification path.
+No other affected multi-line strings were found in `infra/`. Reject literal `${`
+in compiled scheduled-query rules in the existing infrastructure CI check.
+
+Keep thresholds, evaluation frequency, action group and all other resources
+unchanged. Restored matching may notify that action group for previously silent
+alerts. Azure Monitor read-back of the three concrete type filters remains
+required after the normal Deploy; offline validation is not live acceptance.
+
 ## P14-27 — Azure vault mirror runner and Headless CLI wrapper (19 October 2026; #1078)
 
 Add a one-run runner around the P14-26 pure planner; do not add infrastructure or
