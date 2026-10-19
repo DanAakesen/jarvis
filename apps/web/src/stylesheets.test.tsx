@@ -401,4 +401,50 @@ describe('stylesheets', () => {
       });
     }
   });
+
+  it('keeps the composer send action a bare icon with finite, reduced-motion-safe motion', () => {
+    const history = postcss.parse(readFileSync(join(sourceDirectory, 'ConversationHistory.css'), 'utf8'), { from: 'ConversationHistory.css' });
+    const keyframes = new Set<string>();
+    history.walkAtRules('keyframes', (atRule) => { keyframes.add(atRule.params); });
+    expect([...keyframes]).toEqual(expect.arrayContaining(['composer-send-arm', 'composer-send-launch']));
+
+    const baseSelector = '.conversation-history .composer-send';
+    const surfaceProps = new Set([
+      'background', 'background-color', 'background-image', 'box-shadow',
+      'border', 'border-color', 'border-width', 'border-style',
+      'border-top', 'border-right', 'border-bottom', 'border-left',
+    ]);
+    for (const file of stylesheets) {
+      const root = postcss.parse(readFileSync(join(sourceDirectory, file), 'utf8'), { from: file });
+      root.walkRules((rule) => {
+        if (!rule.selector.includes('.composer-send')) return;
+        rule.walkDecls((declaration) => {
+          const label = `${file}: ${rule.selector} ${declaration.prop}`;
+          if (surfaceProps.has(declaration.prop)) {
+            expect(rule.selector, label).toBe(baseSelector);
+            expect(declaration.value, label).toMatch(/^(?:none|0)$/u);
+          }
+          if (declaration.prop.startsWith('animation')) {
+            expect(declaration.value, label).not.toContain('infinite');
+            const name = declaration.value.split(/\s+/u)[0] ?? '';
+            if (declaration.prop === 'animation') expect(['none', ...keyframes], label).toContain(name);
+          }
+        });
+      });
+    }
+
+    const reducesLaunch = (rule: postcss.Rule) => rule.selector.includes('.composer-send-glyph[data-sent]')
+      && rule.nodes?.some((node) => node.toString() === 'animation: none');
+    let reducedByMedia = false;
+    history.walkAtRules('media', (atRule) => {
+      if (!atRule.params.includes('prefers-reduced-motion: reduce')) return;
+      atRule.walkRules((rule) => { reducedByMedia ||= Boolean(reducesLaunch(rule)); });
+    });
+    let reducedBySetting = false;
+    history.walkRules((rule) => {
+      if (rule.selector.startsWith(':root[data-motion="reduced"]') && reducesLaunch(rule)) reducedBySetting = true;
+    });
+    expect(reducedByMedia).toBe(true);
+    expect(reducedBySetting).toBe(true);
+  });
 });
