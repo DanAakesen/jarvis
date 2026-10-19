@@ -991,6 +991,29 @@ describe('shared glass tokens', () => {
     expect(source).toContain('@media (pointer: coarse) { .presence-chip-trigger { min-width: 44px; min-height: 44px; justify-content: center; } }');
   });
 
+  it('lights each rail icon in its own tone and floats its name flat beside it', () => {
+    const source = readFileSync('src/styles.css', 'utf8');
+    const tones = ['home', 'daily', 'proactive', 'factory', 'notes', 'usage', 'status', 'folio'];
+    for (const tone of tones) {
+      expect(tokenValue(source, ':root', `--rail-tone-${tone}`), tone).toMatch(/^#[0-9a-f]{6}$/);
+      expect(source, tone).toContain(`--rail-tone-${tone}: #`);
+      if (tone !== 'home') expect(source).toContain(`.rail-link[data-tone="${tone}"] { --rail-tone: var(--rail-tone-${tone}); }`);
+    }
+    expect(source.match(/--rail-tone-home: #/g)).toHaveLength(2);
+    const link = ruleDeclaration(source, /\n\.rail-link\s*\{([^}]*)\}/, '--state-selected-bg');
+    expect(link).toBe('color-mix(in srgb, var(--rail-tone) 16%, transparent)');
+    expect(ruleDeclaration(source, /\n\.rail-link\s*\{([^}]*)\}/, '--state-selected-fg')).toBe('var(--rail-tone)');
+    expect(tokenValue(source, ':root', '--state-selected-bg')).not.toContain('--rail-tone');
+
+    const tip = /\n\.rail-tip\s*\{([^}]*)\}/;
+    expect(ruleDeclaration(source, tip, 'position')).toBe('fixed');
+    expect(ruleDeclaration(source, tip, 'z-index')).toBe('var(--z-menu)');
+    expect(source.match(tip)?.[1]).not.toMatch(/(^|\s)transform:/);
+    expect(source).toContain('.rail-tip[data-open="true"] { opacity: 1; visibility: visible; pointer-events: auto;');
+    expect(source).toContain(':root[data-motion="reduced"] .rail-tip { translate: 0 -50%; transition: none; }');
+    expect(source).toContain('@media (prefers-reduced-motion: reduce) { .rail-tip { translate: 0 -50%; transition: none; } }');
+  });
+
   it('keeps selected text at 4.5:1 and indicators at 3:1 in both themes and interaction states', () => {
     const source = readFileSync('src/styles.css', 'utf8');
     expect(tokenValue(source, ':root', '--state-selected-fg')).toBe('color-mix(in srgb, var(--focus) 40%, var(--text))');

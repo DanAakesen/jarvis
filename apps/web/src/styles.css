@@ -168,6 +168,15 @@
   --motion-ambient: 34s;
   --ease-standard: cubic-bezier(.2, .65, .3, 1);
   --ease-enter: cubic-bezier(.16, 1, .3, 1);
+  /* One tone per rail icon, lit only while it is selected; the same lightness keeps the rail even. */
+  --rail-tone-home: #005a6a;
+  --rail-tone-daily: #016129;
+  --rail-tone-proactive: #005d55;
+  --rail-tone-factory: #874300;
+  --rail-tone-notes: #663e9e;
+  --rail-tone-usage: #695701;
+  --rail-tone-status: #912964;
+  --rail-tone-folio: #0256a9;
 }
 
 :root[data-theme="dark"] {
@@ -238,6 +247,14 @@
   --chart-series-warm: #ffb45c;
   --glass-rim-light: rgb(255 255 255 / 34%);
   --slab-shadow: 0 30px 80px rgb(0 0 0 / 50%);
+  --rail-tone-home: #41d9f8;
+  --rail-tone-daily: #83dc97;
+  --rail-tone-proactive: #41dfcf;
+  --rail-tone-factory: #feb079;
+  --rail-tone-notes: #ceb5ff;
+  --rail-tone-usage: #dec358;
+  --rail-tone-status: #ffa3cf;
+  --rail-tone-folio: #9dc7fe;
 }
 
 :root[data-theme="light"] {
@@ -382,6 +399,52 @@ a:focus-visible { outline: 3px solid var(--focus); outline-offset: 5px; }
   color: var(--state-selected-indicator);
   stroke-width: 2.1;
 }
+/* Each rail icon lights in its own tone when selected. The tone only feeds the shared selected-state roles on the link,
+   so the tile tint, hover and press states, stroke weight and focus ring stay the app-wide ones. */
+.rail-link {
+  --rail-tone: var(--rail-tone-home);
+  --state-selected-fg: var(--rail-tone);
+  --state-selected-indicator: var(--rail-tone);
+  --state-selected-bg: color-mix(in srgb, var(--rail-tone) 16%, transparent);
+  --state-selected-hover: color-mix(in srgb, var(--rail-tone) 24%, transparent);
+  --state-selected-pressed: color-mix(in srgb, var(--rail-tone) 32%, transparent);
+}
+.rail-link[data-tone="daily"] { --rail-tone: var(--rail-tone-daily); }
+.rail-link[data-tone="proactive"] { --rail-tone: var(--rail-tone-proactive); }
+.rail-link[data-tone="factory"] { --rail-tone: var(--rail-tone-factory); }
+.rail-link[data-tone="notes"] { --rail-tone: var(--rail-tone-notes); }
+.rail-link[data-tone="usage"] { --rail-tone: var(--rail-tone-usage); }
+.rail-link[data-tone="status"] { --rail-tone: var(--rail-tone-status); }
+.rail-link[data-tone="folio"] { --rail-tone: var(--rail-tone-folio); }
+/* Rail labels (P14-32): the control's name beside the hovered or keyboard-focused rail icon. It sits outside the rail so
+   the rail's 3D tilt and glass never skew it, and its transparent bridge lets the pointer travel from the icon onto it. */
+.rail-tip {
+  position: fixed;
+  z-index: var(--z-menu);
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  margin-left: var(--space-2);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-pill);
+  background: var(--surface-translucent);
+  box-shadow: var(--panel-shadow);
+  backdrop-filter: blur(var(--surface-blur));
+  color: var(--text);
+  font-size: var(--type-caption);
+  font-weight: 650;
+  white-space: nowrap;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  translate: calc(-1 * var(--space-1)) -50%;
+  transition: opacity var(--motion-press) var(--ease-standard), translate var(--motion-press) var(--ease-standard), visibility 0s linear var(--motion-press);
+}
+.rail-tip::before { content: ""; position: absolute; top: 0; right: 100%; bottom: 0; width: calc(var(--space-2) + 1px); }
+.rail-tip[data-open="true"] { opacity: 1; visibility: visible; pointer-events: auto; translate: 0 -50%; transition-delay: 0s; }
+:root[data-motion="reduced"] .rail-tip { translate: 0 -50%; transition: none; }
+@media (prefers-reduced-motion: reduce) { .rail-tip { translate: 0 -50%; transition: none; } }
 .app-shell svg { width: 21px; height: 21px; }
 .area-sidebar {
   z-index: var(--z-panel);
