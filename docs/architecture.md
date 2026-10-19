@@ -2250,6 +2250,19 @@ normalized text and the due instant for identity, saves only a sanitized,
 and removes terminal rows older than 30 days. It never cancels a row based on a
 partial source-fact list.
 
+The verified GitHub webhook mapping for a push to the vault repository's
+configured default branch also starts a separate todos-only pass through the
+existing `createTodosSource`. The webhook and notes-index refresh share one
+default-branch push predicate; the webhook does not wait for reminder planning.
+This pass checks pause, the todos source setting and Copenhagen quiet hours
+before reading the vault. It runs the same reminder planning core with
+`planned_run_id = null` and no run, findings, model, alert, todo write or
+Background work entry. Overlapping and rapid pushes collapse to one trailing
+pass, starts stay at least 60 seconds apart, and shutdown or the 60-second
+deadline aborts active work. A newly inserted earliest fire time wakes the
+existing ticker. Scheduled planning remains idempotent through the reminder
+key, and pushes during quiet hours are not queued.
+
 The owner-scoped `proactive_reminders` table is added by migration 0059, with a
 unique owner/key index and pending-fire and sent-day indexes. Planning inserts
 and retention cleanup share one owner-locked transaction; SQL read paths use
@@ -2274,8 +2287,8 @@ Danish/English body. One generic `proactive_reminder` push is bundled per tick
 through the shared system sender. Push delivery and reminder state are separate
 writes, so a process crash between acceptance and state update can send again;
 a brief overlap of revisions during deployment can also duplicate a reminder
-and is accepted. A todo added after the last check is covered from the next
-check on; "Check now" covers it immediately.
+and is accepted. Eligible todos are planned after a default-branch vault push
+outside quiet hours, at a scheduled check, or after "Check now".
 
 ## Web push delivery (P13-02; default off)
 

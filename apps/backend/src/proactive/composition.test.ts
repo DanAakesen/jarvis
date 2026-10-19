@@ -66,6 +66,8 @@ async function composition(gates: Partial<ProactiveCompositionOptions> = {}) {
   const send = vi.fn(async (): Promise<SystemPushOutcome> => ({
     status: 'sent', reason: null, attempted: 1, accepted: 1, statusCode: 202,
   }));
+  const logger = { info: vi.fn(), warn: vi.fn() };
+  const registerVaultPushHandler = vi.fn();
   const existingHook = vi.fn(async () => {});
   registerProactive(app, {
     enabled: true,
@@ -76,11 +78,13 @@ async function composition(gates: Partial<ProactiveCompositionOptions> = {}) {
     pushStore,
     alertLedgerStore: ledger,
     systemPushSender: send as (request: SystemPushRequest, signal: AbortSignal) => Promise<SystemPushOutcome>,
+    logger: logger as never,
+    registerVaultPushHandler,
     onFindingsStored: [existingHook],
     ...gates,
   });
   await app.ready();
-  return { app, pushStore, ledger, send, existingHook };
+  return { app, pushStore, ledger, send, existingHook, logger, registerVaultPushHandler };
 }
 
 function context(item: { id: string }): FindingsStoredContext {
@@ -185,6 +189,18 @@ describe('proactive alert composition', () => {
     expect(vault.read).not.toHaveBeenCalled();
     expect(fixture.pushStore.listSubscriptions).not.toHaveBeenCalled();
     expect(fixture.send).not.toHaveBeenCalled();
+  });
+
+  it('logs the unconfigured reason when no reminder planner exists', async () => {
+    captured.reminderTickerConstructions = 0;
+    const fixture = await composition({ alertsEnabled: false });
+    expect(fixture.registerVaultPushHandler).toHaveBeenCalledOnce();
+    fixture.registerVaultPushHandler.mock.calls[0]![0]!();
+    expect(fixture.logger.info).toHaveBeenCalledWith(
+      expect.objectContaining({ runId: null, reason: 'vault_push_planner_unconfigured' }),
+      'proactive.reminder_plan',
+    );
+    expect(captured.reminderTickerConstructions).toBe(0);
   });
 
   it('adds one planner hook after P13-12 and starts its ticker only with all dependencies', async () => {

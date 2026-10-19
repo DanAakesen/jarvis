@@ -1,5 +1,20 @@
 # Decisions
 
+## P14-24 — Plan todo reminders after default-branch vault pushes (19 October 2026; #1073)
+
+A verified push to the vault repository's default branch starts a bounded,
+todos-only reminder-planning pass without waiting for a scheduled check. The
+webhook and notes-index refresh use the same push predicate, with a late-bound
+callback so startup ordering stays unchanged. The pass reuses the existing
+todos source and reminder planner, writes `planned_run_id = null`, and creates
+no proactive run, findings, model request, alert, todo write or Background work
+entry. It runs only with the existing reminder gates enabled, when proactive
+work is not paused, todos are enabled and the time is outside the Copenhagen
+quiet window. Pushes during quiet hours are not queued. Concurrent or rapid
+triggers collapse to one trailing pass, starts are at least 60 seconds apart,
+and shutdown or a 60-second timeout aborts the pass. Existing reminder-key
+deduplication keeps a later scheduled check from inserting a duplicate.
+
 ## P14-25 — Recognize every high-priority task marker and surface undated tasks (19 October 2026; #1074)
 
 Treat `🔺`, `⏫`, `[priority:: highest]`, `[priority:: high]`, and their

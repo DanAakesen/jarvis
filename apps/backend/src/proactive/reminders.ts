@@ -31,6 +31,41 @@ export function reminderDedupeKey(key: string): string {
   return createHash('sha256').update(`reminder|${key}`).digest('hex').slice(0, 32);
 }
 
+export async function planTodoReminders(options: {
+  reminders: Pick<ProactiveReminderStore, 'plan'>;
+  facts: readonly Pick<FindingsStoredContext['facts'][number], 'kind' | 'text' | 'dueAt' | 'dueHasTime'>[];
+  now: Date;
+  plannedRunId: string | null;
+  onPlanned?: (fireAt: Date) => void;
+}): Promise<Awaited<ReturnType<ProactiveReminderStore['plan']>>> {
+  const candidates: PlannedReminder[] = todosDueWithin(options.facts, options.now, 48 * 60)
+    .filter((fact) => fact.dueHasTime === true && typeof fact.dueAt === 'string' &&
+      Number.isFinite(Date.parse(fact.dueAt)))
+    .flatMap((fact) => {
+      const dueAt = new Date(fact.dueAt!);
+      const title = reminderTitle(fact.text);
+      if (!title) return [];
+      const dueIso = dueAt.toISOString();
+      return [{
+        reminderKey: reminderKey(fact.text, dueIso),
+        deadlineAlertKey: proactiveAlertKey(
+          'deadline_24h', deterministicDedupeKey('deadline', fact.text, dueIso),
+        ),
+        fireAt: new Date(dueAt.getTime() - 60 * 60_000),
+        dueAt,
+        title,
+        plannedRunId: options.plannedRunId,
+      }];
+    });
+  const result = await options.reminders.plan(candidates, options.now);
+  if (result.inserted.length > 0) {
+    const earliest = result.inserted.reduce((value, row) =>
+      row.fireAt.getTime() < value.getTime() ? row.fireAt : value, result.inserted[0]!.fireAt);
+    try { options.onPlanned?.(earliest); } catch { /* Wake-up hints are best effort. */ }
+  }
+  return result;
+}
+
 export function createTodoReminderPlanner(options: {
   store: Pick<ProactiveStore, 'settings'>;
   reminders: Pick<ProactiveReminderStore, 'plan'>;
@@ -77,35 +112,17 @@ export function createTodoReminderPlanner(options: {
         return;
       }
       const now = options.now();
-      const candidates: PlannedReminder[] = todosDueWithin(context.facts, now, 48 * 60)
-        .filter((fact) => fact.dueHasTime === true && typeof fact.dueAt === 'string' &&
-          Number.isFinite(Date.parse(fact.dueAt)))
-        .flatMap((fact) => {
-          const dueAt = new Date(fact.dueAt!);
-          const title = reminderTitle(fact.text);
-          if (!title) return [];
-          const dueIso = dueAt.toISOString();
-          return [{
-            reminderKey: reminderKey(fact.text, dueIso),
-            deadlineAlertKey: proactiveAlertKey(
-              'deadline_24h', deterministicDedupeKey('deadline', fact.text, dueIso),
-            ),
-            fireAt: new Date(dueAt.getTime() - 60 * 60_000),
-            dueAt,
-            title,
-            plannedRunId: context.runId,
-          }];
-        });
       if (context.signal.aborted) {
         log('info', context, 'aborted', startedAt);
         return;
       }
-      const result = await options.reminders.plan(candidates, now);
-      if (result.inserted.length > 0) {
-        const earliest = result.inserted.reduce((value, row) =>
-          row.fireAt.getTime() < value.getTime() ? row.fireAt : value, result.inserted[0]!.fireAt);
-        try { options.onPlanned?.(earliest); } catch { /* Wake-up hints are best effort. */ }
-      }
+      const result = await planTodoReminders({
+        reminders: options.reminders,
+        facts: context.facts,
+        now,
+        plannedRunId: context.runId,
+        ...(options.onPlanned ? { onPlanned: options.onPlanned } : {}),
+      });
       if (result.capSkipped > 0) log('warn', context, 'plan_cap', startedAt, result.capSkipped);
       else if (result.inserted.length > 0 || result.purged > 0) {
         log('info', context, 'planned', startedAt, result.inserted.length);
