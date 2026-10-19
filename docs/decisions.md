@@ -1,5 +1,23 @@
 # Decisions
 
+## P14-34 — Notes map open-task marks (19 October 2026; #1094)
+
+`GET /knowledge/graph` adds optional per-node open-task counts, the number of
+marked graph notes, and a partial flag. The backend reuses `readVaultTasks`, the
+same bounded parser as the task panel; it returns counts only, never checkbox text.
+Task-file scan limits or tasks on notes outside the capped graph are made visible
+as partial. The web client accepts older graph payloads without these fields.
+
+The folder legend adds a default-on, `aria-pressed` Tasks toggle. It switches
+marked stars between their folder colour and the dedicated `--graph-tasks` token,
+and makes marked stars larger; it does not hide notes or change the task panel.
+Hover labels include the open-task count. Theme values and the contrast audit
+remain in `apps/web/src/styles.css` and `apps/web/src/contrast-audit.test.ts`.
+The toggle is not persisted because the map does not currently persist its other
+filters.
+
+Refs #1094
+
 ## P14-35 — Daily v182 unresolved delivery questions (19 October 2026; #1095)
 
 **Proposed only; owner ruling required.** This entry records evidence gaps and

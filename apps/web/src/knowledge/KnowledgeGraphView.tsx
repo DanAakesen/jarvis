@@ -92,6 +92,9 @@ export function KnowledgeGraphView({ backendUrl, getAccessToken, initialQuery = 
   }
   const [searching, setSearching] = useState(false);
   const [localSelectedId, setSelectedId] = useState<string | null>(null);
+  const [taskMarksVisible, setTaskMarksVisible] = useState(true);
+  const taskMarksVisibleRef = useRef(taskMarksVisible);
+  useLayoutEffect(() => { taskMarksVisibleRef.current = taskMarksVisible; }, [taskMarksVisible]);
   // Browsing: one folder can be isolated from the legend; its notes list beside the search.
   const [folder, setFolder] = useState<string | null>(null);
   const [note, setNote] = useState<{ id: string; value: KnowledgeNote | null; error: string } | null>(null);
@@ -138,6 +141,7 @@ export function KnowledgeGraphView({ backendUrl, getAccessToken, initialQuery = 
           onHover: setHover,
           onLabels: (next) => setLabels((current) => JSON.stringify(current) === JSON.stringify(next) ? current : next),
         }, reducedMotion());
+        scene.current.showTasks(taskMarksVisibleRef.current);
         setSceneFailed(false);
       } catch {
         setSceneFailed(true);
@@ -153,6 +157,7 @@ export function KnowledgeGraphView({ backendUrl, getAccessToken, initialQuery = 
   useEffect(() => { scene.current?.highlight(hits); }, [hits, graph]);
   useEffect(() => { scene.current?.select(selectedId); }, [selectedId]);
   useEffect(() => { scene.current?.showFolders(folder !== null ? [folder] : null); }, [folder, graph]);
+  useEffect(() => { scene.current?.showTasks(taskMarksVisible); }, [graph, taskMarksVisible]);
 
   // Search: titles match instantly; the knowledge search refines the result when it answers.
   useEffect(() => {
@@ -230,6 +235,14 @@ export function KnowledgeGraphView({ backendUrl, getAccessToken, initialQuery = 
     };
     return rank(left) - rank(right) || left.localeCompare(right);
   });
+  const hasTaskCounts = !!graph && (typeof graph.openTaskNoteCount === 'number' ||
+    graph.taskCountsPartial === true || graph.nodes.some((node) => node.openTaskCount !== undefined));
+  const hasKnownTaskCount = !!graph && (typeof graph.openTaskNoteCount === 'number' ||
+    (graph.nodes.length > 0 && graph.nodes.every((node) => node.openTaskCount !== undefined)));
+  const taskNoteCount = graph?.openTaskNoteCount ??
+    graph?.nodes.filter((node) => (node.openTaskCount ?? 0) > 0).length ?? 0;
+  const taskCountLabel = hasKnownTaskCount
+    ? `${taskNoteCount} ${taskNoteCount === 1 ? 'note' : 'notes'} with open tasks` : 'count unavailable';
   const currentNote = note && note.id === selectedId ? note : null;
 
   return (
@@ -271,12 +284,16 @@ export function KnowledgeGraphView({ backendUrl, getAccessToken, initialQuery = 
             const node = nodesById.get(label.id);
             return node ? (
               <span key={label.id} className="knowledge-label" data-folder={node.folder} data-selected={label.id === selectedId || undefined}
-                style={{ transform: `translate(${Math.round(label.x)}px, ${Math.round(label.y)}px)` }} aria-hidden="true">{node.title}</span>
+                style={{ transform: `translate(${Math.round(label.x)}px, ${Math.round(label.y)}px)` }} aria-hidden="true">
+                {node.title}{node.openTaskCount ? ` · ${node.openTaskCount} open ${node.openTaskCount === 1 ? 'task' : 'tasks'}` : ''}
+              </span>
             ) : null;
           })}
           {hover && nodesById.get(hover.id) && !labels.some((label) => label.id === hover.id) && (
             <span className="knowledge-label knowledge-label-hover" style={{ transform: `translate(${Math.round(hover.x)}px, ${Math.round(hover.y)}px)` }} aria-hidden="true">
               {nodesById.get(hover.id)!.title}
+              {nodesById.get(hover.id)!.openTaskCount
+                ? ` · ${nodesById.get(hover.id)!.openTaskCount} open ${nodesById.get(hover.id)!.openTaskCount === 1 ? 'task' : 'tasks'}` : ''}
             </span>
           )}
           {(query.trim()
@@ -326,7 +343,7 @@ export function KnowledgeGraphView({ backendUrl, getAccessToken, initialQuery = 
               )}
             </div>
           )}
-          <ul className="knowledge-legend" aria-label="Folders">
+          <ul className="knowledge-legend" aria-label="Map legend">
             {folders.map((name) => (
               <li key={name} data-folder={name}>
                 <button className="ghost-button" type="button" aria-pressed={folder === name} title={folder === name ? 'Show every folder' : `Show only ${name}`}
@@ -335,6 +352,20 @@ export function KnowledgeGraphView({ backendUrl, getAccessToken, initialQuery = 
                 </button>
               </li>
             ))}
+            {hasTaskCounts && (
+              <li>
+                <button className="ghost-button" type="button" aria-pressed={taskMarksVisible}
+                  aria-label={`Tasks, ${taskCountLabel}${graph?.taskCountsPartial ? ', partial' : ''}`}
+                  disabled={!hasKnownTaskCount}
+                  title={!hasKnownTaskCount ? 'Task marking is unavailable while the count is partial' : undefined}
+                  onClick={() => setTaskMarksVisible((current) => !current)}>
+                  <span className="knowledge-dot" data-tasks aria-hidden="true" />
+                  Tasks
+                  <span className="knowledge-legend-count">{hasKnownTaskCount ? taskNoteCount : '—'}</span>
+                  {graph?.taskCountsPartial && <span className="knowledge-legend-partial">partial</span>}
+                </button>
+              </li>
+            )}
             {graph.edges.length === 0 && <li className="knowledge-sample">No links.</li>}
           </ul>
           {selected && !onOpenNote && (

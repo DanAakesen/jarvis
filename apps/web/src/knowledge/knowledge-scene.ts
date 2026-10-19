@@ -30,6 +30,7 @@ function folderColours(element: HTMLElement): Map<string, THREE.Color> {
     ['Work', read('--graph-work', '#ffb45c')],
     ['Personal', read('--graph-personal', '#3ddc97')],
     ['General', read('--graph-general', '#b69cff')],
+    ['Tasks', read('--graph-tasks', '#ff5da2')],
     ['', read('--text-muted', '#a4b5bb')],
   ]);
 }
@@ -125,17 +126,19 @@ export function createKnowledgeScene(host: HTMLElement, graph: KnowledgeGraph, c
   const count = graph.nodes.length;
   const colourArray = new Float32Array(count * 3);
   const sizes = new Float32Array(count);
+  const colourAttribute = new THREE.BufferAttribute(colourArray, 3);
+  const sizeAttribute = new THREE.BufferAttribute(sizes, 1);
   const lit = new Float32Array(count);
   graph.nodes.forEach((node, index) => {
-    const colour = colours.get(node.folder) ?? colours.get('')!;
+    const colour = node.openTaskCount ? colours.get('Tasks')! : colours.get(node.folder) ?? colours.get('')!;
     colourArray.set([colour.r, colour.g, colour.b], index * 3);
-    sizes[index] = 1.9 + Math.min(3, Math.sqrt(node.degree) * 0.7);
+    sizes[index] = (1.9 + Math.min(3, Math.sqrt(node.degree) * 0.7)) * (node.openTaskCount ? 1.3 : 1);
   });
   const pointGeometry = new THREE.BufferGeometry();
   const positionAttribute = new THREE.BufferAttribute(layout.positions, 3);
   pointGeometry.setAttribute('position', positionAttribute);
-  pointGeometry.setAttribute('colour', new THREE.BufferAttribute(colourArray, 3));
-  pointGeometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
+  pointGeometry.setAttribute('colour', colourAttribute);
+  pointGeometry.setAttribute('size', sizeAttribute);
   const litAttribute = new THREE.BufferAttribute(lit, 1);
   pointGeometry.setAttribute('lit', litAttribute);
   const shown = new Float32Array(count).fill(1);
@@ -472,6 +475,19 @@ export function createKnowledgeScene(host: HTMLElement, graph: KnowledgeGraph, c
   };
 
   let hiddenFolders = new Set<string>();
+  let taskMarksVisible = true;
+  const applyTaskMarks = () => {
+    graph.nodes.forEach((node, index) => {
+      const marked = taskMarksVisible && !!node.openTaskCount;
+      const colour = marked ? colours.get('Tasks')! : colours.get(node.folder) ?? colours.get('')!;
+      colourArray.set([colour.r, colour.g, colour.b], index * 3);
+      sizes[index] = (1.9 + Math.min(3, Math.sqrt(node.degree) * 0.7)) * (marked ? 1.3 : 1);
+    });
+    colourAttribute.needsUpdate = true;
+    sizeAttribute.needsUpdate = true;
+    wake();
+    if (reducedMotion) render();
+  };
   const applyEmphasis = () => {
     graph.nodes.forEach((node, index) => { shown[index] = hiddenFolders.has(node.folder) ? 0 : 1; });
     shownAttribute.needsUpdate = true;
@@ -512,6 +528,11 @@ export function createKnowledgeScene(host: HTMLElement, graph: KnowledgeGraph, c
       applyEmphasis();
       const visible = graph.nodes.filter((node) => !hiddenFolders.has(node.folder)).map((node) => node.id);
       if (folders && visible.length) flyTo(visible);
+    },
+    showTasks(visible: boolean) {
+      if (taskMarksVisible === visible) return;
+      taskMarksVisible = visible;
+      applyTaskMarks();
     },
     resetView() {
       highlighted = [];
