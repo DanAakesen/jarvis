@@ -1,4 +1,4 @@
-import { contentHash, contentSize, foldPath, isSafePath, normalizeContent, normalizePath } from './normalize.js';
+import { contentHash, contentSize, foldPath, isSafePath, isWindowsCompatiblePath, normalizeContent, normalizePath } from './normalize.js';
 import { isApprovedPath } from './policy.js';
 import type { Action, BaseRecord, FileRecord, GuardReason, Plan, ReconcileInput, Side, SkipReason } from './types.js';
 
@@ -35,10 +35,15 @@ export function planReconcile(input: ReconcileInput): Plan {
   const spellings = new Map<string, Set<string>>();
   const collisions = new Set<string>();
   const filePaths = new Set<string>();
+  const windowsInvalidPaths = new Set<string>();
   const index = (files: ReadonlyMap<string, FileRecord>, live: boolean): Index => {
     const result: Index = new Map();
     for (const [sourcePath, record] of files) {
       const path = normalizePath(sourcePath);
+      if (live && !isWindowsCompatiblePath(path)) {
+        windowsInvalidPaths.add(path);
+        continue;
+      }
       if (live && isSafePath(path) && record.mode !== '040000') filePaths.add(foldPath(path));
       if (!isApprovedPath(input.policy, path)) { counts.excluded++; continue; }
       const folded = foldPath(path);
@@ -82,6 +87,7 @@ export function planReconcile(input: ReconcileInput): Plan {
     if (reason === 'secret-match') counts.credentialMatches++;
     if (reason === 'conflict') counts.conflicts++;
   };
+  for (const path of windowsInvalidPaths) skip(path, 'windows-path');
   const read = (side: Side, entry: Entry): string => {
     const text = input.readContent(side, entry.sourcePath);
     if (typeof text !== 'string' || contentSize(text) !== entry.record.size ||

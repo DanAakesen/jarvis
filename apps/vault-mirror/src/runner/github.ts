@@ -126,7 +126,7 @@ export function createGitHubMirrorClient(options: {
         signal,
       );
       if (!installationResponse.ok) {
-        throw new GitHubMirrorError([401, 403, 404].includes(installationResponse.status) ? 'auth' : 'unexpected');
+        throw new GitHubMirrorError([401, 403].includes(installationResponse.status) ? 'auth' : 'unexpected');
       }
       const installation = object(await responseJson(installationResponse));
       const id = installation?.id;
@@ -139,13 +139,13 @@ export function createGitHubMirrorClient(options: {
         body: JSON.stringify({ repositories: [repository], permissions: { contents: 'write' } }),
       }, signal);
       if (!tokenResponse.ok) {
-        throw new GitHubMirrorError([401, 403, 404].includes(tokenResponse.status) ? 'auth' : 'unexpected');
+        throw new GitHubMirrorError([401, 403].includes(tokenResponse.status) ? 'auth' : 'unexpected');
       }
       const result = object(await responseJson(tokenResponse));
       if (typeof result?.token !== 'string' || !result.token ||
         !result.permissions || object(result.permissions)?.contents !== 'write' ||
         !Array.isArray(result.repositories) || !result.repositories.some(item =>
-          object(item)?.full_name === VAULT_REPOSITORY)) throw new GitHubMirrorError('auth');
+          object(item)?.full_name === VAULT_REPOSITORY)) throw new GitHubMirrorError('unexpected');
       accessToken = result.token;
       tokenExpiresAt = now() + 7 * 60 * 1000;
       return result.token;

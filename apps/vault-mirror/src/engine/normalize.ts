@@ -7,8 +7,22 @@ export const contentHash = (text: string): string =>
   createHash('sha256').update(normalizeContent(text), 'utf8').digest('hex');
 export const contentSize = (text: string): number => new TextEncoder().encode(text).byteLength;
 
-export function isSafePath(path: string): boolean {
-  return path.length > 0 && !/[\\:]/u.test(path) &&
+export function isWindowsCompatiblePath(path: string): boolean {
+  const reserved = /^(?:con|prn|aux|nul|conin\$|conout\$|com[1-9¹²³]|lpt[1-9¹²³])(?:\.|$)/iu;
+  return !/[<>:"\\|?*]/u.test(path) &&
     ![...path].some(character => character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127) &&
-    path.split('/').every(segment => segment !== '' && segment !== '.' && segment !== '..');
+    path.split('/').every(segment => {
+      const base = segment.trimEnd().split('.')[0]?.trimEnd() ?? '';
+      return !/[. ]$/u.test(segment) && !reserved.test(base);
+    });
+}
+
+export function isSafePathShape(path: string): boolean {
+    return path.length > 0 && !/[\\:]/u.test(path) &&
+      ![...path].some(character => character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127) &&
+      path.split('/').every(segment => segment !== '' && segment !== '.' && segment !== '..');
+}
+
+export function isSafePath(path: string): boolean {
+    return isSafePathShape(path) && isWindowsCompatiblePath(path);
 }

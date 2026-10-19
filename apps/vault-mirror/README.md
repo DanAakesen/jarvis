@@ -42,8 +42,11 @@ of the image or repository.
 
 The state container is `vault-mirror-state`; its `state.zip` blob holds the
 working copy, Headless Sync configuration, common-base content and pending
-write-back. Runs take a blob lease, verify the archive checksum and 200 MB cap,
-and upload state with both the original ETag and active lease. Status is written
+write-back. Runs take a blob lease, verify the archive checksum and 64 MiB cap,
+and upload state with both the original ETag and active lease. The archive is
+preflighted before GitHub or Obsidian writes. An oversized or corrupt archive
+reports the existing `state-corrupt` reason with `needs-attention`; the shared
+status schema and Status-page explanation remain unchanged. Status is written
 to `vault-mirror-status/status.json` using the strict shared contract. Logs use
 an explicit allow-list of run ID, outcome, fixed reason, duration and counts.
 Conflict paths appear only in private status, never in logs.
@@ -63,20 +66,41 @@ count from the status and archive. Busy runs preserve both values, early failure
 increment the carried count, and `ok`/`ok-noop` reset it and advance the success
 time.
 
-The runner sets `pull-only` before every sync. `dry-run` never switches to
+The runner sets `pull-only` before every sync. Each `ob` command uses the
+remaining 420-second run budget minus a 90-second reserve for the remaining
+snapshot, planning, GitHub, archive and status steps; it is not capped at 60
+seconds. If a child times out while the run deadline remains, the runner saves
+its current working copy and CLI state. The next invocation starts with another
+pull-only sync to reconcile that checkpoint before planning. If the overall run
+deadline itself expires, persistence is skipped because its lease signal is
+cancelled.
+
+During per-device setup and before each sync, the runner disables attachment
+types and synced vault settings, and applies the policy's excluded folders.
+The pinned CLI's `--file-types ""` restores its default attachment set, so the
+runner explicitly stores an empty `allowTypes` array in that device's CLI config
+after `sync-config`; excluded file types are treated as accepted by the source's
+filter and are not converted into deletions. `dry-run` never switches to
 `bidirectional` and never writes planned changes to the working copy; status
 counts show pending write-back. In `on`, it writes planned local files through
-temporary files and atomic rename, verifies the resulting path set, uploads, and
-returns to `pull-only`. A failed/unconfirmed upload remains pending in state and
-is retried before planning on the next `on` run. A retry is applied only if the
-current file still matches its saved base; an already-landed write/delete is
-cleared without another upload, and a newer edit drops the stale retry so normal
-planning can reconcile it. A retry upload runs only when a mutation was applied.
-Fresh state suppresses all Obsidian writes even when configured `on`.
+temporary files and atomic rename, verifies those paths, uploads, and returns to
+`pull-only`. A failed/unconfirmed upload remains pending in state and is retried
+before planning on the next `on` run. A retry is applied only if the current file
+still matches its saved base; an already-landed write/delete is cleared without
+another upload, and a newer edit drops the stale retry so normal planning can
+reconcile it. A retry upload runs only when a mutation was applied. Fresh state
+suppresses all Obsidian writes even when configured `on`.
 
 The optional vault password is passed to `ob sync-setup` through its argument
 array because the pinned CLI exposes no password environment-variable or stdin
 input. The container is single-purpose and runs as non-root.
+
+HTTP 401/403, missing or blank required Key Vault secrets, and the CLI's
+explicit invalid/expired-token output are classified as `auth`. Transient Key
+Vault or GitHub errors, timeouts and network failures remain failed outcomes
+for the next scheduled retry. Windows-invalid names are counted skips. Upload
+verification checks only the paths applied by that run, so an unrelated remote
+edit downloaded by bidirectional sync does not create a false upload failure.
 
 The container can be smoke-tested locally with:
 
@@ -88,7 +112,9 @@ docker run --rm \
 ```
 
 These tests use synthetic values and in-memory services; they do not contact
-Azure, GitHub or Obsidian.
+Azure, GitHub or Obsidian. The pinned CLI's config filters and timeout recovery
+are verified from the `0.0.14` package source and tests, not yet verified against
+the live service.
 
 ## Inputs and policy
 
