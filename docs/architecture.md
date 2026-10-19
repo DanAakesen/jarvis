@@ -96,12 +96,15 @@ gated by `on`, rechecked against the planned paths, uploaded, and returned to
 verification. Unsuccessful paths remain pending and retry before the next plan.
 The existing desktop task stays in place.
 
-This code is **not deployed or connected to the live vault**; the separate Azure
-job/infrastructure is not implemented here. Headless CLI behavior and upload
-confirmation assumptions, including filtering, checkpoint recovery and
-configuration updates, are **not yet verified against the live service**.
-Mirror-only code qualifies through `vault-mirror-ci.yml` and does not deploy an
-existing application. See
+Since P14-28, the mirror image is built by the infrastructure deployment when
+`JARVIS_VAULT_MIRROR_ENABLED=true`. Its Dockerfile copy inputs and `.dockerignore`
+are infrastructure fingerprint inputs, so changing them selects infrastructure
+and re-applies all four deploy components under the existing receipt model.
+Markdown and documentation-only changes select no deployment. With the switch
+off, the workflow still skips the image build and mirror resources. Headless CLI
+behavior and upload confirmation assumptions, including filtering, checkpoint
+recovery and configuration updates, are **not yet verified against the live
+service**. See
 [`apps/vault-mirror/README.md`](../apps/vault-mirror/README.md).
 
 ## Shared web date-time formatting (19 October 2026; P14-23)
@@ -6274,6 +6277,18 @@ field parity, deployed acceptance, physical-phone use or owner handoff. The
 historical exporter limits are 8 MiB ingress; normalized output capped at 10,000
 rows/8 MiB; retained inbox capped at 256 MiB/10,000 rows per owner. Date-range
 controls and app screens are source-contract-unverified.
+
+P14-35 adds a test-only inventory of the pinned SQLite source schema: all 31
+tables and 360 columns are classified against Jarvis migration-defined columns.
+The current count is 248 exact-name matches, 0 evidence-backed renames, 91
+explicitly excluded columns and 21 individually reasoned not-mapped columns.
+The test validates source/target table and column names, classifications and
+ordered source fingerprints; it does not assert semantic or behavioral parity
+or change runtime SQL. The synthetic SQL integration test also covers both a
+later partial same-key replacement and an older replay that cannot regress a
+newer value, matching the source's per-key behavior without claiming complete-
+day history. Replay remains unverified until the assertion runs against SQL
+Server on the exact PR head.
 
 P12-12 adds inactive `daily/nutrition-export` owner/device services and an explicitly callable route factory, never production composition. A root-auth optional verifier contract is scoped to the two POST claim/complete routes; absent/revoked/expired/wrong-owner capability denies access and ordinary routes retain existing JWT handling. No verifier/provisioning is installed by `index.ts`. Additive 0044 supplies request/claim/receipt/reconciliation evidence over existing temporary queue snapshots, not another meal store. Canonical nutrition writers invalidate only export status metadata; export transactions recheck all source revisions/tombstones. Owner-local app locks, conditional selection, bounded requests/outputs/deadlock retry/cancellation and no-instruction claim replay protect SQL state. Native Health effects remain outside SQL transactions; [protocol/gates](../apps/backend/src/daily/nutrition-export/README.md).
 

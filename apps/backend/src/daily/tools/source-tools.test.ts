@@ -77,6 +77,21 @@ describe('source-selected Daily tool capabilities', () => {
     await expect(healthTool.execute({ operation: 'get_health_summary', startDate: '2026-10-18' }, f.request(), signal())).rejects.toThrow();
   });
 
+  it('returns the documented conversational status and configured profile shapes', async () => {
+    const f = fixture();
+    const status = await f.tools[2]!.execute({ operation: 'get_coach_status' }, f.request(), signal()) as Record<string, unknown>;
+    expect(status).toMatchObject({
+      timeZone: 'Europe/Copenhagen',
+      profile: { status: 'available', profile: { revision: '3', primaryGoal: 'synthetic' } },
+      coachingJudgment: null,
+      fixedRenderer: false,
+      commitments: null,
+    });
+
+    const profile = await f.tools[2]!.execute({ operation: 'get_coach_profile' }, f.request(), signal()) as Record<string, unknown>;
+    expect(profile).toEqual({ status: 'available', profile: { revision: '3', primaryGoal: 'synthetic' } });
+  });
+
   it('keeps named meal history distinct and excludes recorded recovery dates from analysis', async () => {
     const f = fixture();
     const tool = f.tools[1]!;
