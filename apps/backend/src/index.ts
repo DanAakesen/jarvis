@@ -80,6 +80,7 @@ import { createGitHubActionsLogClient } from './github/actions-logs.js';
 import { createGitHubReleaseGraphReader } from './github/release-graph.js';
 import { createChecksLoop } from './github/checks-loop.js';
 import { createGithubWebhookModule } from './github/webhook.js';
+import { isVaultDefaultBranchPush } from './github/webhook-mapping.js';
 import { createGitHubIssueClient } from './github/issues.js';
 import { startIssueTask } from './factory/issues.js';
 import { createProjectPolicyStore } from './database/project-policy-store.js';
@@ -95,7 +96,7 @@ import { createFoundryMemoryEmbedder, MEMORY_EMBEDDING_DIMENSIONS } from './core
 import type { MemoryEmbedder } from './core/memory-embeddings.js';
 import { checkAgentContract } from './core/agent-contract.js';
 import { buildAgentSettingsPayload, readSettings } from './core/settings.js';
-import { createGitHubVaultClient, VAULT_BRANCH, VAULT_REPOSITORY } from './vault/github-client.js';
+import { createGitHubVaultClient, VAULT_REPOSITORY } from './vault/github-client.js';
 import { createVaultModule } from './vault/index.js';
 import { createArmBudgetReader, startBudgetAlertMonitor } from './operations/budget-alert.js';
 import { createGoogleApiClient } from './google/api-client.js';
@@ -709,6 +710,10 @@ try {
     onStatusError: (error) => logger.warn(safeErrorFields(error), 'pc_bridge.status_update_failed'),
   });
   const frameStore = new FrameStore();
+  let vaultPushReminderHandler = () => {
+    logger.info({ runId: null, durationMs: 0, reason: 'vault_push_planner_unconfigured' },
+      'proactive.reminder_plan');
+  };
   const githubWebhookModule = createGithubWebhookModule({
     deliveryStore: webhookDeliveryStore,
     getSecret: getWebhookSecret,
@@ -717,34 +722,37 @@ try {
     } : {}),
     isTrackedRepository: (repository) => repository.toLowerCase() === VAULT_REPOSITORY.toLowerCase() ||
       trackedRepositories.has(repository.toLowerCase()),
-    ...(checksLoop || projectPolicyEvaluator || vaultModule ||
-      (githubIssueClient && projectStore && taskStore) ? {
-      onMapping: async (mapping) => {
-        if (mapping.kind === 'issue_labeled' && githubIssueClient && projectStore && taskStore) {
-          const result = await startIssueTask({
-            projects: projectStore,
-            tasks: taskStore,
-            github: githubIssueClient,
-            repository: mapping.repository,
-            issue: mapping.number,
-          });
-          if (!['created', 'existing', 'project-not-found', 'issue-not-found', 'issue-closed',
-            'not-an-issue', 'prompt-too-large'].includes(result.kind)) {
-            throw new Error('Issue task start failed');
-          }
+    onMapping: async (mapping) => {
+      if (mapping.kind === 'issue_labeled' && githubIssueClient && projectStore && taskStore) {
+        const result = await startIssueTask({
+          projects: projectStore,
+          tasks: taskStore,
+          github: githubIssueClient,
+          repository: mapping.repository,
+          issue: mapping.number,
+        });
+        if (!['created', 'existing', 'project-not-found', 'issue-not-found', 'issue-closed',
+          'not-an-issue', 'prompt-too-large'].includes(result.kind)) {
+          throw new Error('Issue task start failed');
         }
-        if (mapping.kind === 'push' && mapping.repository.toLowerCase() === VAULT_REPOSITORY.toLowerCase() &&
-            mapping.ref === `refs/heads/${VAULT_BRANCH}` && vaultModule) {
+      }
+      if (isVaultDefaultBranchPush(mapping)) {
+        if (vaultModule) {
           void vaultModule.synchronize(AbortSignal.timeout(10 * 60_000)).catch(() => {
             logger.warn({
               msg: 'vault.index', outcome: 'error', added: 0, changed: 0, removed: 0,
             }, 'vault.index');
           });
         }
-        await checksLoop?.handleMapping(mapping);
-        await projectPolicyEvaluator?.handle(mapping);
-      },
-    } : {}),
+        try {
+          vaultPushReminderHandler();
+        } catch {
+          logger.warn({ runId: null, reason: 'vault_push_trigger_failed' }, 'proactive.reminder_plan');
+        }
+      }
+      await checksLoop?.handleMapping(mapping);
+      await projectPolicyEvaluator?.handle(mapping);
+    },
   });
   const phoneCallModule = config.phone && phoneSessionStore && phoneSecretClient && credential &&
     config.foundryProjectEndpoint
@@ -1208,6 +1216,7 @@ try {
     ...(taskStore ? { taskStore } : {}),
     backgroundJobs: app.backgroundJobs,
     ...(conversationStore ? { conversationStore } : {}),
+    registerVaultPushHandler: (handler: () => void) => { vaultPushReminderHandler = handler; },
     ...(alertPushStore ? { pushStore: alertPushStore } : {}),
     ...(alertPushSender ? { systemPushSender: alertPushSender } : {}),
     pushEnabled: config.pushEnabled,

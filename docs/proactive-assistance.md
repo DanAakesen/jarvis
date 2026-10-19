@@ -216,10 +216,12 @@ titles with publication time and feed host. Feed content remains untrusted.
 Reminders reuse the P13-12 alert flag and are constructed only with the
 proactive, push and alert gates and their vault, store and sender dependencies;
 all three default off in code and are on in production since P13-15. The planner
-runs after every check, but only when the
-todo source succeeded, and records explicit-time todos due within 48 hours for
-one hour before their deadline. A date-only todo remains covered by the
-24-hour deadline alert.
+runs after every check when the todo source succeeded, and a verified push to
+the vault repository's default branch starts a todos-only planning pass when
+the planner exists, proactive work is not paused, todos are enabled and local
+time is outside the quiet window. Both paths record explicit-time todos due
+within 48 hours for one hour before their deadline. A date-only todo remains
+covered by the 24-hour deadline alert.
 
 The in-process ticker reads the earliest pending time once at startup, remains
 silent while idle, and does no reminder work from 22:00 to 07:00 Copenhagen
@@ -228,8 +230,8 @@ deleted todos are cancelled. It creates one private Proactive item per reminder
 and sends one generic bundled push. The daily cap is eight. Titles remain in
 the private reminder/item database rows, never in push payloads or logs.
 
-A todo added after the last check is covered from the next check on; "Check
-now" covers it immediately.
+Default-branch pushes during quiet hours are not queued; the 07:00 check plans
+eligible tasks. Other pushes do not start the pass.
 
 ## Current evidence
 

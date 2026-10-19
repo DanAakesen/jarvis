@@ -29,6 +29,7 @@ import { estimateCost } from './budget.js';
 import { createProactiveAlertHook } from './alerts.js';
 import { createTodoReminderPlanner } from './reminders.js';
 import { createReminderTicker } from './reminder-ticker.js';
+import { createVaultPushReminderPass } from './vault-push-reminders.js';
 import type { SystemPushOutcome, SystemPushRequest } from './push-delivery.js';
 
 const uuidPattern = /^[\da-f]{8}-(?:[\da-f]{4}-){3}[\da-f]{12}$/iu;
@@ -50,6 +51,7 @@ export interface ProactiveCompositionOptions {
   backgroundJobs?: BackgroundJobRegistry;
   conversationStore?: Pick<ConversationStore, 'readRecentUserMessages'>;
   onFindingsStored?: NonNullable<ProactiveEngineOptions['onFindingsStored']>;
+  registerVaultPushHandler?: (handler: () => void) => void;
   pushStore?: PushStore;
   alertLedgerStore?: AlertLedgerStore;
   reminderStore?: ProactiveReminderStore;
@@ -149,6 +151,23 @@ export function registerProactive<Logger extends FastifyBaseLogger>(
       ...(options.logger ? { logger: options.logger } : {}),
     })
     : undefined;
+  const vaultPushReminderPass = reminderPlanner && reminderTicker && reminderStore
+    ? createVaultPushReminderPass({
+      store,
+      reminders: reminderStore,
+      todos: sources.find(({ id }) => id === 'todos')!,
+      now,
+      onPlanned: reminderTicker.considerFireAt,
+      ...(options.logger ? { logger: options.logger } : {}),
+    })
+    : undefined;
+  options.registerVaultPushHandler?.(vaultPushReminderPass?.trigger ?? (() => {
+    try {
+      options.logger?.info({
+        runId: null, durationMs: 0, reason: 'vault_push_planner_unconfigured',
+      }, 'proactive.reminder_plan');
+    } catch { /* Logging cannot change webhook handling. */ }
+  }));
   // Hooks run in order: the time-critical alert goes first, then the database-only reminder planner, so a slow vault write never delays either.
   const run = createProactiveEngine({
     ...options,
@@ -171,6 +190,7 @@ export function registerProactive<Logger extends FastifyBaseLogger>(
     await reminderTicker?.start();
   });
   app.addHook('onClose', async () => {
+    await vaultPushReminderPass?.stop();
     await reminderTicker?.stop();
     await scheduler.stop();
   });
