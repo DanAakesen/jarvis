@@ -82,7 +82,7 @@ export function formatDateTime(value: DateTimeValue, options: DateTimeOptions = 
 }
 
 export function formatDateOnly(value: DateTimeValue, options: DateTimeOptions = {}): string {
-  return formatDate(value, options, { dateStyle: 'medium' });
+  return formatDate(value, { ...options, timeZone: 'UTC' }, { dateStyle: 'medium' });
 }
 
 export function formatTimeOnly(value: DateTimeValue, options: DateTimeOptions = {}): string {

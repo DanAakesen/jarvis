@@ -242,6 +242,16 @@ describe('ConversationHistory', () => {
     expect(screen.getByRole('link', { name: 'Task #77' }).getAttribute('href')).toBe('/factory/tasks/77');
   });
 
+  it('keeps the visible message time relative and formats its absolute tooltip', async () => {
+    vi.setSystemTime(new Date('2026-10-03T12:05:00.000Z'));
+    loadConversationHistory.mockResolvedValue({ messages: [message], nextCursor: null });
+    renderConversation();
+
+    const time = await screen.findByText('5 minutes ago');
+    expect(time.tagName).toBe('TIME');
+    expect(time.getAttribute('title')).toBe('3 Oct 2026, 12:00');
+  });
+
   it('shows a saved generated image inline in conversation history', async () => {
     const artifactId = '7b96c6a9-9f80-4a8b-8a73-51517fe37512';
     loadConversationHistory.mockResolvedValue({

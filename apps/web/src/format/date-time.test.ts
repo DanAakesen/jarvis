@@ -14,6 +14,7 @@ describe('shared date and time formatting', () => {
 
   it('formats date-only and time-only values', () => {
     expect(formatDateOnly('2026-10-19', { timeZone: 'UTC' })).toBe('19 Oct 2026');
+    expect(formatDateOnly('2026-10-19', { timeZone: 'America/Los_Angeles' })).toBe('19 Oct 2026');
     expect(formatTimeOnly('2026-10-19T00:05:00.000Z', { timeZone: 'UTC' })).toBe('00:05');
   });
 

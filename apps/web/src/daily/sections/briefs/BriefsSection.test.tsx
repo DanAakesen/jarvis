@@ -47,17 +47,17 @@ describe('Briefs section', () => {
     const queries = renderBriefs([brief]);
     expect(await screen.findByRole('heading', { level: 2, name: 'Briefs' })).toBeTruthy();
     expect(await screen.findByRole('heading', { level: 3, name: 'October 2026' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Open brief Scheduled brief, 18 Oct 2026' })).toBeTruthy();
-    expect(screen.getByText('18 Oct 2026')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Open brief Scheduled brief, 2026-10-18T08:00:00' })).toBeTruthy();
+    expect(screen.getByText('2026-10-18T08:00:00')).toBeTruthy();
     expect(screen.getByText('Status: completed')).toBeTruthy();
     expect(screen.getByText('Delivery: not_requested')).toBeTruthy();
     expect(screen.getByText('1 brief loaded.')).toBeTruthy();
 
-    const opener = screen.getByRole('button', { name: 'Open brief Scheduled brief, 18 Oct 2026' });
+    const opener = screen.getByRole('button', { name: 'Open brief Scheduled brief, 2026-10-18T08:00:00' });
     fireEvent.click(opener);
     const detailHeading = await screen.findByRole('heading', { level: 3, name: 'Scheduled brief' });
     await waitFor(() => expect(document.activeElement).toBe(detailHeading));
-    expect(screen.getByText('Showing Scheduled brief, 18 Oct 2026.')).toBeTruthy();
+    expect(screen.getByText('Showing Scheduled brief, 2026-10-18T08:00:00.')).toBeTruthy();
     expect(screen.getByRole('heading', { level: 4, name: 'Overview' })).toBeTruthy();
     expect(screen.getByText('Synthetic brief body.')).toBeTruthy();
     expect(screen.getByRole('heading', { level: 4, name: 'Next' })).toBeTruthy();
@@ -78,10 +78,10 @@ describe('Briefs section', () => {
     expect(await screen.findByRole('heading', { level: 3, name: 'October 2026' })).toBeTruthy();
     expect(screen.getByRole('heading', { level: 3, name: 'September 2026' })).toBeTruthy();
     expect(screen.getByRole('heading', { level: 3, name: 'Date unknown' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Open brief Scheduled brief, 1 Oct 2026' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Open brief Scheduled brief, 30 Sept 2026' })).toBeTruthy();
-    expect(screen.getByText('1 Oct 2026')).toBeTruthy();
-    expect(screen.getByText('30 Sept 2026')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Open brief Scheduled brief, 2026-10-01T00:30:00+14:00' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Open brief Scheduled brief, 2026-09-30T23:30:00-12:00' })).toBeTruthy();
+    expect(screen.getByText('2026-10-01T00:30:00+14:00')).toBeTruthy();
+    expect(screen.getByText('2026-09-30T23:30:00-12:00')).toBeTruthy();
     expect(screen.getByText('Status: Unknown')).toBeTruthy();
     expect(screen.getByText('Delivery: Unknown')).toBeTruthy();
     expect(screen.getAllByRole('button', { name: /^Open brief/u })).toHaveLength(3);
@@ -110,7 +110,7 @@ describe('Briefs section', () => {
     render(<MemoryRouter><BriefsSection {...props} /></MemoryRouter>);
     expect(await screen.findByText(/HTTP 503/u)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Retry brief history' }));
-    expect(await screen.findByRole('button', { name: 'Open brief Scheduled brief, 18 Oct 2026' })).toBeTruthy();
+    expect(await screen.findByRole('button', { name: 'Open brief Scheduled brief, 2026-10-18T08:00:00' })).toBeTruthy();
   });
 
   it('offers Retry after a detail error and recovers the selected brief', async () => {
@@ -120,7 +120,7 @@ describe('Briefs section', () => {
       return jsonResponse(dailyFixture(query, query.source === sources.briefs ? [brief] : [brief]));
     });
     render(<MemoryRouter><BriefsSection {...props} /></MemoryRouter>);
-    fireEvent.click(await screen.findByRole('button', { name: 'Open brief Scheduled brief, 18 Oct 2026' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Open brief Scheduled brief, 2026-10-18T08:00:00' }));
     expect(await screen.findByText(/HTTP 503/u)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Retry brief details' }));
     expect(await screen.findByText('Synthetic brief body.')).toBeTruthy();
@@ -155,7 +155,7 @@ describe('Briefs section', () => {
       { ...brief, id: 'oldest', started_at: '2026-10-16T08:00:00', trigger: 'catch_up' },
     ];
     renderBriefs(rows);
-    fireEvent.click(await screen.findByRole('button', { name: 'Open brief Manual brief, 17 Oct 2026' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Open brief Manual brief, 2026-10-17T08:00:00' }));
     await screen.findByRole('heading', { level: 3, name: 'Manual brief' });
 
     const newer = screen.getByRole('button', { name: 'Newer brief' });
@@ -182,7 +182,7 @@ describe('Briefs section', () => {
       body_json: { sections: [{ title: 'Recovery', content: { sleep: { hours: 8 }, notes: ['Rested', 'Recovered'] } }] },
     };
     renderBriefs([structured]);
-    fireEvent.click(await screen.findByRole('button', { name: 'Open brief Scheduled brief, 18 Oct 2026' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Open brief Scheduled brief, 2026-10-18T08:00:00' }));
     expect(await screen.findByText('A concise synthetic preview.')).toBeTruthy();
     expect(screen.getByRole('heading', { level: 4, name: 'Recovery' })).toBeTruthy();
     expect(screen.getByText('sleep')).toBeTruthy();
@@ -198,7 +198,7 @@ describe('Briefs section', () => {
   it('presents a plain-text body as prose and retains its raw value behind disclosure', async () => {
     const plain = { ...brief, preview_text: 'A lead paragraph.', body_json: 'The main synthetic brief body.' };
     renderBriefs([plain]);
-    fireEvent.click(await screen.findByRole('button', { name: 'Open brief Scheduled brief, 18 Oct 2026' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Open brief Scheduled brief, 2026-10-18T08:00:00' }));
     expect(await screen.findByText('A lead paragraph.')).toBeTruthy();
     expect(screen.getAllByText('The main synthetic brief body.')).toHaveLength(2);
     expect(screen.getByText('Raw brief').closest('details')?.hasAttribute('open')).toBe(false);
@@ -206,7 +206,7 @@ describe('Briefs section', () => {
 
   it('explains when a loaded history row has no identifier to open', async () => {
     renderBriefs([{ ...brief, id: null }]);
-    const unavailable = await screen.findByRole('button', { name: 'Open brief Scheduled brief, 18 Oct 2026' });
+    const unavailable = await screen.findByRole('button', { name: 'Open brief Scheduled brief, 2026-10-18T08:00:00' });
     expect(unavailable.hasAttribute('disabled')).toBe(true);
     expect(screen.getByText('Details unavailable because this brief has no recorded identifier.')).toBeTruthy();
   });

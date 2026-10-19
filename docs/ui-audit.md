@@ -464,22 +464,22 @@ wrappers retain Copenhagen time; Proactive keeps its Copenhagen and
 content-language choices. The static guard allows only three calculation-only
 files with checked call counts: `daily/period.ts` and `daily/presentation.ts`
 extract calendar parts, while `proactive-data.ts` converts Copenhagen wall
-times. Daily brief date-only output also uses the helper while preserving its
-recorded civil date. The chat message label remains relative (out of scope); its
-absolute timestamp tooltip uses the shared format.
+times. Date-only values format as UTC calendar dates without a clock or day
+shift; time-only values keep only the clock. Daily brief timestamps with unknown
+zones remain verbatim, as do relative-time labels. The absolute tooltip behind
+the relative chat tag uses the shared format.
 
 Chromium rendered synthetic Kanban card/trail, task window, release page,
-Settings health-credential expiry and chat content at 390×844 and 1440×900 in
-light and dark. The displayed dates and credential expiry used the same
-`19 Oct 2026, 00:05` / `30 Oct 2026, 12:34` shape; chat tooltips had the shared
-absolute format. The phone credential status and deployment record wrapped
-without clipping, and the task timeline’s longer date labels fit their rows.
-The document width matched the viewport in all 20 combinations, with no
-uncaught page errors. The phone check opened the chat using its Show
-conversation control. Synthetic API fixtures and a local sign-in stub were
-used; this is rendered local evidence, not live-backend or human acceptance.
-Screenshots were retained under `/tmp/p14-23-browser/screenshots/`, not in the
-repository.
+and Settings health-credential expiry at 390×844 and 1440×900 in light and
+dark. The displayed dates and credential expiry used the same
+`19 Oct 2026, 00:05` / `30 Oct 2026, 12:34` shape. The phone credential status
+and deployment record wrapped without clipping, and the task timeline’s longer
+date labels fit their rows. The document width matched the viewport in all 16
+combinations, with no uncaught page errors. Synthetic API fixtures and a local
+sign-in stub were used; this is rendered local evidence, not live-backend or
+human acceptance. A unit test pins the chat tooltip format while preserving the
+visible relative label. Screenshots were retained under
+`/tmp/p14-23-browser/screenshots/`, not in the repository.
 
 ## Bounded follow-up
 

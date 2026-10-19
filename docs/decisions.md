@@ -4,13 +4,15 @@
 
 Use `apps/web/src/format/date-time.ts` for user-visible web date-time, date-only
 and time-only values. Default to `en-GB`, medium date plus short 24-hour time,
-and the browser timezone; use `hourCycle: 'h23'` so midnight stays in the
-00–23 hour range. Optional locale and timezone arguments preserve deliberate
-content-language and display-zone choices. Return an en dash for missing or
-invalid values so rendering never throws. Keep relative times, chart/calendar
-labels, data values and non-web formatting outside this presentation helper.
-Daily and Proactive wrappers remain thin to preserve their explicit
-Europe/Copenhagen zone and Danish content behavior.
+and the browser timezone; date-only values use UTC so their calendar day never
+shifts. Use `hourCycle: 'h23'` so midnight stays in the 00–23 hour range.
+Optional locale and timezone arguments preserve deliberate content-language
+and display-zone choices. Return an en dash for missing or invalid values so
+rendering never throws. Keep relative times, chart/calendar labels, data values
+and non-web formatting outside this presentation helper. Daily brief timestamps
+remain verbatim because their timezone is unknown. Daily and Proactive wrappers
+remain thin to preserve their explicit Europe/Copenhagen zone and Danish content
+behavior.
 
 ## P14-15 — Nested section titles wrap, the save row has no frame, touch targets in the task window (19 October 2026)
 
@@ -116,11 +118,10 @@ route, token, dependency or data read changes.
 
 ## P12-38 — Daily visual QA corrections (18 October 2026)
 
-Use `dailyLocale()` in `ui/formatters.ts` as the one source for displayed Daily
-dates and times. Keep the locale an explicit argument on the formatters so tests
-can pin both en-US and en-GB without inheriting the CI host locale; retain the
-existing Europe/Copenhagen display timezone and source-specific handling of
-unqualified historical timestamps.
+Use the shared date-time helper for displayed Daily dates and times, retaining
+the existing Europe/Copenhagen display timezone where it is known. Daily brief
+timestamps have no known timezone and remain verbatim. Keep `dailyLocale()` for
+number and duration formatting, not dates.
 
 Standardize section presentation through the shared title → controls/filters →
 freshness → “About this data” slot order, with the embedded Overview navigation

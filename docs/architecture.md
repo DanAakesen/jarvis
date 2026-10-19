@@ -4,13 +4,15 @@
 
 `apps/web/src/format/date-time.ts` is the web client’s shared date-time
 presentation boundary. Date-time, date-only and time-only calls default to
-`en-GB` and the browser timezone; optional locale and timezone arguments are
-reserved for content-language formatting and surfaces with an established
-display zone. Invalid or missing values return an en dash rather than throwing
-during render. Daily and Proactive keep thin wrappers only for their explicit
-timezone and content-language rules. `dailyLocale()` remains for numeric and
-duration values, and calculation-only `Intl` calls stay in the static guard’s
-small allowlist.
+`en-GB`; date-time and time-only calls use the browser timezone, while date-only
+values are interpreted as UTC to avoid shifting their calendar day. Optional
+locale and timezone arguments preserve content-language formatting and
+established display zones. Invalid or missing values return an en dash rather
+than throwing during render. Daily and Proactive keep thin wrappers only for
+their explicit timezone and content-language rules; Daily brief timestamps
+remain verbatim because their timezone is unknown. `dailyLocale()` remains for
+numeric and duration values, and calculation-only `Intl` calls stay in the
+static guard’s small allowlist.
 
 ## Daily visual QA presentation changes (18 October 2026; P12-38)
 
@@ -28,7 +30,9 @@ button.
 
 `ui/formatters.ts` delegates displayed Daily dates and times to the shared web
 date-time formatters while retaining the established Europe/Copenhagen display
-timezone. `dailyLocale()` is used for numbers and durations, not date output.
+timezone for known-zone values. Daily brief timestamps remain verbatim because
+their timezone is unknown. `dailyLocale()` is used for numbers and durations,
+not date output.
 The Body chart still consumes only the existing per-unit daily summaries: it
 now sends one series per metric/unit to `DailyChart`, with a three-calendar-day
 maximum connecting interval. Wider date gaps create a new line segment; each

@@ -6,7 +6,6 @@ import { DailySectionHeader } from '../../ui/DailySectionHeader';
 import { FreshnessLine } from '../../ui/FreshnessLine';
 import { useDailyPages } from '../../ui/useDailyPages';
 import { useDailyQuery } from '../../useDailyQuery';
-import { formatDateOnly } from '../../../format/date-time';
 import { text, type Row } from '../nutrition/totals';
 import type { DailySectionProps } from '../types';
 import { briefLabel } from './label';
@@ -22,8 +21,7 @@ function storedDate(value: DailyJson | undefined): string | null {
 }
 
 function briefDate(value: DailyJson | undefined) {
-  const date = storedDate(value);
-  return date ? formatDateOnly(date) : 'Unknown';
+  return typeof value === 'string' && value ? value : 'Unknown';
 }
 
 function briefMonth(value: DailyJson | undefined) {
