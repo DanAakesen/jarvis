@@ -6,7 +6,6 @@ import { DailyChart } from '../../ui/DailyChart';
 import { DailyState } from '../../ui/DailyState';
 import { ScrollTable } from '../../ui/ScrollTable';
 import { StatTile } from '../../ui/StatTile';
-import { DataNotes } from '../../ui/DataNotes';
 import { DailyGrid, DailyGridItem } from '../../ui/DailyGrid';
 import { DailySectionHeader } from '../../ui/DailySectionHeader';
 import { FreshnessLine } from '../../ui/FreshnessLine';
@@ -59,21 +58,20 @@ function WorkoutSummary({ rows, partial, period }: { rows: Workout[]; partial: b
   const typeRows = [...types].map(([type, entry]) => ({ type, ...entry }))
     .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
   const longest = Math.max(0, ...typeRows.flatMap(item => item.seconds === null ? [] : [item.seconds]));
-  const scopeNote = (missing: number, unit: string) => partial || missing > 0
-    ? `Known ${unit} total is a lower bound; ${missing} without recorded ${unit}; ${scope}.`
-    : `Recorded ${unit} total ${scope}.`;
+  const scopeNote = (missing: number) => partial || missing > 0
+    ? ['Lower bound', missing > 0 ? `${missing} not recorded` : '', partial ? scope : ''].filter(Boolean).join('; ')
+    : undefined;
   return <>
     <div className="workouts-stats" aria-label="Workout summary">
-      <StatTile compact label="Workouts" value={summary.count} note={partial ? `Loaded workouts; more may exist.` : 'Returned records only; source completeness is unknown.'} />
-      <StatTile compact label="Active days" value={summary.activeDays}
-        note={`Distinct recorded workout dates; missing dates excluded${partial ? `, ${scope}` : ''}.`} />
+      <StatTile compact label="Workouts" value={summary.count} note={partial ? 'More may exist.' : undefined} />
+      <StatTile compact label="Active days" value={summary.activeDays} />
       <StatTile compact label="Total time" value={summary.durationSeconds === null ? null : formatDuration(summary.durationSeconds)}
-        note={scopeNote(summary.missingDuration, 'duration')}
+        note={scopeNote(summary.missingDuration)}
         sparkline={{ values: volume.buckets.map(bucket => bucket.minutes), label: `Recorded workout minutes per ${volume.grain}; gaps are not zero` }} />
       <StatTile compact label="Distance" value={unitValues(summary.distance.values)}
-        note={scopeNote(summary.distance.missing, 'distance')} />
+        note={scopeNote(summary.distance.missing)} />
       <StatTile compact label="Active energy" value={unitValues(summary.energy.values)}
-        note={scopeNote(summary.energy.missing, 'active energy')} />
+        note={scopeNote(summary.energy.missing)} />
     </div>
     <DailyGrid columns="twelve" className="workouts-analysis">
       <DailyGridItem span={8}>
@@ -100,7 +98,6 @@ function WorkoutSummary({ rows, partial, period }: { rows: Workout[]; partial: b
       <DailyGridItem span={4}>
         <section className="workouts-by-type" aria-labelledby="workouts-by-type-heading">
           <h3 id="workouts-by-type-heading">By type</h3>
-          <p>{partial ? 'Loaded workouts' : `Returned workouts ${scope}`}</p>
           {typeRows.length ? <ul>{typeRows.map(item => <li key={item.type}>
             <div className="workouts-type-label"><WorkoutGlyph type={item.type} /><span>{item.name}</span><strong>{item.count}</strong></div>
             <div className="workouts-type-volume">
@@ -120,11 +117,11 @@ function WorkoutTable({ rows, onOpen }: { rows: Workout[]; onOpen: (row: Workout
   const [tableOpen, setTableOpen] = useState(false);
   const open = (row: Workout) => text(row.id) ? <button type="button" className="secondary-button"
     data-workout-id={String(row.id)} onClick={event => onOpen(row, event.currentTarget)}
-    aria-label={`Open ${typeLabel(row)}, ${workoutTime(row)}`}>Open</button> : <span>Detail unavailable: unknown id</span>;
+    aria-label={`Open ${typeLabel(row)}, ${workoutTime(row)}`}>Open</button> : <span>No detail</span>;
   return <details className="workouts-view-table" open={tableOpen}>
     <summary onClick={() => setTableOpen(open => !open)}>View as table</summary>
     {tableOpen && <ScrollTable label="Workouts in the loaded rows">
-      <table><caption>Recorded workouts; unknown values are not zero</caption>
+      <table><caption>Recorded workouts</caption>
         <thead><tr>{['Date and time', 'Type', 'Duration', 'Distance', 'Active energy', 'Average HR (bpm)', 'Maximum HR (bpm)', 'Environment', 'Source', 'Detail']
           .map(label => <th scope="col" key={label}>{label}</th>)}</tr></thead>
         <tbody>{rows.map((row, index) => <tr key={text(row.id) ?? `unknown-${index}`}>
@@ -145,7 +142,7 @@ function WorkoutTable({ rows, onOpen }: { rows: Workout[]; onOpen: (row: Workout
 function WorkoutList({ rows, onOpen }: { rows: Workout[]; onOpen: (row: Workout, button: HTMLButtonElement) => void }) {
   const open = (row: Workout) => text(row.id) ? <button type="button" className="secondary-button"
     data-workout-id={String(row.id)} onClick={event => onOpen(row, event.currentTarget)}
-    aria-label={`Open ${typeLabel(row)}, ${workoutTime(row) === 'Unknown' ? 'Not recorded' : workoutTime(row)}`}>Open</button> : <span>Detail unavailable: unknown id</span>;
+    aria-label={`Open ${typeLabel(row)}, ${workoutTime(row) === 'Unknown' ? 'Not recorded' : workoutTime(row)}`}>Open</button> : <span>No detail</span>;
   return <>
     <ul className="workouts-history" aria-label="Recorded workout history">
       {rows.map((row, index) => {
@@ -267,19 +264,9 @@ export default function WorkoutsSection(props: DailySectionProps) {
         </label>
       </div>}
       freshness={result.last && <FreshnessLine observedAt={result.last.freshness.observedAt} count={result.items.length}
-        partial={partial || result.last.status === 'partial'} />}
-      aboutData={<DataNotes>
-      <p>Recorded activity only. Logging and corrections stay in chat. Original Daily remains canonical.</p>
-      <p>Active days count distinct recorded workout_date values; missing dates are excluded. Total time, distance and energy use recorded values only. Missing measurements are not treated as zero.</p>
-      <p>Distance and energy totals stay grouped by stored unit. Values without a unit are listed individually, not summed. Incomplete loaded totals are lower bounds.</p>
-      <p>Volume groups dates into Monday-start weeks or calendar months in Europe/Copenhagen. Missing durations are excluded from recorded minutes, not treated as zero.</p>
-      <p>Filtering and sorting apply only to loaded rows. Distance and energy sort within each stored unit. Returned records do not establish source completeness or freshness.</p>
-      <p>Heart-rate samples show recorded minute averages, minima and maxima from workout start or the first returned sample. Gaps are not zero. Recorded JSON remains the source detail.</p>
-    </DataNotes>} />
+        partial={partial || result.last.status === 'partial'} />} />
     {selected && row && <WorkoutDetail key={String(row.id)} {...props} row={row} onBack={back} />}
-    {selected && row && !loadedRow && <p role="status">
-      This workout’s summary is from the previous read while the refreshed period is incomplete.
-    </p>}
+    {selected && row && !loadedRow && <p role="status">Summary from the previous read.</p>}
     {selected && !row && <>
       <button type="button" className="secondary-button" onClick={back}>Back to workouts</button>
       {result.status === 'loading' || result.status === 'idle' || result.loadingMore || result.hasMore && !result.capped && !result.error
@@ -292,7 +279,7 @@ export default function WorkoutsSection(props: DailySectionProps) {
         <WorkoutSummary rows={filtered} partial={partial} period={props.period} />
         <section aria-labelledby="workouts-list-heading">
           <h3 id="workouts-list-heading">Workout history</h3>
-          {filtered.length === 0 ? <p>No loaded workouts match this type. Choose All to see the loaded period.</p>
+          {filtered.length === 0 ? <p>No workouts of this type.</p>
             : <WorkoutList rows={sortedWorkouts(filtered, sort)} onOpen={onOpen} />}
         </section>
       </>}
@@ -300,10 +287,10 @@ export default function WorkoutsSection(props: DailySectionProps) {
     </div>
     {result.error && <DailyState status="error" message={result.error} onRetry={result.reload} />}
     {result.hasMore && <div className="workouts-coverage" role="status">
-      <p>Showing {result.items.length} workouts; more exist in this period</p>
+      <p>Showing {result.items.length} workouts; more exist</p>
       {result.loadingMore && <p>Loading more workouts…</p>}
       {result.capped && <button className="secondary-button" type="button" onClick={result.loadMore}>Load more</button>}
     </div>}
-    {result.status === 'loading' && result.items.length > 0 && <p className="daily-meta" role="status">Refreshing recorded workouts…</p>}
+    {result.status === 'loading' && result.items.length > 0 && <p className="daily-meta" role="status">Refreshing…</p>}
   </section>;
 }

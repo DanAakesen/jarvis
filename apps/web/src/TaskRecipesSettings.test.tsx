@@ -54,8 +54,6 @@ describe('TaskRecipesSettings', () => {
     expect(await screen.findByText('PC app: notepad')).not.toBeNull();
     expect(screen.getByText('Browser site: example.com')).not.toBeNull();
     expect(screen.getByText('open a document')).not.toBeNull();
-    expect(screen.getByText('1 step')).not.toBeNull();
-    expect(screen.getByText('2 steps')).not.toBeNull();
     expect(screen.queryByText('#account')).toBeNull();
     expect(fetchMock.mock.calls[0]?.[0]).toBe('https://api.example.com/recipes');
     expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({
@@ -63,7 +61,7 @@ describe('TaskRecipesSettings', () => {
       headers: { Authorization: `${['Bear', 'er'].join('')} ${await getAccessToken()}` },
     });
     await user.click(screen.getByRole('button', { name: 'Refresh routines' }));
-    expect(await screen.findByText('No saved routines.')).not.toBeNull();
+    expect(await screen.findByText('No routines')).not.toBeNull();
   });
 
   it('is named Routines everywhere the user can see or hear it', async () => {
@@ -79,7 +77,7 @@ describe('TaskRecipesSettings', () => {
     expect(visibleText).not.toMatch(/recipe/i);
     await user.click(screen.getByRole('button', { name: 'Delete routine: open a document (notepad)' }));
     await user.click(screen.getByRole('button', { name: 'Confirm delete routine: open a document (notepad)' }));
-    expect(await screen.findByText('Routine deleted: open a document.')).not.toBeNull();
+    expect(await screen.findByText('Deleted')).not.toBeNull();
     expect(view.container.textContent ?? '').not.toMatch(/recipe/i);
   });
 
@@ -114,11 +112,11 @@ describe('TaskRecipesSettings', () => {
       .mockResolvedValueOnce(response());
     renderRecipes();
     expect(await screen.findByRole('alert')).toHaveProperty('textContent', 'Could not load routines. Try again.');
-    expect(screen.queryByText('No saved routines.')).toBeNull();
+    expect(screen.queryByText('No routines')).toBeNull();
     await user.click(screen.getByRole('button', { name: 'Retry routines' }));
     expect(await screen.findByRole('button', { name: 'Retry routines' })).not.toBeNull();
     await user.click(screen.getByRole('button', { name: 'Retry routines' }));
-    expect(await screen.findByText('No saved routines.')).not.toBeNull();
+    expect(await screen.findByText('No routines')).not.toBeNull();
   });
 
   it('keeps previously loaded routines visible when a refresh fails', async () => {
@@ -128,7 +126,7 @@ describe('TaskRecipesSettings', () => {
     await screen.findByText('open a document');
     await user.click(screen.getByRole('button', { name: 'Refresh routines' }));
     expect(await screen.findByRole('alert')).not.toBeNull();
-    expect(screen.getByText('Previously loaded routines are shown.')).not.toBeNull();
+    expect(screen.getByText('Showing the last loaded routines.')).not.toBeNull();
     expect(screen.getByText('open a document')).not.toBeNull();
   });
 
@@ -148,7 +146,7 @@ describe('TaskRecipesSettings', () => {
     expect(fetchMock.mock.calls[1]?.[0]).toBe('https://api.example.com/recipes/pc%2F1');
     expect(fetchMock.mock.calls[1]?.[1]).toMatchObject({ method: 'DELETE' });
     await act(async () => { pending.resolve(new Response(null, { status: 204 })); });
-    expect(await screen.findByText('Routine deleted: open a document.')).not.toBeNull();
+    expect(await screen.findByText('Deleted')).not.toBeNull();
     expect(screen.queryByText('PC app: notepad')).toBeNull();
     expect(screen.getByText('Browser site: example.com')).not.toBeNull();
   });
@@ -167,7 +165,7 @@ describe('TaskRecipesSettings', () => {
     expect(screen.getByText('open a document')).not.toBeNull();
     await user.click(screen.getByRole('button', { name }));
     await user.click(screen.getByRole('button', { name: confirmName }));
-    expect(await screen.findByText('No saved routines.')).not.toBeNull();
+    expect(await screen.findByText('No routines')).not.toBeNull();
   });
 
   it('aborts an old load and ignores its result after changing the service', async () => {

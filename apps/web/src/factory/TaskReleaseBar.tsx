@@ -146,13 +146,13 @@ export function TaskReleaseBar({
         <section className="release-trail release-trail-empty" aria-label="Project release context">
           <span className="release-trail-icon"><TrailIcon name="repo" /></span>
           <div className="release-trail-line" aria-hidden="true"><span /><span /><span /><span /></div>
-          <p>No project selected.</p>
+          <p>No project</p>
         </section>
       );
     }
     return (
       <section className="task-release-bar" aria-label="Project release context">
-        <p>No project selected.</p>
+        <p>No project</p>
       </section>
     );
   }
@@ -166,7 +166,7 @@ export function TaskReleaseBar({
             onAction={backendUrl ? () => setRefreshKey((key) => key + 1) : undefined} />
           : !backendUrl
             ? <StateMessage variant="error" message="Release data is unavailable." />
-            : <StateMessage variant="loading" message="Loading project release context." />}
+            : <StateMessage variant="loading" message="Loading release" />}
       </section>
     );
   }
@@ -232,9 +232,9 @@ export function TaskReleaseBar({
           <Link className="release-trail-open" to={releaseUrl}><TrailIcon name="open" /><span>Open release</span></Link>
         </div>
         {currentStale && currentView.graph &&
-          <p className="release-trail-note release-trail-wide" role="status">Commit data may be stale. Fetched {formatDate(currentView.graph.fetchedAt)}.</p>}
+          <p className="release-trail-note release-trail-wide" role="status">Stale, fetched {formatDate(currentView.graph.fetchedAt)}.</p>}
         {currentResult?.status === 'error' && currentResult.message && (
-          <p className="release-trail-note release-trail-wide" role="alert">Refresh failed; showing the last loaded project data. {currentResult.message}</p>
+          <p className="release-trail-note release-trail-wide" role="alert">Refresh failed. {currentResult.message}</p>
         )}
       </section>
     );
@@ -285,7 +285,7 @@ export function TaskReleaseBar({
         {currentView.graph === null
           ? <p role="status">Commit history is unavailable.</p>
           : commits.length === 0
-            ? <p>No commits are available for this project.</p>
+            ? <p>No commits</p>
             : <ol>
               {commits.map((commit) => (
                 <li key={commit.sha}>
@@ -297,14 +297,14 @@ export function TaskReleaseBar({
               ))}
             </ol>}
         {currentStale && currentView.graph &&
-          <p className="task-release-stale" role="status">Commit data may be stale. Fetched {formatDate(currentView.graph.fetchedAt)}.</p>}
+          <p className="task-release-stale" role="status">Stale, fetched {formatDate(currentView.graph.fetchedAt)}.</p>}
         {currentResult?.status === 'error' && currentResult.message && (
-          <p className="task-release-stale" role="alert">Refresh failed; showing the last loaded project data. {currentResult.message}</p>
+          <p className="task-release-stale" role="alert">Refresh failed. {currentResult.message}</p>
         )}
       </div>
       <div className="task-release-actions">
         {currentView.releases.length === 0
-          ? <p>No releases have been recorded for this project.</p>
+          ? <p>No releases</p>
           : null}
         <button className="secondary-button" type="button" disabled={loading} aria-busy={loading || undefined}
           aria-label={loading ? currentView ? 'Refreshing…' : 'Loading…' : undefined}

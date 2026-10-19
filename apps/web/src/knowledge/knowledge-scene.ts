@@ -12,6 +12,16 @@ export interface KnowledgeSceneCallbacks {
 
 const frameInterval = 1000 / 30;
 
+// Feel of the idle map. Drift is the orbit radius as a share of the cloud's spread; sparks are the links that light up.
+const driftShare = 0.03;
+const sparkGap = [140, 420] as const;
+const sparkLife = [1300, 2300] as const;
+const maxSparks = 14;
+// The map opens fitted to the window: the notes fill this share of the limiting dimension.
+const fitFill = 0.8;
+// A click or hover finds the nearest star within this many pixels.
+const pickRadius = 9;
+
 function folderColours(element: HTMLElement): Map<string, THREE.Color> {
   const styles = getComputedStyle(element);
   const read = (name: string, fallback: string) => new THREE.Color(styles.getPropertyValue(name).trim() || fallback);
@@ -24,10 +34,18 @@ function folderColours(element: HTMLElement): Map<string, THREE.Color> {
   ]);
 }
 
-// Idle life on a flat map (Dan, 8 October): each note floats a few pixels on its own slow orbit; links follow.
-const driftChunk = `vec2 float_drift(float phase, float time) {
-  return vec2(sin(time * (0.35 + phase * 0.25) + phase * 6.2831), cos(time * (0.3 + phase * 0.2) + phase * 9.1));
+// Idle life on a flat map (Dan, 8 October, 19 October): each note floats on its own orbit while a soft swell runs through
+// the whole cloud; links follow. driftAt mirrors this, so a star is picked where it is drawn.
+const driftChunk = `vec2 float_drift(vec2 at, float phase, float time) {
+  vec2 own = vec2(sin(time * (0.55 + phase * 0.45) + phase * 6.2831), cos(time * (0.5 + phase * 0.4) + phase * 9.1));
+  vec2 swell = vec2(sin(at.y * 0.3 + time * 0.6), cos(at.x * 0.27 + time * 0.5)) * 0.7;
+  return own + swell;
 }`;
+
+function driftAt(x: number, y: number, phase: number, time: number, out: { x: number; y: number }) {
+  out.x = Math.sin(time * (0.55 + phase * 0.45) + phase * 6.2831) + 0.7 * Math.sin(y * 0.3 + time * 0.6);
+  out.y = Math.cos(time * (0.5 + phase * 0.4) + phase * 9.1) + 0.7 * Math.cos(x * 0.27 + time * 0.5);
+}
 
 const lineVertex = `attribute vec3 lineColour;
 attribute float phase;
@@ -37,7 +55,7 @@ varying vec3 vColour;
 ${driftChunk}
 void main() {
   vColour = lineColour;
-  gl_Position = projectionMatrix * modelViewMatrix * vec4(position + vec3(float_drift(phase, time) * drift, 0.0), 1.0);
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(position + vec3(float_drift(position.xy, phase, time) * drift, 0.0), 1.0);
 }`;
 
 const lineFragment = `varying vec3 vColour;
@@ -49,6 +67,7 @@ attribute vec3 colour;
 attribute float lit;
 attribute float shown;
 attribute float phase;
+attribute float flare;
 uniform float dimOthers;
 uniform float pixelRatio;
 uniform float time;
@@ -57,13 +76,13 @@ varying vec3 vColour;
 varying float vAlpha;
 ${driftChunk}
 void main() {
-  vec4 view = modelViewMatrix * vec4(position + vec3(float_drift(phase, time) * drift, 0.0), 1.0);
+  vec4 view = modelViewMatrix * vec4(position + vec3(float_drift(position.xy, phase, time) * drift, 0.0), 1.0);
   float emphasis = mix(1.0 - dimOthers * 0.82, 1.0, lit);
-  // Idle life: every star breathes slowly on its own rhythm.
-  float breath = sin(time * (0.6 + phase * 0.5) + phase * 6.2831);
-  vColour = colour * mix(1.0, 1.6, lit) * (0.92 + 0.08 * breath);
+  // Idle life: every star breathes on its own rhythm and flares briefly when a spark reaches it.
+  float breath = sin(time * (0.9 + phase * 0.7) + phase * 6.2831);
+  vColour = colour * mix(1.0, 1.6, lit) * (0.82 + 0.18 * breath) * (1.0 + flare * 1.3);
   vAlpha = emphasis * shown;
-  gl_PointSize = shown * size * pixelRatio * (1.0 + lit * 0.7) * (1.0 + 0.05 * breath) * (400.0 / max(1.0, -view.z));
+  gl_PointSize = shown * size * pixelRatio * (1.0 + lit * 0.7) * (1.0 + 0.12 * breath) * (1.0 + flare * 0.55) * (400.0 / max(1.0, -view.z));
   gl_Position = projectionMatrix * view;
 }`;
 
@@ -81,8 +100,10 @@ void main() {
 }`;
 
 /**
- * The knowledge map, drawn flat with WebGL: one draw call for every note, one for every link. At 30 fps its stars breathe
- * and a link now and then lights up; dragging pans and the wheel zooms; it stops drawing when off-screen or hidden, and stays still with reduced motion.
+ * The knowledge map, drawn flat with WebGL: one draw call for every note, one for every link. It opens centred on the notes
+ * and fitted to the window, following while the layout settles until the first pan or zoom. At 30 fps its stars breathe and
+ * drift, and pulses run along links and flare the notes they reach; dragging pans and the wheel zooms; it stops drawing
+ * when off-screen or hidden, and stays still with reduced motion.
  */
 export function createKnowledgeScene(host: HTMLElement, graph: KnowledgeGraph, callbacks: KnowledgeSceneCallbacks, reducedMotion: boolean) {
   const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: false, powerPreference: 'low-power' });
@@ -120,13 +141,16 @@ export function createKnowledgeScene(host: HTMLElement, graph: KnowledgeGraph, c
   const shown = new Float32Array(count).fill(1);
   const shownAttribute = new THREE.BufferAttribute(shown, 1);
   pointGeometry.setAttribute('shown', shownAttribute);
+  const flares = new Float32Array(count);
+  const flareAttribute = new THREE.BufferAttribute(flares, 1);
+  pointGeometry.setAttribute('flare', flareAttribute);
   const phases = new Float32Array(count);
   for (let index = 0; index < count; index += 1) phases[index] = Math.abs(Math.sin(index * 12.9898) * 43758.5453) % 1;
   pointGeometry.setAttribute('phase', new THREE.BufferAttribute(phases, 1));
   const pointMaterial = new THREE.ShaderMaterial({
     vertexShader: pointVertex,
     fragmentShader: pointFragment,
-    uniforms: { dimOthers: { value: 0 }, pixelRatio: { value: pixelRatio }, time: { value: 0 }, drift: { value: reducedMotion ? 0 : spread * 0.012 } },
+    uniforms: { dimOthers: { value: 0 }, pixelRatio: { value: pixelRatio }, time: { value: 0 }, drift: { value: reducedMotion ? 0 : spread * driftShare } },
     transparent: true,
     depthWrite: false,
     blending: THREE.AdditiveBlending,
@@ -202,41 +226,75 @@ export function createKnowledgeScene(host: HTMLElement, graph: KnowledgeGraph, c
   let frame = 0;
   let last = 0;
   let disposed = false;
-  // Between interactions the stars breathe and a link now and then lights up and fades.
-  const sparks: { edge: number; start: number }[] = [];
-  let nextSpark = performance.now() + 1200;
+  // The map opens fitted and keeps following the cloud while it settles, until the user (or a search) takes the camera.
+  let following = true;
+  const fitTarget = new THREE.Vector3(0, 0, spread * 2.4);
+  const fitCentre = new THREE.Vector3();
+  // Between interactions the stars breathe and drift, and links light up one after another: a pulse runs from one note
+  // to the next, and the note it reaches flares.
+  const sparks: { edge: number; start: number; life: number }[] = [];
+  const flaring: number[] = [];
+  let nextSpark = performance.now() + 300;
   let onScreen = true;
-  const sparkDuration = 1600;
-  const paintEdge = (edge: number, boost: number) => {
-    const factor = edgeFactor[edge]! * (1 + boost);
-    for (let channel = 0; channel < 6; channel += 1) lineColours[edge * 6 + channel] = baseLineColours[edge * 6 + channel]! * factor;
+  const paintEdge = (edge: number, boostSource: number, boostTarget = boostSource) => {
+    const factor = edgeFactor[edge]!;
+    for (let channel = 0; channel < 3; channel += 1) {
+      lineColours[edge * 6 + channel] = baseLineColours[edge * 6 + channel]! * factor * (1 + boostSource);
+      lineColours[edge * 6 + 3 + channel] = baseLineColours[edge * 6 + 3 + channel]! * factor * (1 + boostTarget);
+    }
   };
+  const clearFlares = () => {
+    for (const node of flaring) flares[node] = 0;
+    flaring.length = 0;
+  };
+  const flare = (node: number, value: number) => {
+    if (value < 0.02 || value <= flares[node]!) return;
+    flares[node] = value;
+    flaring.push(node);
+  };
+  const bell = (t: number, from: number, to: number) => Math.sin(Math.PI * Math.min(1, Math.max(0, (t - from) / (to - from))));
   const stepSparks = (now: number) => {
     if (!edgePairs.length) return;
     if (now >= nextSpark) {
       const edge = Math.floor(Math.random() * edgePairs.length);
       const pair = edgePairs[edge]!;
-      if (shown[pair.source] === 1 && shown[pair.target] === 1 && !sparks.some((spark) => spark.edge === edge)) sparks.push({ edge, start: now });
-      nextSpark = now + 900 + Math.random() * 1400;
+      if (sparks.length < maxSparks && shown[pair.source] === 1 && shown[pair.target] === 1 && !sparks.some((spark) => spark.edge === edge)) {
+        sparks.push({ edge, start: now, life: sparkLife[0] + Math.random() * (sparkLife[1] - sparkLife[0]) });
+      }
+      nextSpark = now + sparkGap[0] + Math.random() * (sparkGap[1] - sparkGap[0]);
     }
+    clearFlares();
     for (let index = sparks.length - 1; index >= 0; index -= 1) {
       const spark = sparks[index]!;
-      const t = (now - spark.start) / sparkDuration;
+      const pair = edgePairs[spark.edge]!;
+      const t = (now - spark.start) / spark.life;
       if (t >= 1) { paintEdge(spark.edge, 0); sparks.splice(index, 1); continue; }
-      paintEdge(spark.edge, Math.sin(Math.PI * t) * (pairSimilar(spark.edge) ? 2.6 : 1.1));
+      const gain = pair.similar ? 2.6 : 1.1;
+      const leaving = bell(t, 0, 0.6);
+      const arriving = bell(t, 0.4, 1);
+      paintEdge(spark.edge, leaving * gain, arriving * gain);
+      flare(pair.source, leaving * 0.4);
+      flare(pair.target, arriving * 0.9);
     }
     lineColourAttribute.needsUpdate = true;
+    flareAttribute.needsUpdate = true;
   };
-  const pairSimilar = (edge: number) => edgePairs[edge]!.similar;
-  const raycaster = new THREE.Raycaster();
-  raycaster.params.Points = { threshold: spread * 0.025 };
-  const pointer = new THREE.Vector2();
+  const driftScratch = { x: 0, y: 0 };
+  const probe = new THREE.Vector3();
+  // Where a star is drawn right now: its layout position plus the idle drift the shader applies (none under reduced motion).
+  const drawnAt = (index: number) => {
+    const x = layout.positions[index * 3]!;
+    const y = layout.positions[index * 3 + 1]!;
+    driftAt(x, y, phases[index]!, pointMaterial.uniforms.time!.value as number, driftScratch);
+    const amount = pointMaterial.uniforms.drift!.value as number;
+    return probe.set(x + driftScratch.x * amount, y + driftScratch.y * amount, layout.positions[index * 3 + 2]!);
+  };
 
   const labelled = () => [...new Set([...highlighted.slice(0, 12), ...(selected ? [selected] : [])])];
   const project = (id: string) => {
     const index = indexOf.get(id);
     if (index === undefined) return null;
-    const vector = new THREE.Vector3().fromArray(layout.positions, index * 3).project(camera);
+    const vector = drawnAt(index).project(camera);
     if (vector.z > 1) return null;
     const bounds = renderer.domElement.getBoundingClientRect();
     return { id, x: (vector.x + 1) / 2 * bounds.width, y: (1 - vector.y) / 2 * bounds.height };
@@ -245,6 +303,43 @@ export function createKnowledgeScene(host: HTMLElement, graph: KnowledgeGraph, c
   const render = () => {
     renderer.render(scene, camera);
     callbacks.onLabels(labelled().flatMap((id) => project(id) ?? []));
+  };
+
+  // The middle of the visible notes and how far they reach (98th percentile, so a few strays do not shrink the map) give the framing.
+  const measureFit = () => {
+    const xs: number[] = [];
+    const ys: number[] = [];
+    for (let index = 0; index < count; index += 1) {
+      if (shown[index] !== 1) continue;
+      xs.push(layout.positions[index * 3]!);
+      ys.push(layout.positions[index * 3 + 1]!);
+    }
+    if (!xs.length) return null;
+    const middle = (values: number[]) => values.reduce((sum, value) => sum + value, 0) / values.length;
+    const reach = (values: number[], centre: number) => {
+      const away = values.map((value) => Math.abs(value - centre)).sort((a, b) => a - b);
+      return away[Math.min(away.length - 1, Math.floor(away.length * 0.98))]!;
+    };
+    const cx = middle(xs);
+    const cy = middle(ys);
+    const half = Math.tan((camera.fov * Math.PI) / 360);
+    const pad = spread * 0.06;
+    const need = Math.max((reach(ys, cy) + pad) / half, (reach(xs, cx) + pad) / (half * camera.aspect)) / fitFill;
+    return { centre: new THREE.Vector3(cx, cy, 0), to: new THREE.Vector3(cx, cy, Math.min(spread * 4.5, Math.max(spread * 1.2, need))) };
+  };
+  const aimAtCloud = (snap: boolean) => {
+    const fit = measureFit();
+    if (!fit) return;
+    fitCentre.copy(fit.centre);
+    fitTarget.copy(fit.to);
+    if (!snap) return;
+    camera.position.copy(fit.to);
+    controls.target.copy(fit.centre);
+    controls.update();
+  };
+  const followCloud = () => {
+    camera.position.lerp(fitTarget, 0.14);
+    controls.target.lerp(fitCentre, 0.14);
   };
 
   // One chain of frames only: OrbitControls fires change while the loop updates it, and that must not start another.
@@ -259,8 +354,10 @@ export function createKnowledgeScene(host: HTMLElement, graph: KnowledgeGraph, c
     if (settling) {
       settling = layout.step();
       syncLines();
+      if (following) aimAtCloud(false);
       moving = true;
     }
+    if (following) followCloud();
     if (flight) {
       const t = Math.min(1, (now - flight.start) / flight.duration);
       const eased = 1 - Math.pow(1 - t, 3);
@@ -289,6 +386,7 @@ export function createKnowledgeScene(host: HTMLElement, graph: KnowledgeGraph, c
     renderer.setSize(width, height, false);
     camera.aspect = width / height;
     camera.updateProjectionMatrix();
+    if (following) aimAtCloud(true);
     wake();
     if (reducedMotion) render();
   };
@@ -301,12 +399,23 @@ export function createKnowledgeScene(host: HTMLElement, graph: KnowledgeGraph, c
   intersection?.observe(host);
   resize();
 
+  // Finds the star nearest the pointer, at the position it is drawn (drift included).
   const pick = (event: PointerEvent) => {
     const bounds = renderer.domElement.getBoundingClientRect();
-    pointer.set(((event.clientX - bounds.left) / bounds.width) * 2 - 1, -((event.clientY - bounds.top) / bounds.height) * 2 + 1);
-    raycaster.setFromCamera(pointer, camera);
-    const hit = raycaster.intersectObject(points).find((candidate) => candidate.index !== undefined && shown[candidate.index] === 1);
-    return hit?.index === undefined ? null : graph.nodes[hit.index] ?? null;
+    const px = event.clientX - bounds.left;
+    const py = event.clientY - bounds.top;
+    let best = -1;
+    let bestDistance = pickRadius * pickRadius;
+    for (let index = 0; index < count; index += 1) {
+      if (shown[index] !== 1) continue;
+      const star = drawnAt(index).project(camera);
+      if (star.z > 1) continue;
+      const dx = (star.x + 1) / 2 * bounds.width - px;
+      const dy = (1 - star.y) / 2 * bounds.height - py;
+      const distance = dx * dx + dy * dy;
+      if (distance < bestDistance) { bestDistance = distance; best = index; }
+    }
+    return best < 0 ? null : graph.nodes[best] ?? null;
   };
   let downAt: { x: number; y: number } | null = null;
   let hoverTimer = 0;
@@ -328,7 +437,7 @@ export function createKnowledgeScene(host: HTMLElement, graph: KnowledgeGraph, c
     callbacks.onHover(node ? { id: node.id, x: event.clientX - bounds.left, y: event.clientY - bounds.top } : null);
   };
   const onLeave = () => callbacks.onHover(null);
-  const onControlStart = () => { wake(); };
+  const onControlStart = () => { following = false; wake(); };
   renderer.domElement.addEventListener('pointerdown', onPointerDown);
   renderer.domElement.addEventListener('pointerup', onPointerUp);
   renderer.domElement.addEventListener('pointermove', onPointerMove);
@@ -339,15 +448,8 @@ export function createKnowledgeScene(host: HTMLElement, graph: KnowledgeGraph, c
   document.addEventListener('visibilitychange', onVisibility);
   wake();
 
-  const flyTo = (ids: string[]) => {
-    const indices = ids.flatMap((id) => indexOf.get(id) ?? []);
-    if (!indices.length) return;
-    const box = new THREE.Box3();
-    for (const index of indices) box.expandByPoint(new THREE.Vector3().fromArray(layout.positions, index * 3));
-    const centre = box.getCenter(new THREE.Vector3());
-    const radius = Math.max(spread * 0.4, box.getSize(new THREE.Vector3()).length() * 0.65);
-    const direction = camera.position.clone().sub(controls.target).normalize();
-    const to = centre.clone().add(direction.multiplyScalar(radius / Math.tan((camera.fov * Math.PI) / 360) * 1.5));
+  const flyToView = (to: THREE.Vector3, centre: THREE.Vector3) => {
+    following = false;
     if (reducedMotion) {
       camera.position.copy(to);
       controls.target.copy(centre);
@@ -357,6 +459,16 @@ export function createKnowledgeScene(host: HTMLElement, graph: KnowledgeGraph, c
     }
     flight = { from: camera.position.clone(), to, fromTarget: controls.target.clone(), toTarget: centre, start: performance.now(), duration: 950 };
     wake();
+  };
+  const flyTo = (ids: string[]) => {
+    const indices = ids.flatMap((id) => indexOf.get(id) ?? []);
+    if (!indices.length) return;
+    const box = new THREE.Box3();
+    for (const index of indices) box.expandByPoint(new THREE.Vector3().fromArray(layout.positions, index * 3));
+    const centre = box.getCenter(new THREE.Vector3());
+    const radius = Math.max(spread * 0.4, box.getSize(new THREE.Vector3()).length() * 0.65);
+    const direction = camera.position.clone().sub(controls.target).normalize();
+    flyToView(centre.clone().add(direction.multiplyScalar(radius / Math.tan((camera.fov * Math.PI) / 360) * 1.5)), centre);
   };
 
   let hiddenFolders = new Set<string>();
@@ -377,6 +489,8 @@ export function createKnowledgeScene(host: HTMLElement, graph: KnowledgeGraph, c
       paintEdge(edge, 0);
     });
     sparks.length = 0;
+    clearFlares();
+    flareAttribute.needsUpdate = true;
     lineColourAttribute.needsUpdate = true;
     wake();
     if (reducedMotion) render();
@@ -403,7 +517,8 @@ export function createKnowledgeScene(host: HTMLElement, graph: KnowledgeGraph, c
       highlighted = [];
       selected = null;
       applyEmphasis();
-      flyTo(graph.nodes.map((node) => node.id));
+      const fit = measureFit();
+      if (fit) flyToView(fit.to, fit.centre);
     },
     dispose() {
       disposed = true;

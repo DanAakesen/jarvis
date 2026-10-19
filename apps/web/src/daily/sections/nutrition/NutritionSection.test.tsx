@@ -100,7 +100,7 @@ describe('Nutrition section', () => {
       partial_nutrients: [], latest_updated_at: '2026-10-18T09:00:00Z',
     }));
     render(<Wrapper sources={[ids.meals, ids.days]} entry="/daily?nutritionDate=2026-10-17" />);
-    await screen.findByText('No meals recorded for this day. That does not prove nothing was eaten.');
+    await screen.findByText('No meals recorded.');
     expect(screen.getByRole('link', { name: 'Open Health upload in Settings' }).getAttribute('href')).toBe('/settings#health-upload');
     await screen.findByRole('button', { name: 'Previous logged day: 2026-10-16' });
     fireEvent.click(screen.getByRole('button', { name: 'Next logged day: 2026-10-18' }));
@@ -139,9 +139,6 @@ describe('Nutrition section', () => {
     render(<Wrapper sources={[ids.meals, ids.favorites, ids.plans]} entry="/daily?nutritionView=library" />);
     await screen.findByText('Synthetic favourite 9001');
     await screen.findByText('Synthetic plan 9001');
-    expect(screen.getAllByText('Filtering covers 1 loaded record.')).toHaveLength(2);
-    fireEvent.click(screen.getAllByText('Filtering covers 1 loaded record.')[0]!);
-    expect(screen.getAllByText(/Up to five pages are loaded automatically/u)).toHaveLength(2);
     fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'Synthetic alias 9002' } });
     expect(screen.getByText('Synthetic favourite 9001')).not.toBeNull();
     expect(screen.queryByText('Synthetic plan 9001')).toBeNull();
@@ -167,10 +164,7 @@ describe('Nutrition section', () => {
     meals = [syntheticMeal, { ...syntheticMeal, id: 'synthetic-deleted-9001', meal_name: 'Synthetic deleted 9001', deleted_at: '2026-10-18T09:00:00Z' }];
     mealMore = true;
     render(<Wrapper entry="/daily?nutritionDate=2026-10-18" />);
-    await screen.findByText('This page is partial; nutrient totals are lower bounds.');
-    fireEvent.click(screen.getByText('About this data'));
-    expect(screen.getByText(/Showing 2 meals from the first page/u)).toBeTruthy();
-    const deletedGroup = screen.getByText(/Deleted meals \(1/u).closest('details')!;
+    const deletedGroup = (await screen.findByText(/Deleted meals \(1/u)).closest('details')!;
     expect(deletedGroup.open).toBe(false);
     expect(document.querySelector('.nutrition-meters .daily-meter-values')?.textContent).toContain('9,001 kcal');
     expect(document.querySelector('.daily-freshness')?.textContent).toContain('1 meal, partial');
@@ -184,13 +178,10 @@ describe('Nutrition section', () => {
     render(<Wrapper entry="/daily?nutritionDate=2026-10-18" />);
     await screen.findByText(/Synthetic meal 9001/u);
     await waitFor(() => expect(screen.queryByText('Loading nutrition targets')).toBeNull());
-    expect(screen.queryByText(/Resting burn minus deficit/u) !== null).toBe(resting !== null && deficit !== null);
     const proteinMeter = screen.getByText('Protein', { selector: '.daily-meter-label' }).closest('.daily-meter')! as HTMLElement;
     expect(within(proteinMeter).queryByRole('progressbar') !== null).toBe(protein !== null);
     if (protein !== null) expect(proteinMeter.textContent).toContain(`${formatSynthetic(protein)} g`);
-    expect(screen.queryByText('About this data')?.closest('details')?.open).toBe(false);
-    if (resting !== null && deficit !== null) expect(screen.getByText(/Active energy is not included/u)).not.toBeNull();
-    expect(screen.queryByText('Calories: baseline before activity, not the full daily allowance.') !== null).toBe(resting !== null && deficit !== null);
+    expect(screen.queryByText('Calorie target: baseline before activity.') !== null).toBe(resting !== null && deficit !== null);
   });
   it('shows day/trend partial and unknown values, logged-day coverage and day drilldown', async () => {
     rows[ids.days] = ['2026-10-12', '2026-10-14'].map(date => ({
@@ -199,20 +190,20 @@ describe('Nutrition section', () => {
       partial_nutrients: ['energy_kcal'], latest_updated_at: '2026-10-18T09:00:00Z',
     }));
     render(<Wrapper sources={[ids.meals, ids.days]} entry="/daily?nutritionView=trend&nutritionDate=2026-10-18" />);
-    await screen.findByText(/2 of 7 days in this period have meals/u);
+    await screen.findByText(/2 of 7 days have meals/u);
     expect(screen.getByRole('img', { name: 'Calories (kcal) by logged date' })).not.toBeNull();
     expect(screen.getByText('Average over 2 logged days')).not.toBeNull();
-    expect(screen.getAllByText(/lower bound/u).length).toBeGreaterThan(1);
+    expect(screen.getAllByText(/lower bound/u).length).toBeGreaterThan(0);
     expect(screen.queryByRole('table')).toBeNull();
     fireEvent.click(within(screen.getByText('Calories (kcal) by logged date').closest('figure')!).getByText('View data table'));
     fireEvent.click(screen.getByRole('button', { name: '2026-10-12' }));
     expect((screen.getByLabelText('Meal date') as HTMLInputElement).value).toBe('2026-10-12');
-    await screen.findByText('No meals recorded for this day. That does not prove nothing was eaten.');
+    await screen.findByText('No meals recorded.');
   });
   it('keeps zero-of-period coverage visible for a ready empty Trend', async () => {
     render(<Wrapper sources={[ids.meals, ids.days]} entry="/daily?nutritionView=trend" />);
-    await screen.findByText(/0 of 7 days in this period have meals/u);
-    expect(screen.getByText(/History appears after an import/u)).not.toBeNull();
+    await screen.findByText(/0 of 7 days have meals/u);
+    expect(screen.getByText('No records')).not.toBeNull();
   });
   it('keeps known-zero nutrients, partial bounds and compact non-macro tiles distinct from missing data', async () => {
     meals = [{ ...syntheticMeal, fiber_grams: 0, protein_grams: 0 },
@@ -305,7 +296,6 @@ describe('Nutrition section', () => {
     expect(calories.querySelector('.daily-chart-target')?.textContent).toContain('Baseline before activity (kcal)');
     fireEvent.click(within(protein).getByText('View data table'));
     expect(screen.getByRole('table', { name: 'Monday-based weekly averages over logged days only' })).toBeTruthy();
-    expect(within(protein).getByText('The chart shows daily protein totals; this table shows Monday-based weekly averages with a known-day count for each nutrient.')).toBeTruthy();
     expect(document.querySelector('.nutrition-weekly-list')?.textContent).toContain('2 known days');
   });
   it('retains day drilldown and weekly data tables when all chart observations are unknown', async () => {
@@ -342,7 +332,7 @@ describe('Nutrition section', () => {
     }];
     render(<Wrapper sources={[ids.meals, ids.days]} entry="/daily?nutritionView=trend" />);
     await screen.findByText('Average over 1 logged day');
-    expect(screen.getByText('1 of 7 days in this period has meals; missing days remain unknown.')).toBeTruthy();
+    expect(screen.getByText('1 of 7 days has meals.')).toBeTruthy();
     const weekly = document.querySelector('.nutrition-weekly-list')!.textContent!;
     expect(weekly).toContain('1 known day');
     expect(weekly).not.toMatch(/\b1 (known|logged) days\b/u);
@@ -395,10 +385,9 @@ describe('Nutrition section', () => {
         { id: `synthetic-favorite-${9000 + pages}` }));
     });
     render(<Wrapper sources={[ids.meals, ids.favorites]} entry="/daily?nutritionView=library" />);
-    fireEvent.click(await screen.findByText('Favourites history is partial.'));
-    expect(screen.getByText(/Page limit reached/u)).toBeTruthy();
+    expect(await screen.findByText('Page limit reached.')).toBeTruthy();
     expect(pages).toBe(5);
-    expect(screen.getByText('Filtering covers 5 loaded records.')).not.toBeNull();
+    expect(screen.getByText('Synthetic favourite 9005')).not.toBeNull();
     expect(screen.queryByRole('button', { name: 'Load more' })).toBeNull();
   });
   it('derives plan totals from items with unknown and lower-bound labels', async () => {

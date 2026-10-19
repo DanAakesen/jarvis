@@ -658,7 +658,7 @@ export function TasksPage({ backendUrl, getAccessToken }: Props) {
   const createUnavailable = !backendUrl || visibleProjectState !== 'ready' || projects.length === 0;
   const createHelp = visibleProjectState === 'loading' ? 'Loading projects before task creation is available.' :
     visibleProjectState === 'error' ? 'Retry project loading before creating a task.' :
-      projects.length === 0 ? 'No active projects are available. Project registration is managed by Jarvis.' :
+      projects.length === 0 ? 'No active projects.' :
         'Create a task on an active project. Model and reasoning overrides apply to this task only.';
   const liveStatus = liveState.backendUrl === backendUrl ? liveState.status : 'unavailable';
   // Silence while things work: only a failure shows, as one small red notice. Connecting is not a failure.
@@ -790,10 +790,9 @@ export function TasksPage({ backendUrl, getAccessToken }: Props) {
         </div>
         <p id="create-task-help" className={createUnavailable ? 'tasks-help' : 'visually-hidden'}>{createHelp}</p>
 
-        {visibleTaskState === 'loading' && <StateMessage variant="loading" loaderVariant="cards" message="Loading GitHub board" />}
+        {visibleTaskState === 'loading' && <StateMessage variant="loading" loaderVariant="cards" message="Loading board" />}
         {visibleProjectState === 'ready' && projects.length === 0 &&
-          <StateMessage variant="empty" className="tasks-feedback"
-            message="No active projects are available for a GitHub board." detail="Create a project to begin." />}
+          <StateMessage variant="empty" className="tasks-feedback" message="No active projects" />}
         {/* A retained board reports a failed refresh through the strip notice and refresh icon; the full message is for a page with no board. */}
         {visibleTaskState === 'error' && !board && (
           <StateMessage variant="error" className="tasks-feedback" message={visibleTaskError}
@@ -804,7 +803,7 @@ export function TasksPage({ backendUrl, getAccessToken }: Props) {
           <>
             <div className="task-board kanban-board" role="region" aria-label="Issues by GitHub Project column"
               style={{ '--kanban-columns': columns.map((column) => collapsedColumns.has(column.label) ? '52px' : 'minmax(240px, 1fr)').join(' ') } as CSSProperties}>
-              {noFilteredResults && <StateMessage variant="empty" className="kanban-board-empty" message="No matching issues."
+              {noFilteredResults && <StateMessage variant="empty" className="kanban-board-empty" message="No matches"
                 actionLabel={clearFiltersLabel} onAction={clearFilters} />}
               {columns.map((column) => {
                 const items = column.cards;
@@ -826,7 +825,7 @@ export function TasksPage({ backendUrl, getAccessToken }: Props) {
                     </header>
                     <div id={`${headingId}-cards`} className="kanban-column-body" hidden={collapsedColumns.has(column.label)}>
                     {items.length === 0
-                      ? activeFilterCount === 0 && <StateMessage variant="empty" className="task-column-empty" message="No matching issues." />
+                      ? activeFilterCount === 0 && <StateMessage variant="empty" className="task-column-empty" message="No matches" />
                       : <ul className="task-card-list">
                         {items.slice(0, maxCardsPerColumn).map((card, index) => (
                           <li key={card.issue.number} style={{ '--i': index } as CSSProperties}>

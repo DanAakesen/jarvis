@@ -22,10 +22,9 @@ describe('DailyState', () => {
     expect(screen.queryByRole('status')).toBeNull();
   });
 
-  it('explains empty history without claiming the original source is empty', () => {
+  it('shows a plain empty state', () => {
     render(<DailyState status="empty" />);
-    expect(screen.getByText(/History appears after an import or a phone upload/u)).toBeTruthy();
-    expect(screen.getByText(/None returned does not prove the original source is empty/u)).toBeTruthy();
+    expect(screen.getByRole('status').textContent).toBe('No records');
   });
 
   it('allows a specific empty-state sentence without changing the shared presentation', () => {

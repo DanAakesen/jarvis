@@ -117,7 +117,7 @@ export function TaskControls({
   }
 
   if (state === 'PauseRequested') {
-    return <p className="task-control-feedback" role="status">Pausing… The current turn is stopping.</p>;
+    return <p className="task-control-feedback" role="status">Pausing…</p>;
   }
   if (state === 'Done' || state === 'Cancelled') {
     return null;

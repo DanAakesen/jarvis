@@ -66,7 +66,6 @@ describe('project release view', () => {
     expect(commitLink.querySelector('.graph-hit-target')?.getAttribute('r')).toBe('22');
     expect(screen.getByRole('group', { name: '1 branch and 1 commit, ordered by commit time' }).getAttribute('style'))
       .toContain('width: 720px');
-    expect(screen.getByText(/Marker shapes show record type/)).not.toBeNull();
     expect(screen.getByRole('link', { name: 'Release · success' }).getAttribute('href'))
       .toBe('https://github.com/DanAakesen/jarvis/actions/runs/9871');
     expect(screen.getByRole('link', { name: 'PR #3 · merged · checks passed' }).getAttribute('href'))
@@ -117,8 +116,8 @@ describe('project release view', () => {
     expect(await screen.findByRole('alert')).not.toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
 
-    expect(await screen.findByText('No releases have been recorded.')).not.toBeNull();
-    expect(screen.getByText(/Release records are still shown without the GitHub graph/)).not.toBeNull();
+    expect(await screen.findByText('No releases')).not.toBeNull();
+    expect(screen.getByText('Graph unavailable')).not.toBeNull();
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 

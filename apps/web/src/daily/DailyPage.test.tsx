@@ -37,7 +37,7 @@ describe('inactive single Daily data page', () => {
     fireEvent.change(screen.getByLabelText('Browse'), { target: { value: sources.briefs } });
     await screen.findByText('2026-10-16T07:00:00');
     expect(screen.queryByLabelText('From')).toBeNull();
-    expect(screen.getByText(/Historical records only, not current health or a new delivery/u)).toBeTruthy();
+    expect(screen.queryByText(/Historical records only/u)).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
     await screen.findByText(/Page 2, 1 record/u);
     fireEvent.click(screen.getByRole('button', { name: /Details for/u }));
@@ -65,14 +65,14 @@ describe('inactive single Daily data page', () => {
     expect(within(table).getAllByRole('row')).toHaveLength(4);
     expect(within(table).getByText('0')).toBeTruthy();
     expect(within(table).getAllByText('Not recorded').length).toBeGreaterThan(0);
-    expect(screen.getByText(/Source freshness and completeness are not established/u)).toBeTruthy();
+    expect(screen.getByText(/Freshness and completeness not established/u)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Chart' }));
     const presentation = screen.getByRole('group', { name: 'Record presentation' });
     expect(within(presentation).getByRole('button', { name: 'Chart' }).classList.contains('daily-section-tab')).toBe(true);
     expect(within(presentation).getByRole('button', { name: 'Chart' }).getAttribute('aria-pressed')).toBe('true');
     expect(await screen.findByRole('img', { name: /Synthetic scan mass \(kg\)/u })).toBeTruthy();
     expect(container.querySelectorAll('.daily-chart-bars path')).toHaveLength(2);
-    expect(screen.getByText(/Other pages are not included/u)).toBeTruthy();
+    expect(screen.getByText(/This page only/u)).toBeTruthy();
     fireEvent.keyDown(screen.getByRole('img', { name: /Synthetic scan mass \(kg\)/u }), { key: 'ArrowRight' });
     expect(container.querySelector('.daily-chart-readout')?.textContent).toContain(': 2');
     fireEvent.keyDown(screen.getByRole('img', { name: /Synthetic scan mass \(kg\)/u }), { key: 'Home' });
@@ -135,7 +135,7 @@ describe('inactive single Daily data page', () => {
     status = 503; fireEvent.click(screen.getByRole('button', { name: 'Refresh records' }));
     await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('HTTP 503'));
     expect(screen.getByText('Synthetic retained')).toBeTruthy();
-    expect(screen.getByText(/Previously loaded records remain/u)).toBeTruthy();
+    expect(screen.getByText('Showing the last loaded records.')).toBeTruthy();
     expect(screen.queryByText('must-not-escape')).toBeNull();
     status = 403; fireEvent.click(screen.getByRole('button', { name: 'Retry records' }));
     await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('could not be verified'));

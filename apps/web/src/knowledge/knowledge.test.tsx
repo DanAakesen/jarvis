@@ -1,6 +1,5 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createMemoryRouter, RouterProvider } from 'react-router-dom';
 import { matchTitles, readKnowledgeGraph, sampleKnowledgeGraph, vaultMemoryId } from './knowledge-data';
 import { GeneratedViewRenderer } from '../GeneratedViewRenderer';
 import { KnowledgeBackendContext } from './knowledge-context';
@@ -56,8 +55,8 @@ describe('knowledge graph view', () => {
       { id: 'customer', path: 'Customers/Review.md', title: 'Customer fixture', folder: 'Customers' },
     ], edges: [] })));
     render(<KnowledgeGraphView backendUrl="https://api.example.com" getAccessToken={getAccessToken} />);
-    expect(await screen.findByText('2 notes')).not.toBeNull();
     fireEvent.click(await screen.findByRole('button', { name: 'Vault root1' }));
+    expect(screen.queryByText(/^\d+ notes?$/u)).toBeNull();
     expect(within(screen.getByRole('list', { name: 'Vault root notes' })).getByRole('button', { name: 'Root fixture' })).not.toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Customers1' }));
     expect(within(screen.getByRole('list', { name: 'Customers notes' })).getByRole('button', { name: 'Customer fixture' })).not.toBeNull();
@@ -78,8 +77,7 @@ describe('knowledge graph view', () => {
       ? json({ nodes: [{ id: 'fixture', path: 'Work/Fixture.md', title: 'Fixture note', folder: 'Work' }], edges: [] })
       : json({ title: 'Fixture note', content })));
     render(<KnowledgeGraphView backendUrl="https://api.example.com" getAccessToken={getAccessToken} />);
-    expect(await screen.findByText('1 note')).not.toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Work1' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Work1' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Fixture note' }));
     const body = await screen.findByRole('region', { name: 'Note content' });
     if (prefix.endsWith('---')) {
@@ -213,15 +211,14 @@ describe('knowledge graph view', () => {
       return json({}, 404);
     });
     vi.stubGlobal('fetch', fetchMock);
-    const router = createMemoryRouter([{
-      path: '/',
-      element: <KnowledgeGraphView backendUrl="https://api.example.com" getAccessToken={getAccessToken} showTaskMatches />,
-    }]);
-    render(<RouterProvider router={router} />);
+    const onShowTasks = vi.fn();
+    render(<KnowledgeGraphView backendUrl="https://api.example.com" getAccessToken={getAccessToken} showTaskMatches onShowTasks={onShowTasks} />);
     fireEvent.change(await screen.findByLabelText('Search your knowledge'), { target: { value: 'mirror' } });
     expect(await screen.findByText('The hallway is ready for a new mirror.')).not.toBeNull();
     const taskHeading = await screen.findByRole('heading', { name: 'Tasks' });
-    expect(screen.getByRole('link', { name: '3 matching tasks' }).getAttribute('href')).toBe('/tasks?q=mirror');
+    expect(screen.queryByRole('link', { name: '3 matching tasks' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: '3 matching tasks' }));
+    expect(onShowTasks).toHaveBeenCalledWith('mirror');
     expect(screen.getByText('Buy a mirror')).not.toBeNull();
     expect(screen.getByText('9 Apr 2031, 12:30')).not.toBeNull();
     const notes = screen.getByRole('list', { name: 'Matching notes' });

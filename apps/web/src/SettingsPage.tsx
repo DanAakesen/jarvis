@@ -428,7 +428,7 @@ export function SettingsPage({ backendUrl, getAccessToken, presence, notificatio
       setSavedSettings(result.settings);
       setSettings((current) => current ? ({ ...current, personality: { ...result.settings.personality } }) : current);
       setOptions(result.options);
-      setPersonalityResetMessage('Personality reset and saved. Defaults apply to new sessions.');
+      setPersonalityResetMessage('Reset');
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Personality could not be reset. Try again.');
     } finally {
@@ -453,7 +453,7 @@ export function SettingsPage({ backendUrl, getAccessToken, presence, notificatio
       setOptions(result.options);
       cacheVoiceWorkspacePreference(result.settings.voice.minimizeWindowsOnVoiceStart);
       setPersonalityResetMessage('');
-      setMessage('Saved. These are defaults for new sessions and tasks; running work keeps its current settings.');
+      setMessage('Saved');
       if (savingProjectDefaults) setProjectDefaultsNotice({ kind: 'saved', message: 'Project defaults saved.' });
     } catch (cause) {
       const saveError = cause instanceof Error ? cause.message : 'Settings could not be saved. Try again.';
@@ -494,9 +494,9 @@ export function SettingsPage({ backendUrl, getAccessToken, presence, notificatio
   const saveDisabled = !dirty || !advancedValid || !globalLimitsValid || !maxTasksValid ||
     !newProjectMaxTasksValid || !personalityInstructionsValid || saving;
   const projectDefaultsDisabledReason = !newProjectMaxTasksValid
-    ? 'Maximum parallel tasks must be a whole number from 1 to 100 before saving.'
+    ? 'Parallel tasks must be 1–100.'
     : !advancedValid || !globalLimitsValid || !maxTasksValid || !personalityInstructionsValid
-      ? 'Resolve the invalid Settings fields before saving.'
+      ? 'Fix the invalid fields to save.'
       : '';
   const projectDefaults = state === 'loading' ? (
     <CollapsibleSection storageKey="settings.projects.defaults" headingId="project-defaults-heading" title="Defaults for new projects">
@@ -505,14 +505,11 @@ export function SettingsPage({ backendUrl, getAccessToken, presence, notificatio
   ) : state === 'error' ? (
     <CollapsibleSection storageKey="settings.projects.defaults" headingId="project-defaults-heading" title="Defaults for new projects">
       <StateMessage variant="error" className="settings-feedback"
-        message={backendUrl ? error : 'Project defaults are unavailable because Settings cannot connect to the backend.'}
+        message={backendUrl ? error : 'Project defaults unavailable'}
         actionLabel={backendUrl ? 'Retry settings' : undefined} onAction={backendUrl ? () => { void load(); } : undefined} />
     </CollapsibleSection>
   ) : settings && options ? (
     <CollapsibleSection storageKey="settings.projects.defaults" headingId="project-defaults-heading" title="Defaults for new projects">
-      <p className="settings-explanation">
-        These defaults pre-fill the Add project dialog; every project keeps its own settings and can change them any time.
-      </p>
       <div className="settings-grid">
         <div className="settings-field">
           <label htmlFor="new-project-owner">Owner</label>
@@ -532,7 +529,6 @@ export function SettingsPage({ backendUrl, getAccessToken, presence, notificatio
           onChange={(value) => update('newProjects', 'defaultAgent', value as 'codex' | 'copilot')} />
         <SelectField id="new-project-policy" label="Policy" value={settings.newProjects.policy}
           options={options.projectPolicies} disabled={saving} form="settings-form"
-          help="The policy default only pre-fills projects Jarvis registers later. Every project keeps its own policy and can be changed any time."
           onChange={(value) => update('newProjects', 'policy', value as Settings['newProjects']['policy'])} />
         <div className="settings-field settings-number-field">
           <label htmlFor="new-project-max-tasks">New project maximum parallel tasks</label>
@@ -552,7 +548,7 @@ export function SettingsPage({ backendUrl, getAccessToken, presence, notificatio
         </p>
       )}
       {projectDefaultsDirty && !projectDefaultsNotice && (
-        <p className="settings-feedback" role="status">Unsaved project defaults.</p>
+        <p className="settings-feedback" role="status">Unsaved changes</p>
       )}
       {(projectDefaultsDirty || projectDefaultsNotice?.kind === 'error') && (
         <>
@@ -562,7 +558,6 @@ export function SettingsPage({ backendUrl, getAccessToken, presence, notificatio
               {projectDefaultsNotice?.kind === 'error' ? 'Retry save' : saving ? 'Saving…' : 'Save settings'}
             </button>
           </div>
-          <p className="settings-explanation">This also saves any other changed Settings.</p>
         </>
       )}
     </CollapsibleSection>
@@ -655,7 +650,6 @@ export function SettingsPage({ backendUrl, getAccessToken, presence, notificatio
           )}
 
           <CollapsibleSection storageKey="settings.personality" headingId="personality-settings-heading" title="Jarvis Personality">
-            <p className="settings-explanation" id="personality-session-help">Applies to new sessions.</p>
             <div className="settings-grid">
               <SelectField id="personality-tone" label="Tone" value={settings.personality.tone}
                 options={options.personalityTones} disabled={saving}
@@ -710,9 +704,7 @@ export function SettingsPage({ backendUrl, getAccessToken, presence, notificatio
                 onChange={(value) => update('voice', 'englishVoice', value)} />
               <div className="settings-field">
                 <label htmlFor="danish-voice">Danish voice</label>
-                <input id="danish-voice" value={optionLabels['da-DK-JeppeNeural']} readOnly
-                  aria-describedby="danish-voice-help" />
-                <p className="settings-explanation" id="danish-voice-help">Fixed for Danish voice sessions.</p>
+                <input id="danish-voice" value={optionLabels['da-DK-JeppeNeural']} readOnly />
               </div>
               <SelectField id="default-language" label="Default language" value={settings.voice.defaultLanguage}
                 options={options.languages} disabled={saving}
@@ -732,7 +724,7 @@ export function SettingsPage({ backendUrl, getAccessToken, presence, notificatio
               <strong>Wake word</strong>
               <span>{wakeStatus
                 ? `Last heard ${formatTimeOnly(wakeStatus.at)}. ${wakeStatus.message}`
-                : 'Not heard in this session.'}</span>
+                : 'Not heard'}</span>
             </p>
             {hasVoiceTuning && <VoiceTuningFields voice={settings.voice as VoiceTuningSettings} problems={problems} disabled={saving}
               onChange={(key, value) => update('voice', key, value as never)} />}
@@ -770,14 +762,13 @@ export function SettingsPage({ backendUrl, getAccessToken, presence, notificatio
                 <input id="max-parallel-tasks" type="number" min="1" max="100" step="1"
                   value={settings.global.maxParallelTasks} disabled={saving}
                   onChange={(event) => update('global', 'maxParallelTasks', Number(event.target.value))} />
-                <p className="settings-explanation">Choose a whole number from 1 to 100.</p>
               </div>
               <div className="settings-field settings-number-field">
                 <label htmlFor="screen-share-daily-frame-cap">Daily screen inspection limit</label>
                 <input id="screen-share-daily-frame-cap" type="number" min="1" max="300" step="1"
                   value={settings.global.screenShareDailyFrameCap} disabled={saving}
                   onChange={(event) => update('global', 'screenShareDailyFrameCap', Number(event.target.value))} />
-                <p className="settings-explanation">Maximum screen frames sent to the vision model per UTC day (1–300).</p>
+                <p className="settings-explanation">1–300 frames per UTC day</p>
               </div>
               {typeof settings.global.maxCheckAttempts === 'number' && (
                 <div className="settings-field settings-number-field">
@@ -799,9 +790,8 @@ export function SettingsPage({ backendUrl, getAccessToken, presence, notificatio
           </CollapsibleSection>
 
           <CollapsibleSection storageKey="settings.credentials" headingId="credentials-heading" title="Credentials">
-            <p className="settings-explanation" id="credential-actions-help">Secret values are never shown.</p>
             {credentials.length === 0
-              ? <p role="status">No credential status.</p>
+              ? <p role="status">No credentials</p>
               : (
                 <ul className="credential-list">
                   {credentials.map((credential) => {

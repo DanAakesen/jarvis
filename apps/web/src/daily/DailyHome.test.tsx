@@ -78,6 +78,7 @@ describe('Daily overview', () => {
     expect(screen.getAllByRole('listitem')).toHaveLength(dailySources.length);
     const notes = screen.getByText('About this data').closest('details')!;
     expect(notes.open).toBe(false);
+    expect(notes.textContent).toContain('Freshness and completeness are not established.');
     for (const source of dailySources) {
       expect(row(source.label).queryByText(source.purpose)).toBeNull();
       expect(notes.textContent).toContain(source.purpose);
@@ -85,11 +86,8 @@ describe('Daily overview', () => {
     expect(dailySources.map(source => source.id)).not.toContain(sources.metricCatalog);
     expect(dailySources.map(source => source.id)).not.toContain(sources.days);
     expect(row('Measurements').getByText('Has records')).toBeTruthy();
-    expect(notes.textContent).toContain('last 7 days (Europe/Copenhagen)');
     expect(row('Meal plans').getByText('Has records')).toBeTruthy();
-    expect(notes.textContent).toContain('other collections are not limited to a period');
     expect(row('Sleep').getByText('No records')).toBeTruthy();
-    expect(notes.textContent).toContain('does not prove the original source is empty');
     expect(row('Saved favourites').getByText('No records')).toBeTruthy();
     expect(row('Sync evidence').getByText('No records')).toBeTruthy();
     expect(notes.querySelector('time')?.getAttribute('datetime')).toBe('2026-10-17T07:00:00Z');
@@ -142,7 +140,7 @@ describe('Daily overview', () => {
     await settled();
     expect(screen.getByText('Checked 8 collections: 3 with records, 4 with none returned, 1 that could not be read.')).toBeTruthy();
     expect(row('Sleep').getByText('Could not be read')).toBeTruthy();
-    expect(row('Sleep').getByText('Daily is unavailable (HTTP 503). Retry without changing your records.')).toBeTruthy();
+    expect(row('Sleep').getByText('Daily is unavailable (HTTP 503).')).toBeTruthy();
     expect(row('Measurements').getByText('Has records')).toBeTruthy();
     expect(screen.getAllByRole('button', { name: /^Retry / })).toHaveLength(1);
     const retry = row('Sleep').getByRole('button', { name: 'Retry Sleep' });
@@ -345,9 +343,9 @@ describe('Daily overview', () => {
     expect(f.queries.filter(query => !('limit' in query) || query.limit === 1)).toHaveLength(dailySources.length * 2);
   });
   it.each([
-    [404, 'Daily is not enabled on this backend. Your original Daily remains in use.'],
+    [404, 'Daily is not enabled on this backend.'],
     [403, 'Daily access could not be verified. Sign in as the configured owner.'],
-    [503, 'Daily is unavailable (HTTP 503). Retry without changing your records.'],
+    [503, 'Daily is unavailable (HTTP 503).'],
   ])('explains a failed availability check (HTTP %i), reads nothing, and retries on request', async (status, message) => {
     let failing = true;
     const f = fixture({ capabilities: () => failing ? jsonResponse({ error: 'synthetic' }, status) : capabilityList([sources.metrics]) });
@@ -366,7 +364,7 @@ describe('Daily overview', () => {
   it('says so plainly when the backend exposes no browsable collection', async () => {
     const f = fixture({ capabilities: () => capabilityList([sources.workout]) });
     render(home());
-    await screen.findByText('This backend has not exposed a browsable Daily collection.');
+    await screen.findByText('No Daily data');
     expect(f.queries).toHaveLength(0);
     expect(screen.queryByRole('button', { name: 'Refresh overview' })).toBeNull();
   });

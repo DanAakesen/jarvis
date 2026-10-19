@@ -671,7 +671,7 @@ function ShellLayout({ signedIn, config, session, camera, screenShare, dailyEnab
           </NavLink>
           {areas.map((area) => (
             <NavLink key={area.id} className="rail-link" to={`/${area.path}`} aria-label={area.label} onClick={() => { setFolioOpen(false); setNavigationOpen(area.navigation.length > 1); }}>
-              <ShellIcon name={area.id === 'daily' ? 'daily' : area.id === 'factory' ? 'factory' : area.id === 'tasks' ? 'tasks' : area.id === 'notes' ? 'knowledge' : area.id === 'status' ? 'status' : 'usage'} /><span className="visually-hidden">{area.label}</span>
+              <ShellIcon name={area.id === 'daily' ? 'daily' : area.id === 'factory' ? 'factory' : area.id === 'notes' ? 'knowledge' : area.id === 'status' ? 'status' : 'usage'} /><span className="visually-hidden">{area.label}</span>
             </NavLink>
           ))}
           <button className={`rail-link rail-folio${folioOpen ? ' active' : ''}`} type="button" aria-label="Folio" aria-pressed={folioOpen}
@@ -829,6 +829,12 @@ function ShellLayout({ signedIn, config, session, camera, screenShare, dailyEnab
   );
 }
 
+/** Tasks live on the Notes page now; old links and bookmarks land there with the task list open. */
+function TasksRedirect() {
+  const query = new URLSearchParams(useLocation().search).get('q');
+  return <Navigate to={`/notes?${new URLSearchParams(query ? { tasks: '1', q: query } : { tasks: '1' })}`} replace />;
+}
+
 /** Every Jarvis page needs Dan's verified session; until then the page shows sign-in instead. */
 function RequireSignIn({ session }: { session: SignInSession }) {
   return session.state === 'signed-in' && session.profile ? <Outlet /> : <SignInPage session={session} />;
@@ -945,6 +951,7 @@ export function App({ config = defaultConfig, dailyEnabled = false, pushEnabled 
                   signIn={session.signIn} proactiveEnabled={proactiveEnabled} />
               } />}
               <Route path="knowledge/*" element={<Navigate to="/notes" replace />} />
+              <Route path="tasks/*" element={<TasksRedirect />} />
             </Route>
             <Route path="*" element={<NotFoundPage />} />
           </Route>
