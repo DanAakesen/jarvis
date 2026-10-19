@@ -1,5 +1,26 @@
 # Decisions
 
+## P14-29 — Quiet mirror freshness and owner findings (19 October 2026; #1081)
+
+Consume the merged runner status contract rather than changing it. Add a
+separate strict reduced-view schema for authenticated Status consumption.
+Read through the backend's managed identity with a five-second/32 KiB bound
+and a 30-second single-flight cache, including missing/error results. Missing
+container/blob is not set up; all other failures expose only read error.
+Keep private conflict paths out of tools, proactive data and logs.
+
+Needs-attention/failed outcomes retain their state ahead of stale; otherwise
+success older than 30 minutes, or no successful sync yet, is stale. No-op and
+busy outcomes are healthy only while the last success remains fresh.
+Dry-run stays visible without expansion and remains the runner's default.
+Details are opt-in through one keyboard-operable compact Status row.
+
+Use existing proactive scheduling and persistent finding deduplication for one
+normal-urgency finding per Copenhagen day and fixed reason, after one hour
+without success or when the mirror needs the owner. No push, new flag, tool,
+migration or write-back change. Missing/read-error status creates no finding.
+Live Azure and Obsidian behavior is **not yet verified against the live service**.
+
 ## P14-26 — Pure vault mirror policy, reconcile and status contract (19 October 2026; #1077)
 
 Implement only the offline decision boundary in `apps/vault-mirror`, not a

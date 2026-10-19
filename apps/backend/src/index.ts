@@ -127,6 +127,7 @@ import { createWorkspacePinsModule } from './core/workspace-pins.js';
 import { WorkspacePinStore } from './database/workspace-pin-store.js';
 import { createWeatherModule } from './core/weather.js';
 import { createSystemStatusReader } from './system-status.js';
+import { createVaultMirrorStatusReader } from './vault-mirror-status.js';
 import { createProductionModules } from './production-modules.js';
 import { createPushStore } from './database/push-store.js';
 import { registerPushRoutes } from './push/routes.js';
@@ -207,6 +208,13 @@ try {
       ? { managedIdentityClientId }
       : {})
     : undefined;
+  const vaultMirrorStatusReader = createVaultMirrorStatusReader(
+    archiveStorageAccount && credential
+      ? new BlobServiceClient(`https://${archiveStorageAccount}.blob.core.windows.net`, credential, {
+        retryOptions: { maxTries: 1, tryTimeoutInMs: 5_000 },
+      }).getContainerClient('vault-mirror-status').getBlobClient('status.json')
+      : undefined,
+  );
   const projectRepositoryCreator = config.keyVaultUri && credential
     ? createRepoAdminRepositoryCreator(
       config.keyVaultUri,
@@ -1103,6 +1111,7 @@ try {
       projectPolicyChanged: (projectId: string) => projectPolicyEvaluator.recheckProject(projectId),
     } : {}),
     systemStatusReader,
+    vaultMirrorStatusReader,
     systemSmokeProbes,
     modelCatalogue,
     ...(modelDeploymentWorkflow ? { modelDeploymentWorkflow } : {}),
@@ -1197,6 +1206,7 @@ try {
     })
     : undefined;
   if (config.proactiveEnabled) registerProactive(app, {
+    vaultMirrorStatusReader,
     enabled: config.proactiveEnabled,
     ownerObjectId: config.auth.ownerObjectId,
     ...(proactiveStore ? { store: proactiveStore } : {}),

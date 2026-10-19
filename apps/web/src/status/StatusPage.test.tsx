@@ -11,6 +11,7 @@ const ids = ['database', 'foundry.chat', 'foundry.voice', 'foundry.embeddings', 
 function snapshot(checkedAt = new Date().toISOString()): SystemStatus {
   return {
     checkedAt,
+    vaultMirror: { state: 'not-set-up', lastSuccessAt: null },
     entries: ids.map(id => ({
       id, checkedAt, status: id === 'github_app' ? 'down' : id === 'runner' ? 'unknown' : 'ok',
       ...(id === 'github_app' ? { details: { reason: 'check_failed' } } :
@@ -85,6 +86,34 @@ describe('Status page', () => {
     fetchMock.mockResolvedValue(response(report));
     render(<StatusPage backendUrl="https://api.example.com" getAccessToken={getAccessToken} />);
     expect(await screen.findByText(/Unavailable: the backend has no recorded smoke report/)).not.toBeNull();
+  });
+
+  it('renders the reduced mirror view and reveals paths only on expansion', async () => {
+    const report = snapshot();
+    report.vaultMirror = {
+      state: 'needs-attention', reason: 'conflict', writeBack: 'dry-run',
+      lastSuccessAt: new Date().toISOString(), conflictPaths: ['Notes/synthetic-conflict.md'],
+    };
+    fetchMock.mockResolvedValue(response(report));
+    render(<StatusPage backendUrl="https://api.example.com" getAccessToken={getAccessToken} />);
+    await screen.findByText('Needs attention');
+    const mirror = screen.getByRole('group', { name: 'Vault mirror' });
+    expect(within(mirror).getByText('Needs attention')).not.toBeNull();
+    expect(within(mirror).getByText('Dry-run')).not.toBeNull();
+    expect(screen.queryByText('Notes/synthetic-conflict.md')).toBeNull();
+    fireEvent.click(within(mirror).getByRole('button', { name: 'Vault mirror details' }));
+    expect(within(mirror).getByText('Notes/synthetic-conflict.md')).not.toBeNull();
+  });
+
+  it('rejects a raw mirror document instead of rendering unvalidated fields', async () => {
+    fetchMock.mockResolvedValue(response({
+      ...snapshot(),
+      vaultMirror: { state: 'healthy', lastSuccessAt: null, noteText: 'synthetic forbidden content' },
+    }));
+    render(<StatusPage backendUrl="https://api.example.com" getAccessToken={getAccessToken} />);
+    expect((await screen.findByRole('alert')).textContent).toMatch(/invalid system status response/);
+    expect(screen.queryByText('synthetic forbidden content')).toBeNull();
+    expect(within(screen.getByRole('group', { name: 'Vault mirror' })).getByText('Read error')).not.toBeNull();
   });
 
   it.each([

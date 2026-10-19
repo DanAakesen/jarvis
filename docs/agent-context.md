@@ -1,5 +1,24 @@
 # Agent context
 
+## Vault mirror freshness checks (19 October 2026; P14-29)
+
+Focused web checks from the repository root:
+`npm test --workspace @jarvis/web -- src/status`,
+`npm run lint --workspace @jarvis/web` and
+`npm run build --workspace @jarvis/web`.
+Backend checks:
+`npm test --workspace @jarvis/backend -- --run src/{vault-mirror-status,core/status,system-status,proactive/vault-mirror,proactive/engine,proactive/composition}.test.ts`,
+`npm test --workspace @jarvis/contracts`, backend build, and backend/contracts
+lint. Verified locally: 138 targeted backend tests, 172 contracts tests,
+1,874 web tests, web/backend builds and web/backend/contracts lint.
+The web build retains its existing bundle-size warning.
+The Status reader consumes the existing storage account through managed
+identity; it needs no feature flag, new secret or container provisioning.
+Missing `vault-mirror-status/status.json` is a normal not-set-up state.
+Keep browser fixtures synthetic and outside the repository; never capture real
+vault conflict paths. Local fixtures do not verify Azure identity/RBAC,
+production storage or the live Obsidian service.
+
 ## Offline vault mirror engine checks (19 October 2026; P14-26)
 
 From the repository root: `npm run build:vault-mirror`,

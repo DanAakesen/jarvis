@@ -118,6 +118,7 @@ export interface BuildAppOptions {
   readonly workspaceCommands?: WorkspaceCommandBroker;
   readonly workspaceHtmlArtifacts?: Pick<WorkspaceHtmlArtifactStore, 'read'>;
   readonly systemStatusReader?: SystemStatusReader;
+  readonly vaultMirrorStatusReader?: import('./vault-mirror-status.js').VaultMirrorStatusReader;
   readonly systemSmokeProbes?: Partial<Record<SystemSmokeCheckId, SystemStatusProbe>>;
 }
 
@@ -168,6 +169,7 @@ declare module 'fastify' {
     backgroundJobs: BackgroundJobRegistry;
     onEmbeddingModelChanged: ((jobs: BackgroundJobRegistry) => Promise<void>) | null;
     systemStatusReader: SystemStatusReader;
+    vaultMirrorStatusReader: import('./vault-mirror-status.js').VaultMirrorStatusReader | null;
     systemHealthDiagnostics: SystemHealthDiagnostics;
     systemSmokeReader: SystemSmokeReader;
     shutdownConnections: Set<() => void | Promise<void>>;
@@ -245,6 +247,7 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
   const systemStatusReader = options.systemStatusReader ??
     createSystemStatusReader({}, process.env.JARVIS_DEPLOYED_COMMIT);
   app.decorate('systemStatusReader', systemStatusReader);
+  app.decorate('vaultMirrorStatusReader', options.vaultMirrorStatusReader ?? null);
   app.decorate('systemHealthDiagnostics', new SystemHealthDiagnostics());
   app.decorate('systemSmokeReader', createSystemSmokeReader(
     systemStatusReader,

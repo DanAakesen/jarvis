@@ -1,5 +1,20 @@
 # Product
 
+## Vault mirror freshness (19 October 2026; P14-29)
+
+Status shows one compact **Vault mirror** row: not set up, healthy, stale,
+needs attention, failed, loading or read error, plus time since the last success.
+Healthy includes no-op and busy runs; freshness becomes stale after 30 minutes
+without success. Dry-run is always visible when reported: the mirror is not
+writing into Obsidian. Expand the row for counts, write-back mode, a short fixed
+reason and up to ten conflict paths. No status document is normal, not a failure.
+
+The existing proactive checks create a normal-urgency finding when success is
+over an hour old or the mirror needs the owner, at most once per Copenhagen day
+and reason, with no push notification. Missing/unreadable status does not create
+a mirror finding. No new flag or change to default-off write-back is introduced.
+Azure/Obsidian operation is **not yet verified against the live service**.
+
 ## Planned vault mirror safety boundary (19 October 2026; P14-26)
 
 The planned Azure mirror will remove the desktop-running dependency between

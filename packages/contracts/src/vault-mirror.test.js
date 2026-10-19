@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { vaultMirrorStatusSchema } from './index.js';
+import { vaultMirrorStatusSchema, vaultMirrorStatusViewSchema } from './index.js';
 
 const status = {
   runId: 'synthetic-run-001',
@@ -20,6 +20,27 @@ const status = {
   lastSuccessAt: null,
   conflictPaths: [],
 };
+
+test('vault mirror view is a bounded runtime contract independent of the runner document', () => {
+  for (const state of ['not-set-up', 'healthy', 'stale', 'needs-attention', 'failed', 'read-error']) {
+    assert.deepEqual(vaultMirrorStatusViewSchema.parse({ state, lastSuccessAt: null }), { state, lastSuccessAt: null });
+  }
+  const view = {
+    state: 'needs-attention', lastSuccessAt: status.finishedAt, writeBack: 'dry-run',
+    reason: 'conflict', conflictPaths: ['private/note.md'],
+    counts: {
+      approved: 0, pushed: 0, writtenBack: 0, deleted: 0, conflicts: 1, skipped: 0,
+      credentialMatches: 0, pendingWriteBack: 0, consecutiveFailures: 0,
+    },
+  };
+  assert.deepEqual(vaultMirrorStatusViewSchema.parse(view), view);
+  for (const patch of [
+    { state: 'ok' }, { runId: status.runId }, { startedAt: status.startedAt },
+    { finishedAt: status.finishedAt }, { reason: 'private error' },
+    { conflictPaths: Array(11).fill('private') }, { conflictPaths: ['x'.repeat(1025)] },
+    { counts: { ...view.counts, pushed: -1 } }, { counts: { ...view.counts, extra: 0 } },
+  ]) assert.equal(vaultMirrorStatusViewSchema.safeParse({ ...view, ...patch }).success, false);
+});
 
 test('vault mirror status accepts synthetic completed runs and every documented enum', () => {
   assert.deepEqual(vaultMirrorStatusSchema.parse(status), status);

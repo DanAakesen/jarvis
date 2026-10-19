@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
-import { isSystemSmokeStatus, type SystemStatus, type SystemStatusEntry, type SystemStatusSubsystem, type SystemStatusValue } from '@jarvis/contracts';
+import { isSystemSmokeStatus, vaultMirrorStatusViewSchema, type SystemStatus, type SystemStatusEntry, type SystemStatusSubsystem, type SystemStatusValue } from '@jarvis/contracts';
 import type { AreaProps } from '../areas';
 import { awaitWithSignal, backendFetch } from '../backend-request';
 import { StateMessage } from '../StateMessage';
 import { formatDateTime } from '../format/date-time';
+import { VaultMirrorRow } from './VaultMirrorRow';
 
 const checks: Readonly<Record<SystemStatusSubsystem, string>> = {
   database: 'SQL database',
@@ -43,7 +44,8 @@ function isSystemStatus(value: unknown): value is SystemStatus {
   return isObject(value) && isTime(value.checkedAt) && Array.isArray(value.entries) &&
     value.entries.length === Object.keys(checks).length && value.entries.every(isStatusEntry) &&
     new Set(value.entries.map(entry => entry.id)).size === Object.keys(checks).length &&
-    (value.smoke === undefined || isSystemSmokeStatus(value.smoke));
+    (value.smoke === undefined || isSystemSmokeStatus(value.smoke)) &&
+    (value.vaultMirror === undefined || vaultMirrorStatusViewSchema.safeParse(value.vaultMirror).success);
 }
 
 function readableKey(key: string): string {
@@ -163,6 +165,7 @@ export function StatusPage({ backendUrl, getAccessToken }: AreaProps) {
         detail="The latest refresh failed; this snapshot does not establish current health. Use Retry status to check again." />
       : <StateMessage variant="error" className="system-status-feedback" message={safeErrorMessage(error)} />)}
     {!data && pending && <StateMessage variant="loading" message="Loading system status" />}
+    {!data && <VaultMirrorRow loading={pending} unavailable={!!error} now={now} />}
     {data && <>
       <p className="system-status-snapshot">
         {error ? 'Previous snapshot' : pending ? 'Refreshing the recorded snapshot' : 'Backend responded with a status snapshot'}.
@@ -172,6 +175,7 @@ export function StatusPage({ backendUrl, getAccessToken }: AreaProps) {
       <section className="system-status-panel" aria-labelledby="system-checks-heading" aria-busy={pending}>
         <h2 id="system-checks-heading">System checks</h2>
         <p className="system-status-note">Foundry checks describe configured deployments, not a live model turn. The last backend error is historical evidence, not a claim that the backend is currently failing.</p>
+        <VaultMirrorRow value={data.vaultMirror} unavailable={!!error} now={now} />
         <ul className="system-status-list">
           {data.entries.map(entry => <li className="system-status-row" key={entry.id} aria-label={checks[entry.id]}>
             <div className="system-status-row-heading">
