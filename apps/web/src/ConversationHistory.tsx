@@ -68,7 +68,10 @@ function ConversationIcon({ name }: { name: 'screen' | 'camera' | 'send' | 'late
     case 'camera':
       return <svg {...common}><path d="M4 7h3l2-3h6l2 3h3a2 2 0 0 1 2 2v10H2V9a2 2 0 0 1 2-2Z" /><circle cx="12" cy="12" r="3" /></svg>;
     case 'send':
-      return <svg {...common}><path d="M12 19V5M5.5 11.5 12 5l6.5 6.5" /></svg>;
+      return <svg {...common}>
+        <path className="composer-send-trail" pathLength={1} d="M2.5 16.5h4M5.5 20.5h3" />
+        <path d="M21 3 14.5 21l-3.7-7.8L3 9.5 21 3ZM10.8 13.2 21 3" />
+      </svg>;
     case 'latest':
       return <svg {...common}><path d="M12 5v14m-6-6 6 6 6-6" /></svg>;
     case 'attach':
@@ -216,6 +219,8 @@ export function ConversationHistory({
   const conversationWindow = useConversationWindow();
   // The rotating invitation is for an empty start; once Dan has written, it stays away.
   const [hasSent, setHasSent] = useState(false);
+  // Counts accepted messages; the send icon takes off again on each one.
+  const [sentCount, setSentCount] = useState(0);
   const workspaceCommands = useContext(WorkspaceCommandContext);
   const { key: locationKey, pathname: locationPath } = useLocation();
   const seenLocationKey = useRef(locationKey);
@@ -449,6 +454,7 @@ export function ConversationHistory({
     setDraft('');
     setTurnError('');
     setHasSent(true);
+    setSentCount((count) => count + 1);
     // A new message needs its reply visible: bring history back and follow the latest content.
     followLatest.current = true;
     setAtLatest(true);
@@ -986,7 +992,10 @@ export function ConversationHistory({
         <ConversationMoreMenu className="composer-more" language={language} onLanguageChange={setLanguage} actions={attachActions} align="end" />
         <button className="composer-send" type="submit" disabled={uploadingFiles || (!draft.trim() && readyFiles === 0)}
           aria-label="Send" title={uploadingFiles ? 'Waiting for uploads to finish' : 'Send message'}>
-          <ConversationIcon name="send" />
+          {/* A new key per message restarts the one-off take-off animation, even when sends follow each other quickly. */}
+          <span className="composer-send-glyph" key={sentCount} data-sent={sentCount > 0 || undefined}>
+            <ConversationIcon name="send" />
+          </span>
         </button>
         <input ref={fileInput} className="visually-hidden" type="file" multiple accept={ATTACHMENT_ACCEPT} tabIndex={-1}
           aria-label="Attach files" data-testid="attachment-input"

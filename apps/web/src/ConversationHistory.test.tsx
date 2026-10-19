@@ -1199,6 +1199,31 @@ describe('ConversationHistory', () => {
     expect(document.activeElement).toBe(input);
   });
 
+  it('takes the send icon off again for every accepted message', async () => {
+    sendChatTurn.mockResolvedValue(assistantMessage);
+    const user = userEvent.setup();
+    renderConversation();
+    const input = await screen.findByRole('textbox', { name: 'Message Jarvis' });
+    const glyph = () => screen.getByRole('button', { name: 'Send' }).querySelector('.composer-send-glyph');
+    const resting = glyph();
+    expect(resting).not.toBeNull();
+    expect(resting?.hasAttribute('data-sent')).toBe(false);
+
+    await user.type(input, 'One');
+    await user.keyboard('{Enter}');
+    await waitFor(() => expect(sendChatTurn).toHaveBeenCalledTimes(1));
+    const first = glyph();
+    expect(first?.hasAttribute('data-sent')).toBe(true);
+    expect(first).not.toBe(resting);
+
+    await waitFor(() => expect(input).toHaveProperty('disabled', false));
+    await user.type(input, 'Two');
+    await user.keyboard('{Enter}');
+    await waitFor(() => expect(sendChatTurn).toHaveBeenCalledTimes(2));
+    expect(glyph()?.hasAttribute('data-sent')).toBe(true);
+    expect(glyph()).not.toBe(first);
+  });
+
   it.each(['stop', 'natural', 'error'] as const)('restores typing and draft after voice %s', async (exit) => {
     const user = userEvent.setup();
     loadConversationHistory.mockResolvedValue({ messages: [message], nextCursor: null });

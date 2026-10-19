@@ -1,5 +1,19 @@
 # Decisions
 
+## P14-32 — The send icon is a paper plane that moves (19 October 2026; #1085)
+
+The composer send action stays a bare icon, with no fill, border or shadow in any
+state, but is no longer a plain arrow. It is a paper plane with two short speed
+lines. It rests dim while there is nothing to send and lights up in the focus
+colour, sliding into place, once there is. Hover and keyboard focus warm it, lean it
+along its flight path and draw the lines in; press shrinks it; each accepted
+message makes it fly out and glide back in once. The focus colour is used rather
+than the theme accent because a bare stroke needs guaranteed contrast. The
+take-off runs on a wrapper that remounts for each message, so sends in quick
+succession each play it. All motion is finite, transform and opacity only (plus the
+line draw), and reduced motion keeps only the colour change. `stylesheets.test.tsx`
+pins the bare icon and the finite, reduced-motion-safe animation.
+
 ## P14-34 — Notes map open-task marks (19 October 2026; #1094)
 
 `GET /knowledge/graph` adds optional per-node open-task counts, the number of

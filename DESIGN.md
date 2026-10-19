@@ -304,10 +304,16 @@ error hue. These calm, finite state changes do not pulse or loop.
 Factory job “Open” actions keep their specialized class name and compact
 geometry, but alias the shared primary styling and states. The composer send action
 is the exception: Dan's direct instruction of 19 October 2026 makes it a bare
-icon with no fill, border or shadow in any state. Hover only warms the arrow to the
-focus colour and lifts it 2px, press settles it, and disabled dims it; the target
-stays 36px (44px on coarse pointers) and the accessible name stays “Send”. Factory
-“Create task” already uses the shared primary; its “Create
+icon with no fill, border or shadow in any state, and his follow-up asks it to feel
+modern and alive. It is a paper plane with two short speed lines. It rests dim
+while there is nothing to send, lights up in the focus colour as it slides into
+place once there is, and on hover or keyboard focus warms, leans 2px along its
+flight path and draws the speed lines in. Press shrinks it; each accepted message
+makes it fly out and glide back in once, dimmed. The motion is finite, uses the
+shared motion tokens and animates only transform, opacity and the speed-line
+stroke; reduced motion keeps the colour change and drops the movement and the
+lines. The target stays 36px (44px on coarse pointers) and the accessible name
+stays “Send”. Factory “Create task” already uses the shared primary; its “Create
 project” secondary now keeps the shared neutral surface. Settings save actions
 already use the shared primary. “Jump to latest” is a contextual utility, not a
 main action; it keeps its placement behavior with the shared-radius surfaced

@@ -133,25 +133,41 @@
 .conversation-history .composer textarea { min-height: 44px; max-height: 160px; padding: var(--space-2) var(--space-1); border: 0; border-radius: 0; background: transparent; resize: none; font-size: var(--type-body); line-height: var(--line-body); }
 .conversation-history .composer textarea::placeholder { color: var(--text-muted); opacity: 1; }
 .conversation-history .composer textarea:focus-visible { outline: none; }
-/* The composer send action is a bare icon (Dan, 19 October): no fill, border or shadow in any state. Hover warms the arrow and lifts it. */
+/* The composer send action is a bare icon (Dan, 19 October): no fill, border or shadow in any state. A paper plane rests dim, lights up when there is something to send, leans along its flight path on hover and takes off once per message. All motion is finite and animates transform and opacity only. */
 .conversation-history .composer-send {
   display: grid; place-items: center; width: 36px; height: 36px; min-height: 36px; padding: 0; margin: 0;
   border: 0; border-radius: var(--radius-control); background: none; box-shadow: none;
-  color: var(--text); cursor: pointer;
+  color: var(--focus); cursor: pointer;
   transition: color var(--motion-press) var(--ease-standard);
 }
-.composer-send svg { width: 20px; height: 20px; stroke-width: 2; transition: transform var(--motion-press) var(--ease-standard); }
-.conversation-history .composer-send:hover:not(:disabled) { color: var(--focus); }
-.conversation-history .composer-send:hover:not(:disabled) svg { transform: translateY(-2px); }
-.conversation-history .composer-send:active:not(:disabled) svg { transform: translateY(0) scale(.9); }
+.composer-send-glyph { display: grid; place-items: center; }
+.composer-send-glyph[data-sent] { animation: composer-send-launch var(--motion-state) var(--ease-enter); }
+.composer-send svg { width: 22px; height: 22px; stroke-width: 2; transition: transform var(--motion-press) var(--ease-enter); }
+.composer-send-trail { stroke-width: 1.6; stroke-dasharray: 1 1; stroke-dashoffset: 1; opacity: 0; transition: stroke-dashoffset var(--motion-state) var(--ease-enter), opacity var(--motion-press) var(--ease-standard); }
+.conversation-history .composer-send:not(:disabled) svg { animation: composer-send-arm var(--motion-state) var(--ease-enter); }
+.conversation-history .composer-send:is(:hover, :focus-visible):not(:disabled) { color: color-mix(in srgb, var(--focus) 70%, var(--text)); }
+.conversation-history .composer-send:is(:hover, :focus-visible):not(:disabled) svg { transform: translate(2px, -2px) scale(1.06); }
+.conversation-history .composer-send:is(:hover, :focus-visible):not(:disabled) .composer-send-trail { stroke-dashoffset: 0; opacity: .7; }
+.conversation-history .composer-send:active:not(:disabled) svg { transform: scale(.86); }
 .conversation-history .composer-send:focus-visible { outline: 3px solid var(--focus); outline-offset: 0; }
 .conversation-history .composer-send:disabled { color: var(--disabled-text); cursor: not-allowed; }
-@media (prefers-reduced-motion: reduce) {
-  .conversation-history .composer-send svg { transition: none; }
-  .conversation-history .composer-send:is(:hover, :active):not(:disabled) svg { transform: none; }
+/* The plane slides into place when sending becomes possible, and flies out then glides back in, dimmed, after a send. */
+@keyframes composer-send-arm { from { transform: translate(-3px, 3px) scale(.82); } }
+@keyframes composer-send-launch {
+  0% { color: var(--focus); }
+  38% { transform: translate(10px, -12px) scale(.8); opacity: 0; color: var(--focus); }
+  39% { transform: translate(-8px, 10px) scale(.8); opacity: 0; color: var(--focus); }
 }
-:root[data-motion="reduced"] .conversation-history .composer-send svg { transition: none; }
-:root[data-motion="reduced"] .conversation-history .composer-send:is(:hover, :active):not(:disabled) svg { transform: none; }
+@media (prefers-reduced-motion: reduce) {
+  .composer-send-glyph[data-sent], .conversation-history .composer-send:not(:disabled) svg { animation: none; }
+  .composer-send svg, .composer-send-trail { transition: none; }
+  .conversation-history .composer-send:is(:hover, :focus-visible, :active):not(:disabled) svg { transform: none; }
+  .composer-send-trail { display: none; }
+}
+:root[data-motion="reduced"] .composer-send-glyph[data-sent], :root[data-motion="reduced"] .conversation-history .composer-send:not(:disabled) svg { animation: none; }
+:root[data-motion="reduced"] .composer-send svg, :root[data-motion="reduced"] .composer-send-trail { transition: none; }
+:root[data-motion="reduced"] .conversation-history .composer-send:is(:hover, :focus-visible, :active):not(:disabled) svg { transform: none; }
+:root[data-motion="reduced"] .composer-send-trail { display: none; }
 .composer-status { grid-column: 1 / -1; margin: 0 var(--space-1) var(--space-1); font-size: var(--type-small); }
 .chat-guidance { margin: var(--space-2) 0 0; color: var(--text-muted); font-size: var(--type-caption); }
 .chat-error { margin-top: var(--space-3); color: var(--error); font-size: var(--type-small); }
