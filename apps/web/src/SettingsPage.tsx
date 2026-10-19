@@ -8,6 +8,7 @@ import { StateMessage } from './StateMessage';
 import { CollapsibleSection } from './CollapsibleSection';
 import { useWakeStatus } from './wake-store';
 import { AppearanceDetails, ModelsSection, ResearchSection, RetrievalSection, TimeoutsSection, VoiceTuningFields } from './SettingsAdvanced';
+import { revealWhenReady } from './page-navigation';
 import {
   advancedProblems, isRoleOptions, isRoleSettings,
   type MemorySettings, type ModelRole, type ResearchSettings, type RoleSettings, type TimeoutSettings, type VoiceTuningSettings,
@@ -113,6 +114,8 @@ const optionLabels: Record<string, string> = {
   deliver_pr: 'Deliver a pull request',
   complete_without_deployment: 'Complete without deployment',
 };
+
+const settingsDeepLinkIds = new Set(['health-upload', 'projects', 'proactive-settings', 'nutrition-targets']);
 
 const defaultPersonality: Settings['personality'] = {
   tone: 'british_butler',
@@ -319,7 +322,8 @@ export function SettingsPage({ backendUrl, getAccessToken, presence, notificatio
   const [message, setMessage] = useState('');
   const [personalityResetMessage, setPersonalityResetMessage] = useState('');
   const [error, setError] = useState(backendUrl ? '' : 'Settings unavailable.');
-  const healthUploadAnchor = typeof window !== 'undefined' && window.location.hash === '#health-upload';
+  const hashId = typeof window !== 'undefined' ? window.location.hash.slice(1) : '';
+  const healthUploadAnchor = hashId === 'health-upload';
 
   const load = useCallback(async () => {
     if (!backendUrl) {
@@ -363,8 +367,11 @@ export function SettingsPage({ backendUrl, getAccessToken, presence, notificatio
   }, [backendUrl, getAccessToken]);
 
   useEffect(() => {
-    if (healthUploadAnchor) document.getElementById('health-upload')?.scrollIntoView?.({ block: 'start' });
-  }, [healthUploadAnchor]);
+    if (state !== 'ready' || !settingsDeepLinkIds.has(hashId)) return;
+    const reducedMotion = document.documentElement.dataset.motion === 'reduced' ||
+      (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false);
+    return revealWhenReady(() => document.getElementById(hashId), reducedMotion);
+  }, [hashId, state]);
 
   const update = <Area extends keyof Settings, Key extends keyof Settings[Area]>(
     area: Area,
@@ -661,11 +668,10 @@ export function SettingsPage({ backendUrl, getAccessToken, presence, notificatio
                 <label htmlFor="personality-instructions">Custom instructions</label>
                 <textarea id="personality-instructions" rows={5} maxLength={2_000}
                   value={settings.personality.customInstructions} disabled={saving}
-                  aria-describedby={`personality-instructions-help personality-instructions-count${personalityInstructionsValid ? '' : ' personality-instructions-error'}`}
+                  aria-describedby={`personality-instructions-help${personalityInstructionsValid ? '' : ' personality-instructions-error'}`}
                   aria-invalid={!personalityInstructionsValid}
                   onChange={(event) => update('personality', 'customInstructions', event.target.value)} />
-                <p className="settings-explanation" id="personality-instructions-help">Up to 2,000 characters.</p>
-                <p className="settings-explanation" id="personality-instructions-count">
+                <p className="settings-explanation" id="personality-instructions-help">
                   {settings.personality.customInstructions.length.toLocaleString()} / 2,000 characters
                 </p>
                 {!personalityInstructionsValid && (
@@ -759,36 +765,38 @@ export function SettingsPage({ backendUrl, getAccessToken, presence, notificatio
           )}
 
           <CollapsibleSection storageKey="settings.global" headingId="global-settings-heading" title="Limits" summary={<>{`Up to ${settings.global.maxParallelTasks} parallel tasks`}</>}>
-            <div className="settings-field settings-number-field">
-              <label htmlFor="max-parallel-tasks">Maximum parallel tasks</label>
-              <input id="max-parallel-tasks" type="number" min="1" max="100" step="1"
-                value={settings.global.maxParallelTasks} disabled={saving}
-                onChange={(event) => update('global', 'maxParallelTasks', Number(event.target.value))} />
-              <p className="settings-explanation">Choose a whole number from 1 to 100.</p>
-            </div>
-            <div className="settings-field settings-number-field">
-              <label htmlFor="screen-share-daily-frame-cap">Daily screen inspection limit</label>
-              <input id="screen-share-daily-frame-cap" type="number" min="1" max="300" step="1"
-                value={settings.global.screenShareDailyFrameCap} disabled={saving}
-                onChange={(event) => update('global', 'screenShareDailyFrameCap', Number(event.target.value))} />
-              <p className="settings-explanation">Maximum screen frames sent to the vision model per UTC day (1–300).</p>
-            </div>
-            {typeof settings.global.maxCheckAttempts === 'number' && (
+            <div className="settings-grid">
               <div className="settings-field settings-number-field">
-                <label htmlFor="max-check-attempts">Check repair attempts</label>
-                <input id="max-check-attempts" type="number" min="0" max="10" step="1"
-                  value={settings.global.maxCheckAttempts} disabled={saving}
-                  onChange={(event) => update('global', 'maxCheckAttempts', Number(event.target.value))} />
+                <label htmlFor="max-parallel-tasks">Maximum parallel tasks</label>
+                <input id="max-parallel-tasks" type="number" min="1" max="100" step="1"
+                  value={settings.global.maxParallelTasks} disabled={saving}
+                  onChange={(event) => update('global', 'maxParallelTasks', Number(event.target.value))} />
+                <p className="settings-explanation">Choose a whole number from 1 to 100.</p>
               </div>
-            )}
-            {typeof settings.global.visionDailyBudgetUsd === 'number' && (
               <div className="settings-field settings-number-field">
-                <label htmlFor="vision-daily-budget">Daily watch budget (USD)</label>
-                <input id="vision-daily-budget" type="number" min="0" max="100" step="0.1"
-                  value={settings.global.visionDailyBudgetUsd} disabled={saving}
-                  onChange={(event) => update('global', 'visionDailyBudgetUsd', event.target.valueAsNumber)} />
+                <label htmlFor="screen-share-daily-frame-cap">Daily screen inspection limit</label>
+                <input id="screen-share-daily-frame-cap" type="number" min="1" max="300" step="1"
+                  value={settings.global.screenShareDailyFrameCap} disabled={saving}
+                  onChange={(event) => update('global', 'screenShareDailyFrameCap', Number(event.target.value))} />
+                <p className="settings-explanation">Maximum screen frames sent to the vision model per UTC day (1–300).</p>
               </div>
-            )}
+              {typeof settings.global.maxCheckAttempts === 'number' && (
+                <div className="settings-field settings-number-field">
+                  <label htmlFor="max-check-attempts">Check repair attempts</label>
+                  <input id="max-check-attempts" type="number" min="0" max="10" step="1"
+                    value={settings.global.maxCheckAttempts} disabled={saving}
+                    onChange={(event) => update('global', 'maxCheckAttempts', Number(event.target.value))} />
+                </div>
+              )}
+              {typeof settings.global.visionDailyBudgetUsd === 'number' && (
+                <div className="settings-field settings-number-field">
+                  <label htmlFor="vision-daily-budget">Daily watch budget (USD)</label>
+                  <input id="vision-daily-budget" type="number" min="0" max="100" step="0.1"
+                    value={settings.global.visionDailyBudgetUsd} disabled={saving}
+                    onChange={(event) => update('global', 'visionDailyBudgetUsd', event.target.valueAsNumber)} />
+                </div>
+              )}
+            </div>
           </CollapsibleSection>
 
           <CollapsibleSection storageKey="settings.credentials" headingId="credentials-heading" title="Credentials">

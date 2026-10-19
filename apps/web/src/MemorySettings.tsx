@@ -249,7 +249,7 @@ export function MemorySettings({ backendUrl, getAccessToken }: { backendUrl: str
                     <div className="memory-actions">
                       <button className="primary-button" type="button" disabled={busy !== '' || redacted || !draft.trim() || draft.trim() === current.text.trim()}
                         onClick={() => { void saveCorrection(); }}>{busy === 'saving' ? 'Saving…' : 'Save correction'}</button>
-                      <button className="secondary-button memory-forget" type="button" disabled={busy !== ''} onClick={() => setConfirmForget(true)}>Forget…</button>
+                      <button className="secondary-button danger-button" type="button" disabled={busy !== ''} onClick={() => setConfirmForget(true)}>Forget…</button>
                       <span className="memory-item-meta">{draft.length.toLocaleString()} / 2,000</span>
                     </div>
                     {notice && <p className="settings-feedback" role="status">{notice}</p>}

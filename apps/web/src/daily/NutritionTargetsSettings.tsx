@@ -144,7 +144,7 @@ export function NutritionTargetsSettings({ backendUrl, getAccessToken }: {
   }
 
   return (
-    <CollapsibleSection storageKey="settings.nutrition-targets" headingId="nutrition-targets-heading"
+    <CollapsibleSection storageKey="settings.nutrition-targets" id="nutrition-targets" headingId="nutrition-targets-heading"
       title="Nutrition targets" className="nutrition-targets"
       summary={view.status === 'ready' ? (view.state.missing.length > 0 ? 'Needs setup' : 'Configured') : undefined}>
       {view.status === 'loading' && (

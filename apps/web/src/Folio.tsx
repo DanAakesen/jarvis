@@ -248,7 +248,7 @@ export function FolioPane({ backendUrl, getAccessToken, open, onClose, refreshKe
                     ) : confirmDelete === item.id ? (
                       <div className="folio-confirm" role="group" aria-label={`Remove ${item.title}`}>
                         <span>Remove “{item.title}”?</span>
-                        <button className="secondary-button folio-danger" type="button" disabled={busy === item.id} onClick={() => { void confirmRemove(item); }}>Remove</button>
+                        <button className="secondary-button danger-button" type="button" disabled={busy === item.id} onClick={() => { void confirmRemove(item); }}>Remove</button>
                         <button className="secondary-button" type="button" onClick={() => setConfirmDelete(null)}>Keep</button>
                       </div>
                     ) : (

@@ -173,6 +173,20 @@ request, and every tab at 1440 px had equal padding. The data is synthetic.
 No live records, physical device or human review were involved, and the section
 tab focus rings were not re-inspected in this pass.
 
+## Tasks and Notes corrections (P14-20; 19 October 2026)
+
+Tasks now use the same en-GB 24-hour clock for due times and vault freshness;
+the source-note and task-results links reach 44px on coarse pointers. Notes
+search announces settled no-match queries without an empty results shell. Note
+body padding is balanced, popup titles clamp to two lines while retaining the
+full accessible/hover title, and the phone search count is visually clipped
+but remains a live status for assistive technology.
+
+Synthetic Chromium checks covered 320×640, 390×844, 768×1024 and 1440×900 in
+light and dark, with coarse-pointer checks at 390 and 768. Times, empty-search
+announcement, title/padding, placeholder width and touch-target heights were
+verified; no horizontal overflow or browser console errors were found.
+
 ## Field clearance (P12-40, 19 October 2026)
 
 A states pass over Daily (empty, loading and error at 390 and 1440 px) found one
@@ -355,6 +369,27 @@ voice session was used. Keyboard scrolling of wide generated tables remains
 open follow-up. Synthetic browser screenshots and emulation details are
 indexed in [`screenshots.md`](ui/p14-12/screenshots.md).
 
+## Settings defects (P14-18; 19 October 2026)
+
+The pass found undersized coarse-pointer controls, uneven Limits spacing,
+duplicate Custom instructions guidance, full-width single push actions,
+inconsistent destructive actions, and Settings hashes that did not reveal their
+sections. Limits now shares the Timeouts grid; the character counter retains the
+accessible limit description; destructive starts share `.danger-button`, with
+routine deletion confirmed before its request. Settings reveals the four known
+hash targets after loading, and Nutrition targets now has its link anchor.
+
+Before/after Chromium checks used the actual app with scratch-only auth and
+synthetic API fixtures at 320×640, 390×844, 768×1024 and 1440×900, in light and
+dark with coarse-pointer emulation. All five sliders measured 28→44px; the three
+swatches measured 34×34→44×44px. The push action measured 324→220px at 390px
+and 946→220px at 1440px.
+All four hashes opened and revealed their headings in 32 viewport/theme cases;
+unknown-hash behavior and routine Cancel/Escape/second-press behavior are covered
+by component tests. No browser errors or horizontal overflow were observed.
+Web lint, typecheck, all 1,809 web tests and build passed; the build retains its
+existing large-chunk warning. Captures and fixtures stay outside the repository.
+
 ## Surface coverage
 
 The audit covered the shared shell, desktop rail and mobile navigation, header
@@ -500,6 +535,29 @@ checks, not live-backend or human acceptance.
 - P14-12 adds a `prefers-reduced-motion` rule and a unit guard for the active
   voice-status glyph. A connected voice session was not run in Chromium.
 
+## Factory board and task window (P14-21; 19 October 2026)
+
+The QA pass found split clock metadata, indistinguishable destructive actions,
+inconsistent issue-title and card-action styles, a cramped project filter,
+wrapping usage cells, repeated filtered-empty messages, and undersized touch
+targets. The board now keeps clock metadata together, uses the shared danger,
+ghost and secondary button variants, displays the project name in a wider
+responsive filter track, and gives filtered-empty boards one clear-and-focus
+recovery action. Task-window usage cells stay unbroken in a horizontally
+scrollable table; the listed board controls meet the 44px coarse-pointer target.
+
+Scratch-only auth and synthetic API fixtures rendered the actual app in
+Chromium at 320×640, 390×844, 768×1024, 1024×768 and 1440×900, in light and
+dark. Checks covered the search recovery/focus return, destructive-button
+hierarchy in the board and task window, title hover/focus, filter fit, usage
+values and coarse-pointer targets at 390px. No 390px horizontal overflow or
+browser errors occurred. At 320px, the document measured 369px wide because
+synthetic release-bar repository/branch text extended beyond the viewport; that
+surface is outside this change. Local checks passed:
+`npm test --workspace @jarvis/web` (131 files, 1,803 tests),
+`npm run lint --workspace @jarvis/web`, and
+`npm run build --workspace @jarvis/web` (TypeScript and Vite build).
+
 ## Pass 3: responsive and overflow (18 October 2026; P14-05)
 
 ### Method and coverage
@@ -637,6 +695,33 @@ and after; overflow comes from the Kanban board's issue-list item, not from a
 button. The parallel P14-05 overflow sweep owns that non-button layout, so this
 button pass leaves it unchanged. Other checked pages had no new document-width
 increase.
+
+## Factory project and release surfaces (P14-22; 19 October 2026)
+
+The QA pass found the project-settings intro and completion policy, plus the
+release-page back link and repository/default-branch summary, sitting over the
+3D scene. The intro now sits in the Repository panel, the policy has its own
+settings panel, and the release header uses the shared translucent panel surface.
+Coarse-pointer release links now measure at least 44px, and task-bar, selected
+release and release-row labels consistently use `Build {version}` without
+altering a version that already begins with `v`.
+
+The four formerly bare lines use `--text-muted` (`#5c564f` light,
+`#c0ccd2` dark). Against the translucent panel surface, conservative WCAG
+contrast bounds are **5.52:1 light** and **9.09:1 dark**; these use the
+worst black/white scene-backdrop composite endpoints (92% light and 90% dark
+surface opacity). Both exceed 4.5:1.
+
+The actual app was checked in scratch Chromium with synthetic auth/API data.
+Before-state captures restored the original bare paragraph/fieldset/header;
+after-state captures covered 320×640, 390×844, 768×1024 and 1440×900 in both
+themes. Coarse-pointer emulation was enabled; the task release name/version and
+release record/workflow links measured at least 44px, all viewports stayed
+within their width, and the final routes had no fixture alerts or page errors.
+Local checks passed: `npm run lint --workspace @jarvis/web`
+(`--max-warnings 0`), `npx tsc --noEmit -p apps/web/tsconfig.json`,
+`npm test --workspace @jarvis/web` (131 files, 1,805 tests), and
+`npm run build --workspace @jarvis/web` (with the existing chunk-size warning).
 
 ## Pass 3 (borders, radii, surfaces)
 
@@ -808,3 +893,26 @@ Three “before” examples restore only the old responsive CSS rules over the s
 synthetic markup; the tall desktop “after” captures expose the sections' lower
 content. No change was made to the parallel Data or Briefs rebuilds, `DailyPage`,
 or `PLAN.md`.
+
+## Chat, composer, and generated-table correction (P14-19; 19 October 2026)
+
+The QA pass found the message time tag overlapping short bubbles on touch,
+unbalanced spacing above “Interrupted,” undersized coarse-pointer targets, and
+left-aligned numeric columns in generated tables. Touch metadata now follows
+message text, interrupted-label spacing is balanced, the task link and voice
+orb meet the 44px target, and wholly numeric columns use right alignment and
+tabular figures.
+
+Compared parent and current styles in a scratch Chromium fixture with synthetic
+messages and table rows at 320×640, 390×844, 768×1024, and 1440×900, in light
+and dark with coarse-pointer emulation. The timestamp no longer intersects short
+or long message text, numeric columns compute to right-aligned tabular figures
+while text remains left-aligned, and the interrupted label has 8px above and
+below. Task links measured 44px; the voice orb measured 48px on phone widths and
+44px at tablet/desktop widths. Composer height was unchanged at 390px and 768px.
+The stylesheet ratchet and all 131 web test files (1,804 tests), web lint with
+`--max-warnings 0`, and the web build/typecheck passed.
+
+Headless Chromium reported `hover:none` even with fine-pointer emulation. CDP
+forced the message `:hover` state and keyboard focus separately; both revealed
+the metadata. A physical fine-pointer device was not available.
