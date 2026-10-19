@@ -571,7 +571,7 @@ describe('SettingsPage', () => {
     await user.selectOptions(select, 'microsoft');
     await user.click(screen.getByRole('button', { name: 'Save settings' }));
 
-    expect(await screen.findByText(/Saved\./)).not.toBeNull();
+    expect(await screen.findByText('Saved')).not.toBeNull();
     expect(JSON.parse(String(fetchMock.mock.calls[1]![1]?.body))).toEqual({
       settings: { decisions: { provider: 'microsoft' } },
     });

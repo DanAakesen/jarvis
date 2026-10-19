@@ -141,7 +141,7 @@ export function TasksPanel({ id, backendUrl, getAccessToken, initialQuery = '', 
     {state === 'loading' && <Loader variant="rows" label="Loading tasks" />}
     {error && <div className="tasks-panel-error" role="alert">
       <p>{error}</p>
-      <button type="button" onClick={refresh}>Retry</button>
+      <button className="tasks-panel-retry" type="button" onClick={refresh}>Retry</button>
     </div>}
     {result?.truncated && <p className="tasks-panel-note" role="status">First {result.items.length} of {result.total}</p>}
     {result && !noMatches && <div className="tasks-panel-groups">

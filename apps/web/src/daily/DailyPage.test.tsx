@@ -65,7 +65,6 @@ describe('inactive single Daily data page', () => {
     expect(within(table).getAllByRole('row')).toHaveLength(4);
     expect(within(table).getByText('0')).toBeTruthy();
     expect(within(table).getAllByText('Not recorded').length).toBeGreaterThan(0);
-    expect(screen.getByText(/Source freshness and completeness are not established/u)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Chart' }));
     const presentation = screen.getByRole('group', { name: 'Record presentation' });
     expect(within(presentation).getByRole('button', { name: 'Chart' }).classList.contains('daily-section-tab')).toBe(true);

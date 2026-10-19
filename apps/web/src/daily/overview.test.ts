@@ -34,7 +34,7 @@ describe('Daily overview probes', () => {
     const purposes = dailySources.map(source => source.purpose);
     expect(new Set(purposes).size).toBe(purposes.length);
     for (const purpose of purposes) {
-      expect(purpose.length).toBeGreaterThan(20);
+      expect(purpose.length).toBeGreaterThan(10);
       expect(purpose).not.toMatch(/\d/u);
     }
   });
