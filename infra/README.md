@@ -54,6 +54,66 @@ If the App is not installed on the vault, Jarvis reports that indexing and
 writes are unavailable. The vault is private and was not accessible for live
 verification by the coding agent.
 
+## Vault mirror setup
+
+The mirror is opt-in and requires the core infrastructure to be deployed first.
+Before enabling it, install the existing GitHub App on the private vault
+repository with Contents read/write permission, set the non-secret repository
+variable `JARVIS_GITHUB_APP_ID`, and ensure the companion mirror image is
+available from `apps/vault-mirror/Dockerfile`. The job tolerates missing
+Key Vault secrets at deployment time; its credentials are read at run time.
+
+Install the [official Obsidian Headless CLI](https://github.com/obsidianmd/obsidian-headless)
+only to create the auth token, then run `ob login`. Do not run `ob sync-setup` or
+`ob sync` on a computer that runs desktop Obsidian Sync. The live Obsidian
+service and CLI behavior remain unverified against the live service.
+
+From the repository root in Windows PowerShell 5.1, sign in to the expected
+Azure subscription with `az` and authenticate `gh` to this repository, then
+run:
+
+```powershell
+& .\infra\setup-vault-mirror.ps1
+```
+
+The script asks for the vault name, optional encryption password, policy JSON
+and change caps. Enter the Obsidian token at the hidden prompt, or explicitly
+confirm reading the CLI's own token file. It sends credential values directly
+to Key Vault over HTTPS without writing them to disk, and confirms only secret
+presence and version. It temporarily grants the signed-in owner Key Vault
+Secrets Officer only if the exact-scope assignment is not already present,
+then removes only the assignment it created, including on failure. It sets the
+write-back repository variable to `dry-run` and stores the selected caps as
+non-secret repository variables; it never turns on the mirror switch. If an
+unencrypted vault no longer needs an old password secret, remove that old
+secret separately after confirming the vault's encryption state.
+
+After the setup script completes and the image Dockerfile is on `main`, set
+repository variable `JARVIS_VAULT_MIRROR_ENABLED` to `true` and manually
+dispatch **Deploy** from `main`. The workflow builds a digest-pinned image
+before enabling the Bicep resources. If the Dockerfile, image digest or
+non-secret App ID is unavailable, the log shows a notice and the core
+infrastructure deploys without creating/updating the mirror. Leave
+`JARVIS_VAULT_MIRROR_WRITE_BACK` as `dry-run` for initial runs.
+
+Review the Container Apps job's **Executions** history for completion, duration
+and failures. After the companion backend status reader is deployed, also review
+the authenticated Jarvis Status page for counts, outcomes and any bounded
+conflict paths. Note text and ordinary vault paths are never logged. Do not
+enable write-back until the initial dry runs are clean and the status indicates
+no unresolved conflicts or credential matches. To go live, set
+`JARVIS_VAULT_MIRROR_WRITE_BACK` to `on`, keep conservative caps in
+`JARVIS_VAULT_MIRROR_MAX_CHANGED` and `JARVIS_VAULT_MIRROR_MAX_DELETES`, then
+dispatch **Deploy** again.
+
+To stop the mirror, explicitly set `JARVIS_VAULT_MIRROR_ENABLED` to `false` and
+dispatch **Deploy** from `main`. The deployment deletes the scheduled
+job, its dedicated identity and that identity's role assignments. The private
+state/status containers remain in the existing storage account so the state
+can be recovered if the mirror is enabled again. Do not delete those containers
+unless the owner has separately backed up the state and approved permanent
+teardown.
+
 ## Google Calendar and Gmail setup
 
 After the approved core deployment, Dan creates an OAuth **Desktop app** client

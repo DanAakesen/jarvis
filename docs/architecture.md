@@ -1,5 +1,44 @@
 # Architecture
 
+## Azure vault mirror deployment (19 October 2026; P14-28)
+
+The optional `job-jarvis-vault-mirror` runs in the existing Container Apps
+environment every ten minutes, one replica at a time, with an eight-minute
+timeout and no retries. The deploy workflow builds `jarvis-vault-mirror` from
+the repository root only when `JARVIS_VAULT_MIRROR_ENABLED=true`; the job
+receives a digest-pinned image. If its Dockerfile, image digest or required
+non-secret GitHub App ID is unavailable, the workflow logs a notice and does not
+create or update mirror resources in that deployment. A previously deployed job
+is removed only when the repository switch is explicitly turned off. The Bicep
+switch defaults to false and its resource conditions also require a nonempty
+image.
+
+The job has its own user-assigned identity. It can pull from the existing
+registry, read Key Vault secrets at runtime through the SDK, and read/write only
+the `vault-mirror-state` and `vault-mirror-status` containers. It downloads and
+uploads its state archive in the state container and writes `status.json` to the
+status container. The job never uses Key Vault references. The backend reads
+the status through its existing account-level Storage Blob Data Contributor
+assignment; no new backend role is needed. Both containers are private and use
+the existing account's Entra-only access.
+
+The job gets only non-secret configuration from Bicep: Key Vault URI, its
+managed-identity client ID, GitHub App ID, storage URL, write-back mode and
+per-run file/deletion caps. Its runtime SDK reads `obsidian-auth-token`,
+`obsidian-vault`, optional `obsidian-vault-password`, `vault-mirror-policy` and
+the backend's `github-app-private-key` from Key Vault. The owner provisions the
+Obsidian token, vault name, optional encryption password and policy personally.
+`dry-run`, 25 changed files and 3 deletions are the defaults. The existing
+scheduled task on the owner's computer remains in place.
+
+The repository variable is the operational switch. An explicit false value
+followed by a manual Deploy removes the scheduled job, dedicated identity and
+their role assignments. The deployment retains the two private data containers
+so a later opt-in can recover its base state and status history; remove them
+only after a separately authorized backup/teardown. The status-page reader and
+runner implementation are separate contract consumers and are not provisioned
+by this infrastructure change.
+
 ## Shared web date-time formatting (19 October 2026; P14-23)
 
 `apps/web/src/format/date-time.ts` is the web client’s shared date-time
