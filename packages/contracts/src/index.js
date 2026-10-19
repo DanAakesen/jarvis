@@ -1,6 +1,6 @@
 export { dailyViewIds, dailyModuleId, dailyContractVersion } from './daily.js';
 export { dailyQuerySources, dailyQuerySourcesV1, dailyQuerySourcesV2, dailyQuerySourcesV3, dailyCapabilitiesVersion, dailyCapabilitiesAccept, dailyQuerySchema, isDailyQuery } from './daily.js';
-export { vaultMirrorStatusSchema } from './vault-mirror.js';
+export { vaultMirrorStatusSchema, vaultMirrorStatusViewSchema } from './vault-mirror.js';
 
 export const generatedViewVersion = 1;
 export const systemSmokeCheckIds = Object.freeze([

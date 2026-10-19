@@ -97,8 +97,15 @@ export const coreModule: BackendModule = {
     } } }, async (request, reply) => {
       if (!request.principal) return reply.code(401).send({ error: 'Unauthorized' });
       reply.header('Cache-Control', 'private, max-age=30');
-      const snapshot = await app.systemStatusReader.read();
-      return snapshot.smoke ? { ...snapshot, smoke: systemSmokeHttpResponse(snapshot.smoke) } : snapshot;
+      const [snapshot, vaultMirror] = await Promise.all([
+        app.systemStatusReader.read(),
+        app.vaultMirrorStatusReader?.readForStatus(),
+      ]);
+      return {
+        ...snapshot,
+        ...(vaultMirror ? { vaultMirror } : {}),
+        ...(snapshot.smoke ? { smoke: systemSmokeHttpResponse(snapshot.smoke) } : {}),
+      };
     });
     app.get('/status/smoke', {
       config: { jarvisDeploySmoke: true },

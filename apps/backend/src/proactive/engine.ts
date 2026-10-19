@@ -8,6 +8,8 @@ import type { ProactiveModel } from './model.js';
 import { sourceLabels, type FindingInput, type ProactiveStore } from './store.js';
 import { isQuietHour, monthKey } from './time.js';
 import type { Item, ProactiveSource, RunSummary, SourceFact, SourceId } from './types.js';
+import type { VaultMirrorStatusReader } from '../vault-mirror-status.js';
+import { vaultMirrorFinding } from './vault-mirror.js';
 
 export const RUN_DEADLINE_MS = 3 * 60_000;
 export const LEASE_HEARTBEAT_MS = 60_000;
@@ -60,6 +62,7 @@ export interface ProactiveEngineOptions {
   now: () => Date;
   logger?: { warn: (data: { runId: string; reason: string }, message: string) => void };
   onFindingsStored?: readonly ((context: FindingsStoredContext) => void | Promise<void>)[];
+  vaultMirrorStatusReader?: Pick<VaultMirrorStatusReader, 'read'>;
 }
 
 function abortable<T>(work: Promise<T>, signal: AbortSignal): Promise<T> {
@@ -192,9 +195,12 @@ export function createProactiveEngine(options: ProactiveEngineOptions) {
           state: result.state, reason: result.reason, observedAt: result.observedAt,
         }), controller.signal);
       }
+      const mirror = options.vaultMirrorStatusReader
+        ? vaultMirrorFinding(await abortable(options.vaultMirrorStatusReader.read(), controller.signal), now())
+        : undefined;
       if (!results.some((result) => result.state === 'ok')) {
         reason = 'no_sources';
-        return;
+        if (!mirror) return;
       }
       // Refs are local to this bundle, never a persistent identity.
       const facts: ReadFact[] = results.flatMap((result) => result.state === 'ok'
@@ -212,6 +218,7 @@ export function createProactiveEngine(options: ProactiveEngineOptions) {
         }),
         language, runId: run.id,
       }));
+      if (mirror) pending.push({ ...mirror, runId: run.id });
       if (facts.length > 0) {
         check();
         // Re-check the calendar month immediately before incurring model spend.

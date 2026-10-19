@@ -26,3 +26,15 @@ export const vaultMirrorStatusSchema = z.object({
   lastSuccessAt: timestamp.nullable(),
   conflictPaths: z.array(z.string().min(1).max(1024)).max(10),
 }).strict();
+
+export const vaultMirrorStatusViewSchema = z.object({
+  state: z.enum(['not-set-up', 'healthy', 'stale', 'needs-attention', 'failed', 'read-error']),
+  lastSuccessAt: timestamp.nullable(),
+  writeBack: vaultMirrorStatusSchema.shape.writeBack.optional(),
+  reason: vaultMirrorStatusSchema.shape.reason,
+  counts: vaultMirrorStatusSchema.pick({
+    approved: true, pushed: true, writtenBack: true, deleted: true, conflicts: true,
+    skipped: true, credentialMatches: true, pendingWriteBack: true, consecutiveFailures: true,
+  }).optional(),
+  conflictPaths: vaultMirrorStatusSchema.shape.conflictPaths.optional(),
+}).strict();

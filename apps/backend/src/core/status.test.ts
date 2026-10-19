@@ -1,4 +1,6 @@
 import { Writable } from 'node:stream';
+import { Readable } from 'node:stream';
+import type { BlobClient } from '@azure/storage-blob';
 import type { Contracts } from 'applicationinsights';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildApp } from '../app.js';
@@ -10,6 +12,7 @@ import { summarizeNowFeed } from './status.js';
 import { createSystemStatusReader } from '../system-status.js';
 import { isSystemSmokeStatus, systemSmokeCheckIds } from '@jarvis/contracts';
 import { createLogger } from '../logging.js';
+import { createVaultMirrorStatusReader } from '../vault-mirror-status.js';
 
 const config = { ...loadConfig({}), logLevel: 'silent' as const };
 const headers = {
@@ -59,6 +62,52 @@ afterEach(async () => {
 });
 
 describe('get_status_summary', () => {
+  it('exposes mirror paths only on authenticated HTTP status and refreshes outside the general cache', async () => {
+    let now = Date.parse('2026-10-19T12:00:00Z');
+    const download = vi.fn(async () => ({ readableStreamBody: Readable.from([JSON.stringify({
+      runId: 'private-run', startedAt: '2026-10-19T11:59:00Z', finishedAt: '2026-10-19T12:00:00Z',
+      outcome: 'needs-attention', reason: 'conflict', writeBack: 'dry-run',
+      approved: 1, pushed: 0, writtenBack: 0, deleted: 0, conflicts: 1, skipped: 0,
+      credentialMatches: 0, pendingWriteBack: 0, consecutiveFailures: 0,
+      lastSuccessAt: null, conflictPaths: ['private/note.md'],
+    })]) }));
+    const mirror = createVaultMirrorStatusReader({ download } as unknown as BlobClient, () => now);
+    const readForStatus = vi.spyOn(mirror, 'readForStatus');
+    const general = createSystemStatusReader({}, undefined, () => now);
+    const logs: string[] = [];
+    const logger = createLogger({ ...config, logLevel: 'info' }, undefined,
+      new Writable({ write(chunk, _encoding, done) { logs.push(String(chunk)); done(); } }));
+    const app = buildApp(config, logger, {
+      modules: [coreModule],
+      auth: async () => ({ objectId: config.auth.ownerObjectId, tenantId: config.auth.tenantId }),
+      systemStatusReader: general,
+      vaultMirrorStatusReader: mirror,
+      toolCallStore: { record: vi.fn(async () => {}) },
+      nowFeedStore: { read: async () => feed, dismiss: vi.fn(async () => true) },
+    });
+    apps.push(app);
+    expect((await app.inject({ url: '/status' })).statusCode).toBe(401);
+    expect(readForStatus).not.toHaveBeenCalled();
+    const first = await app.inject({ url: '/status', headers });
+    expect(first.statusCode).toBe(200);
+    expect(first.json().vaultMirror).toMatchObject({ state: 'needs-attention', conflictPaths: ['private/note.md'] });
+    expect(first.json().vaultMirror).not.toHaveProperty('runId');
+    const generalSnapshot = await general.read();
+    now += 30_001;
+    const second = await app.inject({ url: '/status', headers });
+    expect(second.statusCode).toBe(200);
+    expect(await general.read()).toBe(generalSnapshot);
+    expect(download).toHaveBeenCalledTimes(2);
+    expect(general.peek()).not.toHaveProperty('vaultMirror');
+    const tool = await app.inject({
+      method: 'POST', url: '/tools/get_status_summary', headers, payload: {},
+    });
+    expect(tool.statusCode).toBe(200);
+    expect(tool.body).not.toMatch(/vaultMirror|private\/note|private-run/u);
+    expect(JSON.stringify(await mirror.read())).not.toContain('private/note.md');
+    expect(logs.join('')).not.toMatch(/private\/note|private-run|conflictPaths/u);
+  });
+
   it('summarizes only bounded Now-feed counts without exposing feed contents', async () => {
     const read = vi.fn(async () => feed);
     const { app, record } = fixture({ read, dismiss: vi.fn(async () => true) });

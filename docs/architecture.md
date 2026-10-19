@@ -1,5 +1,34 @@
 # Architecture
 
+## Vault mirror status consumption (19 October 2026; P14-29)
+
+The backend reads private `vault-mirror-status/status.json` with its existing
+Azure storage credential, without provisioning containers or writing mirror
+state. The read has a five-second deadline, a 32 KiB limit, strict
+`vaultMirrorStatusSchema` validation and a single-flight 30-second cache that
+also covers missing/read-error results. Missing container/blob means not set
+up; malformed, oversized, timed-out or denied reads become a fixed read error.
+Neither raw documents nor exception details are logged or returned.
+
+Authenticated `GET /status` adds a reduced `vaultMirror` view independently of
+the general one-minute probe cache. It omits run identifiers and run timestamps.
+Conflict paths are confined to this owner response and the expanded web row;
+agent status tools, proactive facts and logs do not receive them. Contracts add
+`vaultMirrorStatusViewSchema` without changing the shared runner document.
+The web validates the view and ages healthy status locally after 30 minutes.
+A successful snapshot without the optional view means not set up, including
+during deployment skew. The disclosure stays mounted across the first load.
+
+The existing proactive engine uses a deterministic normal-urgency mirror
+finding with persistent Copenhagen-day/reason deduplication. It fires after
+one hour without success, immediately on needs-attention, or for failed/stale
+status with no success yet. Recent transient failures, absent and unreadable
+status stay quiet; findings are excluded from push delivery. Storing a mirror
+finding preserves `no_sources` when every source read fails, so the background
+job still reports the failed reads. Existing proactive
+scheduling/settings still apply; no new timer, flag, tool or migration is added.
+Azure/Obsidian behavior is **not yet verified against the live service**.
+
 ## Azure vault mirror deployment (19 October 2026; P14-28)
 
 The optional `job-jarvis-vault-mirror` runs in the existing Container Apps

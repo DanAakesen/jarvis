@@ -6,7 +6,8 @@ import type {
   SystemSmokeCheckId,
   SystemSmokeStatus,
 } from '@jarvis/contracts';
-import { systemSmokeCheckIds } from '@jarvis/contracts';
+import { systemSmokeCheckIds, vaultMirrorStatusViewSchema } from '@jarvis/contracts';
+import { z } from 'zod';
 
 export type SystemStatusResult = Pick<SystemStatusEntry, 'status' | 'details'> & { reason?: string };
 
@@ -165,6 +166,7 @@ export function systemSmokeHttpResponse(report: SystemSmokeStatus): SystemSmokeS
 export const systemStatusResponseSchema = {
   type: 'object',
   properties: {
+    vaultMirror: z.toJSONSchema(vaultMirrorStatusViewSchema),
     checkedAt: { type: 'string', format: 'date-time' },
     smoke: {
       type: 'object',

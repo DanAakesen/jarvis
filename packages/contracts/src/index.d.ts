@@ -22,6 +22,16 @@ export interface VaultMirrorStatus {
   conflictPaths: string[];
 }
 export const vaultMirrorStatusSchema: ZodType<VaultMirrorStatus>;
+export interface VaultMirrorStatusView {
+  state: 'not-set-up' | 'healthy' | 'stale' | 'needs-attention' | 'failed' | 'read-error';
+  lastSuccessAt: string | null;
+  writeBack?: VaultMirrorStatus['writeBack'];
+  reason?: VaultMirrorStatus['reason'];
+  counts?: Pick<VaultMirrorStatus, 'approved' | 'pushed' | 'writtenBack' | 'deleted' | 'conflicts'
+    | 'skipped' | 'credentialMatches' | 'pendingWriteBack' | 'consecutiveFailures'>;
+  conflictPaths?: string[];
+}
+export const vaultMirrorStatusViewSchema: ZodType<VaultMirrorStatusView>;
 
 /** Reserved IDs only; native Daily renderers are implemented in P12-16. */
 export const dailyViewIds: Readonly<{
@@ -882,6 +892,7 @@ export interface SystemStatus {
   checkedAt: string;
   entries: readonly SystemStatusEntry[];
   smoke?: SystemSmokeStatus;
+  vaultMirror?: VaultMirrorStatusView;
 }
 export interface SystemHealthComponent {
   id: string;
