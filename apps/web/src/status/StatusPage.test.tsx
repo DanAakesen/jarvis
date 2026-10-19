@@ -54,6 +54,17 @@ describe('Status page', () => {
     }));
   });
 
+  it('keeps the page intro the only top-level snapshot so the smoke timestamp is not styled as a panel', async () => {
+    const view = render(<StatusPage backendUrl="https://api.example.com/" getAccessToken={getAccessToken} />);
+    await screen.findByRole('listitem', { name: 'GitHub App' });
+    expect(view.container.querySelectorAll('.system-status-snapshot')).toHaveLength(2);
+    const [intro] = Array.from(view.container.querySelectorAll('.status-page > .system-status-snapshot'));
+    expect(view.container.querySelectorAll('.status-page > .system-status-snapshot')).toHaveLength(1);
+    expect(intro?.textContent).toContain('Backend responded with a status snapshot');
+    const smoke = screen.getByRole('heading', { name: 'Recorded smoke check' }).closest('.system-status-panel');
+    expect(smoke?.querySelectorAll(':scope > .system-status-snapshot')).toHaveLength(1);
+  });
+
   it.each([
     { connected: false, text: 'Disconnected at check time.' },
     { connected: null, text: 'Connection state was not reported.' },
