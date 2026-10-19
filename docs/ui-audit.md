@@ -32,10 +32,10 @@ neither open nor scroll to their section.
 | Task | Defects |
 | --- | --- |
 | P14-14 | A29 to A34, A36 to A38, A40, A42 (Proactive, Usage, Status, 404, overlays) |
-| P14-15 | A16 (Routines button class), A44 to A47, A50 (Settings and task window) |
+| P14-15 | A44 to A47, A50 (Settings and task window) |
 | P14-16 | A1, A35 (top bar at 320px, mobile menu) |
 | P14-17 | A22, A49 (state messages and skeleton loaders) |
-| P14-18 | A7, A13 to A16, A48 (Settings) |
+| P14-18 | A7, A13 to A16 (the whole destructive-button change, including Routines Delete), A48 (Settings) |
 | P14-19 | A2, A3, A8, A43 (chat and composer) |
 | P14-20 | A5, A6, A9 to A12 (Tasks and Notes) |
 | P14-21 | A17 to A21, A23 to A25 (Factory board and task window) |
