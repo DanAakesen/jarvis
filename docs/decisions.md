@@ -1,5 +1,21 @@
 # Decisions
 
+## P14-25 — Recognize every high-priority task marker and surface undated tasks (19 October 2026; #1074)
+
+Treat `🔺`, `⏫`, `[priority:: highest]`, `[priority:: high]`, and their
+parenthesized forms as high priority, case-insensitively with flexible spacing.
+Keep the legacy `priority:: P1 - High` form. `🔼`, `🔽`, `⏬`, medium, low,
+lowest, plain prose and missing priority remain normal. The shared todo parser
+strips these markers from displayed task text; the existing two-level
+high/normal contract stays unchanged.
+
+For open high-priority tasks without a due date, create one deterministic digest
+finding per Copenhagen day and unchanged normalized task set, listing the count
+and up to five titles. Use the existing `todo` category with `normal` urgency and
+no due time: it fits a task digest, remains outside the time-critical alert
+mapping, and requires no schema migration. The digest is deterministic and adds
+no model call; reminder rules and deadline alerts are unchanged.
+
 ## P14-15 — Nested section titles wrap, the save row has no frame, touch targets in the task window (19 October 2026)
 
 The whole-app pass found five small CSS defects in Settings and the task window

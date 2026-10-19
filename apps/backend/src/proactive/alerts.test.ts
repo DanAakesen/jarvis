@@ -161,7 +161,12 @@ describe('proactive alert hook', () => {
     const tiedFirstKey = await saveFinding(fixture.store, 'a', 'deadline', { dueAt: '2026-10-20T09:00:00.000Z', language: 'da' });
     const modelCategory = await saveFinding(fixture.store, 'model', 'prep', { dueAt: '2026-10-20T07:00:00.000Z' });
     const normalUrgency = await saveFinding(fixture.store, 'normal', 'deadline', { urgency: 'normal' });
-    await fixture.hook(contextFor([noDue, tiedLaterKey, tiedFirstKey, modelCategory, normalUrgency], { trigger: 'catchup' }));
+    const undatedDigest = await saveFinding(fixture.store, 'digest', 'todo', {
+      urgency: 'normal', dueAt: null,
+    });
+    await fixture.hook(contextFor([
+      noDue, tiedLaterKey, tiedFirstKey, modelCategory, normalUrgency, undatedDigest,
+    ], { trigger: 'catchup' }));
 
     expect(fixture.send).toHaveBeenCalledOnce();
     expect(fixture.send).toHaveBeenCalledWith({
@@ -172,6 +177,7 @@ describe('proactive alert hook', () => {
     expect(await fixture.ledger.get(proactiveAlertKey('travel_disruption', 'd'))).toMatchObject({ status: 'sent' });
     expect(await fixture.ledger.get(proactiveAlertKey('deadline_24h', 'model'))).toBeUndefined();
     expect(await fixture.ledger.get(proactiveAlertKey('deadline_24h', 'normal'))).toBeUndefined();
+    expect(await fixture.ledger.get(proactiveAlertKey('deadline_24h', 'digest'))).toBeUndefined();
     expect(fixture.pushStore.updateItemDelivery).toHaveBeenCalledTimes(3);
     expect(fixture.pushStore.updateItemDelivery).toHaveBeenCalledWith(tiedFirstKey.id, 'accepted', 202);
     expect(fixture.pushStore.updateItemDelivery).toHaveBeenCalledWith(tiedLaterKey.id, 'accepted', 202);

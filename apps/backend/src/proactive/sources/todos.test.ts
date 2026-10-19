@@ -64,20 +64,22 @@ describe('proactive todos source', () => {
     expect(done).toMatchObject({ state: 'ok', facts: [] });
   });
 
-  it('returns notification facts only for open P1 - High tasks', async () => {
+  it('returns notification facts only for open high-priority tasks', async () => {
     const content = [
       '- [ ] Highest [priority:: P1 - High] 📅 2026-10-21 14:00',
+      '- [ ] Plugin highest 🔺 📅 2026-10-21 15:00',
       '- [ ] Lower [priority:: P2 - Medium] 📅 2026-10-21 14:00',
       '- [ ] Unprioritized 📅 2026-10-21 14:00',
       '- [x] Completed [priority:: P1 - High] 📅 2026-10-21 14:00',
     ].join('\n');
     const result = await createTodosSource(vault(content)).read(context());
 
-    expect(result.facts).toHaveLength(1);
-    expect(result.facts[0]).toMatchObject({
-      ref: 'todo:1',
+    expect(result.facts).toHaveLength(2);
+    expect(result.facts.map(({ text }) => text)).toEqual(['Highest', 'Plugin highest']);
+    expect(result.facts[1]).toMatchObject({
+      ref: 'todo:2',
       kind: 'todo',
-      text: 'Highest',
+      text: 'Plugin highest',
     });
   });
 

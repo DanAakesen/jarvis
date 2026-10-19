@@ -61,8 +61,8 @@ function planned(text: string, dueAt: Date, overrides: Partial<PlannedReminder> 
   };
 }
 
-function todoText(text: string, dueAt: Date): string {
-  return `- [ ] ${text} 📅 ${dayKey(dueAt)} ${localTimeLabel(dueAt)} [priority:: P1 - High]`;
+function todoText(text: string, dueAt: Date, priority = '[priority:: P1 - High]'): string {
+  return `- [ ] ${text} 📅 ${dayKey(dueAt)} ${localTimeLabel(dueAt)} ${priority}`;
 }
 
 function fixture(options: {
@@ -314,7 +314,7 @@ describe('todo reminder ticker', () => {
       'Personal/Inbox.md': [
         '- [ ] Synthetic lower 🕒 14:00 🔼 📅 2031-04-09',
         '- [ ] Synthetic normal 🕒 14:00 📅 2031-04-09',
-        '- [ ] Synthetic outside scale 🕒 14:00 🔺 📅 2031-04-09',
+        '- [ ] Synthetic low 🕒 14:00 🔽 📅 2031-04-09',
         '- [x] Synthetic completed 🕒 14:00 ⏫ 📅 2031-04-09',
       ].join('\n'),
       'Work/Archive/Old.md': '- [ ] Synthetic archived 🕒 14:00 ⏫ 📅 2031-04-09',
@@ -446,7 +446,7 @@ describe('todo reminder ticker', () => {
     });
     const dueAt = new Date(NOW.getTime() + 30 * 60_000);
     const row = planned('Synthetic item title', dueAt);
-    current.setContent(todoText(row.title, dueAt));
+    current.setContent(todoText(row.title, dueAt, '🔺'));
     await startWith(current, [row]);
     current.setNow(new Date(NOW.getTime() + 1));
     await current.ticker.tick();
