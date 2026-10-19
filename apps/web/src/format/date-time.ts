@@ -15,6 +15,11 @@ function utcDateAt(year: number, month: number, day: number, hour: number, minut
   return date;
 }
 
+function validCalendarDate(year: number, month: number, day: number): boolean {
+  const date = utcDateAt(year, month, day, 12);
+  return date.getUTCFullYear() === year && date.getUTCMonth() + 1 === month && date.getUTCDate() === day;
+}
+
 function parsedDate(value: DateTimeValue, timeZone?: string): Date | null {
   if (value == null) return null;
   if (value instanceof Date) return Number.isFinite(value.getTime()) ? value : null;
@@ -25,8 +30,8 @@ function parsedDate(value: DateTimeValue, timeZone?: string): Date | null {
     const year = Number(yearText);
     const month = Number(monthText);
     const day = Number(dayText);
+    if (!validCalendarDate(year, month, day)) return null;
     const utcDate = utcDateAt(year, month, day, 12);
-    if (utcDate.getUTCFullYear() !== year || utcDate.getUTCMonth() + 1 !== month || utcDate.getUTCDate() !== day) return null;
     if (!timeZone) {
       const localDate = new Date(0);
       localDate.setFullYear(year, month - 1, day);
@@ -48,6 +53,11 @@ function parsedDate(value: DateTimeValue, timeZone?: string): Date | null {
       candidate += adjustment;
     }
     return new Date(candidate);
+  }
+
+  const isoTimestamp = /^(\d{4})-(\d{2})-(\d{2})T/u.exec(value);
+  if (isoTimestamp && !validCalendarDate(Number(isoTimestamp[1]), Number(isoTimestamp[2]), Number(isoTimestamp[3]))) {
+    return null;
   }
 
   const date = new Date(value);

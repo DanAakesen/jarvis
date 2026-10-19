@@ -21,6 +21,7 @@ describe('shared date and time formatting', () => {
     expect(formatDateTime(null)).toBe('—');
     expect(formatDateOnly(undefined)).toBe('—');
     expect(formatTimeOnly('2026-02-30')).toBe('—');
+    expect(formatDateTime('2026-02-30T00:00:00Z', { timeZone: 'UTC' })).toBe('—');
     expect(formatDateTime('not-a-date')).toBe('—');
     expect(formatDateTime('2026-10-19T06:30:00Z', { timeZone: 'not-a-zone' })).toBe('—');
   });
