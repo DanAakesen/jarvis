@@ -333,7 +333,7 @@ function semanticPairings(): Pairing[] {
   const pairings: Pairing[] = [
     ...([
       { label: 'Kanban page helper and link text', foreground: 'var(--text)', surface: '--surface-translucent', sample: 'body' },
-      { label: 'Kanban live status and caption', foreground: 'var(--text-muted)', surface: '--surface-translucent', sample: 'muted' },
+      { label: 'Kanban board strip connection notice', foreground: 'var(--error)', surface: '--board-slab', sample: 'body' },
       { label: 'Kanban empty-state copy', foreground: 'var(--text)', surface: '--board-slab', sample: 'body' },
       { label: 'Kanban empty-state detail and caption', foreground: 'var(--text-muted)', surface: '--board-slab', sample: 'muted' },
     ] as const).map(({ label, foreground, surface, sample }) => ({
@@ -437,17 +437,17 @@ describe('app-wide theme contrast audit', () => {
       .every(({ allowlistReason }) => Boolean(allowlistReason?.trim()))).toBe(true);
   });
 
-  it('keeps Kanban helper, live-status and empty-state text on measured glass surfaces', () => {
+  it('keeps Kanban helper, board-strip and empty-state text on measured glass surfaces', () => {
     expect(declaration(source, '.kanban-page > .tasks-help', 'background'))
       .toBe('var(--surface-translucent)');
-    expect(declaration(source, '.kanban-page > .kanban-live-status', 'background'))
-      .toBe('var(--surface-translucent)');
+    expect(declaration(source, '.kanban-strip', 'background')).toBe('var(--board-slab)');
     expect(declaration(source, '.kanban-column', 'background')).toBe('var(--board-slab)');
-    expect(declaration(source, '.task-live-status', 'color')).toBe('var(--text-muted)');
+    expect(declaration(source, '.kanban-connection-issue', 'color')).toBe('var(--error)');
+    expect(declaration(source, '.kanban-refresh', 'color')).toBe('var(--text)');
     expect(declaration(source, '.kanban-column .task-column-empty', 'color')).toBe('var(--text-muted)');
     const tasksPage = readFileSync('src/factory/TasksPage.tsx', 'utf8');
-    expect(tasksPage).toContain('<p className="tasks-help">');
-    expect(tasksPage).toContain('className="task-live-status kanban-live-status"');
+    expect(tasksPage).toContain('className="kanban-strip"');
+    expect(tasksPage).toContain('className="kanban-connection-issue"');
     expect(tasksPage).toContain('className="task-column-empty"');
   });
 

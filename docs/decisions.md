@@ -83,6 +83,106 @@ The official package README and bundled source inspected were npm
 research. No Obsidian credential, password, policy or vault content is included
 in source or fixtures.
 
+## P14-28 — Opt-in Azure vault mirror deployment (19 October 2026; #1080)
+
+Deploy `job-jarvis-vault-mirror` in the existing Container Apps environment on
+the ten-minute schedule, with one replica, one completion, no retries, an
+eight-minute timeout, 0.5 vCPU and 1 GiB memory. The small 2:1 memory/CPU
+allocation is a starting point for the Node process and the contract's 200 MiB
+state-archive limit; it is not a live workload benchmark. The Bicep switch
+defaults off, and the deployment requires both the repository opt-in and a
+digest-pinned image before it creates the job, identity, roles or containers.
+The deploy flow skips visibly when the Dockerfile, image digest or required
+non-secret App ID is unavailable; that does not block the core infrastructure
+deployment.
+
+Use a dedicated user-assigned identity with exactly `AcrPull` on the registry,
+`Key Vault Secrets User` on the vault, and `Storage Blob Data Contributor`
+scoped separately to `vault-mirror-state` and `vault-mirror-status`. Both
+containers are private. The backend already has account-scoped Storage Blob
+Data Contributor on this storage account, so it can read the status container
+without another role assignment. The job reads secrets through the SDK at run
+time, so absent owner-provisioned secrets do not affect infrastructure
+deployment. Setting the repository switch explicitly false and manually
+dispatching Deploy deletes the job, dedicated identity and its role assignments;
+it retains the private data containers to preserve state and status for
+recovery. A separate authorized backup/teardown
+is required before deleting those containers.
+
+Keep write-back at `dry-run`, with defaults of 25 changed files and 3 deletes.
+These values are non-secret repository variables and Bicep parameters; the
+owner changes write-back only after reviewing dry-run execution history and
+status. The setup script never changes the enable switch and initializes
+write-back to `dry-run`.
+
+Cost estimate assumptions for one 30-day month: 4,320 scheduled runs; 0.5 vCPU
+and 1 GiB per run; a 120-second expected run (and 480-second configured ceiling);
+one state read and two data writes plus two lease operations per run; one 200 MiB
+state archive plus negligible status data. At the estimated active rates of
+$0.000024/vCPU-second and $0.000003/GiB-second, compute is about $7.78/month
+before grants and $2.38 after the monthly 180,000 vCPU-second and 360,000
+GiB-second grants are fully available. At the full eight-minute ceiling, the
+corresponding figures are about $31.10 before grants and $25.70 after grants.
+The grants are shared across the subscription, not reserved for this job.
+
+The assumed Hot LRS storage rate is $0.020/GiB-month, or about $0.004/month for
+200 MiB. Assuming $0.004 per 10,000 reads and $0.05 per 10,000 writes, 4,320
+reads and 17,280 writes/lease requests cost about $0.09/month. Add this to the
+compute figures above: about $2.47 expected monthly total if all grants remain,
+$7.87 if none remain; at the eight-minute ceiling, about $25.80 with grants or
+$31.20 without. The run time, archive size, request counts, Sweden
+Central compute/storage/transaction prices, and grant remaining balance are
+assumptions or estimates not verified against the live subscription or current
+regional price sheet; ACR build/storage, Key Vault calls, logging, egress and
+taxes are also excluded. Microsoft documents the Consumption free grants in
+[Container Apps billing](https://learn.microsoft.com/en-us/azure/container-apps/billing);
+the approximate rates here are explicitly unverified.
+
+The shared Azure vault-mirror contract is unchanged. The runner and status-page
+reader are separate contract consumers; this decision covers their Azure
+hosting and owner setup only. The Obsidian CLI is open beta and its live-service
+behavior is not yet verified against the live service.
+
+## P14-32 — Kanban is silent when it works: one board strip, a bare refresh icon, a small red notice on failure (19 October 2026; #1085)
+
+The owner asked for the Kanban status text to go and called always-on “all is
+well” lines a trend to avoid. While the board works the page now shows no
+repository line, no fetch time and no “connected” message. Only a fault shows,
+as a small red dot with “Board not connected”, and the detail (failed refresh,
+cached board, GitHub unavailable, last fetched time) sits in its tooltip and
+the screen-reader text, so the words, not the colour, carry the meaning. A
+failed refresh with a board already loaded shows only that notice, and the
+refresh icon is the retry path; the full error with “Retry board” appears only
+when there is no board to keep. The header lost its Refresh board button. A
+slim glass strip directly above the
+board holds a bare refresh icon (no fill, border or shadow in any state, like
+the composer send icon; it spins and is named “Refreshing board…” while a read
+is pending) with Create project and Create task. The filter form reflows by the
+width of the board rather than the viewport (5, 4, 2, then 1 column), which
+fixes fields running past the right edge. The repository link and the
+“closed in the last 14 days” line left with the status lines; the Done toggle
+keeps the 14-day wording as a tooltip. The trade-off is that freshness and the
+live channel are no longer visible at a glance; they surface when something is
+wrong. The live-status line that P14-12 measured on `--surface-translucent` no
+longer exists; the strip uses the same surface (`--board-slab`) and the red
+notice is part of the contrast audit.
+
+## P14-32 — The composer is quiet: no hover rim, a slim focus rim, a bare send icon (19 October 2026; #1085)
+
+The owner asked for three changes to the composer, directly. Hovering it no
+longer starts the rim sweep or the pointer glow, and the resting idle lap is
+unchanged. Focus is slim again: the solid 2px focus-colour ring that P14-04
+added on 18 October is gone, and the focus sweep is back to a 2px rim (P14-10
+had doubled it to 4px), so typing shows one thin travelling light as the design
+always intended. Under reduced motion the same 2px rim is steady. This reverses
+those two choices for the composer only; other controls keep the shared 3px
+focus outline. The send action is a bare arrow icon with no
+fill, border or shadow in any state: hover warms it to the focus colour and
+lifts it 2px, press settles it, disabled dims it. It keeps a 36px target (44px
+on coarse pointers), the “Send” name and a visible keyboard focus outline, and
+it no longer aliases the shared primary button. This is a scoped exception to the
+shared primary alias rule for this one control.
+
 ## P14-26 — Pure vault mirror policy, reconcile and status contract (19 October 2026; #1077)
 
 Implement only the offline decision boundary in `apps/vault-mirror`, not a
