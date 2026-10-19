@@ -3671,8 +3671,12 @@ The same response adds optional per-node `openTaskCount`, top-level
 `GET /vault/tasks`; only open items are counted, and no task text is returned.
 Counts are recomputed against the task scanner's existing file/byte bounds on each
 graph request. A scan cap or open-task path outside the capped graph marks the
-figure partial; the map remains available. Older clients can ignore the additive
-fields, and the web reader treats them as optional.
+`taskCountsPartial` flag; the map remains available. The field stays in the
+additive API contract, but the web legend does not render it as text. The legend
+count means notes on the current map with open tasks; when no count is available,
+it shows an em dash, disables the toggle and explains that task marks are
+unavailable right now. Older clients can ignore the additive fields, and the web
+reader treats them as optional.
 
 Search uses the vault's existing vector-first, term-fallback retrieval and maps
 up to eight unique results to graph node IDs. The `show_knowledge` chat/voice
