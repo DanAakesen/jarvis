@@ -5,14 +5,14 @@ import { describe, expect, it } from 'vitest';
 import { createObsidianClient } from '../src/runner/obsidian.js';
 
 describe('Obsidian CLI configuration', () => {
-  it('uses argv ordering and stores no synced attachments or config categories', async () => {
+  it('uses argv ordering, ignores unsafe config entries, and stores no synced categories', async () => {
     const root = await mkdtemp(join(tmpdir(), 'ob-configuration-test-'));
     const workingCopy = resolve(root, 'working-copy');
     const configHome = resolve(root, 'state');
     const executable = resolve(root, 'fake-ob');
     await mkdir(workingCopy);
     const source = `#!/usr/bin/env node
-import { mkdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync, existsSync, symlinkSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 const args = process.argv.slice(2);
 const callsPath = join(process.cwd(), 'calls.json');
@@ -25,6 +25,10 @@ const configPath = join(process.env.XDG_CONFIG_HOME, 'obsidian-headless', 'sync'
 if (args[0] === 'sync-setup') {
   mkdirSync(resolve(configPath, '..'), { recursive: true });
   writeFileSync(configPath, JSON.stringify({ vaultId: 'synthetic-vault', vaultPath: value('--path') }));
+  const syncRoot = resolve(configPath, '..', '..');
+  mkdirSync(join(syncRoot, 'linked'), { recursive: true });
+  symlinkSync(configPath, join(syncRoot, 'linked', 'config.json'));
+  mkdirSync(join(syncRoot, 'non-regular', 'config.json'), { recursive: true });
 } else if (args[0] === 'sync-config') {
   const config = JSON.parse(readFileSync(configPath, 'utf8'));
   config.syncMode = value('--mode') === 'bidirectional' ? undefined : value('--mode');

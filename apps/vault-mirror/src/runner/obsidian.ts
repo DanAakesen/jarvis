@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { spawn } from 'node:child_process';
-import { lstat, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises';
+import { constants } from 'node:fs';
+import { lstat, open, readdir, rename, rm, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 
 export type ObReason = 'auth' | 'pull-failed' | 'upload-failed' | 'timeout';
@@ -24,6 +25,24 @@ export interface ObOptions {
 
 const outputLimit = 32 * 1024;
 const graceMs = 1_000;
+
+async function readRegularFile(path: string): Promise<string | undefined> {
+  if (constants.O_NOFOLLOW === undefined) {
+    const info = await lstat(path);
+    if (info.isSymbolicLink() || !info.isFile()) return undefined;
+  }
+  let file: Awaited<ReturnType<typeof open>> | undefined;
+  try {
+    file = await open(path, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0));
+    if (!(await file.stat()).isFile()) return undefined;
+    return await file.readFile({ encoding: 'utf8' });
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ELOOP') return undefined;
+    throw error;
+  } finally {
+    await file?.close();
+  }
+}
 
 function classify(text: string, timeout: boolean, operation: 'setup' | 'pull' | 'upload'): ObReason {
   if (timeout) return 'timeout';
@@ -135,15 +154,17 @@ export function createObsidianClient(options: ObOptions) {
         .filter(entry => entry.isDirectory() && !entry.isSymbolicLink())
         .map(async entry => {
           const configPath = resolve(syncRoot, entry.name, 'config.json');
-          const info = await lstat(configPath);
-          if (!info.isFile() || info.isSymbolicLink()) return undefined;
-          const config = JSON.parse(await readFile(configPath, 'utf8')) as { vaultPath?: unknown };
+          const content = await readRegularFile(configPath);
+          if (content === undefined) return undefined;
+          const config = JSON.parse(content) as { vaultPath?: unknown };
           return config.vaultPath === path ? configPath : undefined;
         }));
       const matches = configs.filter((configPath): configPath is string => configPath !== undefined);
       if (matches.length !== 1) throw new TypeError();
       const configPath = matches[0]!;
-      const config = JSON.parse(await readFile(configPath, 'utf8')) as Record<string, unknown>;
+      const content = await readRegularFile(configPath);
+      if (content === undefined) throw new TypeError();
+      const config = JSON.parse(content) as Record<string, unknown>;
       if (config.vaultPath !== path) throw new TypeError();
       config.allowTypes = [];
       const temporary = resolve(dirname(configPath), `.config-${randomUUID()}`);
