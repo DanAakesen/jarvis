@@ -94,6 +94,7 @@ const events = new Set([
   'factory.issue_create_outcome_uncertain',
   'factory.board_phase', 'factory.board_read_timing', 'factory.board_invalidated',
   'system.smoke_check',
+  'proactive.reminder_plan',
   'phone.call_callback_processed', 'phone.incoming_call_rejected', 'phone.session_started',
 ]);
 
@@ -318,6 +319,27 @@ function safeFields(input: Record<string, unknown>): Record<string, unknown> {
         /^[\da-f]{8}-(?:[\da-f]{4}-){3}[\da-f]{12}$/iu.test(id)).slice(0, 20);
       if (itemIds.length > 0) fields.itemIds = itemIds;
     }
+    if (typeof input.count === 'number' && Number.isInteger(input.count) && input.count >= 0 && input.count <= 100) {
+      fields.count = input.count;
+    }
+    if (typeof input.durationMs === 'number' && Number.isFinite(input.durationMs) &&
+        input.durationMs >= 0 && input.durationMs <= 180_000) fields.durationMs = input.durationMs;
+    return fields;
+  }
+  if (input.msg === 'proactive.reminder_plan') {
+    const fields: Record<string, unknown> = {};
+    if (input.runId === null ||
+        (typeof input.runId === 'string' && /^[\da-f]{8}-(?:[\da-f]{4}-){3}[\da-f]{12}$/iu.test(input.runId))) {
+      fields.runId = input.runId;
+    }
+    const reasons = new Set([
+      'aborted', 'paused', 'todos_unavailable', 'planned', 'plan_cap', 'planner_failed',
+      'vault_push_planner_unconfigured', 'vault_push_trigger_failed', 'vault_push_quiet_hours',
+      'vault_push_paused', 'vault_push_todos_disabled', 'vault_push_todos_unavailable',
+      'vault_push_plan_cap', 'vault_push_planned', 'vault_push_no_new_rows',
+      'vault_push_timeout', 'vault_push_aborted', 'vault_push_failed',
+    ]);
+    if (typeof input.reason === 'string' && reasons.has(input.reason)) fields.reason = input.reason;
     if (typeof input.count === 'number' && Number.isInteger(input.count) && input.count >= 0 && input.count <= 100) {
       fields.count = input.count;
     }

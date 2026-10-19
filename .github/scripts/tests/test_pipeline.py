@@ -64,6 +64,27 @@ class ImpactTests(unittest.TestCase):
         self.assertEqual({key for key, value in selection(["apps/web/src/App.tsx"]).items()
                           if value}, {"web", "python"})
 
+    def test_vault_mirror_changes_select_only_mirror_and_python(self):
+        for path in ("apps/vault-mirror/src/index.ts", "apps/vault-mirror/package.json",
+                     "apps/vault-mirror/tsconfig.json"):
+            with self.subTest(path=path):
+                self.assertEqual({key for key, value in selection([path]).items() if value},
+                                 {"vault-mirror", "python"})
+
+    def test_shared_node_inputs_qualify_vault_mirror(self):
+        for path in ("package.json", "package-lock.json", "tsconfig.base.json", ".nvmrc",
+                     "packages/contracts/src/status.js"):
+            with self.subTest(path=path):
+                self.assertTrue(selection([path])["vault-mirror"])
+        self.assertTrue(selection(None)["vault-mirror"])
+
+    def test_vault_mirror_has_no_deployment_or_existing_application_inputs(self):
+        self.assertEqual(PARTS, ("infra", "backend", "web", "agent"))
+        for path in ("apps/vault-mirror/src/index.ts", "apps/vault-mirror/package.json",
+                     ".github/workflows/vault-mirror-ci.yml"):
+            with self.subTest(path=path):
+                self.assertEqual(deploy_parts(path), set())
+
     def test_shared_unknown_and_missing_base_fail_conservatively(self):
         for paths in (None, ["new-runtime/config"], [".github/workflows/ci.yml"],
                       [".github/scripts/pipeline_impact.py"]):
@@ -104,6 +125,10 @@ class ImpactTests(unittest.TestCase):
         infra = values([*records[:2], records[2].replace("c" * 40, "d" * 40)])
         self.assertTrue(all(initial[part] != infra[part] for part in PARTS))
         self.assertEqual(initial, values(records, workflow=recipe + "\n  smoke:\n    run: changed"))
+        self.assertEqual(initial, values([
+            *records, "100644 blob " + "d" * 40 + "\tapps/vault-mirror/src/index.ts",
+            "100644 blob " + "e" * 40 + "\t.github/workflows/vault-mirror-ci.yml",
+        ]))
         own_job = values(records, workflow=recipe.replace("run: web", "run: new-web"))
         self.assertNotEqual(initial["web"], own_job["web"])
         self.assertEqual(initial["infra"], own_job["infra"])
@@ -127,6 +152,21 @@ class ImpactTests(unittest.TestCase):
 
 
 class QualificationTests(unittest.TestCase):
+    def test_vault_mirror_result_is_required_in_exact_qualification_receipt(self):
+        selected = selection(["apps/vault-mirror/src/index.ts"])
+        results = {"plan": {"result": "success"}, **{
+            key: {"result": "success" if needed else "skipped"}
+            for key, needed in selected.items()
+        }}
+        self.assertTrue(ci_evidence(results, selected, CONTEXT, {})["qualified"])
+        for status in ("failure", "cancelled", "skipped"):
+            with self.subTest(status=status):
+                broken = copy.deepcopy(results)
+                broken["vault-mirror"]["result"] = status
+                self.assertFalse(ci_evidence(broken, selected, CONTEXT, {})["qualified"])
+        del results["vault-mirror"]
+        self.assertFalse(ci_evidence(results, selected, CONTEXT, {})["qualified"])
+
     def test_ci_receipt_is_exact_and_failure_is_not_success_shaped(self):
         selected = selection(None)
         results = {key: {"result": "success"} for key in ("plan", *CHECKS)}
@@ -496,6 +536,40 @@ class ArtifactTests(unittest.TestCase):
 
 
 class SafeFailureTests(unittest.TestCase):
+    def test_ci_maps_every_selected_component_and_requires_its_result(self):
+        source = (ROOT / ".github/workflows/ci.yml").read_text()
+        needs = next(line.strip().removeprefix("needs: [").removesuffix("]")
+                     for line in source.splitlines() if line.startswith("    needs: ["))
+        self.assertEqual(set(needs.split(", ")), {"plan", *CHECKS})
+        for component in set(CHECKS) - {"infra", "python"}:
+            with self.subTest(component=component):
+                self.assertIn(f"      {component}: ${{{{ steps.impact.outputs.{component} }}}}",
+                              source)
+                job = workflow_recipe(source, component)
+                self.assertIn("    needs: plan", job)
+                self.assertIn(f"    if: needs.plan.outputs.{component} == 'true'", job)
+                workflow = "foundry-contract" if component == "foundry" else f"{component}-ci"
+                self.assertIn(f"    uses: ./.github/workflows/{workflow}.yml", job)
+
+    def test_vault_mirror_reuses_backend_node_setup_and_runs_required_scripts(self):
+        source = (ROOT / ".github/workflows/vault-mirror-ci.yml").read_text()
+        backend = (ROOT / ".github/workflows/backend-ci.yml").read_text()
+        self.assertIn("on:\n  workflow_call:", source)
+        self.assertIn("permissions:\n  contents: read", source)
+        for line in backend.splitlines():
+            if any(value in line for value in (
+                "actions/checkout@", "actions/setup-node@", "node-version-file:",
+                "cache: npm", "npm install --global",
+            )):
+                self.assertIn(line, source)
+        commands = [line.strip().removeprefix("- run: ") for line in source.splitlines()
+                    if line.strip().startswith("- run: ")]
+        self.assertEqual(commands, [
+            "npm ci", "npm run lint:vault-mirror", "npm run typecheck:vault-mirror",
+            "npm test --workspace @jarvis/contracts", "npm run test:vault-mirror",
+            "npm run build:vault-mirror",
+        ])
+
     def test_delayed_draft_event_cannot_cancel_ready_qualification(self):
         source = (ROOT / ".github/workflows/ci.yml").read_text()
         group = next(line.strip().removeprefix("group: ") for line in source.splitlines()

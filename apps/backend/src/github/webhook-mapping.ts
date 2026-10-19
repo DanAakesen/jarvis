@@ -1,3 +1,5 @@
+import { VAULT_BRANCH, VAULT_REPOSITORY } from '../vault/github-client.js';
+
 type PullRequestMapping = {
   readonly kind: 'pull_request';
   readonly repository: string;
@@ -69,6 +71,14 @@ export type GithubWebhookMapping =
   | PushMapping
   | DeploymentStatusMapping
   | IssueLabeledMapping;
+
+export function isVaultDefaultBranchPush(
+  mapping: GithubWebhookMapping,
+): mapping is PushMapping {
+  return mapping.kind === 'push' &&
+    mapping.repository.toLowerCase() === VAULT_REPOSITORY.toLowerCase() &&
+    mapping.ref === `refs/heads/${VAULT_BRANCH}`;
+}
 
 type JsonObject = Record<string, unknown>;
 

@@ -12,13 +12,18 @@
   "workspaces": [
     "packages/contracts",
     "apps/web",
-    "apps/backend"
+    "apps/backend",
+    "apps/vault-mirror"
   ],
   "scripts": {
     "build": "npm run build --workspaces",
     "dev": "npm run dev --workspace @jarvis/web",
     "lint": "npm run lint --workspaces",
-    "test": "npm test --workspaces"
+    "test": "npm test --workspaces",
+    "build:vault-mirror": "npm run build --workspace @jarvis/vault-mirror",
+    "typecheck:vault-mirror": "npm run typecheck --workspace @jarvis/vault-mirror",
+    "lint:vault-mirror": "npm run lint --workspace @jarvis/vault-mirror",
+    "test:vault-mirror": "npm test --workspace @jarvis/vault-mirror"
   },
   "devDependencies": {
     "typescript": "6.0.3"

@@ -1,5 +1,18 @@
 # Product
 
+## Planned vault mirror safety boundary (19 October 2026; P14-26)
+
+The planned Azure mirror will remove the desktop-running dependency between
+Obsidian and the private vault repository. This issue implements only synthetic,
+offline reconciliation planning and its strict status contract; nothing is
+deployed or connected to the real vault. The existing desktop task remains.
+Obsidian uploads to GitHub are planned from the first run, but write-back stays
+`dry-run` until the owner explicitly enables it after reviewing runs. Fresh state,
+conflicts, private policy and partial-pull/mass-deletion guards prevent unsafe
+writes. Unresolved conflicts resolve in Obsidian's favour after 24 hours, never
+by overwriting Obsidian. Live Obsidian behavior is **not yet verified against the
+live service**.
+
 ## Shared overlays (18 October 2026; P14-09)
 
 Dialogs, sheets and menus use one stacking order without covering modal actions
@@ -1170,7 +1183,8 @@ part of this slice.
 ## Proactive todo reminders (18 October 2026; P13-13)
 
 An explicit-time P1 - High todo gets one generic reminder push about an hour
-before it is due when a proactive check has seen it. Other priorities and tasks
+before it is due when a proactive check has seen it or a verified push to the
+vault's default branch triggers a todos-only planning pass. Other priorities and tasks
 without an explicit priority do not generate task notifications. Date-only
 P1 - High todos remain covered by the 24-hour deadline alert. Reminders wait
 through the 22:00–07:00 Copenhagen quiet window and are presented as due soon or
@@ -1180,8 +1194,8 @@ Proactive item; todo text is not included in its push or logs. The shared
 proactive, push and alert switches default off in code, are on in production since
 P13-15, and add no new setting or web control.
 
-A todo added after the last check is covered from the next check on; "Check
-now" covers it immediately.
+A default-branch vault push plans eligible todos shortly after the change, except
+during the quiet window; scheduled checks and "Check now" continue to plan them.
 
 ## Proactive web (18 October 2026; P13-10)
 

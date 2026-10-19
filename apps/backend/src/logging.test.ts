@@ -33,6 +33,25 @@ describe('structured log export', () => {
     expect(records.join('') + JSON.stringify(sink.trackTrace.mock.calls)).not.toContain('private');
   });
 
+  it('exports only allowlisted fields for reminder planning logs', () => {
+    const records: string[] = [];
+    const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
+    const sink = { ...sdk, trackTrace: vi.fn() };
+    const logger = createLogger({ logLevel: 'info' }, sink, output);
+    logger.info({
+      runId: null, reason: 'vault_push_planned', count: 1, durationMs: 25,
+      text: 'private task text', path: 'private/path.md',
+    }, 'proactive.reminder_plan');
+    const fields = { runId: null, reason: 'vault_push_planned', count: 1, durationMs: 25 };
+    expect(JSON.parse(records[0]!)).toEqual({
+      level: 30, time: expect.any(Number), service: 'jarvis-backend', msg: 'proactive.reminder_plan', ...fields,
+    });
+    expect(sink.trackTrace).toHaveBeenLastCalledWith(expect.objectContaining({
+      message: 'proactive.reminder_plan', properties: { service: 'jarvis-backend', ...fields },
+    }));
+    expect(records.join('') + JSON.stringify(sink.trackTrace.mock.calls)).not.toContain('private');
+  });
+
   it.each(['internal_error', 'hook_failed', 'job_update_failed', 'private-provider-text'])(
     'exports only allowlisted proactive reason codes and run IDs: %s', (reason) => {
       const records: string[] = [];

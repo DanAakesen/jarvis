@@ -1,5 +1,29 @@
 # Agent context
 
+## Offline vault mirror engine checks (19 October 2026; P14-26)
+
+From the repository root: `npm run build:vault-mirror`,
+`npm run typecheck:vault-mirror`, `npm run lint:vault-mirror` and
+`npm run test:vault-mirror`. The workspace uses the existing pinned Node/npm,
+TypeScript, ESLint and Vitest toolchain; root `npm ci` installs its dependencies.
+Shared status checks use `npm test --workspace @jarvis/contracts`.
+
+This is only the pure engine/policy/status boundary, not a runnable Azure job.
+No entry point, CLI access, deployment, live vault test or secret provisioning
+belongs to P14-26. Future configuration must retain `VAULT_MIRROR_WRITE_BACK`
+default `dry-run` (unrecognized values also mean `dry-run`), `MAX_CHANGED`
+default 25/hard max 100 and `MAX_DELETES` default 3/hard max 10, with the
+`VAULT_MIRROR_` prefix on both cap variables. Freshly initialized bases suppress
+O writes even in `on`. Do not log plans, policies, content or skipped paths.
+Only counters/fixed reasons are log-safe; conflict paths belong only in private
+status and authenticated UI. Live Obsidian service behavior is **not yet verified
+against the live service**. See the workspace README for action ordering,
+conflict persistence and one-run first-sync cap recovery.
+
+CI has a reusable `vault-mirror-ci.yml`, impact mapping and a required aggregate
+result dependency. Changes to this wiring require the dispatcher's explicit
+protected-path approval. Mirror-only source edits do not deploy existing apps.
+
 ## Suggested todos, alerts and reminders are on in production (P13-15; 18 October 2026)
 
 Dan delegated the decision and switched proactive milestones 3 and 4 on after the
@@ -2930,7 +2954,7 @@ P8-33's local scratch-browser evidence exercised responsive layouts at 390×844,
 
 ## Setup and commands
 
-The repository uses npm workspaces for `apps/web`, `apps/backend`, and
+The repository uses npm workspaces for `apps/web`, `apps/backend`, `apps/vault-mirror`, and
 `packages/contracts`, one root lockfile, and shared strict TypeScript
 configuration. P8-14 keeps the versioned JSON Schema and browser/backend view
 types in the contracts workspace; P7-14 adds the bounded typed web-research
