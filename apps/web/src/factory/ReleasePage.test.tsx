@@ -81,8 +81,29 @@ describe('project release view', () => {
     );
 
     fireEvent.click(releaseLink);
-    expect(await screen.findByRole('heading', { name: 'Release 18' })).not.toBeNull();
+    expect(await screen.findByRole('heading', { name: 'Build 18' })).not.toBeNull();
     expect(screen.getByRole('button', { name: 'Close release details' })).not.toBeNull();
+  });
+
+  it('uses one Build label for versions that already start with v', async () => {
+    const data = {
+      ...responseData,
+      releases: responseData.releases.map((release) => ({ ...release, version: 'v18' })),
+    };
+    fetchMock.mockResolvedValue(new Response(JSON.stringify(data), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    renderPage();
+
+    const releaseLinks = await screen.findAllByRole('link', { name: 'Build v18' });
+    expect(releaseLinks).toHaveLength(2);
+    expect(releaseLinks[0]!.getAttribute('href')).toBe('/factory/projects/42/releases/7');
+    expect(releaseLinks[0]!.closest('.release-record-title')).not.toBeNull();
+    expect(releaseLinks[1]!.closest('.release-details')).not.toBeNull();
+
+    fireEvent.click(releaseLinks[0]!);
+    expect(await screen.findByRole('heading', { name: 'Build v18' })).not.toBeNull();
+    expect(await screen.findAllByRole('link', { name: 'Build v18' })).toHaveLength(2);
   });
 
   it('offers retry and keeps persisted records usable when graph data is unavailable', async () => {

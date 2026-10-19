@@ -6,11 +6,11 @@ import { TaskReleaseBar } from './TaskReleaseBar';
 const getAccessToken = vi.fn(async () => 'test-access-token');
 const fetchMock = vi.fn<typeof fetch>();
 
-function releaseView(projectId: string, name: string, sha: string, fetchedAt: string) {
+function releaseView(projectId: string, name: string, sha: string, fetchedAt: string, version = '8') {
   return {
     project: { id: projectId, name, repo: `org/${name.toLowerCase()}`, defaultBranch: 'main' },
     releases: [{
-      id: `release-${projectId}`, version: '8', sha, status: 'failed',
+      id: `release-${projectId}`, version, sha, status: 'failed',
       createdAt: '2026-10-04T12:00:00.000Z', releasedAt: null,
     }],
     pullRequests: [],
@@ -75,6 +75,7 @@ describe('TaskReleaseBar', () => {
     expect(items.at(-1)?.hasAttribute('data-latest')).toBe(true);
     expect(items[0]?.querySelector('a')?.getAttribute('href')).toBe('https://github.com/org/jarvis/commit/aaa1111');
     expect(screen.getByRole('list', { name: 'Pipeline' }).textContent).toContain('Build failure');
+    expect(screen.getByRole('link', { name: 'Build 8' })).not.toBeNull();
     expect(screen.getByRole('button', { name: 'Refresh release context' })).not.toBeNull();
     expect(screen.getByRole('link', { name: 'Open release' }).getAttribute('href')).toBe('/factory/projects/7/releases/release-7');
   });
@@ -99,7 +100,7 @@ describe('TaskReleaseBar', () => {
         });
       }
       return Promise.resolve(response(releaseView(
-        '8', 'New project', 'bbbbbbb2222222', '2026-10-04T10:00:00.000Z',
+        '8', 'New project', 'bbbbbbb2222222', '2026-10-04T10:00:00.000Z', 'v8',
       )));
     });
     vi.stubGlobal('fetch', fetchMock);
@@ -117,7 +118,7 @@ describe('TaskReleaseBar', () => {
     expect(await screen.findByRole('link', { name: 'New project' })).not.toBeNull();
     expect(screen.queryByText('org/new project')).toBeNull();
     expect(screen.getByRole('link', { name: /failureBuild and test/ })).not.toBeNull();
-    expect(screen.getByRole('link', { name: 'v8' })).not.toBeNull();
+    expect(screen.getByRole('link', { name: 'Build v8' })).not.toBeNull();
     expect(screen.getByRole('link', { name: /bbbbbbb/ })).not.toBeNull();
     expect(screen.getAllByText('failure').length).toBeGreaterThanOrEqual(2);
     expect(screen.getByText(/Commit data may be stale/)).not.toBeNull();

@@ -215,6 +215,22 @@ describe('app-wide control contract', () => {
       .toBe('var(--radius-panel)');
   });
 
+  it('surfaces release headers and gives release links touch targets on coarse pointers', () => {
+    const header = /\.release-page-header\s*\{([^}]*)\}/;
+    expect(ruleDeclaration(source, header, 'padding')).toBe('var(--space-4) var(--space-5)');
+    expect(ruleDeclaration(source, header, 'border')).toBe('1px solid var(--rule)');
+    expect(ruleDeclaration(source, header, 'border-radius')).toBe('var(--radius-panel)');
+    expect(ruleDeclaration(source, header, 'background')).toBe('var(--surface-translucent)');
+    const coarseReleaseLinks = mediaBlocks(source).find(({ query, body }) =>
+      query.includes('pointer: coarse') && body.includes('.release-trail-pipeline a'));
+    expect(coarseReleaseLinks).toBeDefined();
+    const touchTargets = /\.release-trail-name a, \.release-trail-pipeline a, \.release-record-title > a\s*\{([^}]*)\}/;
+    expect(ruleDeclaration(coarseReleaseLinks!.body, touchTargets, 'display')).toBe('inline-flex');
+    expect(ruleDeclaration(coarseReleaseLinks!.body, touchTargets, 'min-height')).toBe('44px');
+    expect(ruleDeclaration(coarseReleaseLinks!.body, touchTargets, 'align-items')).toBe('center');
+    expect(ruleDeclaration(source, /\.release-record-title > a\s*\{([^}]*)\}/, 'overflow-wrap')).toBe('anywhere');
+  });
+
   it('uses touch-sized advanced Settings controls and content-width push actions', () => {
     const coarse = mediaBlocks(source).find(({ query, body }) =>
       query.trim() === '(pointer: coarse)' && body.includes('.settings-field.advanced-range'))?.body ?? '';
