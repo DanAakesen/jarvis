@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } fro
 import { backendFetch } from './backend-request';
 import { StateMessage } from './StateMessage';
 import { folioKinds as kinds, folioPageSize as pageSize, groupFolio, isFolioItem, type FolioItem, type FolioKind } from './folio-data';
+import { formatDateOnly, formatTimeOnly } from './format/date-time';
 
 /**
  * The Folio (P9-25, #519): everything Jarvis has pulled up, reopened from the left pane. Search and kind chips filter;
@@ -12,8 +13,8 @@ function formatWhen(iso: string, now = new Date()) {
   const date = new Date(iso);
   const sameDay = date.toDateString() === now.toDateString();
   return sameDay
-    ? date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
-    : date.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+    ? formatTimeOnly(date)
+    : formatDateOnly(date);
 }
 
 function KindIcon({ kind }: { kind: FolioKind }) {

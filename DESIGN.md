@@ -13,13 +13,15 @@ schema says so (it declares a unit or is flagged numeric), even if the loaded pa
 records no values, so missing values in a numeric column share the column’s numeric
 alignment.
 
-All displayed Daily dates and times use `dailyLocale()` and the formatters in
-`apps/web/src/daily/ui/formatters.ts`; dated values retain the established
-Europe/Copenhagen timezone. Body charts keep one “Daily value” series and one
-legend entry per metric/unit. They connect actual readings at most three
-calendar days apart, break the line across wider gaps, show every recorded
-reading as a point and never interpolate. The chart text alternative states
-this connection rule and the absence of interpolation.
+Displayed Daily dates and times with a known zone use the shared formatters in
+`apps/web/src/format/date-time.ts`; wrappers retain the established
+Europe/Copenhagen timezone. Date-only values use UTC to avoid day shifts. Daily
+brief timestamps remain verbatim because their timezone is unknown.
+`dailyLocale()` remains for number and duration formatting. Body charts keep one
+“Daily value” series and one legend entry per metric/unit. They connect actual
+readings at most three calendar days apart, break the line across wider gaps,
+show every recorded reading as a point and never interpolate. The chart text
+alternative states this connection rule and the absence of interpolation.
 
 ## Daily accessibility and keyboard audit (P12-37, 18 October 2026)
 

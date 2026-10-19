@@ -223,7 +223,7 @@ describe('knowledge graph view', () => {
     const taskHeading = await screen.findByRole('heading', { name: 'Tasks' });
     expect(screen.getByRole('link', { name: '3 matching tasks' }).getAttribute('href')).toBe('/tasks?q=mirror');
     expect(screen.getByText('Buy a mirror')).not.toBeNull();
-    expect(screen.getByText(/Apr 9, 2031, 12:30 PM|9 Apr 2031, 12:30/)).not.toBeNull();
+    expect(screen.getByText('9 Apr 2031, 12:30')).not.toBeNull();
     const notes = screen.getByRole('list', { name: 'Matching notes' });
     expect(taskHeading.compareDocumentPosition(notes) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(within(notes).getByRole('button', { name: /Home note/ })).not.toBeNull();

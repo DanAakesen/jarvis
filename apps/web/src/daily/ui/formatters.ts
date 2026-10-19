@@ -1,3 +1,5 @@
+import { formatDateOnly as formatSharedDate, formatDateTime, formatTimeOnly } from '../../format/date-time';
+
 const timezone = 'Europe/Copenhagen';
 
 export function dailyLocale() {
@@ -25,27 +27,14 @@ export function formatDuration(seconds: number | null | undefined, locale = dail
   return unit(Math.floor(seconds), 'second');
 }
 
-function validDate(value: string | null | undefined) {
-  if (!value) return null;
-  if (/^\d{4}-\d{2}-\d{2}$/u.test(value)) {
-    const date = new Date(`${value}T12:00:00Z`);
-    return date.toISOString().slice(0, 10) === value ? date : null;
-  }
-  const date = new Date(value);
-  return Number.isFinite(date.getTime()) ? date : null;
+export function formatDate(value: string | null | undefined) {
+  return value ? formatSharedDate(value, { timeZone: timezone }) : 'Unknown';
 }
 
-export function formatDate(value: string | null | undefined, locale = dailyLocale()) {
-  const date = validDate(value);
-  return date ? new Intl.DateTimeFormat(locale, { timeZone: timezone, dateStyle: 'medium' }).format(date) : 'Unknown';
+export function formatTime(value: string | null | undefined) {
+  return value ? formatDateTime(value, { timeZone: timezone }) : 'Unknown';
 }
 
-export function formatTime(value: string | null | undefined, locale = dailyLocale()) {
-  const date = validDate(value);
-  return date ? new Intl.DateTimeFormat(locale, { timeZone: timezone, dateStyle: 'medium', timeStyle: 'short' }).format(date) : 'Unknown';
-}
-
-export function formatClockTime(value: string | null | undefined, locale = dailyLocale()) {
-  const date = validDate(value);
-  return date ? new Intl.DateTimeFormat(locale, { timeZone: timezone, timeStyle: 'short' }).format(date) : 'Unknown';
+export function formatClockTime(value: string | null | undefined) {
+  return value ? formatTimeOnly(value, { timeZone: timezone }) : 'Unknown';
 }

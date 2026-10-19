@@ -27,6 +27,7 @@ import { ATTACHMENT_ACCEPT, MAX_ATTACHMENTS, publicPublicationImage, type ChatAt
 import { useChatAttachments } from './useChatAttachments';
 import { Loader } from './Loader';
 import { StateMessage } from './StateMessage';
+import { formatDateTime } from './format/date-time';
 import {
   accessToken,
   createChatSession,
@@ -800,7 +801,7 @@ export function ConversationHistory({
                     })()}
                     {/* Only the time, tucked onto the bubble's top-right edge and shown on hover; voice usage is read out to screen readers. */}
                     <div className="message-metadata">
-                      <time dateTime={message.at} title={new Date(message.at).toLocaleString()}>
+                      <time dateTime={message.at} title={formatDateTime(message.at)}>
                         {relativeTime(message.at, now)}
                       </time>
                       {voiceUsageText && <span className="visually-hidden">{`Voice${voiceUsageText}`}</span>}

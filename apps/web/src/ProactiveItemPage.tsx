@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useLocation, useParams } from 'react-router-dom';
 import { backendFetch } from './backend-request';
 import { saveSignInReturnPath } from './auth';
+import { formatDateTime } from './format/date-time';
 
 interface ProactiveItem {
   id: string;
@@ -118,7 +119,7 @@ export function ProactiveItemPage({ backendUrl, getAccessToken, signIn }: {
           <p className="proactive-item-body">{state.item.body}</p>
           <p className="proactive-item-time">
             <time dateTime={state.item.createdAt}>
-              {new Date(state.item.createdAt).toLocaleString()}
+              {formatDateTime(state.item.createdAt)}
             </time>
           </p>
         </>

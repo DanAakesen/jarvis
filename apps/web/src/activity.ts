@@ -89,10 +89,3 @@ export function formatDuration(startedAt: string, now: number): string {
   if (minutes < 60) return `${minutes} min`;
   return `${Math.floor(minutes / 60)} h ${String(minutes % 60).padStart(2, '0')} min`;
 }
-
-const timeFormat = new Intl.DateTimeFormat('en-GB', { dateStyle: 'medium', timeStyle: 'short' });
-
-export function formatTime(value: string): string {
-  const time = Date.parse(value);
-  return Number.isNaN(time) ? 'Unknown time' : timeFormat.format(time);
-}

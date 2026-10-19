@@ -546,6 +546,33 @@ overflow; reduced motion removed the Loader animation, and the gallery emitted
 no console errors. This measures the shared gallery transition, not route-level
 loading-to-ready transitions or live backend behavior.
 
+## Shared date-time format (P14-23; 19 October 2026)
+
+The shared formatter now owns user-visible web date-time, date-only and
+time-only output. An en-GB format, browser timezone default for instants, and
+safe en-dash fallback replace the scattered browser-locale and ISO display
+paths. Daily wrappers retain Copenhagen time; Proactive keeps its Copenhagen
+and content-language choices. The static guard allows only three
+calculation-only files with checked call counts: `daily/period.ts` and
+`daily/presentation.ts` extract calendar parts, while `proactive-data.ts`
+converts Copenhagen wall times. Date-only strings format as UTC calendar dates
+without a clock or day shift; instants formatted as dates retain the requested
+display zone. Time-only values keep only the clock. Daily brief timestamps with
+unknown zones remain verbatim, as do relative-time labels. The absolute tooltip
+behind the relative chat tag uses the shared format.
+
+Chromium rendered synthetic Kanban card/trail, task window, release page,
+and Settings health-credential expiry at 390×844 and 1440×900 in light and
+dark. The displayed dates and credential expiry used the same
+`19 Oct 2026, 00:05` / `30 Oct 2026, 12:34` shape. The phone credential status
+and deployment record wrapped without clipping, and the task timeline’s longer
+date labels fit their rows. The document width matched the viewport in all 16
+combinations, with no uncaught page errors. Synthetic API fixtures and a local
+sign-in stub were used; this is rendered local evidence, not live-backend or
+human acceptance. A unit test pins the chat tooltip format while preserving the
+visible relative label. Screenshots were retained under
+`/tmp/p14-23-browser/screenshots/`, not in the repository.
+
 ## Bounded follow-up
 
 The app has more than 40 independently styled route and component surfaces, so

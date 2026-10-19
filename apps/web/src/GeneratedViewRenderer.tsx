@@ -6,6 +6,7 @@ import { ChartView } from './ChartView';
 import { CodeView } from './CodeView';
 import { HtmlAppView } from './HtmlAppView';
 import type { SessionCommandResult } from './session-commands';
+import { formatDateOnly, formatDateTime } from './format/date-time';
 
 function ViewAction({ view, title }: { view: GeneratedView; title: string }) {
   const action = view.actions?.find((candidate) => candidate.type === 'open-route' || candidate.type === 'open-link');
@@ -27,11 +28,9 @@ type TimelineEvent = { at?: string; label?: string; title: string; description?:
 
 function timelineDate(at: string) {
   const dateOnly = /^\d{4}-\d{2}-\d{2}$/u.test(at);
-  const date = new Date(dateOnly ? `${at}T00:00:00Z` : at);
-  if (Number.isNaN(date.getTime())) return at;
   return dateOnly
-    ? date.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })
-    : date.toLocaleString(undefined, { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    ? formatDateOnly(at, { timeZone: 'UTC', fallback: at })
+    : formatDateTime(at, { fallback: at });
 }
 
 export function GeneratedViewRenderer({  view,
