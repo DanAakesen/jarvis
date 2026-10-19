@@ -1416,7 +1416,6 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
 .task-form-field textarea:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 .task-form-field textarea { min-height: 120px; resize: vertical; }
 .task-search-field { grid-column: span 2; }
-.task-live-status { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2); margin: var(--space-5) 0 var(--space-3); color: var(--text-muted); font-size: var(--type-small); }
 .task-inline-button { min-height: 44px; padding: 0 var(--space-2); border: 0; background: transparent; color: var(--focus); font: inherit; font-weight: 650; text-decoration: underline; cursor: pointer; }
 .task-inline-button:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 .task-limit-note { margin: var(--space-3) 0; }
@@ -1570,8 +1569,7 @@ a.task-card-title { text-decoration: none; }
 .kanban-search input:hover, .kanban-select select:hover { border-color: var(--control-rule); }
 .kanban-search input:focus-visible, .kanban-select select:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 .kanban-page .task-release-bar { background: var(--board-slab); box-shadow: none; }
-.kanban-live-status { margin: var(--space-2) 0; font-size: var(--type-caption); }
-.kanban-page > .tasks-help, .kanban-page > .kanban-live-status {
+.kanban-page > .tasks-help {
   width: fit-content;
   max-width: 100%;
   padding: var(--space-2) var(--space-3);
@@ -1624,9 +1622,16 @@ a.task-card-title { text-decoration: none; }
 .kanban-card .task-controls button { min-height: 36px; padding: 0 var(--space-3); font-size: var(--type-small); }
 @media (pointer: coarse) { .kanban-card .task-controls button { min-height: 44px; } }
 @media (min-width: 1200px) { .kanban-board { grid-auto-columns: minmax(168px, 1fr); gap: var(--space-3); } }
-@media (max-width: 900px) {
-  .kanban-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+/* Filters reflow by the width of the board area, not the screen: a docked side panel narrows the board without changing the viewport. */
+@container task-board (max-width: 879px) {
+  .kanban-filters { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .kanban-search { grid-column: 1 / -1; }
+}
+@container task-board (max-width: 719px) {
+  .kanban-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@container task-board (max-width: 299px) {
+  .kanban-filters { grid-template-columns: minmax(0, 1fr); }
 }
 
 .release-page { width: 100%; max-width: 1200px; margin-inline: auto; }
@@ -2158,9 +2163,6 @@ a.task-card-title { text-decoration: none; }
    commit trail drawn as a lit line.
    --------------------------------------------------------------------------------------------- */
 .kanban-header { justify-content: flex-start; }
-.kanban-header .kanban-create-project { margin-left: auto; }
-.kanban-header .kanban-create-project svg { width: 18px; height: 18px; }
-.kanban-create-project { display: inline-flex; align-items: center; gap: var(--space-2); min-height: 44px; }
 .project-dialog { display: grid; gap: var(--space-4); background: var(--surface); }
 .project-dialog h2 { margin: 0; }
 .project-dialog-part { display: grid; gap: var(--space-3); padding: var(--space-4); border: 1px solid color-mix(in srgb, var(--glass-rim-light) 30%, transparent); border-radius: var(--radius-panel); background: var(--glass-hover); }
@@ -3243,23 +3245,58 @@ a.task-chip:hover { background: var(--glass-pressed); }
 @keyframes mobile-caption-in { from { opacity: 0; translate: 0 4px; } }
 :root[data-motion="reduced"] :is(.mobile-menu-sheet, .mobile-menu-backdrop, .mobile-caption span, .app-shell[data-phone="true"] .workspace-window, .app-shell[data-phone="true"] .window-tabstrip) { animation: none; }
 @media (prefers-reduced-motion: reduce) { :is(.mobile-menu-sheet, .mobile-menu-backdrop, .mobile-caption span, .app-shell[data-phone="true"] .workspace-window, .app-shell[data-phone="true"] .window-tabstrip) { animation: none; } }
-/* Kanban space and alignment (Dan, 8 October). Header: title and actions share a row (actions as a matched pair),
-   the summary pills sit underneath. Search and filters live in one collapsible glass section; columns collapse from
-   their title. */
-.kanban-header { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "title actions" "pulse pulse"; align-items: center; gap: var(--space-3) var(--space-4); }
-.kanban-header h1 { grid-area: title; }
-.kanban-header .kanban-pulse { grid-area: pulse; }
-.kanban-header-actions { display: flex; grid-area: actions; align-items: center; gap: var(--space-3); }
-.kanban-header .kanban-create-project { margin-left: 0; }
-.kanban-header-actions .kanban-create { min-height: 44px; padding: 0 var(--space-4); justify-content: center; font-size: var(--type-small); font-weight: 650; line-height: var(--line-tight); }
+/* Kanban space and alignment (Dan, 8 October). The title and the summary pills share a row; the create and refresh actions
+   live in the board strip below. Search and filters live in one collapsible glass section; columns collapse from their title. */
 @media (max-width: 700px) {
-  .kanban-header { grid-template-columns: minmax(0, 1fr); grid-template-areas: "title" "pulse" "actions"; gap: var(--space-3); }
   .kanban-header h1 { font-size: var(--type-title); }
   .kanban-header .kanban-pulse { min-width: 0; flex-wrap: wrap; }
   .kanban-header .kanban-pulse li { flex: none; }
-  .kanban-header-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); }
-  .kanban-header-actions .kanban-create { width: 100%; padding: 0 var(--space-3); }
 }
+/* Board strip (Dan, 19 October): one slim glass bar above the columns holds the refresh icon, the connection notice and
+   the create actions. A working board says nothing; only a failure shows, small and red. */
+.kanban-strip {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2) var(--space-3);
+  margin: 0 0 var(--space-3); padding: var(--space-2);
+  border: 1px solid var(--rule); border-radius: var(--radius-panel);
+  background: var(--board-slab); backdrop-filter: blur(24px) saturate(1.2);
+}
+.kanban-strip-status { display: flex; min-width: 0; flex: 1 1 auto; align-items: center; }
+.kanban-strip-actions { display: flex; flex: none; align-items: center; gap: var(--space-2); margin-left: auto; }
+.kanban-strip .kanban-create { min-height: 36px; padding: 0 var(--space-4); justify-content: center; font-size: var(--type-small); font-weight: 650; line-height: var(--line-tight); }
+.kanban-connection { min-width: 0; }
+.kanban-connection-issue { display: inline-flex; min-width: 0; align-items: center; gap: var(--space-2); margin-left: var(--space-2); color: var(--error); font-size: var(--type-caption); font-weight: 650; line-height: var(--line-tight); }
+.kanban-connection-dot { width: 8px; height: 8px; flex: none; border-radius: 50%; background: currentColor; }
+/* The refresh action is a bare icon (Dan, 19 October): no fill, border or shadow in any state. Hover tints it with the focus colour and turns it a quarter; while a refresh runs it spins. */
+.kanban-refresh {
+  display: grid; place-items: center; width: 36px; height: 36px; flex: none; padding: 0;
+  border: 0; border-radius: var(--radius-control); background: none; box-shadow: none;
+  color: var(--text); cursor: pointer;
+  transition: color var(--motion-press) var(--ease-standard);
+}
+.kanban-refresh svg { width: 20px; height: 20px; stroke-width: 2; transition: rotate var(--motion-state) var(--ease-enter), scale var(--motion-press) var(--ease-standard); }
+.kanban-refresh:hover:not(:disabled) { color: var(--focus); }
+.kanban-refresh:hover:not(:disabled) svg { rotate: 90deg; }
+.kanban-refresh:active:not(:disabled) svg { rotate: 180deg; scale: .9; }
+.kanban-refresh:disabled { color: var(--disabled-text); cursor: not-allowed; }
+.kanban-refresh[aria-busy="true"]:disabled { cursor: progress; }
+.kanban-refresh[aria-busy="true"] svg { animation: kanban-refresh-spin 900ms linear infinite; }
+@keyframes kanban-refresh-spin { to { rotate: 360deg; } }
+@media (pointer: coarse) {
+  .kanban-refresh { width: 44px; height: 44px; }
+  .kanban-strip .kanban-create { min-height: 44px; }
+}
+@media (max-width: 700px) {
+  .kanban-strip-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); flex: 1 1 100%; gap: var(--space-2); }
+  .kanban-strip .kanban-create { width: 100%; padding: 0 var(--space-3); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .kanban-refresh, .kanban-refresh svg { transition: none; }
+  .kanban-refresh:is(:hover, :active):not(:disabled) svg { rotate: none; scale: none; }
+  .kanban-refresh[aria-busy="true"] svg { animation: none; }
+}
+:root[data-motion="reduced"] :is(.kanban-refresh, .kanban-refresh svg) { transition: none; }
+:root[data-motion="reduced"] .kanban-refresh:is(:hover, :active):not(:disabled) svg { rotate: none; scale: none; }
+:root[data-motion="reduced"] .kanban-refresh[aria-busy="true"] svg { animation: none; }
 .kanban-filter-panel { margin: 0 0 var(--space-4); border: 1px solid var(--rule); border-radius: var(--radius-panel); background: var(--surface-muted); }
 .kanban-filter-toggle { display: flex; width: 100%; min-height: 48px; align-items: center; gap: var(--space-3); padding: 0 var(--space-4); border: 0; border-radius: var(--radius-control); background: transparent;
   color: var(--text); font: inherit; font-weight: 600; text-align: left; cursor: pointer; transition: background-color var(--motion-press) var(--ease-standard); }

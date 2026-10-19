@@ -1,5 +1,26 @@
 # Decisions
 
+## P14-32 — Kanban is silent when it works: one board strip, a bare refresh icon, a small red notice on failure (19 October 2026; #1085)
+
+The owner asked for the Kanban status text to go and called always-on “all is
+well” lines a trend to avoid. While the board works the page now shows no
+repository line, no fetch time and no “connected” message. Only a fault shows,
+as a small red dot with “Board not connected”, and the detail (failed refresh,
+cached board, GitHub unavailable, last fetched time) sits in its tooltip and
+the screen-reader text, so the words, not the colour, carry the meaning. The
+header lost its Refresh board button. A slim glass strip directly above the
+board holds a bare refresh icon (no fill, border or shadow in any state, like
+the composer send icon; it spins and is named “Refreshing board…” while a read
+is pending) with Create project and Create task. The filter form reflows by the
+width of the board rather than the viewport (5, 4, 2, then 1 column), which
+fixes fields running past the right edge. The repository link and the
+“closed in the last 14 days” line left with the status lines; the Done toggle
+keeps the 14-day wording as a tooltip. The trade-off is that freshness and the
+live channel are no longer visible at a glance; they surface when something is
+wrong. The live-status line that P14-12 measured on `--surface-translucent` no
+longer exists; the strip uses the same surface (`--board-slab`) and the red
+notice is part of the contrast audit.
+
 ## P14-32 — The composer is quiet: no hover rim, a slim focus rim, a bare send icon (19 October 2026; #1085)
 
 The owner asked for three changes to the composer, directly. Hovering it no

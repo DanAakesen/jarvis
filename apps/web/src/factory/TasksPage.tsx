@@ -231,10 +231,11 @@ function writeStored(key: string, value: string) {
   try { localStorage.setItem(key, value); } catch { /* Storage can be blocked; the board then simply forgets. */ }
 }
 
-function KanbanIcon({ name }: { name: 'search' | 'plus' | 'clock' | 'branch' | 'chevron' }) {
+function KanbanIcon({ name }: { name: 'search' | 'plus' | 'clock' | 'branch' | 'chevron' | 'refresh' }) {
   const common = { 'aria-hidden': true as const, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
   switch (name) {
     case 'search': return <svg {...common}><circle cx="11" cy="11" r="6.5" /><path d="m16 16 4.5 4.5" /></svg>;
+    case 'refresh': return <svg {...common}><path d="M19 12a7 7 0 1 1-2.05-4.95" /><path d="M19 4.5V8h-3.5" /></svg>;
     case 'chevron': return <svg {...common}><path d="m8 10 4 4 4-4" /></svg>;
     case 'plus': return <svg {...common}><path d="M12 5v14M5 12h14" /></svg>;
     case 'clock': return <svg {...common}><circle cx="12" cy="12" r="8.5" /><path d="M12 7.5V12l3 2" /></svg>;
@@ -660,10 +661,15 @@ export function TasksPage({ backendUrl, getAccessToken }: Props) {
       projects.length === 0 ? 'No active projects are available. Project registration is managed by Jarvis.' :
         'Create a task on an active project. Model and reasoning overrides apply to this task only.';
   const liveStatus = liveState.backendUrl === backendUrl ? liveState.status : 'unavailable';
-  const liveStatusText = liveStatus === 'connected' ? 'Live board updates connected.' :
-    liveStatus === 'reconnecting' ? 'Reconnecting to live board updates. The board may be out of date.' :
-      liveStatus === 'connecting' ? 'Connecting to live board updates…' :
-        'Live board updates are unavailable. Refresh the board to check for changes.';
+  // Silence while things work: only a failure shows, as one small red notice. Connecting is not a failure.
+  const connectionIssues = !board ? [] : [
+    visibleTaskState === 'error' && 'Showing the last loaded board because refresh failed.',
+    board.stale && 'Showing a cached board; GitHub is unavailable, so issue placement may be out of date.',
+    liveStatus === 'reconnecting' && 'Reconnecting to live board updates. The board may be out of date.',
+    liveStatus === 'unavailable' && 'Live board updates are unavailable. Refresh the board to check for changes.',
+  ].filter(Boolean);
+  const connectionDetail = board && connectionIssues.length > 0
+    ? `${connectionIssues.join(' ')} Last fetched ${formatDateTime(board.fetchedAt)}.` : '';
   const updatedAfter = board && appliedFilters.period ? Date.parse(board.fetchedAt) - Number(appliedFilters.period) * 86_400_000 : null;
   const columns = board?.columns.map((column) => ({
     ...column,
@@ -689,22 +695,7 @@ export function TasksPage({ backendUrl, getAccessToken }: Props) {
               <li data-tone="done"><span aria-hidden="true" />{columns.find((column) => column.id === 'done')?.cards.length ?? 0} done</li>
             </ul>
           )}
-          <div className="kanban-header-actions">
-          <button className="secondary-button" type="button" disabled={!backendUrl || !filters.projectId || refreshing}
-            onClick={() => setReloadKey((value) => value + 1)}>{refreshing ? 'Refreshing board…' : 'Refresh board'}</button>
-          <button className="secondary-button kanban-create kanban-create-project" type="button" ref={createProjectButtonRef}
-            onClick={() => setProjectDialogOpen(true)} disabled={!backendUrl}>
-            <KanbanIcon name="plus" />
-            <span>Create project</span>
-          </button>
-          <button ref={createButtonRef} className="primary-button kanban-create" type="button" onClick={openCreateDialog}
-            disabled={createUnavailable} aria-describedby="create-task-help">
-            <KanbanIcon name="plus" />
-            <span>Create task</span>
-          </button>
-          </div>
         </header>
-        <p id="create-task-help" className={createUnavailable ? 'tasks-help' : 'visually-hidden'}>{createHelp}</p>
         {visibleProjectState === 'error' && (
           <StateMessage variant="error" className="tasks-feedback" message={visibleProjectError}
             actionLabel="Retry projects" onAction={() => setProjectRetry((value) => value + 1)} />
@@ -767,6 +758,38 @@ export function TasksPage({ backendUrl, getAccessToken }: Props) {
 
         <TaskReleaseBar backendUrl={backendUrl} getAccessToken={getAccessToken} projectId={filters.projectId} variant="trail" />
 
+        <div className="kanban-strip" role="group" aria-label="Board actions">
+          <div className="kanban-strip-status">
+            <button className="kanban-refresh" type="button" disabled={!backendUrl || !filters.projectId || refreshing}
+              aria-label={refreshing ? 'Refreshing board…' : 'Refresh board'} title={refreshing ? 'Refreshing board…' : 'Refresh board'}
+              aria-busy={refreshing || undefined} onClick={() => setReloadKey((value) => value + 1)}>
+              <KanbanIcon name="refresh" />
+            </button>
+            <span className="kanban-connection" role="status" aria-live="polite">
+              {connectionDetail && (
+                <span className="kanban-connection-issue" title={connectionDetail}>
+                  <span className="kanban-connection-dot" aria-hidden="true" />
+                  Board not connected
+                  <span className="visually-hidden">. {connectionDetail}</span>
+                </span>
+              )}
+            </span>
+          </div>
+          <div className="kanban-strip-actions">
+            <button className="secondary-button kanban-create" type="button" ref={createProjectButtonRef}
+              onClick={() => setProjectDialogOpen(true)} disabled={!backendUrl}>
+              <KanbanIcon name="plus" />
+              <span>Create project</span>
+            </button>
+            <button ref={createButtonRef} className="primary-button kanban-create" type="button" onClick={openCreateDialog}
+              disabled={createUnavailable} aria-describedby="create-task-help">
+              <KanbanIcon name="plus" />
+              <span>Create task</span>
+            </button>
+          </div>
+        </div>
+        <p id="create-task-help" className={createUnavailable ? 'tasks-help' : 'visually-hidden'}>{createHelp}</p>
+
         {visibleTaskState === 'loading' && <StateMessage variant="loading" loaderVariant="cards" message="Loading GitHub board" />}
         {visibleProjectState === 'ready' && projects.length === 0 &&
           <StateMessage variant="empty" className="tasks-feedback"
@@ -778,20 +801,6 @@ export function TasksPage({ backendUrl, getAccessToken }: Props) {
         )}
         {board && (
           <>
-            <p className="tasks-help">
-              <a href={`https://github.com/${board.project.repo}`} target="_blank" rel="noopener noreferrer">{board.project.repo}</a>
-              {' · '}Fetched <time dateTime={board.fetchedAt}>{formatDateTime(board.fetchedAt)}</time>.
-              {' '}Open issues and issues closed in the last 14 days.
-            </p>
-            <div className="task-live-status kanban-live-status" role="status" aria-live="polite">{liveStatusText}</div>
-            {visibleTaskState === 'error' &&
-              <StateMessage variant="partial" className="tasks-feedback"
-                message="Showing the last loaded board because refresh failed."
-                detail="Retry the board to check for the latest issues." />}
-            {board.stale &&
-              <StateMessage variant="partial" className="tasks-feedback"
-                message="Showing a cached board; issue placement may be out of date."
-                detail="GitHub is unavailable. Retry the board to check for current issues." />}
             <div className="task-board kanban-board" role="region" aria-label="Issues by GitHub Project column"
               style={{ '--kanban-columns': columns.map((column) => collapsedColumns.has(column.label) ? '52px' : 'minmax(240px, 1fr)').join(' ') } as CSSProperties}>
               {noFilteredResults && <StateMessage variant="empty" className="kanban-board-empty" message="No matching issues."
@@ -805,7 +814,8 @@ export function TasksPage({ backendUrl, getAccessToken }: Props) {
                     <header className="kanban-column-heading">
                       <h2 id={headingId}>
                         <button className="kanban-column-toggle" type="button" aria-expanded={!collapsedColumns.has(column.label)}
-                          aria-controls={`${headingId}-cards`} onClick={() => toggleColumn(column.label)}>
+                          aria-controls={`${headingId}-cards`} onClick={() => toggleColumn(column.label)}
+                          title={column.id === 'done' ? 'Closed in the last 14 days' : undefined}>
                           <span className={`kanban-dot kanban-dot-${columnTone(column.label)}`} aria-hidden="true" />
                           <span className="kanban-column-label">{column.label}</span>
                           <span className="kanban-chevron" aria-hidden="true"><KanbanIcon name="chevron" /></span>

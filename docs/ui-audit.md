@@ -441,7 +441,10 @@ body text). The helper and status now use `--surface-translucent`; empty-state
 copy remains on the existing `--board-slab`. All sampled pairings pass 4.5:1;
 coordinates, pixel colors, and before/after ratios are in the
 `heroSceneMeasurements` table. The guard test checks these selectors and
-measures the shared surfaces against each recorded worst-case pixel.
+measures the shared surfaces against each recorded worst-case pixel. The
+live-update caption left the page on 19 October (P14-32); its pairing is now the
+red “Board not connected” notice on the board strip (`--error` on
+`--board-slab`), still one of the four Kanban pairings.
 
 The pairing list is identical in both themes. Explicit theme-only rules change
 colors for light presence indicators and the done icon; the dark-only
