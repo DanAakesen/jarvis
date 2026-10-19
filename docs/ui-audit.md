@@ -464,8 +464,9 @@ wrappers retain Copenhagen time; Proactive keeps its Copenhagen and
 content-language choices. The static guard allows only three calculation-only
 files with checked call counts: `daily/period.ts` and `daily/presentation.ts`
 extract calendar parts, while `proactive-data.ts` converts Copenhagen wall
-times. The chat message label remains relative (out of scope); its absolute
-timestamp tooltip uses the shared format.
+times. Daily brief date-only output also uses the helper while preserving its
+recorded civil date. The chat message label remains relative (out of scope); its
+absolute timestamp tooltip uses the shared format.
 
 Chromium rendered synthetic Kanban card/trail, task window, release page,
 Settings health-credential expiry and chat content at 390×844 and 1440×900 in
