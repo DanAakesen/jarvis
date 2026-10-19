@@ -46,6 +46,13 @@ class DeployPlanTests(unittest.TestCase):
     def test_other_components_deploy_nothing(self):
         self.assertEqual(selected(plan("push", ["runner/app.py", ".github/scripts/plan_status.py"])), set())
 
+    def test_vault_mirror_is_qualification_only(self):
+        result = plan("push", ["apps/vault-mirror/src/index.ts",
+                               "apps/vault-mirror/package.json",
+                               ".github/workflows/vault-mirror-ci.yml"])
+        self.assertEqual(selected(result), set())
+        self.assertIn("no deployable changes", result["reason"])
+
     def test_manual_run_and_unknown_base_deploy_everything(self):
         self.assertEqual(selected(plan("workflow_dispatch", ["README.md"])), {"infra", "backend", "web", "agent"})
         self.assertEqual(selected(plan("workflow_dispatch", [], superseded=True)), set())
