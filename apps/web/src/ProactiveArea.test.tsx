@@ -360,6 +360,7 @@ describe('Proactive area', () => {
     });
     renderArea();
     await screen.findByRole('button', { name: 'Check now' });
+    expect(screen.getByText('Snooze').classList.contains('secondary-button')).toBe(true);
     await user.click(screen.getByText('Snooze'));
     await user.click(screen.getByRole('button', { name: `Snooze ${item.title} Tomorrow 07:00 Europe/Copenhagen` }));
     await waitFor(() => expect(screen.queryByRole('link', { name: `Open ${item.title}` })).toBeNull());

@@ -319,6 +319,7 @@ describe('Jarvis routes', () => {
     const user = userEvent.setup();
     render(<MemoryRouter initialEntries={['/unknown/nested']}><App /></MemoryRouter>);
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Page not found');
+    expect(screen.getByRole('region', { name: 'Page not found' }).classList.contains('panel')).toBe(true);
     await user.click(screen.getByRole('link', { name: 'Return to Jarvis' }));
     expect((await screen.findByRole('heading', { level: 1 })).textContent).toBe(getSignInGreeting());
   });
