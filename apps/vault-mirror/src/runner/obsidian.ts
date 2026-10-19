@@ -87,18 +87,23 @@ export async function runOb(
       terminate();
     }, timeoutMs);
     timer.unref();
-    child.stdout?.on('data', capture);
-    child.stderr?.on('data', capture);
-    options.signal.addEventListener('abort', abort, { once: true });
-    child.once('error', () => {
-      settled = true;
-      reject(new ObCommandError(classify('', timedOut, operation)));
-    });
-    child.once('close', code => {
+    const cleanup = (): void => {
       settled = true;
       clearTimeout(timer);
       if (killTimer) clearTimeout(killTimer);
       options.signal.removeEventListener('abort', abort);
+    };
+    child.stdout?.on('data', capture);
+    child.stderr?.on('data', capture);
+    options.signal.addEventListener('abort', abort, { once: true });
+    child.once('error', () => {
+      if (settled) return;
+      cleanup();
+      reject(new ObCommandError(classify('', timedOut, operation)));
+    });
+    child.once('close', code => {
+      if (settled) return;
+      cleanup();
       if (code === 0 && !timedOut) resolvePromise();
       else reject(new ObCommandError(classify(Buffer.concat(output).toString('utf8'), timedOut, operation)));
     });

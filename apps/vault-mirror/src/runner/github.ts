@@ -1,5 +1,6 @@
 import { createPrivateKey } from 'node:crypto';
 import { SignJWT } from 'jose';
+import { createHash } from 'node:crypto';
 import { contentHash, isApprovedPath } from '../engine/index.js';
 import { contentSize } from '../engine/normalize.js';
 import type { ValidatedPolicy } from '../engine/policy.js';
@@ -8,7 +9,6 @@ import { VAULT_BRANCH, VAULT_REPOSITORY } from './types.js';
 
 const apiOrigin = 'https://api.github.com';
 const maxResponseBytes = 10 * 1024 * 1024;
-const maxNoteBytes = 256 * 1024;
 const maxApprovedFiles = 10_000;
 const concurrency = 6;
 const neutralMessage = 'Update vault mirror';
@@ -17,10 +17,12 @@ const bearer = (token: string): string => `${['Bear', 'er'].join('')} ${token}`;
 type JsonObject = Record<string, unknown>;
 
 export class GitHubMirrorError extends Error {
-  constructor(readonly reason: 'auth' | 'repo-not-private' | 'push-rejected' | 'unexpected') {
+  constructor(readonly reason: 'auth' | 'repo-not-private' | 'push-rejected' | 'timeout' | 'unexpected') {
     super('Vault GitHub operation failed');
   }
 }
+
+class GitHubContentError extends Error {}
 
 function object(value: unknown): JsonObject | undefined {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
@@ -63,9 +65,9 @@ function decodeBlob(value: unknown): string {
     throw new GitHubMirrorError('unexpected');
   }
   const bytes = Buffer.from(blob.content.replace(/\s/gu, ''), 'base64');
-  if (bytes.byteLength > maxNoteBytes || bytes.includes(0)) throw new GitHubMirrorError('unexpected');
+  if (bytes.includes(0)) throw new GitHubContentError();
   try { return new TextDecoder('utf-8', { fatal: true }).decode(bytes); }
-  catch { throw new GitHubMirrorError('unexpected'); }
+  catch { throw new GitHubContentError(); }
 }
 
 export function createGitHubMirrorClient(options: {
@@ -81,6 +83,21 @@ export function createGitHubMirrorClient(options: {
   let tokenExpiresAt = 0;
   let tokenRequest: Promise<string> | undefined;
   const content = new Map<string, string>();
+
+  async function timedFetch(url: string, init: RequestInit, signal: AbortSignal): Promise<Response> {
+    const timeout = AbortSignal.timeout(10_000);
+    try {
+      return await fetcher(url, {
+        ...init,
+        signal: AbortSignal.any([signal, timeout]),
+        redirect: 'error',
+      });
+    } catch {
+      if (signal.aborted) throw signal.reason;
+      if (timeout.aborted) throw new GitHubMirrorError('timeout');
+      throw new GitHubMirrorError('unexpected');
+    }
+  }
 
   async function appJwt(): Promise<string> {
     const issued = Math.floor(now() / 1000);
@@ -103,24 +120,27 @@ export function createGitHubMirrorClient(options: {
         'X-GitHub-Api-Version': '2022-11-28',
         'Content-Type': 'application/json',
       };
-      const installationResponse = await fetcher(
+      const installationResponse = await timedFetch(
         `${apiOrigin}/repos/${owner}/${repository}/installation`,
-        { headers, signal: AbortSignal.any([signal, AbortSignal.timeout(10_000)]), redirect: 'error' },
+        { headers },
+        signal,
       );
-      if (!installationResponse.ok) throw new GitHubMirrorError('auth');
+      if (!installationResponse.ok) {
+        throw new GitHubMirrorError([401, 403, 404].includes(installationResponse.status) ? 'auth' : 'unexpected');
+      }
       const installation = object(await responseJson(installationResponse));
       const id = installation?.id;
       if (!Number.isSafeInteger(id) || (id as number) < 1) {
         throw new GitHubMirrorError('auth');
       }
-      const tokenResponse = await fetcher(`${apiOrigin}/app/installations/${id}/access_tokens`, {
+      const tokenResponse = await timedFetch(`${apiOrigin}/app/installations/${id}/access_tokens`, {
         method: 'POST',
         headers,
         body: JSON.stringify({ repositories: [repository], permissions: { contents: 'write' } }),
-        signal: AbortSignal.any([signal, AbortSignal.timeout(10_000)]),
-        redirect: 'error',
-      });
-      if (!tokenResponse.ok) throw new GitHubMirrorError('auth');
+      }, signal);
+      if (!tokenResponse.ok) {
+        throw new GitHubMirrorError([401, 403, 404].includes(tokenResponse.status) ? 'auth' : 'unexpected');
+      }
       const result = object(await responseJson(tokenResponse));
       if (typeof result?.token !== 'string' || !result.token ||
         !result.permissions || object(result.permissions)?.contents !== 'write' ||
@@ -141,9 +161,7 @@ export function createGitHubMirrorClient(options: {
     retry = true,
   ): Promise<unknown> {
     const token = await installationToken(signal);
-    let response: Response;
-    try {
-      response = await fetcher(`${apiOrigin}${path}`, {
+    const response = await timedFetch(`${apiOrigin}${path}`, {
         method,
         headers: {
           Accept: 'application/vnd.github+json',
@@ -152,13 +170,7 @@ export function createGitHubMirrorClient(options: {
           'X-GitHub-Api-Version': '2022-11-28',
         },
         ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-        signal: AbortSignal.any([signal, AbortSignal.timeout(10_000)]),
-        redirect: 'error',
-      });
-    } catch {
-      if (signal.aborted) throw signal.reason;
-      throw new GitHubMirrorError('unexpected');
-    }
+      }, signal);
     if (response.status === 401 && retry) {
       accessToken = undefined;
       tokenExpiresAt = 0;
@@ -167,7 +179,12 @@ export function createGitHubMirrorClient(options: {
     if ((response.status === 409 || response.status === 422) && method === 'PATCH') {
       throw new GitHubMirrorError('push-rejected');
     }
-    if (!response.ok) throw new GitHubMirrorError(response.status === 401 || response.status === 403 ? 'auth' : 'unexpected');
+    if (!response.ok) {
+      if (response.status === 404 && path === `/repos/${VAULT_REPOSITORY}`) {
+        throw new GitHubMirrorError('repo-not-private');
+      }
+      throw new GitHubMirrorError(response.status === 401 || response.status === 403 ? 'auth' : 'unexpected');
+    }
     return responseJson(response);
   }
 
@@ -201,10 +218,13 @@ export function createGitHubMirrorClient(options: {
 
     async snapshot(signal): Promise<GitHubSnapshot> {
       const ref = object(await request(`/repos/${VAULT_REPOSITORY}/git/ref/heads/${VAULT_BRANCH}`, signal));
-      const head = object(ref?.object)?.sha;
-      if (typeof head !== 'string' || !/^[a-f0-9]{40}$/iu.test(head)) throw new GitHubMirrorError('unexpected');
+      const refObject = object(ref?.object);
+      const head = refObject?.sha;
+      if (refObject?.type !== 'commit' || typeof head !== 'string' || !/^[a-f0-9]{40}$/iu.test(head)) {
+        throw new GitHubMirrorError('unexpected');
+      }
       const treeResponse = object(await request(`/repos/${VAULT_REPOSITORY}/git/trees/${head}?recursive=1`, signal));
-      if (!treeResponse || treeResponse.truncated === true || !Array.isArray(treeResponse.tree) || treeResponse.tree.length > 100_000 ||
+      if (!treeResponse || treeResponse.truncated !== false || !Array.isArray(treeResponse.tree) || treeResponse.tree.length > 100_000 ||
         typeof treeResponse.sha !== 'string' || !/^[a-f0-9]{40}$/iu.test(treeResponse.sha)) {
         throw new GitHubMirrorError('unexpected');
       }
@@ -224,13 +244,25 @@ export function createGitHubMirrorClient(options: {
       const approved = entries.filter(file => isApprovedPath(options.policy, file.path));
       if (approved.length > maxApprovedFiles) throw new GitHubMirrorError('unexpected');
       const files = new Map<string, RemoteFile>();
+      const unavailableRecord = (file: { path: string; sha: string; size: number; mode: string }): RemoteFile => ({
+        sha: file.sha,
+        hash: createHash('sha256').update(`${file.sha}:${file.size}`).digest('hex'),
+        size: file.size,
+        mode: file.mode,
+      });
       await boundedMap(approved, async file => {
         if (file.mode !== '100644') {
           files.set(file.path, { sha: file.sha, hash: contentHash(''), size: file.size, mode: file.mode });
-        } else if (file.size > maxNoteBytes) {
-          files.set(file.path, { sha: file.sha, hash: contentHash(''), size: file.size, mode: file.mode });
+        } else if (file.size > options.policy.maxNoteBytes || file.size > maxResponseBytes * 0.72) {
+          files.set(file.path, unavailableRecord(file));
         } else {
-          const text = await readBlob(file.sha, signal);
+          let text: string;
+          try { text = await readBlob(file.sha, signal); }
+          catch (error) {
+            if (!(error instanceof GitHubContentError)) throw error;
+            files.set(file.path, unavailableRecord(file));
+            return;
+          }
           const record = { sha: file.sha, hash: contentHash(text), size: contentSize(text), mode: file.mode, text };
           if (record.size !== file.size) throw new GitHubMirrorError('unexpected');
           content.set(file.sha, text);
@@ -241,7 +273,7 @@ export function createGitHubMirrorClient(options: {
     },
 
     async readFile(file, signal) {
-      if (file.size > maxNoteBytes || file.mode !== '100644') throw new GitHubMirrorError('unexpected');
+      if (file.size > options.policy.maxNoteBytes || file.mode !== '100644') throw new GitHubContentError();
       return readBlob(file.sha, signal);
     },
 

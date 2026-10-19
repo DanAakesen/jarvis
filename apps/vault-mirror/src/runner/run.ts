@@ -64,7 +64,7 @@ function syncConflictState(state: MirrorState, plan: Plan): string[] {
   for (const item of conflictRows) {
     if (item.conflictFirstSeenAt !== undefined) state.conflictFirstSeenAt[item.path] = item.conflictFirstSeenAt;
   }
-  return [...conflicts].slice(0, 10);
+  return [...conflicts].filter(path => path.length <= 1024).slice(0, 10);
 }
 
 function statusReason(plan: Plan): MirrorReason | undefined {
@@ -81,6 +81,11 @@ function reasonFor(error: unknown, signal: AbortSignal, leaseLost: boolean): Mir
   if (error instanceof StateCorruptError) return 'state-corrupt';
   if (leaseLost) return 'unexpected';
   if (signal.aborted) return 'timeout';
+  if (error && typeof error === 'object') {
+    const details = error as { name?: unknown; code?: unknown; statusCode?: unknown };
+    if (details.name === 'TimeoutError' || details.name === 'AbortError' ||
+      details.code === 'ETIMEDOUT' || details.statusCode === 408) return 'timeout';
+  }
   if (error instanceof Error && isMirrorReason(error.message)) return error.message;
   return 'unexpected';
 }
@@ -133,6 +138,18 @@ async function planWithReaders(
   return planReconcile(input);
 }
 
+async function bidirectionalUpload(
+  obsidian: ReturnType<RunDependencies['createObsidian']>,
+  assertLease: () => Promise<void>,
+): Promise<void> {
+  let failure: unknown;
+  try { await obsidian.sync('bidirectional', 'upload', assertLease); }
+  catch (error) { failure = error; }
+  try { await obsidian.setMode('pull-only', assertLease); }
+  catch (error) { failure ??= error; }
+  if (failure !== undefined) throw new RunFailure(failedUploadReason(failure));
+}
+
 async function applyPending(
   state: MirrorState,
   workingCopy: string,
@@ -146,15 +163,7 @@ async function applyPending(
     if (pending.kind === 'write') await writeWorkspaceFile(workingCopy, path, pending.file.text);
     else await deleteWorkspaceFile(workingCopy, path);
   }
-  try {
-    await obsidian.sync('bidirectional', 'upload', assertLease);
-  } catch {
-    throw new RunFailure('upload-failed');
-  } finally {
-    await obsidian.setMode('pull-only', assertLease).catch(() => {
-      throw new RunFailure('upload-failed');
-    });
-  }
+  await bidirectionalUpload(obsidian, assertLease);
   const after = await snapshotWorkspace(workingCopy);
   for (const [path, pending] of entries) {
     if (pending.kind === 'delete') {
@@ -250,8 +259,14 @@ export async function runMirror(options: RunOptions): Promise<RunResult> {
     await assertLease();
     let archive: Uint8Array;
     try { archive = await encodeState(state, workspace.workingCopy, workspace.configHome); }
-    catch { throw new RunFailure('state-corrupt'); }
-    if (archive.byteLength > 200 * 1024 * 1024) throw new RunFailure('state-corrupt');
+    catch {
+      stateCorrupt = true;
+      throw new RunFailure('state-corrupt');
+    }
+    if (archive.byteLength > 200 * 1024 * 1024) {
+      stateCorrupt = true;
+      throw new RunFailure('state-corrupt');
+    }
     await lease.upload(archive, checksum(archive), signal);
   };
 
@@ -311,6 +326,11 @@ export async function runMirror(options: RunOptions): Promise<RunResult> {
     catch (error) {
       if (error instanceof ObCommandError) throw new RunFailure(error.reason);
       throw error;
+    }
+    try { await encodeState(state, workspace.workingCopy, workspace.configHome); }
+    catch {
+      stateCorrupt = true;
+      throw new RunFailure('state-corrupt');
     }
     if (Object.keys(state.pendingWriteBack).length > 0 && options.config.writeBack === 'on') {
       await applyPending(state, workspace.workingCopy, obsidian, assertLease);
@@ -391,15 +411,7 @@ export async function runMirror(options: RunOptions): Promise<RunResult> {
             for (const action of writesToObsidian) delete state.pendingWriteBack[action.path];
             throw new RunFailure('guard-tripped', 'needs-attention');
           }
-          try {
-            await obsidian.sync('bidirectional', 'upload', assertLease);
-          } catch (error) {
-            throw new RunFailure(failedUploadReason(error));
-          } finally {
-            await obsidian.setMode('pull-only', assertLease).catch(() => {
-              throw new RunFailure('upload-failed');
-            });
-          }
+          await bidirectionalUpload(obsidian, assertLease);
           const uploaded = await snapshotWorkspace(workspace.workingCopy);
           const changedAfterUpload = workspaceDiff(before, uploaded);
           if (!samePaths(changedAfterUpload, expected) ||
@@ -439,8 +451,7 @@ export async function runMirror(options: RunOptions): Promise<RunResult> {
       state.consecutiveFailures++;
       consecutiveFailures = state.consecutiveFailures;
     }
-    counts.pendingWriteBack = Object.keys(state.pendingWriteBack).length +
-      (options.config.writeBack === 'dry-run' ? approvedPending : 0);
+    counts.pendingWriteBack = Object.keys(state.pendingWriteBack).length + approvedPending;
     await writeState();
   } catch (error) {
     reason = reasonFor(error, signal, leaseLost);
@@ -455,9 +466,7 @@ export async function runMirror(options: RunOptions): Promise<RunResult> {
       counts.conflicts = ownedPlan.counters.conflicts;
       counts.credentialMatches = ownedPlan.counters.credentialMatches;
     }
-    counts.pendingWriteBack = state
-      ? Object.keys(state.pendingWriteBack).length
-      : 0;
+    counts.pendingWriteBack = (state ? Object.keys(state.pendingWriteBack).length : 0) + approvedPending;
     if (stateLoaded && state && !stateCorrupt) {
       state.consecutiveFailures++;
       consecutiveFailures = state.consecutiveFailures;

@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { chmod, mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
+import { chmod, lstat, mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
 import { contentHash, contentSize, isSafePath, normalizeContent } from '../engine/normalize.js';
@@ -38,7 +38,7 @@ function validStoredFile(value: unknown): value is StoredFile {
   if (Object.keys(record).some(key => !['hash', 'size', 'mode', 'text', 'conflictFirstSeenAt'].includes(key)) ||
     typeof record.hash !== 'string' || !/^[a-f0-9]{64}$/u.test(record.hash) ||
     !Number.isSafeInteger(record.size) || (record.size as number) < 0 ||
-    typeof record.mode !== 'string' || typeof record.text !== 'string') return false;
+    record.mode !== '100644' || typeof record.text !== 'string') return false;
   if (record.conflictFirstSeenAt !== undefined &&
     (typeof record.conflictFirstSeenAt !== 'number' || !Number.isFinite(record.conflictFirstSeenAt) ||
       record.conflictFirstSeenAt < 0)) return false;
@@ -76,7 +76,7 @@ function parseState(value: unknown): MirrorState {
     !Object.entries(state.conflictFirstSeenAt).every(([path, timestamp]) =>
       isSafePath(path) && typeof timestamp === 'number' && Number.isFinite(timestamp) && timestamp >= 0) ||
     !Number.isSafeInteger(state.consecutiveFailures) || (state.consecutiveFailures as number) < 0 ||
-    state.lastSuccessAt !== null && (typeof state.lastSuccessAt !== 'string' ||
+    state.lastSuccessAt !== null && (typeof state.lastSuccessAt !== 'string' || state.lastSuccessAt.length > 64 ||
       !Number.isFinite(Date.parse(state.lastSuccessAt)))) throw new TypeError('Corrupt mirror state');
   return state as unknown as MirrorState;
 }
@@ -98,11 +98,17 @@ function inspectZip(bytes: Uint8Array): void {
     throw new TypeError('Corrupt mirror archive');
   }
   const entries = view.getUint16(eocd + 10, true);
+  const entriesOnDisk = view.getUint16(eocd + 8, true);
   const directoryBytes = view.getUint32(eocd + 12, true);
   const directoryOffset = view.getUint32(eocd + 16, true);
-  if (entries > 100_000 || directoryOffset + directoryBytes > eocd) throw new TypeError('Corrupt mirror archive');
+  const commentLength = view.getUint16(eocd + 20, true);
+  if (entries > 100_000 || entriesOnDisk !== entries ||
+    directoryOffset + directoryBytes !== eocd || eocd + 22 + commentLength !== bytes.byteLength) {
+    throw new TypeError('Corrupt mirror archive');
+  }
   let offset = directoryOffset;
   let totalExpanded = 0;
+  const names = new Set<string>();
   for (let index = 0; index < entries; index++) {
     if (offset + 46 > bytes.byteLength || view.getUint32(offset, true) !== 0x02014b50) {
       throw new TypeError('Corrupt mirror archive');
@@ -118,7 +124,8 @@ function inspectZip(bytes: Uint8Array): void {
       throw new TypeError('Corrupt mirror archive');
     }
     const name = strFromU8(bytes.subarray(offset + 46, offset + 46 + nameLength));
-    if (!safeArchivePath(name)) throw new TypeError('Corrupt mirror archive');
+    if (!safeArchivePath(name) || names.has(name)) throw new TypeError('Corrupt mirror archive');
+    names.add(name);
     const externalAttributes = view.getUint32(offset + 38, true);
     const unixMode = externalAttributes >>> 16;
     const fileType = unixMode & 0o170000;
@@ -132,7 +139,12 @@ function inspectZip(bytes: Uint8Array): void {
   if (offset !== directoryOffset + directoryBytes) throw new TypeError('Corrupt mirror archive');
 }
 
-async function addDirectory(files: Record<string, Uint8Array>, source: string, prefix: string): Promise<number> {
+async function addDirectory(
+  files: Record<string, Uint8Array>,
+  modes: Record<string, number>,
+  source: string,
+  prefix: string,
+): Promise<number> {
   let total = 0;
   const visit = async (directory: string, name: string): Promise<void> => {
     for (const entry of await readdir(directory, { withFileTypes: true })) {
@@ -143,7 +155,9 @@ async function addDirectory(files: Record<string, Uint8Array>, source: string, p
         const file = await readFile(path);
         total += file.byteLength;
         if (total > MAX_ARCHIVE_BYTES) throw new TypeError('Oversized mirror archive');
-        files[`${name}${entry.name}`] = file;
+        const archivePath = `${name}${entry.name}`;
+        files[archivePath] = file;
+        modes[archivePath] = (await lstat(path)).mode & 0o777;
       }
     }
   };
@@ -159,9 +173,14 @@ export async function encodeState(
   const files: Record<string, Uint8Array> = {
     'mirror.json': strToU8(JSON.stringify(state)),
   };
-  const expanded = (await addDirectory(files, workingCopy, 'vault/')) +
-    (await addDirectory(files, configHome, 'headless/'));
-  if (expanded > MAX_ARCHIVE_BYTES) throw new TypeError('Oversized mirror archive');
+  const modes: Record<string, number> = {};
+  const expanded = (await addDirectory(files, modes, workingCopy, 'vault/')) +
+    (await addDirectory(files, modes, configHome, 'headless/'));
+  const metadata = strToU8(JSON.stringify({ modes }));
+  files['archive-metadata.json'] = metadata;
+  if (expanded + files['mirror.json']!.byteLength + metadata.byteLength > MAX_ARCHIVE_BYTES) {
+    throw new TypeError('Oversized mirror archive');
+  }
   const archive = zipSync(files, { level: 6 });
   if (archive.byteLength > MAX_ARCHIVE_BYTES) throw new TypeError('Oversized mirror archive');
   return archive;
@@ -175,12 +194,22 @@ export async function decodeState(
   inspectZip(archive);
   const entries = unzipSync(archive);
   const stateBytes = entries['mirror.json'];
-  if (!stateBytes) throw new TypeError('Corrupt mirror archive');
+  const metadataBytes = entries['archive-metadata.json'];
+  if (!stateBytes || !metadataBytes) throw new TypeError('Corrupt mirror archive');
   const state = parseState(JSON.parse(strFromU8(stateBytes)) as unknown);
-  let expanded = stateBytes.byteLength;
+  let expanded = stateBytes.byteLength + metadataBytes.byteLength;
+  const metadata = JSON.parse(strFromU8(metadataBytes)) as unknown;
+  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata) ||
+    Object.keys(metadata).length !== 1 || !('modes' in metadata) ||
+    !metadata.modes || typeof metadata.modes !== 'object' || Array.isArray(metadata.modes) ||
+    Object.entries(metadata.modes).some(([path, mode]) =>
+      !safeArchivePath(path) || !Number.isSafeInteger(mode) || (mode as number) < 0 || (mode as number) > 0o777)) {
+    throw new TypeError('Corrupt mirror archive');
+  }
+  const modes = metadata.modes as Record<string, number>;
   const writes: { root: 'vault' | 'headless'; path: string; bytes: Uint8Array }[] = [];
   for (const [name, content] of Object.entries(entries)) {
-    if (name === 'mirror.json' || name.endsWith('/')) continue;
+    if (name === 'mirror.json' || name === 'archive-metadata.json' || name.endsWith('/')) continue;
     if (!safeArchivePath(name)) throw new TypeError('Corrupt mirror archive');
     const separator = name.indexOf('/');
     const prefix = name.slice(0, separator);
@@ -188,10 +217,12 @@ export async function decodeState(
     if ((prefix !== 'vault' && prefix !== 'headless') || !relative || !safeArchivePath(relative)) {
       throw new TypeError('Corrupt mirror archive');
     }
+    if (!Object.hasOwn(modes, name)) throw new TypeError('Corrupt mirror archive');
     expanded += content.byteLength;
     if (expanded > MAX_ARCHIVE_BYTES) throw new TypeError('Corrupt mirror archive');
     writes.push({ root: prefix, path: relative, bytes: content });
   }
+  if (Object.keys(modes).length !== writes.length) throw new TypeError('Corrupt mirror archive');
   for (const [prefix, root] of [['vault', workingCopy], ['headless', configHome]] as const) {
     await mkdir(root, { recursive: true, mode: 0o700 });
     await chmod(root, 0o700);
@@ -201,7 +232,7 @@ export async function decodeState(
       const relative = target.slice(root.length + 1);
       if (!relative || relative === '..' || relative.startsWith('../')) throw new TypeError('Corrupt mirror archive');
       await mkdir(resolve(target, '..'), { recursive: true, mode: 0o700 });
-      await writeFile(target, item.bytes, { mode: 0o600, flag: 'w' });
+      await writeFile(target, item.bytes, { mode: 0o600 | (modes[`${prefix}/${item.path}`]! & 0o111), flag: 'w' });
     }
   }
   return state;

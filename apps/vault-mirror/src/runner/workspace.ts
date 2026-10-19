@@ -57,17 +57,33 @@ async function ensureParent(root: string, path: string, preserveSpelling = false
   return target;
 }
 
+async function existingFile(root: string, path: string): Promise<string> {
+  const target = resolve(root, ...path.split('/'));
+  const rel = relative(root, target);
+  if (!rel || rel === '..' || rel.startsWith(`..${sep}`)) throw new TypeError('Unsafe working-copy entry');
+  let current = root;
+  for (const segment of path.split('/').slice(0, -1)) {
+    current = resolve(current, segment);
+    const parent = await lstat(current);
+    if (!parent.isDirectory() || parent.isSymbolicLink()) throw new TypeError('Unsafe working-copy entry');
+  }
+  const info = await lstat(target);
+  if (!info.isFile() || info.isSymbolicLink()) throw new TypeError('Unsafe working-copy entry');
+  return target;
+}
+
 export async function snapshotWorkspace(root: string): Promise<WorkspaceSnapshot> {
   const files = new Map<string, WorkspaceFile>();
   const bytes = new Map<string, Buffer>();
   for (const path of await walk(root)) {
-    const normalized = normalizePath(path);
-    if (!isSafePath(normalized)) continue;
-    const target = await ensureParent(root, path, true);
+    const target = await existingFile(root, path);
     const value = await readFile(target);
     const info = await stat(target);
     let text: string | undefined;
-    try { text = new TextDecoder('utf-8', { fatal: true }).decode(value); }
+    try {
+      if (value.includes(0)) throw new TypeError('Binary vault entry');
+      text = new TextDecoder('utf-8', { fatal: true }).decode(value);
+    }
     catch { /* Invalid UTF-8 remains an unreadable record and cannot be written back. */ }
     bytes.set(path, value);
     files.set(path, {
@@ -108,8 +124,7 @@ export async function restoreWorkspace(root: string, snapshot: WorkspaceSnapshot
   const currentPaths = await walk(root);
   const saved = new Set(snapshot.bytes.keys());
   for (const path of currentPaths) {
-    safePath(path);
-    if (!saved.has(path)) await rm(await ensureParent(root, path, true));
+    if (!saved.has(path)) await rm(await existingFile(root, path));
   }
   for (const [path, value] of snapshot.bytes) {
     const target = await ensureParent(root, path, true);

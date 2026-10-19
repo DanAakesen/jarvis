@@ -24,14 +24,16 @@ export function createProductionDependencies(config: MirrorConfig): RunDependenc
   return {
     async readSecrets(signal): Promise<MirrorSecrets> {
       const secret = async (name: string, optional = false): Promise<string | undefined> => {
+        const timeout = AbortSignal.timeout(10_000);
         try {
           const value = await keyVault.getSecret(name, {
-            abortSignal: AbortSignal.any([signal, AbortSignal.timeout(10_000)]),
+            abortSignal: AbortSignal.any([signal, timeout]),
           });
           return value.value;
         } catch (error) {
           if (optional && errorStatus(error) === 404) return undefined;
           if (signal.aborted) throw signal.reason;
+          if (timeout.aborted) throw new Error('timeout', { cause: error });
           if (name === 'vault-mirror-policy' && errorStatus(error) === 404) {
             throw new Error('policy-missing', { cause: error });
           }
