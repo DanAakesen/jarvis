@@ -104,14 +104,13 @@ function GraphLegend() {
         <li><span className="graph-key graph-key-release" aria-hidden="true" />Release</li>
         <li><span className="graph-key graph-key-deployment" aria-hidden="true" />Deployment</li>
       </ul>
-      <p className="release-legend-note">Marker shapes show record type; colour follows the status shown in the linked records.</p>
     </>
   );
 }
 
 function GitGraphView({ graph, data }: { graph: GitGraph; data: ReleaseView }) {
   if (graph.branches.length === 0) {
-    return <StateMessage variant="empty" className="release-feedback" message="No branches or commits were returned by GitHub." />;
+    return <StateMessage variant="empty" className="release-feedback" message="No history" />;
   }
   const positions = new Map(graph.commits.map((commit, index) => [commit.sha, index]));
   const width = Math.max(720, 188 + graph.commits.length * 64);
@@ -170,7 +169,7 @@ function GitGraphView({ graph, data }: { graph: GitGraph; data: ReleaseView }) {
           })}
         </svg>
       </div>
-      {graph.truncated && <p className="release-freshness">Showing a bounded recent graph: branch or commit history was truncated.</p>}
+      {graph.truncated && <p className="release-freshness">Recent history only</p>}
     </>
   );
 }
@@ -267,9 +266,7 @@ export function ReleasePage({ backendUrl, getAccessToken }: AreaProps) {
           {refreshing ? 'Refreshing…' : 'Refresh releases and graph'}
         </button>
       </div>
-      {error && <StateMessage variant="partial" className="release-feedback"
-        message="The latest refresh failed."
-        detail="Showing the last loaded records; use Refresh releases and graph to try again." />}
+      {error && <StateMessage variant="partial" className="release-feedback" message="The latest refresh failed." />}
 
       <section className="release-section" aria-labelledby="graph-heading">
         <div className="release-section-heading">
@@ -279,9 +276,7 @@ export function ReleasePage({ backendUrl, getAccessToken }: AreaProps) {
           {data.graph && <p className="release-freshness">Fetched {formatDate(data.graph.fetchedAt)}</p>}
         </div>
         {!data.graph
-          ? <StateMessage variant="partial" className="release-feedback"
-            message="Release records are still shown without the GitHub graph."
-            detail="Refresh releases and graph to try again." />
+          ? <StateMessage variant="partial" className="release-feedback" message="Graph unavailable" />
           : <GitGraphView graph={data.graph} data={data} />}
       </section>
 
@@ -321,7 +316,7 @@ export function ReleasePage({ backendUrl, getAccessToken }: AreaProps) {
       <section className="release-section" aria-labelledby="releases-heading">
         <h2 id="releases-heading">Releases</h2>
         {data.releases.length === 0
-          ? <StateMessage variant="empty" className="release-feedback" message="No releases have been recorded." />
+          ? <StateMessage variant="empty" className="release-feedback" message="No releases" />
           : (
             <ul className="release-record-list">
               {data.releases.map((release) => (
@@ -355,7 +350,7 @@ export function ReleasePage({ backendUrl, getAccessToken }: AreaProps) {
       <section className="release-section" aria-labelledby="runs-heading">
         <h2 id="runs-heading">Workflow runs</h2>
         {data.workflowRuns.length === 0
-          ? <StateMessage variant="empty" className="release-feedback" message="No workflow runs have been recorded for this project." />
+          ? <StateMessage variant="empty" className="release-feedback" message="No runs" />
           : (
             <ul className="release-run-list">
               {data.workflowRuns.map((run) => (
@@ -383,7 +378,7 @@ export function ReleasePage({ backendUrl, getAccessToken }: AreaProps) {
       <section className="release-section" aria-labelledby="deployments-heading">
         <h2 id="deployments-heading">Deployments</h2>
         {data.deployments.length === 0
-          ? <StateMessage variant="empty" className="release-feedback" message="No deployments have been recorded for this project." />
+          ? <StateMessage variant="empty" className="release-feedback" message="No deployments" />
           : (
             <ul className="release-deployment-list">
               {data.deployments.map((deployment) => {
@@ -474,13 +469,13 @@ function RelatedReleaseItems({ release, repositoryUrl, runs, deployments, pullRe
         <h3>Workflow runs</h3>
         {runs.length ? (
           <ul>{runs.map((run) => <li key={run.id}><a href={linkedRunUrl(repositoryUrl, run.id)} target="_blank" rel="noreferrer">{run.workflow} · {runStatus(run)}</a></li>)}</ul>
-        ) : <p>No workflow runs are linked to this release.</p>}
+        ) : <p>No runs</p>}
       </div>
       <div>
         <h3>Deployments</h3>
         {deployments.length ? (
           <ul>{deployments.map((deployment) => <li key={deployment.id}>{deployment.environment} · {deploymentState(deployment.status)} · {formatDate(deployment.at)}</li>)}</ul>
-        ) : <p>No deployments are linked to this release.</p>}
+        ) : <p>No deployments</p>}
       </div>
       <div>
         <h3>Pull requests and tasks</h3>
@@ -489,7 +484,7 @@ function RelatedReleaseItems({ release, repositoryUrl, runs, deployments, pullRe
             {pullRequests.map((pr) => <li key={pr.id}><a href={`${repositoryUrl}/pull/${pr.number}`} target="_blank" rel="noreferrer">PR #{pr.number} · {pr.state} · checks {pr.checks}</a></li>)}
             {taskIds.map((taskId) => <li key={taskId}><TaskWindowLink taskId={taskId}>Task #{taskId}</TaskWindowLink></li>)}
           </ul>
-        ) : <p>No linked pull requests or tasks were recorded for this release.</p>}
+        ) : <p>No links</p>}
       </div>
       <span className="visually-hidden">Release SHA {release.sha}</span>
     </div>

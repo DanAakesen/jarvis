@@ -24,7 +24,7 @@ export function useDailyQuery(backendUrl: string | null, getAccessToken: () => P
         if (active) setResult({ key, data, pending: false });
       } catch (error) {
         if (active && !controller.signal.aborted) {
-          const message = error instanceof DailyReadError ? error.message : 'Daily could not be loaded. Retry to recover the recorded data.';
+          const message = error instanceof DailyReadError ? error.message : 'Daily could not be loaded.';
           const clear = error instanceof DailyReadError && (error.kind === 'auth' || error.kind === 'disabled');
           setResult(previous => ({ key, pending: false, error: message,
             ...(!clear && previous.key === key && previous.data ? { data: previous.data } : {}) }));

@@ -5,7 +5,7 @@ import { dailyProbe, probeState, type DailyProbe } from './overview';
 import { dailySources, initialDailyPeriod } from './presentation';
 import { DailyRefreshContext } from './refresh';
 
-const unreadable = 'This collection could not be read. Retry without changing your records.';
+const unreadable = 'This collection could not be read.';
 /** The backend shares a small SQL pool with chat, so the overview reads two collections at a time. */
 const concurrency = 2;
 

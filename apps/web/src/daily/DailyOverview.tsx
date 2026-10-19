@@ -94,7 +94,6 @@ export function DailyOverview({ backendUrl, getAccessToken, capabilities, onRetr
     <header className="daily-heading">
       {!embedded && <div>
         <h1 id="daily-heading">Daily</h1>
-        <p>Your workouts, nutrition, body, sleep and latest brief at a glance.</p>
       </div>}
       {embedded && hasSummarySource && <h2 id="daily-summary-heading">Today</h2>}
       {rows.length > 0 && <div className="daily-heading-actions">
@@ -106,7 +105,7 @@ export function DailyOverview({ backendUrl, getAccessToken, capabilities, onRetr
       ? <div className="daily-notice" role="alert"><p>{capabilities.error}</p>
         <button className="secondary-button" type="button" onClick={onRetryAvailability}>Retry availability</button></div>
       : !capabilities.sources ? <Loader label="Checking Daily availability" variant="rows" />
-        : rows.length === 0 && !hasSummarySource ? <p className="daily-empty" role="status">This backend has not exposed a browsable Daily collection.</p>
+        : rows.length === 0 && !hasSummarySource ? <p className="daily-empty" role="status">No Daily data</p>
           : <>
             {hasSummarySource && <>
               {!embedded && <h2 id="daily-summary-heading">Today</h2>}
@@ -118,15 +117,9 @@ export function DailyOverview({ backendUrl, getAccessToken, capabilities, onRetr
               <ul className="daily-overview-list" aria-labelledby="daily-holds-heading">
                 {rows.map(row => <OverviewRow key={row.source.id} row={row} onOpen={onOpen} onRetry={reload} />)}
               </ul>
-              {healthIsEmpty && <p className="daily-empty">No health records returned in the last 7 days.
+              {healthIsEmpty && <p className="daily-empty">No health records in the last 7 days.
                 {' '}<Link to="/settings#health-upload">Set up Health Auto Export in Settings</Link></p>}
               <DataNotes>
-                <p>Coverage checks read one record per collection. Dated collections cover the last 7 days (Europe/Copenhagen);
-                  other collections are not limited to a period. No records in this period does not prove the original source is empty.</p>
-                <p>Summaries use the last 30 days for workouts and body, the last 7 days for nutrition and sleep,
-                  and the latest returned brief. Source freshness and completeness remain unknown; partial history is labelled.</p>
-                <p>Nutrition compares logged energy with resting burn minus deficit (before activity),
-                  not an activity-adjusted allowance.</p>
                 {rows.map(row => <p key={row.source.id}><strong>{row.source.label}.</strong> {row.source.purpose}
                   {row.probe && row.probe.state !== 'failed' && <> Read <time dateTime={row.probe.observedAt}>{dailyValue(row.probe.observedAt)}</time>.</>}</p>)}
               </DataNotes>

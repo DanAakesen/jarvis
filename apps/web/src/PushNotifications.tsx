@@ -164,8 +164,8 @@ export function PushNotifications({ backendUrl, getAccessToken }: {
       if (granted !== 'granted') {
         setFeedback({
           message: granted === 'denied'
-            ? 'Notifications were denied. Follow the instructions below to re-enable them.'
-            : 'Notifications were not enabled. You can try again.',
+            ? 'Notifications denied. See the steps below.'
+            : 'Notifications not enabled. Try again.',
           error: granted !== 'default',
         });
         return;
@@ -228,7 +228,7 @@ export function PushNotifications({ backendUrl, getAccessToken }: {
       if (response.status === 409) {
         setSubscription(null);
         setFeedback({
-          message: 'No subscription is saved for this device. Turn notifications on again before sending another test.',
+          message: 'No subscription for this device. Turn notifications on again.',
           error: true,
         });
         return;
@@ -247,7 +247,7 @@ export function PushNotifications({ backendUrl, getAccessToken }: {
       }
       const [attempted, accepted, failed] = counts as [number, number, number];
       setFeedback({
-        message: `The push service accepted ${accepted} of ${attempted} ${attempted === 1 ? 'attempt' : 'attempts'}; ${failed} failed. “Accepted” does not mean it was shown on the phone. Lock the phone, close the app and tap the notification.`,
+        message: `Accepted ${accepted}/${attempted}; ${failed} failed. Delivery is not confirmed.`,
         error: false,
       });
     } catch {
@@ -354,8 +354,8 @@ export function PushNotifications({ backendUrl, getAccessToken }: {
                       : permission === 'granted'
                         ? <>
                             <p>{keyChanged
-                              ? 'The server notification key changed. Turn notifications on again for this device.'
-                              : 'This device no longer has a notification subscription. Turn notifications on again.'}</p>
+                              ? 'Notification key changed. Turn notifications on again.'
+                              : 'Subscription lost. Turn notifications on again.'}</p>
                             <button className="primary-button" type="button" disabled={busy !== ''}
                               onClick={() => { void enable(); }}>
                               {busy === 'enable' ? 'Turning on…' : 'Turn notifications on again'}

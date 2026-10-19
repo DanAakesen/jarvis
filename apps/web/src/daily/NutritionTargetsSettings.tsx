@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { CollapsibleSection } from '../CollapsibleSection';
 import { Loader } from '../Loader';
-import { formatTime } from './ui/formatters';
 import {
   draftText,
   loadNutritionTargets,
@@ -27,11 +26,6 @@ type View =
 interface Feedback { tone: 'success' | 'error'; message: string }
 
 const emptyDrafts: Drafts = { restingKcal: '', deficitKcal: '', proteinGrams: '' };
-const hints: Record<NutritionTargetKey, string> = {
-  restingKcal: 'What your body burns in a day before any activity.',
-  deficitKcal: 'How far below your burn you aim to finish the day.',
-  proteinGrams: 'The protein you aim to eat in a day.',
-};
 
 function draftsFrom(state: NutritionTargetsState): Drafts {
   return {
@@ -43,10 +37,6 @@ function draftsFrom(state: NutritionTargetsState): Drafts {
 
 function failureKind(error: unknown): NutritionTargetsFailure {
   return error instanceof NutritionTargetsError ? error.kind : 'failed';
-}
-
-function formatSavedAt(value: string): string {
-  return formatTime(value);
 }
 
 /**
@@ -133,7 +123,7 @@ export function NutritionTargetsSettings({ backendUrl, getAccessToken }: {
       setDrafts(draftsFrom(state));
       setTouched({});
       setView({ status: 'ready', state });
-      setFeedback({ tone: 'success', message: 'Nutrition targets saved.' });
+      setFeedback({ tone: 'success', message: 'Saved' });
     } catch (error) {
       if (controller.signal.aborted) return;
       setFeedback({ tone: 'error', message: nutritionTargetsFailureMessage(failureKind(error), 'save') });
@@ -165,18 +155,6 @@ export function NutritionTargetsSettings({ backendUrl, getAccessToken }: {
       )}
       {ready && parsed && (
         <>
-          <p className="settings-explanation">
-            Jarvis works out what is left to eat today from these figures: resting burn plus the active energy stored
-            for today, minus the deficit, minus the meals you have logged. It never estimates them.
-          </p>
-          <p className="settings-explanation">
-            Leave a field empty to clear it. You can also ask Jarvis to change them. They save here, not with Save settings.
-          </p>
-          {ready.missing.length > 0 && (
-            <p className="settings-explanation">
-              Not set yet: {ready.missing.map((key) => ready.bounds[key].label).join(', ')}. Jarvis needs all three to work out what is left today.
-            </p>
-          )}
           <form aria-labelledby="nutrition-targets-heading" aria-busy={saving} noValidate onSubmit={(event) => { void save(event); }}>
             <div className="nutrition-targets-grid">
               {nutritionTargetKeys.map((key) => {
@@ -189,13 +167,10 @@ export function NutritionTargetsSettings({ backendUrl, getAccessToken }: {
                     <label htmlFor={id}>{bound.label} ({bound.unit})</label>
                     <input id={id} type="text" inputMode="numeric" autoComplete="off" spellCheck={false}
                       value={drafts[key]} readOnly={saving} aria-invalid={error ? true : undefined}
-                      aria-describedby={`${id}-hint${error ? ` ${id}-error` : ''}`}
+                      aria-describedby={error ? `${id}-error` : undefined}
                       ref={(node) => { inputs.current[key] = node; }}
                       onChange={(event) => edit(key, event.target.value)}
                       onBlur={() => setTouched((current) => (current[key] ? current : { ...current, [key]: true }))} />
-                    <p className="settings-explanation" id={`${id}-hint`}>
-                      {hints[key]} Whole number from {bound.min} to {bound.max} {bound.unit}.
-                    </p>
                     {error && <p className="settings-validation-error" id={`${id}-error`} role="alert">{error}</p>}
                   </div>
                 );
@@ -210,7 +185,6 @@ export function NutritionTargetsSettings({ backendUrl, getAccessToken }: {
               </p>
             </div>
           </form>
-          {ready.updatedAt && <p className="settings-explanation">Last saved {formatSavedAt(ready.updatedAt)}.</p>}
         </>
       )}
     </CollapsibleSection>

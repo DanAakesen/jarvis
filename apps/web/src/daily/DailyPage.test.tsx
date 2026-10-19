@@ -37,7 +37,7 @@ describe('inactive single Daily data page', () => {
     fireEvent.change(screen.getByLabelText('Browse'), { target: { value: sources.briefs } });
     await screen.findByText('2026-10-16T07:00:00');
     expect(screen.queryByLabelText('From')).toBeNull();
-    expect(screen.getByText(/Historical records only, not current health or a new delivery/u)).toBeTruthy();
+    expect(screen.queryByText(/Historical records only/u)).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
     await screen.findByText(/Page 2, 1 record/u);
     fireEvent.click(screen.getByRole('button', { name: /Details for/u }));
@@ -135,7 +135,6 @@ describe('inactive single Daily data page', () => {
     status = 503; fireEvent.click(screen.getByRole('button', { name: 'Refresh records' }));
     await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('HTTP 503'));
     expect(screen.getByText('Synthetic retained')).toBeTruthy();
-    expect(screen.getByText(/Previously loaded records remain/u)).toBeTruthy();
     expect(screen.queryByText('must-not-escape')).toBeNull();
     status = 403; fireEvent.click(screen.getByRole('button', { name: 'Retry records' }));
     await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('could not be verified'));

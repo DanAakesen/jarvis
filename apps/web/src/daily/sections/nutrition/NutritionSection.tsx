@@ -5,8 +5,6 @@ import { Loader } from '../../../Loader';
 import { loadNutritionTargets, nutritionTargetsFailureMessage, NutritionTargetsError, type NutritionTargetsState } from '../../nutrition-targets';
 import { copenhagenDate, isDailyPeriod } from '../../period';
 import { DailyChart } from '../../ui/DailyChart';
-import { DailyCoverageNote } from '../../ui/DailyCoverageNote';
-import { DataNotes } from '../../ui/DataNotes';
 import { DailySectionHeader } from '../../ui/DailySectionHeader';
 import { DailyState } from '../../ui/DailyState';
 import { FreshnessLine } from '../../ui/FreshnessLine';
@@ -36,11 +34,10 @@ function NutrientList({ row }: { row: Row }) {
 function PlanTotals({ row }: { row: Row }) {
   const items = planItems(row.items_json);
   if (items === null) return <>
-    <p>Plan items could not be interpreted. Stored plan totals follow; their item-level completeness is unknown.</p>
+    <p>Plan items unreadable; stored totals shown.</p>
     <NutrientList row={row} />
   </>;
   return <>
-    <p>Totals from {items.length} stored plan items; missing values are unknown, not zero.</p>
     <dl>{nutrients.map(nutrient => {
       const total = sumNutrient(items, nutrient.key);
       return <div key={nutrient.key}><dt>{nutrient.label}</dt><dd>{display(total.value, nutrient.unit)}
@@ -72,9 +69,7 @@ function PagesState({ pages, label }: { pages: DailyPages; label: string }) {
     {pages.hasMore && <>
       <DailyState status="partial" coverage={{ returned: pages.items.length, hasMore: true }}
         {...(!pages.capped ? { onLoadMore: pages.loadMore } : {})} />
-      <DailyCoverageNote summary={`${label} history is partial.`}>
-        <p>{pages.capped ? 'Page limit reached. Narrow the period or filter the loaded records.' : 'Only loaded records are shown; the original source may contain more.'}</p>
-      </DailyCoverageNote>
+      {pages.capped && <p>Page limit reached.</p>}
     </>}
   </>;
 }
@@ -89,11 +84,6 @@ function Targets({ state, pending, error, retry }: {
       {state.missing.length > 0 && <p>Targets are not set. <Link to="/settings#nutrition-targets">Set them in Settings</Link>.</p>}
     </>}
   </div>;
-}
-
-function BaselineNote({ state }: { state: NutritionTargetsState | null }) {
-  const baseline = state ? targetBaseline(state.targets) : null;
-  return baseline !== null && <p>Resting burn minus deficit (before activity): {formatNumber(baseline)} kcal baseline allowance. Active energy is not included; this is not the full daily allowance.</p>;
 }
 
 function CaloriesComparison({ rows, state, partialPage }: { rows: Row[]; state: NutritionTargetsState | null; partialPage: boolean }) {
@@ -136,15 +126,7 @@ function Day({ props, date, setDate, days, targets }: {
       <button type="button" className="secondary-button" aria-label={`Today, ${today}`} disabled={date === today} onClick={() => setDate(today)}>Today</button>
     </div>}
     freshness={result.data && <FreshnessLine observedAt={result.data.freshness.observedAt} count={active.length}
-      recordLabel="meals" partial={result.data.coverage.hasMore} />}
-    aboutData={result.data && <DataNotes>
-      <p>Totals use displayed non-deleted meals only; unknown nutrient values are not zero. Partial totals are lower bounds.</p>
-      {result.data.coverage.hasMore && <p>This page is partial; nutrient totals are lower bounds.</p>}
-      {result.data.coverage.hasMore &&
-        <p>Showing {result.data.coverage.returned} meals from the first page, up to 100. Totals use displayed non-deleted meals only; unknown nutrient values are not zero.</p>
-      }
-      <BaselineNote state={targets.state} />
-    </DataNotes>} />
+      recordLabel="meals" partial={result.data.coverage.hasMore} />} />
     <div className="nutrition-block nutrition-day-content">
     {result.pending && <DailyState status="loading" />}
     {result.error && <DailyState status="error" message={result.error} onRetry={result.reload} />}
@@ -158,7 +140,7 @@ function Day({ props, date, setDate, days, targets }: {
           partial={total.value !== null && (total.missing > 0 || result.data!.coverage.hasMore)} />;
       })}</div>
       {targets.state && targetBaseline(targets.state.targets) !== null &&
-        <p className="nutrition-partial">Calories: baseline before activity, not the full daily allowance.</p>}
+        <p className="nutrition-partial">Calorie target: baseline before activity.</p>}
       <CaloriesComparison rows={rows} state={targets.state} partialPage={result.data.coverage.hasMore} />
       <div className="nutrition-other-nutrients">{nutrients.slice(4).map(nutrient => {
         const total = sumNutrient(rows, nutrient.key);
@@ -173,12 +155,12 @@ function Day({ props, date, setDate, days, targets }: {
         </details>}
       <Targets {...targets} />
       {!active.length && <div>
-        <p>No meals recorded for this day. That does not prove nothing was eaten.</p>
+        <p>No meals recorded.</p>
         <p><Link to="/settings#health-upload">Open Health upload in Settings</Link></p>
-        {props.sources.includes(sources.days) && <><p>Known logged days in {props.period.startDate}–{props.period.endDate}:</p>
+        {props.sources.includes(sources.days) && <>
           {previous && <button className="secondary-button" type="button" onClick={() => setDate(previous)}>Previous logged day: {previous}</button>}
           {next && <button className="secondary-button" type="button" onClick={() => setDate(next)}>Next logged day: {next}</button>}
-          {!previous && !next && <p>No other logged days returned in this period.</p>}
+          {!previous && !next && <p>No other logged days.</p>}
           <PagesState pages={days} label="Logged days" /></>}
       </div>}
       {groupedMeals(rows).map(([group, meals]) => <section className="nutrition-block" key={group}>
@@ -211,7 +193,6 @@ function Trend({ days, select, targets, period }: { days: DailyPages; select: (d
             {Array.isArray(row.partial_nutrients) && row.partial_nutrients.includes(nutrient.key) ? ' (lower bound)' : ''}</td>)}
         </tr>)}</tbody></table></ScrollTable>;
   const weekTable = <>
-    <p>The chart shows daily protein totals; this table shows Monday-based weekly averages with a known-day count for each nutrient.</p>
     <ScrollTable label="Weekly nutrition averages"><table><caption>Monday-based weekly averages over logged days only</caption>
         <thead><tr><th scope="col">Week starting</th><th scope="col">Logged days</th>{nutrients.map(nutrient => <th scope="col" key={nutrient.key}>{nutrient.label}</th>)}</tr></thead>
         <tbody>{weeks.map(week => <tr key={week.week}><th scope="row">{week.week}</th><td>Average over {week.days} logged {dayWord(week.days)}</td>
@@ -222,13 +203,8 @@ function Trend({ days, select, targets, period }: { days: DailyPages; select: (d
   </>;
   return <div className="nutrition-block">
     <PagesState pages={days} label="Trend" />
-    {(days.status === 'ready' || rows.length > 0) && <>
-      <p>{rows.length} of {periodDays} {dayWord(periodDays)} in this period {rows.length === 1 ? 'has' : 'have'} meals; missing days remain unknown.</p>
-      <DataNotes>
-       <p>Dates use Europe/Copenhagen. Missing days are not zero, lines do not bridge gaps, and partial nutrients are lower bounds. Loaded history does not establish source completeness.</p>
-       <BaselineNote state={targets} />
-      </DataNotes>
-    </>}
+    {(days.status === 'ready' || rows.length > 0) &&
+      <p>{rows.length} of {periodDays} {dayWord(periodDays)} {rows.length === 1 ? 'has' : 'have'} meals.</p>}
     {days.status === 'ready' && !rows.length && <DailyState status="empty" />}
     {rows.length > 0 && <>
       <div className="nutrition-charts">{macros.map(nutrient => {
@@ -268,15 +244,12 @@ function LibraryCollection({ props, kind, filter }: { props: DailySectionProps; 
       kind === 'plans' ? text(row.description, '') : '',
       kind === 'plans' && row.items_json ? readableJson(row.items_json) : ''].join(' ').toLowerCase().includes(filter.toLowerCase()));
   return <section className="nutrition-block"><h3>{kind === 'favorites' ? 'Favourites' : 'Meal plans'}</h3>
-    <DailyCoverageNote summary={`Filtering covers ${pages.items.length} loaded ${pages.items.length === 1 ? 'record' : 'records'}.`}>
-      <p>Up to five pages are loaded automatically. Source completeness is unknown.</p>
-    </DailyCoverageNote>
     <PagesState pages={pages} label={kind === 'favorites' ? 'Favourites' : 'Meal plans'} />
-    {pages.status === 'ready' && !matches.length && <p>No {filter ? 'matching loaded ' : 'loaded '}{kind === 'favorites' ? 'favourites' : 'plans'}.</p>}
+    {pages.status === 'ready' && !matches.length && <p>{filter ? 'No matches' : kind === 'favorites' ? 'No favourites' : 'No meal plans'}</p>}
     {matches.map((row, index) => kind === 'favorites'
       ? <RecordDetails key={text(row.id, `favorite-${index}`)} row={row} name={text(row[nameKey], 'Unnamed favourite')} />
       : <details className="nutrition-record" key={text(row.id, `plan-${index}`)}><summary>{text(row[nameKey], 'Unnamed plan')}</summary>
-        <p>{text(row.description, 'No description recorded.')}</p>
+        {text(row.description, '') && <p>{text(row.description, '')}</p>}
         <PlanTotals row={row} />
         <details><summary>Plan items</summary><pre>{readableJson(row.items_json)}</pre></details>
       </details>)}
@@ -337,7 +310,6 @@ export default function NutritionSection(props: DailySectionProps) {
       {activeView === 'trend' && <><Targets {...targetProps} /><Trend days={days} select={setDate} targets={targetResult.state} period={props.period} /></>}
       {activeView === 'library' && <>
         <label className="nutrition-filter">Filter loaded library <input type="search" value={filter} onChange={event => setFilter(event.target.value)} /></label>
-        <p>Search names, aliases, and plan descriptions or items among loaded records. This library is read-only; logging and corrections stay in chat.</p>
         {(['favorites', 'plans'] as const).filter(kind => props.sources.includes(sources[kind]))
           .map(kind => <LibraryCollection props={props} kind={kind} filter={filter} key={kind} />)}
       </>}

@@ -132,7 +132,6 @@ describe('Projects page', () => {
     const list = await within(dialog).findByRole('list', { name: 'Repositories you can add' });
     expect(within(list).getByText('DanAakesen/second-project')).not.toBeNull();
     expect(within(list).queryByText('DanAakesen/jarvis')).toBeNull();
-    expect(await within(dialog).findByText('The policy default only pre-fills projects Jarvis registers later. Every project keeps its own policy and can be changed any time.')).not.toBeNull();
     expect(within(dialog).getByText('DanAakesen', { selector: 'dd' })).not.toBeNull();
     expect(within(dialog).getByText('main', { selector: 'dd' })).not.toBeNull();
     expect(within(dialog).getByRole('button', { name: 'Ask Jarvis to create it' })).toHaveProperty('disabled', true);
@@ -192,8 +191,6 @@ describe('Projects page', () => {
     renderFactory('/factory/projects/7');
 
     const policy = await screen.findByRole('group', { name: 'Completion policy for Jarvis' });
-    const intro = screen.getByText('Other project settings apply to new tasks. Completion policy applies now, including pull requests that are already open.');
-    expect(intro.closest('.settings-section')).not.toBeNull();
     expect(policy.closest('.settings-section')).not.toBeNull();
     expect(within(policy).getByRole('radio', { name: /Deliver a pull request/ })).toHaveProperty('checked', true);
     expect(within(policy).getByRole('radio', { name: /Complete without deployment/ })).toHaveProperty('checked', false);
@@ -303,7 +300,7 @@ describe('Projects page', () => {
     projects = [];
     renderFactory();
 
-    expect(await screen.findByText('No managed projects are available.')).not.toBeNull();
+    expect(await screen.findByText('No projects')).not.toBeNull();
     expect(screen.getByRole('button', { name: 'Add project' })).not.toBeNull();
     expect(screen.queryByRole('link', { name: 'New project defaults' })).toBeNull();
 
@@ -355,11 +352,11 @@ describe('Projects page', () => {
 
     await user.click(screen.getByRole('button', { name: 'Archive project' }));
     const confirmation = screen.getByRole('group', { name: 'Confirm project archive' });
-    expect(screen.getByText(/task history stays available/)).not.toBeNull();
+    expect(screen.getByText(/History is kept/)).not.toBeNull();
     await user.click(within(confirmation).getByRole('button', { name: 'Confirm archive' }));
 
-    expect(await screen.findByText('No managed projects are available.')).not.toBeNull();
-    expect(screen.getByText(/Project archived\. Its task history is retained/)).not.toBeNull();
+    expect(await screen.findByText('No projects')).not.toBeNull();
+    expect(screen.getByText('Project archived.')).not.toBeNull();
     expect(fetchMock.mock.calls.some(([, init]) => init?.method === 'DELETE')).toBe(true);
   });
 

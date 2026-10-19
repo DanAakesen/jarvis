@@ -8,7 +8,6 @@ interface RecipeSummary {
   kind: 'pc' | 'browser';
   key: string;
   goal: string;
-  stepCount: number;
 }
 
 function recipeSummaries(value: unknown): RecipeSummary[] {
@@ -34,7 +33,6 @@ function recipeSummaries(value: unknown): RecipeSummary[] {
       kind: recipe.kind,
       key: recipe.key,
       goal: recipe.goal.trim().replace(/\s+/g, ' '),
-      stepCount: recipe.steps.length,
     };
   });
 }
@@ -75,7 +73,7 @@ export function TaskRecipesSettings({ backendUrl, getAccessToken }: {
       if (controller.signal.aborted) return;
       setRecipes(summaries);
       setLoaded(true);
-      setMessage('Routines refreshed.');
+      setMessage('Refreshed');
     } catch {
       if (!controller.signal.aborted) {
         setError(backendUrl
@@ -120,7 +118,7 @@ export function TaskRecipesSettings({ backendUrl, getAccessToken }: {
       if (response.status !== 204) throw new Error('Delete failed');
       if (controller.signal.aborted) return;
       setRecipes((current) => current.filter((item) => item.id !== recipe.id));
-      setMessage(`Routine deleted: ${recipe.goal}.`);
+      setMessage('Deleted');
     } catch {
       if (!controller.signal.aborted) {
         setConfirmingDelete(null);
@@ -136,7 +134,6 @@ export function TaskRecipesSettings({ backendUrl, getAccessToken }: {
 
   return (
     <CollapsibleSection storageKey="settings.recipes" headingId="routines-heading" title="Routines">
-      <p className="settings-explanation">Typed text and page content are not stored.</p>
       <div className="settings-actions">
         <button className="secondary-button" type="button" aria-busy={loading || undefined} aria-label={loading ? 'Refreshing…' : undefined}
           disabled={loading || deleting !== null || !backendUrl} onClick={() => { void load(); }}>
@@ -147,8 +144,7 @@ export function TaskRecipesSettings({ backendUrl, getAccessToken }: {
       <p className="settings-feedback" role={error ? 'alert' : 'status'}>
         {error || (loading ? <Loader variant="inline" announce={false} label="Loading routines…" /> : message)}
       </p>
-      {error && loaded && <p className="settings-explanation">Previously loaded routines are shown.</p>}
-      {loaded && recipes.length === 0 && <p>No saved routines.</p>}
+      {loaded && recipes.length === 0 && <p>No routines</p>}
       {recipes.length > 0 && (
         <ul className="repository-list" aria-label="Saved routines">
           {recipes.map((recipe) => (
@@ -156,9 +152,6 @@ export function TaskRecipesSettings({ backendUrl, getAccessToken }: {
               <div className="repository-info">
                 <strong><code>{recipe.kind === 'pc' ? 'PC app' : 'Browser site'}: {recipe.key}</code></strong>
                 <p style={{ overflowWrap: 'anywhere' }}>{recipe.goal}</p>
-                <p className="settings-explanation">
-                  {recipe.stepCount} {recipe.stepCount === 1 ? 'step' : 'steps'}
-                </p>
               </div>
               {confirmingDelete === recipe.id ? (
                 <div className="button-group" role="group" aria-label={`Delete routine: ${recipe.goal} (${recipe.key})`}

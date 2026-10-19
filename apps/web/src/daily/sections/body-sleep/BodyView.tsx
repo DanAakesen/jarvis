@@ -6,7 +6,6 @@ import { DailyPeriodControl } from '../../DailyPeriodControl';
 import { DailyChart } from '../../ui/DailyChart';
 import { ScrollTable } from '../../ui/ScrollTable';
 import { StatTile } from '../../ui/StatTile';
-import { DailyCoverageNote } from '../../ui/DailyCoverageNote';
 import { DailySectionHeader } from '../../ui/DailySectionHeader';
 import { FreshnessLine } from '../../ui/FreshnessLine';
 import { Sparkline } from '../../ui/Sparkline';
@@ -82,13 +81,8 @@ export function BodyView({ backendUrl, getAccessToken, period, onPeriodChange, r
       <DailyPeriodControl period={period} onPeriodChange={onPeriodChange} />
     </div>}
     freshness={latestRead && <FreshnessLine observedAt={latestRead.freshness.observedAt} count={recordCount}
-      partial={freshnessPages.hasMore || freshnessPages.loadingMore || freshnessPages.error !== null} />}
-    aboutData={selected && <DailyCoverageNote summary="About this data">
-      <p>Recorded identifier: <code className="body-sleep-identifier">{selected}</code></p>
-      <p>Missing values, gaps and units remain explicit. Daily values use the recorded average only as a labelled fallback. Missing days are not zero or interpolated. Each recorded unit group has its own summary and chart; units are not converted or combined.</p>
-      <p>Summaries use one value per day, averaging retained observations when a date repeats. Minimum and maximum refer to daily values; recorded ranges remain in the data table. Readings no more than 3 calendar days apart connect; wider gaps remain disconnected. Coverage and freshness are not established by returned records.</p>
-    </DailyCoverageNote>} />
-    {search && <p role="status">{filtered.length} {filtered.length === 1 ? 'measurement matches' : 'measurements match'}. The current selection stays available.</p>}
+      partial={freshnessPages.hasMore || freshnessPages.loadingMore || freshnessPages.error !== null} />} />
+    {search && <p role="status">{filtered.length} {filtered.length === 1 ? 'measurement matches' : 'measurements match'}</p>}
     <ReadState pages={catalogue} name="catalogue" />
     {selected && <ReadState pages={records} name="measurements" />}
     {recent.length > 1 && <nav className="body-sleep-shortcuts" aria-label="Recently recorded measurements">
@@ -103,9 +97,7 @@ export function BodyView({ backendUrl, getAccessToken, period, onPeriodChange, r
             <span className="body-sleep-shortcut-content">
               <span className="body-sleep-shortcut-name">{metricDisplay(name).label}</span>
               <span className="body-sleep-shortcut-state">{current ? 'Selected' : 'Select'}</span>
-              {current
-                ? <Sparkline values={shortcutValues} label={`${metricDisplay(name).label} selected-unit trend`} />
-                : <span className="body-sleep-shortcut-pending">Trend loads when selected</span>}
+              {current && <Sparkline values={shortcutValues} label={`${metricDisplay(name).label} selected-unit trend`} />}
             </span>
           </button>
         </li>;

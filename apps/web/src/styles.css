@@ -1653,7 +1653,6 @@ a.task-card-title { text-decoration: none; }
 .graph-key-checks { border-radius: 0; }
 .graph-key-release { transform: rotate(45deg); }
 .graph-key-deployment { border-radius: 50%; border: 2px solid var(--text-muted); background: var(--surface); }
-.release-legend-note { margin: calc(var(--space-2) * -1) 0 var(--space-3); color: var(--text-muted); font-size: var(--type-caption); }
 .release-graph-scroll { max-width: 100%; overflow-x: auto; overscroll-behavior-x: contain; border: 1px solid var(--rule); border-radius: var(--radius-control); background: var(--surface); }
 .release-graph-scroll:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
 .release-graph { display: block; max-width: none; }
@@ -1767,7 +1766,6 @@ a.task-card-title { text-decoration: none; }
 .timeline-error { color: var(--error); }
 .timeline-artifacts { display: grid; justify-items: start; gap: var(--space-1); margin-top: var(--space-4); }
 .task-usage { min-width: 0; }
-.task-usage-note { margin-bottom: var(--space-5); font-size: var(--type-small); }
 .task-usage-table-wrap { max-width: 100%; overflow-x: auto; }
 .task-usage-table { width: 100%; border-collapse: collapse; text-align: left; }
 .task-usage-table caption { padding: 0 0 var(--space-2); color: var(--text-muted); font-size: var(--type-small); text-align: left; }

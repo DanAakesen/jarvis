@@ -94,7 +94,7 @@ describe('Proactive area', () => {
     expect(screen.getByText('Todo added')).not.toBeNull();
     expect(screen.getByText('From Calendar and Todo list')).not.toBeNull();
     expect(screen.getByText('Close to the monthly limit')).not.toBeNull();
-    expect(screen.getByText('Estimated 42 of 100 DKK this month. This is an estimate.')).not.toBeNull();
+    expect(screen.getByText('Estimated 42 of 100 DKK this month.')).not.toBeNull();
     expect(screen.getByText('Stale, last read just now')).not.toBeNull();
 
     fireEvent.click(screen.getByText('Recent checks'));
@@ -148,7 +148,7 @@ describe('Proactive area', () => {
       return response({}, 404);
     });
     renderArea();
-    expect(await screen.findByText(/Nothing needs you right now/u)).not.toBeNull();
+    expect(await screen.findByText('No open items')).not.toBeNull();
     expect(screen.getAllByText(/Last check/).length).toBeGreaterThan(0);
   });
 
@@ -197,9 +197,9 @@ describe('Proactive area', () => {
     renderArea();
     expect(await screen.findByText(label)).not.toBeNull();
     expect(screen.getByRole('meter', { name: 'Estimated monthly proactive spend' })).not.toBeNull();
-    expect(screen.getByText('Estimated 42 of 100 DKK this month. This is an estimate.')).not.toBeNull();
+    expect(screen.getByText('Estimated 42 of 100 DKK this month.')).not.toBeNull();
     if (exhausted) {
-      expect(screen.getByText('Limit reached. Proactive checks are paused until next month or until you raise the limit in Settings.')).not.toBeNull();
+      expect(screen.getByText('Checks are paused until next month.')).not.toBeNull();
     }
   });
 

@@ -20,15 +20,15 @@ describe('Health upload settings', () => {
     vi.stubGlobal('fetch', fetch);
     render(<HealthUploadSettings backendUrl="https://jarvis.example.test/" getAccessToken={async () => 'synthetic-owner-token'} />);
 
-    await screen.findByText('Credential status: empty.');
+    await screen.findByText('Credential: empty');
     expect(screen.getByText('https://jarvis.example.test/api/health/ingest')).toBeTruthy();
     expect(screen.getByText(/POST/u)).toBeTruthy();
     expect(screen.getByText(`Authorization: ${['Bear', 'er'].join('')} <token>`)).toBeTruthy();
     expect(document.body.textContent).not.toMatch(/\*{6,}/u);
     expect(screen.getByText(/automation-id/u)).toBeTruthy();
     expect(screen.getByText(/session-id/u)).toBeTruthy();
-    expect(screen.getByText(/Keep each metric\/date group intact in one upload/u)).toBeTruthy();
-    expect(screen.getByText(/8 MiB ingress, 10,000 normalized rows or 8 MiB output/u)).toBeTruthy();
+    expect(screen.getByText(/each metric\/date group in one upload/u)).toBeTruthy();
+    expect(screen.getByText(/up to 8 MiB/u)).toBeTruthy();
     expect(screen.queryByText(/batching guidance is not yet qualified/u)).toBeNull();
 
     fireEvent.click(screen.getByRole('button', { name: 'Create credential' }));
@@ -41,11 +41,11 @@ describe('Health upload settings', () => {
     expect(screen.getByLabelText('One-time bearer token')).toHaveProperty('value', token);
 
     fireEvent.click(screen.getByRole('button', { name: 'Rotate credential' }));
-    await screen.findByText('Credential created. Copy it now; Jarvis will not show it again.');
+    await screen.findByText('Shown once. Copy it now.');
     expect(JSON.parse(String(fetch.mock.calls.at(-1)?.[1]?.body))).toEqual({ action: 'rotate' });
 
     fireEvent.click(screen.getByRole('button', { name: 'Revoke credential' }));
-    await screen.findByText('Upload credential revoked.');
+    await screen.findByText('Revoked');
     expect(screen.queryByLabelText('One-time bearer token')).toBeNull();
     expect(JSON.parse(String(fetch.mock.calls.at(-1)?.[1]?.body))).toEqual({ action: 'revoke' });
     expect(screen.getAllByRole('status')[0]?.textContent).toContain('revoked');
@@ -55,8 +55,7 @@ describe('Health upload settings', () => {
     const fetch = vi.fn(async () => new Response(JSON.stringify({ error: 'synthetic' }), { status: 503 }));
     vi.stubGlobal('fetch', fetch);
     render(<HealthUploadSettings backendUrl={null} getAccessToken={async () => 'synthetic-owner-token'} />);
-    expect(screen.getByText('Unavailable until the Jarvis API URL is configured')).toBeTruthy();
-    expect(screen.getByText('Actions are disabled because no configured API base URL is available.')).toBeTruthy();
+    expect(screen.getByText('API URL not configured')).toBeTruthy();
     expect((screen.getByRole('button', { name: 'Retry status' }) as HTMLButtonElement).disabled).toBe(true);
 
     cleanup();

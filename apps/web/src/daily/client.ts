@@ -179,9 +179,9 @@ async function requestJson(backendUrl: string | null, path: string, getAccessTok
   });
   if (!response.ok) {
     await response.body?.cancel();
-    if (response.status === 404) throw new DailyReadError('Daily is not enabled on this backend. Your original Daily remains in use.', 'disabled');
+    if (response.status === 404) throw new DailyReadError('Daily is not enabled on this backend.', 'disabled');
     if (response.status === 401 || response.status === 403) throw new DailyReadError('Daily access could not be verified. Sign in as the configured owner.', 'auth');
-    throw new DailyReadError(`Daily is unavailable (HTTP ${response.status}). Retry without changing your records.`);
+    throw new DailyReadError(`Daily is unavailable (HTTP ${response.status}).`);
   }
   return readJson(response);
 }

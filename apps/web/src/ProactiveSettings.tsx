@@ -136,7 +136,7 @@ export function ProactiveSettings({ backendUrl, getAccessToken, signIn }: {
       const clean = normalizedSettings(value);
       setSaved(clean);
       setDraft((current) => current ? { ...current, sources: clean.sources } : draftFrom(clean));
-      setNotice(paused ? 'Proactive checks paused.' : 'Proactive checks resumed.');
+      setNotice(paused ? 'Paused' : 'Resumed');
     } catch (error) {
       const status = isRecord(error) && typeof error.status === 'number' ? error.status : 0;
       if (needsSignIn(error)) setSignInRequired(true);
@@ -199,7 +199,7 @@ export function ProactiveSettings({ backendUrl, getAccessToken, signIn }: {
       setSaved(clean);
       setDraft(draftFrom(clean));
       setBudgetTouched(false);
-      setNotice('Proactive settings saved.');
+      setNotice('Saved');
     } catch (error) {
       const status = isRecord(error) && typeof error.status === 'number' ? error.status : 0;
       if (needsSignIn(error)) setSignInRequired(true);
@@ -230,7 +230,6 @@ export function ProactiveSettings({ backendUrl, getAccessToken, signIn }: {
           onChange={(event) => { void setPaused(event.target.checked); }} />
         Pause proactive checks
       </label>
-      <p className="settings-explanation">Pausing stops scheduled checks, todo additions and alerts.</p>
       {fieldErrors.paused && <p role="alert" className="settings-validation-error">{fieldErrors.paused}</p>}
       <form aria-labelledby="proactive-settings-heading" aria-busy={saving} noValidate onSubmit={(event) => { void save(event); }}>
         <div className="settings-field settings-number-field">
@@ -238,13 +237,12 @@ export function ProactiveSettings({ backendUrl, getAccessToken, signIn }: {
           <input id="proactive-budget-input" type="number" min="0" max="1000" step="1"
             value={draft.monthlyBudgetDkk} disabled={saving}
             aria-invalid={budgetTouched && !budgetValid || Boolean(fieldErrors.monthlyBudgetDkk)}
-            aria-describedby="proactive-budget-help proactive-budget-error"
+            aria-describedby="proactive-budget-error"
             onChange={(event) => {
               setBudgetTouched(true);
               setDraft((current) => current ? { ...current, monthlyBudgetDkk: event.target.value } : current);
               setFieldErrors({});
             }} />
-          <p className="settings-explanation" id="proactive-budget-help">Whole number from 0 to 1,000 DKK. Proactive spend is an estimate.</p>
           {(budgetTouched && !budgetValid || fieldErrors.monthlyBudgetDkk) &&
             <p className="settings-validation-error" id="proactive-budget-error" role="alert">
               {fieldErrors.monthlyBudgetDkk ?? 'Enter a whole number from 0 to 1,000.'}
@@ -265,7 +263,6 @@ export function ProactiveSettings({ backendUrl, getAccessToken, signIn }: {
 
         <fieldset className="settings-field proactive-feeds">
           <legend>News feeds</legend>
-          <p className="settings-explanation">Up to 10 unique HTTPS feed URLs; each may be at most 300 characters.</p>
           {draft.newsFeeds.map((feed, index) => <div className="proactive-feed-field" key={index}>
             <label htmlFor={`proactive-feed-${index}`}>Feed {index + 1}</label>
             <div className="proactive-feed-input">
@@ -296,14 +293,11 @@ export function ProactiveSettings({ backendUrl, getAccessToken, signIn }: {
           <label htmlFor="proactive-guidance">Guidance</label>
           <textarea id="proactive-guidance" rows={5} maxLength={1000} value={draft.guidance}
             disabled={saving} aria-invalid={!guidanceValid || Boolean(fieldErrors.guidance)}
-            aria-describedby="proactive-guidance-help proactive-guidance-count proactive-guidance-error"
+            aria-describedby="proactive-guidance-count proactive-guidance-error"
             onChange={(event) => {
               setDraft((current) => current ? { ...current, guidance: event.target.value } : current);
               setFieldErrors({});
             }} />
-          <p className="settings-explanation" id="proactive-guidance-help">
-            A low-priority preference for how Jarvis writes and what it highlights. It never grants permission to do anything.
-          </p>
           <p className="settings-explanation" id="proactive-guidance-count">{draft.guidance.length} / 1,000 characters</p>
           {(!guidanceValid || fieldErrors.guidance) && <p className="settings-validation-error"
             id="proactive-guidance-error" role="alert">{fieldErrors.guidance ?? 'Use at most 1,000 characters.'}</p>}

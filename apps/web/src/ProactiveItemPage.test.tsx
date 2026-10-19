@@ -61,13 +61,13 @@ describe('proactive item page', () => {
   it('does not distinguish another owner from an item that does not exist', async () => {
     fetchMock.mockResolvedValue(jsonResponse({ error: 'not_found' }, 404));
     renderPage();
-    expect(await screen.findByText('This item was not found or is not available to this account.')).not.toBeNull();
+    expect(await screen.findByText('Item not found.')).not.toBeNull();
   });
 
   it('renders an error with a working retry', async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({}, 503)).mockResolvedValueOnce(jsonResponse(itemResponse()));
     renderPage();
-    expect((await screen.findByRole('alert')).textContent).toContain('This item could not be loaded. Try again.');
+    expect((await screen.findByRole('alert')).textContent).toContain('Item could not be loaded.');
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
     expect(await screen.findByRole('heading', { name: 'Synthetic notification item' })).not.toBeNull();
     expect(fetchMock).toHaveBeenCalledTimes(2);
@@ -94,7 +94,7 @@ describe('proactive item page', () => {
 
   it('does not make a request for a malformed item id', async () => {
     renderPage('/proactive/not-a-uuid');
-    expect(await screen.findByText('This item was not found or is not available to this account.')).not.toBeNull();
+    expect(await screen.findByText('Item not found.')).not.toBeNull();
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });

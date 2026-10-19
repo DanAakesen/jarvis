@@ -5,7 +5,6 @@ import type { DailySectionProps } from '../types';
 import { DailyPeriodControl } from '../../DailyPeriodControl';
 import { ScrollTable } from '../../ui/ScrollTable';
 import { StatTile } from '../../ui/StatTile';
-import { DailyCoverageNote } from '../../ui/DailyCoverageNote';
 import { DailySectionHeader } from '../../ui/DailySectionHeader';
 import { FreshnessLine } from '../../ui/FreshnessLine';
 import { formatDate, formatNumber } from '../../ui/formatters';
@@ -55,11 +54,7 @@ export function SleepView({ backendUrl, getAccessToken, period, onPeriodChange, 
       <DailyPeriodControl period={period} onPeriodChange={onPeriodChange} />
     </div>}
     freshness={pages.last && <FreshnessLine observedAt={pages.last.freshness.observedAt} count={pages.items.length}
-      partial={pages.hasMore || pages.error !== null || pages.loadingMore} />}
-    aboutData={<DailyCoverageNote summary="About this data">
-      <p>Only recorded sleep values are summarized. Unknown stages and missing nights are not zero. An unknown asleep value never falls back to total sleep. Returned records do not establish source completeness or freshness.</p>
-      <p>Sleep stage details and source labels reflect fields returned for each night. Missing stage values are omitted, not estimated.</p>
-    </DailyCoverageNote>} />
+      partial={pages.hasMore || pages.error !== null || pages.loadingMore} />} />
     <ReadState pages={pages} name="sleep" />
     {pages.status === 'ready' && pages.items.length === 0 && <HealthEmptyState name="sleep" />}
     {pages.items.length > 0 && <>
@@ -80,7 +75,7 @@ export function SleepView({ backendUrl, getAccessToken, period, onPeriodChange, 
         <StatTile label="Shortest night asleep" value={summary.shortest?.value} unit="h"
           note={summary.shortest ? formatDate(summary.shortest.date) : 'No asleep values recorded'} />
         <StatTile label="Nights recorded" value={`${nightsRecorded} of ${summary.total}`}
-          note={pages.hasMore || pages.error ? 'Loaded nights only; more records may remain.' : 'Returned records; source completeness is unknown.'} />
+          note={pages.hasMore || pages.error ? 'More nights remain.' : undefined} />
       </div>
       <SleepChart rows={pages.items} period={period} />
     <Nights rows={sorted} openers={openers} night={night} select={select} />
@@ -90,7 +85,7 @@ export function SleepView({ backendUrl, getAccessToken, period, onPeriodChange, 
     <button type="button" className="secondary-button" onClick={() => select(null)}>Close night detail</button>
     {selected ? <dl>{sleepFields.map(field => <div key={field.key}>
       <dt>{field.label}</dt><dd><SleepValue row={selected} field={field} /></dd>
-    </div>)}</dl> : <p role="status">This night is not in the loaded period. It may be outside the period, beyond the page limit or unavailable. The URL selection is retained.</p>}
+    </div>)}</dl> : <p role="status">Night not in the loaded period.</p>}
     </section>}
   </div>;
 }
@@ -109,7 +104,7 @@ function StageBreakdown({ stagesRecorded }: { stagesRecorded: ReturnType<typeof 
       </li>) : <li>Stages not recorded</li>}
     </ul>
     {stagesRecorded.length > 0 && stagesRecorded.length < stages.length &&
-      <p className="body-sleep-note">Partial stages; unrecorded stages are unknown.</p>}
+      <p className="body-sleep-note">Partial stages</p>}
   </div>;
 }
 
@@ -146,14 +141,14 @@ function Nights({ rows, openers, night, select }: {
           </ul>
           {stagesRecorded.length > 0 && stagesRecorded.length < stages.length &&
             <p className="body-sleep-note">Partial stages</p>}
-          <p className="body-sleep-sources">Sources: {names.length ? names.join(', ') : 'Not provided by this view'}</p>
+          {names.length > 0 && <p className="body-sleep-sources">Sources: {names.join(', ')}</p>}
         </li>;
       })}
     </ul>
     <details className="body-sleep-table">
       <summary>View data table</summary>
       <ScrollTable label="Nightly sleep records" stickyFirstColumn>
-        <table><caption>Nightly sleep records, newest first. Times with offsets are shown in Europe/Copenhagen; unzoned times remain as recorded.</caption>
+        <table><caption>Nightly sleep records, newest first</caption>
           <thead><tr><th scope="col">Night</th>{sleepFields.map(field => <th scope="col" key={field.key}>{field.label}</th>)}</tr></thead>
           <tbody>{rows.map((row, index) => {
             const date = dateOnly(row.sleep_date);
