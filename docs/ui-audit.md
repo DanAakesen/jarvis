@@ -17,7 +17,7 @@ altering a version that already begins with `v`.
 
 The four formerly bare lines use `--text-muted` (`#5c564f` light,
 `#c0ccd2` dark). Against the translucent panel surface, conservative WCAG
-contrast bounds are **5.50:1 light** and **9.08:1 dark**; these use the
+contrast bounds are **5.52:1 light** and **9.09:1 dark**; these use the
 worst black/white scene-backdrop composite endpoints (92% light and 90% dark
 surface opacity). Both exceed 4.5:1.
 
