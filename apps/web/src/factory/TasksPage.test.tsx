@@ -127,6 +127,9 @@ async function openTaskForm(title = 'Add coverage') {
   return dialog.querySelector('form')!;
 }
 
+const boardStrip = () => screen.getByRole('group', { name: 'Board actions' });
+const connectionNotice = () => within(boardStrip()).getByRole('status');
+
 function submittedTasks() {
   return fetchMock.mock.calls
     .filter(([input, init]) => String(input).endsWith('/factory/tasks') && init?.method === 'POST')
@@ -277,7 +280,12 @@ describe('Factory task board', () => {
     expect(openTask.getAttribute('href')).toBe('/factory/tasks/42');
     expect(within(card).getByRole('button', { name: 'Fix the bug' }).getAttribute('aria-pressed')).toBe('false');
     expect(within(card).getByText(/Started/)).not.toBeNull();
-    expect(await screen.findByText('Live board updates connected.')).not.toBeNull();
+    const strip = boardStrip();
+    expect(within(strip).getByRole('button', { name: 'Refresh board' })).not.toBeNull();
+    expect(within(strip).getByRole('button', { name: 'Create project' })).not.toBeNull();
+    expect(within(strip).getByRole('button', { name: 'Create task' })).not.toBeNull();
+    expect(within(strip).queryByText('Board not connected')).toBeNull();
+    expect(screen.queryAllByText(/Live board updates|Fetched|DanAakesen\/jarvis/)).toHaveLength(0);
     expect(streamHarness.callbacks.size).toBe(0);
   });
 
@@ -622,6 +630,7 @@ describe('Factory task board', () => {
   });
 
   it('shows a live refresh failure beside the retained board without replacing its cards', async () => {
+    const user = userEvent.setup();
     renderFactory();
     const board = await screen.findByRole('region', { name: 'Issues by GitHub Project column' });
     const card = screen.getByRole('article', { name: 'Fix the bug' });
@@ -630,11 +639,23 @@ describe('Factory task board', () => {
       ? Promise.resolve(response({ error: 'unavailable' }, 503))
       : originalFetch(input, init));
     invalidate();
-    expect(await screen.findByText('Showing the last loaded board because refresh failed.')).not.toBeNull();
+    expect(await screen.findByText('Board not connected')).not.toBeNull();
+    expect(connectionNotice().textContent).toContain('Showing the last loaded board because refresh failed.');
     expect(screen.getByRole('region', { name: 'Issues by GitHub Project column' })).toBe(board);
     expect(screen.getByRole('article', { name: 'Fix the bug' })).toBe(card);
     expect(screen.queryByText('Loading GitHub board…')).toBeNull();
     expect(document.querySelector('.loader-core')).toBeNull();
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.queryByText('Board data could not be loaded. Try again.')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Retry board' })).toBeNull();
+
+    fetchMock.mockImplementation(originalFetch);
+    const refresh = within(boardStrip()).getByRole('button', { name: 'Refresh board' });
+    expect(refresh.hasAttribute('disabled')).toBe(false);
+    await user.click(refresh);
+    await waitFor(() => expect(screen.queryByText('Board not connected')).toBeNull());
+    expect(screen.getByRole('region', { name: 'Issues by GitHub Project column' })).toBe(board);
+    expect(screen.getByRole('article', { name: 'Fix the bug' })).not.toBeNull();
   });
 
   it('shows a recoverable error when the GitHub board cannot be loaded', async () => {
@@ -647,6 +668,7 @@ describe('Factory task board', () => {
 
     expect((await screen.findByRole('alert')).textContent).toContain('Board data could not be loaded. Try again.');
     expect(screen.getByRole('button', { name: 'Retry board' })).not.toBeNull();
+    expect(within(boardStrip()).queryByText('Board not connected')).toBeNull();
   });
 
   it('opens task details in the shared panel and returns focus to the selected card', async () => {
@@ -766,8 +788,10 @@ describe('Factory task board', () => {
     invalidate(100);
     await waitFor(() => expect(fetchMock.mock.calls.filter(([url]) => String(url).includes('/factory/board?'))).toHaveLength(2));
     act(() => publishFactoryBoardStatus('https://api.example.com', 'reconnecting'));
-    expect(screen.getByText(/Reconnecting to live board updates/)).not.toBeNull();
+    expect(screen.getByText('Board not connected')).not.toBeNull();
+    expect(connectionNotice().textContent).toContain('Reconnecting to live board updates');
     act(() => publishFactoryBoardStatus('https://api.example.com', 'connected'));
+    expect(screen.queryByText('Board not connected')).toBeNull();
     await waitFor(() => expect(fetchMock.mock.calls.filter(([url]) => String(url).includes('/factory/board?'))).toHaveLength(3));
     invalidate(1);
     await waitFor(() => expect(fetchMock.mock.calls.filter(([url]) => String(url).includes('/factory/board?'))).toHaveLength(4));
@@ -855,6 +879,17 @@ describe('Factory task board', () => {
           signal.addEventListener('abort', abort, { once: true });
         });
       });
+    });
+
+    it('shows the refresh icon as busy and disabled only while a board read is pending', async () => {
+      await mount();
+      const pending = screen.getByRole('button', { name: 'Refreshing board…' });
+      expect(pending.getAttribute('aria-busy')).toBe('true');
+      expect(pending.hasAttribute('disabled')).toBe(true);
+      await advance(10_000);
+      const idle = screen.getByRole('button', { name: 'Refresh board' });
+      expect(idle.hasAttribute('aria-busy')).toBe(false);
+      expect(idle.hasAttribute('disabled')).toBe(false);
     });
 
     it('finishes slow reads and queues one follow-up, including updates arriving during that follow-up', async () => {
@@ -961,7 +996,7 @@ describe('Factory task board', () => {
       expect(navigation.current?.(42, '42')).toEqual({ status: 'refused', reason: 'Board data could not be loaded. Try again.' });
       await advance(20_000);
       expect(reads).toHaveLength(2);
-      expect(screen.getByText('Showing the last loaded board because refresh failed.')).not.toBeNull();
+      expect(connectionNotice().textContent).toContain('Showing the last loaded board because refresh failed.');
     });
 
     it('does not queue duplicate latest versions or unrelated project updates', async () => {
@@ -1002,15 +1037,15 @@ describe('Factory task board', () => {
       expect(reads).toHaveLength(2);
       expect(readAt(1).signal.aborted).toBe(false);
       await act(async () => readAt(1).finish(response({ error: 'unavailable' }, 503)));
-      expect(screen.getByText('Showing the last loaded board because refresh failed.')).not.toBeNull();
+      expect(connectionNotice().textContent).toContain('Showing the last loaded board because refresh failed.');
       await advance(150);
       expect(reads).toHaveLength(3);
-      expect(screen.getByText('Showing the last loaded board because refresh failed.')).not.toBeNull();
+      expect(connectionNotice().textContent).toContain('Showing the last loaded board because refresh failed.');
       expect(screen.getByRole('region', { name: 'Issues by GitHub Project column' })).toBe(board);
       expect(screen.getByRole('article', { name: 'Fix the bug' })).toBe(card);
       await advance(10_150);
       expect(reads).toHaveLength(3);
-      expect(screen.queryByText('Showing the last loaded board because refresh failed.')).toBeNull();
+      expect(screen.queryByText('Board not connected')).toBeNull();
     });
 
     it('does not retry a failure without a new invalidation and preserves explicit Retry and Refresh', async () => {
@@ -1053,7 +1088,8 @@ describe('Factory task board', () => {
       expect(readAt(0).signal.aborted).toBe(true);
       await advance(10_150);
       expect(reads).toHaveLength(2);
-      expect(screen.getByText('DanAakesen/other')).not.toBeNull();
+      expect(screen.getByRole('combobox', { name: 'Project' })).toHaveProperty('value', '9');
+      expect(screen.getByRole('article', { name: 'Fix the bug' })).not.toBeNull();
       expect(navigation.current?.(999)).toMatchObject({ status: 'refused', reason: expect.stringContaining('not in') });
     });
 
@@ -1077,11 +1113,31 @@ describe('Factory task board', () => {
       ? Promise.resolve(response({ ...boardFixture(), stale: true })) : original(input, init));
     publishFactoryBoardStatus('https://api.example.com', 'unavailable');
     renderFactory();
-    await screen.findByText('Showing a cached board; issue placement may be out of date.');
-    expect(screen.getByText(/Live board updates are unavailable/)).not.toBeNull();
-    expect(screen.getByText('DanAakesen/jarvis')).not.toBeNull();
-    await user.click(screen.getByRole('button', { name: 'Refresh board' }));
+    await screen.findByText('Board not connected');
+    const notice = connectionNotice();
+    expect(notice.textContent).toContain('Showing a cached board; GitHub is unavailable, so issue placement may be out of date.');
+    expect(notice.textContent).toContain('Live board updates are unavailable. Refresh the board to check for changes.');
+    expect(notice.textContent).toContain('Last fetched');
+    expect(notice.querySelector('.kanban-connection-issue')?.getAttribute('title')).toBe(
+      notice.textContent!.replace(/^Board not connected\. /, ''),
+    );
+    expect(screen.queryAllByText(/DanAakesen\/jarvis/)).toHaveLength(0);
+    await user.click(within(boardStrip()).getByRole('button', { name: 'Refresh board' }));
     await waitFor(() => expect(fetchMock.mock.calls.filter(([url]) => String(url).includes('/factory/board?'))).toHaveLength(2));
+  });
+
+  it('keeps refresh, Create project and Create task on one strip above the board', async () => {
+    renderFactory();
+    const board = await screen.findByRole('region', { name: 'Issues by GitHub Project column' });
+    const strip = boardStrip();
+    const refresh = within(strip).getByRole('button', { name: 'Refresh board' });
+    expect(refresh.textContent).toBe('');
+    expect(refresh.getAttribute('title')).toBe('Refresh board');
+    expect(within(strip).getByRole('button', { name: 'Create project' })).not.toBeNull();
+    expect(within(strip).getByRole('button', { name: 'Create task' })).not.toBeNull();
+    expect(strip.compareDocumentPosition(board) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(document.querySelector('.kanban-header button')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Done' }).getAttribute('title')).toBe('Closed in the last 14 days');
   });
 
   it.each(['wrong project', 'wrong columns', 'unsafe issue link'] as const)('rejects %s rather than showing false data', async (kind) => {
@@ -1134,7 +1190,7 @@ describe('Factory task board', () => {
     await act(async () => finishOld(response(boardFixture())));
     expect(screen.queryByRole('article', { name: 'Fix the bug' })).toBeNull();
     expect(screen.getByRole('article', { name: 'Other issue' })).not.toBeNull();
-    expect(screen.getByText('DanAakesen/other')).not.toBeNull();
+    expect(screen.getByRole('combobox', { name: 'Project' })).toHaveProperty('value', '9');
   });
 
   it('caps each column explicitly and filters the full snapshot before applying that cap', async () => {

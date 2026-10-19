@@ -1,5 +1,45 @@
 # Decisions
 
+## P14-32 — Kanban is silent when it works: one board strip, a bare refresh icon, a small red notice on failure (19 October 2026; #1085)
+
+The owner asked for the Kanban status text to go and called always-on “all is
+well” lines a trend to avoid. While the board works the page now shows no
+repository line, no fetch time and no “connected” message. Only a fault shows,
+as a small red dot with “Board not connected”, and the detail (failed refresh,
+cached board, GitHub unavailable, last fetched time) sits in its tooltip and
+the screen-reader text, so the words, not the colour, carry the meaning. A
+failed refresh with a board already loaded shows only that notice, and the
+refresh icon is the retry path; the full error with “Retry board” appears only
+when there is no board to keep. The header lost its Refresh board button. A
+slim glass strip directly above the
+board holds a bare refresh icon (no fill, border or shadow in any state, like
+the composer send icon; it spins and is named “Refreshing board…” while a read
+is pending) with Create project and Create task. The filter form reflows by the
+width of the board rather than the viewport (5, 4, 2, then 1 column), which
+fixes fields running past the right edge. The repository link and the
+“closed in the last 14 days” line left with the status lines; the Done toggle
+keeps the 14-day wording as a tooltip. The trade-off is that freshness and the
+live channel are no longer visible at a glance; they surface when something is
+wrong. The live-status line that P14-12 measured on `--surface-translucent` no
+longer exists; the strip uses the same surface (`--board-slab`) and the red
+notice is part of the contrast audit.
+
+## P14-32 — The composer is quiet: no hover rim, a slim focus rim, a bare send icon (19 October 2026; #1085)
+
+The owner asked for three changes to the composer, directly. Hovering it no
+longer starts the rim sweep or the pointer glow, and the resting idle lap is
+unchanged. Focus is slim again: the solid 2px focus-colour ring that P14-04
+added on 18 October is gone, and the focus sweep is back to a 2px rim (P14-10
+had doubled it to 4px), so typing shows one thin travelling light as the design
+always intended. Under reduced motion the same 2px rim is steady. This reverses
+those two choices for the composer only; other controls keep the shared 3px
+focus outline. The send action is a bare arrow icon with no
+fill, border or shadow in any state: hover warms it to the focus colour and
+lifts it 2px, press settles it, disabled dims it. It keeps a 36px target (44px
+on coarse pointers), the “Send” name and a visible keyboard focus outline, and
+it no longer aliases the shared primary button. This is a scoped exception to the
+shared primary alias rule for this one control.
+
 ## P14-26 — Pure vault mirror policy, reconcile and status contract (19 October 2026; #1077)
 
 Implement only the offline decision boundary in `apps/vault-mirror`, not a
