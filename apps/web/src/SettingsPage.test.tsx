@@ -99,10 +99,14 @@ function renderSettingsPage(url: string | null = backendUrl, healthUpload?: Reac
           </CollapsibleSection>
         )}
         nutrition={deepLinkTargets
-          ? <CollapsibleSection storageKey="settings.nutrition-targets" id="nutrition-targets" title="Nutrition targets" />
+          ? <CollapsibleSection storageKey="settings.nutrition-targets" id="nutrition-targets" title="Nutrition targets">
+              <p>Nutrition target fixture</p>
+            </CollapsibleSection>
           : undefined}
         proactive={deepLinkTargets
-          ? <CollapsibleSection storageKey="settings.proactive" id="proactive-settings" title="Proactive" persist={false} initiallyOpen={false} />
+          ? <CollapsibleSection storageKey="settings.proactive" id="proactive-settings" title="Proactive" persist={false} initiallyOpen={false}>
+              <p>Proactive fixture</p>
+            </CollapsibleSection>
           : undefined} />
     </ThemePreferenceContext.Provider>,
   );

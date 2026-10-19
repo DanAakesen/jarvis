@@ -3553,10 +3553,6 @@ a.task-chip:hover { background: var(--glass-pressed); }
 }
 :root[data-motion="reduced"] .advanced-toggle input[role="switch"]::after { transition: none; }
 .settings-field.advanced-range input[type="range"] { height: 28px; min-height: 28px; padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
-@media (pointer: coarse) {
-  .settings-field.advanced-range input[type="range"] { height: 44px; min-height: 44px; }
-  .advanced-colour input[type="color"] { width: 44px; height: 44px; }
-}
 .collapsible-inner > .advanced-field + .advanced-field, .advanced-group > .advanced-field + .settings-grid, .collapsible-inner > .advanced-range + .settings-grid { margin-top: var(--space-3); }
 .advanced-range { display: grid; gap: var(--space-1); }
 .collapsible-inner > .advanced-toggle, .advanced-group > .advanced-toggle { margin-top: var(--space-3); }
@@ -3568,6 +3564,10 @@ a.task-chip:hover { background: var(--glass-pressed); }
 .advanced-colour input[type="color"] { flex: none; width: 34px; height: 34px; padding: 0; border: 0; border-radius: var(--radius-control); background: transparent; cursor: pointer; }
 .advanced-colour input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
 .advanced-colour input[type="color"]::-webkit-color-swatch { border: 1px solid var(--rule); border-radius: var(--radius-control); }
+@media (pointer: coarse) {
+  .settings-field.advanced-range input[type="range"] { height: 44px; min-height: 44px; }
+  .advanced-colour input[type="color"] { width: 44px; height: 44px; }
+}
 @media (max-width: 700px) { .advanced-colours { grid-template-columns: minmax(0, 1fr); } }
 .advanced-field .advanced-segmented { width: fit-content; max-width: 100%; }
 
