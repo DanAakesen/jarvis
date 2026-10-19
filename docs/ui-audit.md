@@ -173,6 +173,20 @@ request, and every tab at 1440 px had equal padding. The data is synthetic.
 No live records, physical device or human review were involved, and the section
 tab focus rings were not re-inspected in this pass.
 
+## Tasks and Notes corrections (P14-20; 19 October 2026)
+
+Tasks now use the same en-GB 24-hour clock for due times and vault freshness;
+the source-note and task-results links reach 44px on coarse pointers. Notes
+search announces settled no-match queries without an empty results shell. Note
+body padding is balanced, popup titles clamp to two lines while retaining the
+full accessible/hover title, and the phone search count is visually clipped
+but remains a live status for assistive technology.
+
+Synthetic Chromium checks covered 320×640, 390×844, 768×1024 and 1440×900 in
+light and dark, with coarse-pointer checks at 390 and 768. Times, empty-search
+announcement, title/padding, placeholder width and touch-target heights were
+verified; no horizontal overflow or browser console errors were found.
+
 ## Field clearance (P12-40, 19 October 2026)
 
 A states pass over Daily (empty, loading and error at 390 and 1440 px) found one

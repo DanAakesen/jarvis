@@ -82,6 +82,15 @@ describe('Notes workflow', () => {
     })).toBe(true);
   });
 
+  it('keeps a long note title available to assistive technology and on hover', async () => {
+    const title = 'A'.repeat(120);
+    mount([`/notes?${new URLSearchParams({ note: `Work/${title}.md` })}`], undefined, true);
+    const dialog = await screen.findByRole('dialog', { name: title });
+    const heading = within(dialog).getByRole('heading', { level: 3, name: title });
+    expect(heading.getAttribute('title')).toBe(title);
+    expect(heading.querySelector('.knowledge-note-title')?.textContent).toBe(title);
+  });
+
   it('defaults to the original graph, opens its familiar reader and edits only after selecting a note', async () => {
     mount();
     expect(await screen.findByLabelText('Search your knowledge')).not.toBeNull();
