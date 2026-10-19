@@ -1,4 +1,5 @@
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { systemSmokeCheckIds, type SystemStatus } from '@jarvis/contracts';
 import { StatusPage } from './StatusPage';
@@ -11,6 +12,7 @@ const ids = ['database', 'foundry.chat', 'foundry.voice', 'foundry.embeddings', 
 function snapshot(checkedAt = new Date().toISOString()): SystemStatus {
   return {
     checkedAt,
+    vaultMirror: { state: 'not-set-up', lastSuccessAt: null },
     entries: ids.map(id => ({
       id, checkedAt, status: id === 'github_app' ? 'down' : id === 'runner' ? 'unknown' : 'ok',
       ...(id === 'github_app' ? { details: { reason: 'check_failed' } } :
@@ -33,6 +35,45 @@ beforeEach(() => {
 afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
 
 describe('Status page', () => {
+  it('preserves the expanded loading row and keyboard focus when the first snapshot arrives', async () => {
+    let finish!: (value: Response) => void;
+    fetchMock.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    const user = userEvent.setup();
+    render(<StatusPage backendUrl="https://api.example.com" getAccessToken={getAccessToken} />);
+    const toggle = screen.getByRole('button', { name: 'Vault mirror details' });
+    await user.tab();
+    expect(document.activeElement).toBe(toggle);
+    await user.keyboard('{Enter}');
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    expect(screen.getByText('Waiting for mirror status.')).not.toBeNull();
+    await act(async () => { finish(response(snapshot())); });
+    expect(screen.getByRole('button', { name: 'Vault mirror details' })).toBe(toggle);
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    expect(document.activeElement).toBe(toggle);
+    expect(screen.getByText('Not set up')).not.toBeNull();
+    expect(screen.getByText('No mirror status document yet.')).not.toBeNull();
+  });
+
+  it('shows not set up for a successful older backend snapshot without a mirror field', async () => {
+    const report = snapshot();
+    delete report.vaultMirror;
+    fetchMock.mockResolvedValue(response(report));
+    render(<StatusPage backendUrl="https://api.example.com" getAccessToken={getAccessToken} />);
+    await screen.findByRole('listitem', { name: 'SQL database' });
+    expect(within(screen.getByRole('group', { name: 'Vault mirror' })).getByText('Not set up')).not.toBeNull();
+    expect(screen.queryByText('Read error')).toBeNull();
+  });
+
+  it('keeps read error and accurate recovery copy on a failed fetch', async () => {
+    fetchMock.mockResolvedValueOnce(response({}, 503));
+    render(<StatusPage backendUrl="https://api.example.com" getAccessToken={getAccessToken} />);
+    await screen.findByRole('button', { name: 'Retry status' });
+    const row = screen.getByRole('group', { name: 'Vault mirror' });
+    expect(within(row).getByText('Read error')).not.toBeNull();
+    fireEvent.click(within(row).getByRole('button', { name: 'Vault mirror details' }));
+    expect(within(row).getByText('Mirror status could not be read. Try loading status again.')).not.toBeNull();
+  });
+
   it('shows all recorded checks, real failures, bridge metadata and the retained smoke report without rerunning it', async () => {
     render(<StatusPage backendUrl="https://api.example.com/" getAccessToken={getAccessToken} />);
     const github = await screen.findByRole('listitem', { name: 'GitHub App' });
@@ -85,6 +126,34 @@ describe('Status page', () => {
     fetchMock.mockResolvedValue(response(report));
     render(<StatusPage backendUrl="https://api.example.com" getAccessToken={getAccessToken} />);
     expect(await screen.findByText(/Unavailable: the backend has no recorded smoke report/)).not.toBeNull();
+  });
+
+  it('renders the reduced mirror view and reveals paths only on expansion', async () => {
+    const report = snapshot();
+    report.vaultMirror = {
+      state: 'needs-attention', reason: 'conflict', writeBack: 'dry-run',
+      lastSuccessAt: new Date().toISOString(), conflictPaths: ['Notes/synthetic-conflict.md'],
+    };
+    fetchMock.mockResolvedValue(response(report));
+    render(<StatusPage backendUrl="https://api.example.com" getAccessToken={getAccessToken} />);
+    await screen.findByText('Needs attention');
+    const mirror = screen.getByRole('group', { name: 'Vault mirror' });
+    expect(within(mirror).getByText('Needs attention')).not.toBeNull();
+    expect(within(mirror).getByText('Dry-run')).not.toBeNull();
+    expect(screen.queryByText('Notes/synthetic-conflict.md')).toBeNull();
+    fireEvent.click(within(mirror).getByRole('button', { name: 'Vault mirror details' }));
+    expect(within(mirror).getByText('Notes/synthetic-conflict.md')).not.toBeNull();
+  });
+
+  it('rejects a raw mirror document instead of rendering unvalidated fields', async () => {
+    fetchMock.mockResolvedValue(response({
+      ...snapshot(),
+      vaultMirror: { state: 'healthy', lastSuccessAt: null, noteText: 'synthetic forbidden content' },
+    }));
+    render(<StatusPage backendUrl="https://api.example.com" getAccessToken={getAccessToken} />);
+    expect((await screen.findByRole('alert')).textContent).toMatch(/invalid system status response/);
+    expect(screen.queryByText('synthetic forbidden content')).toBeNull();
+    expect(within(screen.getByRole('group', { name: 'Vault mirror' })).getByText('Read error')).not.toBeNull();
   });
 
   it.each([
