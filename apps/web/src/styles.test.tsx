@@ -240,12 +240,15 @@ describe('app-wide control contract', () => {
     const range = /(?:^|\n)\.usage-segmented\s*\{([^}]*)\}/;
     expect(ruleDeclaration(source, range, 'border')).toBe('1px solid var(--rule)');
     expect(ruleDeclaration(source, range, 'background')).toBe('var(--surface-translucent)');
-    expect(source).toContain('.system-status-panel, .system-status-snapshot, .usage-hero,');
-    expect(ruleDeclaration(source, /\.system-status-snapshot\s*\{\s*margin:[^;]+;([^}]*)\}/, 'padding'))
+    // Only the page intro is a panel; the smoke-check timestamp inside the recorded smoke panel stays plain text.
+    expect(source).toContain('.system-status-panel, .status-page > .system-status-snapshot, .usage-hero,');
+    expect(source).not.toContain('.system-status-panel, .system-status-snapshot,');
+    expect(ruleDeclaration(source, /\.status-page > \.system-status-snapshot\s*\{([^}]*)\}/, 'padding'))
       .toBe('var(--space-3) var(--space-4)');
+    expect(source.match(/(?:^|\n)\.system-status-snapshot\s*\{([^}]*)\}/)?.[1] ?? '').not.toContain('padding');
   });
 
-  it('keeps the Snooze menu inside the viewport with every option on one line', () => {
+  it('keeps the Snooze menu inside the viewport and the time unbroken', () => {
     const proactive = readFileSync('src/proactive.css', 'utf8');
     const menu = /\.proactive-snooze-menu\s*\{\n\s*position: absolute;([^}]*)\}/;
     expect(ruleDeclaration(proactive, menu, 'width')).toBe('max-content');
@@ -255,6 +258,8 @@ describe('app-wide control contract', () => {
     expect(ruleDeclaration(proactive, menu, 'max-width')).toBe('calc(100vw - 2 * var(--space-3))');
     expect(ruleDeclaration(proactive, /\.proactive-snooze-time\s*\{([^}]*)\}/, 'flex')).toBe('none');
     expect(ruleDeclaration(proactive, /\.proactive-snooze-time\s*\{([^}]*)\}/, 'white-space')).toBe('nowrap');
+    // Only the time is kept on one line; a long label may wrap inside its own button instead of overflowing.
+    expect(proactive.match(/\.proactive-snooze-menu \.secondary-button\s*\{([^}]*)\}/)?.[1] ?? '').not.toContain('white-space');
     const phone = mediaBlocks(proactive).find(({ query }) => /max-width:\s*700px/.test(query))?.body ?? '';
     const phoneMenu = /\.proactive-snooze-menu\s*\{([^}]*)\}/;
     expect(ruleDeclaration(phone, phoneMenu, 'right')).toBe('0');

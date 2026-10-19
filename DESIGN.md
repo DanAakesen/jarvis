@@ -369,7 +369,8 @@ route. Actions and settings keep visible success/error copy, retry behavior,
 keyboard focus and 44px touch targets. The small-screen layout is phone-first,
 and all state remains readable with reduced motion and in either theme. The page
 itself sits on the shared translucent panel (P14-14), and the Snooze menu stays
-inside the viewport with each option on one line.
+inside the viewport. From 701 px every option fits on one line; on phones the
+long Tomorrow option wraps inside its own button and the time never breaks.
 
 The settings slot is a single collapsed Proactive section with its own Save;
 the Pause switch commits immediately. Private feed and guidance values are not

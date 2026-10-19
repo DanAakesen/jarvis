@@ -3340,14 +3340,15 @@ a.task-chip:hover { background: var(--glass-pressed); }
 .system-status-header, .system-status-row-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--space-3); }
 .system-status-header { margin-bottom: var(--space-2); }
 .system-status-header h1, .system-status-panel h2 { margin: 0; }
-.system-status-panel, .system-status-snapshot, .usage-hero, .usage-card, .usage-details, .usage-empty {
+.system-status-panel, .status-page > .system-status-snapshot, .usage-hero, .usage-card, .usage-details, .usage-empty {
   min-width: 0; border: 1px solid var(--rule); border-radius: var(--radius-panel); background: var(--surface-translucent);
   box-shadow: var(--panel-shadow); backdrop-filter: blur(var(--surface-blur));
 }
 .system-status-panel { padding: var(--space-5); }
 .system-status-panel h2 { font-size: var(--type-lead); }
 .system-status-note, .system-status-snapshot, .system-status-reason { margin: var(--space-3) 0; font-size: var(--type-small); overflow-wrap: anywhere; }
-.system-status-snapshot { margin: 0; padding: var(--space-3) var(--space-4); }
+.system-status-snapshot { margin: 0; }
+.status-page > .system-status-snapshot { padding: var(--space-3) var(--space-4); }
 .system-status-note, .system-status-time { color: var(--text-muted); }
 .system-status-feedback { padding: var(--space-4); border: 1px solid var(--rule); border-radius: var(--radius-panel); background: var(--error-surface); color: var(--text); }
 .system-status-feedback > p:first-child { color: var(--error); font-weight: 600; }
