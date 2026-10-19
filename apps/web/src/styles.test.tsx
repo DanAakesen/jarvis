@@ -215,6 +215,22 @@ describe('app-wide control contract', () => {
       .toBe('var(--radius-panel)');
   });
 
+  it('surfaces release headers and gives release links touch targets on coarse pointers', () => {
+    const header = /\.release-page-header\s*\{([^}]*)\}/;
+    expect(ruleDeclaration(source, header, 'padding')).toBe('var(--space-4) var(--space-5)');
+    expect(ruleDeclaration(source, header, 'border')).toBe('1px solid var(--rule)');
+    expect(ruleDeclaration(source, header, 'border-radius')).toBe('var(--radius-panel)');
+    expect(ruleDeclaration(source, header, 'background')).toBe('var(--surface-translucent)');
+    const coarseReleaseLinks = mediaBlocks(source).find(({ query, body }) =>
+      query.includes('pointer: coarse') && body.includes('.release-trail-pipeline a'));
+    expect(coarseReleaseLinks).toBeDefined();
+    const touchTargets = /\.release-trail-name a, \.release-trail-pipeline a, \.release-record-title > a\s*\{([^}]*)\}/;
+    expect(ruleDeclaration(coarseReleaseLinks!.body, touchTargets, 'display')).toBe('inline-flex');
+    expect(ruleDeclaration(coarseReleaseLinks!.body, touchTargets, 'min-height')).toBe('44px');
+    expect(ruleDeclaration(coarseReleaseLinks!.body, touchTargets, 'align-items')).toBe('center');
+    expect(ruleDeclaration(source, /\.release-record-title > a\s*\{([^}]*)\}/, 'overflow-wrap')).toBe('anywhere');
+  });
+
   it('uses touch-sized advanced Settings controls and content-width push actions', () => {
     const coarse = mediaBlocks(source).find(({ query, body }) =>
       query.trim() === '(pointer: coarse)' && body.includes('.settings-field.advanced-range'))?.body ?? '';
@@ -234,6 +250,45 @@ describe('app-wide control contract', () => {
     expect(proactive).toContain('.proactive-page [role="alert"]');
     expect(ruleDeclaration(shared, /\.state-message--error\s*\{([^}]*)\}/, 'background')).toBe('var(--error-surface)');
     expect(ruleDeclaration(shared, /\.state-message--error\s*\{([^}]*)\}/, 'border')).toBe('1px solid var(--rule)');
+  });
+
+  it('gives empty and loading state messages the error surface and keeps them flat inside surfaced containers', () => {
+    const defaults = /(?:^|\n):where\(\.state-message--empty, \.state-message--loading\)\s*\{([^}]*)\}/;
+    expect(ruleDeclaration(sharedStyles, defaults, 'padding-inline')).toBe('var(--space-3)');
+    expect(ruleDeclaration(sharedStyles, defaults, 'border')).toBe('1px solid var(--rule)');
+    expect(ruleDeclaration(sharedStyles, defaults, 'border-radius')).toBe('var(--radius-panel)');
+    expect(ruleDeclaration(sharedStyles, defaults, 'background')).toBe('var(--surface-translucent)');
+    // The error colour stays with the error variant; zero specificity lets a component's own surface win.
+    expect(sharedStyles.match(defaults)?.[1]).not.toMatch(/(?:^|[;\s])color:/u);
+    expect(sharedStyles).not.toMatch(/:where\([^)]*state-message--(?:error|partial)/u);
+
+    const reset = sharedStyles.match(
+      /(?:^|\n):where\(([^)]*)\)\s*:where\(\.state-message--empty, \.state-message--loading\)\s*\{([^}]*)\}/);
+    expect(reset).not.toBeNull();
+    const containers = (reset?.[1] ?? '').split(',').map((name) => name.trim()).filter(Boolean);
+    expect(containers).toEqual(expect.arrayContaining([
+      '.settings-section', '.workspace-window', '.folio-pane', '.release-section', '.release-trail', '.task-release-bar',
+      '.task-card', '.memory-detail', '.conversation-message', '.context-panel', '.knowledge-note', '.proactive-page',
+      '.kanban-column', '.task-column', '.modal', '.project-dialog-part', '.jobs-popover',
+    ]));
+    expect(reset?.[2]).toMatch(/padding-inline:\s*0;/u);
+    expect(reset?.[2]).toMatch(/border:\s*0;/u);
+    expect(reset?.[2]).toMatch(/background:\s*none;/u);
+    // Both rules have zero specificity, so the reset only wins by coming later.
+    expect(sharedStyles.indexOf(reset?.[0] ?? '')).toBeGreaterThan(sharedStyles.search(defaults));
+    // A container that no stylesheet defines would silently never flatten its messages.
+    const elsewhere = stylesheets.join('\n').replace(reset?.[0] ?? '', '');
+    for (const name of containers) {
+      expect(elsewhere, name).toMatch(new RegExp(`${name.replaceAll('.', '\\.')}(?![\\w-])`, 'u'));
+    }
+  });
+
+  it('shows the knowledge graph messages as a compact centred card instead of a pane-wide overlay', () => {
+    const card = sharedStyles.match(/\.knowledge-status, \.knowledge-loader\s*\{([^}]*)\}/)?.[1] ?? '';
+    expect(card).toMatch(/(?:^|[;\s])position:\s*absolute;/u);
+    expect(card).toMatch(/(?:^|[;\s])width:\s*max-content;/u);
+    expect(card).toMatch(/(?:^|[;\s])max-width:\s*min\(420px, 90%\);/u);
+    expect(sharedStyles).not.toMatch(/\.knowledge-loader\s*\{[^}]*inset:\s*0/u);
   });
 
   it('puts the Proactive page, Usage range switch, Status intro and 404 page on readable surfaces', () => {

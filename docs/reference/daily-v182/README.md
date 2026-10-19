@@ -2,6 +2,8 @@
 
 Source: original Sites Daily Overview, version **182**, SHA `9e193554c9c8c7c23a788ed3d2b0582580b76c0f`. Evidence date: 18 October 2026. This is the original app, not the DanAakesen/daily refresh-service repository.
 
+Current implementation gaps and endpoint/credential evidence are summarized in the [delivery status report](delivery-status.md).
+
 The source agent completed its documentation and Dan confirmed his validation. This handoff retains the six original delivered files. Original Daily code, credentials and data remain unchanged.
 
 ## Source documentation

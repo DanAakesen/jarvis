@@ -5,6 +5,97 @@ treatments selected from the existing Jarvis design system. The shared source
 of truth is `apps/web/src/styles.css`; route stylesheets own workflow layout,
 not parallel palettes or control systems.
 
+## Empty and loading messages and skeleton loaders (P14-17; 19 October 2026)
+
+Both defects sit in `StateMessage`. Only its error variant had a surface, so the
+empty and loading variants were faint muted text directly on the 3D scene (A22):
+15 of the 35 messages measured at 1440 in each theme, among them the Kanban
+empty, loading and no-projects messages, the Notes messages, and the Project,
+Releases, Status and Usage loading messages. The wrapper around every skeleton
+loader (`<span aria-hidden="true">`) is a grid item of
+`.state-message { display: grid; justify-items: start }`, so it shrank to its
+content and all 70 loaders in the baseline were narrower than their message
+(A49). The issue measured `rows` and `lines`; all five variants were affected.
+
+| Loader variant | Before | After |
+| --- | --- | --- |
+| `rows` (Folio, Proactive, Settings, Create project) | 59.6 to 68px, for example 68 of 866 in Proactive at 1440 | full message width: Proactive 866 (1440), 332 (390), 262 (320) |
+| `lines` (chat history, task origin, memory detail, Proactive item) | wrapper 0px, no bar visible | full width, 4 of 4 bars: chat history 680 (1440), 338 (390), 268 (320) |
+| `image` (generated image, image preview) | 2.7px | full width: 158.6 and 188.4 (320); the preview keeps its 320px cap on a 411.7px message at 1440 |
+| `panel` (task details) | about 24px | 981.5 (1440), 490.4 (768), 346.8 (390), 272 to 277 (320) |
+| `cards` (Kanban board) | four 34px columns in 184 of 1272px at 1440; nothing at 390 and 320 | 1246 (four columns, 1440), 624.6 (two, 768), 332 (one, 390), 262 (one, 320) |
+
+The `cards` loader had a second fault that the issue did not list. Its 900px and
+700px rules hid columns with `:nth-child(n + 3)` and `(n + 2)`, which counted the
+visually hidden label as the first child, so at 700px and narrower every column
+was hidden and at 900px a two-column grid showed one. They now hide
+`.skeleton-column + .skeleton-column + .skeleton-column` and
+`.skeleton-column + .skeleton-column`: four columns, two at 900px, one at 700px,
+with no new breakpoint.
+
+The wrapper gets the class `state-message-skeleton` (`justify-self: stretch`,
+`min-width: 0`) instead of the `:has()` selector the issue proposed. Empty and
+loading messages now take the error variant's surface (`--surface-translucent`,
+a 1px `--rule` border, `--radius-panel`, `--space-3` inline padding) as a
+zero-specificity `:where()` default, so any class rule overrides it. A second
+`:where()` rule removes it inside the 17 containers that already supply a
+surface, so a message never becomes a card in a card: `.settings-section`,
+`.workspace-window`, `.folio-pane`, `.release-section`, `.release-trail`,
+`.task-release-bar`, `.task-card`, `.memory-detail`, `.conversation-message`,
+`.context-panel`, `.knowledge-note`, `.proactive-page` (the list and the item
+page), `.kanban-column`, `.task-column`, `.modal`, `.project-dialog-part` and
+`.jobs-popover`. The issue named only Settings sections and popovers, and
+`.jobs-popover` renders no state message today, so it is listed for safety. The
+error and partial variants keep their current look, and `.usage-empty`,
+`.project-empty` and `.workspace-pin-feedback` keep their own surfaces. All 68
+`StateMessage` empty and loading call sites were traced to their container.
+
+The Notes graph overlay `.knowledge-loader` covered the whole pane, so a surface
+would have been a full-pane slab and its text sat at the far left. It and
+`.knowledge-status` are now one compact centred card
+(`width: max-content; max-width: min(420px, 90%)`); without `max-content` the
+`left: 50%` box shrank to half the pane (195px at 390).
+
+Checked with the untracked scratch harness: the real app in headless Edge with
+sign-in stubbed and synthetic data, 34 empty and loading scenarios (Folio, chat
+history and images, Kanban, task window, projects, releases, Notes, Settings,
+Proactive list and item, Usage, Status), measured at 320, 390, 768 and 1440 in
+light and at 320, 390 and 1440 in dark, with coarse pointers emulated at 768 and
+below, and screenshotted at 320, 390 and 1440 in both themes (768 for nine
+scenarios). The main run took 162 measurements and 112 screenshots, and a 320px
+pass over all 34 scenarios added 57 and 58, with no failures. All 86 skeleton
+loaders in the main run and all 32 in the 320px pass are full width and visible.
+No message sits bare on the scene: 0 of 88 at 1440 and at 390 in light and dark
+(30 of 70 before; the extra 18 come from three scenarios added after the
+baseline) and 0 of 92 at 320. The only double surface is the existing
+`.project-empty` inside the Settings Projects section, which P14-15 owns and this
+change does not touch. The 768px figures are after-only, because the baseline did
+not measure 768.
+
+The measurements were taken on `main` at `b57482aa`. P14-15, P14-18 to P14-22
+and a later copy fix merged afterwards, and the scenarios were not measured again
+on the merged tree, so the figures describe this change on that baseline and not
+the final layout of every screen.
+
+Tests: ten new cases in `StateMessage.test.tsx` (the wrapper class for each of
+the five variants, the text loader markup, the stretch rule, the card columns)
+and `styles.test.tsx` (the default surface, the reset list, the compact Notes
+card); nine fail on the old code (re-run against `main` at `fbd8fdaf`) and the
+tenth guards the unchanged text loader.
+Roles, announcements and recovery actions are unchanged. `tsc`, ESLint with
+`--max-warnings 0` on the changed files and `vite build` pass. The full web suite
+has 13 failures: the 7 known Windows backslash failures in `stylesheets.test.tsx`
+and 6 existing tests in six other files that fail identically without this change.
+The Group 5 scenarios also cover the Factory board and task window loaders that
+the whole-app pass listed as not checked.
+
+Not rendered, audited in code only, because the fake backend never produces the
+state: the `ContextPanel` and Workspace content-view loaders, the knowledge graph
+and Presence `lines` loaders, `HtmlAppView`, `NoteFolderPicker`, the Opening note
+message, the task release bar loading message, the attachment lightbox loader and
+the `.workspace-empty` messages. Hover, pressed and focus states and real
+devices were not checked.
+
 ## Phone top bar at 320px and the phone menu (P14-16; 19 October 2026)
 
 The 320px overflow (A1) was the phone top bar needing 353px of the 300px content
@@ -722,6 +813,33 @@ and after; overflow comes from the Kanban board's issue-list item, not from a
 button. The parallel P14-05 overflow sweep owns that non-button layout, so this
 button pass leaves it unchanged. Other checked pages had no new document-width
 increase.
+
+## Factory project and release surfaces (P14-22; 19 October 2026)
+
+The QA pass found the project-settings intro and completion policy, plus the
+release-page back link and repository/default-branch summary, sitting over the
+3D scene. The intro now sits in the Repository panel, the policy has its own
+settings panel, and the release header uses the shared translucent panel surface.
+Coarse-pointer release links now measure at least 44px, and task-bar, selected
+release and release-row labels consistently use `Build {version}` without
+altering a version that already begins with `v`.
+
+The four formerly bare lines use `--text-muted` (`#5c564f` light,
+`#c0ccd2` dark). Against the translucent panel surface, conservative WCAG
+contrast bounds are **5.52:1 light** and **9.09:1 dark**; these use the
+worst black/white scene-backdrop composite endpoints (92% light and 90% dark
+surface opacity). Both exceed 4.5:1.
+
+The actual app was checked in scratch Chromium with synthetic auth/API data.
+Before-state captures restored the original bare paragraph/fieldset/header;
+after-state captures covered 320×640, 390×844, 768×1024 and 1440×900 in both
+themes. Coarse-pointer emulation was enabled; the task release name/version and
+release record/workflow links measured at least 44px, all viewports stayed
+within their width, and the final routes had no fixture alerts or page errors.
+Local checks passed: `npm run lint --workspace @jarvis/web`
+(`--max-warnings 0`), `npx tsc --noEmit -p apps/web/tsconfig.json`,
+`npm test --workspace @jarvis/web` (131 files, 1,805 tests), and
+`npm run build --workspace @jarvis/web` (with the existing chunk-size warning).
 
 ## Pass 3 (borders, radii, surfaces)
 

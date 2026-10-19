@@ -263,7 +263,7 @@ export function KnowledgeGraphView({ backendUrl, getAccessToken, initialQuery = 
       </div>}
       {graph && query.trim() && !searching && hits.length === 0 &&
         (!showTaskMatches || (!taskSearch.error && taskSearch.result?.total === 0)) &&
-        <p className="knowledge-status" role="status">No notes or tasks match “{query.trim()}”.</p>}
+        <p className="knowledge-status" role="status">No {showTaskMatches ? 'notes or tasks' : 'notes'} match “{query.trim()}”.</p>}
       {graph && (
         <>
           {labels.map((label) => {

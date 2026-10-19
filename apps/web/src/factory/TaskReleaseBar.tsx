@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { fetchReleaseView } from './release-data';
+import { releaseBuildLabel } from './release-label';
 import type { ReleaseView } from './release-data';
 import { Loader } from '../Loader';
 import { StateMessage } from '../StateMessage';
@@ -201,7 +202,7 @@ export function TaskReleaseBar({
           <ul className="release-trail-pipeline" aria-label="Pipeline">
             <li data-tone={pipelineTone(buildState)}>Build {buildState ? statusLabel(buildState) : 'not reported'}</li>
             <li data-tone={pipelineTone(latestDeployment?.status)}>Deploy {latestDeployment ? statusLabel(latestDeployment.status) : 'not reported'}</li>
-            {latestRelease && <li data-tone={pipelineTone(latestRelease.status)}><Link to={releaseUrl}>v{latestRelease.version}</Link></li>}
+            {latestRelease && <li data-tone={pipelineTone(latestRelease.status)}><Link to={releaseUrl}>{releaseBuildLabel(latestRelease.version)}</Link></li>}
           </ul>
         </div>
         {currentView.graph === null
@@ -272,7 +273,7 @@ export function TaskReleaseBar({
             <dt>Release</dt>
             <dd>
               <span className="task-release-version">
-                <Link to={releaseUrl}>v{latestRelease.version}</Link>
+                <Link to={releaseUrl}>{releaseBuildLabel(latestRelease.version)}</Link>
                 <span className={`release-status state-${latestRelease.status}`}>{latestRelease.status}</span>
               </span>
             </dd>

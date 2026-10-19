@@ -4,6 +4,7 @@ import { TaskWindowLink } from '../TaskWindowLink';
 import { backendFetch } from '../backend-request';
 import type { AreaProps } from '../areas';
 import { fetchReleaseView } from './release-data';
+import { releaseBuildLabel } from './release-label';
 import { StateMessage } from '../StateMessage';
 import type {
   Deployment, DeploymentStatus, GitGraph, PullRequest, Release, ReleaseView, WorkflowRun,
@@ -288,7 +289,7 @@ export function ReleasePage({ backendUrl, getAccessToken }: AreaProps) {
         <section className="release-section selected-release" aria-labelledby="selected-release-heading">
           {selectedRelease ? (
             <>
-              <h2 id="selected-release-heading">Release {selectedRelease.version}</h2>
+              <h2 id="selected-release-heading">{releaseBuildLabel(selectedRelease.version)}</h2>
               <dl className="release-details">
                 <div><dt>Status</dt><dd><StatusLabel state={selectedRelease.status}>{selectedRelease.status}</StatusLabel></dd></div>
                 <div><dt>Commit</dt><dd><a href={`${repositoryUrl}/commit/${encodeURIComponent(selectedRelease.sha)}`} target="_blank" rel="noreferrer"><code>{shortSha(selectedRelease.sha)}</code></a></dd></div>
@@ -326,7 +327,7 @@ export function ReleasePage({ backendUrl, getAccessToken }: AreaProps) {
               {data.releases.map((release) => (
                 <li key={release.id} className="release-record">
                   <div className="release-record-title">
-                    <Link to={`/factory/projects/${projectId}/releases/${release.id}`}>Build {release.version}</Link>
+                    <Link to={`/factory/projects/${projectId}/releases/${release.id}`}>{releaseBuildLabel(release.version)}</Link>
                     <StatusLabel state={release.status}>{release.status}</StatusLabel>
                   </div>
                   <dl className="release-details">
@@ -395,7 +396,7 @@ export function ReleasePage({ backendUrl, getAccessToken }: AreaProps) {
                     </div>
                     <dl className="release-details">
                       <div><dt>Time</dt><dd>{formatDate(deployment.at)}</dd></div>
-                      {release && <div><dt>Release</dt><dd><Link to={`/factory/projects/${projectId}/releases/${release.id}`}>Build {release.version}</Link></dd></div>}
+                      {release && <div><dt>Release</dt><dd><Link to={`/factory/projects/${projectId}/releases/${release.id}`}>{releaseBuildLabel(release.version)}</Link></dd></div>}
                     </dl>
                     <a href={`${repositoryUrl}/deployments/${encodeURIComponent(deployment.environment)}`} target="_blank" rel="noreferrer">Open deployment on GitHub</a>
                   </li>

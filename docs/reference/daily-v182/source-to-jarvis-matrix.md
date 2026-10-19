@@ -21,7 +21,7 @@ real-SQL execution in this environment, deployment, or owner acceptance.
 | `briefing_runs` | No target | excluded | Fixed/scheduled Daily brief renderer is excluded. |
 | `coach_commitments` | `daily.coach_commitments` | existing | Preserve existing rows/schema; commitment and order capabilities are excluded. |
 | `coach_experiments` | `daily.coach_experiments` | existing | Preserve existing rows/schema; weekly experiments are excluded. |
-| `coach_profiles` | `daily.coach_profiles` | existing | Physical table reused; selected read/update native operations are implemented; SQL integration test added but requires Database CI. |
+| `coach_profiles` | `daily.coach_profiles` | existing | Physical table reused; selected read/update native operations are implemented; SQL integration passed in PR #1008 Database CI. |
 | `gmail_suppressions` | No target | excluded | Source-specific Gmail suppression state is not part of the selected Daily port. |
 | `health_daily_metrics` | `daily.health_daily_metrics` | existing | SQL Server `date`/`float` and JSON adaptations; preserve source units and day semantics. |
 | `health_ingestions` | `daily.health_ingestions` | existing | SQL Server owner-scoped lineage; inbound processor writes succeeded state. |
@@ -43,7 +43,7 @@ real-SQL execution in this environment, deployment, or owner acceptance.
 | `nutrition_recommendation_feedback` | `daily.nutrition_recommendation_feedback` | existing | Existing preference persistence; selected preference operation uses it and has synthetic confirmation/owner tests. Null clears to a retained revisioned null row, unlike source delete semantics. |
 | `order_suppressions` | No target | excluded | Coach orders and their suppression lifecycle are excluded. |
 | `readiness_checkins` | `daily.readiness_checkins` | existing | Preserve rows/schema; standalone Ready workflow is excluded. |
-| `recovery_days` | `daily.recovery_days` | existing | Physical table reused; mark/clear capability implemented; SQL integration test added but requires Database CI. |
+| `recovery_days` | `daily.recovery_days` | existing | Physical table reused; mark/clear capability is implemented; SQL integration passed in PR #1008 Database CI. |
 | `widget_auth_attempts` | No target | excluded | Legacy widget authentication/rendering is excluded. |
 
 Existing SQL objects are defined in migrations `0041_daily_owner_schema.sql`
@@ -83,9 +83,10 @@ source OpenAPI paths.
 
 The corresponding inbound phone routes remain `POST /api/health/ingest` and
 `POST /api/health/heartbeat`; the code retains the original headers/body
-semantics. Runtime defaults the feature off; this branch's authorized backend
-deployment environment explicitly enables it. Deployment and endpoint
-verification remain outstanding.
+semantics. Runtime defaults the feature off; the reviewed backend deployment
+environment explicitly enables it. Post-merge deployment succeeded, but
+upload-specific production authentication/processing and phone acceptance remain
+unverified. See the [delivery status report](delivery-status.md).
 
 ## Selected native tools
 
@@ -166,6 +167,7 @@ preserved and no source compatibility alias or parallel runtime is created.
 
 Excluded means the owner did not select that source feature. Existing means the
 component is present; see the evidence table for fields and semantics actually
-checked. This PR remains incomplete: source-path HTTP parity, the all-31-table
-field matrix, real SQL CI, deployed HTTP/worker proof, endpoint/token handoff and
-owner acceptance are not established.
+checked. The PR's SQL integration CI passed. Source-path HTTP parity, the all-31-table
+field matrix, upload-specific deployed HTTP/worker proof, current credential
+status/handoff and owner phone acceptance remain unresolved. See the
+[delivery status report](delivery-status.md).

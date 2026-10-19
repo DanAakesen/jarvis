@@ -171,6 +171,27 @@ describe('knowledge graph view', () => {
     expect(container.querySelector('.knowledge-results')).toBeNull();
   });
 
+  it('says only notes match when task matches are not searched', async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      if (url.pathname === '/knowledge/graph') return json({
+        nodes: [{ id: 'fixture', path: 'Work/Fixture.md', title: 'Fixture note', folder: 'Work' }],
+        edges: [],
+      });
+      if (url.pathname === '/knowledge/search') return json({ hits: [] });
+      return json({}, 404);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    render(<KnowledgeGraphView backendUrl="https://api.example.com" getAccessToken={getAccessToken} />);
+
+    fireEvent.change(await screen.findByLabelText('Search your knowledge'), { target: { value: 'nothing here' } });
+
+    const message = await screen.findByText('No notes match “nothing here”.');
+    expect(message.getAttribute('role')).toBe('status');
+    expect(screen.queryByText(/No notes or tasks match/)).toBeNull();
+    expect(fetchMock.mock.calls.some(([input]) => new URL(String(input)).pathname === '/vault/tasks')).toBe(false);
+  });
+
   it('shows task matches and plain note snippets as separate search results', async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = new URL(String(input));

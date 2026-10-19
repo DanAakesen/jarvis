@@ -2000,3 +2000,13 @@ Loader unless the final collection layout is known well enough for a matching
 skeleton. Explain the real empty condition and, for stale, partial or capped
 data, explain how to refresh. Daily retains its existing `DailyState` treatment
 until its separate follow-up.
+
+Empty and loading messages carry the same surface as the error variant
+(`--surface-translucent`, a 1px `--rule` border, `--radius-panel` and
+`--space-3` inline padding) unless the container already supplies a surface.
+`styles.css` lists those containers next to the default; a surfaced container
+that hosts a state message must be added to that list, or the message shows a
+second surface. Skeleton loaders fill the message's width through the
+`.state-message-skeleton` wrapper. The `image` placeholder keeps its 320px cap,
+and the `cards` placeholder shows four columns, two at 900px and narrower and
+one at 700px and narrower.
