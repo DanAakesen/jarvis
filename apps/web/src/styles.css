@@ -2734,12 +2734,13 @@ a.task-chip:hover { background: var(--glass-pressed); }
 @media (prefers-reduced-motion: reduce) { .jobs-popover { animation: none; } .jobs-ring-value { transition: none; } }
 :root[data-motion="reduced"] .jobs-popover { animation: none; }
 /* Knowledge graph (P7-43): Dan's vault as a 3D star cloud. Folder colours are shared by stars, lines, labels and legend. */
-:root, :root[data-theme="dark"] { --graph-people: #4aa8ff; --graph-work: #ffb45c; --graph-personal: #3ddc97; --graph-general: #b69cff; }
-:root[data-theme="light"] { --graph-people: #1f6acc; --graph-work: #9f5800; --graph-personal: #146d49; --graph-general: #6f4fd6; }
+:root, :root[data-theme="dark"] { --graph-people: #4aa8ff; --graph-work: #ffb45c; --graph-personal: #3ddc97; --graph-general: #b69cff; --graph-tasks: #ff5da2; }
+:root[data-theme="light"] { --graph-people: #1f6acc; --graph-work: #9f5800; --graph-personal: #146d49; --graph-general: #6f4fd6; --graph-tasks: #b01842; }
 [data-folder="People"] { --folder: var(--graph-people); }
 [data-folder="Work"] { --folder: var(--graph-work); }
 [data-folder="Personal"] { --folder: var(--graph-personal); }
 [data-folder="General"] { --folder: var(--graph-general); }
+[data-tasks] { --folder: var(--graph-tasks); }
 .shell-main:has(> .jarvis-stage > .knowledge-page, > .knowledge-page), .app-shell .shell-main:has(.knowledge-page) { padding: 0; overflow: hidden; }
 .knowledge-page { position: relative; height: 100%; min-height: 420px; }
 .knowledge { position: relative; height: 100%; min-height: inherit; overflow: hidden; isolation: isolate; }
@@ -2778,6 +2779,7 @@ a.task-chip:hover { background: var(--glass-pressed); }
 .knowledge-legend { position: absolute; z-index: 3; bottom: 16px; left: 16px; display: flex; flex-wrap: wrap; gap: var(--space-2); margin: 0; padding: 0; list-style: none; }
 .knowledge-legend li { display: inline-flex; min-height: 32px; align-items: center; gap: var(--space-2); padding: 0 var(--space-3); border-radius: var(--radius-control); background: var(--stage-glass); backdrop-filter: blur(12px); color: var(--text); font-size: var(--type-caption); font-weight: 600; }
 .knowledge-legend-count { color: var(--text-muted); font-weight: 500; }
+.knowledge-legend-partial { color: var(--text-muted); font-weight: 500; }
 .knowledge-legend .knowledge-sample { background: color-mix(in srgb, var(--warning) 22%, transparent); }
 .knowledge-label {
   position: absolute; z-index: 2; top: 0; left: 0; max-width: 220px; margin: var(--space-3) 0 0 var(--space-3); padding: var(--space-1) var(--space-2); overflow: hidden;
@@ -2809,6 +2811,7 @@ a.task-chip:hover { background: var(--glass-pressed); }
   .knowledge-note { top: auto; left: 8px; right: 8px; width: auto; max-height: 60%; }
   .knowledge-legend { bottom: 8px; left: 8px; }
 }
+@media (pointer: coarse) { .knowledge-legend button { min-height: 44px; } }
 @media (prefers-reduced-motion: reduce) { .knowledge-note { animation: none; } }
 :root[data-motion="reduced"] .knowledge-note { animation: none; }/* Knowledge v2 (Dan, 7 October): a darker backdrop so the stars read, and the legend doubles as folder filters. */
 .knowledge-stage { background: radial-gradient(ellipse at 50% 45%, color-mix(in srgb, var(--stage-background) 72%, transparent), color-mix(in srgb, var(--stage-background) 92%, transparent)); }

@@ -2,9 +2,24 @@ import { backendFetch } from '../backend-request';
 
 /** Knowledge graph of Dan's vault (P7-43, contract in #481). */
 export type KnowledgeFolder = string;
-export interface KnowledgeNode { id: string; path: string; title: string; folder: KnowledgeFolder; directory: string; updatedAt: string | null; degree: number }
+export interface KnowledgeNode {
+  id: string;
+  path: string;
+  title: string;
+  folder: KnowledgeFolder;
+  directory: string;
+  updatedAt: string | null;
+  degree: number;
+  openTaskCount?: number;
+}
 export interface KnowledgeEdge { source: string; target: string; type: 'link' | 'similar'; /** Similarity strength, 0–1. */ score?: number }
-export interface KnowledgeGraph { nodes: KnowledgeNode[]; edges: KnowledgeEdge[]; sample?: boolean }
+export interface KnowledgeGraph {
+  nodes: KnowledgeNode[];
+  edges: KnowledgeEdge[];
+  openTaskNoteCount?: number;
+  taskCountsPartial?: boolean;
+  sample?: boolean;
+}
 export interface KnowledgeNote { id: string; title: string; folder: string; content: string; updatedAt: string | null; githubUrl: string | null }
 
 export const knowledgeFolders: readonly KnowledgeFolder[] = ['People', 'Work', 'Personal', 'General'];
@@ -16,6 +31,7 @@ export function connectedNotes(graph: KnowledgeGraph | null, id: string | null):
 }
 const maxNodes = 4000;
 const maxEdges = 20000;
+const maxOpenTaskCount = 4 * 1024 * 1024;
 const unavailableStatuses = new Set([404, 405, 501]);
 
 export class KnowledgeUnavailable extends Error {}
@@ -58,6 +74,9 @@ export function readKnowledgeGraph(value: unknown): KnowledgeGraph {
       title: text(node.title, 200) || text(node.path, 200) || id,
       updatedAt: typeof node.updatedAt === 'string' && !Number.isNaN(Date.parse(node.updatedAt)) ? node.updatedAt : null,
       degree: typeof node.degree === 'number' && Number.isFinite(node.degree) ? Math.max(0, Math.min(1000, Math.round(node.degree))) : 0,
+      ...(typeof node.openTaskCount === 'number' && Number.isSafeInteger(node.openTaskCount) &&
+          node.openTaskCount >= 0 && node.openTaskCount <= maxOpenTaskCount
+        ? { openTaskCount: node.openTaskCount } : {}),
     });
   }
   const edges: KnowledgeEdge[] = [];
@@ -69,7 +88,14 @@ export function readKnowledgeGraph(value: unknown): KnowledgeGraph {
     const score = typeof edge.score === 'number' && Number.isFinite(edge.score) ? Math.max(0, Math.min(1, edge.score)) : undefined;
     edges.push({ source, target, type: edge.type === 'similar' ? 'similar' : 'link', ...(score === undefined ? {} : { score }) });
   }
-  return { nodes, edges };
+  return {
+    nodes,
+    edges,
+    ...(typeof body.openTaskNoteCount === 'number' && Number.isSafeInteger(body.openTaskNoteCount) &&
+        body.openTaskNoteCount >= 0 && body.openTaskNoteCount <= maxNodes
+      ? { openTaskNoteCount: body.openTaskNoteCount } : {}),
+    ...(typeof body.taskCountsPartial === 'boolean' ? { taskCountsPartial: body.taskCountsPartial } : {}),
+  };
 }
 
 export async function loadKnowledgeGraph(backendUrl: string, getAccessToken: () => Promise<string>, signal?: AbortSignal) {

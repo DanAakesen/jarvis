@@ -668,6 +668,61 @@ describe('GitHub vault', () => {
     expect(graphFiles).toHaveBeenCalledTimes(2);
   });
 
+  it('marks only graph notes with open in-scope tasks and matches the task panel total', async () => {
+    const remote = {
+      'Personal/Inbox.md': {
+        sha: sha('a'),
+        content: '# Inbox\n- [ ] Synthetic open task\n- [x] Synthetic completed task',
+      },
+      'Personal/Done.md': { sha: sha('b'), content: '- [x] Completed only' },
+      'Personal/Quiet.md': { sha: sha('c'), content: '# Quiet' },
+      'Work/Project.md': { sha: sha('d'), content: '- [ ] Work task' },
+      'Work/Archive/Old.md': { sha: sha('e'), content: '- [ ] Archived task' },
+      'General/Outside.md': { sha: sha('f'), content: '- [ ] Out-of-scope task' },
+      'Tasks.md': { sha: sha('1'), content: '- [ ] Dashboard task' },
+    };
+    const { module } = moduleFor({ remote });
+    await module.synchronize(signal());
+    const app = memoryApiApp(module);
+
+    const tasks = await app.inject({ url: '/vault/tasks', headers: apiAuthorization });
+    const response = await app.inject({ url: '/knowledge/graph', headers: apiAuthorization });
+
+    expect(tasks.statusCode).toBe(200);
+    expect(response.statusCode).toBe(200);
+    const graph = response.json();
+    expect(graph.openTaskNoteCount).toBe(3);
+    expect(graph.taskCountsPartial).toBe(false);
+    expect(graph.nodes.filter((node: { openTaskCount: number }) => node.openTaskCount > 0)
+      .map((node: { path: string }) => node.path).sort()).toEqual([
+      'Personal/Inbox.md', 'Tasks.md', 'Work/Project.md',
+    ]);
+    expect(graph.nodes.find((node: { path: string }) => node.path === 'Personal/Inbox.md').openTaskCount).toBe(1);
+    expect(graph.nodes.find((node: { path: string }) => node.path === 'Personal/Done.md').openTaskCount).toBe(0);
+    expect(graph.nodes.find((node: { path: string }) => node.path === 'Work/Archive/Old.md').openTaskCount).toBe(0);
+    expect(graph.nodes.find((node: { path: string }) => node.path === 'General/Outside.md').openTaskCount).toBe(0);
+    expect(graph.nodes.reduce((total: number, node: { openTaskCount: number }) => total + node.openTaskCount, 0))
+      .toBe(tasks.json().total);
+    expect(JSON.stringify(graph)).not.toContain('Synthetic open task');
+  });
+
+  it('keeps the graph available and marks task counts partial when the shared task-file cap is exceeded', async () => {
+    const remote = Object.fromEntries(Array.from({ length: 257 }, (_, index) => [
+      `Personal/Note${index}.md`,
+      { sha: sha('a'), content: '- [ ] Synthetic task' },
+    ]));
+    const { module } = moduleFor({ remote });
+    await module.synchronize(signal());
+    const app = memoryApiApp(module);
+
+    const response = await app.inject({ url: '/knowledge/graph', headers: apiAuthorization });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ taskCountsPartial: true });
+    expect(response.json().openTaskNoteCount).toBeUndefined();
+    expect(response.json().nodes[0].openTaskCount).toBeUndefined();
+  });
+
   it('prefers stored chunk embeddings over precomputed similarities when building graph edges', async () => {
     const remote = {
       'People/Alex.md': { sha: sha('a'), content: '# Alex\n\nEngineer.' },

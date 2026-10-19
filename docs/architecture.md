@@ -3665,6 +3665,15 @@ cached until a successful vault sync. The top-level `updatedAt` is the last
 successful vault sync time; note timestamps are SQL index timestamps, not Git
 commit dates.
 
+The same response adds optional per-node `openTaskCount`, top-level
+`openTaskNoteCount`, and `taskCountsPartial` fields. The graph route uses
+`readVaultTasks` from `apps/backend/src/proactive/todo-discovery.ts`, shared with
+`GET /vault/tasks`; only open items are counted, and no task text is returned.
+Counts are recomputed against the task scanner's existing file/byte bounds on each
+graph request. A scan cap or open-task path outside the capped graph marks the
+figure partial; the map remains available. Older clients can ignore the additive
+fields, and the web reader treats them as optional.
+
 Search uses the vault's existing vector-first, term-fallback retrieval and maps
 up to eight unique results to graph node IDs. The `show_knowledge` chat/voice
 tool searches first, then creates or updates the `knowledge-graph` workspace
