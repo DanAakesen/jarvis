@@ -446,11 +446,13 @@ whose count opens the panel with the same query. The full one-page layout is
 design-led (#1085) and follows once a design exists.
 
 The map legend includes a default-on **Tasks** toggle and the number of notes with
-open tasks. It changes marked stars to `--graph-tasks` and enlarges them; it never
-hides notes, and the folder filters continue to operate independently. Hover labels
-include a marked note's open-task count. A cap or incomplete graph scan keeps the
-count visibly partial. Dark/light token values and the contrast audit live in
-`apps/web/src/styles.css` and `apps/web/src/contrast-audit.test.ts`.
+open tasks on the map. Its accessible name gives that count as notes with open
+tasks. It changes marked stars to `--graph-tasks` and enlarges them; it never hides
+notes, and the folder filters continue to operate independently. Hover labels
+include a marked note's open-task count. When no count is available, the legend
+shows an em dash, disables the toggle and explains that task marks are unavailable.
+Dark/light token values and the contrast audit live in `apps/web/src/styles.css`
+and `apps/web/src/contrast-audit.test.ts`.
 
 ## Quiet copy (19 October 2026)
 

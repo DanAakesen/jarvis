@@ -355,14 +355,13 @@ export function KnowledgeGraphView({ backendUrl, getAccessToken, initialQuery = 
             {hasTaskCounts && (
               <li>
                 <button className="ghost-button" type="button" aria-pressed={taskMarksVisible}
-                  aria-label={`Tasks, ${taskCountLabel}${graph?.taskCountsPartial ? ', partial' : ''}`}
+                  aria-label={`Tasks, ${taskCountLabel}`}
                   disabled={!hasKnownTaskCount}
-                  title={!hasKnownTaskCount ? 'Task marking is unavailable while the count is partial' : undefined}
+                  title={!hasKnownTaskCount ? 'Task marks are unavailable right now' : undefined}
                   onClick={() => setTaskMarksVisible((current) => !current)}>
                   <span className="knowledge-dot" data-tasks aria-hidden="true" />
                   Tasks
                   <span className="knowledge-legend-count">{hasKnownTaskCount ? taskNoteCount : '—'}</span>
-                  {graph?.taskCountsPartial && <span className="knowledge-legend-partial">partial</span>}
                 </button>
               </li>
             )}
