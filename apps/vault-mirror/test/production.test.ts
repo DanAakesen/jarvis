@@ -78,14 +78,55 @@ describe('Key Vault failure classification', () => {
       .resolves.toMatchObject({ vaultName: 'synthetic-vault' });
   });
 
-  it('does not call a missing required secret an authentication rejection', async () => {
-    getSecret.mockImplementation(async (name: string) => ({
-      value: name === 'obsidian-auth-token' ? undefined
-        : name === 'vault-mirror-policy' ? JSON.stringify(policyData)
+  it.each(['obsidian-auth-token', 'obsidian-vault', 'github-app-private-key'])(
+    'classifies a missing required secret %s as auth',
+    async (missingSecret) => {
+      getSecret.mockImplementation(async (name: string) => {
+        if (name === missingSecret) {
+          throw Object.assign(new Error('not found'), { statusCode: 404 });
+        }
+        return {
+          value: name === 'vault-mirror-policy' ? JSON.stringify(policyData)
+            : name === 'obsidian-vault' ? 'synthetic-vault'
+              : name === 'github-app-private-key' ? 'synthetic-private-key'
+                : 'synthetic-token',
+        };
+      });
+      const dependencies = createProductionDependencies(config);
+
+      await expect(dependencies.readSecrets(new AbortController().signal))
+        .rejects.toMatchObject({ message: 'auth' });
+    },
+  );
+
+  it.each(['obsidian-auth-token', 'obsidian-vault', 'github-app-private-key'])(
+    'classifies a blank required secret %s as auth',
+    async (blankSecret) => {
+      getSecret.mockImplementation(async (name: string) => ({
+        value: name === blankSecret ? ' \t '
+          : name === 'vault-mirror-policy' ? JSON.stringify(policyData)
+            : name === 'obsidian-vault' ? 'synthetic-vault'
+              : name === 'github-app-private-key' ? 'synthetic-private-key'
+                : 'synthetic-token',
+      }));
+      const dependencies = createProductionDependencies(config);
+
+      await expect(dependencies.readSecrets(new AbortController().signal))
+        .rejects.toMatchObject({ message: 'auth' });
+    },
+  );
+
+  it('keeps a required-secret 5xx as unexpected', async () => {
+    getSecret.mockImplementation(async (name: string) => {
+      if (name === 'github-app-private-key') {
+        throw Object.assign(new Error('service unavailable'), { statusCode: 503 });
+      }
+      return {
+        value: name === 'vault-mirror-policy' ? JSON.stringify(policyData)
           : name === 'obsidian-vault' ? 'synthetic-vault'
-            : name === 'github-app-private-key' ? 'synthetic-private-key'
-              : undefined,
-    }));
+            : 'synthetic-token',
+      };
+    });
     const dependencies = createProductionDependencies(config);
 
     await expect(dependencies.readSecrets(new AbortController().signal))

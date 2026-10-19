@@ -95,12 +95,12 @@ The optional vault password is passed to `ob sync-setup` through its argument
 array because the pinned CLI exposes no password environment-variable or stdin
 input. The container is single-purpose and runs as non-root.
 
-Only HTTP 401/403 and the CLI's explicit invalid/expired-token output are
-classified as `auth`. Transient Key Vault or GitHub errors, timeouts and network
-failures remain failed outcomes for the next scheduled retry. Windows-invalid
-names are counted skips. Upload verification checks only the paths applied by
-that run, so an unrelated remote edit downloaded by bidirectional sync does not
-create a false upload failure.
+HTTP 401/403, missing or blank required Key Vault secrets, and the CLI's
+explicit invalid/expired-token output are classified as `auth`. Transient Key
+Vault or GitHub errors, timeouts and network failures remain failed outcomes
+for the next scheduled retry. Windows-invalid names are counted skips. Upload
+verification checks only the paths applied by that run, so an unrelated remote
+edit downloaded by bidirectional sync does not create a false upload failure.
 
 The container can be smoke-tested locally with:
 

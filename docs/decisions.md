@@ -37,10 +37,12 @@ deletion in both pull-only and bidirectional branches. These command, filter,
 configuration-file and recovery behaviors are **not yet verified against the
 live service**.
 
-Key Vault and GitHub errors are `auth` only for HTTP 401/403 or the Obsidian
-CLI's explicit invalid/expired-token result; missing secrets, 404s outside the
-established optional-password/policy/private-repository cases, rate limits,
-server errors, timeouts and network failures are failed outcomes.
+Key Vault and GitHub errors are `auth` for HTTP 401/403, missing (404) or blank
+required Key Vault secrets, or the Obsidian CLI's explicit invalid/expired-token
+result. Missing optional passwords remain allowed; a missing policy secret
+remains `policy-missing`; an inaccessible private repository remains
+`repo-not-private`. Other 404s, rate limits, server errors, timeouts and
+network failures are failed outcomes.
 Windows-incompatible file names are counted as skips.
 After an Obsidian upload, verify only the paths this run applied; unrelated
 remote edits pulled by that bidirectional sync do not invalidate its result.

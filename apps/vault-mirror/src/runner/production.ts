@@ -13,6 +13,11 @@ import type { MirrorConfig } from './config.js';
 import type { MirrorSecrets, RunDependencies } from './types.js';
 
 const workspaceName = `jarvis-vault-mirror-${process.getuid?.() ?? 'default'}`;
+const requiredSecretNames = new Set([
+  'obsidian-auth-token',
+  'obsidian-vault',
+  'github-app-private-key',
+]);
 
 export async function createMirrorWorkspace(
   root = resolve(tmpdir(), workspaceName),
@@ -59,7 +64,10 @@ export function createProductionDependencies(config: MirrorConfig): RunDependenc
           if (name === 'vault-mirror-policy' && errorStatus(error) === 404) {
             throw new Error('policy-missing', { cause: error });
           }
-          if ([401, 403].includes(errorStatus(error) ?? 0)) throw new Error('auth', { cause: error });
+          const status = errorStatus(error);
+          if ([401, 403].includes(status ?? 0) || (status === 404 && requiredSecretNames.has(name))) {
+            throw new Error('auth', { cause: error });
+          }
           throw new Error('unexpected', { cause: error });
         }
       };
@@ -71,7 +79,7 @@ export function createProductionDependencies(config: MirrorConfig): RunDependenc
         secret('github-app-private-key'),
       ]);
       if (!obsidianToken?.trim() || !vaultName?.trim() || !githubPrivateKey?.trim()) {
-        throw new Error('unexpected');
+        throw new Error('auth');
       }
       const validated = validatePolicy(policyJson);
       if (!validated.success) throw new Error('policy-missing');
