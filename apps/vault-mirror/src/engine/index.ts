@@ -35,24 +35,27 @@ export function planReconcile(input: ReconcileInput): Plan {
   const spellings = new Map<string, Set<string>>();
   const collisions = new Set<string>();
   const filePaths = new Set<string>();
-  const index = (files: ReadonlyMap<string, FileRecord>): Index => {
+  const index = (files: ReadonlyMap<string, FileRecord>, live: boolean): Index => {
     const result: Index = new Map();
     for (const [sourcePath, record] of files) {
       const path = normalizePath(sourcePath);
-      if (isSafePath(path) && record.mode !== '040000') filePaths.add(foldPath(path));
+      if (live && isSafePath(path) && record.mode !== '040000') filePaths.add(foldPath(path));
       if (!isApprovedPath(input.policy, path)) { counts.excluded++; continue; }
       const folded = foldPath(path);
-      const variants = spellings.get(folded) ?? new Set<string>();
-      variants.add(path);
-      spellings.set(folded, variants);
-      if (variants.size > 1 || result.has(path)) collisions.add(folded);
+      if (live) {
+        const variants = spellings.get(folded) ?? new Set<string>();
+        variants.add(path);
+        spellings.set(folded, variants);
+        if (variants.size > 1) collisions.add(folded);
+      }
+      if (result.has(path)) collisions.add(folded);
       result.set(path, { sourcePath, record });
     }
     return result;
   };
-  const O = index(input.O);
-  const G = index(input.G);
-  const B = index(input.B);
+  const O = index(input.O, true);
+  const G = index(input.G, true);
+  const B = index(input.B, false);
   for (const path of filePaths) {
     const segments = path.split('/');
     for (let end = 1; end < segments.length; end++) {

@@ -97,6 +97,42 @@ describe('normalisation and collisions', () => {
     const G = new Map(input.G).set('Notes/CAFÉ.md', record('theirs'));
     expect(planReconcile({ ...input, G }).counters.skipReasons['path-collision']).toBe(2);
   });
+  it('a stale base-only spelling is forgotten after live sides agree on a case-only rename', () => {
+    const { input, texts } = fixture();
+    const path = 'Notes/Todo.md';
+    const stalePath = 'Notes/todo.md';
+    const text = 'same';
+    const O = new Map(input.O).set(path, record(text));
+    const G = new Map(input.G).set(path, record(text));
+    const B = new Map(input.B).set(stalePath, record(text));
+    texts.O.set(path, text);
+    texts.G.set(path, text);
+    const plan = planReconcile({ ...input, O, G, B });
+    expect(plan.verdict).toBe('ok');
+    expect(plan.skipped).toEqual([]);
+    expect(plan.actions).toEqual([
+      { kind: 'recordBase', path, record: record(text), text },
+      { kind: 'forgetBase', path: stalePath },
+    ]);
+  });
+  it('a stale base-only file is forgotten after becoming a directory on both live sides', () => {
+    const { input, texts } = fixture();
+    const stalePath = 'Notes/parent.md';
+    const path = `${stalePath}/child.md`;
+    const text = 'same';
+    const O = new Map(input.O).set(path, record(text));
+    const G = new Map(input.G).set(path, record(text));
+    const B = new Map(input.B).set(stalePath, record('old file'));
+    texts.O.set(path, text);
+    texts.G.set(path, text);
+    const plan = planReconcile({ ...input, O, G, B });
+    expect(plan.verdict).toBe('ok');
+    expect(plan.skipped).toEqual([]);
+    expect(plan.actions).toEqual([
+      { kind: 'forgetBase', path: stalePath },
+      { kind: 'recordBase', path, record: record(text), text },
+    ]);
+  });
   it('Unicode caseless collisions are conservative (sharp s and SS)', () => {
     const { input } = fixture();
     const O = new Map(input.O).set('Notes/straße.md', record('a')).set('Notes/STRASSE.md', record('b'));

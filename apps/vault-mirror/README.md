@@ -43,10 +43,12 @@ sanitized to a skipped path, not exposed as an error message.
 Inventory paths are vault-relative, slash-separated and normalized to Unicode
 NFC. The engine also normalizes incoming keys, retaining original reader keys.
 NFC/NFD spellings on different sides represent the same path. Duplicate
-normalized keys within one side, or different NFC spellings that collide under
+normalized keys within one map, or different live NFC spellings that collide under
 conservative Unicode caseless comparison, are skipped, never coalesced.
-File/descendant collisions across inventories also skip affected approved paths,
+File/descendant collisions across live inventories also skip affected approved paths,
 including descendants blocked by an excluded ancestor file.
+Stale base-only spellings and file paths do not register live collisions; once
+absent from both live sides, those base entries can be forgotten.
 Content hashes are SHA-256 over UTF-8 after CRLF → LF; other text is preserved.
 Inventory sizes describe original bytes. Read bytes and hashes are checked before
 planning outgoing content; output text uses LF with a matching hash and size.
