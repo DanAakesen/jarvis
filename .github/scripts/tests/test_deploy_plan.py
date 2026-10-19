@@ -25,17 +25,19 @@ class DeployPlanTests(unittest.TestCase):
     def test_bootstrap_ids_also_rebuild_the_web(self):
         self.assertEqual(selected(plan("push", ["infra/bootstrap.output.json"])), {"infra", "backend", "web", "agent"})
 
-    def test_node_shared_files_do_not_redeploy_infrastructure_or_python(self):
+    def test_node_shared_files_redeploy_through_infrastructure(self):
         for path in (
             "package.json",
             "package-lock.json",
             "tsconfig.base.json",
         ):
             with self.subTest(path=path):
-                self.assertEqual(selected(plan("push", [path])), {"backend", "web"})
+                self.assertEqual(selected(plan("push", [path])),
+                                 {"infra", "backend", "web", "agent"})
 
     def test_workflow_checks_do_not_become_application_inputs(self):
-        for path in (".github/workflows/ci.yml", ".github/scripts/deploy_smoke.py"):
+        for path in (".github/workflows/ci.yml", ".github/workflows/vault-mirror-ci.yml",
+                     ".github/scripts/deploy_smoke.py"):
             self.assertEqual(selected(plan("push", [path])), set())
 
     def test_documentation_only_deploys_nothing(self):
@@ -46,12 +48,12 @@ class DeployPlanTests(unittest.TestCase):
     def test_other_components_deploy_nothing(self):
         self.assertEqual(selected(plan("push", ["runner/app.py", ".github/scripts/plan_status.py"])), set())
 
-    def test_vault_mirror_is_qualification_only(self):
-        result = plan("push", ["apps/vault-mirror/src/index.ts",
-                               "apps/vault-mirror/package.json",
-                               ".github/workflows/vault-mirror-ci.yml"])
-        self.assertEqual(selected(result), set())
-        self.assertIn("no deployable changes", result["reason"])
+    def test_vault_mirror_inputs_deploy_through_infrastructure(self):
+        for path in ("apps/vault-mirror/src/main.ts", "apps/vault-mirror/Dockerfile",
+                     "packages/contracts/src/status.js", "package-lock.json"):
+            with self.subTest(path=path):
+                self.assertEqual(selected(plan("push", [path])),
+                                 {"infra", "backend", "web", "agent"})
 
     def test_manual_run_and_unknown_base_deploy_everything(self):
         self.assertEqual(selected(plan("workflow_dispatch", ["README.md"])), {"infra", "backend", "web", "agent"})
