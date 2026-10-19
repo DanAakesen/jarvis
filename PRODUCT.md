@@ -710,6 +710,12 @@ done unless it is consent, a destructive-action warning or recovery guidance.
 Freshness, stale, partial, failed-refresh and estimated states keep a short
 visible marker.
 
+Notes with open in-scope tasks use the Tasks map colour and a slightly larger mark.
+The map legend shows how many notes are marked and toggles that colour without
+hiding notes; hovering a marked note shows its open-task count. Counts come from the
+same bounded checkbox parser as the read-only task panel. A partial count is labelled
+partial; the graph carries counts and completeness only, never task text.
+
 #### Software Factory — task view
 
 | Data points | Actions |

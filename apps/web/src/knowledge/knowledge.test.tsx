@@ -1,14 +1,30 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { matchTitles, readKnowledgeGraph, sampleKnowledgeGraph, vaultMemoryId } from './knowledge-data';
 import { GeneratedViewRenderer } from '../GeneratedViewRenderer';
 import { KnowledgeBackendContext } from './knowledge-context';
 import { createKnowledgeLayout } from './knowledge-layout';
 import { KnowledgeGraphView } from './KnowledgeGraphView';
 
+const sceneMocks = vi.hoisted(() => ({ create: vi.fn(), showTasks: vi.fn() }));
+vi.mock('./knowledge-scene', () => ({ createKnowledgeScene: sceneMocks.create }));
+
 const getAccessToken = vi.fn(async () => 'token');
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 
+beforeEach(() => {
+  sceneMocks.showTasks.mockClear();
+  sceneMocks.create.mockReset();
+  sceneMocks.create.mockImplementation(() => ({
+    highlight: vi.fn(),
+    select: vi.fn(),
+    showFolders: vi.fn(),
+    showTasks: sceneMocks.showTasks,
+    resetView: vi.fn(),
+    dispose: vi.fn(),
+  }));
+});
 afterEach(() => { vi.unstubAllGlobals(); });
 
 describe('knowledge graph data', () => {
@@ -25,6 +41,21 @@ describe('knowledge graph data', () => {
     expect(matchTitles(graph, 'ann')).toEqual(['a']);
     expect(() => readKnowledgeGraph({ nodes: 'nope' })).toThrow();
     expect(vaultMemoryId('People/Anna.md')).toBe('vault_UGVvcGxlL0FubmEubWQ');
+  });
+  it('reads task counts additively and accepts graph payloads from older servers', () => {
+    const graph = readKnowledgeGraph({
+      nodes: [{ id: 'task-note', path: 'Work/Tasks.md', openTaskCount: 2 }],
+      edges: [],
+      openTaskNoteCount: 1,
+      taskCountsPartial: true,
+    });
+    expect(graph.nodes[0]?.openTaskCount).toBe(2);
+    expect(graph.openTaskNoteCount).toBe(1);
+    expect(graph.taskCountsPartial).toBe(true);
+    const older = readKnowledgeGraph({ nodes: [{ id: 'old', path: 'Work/Old.md' }], edges: [] });
+    expect(older.nodes[0]?.openTaskCount).toBeUndefined();
+    expect(older.openTaskNoteCount).toBeUndefined();
+    expect(older.taskCountsPartial).toBeUndefined();
   });
   it('lays out root and arbitrary folders without assuming four regions', () => {
     const graph = readKnowledgeGraph({ nodes: [
@@ -55,12 +86,57 @@ describe('knowledge graph view', () => {
       { id: 'customer', path: 'Customers/Review.md', title: 'Customer fixture', folder: 'Customers' },
     ], edges: [] })));
     render(<KnowledgeGraphView backendUrl="https://api.example.com" getAccessToken={getAccessToken} />);
+    expect(screen.queryByRole('button', { name: /^Tasks/u })).toBeNull();
     fireEvent.click(await screen.findByRole('button', { name: 'Vault root1' }));
     expect(screen.queryByText(/^\d+ notes?$/u)).toBeNull();
     expect(within(screen.getByRole('list', { name: 'Vault root notes' })).getByRole('button', { name: 'Root fixture' })).not.toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Customers1' }));
     expect(within(screen.getByRole('list', { name: 'Customers notes' })).getByRole('button', { name: 'Customer fixture' })).not.toBeNull();
     expect(screen.queryByRole('button', { name: 'General0' })).toBeNull();
+  });
+  it('shows the task-note count and toggles scene marks without filtering notes', async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal('fetch', vi.fn(async () => json({
+      nodes: [
+        { id: 'task', path: 'Personal/Inbox.md', title: 'Inbox', folder: 'Personal', openTaskCount: 2 },
+        { id: 'quiet', path: 'Personal/Quiet.md', title: 'Quiet', folder: 'Personal', openTaskCount: 0 },
+      ],
+      edges: [],
+      openTaskNoteCount: 1,
+      taskCountsPartial: true,
+    })));
+    render(<KnowledgeGraphView backendUrl="https://api.example.com" getAccessToken={getAccessToken} />);
+
+    const toggle = await screen.findByRole('button', { name: 'Tasks, 1 note with open tasks, partial' });
+    expect(toggle.getAttribute('aria-pressed')).toBe('true');
+    await waitFor(() => expect(sceneMocks.create).toHaveBeenCalledOnce());
+    expect(sceneMocks.create.mock.calls[0]?.[1].nodes[0]?.openTaskCount).toBe(2);
+    expect(screen.getByRole('button', { name: 'Personal2' })).not.toBeNull();
+    const callbacks = (sceneMocks.create.mock.calls[0] as unknown[] | undefined)?.[2] as
+      { onHover: (hover: { id: string; x: number; y: number }) => void } | undefined;
+    act(() => callbacks?.onHover({ id: 'task', x: 12, y: 34 }));
+    expect(screen.getByText('Inbox · 2 open tasks')).not.toBeNull();
+
+    await user.click(toggle);
+    expect(toggle.getAttribute('aria-pressed')).toBe('false');
+    await waitFor(() => expect(sceneMocks.showTasks).toHaveBeenLastCalledWith(false));
+    await user.keyboard('{Enter}');
+    expect(toggle.getAttribute('aria-pressed')).toBe('true');
+    await waitFor(() => expect(sceneMocks.showTasks).toHaveBeenLastCalledWith(true));
+  });
+  it('labels and disables task marking when a bounded scan could not produce counts', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => json({
+      nodes: [{ id: 'task', path: 'Personal/Inbox.md', title: 'Inbox', folder: 'Personal' }],
+      edges: [],
+      taskCountsPartial: true,
+    })));
+    render(<KnowledgeGraphView backendUrl="https://api.example.com" getAccessToken={getAccessToken} />);
+
+    const toggle = await screen.findByRole('button', { name: 'Tasks, count unavailable, partial' });
+    expect(toggle.getAttribute('aria-pressed')).toBe('true');
+    expect((toggle as HTMLButtonElement).disabled).toBe(true);
+    expect(toggle.textContent).toContain('—');
+    expect(toggle.textContent).toContain('partial');
   });
   it.each([
     ['front matter first', '---\ntags: [fixture]\ncreated: 2026-10-10\n---\n'],

@@ -387,6 +387,7 @@ function semanticPairings(): Pairing[] {
     { label: 'Knowledge graph Work mark', foreground: 'var(--graph-work)', backgrounds: ['--stage-background', '--stage-floor'].map((name) => ({ label: name, layers: tokens(name) })), threshold: 3 },
     { label: 'Knowledge graph Personal mark', foreground: 'var(--graph-personal)', backgrounds: ['--stage-background', '--stage-floor'].map((name) => ({ label: name, layers: tokens(name) })), threshold: 3 },
     { label: 'Knowledge graph General mark', foreground: 'var(--graph-general)', backgrounds: ['--stage-background', '--stage-floor'].map((name) => ({ label: name, layers: tokens(name) })), threshold: 3 },
+    { label: 'Knowledge graph Tasks mark', foreground: 'var(--graph-tasks)', backgrounds: ['--stage-background', '--stage-floor'].map((name) => ({ label: name, layers: tokens(name) })), threshold: 3 },
   ];
 
   for (const pairing of buttonPairings) pairings.push(pairing);
