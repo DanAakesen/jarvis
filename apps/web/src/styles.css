@@ -2499,8 +2499,10 @@ a.task-chip:hover { background: var(--glass-pressed); }
 .task-window .task-usage-table-wrap { margin: 0 0 var(--space-2); }
 .task-window .task-usage-table { font-size: var(--type-caption); }
 @media (prefers-reduced-motion: reduce) { .task-state-chip[data-state="Running"] .task-state-dot { animation: none; } }
-:root[data-motion="reduced"] .task-state-chip[data-state="Running"] .task-state-dot { animation: none; }.task-trail .timeline-payload summary { width: fit-content; min-height: 0; padding: var(--space-1) 0; color: var(--text-muted); font-size: var(--type-caption); font-weight: 600; cursor: pointer; }
+:root[data-motion="reduced"] .task-state-chip[data-state="Running"] .task-state-dot { animation: none; }
+.task-trail .timeline-payload summary { width: fit-content; min-height: 0; padding: var(--space-1) 0; color: var(--text-muted); font-size: var(--type-caption); font-weight: 600; cursor: pointer; }
 .task-trail .timeline-payload summary:hover { color: var(--text); }
+@media (pointer: coarse) { .task-trail .timeline-payload summary { min-height: 44px; } a.task-chip { min-height: 44px; } }
 /* Off the home page, ordinary windows float centred over the page at a readable width. */
 .app-shell[data-home="false"] .workspace-canvas-tiled .workspace-window:not(.workspace-window-conversation, .workspace-window-maximized) { justify-self: center; width: min(1180px, 100%); }/* Over a busy page the conversation sheet needs the denser slab to stay readable. */
 .app-shell[data-home="false"] .workspace-window-conversation.luminous-glass { background: var(--stage-slab); }
@@ -3318,6 +3320,8 @@ a.task-chip:hover { background: var(--glass-pressed); }
 .collapsible-toggle:active { background: var(--glass-pressed); }
 .collapsible-toggle:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 .collapsible-title { flex: none; }
+.collapsible-inner .collapsible-title { flex: 0 1 auto; min-width: min-content; }
+.collapsible-inner .collapsible-toggle { font-size: var(--type-subsection); }
 .collapsible-summary { min-width: 0; overflow: hidden; color: var(--text-muted); font-size: var(--type-small); font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
 .collapsible-aside { color: var(--text-muted); font-size: var(--type-small); font-weight: 500; }
 .app-shell .collapsible-chevron { flex: none; width: 18px; height: 18px; margin-left: auto; color: var(--text-muted); transition: rotate var(--motion-state) var(--ease-enter); }
@@ -3325,7 +3329,7 @@ a.task-chip:hover { background: var(--glass-pressed); }
 .collapsible-body { display: grid; grid-template-rows: 1fr; transition: grid-template-rows var(--motion-panel) var(--ease-enter), visibility 0s; }
 .collapsible-section[data-open="false"] .collapsible-body { grid-template-rows: 0fr; visibility: hidden; transition: grid-template-rows var(--motion-panel) var(--ease-enter), visibility 0s linear var(--motion-panel); }
 .collapsible-inner { min-height: 0; overflow: hidden; padding: 0 var(--space-1); }
-.collapsible-section[data-open="true"] .collapsible-inner { padding-bottom: var(--space-5); }
+.collapsible-section[data-open="true"] > .collapsible-body > .collapsible-inner { padding-bottom: var(--space-5); }
 .collapsible-section[data-open="true"] .collapsible-body { overflow: visible; }
 .collapsible-section[data-open="true"] .collapsible-inner:has(select:open, .more-menu[data-open="true"]) { overflow: visible; }
 /* One even stack of folded cards: same padding, same height and spacing role. */
@@ -3605,7 +3609,7 @@ a.task-chip:hover { background: var(--glass-pressed); }
 .app-shell .collapsible-toggle:hover .collapsible-chevron { color: var(--glass-edge-cool); translate: 2px 0; }
 .app-shell .collapsible-section[data-open="true"] .collapsible-toggle:hover .collapsible-chevron { translate: 0 2px; }
 .collapsible-toggle:active .collapsible-title { color: var(--text-muted); }
-.settings-page > .settings-save { position: static; width: auto; max-width: none; margin: var(--space-4) 0 0; padding: 0; border-radius: 0; background: none; backdrop-filter: none; box-shadow: none;
+.settings-page > .settings-save { position: static; width: auto; max-width: none; margin: var(--space-4) 0 0; padding: 0; border: 0; border-radius: 0; background: none; backdrop-filter: none; box-shadow: none;
   justify-content: flex-end; }
 .settings-page > .settings-save .settings-feedback { margin: 0; }
 /* Memory: what Jarvis remembers, between the capture switch and recall tuning. The detail opens only once a memory is chosen. */
@@ -3934,8 +3938,9 @@ select.form-control {
   --field-padding-start: var(--space-7);
 }
 .app-shell .proactive-feed-input {
-  align-items: flex-start;
+  align-items: stretch;
 }
+.app-shell .proactive-feeds > .secondary-button { justify-self: start; }
 .app-shell :is(
   .settings-field, .project-form, .task-filter-field, .task-form-field, .task-create-form, .task-control-form,
   .timeline-toolbar, .usage-field, .role-controls, .kanban-search, .kanban-select, .proactive-feed-input,

@@ -326,6 +326,25 @@ describe('app-wide control contract', () => {
     expect(violations).toEqual([]);
   });
 
+  it('keeps the Settings save bar frameless, nested sections shrinkable and task window links touch-sized', () => {
+    expect(ruleDeclaration(source, /\.settings-page > \.settings-save\s*\{([^}]*)\}/, 'border')).toBe('0');
+    const nestedTitle = /\.collapsible-inner \.collapsible-title\s*\{([^}]*)\}/;
+    expect(ruleDeclaration(source, nestedTitle, 'flex')).toBe('0 1 auto');
+    expect(ruleDeclaration(source, nestedTitle, 'min-width')).toBe('min-content');
+    expect(ruleDeclaration(source, /\.collapsible-inner \.collapsible-toggle\s*\{([^}]*)\}/, 'font-size'))
+      .toBe('var(--type-subsection)');
+    expect(source).toContain('.collapsible-section[data-open="true"] > .collapsible-body > .collapsible-inner { padding-bottom: var(--space-5); }');
+    expect(source).not.toContain('.collapsible-section[data-open="true"] .collapsible-inner { padding-bottom');
+    expect(ruleDeclaration(source, /\.app-shell \.proactive-feed-input\s*\{([^}]*)\}/, 'align-items')).toBe('stretch');
+    expect(ruleDeclaration(source, /\.app-shell \.proactive-feeds > \.secondary-button\s*\{([^}]*)\}/, 'justify-self'))
+      .toBe('start');
+    expect(source).toMatch(/^\.task-trail \.timeline-payload summary \{/m);
+    const coarse = mediaBlocks(source).filter(({ query }) => query.trim() === '(pointer: coarse)')
+      .map(({ body }) => body).join('\n');
+    expect(ruleDeclaration(coarse, /\.task-trail \.timeline-payload summary\s*\{([^}]*)\}/, 'min-height')).toBe('44px');
+    expect(ruleDeclaration(coarse, /a\.task-chip\s*\{([^}]*)\}/, 'min-height')).toBe('44px');
+  });
+
   it('removes decorative control rims without removing neutral field structure or focus', () => {
     for (const selector of [
       /\.kanban-card-action\s*\{([^}]*)\}/,

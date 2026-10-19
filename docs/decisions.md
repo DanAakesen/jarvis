@@ -1,5 +1,31 @@
 # Decisions
 
+## P14-15 — Nested section titles wrap, the save row has no frame, touch targets in the task window (19 October 2026)
+
+The whole-app pass found five small CSS defects in Settings and the task window
+(A44 to A47, A50). The choices worth recording:
+
+- A nested collapsible section's title wraps rather than being cut, and nested
+  toggles use `--type-subsection` (17px) instead of the 22px of top-level titles.
+  The whole title stays readable on a 320px phone, the chevron keeps its place,
+  and a nested section reads as a child of the section around it.
+- The padding under an open section applies to that section's own inner only. A
+  folded section nested in an open one is as tall as any folded top-level
+  section; the dead space under it came from a selector that also matched
+  descendants, not from a design choice.
+- "View event payload" and the project and branch chips in the task window are
+  44px on coarse pointers only, following the DESIGN.md rule that compact
+  controls return to 44px on touch. Fine pointers keep the compact chip and the
+  caption-size disclosure.
+- Save settings stays a plain end-of-page row (P9-98). The leftover 1px frame
+  came from the base `.settings-save` block and is removed rather than
+  replaced with new chrome.
+- The News feeds row stretches its controls to one height, and "Add feed" keeps
+  its content width at the start of the row.
+
+Not verified: the News feeds row and the Save row at 1440px (the harness captures
+stop at 1600px), and real touch devices.
+
 ## P14-16 — Phone top bar drops Settings and, on narrow handsets, presence (19 October 2026)
 
 At 320px the phone top bar needed 353px of the 300px its content box leaves
