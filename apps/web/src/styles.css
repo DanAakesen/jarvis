@@ -2842,7 +2842,6 @@ a.task-chip:hover { background: var(--glass-pressed); }
 .knowledge-legend { position: absolute; z-index: 3; bottom: 16px; left: 16px; display: flex; flex-wrap: wrap; gap: var(--space-2); margin: 0; padding: 0; list-style: none; }
 .knowledge-legend li { display: inline-flex; min-height: 32px; align-items: center; gap: var(--space-2); padding: 0 var(--space-3); border-radius: var(--radius-control); background: var(--stage-glass); backdrop-filter: blur(12px); color: var(--text); font-size: var(--type-caption); font-weight: 600; }
 .knowledge-legend-count { color: var(--text-muted); font-weight: 500; }
-.knowledge-legend-partial { color: var(--text-muted); font-weight: 500; }
 .knowledge-legend .knowledge-sample { background: color-mix(in srgb, var(--warning) 22%, transparent); }
 .knowledge-label {
   position: absolute; z-index: 2; top: 0; left: 0; max-width: 220px; margin: var(--space-3) 0 0 var(--space-3); padding: var(--space-1) var(--space-2); overflow: hidden;
