@@ -5,6 +5,33 @@ treatments selected from the existing Jarvis design system. The shared source
 of truth is `apps/web/src/styles.css`; route stylesheets own workflow layout,
 not parallel palettes or control systems.
 
+## Factory project and release surfaces (P14-22; 19 October 2026)
+
+The QA pass found the project-settings intro and completion policy, plus the
+release-page back link and repository/default-branch summary, sitting over the
+3D scene. The intro now sits in the Repository panel, the policy has its own
+settings panel, and the release header uses the shared translucent panel surface.
+Coarse-pointer release links now measure at least 44px, and task-bar, selected
+release and release-row labels consistently use `Build {version}` without
+altering a version that already begins with `v`.
+
+The four formerly bare lines use `--text-muted` (`#5c564f` light,
+`#c0ccd2` dark). Against the translucent panel surface, conservative WCAG
+contrast bounds are **5.50:1 light** and **9.08:1 dark**; these use the
+worst black/white scene-backdrop composite endpoints (92% light and 90% dark
+surface opacity). Both exceed 4.5:1.
+
+The actual app was checked in scratch Chromium with synthetic auth/API data.
+Before-state captures restored the original bare paragraph/fieldset/header;
+after-state captures covered 320×640, 390×844, 768×1024 and 1440×900 in both
+themes. Coarse-pointer emulation was enabled; the task release name/version and
+release record/workflow links measured at least 44px, all viewports stayed
+within their width, and the final routes had no fixture alerts or page errors.
+Local checks passed: `npm run lint --workspace @jarvis/web`
+(`--max-warnings 0`), `npx tsc --noEmit -p apps/web/tsconfig.json`,
+`npm test --workspace @jarvis/web` (131 files, 1,805 tests), and
+`npm run build --workspace @jarvis/web` (with the existing chunk-size warning).
+
 ## Daily visual QA pass (P12-38; 18 October 2026)
 
 Rendered the parent revision and the corrected Daily page in synthetic Chromium
