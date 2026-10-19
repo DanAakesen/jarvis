@@ -120,6 +120,7 @@ export function DailyOverview({ backendUrl, getAccessToken, capabilities, onRetr
               {healthIsEmpty && <p className="daily-empty">No health records in the last 7 days.
                 {' '}<Link to="/settings#health-upload">Set up Health Auto Export in Settings</Link></p>}
               <DataNotes>
+                <p>Freshness and completeness are not established.</p>
                 {rows.map(row => <p key={row.source.id}><strong>{row.source.label}.</strong> {row.source.purpose}
                   {row.probe && row.probe.state !== 'failed' && <> Read <time dateTime={row.probe.observedAt}>{dailyValue(row.probe.observedAt)}</time>.</>}</p>)}
               </DataNotes>

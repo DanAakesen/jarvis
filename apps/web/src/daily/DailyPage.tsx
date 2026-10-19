@@ -141,7 +141,7 @@ export function DailyPage({ backendUrl, getAccessToken, knownSources, initialSou
             }}>Back to brief history</button>}
           </div>
           {result.error && !data && <DailyState status="error" message={result.error} retryLabel="Retry records" onRetry={result.reload} />}
-          {result.error && data && <div role="alert" className="daily-notice"><p>{result.error}</p>
+          {result.error && data && <div role="alert" className="daily-notice"><p>{result.error}</p><p>Showing the last loaded records.</p>
             <button className="secondary-button" type="button" onClick={result.reload} disabled={result.pending}>Retry records</button></div>}
           {result.pending && (data ? <p role="status">Refreshing…</p> : <DailyState status="loading" />)}
           {data && <>
@@ -160,7 +160,7 @@ export function DailyPage({ backendUrl, getAccessToken, knownSources, initialSou
                 {view === 'chart' && plot ? <div className="daily-plot">
                   <DailyChart kind="bar" series={plot.series} name={`${plot.label}, recorded Copenhagen dates`}
                     dataTable={<Records source={data.source} rows={data.items} units={data.units} />} />
-                  <p className="daily-meta">{plot.unit}</p>
+                  <p className="daily-meta">{plot.unit} · This page only</p>
                 </div> : <Records key={`${data.source}:${cursors.length}`} source={data.source} rows={data.items} units={data.units} {...(canOpenRecord ? {
                   openLabel: data.source === sources.workouts ? 'Open workout' : 'Open brief',
                   onOpenRecord: (id: string) => {
@@ -180,7 +180,7 @@ export function DailyPage({ backendUrl, getAccessToken, knownSources, initialSou
             </footer>
             <details className="daily-contract-details"><summary>Source, units and coverage</summary>
               {data.period && <p>Applied period: {formatDate(data.period.startDate)} to {formatDate(data.period.endDate)} (Europe/Copenhagen).</p>}
-              <p>Last source processing: {dailyValue(data.freshness.sourceProcessedCommittedAt)}.</p>
+              <p>Last source processing: {dailyValue(data.freshness.sourceProcessedCommittedAt)}. Freshness and completeness not established.</p>
               <dl className="daily-facts"><div><dt>Source</dt><dd>{data.source}</dd></div>
                 <div><dt>Consistency</dt><dd>Independent committed reads, not an atomic snapshot</dd></div>
                 <div><dt>Latest returned update</dt><dd>{dailyValue(data.freshness.latestReturnedRecordUpdatedAt)}</dd></div>

@@ -144,6 +144,7 @@ export function TaskRecipesSettings({ backendUrl, getAccessToken }: {
       <p className="settings-feedback" role={error ? 'alert' : 'status'}>
         {error || (loading ? <Loader variant="inline" announce={false} label="Loading routines…" /> : message)}
       </p>
+      {error && loaded && <p>Showing the last loaded routines.</p>}
       {loaded && recipes.length === 0 && <p>No routines</p>}
       {recipes.length > 0 && (
         <ul className="repository-list" aria-label="Saved routines">

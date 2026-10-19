@@ -441,6 +441,8 @@ Say a thing once, and only when the person needs it. No sentence repeats what a
 heading, label or visible state already shows, and none states what is not stored
 or not done unless it is consent, a destructive-action warning or recovery
 guidance. Success is quiet; errors keep their reason and the way to recover.
+Freshness, stale, partial, failed-refresh and estimated states are data honesty,
+not filler, and keep a short visible marker.
 Descriptions are one short phrase or absent, and lists of explanatory sentences
 become labels, values or icons. `copy-cleanup.test.ts` guards the removed strings.
 

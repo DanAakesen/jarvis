@@ -18,7 +18,9 @@ a star is found where it is drawn. Reduced motion keeps it still.
 Copy that restates a heading, a label or a visible state is removed, along with
 reassurance about what is not stored, unless it is consent, a destructive-action
 warning or recovery guidance; success is quiet. `copy-cleanup.test.ts` now scans
-every non-test source file for the removed strings.
+every non-test source file for the removed strings. Data-honesty markers are not
+filler: freshness, stale, partial, failed-refresh and estimated states keep a short
+visible note (for example "Showing the last loaded records." and "This page only").
 
 ## P14-27 — Azure vault mirror runner and Headless CLI wrapper (19 October 2026; #1078)
 

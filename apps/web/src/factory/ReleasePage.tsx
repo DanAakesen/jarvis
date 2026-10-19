@@ -266,7 +266,8 @@ export function ReleasePage({ backendUrl, getAccessToken }: AreaProps) {
           {refreshing ? 'Refreshing…' : 'Refresh releases and graph'}
         </button>
       </div>
-      {error && <StateMessage variant="partial" className="release-feedback" message="The latest refresh failed." />}
+      {error && <StateMessage variant="partial" className="release-feedback" message="The latest refresh failed."
+        detail="Showing the last loaded records." />}
 
       <section className="release-section" aria-labelledby="graph-heading">
         <div className="release-section-heading">

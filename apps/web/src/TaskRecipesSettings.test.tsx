@@ -126,6 +126,7 @@ describe('TaskRecipesSettings', () => {
     await screen.findByText('open a document');
     await user.click(screen.getByRole('button', { name: 'Refresh routines' }));
     expect(await screen.findByRole('alert')).not.toBeNull();
+    expect(screen.getByText('Showing the last loaded routines.')).not.toBeNull();
     expect(screen.getByText('open a document')).not.toBeNull();
   });
 

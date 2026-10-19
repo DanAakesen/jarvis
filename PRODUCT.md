@@ -704,6 +704,8 @@ motion is clearly alive (drifting notes, breathing stars, pulses along links).
 Screens carry as little copy as the task allows: no sentence repeats a heading,
 label or visible state, and none reassures about what is not stored or not done
 unless it is consent, a destructive-action warning or recovery guidance.
+Freshness, stale, partial, failed-refresh and estimated states keep a short
+visible marker.
 
 #### Software Factory — task view
 

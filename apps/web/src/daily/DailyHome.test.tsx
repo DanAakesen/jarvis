@@ -78,6 +78,7 @@ describe('Daily overview', () => {
     expect(screen.getAllByRole('listitem')).toHaveLength(dailySources.length);
     const notes = screen.getByText('About this data').closest('details')!;
     expect(notes.open).toBe(false);
+    expect(notes.textContent).toContain('Freshness and completeness are not established.');
     for (const source of dailySources) {
       expect(row(source.label).queryByText(source.purpose)).toBeNull();
       expect(notes.textContent).toContain(source.purpose);
