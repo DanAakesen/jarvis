@@ -1,5 +1,54 @@
 # Decisions
 
+## P14-33 — Harden the first live vault-mirror run (19 October 2026; #1090)
+
+Keep the engine and `@jarvis/contracts` status schema unchanged. Each `ob` call
+uses the remaining 420-second run budget less a fixed 90-second reserve for
+snapshotting, planning, GitHub writes, state upload and status persistence; the
+Container Apps replica timeout remains 480 seconds. A child-command timeout
+does not abort the run deadline, so the runner persists the stopped workspace
+and the matching Headless state before reporting `timeout`. The next invocation
+always begins in `pull-only` and lets the CLI reconcile that checkpoint before
+planning or writing back. The pinned package writes each downloaded file before
+recording it in its local state database; recovery ordering is inferred from
+source and remains **not yet verified against the live service**.
+
+Reduce the state archive limit from 200 MiB to 64 MiB. This bounds the expanded
+input buffers and generated archive produced by the synchronous `fflate` ZIP
+implementation within the job's 1 GiB memory limit; archive encoding is
+preflighted before GitHub or Obsidian writes, including pending retries and
+planned write-back. On Node 22.23.3, encoding a 63 MiB incompressible file
+produced a 63.01 MiB archive with a measured peak RSS of 315 MiB, below the
+1 GiB job limit. Oversized and corrupt archives use the existing fixed
+`state-corrupt` reason and `needs-attention` outcome, which the current Status
+page already explains. The shared schema cannot distinguish the two archive
+causes; keep that contract unchanged.
+
+The pinned `obsidian-headless@0.0.14` package source confirms `sync-config`
+supports `--file-types`, `--excluded-folders` and `--configs`. Its empty
+`--file-types` argument deletes `allowTypes`, which restores the package defaults
+of image, audio, PDF and video. An empty `allowTypes` array is truthy in the
+package's filter constructor and disables all attachment categories, so after
+each per-device `sync-config` command the runner sets only this device's
+`config.json` `allowTypes` to `[]`. `--configs ""` clears synced vault settings;
+policy excluded prefixes become the CLI's excluded-folder list. Source checks
+show rejected files are removed from the sync queue and accepted without
+deletion in both pull-only and bidirectional branches. These command, filter,
+configuration-file and recovery behaviors are **not yet verified against the
+live service**.
+
+Key Vault and GitHub errors are `auth` for HTTP 401/403, missing (404) or blank
+required Key Vault secrets, or the Obsidian CLI's explicit invalid/expired-token
+result. Missing optional passwords remain allowed; a missing policy secret
+remains `policy-missing`; an inaccessible private repository remains
+`repo-not-private`. Other 404s, rate limits, server errors, timeouts and
+network failures are failed outcomes.
+Windows-incompatible file names are counted as skips.
+After an Obsidian upload, verify only the paths this run applied; unrelated
+remote edits pulled by that bidirectional sync do not invalidate its result.
+Build `better-sqlite3` from source in the isolated CLI image stage; the runtime
+remains slim and non-root.
+
 ## P14-27 — Azure vault mirror runner and Headless CLI wrapper (19 October 2026; #1078)
 
 Add a one-run runner around the P14-26 pure planner; do not add infrastructure or
@@ -7,8 +56,9 @@ change the shared status/policy contract. The existing desktop task remains and
 this image is not deployed or connected to the live vault. Azure access uses the
 job's user-assigned managed identity for Key Vault and private Blob containers.
 The `vault-mirror-state/state.zip` blob is the single-flight lease; verify its
-SHA-256 metadata and 200 MB limit after leasing, then update it once at the end
-with both its original ETag and lease ID. Status is a separate
+SHA-256 metadata and archive limit after leasing, then update it once at the end
+with both its original ETag and lease ID. P14-33 supersedes this decision's
+original 200 MB cap with 64 MiB. Status is a separate
 `vault-mirror-status/status.json` blob. A missing state blob is initialized only
 with an `If-None-Match: *` create.
 
@@ -55,17 +105,16 @@ requested. Fresh state and guard trips still suppress O writes.
 
 The wrapper pins official `obsidian-headless` **0.0.14** in the isolated
 `apps/vault-mirror/tools` lockfile, invokes `ob` with an argv array, supplies
-`OBSIDIAN_AUTH_TOKEN` only in its child's environment, bounds each invocation to
-60 seconds within a 420-second run, captures bounded output without printing it,
-and terminates the child process group on timeout. Runner logging is restricted
-to run ID, outcome, fixed reason, duration and counts; paths appear only in
-private conflict status. `dry-run` is the default and only an explicit `on` value
-enables write-back. The image uses a pinned Node 22 base and runs as non-root;
-CI builds but does not publish it, then smoke-tests `ob --version` and a fake
-service run. The optional vault password is passed in the `ob sync-setup`
-argument array because this CLI provides no password environment-variable or
-stdin input; the job's single-purpose non-root container limits other local
-process exposure.
+`OBSIDIAN_AUTH_TOKEN` only in its child's environment, captures bounded output
+without printing it, and terminates the child process group on timeout. Runner
+logging is restricted to run ID, outcome, fixed reason, duration and counts;
+paths appear only in private conflict status. `dry-run` is the default and only
+an explicit `on` value enables write-back. The image uses a pinned Node 22 base
+and runs as non-root; CI builds but does not publish it, then smoke-tests
+`ob --version` and a fake service run. The optional vault password is passed in
+the `ob sync-setup` argument array because this CLI provides no password
+environment-variable or stdin input; the job's single-purpose non-root
+container limits other local process exposure.
 
 All assumptions below are **not yet verified against the live service**:
 

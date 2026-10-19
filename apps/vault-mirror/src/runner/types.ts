@@ -3,8 +3,9 @@ import type { FileRecord, Plan, WriteBack } from '../engine/index.js';
 import type { ValidatedPolicy } from '../engine/policy.js';
 import type { MirrorState } from './state.js';
 
-export const MAX_ARCHIVE_BYTES = 200 * 1024 * 1024;
+export const MAX_ARCHIVE_BYTES = 64 * 1024 * 1024;
 export const OVERALL_RUN_MS = 420_000;
+export const OB_POST_CALL_RESERVE_MS = 90_000;
 export const VAULT_REPOSITORY = 'DanAakesen/vault';
 export const VAULT_BRANCH = 'master';
 
@@ -84,6 +85,7 @@ export interface RunDependencies {
     readonly configHome: string;
     readonly signal: AbortSignal;
     readonly remainingMs: () => number;
+    readonly excludedFolders: readonly string[];
   }) => ObsidianClient;
   readonly afterWriteBack?: (workingCopy: string) => Promise<void>;
   readonly now?: () => number;

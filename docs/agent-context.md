@@ -54,8 +54,19 @@ at 100/10. Freshly initialized bases suppress Obsidian writes even in `on`.
 Never log plans, policies, note content or paths; only conflict paths are allowed
 in private status. The image builds only; no Azure job or live secret provisioning
 is part of this change. Headless behavior is **not yet verified against the live
-service**. See the workspace README and P14-27 decision for runner ordering,
+service**. See the workspace README and P14-33 decision for runner ordering,
 recovery and CLI assumptions.
+
+P14-33 bounds the in-memory state archive to 64 MiB and gives each `ob` call the
+remaining 420-second run budget minus a 90-second reserve. A child timeout saves
+the workspace and Headless state for the next pull-only reconciliation; an
+expired overall deadline cannot persist because its lease signal is cancelled.
+The runner uses the pinned 0.0.14 CLI source to disable attachment/config sync
+per device; empty `--file-types` restores defaults, so it stores an empty
+`allowTypes` array after `sync-config`. This source-derived behavior and
+checkpoint recovery are still **not yet verified against the live service**.
+The image builds `better-sqlite3` from source with build tools in the CLI-only
+Docker stage; those tools are not copied into the non-root runtime stage.
 
 CI has a reusable `vault-mirror-ci.yml`, impact mapping and a required aggregate
 result dependency. Changes to this wiring require the dispatcher's explicit
