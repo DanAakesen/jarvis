@@ -84,7 +84,7 @@ function parseState(value: unknown): MirrorState {
 function safeArchivePath(name: string): boolean {
   return !name.startsWith('/') && !name.includes('\\') &&
     name.split('/').filter((part, index, all) => !(part === '' && index === all.length - 1))
-      .every(part => part !== '' && part !== '.' && part !== '..' && !part.includes(':'));
+      .every(part => part !== '' && part !== '.' && part !== '..');
 }
 
 function inspectZip(bytes: Uint8Array): void {

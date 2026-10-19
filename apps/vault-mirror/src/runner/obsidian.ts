@@ -1,5 +1,7 @@
+import { randomUUID } from 'node:crypto';
 import { spawn } from 'node:child_process';
-import { resolve } from 'node:path';
+import { lstat, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises';
+import { dirname, resolve } from 'node:path';
 
 export type ObReason = 'auth' | 'pull-failed' | 'upload-failed' | 'timeout';
 
@@ -12,11 +14,12 @@ export class ObCommandError extends Error {
 export interface ObOptions {
   readonly executable?: string;
   readonly configHome: string;
-  readonly timeoutMs: number;
+  readonly timeoutMs: number | (() => number);
   readonly token: string;
   readonly password?: string;
   readonly workingCopy: string;
   readonly signal: AbortSignal;
+  readonly excludedFolders?: readonly string[];
 }
 
 const outputLimit = 32 * 1024;
@@ -37,7 +40,8 @@ export async function runOb(
 ): Promise<void> {
   if (options.signal.aborted) throw options.signal.reason;
   const executable = options.executable ?? 'ob';
-  const timeoutMs = Math.min(options.timeoutMs, 60_000);
+  const timeoutMs = typeof options.timeoutMs === 'function' ? options.timeoutMs() : options.timeoutMs;
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) throw new ObCommandError('timeout');
   let child: ReturnType<typeof spawn>;
   try {
     child = spawn(executable, [...args], {
@@ -113,6 +117,47 @@ export async function runOb(
 export function createObsidianClient(options: ObOptions) {
   const path = resolve(options.workingCopy);
   const common = ['--path', path, '--config-dir', '.obsidian'];
+  const configure = async (
+    mode: 'pull-only' | 'bidirectional',
+    operation: 'setup' | 'pull' | 'upload',
+    beforeWrite: () => Promise<void>,
+  ): Promise<void> => {
+    await beforeWrite();
+    await runOb([
+      'sync-config', '--mode', mode, '--excluded-folders',
+      options.excludedFolders?.join(',') ?? '', '--configs', '', ...common, '--json',
+    ], options, operation);
+    const syncRoot = resolve(options.configHome, 'headless', 'obsidian-headless', 'sync');
+    try {
+      const rootInfo = await lstat(syncRoot);
+      if (!rootInfo.isDirectory() || rootInfo.isSymbolicLink()) throw new TypeError();
+      const configs = await Promise.all((await readdir(syncRoot, { withFileTypes: true }))
+        .filter(entry => entry.isDirectory() && !entry.isSymbolicLink())
+        .map(async entry => {
+          const configPath = resolve(syncRoot, entry.name, 'config.json');
+          const info = await lstat(configPath);
+          if (!info.isFile() || info.isSymbolicLink()) return undefined;
+          const config = JSON.parse(await readFile(configPath, 'utf8')) as { vaultPath?: unknown };
+          return config.vaultPath === path ? configPath : undefined;
+        }));
+      const matches = configs.filter((configPath): configPath is string => configPath !== undefined);
+      if (matches.length !== 1) throw new TypeError();
+      const configPath = matches[0]!;
+      const config = JSON.parse(await readFile(configPath, 'utf8')) as Record<string, unknown>;
+      if (config.vaultPath !== path) throw new TypeError();
+      config.allowTypes = [];
+      const temporary = resolve(dirname(configPath), `.config-${randomUUID()}`);
+      try {
+        await writeFile(temporary, JSON.stringify(config), { encoding: 'utf8', mode: 0o600, flag: 'wx' });
+        await rename(temporary, configPath);
+      } catch (error) {
+        await rm(temporary, { force: true }).catch(() => undefined);
+        throw error;
+      }
+    } catch {
+      throw new ObCommandError(operation === 'upload' ? 'upload-failed' : 'pull-failed');
+    }
+  };
   return {
     async setup(vault: string, beforeWrite: () => Promise<void>): Promise<void> {
       const args = ['sync-setup', '--vault', vault, '--device-name', 'jarvis-vault-mirror',
@@ -120,20 +165,19 @@ export function createObsidianClient(options: ObOptions) {
       if (options.password !== undefined) args.push('--password', options.password);
       await beforeWrite();
       await runOb(args, options, 'setup');
+      await configure('pull-only', 'setup', beforeWrite);
     },
     async sync(
       mode: 'pull-only' | 'bidirectional',
       operation: 'pull' | 'upload',
       beforeWrite: () => Promise<void>,
     ): Promise<void> {
-      await beforeWrite();
-      await runOb(['sync-config', '--mode', mode, ...common, '--json'], options, operation);
+      await configure(mode, operation, beforeWrite);
       await beforeWrite();
       await runOb(['sync', ...common.slice(0, 2)], options, operation);
     },
     async setMode(mode: 'pull-only' | 'bidirectional', beforeWrite: () => Promise<void>): Promise<void> {
-      await beforeWrite();
-      await runOb(['sync-config', '--mode', mode, ...common, '--json'], options, 'upload');
+      await configure(mode, 'upload', beforeWrite);
     },
   };
 }

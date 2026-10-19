@@ -16,6 +16,7 @@ export interface ValidatedPolicy {
   readonly allowedRoots: readonly string[];
   readonly allowedExtensions: readonly string[];
   readonly excludedPrefixes: readonly string[];
+  readonly syncExcludedFolders: readonly string[];
   readonly excludedNames: readonly string[];
   readonly excludedNamePattern: RegExp;
   readonly secretPatterns: readonly RegExp[];
@@ -43,6 +44,7 @@ export function validatePolicy(input: unknown): PolicyResult {
         allowedRoots: Object.freeze(data.allowedRoots.map(foldPath)),
         allowedExtensions: Object.freeze(data.allowedExtensions.map(foldPath)),
         excludedPrefixes: Object.freeze(data.excludedPrefixes.map(foldPath)),
+        syncExcludedFolders: Object.freeze(data.excludedPrefixes),
         excludedNames: Object.freeze(data.excludedNames.map(foldPath)),
         excludedNamePattern: new RegExp(data.excludedNamePattern, 'i'),
         secretPatterns: Object.freeze(data.secretPatterns.map(pattern => new RegExp(pattern, 'i'))),

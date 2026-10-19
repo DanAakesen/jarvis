@@ -8,6 +8,7 @@ import { createGitHubMirrorClient } from './github.js';
 import { createObsidianClient } from './obsidian.js';
 import { runMirror } from './run.js';
 import { AzureMirrorStorage } from './storage.js';
+import { OB_POST_CALL_RESERVE_MS } from './types.js';
 import type { MirrorConfig } from './config.js';
 import type { MirrorSecrets, RunDependencies } from './types.js';
 
@@ -58,7 +59,8 @@ export function createProductionDependencies(config: MirrorConfig): RunDependenc
           if (name === 'vault-mirror-policy' && errorStatus(error) === 404) {
             throw new Error('policy-missing', { cause: error });
           }
-          throw new Error('auth', { cause: error });
+          if ([401, 403].includes(errorStatus(error) ?? 0)) throw new Error('auth', { cause: error });
+          throw new Error('unexpected', { cause: error });
         }
       };
       const [obsidianToken, vaultName, vaultPassword, policyJson, githubPrivateKey] = await Promise.all([
@@ -69,7 +71,7 @@ export function createProductionDependencies(config: MirrorConfig): RunDependenc
         secret('github-app-private-key'),
       ]);
       if (!obsidianToken?.trim() || !vaultName?.trim() || !githubPrivateKey?.trim()) {
-        throw new Error('auth');
+        throw new Error('unexpected');
       }
       const validated = validatePolicy(policyJson);
       if (!validated.success) throw new Error('policy-missing');
@@ -95,7 +97,8 @@ export function createProductionDependencies(config: MirrorConfig): RunDependenc
         workingCopy: options.workingCopy,
         ...(options.password === undefined ? {} : { password: options.password }),
         signal: options.signal,
-        timeoutMs: Math.min(60_000, options.remainingMs()),
+        timeoutMs: () => Math.max(0, options.remainingMs() - OB_POST_CALL_RESERVE_MS),
+        excludedFolders: options.excludedFolders,
       });
     },
     log(entry) {
