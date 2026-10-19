@@ -5,6 +5,29 @@ treatments selected from the existing Jarvis design system. The shared source
 of truth is `apps/web/src/styles.css`; route stylesheets own workflow layout,
 not parallel palettes or control systems.
 
+## Factory board and task window (P14-21; 19 October 2026)
+
+The QA pass found split clock metadata, indistinguishable destructive actions,
+inconsistent issue-title and card-action styles, a cramped project filter,
+wrapping usage cells, repeated filtered-empty messages, and undersized touch
+targets. The board now keeps clock metadata together, uses the shared danger,
+ghost and secondary button variants, displays the project name in a wider
+responsive filter track, and gives filtered-empty boards one clear-and-focus
+recovery action. Task-window usage cells stay unbroken in a horizontally
+scrollable table; the listed board controls meet the 44px coarse-pointer target.
+
+Scratch-only auth and synthetic API fixtures rendered the actual app in
+Chromium at 320×640, 390×844, 768×1024, 1024×768 and 1440×900, in light and
+dark. Checks covered the search recovery/focus return, destructive-button
+hierarchy in the board and task window, title hover/focus, filter fit, usage
+values and coarse-pointer targets at 390px. No 390px horizontal overflow or
+browser errors occurred. At 320px, the document measured 369px wide because
+synthetic release-bar repository/branch text extended beyond the viewport; that
+surface is outside this change. Local checks passed:
+`npm test --workspace @jarvis/web` (131 files, 1,803 tests),
+`npm run lint --workspace @jarvis/web`, and
+`npm run build --workspace @jarvis/web` (TypeScript and Vite build).
+
 ## Daily visual QA pass (P12-38; 18 October 2026)
 
 Rendered the parent revision and the corrected Daily page in synthetic Chromium

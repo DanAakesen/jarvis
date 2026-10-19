@@ -231,6 +231,7 @@ describe('Factory task board', () => {
 
     expect(await screen.findByRole('heading', { level: 1, name: 'Kanban' })).not.toBeNull();
     const board = await screen.findByRole('region', { name: 'Issues by GitHub Project column' });
+    expect(screen.getByRole('option', { name: 'Jarvis' })).not.toBeNull();
     const names = ['Backlog', 'Needs Dan', 'Ready', 'In progress', 'In review', 'Done'];
     expect(within(board).getAllByRole('heading', { level: 2 }).map((heading) => heading.textContent)).toEqual(names);
     for (const name of names) {
@@ -270,12 +271,35 @@ describe('Factory task board', () => {
     expect(within(card).getByText(/2 attempts/)).not.toBeNull();
     expect(within(card).getByRole('button', { name: 'Pause' })).not.toBeNull();
     expect(within(card).getByRole('button', { name: 'Steer' })).not.toBeNull();
-    expect(within(card).getByRole('button', { name: 'View details' })).not.toBeNull();
-    expect(within(card).getByRole('link', { name: 'Open Fix the bug in a window' }).getAttribute('href')).toBe('/factory/tasks/42');
+    expect(within(card).getByRole('button', { name: 'View details' }).className).toBe('ghost-button');
+    const openTask = within(card).getByRole('link', { name: 'Open Fix the bug in a window' });
+    expect(openTask.className).toBe('secondary-button kanban-card-open');
+    expect(openTask.getAttribute('href')).toBe('/factory/tasks/42');
     expect(within(card).getByRole('button', { name: 'Fix the bug' }).getAttribute('aria-pressed')).toBe('false');
     expect(within(card).getByText(/Started/)).not.toBeNull();
     expect(await screen.findByText('Live board updates connected.')).not.toBeNull();
     expect(streamHarness.callbacks.size).toBe(0);
+  });
+
+  it('shows one recoverable empty state for active filters and returns focus to search', async () => {
+    const user = userEvent.setup();
+    renderFactory();
+    await screen.findByRole('article', { name: 'Fix the bug' });
+    const search = screen.getByRole('searchbox', { name: 'Search issues' });
+    await user.type(search, 'no matching issue');
+
+    const clearSearch = await screen.findByRole('button', { name: 'Clear search' });
+    expect(screen.getAllByText('No matching issues.')).toHaveLength(1);
+    await user.click(clearSearch);
+    expect(await screen.findByRole('article', { name: 'Fix the bug' })).not.toBeNull();
+    await waitFor(() => expect(document.activeElement).toBe(search));
+
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Agent' }), 'copilot');
+    const clearFilters = await screen.findByRole('button', { name: 'Clear filters' });
+    expect(screen.getAllByText('No matching issues.')).toHaveLength(1);
+    await user.click(clearFilters);
+    expect(await screen.findByRole('article', { name: 'Fix the bug' })).not.toBeNull();
+    await waitFor(() => expect(document.activeElement).toBe(search));
   });
 
   it('uses only the required project query and applies agent, task-state, update-period and search filters locally', async () => {
