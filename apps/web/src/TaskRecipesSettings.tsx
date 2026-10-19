@@ -172,7 +172,7 @@ export function TaskRecipesSettings({ backendUrl, getAccessToken }: {
                   <button className="secondary-button" type="button" disabled={deleting !== null}
                     onClick={() => setConfirmingDelete(null)}>Cancel</button>
                   <button className="secondary-button danger-button danger-button--filled" type="button" autoFocus
-                    aria-label={`Delete routine: ${recipe.goal} (${recipe.key})`}
+                    aria-label={`${deleting === recipe.id ? 'Deleting' : 'Confirm delete'} routine: ${recipe.goal} (${recipe.key})`}
                     aria-busy={deleting === recipe.id || undefined}
                     disabled={loading || deleting !== null}
                     onClick={() => { void deleteRecipe(recipe); }}>
