@@ -817,7 +817,7 @@ function ShellLayout({ signedIn, config, session, camera, screenShare, dailyEnab
       {signedIn && phone && (
         <>
           <MobileCaption text={workText ?? (working ? activityText : null)} />
-          <MobileMenu open={menuOpen} onClose={closeMenu} onNavigate={closePagePanels} onFolio={() => setFolioOpen(true)} onContext={contextPanel.toggle} dailyEnabled={dailyEnabled} />
+          <MobileMenu open={menuOpen} onClose={closeMenu} onNavigate={closePagePanels} onFolio={() => setFolioOpen(true)} onContext={contextPanel.toggle} dailyEnabled={dailyEnabled} proactiveEnabled={proactiveEnabled} />
         </>
       )}
       {signedIn && <ContextPanel modal={phone} closeIcon={<ShellIcon name="close" />} resizeHandle={phone ? undefined : (
