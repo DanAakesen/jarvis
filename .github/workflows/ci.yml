@@ -37,6 +37,7 @@ jobs:
       selection: ${{ steps.impact.outputs.selection }}
       web: ${{ steps.impact.outputs.web }}
       backend: ${{ steps.impact.outputs.backend }}
+      vault-mirror: ${{ steps.impact.outputs.vault-mirror }}
       database: ${{ steps.impact.outputs.database }}
       foundry: ${{ steps.impact.outputs.foundry }}
       runner: ${{ steps.impact.outputs.runner }}
@@ -65,6 +66,12 @@ jobs:
     needs: plan
     if: needs.plan.outputs.backend == 'true'
     uses: ./.github/workflows/backend-ci.yml
+
+  vault-mirror:
+    name: Vault mirror
+    needs: plan
+    if: needs.plan.outputs.vault-mirror == 'true'
+    uses: ./.github/workflows/vault-mirror-ci.yml
 
   database:
     name: Database
@@ -131,7 +138,7 @@ jobs:
   result:
     name: ${{ github.event_name == 'pull_request' && github.event.pull_request.draft && 'Draft CI not qualified' || 'CI result' }}
     if: always() && (github.event_name != 'pull_request' || !github.event.pull_request.draft)
-    needs: [plan, web, backend, database, foundry, runner, jarvis-agent, infra, python]
+    needs: [plan, web, backend, vault-mirror, database, foundry, runner, jarvis-agent, infra, python]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:

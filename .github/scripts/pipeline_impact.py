@@ -8,13 +8,14 @@ from pathlib import Path
 import subprocess
 
 PARTS = ("infra", "backend", "web", "agent")
-CHECKS = ("web", "backend", "database", "foundry", "runner", "jarvis-agent", "infra", "python")
-NODE_CHECKS = {"web", "backend", "database", "foundry"}
+CHECKS = ("web", "backend", "vault-mirror", "database", "foundry", "runner", "jarvis-agent",
+          "infra", "python")
+NODE_CHECKS = {"web", "backend", "vault-mirror", "database", "foundry"}
 CHECK_ONLY_WORKFLOWS = {
     "backend-ci.yml", "ci.yml", "codeql.yml", "copilot-ready.yml", "copilot-setup-steps.yml",
     "database-ci.yml", "foundry-contract.yml", "jarvis-agent-ci.yml", "plan-status.yml",
     "pr-title.yml", "project-board.yml", "runner-ci.yml", "runner-deploy.yml", "web-ci.yml",
-    "worker-label.yml", "voice-probe.yml", "danish-voice-agent.yml",
+    "worker-label.yml", "voice-probe.yml", "danish-voice-agent.yml", "vault-mirror-ci.yml",
 }
 CHECK_ONLY_SCRIPTS = {
     "deploy_plan.py", "deploy_smoke.py", "smoke_reasons.py", "pipeline_impact.py",
@@ -38,6 +39,10 @@ def deploy_parts(path: str) -> set[str]:
         return set()
     if path.startswith("infra/"):
         return {"infra"}
+    # Vault mirror is qualified separately; no production deployment exists yet.
+    # Keep it out of existing applications' fingerprints and the deploy fallback.
+    if path.startswith("apps/vault-mirror/"):
+        return set()
     if path.startswith("apps/backend/") or path.startswith("db/") or path == ".dockerignore":
         return {"backend"}
     if path == "apps/web/package.json":
@@ -74,6 +79,8 @@ def checks_for(path: str) -> set[str]:
         return set()
     if path.startswith("apps/web/"):
         return {"web", "backend"} if path.endswith("/package.json") else {"web"}
+    if path.startswith("apps/vault-mirror/"):
+        return {"vault-mirror"}
     if path.startswith(("apps/backend/", "db/")):
         return {"backend", "database", "foundry", "web", "jarvis-agent", "runner", "python"}
     if path.startswith("packages/contracts/") or path in {

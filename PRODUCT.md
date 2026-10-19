@@ -1,5 +1,18 @@
 # Product
 
+## Planned vault mirror safety boundary (19 October 2026; P14-26)
+
+The planned Azure mirror will remove the desktop-running dependency between
+Obsidian and the private vault repository. This issue implements only synthetic,
+offline reconciliation planning and its strict status contract; nothing is
+deployed or connected to the real vault. The existing desktop task remains.
+Obsidian uploads to GitHub are planned from the first run, but write-back stays
+`dry-run` until the owner explicitly enables it after reviewing runs. Fresh state,
+conflicts, private policy and partial-pull/mass-deletion guards prevent unsafe
+writes. Unresolved conflicts resolve in Obsidian's favour after 24 hours, never
+by overwriting Obsidian. Live Obsidian behavior is **not yet verified against the
+live service**.
+
 ## Shared overlays (18 October 2026; P14-09)
 
 Dialogs, sheets and menus use one stacking order without covering modal actions
