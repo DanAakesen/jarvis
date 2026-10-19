@@ -1,7 +1,6 @@
 import { useLayoutEffect, useRef, useState } from 'react';
 import { dailyQuerySources as sources, type DailyJson, type DailyQuery } from '@jarvis/contracts';
 import { DailyState } from '../../ui/DailyState';
-import { DailyCoverageNote } from '../../ui/DailyCoverageNote';
 import { DailySectionHeader } from '../../ui/DailySectionHeader';
 import { FreshnessLine } from '../../ui/FreshnessLine';
 import { useDailyPages } from '../../ui/useDailyPages';
@@ -153,11 +152,7 @@ export default function BriefsSection(props: DailySectionProps) {
   return <section className="daily-briefs" aria-labelledby="briefs-heading">
     <DailySectionHeader title="Briefs" headingId="briefs-heading"
       freshness={<FreshnessLine {...(history.first ? { observedAt: history.first.freshness.observedAt } : {})}
-        count={loadedCount} recordLabel="briefs" partial={history.hasMore || history.error !== null} />}
-      aboutData={<DailyCoverageNote summary="About this data">
-      <p>Stored timestamps are displayed by their recorded date. No timezone is inferred.</p>
-      <p>Past briefs—not current health or a new delivery.</p>
-    </DailyCoverageNote>} />
+        count={loadedCount} recordLabel="briefs" partial={history.hasMore || history.error !== null} />} />
     <section className="daily-brief-history" aria-label="Brief history" hidden={selectedId !== null}
       aria-busy={history.status === 'loading' || history.loadingMore}>
       {(history.status === 'idle' || history.status === 'loading' || history.loadingMore) && loadedCount === 0 &&
@@ -165,8 +160,7 @@ export default function BriefsSection(props: DailySectionProps) {
       {history.error && <DailyState status="error" message={history.error} retryLabel="Retry brief history" onRetry={history.reload} />}
       {history.status === 'ready' && loadedCount === 0 && !history.error && !history.hasMore && !history.loadingMore &&
         <div className="daily-brief-empty" role="status">
-          <p>No briefs have been recorded yet.</p>
-          <p>Briefs will appear here after the first one is recorded.</p>
+          <p>No briefs</p>
         </div>}
       {loadedCount > 0 && <>
         <p className="daily-brief-count" role="status">{loadedCount} {loadedCount === 1 ? 'brief' : 'briefs'} loaded.</p>
@@ -205,11 +199,8 @@ export default function BriefsSection(props: DailySectionProps) {
         </section>)}
       </>}
       {history.hasMore && history.capped &&
-        <p className="daily-brief-coverage" role="status">
-          More history exists, but the 10-page automatic loading cap has been reached.
-        </p>}
+        <p className="daily-brief-coverage" role="status">Page limit reached.</p>}
       {history.hasMore && !history.capped && <div className="daily-brief-coverage" role="status">
-        <p>More brief history is available.</p>
         <button className="secondary-button" type="button" onClick={history.loadMore} disabled={history.loadingMore}>
           {history.loadingMore ? 'Loading more briefs…' : 'Load more'}
         </button>
@@ -228,7 +219,7 @@ export default function BriefsSection(props: DailySectionProps) {
           <button className="secondary-button" type="button" disabled={!newerRecord}
             {...(!newerRecord ? { 'aria-describedby': 'daily-brief-newer-reason' } : {})}
             onClick={() => newerRecord && setSelectedId(text(newerRecord.id, ''))}>Newer brief</button>
-          {!newerRecord && <span id="daily-brief-newer-reason">{newerNeighbor
+          {!newerRecord && <span id="daily-brief-newer-reason" className="visually-hidden">{newerNeighbor
             ? 'The newer brief cannot be opened because it has no recorded identifier.'
             : 'No newer brief is loaded.'}</span>}
         </div>
@@ -236,7 +227,7 @@ export default function BriefsSection(props: DailySectionProps) {
           <button className="secondary-button" type="button" disabled={!olderRecord}
             {...(!olderRecord ? { 'aria-describedby': 'daily-brief-older-reason' } : {})}
             onClick={() => olderRecord && setSelectedId(text(olderRecord.id, ''))}>Older brief</button>
-          {!olderRecord && <span id="daily-brief-older-reason">{olderNeighbor
+          {!olderRecord && <span id="daily-brief-older-reason" className="visually-hidden">{olderNeighbor
             ? 'The older brief cannot be opened because it has no recorded identifier.'
             : 'No older brief is loaded.'}</span>}
         </div>

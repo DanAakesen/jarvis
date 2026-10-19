@@ -48,8 +48,8 @@ export default function BodySleepSection(props: DailySectionProps) {
         {item === 'body' ? 'Body' : 'Sleep'}
       </button>)}
     </div>
-    {!hasBody && <p>Body is unavailable: this backend must expose both measurements and the metric catalogue.</p>}
-    {!hasSleep && <p>Sleep is unavailable: this backend does not expose sleep records.</p>}
+    {!hasBody && <p>Body unavailable.</p>}
+    {!hasSleep && <p>Sleep unavailable.</p>}
     {views.map(item => <div role="tabpanel" key={item} id={`body-sleep-panel-${item}`}
       aria-labelledby={`body-sleep-tab-${item}`} hidden={item !== view} tabIndex={0}>
       {item === view && (item === 'body' ? <BodyView {...props} /> : <SleepView {...props} />)}

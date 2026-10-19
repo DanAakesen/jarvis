@@ -297,14 +297,14 @@ describe('Factory task board', () => {
     await user.type(search, 'no matching issue');
 
     const clearSearch = await screen.findByRole('button', { name: 'Clear search' });
-    expect(screen.getAllByText('No matching issues.')).toHaveLength(1);
+    expect(screen.getAllByText('No matches')).toHaveLength(1);
     await user.click(clearSearch);
     expect(await screen.findByRole('article', { name: 'Fix the bug' })).not.toBeNull();
     await waitFor(() => expect(document.activeElement).toBe(search));
 
     await user.selectOptions(screen.getByRole('combobox', { name: 'Agent' }), 'copilot');
     const clearFilters = await screen.findByRole('button', { name: 'Clear filters' });
-    expect(screen.getAllByText('No matching issues.')).toHaveLength(1);
+    expect(screen.getAllByText('No matches')).toHaveLength(1);
     await user.click(clearFilters);
     expect(await screen.findByRole('article', { name: 'Fix the bug' })).not.toBeNull();
     await waitFor(() => expect(document.activeElement).toBe(search));
@@ -567,7 +567,7 @@ describe('Factory task board', () => {
         : originalFetch(input, init));
       invalidate();
       await waitFor(() => expect(finishRefresh).toBeDefined());
-      expect(screen.queryByText('Loading GitHub board…')).toBeNull();
+      expect(screen.queryByText('Loading board…')).toBeNull();
       expect(screen.getByRole('region', { name: 'Issues by GitHub Project column' })).toBe(board);
       expect(title.getAttribute('aria-pressed')).toBe('true');
       expect(board.scrollLeft).toBe(180);
@@ -618,7 +618,7 @@ describe('Factory task board', () => {
     expect(screen.getByRole('article', { name: 'Fix the bug' })).toBe(card);
     expect(board.scrollLeft).toBe(160);
     expect(board.scrollTop).toBe(70);
-    expect(screen.queryByText('Loading GitHub board…')).toBeNull();
+    expect(screen.queryByText('Loading board…')).toBeNull();
     expect(document.querySelector('.loader-core')).toBeNull();
     await act(async () => finishRefresh(response(boardFixture([{ ...task, activity: 'Recovered' }]))));
     expect(await screen.findByText('Recovered')).not.toBeNull();
@@ -643,7 +643,7 @@ describe('Factory task board', () => {
     expect(connectionNotice().textContent).toContain('Showing the last loaded board because refresh failed.');
     expect(screen.getByRole('region', { name: 'Issues by GitHub Project column' })).toBe(board);
     expect(screen.getByRole('article', { name: 'Fix the bug' })).toBe(card);
-    expect(screen.queryByText('Loading GitHub board…')).toBeNull();
+    expect(screen.queryByText('Loading board…')).toBeNull();
     expect(document.querySelector('.loader-core')).toBeNull();
     expect(screen.queryByRole('alert')).toBeNull();
     expect(screen.queryByText('Board data could not be loaded. Try again.')).toBeNull();
@@ -1159,8 +1159,7 @@ describe('Factory task board', () => {
   it('does not request an unscoped board when there are no active projects', async () => {
     fetchMock.mockResolvedValue(response([]));
     renderFactory();
-    await screen.findByText('No active projects are available for a GitHub board.');
-    await screen.findByText('Create a project to begin.');
+    await screen.findByText('No active projects');
     expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/factory/board'))).toBe(false);
     expect(screen.getByRole('button', { name: 'Create task' }).hasAttribute('disabled')).toBe(true);
   });

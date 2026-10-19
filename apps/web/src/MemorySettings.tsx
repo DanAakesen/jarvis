@@ -219,7 +219,7 @@ export function MemorySettings({ backendUrl, getAccessToken }: { backendUrl: str
                 actionLabel="Retry" onAction={() => { setList({ status: 'loading' }); setReload((value) => value + 1); }} />}
               {list.status === 'ready' && list.value.length === 0 && (
                 <StateMessage variant="empty" className="settings-explanation"
-                  message={debounced ? 'Nothing matches this search.' : 'No memories have been recorded.'} />
+                  message={debounced ? 'No matches' : 'No memories'} />
               )}
               {list.status === 'ready' && list.value.length > 0 && (
                 <ul className="memory-list" aria-label="Memories">
@@ -241,7 +241,7 @@ export function MemorySettings({ backendUrl, getAccessToken }: { backendUrl: str
                 {current && (
                   <>
                     <p className="memory-item-meta">Remembered {formatDate(current.updatedAt)}</p>
-                    {redacted && <p className="settings-explanation">This memory looks like it contains a credential, so its text is hidden and cannot be edited here.</p>}
+                    {redacted && <p className="settings-explanation">Text hidden: it looks like a credential.</p>}
                     <div className="settings-field memory-text">
                       <label className="visually-hidden" htmlFor={`${ids}-text`}>Memory text</label>
                       <textarea id={`${ids}-text`} rows={4} value={draft} disabled={busy !== '' || redacted} maxLength={draftLimit}

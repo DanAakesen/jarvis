@@ -89,8 +89,7 @@ describe('Briefs section', () => {
 
   it('shows a plain empty state instead of a blank history panel', async () => {
     renderBriefs([]);
-    expect(await screen.findByText('No briefs have been recorded yet.')).toBeTruthy();
-    expect(screen.getByText('Briefs will appear here after the first one is recorded.')).toBeTruthy();
+    expect(await screen.findByText('No briefs')).toBeTruthy();
   });
 
   it('shows the loading state while history is pending', () => {
@@ -139,13 +138,12 @@ describe('Briefs section', () => {
       return new Promise<Response>(resolve => { finishSecondPage = resolve; });
     });
     render(<MemoryRouter><BriefsSection {...props} /></MemoryRouter>);
-    expect(await screen.findByText('More brief history is available.')).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Loading more briefs…' }).hasAttribute('disabled')).toBe(true);
+    expect(await screen.findByRole('button', { name: 'Loading more briefs…' })).toHaveProperty('disabled', true);
     expect(screen.getByText('1 brief loaded.')).toBeTruthy();
     await act(async () => {
       finishSecondPage(jsonResponse(dailyFixture(queries[1]!, [], null)));
     });
-    await waitFor(() => expect(screen.queryByText('More brief history is available.')).toBeNull());
+    await waitFor(() => expect(screen.queryByRole('button', { name: /more briefs|Load more/u })).toBeNull());
   });
 
   it('announces newer and older navigation, disables both ends with reasons, and focuses the new heading', async () => {
@@ -221,7 +219,7 @@ describe('Briefs section', () => {
       return jsonResponse(dailyFixture(query, [row], next));
     });
     render(<MemoryRouter><BriefsSection {...props} /></MemoryRouter>);
-    expect(await screen.findByText('More history exists, but the 10-page automatic loading cap has been reached.')).toBeTruthy();
+    expect(await screen.findByText('Page limit reached.')).toBeTruthy();
     expect(screen.getByText('10 briefs loaded.')).toBeTruthy();
     expect(queries.filter(query => query.source === sources.briefs)).toHaveLength(10);
     expect(screen.queryByRole('button', { name: 'Load more' })).toBeNull();

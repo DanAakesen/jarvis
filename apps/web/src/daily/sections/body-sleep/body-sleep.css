@@ -18,7 +18,7 @@
 .body-sleep-shortcut-content { display: grid; justify-items: start; gap: var(--space-1); width: 100%; min-width: 0; text-align: start; }
 .body-sleep-shortcut-name, .body-sleep-shortcut-date { overflow-wrap: anywhere; }
 .body-sleep-shortcut-name { font-weight: 650; }
-.body-sleep-shortcut-pending, .body-sleep-shortcut-state { color: var(--text-muted); font-size: var(--type-small); }
+.body-sleep-shortcut-state { color: var(--text-muted); font-size: var(--type-small); }
 .app-shell .body-sleep-shortcuts .daily-sparkline { width: min(100%, 8rem); height: 1.25rem; margin-top: 0; }
 .body-sleep-read-state { display: grid; align-content: start; gap: var(--space-2); min-width: 0; }
 .body-sleep-empty { display: grid; justify-items: start; gap: var(--space-2); }
@@ -26,7 +26,6 @@
 .body-sleep-unit { display: grid; gap: var(--space-3); }
 .body-sleep-unit > h3 { overflow-wrap: anywhere; }
 .body-sleep-note, .body-sleep-read-state { color: var(--text-muted); font-size: var(--type-small); overflow-wrap: anywhere; }
-.body-sleep-identifier { display: inline-block; max-width: 100%; overflow-wrap: anywhere; }
 .body-sleep-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); align-items: stretch; gap: var(--space-3); }
 .body-sleep-stats .daily-stat-tile { height: auto; }
 .body-sleep-last-night { display: grid; gap: var(--space-3); }

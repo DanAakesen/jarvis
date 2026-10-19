@@ -492,8 +492,7 @@ export function ProjectsPage({ backendUrl, getAccessToken, projectDefaults }: Pr
           {manageError && <p className="projects-feedback" role="alert">{manageError}</p>}
           {projects.length === 0 ? (
             <StateMessage variant="empty" className="project-empty"
-              message="No managed projects are available."
-              detail="Add a project to manage it with Jarvis." actionLabel="Add project"
+              message="No projects" actionLabel="Add project"
               actionDisabled={!backendUrl} actionDescribedBy="project-add-help"
               onAction={() => setProjectDialogOpen(true)} />
           ) : (
@@ -689,7 +688,7 @@ export function ProjectSettingsPage({ backendUrl, getAccessToken }: ProjectsPage
     setError('');
     try {
       await request(backendUrl, getAccessToken, `/factory/projects/${projectId}`, 'DELETE');
-      navigate('/settings#projects', { replace: true, state: { notice: 'Project archived. Its task history is retained and its repository remains reserved.' } });
+      navigate('/settings#projects', { replace: true, state: { notice: 'Project archived.' } });
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Project could not be archived. Try again.');
       setShowArchiveConfirmation(false);
@@ -735,7 +734,6 @@ export function ProjectSettingsPage({ backendUrl, getAccessToken }: ProjectsPage
             />
           </section>
           <section className="settings-section" aria-labelledby="project-repository-heading">
-            <p>Other project settings apply to new tasks. Completion policy applies now, including pull requests that are already open.</p>
             <h2 id="project-repository-heading">Repository</h2>
             <div className="projects-form-grid">
               <div className="settings-field">
@@ -808,7 +806,7 @@ export function ProjectSettingsPage({ backendUrl, getAccessToken }: ProjectsPage
           </div>
           <section className="project-archive" aria-labelledby="archive-project-heading">
             <h2 id="archive-project-heading">Archive project</h2>
-            <p>Archiving hides this project from active lists. Its task history stays available and its repository remains reserved.</p>
+            <p>Hides the project from active lists. History is kept.</p>
             {!showArchiveConfirmation ? (
               <div className="button-group button-group--space-4">
                 <button className="secondary-button" type="button" disabled={disabled}
@@ -951,9 +949,6 @@ export function CreateProjectDialog({ backendUrl, getAccessToken, onClose, onAdd
         </section>
         <form id="new-project-form" className="project-dialog-part task-create-form" onSubmit={askJarvis}>
           <h3>Start a new repository</h3>
-          <p className="settings-explanation">
-            The policy default only pre-fills projects Jarvis registers later. Every project keeps its own policy and can be changed any time.
-          </p>
           {defaultsState === 'loading' && <StateMessage variant="loading" message="Loading project defaults" />}
           {defaultsState === 'error' && <StateMessage variant="error" className="tasks-feedback" message={defaultsError}
             actionLabel={backendUrl ? 'Retry defaults' : undefined} onAction={backendUrl ? retryDefaults : undefined} />}

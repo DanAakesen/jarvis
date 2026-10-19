@@ -151,7 +151,6 @@
 .daily-section-panel { min-width: 0; min-height: 12rem; }
 .daily-section-panel:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; border-radius: var(--radius-control); }
 .daily-period-slot { margin-bottom: var(--space-4); }
-.daily-period-hint { margin: 0; min-height: 70px; display: flex; align-items: center; color: var(--text-muted); font-size: var(--type-small); }
 .daily-period-control { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--space-3); margin-bottom: 0; }
 .daily-period-control > label, .daily-custom-period > label { display: grid; gap: var(--space-1); font-size: var(--type-small); }
 .daily-custom-period { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--space-3); }

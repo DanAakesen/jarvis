@@ -605,9 +605,9 @@ export function TaskDetailPage({ backendUrl, getAccessToken, taskId, compact = f
                     </select>
                   </div>
                   {task.events.length === 0
-                    ? <p className="task-window-note">No task events have been recorded.</p>
+                    ? <p className="task-window-note">No events</p>
                     : visibleEvents.length === 0
-                      ? <p className="task-window-note">No events match this event type.</p>
+                      ? <p className="task-window-note">No matches</p>
                       : (
                         <ol className="task-trail">
                           {[...visibleEvents].reverse().map((event, index) => (
@@ -665,7 +665,7 @@ export function TaskDetailPage({ backendUrl, getAccessToken, taskId, compact = f
                 <section className="task-card" aria-labelledby={`${ids}-disk`}>
                   <h4 id={`${ids}-disk`}>Sandbox disk</h4>
                   {measurements.length === 0
-                    ? <p className="task-window-note">No disk measurements have been recorded for this task.</p>
+                    ? <p className="task-window-note">No measurements</p>
                     : (
                       <ol className="task-disk-readings">
                         {[...measurements].reverse().map(({ event, reading }) => {
@@ -712,7 +712,6 @@ export function TaskDetailPage({ backendUrl, getAccessToken, taskId, compact = f
                         </table>
                       </div>
                     )}
-                  <p className="task-window-note">Sandbox cost is estimated from session time. Agent usage appears only when the provider reports it.</p>
                 </section>
               </div>
             </div>
@@ -828,7 +827,7 @@ export function TaskDetailPage({ backendUrl, getAccessToken, taskId, compact = f
           {!compact && <section className="task-detail-section" aria-labelledby="disk-heading">
             <h2 id="disk-heading">Sandbox disk</h2>
             {measurements.length === 0
-              ? <p>No disk measurements have been recorded for this task.</p>
+              ? <p>No measurements</p>
               : (
                 <ol className="task-disk-list">
                   {measurements.map(({ event, reading }) => (
@@ -847,9 +846,6 @@ export function TaskDetailPage({ backendUrl, getAccessToken, taskId, compact = f
           </section>}
           <section className="task-detail-section task-usage" aria-labelledby="usage-heading">
             <h2 id="usage-heading">Usage</h2>
-            <p className="task-usage-note">
-              Sandbox cost is estimated from session time. Agent usage appears only when the provider reports it.
-            </p>
             {task.usage.length === 0
               ? <p>No usage recorded.</p>
               : (
@@ -884,7 +880,7 @@ export function TaskDetailPage({ backendUrl, getAccessToken, taskId, compact = f
             <h2 id="timeline-heading">{compact ? 'Recent activity' : 'Task timeline'}</h2>
             {compact ? (
               previewEvents.length === 0
-                ? <p>No task events have been recorded.</p>
+                ? <p>No events</p>
                 : <ol className="task-timeline-preview">
                   {previewEvents.map((event) => (
                     <li key={event.id}>
@@ -908,9 +904,9 @@ export function TaskDetailPage({ backendUrl, getAccessToken, taskId, compact = f
               </span>
             </div>
             {task.events.length === 0
-              ? <p>No task events have been recorded.</p>
+              ? <p>No events</p>
               : visibleEvents.length === 0
-                ? <p>No events match this event type.</p>
+                ? <p>No matches</p>
                 : (
                   <ol className="activity-list task-timeline">
                     {visibleEvents.map((event) => (

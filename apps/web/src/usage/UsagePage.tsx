@@ -205,7 +205,7 @@ function Segmented<T extends string>({ label, value, options, onChange }: {
 /** A single stacked bar with a labelled legend; colour never carries meaning alone. */
 function SplitBar({ slices, format, label }: { slices: Slice[]; format: (value: number) => string; label: string }) {
   const total = slices.reduce((sum, slice) => sum + slice.value, 0);
-  if (total <= 0) return <p className="usage-quiet">Nothing to compare yet.</p>;
+  if (total <= 0) return <p className="usage-quiet">No comparison data</p>;
   return (
     <>
       <div className="usage-split" role="img" aria-label={`${label}: ${slices.map((slice) => `${slice.label} ${format(slice.value)}`).join(', ')}`}>
@@ -230,7 +230,7 @@ function SplitBar({ slices, format, label }: { slices: Slice[]; format: (value: 
 /** Ranked horizontal bars, scaled to the largest value. */
 function RankBars({ items, format }: { items: Slice[]; format: (value: number) => string }) {
   const max = Math.max(...items.map((item) => item.value), 0);
-  if (!items.length || max <= 0) return <p className="usage-quiet">Nothing recorded yet.</p>;
+  if (!items.length || max <= 0) return <p className="usage-quiet">No data</p>;
   return (
     <ol className="usage-rank">
       {items.map((item) => (
@@ -317,8 +317,7 @@ export function UsagePage({ backendUrl, getAccessToken }: AreaProps) {
           onChange={setPeriod} />
       </header>
 
-      {currentState.status === 'loading' && <StateMessage variant="loading"
-        message={`Loading usage for ${periods.find(({ value }) => value === period)?.label.toLowerCase()}`} />}
+      {currentState.status === 'loading' && <StateMessage variant="loading" message="Loading usage" />}
       {currentState.status === 'error' && <StateMessage variant="error" className="usage-feedback"
         message={currentState.message} actionLabel="Retry"
         onAction={() => setReload((value) => value + 1)} />}
@@ -340,12 +339,11 @@ export function UsagePage({ backendUrl, getAccessToken }: AreaProps) {
           {report.truncated && (
             <StateMessage variant="partial" className="usage-limit-note"
               message={`Showing the latest ${entries.length} of ${report.totalEntries} records.`}
-              detail="Refresh this report to check for the latest records."
               actionLabel="Refresh usage" onAction={() => setReload((value) => value + 1)} />
           )}
 
           {entries.length === 0 ? <StateMessage variant="empty" className="usage-empty"
-            message="No usage was recorded in this period." /> : (
+            message="No usage" /> : (
             <div className="usage-grid">
               <section className="usage-card" aria-labelledby="usage-split-heading">
                 <div className="usage-card-head">

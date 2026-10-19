@@ -115,7 +115,7 @@ describe('Usage page', () => {
       status: 200, headers: { 'Content-Type': 'application/json' },
     }));
     await user.click(within(screen.getByRole('group', { name: 'Time period' })).getByRole('button', { name: '90 days' }));
-    expect(await screen.findByText('No usage was recorded in this period.')).not.toBeNull();
+    expect(await screen.findByText('No usage')).not.toBeNull();
   });
 
   it('distinguishes empty and unavailable Codex tool counts', async () => {

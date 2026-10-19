@@ -10,7 +10,6 @@ import { ShellIcon } from './ShellIcon';
 const pages = [
   { to: '/', label: 'Jarvis', end: true },
   { to: '/factory/kanban', label: 'Software Factory' },
-  { to: '/tasks', label: 'Tasks' },
   { to: '/notes', label: 'Notes' },
   { to: '/usage', label: 'Usage' },
   { to: '/status', label: 'Status' },

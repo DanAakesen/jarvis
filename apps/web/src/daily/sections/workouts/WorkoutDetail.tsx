@@ -38,8 +38,8 @@ function HeartRate({ row, ...props }: DailySectionProps & { row: Workout }) {
     {(result.status === 'loading' || result.status === 'idle') && result.items.length === 0 && <DailyState status="loading" />}
     {result.error && <DailyState status="error" message={result.error} onRetry={result.reload} />}
     {result.status === 'ready' && result.items.length === 0 &&
-      <p role="status">No heart-rate samples were returned for this workout; that does not prove none were recorded</p>}
-    {result.hasMore && <p role="status">Showing {result.items.length} samples; more exist for this workout.
+      <p role="status">No heart-rate samples</p>}
+    {result.hasMore && <p role="status">Showing {result.items.length} samples; more exist.
       {result.capped && <button type="button" className="secondary-button" onClick={result.loadMore}>Load more samples</button>}
     </p>}
     {units.map(unit => {
@@ -62,7 +62,7 @@ function HeartRate({ row, ...props }: DailySectionProps & { row: Workout }) {
       return <DailyChart key={unit} kind="line" rangeLabel={`Recorded minimum–maximum (${unit})`}
         name={`${metricDisplay(metric ?? 'Unknown metric').label} (${unit}), elapsed minutes${result.hasMore ? ', loaded samples only' : ''}`} series={series} />;
     })}
-    {result.status === 'loading' && result.items.length > 0 && <p role="status">Refreshing recorded samples…</p>}
+    {result.status === 'loading' && result.items.length > 0 && <p role="status">Refreshing…</p>}
   </section>;
 }
 
@@ -73,7 +73,7 @@ function RecordedDetail({ workoutId, ...props }: DailySectionProps & { workoutId
     <summary>Recorded detail</summary>
     {result.pending && <DailyState status="loading" />}
     {result.error && <DailyState status="error" message={result.error} onRetry={result.reload} />}
-    {result.data && result.data.items.length === 0 && <p>No recorded detail was returned for this workout.</p>}
+    {result.data && result.data.items.length === 0 && <p>No detail</p>}
     {result.data?.items.map((item: Record<string, DailyJson>, index) =>
       <pre key={index}>{JSON.stringify(item.detail, null, 2)}</pre>)}
   </details>;

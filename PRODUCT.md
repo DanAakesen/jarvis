@@ -680,22 +680,35 @@ pinning is available, and Close for unpinned windows. Crowded tabs remain
 scrollable; phone window-list actions remain reachable above content windows.
 Persistent-pin semantics are still part of the unfinished P8-42 implementation.
 
-#### Vault tasks and Notes (P13-19; 18 October 2026)
+#### Vault tasks on the Notes page (P13-19; 18 October 2026; one page since 19 October 2026)
 
-Personal to-dos and notes are separate concepts. The `/tasks` page reads native
-Obsidian checkbox items from the shared proactive scope: `Personal/` and `Work/`
-notes plus the root `task.md` or `tasks.md` dashboard. It groups open tasks by
-Overdue, Today, Upcoming and No date; completed tasks are opt-in. Search filters
-task text, and each task links to its source note. Jarvis never creates, edits,
-completes, reorders or deletes these tasks; Dan completes them in Obsidian.
-Agent work remains on the Software Factory board.
+Notes and personal to-dos share one page; there is no Tasks page. A **Show tasks**
+button at the top left of the map, beside the search bar rather than inside it,
+opens a task panel beside the map (**Hide tasks**, Escape or Back closes it), and
+the old `/tasks` address redirects to `/notes?tasks=1`, keeping a `q` search. The
+address holds the panel's state, so a link to a task search opens it. The panel
+reads native Obsidian checkbox items from the
+shared proactive scope: `Personal/` and `Work/` notes plus the root `task.md` or
+`tasks.md` dashboard. It groups open tasks by Overdue, Today, Upcoming and No date;
+completed tasks are opt-in. Search filters task text, and each task opens its source
+note in place. Jarvis never creates, edits, completes, reorders or deletes these
+tasks; Dan completes them in Obsidian. Agent work remains on the Software Factory
+board.
 
-Notes remains a notes surface. Search shows the matching plain-text snippet under
-each note title and, when open tasks match, a separate Tasks result group linking
-to `/tasks?q=...`. In chat and voice, task/to-do/reminder requests use the
-read-only tasks kind of `vault_search`; note searches use its default notes kind
-and `vault_read`.
+Notes search shows the matching plain-text snippet under each note title and, when
+open tasks match, a Tasks result group whose count opens the panel with that
+search. In chat and voice, task/to-do/reminder requests use the read-only tasks
+kind of `vault_search`; note searches use its default notes kind and `vault_read`.
 All reads are owner-only and treat vault content as untrusted data.
+
+The knowledge map opens centred on the notes and fitted to the window, and its idle
+motion is clearly alive (drifting notes, breathing stars, pulses along links). The
+Notes search bar is compact and shows no note total, only a match count while
+searching. Screens carry as little copy as the task allows: no sentence repeats a
+heading, label or visible state, and none reassures about what is not stored or not
+done unless it is consent, a destructive-action warning or recovery guidance.
+Freshness, stale, partial, failed-refresh and estimated states keep a short
+visible marker.
 
 #### Software Factory — task view
 

@@ -53,6 +53,10 @@ export function newNotePath(folder: string, title: string): string {
   return slug && safeNoteFolder(folder) ? `${folder ? `${folder}/` : ''}${slug}.md` : '';
 }
 
+export function noteTitleFromPath(path: string): string {
+  return path.split('/').at(-1)?.replace(/\.md$/iu, '').replace(/[-_]/gu, ' ') || 'Vault note';
+}
+
 export function readNote(value: unknown): Note {
   const note = object(value);
   if (!note || !safeNotePath(note.path) || !content(note.content) || !sha(note.sha) || !githubUrl(note.url)) {

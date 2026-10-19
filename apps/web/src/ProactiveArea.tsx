@@ -446,11 +446,7 @@ export function ProactiveArea({ backendUrl, getAccessToken, signIn, now: injecte
         {items.state === 'loading' && <StateMessage variant="loading" loaderVariant="rows" message="Loading open items" />}
         {items.state === 'error' && <StateMessage variant="error" message={items.message}
           actionLabel="Retry" onAction={() => { void loadItems(); }} />}
-        {items.state === 'loaded' && items.value.length === 0 && <StateMessage variant="empty"
-          message="Nothing needs you right now." detail={loadedStatus?.lastRun
-            ? <>Last check <time dateTime={loadedStatus.lastRun.finishedAt ?? loadedStatus.lastRun.startedAt}>
-              {formatTime(loadedStatus.lastRun.finishedAt ?? loadedStatus.lastRun.startedAt)}</time>.</>
-            : 'No check has run yet.'} />}
+        {items.state === 'loaded' && items.value.length === 0 && <StateMessage variant="empty" message="No open items" />}
         {items.state === 'loaded' && items.value.length > 0 && <ul className="proactive-item-list">
           {items.value.map((item) => <li key={item.id} className="proactive-item-row">
             <ItemLink item={item} />
@@ -487,7 +483,7 @@ export function ProactiveArea({ backendUrl, getAccessToken, signIn, now: injecte
 
       <section className="proactive-block" aria-labelledby="proactive-budget-heading">
         <h2 id="proactive-budget-heading">Budget</h2>
-        {status.state === 'loading' && <StateMessage variant="loading" message="Loading monthly budget" />}
+        {status.state === 'loading' && <StateMessage variant="loading" message="Loading budget" />}
         {status.state === 'error' && <StateMessage variant="error" message="Budget status could not be loaded."
           actionLabel="Retry" actionAriaLabel="Retry budget status" onAction={() => { void loadStatus(); }} />}
         {loadedStatus && <div className="proactive-budget" data-state={loadedStatus.budget.state}>
@@ -504,8 +500,8 @@ export function ProactiveArea({ backendUrl, getAccessToken, signIn, now: injecte
             value={Math.min(loadedStatus.budget.estimatedSpendDkk, Math.max(1, loadedStatus.budget.monthlyLimitDkk))}
             aria-label="Estimated monthly proactive spend"
             aria-valuetext={`Estimated ${loadedStatus.budget.estimatedSpendDkk} of ${loadedStatus.budget.monthlyLimitDkk} DKK this month.`} />
-          <p>Estimated {loadedStatus.budget.estimatedSpendDkk} of {loadedStatus.budget.monthlyLimitDkk} DKK this month. This is an estimate.</p>
-          {loadedStatus.budget.state === 'exhausted' && <p>Limit reached. Proactive checks are paused until next month or until you raise the limit in Settings.</p>}
+          <p>Estimated {loadedStatus.budget.estimatedSpendDkk} of {loadedStatus.budget.monthlyLimitDkk} DKK this month.</p>
+          {loadedStatus.budget.state === 'exhausted' && <p>Checks are paused until next month.</p>}
           <Link to="/settings#proactive-settings">Change the budget in Settings</Link>
         </div>}
       </section>
