@@ -72,10 +72,16 @@ baseline) and 0 of 92 at 320. The only double surface is the existing
 change does not touch. The 768px figures are after-only, because the baseline did
 not measure 768.
 
+The measurements were taken on `main` at `b57482aa`. P14-15, P14-18 to P14-22
+and a later copy fix merged afterwards, and the scenarios were not measured again
+on the merged tree, so the figures describe this change on that baseline and not
+the final layout of every screen.
+
 Tests: ten new cases in `StateMessage.test.tsx` (the wrapper class for each of
 the five variants, the text loader markup, the stretch rule, the card columns)
 and `styles.test.tsx` (the default surface, the reset list, the compact Notes
-card); nine fail on the old code and the tenth guards the unchanged text loader.
+card); nine fail on the old code (re-run against `main` at `fbd8fdaf`) and the
+tenth guards the unchanged text loader.
 Roles, announcements and recovery actions are unchanged. `tsc`, ESLint with
 `--max-warnings 0` on the changed files and `vite build` pass. The full web suite
 has 13 failures: the 7 known Windows backslash failures in `stylesheets.test.tsx`
