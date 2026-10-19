@@ -215,6 +215,15 @@ describe('app-wide control contract', () => {
       .toBe('var(--radius-panel)');
   });
 
+  it('uses touch-sized advanced Settings controls and content-width push actions', () => {
+    const coarse = mediaBlocks(source).find(({ query, body }) =>
+      query.trim() === '(pointer: coarse)' && body.includes('.settings-field.advanced-range'))?.body ?? '';
+    expect(coarse).toContain('.settings-field.advanced-range input[type="range"] { height: 44px; min-height: 44px; }');
+    expect(coarse).toContain('.advanced-colour input[type="color"] { width: 44px; height: 44px; }');
+    const pushNotifications = readFileSync('src/PushNotifications.css', 'utf8');
+    expect(ruleDeclaration(pushNotifications, /\.push-notifications\s*\{([^}]*)\}/, 'justify-items')).toBe('start');
+  });
+
   it('pairs Daily and Proactive block alerts with the shared error surface', () => {
     const daily = readFileSync('src/daily/daily.css', 'utf8');
     const proactive = readFileSync('src/proactive.css', 'utf8');

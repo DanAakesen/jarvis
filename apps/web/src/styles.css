@@ -2567,7 +2567,6 @@ a.task-chip:hover { background: var(--glass-pressed); }
 .memory-text textarea { width: 100%; min-height: 120px; }
 .memory-toolbar .settings-field, .memory-toolbar .settings-field :is(input, select) { width: 100%; margin: 0; }
 .memory-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin-top: var(--space-3); }
-.memory-forget:hover:not(:disabled) { background: var(--error-wash); }
 .memory-history-heading { margin: var(--space-4) 0 var(--space-2); font-size: var(--type-small); }
 .memory-history { display: grid; gap: var(--space-2); margin: 0; padding: 0; list-style: none; }
 .memory-history li { display: grid; gap: var(--space-1); font-size: var(--type-caption); }
@@ -3108,7 +3107,6 @@ a.task-chip:hover { background: var(--glass-pressed); }
 .folio-rename, .folio-confirm { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-3); }
 .folio-rename input { flex: 1; min-width: 0; min-height: 44px; padding: 0 var(--space-3); border: 1px solid var(--control-rule); border-radius: var(--radius-control); background: transparent; color: var(--text); font: inherit; font-size: var(--type-small); }
 .folio-confirm span { flex: 1 1 100%; font-size: var(--type-small); }
-.folio-danger { color: var(--error); }
 .folio-notice { margin: var(--space-1) var(--space-3) var(--space-2); color: var(--text-muted); font-size: var(--type-caption); }
 .folio-notice[data-tone="error"] { color: var(--error); }
 .folio-state { display: grid; gap: var(--space-3); justify-items: start; padding: var(--space-4) var(--space-2); color: var(--text-muted); font-size: var(--type-small); }
@@ -3555,6 +3553,10 @@ a.task-chip:hover { background: var(--glass-pressed); }
 }
 :root[data-motion="reduced"] .advanced-toggle input[role="switch"]::after { transition: none; }
 .settings-field.advanced-range input[type="range"] { height: 28px; min-height: 28px; padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+@media (pointer: coarse) {
+  .settings-field.advanced-range input[type="range"] { height: 44px; min-height: 44px; }
+  .advanced-colour input[type="color"] { width: 44px; height: 44px; }
+}
 .collapsible-inner > .advanced-field + .advanced-field, .advanced-group > .advanced-field + .settings-grid, .collapsible-inner > .advanced-range + .settings-grid { margin-top: var(--space-3); }
 .advanced-range { display: grid; gap: var(--space-1); }
 .collapsible-inner > .advanced-toggle, .advanced-group > .advanced-toggle { margin-top: var(--space-3); }

@@ -221,7 +221,7 @@ function Deployments({ catalogue, error, call, onChanged }: {
                   <button className="secondary-button" type="button" onClick={() => setConfirming(null)}>Keep</button>
                 </span>
               ) : catalogue.source === 'arm' ? (
-                <button className="secondary-button" type="button" aria-label={`Remove ${deployment.name}`} onClick={() => setConfirming(deployment.name)}>Remove</button>
+                <button className="secondary-button danger-button" type="button" aria-label={`Remove ${deployment.name}`} onClick={() => setConfirming(deployment.name)}>Remove</button>
               ) : null}
             </li>
           ))}
