@@ -1,5 +1,25 @@
 # Decisions
 
+## P14-32 — One Notes page, a livelier map and quieter copy (19 October 2026; #1085)
+
+The Tasks page is gone. Notes is the one page: a Show tasks button in its search
+bar opens the read-only task panel beside the map, and `/tasks` redirects to
+`/notes?tasks=1` (keeping the search), so old links and the Notes search task
+group still work. This is the interim step before the design-led one-page layout
+tracked in #1085.
+
+The knowledge map opens centred on the mass of the notes and fitted to the window,
+follows the layout while it settles, and stops at the first pan, zoom or search
+flight; Reset view returns to the same fit. Its idle motion is stronger (drift, a
+swell through the cloud, brighter breathing, pulses along links, flaring notes);
+the constants are at the top of `knowledge-scene.ts`. Picking mirrors the drift, so
+a star is found where it is drawn. Reduced motion keeps it still.
+
+Copy that restates a heading, a label or a visible state is removed, along with
+reassurance about what is not stored, unless it is consent, a destructive-action
+warning or recovery guidance; success is quiet. `copy-cleanup.test.ts` now scans
+every non-test source file for the removed strings.
+
 ## P14-28 — Opt-in Azure vault mirror deployment (19 October 2026; #1080)
 
 Deploy `job-jarvis-vault-mirror` in the existing Container Apps environment on

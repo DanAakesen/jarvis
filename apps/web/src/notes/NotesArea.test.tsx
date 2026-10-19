@@ -11,6 +11,11 @@ const raw = '---\ntags: [fixture]\n---\n# Fixture\n\nExact content.\n';
 const path = 'Work/fixture.md';
 const summary = { path, title: 'Fixture', folder: 'Work', updatedAt: '2026-10-11T00:00:00Z' };
 const second = { ...summary, path: 'General/other.md', title: 'Other', folder: 'General' };
+const vaultTask = (letter: string, text: string, taskPath: string, line: number) => ({
+  id: letter.repeat(64), text, done: false, dueDate: '2031-04-09', dueTime: null, dueAt: null,
+  priority: 'normal', path: taskPath, line, heading: 'Inbox',
+});
+const vaultTasks = [vaultTask('d', 'Buy a mirror', path, 3), vaultTask('e', 'Call about the frame', second.path, 1)];
 const json = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status, headers: { 'Content-Type': 'application/json' } });
 const getAccessToken = async () => 'fixture-token';
 const fetchMock = vi.fn<typeof fetch>();
@@ -38,6 +43,9 @@ beforeEach(() => {
     if (url.pathname === '/notes/tree') return json({
       directories: ['Customers', 'Customers/Novaro', 'General', 'Work'],
       rootNoteCount: 1, truncated: false, updatedAt: '2026-10-11T17:00:00Z',
+    });
+    if (url.pathname === '/vault/tasks') return json({
+      items: vaultTasks, readAt: '2031-04-09T20:28:00.000Z', today: '2031-04-09', total: vaultTasks.length, truncated: false,
     });
     if (init?.method === 'POST' || init?.method === 'PUT') {
       const body = JSON.parse(String(init.body)) as { path: string; content: string };
@@ -80,6 +88,72 @@ describe('Notes workflow', () => {
       const url = new URL(String(input));
       return url.pathname === '/notes/note' && url.searchParams.get('path') === path;
     })).toBe(true);
+  });
+
+  it('shows tasks on request, opens a task’s note in place and puts the list away again', async () => {
+    mount();
+    const toggle = await screen.findByRole('button', { name: 'Show tasks' });
+    expect(toggle.closest('.knowledge-search')).not.toBeNull();
+    expect(screen.queryByRole('region', { name: 'Task list' })).toBeNull();
+    expect(fetchMock.mock.calls.some(([input]) => new URL(String(input)).pathname === '/vault/tasks')).toBe(false);
+
+    fireEvent.click(toggle);
+    const list = await screen.findByRole('region', { name: 'Task list' });
+    expect(screen.getByRole('button', { name: 'Hide tasks' }).getAttribute('aria-controls')).toBe(list.id);
+    expect(await within(list).findByText('Buy a mirror')).not.toBeNull();
+
+    fireEvent.click(within(list).getByRole('link', { name: 'Open source note Work/fixture.md, line 3' }));
+    const dialog = await screen.findByRole('dialog', { name: 'fixture' });
+    expect(within(dialog).getByRole('region', { name: 'Markdown preview' })).not.toBeNull();
+    expect(screen.getByRole('region', { name: 'Task list' })).not.toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Hide tasks' }));
+    expect(screen.queryByRole('region', { name: 'Task list' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Show tasks' })).not.toBeNull();
+  });
+
+  it('opens the task list from a link that asks for it, with the search already typed', async () => {
+    mount(['/notes?tasks=1&q=mirror']);
+    const list = await screen.findByRole('region', { name: 'Task list' });
+    expect((within(list).getByRole('searchbox', { name: 'Search tasks' }) as HTMLInputElement).value).toBe('mirror');
+    await waitFor(() => expect(fetchMock.mock.calls.some(([input]) => {
+      const url = new URL(String(input));
+      return url.pathname === '/vault/tasks' && url.searchParams.get('q') === 'mirror';
+    })).toBe(true));
+  });
+
+  it('closes the task list with Escape and hands focus back to its button', async () => {
+    mount();
+    fireEvent.click(await screen.findByRole('button', { name: 'Show tasks' }));
+    const list = await screen.findByRole('region', { name: 'Task list' });
+    expect(document.activeElement).toBe(list);
+    fireEvent.keyDown(list, { key: 'Escape' });
+    expect(screen.queryByRole('region', { name: 'Task list' })).toBeNull();
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Show tasks' }));
+  });
+
+  it('puts the task list away when a task’s note opens on a narrow screen', async () => {
+    vi.stubGlobal('matchMedia', vi.fn((query: string) => ({
+      matches: query.includes('max-width: 900px'), media: query, addEventListener: vi.fn(), removeEventListener: vi.fn(),
+    })));
+    mount(['/notes?tasks=1']);
+    const list = await screen.findByRole('region', { name: 'Task list' });
+    fireEvent.click(await within(list).findByRole('link', { name: 'Open source note Work/fixture.md, line 3' }));
+    await screen.findByRole('dialog', { name: 'fixture' });
+    expect(screen.queryByRole('region', { name: 'Task list' })).toBeNull();
+  });
+
+  it('asks before a task’s note replaces an unsaved draft', async () => {
+    mount();
+    const input = await openFixture();
+    fireEvent.change(input, { target: { value: 'Unsaved draft' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Show tasks' }));
+    const list = await screen.findByRole('region', { name: 'Task list' });
+    fireEvent.click(await within(list).findByRole('link', { name: 'Open source note General/other.md, line 1' }));
+    expect(screen.getByRole('dialog', { name: 'Unsaved changes' })).not.toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Keep editing' }));
+    expect((screen.getByRole('textbox', { name: 'Markdown' }) as HTMLTextAreaElement).value).toBe('Unsaved draft');
+    expect(fetchMock.mock.calls.some(([request]) => new URL(String(request)).searchParams.get('path') === second.path)).toBe(false);
   });
 
   it('keeps a long note title available to assistive technology and on hover', async () => {
