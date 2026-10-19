@@ -1,5 +1,34 @@
 # Architecture
 
+## Vault mirror status consumption (19 October 2026; P14-29)
+
+The backend reads private `vault-mirror-status/status.json` with its existing
+Azure storage credential, without provisioning containers or writing mirror
+state. The read has a five-second deadline, a 32 KiB limit, strict
+`vaultMirrorStatusSchema` validation and a single-flight 30-second cache that
+also covers missing/read-error results. Missing container/blob means not set
+up; malformed, oversized, timed-out or denied reads become a fixed read error.
+Neither raw documents nor exception details are logged or returned.
+
+Authenticated `GET /status` adds a reduced `vaultMirror` view independently of
+the general one-minute probe cache. It omits run identifiers and run timestamps.
+Conflict paths are confined to this owner response and the expanded web row;
+agent status tools, proactive facts and logs do not receive them. Contracts add
+`vaultMirrorStatusViewSchema` without changing the shared runner document.
+The web validates the view and ages healthy status locally after 30 minutes.
+A successful snapshot without the optional view means not set up, including
+during deployment skew. The disclosure stays mounted across the first load.
+
+The existing proactive engine uses a deterministic normal-urgency mirror
+finding with persistent Copenhagen-day/reason deduplication. It fires after
+one hour without success, immediately on needs-attention, or for failed/stale
+status with no success yet. Recent transient failures, absent and unreadable
+status stay quiet; findings are excluded from push delivery. Storing a mirror
+finding preserves `no_sources` when every source read fails, so the background
+job still reports the failed reads. Existing proactive
+scheduling/settings still apply; no new timer, flag, tool or migration is added.
+Azure/Obsidian behavior is **not yet verified against the live service**.
+
 ## Azure vault mirror deployment (19 October 2026; P14-28)
 
 The optional `job-jarvis-vault-mirror` runs in the existing Container Apps
@@ -39,23 +68,33 @@ only after a separately authorized backup/teardown. The status-page reader and
 runner implementation are separate contract consumers and are not provisioned
 by this infrastructure change.
 
-## Planned Azure vault mirror decision boundary (19 October 2026; P14-26)
+## Azure vault mirror runner (19 October 2026; P14-27)
 
-`apps/vault-mirror` (`@jarvis/vault-mirror`) is an offline TypeScript workspace,
-**planned and not yet deployed**. Its pure `planReconcile` engine takes approved
-Obsidian/GitHub/base inventories, supplied time and in-memory readers/merge;
-it returns guarded directional writes and common-base updates, without I/O.
-Private Zod policy validation, NFC paths, CRLF-normalized SHA-256 comparison,
-collision refusal, credential filtering and default-off Obsidian write-back
-are separate from any future runner. The existing desktop scheduled task stays.
+`apps/vault-mirror` (`@jarvis/vault-mirror`) combines the pure `planReconcile`
+engine with a one-run TypeScript process. `main.ts` validates configuration,
+reads Key Vault secrets through `ManagedIdentityCredential`, verifies the
+configured private repository/default branch with a repository-scoped GitHub App
+Contents-write token, and takes an Azure Blob lease before loading state. The
+checksummed, 200 MB-capped archive contains the Obsidian working copy, Headless
+configuration and common-base/pending-write-back records. Its upload requires
+the original ETag and active lease. A separate status blob contains only the
+strict `vaultMirrorStatusSchema` fields.
 
-The strict `vaultMirrorStatusSchema` in `packages/contracts` defines bounded,
-content-free status with fixed reasons/counts and at most ten private conflict
-paths. Mirror-only changes qualify mirror + Python checks, not an existing
-application deployment. No CLI, Azure job, storage, image or entry point is
-implemented here; the future runner owns snapshot preconditions, action ordering,
-conflict timestamps and durable state. Obsidian Headless Sync behavior is
-**not yet verified against the live service**. See
+The runner keeps `src/engine` pure. It uses the pinned `ob` CLI through an
+argument-array wrapper with a child-only auth token, bounded output/timeouts and
+process-group termination. Each run pulls in `pull-only`, snapshots approved
+files and one recursive Git tree, plans with the engine, then applies GitHub
+changes as one Git Data API commit with a non-force ref update. A moved branch is
+read and planned once more. Obsidian write-back is gated by `on`, rechecked against
+the exact planned file set, uploaded, and returned to `pull-only`; unsuccessful
+paths remain pending and retry before the next plan. The existing desktop task
+stays in place.
+
+This code is **not deployed or connected to the live vault**; the separate Azure
+job/infrastructure is not implemented here. Headless CLI behavior and upload
+confirmation assumptions are **not yet verified against the live service**.
+Mirror-only code qualifies through `vault-mirror-ci.yml` and does not deploy an
+existing application. See
 [`apps/vault-mirror/README.md`](../apps/vault-mirror/README.md).
 
 ## Shared web date-time formatting (19 October 2026; P14-23)

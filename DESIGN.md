@@ -1,5 +1,29 @@
 # Design
 
+## Vault mirror Status row (19 October 2026; P14-29)
+
+Use one quiet row within System checks, with the Vault mirror label, a text
+state badge, relative last-success time and an explicit Dry-run label when
+reported. The existing status badge combines a dot with words; colour is never
+the only state signal. Not set up, healthy, stale, needs attention, failed,
+loading and read error use the same compact anatomy, without collapsed prose
+or lists.
+
+A full-width disclosure button uses the shared ghost-button geometry, a 44px
+minimum target, visible focus and `aria-expanded`. Enter/Space toggles details
+without moving focus. Counts, write-back mode, fixed reason copy and up to ten
+wrapping conflict paths mount only while expanded. Layout wraps on phones;
+expansion is immediate and has no motion dependency, including reduced motion.
+Loading/error retain this row and the page's existing Refresh/Retry recovery.
+The same disclosure remains mounted while the first snapshot arrives,
+preserving expansion and focus. A successful snapshot without mirror data
+shows Not set up; failed fetches and explicit read errors retain Read error.
+Recovery copy does not assume whether the page offers Refresh or Retry.
+Synthetic Chromium inspected all seven states, disclosure, keyboard focus,
+repeated input, long paths and overflow at 1280×900, 390×900 and 320×900 with
+normal/reduced motion (42 cases). This used the actual Status component and
+styles in an isolated fixture, not live authentication, Azure or Obsidian.
+
 ## Daily visual QA pass (P12-38, 18 October 2026)
 
 Use the shared `DailySectionHeader` slot order throughout Daily: section title

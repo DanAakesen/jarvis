@@ -61,6 +61,7 @@ export interface ProactiveCompositionOptions {
   alertsEnabled?: boolean;
   now?: () => Date;
   logger?: FastifyBaseLogger;
+  vaultMirrorStatusReader?: NonNullable<ProactiveEngineOptions['vaultMirrorStatusReader']>;
 }
 
 export function registerProactive<Logger extends FastifyBaseLogger>(

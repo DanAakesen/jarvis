@@ -3432,6 +3432,14 @@ a.task-chip:hover { background: var(--glass-pressed); }
 .system-status-details dt { color: var(--text-muted); }
 .system-status-details dd { margin: 0; }
 .system-status-details :is(dt, dd) { overflow-wrap: anywhere; font-size: var(--type-small); }
+.vault-mirror-row { padding: var(--space-2) 0; }
+.vault-mirror-toggle.ghost-button { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-start;
+  gap: var(--space-2) var(--space-3); width: 100%; min-height: 44px; text-align: left; }
+.vault-mirror-label { display: inline-flex; align-items: center; gap: var(--space-2); }
+.vault-mirror-toggle > .system-status-time:last-child { margin-left: auto; }
+.vault-mirror-details { padding: 0 var(--space-3); }
+.vault-mirror-details h3 { margin: var(--space-3) 0 var(--space-2); font-size: var(--type-small); }
+.vault-mirror-details ul { margin: 0; padding-left: var(--space-4); font-size: var(--type-small); overflow-wrap: anywhere; }
 @media (max-width: 700px) {
   .system-status-panel { padding: var(--space-4); }
   .system-status-details dl > div { grid-template-columns: minmax(0, 1fr); gap: var(--space-1); }

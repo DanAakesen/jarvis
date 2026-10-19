@@ -1,17 +1,32 @@
 # Product
 
-## Planned vault mirror safety boundary (19 October 2026; P14-26)
+## Vault mirror freshness (19 October 2026; P14-29)
 
-The planned Azure mirror will remove the desktop-running dependency between
-Obsidian and the private vault repository. This issue implements only synthetic,
-offline reconciliation planning and its strict status contract; nothing is
-deployed or connected to the real vault. The existing desktop task remains.
-Obsidian uploads to GitHub are planned from the first run, but write-back stays
-`dry-run` until the owner explicitly enables it after reviewing runs. Fresh state,
-conflicts, private policy and partial-pull/mass-deletion guards prevent unsafe
-writes. Unresolved conflicts resolve in Obsidian's favour after 24 hours, never
-by overwriting Obsidian. Live Obsidian behavior is **not yet verified against the
-live service**.
+Status shows one compact **Vault mirror** row: not set up, healthy, stale,
+needs attention, failed, loading or read error, plus time since the last success.
+Healthy includes no-op and busy runs; freshness becomes stale after 30 minutes
+without success. Dry-run is always visible when reported: the mirror is not
+writing into Obsidian. Expand the row for counts, write-back mode, a short fixed
+reason and up to ten conflict paths. No status document is normal, not a failure.
+
+The existing proactive checks create a normal-urgency finding immediately for
+needs-attention, or for failed/stale status when success is over an hour old or
+has never occurred, at most once per Copenhagen day and reason, with no push
+notification. A recent transient failure stays quiet. Missing/unreadable status
+does not create a mirror finding. No new flag or change to default-off write-back is introduced.
+Azure/Obsidian operation is **not yet verified against the live service**.
+
+## Planned Azure vault mirror safety boundary (19 October 2026; P14-27)
+
+The Azure mirror runner reconciles the owner's Obsidian vault with its private
+GitHub repository using Obsidian Headless Sync. This code is not deployed or
+connected to the live vault; the existing desktop task remains. Obsidian-to-GitHub
+sync is enabled from the first run. GitHub-to-Obsidian write-back defaults to
+`dry-run`; only the owner may explicitly set it to `on` after reviewing runs.
+Fresh state, conflicts, private policy and partial-pull/mass-deletion guards
+prevent unsafe writes. Unresolved conflicts resolve in Obsidian's favour after
+24 hours, never by overwriting Obsidian. Headless CLI behavior is **not yet
+verified against the live service**.
 
 ## Shared overlays (18 October 2026; P14-09)
 

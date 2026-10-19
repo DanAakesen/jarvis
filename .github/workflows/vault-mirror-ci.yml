@@ -26,3 +26,12 @@ jobs:
       - run: npm test --workspace @jarvis/contracts
       - run: npm run test:vault-mirror
       - run: npm run build:vault-mirror
+      - name: Build vault mirror image
+        run: docker build --file apps/vault-mirror/Dockerfile --tag jarvis-vault-mirror:ci .
+      - name: Smoke-test Obsidian CLI
+        run: docker run --rm --entrypoint ob jarvis-vault-mirror:ci --version
+      - name: Smoke-test runner with in-memory services
+        run: >-
+          docker run --rm
+          --mount "type=bind,source=${{ github.workspace }}/apps/vault-mirror/test/container-smoke.mjs,target=/tmp/container-smoke.mjs,readonly"
+          --entrypoint node jarvis-vault-mirror:ci /tmp/container-smoke.mjs
