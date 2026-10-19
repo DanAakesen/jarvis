@@ -47,6 +47,7 @@ export function TaskRecipesSettings({ backendUrl, getAccessToken }: {
   const [loading, setLoading] = useState(true);
   const [loaded, setLoaded] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [confirmingDelete, setConfirmingDelete] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const request = useRef<AbortController | null>(null);
@@ -57,6 +58,7 @@ export function TaskRecipesSettings({ backendUrl, getAccessToken }: {
     request.current = controller;
     setLoading(true);
     setDeleting(null);
+    setConfirmingDelete(null);
     setError('');
     setMessage('');
     try {
@@ -120,7 +122,10 @@ export function TaskRecipesSettings({ backendUrl, getAccessToken }: {
       setRecipes((current) => current.filter((item) => item.id !== recipe.id));
       setMessage(`Routine deleted: ${recipe.goal}.`);
     } catch {
-      if (!controller.signal.aborted) setError('Could not delete this routine. Try Delete again.');
+      if (!controller.signal.aborted) {
+        setConfirmingDelete(null);
+        setError('Could not delete this routine. Try Delete again.');
+      }
     } finally {
       if (!controller.signal.aborted) {
         request.current = null;
@@ -155,11 +160,32 @@ export function TaskRecipesSettings({ backendUrl, getAccessToken }: {
                   {recipe.stepCount} {recipe.stepCount === 1 ? 'step' : 'steps'}
                 </p>
               </div>
-              <button className="secondary-button" type="button"
-                aria-label={`Delete routine: ${recipe.goal} (${recipe.key})`}
-                disabled={loading || deleting !== null} onClick={() => { void deleteRecipe(recipe); }}>
-                {deleting === recipe.id ? 'Deleting…' : 'Delete'}
-              </button>
+              {confirmingDelete === recipe.id ? (
+                <div className="button-group" role="group" aria-label={`Delete routine: ${recipe.goal} (${recipe.key})`}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Escape') {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      setConfirmingDelete(null);
+                    }
+                  }}>
+                  <button className="secondary-button" type="button" disabled={deleting !== null}
+                    onClick={() => setConfirmingDelete(null)}>Cancel</button>
+                  <button className="secondary-button danger-button danger-button--filled" type="button" autoFocus
+                    aria-label={`Delete routine: ${recipe.goal} (${recipe.key})`}
+                    aria-busy={deleting === recipe.id || undefined}
+                    disabled={loading || deleting !== null}
+                    onClick={() => { void deleteRecipe(recipe); }}>
+                    {deleting === recipe.id ? 'Deleting…' : 'Confirm delete routine'}
+                  </button>
+                </div>
+              ) : (
+                <button className="secondary-button danger-button" type="button"
+                  aria-label={`Delete routine: ${recipe.goal} (${recipe.key})`}
+                  disabled={loading || deleting !== null} onClick={() => setConfirmingDelete(recipe.id)}>
+                  {deleting === recipe.id ? 'Deleting…' : 'Delete'}
+                </button>
+              )}
             </li>
           ))}
         </ul>

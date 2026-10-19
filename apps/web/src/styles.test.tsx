@@ -215,6 +215,15 @@ describe('app-wide control contract', () => {
       .toBe('var(--radius-panel)');
   });
 
+  it('uses touch-sized advanced Settings controls and content-width push actions', () => {
+    const coarse = mediaBlocks(source).find(({ query, body }) =>
+      query.trim() === '(pointer: coarse)' && body.includes('.settings-field.advanced-range'))?.body ?? '';
+    expect(coarse).toContain('.settings-field.advanced-range input[type="range"] { height: 44px; min-height: 44px; }');
+    expect(coarse).toContain('.advanced-colour input[type="color"] { width: 44px; height: 44px; }');
+    const pushNotifications = readFileSync('src/PushNotifications.css', 'utf8');
+    expect(ruleDeclaration(pushNotifications, /\.push-notifications\s*\{([^}]*)\}/, 'justify-items')).toBe('start');
+  });
+
   it('pairs Daily and Proactive block alerts with the shared error surface', () => {
     const daily = readFileSync('src/daily/daily.css', 'utf8');
     const proactive = readFileSync('src/proactive.css', 'utf8');
@@ -225,6 +234,58 @@ describe('app-wide control contract', () => {
     expect(proactive).toContain('.proactive-page [role="alert"]');
     expect(ruleDeclaration(shared, /\.state-message--error\s*\{([^}]*)\}/, 'background')).toBe('var(--error-surface)');
     expect(ruleDeclaration(shared, /\.state-message--error\s*\{([^}]*)\}/, 'border')).toBe('1px solid var(--rule)');
+  });
+
+  it('puts the Proactive page, Usage range switch, Status intro and 404 page on readable surfaces', () => {
+    const proactive = readFileSync('src/proactive.css', 'utf8');
+    const page = /\.proactive-page\s*\{([^}]*)\}/;
+    expect(ruleDeclaration(proactive, page, 'background')).toBe('var(--surface-translucent)');
+    expect(ruleDeclaration(proactive, page, 'border')).toBe('1px solid var(--rule)');
+    expect(ruleDeclaration(proactive, page, 'border-radius')).toBe('var(--radius-panel)');
+    const phone = mediaBlocks(proactive).find(({ query }) => /max-width:\s*700px/.test(query));
+    expect(ruleDeclaration(phone?.body ?? '', /\.proactive-page\s*\{([^}]*)\}/, 'margin-bottom'))
+      .toBe('max(160px, calc(env(safe-area-inset-bottom) + 144px))');
+    expect(phone?.body).not.toMatch(/padding-bottom:\s*max\(160px/);
+    const range = /(?:^|\n)\.usage-segmented\s*\{([^}]*)\}/;
+    expect(ruleDeclaration(source, range, 'border')).toBe('1px solid var(--rule)');
+    expect(ruleDeclaration(source, range, 'background')).toBe('var(--surface-translucent)');
+    // Only the page intro is a panel; the smoke-check timestamp inside the recorded smoke panel stays plain text.
+    expect(source).toContain('.system-status-panel, .status-page > .system-status-snapshot, .usage-hero,');
+    expect(source).not.toContain('.system-status-panel, .system-status-snapshot,');
+    expect(ruleDeclaration(source, /\.status-page > \.system-status-snapshot\s*\{([^}]*)\}/, 'padding'))
+      .toBe('var(--space-3) var(--space-4)');
+    expect(source.match(/(?:^|\n)\.system-status-snapshot\s*\{([^}]*)\}/)?.[1] ?? '').not.toContain('padding');
+  });
+
+  it('keeps the Snooze menu inside the viewport and the time unbroken', () => {
+    const proactive = readFileSync('src/proactive.css', 'utf8');
+    const menu = /\.proactive-snooze-menu\s*\{\n\s*position: absolute;([^}]*)\}/;
+    expect(ruleDeclaration(proactive, menu, 'width')).toBe('max-content');
+    // A wrapping row would size to the sum of every option, so the menu stays a column.
+    expect(ruleDeclaration(proactive, menu, 'flex-direction')).toBe('column');
+    expect(ruleDeclaration(proactive, menu, 'flex-wrap')).toBe('nowrap');
+    expect(ruleDeclaration(proactive, menu, 'max-width')).toBe('calc(100vw - 2 * var(--space-3))');
+    expect(ruleDeclaration(proactive, /\.proactive-snooze-time\s*\{([^}]*)\}/, 'flex')).toBe('none');
+    expect(ruleDeclaration(proactive, /\.proactive-snooze-time\s*\{([^}]*)\}/, 'white-space')).toBe('nowrap');
+    // Only the time is kept on one line; a long label may wrap inside its own button instead of overflowing.
+    expect(proactive.match(/\.proactive-snooze-menu \.secondary-button\s*\{([^}]*)\}/)?.[1] ?? '').not.toContain('white-space');
+    const phone = mediaBlocks(proactive).find(({ query }) => /max-width:\s*700px/.test(query))?.body ?? '';
+    const phoneMenu = /\.proactive-snooze-menu\s*\{([^}]*)\}/;
+    expect(ruleDeclaration(phone, phoneMenu, 'right')).toBe('0');
+    expect(ruleDeclaration(phone, phoneMenu, 'left')).toBe('auto');
+    expect(ruleDeclaration(phone, phoneMenu, 'width')).toBe('calc(200% + var(--space-2))');
+    expect(phone).toMatch(/\.proactive-item-actions \.secondary-button,\s*\.proactive-snooze\s*\{\s*flex: 1 1 calc\(50% - 6px\);/);
+  });
+
+  it('keeps overlay headings, attention rows and small links on one hierarchy and touch size', () => {
+    expect(ruleDeclaration(source, /\.jobs-popover-heading\s*\{([^}]*)\}/, 'font-size')).toBe('var(--type-subheading)');
+    expect(mediaBlocks(source).some(({ query, body }) => /max-width:\s*700px/.test(query)
+      && /\.attention-popover \.activity-item\s*\{\s*align-items:\s*flex-start;\s*\}/.test(body))).toBe(true);
+    const coarse = (css: string) => mediaBlocks(css).filter(({ query }) => query.trim() === '(pointer: coarse)')
+      .map(({ body }) => body).join('\n');
+    expect(ruleDeclaration(coarse(source), /\.usage-rank-label a\s*\{([^}]*)\}/, 'min-height')).toBe('44px');
+    expect(ruleDeclaration(coarse(readFileSync('src/proactive.css', 'utf8')), /\.proactive-budget a\s*\{([^}]*)\}/, 'min-height'))
+      .toBe('44px');
   });
 
   it('keeps action group order in markup and the deployment form row gap on the spacing scale', () => {
@@ -274,6 +335,25 @@ describe('app-wide control contract', () => {
     visit('src');
 
     expect(violations).toEqual([]);
+  });
+
+  it('keeps the Settings save bar frameless, nested sections shrinkable and task window links touch-sized', () => {
+    expect(ruleDeclaration(source, /\.settings-page > \.settings-save\s*\{([^}]*)\}/, 'border')).toBe('0');
+    const nestedTitle = /\.collapsible-inner \.collapsible-title\s*\{([^}]*)\}/;
+    expect(ruleDeclaration(source, nestedTitle, 'flex')).toBe('0 1 auto');
+    expect(ruleDeclaration(source, nestedTitle, 'min-width')).toBe('min-content');
+    expect(ruleDeclaration(source, /\.collapsible-inner \.collapsible-toggle\s*\{([^}]*)\}/, 'font-size'))
+      .toBe('var(--type-subsection)');
+    expect(source).toContain('.collapsible-section[data-open="true"] > .collapsible-body > .collapsible-inner { padding-bottom: var(--space-5); }');
+    expect(source).not.toContain('.collapsible-section[data-open="true"] .collapsible-inner { padding-bottom');
+    expect(ruleDeclaration(source, /\.app-shell \.proactive-feed-input\s*\{([^}]*)\}/, 'align-items')).toBe('stretch');
+    expect(ruleDeclaration(source, /\.app-shell \.proactive-feeds > \.secondary-button\s*\{([^}]*)\}/, 'justify-self'))
+      .toBe('start');
+    expect(source).toMatch(/^\.task-trail \.timeline-payload summary \{/m);
+    const coarse = mediaBlocks(source).filter(({ query }) => query.trim() === '(pointer: coarse)')
+      .map(({ body }) => body).join('\n');
+    expect(ruleDeclaration(coarse, /\.task-trail \.timeline-payload summary\s*\{([^}]*)\}/, 'min-height')).toBe('44px');
+    expect(ruleDeclaration(coarse, /a\.task-chip\s*\{([^}]*)\}/, 'min-height')).toBe('44px');
   });
 
   it('removes decorative control rims without removing neutral field structure or focus', () => {
@@ -498,6 +578,14 @@ describe('shared glass tokens', () => {
     expect(ruleDeclaration(source, /\.job-tab-list\s*\{([^}]*)\}/, 'scrollbar-width')).toBe('none');
     expect(source).toContain('.app-shell[data-phone="true"] .job-tab-list { display: none; }');
     expect(source).toContain('.app-shell[data-phone="true"] .job-tabs { flex: 0 0 auto; margin-left: auto; }');
+  });
+
+  it('keeps the phone top bar inside 320px: Settings lives in the menu and presence yields on narrow handsets', () => {
+    const source = readFileSync('src/styles.css', 'utf8');
+    expect(ruleDeclaration(source, /\.app-shell\[data-phone="true"\] \.settings-link\s*\{([^}]*)\}/, 'display')).toBe('none');
+    const narrow = mediaBlocks(source).filter(({ query }) => /max-width:\s*380px/.test(query)).map(({ body }) => body).join('\n');
+    expect(narrow).toMatch(/\.app-shell\[data-phone="true"\] \.presence-chip\s*\{\s*display:\s*none;\s*\}/);
+    expect(ruleDeclaration(source, /\.app-shell\[data-phone="true"\] \.topbar-actions\s*\{([^}]*)\}/, 'gap')).toBe('0');
   });
 
   it('keeps phone window rows at their natural touch height rather than the desktop tab basis', () => {

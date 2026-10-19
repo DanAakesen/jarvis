@@ -1,5 +1,69 @@
 # Decisions
 
+## P14-15 — Nested section titles wrap, the save row has no frame, touch targets in the task window (19 October 2026)
+
+The whole-app pass found five small CSS defects in Settings and the task window
+(A44 to A47, A50). The choices worth recording:
+
+- A nested collapsible section's title wraps rather than being cut, and nested
+  toggles use `--type-subsection` (17px) instead of the 22px of top-level titles.
+  The whole title stays readable on a 320px phone, the chevron keeps its place,
+  and a nested section reads as a child of the section around it.
+- The padding under an open section applies to that section's own inner only. A
+  folded section nested in an open one is as tall as any folded top-level
+  section; the dead space under it came from a selector that also matched
+  descendants, not from a design choice.
+- "View event payload" and the project and branch chips in the task window are
+  44px on coarse pointers only, following the DESIGN.md rule that compact
+  controls return to 44px on touch. Fine pointers keep the compact chip and the
+  caption-size disclosure.
+- Save settings stays a plain end-of-page row (P9-98). The leftover 1px frame
+  came from the base `.settings-save` block and is removed rather than
+  replaced with new chrome.
+- The News feeds row stretches its controls to one height, and "Add feed" keeps
+  its content width at the start of the row.
+
+Not verified: the News feeds row and the Save row at 1440px (the harness captures
+stop at 1600px), and real touch devices.
+
+## P14-16 — Phone top bar drops Settings and, on narrow handsets, presence (19 October 2026)
+
+At 320px the phone top bar needed 353px of the 300px its content box leaves
+(brand 47px, background-work cluster 122px, then windows, presence, Menu and
+Settings at 44px each), so every route scrolled sideways by 45px. The row is
+made of 44px touch targets that must not shrink, so a control has to leave the
+row rather than be squeezed. Settings is already a row of the Menu sheet, so the
+gear is hidden at every phone width with one `display: none` on
+`.app-shell[data-phone="true"] .settings-link`. Hiding it only at 320px would
+give the header a different set of controls per phone width and leave 321px to
+380px one control short of the same overflow whenever the database-wake mark
+(32px) or longer counts appear; a landscape phone also loses the gear but
+keeps the Menu. Presence is the second control with a copy in Settings
+(Settings, Presence), so it is hidden at 380px and narrower and shown above.
+
+The query is `max-width: 380px`, not the 360px the issue proposed:
+`styles.test.tsx` pins the stylesheet breakpoints to 380, 700, 900 and 1200px,
+a 360px query adds a fifth value and fails that contract, and 380px is the
+documented narrow-handset exception. The cost is that 361px to 380px phones
+lose the presence chip too. The DOM is unchanged, so accessible names, the tab
+order of the remaining controls and every handler are as before; `display: none`
+takes the hidden controls out of the tab order and accessibility tree. The header
+focus fallback (`focusHeaderFallback`, used when the last attention item is
+dismissed and its trigger unmounts) looked up `.jobs-summary`,
+`.presence-chip-trigger` and `.settings-link` in turn, and focusing a hidden
+element does nothing, so on a narrow phone with no background-work summary focus
+would have fallen to the page. It now tries the Menu button before the Settings
+link and takes the first control that accepts focus.
+
+The phone Menu takes a `proactiveEnabled` flag (default off) and lists Proactive
+after the first area, the order of the rail (`appAreas`): after Daily when Daily
+is on, after Jarvis otherwise. `MobileShell.tsx` keeps its own short list rather
+than importing `areas.ts`, which would pull the whole app tree into the shell
+module; `App.test.tsx` compares the phone Menu with the rail so the two cannot
+drift. Open risk: the 320px row with the database-wake mark has about 3px to
+spare, and counts of three digits in the background-work cluster add roughly 3px
+per pair.
+
 ## Header focus fallback must not override newer focus (19 October 2026; fix-main)
 
 The Attention popover returns focus to a header control through

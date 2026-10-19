@@ -1,8 +1,13 @@
 .proactive-page {
   width: min(100%, 900px);
-  margin: 0 auto;
-  padding: var(--space-5) var(--space-4) max(var(--space-7), env(safe-area-inset-bottom));
+  margin: 0 auto max(var(--space-7), env(safe-area-inset-bottom));
+  padding: var(--space-5) var(--space-4);
   color: var(--text);
+  background: var(--surface-translucent);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-panel);
+  box-shadow: var(--panel-shadow);
+  backdrop-filter: blur(var(--surface-blur));
 }
 
 .proactive-page [role="alert"]:not(.state-message) {
@@ -203,15 +208,7 @@
 }
 
 .proactive-snooze > summary {
-  display: flex;
   min-width: 88px;
-  min-height: 44px;
-  align-items: center;
-  justify-content: center;
-  padding: 0 var(--space-3);
-  border-radius: var(--radius-control);
-  background: color-mix(in srgb, var(--text) 8%, var(--surface));
-  cursor: pointer;
   list-style: none;
 }
 
@@ -219,17 +216,17 @@
   display: none;
 }
 
-.proactive-snooze > summary:hover {
-  background: color-mix(in srgb, var(--text) 14%, var(--surface));
-}
-.proactive-snooze > summary:active { background: color-mix(in srgb, var(--text) 18%, var(--surface)); }
-
 .proactive-snooze-menu {
   position: absolute;
   z-index: 2;
   top: calc(100% + 4px);
   left: 0;
+  flex-direction: column;
+  flex-wrap: nowrap;
+  align-items: stretch;
+  width: max-content;
   min-width: 230px;
+  max-width: calc(100vw - 2 * var(--space-3));
   padding: var(--space-2);
   border: 1px solid var(--rule);
   border-radius: var(--radius-panel);
@@ -246,7 +243,9 @@
 }
 
 .proactive-snooze-time {
+  flex: none;
   color: var(--text-muted);
+  white-space: nowrap;
 }
 
 .proactive-action-error {
@@ -293,6 +292,14 @@
 .proactive-budget meter {
   width: min(100%, 520px);
   height: 1em;
+}
+
+@media (pointer: coarse) {
+  .proactive-budget a {
+    display: flex;
+    align-items: center;
+    min-height: 44px;
+  }
 }
 
 .proactive-runs-list > li {
@@ -370,7 +377,8 @@
 @media (max-width: 700px) {
   .proactive-page {
     padding-inline: var(--space-3);
-    padding-bottom: max(160px, calc(env(safe-area-inset-bottom) + 144px));
+    padding-bottom: var(--space-5);
+    margin-bottom: max(160px, calc(env(safe-area-inset-bottom) + 144px));
   }
 
   .proactive-item-actions {
@@ -378,11 +386,23 @@
   }
 
   .proactive-item-actions .secondary-button,
-  .proactive-snooze > summary {
+  .proactive-snooze {
     flex: 1 1 calc(50% - 6px);
+  }
+
+  .proactive-snooze > summary {
+    width: 100%;
   }
 
   .proactive-source-row {
     justify-content: flex-start;
+  }
+
+  .proactive-snooze-menu {
+    right: 0;
+    left: auto;
+    width: calc(200% + var(--space-2));
+    min-width: 0;
+    max-width: none;
   }
 }

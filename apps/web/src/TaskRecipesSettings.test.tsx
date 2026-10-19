@@ -78,8 +78,30 @@ describe('TaskRecipesSettings', () => {
       .map((element) => element.getAttribute('aria-label') ?? '')].join('\n');
     expect(visibleText).not.toMatch(/recipe/i);
     await user.click(screen.getByRole('button', { name: 'Delete routine: open a document (notepad)' }));
+    await user.click(screen.getByRole('button', { name: 'Delete routine: open a document (notepad)' }));
     expect(await screen.findByText('Routine deleted: open a document.')).not.toBeNull();
     expect(view.container.textContent ?? '').not.toMatch(/recipe/i);
+  });
+
+  it('requires confirmation and restores the Delete action with Cancel or Escape', async () => {
+    const user = userEvent.setup();
+    fetchMock.mockResolvedValueOnce(response([pcRecipe]));
+    renderRecipes();
+    const name = 'Delete routine: open a document (notepad)';
+    await user.click(await screen.findByRole('button', { name }));
+
+    expect(screen.getByText('Confirm delete routine')).not.toBeNull();
+    expect(screen.getByRole('button', { name })).not.toBeNull();
+    expect(screen.getByRole('button', { name: 'Cancel' })).not.toBeNull();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    await user.keyboard('{Escape}');
+    expect(screen.getByRole('button', { name }).textContent).toBe('Delete');
+
+    await user.click(screen.getByRole('button', { name }));
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(screen.getByRole('button', { name }).textContent).toBe('Delete');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it('offers recovery for failed loads and rejects malformed data', async () => {
@@ -114,6 +136,8 @@ describe('TaskRecipesSettings', () => {
     renderRecipes();
     await screen.findByText('open a document');
     await user.click(screen.getByRole('button', { name: 'Delete routine: open a document (notepad)' }));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    await user.click(screen.getByRole('button', { name: 'Delete routine: open a document (notepad)' }));
     expect(screen.getByText('Deleting…')).not.toBeNull();
     expect(screen.getByRole('button', { name: 'Refresh routines' }).hasAttribute('disabled')).toBe(true);
     const rows = within(screen.getByRole('list', { name: 'Saved routines' }));
@@ -134,8 +158,10 @@ describe('TaskRecipesSettings', () => {
     renderRecipes();
     const name = 'Delete routine: open a document (notepad)';
     await user.click(await screen.findByRole('button', { name }));
+    await user.click(screen.getByRole('button', { name }));
     expect(await screen.findByRole('alert')).toHaveProperty('textContent', 'Could not delete this routine. Try Delete again.');
     expect(screen.getByText('open a document')).not.toBeNull();
+    await user.click(screen.getByRole('button', { name }));
     await user.click(screen.getByRole('button', { name }));
     expect(await screen.findByText('No saved routines.')).not.toBeNull();
   });
@@ -168,6 +194,7 @@ describe('TaskRecipesSettings', () => {
     fetchMock.mockResolvedValueOnce(response([pcRecipe])).mockReturnValueOnce(pending.promise);
     const view = renderRecipes();
     await user.click(await screen.findByRole('button', { name: 'Delete routine: open a document (notepad)' }));
+    await user.click(screen.getByRole('button', { name: 'Delete routine: open a document (notepad)' }));
     const signal = fetchMock.mock.calls[1]?.[1]?.signal;
     view.unmount();
     expect(signal?.aborted).toBe(true);

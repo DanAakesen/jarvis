@@ -263,7 +263,8 @@ export function KnowledgeGraphView({ backendUrl, getAccessToken, initialQuery = 
         {searchAction}
       </div>}
       {graph && query.trim() && !searching && hits.length === 0 &&
-        <StateMessage variant="empty" className="knowledge-status" message="No notes match this search." />}
+        (!showTaskMatches || (!taskSearch.error && taskSearch.result?.total === 0)) &&
+        <p className="knowledge-status" role="status">No notes or tasks match “{query.trim()}”.</p>}
       {graph && (
         <>
           {labels.map((label) => {
@@ -279,7 +280,7 @@ export function KnowledgeGraphView({ backendUrl, getAccessToken, initialQuery = 
             </span>
           )}
           {(query.trim()
-            ? hits.length > 0 || (showTaskMatches && (!!taskSearch.result || !!taskSearch.error))
+            ? hits.length > 0 || (showTaskMatches && (!!taskSearch.error || (!!taskSearch.result && taskSearch.result.total > 0)))
             : folder !== null) && (
             <div className="knowledge-results luminous-glass">
               {query.trim() && showTaskMatches && taskSearch.result && taskSearch.result.total > 0 && (
