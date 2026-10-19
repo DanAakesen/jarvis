@@ -1,5 +1,6 @@
 .push-notifications {
   display: grid;
+  justify-items: start;
   min-width: 0;
   gap: var(--space-3);
 }

@@ -369,6 +369,27 @@ voice session was used. Keyboard scrolling of wide generated tables remains
 open follow-up. Synthetic browser screenshots and emulation details are
 indexed in [`screenshots.md`](ui/p14-12/screenshots.md).
 
+## Settings defects (P14-18; 19 October 2026)
+
+The pass found undersized coarse-pointer controls, uneven Limits spacing,
+duplicate Custom instructions guidance, full-width single push actions,
+inconsistent destructive actions, and Settings hashes that did not reveal their
+sections. Limits now shares the Timeouts grid; the character counter retains the
+accessible limit description; destructive starts share `.danger-button`, with
+routine deletion confirmed before its request. Settings reveals the four known
+hash targets after loading, and Nutrition targets now has its link anchor.
+
+Before/after Chromium checks used the actual app with scratch-only auth and
+synthetic API fixtures at 320×640, 390×844, 768×1024 and 1440×900, in light and
+dark with coarse-pointer emulation. All five sliders measured 28→44px; the three
+swatches measured 34×34→44×44px. The push action measured 324→220px at 390px
+and 946→220px at 1440px.
+All four hashes opened and revealed their headings in 32 viewport/theme cases;
+unknown-hash behavior and routine Cancel/Escape/second-press behavior are covered
+by component tests. No browser errors or horizontal overflow were observed.
+Web lint, typecheck, all 1,809 web tests and build passed; the build retains its
+existing large-chunk warning. Captures and fixtures stay outside the repository.
+
 ## Surface coverage
 
 The audit covered the shared shell, desktop rail and mobile navigation, header
