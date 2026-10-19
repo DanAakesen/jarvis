@@ -23,6 +23,29 @@ param pcBridgeClientId string = ''
 @description('Dan’s IANA time zone used for Google Calendar day boundaries. Empty disables Google mail and calendar tools.')
 param jarvisGoogleTimeZone string = ''
 
+@description('Enable the vault mirror resources. The deploy workflow keeps this false until an image has been built.')
+param vaultMirrorEnabled bool = false
+
+@description('The digest-pinned vault mirror image. Empty keeps all vault mirror resources disabled.')
+param vaultMirrorImage string = ''
+
+@description('Whether the mirror writes changes back to Obsidian. Keep dry-run until the owner approves live writes.')
+@allowed([
+  'dry-run'
+  'on'
+])
+param vaultMirrorWriteBack string = 'dry-run'
+
+@description('Maximum changed files the vault mirror may process in one run.')
+@minValue(1)
+@maxValue(100)
+param vaultMirrorMaxChanged int = 25
+
+@description('Maximum deletions the vault mirror may process in one run.')
+@minValue(0)
+@maxValue(10)
+param vaultMirrorMaxDeletes int = 3
+
 @description('A ChatGPT-supported model for Codex hosted-runner tools.')
 param codexToolModel string = 'gpt-5.5'
 
@@ -57,9 +80,18 @@ var foundryDeploymentReaderRoleId = 'acdd72a7-3385-48ef-bd42-f606fba81ae7'
 var foundryAccountName = 'jarvis-${foundryNameTimestamp}-${suffix}'
 var backendAppName = 'ca-jarvis-backend-${suffix}'
 var deployBackendApp = !empty(backendImage)
+var deployVaultMirror = vaultMirrorEnabled && !empty(vaultMirrorImage)
 
 resource backendIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' existing = {
   name: last(split(backendIdentityResourceId, '/'))
+}
+
+resource vaultMirrorIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = if (deployVaultMirror) {
+  name: 'id-jarvis-vault-mirror-${suffix}'
+  location: resourceGroup().location
+  tags: {
+    project: 'jarvis'
+  }
 }
 
 resource logAnalytics 'Microsoft.OperationalInsights/workspaces@2023-09-01' = {
@@ -255,6 +287,22 @@ resource taskEventsContainer 'Microsoft.Storage/storageAccounts/blobServices/con
   }
 }
 
+resource vaultMirrorStateContainer 'Microsoft.Storage/storageAccounts/blobServices/containers@2023-05-01' = if (deployVaultMirror) {
+  parent: blobService
+  name: 'vault-mirror-state'
+  properties: {
+    publicAccess: 'None'
+  }
+}
+
+resource vaultMirrorStatusContainer 'Microsoft.Storage/storageAccounts/blobServices/containers@2023-05-01' = if (deployVaultMirror) {
+  parent: blobService
+  name: 'vault-mirror-status'
+  properties: {
+    publicAccess: 'None'
+  }
+}
+
 resource blobDataAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
   name: guid(storage.id, backendIdentity.id, blobDataContributorRoleId)
   scope: storage
@@ -296,6 +344,46 @@ resource acrPullAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' 
   properties: {
     roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', acrPullRoleId)
     principalId: backendIdentity.properties.principalId
+    principalType: 'ServicePrincipal'
+  }
+}
+
+resource vaultMirrorAcrPullAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (deployVaultMirror) {
+  name: guid(registry.id, vaultMirrorIdentity!.id, acrPullRoleId)
+  scope: registry
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', acrPullRoleId)
+    principalId: vaultMirrorIdentity!.properties.principalId
+    principalType: 'ServicePrincipal'
+  }
+}
+
+resource vaultMirrorKeyVaultSecretsAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (deployVaultMirror) {
+  name: guid(keyVault.id, vaultMirrorIdentity!.id, keyVaultSecretsUserRoleId)
+  scope: keyVault
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', keyVaultSecretsUserRoleId)
+    principalId: vaultMirrorIdentity!.properties.principalId
+    principalType: 'ServicePrincipal'
+  }
+}
+
+resource vaultMirrorStateBlobAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (deployVaultMirror) {
+  name: guid(vaultMirrorStateContainer.id, vaultMirrorIdentity!.id, blobDataContributorRoleId)
+  scope: vaultMirrorStateContainer
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', blobDataContributorRoleId)
+    principalId: vaultMirrorIdentity!.properties.principalId
+    principalType: 'ServicePrincipal'
+  }
+}
+
+resource vaultMirrorStatusBlobAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (deployVaultMirror) {
+  name: guid(vaultMirrorStatusContainer.id, vaultMirrorIdentity!.id, blobDataContributorRoleId)
+  scope: vaultMirrorStatusContainer
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', blobDataContributorRoleId)
+    principalId: vaultMirrorIdentity!.properties.principalId
     principalType: 'ServicePrincipal'
   }
 }
@@ -931,6 +1019,87 @@ resource backendAppScaleAssignment 'Microsoft.Authorization/roleAssignments@2022
     principalId: backendIdentity.properties.principalId
     principalType: 'ServicePrincipal'
   }
+}
+
+resource vaultMirrorJob 'Microsoft.App/jobs@2024-03-01' = if (deployVaultMirror) {
+  name: 'job-jarvis-vault-mirror'
+  location: resourceGroup().location
+  identity: {
+    type: 'UserAssigned'
+    userAssignedIdentities: {
+      '${vaultMirrorIdentity.id}': {}
+    }
+  }
+  tags: {
+    project: 'jarvis'
+  }
+  properties: {
+    environmentId: containerAppsEnvironment.id
+    configuration: {
+      triggerType: 'Schedule'
+      replicaTimeout: 480
+      replicaRetryLimit: 0
+      scheduleTriggerConfig: {
+        cronExpression: '*/10 * * * *'
+        parallelism: 1
+        replicaCompletionCount: 1
+      }
+      registries: [
+        {
+          server: registry.properties.loginServer
+          identity: vaultMirrorIdentity.id
+        }
+      ]
+    }
+    template: {
+      containers: [
+        {
+          name: 'vault-mirror'
+          image: vaultMirrorImage
+          resources: {
+            cpu: json('0.5')
+            memory: '1Gi'
+          }
+          env: [
+            {
+              name: 'KEY_VAULT_URI'
+              value: keyVault.properties.vaultUri
+            }
+            {
+              name: 'AZURE_CLIENT_ID'
+              value: vaultMirrorIdentity!.properties.clientId
+            }
+            {
+              name: 'GITHUB_APP_ID'
+              value: githubAppId
+            }
+            {
+              name: 'VAULT_MIRROR_STORAGE_URL'
+              value: 'https://${storage.name}.blob.${environment().suffixes.storage}'
+            }
+            {
+              name: 'VAULT_MIRROR_WRITE_BACK'
+              value: vaultMirrorWriteBack
+            }
+            {
+              name: 'VAULT_MIRROR_MAX_CHANGED'
+              value: string(vaultMirrorMaxChanged)
+            }
+            {
+              name: 'VAULT_MIRROR_MAX_DELETES'
+              value: string(vaultMirrorMaxDeletes)
+            }
+          ]
+        }
+      ]
+    }
+  }
+  dependsOn: [
+    vaultMirrorAcrPullAssignment
+    vaultMirrorKeyVaultSecretsAssignment
+    vaultMirrorStateBlobAssignment
+    vaultMirrorStatusBlobAssignment
+  ]
 }
 
 resource staticWebApp 'Microsoft.Web/staticSites@2022-09-01' = {

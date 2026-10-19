@@ -981,6 +981,16 @@ live subscription and Blob acceptance pending; video is deferred and artifact
 retention remains open.
 The existing Microsoft-first service and cost constraints remain in force.
 
+### Vault mirror setup (19 October 2026; P14-28)
+
+The owner may opt into an Azure-hosted mirror that keeps the Obsidian vault and
+private GitHub vault repository synchronized in both directions. Reading the
+vault into GitHub is live on the first run; writing back to Obsidian remains
+`dry-run` until the owner reviews the initial runs and explicitly changes the
+repository setting. The existing scheduled task on the owner's computer stays
+in place. The infrastructure switch defaults off, and the owner stores all
+Obsidian credentials and sync policy directly in Key Vault.
+
 ### Selected shell refinement (6 October 2026; implemented in P8-37)
 
 The shared typing/manual shell retains its top bar, narrow icon rail, collapsible area navigation, main tabs/workspace, closable contextual panel and Settings at top right. It has no separate bottom app-shell/status bar. Existing database-waking feedback remains accessible in compact top-bar status treatment; the bottom-centred chat input and compact voice-session control bar remain. P8-37 (#398) implements this requirement together with the composer and message window in one PR: the footer and its layout track are gone, and “Waking Jarvis…” is a compact `role="status"` pill in the top-bar actions (a pulsing mark with the same accessible text on phones).
