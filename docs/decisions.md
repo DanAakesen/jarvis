@@ -7,22 +7,22 @@ options; it does not change runtime behavior or mark source parity complete.
 
 ### Schema field-mapping scope
 
-**Question:** Should the 269 non-excluded source columns currently marked as
-field-mapping gaps remain explicit gaps until verified individually, or should
-the implementation expand to map every source field before this row is
-accepted?
+**Question:** Should the 21 source columns without an exact migration-column
+match remain individually marked not mapped, or should additional mappings be
+verified before the schema row is accepted?
 
-- **Option A — retain scoped gaps:** keep the 31-table/360-column inventory,
-  map selected fields as evidence becomes available, and leave non-selected
-  fields as gaps. This preserves the approved feature scope but does not claim
-  all-column parity.
+- **Option A — retain scoped unknowns:** keep the 31-table/360-column inventory
+  with 248 exact-name matches, 0 evidence-backed renames, 91 explicitly excluded
+  columns, and 21 individually reasoned not-mapped columns. This preserves the
+  approved feature scope without claiming data or behavior parity.
 - **Option B — map every field:** document source-to-Jarvis column mappings
-  and SQL adaptations for all 360 columns. This substantially expands analysis
-  beyond the selected capabilities and still must not change or delete existing
-  owner data.
+  and SQL adaptations for the 21 unmatched columns, including source
+  `owner_email`, raw-object lifecycle fields, and `nutrition_queue.claim_token`.
+  This expands analysis beyond the selected capabilities and still must not
+  change or delete existing owner data.
 
-**Recommendation:** Option A, with every gap visible and no claim of field
-parity. Evidence: [`source-schema.test.ts`](../apps/backend/src/daily/source-schema.test.ts)
+**Recommendation:** Option A, with every not-mapped field visible and no claim
+of semantic parity. Evidence: [`source-schema.test.ts`](../apps/backend/src/daily/source-schema.test.ts)
 and the [P14-35 schema inventory](reference/daily-v182/source-to-jarvis-matrix.md#machine-checked-schema-classification).
 
 ### Sleep date and DST oracle
@@ -115,6 +115,25 @@ registry tools, or register nine distinct names?
 
 **Recommendation:** Option B under the current tool limit. Keep the mismatch
 visible; grouping is not proof of request/response/error parity.
+
+### Favorites query contract
+
+**Question:** Should Jarvis add a native `get_favorites` query/limit operation
+that returns the source favorites-list shape, or keep the current exact-name/
+alias lookup as a deliberately partial mapping?
+
+- **Option A — source-shaped list:** accept the source's bounded `query` and
+  `limit` inputs and return a favorites collection with `hasMore` and `source`.
+  This fills the selected capability's search/list gap but adds a new tool
+  contract.
+- **Option B — exact lookup only:** retain Jarvis's existing lookup by exact
+  saved name/alias and do not claim it implements the source list operation.
+  This keeps the current native tool contract but leaves `get_favorites`
+  partial.
+
+**Recommendation:** Option B unless the owner requires a favorites-list
+workflow. The pinned MCP schema documents `query`/`limit` and a list response;
+the existing Jarvis test covers only exact-name lookup.
 
 ### Historical partial replay
 

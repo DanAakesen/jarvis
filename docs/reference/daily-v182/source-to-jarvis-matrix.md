@@ -15,18 +15,18 @@ real-SQL execution in this environment, deployment, or owner acceptance.
 
 [`source-schema.test.ts`](../../../apps/backend/src/daily/source-schema.test.ts)
 parses the pinned SQLite DDL, asserts the exact 31 table names and 360 columns,
-and classifies every table. Fifteen tables map to a Jarvis target, five are
-reused existing tables, and eleven are intentionally excluded with a reason.
-The test fingerprints each table's ordered column names and count, so a new,
-removed or renamed column fails until the inventory is reviewed.
+and compares each column against tables created or extended by Jarvis SQL
+migrations. It fingerprints ordered source column names and counts, validates
+every target table and column, rejects stale source-column classifications, and
+fails on an unclassified column.
 
-For columns, the test assigns **intentionally excluded** to every field in an
-excluded table. The remaining 269 columns are each classified as a **gap**:
-the source-table target is inventoried, but no verified source-column to
-Jarvis-column correspondence is claimed. The existing field-level rows below
-provide evidence for selected fields, but do not erase those per-column gaps.
-This test proves inventory and classification only, not all-column parity or
-SQL Server type/behavior equivalence.
+The test currently finds **248 exact-name column matches, 0 evidence-backed
+renames, 91 intentionally excluded columns, and 21 not mapped columns**. The
+21 unverified columns are ten `owner_email` fields, ten `health_raw_objects`
+lifecycle fields, and `nutrition_queue.claim_token`. The raw-object source table
+and Jarvis SQL inbox have different lifecycles; matching `checksum` alone does
+not establish row parity. No owner identity rename is claimed without evidence.
+These are schema correspondences only, not data, SQL type, or behavioral parity.
 
 ## Source tables
 
@@ -44,7 +44,7 @@ SQL Server type/behavior equivalence.
 | `health_daily_metrics` | `daily.health_daily_metrics` | existing | SQL Server `date`/`float` and JSON adaptations; preserve source units and day semantics. |
 | `health_ingestions` | `daily.health_ingestions` | existing | SQL Server owner-scoped lineage; inbound processor writes succeeded state. |
 | `health_phone_sync_state` | `daily.health_phone_sync_state` | existing | Heartbeat evidence only, distinct from processed health data. |
-| `health_raw_objects` | `daily.health_upload_inbox` raw bytes, temporarily | implemented | No source object-store duplicate; accepted source bytes remain in bounded SQL inbox under existing limits. |
+| `health_raw_objects` | `daily.health_upload_inbox` | partial | `checksum` has an exact-name target; the other ten source object-lifecycle columns have no verified mapping to the per-request inbox. No source object-store equivalence is claimed. |
 | `health_sleep_daily` | `daily.health_sleep_daily` | existing | SQL Server `date`/`float`; offsets normalize through the existing processor. |
 | `health_sync_feeds` | `daily.health_sync_feeds` | existing | Per-feed successful processing freshness. |
 | `health_sync_state` | `daily.health_sync_state` | existing | Owner-scoped ingestion and processing summary. |
@@ -110,18 +110,17 @@ unverified. See the [delivery status report](delivery-status.md).
 
 | Delivery row | Status | Evidence and remaining decision |
 | --- | --- | --- |
-| Backend/schema classification | owner question | [`source-schema.test.ts`](../../../apps/backend/src/daily/source-schema.test.ts) classifies 31 tables/360 columns; 269 field mappings remain explicit gaps. See proposed scope question in `docs/decisions.md`. |
+| Backend/schema classification | owner question | [`source-schema.test.ts`](../../../apps/backend/src/daily/source-schema.test.ts) checks 248 exact-name matches, 0 evidence-backed renames, 91 explicitly excluded columns, and 21 individually reasoned not-mapped columns. See the proposed scope question in `docs/decisions.md`. |
 | Sleep dates and DST | owner question | [`daily-source-contract.md`](daily-source-contract.md#dates-and-timezone) documents source date precedence; source-compatible SQL boundary vectors are not present. |
 | Coach profile bootstrap | owner question | [`daily-api.md`](daily-api.md#tool-runtime-and-persistence-notes) documents a source code-default profile at revision 0; Jarvis missing-profile behavior is covered by [`daily-schema.integration.test.ts`](../../../apps/backend/src/database/daily-schema.integration.test.ts), but the configured defaults are not reproduced. |
 | Preference clear | owner question | The source deletes on null; Jarvis retains a revisioned null row. See field mapping and proposed decision in `docs/decisions.md`. |
 | Meal duplicate/HTTP behavior | owner question | The source's idempotent insert and HTTP 200 response are documented; no Jarvis source-path contract test establishes equivalence. |
 | API compatibility | owner question | All 19 paths are listed above; source requests have not all been exercised against Jarvis request/response/error contracts. |
 | Sixteen capabilities | owner question | Capability mappings and registration tests exist; source contract parity is incomplete and three tools group nine operations. |
-| Historical per-key replay | owner step | The new [`health-processing.integration.test.ts`](../../../apps/backend/src/database/health-processing.integration.test.ts) asserts later partial replacement and older replay protection, matching the pinned per-key rule, but could not run locally; Database CI was skipped by the title gate. |
+| Historical per-key replay | unverified | The [`health-processing.integration.test.ts`](../../../apps/backend/src/database/health-processing.integration.test.ts) asserts later partial replacement and older replay protection, matching the pinned per-key rule. The assertion has not yet executed against SQL Server on this PR head. |
 | Complete-day protection | owner question | Neither contract defines a complete-day marker; any stronger Jarvis-only guard needs an explicit ruling. |
 | Five reused capabilities | owner question | Exact partial differences are listed in [reuse coverage](#reuse-coverage-five-capabilities); whether to accept or extend them remains open. |
 | CI/deployment baseline | verified | Prior PR #1008 CI and deployment runs are linked from the [delivery status](delivery-status.md); they do not verify the current head or live upload. |
-| P14-35 CI qualification | owner step | The [title gate](https://github.com/DanAakesen/jarvis/actions/runs/39270570237) requires `[WIP] P14-35: Close unresolved rows in delivery status for Daily v182`; it failed, so aggregate CI and Database were skipped. A fresh gate/full CI run is required. |
 | Credential, history and phone acceptance | owner step | The checklist is in the [delivery status](delivery-status.md#remaining-ci-and-owner-only-acceptance-steps). |
 
 ## Selected native tools
@@ -148,7 +147,7 @@ registered.
 | `get_coach_status` | `daily_coach_status` / `get_coach_status` operation | conversational health/nutrition/profile/recovery data | implemented as data-only, no fixed renderer; `source-tools.test.ts` |
 | `get_coach_profile` | `daily_coach_status` / `get_coach_profile` operation | `daily.coach_profiles` store | implemented; missing profile remains unconfigured; SQL integration added |
 | `update_coach_profile` | `daily_coach_status` / `update_coach_profile` operation | `daily.coach_profiles` store | confirmed revision-checked update; SQL integration added |
-| `get_favorites` | `daily_saved_food` (read operation) | existing canonical favorites store | existing |
+| `get_favorites` | `daily_saved_food` `lookup_saved` operation | existing canonical favorites store | partial: exact-name/alias lookup, not the source `query`/`limit` favorites list; owner ruling required |
 | `save_favorite` | `daily_saved_food` (save operation) | existing canonical favorites store | existing |
 | `set_meal_preference` | `daily_nutrition_history` / `set_meal_preference` operation | `NutritionStore.feedback` and `daily.nutrition_recommendation_feedback` | implemented with Now confirmation; `source-tools.test.ts` |
 | `set_recovery_period` | `daily_coach_status` / `set_recovery_period` operation | `daily.recovery_days` store | implemented with Now confirmation; SQL integration added |
@@ -167,7 +166,7 @@ registered.
 
 | Source record/fields | Jarvis target and adaptation | Evidence | Status / remaining difference |
 | --- | --- | --- | --- |
-| `health_daily_metrics`: `(metric_name, metric_date)`, nullable unit/value/min/avg/max, sample count, source timestamps/fields, ingestion and update time | `daily.health_daily_metrics`: owner UUID added to composite key; source TEXT date becomes SQL `date`, REAL becomes `float`, JSON remains validated `nvarchar(max)`. Values/units/nulls and date key are retained. | `daily-schema.md`; migration `0041`; `health/persistence.ts`; `database/daily-schema.integration.test.ts`; processor/read-model tests; [P14-35 replay test](../../../apps/backend/src/database/health-processing.integration.test.ts) | Selected field/adaptation evidence exists. The inventory test marks the unverified individual columns as gaps. The new later-partial replacement assertion is not yet verified because exact-head SQL CI was skipped. The pinned source replaces supplied keys and defines no complete-day marker. |
+| `health_daily_metrics`: `(metric_name, metric_date)`, nullable unit/value/min/avg/max, sample count, source timestamps/fields, ingestion and update time | `daily.health_daily_metrics`: source columns with exact names exist in the migration; source TEXT date becomes SQL `date`, REAL becomes `float`, JSON remains validated `nvarchar(max)`. Values/units/nulls and date key are retained. | `daily-schema.md`; migration `0041`; `health/persistence.ts`; `database/daily-schema.integration.test.ts`; processor/read-model tests; [P14-35 replay test](../../../apps/backend/src/database/health-processing.integration.test.ts) | The inventory checks exact column correspondence, not source semantics or all-column parity. The later-partial replacement assertion remains unverified on this head. The pinned source replaces supplied keys and defines no complete-day marker. |
 | `health_sleep_daily`: sleep date/start/end, nullable hour totals/phases, sources/count/ingestion/update | `daily.health_sleep_daily`: owner UUID key; SQL date/float, JSON source list, hour values unchanged. | `daily-schema.md`; migration `0041`; `health/persistence.ts`; health normalization/read-model tests; [P14-35 schema classification](../../../apps/backend/src/daily/source-schema.test.ts) | Selected field types/units are mapped. Source key precedence is documented, but source-compatible SQL evidence for conflicting dates and DST boundaries is still needed. |
 | `health_workouts`, `health_workout_metrics`, `health_workout_heart_rate_minute`: stable source workout ID, date/time, duration/energy/distance/HR, per-workout metrics and minute samples | Corresponding owner-composite `daily.health_*` tables; source IDs use binary collation, date is SQL `date`, instants remain offset-bearing text, numeric values are `float`/`bigint`, details remain validated JSON. | `daily-schema.md`; migrations `0041`/`0047`; `health/persistence.ts`; `health/processor.ts`; processor and health read-model tests | Stable IDs and empty-export preservation are implemented. Historical partial same-key replacement is unresolved. |
 | `nutrition_meals`: stable ID/idempotency key, occurred instant/Copenhagen meal date, named meal/components, nullable nutrients, provenance, revision/tombstone and writeback state | `daily.nutrition_meals`: owner UUID plus canonical idempotency key, SQL `date` meal date, offset-bearing text instant, nullable nutrients and revision/tombstone. Optional Apple Health state remains stored but no outbound write is added. | `daily-schema.md`; migrations `0041`/`0050`; `nutrition/store.ts`; `nutrition/store.test.ts`; database SQL tests | Named meal history is distinct from health nutrient observations. Pinned source duplicate semantics are `INSERT OR IGNORE` by owner/key and return the retained meal with `duplicate:true`; Jarvis has no source-path HTTP response test. Owner question is in `docs/decisions.md`. |
@@ -204,8 +203,8 @@ preserved and no source compatibility alias or parallel runtime is created.
 Excluded means the owner did not select that source feature. Existing means the
 component is present; see the evidence table for fields and semantics actually
 checked. The PR #1008 SQL integration CI passed. Source-path HTTP parity,
-field-to-field mapping across all 31 tables/360 columns, upload-specific deployed
-HTTP/worker proof, current credential status/handoff and owner phone acceptance
-remain open. The P14-35 schema test inventories the fields but does not prove
-their parity. See the
+complete semantic/type/behavior parity across all 31 tables/360 columns,
+upload-specific deployed HTTP/worker proof, current credential status/handoff
+and owner phone acceptance remain open. The P14-35 schema test checks column
+name correspondence but does not prove semantic or behavioral parity. See the
 [delivery status report](delivery-status.md).
