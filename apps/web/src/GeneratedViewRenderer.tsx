@@ -56,15 +56,25 @@ export function GeneratedViewRenderer({  view,
       return <CodeView data={view.data} title={view.title} />;
     case 'knowledge-graph':
       return <KnowledgeGraphWindow query={view.data.query} highlight={view.data.highlight} />;
-    case 'table':
+    case 'table': {
+      const numericColumns = view.data.columns.map((_, columnIndex) => (
+        view.data.rows.some((row) => typeof row[columnIndex] === 'number') &&
+        view.data.rows.every((row) => row[columnIndex] === null || typeof row[columnIndex] === 'number')
+      ));
       return (
         <>
           <div className="generated-view-table" role="region" aria-label={`Scrollable table: ${view.title}`} tabIndex={0}>
             <table aria-label={view.title}>
-              <thead><tr>{view.data.columns.map((column) => <th key={column} scope="col">{column}</th>)}</tr></thead>
+              <thead><tr>{view.data.columns.map((column, index) => (
+                <th key={column} className={numericColumns[index] ? 'generated-view-number' : undefined} scope="col">{column}</th>
+              ))}</tr></thead>
               <tbody>
                 {view.data.rows.map((row, index) => (
-                  <tr key={index}>{row.map((cell, cellIndex) => <td key={cellIndex}>{cell === null ? '—' : String(cell)}</td>)}</tr>
+                  <tr key={index}>{row.map((cell, cellIndex) => (
+                    <td key={cellIndex} className={numericColumns[cellIndex] ? 'generated-view-number' : undefined}>
+                      {cell === null ? '—' : String(cell)}
+                    </td>
+                  ))}</tr>
                 ))}
               </tbody>
             </table>
@@ -72,6 +82,7 @@ export function GeneratedViewRenderer({  view,
           <SourceNote source={view.source} />
         </>
       );
+    }
     case 'list':
       return (
         <ul className={className}>

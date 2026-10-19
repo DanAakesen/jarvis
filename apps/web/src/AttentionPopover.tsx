@@ -152,9 +152,12 @@ function focusHeaderFallback() {
   const focus = () => {
     // The frame can land after something else took focus (a newer popover, a deliberate click); only rescue focus that fell to the page.
     if (document.activeElement && document.activeElement !== document.body) return;
-    (document.querySelector<HTMLButtonElement>('.jobs-summary') ??
-      document.querySelector<HTMLButtonElement>('.presence-chip-trigger') ??
-      document.querySelector<HTMLAnchorElement>('.settings-link'))?.focus();
+    // Narrow phones hide the presence chip and the Settings link, and focusing a hidden control does nothing, so take the first control that accepts focus.
+    for (const selector of ['.jobs-summary', '.presence-chip-trigger', '.mobile-menu-button', '.settings-link']) {
+      const target = document.querySelector<HTMLElement>(selector);
+      target?.focus();
+      if (target && document.activeElement === target) return;
+    }
   };
   if (typeof window.requestAnimationFrame === 'function') window.requestAnimationFrame(focus);
   else focus();

@@ -29,6 +29,9 @@
 .vault-task-row-meta a { min-width: 0; color: inherit; overflow-wrap: anywhere; text-decoration-thickness: 1px; text-underline-offset: 2px; }
 .vault-task-row-meta a:hover { color: var(--text); }
 .vault-task-row-meta a:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; border-radius: var(--radius-control); }
+@media (pointer: coarse) {
+  .vault-task-row-meta a { display: inline-flex; min-height: 44px; align-items: center; }
+}
 .vault-task-error { margin: var(--space-4) 0 var(--space-2); color: var(--error); }
 .vault-task-empty { margin: var(--space-4) 0; }
 

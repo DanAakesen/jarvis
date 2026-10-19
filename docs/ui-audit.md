@@ -5,32 +5,81 @@ treatments selected from the existing Jarvis design system. The shared source
 of truth is `apps/web/src/styles.css`; route stylesheets own workflow layout,
 not parallel palettes or control systems.
 
-## Factory project and release surfaces (P14-22; 19 October 2026)
+## Phone top bar at 320px and the phone menu (P14-16; 19 October 2026)
 
-The QA pass found the project-settings intro and completion policy, plus the
-release-page back link and repository/default-branch summary, sitting over the
-3D scene. The intro now sits in the Repository panel, the policy has its own
-settings panel, and the release header uses the shared translucent panel surface.
-Coarse-pointer release links now measure at least 44px, and task-bar, selected
-release and release-row labels consistently use `Build {version}` without
-altering a version that already begins with `v`.
+The 320px overflow (A1) was the phone top bar needing 353px of the 300px content
+box a 320px phone leaves: the context title (47px), the job tabs (122px), four
+44px actions (windows, presence, Menu, Settings) and two 4px gaps. The Settings
+link ended at x=365, so `document.scrollWidth` was 365 against a `clientWidth`
+of 320 on every route (45px, 38 of 38 light and dark measurements at 320). With
+the database-waking mark (32px) the bar also overflowed at 375 and 390px (22px
+and 7px); that case was not in the first report.
 
-The four formerly bare lines use `--text-muted` (`#5c564f` light,
-`#c0ccd2` dark). Against the translucent panel surface, conservative WCAG
-contrast bounds are **5.52:1 light** and **9.09:1 dark**; these use the
-worst black/white scene-backdrop composite endpoints (92% light and 90% dark
-surface opacity). Both exceed 4.5:1.
+The Settings gear is now hidden on phones, because the Menu already has a
+Settings row, and the presence chip is hidden at 380px and narrower, because
+Settings, Presence still switches the mode. Hidden controls leave the tab order
+and the accessibility tree; the markup, handlers and names are unchanged. The
+focus fallback that runs when the last attention item is dismissed now tries the
+Menu button before the Settings link and takes the first control that accepts
+focus, because focusing a hidden control does nothing. The
+issue proposed 360px for the presence rule, but `styles.test.tsx` allows only the
+380, 700, 900 and 1200px breakpoints, so 380px is used and presence is also
+hidden from 361 to 380px.
 
-The actual app was checked in scratch Chromium with synthetic auth/API data.
-Before-state captures restored the original bare paragraph/fieldset/header;
-after-state captures covered 320×640, 390×844, 768×1024 and 1440×900 in both
-themes. Coarse-pointer emulation was enabled; the task release name/version and
-release record/workflow links measured at least 44px, all viewports stayed
-within their width, and the final routes had no fixture alerts or page errors.
-Local checks passed: `npm run lint --workspace @jarvis/web`
-(`--max-warnings 0`), `npx tsc --noEmit -p apps/web/tsconfig.json`,
-`npm test --workspace @jarvis/web` (131 files, 1,805 tests), and
-`npm run build --workspace @jarvis/web` (with the existing chunk-size warning).
+The phone Menu now lists Proactive exactly when the Proactive flag is on, in the
+rail's position (after Daily, or after Jarvis when Daily is off), and keeps it
+current on `/proactive/<id>` (A35). An App test compares the Menu with the rail
+for three flag combinations.
+
+After the change all 148 measurements (19 scenarios at 320, 375, 390 and 768 in
+light and dark) have `document.scrollWidth` equal to `clientWidth`, including the
+waking case, and the top bar actions end at x=312 at 320px (365 before). The
+shell, main and overlay touch-target counts are identical to the baseline in all
+93 shared measurements. Not covered: three-digit job counts together with the
+waking mark at 320px (about 3px to spare), and real devices.
+
+## Whole-app visual QA pass (19 October 2026)
+
+Rendered the real app at `b02eeb66` in headless Chromium with sign-in stubbed
+and synthetic fixtures only. 72 scenarios across chat, Tasks, Notes, Settings,
+the Factory pages, Proactive, Usage, Status and the shared overlays produced
+369 screenshots and 355 measurement files. Scenarios were measured at 320, 390,
+768, 1024 and 1440 in light (1440 also in dark) and screenshotted at 390 and
+1440 in light and dark; coarse pointers were emulated at 768 and below. The
+findings were judged against `DESIGN.md` and this audit.
+
+Measured clean: no horizontal overflow at 768, 1024 or 1440; no page, render
+or console errors; select text clears the arrow on every Settings and Factory
+select; primary and secondary buttons are 44px high with a 10px radius; shell
+and overlay touch targets at 320 and 390 are at least 44px; every H1 is 40px at
+weight 650.
+
+The pass found 50 defects (3 High, 21 Medium, 26 Low). The most visible: at
+320px every route is 45px wider than the viewport because of the top bar; the
+Snooze menu overflows the viewport by 114px at 390px; several blocks (the
+Proactive page, Usage, Status, the 404 page, project settings and the release
+header) put muted text directly on the 3D scene, which is close to unreadable in
+light; and the Settings deep links to Projects, Proactive and Nutrition targets
+neither open nor scroll to their section.
+
+| Task | Defects |
+| --- | --- |
+| P14-14 | A29 to A34, A36 to A38, A40, A42 (Proactive, Usage, Status, 404, overlays) |
+| P14-15 | A44 to A47, A50 (Settings and task window) |
+| P14-16 | A1, A35 (top bar at 320px, mobile menu) |
+| P14-17 | A22, A49 (state messages and skeleton loaders) |
+| P14-18 | A7, A13 to A16 (the whole destructive-button change, including Routines Delete), A48 (Settings) |
+| P14-19 | A2, A3, A8, A43 (chat and composer) |
+| P14-20 | A5, A6, A9 to A12 (Tasks and Notes) |
+| P14-21 | A17 to A21, A23 to A25 (Factory board and task window) |
+| P14-22 | A26 to A28, A39 (Factory projects and releases) |
+| Follow-up | A4: one shared date-time format; it touches call sites owned by the tasks above, so it follows them |
+| Not fixed | A41: title position alignment is a design decision, not a defect fix |
+
+Not checked: hover, pressed and focus states, voice, signed-out screens, real
+devices, the Presence and More menus, generic modals, views created through a
+stream, `html_app` and chart views, and the Factory board and task window
+skeleton loaders. The harness is not part of the repository.
 
 ## Daily visual QA pass (P12-38; 18 October 2026)
 
@@ -124,6 +173,20 @@ request, and every tab at 1440 px had equal padding. The data is synthetic.
 No live records, physical device or human review were involved, and the section
 tab focus rings were not re-inspected in this pass.
 
+## Tasks and Notes corrections (P14-20; 19 October 2026)
+
+Tasks now use the same en-GB 24-hour clock for due times and vault freshness;
+the source-note and task-results links reach 44px on coarse pointers. Notes
+search announces settled no-match queries without an empty results shell. Note
+body padding is balanced, popup titles clamp to two lines while retaining the
+full accessible/hover title, and the phone search count is visually clipped
+but remains a live status for assistive technology.
+
+Synthetic Chromium checks covered 320×640, 390×844, 768×1024 and 1440×900 in
+light and dark, with coarse-pointer checks at 390 and 768. Times, empty-search
+announcement, title/padding, placeholder width and touch-target heights were
+verified; no horizontal overflow or browser console errors were found.
+
 ## Field clearance (P12-40, 19 October 2026)
 
 A states pass over Daily (empty, loading and error at 390 and 1440 px) found one
@@ -151,6 +214,97 @@ wider than its container, no text clipped by an ellipsis and no Daily touch
 target under 44 px. The data is synthetic; no live records, physical device or
 human review were involved. Tests guard the custom properties and the stacked
 picker.
+
+## Proactive, Usage, Status, 404 and overlay readability (P14-14, 19 October 2026)
+
+The whole-app QA pass above found four views that put muted text directly on the
+3D scene (Proactive, the Status intro, the 404 page and the Usage range switch),
+a Snooze menu that ran past the phone viewport, and overlay, hierarchy and
+touch-target slips beside them. Each now uses the shared surfaces, type roles
+and button system.
+
+| # | View | Change |
+| --- | --- | --- |
+| 1 | Proactive page, detail page and their empty, loading and paused states (A29) | The page takes the shared translucent panel surface, border and radius. On phones the dock clearance is a margin rather than padding, so the panel ends above the dock. |
+| 2 | Snooze menu (A30, A42) | On phones it is right-aligned and two buttons wide, inside the viewport. From 701 px it is a column sized to its longest option, so every option fits on one line. On phones the long Tomorrow option wraps onto two lines inside its own button, and the time never breaks. |
+| 3 | Snooze trigger (A37) | It is a secondary button like Dismiss, Useful and Wrong, and the four sit in an even 2 × 2 grid on phones. |
+| 4 | Usage range switch (A32) | A border and the translucent surface replace a 6% tint. |
+| 5 | Status intro (A33) | It is a panel of its own above System checks. Only the page intro is a panel; the smoke-check timestamp inside its own panel stays plain text. |
+| 6 | 404 page (A34) | It uses the standard panel. |
+| 7 | Attention, Background work, context and menu overlays in dark (A31) | They take the shared backdrop blur, so the page behind no longer shows through the 90% surface. |
+| 8 | Attention rows at phone widths (A36) | Titles, Dismiss and the confirmation buttons share one left edge. |
+| 9 | Popover titles (A38) | "Needs attention" and "Background work" use the subheading size, above the 17 px section headings. |
+| 10 | Usage rank links and the Proactive budget link (A40) | They are 44 px high with a coarse pointer. |
+
+Rendered checks used the whole-app headless Edge harness on synthetic data. The
+group covers 17 scenarios (Usage, Status, Proactive with its items and open
+Snooze menus, the 404 page, the knowledge redirect and the overlays), measured
+on 79 pages at 320, 390, 768, 1024 and 1440 px (light; 1440 also dark) and
+captured in 84 screenshots at 390 and 1440 px in light and dark, with the empty,
+loading and error states of the main views. Text contrast was sampled from
+pixels in the 1440 px light screenshots; the before values are from `b02eeb66`.
+
+| Text | Before | After |
+| --- | ---: | ---: |
+| Proactive "Last check" line | about 1.9:1 | 6.1:1 |
+| Status intro | about 1.8:1 | 6.1:1 |
+| 404 body | about 1.6:1 | 6.0:1 |
+| Usage unselected range label | about 1.4:1 | 6.1:1 light, 9.6:1 dark |
+
+The shared tokens give muted text on the panel at least 5.5:1 in light and
+9.1:1 in dark over both stage extremes. The harness contrast probe reads
+ancestor background colours and cannot see the 3D scene, so it reported no
+failures before or after; the pixel samples are the evidence.
+
+With the Snooze menu open, `document.scrollWidth` fell from 504 to 390 px at 390
+px and from 434 to 365 px at 320 px; the 45 px that remains at 320 px is the top
+bar (P14-16). Elements wider than their container fell from 42 to 0 on Proactive
+at 320 and 390 px, and from 7 to 0 on the item page. With a coarse pointer, touch
+targets under 44 px fell from 1 to 0 on Proactive and from 4 to 0 on Usage at 390
+px. The menu is a column on purpose: sized with `max-content`, a wrapping row adds
+every option together (713 px at 768 and 1440 px), so a test pins the column. The
+data is synthetic; no live records, physical device or human review were
+involved.
+
+## Settings save row, nested sections, feed rows and task window targets (P14-15; 19 October 2026)
+
+Five findings from the whole-app pass (A44 to A47 and A50) were all in
+`styles.css`; no markup changed.
+
+- Save settings (A47): `.settings-page > .settings-save` reset padding, radius,
+  background and shadow but not the 1px border of the base `.settings-save`
+  block, so a frame surrounded the button in every Settings state. It now sets
+  `border: 0` and stays the plain end-of-page row.
+- Nested section title (A45): inside another section the title was `flex: none`
+  and its chevron sat in a clipped box, so at 320px "Defaults for new projects"
+  read "Defaults for new projec" with no visible chevron. A title inside a nested
+  section now shrinks and wraps, and nested toggles use the subsection size (17px
+  against 22px for top-level titles) so the nested heading reads as a child.
+- Folded nested section (A50): the padding under an open section matched every
+  descendant inner, so a folded section nested in an open one kept about 24px of
+  dead space under its title. The rule now matches only a section's own inner
+  (`> .collapsible-body > .collapsible-inner`). With Projects open the 390px page
+  is 26px shorter (3963px to 3937px: the 24px plus the 2px save row frame).
+- News feeds (A46): the URL input was top-aligned beside the 44px Remove button
+  and "Add feed" stretched to the panel width. The row now stretches its controls
+  to one height and "Add feed" keeps its content width at the start of the row.
+- Task window (A44): the 44px coarse-pointer minimum for "View event payload" was
+  undone by an override fused onto the end of another rule, and the project and
+  branch chips kept a 28px minimum. The fused rule is on its own line and
+  `(pointer: coarse)` restores 44px for both; fine pointers keep the compact sizes.
+
+Rendered with the whole-app harness on the base (b02eeb66) and on this change.
+Of the 29 scenario and width measurements present in both runs, 6 differ and 23
+are identical. At 320px `settings`, `projects-defaults` and `projects-open` each
+lose their 2 wide elements and their one hidden-clip entry. At 390px the three
+task windows drop from 43, 43 and 44 targets under 44px to 34 each; the
+remaining 34 are the board and release links of A25 and A26 (P14-21, P14-22).
+The screenshots confirm the Save row has no frame at 390px, the nested title
+wraps beside its chevron at 320px, the folded Defaults section flows straight
+into Nutrition targets, "Add feed" is content width, and the payload disclosure
+and chips are 44px tall. Not covered: the 1440px captures stop at 1600px, so the
+News feeds row and the Save row were not rendered at 1440px by this change (the
+QA pass rendered the same rules there), and real touch devices.
 
 ## Colour and contrast (P14-12, 18 October 2026)
 
@@ -214,6 +368,27 @@ camera and microphone denial; no physical camera, microphone or connected
 voice session was used. Keyboard scrolling of wide generated tables remains
 open follow-up. Synthetic browser screenshots and emulation details are
 indexed in [`screenshots.md`](ui/p14-12/screenshots.md).
+
+## Settings defects (P14-18; 19 October 2026)
+
+The pass found undersized coarse-pointer controls, uneven Limits spacing,
+duplicate Custom instructions guidance, full-width single push actions,
+inconsistent destructive actions, and Settings hashes that did not reveal their
+sections. Limits now shares the Timeouts grid; the character counter retains the
+accessible limit description; destructive starts share `.danger-button`, with
+routine deletion confirmed before its request. Settings reveals the four known
+hash targets after loading, and Nutrition targets now has its link anchor.
+
+Before/after Chromium checks used the actual app with scratch-only auth and
+synthetic API fixtures at 320×640, 390×844, 768×1024 and 1440×900, in light and
+dark with coarse-pointer emulation. All five sliders measured 28→44px; the three
+swatches measured 34×34→44×44px. The push action measured 324→220px at 390px
+and 946→220px at 1440px.
+All four hashes opened and revealed their headings in 32 viewport/theme cases;
+unknown-hash behavior and routine Cancel/Escape/second-press behavior are covered
+by component tests. No browser errors or horizontal overflow were observed.
+Web lint, typecheck, all 1,809 web tests and build passed; the build retains its
+existing large-chunk warning. Captures and fixtures stay outside the repository.
 
 ## Surface coverage
 
@@ -360,6 +535,29 @@ checks, not live-backend or human acceptance.
 - P14-12 adds a `prefers-reduced-motion` rule and a unit guard for the active
   voice-status glyph. A connected voice session was not run in Chromium.
 
+## Factory board and task window (P14-21; 19 October 2026)
+
+The QA pass found split clock metadata, indistinguishable destructive actions,
+inconsistent issue-title and card-action styles, a cramped project filter,
+wrapping usage cells, repeated filtered-empty messages, and undersized touch
+targets. The board now keeps clock metadata together, uses the shared danger,
+ghost and secondary button variants, displays the project name in a wider
+responsive filter track, and gives filtered-empty boards one clear-and-focus
+recovery action. Task-window usage cells stay unbroken in a horizontally
+scrollable table; the listed board controls meet the 44px coarse-pointer target.
+
+Scratch-only auth and synthetic API fixtures rendered the actual app in
+Chromium at 320×640, 390×844, 768×1024, 1024×768 and 1440×900, in light and
+dark. Checks covered the search recovery/focus return, destructive-button
+hierarchy in the board and task window, title hover/focus, filter fit, usage
+values and coarse-pointer targets at 390px. No 390px horizontal overflow or
+browser errors occurred. At 320px, the document measured 369px wide because
+synthetic release-bar repository/branch text extended beyond the viewport; that
+surface is outside this change. Local checks passed:
+`npm test --workspace @jarvis/web` (131 files, 1,803 tests),
+`npm run lint --workspace @jarvis/web`, and
+`npm run build --workspace @jarvis/web` (TypeScript and Vite build).
+
 ## Pass 3: responsive and overflow (18 October 2026; P14-05)
 
 ### Method and coverage
@@ -497,6 +695,33 @@ and after; overflow comes from the Kanban board's issue-list item, not from a
 button. The parallel P14-05 overflow sweep owns that non-button layout, so this
 button pass leaves it unchanged. Other checked pages had no new document-width
 increase.
+
+## Factory project and release surfaces (P14-22; 19 October 2026)
+
+The QA pass found the project-settings intro and completion policy, plus the
+release-page back link and repository/default-branch summary, sitting over the
+3D scene. The intro now sits in the Repository panel, the policy has its own
+settings panel, and the release header uses the shared translucent panel surface.
+Coarse-pointer release links now measure at least 44px, and task-bar, selected
+release and release-row labels consistently use `Build {version}` without
+altering a version that already begins with `v`.
+
+The four formerly bare lines use `--text-muted` (`#5c564f` light,
+`#c0ccd2` dark). Against the translucent panel surface, conservative WCAG
+contrast bounds are **5.52:1 light** and **9.09:1 dark**; these use the
+worst black/white scene-backdrop composite endpoints (92% light and 90% dark
+surface opacity). Both exceed 4.5:1.
+
+The actual app was checked in scratch Chromium with synthetic auth/API data.
+Before-state captures restored the original bare paragraph/fieldset/header;
+after-state captures covered 320×640, 390×844, 768×1024 and 1440×900 in both
+themes. Coarse-pointer emulation was enabled; the task release name/version and
+release record/workflow links measured at least 44px, all viewports stayed
+within their width, and the final routes had no fixture alerts or page errors.
+Local checks passed: `npm run lint --workspace @jarvis/web`
+(`--max-warnings 0`), `npx tsc --noEmit -p apps/web/tsconfig.json`,
+`npm test --workspace @jarvis/web` (131 files, 1,805 tests), and
+`npm run build --workspace @jarvis/web` (with the existing chunk-size warning).
 
 ## Pass 3 (borders, radii, surfaces)
 
@@ -668,3 +893,26 @@ Three “before” examples restore only the old responsive CSS rules over the s
 synthetic markup; the tall desktop “after” captures expose the sections' lower
 content. No change was made to the parallel Data or Briefs rebuilds, `DailyPage`,
 or `PLAN.md`.
+
+## Chat, composer, and generated-table correction (P14-19; 19 October 2026)
+
+The QA pass found the message time tag overlapping short bubbles on touch,
+unbalanced spacing above “Interrupted,” undersized coarse-pointer targets, and
+left-aligned numeric columns in generated tables. Touch metadata now follows
+message text, interrupted-label spacing is balanced, the task link and voice
+orb meet the 44px target, and wholly numeric columns use right alignment and
+tabular figures.
+
+Compared parent and current styles in a scratch Chromium fixture with synthetic
+messages and table rows at 320×640, 390×844, 768×1024, and 1440×900, in light
+and dark with coarse-pointer emulation. The timestamp no longer intersects short
+or long message text, numeric columns compute to right-aligned tabular figures
+while text remains left-aligned, and the interrupted label has 8px above and
+below. Task links measured 44px; the voice orb measured 48px on phone widths and
+44px at tablet/desktop widths. Composer height was unchanged at 390px and 768px.
+The stylesheet ratchet and all 131 web test files (1,804 tests), web lint with
+`--max-warnings 0`, and the web build/typecheck passed.
+
+Headless Chromium reported `hover:none` even with fine-pointer emulation. CDP
+forced the message `:hover` state and keyboard focus separately; both revealed
+the metadata. A physical fine-pointer device was not available.

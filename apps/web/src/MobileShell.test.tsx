@@ -1,15 +1,20 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useState } from 'react';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 import { MobileMenu } from './MobileShell';
 
-function Harness({ onNavigate = () => {} }: { onNavigate?: () => void }) {
+function Harness({ onNavigate = () => {}, path = '/', ...flags }: {
+  onNavigate?: () => void;
+  path?: string;
+  dailyEnabled?: boolean;
+  proactiveEnabled?: boolean;
+}) {
   const [open, setOpen] = useState(false);
-  return <MemoryRouter>
+  return <MemoryRouter initialEntries={[path]}>
     <button onClick={() => setOpen(true)}>Open menu</button>
-    <MobileMenu open={open} onClose={() => setOpen(false)} onNavigate={onNavigate} onFolio={() => {}} onContext={() => {}} />
+    <MobileMenu open={open} onClose={() => setOpen(false)} onNavigate={onNavigate} onFolio={() => {}} onContext={() => {}} {...flags} />
   </MemoryRouter>;
 }
 
@@ -66,5 +71,33 @@ describe('mobile menu modal behavior', () => {
     } finally {
       document.removeEventListener('keydown', voiceShortcut);
     }
+  });
+});
+
+describe('mobile menu pages', () => {
+  async function openPages(props: Parameters<typeof Harness>[0] = {}) {
+    const user = userEvent.setup();
+    render(<Harness {...props} />);
+    await user.click(screen.getByRole('button', { name: 'Open menu' }));
+    return within(screen.getByRole('navigation', { name: 'Pages' }));
+  }
+
+  // The rail lists Conversation, then the areas with Proactive after the first one (`appAreas`); the menu adds Settings.
+  it.each([
+    { dailyEnabled: false, proactiveEnabled: false, pages: ['Jarvis', 'Software Factory', 'Tasks', 'Notes', 'Usage', 'Status', 'Settings'] },
+    { dailyEnabled: true, proactiveEnabled: false, pages: ['Jarvis', 'Daily', 'Software Factory', 'Tasks', 'Notes', 'Usage', 'Status', 'Settings'] },
+    { dailyEnabled: false, proactiveEnabled: true, pages: ['Jarvis', 'Software Factory', 'Proactive', 'Tasks', 'Notes', 'Usage', 'Status', 'Settings'] },
+    { dailyEnabled: true, proactiveEnabled: true, pages: ['Jarvis', 'Daily', 'Proactive', 'Software Factory', 'Tasks', 'Notes', 'Usage', 'Status', 'Settings'] },
+  ])('lists the pages in rail order (daily $dailyEnabled, proactive $proactiveEnabled)', async ({ pages, ...flags }) => {
+    const navigation = await openPages(flags);
+    expect(navigation.getAllByRole('link').map((link) => link.textContent)).toEqual(pages);
+  });
+
+  it('links Proactive to its area and keeps it current on an item page', async () => {
+    const navigation = await openPages({ proactiveEnabled: true, path: '/proactive/11111111-1111-4111-8111-111111111111' });
+    const proactive = navigation.getByRole('link', { name: 'Proactive' });
+    expect(proactive.getAttribute('href')).toBe('/proactive');
+    expect(proactive.getAttribute('aria-current')).toBe('page');
+    expect(navigation.getByRole('link', { name: 'Jarvis' }).hasAttribute('aria-current')).toBe(false);
   });
 });

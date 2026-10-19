@@ -114,20 +114,25 @@ action cleanup never wait for animation.
 
 Use the shared viewport set in `apps/web/src/styles.css`: phone through 700px,
 tablet above 700px through 900px, desktop above 900px, and wide from 1200px.
-The 380px narrow-handset exception only tightens chat, voice, metadata and
-camera controls. The 1099px task-board and 720px task-detail container queries
+The 380px narrow-handset exception tightens chat, voice, metadata and camera
+controls, and also drops the presence control from the phone top bar (P14-16).
+The 1099px task-board and 720px task-detail container queries
 remain content-scoped because their layout follows allocated component width.
 Daily's 640px and 760px media queries remain outside this pass as its page is
 being built in parallel.
 
 ## Icon-only header (P9-119)
 
-Settings is a gear only at every width, including phones, with its Settings
-accessible name, native tooltip, active-route state and 44px target. Presence
+Settings is a gear only above the phone breakpoint, with its Settings
+accessible name, native tooltip, active-route state and 44px target. On phones
+the gear is hidden because the Menu sheet has a Settings row (P14-16); the
+single-row header needs 353px and a 320px phone leaves 300px. Presence
 uses one person, moon or walking-person icon for Present, Away or On the move;
 the existing green/yellow/blue tokens remain, with darker same-hue strokes in
 light mode for contrast. No top-bar presence dot or visible mode label.
 Accessible names and tooltips identify the mode; switching behaviour is unchanged.
+At 380px and narrower the phone header also hides presence (P14-16); Settings,
+Presence still switches the mode there.
 
 The header background-work cluster has non-zero running, done, failed and
 attention icon/count pairs. Spinner, check, warning-triangle and bell shapes
@@ -146,8 +151,9 @@ The summary remains in the header on phones instead of inside the windows
 sheet; the separate windows button counts windows only. Keep the existing
 individual desktop job tabs and phone window sheet. Settings, presence and
 the summary have 44px targets, shared borderless hover/pressed surfaces and
-visible keyboard focus. Stack each phone count below its icon to fit the
-single-row header at 320px without changing the composer or voice orb.
+visible keyboard focus. Stack each phone count below its icon and keep the
+Settings gear (and, at 380px and narrower, presence) out of the phone header to
+fit the single-row header at 320px without changing the composer or voice orb.
 
 Local Chromium fixture captures and interaction measurements are in
 `docs/ui/screenshots/p9-119/`: 320×568, 390×844 and 1440×900 in both themes,
@@ -367,7 +373,10 @@ Urgency and budget states pair words with icons, never colour alone. Finding
 text stays plain, with a clamped expandable body and a separate full-detail
 route. Actions and settings keep visible success/error copy, retry behavior,
 keyboard focus and 44px touch targets. The small-screen layout is phone-first,
-and all state remains readable with reduced motion and in either theme.
+and all state remains readable with reduced motion and in either theme. The page
+itself sits on the shared translucent panel (P14-14), and the Snooze menu stays
+inside the viewport. From 701 px every option fits on one line; on phones the
+long Tomorrow option wraps inside its own button and the time never breaks.
 
 The settings slot is a single collapsed Proactive section with its own Save;
 the Pause switch commits immediately. Private feed and guidance values are not
@@ -859,6 +868,16 @@ Save, next section; the console was clean. Limits: a mocked `fetch` with synthet
 figures, no live backend, no 3D stage, header or real sign-in, and
 `prefers-reduced-motion` could not be emulated (the section adds no motion of its
 own). Local runs are not qualification.
+
+P14-15 gives a section nested inside another (today the Projects section's
+"Defaults for new projects") a child-level heading. The nested toggle uses the
+subsection size (17px) against 22px for top-level titles, the title may shrink
+and wrap so the chevron always stays visible (at 320px it wraps to two lines
+instead of being cut), and a folded nested section carries no extra padding
+under its title. The rule is on `.collapsible-inner`, so it applies to any
+`CollapsibleSection` rendered inside another. Save settings stays a plain
+end-of-page row with no frame. Checked in headless Edge at 320 and 390px, light
+and dark, on synthetic data; the 1440px lower page was not rendered.
 
 ## Projects (P1-10)
 
@@ -1427,7 +1446,7 @@ activity-feedback treatment, not new gradient heading text introduced by this
 camera correction. Reduced motion retains solid text without the sweep.
 - **Rail (P9-71):** the current area uses the same subtle cyan wash as the phone menu and top-bar toggles, with a readable cyan icon and stronger stroke rather than a glow or outlined tile.
 - **Selection (P9-71, 10 October):** navigation, top-bar toggles, workspace tabs and segmented choices share the role-named `--state-selected-*` tokens in `apps/web/src/styles.css`, derived from the existing focus/text palette. Selected text gains weight and selected icons gain stroke weight or size; neither an outline nor colour alone marks selection. Hover deepens the tint and press deepens it again; focus keeps its separate visible ring. A closed toggle returns to its transparent resting surface. Presence keeps its mode label and tone dot when closed; opening its menu uses the shared cyan selection treatment. Text and indicators meet 4.5:1 and 3:1 respectively in light/dark, including hover and press.
-- **Presence:** a chip in the top bar shows the live mode (Present green, Away yellow, On the move blue; P9-102) and switches it from a small glass menu. The mode label sits beside every dot except in the phone top bar, which keeps the dot alone and names the mode in its accessible label. Settings has a Presence section with three mode cards and one instruction per mode beside the base instruction in Personality. Without the presence service the chip is hidden and Settings says the modes are not available yet.
+- **Presence:** a chip in the top bar shows the live mode (Present green, Away yellow, On the move blue; P9-102) and switches it from a small glass menu. The mode label sits beside every dot except in the phone top bar, which keeps the dot alone and names the mode in its accessible label. At 380px and narrower the phone top bar omits the chip, and Settings, Presence switches the mode (P14-16). Settings has a Presence section with three mode cards and one instruction per mode beside the base instruction in Personality. Without the presence service the chip is hidden and Settings says the modes are not available yet.
 - **Memory:** a Settings section to browse, search and filter (People, Work, Personal, General) what Jarvis knows, with sync status and counts. Choosing an entry shows it beside the list with its history, a Save correction action (vault notes link to the resulting commit) and Forget. Forget explains the outcome first: memories Jarvis keeps are forgotten at once; vault notes need approval in the conversation, and the page reports when approval is pending, refused while away, or unavailable.
 - **Top bar (7 October):** the brand, then every open window as a Chrome-style tab (the conversation has none; the orb brings it back), then a tab per background job, the presence chip and the controls. There is no breadcrumb. Tabs share the glass hover of every icon button; the front window's tab uses the selected surface. An empty tab area shows nothing.
 - **Floating windows:** shell windows float, drag by the title bar and resize from the right and bottom edges; Tab to a title, then arrows move and Alt+arrows resize. There is no Arrange menu. Windows stay inside the window area and may sit over the docked conversation. Long titles wrap to two lines with the full title on hover.
@@ -1452,7 +1471,7 @@ camera correction. Reduced motion retains solid text without the sweep.
 - **Showing the work (P9-41, 8 October):** while Jarvis works, its live chat bubble types Jarvis's own description of the step ("Searching your vault for Ignite") instead of a canned phrase, and the top bar's activity label shows the same text. Repository reads and searches open a read-only **Code view** window: a monospace path breadcrumb (repo / folder / **file**), ref and language chips, an Open on GitHub link (only for a real owner/name repo), numbered lines, highlighted ranges tinted cyan with a bright line number, and query matches marked amber. Each time Jarvis moves, the first highlighted line scrolls to the middle and the body fades in. Content is shown as text only; screen readers hear the highlighted ranges and that matches are marked.
 - **Notes refinements (Dan, 11 October; local):** place inventory freshness on the top header row immediately before the close icon, right-aligned opposite New note. On narrow phones it wraps within that row rather than clipping or covering the 44 px close control. The destination disclosure is one 44 px row: folder glyph, "Save in" and destination, then chevron. Long destinations ellipsise visually; the full path remains in the accessible name and tooltip. Remove the separate New folder action: every folder row, including Vault root, has a plus revealed on desktop hover or keyboard focus and always visible on touch. It expands that folder and inserts a focused child naming row there, with Enter/check to add and Escape/cross to cancel. The temporary name does not change the note destination until added; creation remains local until a note Save. Remove the new-draft instruction/path metadata row, retaining path metadata for existing notes.
 
-- **Phones (8 October, voice first):** no rail or side panels. A slim top bar holds an open-windows count, the presence chip and a menu button; the menu is a bottom glass sheet with Jarvis, Software Factory, Knowledge, Usage, Settings, Folio and the context panel (Jarvis can also switch pages by voice). The chat bar is the dock at the bottom of every page; its orb starts hands-free voice. Home is the room with the transcript tucked away: swipe the handle up (or, once P9-45 lands, ask Jarvis) to bring it up as a sheet. One caption line above the dock says what Jarvis is doing. Windows Jarvis opens slide up as full-width sheets; the count opens a list of them. Pages scroll normally (the desktop scroll lock does not apply). Screen sharing is hidden where the browser cannot share the screen (all phone browsers); the camera offers a front/back switch on touch devices. Presence will switch to On the move automatically on phones once P9-44 lands.
+- **Phones (8 October, voice first):** no rail or side panels. A slim top bar holds an open-windows count, the presence chip (not at 380px and narrower; P14-16) and a menu button; the menu is a bottom glass sheet with the pages in the rail's order (Jarvis, Daily and Proactive when enabled, Software Factory, Tasks, Notes, Usage, Status), then Settings, Folio and the context panel (Jarvis can also switch pages by voice). The chat bar is the dock at the bottom of every page; its orb starts hands-free voice. Home is the room with the transcript tucked away: swipe the handle up (or, once P9-45 lands, ask Jarvis) to bring it up as a sheet. One caption line above the dock says what Jarvis is doing. Windows Jarvis opens slide up as full-width sheets; the count opens a list of them. Pages scroll normally (the desktop scroll lock does not apply). Screen sharing is hidden where the browser cannot share the screen (all phone browsers); the camera offers a front/back switch on touch devices. Presence will switch to On the move automatically on phones once P9-44 lands.
 - **Chat bar life (8 October):** when idle, one thin (1.25 px) light runs an unhurried six-second lap of the bar's rim every 10 s, easing from slow to moderate, then rests; hover and focus keep a slow steady sweep (7 s and 6 s per lap). The placeholder is a rotating invitation in Jarvis's voice ("What shall we tackle?") that types in slowly (70 ms per letter), rests, gets two unhurried light sweeps (2.4 s each), and gives way to the next every 9 s; the native placeholder stays for assistive technology.
 - **Kanban space (8 October):** the header pairs Create project and Create task as matched pills (an even two-up on phones, with the summary pills on one scrolling line). Search and filters are one collapsible glass section showing how many filters are active when closed (open by default on desktop, closed on phones). Each column collapses from its title; on wide screens a collapsed column becomes a 52 px strip with its title running down it. Both are remembered on the device.
 - **Collapsible sections (8 October, standing rule):** settings-like pages are an even stack of glass cards that fold to their title (`CollapsibleSection`): the title row is the toggle with a chevron, a folded card shows a one-line summary of its current state (theme, model, presence), and each card remembers on the device whether it was open. Cards start folded. New settings, configuration or detail areas use this component rather than adding long always-open blocks, so pages stay short on a phone. When Jarvis navigates to a section it opens it first.

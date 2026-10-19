@@ -159,14 +159,14 @@ export function TaskControls({
           </button>
         )}
         {!confirmCancel ? (
-          <button className="secondary-button" type="button" disabled={busy !== null}
+          <button className="danger-button" type="button" disabled={busy !== null}
             onClick={() => { setConfirmCancel(true); setSteering(false); setError(''); setFeedback(''); }}>
             Cancel task
           </button>
         ) : (
           <>
             <span className="task-control-confirmation">This ends the task and cannot be undone.</span>
-            <button className="secondary-button" type="button" disabled={busy !== null}
+            <button className="danger-button danger-button--filled" type="button" disabled={busy !== null}
               onClick={() => void run('cancel')}>
               {busy === 'cancel' ? 'Cancelling…' : 'Confirm cancel task'}
             </button>

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -7,6 +7,7 @@ import { SettingsPage } from './SettingsPage';
 import { ResearchSection } from './SettingsAdvanced';
 import { ProjectsPage } from './factory/ProjectsPage';
 import { ThemePreferenceContext, type ThemeMode, type ThemePreference } from './theme-preference-context';
+import { CollapsibleSection } from './CollapsibleSection';
 
 const settings = {
   appearance: { theme: 'light' as ThemeMode },
@@ -87,17 +88,26 @@ function settingsResponse(current: typeof settings & { global: typeof settings.g
   return { settings: current, options, credentials };
 }
 
-function renderSettingsPage(url: string | null = backendUrl, healthUpload?: ReactNode) {
+function renderSettingsPage(url: string | null = backendUrl, healthUpload?: ReactNode, deepLinkTargets = false) {
   return render(
     <ThemePreferenceContext.Provider value={themePreference}>
       <SettingsPage backendUrl={url} getAccessToken={getAccessToken}
         healthUpload={healthUpload}
         renderProjects={(projectDefaults) => (
-          <section aria-labelledby="test-projects-heading">
-            <h2 id="test-projects-heading">Projects</h2>
+          <CollapsibleSection storageKey="settings.projects" id="projects" headingId="projects-heading" title="Projects">
             {projectDefaults}
-          </section>
-        )} />
+          </CollapsibleSection>
+        )}
+        nutrition={deepLinkTargets
+          ? <CollapsibleSection storageKey="settings.nutrition-targets" id="nutrition-targets" title="Nutrition targets">
+              <p>Nutrition target fixture</p>
+            </CollapsibleSection>
+          : undefined}
+        proactive={deepLinkTargets
+          ? <CollapsibleSection storageKey="settings.proactive" id="proactive-settings" title="Proactive" persist={false} initiallyOpen={false}>
+              <p>Proactive fixture</p>
+            </CollapsibleSection>
+          : undefined} />
     </ThemePreferenceContext.Provider>,
   );
 }
@@ -119,11 +129,42 @@ beforeEach(() => {
 afterEach(() => { vi.unstubAllGlobals(); });
 
 describe('SettingsPage', () => {
-  it('opens the Health upload section when linked from the Daily no-data state', () => {
-    window.history.replaceState({}, '', '/settings#health-upload');
-    renderSettingsPage(backendUrl, <p>Health upload test content</p>);
-    const section = screen.getByRole('heading', { name: 'Health upload' }).closest('section');
-    expect(section?.getAttribute('data-open')).toBe('true');
+  it.each([
+    { hash: 'health-upload', key: 'settings.health-upload' },
+    { hash: 'projects', key: 'settings.projects' },
+    { hash: 'proactive-settings', key: 'settings.proactive' },
+    { hash: 'nutrition-targets', key: 'settings.nutrition-targets' },
+  ])('opens and scrolls to the #$hash section after Settings is ready', async ({ hash, key }) => {
+    window.history.replaceState({}, '', `/settings#${hash}`);
+    localStorage.setItem(`jarvis.sections.${key}`, '0');
+    document.documentElement.dataset.motion = 'reduced';
+    fetchMock.mockResolvedValueOnce(response(settingsResponse()));
+    const view = renderSettingsPage(backendUrl,
+      hash === 'health-upload' ? <p>Health upload test content</p> : undefined, true);
+    const target = view.container.ownerDocument.getElementById(hash) as HTMLElement;
+    const scrollIntoView = vi.fn();
+    target.scrollIntoView = scrollIntoView;
+
+    await screen.findByRole('heading', { name: 'Jarvis', level: 2 });
+    await waitFor(() => expect(target.getAttribute('data-open')).toBe('true'));
+    await waitFor(() => expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'auto', block: 'center' }));
+    document.documentElement.removeAttribute('data-motion');
+  });
+
+  it('ignores unknown Settings hashes without opening or scrolling a section', async () => {
+    window.history.replaceState({}, '', '/settings#unknown-section');
+    localStorage.setItem('jarvis.sections.settings.projects', '0');
+    fetchMock.mockResolvedValueOnce(response(settingsResponse()));
+    const view = renderSettingsPage(backendUrl, undefined, true);
+    const scrollIntoView = vi.fn();
+    for (const section of view.container.querySelectorAll<HTMLElement>('.settings-section')) {
+      section.scrollIntoView = scrollIntoView;
+    }
+
+    await screen.findByRole('heading', { name: 'Jarvis', level: 2 });
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(document.getElementById('projects')?.getAttribute('data-open')).toBe('false');
+    expect(scrollIntoView).not.toHaveBeenCalled();
   });
   it.each([
     { name: 'current Jeppe settings', voice: settings.voice.danishVoice, voices: options.danishVoices },
@@ -221,7 +262,11 @@ describe('SettingsPage', () => {
     expect(screen.getByRole('combobox', { name: 'Tone' })).toHaveProperty('value', 'british_butler');
     expect(screen.getByRole('combobox', { name: 'Response style' })).toHaveProperty('value', 'concise');
     expect(screen.getByText('Applies to new sessions.')).not.toBeNull();
-    expect(screen.getByRole('textbox', { name: 'Custom instructions' })).toHaveProperty('maxLength', 2_000);
+    const instructions = screen.getByRole('textbox', { name: 'Custom instructions' });
+    expect(instructions).toHaveProperty('maxLength', 2_000);
+    expect(instructions.getAttribute('aria-describedby')).toBe('personality-instructions-help');
+    expect(screen.getByText('0 / 2,000 characters').id).toBe('personality-instructions-help');
+    expect(screen.queryByText('Up to 2,000 characters.')).toBeNull();
     expect(screen.getByRole('button', {
       name: 'Reset personality',
       description: /default personality is already selected/,
