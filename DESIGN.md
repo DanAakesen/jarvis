@@ -869,6 +869,16 @@ figures, no live backend, no 3D stage, header or real sign-in, and
 `prefers-reduced-motion` could not be emulated (the section adds no motion of its
 own). Local runs are not qualification.
 
+P14-15 gives a section nested inside another (today the Projects section's
+"Defaults for new projects") a child-level heading. The nested toggle uses the
+subsection size (17px) against 22px for top-level titles, the title may shrink
+and wrap so the chevron always stays visible (at 320px it wraps to two lines
+instead of being cut), and a folded nested section carries no extra padding
+under its title. The rule is on `.collapsible-inner`, so it applies to any
+`CollapsibleSection` rendered inside another. Save settings stays a plain
+end-of-page row with no frame. Checked in headless Edge at 320 and 390px, light
+and dark, on synthetic data; the 1440px lower page was not rendered.
+
 ## Projects (P1-10)
 
 Keep the neutral foundation. The list uses one compact project panel per
