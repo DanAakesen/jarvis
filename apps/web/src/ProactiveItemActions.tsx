@@ -33,7 +33,7 @@ export function ItemActionControls({ item, now, onAction }: {
     <button className="secondary-button" type="button" disabled={pending}
       aria-label={`Dismiss ${item.title}`} onClick={() => { void apply('dismiss'); }}>Dismiss</button>
     <details className="proactive-snooze">
-      <summary aria-label={`Snooze ${item.title}`} aria-disabled={pending}>Snooze</summary>
+      <summary className="secondary-button" aria-label={`Snooze ${item.title}`} aria-disabled={pending}>Snooze</summary>
       <div className="proactive-snooze-menu" role="group" aria-label={`Snooze ${item.title}`}>
         {snoozeOptions.map(({ label, at }) => <button key={label} className="secondary-button" type="button" disabled={pending}
           aria-label={`Snooze ${item.title} ${label}`} onClick={(event) => {
