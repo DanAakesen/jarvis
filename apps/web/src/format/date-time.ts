@@ -3,6 +3,7 @@ export type DateTimeValue = Date | string | null | undefined;
 export interface DateTimeOptions {
   locale?: string;
   timeZone?: string;
+  fallback?: string;
 }
 
 const fallback = '—';
@@ -65,15 +66,16 @@ function parsedDate(value: DateTimeValue, timeZone?: string): Date | null {
 }
 
 function formatDate(value: DateTimeValue, options: DateTimeOptions, dateOptions: Intl.DateTimeFormatOptions): string {
+  const fallbackText = options.fallback ?? fallback;
   try {
     const date = parsedDate(value, options.timeZone);
-    if (!date) return fallback;
+    if (!date) return fallbackText;
     return new Intl.DateTimeFormat(options.locale ?? 'en-GB', {
       ...dateOptions,
       ...(options.timeZone !== undefined ? { timeZone: options.timeZone } : {}),
     }).format(date);
   } catch {
-    return fallback;
+    return fallbackText;
   }
 }
 
@@ -82,7 +84,10 @@ export function formatDateTime(value: DateTimeValue, options: DateTimeOptions = 
 }
 
 export function formatDateOnly(value: DateTimeValue, options: DateTimeOptions = {}): string {
-  return formatDate(value, { ...options, timeZone: 'UTC' }, { dateStyle: 'medium' });
+  const dateOptions = typeof value === 'string' && dateOnlyPattern.test(value)
+    ? { ...options, timeZone: 'UTC' }
+    : options;
+  return formatDate(value, dateOptions, { dateStyle: 'medium' });
 }
 
 export function formatTimeOnly(value: DateTimeValue, options: DateTimeOptions = {}): string {

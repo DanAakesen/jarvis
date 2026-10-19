@@ -4,15 +4,16 @@
 
 Use `apps/web/src/format/date-time.ts` for user-visible web date-time, date-only
 and time-only values. Default to `en-GB`, medium date plus short 24-hour time,
-and the browser timezone; date-only values use UTC so their calendar day never
-shifts. Use `hourCycle: 'h23'` so midnight stays in the 00–23 hour range.
-Optional locale and timezone arguments preserve deliberate content-language
-and display-zone choices. Return an en dash for missing or invalid values so
-rendering never throws. Keep relative times, chart/calendar labels, data values
-and non-web formatting outside this presentation helper. Daily brief timestamps
-remain verbatim because their timezone is unknown. Daily and Proactive wrappers
-remain thin to preserve their explicit Europe/Copenhagen zone and Danish content
-behavior.
+and the browser timezone for instants; date-only strings are calendar dates and
+format as UTC so their day never shifts. Use `hourCycle: 'h23'` so midnight
+stays in the 00–23 hour range. Optional locale and timezone arguments preserve
+deliberate content-language and display-zone choices for instants. Return an en
+dash for missing or invalid values by default so rendering never throws; callers
+may supply a display fallback for valid-but-unparseable legacy values. Keep
+relative times, chart/calendar labels, data values and non-web formatting
+outside this presentation helper. Daily brief timestamps remain verbatim
+because their timezone is unknown. Daily and Proactive wrappers remain thin to
+preserve their explicit Europe/Copenhagen zone and Danish content behavior.
 
 ## P14-15 — Nested section titles wrap, the save row has no frame, touch targets in the task window (19 October 2026)
 

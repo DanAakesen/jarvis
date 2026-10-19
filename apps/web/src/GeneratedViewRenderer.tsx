@@ -29,8 +29,8 @@ type TimelineEvent = { at?: string; label?: string; title: string; description?:
 function timelineDate(at: string) {
   const dateOnly = /^\d{4}-\d{2}-\d{2}$/u.test(at);
   return dateOnly
-    ? formatDateOnly(at, { timeZone: 'UTC' })
-    : formatDateTime(at);
+    ? formatDateOnly(at, { timeZone: 'UTC', fallback: at })
+    : formatDateTime(at, { fallback: at });
 }
 
 export function GeneratedViewRenderer({  view,

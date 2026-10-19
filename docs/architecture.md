@@ -4,15 +4,16 @@
 
 `apps/web/src/format/date-time.ts` is the web client’s shared date-time
 presentation boundary. Date-time, date-only and time-only calls default to
-`en-GB`; date-time and time-only calls use the browser timezone, while date-only
-values are interpreted as UTC to avoid shifting their calendar day. Optional
+`en-GB`; instants use the browser timezone by default, while date-only strings
+are interpreted as UTC calendar dates to avoid shifting their day. Optional
 locale and timezone arguments preserve content-language formatting and
-established display zones. Invalid or missing values return an en dash rather
-than throwing during render. Daily and Proactive keep thin wrappers only for
-their explicit timezone and content-language rules; Daily brief timestamps
-remain verbatim because their timezone is unknown. `dailyLocale()` remains for
-numeric and duration values, and calculation-only `Intl` calls stay in the
-static guard’s small allowlist.
+established display zones for instants. Invalid or missing values return an en
+dash by default rather than throwing during render; callers may supply a
+fallback for valid-but-unparseable legacy values. Daily and Proactive keep thin
+wrappers only for their explicit timezone and content-language rules; Daily
+brief timestamps remain verbatim because their timezone is unknown.
+`dailyLocale()` remains for numeric and duration values, and calculation-only
+`Intl` calls stay in the static guard’s small allowlist.
 
 ## Daily visual QA presentation changes (18 October 2026; P12-38)
 

@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import type { GeneratedView } from '@jarvis/contracts';
+import { isGeneratedView, type GeneratedView } from '@jarvis/contracts';
 import { GeneratedViewRenderer } from './GeneratedViewRenderer';
 
 describe('GeneratedViewRenderer timeline', () => {
@@ -19,6 +19,17 @@ describe('GeneratedViewRenderer timeline', () => {
     expect(items[0]!.querySelector('time')?.getAttribute('dateTime')).toBe('2026-09-29T09:00:00.000Z');
     expect(items[0]!.querySelector('time')?.textContent).toMatch(/2026/);
     expect(screen.getByText('All charges proven except 4(B).')).not.toBeNull();
+  });
+
+  it('preserves the raw leap-second value accepted by the timeline contract', () => {
+    const view = {
+      version: 1, title: 'Leap second', renderer: 'timeline',
+      source: { id: 'research', status: 'complete', updatedAt: '2016-12-31T23:59:00Z' },
+      data: { events: [{ at: '2016-12-31T23:59:60Z', title: 'Leap second' }] },
+    };
+    expect(isGeneratedView(view)).toBe(true);
+    render(<GeneratedViewRenderer view={view as GeneratedView} />);
+    expect(screen.getByText('2016-12-31T23:59:60Z')).not.toBeNull();
   });
 
   it('draws a chart with a legend and keeps the values available', () => {
