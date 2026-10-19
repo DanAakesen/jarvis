@@ -168,6 +168,57 @@ target under 44 px. The data is synthetic; no live records, physical device or
 human review were involved. Tests guard the custom properties and the stacked
 picker.
 
+## Proactive, Usage, Status, 404 and overlay readability (P14-14, 19 October 2026)
+
+The whole-app QA pass above found four views that put muted text directly on the
+3D scene (Proactive, the Status intro, the 404 page and the Usage range switch),
+a Snooze menu that ran past the phone viewport, and overlay, hierarchy and
+touch-target slips beside them. Each now uses the shared surfaces, type roles
+and button system.
+
+| # | View | Change |
+| --- | --- | --- |
+| 1 | Proactive page, detail page and their empty, loading and paused states (A29) | The page takes the shared translucent panel surface, border and radius. On phones the dock clearance is a margin rather than padding, so the panel ends above the dock. |
+| 2 | Snooze menu (A30, A42) | On phones it is right-aligned and two buttons wide, inside the viewport. From 701 px it is a column sized to its longest option, so every option fits on one line. On phones the long Tomorrow option wraps onto two lines inside its own button, and the time never breaks. |
+| 3 | Snooze trigger (A37) | It is a secondary button like Dismiss, Useful and Wrong, and the four sit in an even 2 × 2 grid on phones. |
+| 4 | Usage range switch (A32) | A border and the translucent surface replace a 6% tint. |
+| 5 | Status intro (A33) | It is a panel of its own above System checks. Only the page intro is a panel; the smoke-check timestamp inside its own panel stays plain text. |
+| 6 | 404 page (A34) | It uses the standard panel. |
+| 7 | Attention, Background work, context and menu overlays in dark (A31) | They take the shared backdrop blur, so the page behind no longer shows through the 90% surface. |
+| 8 | Attention rows at phone widths (A36) | Titles, Dismiss and the confirmation buttons share one left edge. |
+| 9 | Popover titles (A38) | "Needs attention" and "Background work" use the subheading size, above the 17 px section headings. |
+| 10 | Usage rank links and the Proactive budget link (A40) | They are 44 px high with a coarse pointer. |
+
+Rendered checks used the whole-app headless Edge harness on synthetic data. The
+group covers 17 scenarios (Usage, Status, Proactive with its items and open
+Snooze menus, the 404 page, the knowledge redirect and the overlays), measured
+on 79 pages at 320, 390, 768, 1024 and 1440 px (light; 1440 also dark) and
+captured in 84 screenshots at 390 and 1440 px in light and dark, with the empty,
+loading and error states of the main views. Text contrast was sampled from
+pixels in the 1440 px light screenshots; the before values are from `b02eeb66`.
+
+| Text | Before | After |
+| --- | ---: | ---: |
+| Proactive "Last check" line | about 1.9:1 | 6.1:1 |
+| Status intro | about 1.8:1 | 6.1:1 |
+| 404 body | about 1.6:1 | 6.0:1 |
+| Usage unselected range label | about 1.4:1 | 6.1:1 light, 9.6:1 dark |
+
+The shared tokens give muted text on the panel at least 5.5:1 in light and
+9.1:1 in dark over both stage extremes. The harness contrast probe reads
+ancestor background colours and cannot see the 3D scene, so it reported no
+failures before or after; the pixel samples are the evidence.
+
+With the Snooze menu open, `document.scrollWidth` fell from 504 to 390 px at 390
+px and from 434 to 365 px at 320 px; the 45 px that remains at 320 px is the top
+bar (P14-16). Elements wider than their container fell from 42 to 0 on Proactive
+at 320 and 390 px, and from 7 to 0 on the item page. With a coarse pointer, touch
+targets under 44 px fell from 1 to 0 on Proactive and from 4 to 0 on Usage at 390
+px. The menu is a column on purpose: sized with `max-content`, a wrapping row adds
+every option together (713 px at 768 and 1440 px), so a test pins the column. The
+data is synthetic; no live records, physical device or human review were
+involved.
+
 ## Colour and contrast (P14-12, 18 October 2026)
 
 The contrast ratchet reads the canonical tokens and measures 197 shared-token
