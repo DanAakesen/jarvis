@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { MAX_VAULT_FILE_BYTES, VaultFileTooLargeError } from '../../vault/github-client.js';
 import { defaultProactiveSettings } from '../store.js';
 import type { SourceContext } from '../types.js';
+import { detectFindings } from '../detect.js';
 import { createTodosSource } from './todos.js';
 
 const now = new Date('2026-10-20T12:00:00.000Z');
@@ -67,7 +68,7 @@ describe('proactive todos source', () => {
   it('returns notification facts only for open high-priority tasks', async () => {
     const content = [
       '- [ ] Highest [priority:: P1 - High] 📅 2026-10-21 14:00',
-      '- [ ] Plugin highest 🔺 📅 2026-10-21 15:00',
+      '- [ ] Plugin highest 🔺 📅 2026-10-20 15:00',
       '- [ ] Lower [priority:: P2 - Medium] 📅 2026-10-21 14:00',
       '- [ ] Unprioritized 📅 2026-10-21 14:00',
       '- [x] Completed [priority:: P1 - High] 📅 2026-10-21 14:00',
@@ -75,12 +76,14 @@ describe('proactive todos source', () => {
     const result = await createTodosSource(vault(content)).read(context());
 
     expect(result.facts).toHaveLength(2);
-    expect(result.facts.map(({ text }) => text)).toEqual(['Highest', 'Plugin highest']);
-    expect(result.facts[1]).toMatchObject({
+    expect(result.facts.map(({ text }) => text)).toEqual(['Plugin highest', 'Highest']);
+    expect(result.facts[0]).toMatchObject({
       ref: 'todo:2',
       kind: 'todo',
       text: 'Plugin highest',
     });
+    expect(detectFindings(result.facts, now, 'en').map(({ category }) => category))
+      .toEqual(['deadline', 'deadline']);
   });
 
   it('maps missing dependencies, missing or ambiguous files, size errors, read failures and timeouts', async () => {
