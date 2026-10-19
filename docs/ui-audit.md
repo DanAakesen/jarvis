@@ -641,3 +641,26 @@ Three “before” examples restore only the old responsive CSS rules over the s
 synthetic markup; the tall desktop “after” captures expose the sections' lower
 content. No change was made to the parallel Data or Briefs rebuilds, `DailyPage`,
 or `PLAN.md`.
+
+## Chat, composer, and generated-table correction (P14-19; 19 October 2026)
+
+The QA pass found the message time tag overlapping short bubbles on touch,
+unbalanced spacing above “Interrupted,” undersized coarse-pointer targets, and
+left-aligned numeric columns in generated tables. Touch metadata now follows
+message text, interrupted-label spacing is balanced, the task link and voice
+orb meet the 44px target, and wholly numeric columns use right alignment and
+tabular figures.
+
+Compared parent and current styles in a scratch Chromium fixture with synthetic
+messages and table rows at 320×640, 390×844, 768×1024, and 1440×900, in light
+and dark with coarse-pointer emulation. The timestamp no longer intersects short
+or long message text, numeric columns compute to right-aligned tabular figures
+while text remains left-aligned, and the interrupted label has 8px above and
+below. Task links measured 44px; the voice orb measured 48px on phone widths and
+44px at tablet/desktop widths. Composer height was unchanged at 390px and 768px.
+The stylesheet ratchet and all 131 web test files (1,804 tests), web lint with
+`--max-warnings 0`, and the web build/typecheck passed.
+
+Headless Chromium reported `hover:none` even with fine-pointer emulation. CDP
+forced the message `:hover` state and keyboard focus separately; both revealed
+the metadata. A physical fine-pointer device was not available.
