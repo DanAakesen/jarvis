@@ -145,12 +145,21 @@ describe('pinned Daily v182 source schema inventory', () => {
       if (classification.kind === 'intentionally excluded') {
         expect(classification.reason?.length).toBeGreaterThan(0);
       } else {
-        expect(columnGapReason.length).toBeGreaterThan(0);
+        expect(columnGapReason).toContain('no verified Jarvis-column correspondence');
       }
 
-      for (const _column of columns) {
+      for (const column of columns) {
+        const disposition = classification.kind === 'intentionally excluded'
+          ? { kind: classification.kind, reason: classification.reason }
+          : { kind: 'gap', reason: columnGapReason, target: classification.target };
+        expect(disposition.kind).toMatch(/^(?:intentionally excluded|gap)$/u);
+        expect(disposition.reason?.length).toBeGreaterThan(0);
+        if (disposition.kind === 'gap' && classification.target) {
+          expect(classification.target).toMatch(/^daily\./u);
+        }
+        expect(column.length).toBeGreaterThan(0);
         classifiedColumns++;
-        if (classification.kind === 'intentionally excluded') excludedColumns++;
+        if (disposition.kind === 'intentionally excluded') excludedColumns++;
         else gapColumns++;
       }
     }

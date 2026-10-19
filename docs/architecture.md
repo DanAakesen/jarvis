@@ -6248,6 +6248,15 @@ historical exporter limits are 8 MiB ingress; normalized output capped at 10,000
 rows/8 MiB; retained inbox capped at 256 MiB/10,000 rows per owner. Date-range
 controls and app screens are source-contract-unverified.
 
+P14-35 adds a test-only inventory of the pinned SQLite source schema: all 31
+tables and 360 columns are classified, with 91 intentionally excluded columns
+and 269 explicit field-mapping gaps. The test fingerprints each table's ordered
+column names and fails on schema drift; it does not assert all-column parity or
+change runtime SQL. The synthetic SQL integration test also covers both a later
+partial same-key replacement and an older replay that cannot regress a newer
+value, matching the source's per-key behavior without claiming complete-day
+history. The P14-35 later-partial assertion awaits an exact-head Database CI run.
+
 P12-12 adds inactive `daily/nutrition-export` owner/device services and an explicitly callable route factory, never production composition. A root-auth optional verifier contract is scoped to the two POST claim/complete routes; absent/revoked/expired/wrong-owner capability denies access and ordinary routes retain existing JWT handling. No verifier/provisioning is installed by `index.ts`. Additive 0044 supplies request/claim/receipt/reconciliation evidence over existing temporary queue snapshots, not another meal store. Canonical nutrition writers invalidate only export status metadata; export transactions recheck all source revisions/tombstones. Owner-local app locks, conditional selection, bounded requests/outputs/deadlock retry/cancellation and no-instruction claim replay protect SQL state. Native Health effects remain outside SQL transactions; [protocol/gates](../apps/backend/src/daily/nutrition-export/README.md).
 
 P12-10's inactive `daily/feeds` services inject the existing Google client and resolve server owner per request. Gmail scans stage bounded work against connected account/history/model generations; cancellation/change/incomplete coverage cannot publish success. The Foundry semantic factory reuses configured endpoint validation, existing managed-identity callback, canonical chat settings/catalogue and usage accounting; json_object transport has strict local output/source-date validation, no tools or runner relay. Independent source item/UTF-8 preflight prevents an oversized calendar from blocking healthy Gmail. Exact selectors/keys and mapped 0041 transactions use per-owner app locks, parameterized SQL and retained-success freshness. Manual execution reports running/completed/limited and independent errors. P12-09's explicit shared feed composition above adds the internal tool without production registration. No new schema/credentials/model/resource; calendar consent and deployed-model/live parity remain open. [Boundary and limitations](../apps/backend/src/daily/feeds/README.md).

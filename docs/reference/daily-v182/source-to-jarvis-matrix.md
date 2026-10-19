@@ -4,11 +4,29 @@ Source: the pinned [Daily v182 contract](README.md), including its 31 source
 tables, 19 published OpenAPI paths and 36 reviewed tools. This matrix separates
 the source inventory from the narrower owner-approved Jarvis implementation.
 “Existing” means a Jarvis component or SQL object exists; it does not claim
-source parity, live records, or production activation.
+source parity, live records, or production activation. P14-35 evidence is dated
+19 October 2026.
 
 For implementation evidence below, `implemented` means a local capability is
 registered with synthetic tests; it does not imply source HTTP-path parity,
 real-SQL execution in this environment, deployment, or owner acceptance.
+
+## Machine-checked schema classification (19 October 2026)
+
+[`source-schema.test.ts`](../../../apps/backend/src/daily/source-schema.test.ts)
+parses the pinned SQLite DDL, asserts the exact 31 table names and 360 columns,
+and classifies every table. Fifteen tables map to a Jarvis target, five are
+reused existing tables, and eleven are intentionally excluded with a reason.
+The test fingerprints each table's ordered column names and count, so a new,
+removed or renamed column fails until the inventory is reviewed.
+
+For columns, the test assigns **intentionally excluded** to every field in an
+excluded table. The remaining 269 columns are each classified as a **gap**:
+the source-table target is inventoried, but no verified source-column to
+Jarvis-column correspondence is claimed. The existing field-level rows below
+provide evidence for selected fields, but do not erase those per-column gaps.
+This test proves inventory and classification only, not all-column parity or
+SQL Server type/behavior equivalence.
 
 ## Source tables
 
@@ -88,6 +106,24 @@ environment explicitly enables it. Post-merge deployment succeeded, but
 upload-specific production authentication/processing and phone acceptance remain
 unverified. See the [delivery status report](delivery-status.md).
 
+## P14-35 row dispositions (19 October 2026)
+
+| Delivery row | Status | Evidence and remaining decision |
+| --- | --- | --- |
+| Backend/schema classification | owner question | [`source-schema.test.ts`](../../../apps/backend/src/daily/source-schema.test.ts) classifies 31 tables/360 columns; 269 field mappings remain explicit gaps. See proposed scope question in `docs/decisions.md`. |
+| Sleep dates and DST | owner question | [`daily-source-contract.md`](daily-source-contract.md#dates-and-timezone) documents source date precedence; source-compatible SQL boundary vectors are not present. |
+| Coach profile bootstrap | owner question | [`daily-api.md`](daily-api.md#tool-runtime-and-persistence-notes) documents a source code-default profile at revision 0; Jarvis missing-profile behavior is covered by [`daily-schema.integration.test.ts`](../../../apps/backend/src/database/daily-schema.integration.test.ts), but the configured defaults are not reproduced. |
+| Preference clear | owner question | The source deletes on null; Jarvis retains a revisioned null row. See field mapping and proposed decision in `docs/decisions.md`. |
+| Meal duplicate/HTTP behavior | owner question | The source's idempotent insert and HTTP 200 response are documented; no Jarvis source-path contract test establishes equivalence. |
+| API compatibility | owner question | All 19 paths are listed above; source requests have not all been exercised against Jarvis request/response/error contracts. |
+| Sixteen capabilities | owner question | Capability mappings and registration tests exist; source contract parity is incomplete and three tools group nine operations. |
+| Historical per-key replay | owner step | The new [`health-processing.integration.test.ts`](../../../apps/backend/src/database/health-processing.integration.test.ts) asserts later partial replacement and older replay protection, matching the pinned per-key rule, but could not run locally; Database CI was skipped by the title gate. |
+| Complete-day protection | owner question | Neither contract defines a complete-day marker; any stronger Jarvis-only guard needs an explicit ruling. |
+| Five reused capabilities | owner question | Exact partial differences are listed in [reuse coverage](#reuse-coverage-five-capabilities); whether to accept or extend them remains open. |
+| CI/deployment baseline | verified | Prior PR #1008 CI and deployment runs are linked from the [delivery status](delivery-status.md); they do not verify the current head or live upload. |
+| P14-35 CI qualification | owner step | The [title gate](https://github.com/DanAakesen/jarvis/actions/runs/39270570237) requires `[WIP] P14-35: Close unresolved rows in delivery status for Daily v182`; it failed, so aggregate CI and Database were skipped. A fresh gate/full CI run is required. |
+| Credential, history and phone acceptance | owner step | The checklist is in the [delivery status](delivery-status.md#remaining-ci-and-owner-only-acceptance-steps). |
+
 ## Selected native tools
 
 These are the exact 16 owner-selected capabilities. Native tools use the
@@ -121,22 +157,22 @@ registered.
 
 | Source capability | Existing Jarvis capability and evidence | Coverage |
 | --- | --- | --- |
-| `search` | `conversation_search`, `memory_search`, `vault_search`, and `repo_search`; health/meals are separately available through selected Daily operations. Evidence: `core/conversation.test.ts`, `core/memory.test.ts`, `vault/vault.test.ts`, and Daily `source-tools.test.ts`. | Partial; no universal source-Daily search or combined health/meal search. |
-| `fetch` | `daily_query`/`daily_show` retrieve Daily records; Factory `get_task` and `get_status_summary` retrieve their own domains. Evidence: `daily/tools/show.test.ts`, `daily/routes/query.test.ts`, `factory/tools.test.ts`, and `core/status.test.ts`. | Partial; no universal cross-domain source `fetch`. |
-| `get_daily_overview` | `daily_coach_status` / `get_coach_status`, `get_status_summary` and selected Daily reads. Evidence: `source-tools.test.ts` and `core/status.test.ts`. | Partial; conversational facts are supplied, but source scoreboard/fixed renderer is not reproduced. |
-| `get_attention_items` | Factory task tools and Google calendar tools cover their own records; no Daily attention snapshot service is selected. Evidence: `factory/tools.test.ts`, `google/tools.test.ts`, and absence of an attention service in this matrix. | Deliberately partial; source snapshot/rule engine is not ported. |
-| `get_calendar_window` | Google Calendar native tools include `calendar_list_events` and `calendar_today_agenda` in `apps/backend/src/google/tools.ts`; evidence: `google/tools.test.ts`. | Reused for ordinary calendar queries; source wrapper is not duplicated. |
+| `search` | `conversation_search`, `memory_search`, `vault_search`, and `repo_search`; health/meals are separately available through selected Daily operations. Evidence: `core/conversation.test.ts`, `core/memory.test.ts`, `vault/vault.test.ts`, and Daily `source-tools.test.ts`. | Partial: no one search combines Daily health/named meals with tasks and calendar; each existing search has its own domain/index. |
+| `fetch` | `daily_query`/`daily_show` retrieve Daily records; Factory `get_task` and `get_status_summary` retrieve their own domains. Evidence: `daily/tools/show.test.ts`, `daily/routes/query.test.ts`, `factory/tools.test.ts`, and `core/status.test.ts`. | Partial: there is no cross-domain resolver that accepts a source item/reference and fetches its owning record. |
+| `get_daily_overview` | `daily_coach_status` / `get_coach_status`, `get_status_summary` and selected Daily reads. Evidence: `source-tools.test.ts` and `core/status.test.ts`. | Partial: conversational health/nutrition/profile/recovery facts are available, but no source scoreboard or fixed renderer is reproduced. |
+| `get_attention_items` | Factory task tools and Google calendar tools cover their own records; no Daily attention snapshot service is selected. Evidence: `factory/tools.test.ts`, `google/tools.test.ts`, and absence of an attention service in this matrix. | Deliberately partial: Jarvis has no source attention snapshot/status aggregation or fixed source attention rules; task/calendar data are not a substitute for those derived items. |
+| `get_calendar_window` | Google Calendar native tools include `calendar_list_events` and `calendar_today_agenda` in `apps/backend/src/google/tools.ts`; evidence: `google/tools.test.ts`. | Partial: ordinary event-list/agenda queries are reused, but the source-specific window wrapper and its response contract are not duplicated. |
 
 ## Field-level mapping and verification evidence
 
 | Source record/fields | Jarvis target and adaptation | Evidence | Status / remaining difference |
 | --- | --- | --- | --- |
-| `health_daily_metrics`: `(metric_name, metric_date)`, nullable unit/value/min/avg/max, sample count, source timestamps/fields, ingestion and update time | `daily.health_daily_metrics`: owner UUID added to composite key; source TEXT date becomes SQL `date`, REAL becomes `float`, JSON remains validated `nvarchar(max)`. Values/units/nulls and date key are retained. | `daily-schema.md`; migration `0041`; `health/persistence.ts`; `database/daily-schema.integration.test.ts`; processor/read-model tests | Engine/identity adaptation verified. Completeness is unknown; partial batches may replace a supplied metric/date key. |
-| `health_sleep_daily`: sleep date/start/end, nullable hour totals/phases, sources/count/ingestion/update | `daily.health_sleep_daily`: owner UUID key; SQL date/float, JSON source list, hour values unchanged. | `daily-schema.md`; migration `0041`; `health/persistence.ts`; health normalization/read-model tests | Field types/units mapped. Source wake-date and DST behavior still need source-compatible integration evidence. |
+| `health_daily_metrics`: `(metric_name, metric_date)`, nullable unit/value/min/avg/max, sample count, source timestamps/fields, ingestion and update time | `daily.health_daily_metrics`: owner UUID added to composite key; source TEXT date becomes SQL `date`, REAL becomes `float`, JSON remains validated `nvarchar(max)`. Values/units/nulls and date key are retained. | `daily-schema.md`; migration `0041`; `health/persistence.ts`; `database/daily-schema.integration.test.ts`; processor/read-model tests; [P14-35 replay test](../../../apps/backend/src/database/health-processing.integration.test.ts) | Selected field/adaptation evidence exists. The inventory test marks the unverified individual columns as gaps. The new later-partial replacement assertion is not yet verified because exact-head SQL CI was skipped. The pinned source replaces supplied keys and defines no complete-day marker. |
+| `health_sleep_daily`: sleep date/start/end, nullable hour totals/phases, sources/count/ingestion/update | `daily.health_sleep_daily`: owner UUID key; SQL date/float, JSON source list, hour values unchanged. | `daily-schema.md`; migration `0041`; `health/persistence.ts`; health normalization/read-model tests; [P14-35 schema classification](../../../apps/backend/src/daily/source-schema.test.ts) | Selected field types/units are mapped. Source key precedence is documented, but source-compatible SQL evidence for conflicting dates and DST boundaries is still needed. |
 | `health_workouts`, `health_workout_metrics`, `health_workout_heart_rate_minute`: stable source workout ID, date/time, duration/energy/distance/HR, per-workout metrics and minute samples | Corresponding owner-composite `daily.health_*` tables; source IDs use binary collation, date is SQL `date`, instants remain offset-bearing text, numeric values are `float`/`bigint`, details remain validated JSON. | `daily-schema.md`; migrations `0041`/`0047`; `health/persistence.ts`; `health/processor.ts`; processor and health read-model tests | Stable IDs and empty-export preservation are implemented. Historical partial same-key replacement is unresolved. |
-| `nutrition_meals`: stable ID/idempotency key, occurred instant/Copenhagen meal date, named meal/components, nullable nutrients, provenance, revision/tombstone and writeback state | `daily.nutrition_meals`: owner UUID plus canonical idempotency key, SQL `date` meal date, offset-bearing text instant, nullable nutrients and revision/tombstone. Optional Apple Health state remains stored but no outbound write is added. | `daily-schema.md`; migrations `0041`/`0050`; `nutrition/store.ts`; `nutrition/store.test.ts`; database SQL tests | Named meal history is distinct from health nutrient observations. Source-specific duplicate and HTTP response behavior remain open. |
-| `nutrition_recommendation_feedback`: owner/meal key, like/dislike, created/updated | `daily.nutrition_recommendation_feedback`: owner UUID, binary meal key, nullable preference plus revision for retry-safe Jarvis writes. | `daily-schema.md`; migrations `0041`/`0050`; `NutritionStore.feedback`; saved-food and `source-tools.test.ts` | Source `null` clears by deleting the row; Jarvis retains a revisioned null row. This preservation-oriented difference is explicit. |
-| `coach_profiles`: source goal, numeric target, style and structured preference fields with owner key/revision/timestamps | `daily.coach_profiles`: owner UUID replaces owner email; numeric/structured fields preserve units and meaning; updates lock and revision-check the current row. JSON remains validated `nvarchar(max)`. | `daily-schema.md`; migration `0041`; `coach-store.ts`; `daily-schema.integration.test.ts`; `source-tools.test.ts` | SQL read/update works for existing profiles. No default profile row is invented; missing-profile bootstrap/source configuration defaults remain unresolved. |
+| `nutrition_meals`: stable ID/idempotency key, occurred instant/Copenhagen meal date, named meal/components, nullable nutrients, provenance, revision/tombstone and writeback state | `daily.nutrition_meals`: owner UUID plus canonical idempotency key, SQL `date` meal date, offset-bearing text instant, nullable nutrients and revision/tombstone. Optional Apple Health state remains stored but no outbound write is added. | `daily-schema.md`; migrations `0041`/`0050`; `nutrition/store.ts`; `nutrition/store.test.ts`; database SQL tests | Named meal history is distinct from health nutrient observations. Pinned source duplicate semantics are `INSERT OR IGNORE` by owner/key and return the retained meal with `duplicate:true`; Jarvis has no source-path HTTP response test. Owner question is in `docs/decisions.md`. |
+| `nutrition_recommendation_feedback`: owner/meal key, like/dislike, created/updated | `daily.nutrition_recommendation_feedback`: owner UUID, binary meal key, nullable preference plus revision for retry-safe Jarvis writes. | `daily-schema.md`; migrations `0041`/`0050`; `NutritionStore.feedback`; saved-food and `source-tools.test.ts` | Source `null` clears by deleting the row; Jarvis retains a revisioned null row. This preservation-oriented difference remains an owner question. |
+| `coach_profiles`: source goal, numeric target, style and structured preference fields with owner key/revision/timestamps | `daily.coach_profiles`: owner UUID replaces owner email; numeric/structured fields preserve units and meaning; updates lock and revision-check the current row. JSON remains validated `nvarchar(max)`. | `daily-schema.md`; migration `0041`; `coach-store.ts`; `daily-schema.integration.test.ts`; `source-tools.test.ts` | SQL read/update works for existing profiles. Jarvis returns not-configured for a missing row; the pinned API reference says source returns a code-default profile at revision 0, but does not list the configured values. |
 | `recovery_days`: owner/date/context/create/update | `daily.recovery_days`: owner UUID plus SQL `date`, context and timestamps; clear deletes markers only. | `daily-schema.md`; migration `0041`; `coach-store.ts`; `daily-schema.integration.test.ts`; `source-tools.test.ts` | Confirmed mark/clear preserves health records. Effects on every other analytical denominator are not implemented by these selected tools. |
 
 This evidence covers the named selected records only. It is not a completed
@@ -167,7 +203,9 @@ preserved and no source compatibility alias or parallel runtime is created.
 
 Excluded means the owner did not select that source feature. Existing means the
 component is present; see the evidence table for fields and semantics actually
-checked. The PR's SQL integration CI passed. Source-path HTTP parity, the all-31-table
-field matrix, upload-specific deployed HTTP/worker proof, current credential
-status/handoff and owner phone acceptance remain unresolved. See the
+checked. The PR #1008 SQL integration CI passed. Source-path HTTP parity,
+field-to-field mapping across all 31 tables/360 columns, upload-specific deployed
+HTTP/worker proof, current credential status/handoff and owner phone acceptance
+remain open. The P14-35 schema test inventories the fields but does not prove
+their parity. See the
 [delivery status report](delivery-status.md).
