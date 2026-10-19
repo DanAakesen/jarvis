@@ -510,6 +510,7 @@ interface KnowledgeGraphNode {
   readonly directory: string;
   readonly updatedAt: string;
   readonly degree: number;
+  readonly openTaskCount?: number;
 }
 
 interface KnowledgeGraphEdge {
@@ -523,6 +524,8 @@ interface KnowledgeGraph {
   readonly nodes: readonly KnowledgeGraphNode[];
   readonly edges: readonly KnowledgeGraphEdge[];
   readonly updatedAt: string;
+  readonly openTaskNoteCount?: number;
+  readonly taskCountsPartial?: boolean;
 }
 
 function meanVectors(rows: VaultGraphData['embeddings']): Map<string, number[]> {
@@ -1051,6 +1054,32 @@ export function createVaultModule(options: {
     }
   }
 
+  async function knowledgeGraphWithTaskCounts(signal: AbortSignal): Promise<KnowledgeGraph> {
+    const graph = await knowledgeGraph(signal);
+    try {
+      const todos = await readVaultTasks(options.client, signal);
+      const counts = new Map<string, number>();
+      for (const todo of todos) {
+        if (!todo.done) counts.set(todo.path, (counts.get(todo.path) ?? 0) + 1);
+      }
+      const graphPaths = new Set(graph.nodes.map(({ path }) => path));
+      const nodes = graph.nodes.map((node) => ({
+        ...node,
+        openTaskCount: counts.get(node.path) ?? 0,
+      }));
+      return {
+        ...graph,
+        nodes,
+        openTaskNoteCount: nodes.filter(({ openTaskCount }) => openTaskCount > 0).length,
+        taskCountsPartial: graph.nodes.length >= maxGraphNodes ||
+          [...counts.keys()].some((path) => !graphPaths.has(path)),
+      };
+    } catch (error) {
+      if (signal.aborted) throw error;
+      return { ...graph, taskCountsPartial: true };
+    }
+  }
+
   async function searchVault(query: string, limit: number, signal: AbortSignal): Promise<VaultSearchHit[]> {
     if (synchronization) throw new ToolFailure('The vault is synchronizing. Please try again shortly.');
     if (indexStatus !== 'ready') {
@@ -1504,6 +1533,7 @@ export function createVaultModule(options: {
                 directory: { type: 'string', maxLength: maxPathLength },
                 updatedAt: { type: 'string', format: 'date-time' },
                 degree: { type: 'integer', minimum: 0, maximum: maxGraphEdges * 2 },
+                openTaskCount: { type: 'integer', minimum: 0 },
               },
               required: ['id', 'path', 'title', 'folder', 'directory', 'updatedAt', 'degree'],
               additionalProperties: false,
@@ -1525,6 +1555,8 @@ export function createVaultModule(options: {
             },
           },
           updatedAt: { type: 'string', format: 'date-time' },
+          openTaskNoteCount: { type: 'integer', minimum: 0, maximum: maxGraphNodes },
+          taskCountsPartial: { type: 'boolean' },
         },
         required: ['nodes', 'edges', 'updatedAt'],
         additionalProperties: false,
@@ -1946,7 +1978,7 @@ export function createVaultModule(options: {
         if (!ownerOnly(request, reply)) return;
         if (indexStatus !== 'ready') return reply.code(503).send({ error: 'Vault index is not ready' });
         try {
-          return await knowledgeGraph(AbortSignal.timeout(30_000));
+          return await knowledgeGraphWithTaskCounts(AbortSignal.timeout(30_000));
         } catch (error) {
           if (error instanceof ToolFailure) return reply.code(503).send({ error: error.message });
           throw error;
