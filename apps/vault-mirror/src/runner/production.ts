@@ -1,6 +1,6 @@
-import { mkdtemp, mkdir, rm } from 'node:fs/promises';
+import { mkdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { resolve } from 'node:path';
 import { ManagedIdentityCredential } from '@azure/identity';
 import { SecretClient } from '@azure/keyvault-secrets';
 import { validatePolicy } from '../engine/policy.js';
@@ -10,6 +10,27 @@ import { runMirror } from './run.js';
 import { AzureMirrorStorage } from './storage.js';
 import type { MirrorConfig } from './config.js';
 import type { MirrorSecrets, RunDependencies } from './types.js';
+
+const workspaceName = `jarvis-vault-mirror-${process.getuid?.() ?? 'default'}`;
+
+export async function createMirrorWorkspace(
+  root = resolve(tmpdir(), workspaceName),
+): Promise<{ readonly workingCopy: string; readonly configHome: string; readonly cleanup: () => Promise<void> }> {
+  root = resolve(root);
+  await rm(root, { recursive: true, force: true });
+  await mkdir(root, { recursive: true, mode: 0o700 });
+  const workingCopy = resolve(root, 'working-copy');
+  const configHome = resolve(root, 'state');
+  await Promise.all([
+    mkdir(workingCopy, { recursive: true, mode: 0o700 }),
+    mkdir(configHome, { recursive: true, mode: 0o700 }),
+  ]);
+  return {
+    workingCopy,
+    configHome,
+    cleanup: () => rm(root, { recursive: true, force: true }),
+  };
+}
 
 function errorStatus(error: unknown): number | undefined {
   if (!error || typeof error !== 'object') return undefined;
@@ -66,20 +87,7 @@ export function createProductionDependencies(config: MirrorConfig): RunDependenc
       policy,
     }),
     storage: new AzureMirrorStorage(config.storageUrl, credential),
-    async createWorkspace() {
-      const root = await mkdtemp(join(tmpdir(), 'jarvis-vault-mirror-'));
-      const workingCopy = resolve(root, 'working-copy');
-      const configHome = resolve(root, 'state');
-      await Promise.all([
-        mkdir(workingCopy, { recursive: true, mode: 0o700 }),
-        mkdir(configHome, { recursive: true, mode: 0o700 }),
-      ]);
-      return {
-        workingCopy,
-        configHome,
-        cleanup: () => rm(root, { recursive: true, force: true }),
-      };
-    },
+    createWorkspace: () => createMirrorWorkspace(),
     createObsidian(options) {
       return createObsidianClient({
         configHome: options.configHome,

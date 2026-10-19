@@ -158,14 +158,39 @@ async function applyPending(
 ): Promise<void> {
   const entries = Object.entries(state.pendingWriteBack);
   if (entries.length === 0) return;
+  const before = await snapshotWorkspace(workingCopy);
+  const applied: [string, PendingWrite][] = [];
   for (const [path, pending] of entries) {
     await assertLease();
-    if (pending.kind === 'write') await writeWorkspaceFile(workingCopy, path, pending.file.text);
-    else await deleteWorkspaceFile(workingCopy, path);
+    const current = before.files.get(path)?.record;
+    const base = state.base[path];
+    const matches = (record: FileRecord | undefined, expected: StoredFile | undefined): boolean =>
+      record === undefined ? expected === undefined :
+        expected !== undefined && record.hash === expected.hash && record.mode === expected.mode;
+    if (pending.kind === 'write') {
+      if (matches(current, pending.file)) {
+        state.base[path] = pending.file;
+        delete state.pendingWriteBack[path];
+      } else if (matches(current, base)) {
+        await writeWorkspaceFile(workingCopy, path, pending.file.text);
+        applied.push([path, pending]);
+      } else {
+        delete state.pendingWriteBack[path];
+      }
+    } else if (current === undefined) {
+      delete state.base[path];
+      delete state.pendingWriteBack[path];
+    } else if (matches(current, base)) {
+      await deleteWorkspaceFile(workingCopy, path);
+      applied.push([path, pending]);
+    } else {
+      delete state.pendingWriteBack[path];
+    }
   }
+  if (applied.length === 0) return;
   await bidirectionalUpload(obsidian, assertLease);
   const after = await snapshotWorkspace(workingCopy);
-  for (const [path, pending] of entries) {
+  for (const [path, pending] of applied) {
     if (pending.kind === 'delete') {
       if (after.files.has(path)) throw new RunFailure('upload-failed');
       delete state.base[path];
@@ -202,6 +227,7 @@ export async function runMirror(options: RunOptions): Promise<RunResult> {
   let reason: MirrorReason | undefined;
   let lastSuccessAt: string | null = null;
   let consecutiveFailures = 0;
+  let failureCounted = false;
   let conflictPaths: string[] = [];
   let state: MirrorState | undefined;
   let stateLoaded = false;
@@ -271,13 +297,19 @@ export async function runMirror(options: RunOptions): Promise<RunResult> {
   };
 
   try {
+    try {
+      const previousStatus = await dependencies.storage.readStatus();
+      if (previousStatus) {
+        lastSuccessAt = previousStatus.lastSuccessAt;
+        consecutiveFailures = previousStatus.consecutiveFailures;
+      }
+    } catch { /* Status history is best-effort. */ }
     const secrets = await dependencies.readSecrets(signal);
     const github = dependencies.createGitHub(secrets.githubPrivateKey, secrets.policy);
     await github.verifyRepository(signal);
     const acquired = await dependencies.storage.acquireLease(signal);
     if (acquired.busy) {
       outcome = 'skipped-busy';
-      lastSuccessAt = null;
       return { status: status(), exitCode: 0 };
     }
     lease = acquired.lease;
@@ -303,8 +335,12 @@ export async function runMirror(options: RunOptions): Promise<RunResult> {
       }
     }
     stateLoaded = true;
-    lastSuccessAt = state.lastSuccessAt;
-    consecutiveFailures = state.consecutiveFailures;
+    if (state.lastSuccessAt && (!lastSuccessAt || Date.parse(state.lastSuccessAt) > Date.parse(lastSuccessAt))) {
+      lastSuccessAt = state.lastSuccessAt;
+    }
+    consecutiveFailures = Math.max(consecutiveFailures, state.consecutiveFailures);
+    state.lastSuccessAt = lastSuccessAt;
+    state.consecutiveFailures = consecutiveFailures;
     workspace ??= await dependencies.createWorkspace(signal);
     const obsidian = dependencies.createObsidian({
       token: secrets.obsidianToken,
@@ -447,9 +483,11 @@ export async function runMirror(options: RunOptions): Promise<RunResult> {
       lastSuccessAt = parseNow(now());
       state.lastSuccessAt = lastSuccessAt;
       state.consecutiveFailures = 0;
+      consecutiveFailures = 0;
     } else {
-      state.consecutiveFailures++;
+      state.consecutiveFailures = Math.max(state.consecutiveFailures, consecutiveFailures) + 1;
       consecutiveFailures = state.consecutiveFailures;
+      failureCounted = true;
     }
     counts.pendingWriteBack = Object.keys(state.pendingWriteBack).length + approvedPending;
     await writeState();
@@ -468,13 +506,19 @@ export async function runMirror(options: RunOptions): Promise<RunResult> {
     }
     counts.pendingWriteBack = (state ? Object.keys(state.pendingWriteBack).length : 0) + approvedPending;
     if (stateLoaded && state && !stateCorrupt) {
-      state.consecutiveFailures++;
-      consecutiveFailures = state.consecutiveFailures;
-      try { await writeState(); }
-      catch {
-        reason = 'upload-failed';
-        outcome = 'failed';
+      if (!failureCounted) {
+        state.consecutiveFailures = Math.max(state.consecutiveFailures, consecutiveFailures) + 1;
+        consecutiveFailures = state.consecutiveFailures;
       }
+      if (!signal.aborted && !leaseLost) {
+        try { await writeState(); }
+        catch {
+          reason = 'upload-failed';
+          outcome = 'failed';
+        }
+      }
+    } else if (!failureCounted && reason !== undefined) {
+      consecutiveFailures++;
     }
   } finally {
     clearTimeout(deadlineTimer);

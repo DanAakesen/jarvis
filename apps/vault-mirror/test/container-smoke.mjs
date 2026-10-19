@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { runMirror } from '/app/apps/vault-mirror/dist/runner/run.js';
@@ -35,6 +35,7 @@ const storage = {
       },
     };
   },
+  async readStatus() { return status ?? null; },
   async writeStatus(value) { status = value; },
 };
 
@@ -46,9 +47,8 @@ await Promise.all([
   mkdir(configHome, { recursive: true }),
 ]);
 try {
-  const result = await runMirror({
-    config: { githubAppId: '123456', writeBack: 'dry-run', maxChanged: 25, maxDeletes: 3 },
-    dependencies: {
+  let setupCalls = 0;
+  const dependencies = {
       async readSecrets() {
         return {
           obsidianToken: 'synthetic-image-token',
@@ -67,6 +67,14 @@ try {
       },
       storage,
       async createWorkspace() {
+        await Promise.all([
+          rm(workingCopy, { recursive: true, force: true }),
+          rm(configHome, { recursive: true, force: true }),
+        ]);
+        await Promise.all([
+          mkdir(workingCopy, { recursive: true, mode: 0o700 }),
+          mkdir(configHome, { recursive: true, mode: 0o700 }),
+        ]);
         return {
           workingCopy,
           configHome,
@@ -74,16 +82,36 @@ try {
         };
       },
       createObsidian() {
+        const configPath = join(configHome, 'fake-ob-config.json');
+        const assertPath = async () => {
+          const config = JSON.parse(await readFile(configPath, 'utf8'));
+          assert.equal(config.vaultPath, workingCopy);
+        };
         return {
-          async setup() {},
-          async setMode(mode) { assert.equal(mode, 'pull-only'); },
-          async sync(mode) { assert.equal(mode, 'pull-only'); },
+          async setup() {
+            await writeFile(configPath, JSON.stringify({ vaultPath: workingCopy }));
+            setupCalls++;
+          },
+          async setMode(mode) {
+            await assertPath();
+            assert.equal(mode, 'pull-only');
+          },
+          async sync(mode) {
+            await assertPath();
+            assert.equal(mode, 'pull-only');
+          },
         };
       },
-    },
-  });
-  assert.equal(result.exitCode, 0);
-  assert.equal(result.status.outcome, 'ok-noop');
+  };
+  for (let run = 0; run < 2; run++) {
+    const result = await runMirror({
+      config: { githubAppId: '123456', writeBack: 'dry-run', maxChanged: 25, maxDeletes: 3 },
+      dependencies,
+    });
+    assert.equal(result.exitCode, 0);
+    assert.equal(result.status.outcome, 'ok-noop');
+  }
+  assert.equal(setupCalls, 1);
   assert.equal(status?.outcome, 'ok-noop');
   assert.ok(archive instanceof Uint8Array);
 } finally {

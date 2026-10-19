@@ -1,5 +1,6 @@
 import { BlobServiceClient, type ContainerClient } from '@azure/storage-blob';
 import type { TokenCredential } from '@azure/core-auth';
+import { vaultMirrorStatusSchema, type VaultMirrorStatus } from '@jarvis/contracts';
 import { checksum } from './state.js';
 import type { LeaseResult, MirrorStorage, StateLease } from './types.js';
 import { MAX_ARCHIVE_BYTES } from './types.js';
@@ -7,6 +8,7 @@ import { MAX_ARCHIVE_BYTES } from './types.js';
 const stateContainerName = 'vault-mirror-state';
 const statusContainerName = 'vault-mirror-status';
 const stateBlobName = 'state.zip';
+const maxStatusBytes = 32 * 1024;
 
 function statusCode(error: unknown): number | undefined {
   if (!error || typeof error !== 'object') return undefined;
@@ -29,6 +31,20 @@ export class AzureMirrorStorage implements MirrorStorage {
     });
     this.state = service.getContainerClient(stateContainerName);
     this.status = service.getContainerClient(statusContainerName);
+  }
+
+  async readStatus(): Promise<VaultMirrorStatus | null> {
+    try {
+      const blob = this.status.getBlockBlobClient('status.json');
+      const bytes = await blob.downloadToBuffer(0, maxStatusBytes + 1, {
+        abortSignal: AbortSignal.timeout(5_000),
+      });
+      if (bytes.byteLength > maxStatusBytes) return null;
+      const parsed = vaultMirrorStatusSchema.safeParse(JSON.parse(bytes.toString('utf8')) as unknown);
+      return parsed.success ? parsed.data : null;
+    } catch {
+      return null;
+    }
   }
 
   async acquireLease(signal: AbortSignal): Promise<LeaseResult> {

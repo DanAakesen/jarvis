@@ -53,6 +53,7 @@ export interface StateLease {
 export type LeaseResult = { readonly busy: true } | { readonly busy: false; readonly lease: StateLease };
 
 export interface MirrorStorage {
+  readStatus(): Promise<VaultMirrorStatus | null>;
   acquireLease(signal: AbortSignal): Promise<LeaseResult>;
   writeStatus(status: VaultMirrorStatus, signal: AbortSignal): Promise<void>;
 }

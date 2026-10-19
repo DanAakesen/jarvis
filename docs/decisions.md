@@ -23,15 +23,35 @@ GitHub App installation identity is used for the commit.
 
 Keep runtime I/O outside `src/engine`. The runner persists the working copy,
 Headless CLI configuration, common-base text, conflict first-seen times and
-pending write-back paths together. It checks the lease before each external or
-local write. GitHub changes happen atomically before local write-back. Local
-write-back uses a same-directory temporary file and rename, then compares the
-entire working-copy diff with the planned O-side paths before upload; a mismatch
-restores the prior copy and reports `guard-tripped`. Failed/unconfirmed O writes
-and deletes remain pending and do not advance the base. In `on`, pending changes
-are re-applied and uploaded before planning. In `dry-run`, pending paths are
-excluded from planning and remain pending; no bidirectional mode is requested.
-Fresh state and guard trips still suppress O writes.
+pending write-back paths together. The working copy and config home use the same
+fixed per-user absolute paths below the OS temp directory on every invocation.
+After taking the state lease, the runner removes and recreates those directories
+with mode 0700, then restores their archived contents; this preserves `ob`'s
+configured `vaultPath` while avoiding reliance on repeating `sync-setup`. The
+paths are private to the single-purpose non-root job/container. It checks the
+lease before each external or local write. GitHub changes happen atomically
+before local write-back. Local write-back uses a same-directory temporary file
+and rename, then compares the entire working-copy diff with the planned O-side
+paths before upload; a mismatch restores the prior copy and reports
+`guard-tripped`.
+
+At run start, the runner best-effort reads `status.json` with a 5-second timeout,
+a 32 KiB cap and strict schema validation. Invalid, absent or unavailable status
+is ignored. Until the state archive is loaded, its previous success timestamp
+and failure count seed early outcomes; once loaded, the later success timestamp
+and larger failure count from status and state are retained. A busy run carries
+both values unchanged. Early failures increment the carried failure count, and
+successful `ok`/`ok-noop` runs reset it; both success outcomes advance
+`lastSuccessAt`.
+
+Failed/unconfirmed O writes and deletes remain pending and do not advance the
+base. Before retrying in `on`, compare each pending target with both its prior
+base and intended result. Apply only when it still matches the base; clear an
+already-landed write/delete without another upload; if it differs from both,
+drop the stale retry and let normal planning reconcile the newer edit. Upload
+only if at least one pending mutation was applied. In `dry-run`, pending paths
+are excluded from planning and remain pending; no bidirectional mode is
+requested. Fresh state and guard trips still suppress O writes.
 
 The wrapper pins official `obsidian-headless` **0.0.14** in the isolated
 `apps/vault-mirror/tools` lockfile, invokes `ob` with an argv array, supplies
@@ -42,7 +62,10 @@ to run ID, outcome, fixed reason, duration and counts; paths appear only in
 private conflict status. `dry-run` is the default and only an explicit `on` value
 enables write-back. The image uses a pinned Node 22 base and runs as non-root;
 CI builds but does not publish it, then smoke-tests `ob --version` and a fake
-service run.
+service run. The optional vault password is passed in the `ob sync-setup`
+argument array because this CLI provides no password environment-variable or
+stdin input; the job's single-purpose non-root container limits other local
+process exposure.
 
 All assumptions below are **not yet verified against the live service**:
 

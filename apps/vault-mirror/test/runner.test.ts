@@ -1,7 +1,7 @@
 import { chmod, mkdtemp, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { generateKeyPairSync } from 'node:crypto';
+import { generateKeyPairSync, randomUUID } from 'node:crypto';
 import { zipSync, strToU8 } from 'fflate';
 import { describe, expect, it } from 'vitest';
 import { contentHash, contentSize, normalizeContent } from '../src/engine/normalize.js';
@@ -10,6 +10,7 @@ import type { ValidatedPolicy } from '../src/engine/policy.js';
 import { GitHubMirrorError, createGitHubMirrorClient } from '../src/runner/github.js';
 import { mergeThreeWay } from '../src/runner/merge.js';
 import { ObCommandError, runOb } from '../src/runner/obsidian.js';
+import { createMirrorWorkspace } from '../src/runner/production.js';
 import { runMirror } from '../src/runner/run.js';
 import { checksum, decodeState, emptyState, encodeState } from '../src/runner/state.js';
 import type { MirrorStorage, MirrorSecrets, RemoteFile, RunDependencies, StateLease } from '../src/runner/types.js';
@@ -23,6 +24,7 @@ const policy: ValidatedPolicy = validated.policy;
 const fakeSecrets: MirrorSecrets = {
   obsidianToken: 'synthetic-obsidian-token',
   vaultName: 'Synthetic Vault',
+  vaultPassword: 'synthetic-vault-password',
   policy,
   githubPrivateKey: 'synthetic-github-key',
 };
@@ -37,6 +39,10 @@ class FakeStorage implements MirrorStorage {
   loseOnRenew = -1;
   failStateUpload = false;
   corruptChecksum = false;
+
+  async readStatus(): Promise<import('@jarvis/contracts').VaultMirrorStatus | null> {
+    return this.status ?? null;
+  }
 
   async acquireLease(): Promise<{ busy: true } | { busy: false; lease: StateLease }> {
     if (this.busy || this.held) return { busy: true };
@@ -74,9 +80,12 @@ class FakeGitHub {
   snapshots = 0;
   commits = 0;
   failNextRefUpdate = false;
+  failVerify = false;
   private head = 1;
 
-  async verifyRepository(): Promise<void> {}
+  async verifyRepository(): Promise<void> {
+    if (this.failVerify) throw new GitHubMirrorError('unexpected');
+  }
 
   async snapshot(): Promise<{ head: string; tree: string; files: Map<string, RemoteFile> }> {
     this.snapshots++;
@@ -131,6 +140,8 @@ class FakeObsidian {
   setupCalls = 0;
   uploadCalls = 0;
   failNextUpload = false;
+  failNextPull = false;
+  afterPull?: () => void;
   readonly remote = new Map<string, string>();
   private knownRemotePaths = new Set<string>();
 
@@ -139,14 +150,25 @@ class FakeObsidian {
     this.knownRemotePaths = new Set(this.remote.keys());
   }
 
-  client(workingCopy: string) {
+  client(workingCopy: string, configHome: string) {
+    const configPath = join(configHome, 'fake-ob-config.json');
+    const assertConfiguredPath = async (): Promise<void> => {
+      try {
+        const configuration = JSON.parse(await readFile(configPath, 'utf8')) as { vaultPath?: string };
+        if (configuration.vaultPath !== workingCopy) throw new Error('vault-path-mismatch');
+      } catch {
+        throw new ObCommandError('pull-failed');
+      }
+    };
     return {
       setup: async (_vault: string, beforeWrite: () => Promise<void>) => {
         await beforeWrite();
+        await writeFile(configPath, JSON.stringify({ vaultPath: workingCopy }));
         this.setupCalls++;
       },
       setMode: async (mode: 'pull-only' | 'bidirectional', beforeWrite: () => Promise<void>) => {
         await beforeWrite();
+        await assertConfiguredPath();
         this.modes.push(mode);
       },
       sync: async (
@@ -155,8 +177,13 @@ class FakeObsidian {
         beforeWrite: () => Promise<void>,
       ) => {
         await beforeWrite();
+        await assertConfiguredPath();
         this.modes.push(mode);
         if (operation === 'pull') {
+          if (this.failNextPull) {
+            this.failNextPull = false;
+            throw new ObCommandError('pull-failed');
+          }
           for (const oldPath of this.knownRemotePaths) {
             if (!this.remote.has(oldPath)) {
               const target = resolve(workingCopy, ...oldPath.split('/'));
@@ -165,6 +192,7 @@ class FakeObsidian {
           }
           for (const [path, text] of this.remote) await writeWorkspaceFile(workingCopy, path, text);
           this.knownRemotePaths = new Set(this.remote.keys());
+          this.afterPull?.();
           return;
         }
         this.uploadCalls++;
@@ -189,30 +217,50 @@ function dependencies(
   storage = new FakeStorage(),
   extra: Partial<RunDependencies> = {},
 ): RunDependencies {
+  const workspaceRoot = resolve(tmpdir(), `mirror-run-test-${randomUUID()}`);
   return {
     readSecrets: async () => fakeSecrets,
     createGitHub: () => github,
     storage,
     async createWorkspace() {
-      const root = await mkdtemp(join(tmpdir(), 'mirror-run-test-'));
-      const workingCopy = resolve(root, 'working-copy');
-      const configHome = resolve(root, 'config-home');
-      await Promise.all([
-        mkdir(workingCopy, { recursive: true, mode: 0o700 }),
-        mkdir(configHome, { recursive: true, mode: 0o700 }),
-      ]);
-      return { workingCopy, configHome, cleanup: () => rm(root, { recursive: true, force: true }) };
+      return createMirrorWorkspace(workspaceRoot);
     },
-    createObsidian: options => obsidian.client(options.workingCopy),
+    createObsidian: options => obsidian.client(options.workingCopy, options.configHome),
     ...extra,
   };
 }
 
-function options(deps: RunDependencies, writeBack: 'on' | 'dry-run' = 'on') {
+function options(deps: RunDependencies, writeBack: 'on' | 'dry-run' = 'on', signal?: AbortSignal) {
   return {
     config: { githubAppId: '123456', writeBack, maxChanged: 25, maxDeletes: 3 },
     dependencies: deps,
+    ...(signal ? { signal } : {}),
   } as const;
+}
+
+function assertPrivateOutput(
+  status: import('@jarvis/contracts').VaultMirrorStatus,
+  logs: readonly Readonly<Record<string, string | number>>[],
+  notePaths: readonly string[],
+  noteTexts: readonly string[],
+): void {
+  const statusText = JSON.stringify({ ...status, conflictPaths: [] });
+  const logText = JSON.stringify(logs);
+  for (const secret of [
+    fakeSecrets.obsidianToken,
+    fakeSecrets.vaultPassword!,
+    fakeSecrets.vaultName,
+    fakeSecrets.githubPrivateKey,
+    ...noteTexts,
+  ]) {
+    expect(statusText).not.toContain(secret);
+    expect(logText).not.toContain(secret);
+  }
+  for (const path of notePaths) {
+    expect(statusText).not.toContain(path);
+    expect(logText).not.toContain(path);
+  }
+  expect(logText).not.toContain('Notes/');
 }
 
 async function initialized(
@@ -245,7 +293,11 @@ describe('vault mirror runner', () => {
     obsidian.remote.set('Notes/from-obsidian.md', 'new O');
     github.files.set('Notes/from-github.md', 'new G');
 
-    const result = await runMirror(options(deps));
+    const logs: Readonly<Record<string, string | number>>[] = [];
+    const result = await runMirror(options({
+      ...deps,
+      log: entry => { logs.push(entry); },
+    }));
 
     expect(result.exitCode).toBe(0);
     expect(github.files.get('Notes/from-obsidian.md')).toBe('new O');
@@ -255,6 +307,24 @@ describe('vault mirror runner', () => {
     expect(result.status.pushed).toBe(1);
     expect(result.status.writtenBack).toBe(1);
     expect(result.status.pendingWriteBack).toBe(0);
+    assertPrivateOutput(result.status, logs, [
+      'Notes/from-obsidian.md', 'Notes/from-github.md',
+    ], ['old O', 'old G', 'new O', 'new G']);
+  });
+
+  it('restores the persisted Obsidian path and setup across consecutive runs', async () => {
+    const github = new FakeGitHub();
+    const obsidian = new FakeObsidian();
+    const storage = new FakeStorage();
+    const deps = dependencies(github, obsidian, storage);
+
+    const first = await runMirror(options(deps));
+    const second = await runMirror(options(deps));
+
+    expect(first.exitCode).toBe(0);
+    expect(second.exitCode).toBe(0);
+    expect(second.status.outcome).toBe('ok-noop');
+    expect(obsidian.setupCalls).toBe(1);
   });
 
   it('keeps dry-run pull-only and reports proposed write-back as pending', async () => {
@@ -313,6 +383,70 @@ describe('vault mirror runner', () => {
     expect(obsidian.remote.get('Notes/retry.md')).toBe('new');
     expect(next.status.pendingWriteBack).toBe(0);
     expect(next.status.writtenBack).toBe(0);
+  });
+
+  it('preserves an Obsidian edit made after a pending write failed', async () => {
+    const github = new FakeGitHub();
+    const obsidian = new FakeObsidian();
+    const storage = new FakeStorage();
+    const deps = await initialized(github, obsidian, storage, { 'Notes/retry-edit.md': 'old' });
+    github.files.set('Notes/retry-edit.md', 'GitHub edit');
+    obsidian.failNextUpload = true;
+    await runMirror(options(deps));
+    obsidian.remote.set('Notes/retry-edit.md', 'owner edit');
+    const uploadsBeforeRetry = obsidian.uploadCalls;
+
+    const result = await runMirror(options(deps));
+
+    expect(result.status.reason).toBe('conflict');
+    expect(obsidian.remote.get('Notes/retry-edit.md')).toBe('owner edit');
+    expect(github.files.get('Notes/retry-edit.md')).toBe('GitHub edit');
+    expect(obsidian.uploadCalls).toBe(uploadsBeforeRetry);
+    expect(result.status.pendingWriteBack).toBe(0);
+  });
+
+  it('does not retry a pending delete over a newer Obsidian edit', async () => {
+    const github = new FakeGitHub();
+    const obsidian = new FakeObsidian();
+    const storage = new FakeStorage();
+    const baseline = Object.fromEntries(Array.from({ length: 20 }, (_, index) =>
+      [`Notes/baseline-${index}.md`, `base-${index}`]));
+    const deps = await initialized(github, obsidian, storage, {
+      ...baseline,
+      'Notes/retry-delete.md': 'base',
+    });
+    github.files.delete('Notes/retry-delete.md');
+    obsidian.failNextUpload = true;
+    await runMirror(options(deps));
+    obsidian.remote.set('Notes/retry-delete.md', 'owner edit');
+    const uploadsBeforeRetry = obsidian.uploadCalls;
+
+    const result = await runMirror(options(deps));
+
+    expect(result.exitCode).toBe(0);
+    expect(obsidian.remote.get('Notes/retry-delete.md')).toBe('owner edit');
+    expect(github.files.get('Notes/retry-delete.md')).toBe('owner edit');
+    expect(obsidian.uploadCalls).toBe(uploadsBeforeRetry);
+    expect(result.status.pendingWriteBack).toBe(0);
+  });
+
+  it('clears an already-landed pending write without uploading again', async () => {
+    const github = new FakeGitHub();
+    const obsidian = new FakeObsidian();
+    const storage = new FakeStorage();
+    const deps = await initialized(github, obsidian, storage, { 'Notes/already-landed.md': 'old' });
+    github.files.set('Notes/already-landed.md', 'new');
+    obsidian.failNextUpload = true;
+    await runMirror(options(deps));
+    obsidian.remote.set('Notes/already-landed.md', 'new');
+    const uploadsBeforeRetry = obsidian.uploadCalls;
+
+    const result = await runMirror(options(deps));
+
+    expect(result.exitCode).toBe(0);
+    expect(result.status.pendingWriteBack).toBe(0);
+    expect(obsidian.remote.get('Notes/already-landed.md')).toBe('new');
+    expect(obsidian.uploadCalls).toBe(uploadsBeforeRetry);
   });
 
   it('replans safely if a crash follows the GitHub commit but precedes state persistence', async () => {
@@ -384,26 +518,37 @@ describe('vault mirror runner', () => {
     expect(github.files.get('Notes/merge.md')).toBe('A\nb\nC\n');
     expect(obsidian.remote.get('Notes/merge.md')).toBe('A\nb\nC\n');
     expect(obsidian.remote.get('Notes/conflict.md')).toBe('one\nours\nthree\n');
-    expect(JSON.stringify(logs)).not.toContain('Notes/');
-    expect(JSON.stringify(logs)).not.toContain('synthetic-obsidian-token');
-    expect(JSON.stringify(logs)).not.toContain('one\nours');
+    assertPrivateOutput(result.status, logs, [
+      'Notes/merge.md', 'Notes/conflict.md',
+    ], ['a\nb\nc\n', 'A\nb\nC\n', 'one\nours\nthree\n', 'one\ntheirs\nthree\n']);
   });
 
   it('restores a write-back if the working-copy difference exceeds the plan', async () => {
     const github = new FakeGitHub();
     const obsidian = new FakeObsidian();
     const storage = new FakeStorage();
-    await initialized(github, obsidian, storage, { 'Notes/guard.md': 'old' });
+    const baseDependencies = await initialized(github, obsidian, storage, { 'Notes/guard.md': 'old' });
     github.files.set('Notes/guard.md', 'new');
-    const guardedDependencies = dependencies(github, obsidian, storage, {
+    let guardWorkingCopy = '';
+    const guardedDependencies = {
+      ...baseDependencies,
+      async createWorkspace(signal: AbortSignal) {
+        const workspace = await baseDependencies.createWorkspace(signal);
+        guardWorkingCopy = workspace.workingCopy;
+        return { ...workspace, cleanup: async () => {} };
+      },
       afterWriteBack: async workingCopy => writeFile(join(workingCopy, 'unexpected.md'), 'unexpected'),
-    });
+    } satisfies RunDependencies;
 
     const result = await runMirror(options(guardedDependencies));
 
     expect(result.exitCode).toBe(1);
     expect(result.status.reason).toBe('guard-tripped');
     expect(obsidian.remote.get('Notes/guard.md')).toBe('old');
+    const restored = await snapshotWorkspace(guardWorkingCopy);
+    expect(restored.files.get('Notes/guard.md')?.text).toBe('old');
+    expect(restored.files.has('unexpected.md')).toBe(false);
+    await rm(resolve(guardWorkingCopy, '..'), { recursive: true, force: true });
   });
 
   it('re-reads and replans once if the GitHub ref moved', async () => {
@@ -439,6 +584,94 @@ describe('vault mirror runner', () => {
     expect(obsidian.uploadCalls).toBe(0);
   });
 
+  it('keeps prior success and increments failures before the state is loaded', async () => {
+    const github = new FakeGitHub();
+    const obsidian = new FakeObsidian();
+    const storage = new FakeStorage();
+    const deps = await initialized(github, obsidian, storage, {});
+    const previousSuccess = storage.status!.lastSuccessAt;
+    github.failVerify = true;
+
+    const result = await runMirror(options(deps));
+
+    expect(result.status.lastSuccessAt).toBe(previousSuccess);
+    expect(result.status.consecutiveFailures).toBe(1);
+    expect(result.status.reason).toBe('unexpected');
+  });
+
+  it('carries status through busy runs and resets failures on the next success', async () => {
+    const github = new FakeGitHub();
+    const obsidian = new FakeObsidian();
+    const storage = new FakeStorage();
+    const deps = await initialized(github, obsidian, storage, {});
+    const previousSuccess = storage.status!.lastSuccessAt;
+    github.failVerify = true;
+    const firstFailure = await runMirror(options(deps));
+    const secondFailure = await runMirror(options(deps));
+    expect(firstFailure.status.consecutiveFailures).toBe(1);
+    expect(secondFailure.status.consecutiveFailures).toBe(2);
+    github.failVerify = false;
+    const recovered = await runMirror(options(deps));
+    expect(recovered.status.consecutiveFailures).toBe(0);
+    expect(Date.parse(recovered.status.lastSuccessAt!)).toBeGreaterThanOrEqual(Date.parse(previousSuccess!));
+
+    storage.busy = true;
+    const busy = await runMirror(options(deps));
+    expect(busy.status.outcome).toBe('skipped-busy');
+    expect(busy.status.lastSuccessAt).toBe(recovered.status.lastSuccessAt);
+    expect(busy.status.consecutiveFailures).toBe(0);
+  });
+
+  it('advances lastSuccessAt after an ok-noop run', async () => {
+    let now = Date.parse('2026-10-19T12:00:00.000Z');
+    const github = new FakeGitHub();
+    const obsidian = new FakeObsidian();
+    const storage = new FakeStorage();
+    const deps = dependencies(github, obsidian, storage, { now: () => now });
+    const first = await runMirror(options(deps));
+    now += 1_000;
+
+    const result = await runMirror(options(deps));
+
+    expect(result.status.outcome).toBe('ok-noop');
+    expect(result.status.lastSuccessAt).toBe('2026-10-19T12:00:01.000Z');
+    expect(Date.parse(result.status.lastSuccessAt!)).toBeGreaterThan(Date.parse(first.status.lastSuccessAt!));
+  });
+
+  it('reports timeout without replacing it when state persistence is blocked', async () => {
+    const github = new FakeGitHub();
+    const obsidian = new FakeObsidian();
+    const storage = new FakeStorage();
+    const deps = await initialized(github, obsidian, storage, {});
+    const archive = storage.archive;
+    const controller = new AbortController();
+    obsidian.afterPull = () => controller.abort(new Error('deadline'));
+
+    const result = await runMirror(options(deps, 'on', controller.signal));
+
+    expect(result.status.reason).toBe('timeout');
+    expect(result.status.outcome).toBe('failed');
+    expect(storage.archive).toBe(archive);
+  });
+
+  it('keeps credentials, vault identifiers, paths and note text out of failure status and logs', async () => {
+    const github = new FakeGitHub();
+    const obsidian = new FakeObsidian({ 'Notes/private.md': 'synthetic note text' });
+    const storage = new FakeStorage();
+    const logs: Readonly<Record<string, string | number>>[] = [];
+    const deps = dependencies(github, obsidian, storage, {
+      log: entry => { logs.push(entry); },
+    });
+    const preflight = await runMirror(options(deps));
+    expect(preflight.exitCode).toBe(0);
+    obsidian.failNextPull = true;
+
+    const result = await runMirror(options(deps));
+
+    expect(result.status.reason).toBe('pull-failed');
+    assertPrivateOutput(result.status, logs, ['Notes/private.md'], ['synthetic note text']);
+  });
+
   it('stops on a corrupt state archive before syncing or pushing', async () => {
     const github = new FakeGitHub();
     const obsidian = new FakeObsidian({ 'Notes/state.md': 'old' });
@@ -457,16 +690,18 @@ describe('vault mirror runner', () => {
 
   it('returns skipped-busy without acquiring or writing state', async () => {
     const storage = new FakeStorage();
-    storage.busy = true;
     const github = new FakeGitHub();
     const obsidian = new FakeObsidian();
+    const deps = await initialized(github, obsidian, storage, {});
+    const previous = storage.status!;
+    storage.busy = true;
 
-    const result = await runMirror(options(dependencies(github, obsidian, storage)));
+    const result = await runMirror(options(deps));
 
     expect(result.exitCode).toBe(0);
     expect(result.status.outcome).toBe('skipped-busy');
-    expect(storage.archive).toBeNull();
-    expect(obsidian.setupCalls).toBe(0);
+    expect(result.status.lastSuccessAt).toBe(previous.lastSuccessAt);
+    expect(result.status.consecutiveFailures).toBe(previous.consecutiveFailures);
   });
 });
 

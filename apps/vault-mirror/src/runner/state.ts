@@ -56,10 +56,10 @@ function validPending(value: unknown): value is Record<string, PendingWrite> {
     Object.entries(value).every(([path, pending]) => {
       if (!isSafePath(path) || !pending || typeof pending !== 'object' || Array.isArray(pending)) return false;
       const record = pending as Record<string, unknown>;
-      return Object.keys(record).length === 2 &&
-        (record.kind === 'write' && Object.keys(record).every(key => ['kind', 'file'].includes(key)) &&
+      return (record.kind === 'write' && Object.keys(record).length === 2 &&
+          Object.keys(record).every(key => ['kind', 'file'].includes(key)) &&
           validStoredFile(record.file) ||
-          record.kind === 'delete' && Object.keys(record).every(key => key === 'kind'));
+          record.kind === 'delete' && Object.keys(record).length === 1 && Object.keys(record)[0] === 'kind');
     });
 }
 

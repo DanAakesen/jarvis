@@ -48,13 +48,35 @@ to `vault-mirror-status/status.json` using the strict shared contract. Logs use
 an explicit allow-list of run ID, outcome, fixed reason, duration and counts.
 Conflict paths appear only in private status, never in logs.
 
+The working copy and configuration home use fixed absolute paths below the
+container's temp directory on every run. After taking the lease, the runner
+removes and recreates them with mode 0700, then restores their archived contents.
+This keeps the `vaultPath` saved by `ob sync-setup` matched to the path passed to
+later commands; setup is not repeated just to compensate for a changing temp
+directory.
+
+At startup, the runner best-effort reads the previous status with a five-second
+timeout, 32 KiB limit and strict schema validation. Missing or invalid status is
+ignored. Its last-success time and failure count seed outcomes before state loads;
+after state loads, the runner retains the later success time and larger failure
+count from the status and archive. Busy runs preserve both values, early failures
+increment the carried count, and `ok`/`ok-noop` reset it and advance the success
+time.
+
 The runner sets `pull-only` before every sync. `dry-run` never switches to
 `bidirectional` and never writes planned changes to the working copy; status
 counts show pending write-back. In `on`, it writes planned local files through
 temporary files and atomic rename, verifies the resulting path set, uploads, and
 returns to `pull-only`. A failed/unconfirmed upload remains pending in state and
-is retried before planning on the next `on` run. Fresh state suppresses all
-Obsidian writes even when configured `on`.
+is retried before planning on the next `on` run. A retry is applied only if the
+current file still matches its saved base; an already-landed write/delete is
+cleared without another upload, and a newer edit drops the stale retry so normal
+planning can reconcile it. A retry upload runs only when a mutation was applied.
+Fresh state suppresses all Obsidian writes even when configured `on`.
+
+The optional vault password is passed to `ob sync-setup` through its argument
+array because the pinned CLI exposes no password environment-variable or stdin
+input. The container is single-purpose and runs as non-root.
 
 The container can be smoke-tested locally with:
 
