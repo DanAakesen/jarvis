@@ -107,8 +107,15 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - run: |
           az bicep install --version v0.44.1
-          az bicep build --file infra/main.bicep --stdout >/dev/null
+          az bicep build --file infra/main.bicep --stdout >"$RUNNER_TEMP/infra.json"
           az bicep lint --file infra/main.bicep
+      - name: Reject unresolved interpolation in compiled alert queries
+        run: |
+          jq -e '
+            [.. | objects | select(.type? == "Microsoft.Insights/scheduledQueryRules")
+              | .properties.criteria.allOf[].query]
+            | length > 0 and all(.[]; contains("${") | not)
+          ' "$RUNNER_TEMP/infra.json"
 
   python:
     name: Python lint, test and build
