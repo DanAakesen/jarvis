@@ -562,15 +562,14 @@ dd { margin: 0; color: var(--text-muted); overflow-wrap: anywhere; }
     box-shadow var(--motion-press) var(--ease-standard), color var(--motion-press) var(--ease-standard),
     transform var(--motion-press) var(--ease-standard);
 }
-.primary-button, .jobs-action-primary, .conversation-history .composer-send {
+.primary-button, .jobs-action-primary {
   border-color: color-mix(in srgb, var(--primary-action) 54%, var(--highlight-solid));
   background: linear-gradient(180deg, color-mix(in srgb, var(--primary-action) 93%, var(--highlight-solid)),
     color-mix(in srgb, var(--primary-action) 94%, var(--ink-solid)));
   color: var(--primary-action-text); box-shadow: var(--button-primary-shadow);
 }
 .primary-button:hover:not(:disabled, [aria-busy="true"]),
-.jobs-action-primary:hover:not(:disabled, [aria-busy="true"]),
-.conversation-history .composer-send:hover:not(:disabled, [aria-busy="true"]) {
+.jobs-action-primary:hover:not(:disabled, [aria-busy="true"]) {
   border-color: color-mix(in srgb, var(--primary-action-hover) 48%, var(--highlight-solid));
   background: linear-gradient(180deg, color-mix(in srgb, var(--primary-action-hover) 94%, var(--highlight-solid)),
     color-mix(in srgb, var(--primary-action-hover) 92%, var(--ink-solid)));
@@ -578,8 +577,7 @@ dd { margin: 0; color: var(--text-muted); overflow-wrap: anywhere; }
     0 0 18px color-mix(in srgb, var(--primary-action) 28%, transparent);
 }
 .primary-button:active:not(:disabled, [aria-busy="true"]),
-.jobs-action-primary:active:not(:disabled, [aria-busy="true"]),
-.conversation-history .composer-send:active:not(:disabled, [aria-busy="true"]) {
+.jobs-action-primary:active:not(:disabled, [aria-busy="true"]) {
   background: linear-gradient(180deg, color-mix(in srgb, var(--primary-action) 84%, var(--ink-solid)),
     color-mix(in srgb, var(--primary-action) 78%, var(--ink-solid)));
   transform: translateY(1px);
@@ -625,14 +623,13 @@ dd { margin: 0; color: var(--text-muted); overflow-wrap: anywhere; }
   transform: translateY(1px);
 }
 .primary-button:focus-visible, .secondary-button:focus-visible, .ghost-button:focus-visible,
-.danger-button:focus-visible, .danger-button--filled:focus-visible, .jobs-action:focus-visible,
-.conversation-history .composer-send:focus-visible {
+.danger-button:focus-visible, .danger-button--filled:focus-visible, .jobs-action:focus-visible {
   outline: 3px solid var(--focus); outline-offset: 3px; box-shadow: 0 0 0 3px var(--page);
 }
 .primary-button:disabled, .secondary-button:disabled, .ghost-button:disabled, .danger-button:disabled {
   border-color: var(--control-rule); background: var(--disabled-surface); color: var(--disabled-text); box-shadow: none; cursor: not-allowed;
 }
-.primary-button:disabled, .jobs-action-primary:disabled, .conversation-history .composer-send:disabled {
+.primary-button:disabled, .jobs-action-primary:disabled {
   border-color: color-mix(in srgb, var(--primary-action-disabled) 55%, var(--highlight-solid));
   background: var(--primary-action-disabled); color: var(--primary-action-disabled-text);
 }
@@ -1170,15 +1167,14 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
 .conversation-input.luminous-glass:has(textarea:focus-visible) {
   box-shadow:
     0 26px 60px -18px color-mix(in srgb, var(--ink-solid) 55%, transparent),
-    0 14px 40px -22px var(--glass-glow-warm),
-    0 0 0 2px var(--focus);
+    0 14px 40px -22px var(--glass-glow-warm);
 }
-/* Hover and typing: a thin light runs around the rim instead of a thick ring; focus brightens it. */
+/* Typing: a thin (2px) light runs around the rim, with no solid focus ring (Dan, 19 October: slim and subtle, as before 18 October). Hovering the composer does nothing. */
 @property --rim-sweep { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
 .conversation-input.luminous-glass::after {
   position: absolute;
   inset: -1px;
-  padding: var(--space-1);
+  padding: calc(var(--space-1) / 2);
   border-radius: inherit;
   background: conic-gradient(from var(--rim-sweep),
     transparent 0 62%,
@@ -1194,7 +1190,6 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
   -webkit-mask-composite: xor;
   mask: linear-gradient(var(--ink-solid) 0 0) content-box exclude, linear-gradient(var(--ink-solid) 0 0);
 }
-.conversation-input.luminous-glass:hover::after { opacity: .7; animation: rim-sweep 7s linear infinite; }
 .conversation-input.luminous-glass:focus-within::after { opacity: 1; animation: rim-sweep 6s linear infinite; }
 @keyframes rim-sweep { to { --rim-sweep: 360deg; } }
 :root[data-motion="reduced"] .conversation-input.luminous-glass::after { animation: none; background: color-mix(in srgb, var(--glass-edge-cool) 80%, var(--glass-rim-light)); }
@@ -1421,7 +1416,6 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
 .task-form-field textarea:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 .task-form-field textarea { min-height: 120px; resize: vertical; }
 .task-search-field { grid-column: span 2; }
-.task-live-status { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2); margin: var(--space-5) 0 var(--space-3); color: var(--text-muted); font-size: var(--type-small); }
 .task-inline-button { min-height: 44px; padding: 0 var(--space-2); border: 0; background: transparent; color: var(--focus); font: inherit; font-weight: 650; text-decoration: underline; cursor: pointer; }
 .task-inline-button:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 .task-limit-note { margin: var(--space-3) 0; }
@@ -1575,8 +1569,7 @@ a.task-card-title { text-decoration: none; }
 .kanban-search input:hover, .kanban-select select:hover { border-color: var(--control-rule); }
 .kanban-search input:focus-visible, .kanban-select select:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 .kanban-page .task-release-bar { background: var(--board-slab); box-shadow: none; }
-.kanban-live-status { margin: var(--space-2) 0; font-size: var(--type-caption); }
-.kanban-page > .tasks-help, .kanban-page > .kanban-live-status {
+.kanban-page > .tasks-help {
   width: fit-content;
   max-width: 100%;
   padding: var(--space-2) var(--space-3);
@@ -1629,9 +1622,16 @@ a.task-card-title { text-decoration: none; }
 .kanban-card .task-controls button { min-height: 36px; padding: 0 var(--space-3); font-size: var(--type-small); }
 @media (pointer: coarse) { .kanban-card .task-controls button { min-height: 44px; } }
 @media (min-width: 1200px) { .kanban-board { grid-auto-columns: minmax(168px, 1fr); gap: var(--space-3); } }
-@media (max-width: 900px) {
-  .kanban-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+/* Filters reflow by the width of the board area, not the screen: a docked side panel narrows the board without changing the viewport. */
+@container task-board (max-width: 879px) {
+  .kanban-filters { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .kanban-search { grid-column: 1 / -1; }
+}
+@container task-board (max-width: 719px) {
+  .kanban-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@container task-board (max-width: 299px) {
+  .kanban-filters { grid-template-columns: minmax(0, 1fr); }
 }
 
 .release-page { width: 100%; max-width: 1200px; margin-inline: auto; }
@@ -2082,7 +2082,7 @@ a.task-card-title { text-decoration: none; }
    surface Jarvis is acting on glows so Dan can see it change.
    --------------------------------------------------------------------------------------------- */
 :is(.workspace-window, .kanban-column, .kanban-card, .settings-section, .area-sidebar,
-  .context-panel, .app-topbar, .area-rail, .conversation-input.luminous-glass, .task-release-bar, .signin-button)[data-lit] {
+  .context-panel, .app-topbar, .area-rail, .task-release-bar, .signin-button)[data-lit] {
   background-image: radial-gradient(circle 140px at var(--light-x, 50%) var(--light-y, 50%),
     color-mix(in srgb, var(--glass-rim-light) 26%, transparent), transparent 72%);
 }
@@ -2163,9 +2163,6 @@ a.task-card-title { text-decoration: none; }
    commit trail drawn as a lit line.
    --------------------------------------------------------------------------------------------- */
 .kanban-header { justify-content: flex-start; }
-.kanban-header .kanban-create-project { margin-left: auto; }
-.kanban-header .kanban-create-project svg { width: 18px; height: 18px; }
-.kanban-create-project { display: inline-flex; align-items: center; gap: var(--space-2); min-height: 44px; }
 .project-dialog { display: grid; gap: var(--space-4); background: var(--surface); }
 .project-dialog h2 { margin: 0; }
 .project-dialog-part { display: grid; gap: var(--space-3); padding: var(--space-4); border: 1px solid color-mix(in srgb, var(--glass-rim-light) 30%, transparent); border-radius: var(--radius-panel); background: var(--glass-hover); }
@@ -3248,23 +3245,58 @@ a.task-chip:hover { background: var(--glass-pressed); }
 @keyframes mobile-caption-in { from { opacity: 0; translate: 0 4px; } }
 :root[data-motion="reduced"] :is(.mobile-menu-sheet, .mobile-menu-backdrop, .mobile-caption span, .app-shell[data-phone="true"] .workspace-window, .app-shell[data-phone="true"] .window-tabstrip) { animation: none; }
 @media (prefers-reduced-motion: reduce) { :is(.mobile-menu-sheet, .mobile-menu-backdrop, .mobile-caption span, .app-shell[data-phone="true"] .workspace-window, .app-shell[data-phone="true"] .window-tabstrip) { animation: none; } }
-/* Kanban space and alignment (Dan, 8 October). Header: title and actions share a row (actions as a matched pair),
-   the summary pills sit underneath. Search and filters live in one collapsible glass section; columns collapse from
-   their title. */
-.kanban-header { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "title actions" "pulse pulse"; align-items: center; gap: var(--space-3) var(--space-4); }
-.kanban-header h1 { grid-area: title; }
-.kanban-header .kanban-pulse { grid-area: pulse; }
-.kanban-header-actions { display: flex; grid-area: actions; align-items: center; gap: var(--space-3); }
-.kanban-header .kanban-create-project { margin-left: 0; }
-.kanban-header-actions .kanban-create { min-height: 44px; padding: 0 var(--space-4); justify-content: center; font-size: var(--type-small); font-weight: 650; line-height: var(--line-tight); }
+/* Kanban space and alignment (Dan, 8 October). The title and the summary pills share a row; the create and refresh actions
+   live in the board strip below. Search and filters live in one collapsible glass section; columns collapse from their title. */
 @media (max-width: 700px) {
-  .kanban-header { grid-template-columns: minmax(0, 1fr); grid-template-areas: "title" "pulse" "actions"; gap: var(--space-3); }
   .kanban-header h1 { font-size: var(--type-title); }
   .kanban-header .kanban-pulse { min-width: 0; flex-wrap: wrap; }
   .kanban-header .kanban-pulse li { flex: none; }
-  .kanban-header-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); }
-  .kanban-header-actions .kanban-create { width: 100%; padding: 0 var(--space-3); }
 }
+/* Board strip (Dan, 19 October): one slim glass bar above the columns holds the refresh icon, the connection notice and
+   the create actions. A working board says nothing; only a failure shows, small and red. */
+.kanban-strip {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2) var(--space-3);
+  margin: 0 0 var(--space-3); padding: var(--space-2);
+  border: 1px solid var(--rule); border-radius: var(--radius-panel);
+  background: var(--board-slab); backdrop-filter: blur(24px) saturate(1.2);
+}
+.kanban-strip-status { display: flex; min-width: 0; flex: 1 1 auto; align-items: center; }
+.kanban-strip-actions { display: flex; flex: none; align-items: center; gap: var(--space-2); margin-left: auto; }
+.kanban-strip .kanban-create { min-height: 36px; padding: 0 var(--space-4); justify-content: center; font-size: var(--type-small); font-weight: 650; line-height: var(--line-tight); }
+.kanban-connection { min-width: 0; }
+.kanban-connection-issue { display: inline-flex; min-width: 0; align-items: center; gap: var(--space-2); margin-left: var(--space-2); color: var(--error); font-size: var(--type-caption); font-weight: 650; line-height: var(--line-tight); }
+.kanban-connection-dot { width: 8px; height: 8px; flex: none; border-radius: 50%; background: currentColor; }
+/* The refresh action is a bare icon (Dan, 19 October): no fill, border or shadow in any state. Hover tints it with the focus colour and turns it a quarter; while a refresh runs it spins. */
+.kanban-refresh {
+  display: grid; place-items: center; width: 36px; height: 36px; flex: none; padding: 0;
+  border: 0; border-radius: var(--radius-control); background: none; box-shadow: none;
+  color: var(--text); cursor: pointer;
+  transition: color var(--motion-press) var(--ease-standard);
+}
+.kanban-refresh svg { width: 20px; height: 20px; stroke-width: 2; transition: rotate var(--motion-state) var(--ease-enter), scale var(--motion-press) var(--ease-standard); }
+.kanban-refresh:hover:not(:disabled) { color: var(--focus); }
+.kanban-refresh:hover:not(:disabled) svg { rotate: 90deg; }
+.kanban-refresh:active:not(:disabled) svg { rotate: 180deg; scale: .9; }
+.kanban-refresh:disabled { color: var(--disabled-text); cursor: not-allowed; }
+.kanban-refresh[aria-busy="true"]:disabled { cursor: progress; }
+.kanban-refresh[aria-busy="true"] svg { animation: kanban-refresh-spin 900ms linear infinite; }
+@keyframes kanban-refresh-spin { to { rotate: 360deg; } }
+@media (pointer: coarse) {
+  .kanban-refresh { width: 44px; height: 44px; }
+  .kanban-strip .kanban-create { min-height: 44px; }
+}
+@media (max-width: 700px) {
+  .kanban-strip-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); flex: 1 1 100%; gap: var(--space-2); }
+  .kanban-strip .kanban-create { width: 100%; padding: 0 var(--space-3); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .kanban-refresh, .kanban-refresh svg { transition: none; }
+  .kanban-refresh:is(:hover, :active):not(:disabled) svg { rotate: none; scale: none; }
+  .kanban-refresh[aria-busy="true"] svg { animation: none; }
+}
+:root[data-motion="reduced"] :is(.kanban-refresh, .kanban-refresh svg) { transition: none; }
+:root[data-motion="reduced"] .kanban-refresh:is(:hover, :active):not(:disabled) svg { rotate: none; scale: none; }
+:root[data-motion="reduced"] .kanban-refresh[aria-busy="true"] svg { animation: none; }
 .kanban-filter-panel { margin: 0 0 var(--space-4); border: 1px solid var(--rule); border-radius: var(--radius-panel); background: var(--surface-muted); }
 .kanban-filter-toggle { display: flex; width: 100%; min-height: 48px; align-items: center; gap: var(--space-3); padding: 0 var(--space-4); border: 0; border-radius: var(--radius-control); background: transparent;
   color: var(--text); font: inherit; font-weight: 600; text-align: left; cursor: pointer; transition: background-color var(--motion-press) var(--ease-standard); }
@@ -3304,15 +3336,15 @@ a.task-chip:hover { background: var(--glass-pressed); }
 }
 :root[data-motion="reduced"] :is(.kanban-filter-body, .kanban-filter-body > .kanban-filters, .kanban-chevron) { transition: none; }
 @media (prefers-reduced-motion: reduce) { :is(.kanban-filter-body, .kanban-filter-body > .kanban-filters, .kanban-chevron) { transition: none; } }
-/* Chat bar idle lap (Dan, 8 October): one thin, unhurried light runs the rim every 10 s, easing from slow to moderate. */
-.conversation-input.luminous-glass:not(:hover, :focus-within)::after { padding: 1.25px; animation: rim-idle 10s infinite; }
+/* Chat bar idle lap (Dan, 8 October): one thin, unhurried light runs the rim every 10 s, easing from slow to moderate. Hover does not change it. */
+.conversation-input.luminous-glass:not(:focus-within)::after { padding: 1.25px; animation: rim-idle 10s infinite; }
 @keyframes rim-idle {
   0% { --rim-sweep: -40deg; opacity: 0; animation-timing-function: cubic-bezier(.45, 0, .7, .6); }
   8% { opacity: .85; }
   60% { --rim-sweep: 400deg; opacity: .8; }
   70%, 100% { --rim-sweep: 400deg; opacity: 0; }
 }:root[data-motion="reduced"] .conversation-input.luminous-glass::after { animation: none; }
-@media (prefers-reduced-motion: reduce) { .conversation-input.luminous-glass:not(:hover, :focus-within)::after { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .conversation-input.luminous-glass:not(:focus-within)::after { animation: none; } }
 
 /* Knowledge folder filters on phones: one touch-sized row that scrolls sideways if needed. */
 .app-shell[data-phone="true"] .knowledge-legend { right: 8px; flex-wrap: nowrap; gap: var(--space-1); overflow-x: auto; scrollbar-width: none; overscroll-behavior-x: contain; }
@@ -3758,7 +3790,7 @@ a.task-chip:hover { background: var(--glass-pressed); }
 :root[data-motion="reduced"] .conversation-latest { animation: none; }
 
 :is(.primary-button, .secondary-button, .ghost-button, .danger-button, .danger-button--filled,
-  .jobs-action, .conversation-history .composer-send, .conversation-latest):focus-visible {
+  .jobs-action, .conversation-latest):focus-visible {
   box-shadow: 0 0 0 3px var(--page);
 }
 
@@ -3768,16 +3800,16 @@ a.task-chip:hover { background: var(--glass-pressed); }
     --control-rule: var(--text);
   }
   :is(.primary-button, .secondary-button, .ghost-button, .danger-button, .danger-button--filled,
-    .jobs-action, .conversation-history .composer-send, .conversation-latest):not(:disabled) {
+    .jobs-action, .conversation-latest):not(:disabled) {
     background-image: none; border-color: currentColor; box-shadow: none;
   }
-  :is(.primary-button, .jobs-action-primary, .conversation-history .composer-send):not(:disabled) {
+  :is(.primary-button, .jobs-action-primary):not(:disabled) {
     background-color: var(--primary-action);
   }
-  :is(.primary-button, .jobs-action-primary, .conversation-history .composer-send):hover:not(:disabled, [aria-busy="true"]) {
+  :is(.primary-button, .jobs-action-primary):hover:not(:disabled, [aria-busy="true"]) {
     background-color: var(--primary-action-hover);
   }
-  :is(.primary-button, .jobs-action-primary, .conversation-history .composer-send):active:not(:disabled, [aria-busy="true"]) {
+  :is(.primary-button, .jobs-action-primary):active:not(:disabled, [aria-busy="true"]) {
     background-color: color-mix(in srgb, var(--primary-action) 78%, var(--ink-solid));
   }
   :is(.secondary-button, .jobs-action:not(.jobs-action-primary), .conversation-latest):not(:disabled) {
@@ -3805,23 +3837,23 @@ a.task-chip:hover { background: var(--glass-pressed); }
     background-color: color-mix(in srgb, var(--error) 78%, var(--ink-solid));
   }
   :is(.primary-button, .secondary-button, .ghost-button, .danger-button, .danger-button--filled,
-    .jobs-action, .conversation-history .composer-send, .conversation-latest):focus-visible {
+    .jobs-action, .conversation-latest):focus-visible {
     box-shadow: 0 0 0 3px var(--page);
   }
 }
 @media (forced-colors: active) {
   :is(.primary-button, .secondary-button, .ghost-button, .danger-button, .danger-button--filled,
-    .jobs-action, .conversation-history .composer-send, .conversation-latest):not(:disabled) {
+    .jobs-action, .conversation-latest):not(:disabled) {
     border-color: ButtonText; background: ButtonFace; background-image: none; color: ButtonText;
     box-shadow: none; forced-color-adjust: auto;
   }
   :is(.primary-button, .secondary-button, .ghost-button, .danger-button, .danger-button--filled,
-    .jobs-action, .conversation-history .composer-send, .conversation-latest):disabled {
+    .jobs-action, .conversation-latest):disabled {
     border-color: GrayText; background: ButtonFace; background-image: none; color: GrayText;
     box-shadow: none; forced-color-adjust: auto;
   }
   :is(.primary-button, .secondary-button, .ghost-button, .danger-button, .danger-button--filled,
-    .jobs-action, .conversation-history .composer-send, .conversation-latest):focus-visible {
+    .jobs-action, .conversation-latest):focus-visible {
     outline: 3px solid Highlight; outline-offset: 3px; box-shadow: none;
   }
   .app-shell :is(

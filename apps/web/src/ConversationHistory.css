@@ -75,7 +75,6 @@
 .conversation-input-slot[data-positioned] { display: block; flex: 0 0 auto; height: var(--conversation-composer-height, 52px); }
 /* The desktop composer and maximised transcript share their page gutters. Restore keeps the normal dock width. */
 .app-shell[data-phone="false"][data-voice-active="false"][data-conversation-open="true"]:has(.workspace-window-conversation.workspace-window-maximized:not(.workspace-window-minimized, [hidden])) .jarvis-page { --chat-width: 100%; }
-.conversation-input:has(textarea:focus-visible) { box-shadow: var(--dialog-shadow), 0 0 0 3px var(--focus); }
 /* In typing mode the voice wrappers dissolve into the shared composer grid. Feedback is portalled outside the composer. */
 .conversation-input[data-voice-active="false"] > .conversation-actions,
 .conversation-input[data-voice-active="false"] .voice-controls[data-active="false"] { display: contents; }
@@ -134,12 +133,25 @@
 .conversation-history .composer textarea { min-height: 44px; max-height: 160px; padding: var(--space-2) var(--space-1); border: 0; border-radius: 0; background: transparent; resize: none; font-size: var(--type-body); line-height: var(--line-body); }
 .conversation-history .composer textarea::placeholder { color: var(--text-muted); opacity: 1; }
 .conversation-history .composer textarea:focus-visible { outline: none; }
-/* The composer send action uses the shared primary treatment with compact icon geometry. */
+/* The composer send action is a bare icon (Dan, 19 October): no fill, border or shadow in any state. Hover warms the arrow and lifts it. */
 .conversation-history .composer-send {
   display: grid; place-items: center; width: 36px; height: 36px; min-height: 36px; padding: 0; margin: 0;
-  border-radius: var(--radius-control);
+  border: 0; border-radius: var(--radius-control); background: none; box-shadow: none;
+  color: var(--text); cursor: pointer;
+  transition: color var(--motion-press) var(--ease-standard);
 }
-.composer-send svg { width: 18px; height: 18px; stroke-width: 2.2; }
+.composer-send svg { width: 20px; height: 20px; stroke-width: 2; transition: transform var(--motion-press) var(--ease-standard); }
+.conversation-history .composer-send:hover:not(:disabled) { color: var(--focus); }
+.conversation-history .composer-send:hover:not(:disabled) svg { transform: translateY(-2px); }
+.conversation-history .composer-send:active:not(:disabled) svg { transform: translateY(0) scale(.9); }
+.conversation-history .composer-send:focus-visible { outline: 3px solid var(--focus); outline-offset: 0; }
+.conversation-history .composer-send:disabled { color: var(--disabled-text); cursor: not-allowed; }
+@media (prefers-reduced-motion: reduce) {
+  .conversation-history .composer-send svg { transition: none; }
+  .conversation-history .composer-send:is(:hover, :active):not(:disabled) svg { transform: none; }
+}
+:root[data-motion="reduced"] .conversation-history .composer-send svg { transition: none; }
+:root[data-motion="reduced"] .conversation-history .composer-send:is(:hover, :active):not(:disabled) svg { transform: none; }
 .composer-status { grid-column: 1 / -1; margin: 0 var(--space-1) var(--space-1); font-size: var(--type-small); }
 .chat-guidance { margin: var(--space-2) 0 0; color: var(--text-muted); font-size: var(--type-caption); }
 .chat-error { margin-top: var(--space-3); color: var(--error); font-size: var(--type-small); }
