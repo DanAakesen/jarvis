@@ -212,7 +212,10 @@ export function NotesArea({ backendUrl, getAccessToken }: AreaProps) {
             if (event.key === 'Escape' && !pendingChange && blocker.state !== 'blocked') { event.preventDefault(); change(clearEditor); }
           }}>
           <header className="knowledge-note-heading">
-            <h3 id={`${id}-note`}>{!editor?.created && <span className="knowledge-dot" data-folder={editor?.path.split('/')[0]} aria-hidden="true" />}{editor?.created ? 'New note' : editor?.title ?? openingTitle}</h3>
+            <h3 id={`${id}-note`} title={editor?.created ? 'New note' : editor?.title ?? openingTitle}>
+              {!editor?.created && <span className="knowledge-dot" data-folder={editor?.path.split('/')[0]} aria-hidden="true" />}
+              <span className="knowledge-note-title">{editor?.created ? 'New note' : editor?.title ?? openingTitle}</span>
+            </h3>
             {editor?.created && folderUpdatedAt && <p className="notes-folder-updated">Vault folders. Updated <time dateTime={folderUpdatedAt}>{new Date(folderUpdatedAt).toLocaleString()}</time>.</p>}
             <button className="modal-close" type="button" disabled={saving} aria-label={`Close ${editor?.created ? 'New note' : editor?.title ?? openingTitle}`}
               onClick={() => change(clearEditor)}>

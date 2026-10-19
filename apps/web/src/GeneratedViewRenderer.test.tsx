@@ -38,6 +38,25 @@ describe('GeneratedViewRenderer timeline', () => {
   });
 });
 
+describe('GeneratedViewRenderer table', () => {
+  it('right-aligns numeric columns and leaves text and mixed columns unchanged', () => {
+    const view = {
+      version: 1, title: 'Sample usage table', renderer: 'table',
+      source: { id: 'usage', status: 'complete', updatedAt: '2026-10-08T16:00:00.000Z' },
+      data: {
+        columns: ['Runs', 'Task', 'Cost (DKK)'],
+        rows: [[24.5, 'Sample build', 8.1], [8.1, 'Release check', 'n/a'], [null, null, 0.4]],
+      },
+    } as unknown as GeneratedView;
+    const { container } = render(<GeneratedViewRenderer view={view} />);
+    const headers = Array.from(container.querySelectorAll('th'));
+    const rows = Array.from(container.querySelectorAll('tbody tr'));
+    expect(headers.map((cell) => cell.classList.contains('generated-view-number'))).toEqual([true, false, false]);
+    expect(rows.map((row) => Array.from(row.querySelectorAll('td'), (cell) => cell.classList.contains('generated-view-number'))))
+      .toEqual([[true, false, false], [true, false, false], [true, false, false]]);
+  });
+});
+
 describe('GeneratedViewRenderer source note', () => {
   const reason = 'Retained Daily records, 1–16 Oct 2026 (Copenhagen dates). Read 17 Oct 2026, 09:00 Copenhagen time. '
     + 'Completeness and freshness are not established. Unknown means no value was recorded, not zero.';

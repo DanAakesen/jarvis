@@ -43,7 +43,7 @@ export function SignInPage({ session }: { session: SignInSession }) {
 
 export function NotFoundPage() {
   return (
-    <section aria-labelledby="missing-heading">
+    <section className="panel" aria-labelledby="missing-heading">
       <h1 id="missing-heading">Page not found</h1>
       <p>This address does not have a page in Jarvis.</p>
       <Link className="home-link" to="/">Return to Jarvis</Link>

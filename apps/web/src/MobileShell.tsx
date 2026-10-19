@@ -17,13 +17,22 @@ const pages = [
   { to: '/settings', label: 'Settings' },
 ] as const;
 
-export function MobileMenu({ open, onClose, onNavigate, onFolio, onContext, dailyEnabled = false }: {
+type MenuPage = { readonly to: string; readonly label: string; readonly end?: true };
+
+/** Same order as the rail (`appAreas`): Proactive follows the first area, which is Daily when that is on. */
+function menuPages(dailyEnabled: boolean, proactiveEnabled: boolean): readonly MenuPage[] {
+  const list: readonly MenuPage[] = dailyEnabled ? [pages[0], { to: '/daily', label: 'Daily' }, ...pages.slice(1)] : pages;
+  return proactiveEnabled ? [...list.slice(0, 2), { to: '/proactive', label: 'Proactive' }, ...list.slice(2)] : list;
+}
+
+export function MobileMenu({ open, onClose, onNavigate, onFolio, onContext, dailyEnabled = false, proactiveEnabled = false }: {
   open: boolean;
   onClose: () => void;
   onNavigate: () => void;
   onFolio: () => void;
   onContext: () => void;
   dailyEnabled?: boolean;
+  proactiveEnabled?: boolean;
 }) {
   const sheet = useRef<HTMLDivElement>(null);
   const root = useRef<HTMLDivElement>(null);
@@ -39,8 +48,8 @@ export function MobileMenu({ open, onClose, onNavigate, onFolio, onContext, dail
           <button className="modal-close" type="button" aria-label="Close menu" onClick={onClose}><ShellIcon name="close" /></button>
         </header>
         <nav className="mobile-menu-body" aria-label="Pages">
-          {(dailyEnabled ? [pages[0], { to: '/daily', label: 'Daily' }, ...pages.slice(1)] : pages).map((page) => (
-            <NavLink key={page.to} className="mobile-menu-link" to={page.to} end={'end' in page} onClick={() => { onNavigate(); onClose(); }}>{page.label}</NavLink>
+          {menuPages(dailyEnabled, proactiveEnabled).map((page) => (
+            <NavLink key={page.to} className="mobile-menu-link" to={page.to} end={page.end === true} onClick={() => { onNavigate(); onClose(); }}>{page.label}</NavLink>
           ))}
         </nav>
         <div className="mobile-menu-actions">

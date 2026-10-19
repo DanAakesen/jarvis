@@ -36,6 +36,7 @@ function surfaceViolations(source: string) {
     ['border-radius', 'var(--radius-panel)'],
     ['background', 'var(--surface)'],
     ['box-shadow', 'var(--panel-shadow)'],
+    ['backdrop-filter', 'blur(var(--surface-blur))'],
   ].filter(([property, value]) => rules.get(property!) !== value);
 }
 
@@ -85,7 +86,7 @@ describe('shared overlay contract', () => {
   it('rejects removed or regressed stacking, surface and feedback rules', () => {
     expect(stackingViolations('.popover { z-index: 1200; }')).toEqual(['1200']);
     expect(stackingViolations('.popover { z-index: calc(10 + var(--workspace-depth)); }')).not.toEqual([]);
-    expect(surfaceViolations('')).toHaveLength(4);
+    expect(surfaceViolations('')).toHaveLength(5);
     expect(surfaceViolations(`${surfaces} { border: 1px solid var(--rule); border-radius: var(--radius-panel); background: transparent; box-shadow: var(--panel-shadow); }`)).not.toEqual([]);
     expect(feedbackViolations('')).toBe(true);
     expect(feedbackViolations(styles.replace('.workspace-pin-feedback { position: static;', '.workspace-pin-feedback { position: absolute;'))).toBe(true);
