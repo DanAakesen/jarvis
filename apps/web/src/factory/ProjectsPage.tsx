@@ -708,7 +708,6 @@ export function ProjectSettingsPage({ backendUrl, getAccessToken }: ProjectsPage
   return (
     <section className="project-settings-page" aria-labelledby="project-settings-heading">
       <h1 id="project-settings-heading">Project settings</h1>
-      <p>Other project settings apply to new tasks. Completion policy applies now, including pull requests that are already open.</p>
       {visibleState === 'error' ? (
         <>
           <StateMessage variant="error" className="projects-feedback" message={visibleError}
@@ -720,19 +719,22 @@ export function ProjectSettingsPage({ backendUrl, getAccessToken }: ProjectsPage
         <form className="project-form" noValidate onSubmit={(event) => { void save(event); }}>
           {error && <p className="projects-feedback" role="alert">{error}</p>}
           {validationError && <p className="projects-feedback" role="alert">{validationError}</p>}
-          <CompletionPolicyControl
-            projectId={projectId!}
-            projectName={values.name}
-            policy={values.policy as Project['policy']}
-            backendUrl={backendUrl}
-            getAccessToken={getAccessToken}
-            onSaved={(updated) => {
-              const nextValues = toProjectValues(updated);
-              setValues(nextValues);
-              setSavedValues(nextValues);
-            }}
-          />
+          <section className="settings-section">
+            <CompletionPolicyControl
+              projectId={projectId!}
+              projectName={values.name}
+              policy={values.policy as Project['policy']}
+              backendUrl={backendUrl}
+              getAccessToken={getAccessToken}
+              onSaved={(updated) => {
+                const nextValues = toProjectValues(updated);
+                setValues(nextValues);
+                setSavedValues(nextValues);
+              }}
+            />
+          </section>
           <section className="settings-section" aria-labelledby="project-repository-heading">
+            <p>Other project settings apply to new tasks. Completion policy applies now, including pull requests that are already open.</p>
             <h2 id="project-repository-heading">Repository</h2>
             <div className="projects-form-grid">
               <div className="settings-field">

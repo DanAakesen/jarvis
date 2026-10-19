@@ -299,6 +299,7 @@ export function TasksPage({ backendUrl, getAccessToken }: Props) {
   const contextPanel = useContextPanel();
   const issueNavigation = useContext(FactoryIssueNavigationContext);
   const closeContextPanel = contextPanel.close;
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const createButtonRef = useRef<HTMLButtonElement>(null);
   const createProjectButtonRef = useRef<HTMLButtonElement>(null);
   const [projectDialogOpen, setProjectDialogOpen] = useState(false);
@@ -648,6 +649,10 @@ export function TasksPage({ backendUrl, getAccessToken }: Props) {
     setCreateError('');
   };
   const activeFilterCount = [filters.search.trim(), filters.agent, filters.state, filters.period].filter(Boolean).length;
+  const activeSearch = Boolean(filters.search.trim());
+  const activeOtherFilters = Boolean(filters.agent || filters.state || filters.period);
+  const clearFiltersLabel = activeSearch && activeOtherFilters ? 'Clear search and filters' :
+    activeSearch ? 'Clear search' : 'Clear filters';
   const createUnavailable = !backendUrl || visibleProjectState !== 'ready' || projects.length === 0;
   const createHelp = visibleProjectState === 'loading' ? 'Loading projects before task creation is available.' :
     visibleProjectState === 'error' ? 'Retry project loading before creating a task.' :
@@ -664,6 +669,12 @@ export function TasksPage({ backendUrl, getAccessToken }: Props) {
     label: columnLabels[column.id],
     cards: column.cards.filter((card) => matchesFilters(card, appliedFilters, updatedAfter)),
   })) ?? [];
+  const noFilteredResults = activeFilterCount > 0 && columns.length > 0 && columns.every((column) => column.cards.length === 0);
+  const clearFilters = () => {
+    setFiltersOpen(true);
+    applyNow({ ...emptyFilters, projectId: filters.projectId });
+    window.setTimeout(() => searchInputRef.current?.focus(), 0);
+  };
 
   {
     return (
@@ -714,7 +725,7 @@ export function TasksPage({ backendUrl, getAccessToken }: Props) {
           <label className="kanban-search">
             <KanbanIcon name="search" />
             <span className="visually-hidden">Search issues</span>
-            <input id="filter-search" type="search" placeholder="Search issues…" value={filters.search} maxLength={100}
+            <input ref={searchInputRef} id="filter-search" type="search" placeholder="Search issues…" value={filters.search} maxLength={100}
               onChange={(event) => setFilters({ ...filters, search: event.target.value })} />
           </label>
           <label className="kanban-select">
@@ -722,7 +733,7 @@ export function TasksPage({ backendUrl, getAccessToken }: Props) {
             <select id="filter-project" value={filters.projectId} disabled={visibleProjectState !== 'ready' || projects.length === 0}
               onChange={(event) => applyNow({ ...filters, projectId: event.target.value })}>
               {!filters.projectId && <option value="">Select a project</option>}
-              {projects.map((project) => <option key={project.id} value={project.id}>Project: {project.name}</option>)}
+              {projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}
             </select>
           </label>
           <label className="kanban-select">
@@ -782,6 +793,8 @@ export function TasksPage({ backendUrl, getAccessToken }: Props) {
                 detail="GitHub is unavailable. Retry the board to check for current issues." />}
             <div className="task-board kanban-board" role="region" aria-label="Issues by GitHub Project column"
               style={{ '--kanban-columns': columns.map((column) => collapsedColumns.has(column.label) ? '52px' : 'minmax(240px, 1fr)').join(' ') } as CSSProperties}>
+              {noFilteredResults && <StateMessage variant="empty" className="kanban-board-empty" message="No matching issues."
+                actionLabel={clearFiltersLabel} onAction={clearFilters} />}
               {columns.map((column) => {
                 const items = column.cards;
                 const headingId = `column-${columnTone(column.label)}`;
@@ -801,7 +814,7 @@ export function TasksPage({ backendUrl, getAccessToken }: Props) {
                     </header>
                     <div id={`${headingId}-cards`} className="kanban-column-body" hidden={collapsedColumns.has(column.label)}>
                     {items.length === 0
-                      ? <StateMessage variant="empty" className="task-column-empty" message="No matching issues." />
+                      ? activeFilterCount === 0 && <StateMessage variant="empty" className="task-column-empty" message="No matching issues." />
                       : <ul className="task-card-list">
                         {items.slice(0, maxCardsPerColumn).map((card, index) => (
                           <li key={card.issue.number} style={{ '--i': index } as CSSProperties}>
@@ -850,13 +863,13 @@ export function TasksPage({ backendUrl, getAccessToken }: Props) {
                                 onComplete={() => setReloadKey((value) => value + 1)}
                               />
                               <div className="kanban-card-actions">
-                                <button className="kanban-card-action" type="button" aria-controls="context-panel"
+                                <button className="ghost-button" type="button" aria-controls="context-panel"
                                   onClick={(event) => {
                                     if (card.task) selectTask(card.task, card.issue.title, card.issue.number, event.currentTarget);
                                   }}>
                                   View details
                                 </button>
-                                <TaskWindowLink className="kanban-card-action kanban-card-open" taskId={card.task.id} title={card.issue.title}
+                                <TaskWindowLink className="secondary-button kanban-card-open" taskId={card.task.id} title={card.issue.title}
                                   aria-label={`Open ${card.issue.title} in a window`}>
                                   <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                                     <rect x="3.5" y="5" width="17" height="14" rx="2.5" /><path d="M3.5 9h17M7 7h.01M9.5 7h.01" />

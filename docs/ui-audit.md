@@ -535,6 +535,29 @@ checks, not live-backend or human acceptance.
 - P14-12 adds a `prefers-reduced-motion` rule and a unit guard for the active
   voice-status glyph. A connected voice session was not run in Chromium.
 
+## Factory board and task window (P14-21; 19 October 2026)
+
+The QA pass found split clock metadata, indistinguishable destructive actions,
+inconsistent issue-title and card-action styles, a cramped project filter,
+wrapping usage cells, repeated filtered-empty messages, and undersized touch
+targets. The board now keeps clock metadata together, uses the shared danger,
+ghost and secondary button variants, displays the project name in a wider
+responsive filter track, and gives filtered-empty boards one clear-and-focus
+recovery action. Task-window usage cells stay unbroken in a horizontally
+scrollable table; the listed board controls meet the 44px coarse-pointer target.
+
+Scratch-only auth and synthetic API fixtures rendered the actual app in
+Chromium at 320×640, 390×844, 768×1024, 1024×768 and 1440×900, in light and
+dark. Checks covered the search recovery/focus return, destructive-button
+hierarchy in the board and task window, title hover/focus, filter fit, usage
+values and coarse-pointer targets at 390px. No 390px horizontal overflow or
+browser errors occurred. At 320px, the document measured 369px wide because
+synthetic release-bar repository/branch text extended beyond the viewport; that
+surface is outside this change. Local checks passed:
+`npm test --workspace @jarvis/web` (131 files, 1,803 tests),
+`npm run lint --workspace @jarvis/web`, and
+`npm run build --workspace @jarvis/web` (TypeScript and Vite build).
+
 ## Pass 3: responsive and overflow (18 October 2026; P14-05)
 
 ### Method and coverage
@@ -672,6 +695,33 @@ and after; overflow comes from the Kanban board's issue-list item, not from a
 button. The parallel P14-05 overflow sweep owns that non-button layout, so this
 button pass leaves it unchanged. Other checked pages had no new document-width
 increase.
+
+## Factory project and release surfaces (P14-22; 19 October 2026)
+
+The QA pass found the project-settings intro and completion policy, plus the
+release-page back link and repository/default-branch summary, sitting over the
+3D scene. The intro now sits in the Repository panel, the policy has its own
+settings panel, and the release header uses the shared translucent panel surface.
+Coarse-pointer release links now measure at least 44px, and task-bar, selected
+release and release-row labels consistently use `Build {version}` without
+altering a version that already begins with `v`.
+
+The four formerly bare lines use `--text-muted` (`#5c564f` light,
+`#c0ccd2` dark). Against the translucent panel surface, conservative WCAG
+contrast bounds are **5.52:1 light** and **9.09:1 dark**; these use the
+worst black/white scene-backdrop composite endpoints (92% light and 90% dark
+surface opacity). Both exceed 4.5:1.
+
+The actual app was checked in scratch Chromium with synthetic auth/API data.
+Before-state captures restored the original bare paragraph/fieldset/header;
+after-state captures covered 320×640, 390×844, 768×1024 and 1440×900 in both
+themes. Coarse-pointer emulation was enabled; the task release name/version and
+release record/workflow links measured at least 44px, all viewports stayed
+within their width, and the final routes had no fixture alerts or page errors.
+Local checks passed: `npm run lint --workspace @jarvis/web`
+(`--max-warnings 0`), `npx tsc --noEmit -p apps/web/tsconfig.json`,
+`npm test --workspace @jarvis/web` (131 files, 1,805 tests), and
+`npm run build --workspace @jarvis/web` (with the existing chunk-size warning).
 
 ## Pass 3 (borders, radii, surfaces)
 
