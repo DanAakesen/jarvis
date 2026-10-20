@@ -7,6 +7,7 @@ import { capabilityInstructions } from '../core/capability-instructions.js';
 import { defaultSettings } from '../core/settings.js';
 import { builtInModeInstructions } from '../core/presence-instructions.js';
 import { startWorkPresentation } from '../core/work-presentation.js';
+import { dailySourceTools } from '../daily/tools/source-tools.js';
 import {
   createEnglishSessionUpdate,
   createRealtimeSessionUpdate,
@@ -54,6 +55,105 @@ describe('calendar follow-up routing', () => {
       expect(calendarTurnContext(false, text)).toEqual({ explicit: true, followup: false });
     },
   );
+});
+
+describe('Voice Live model tool schemas', () => {
+  const groupedTools = dailySourceTools({} as never, () => ({} as never), () => ({} as never));
+
+  it.each([
+    ['daily_health_summary', ['get_health_summary', 'get_health_history']],
+    ['daily_nutrition_history', ['get_nutrition_history', 'analyze_nutrition', 'get_calorie_balance', 'set_meal_preference']],
+    ['daily_coach_status', ['get_coach_status', 'get_coach_profile', 'update_coach_profile', 'set_recovery_period']],
+  ])('flattens %s and retains its operation-specific fields', (name, operations) => {
+    const tool = groupedTools.find(({ name: toolName }) => toolName === name);
+    expect(tool).toBeDefined();
+    const schema = toModelToolSchema(tool!.inputSchema) as Record<string, unknown>;
+    const properties = schema.properties as Record<string, Record<string, unknown>>;
+    const operation = properties.operation!;
+
+    expect(tool!.inputSchema).toHaveProperty('oneOf');
+    expect(schema).toMatchObject({ type: 'object', additionalProperties: false });
+    expect(schema).not.toHaveProperty('oneOf');
+    expect(operation).toMatchObject({ type: 'string', enum: operations });
+    expect(operation).not.toHaveProperty('anyOf');
+    expect(operation).not.toHaveProperty('oneOf');
+    expect(operation.description).toEqual(expect.stringContaining('required'));
+    expect(operation.description).toEqual(expect.stringContaining('optional'));
+    for (const operationName of operations) expect(operation.description).toContain(operationName);
+  });
+
+  it('intersects required fields and includes operation-specific required and optional hints', () => {
+    const schema = toModelToolSchema({
+      type: 'object',
+      oneOf: [
+        {
+          type: 'object',
+          properties: {
+            operation: { type: 'string', const: 'first' },
+            shared: { type: 'string' },
+            firstOnly: { type: 'string' },
+            optional: { type: 'integer' },
+          },
+          required: ['operation', 'shared', 'firstOnly'],
+          additionalProperties: false,
+        },
+        {
+          type: 'object',
+          properties: {
+            operation: { type: 'string', const: 'second' },
+            shared: { type: 'string' },
+            secondOnly: { type: 'string' },
+          },
+          required: ['operation', 'shared', 'secondOnly'],
+          additionalProperties: false,
+        },
+      ],
+    }) as Record<string, unknown>;
+    const properties = schema.properties as Record<string, Record<string, unknown>>;
+
+    expect(schema.required).toEqual(['operation', 'shared']);
+    expect(schema.additionalProperties).toBe(false);
+    expect(properties.operation).toMatchObject({ type: 'string', enum: ['first', 'second'] });
+    expect(properties.operation).not.toHaveProperty('anyOf');
+    expect(properties.operation?.description).toContain('first: required shared, firstOnly; optional optional');
+    expect(properties.operation?.description).toContain('second: required shared, secondOnly; optional none');
+    expect(properties).toHaveProperty('firstOnly');
+    expect(properties).toHaveProperty('secondOnly');
+    expect(properties).toHaveProperty('optional');
+  });
+
+  it('omits additionalProperties false unless every branch forbids it', () => {
+    const schema = toModelToolSchema({
+      type: 'object',
+      anyOf: [
+        { type: 'object', properties: { operation: { type: 'string', const: 'first' } }, additionalProperties: false },
+        { type: 'object', properties: { operation: { type: 'string', const: 'second' } } },
+      ],
+    }) as Record<string, unknown>;
+
+    expect(schema).not.toHaveProperty('additionalProperties');
+  });
+
+  it('leaves a plain object schema unchanged', () => {
+    const schema = {
+      type: 'object',
+      properties: { query: { type: 'string', minLength: 1 } },
+      required: ['query'],
+      additionalProperties: false,
+    };
+
+    expect(toModelToolSchema(schema)).toEqual(schema);
+  });
+
+  it('converts nested const values to one-value enums', () => {
+    expect(toModelToolSchema({
+      type: 'object',
+      properties: { operation: { type: 'string', const: 'read' } },
+    })).toEqual({
+      type: 'object',
+      properties: { operation: { type: 'string', enum: ['read'] } },
+    });
+  });
 });
 
 const registry: ToolRegistry = {

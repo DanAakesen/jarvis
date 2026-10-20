@@ -30,6 +30,7 @@ import { checkAgentContract } from './core/agent-contract.js';
 import { composeDaily } from './daily/composition.js';
 import { createMemoryProactiveStore } from './proactive/store.js';
 import { createProactiveToolsModule } from './proactive/tools.js';
+import { toModelToolSchema } from './voice/realtime.js';
 
 const limits = JSON.parse(readFileSync(
   new URL('../../../agents/jarvis/limits.json', import.meta.url), 'utf8',
@@ -121,6 +122,44 @@ describe('production tool catalogue', () => {
       'browser-agent', 'image-generation', 'html-view', 'weather', 'folio', 'workspace-pins',
       'screen-vision', 'vision-watch', 'voice', 'daily', 'proactive',
     ]);
+  });
+
+  it('sends every configured production tool to Voice Live as a plain object schema (L121)', () => {
+    const tools = buildCatalogue(modulesWithEveryFeature()).list();
+    const assertTypedCombinators = (schema: unknown, name: string, path = ''): void => {
+      if (Array.isArray(schema)) {
+        schema.forEach((branch, index) => assertTypedCombinators(branch, name, `${path}[${index}]`));
+        return;
+      }
+      if (schema === null || typeof schema !== 'object') return;
+      const object = schema as Record<string, unknown>;
+      expect(object, `${name}${path}`).not.toHaveProperty('const');
+      for (const key of ['oneOf', 'anyOf', 'allOf']) {
+        if (key in object) {
+          expect(Array.isArray(object[key]), `${name}${path}.${key}`).toBe(true);
+          for (const [index, branch] of (object[key] as unknown[]).entries()) {
+            expect(branch !== null && typeof branch === 'object' && !Array.isArray(branch) && 'type' in branch,
+              `${name}${path}.${key}[${index}]`).toBe(true);
+          }
+        }
+      }
+      for (const [key, value] of Object.entries(object)) {
+        assertTypedCombinators(value, name, `${path}.${key}`);
+      }
+    };
+
+    expect(tools.map(({ name }) => name)).toEqual(expect.arrayContaining([
+      'daily_health_summary', 'daily_nutrition_history', 'daily_coach_status',
+    ]));
+    for (const tool of tools) {
+      const schema = toModelToolSchema(tool.inputSchema) as Record<string, unknown>;
+      expect(schema.type, tool.name).toBe('object');
+      expect(schema.properties, tool.name).toEqual(expect.any(Object));
+      for (const key of ['oneOf', 'anyOf', 'allOf', 'not', 'enum']) {
+        expect(schema, tool.name).not.toHaveProperty(key);
+      }
+      assertTypedCombinators(schema, tool.name);
+    }
   });
 
   it('keeps the catalogue unchanged with proactive off and adds exactly one tool when enabled', () => {

@@ -262,6 +262,40 @@ function sendTimedPartialTranscript(socket: WebSocket, itemId: string) {
 }
 
 describe('backend-relayed Voice Live WebSocket', () => {
+  it('logs bounded schema details only for invalid_function_parameters errors', async () => {
+    const records: string[] = [];
+    const { upstream } = await connectedPartialVoice(
+      partialSpeechHarness(), { classify: vi.fn(async () => null) }, records,
+    );
+    upstream.send(JSON.stringify({
+      type: 'error',
+      error: {
+        code: 'invalid_function_parameters',
+        param: 'tools[0].parameters',
+        message: 'A'.repeat(400),
+      },
+    }));
+    upstream.send(JSON.stringify({
+      type: 'error',
+      error: { code: 'invalid_value', param: 'private.path', message: 'do-not-log-this-message' },
+    }));
+
+    await vi.waitFor(() => {
+      expect(records.filter((record) => JSON.parse(record).msg === 'voice.upstream_event_error')).toHaveLength(2);
+    });
+    const logs = records.map((record) => JSON.parse(record) as Record<string, unknown>)
+      .filter(({ msg }) => msg === 'voice.upstream_event_error');
+    expect(logs[0]).toMatchObject({
+      errorCode: 'invalid_function_parameters',
+      param: 'tools 0 .parameters',
+      upstreamMessage: 'A'.repeat(300),
+    });
+    expect((logs[0]!.upstreamMessage as string).length).toBe(300);
+    expect(logs[1]).not.toHaveProperty('param');
+    expect(logs[1]).not.toHaveProperty('upstreamMessage');
+    expect(records.join('')).not.toContain('do-not-log-this-message');
+  });
+
   it('reports failed voice persistence after draining both transports', async () => {
     const records: string[] = [];
     const { app, browser, upstream, conversationStore } = await connectedPartialVoice(

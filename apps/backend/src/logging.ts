@@ -545,6 +545,15 @@ function safeFields(input: Record<string, unknown>): Record<string, unknown> {
       fields.httpStatus = input.httpStatus;
     }
     if (input.language === 'da' || input.language === 'en') fields.language = input.language;
+    if (input.msg === 'voice.upstream_event_error' && input.errorCode === 'invalid_function_parameters') {
+      fields.errorCode = input.errorCode;
+      if (typeof input.param === 'string' && /^[A-Za-z0-9 .:,'()_-]{1,120}$/.test(input.param)) {
+        fields.param = input.param;
+      }
+      if (typeof input.upstreamMessage === 'string' && /^[A-Za-z0-9 .:,'()_-]{1,300}$/.test(input.upstreamMessage)) {
+        fields.upstreamMessage = input.upstreamMessage;
+      }
+    }
   }
   if (input.msg === 'voice.reflex_metrics') {
     if (input.language === 'da' || input.language === 'en') fields.language = input.language;
