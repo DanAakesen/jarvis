@@ -2,7 +2,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter, useSearchParams } from 'react-router-dom';
 import userEvent from '@testing-library/user-event';
-import { dailyQuerySources as sources, isDailyQuery, type DailyJson, type DailyQuery, type DailySourceId } from '@jarvis/contracts';
+import { dailyCapabilitiesVersion, dailyQuerySources as sources, isDailyQuery, type DailyJson, type DailyQuery, type DailySourceId } from '@jarvis/contracts';
 import { DailyHome } from './DailyHome';
 import { DailyOverview } from './DailyOverview';
 import { DailyRefreshContext } from './refresh';
@@ -30,7 +30,7 @@ function items(query: DailyQuery): Record<string, DailyJson>[] {
   const record = records[query.source];
   return record ? [record] : [];
 }
-const capabilityList = (ids: readonly DailySourceId[] = Object.values(sources)) => jsonResponse({ module: 'daily', version: 3, sources: ids });
+const capabilityList = (ids: readonly DailySourceId[] = Object.values(sources)) => jsonResponse({ module: 'daily', version: dailyCapabilitiesVersion, sources: ids });
 function gate() {
   let open = () => {};
   const opened = new Promise<void>(resolve => { open = resolve; });

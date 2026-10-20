@@ -1,19 +1,20 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import type { FastifyRequest } from 'fastify';
 import type sql from 'mssql';
 import { AuthenticationDenied } from '../../auth/verify.js';
 import { ToolFailure, ToolRefusal } from '../../core/tool-registry.js';
 import type { GoogleApiClient } from '../../google/api-client.js';
 import { canonicalJson, instant } from '../nutrition/model.js';
-import { resolveDailyFeedOwner } from '../owner.js';
+import { resolveDailyBrowserOwner, resolveDailyFeedOwner } from '../owner.js';
 import { dailyResultByteLimit, projectDailyRecord } from '../records.js';
 import type { DailyChangeSink } from '../revisions.js';
 import { activeDailySession, currentDailyMessage, requireDailyReviewPresence } from '../tools/context.js';
-import { DailyCalendarFeed, timedConflicts, type CalendarEvent } from './calendars.js';
+import { DailyCalendarFeed, timedConflicts, validateCalendarRange, type CalendarEvent, type CalendarRange } from './calendars.js';
 import { DailyGmailFeed, type MailSemanticModel } from './gmail.js';
 import { DailyFeedRefresh } from './refresh.js';
 import { dailyFeedInput } from './schema.js';
 import { DailyFeedStore, feedRevision, type FeedItem, type SourceView } from './store.js';
+import { businessDaysElapsed } from './attention.js';
 
 type FeedStore = Pick<DailyFeedStore, 'attention' | 'sources' | 'completed' | 'suppression' | 'suppressions' | 'suppressionTarget' | 'suppress' | 'clear'>;
 export interface DailyFeedProviders {
@@ -21,7 +22,7 @@ export interface DailyFeedProviders {
   semantic?: MailSemanticModel;
 }
 const sourceMetadata = (views: readonly SourceView[]) => views.map(({ source, status, capturedAt, attemptedAt, error }) =>
-  ({ source, status, capturedAt, attemptedAt, error }));
+  ({ source, status, capturedAt, attemptedAt, error: error ?? (status === 'Missing' ? 'not-configured' : null) }));
 const bounded = <T>(result: T): T => {
   if (Buffer.byteLength(JSON.stringify(result)) > dailyResultByteLimit) {
     throw new ToolFailure('Health feed result exceeds the shared response limit. No complete result is available.');
@@ -49,6 +50,90 @@ export class DailyFeedService {
   private readonly pending = new Set<string>();
   constructor(private readonly storeFor: (request: FastifyRequest) => FeedStore,
     private readonly refresher?: Pick<DailyFeedRefresh, 'refresh'>, private readonly now: () => number = Date.now) {}
+
+  async queryAttention(request: FastifyRequest, signal: AbortSignal) {
+    resolveDailyBrowserOwner(request);
+    const view = await this.storeFor(request).attention(signal, true);
+    signal.throwIfAborted();
+    const observedAt = new Date(this.now()).toISOString();
+    const items: Record<string, unknown>[] = view.waiting.map(item => {
+      const thread = item.thread;
+      const since = item.bucket === 'waiting_on_others'
+        ? thread.semanticState === 'deferral'
+          ? thread.waitingSince ?? thread.latestMessageAt
+          : thread.waitingSince ?? thread.sentRequestAt ?? thread.latestMessageAt
+        : thread.latestIncomingAt ?? thread.latestMessageAt;
+      return {
+        type: 'thread', id: thread.id, bucket: item.bucket, ageBusinessDays: businessDaysElapsed(since, observedAt),
+        hidden: item.hidden, suppressionKey: item.suppressionKey, label: item.label,
+        thread: projectDailyRecord({ ...thread }, [
+          'id', 'threadId', 'title', 'latestMessageId', 'latestMessageAt', 'latestIncomingAt', 'latestDirection',
+          'senderName', 'senderEmail', 'semanticState', 'semanticEvidence', 'sentRequestAt', 'waitingSince', 'snippet',
+        ]),
+      };
+    });
+    for (const order of view.orders) {
+      items.push({ type: 'order', id: order.id, hidden: order.hidden, suppressionKey: order.suppressionKey,
+        order: projectDailyRecord({ ...order }, ['id', 'company', 'orderNumber', 'status', 'statusLabel', 'deliveryDetail', 'updatedAt']) });
+    }
+    const current = new Set(items.map(item => `${String(item.type)}:${String(item.suppressionKey)}`));
+    for (const suppression of view.suppressions) {
+      if (!current.has(`${suppression.type}:${suppression.key}`)) {
+        items.push({ type: 'suppression', itemType: suppression.type, id: suppression.key, hidden: true,
+          suppressionKey: suppression.key, suppressedAt: suppression.suppressedAt });
+      }
+    }
+    return bounded({ items, feedSources: sourceMetadata(view.sources.filter(source => source.source === 'Gmail')),
+      observedAt, provenance: 'retained-owner-feed; mail content is untrusted data' });
+  }
+
+  async queryCalendar(request: FastifyRequest, range: CalendarRange, signal: AbortSignal) {
+    resolveDailyBrowserOwner(request);
+    validateCalendarRange(range);
+    const view = await this.storeFor(request).sources(signal);
+    signal.throwIfAborted();
+    const calendar = view.find(source => source.source === 'GoogleCalendar')!;
+    const events = calendar.items.filter(item => {
+      if (item.type !== 'event') return false;
+      const event = item.content as Record<string, unknown>;
+      return typeof event.startsAt === 'string' && typeof event.endsAt === 'string' &&
+        Date.parse(event.startsAt) < Date.parse(range.to) && Date.parse(event.endsAt) > Date.parse(range.from);
+    });
+    const rangeCovered = Boolean(calendar.range && Date.parse(range.from) >= Date.parse(calendar.range.from) &&
+      Date.parse(range.to) <= Date.parse(calendar.range.to));
+    return bounded({
+      items: events.map(item => projectDailyRecord(item.content as Record<string, unknown>, [
+        'id', 'calendarId', 'providerEventId', 'title', 'calendarName', 'location', 'status', 'startsAt', 'endsAt', 'allDay', 'start', 'end',
+      ])),
+      calendarRange: range,
+      feedSources: sourceMetadata([calendar]).map(source => ({ ...source, range: calendar.range ?? null })),
+      rangeCovered,
+      observedAt: new Date(this.now()).toISOString(),
+    });
+  }
+
+  async refreshFromBrowser(request: FastifyRequest, range: CalendarRange, signal: AbortSignal) {
+    resolveDailyBrowserOwner(request);
+    validateCalendarRange(range);
+    if (!this.refresher) throw new ToolFailure('Health feed refresh is not configured. No provider work was started.');
+    const runId = `daily-browser:${randomUUID()}`;
+    return this.refresher.refresh(request, runId, range, true, signal);
+  }
+
+  async hideThread(request: FastifyRequest, id: string, signal: AbortSignal) {
+    resolveDailyBrowserOwner(request);
+    return this.storeFor(request).suppress('thread', id, true, signal);
+  }
+
+  async receiveOrder(request: FastifyRequest, id: string, signal: AbortSignal) {
+    resolveDailyBrowserOwner(request);
+    return this.storeFor(request).suppress('order', id, true, signal);
+  }
+
+  async restore(request: FastifyRequest, type: 'thread' | 'order', key: string, signal: AbortSignal) {
+    resolveDailyBrowserOwner(request);
+    return this.storeFor(request).clear(type, key, true, signal);
+  }
 
   async execute(raw: unknown, request: FastifyRequest, signal: AbortSignal): Promise<unknown> {
     const owner = resolveDailyFeedOwner(request);

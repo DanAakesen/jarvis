@@ -133,6 +133,7 @@ import { createPushStore } from './database/push-store.js';
 import { registerPushRoutes } from './push/routes.js';
 import { createSystemPushSender } from './proactive/push-delivery.js';
 import { composeDaily } from './daily/composition.js';
+import { createFoundryMailSemanticModel } from './daily/feeds/foundry-model.js';
 import { registerProactive } from './proactive/composition.js';
 import { createProactiveStore } from './database/proactive-store.js';
 import { createMemoryProactiveStore } from './proactive/store.js';
@@ -407,6 +408,13 @@ try {
       },
     })
     : { read: async () => fallbackModelCatalogue() };
+  const dailyMailSemantic = config.dailyFeedsEnabled && config.foundryProjectEndpoint && credential && settingsStore && usageStore
+    ? createFoundryMailSemanticModel(config.foundryProjectEndpoint, async (scope, signal) => {
+      const token = await credential.getToken(scope, { abortSignal: signal });
+      if (!token) throw new Error('Daily mail semantic identity unavailable');
+      return token.token;
+    }, settingsStore, modelCatalogue, usageStore)
+    : undefined;
   const embeddingModel = async () => settingsStore
     ? (await readSettings(settingsStore, await modelCatalogue.read())).roles.embedding.model
     : config.foundryMemoryEmbeddingDeploymentName ?? 'text-embedding-3-small';
@@ -898,6 +906,11 @@ try {
       enabled: config.dailyEnabled === true,
       pool: database?.pool,
       ownerObjectId: config.auth.ownerObjectId,
+      feedsEnabled: config.dailyFeedsEnabled === true,
+      ...(config.dailyFeedsEnabled ? { feeds: {
+        ...(googleApiClient ? { google: googleApiClient } : {}),
+        ...(dailyMailSemantic ? { semantic: dailyMailSemantic } : {}),
+      } } : {}),
     }),
     proactive: proactiveToolsModule,
   });
