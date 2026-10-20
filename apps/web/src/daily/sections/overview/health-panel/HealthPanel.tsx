@@ -17,6 +17,10 @@ const labels: Record<HealthTab, string> = {
 };
 type Props = Pick<DailySectionProps, 'backendUrl' | 'getAccessToken' | 'sources' | 'refreshVersion'> & { targets: HealthTargets };
 
+function healthMessage(message: string) {
+  return message.replace(/\bdaily\b/giu, 'Health');
+}
+
 function Tiles({ tiles }: { tiles: Tile[] }) {
   return <div className="health-panel-tiles">{tiles.map(tile => <StatTile compact key={tile.key}
     label={tile.label} value={tile.value} {...(typeof tile.value === 'number' && tile.unit ? { unit: tile.unit } : {})}
@@ -26,8 +30,8 @@ function Tiles({ tiles }: { tiles: Tile[] }) {
 
 function ReadStatus({ name, page, served }: { name: string; page: DailyPages; served: boolean }) {
   if (!served) return <DailyUnavailable>{`${name} is not served by this backend.`}</DailyUnavailable>;
-  if (page.error) return <DailyState status="error" message={`${name}: ${page.error}`} onRetry={page.reload} />;
-  if (page.status === 'loading' || page.status === 'idle') return <DailyState status="loading" />;
+  if (page.error) return <DailyState status="error" message={`${name}: ${healthMessage(page.error)}`} onRetry={page.reload} />;
+  if (page.status === 'loading' || page.status === 'idle') return <DailyState status="loading" loadingLabel="Loading Health history" />;
   return page.hasMore ? <DailyState status="partial" coverage={{ returned: page.items.length, hasMore: true }}
     {...(!page.capped ? { onLoadMore: page.loadMore } : {})} /> : null;
 }
@@ -121,7 +125,7 @@ export function HealthPanel(props: Props) {
             <p>Received records · {formatDate(window.startDate)}–{formatDate(window.endDate)} · Europe/Copenhagen.
               Source completeness is unknown.</p>
             {visibleReads.map(read => <ReadStatus key={read.source} {...read} served={served(read.source)} />)}
-            {tab === 'overview' && served(sources.sync) && sync.error && <DailyState status="error" message={`Sync: ${sync.error}`} onRetry={sync.reload} />}
+            {tab === 'overview' && served(sources.sync) && sync.error && <DailyState status="error" message={`Sync: ${healthMessage(sync.error)}`} onRetry={sync.reload} />}
             {noCategories && tab !== 'overview' && <p>Metric categories are not served by this catalogue. Uncategorised metrics appear in All data.</p>}
           </div>
           {tab === 'overview' ? <>

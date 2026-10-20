@@ -1,10 +1,11 @@
 import { Loader } from '../../Loader';
 import { formatTime } from './formatters';
 
-export function DailyState({ status, message, emptyMessage, retryLabel = 'Retry', onRetry, onLoadMore, coverage, freshness }: {
+export function DailyState({ status, message, emptyMessage, loadingLabel = 'Loading Daily history', retryLabel = 'Retry', onRetry, onLoadMore, coverage, freshness }: {
   status: 'loading' | 'empty' | 'error' | 'partial' | 'ready';
   message?: string;
   emptyMessage?: string;
+  loadingLabel?: string;
   retryLabel?: string;
   onRetry?: () => void;
   onLoadMore?: () => void;
@@ -12,7 +13,7 @@ export function DailyState({ status, message, emptyMessage, retryLabel = 'Retry'
   freshness?: { observedAt: string };
 }) {
   return <div className="daily-state">
-    {status === 'loading' && <Loader label="Loading Daily history" variant="rows" />}
+    {status === 'loading' && <Loader label={loadingLabel} variant="rows" />}
     {status === 'empty' && <p role="status">{emptyMessage ?? 'No records'}</p>}
     {status === 'error' && <div role="alert"><p>{message ?? 'Daily history could not be loaded.'}</p>
       {onRetry && <button className="secondary-button" type="button" onClick={onRetry}>{retryLabel}</button>}

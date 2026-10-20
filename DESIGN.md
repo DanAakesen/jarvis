@@ -1658,6 +1658,11 @@ keys, disclosure/deep links and equal state heights. Screenshot-viewer limits
 prevented a complete pixel review; live owner data, physical devices and
 P14-45 target wiring remain unverified.
 
+20 October 2026 owner naming follow-up: all new panel copy and accessible
+announcements use Health, including inherited loading labels and read errors.
+Internal identifiers and existing routes remain unchanged for #1146/#1147;
+the panel introduces no hard-coded area-route links.
+
 20 October 2026 (P14-41 / #1116): the owner wants the original Daily components and data presentation rebuilt in Jarvis styling. Keep the original composition (cards, rings, tiles, panels) but draw it with existing Jarvis tokens, shared components, themes, density and motion; add no Daily-only skin or tokens. See the [audit](docs/ui/p14-41/audit.md).
 
 17 October brief-history source continuation reuses the existing collection

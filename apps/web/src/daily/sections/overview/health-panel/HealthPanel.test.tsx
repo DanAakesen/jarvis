@@ -23,7 +23,7 @@ function mount(url = '/', available = allSources, targets: Parameters<typeof Hea
 function panel() { return screen.getByRole('tabpanel'); }
 async function settled() {
   await waitFor(() => expect(screen.getByText('No sync received')).toBeTruthy());
-  await waitFor(() => expect(screen.queryAllByText('Loading Daily history')).toHaveLength(0));
+  await waitFor(() => expect(screen.queryAllByText('Loading Health history')).toHaveLength(0));
   await waitFor(() => expect(within(panel()).getAllByText(/Read /u).length).toBeGreaterThan(0));
 }
 
@@ -39,6 +39,47 @@ beforeEach(() => {
 afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
 
 describe('Health panel', () => {
+  it('announces Health while loading without exposing internal source ids', async () => {
+    let release!: () => void;
+    const hold = new Promise<void>(resolve => { release = resolve; });
+    vi.mocked(fetch).mockImplementation(async (_url, init) => {
+      const query = JSON.parse(init!.body as string) as DailyQuery;
+      await hold;
+      return jsonResponse(dailyFixture(query));
+    });
+    const { container } = mount();
+    expect(screen.getAllByText('Loading Health history').length).toBeGreaterThan(0);
+    expect(container.textContent).not.toMatch(/\bdaily\b/iu);
+    expect(container.textContent).not.toContain(sources.sleep);
+    release();
+    await settled();
+    expect(container.textContent).not.toMatch(/\bdaily\b/iu);
+  });
+
+  it.each([
+    [401, 'Health access could not be verified. Sign in as the configured owner.'],
+    [403, 'Health access could not be verified. Sign in as the configured owner.'],
+    [404, 'Health is not enabled on this backend.'],
+    [503, 'Health is unavailable (HTTP 503).'],
+  ])('uses Health in collection and sync errors (HTTP %i)', async (status, message) => {
+    vi.mocked(fetch).mockResolvedValue(jsonResponse({}, status));
+    const { container } = mount();
+    await waitFor(() => expect(screen.getAllByRole('alert')).toHaveLength(6));
+    expect(screen.getByText(`Sleep: ${message}`)).toBeTruthy();
+    expect(screen.getByText(`Sync: ${message}`)).toBeTruthy();
+    expect(container.textContent).not.toMatch(/\bdaily\b/iu);
+    expect(container.textContent).not.toContain(sources.sleep);
+  });
+
+  it('uses Health for unexpected read failures', async () => {
+    vi.mocked(fetch).mockRejectedValue(new Error('Synthetic network failure'));
+    const { container } = mount();
+    await waitFor(() => expect(screen.getAllByRole('alert')).toHaveLength(6));
+    expect(screen.getByText('Sleep: Health could not be loaded.')).toBeTruthy();
+    expect(screen.getByText('Sync: Health could not be loaded.')).toBeTruthy();
+    expect(container.textContent).not.toMatch(/\bdaily\b/iu);
+  });
+
   it('renders seven labelled tabs with roving focus, arrows, Home and End', async () => {
     mount();
     await settled();
