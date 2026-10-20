@@ -16,7 +16,7 @@
 .tasks-panel-search:has(input:focus-visible) { outline: 3px solid var(--focus); outline-offset: 2px; }
 /* The refresh action is a bare icon: no fill, border or shadow in any state. Hover tints it and turns it a quarter; while a refresh runs it spins. */
 .tasks-panel-refresh {
-  display: grid; place-items: center; width: 36px; height: 36px; padding: 0; border: 0; border-radius: var(--radius-control);
+  display: grid; place-items: center; width: var(--control-size); height: var(--control-size); padding: 0; border: 0; border-radius: var(--radius-control);
   background: none; box-shadow: none; color: var(--text); cursor: pointer; transition: color var(--motion-press) var(--ease-standard);
 }
 .tasks-panel-refresh svg { width: 20px; height: 20px; transition: rotate var(--motion-state) var(--ease-enter), scale var(--motion-press) var(--ease-standard); }
@@ -27,7 +27,7 @@
 .tasks-panel-refresh:disabled { color: var(--disabled-text); cursor: progress; }
 .tasks-panel-refresh[aria-busy="true"] svg { animation: tasks-panel-spin 900ms linear infinite; }
 .tasks-panel-toggle {
-  justify-self: start; min-height: 32px; padding: 0 var(--space-3); border: 0; border-radius: var(--radius-pill); background: transparent; color: var(--text-muted);
+  justify-self: start; min-height: var(--pill-size); padding: 0 var(--space-3); border: 0; border-radius: var(--radius-pill); background: transparent; color: var(--text-muted);
   font: inherit; font-size: var(--type-caption); font-weight: 650; cursor: pointer;
   transition: background-color var(--motion-press) var(--ease-standard), color var(--motion-press) var(--ease-standard);
 }
@@ -57,7 +57,7 @@
 .tasks-panel-note, .tasks-panel-empty { margin: 0; color: var(--text-muted); font-size: var(--type-caption); }
 .tasks-panel-error { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); color: var(--error); font-size: var(--type-small); }
 .tasks-panel-error p { min-width: 0; margin: 0; overflow-wrap: anywhere; }
-.tasks-panel-retry { flex: 0 0 auto; min-height: 36px; padding: 0 var(--space-3); border: 0; border-radius: var(--radius-control); background: var(--glass-hover); color: var(--text); font: inherit; font-size: var(--type-caption); font-weight: 650; cursor: pointer; }
+.tasks-panel-retry { flex: 0 0 auto; min-height: var(--control-size); padding: 0 var(--space-3); border: 0; border-radius: var(--radius-control); background: var(--glass-hover); color: var(--text); font: inherit; font-size: var(--type-caption); font-weight: 650; cursor: pointer; }
 .tasks-panel-retry:hover { background: var(--glass-pressed); }
 .tasks-panel-retry:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 @keyframes tasks-panel-in { from { opacity: 0; translate: -8px 0; } }

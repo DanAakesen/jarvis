@@ -274,6 +274,15 @@ inset-shadow borders or selected-state glows are added to non-button controls.
 Within action groups, markup order is keyboard and visual order: place the
 primary action last. CSS does not reorder action groups.
 
+Control sizes (P14-32, 20 October 2026) come from three tokens in `styles.css`,
+and new rules use them instead of ad-hoc heights: `--control-size` (44px) for a
+standalone control or bar, `--control-size-inset` (36px) for a control nested in a
+44px bar, and `--pill-size` (28px) for a pill. Siblings in a row share one height:
+the Notes search bar and "Show tasks" are both 44px with the "+" and "Reset view"
+at 36px inside the bar, the top-bar icon buttons and Settings link are 44px, and the
+Tasks panel refresh and retry controls are 44px. Inset controls keep a 44px hit area
+through an invisible extension. The Notes legend items are 28px pills.
+
 Keep compact desktop controls where useful and at least 44px touch targets.
 Segmented groups wrap at narrow widths; scrolling filter rows retain keyboard
 focus and readable labels. Reuse current motion timing and reduced-motion

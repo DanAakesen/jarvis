@@ -161,6 +161,10 @@
   --radius-panel: var(--theme-radius, 18px);
   --radius-window: var(--theme-radius, 24px);
   --radius-pill: 999px;
+  /* Control sizes: a standalone control or bar, a control nested inside a bar, and a pill. Use these, not ad-hoc heights. */
+  --control-size: 44px;
+  --control-size-inset: 36px;
+  --pill-size: 28px;
   --motion-press: 140ms;
   --motion-state: 260ms;
   --motion-panel: 420ms;
@@ -1093,17 +1097,16 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
 .brand { font-size: var(--type-lead); letter-spacing: -0.01em; }
 .topbar-actions { gap: var(--space-1); }
 .topbar-feature-button, .settings-link, .topbar-icon-button {
-  height: 36px;
-  min-height: 36px;
+  height: var(--control-size);
+  min-height: var(--control-size);
   border-radius: var(--radius-control);
   background: transparent;
   color: var(--text-muted);
   transition: background-color var(--motion-press) var(--ease-standard), color var(--motion-press) var(--ease-standard), box-shadow var(--motion-press) var(--ease-standard);
 }
-.settings-link { height: 44px; min-height: 44px; }
-.topbar-feature-button, .topbar-icon-button { width: 36px; min-width: 36px; }
+.topbar-feature-button, .topbar-icon-button { width: var(--control-size); min-width: var(--control-size); }
 .topbar-feature-button.camera-control-button { width: auto; padding-inline: var(--space-3); }
-.topbar-feature-button.screen-control-button[aria-pressed="false"] { width: 36px; padding-inline: 0; }
+.topbar-feature-button.screen-control-button[aria-pressed="false"] { width: var(--control-size); padding-inline: 0; }
 .topbar-feature-button svg, .settings-link svg, .topbar-icon-button svg { width: 18px; height: 18px; }
 .camera-control-button:hover, .settings-link:hover, .topbar-icon-button:hover { background: var(--glass-hover); color: var(--text); }
 .camera-control-button[aria-pressed="true"], .topbar-icon-button[aria-expanded="true"], .settings-link[aria-current="page"] {
@@ -1112,10 +1115,6 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
   box-shadow: none;
 }
 .topbar-icon-button[aria-expanded="true"] svg, .settings-link[aria-current="page"] svg { stroke-width: 2.1; }
-@media (pointer: coarse) {
-  .topbar-feature-button, .settings-link, .topbar-icon-button { height: 44px; min-height: 44px; }
-  .topbar-feature-button, .topbar-icon-button, .topbar-feature-button.screen-control-button[aria-pressed="false"] { width: 44px; min-width: 44px; }
-}
 /* Desktop shell (every page): the top bar floats as the same glass slab as the side panels. */
 @media (width > 700px) and (not ((max-height: 500px) and (pointer: coarse))) {
   .app-shell:not(.app-signed-out) .app-topbar {
@@ -2814,8 +2813,8 @@ a.task-chip:hover { background: var(--glass-pressed); }
 .knowledge-status, .knowledge-loader { position: absolute; z-index: 2; top: 50%; left: 50%; display: grid; width: max-content; max-width: min(420px, 90%); justify-items: center; gap: var(--space-3); margin: 0; color: var(--text-muted); text-align: center; translate: -50% -50%; }
 .knowledge-status p { margin: 0; }
 .knowledge-search {
-  position: absolute; z-index: 3; top: 16px; left: 50%; display: flex; width: min(560px, calc(100% - 32px)); min-height: 44px; align-items: center; gap: var(--space-2);
-  padding: var(--space-1) var(--space-2) var(--space-1) var(--space-4); border-radius: var(--radius-control); translate: -50% 0;
+  position: absolute; z-index: 3; top: 16px; left: 50%; display: flex; width: min(560px, calc(100% - 32px)); height: var(--control-size); min-height: var(--control-size); align-items: center; gap: var(--space-2);
+  padding: 0 var(--space-1) 0 var(--space-4); border-radius: var(--radius-control); translate: -50% 0;
 }
 .knowledge-search.luminous-glass { border-color: var(--control-rule); box-shadow: none; }
 .knowledge-search.luminous-glass::before { content: none; }
@@ -2824,10 +2823,11 @@ a.task-chip:hover { background: var(--glass-pressed); }
 .knowledge-search input:focus-visible { outline: none; }
 .knowledge-search:has(input:focus-visible) { outline: 3px solid var(--focus); outline-offset: 2px; }
 .knowledge-count { flex: 0 0 auto; color: var(--text-muted); font-size: var(--type-caption); white-space: nowrap; }
-.knowledge-reset { flex: 0 0 auto; min-height: 36px; padding: 0 var(--space-3); border: 0; border-radius: var(--radius-control); background: var(--glass-hover); color: var(--text); font: inherit; font-size: var(--type-caption); font-weight: 650; cursor: pointer; }
+.knowledge-reset { position: relative; flex: 0 0 auto; min-height: var(--control-size-inset); padding: 0 var(--space-3); border: 0; border-radius: var(--radius-control); background: var(--glass-hover); color: var(--text); font: inherit; font-size: var(--type-caption); font-weight: 650; cursor: pointer; }
+.knowledge-reset::after { content: ""; position: absolute; inset: -4px 0; }
 .knowledge-reset:hover { background: var(--glass-pressed); }
 .knowledge-reset:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
-.knowledge-results { position: absolute; z-index: 3; top: 70px; left: 50%; display: grid; width: min(560px, calc(100% - 32px)); max-height: 40%; gap: var(--space-1); margin: 0; padding: var(--space-2); overflow-x: hidden; overflow-y: auto; overflow-wrap: anywhere; border-radius: var(--radius-panel); list-style: none; translate: -50% 0; }
+.knowledge-results { position: absolute; z-index: 3; top: calc(16px + var(--control-size) + var(--space-2)); left: 50%; display: grid; width: min(560px, calc(100% - 32px)); max-height: 40%; gap: var(--space-1); margin: 0; padding: var(--space-2); overflow-x: hidden; overflow-y: auto; overflow-wrap: anywhere; border-radius: var(--radius-panel); list-style: none; translate: -50% 0; }
 /* Like the search field above it, the list drops the glass ring: that ring overhangs its box by 1px and adds phantom scrollbars to a scroller. */
 .knowledge-results.luminous-glass { border-color: var(--control-rule); }
 .knowledge-results.luminous-glass::before { content: none; }
@@ -2840,7 +2840,7 @@ a.task-chip:hover { background: var(--glass-pressed); }
 .knowledge-results button:focus-visible, .knowledge-neighbours button:focus-visible { outline: 3px solid var(--focus); outline-offset: 1px; }
 .knowledge-dot { width: 8px; height: 8px; flex: 0 0 auto; border-radius: 50%; background: var(--folder, var(--text-muted)); box-shadow: 0 0 8px var(--folder, transparent); }
 .knowledge-legend { position: absolute; z-index: 3; bottom: 16px; left: 16px; display: flex; flex-wrap: wrap; gap: var(--space-2); margin: 0; padding: 0; list-style: none; }
-.knowledge-legend li { display: inline-flex; min-height: 32px; align-items: center; gap: var(--space-2); padding: 0 var(--space-3); border-radius: var(--radius-control); background: var(--stage-glass); backdrop-filter: blur(12px); color: var(--text); font-size: var(--type-caption); font-weight: 600; }
+.knowledge-legend li { display: inline-flex; min-height: var(--pill-size); align-items: center; gap: var(--space-2); padding: 0 var(--space-3); border-radius: var(--radius-pill); background: var(--stage-glass); backdrop-filter: blur(12px); color: var(--text); font-size: var(--type-caption); font-weight: 600; }
 .knowledge-legend-count { color: var(--text-muted); font-weight: 500; }
 .knowledge-legend .knowledge-sample { background: color-mix(in srgb, var(--warning) 22%, transparent); }
 .knowledge-label {
@@ -2878,7 +2878,7 @@ a.task-chip:hover { background: var(--glass-pressed); }
 :root[data-motion="reduced"] .knowledge-note { animation: none; }/* Knowledge v2 (Dan, 7 October): a darker backdrop so the stars read, and the legend doubles as folder filters. */
 .knowledge-stage { background: radial-gradient(ellipse at 50% 45%, color-mix(in srgb, var(--stage-background) 72%, transparent), color-mix(in srgb, var(--stage-background) 92%, transparent)); }
 .knowledge-legend li:has(> button) { padding: 0; }
-.knowledge-legend button { display: inline-flex; min-height: 32px; align-items: center; gap: var(--space-2); padding: 0 var(--space-3); border: 0; border-radius: inherit; background: transparent; color: inherit; font: inherit; cursor: pointer; }
+.knowledge-legend button { display: inline-flex; min-height: var(--pill-size); align-items: center; gap: var(--space-2); padding: 0 var(--space-3); border: 0; border-radius: inherit; background: transparent; color: inherit; font: inherit; cursor: pointer; }
 .knowledge-legend li:has(> button:hover) { background: var(--glass-hover); }
 .knowledge-legend li:has(> button[aria-pressed="true"]) { background: var(--state-selected-bg); color: var(--state-selected-fg); font-weight: 750; }
 .knowledge-legend button:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }/* Shell windows float at every desktop width (Dan, 7 October): the old ≤900 px stacking is for the classic workspace only. */
@@ -3670,7 +3670,7 @@ a.task-chip:hover { background: var(--glass-pressed); }
     width: 44px; min-width: 44px; height: 44px; min-height: 44px;
   }
   :is(.usage-segmented button, .advanced-segmented button, .folio-kind, .presence-option,
-    .knowledge-reset, .knowledge-results button, .knowledge-neighbours button, .knowledge-legend button,
+    .knowledge-results button, .knowledge-neighbours button, .knowledge-legend button,
     .project-dialog-repositories .secondary-button, .role-controls select, .task-release-actions .secondary-button) { min-height: 44px; }
   .folio-action { width: 44px; height: 44px; }
   .release-trail-button { width: 44px; min-height: 44px; }
@@ -4059,6 +4059,7 @@ select.form-control {
   min-height: 38px;
   font: var(--type-body)/var(--line-body) var(--font-body);
 }
+.app-shell .knowledge-search input { height: var(--control-size-inset); min-height: 0; }
 .app-shell .kanban-search input {
   --field-padding-start: var(--space-7);
 }

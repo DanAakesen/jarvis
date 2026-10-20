@@ -1014,6 +1014,22 @@ describe('shared glass tokens', () => {
     expect(source).toContain('@media (prefers-reduced-motion: reduce) { .rail-tip { translate: 0 -50%; transition: none; } }');
   });
 
+  it('keeps sibling controls on one size scale', () => {
+    const source = readFileSync('src/styles.css', 'utf8');
+    const notes = readFileSync('src/notes/NotesArea.css', 'utf8');
+    expect(tokenValue(source, ':root', '--control-size')).toBe('44px');
+    expect(tokenValue(source, ':root', '--control-size-inset')).toBe('36px');
+    expect(tokenValue(source, ':root', '--pill-size')).toBe('28px');
+    const search = ruleDeclaration(source, /\n\.knowledge-search\s*\{([^}]*)\}/, 'height');
+    expect(search).toBe('var(--control-size)');
+    expect(ruleDeclaration(source, /\n\.knowledge-search\s*\{([^}]*)\}/, 'padding')).toBe('0 var(--space-1) 0 var(--space-4)');
+    expect(ruleDeclaration(notes, /\.notes-page \.knowledge-search \.notes-create-button\s*\{([^}]*)\}/, 'min-height')).toBe('var(--control-size-inset)');
+    expect(ruleDeclaration(notes, /\.notes-page \.notes-tasks-toggle\s*\{([^}]*)\}/, 'min-height')).toBe('var(--control-size)');
+    expect(ruleDeclaration(source, /\n\.knowledge-reset\s*\{([^}]*)\}/, 'min-height')).toBe('var(--control-size-inset)');
+    expect(ruleDeclaration(source, /\.topbar-feature-button, \.settings-link, \.topbar-icon-button\s*\{([^}]*)\}/, 'height')).toBe('var(--control-size)');
+    expect(notes).not.toMatch(/\.notes-page \.knowledge-reset\s*\{\s*min-height: 44px/);
+  });
+
   it('keeps selected text at 4.5:1 and indicators at 3:1 in both themes and interaction states', () => {
     const source = readFileSync('src/styles.css', 'utf8');
     expect(tokenValue(source, ':root', '--state-selected-fg')).toBe('color-mix(in srgb, var(--focus) 40%, var(--text))');

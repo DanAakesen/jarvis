@@ -1,5 +1,16 @@
 # Decisions
 
+## P14-32 — One size scale for controls (20 October 2026; #1085)
+
+Controls in the same row had drifted to different heights (the Notes search bar
+measured about 53px next to a 44px button, with 36, 32 and 28px neighbours
+elsewhere). Three tokens now define the scale: `--control-size` 44px for a
+standalone control or bar, `--control-size-inset` 36px for a control nested in a
+44px bar, and `--pill-size` 28px for pills. The Notes top row, the legend, the
+top-bar icon buttons and the Tasks panel controls use them. Inset controls keep a
+44px hit area through an invisible extension rather than growing the bar. Other
+stylesheets still hold ad-hoc heights and move onto the scale as they are touched.
+
 ## P14-32 — Rail icons light in their own tone and name themselves on hover (19 October 2026; #1085)
 
 Each left-rail icon now lights in its own tone when its page is selected, and
