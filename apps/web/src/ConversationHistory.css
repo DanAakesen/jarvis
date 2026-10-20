@@ -341,7 +341,7 @@
   padding: 0; pointer-events: none;
 }
 .app-shell[data-chat="rail"]:not(.app-signed-out) .workspace-shell-area { bottom: 16px; }
-.app-shell[data-home="false"] .workspace-shell-area :is(.workspace-window, .workspace-view-switcher) { pointer-events: auto; }
+.app-shell[data-home="false"] .workspace-shell-area .workspace-window { pointer-events: auto; }
 /* While the bar is in the rail its conversation sheet leaves the tiling and hides after the flight. */
 .app-shell[data-chat="rail"] .workspace-canvas { position: relative; }
 .app-shell[data-chat="rail"] .workspace-window-conversation:not(.workspace-window-maximized) {
@@ -445,11 +445,6 @@
   color: var(--text-muted); font-size: var(--type-caption); line-height: var(--line-tight); white-space: nowrap; pointer-events: none;
 }
 .conversation-message .message-metadata:has(> time:only-child:empty) { display: none; }
-@media (hover: none) {
-  .conversation-message .message-metadata {
-    position: static; width: fit-content; max-width: 100%; margin: var(--space-1) 0 0 auto;
-  }
-}
 .conversation-message[data-speaker="dan"] > .message-visual-status {
   margin-top: var(--space-2); color: var(--text-muted); font-size: var(--type-small); white-space: normal;
 }
@@ -720,6 +715,6 @@
   left: calc(env(safe-area-inset-left) + 8px);
   padding: 0; pointer-events: none;
 }
-.app-shell.app-shell[data-phone="true"][data-voice-active="false"] .workspace-shell-area :is(.workspace-window, .workspace-view-switcher) {
+.app-shell.app-shell[data-phone="true"][data-voice-active="false"] .workspace-shell-area .workspace-window {
   pointer-events: auto;
 }

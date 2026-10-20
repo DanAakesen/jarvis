@@ -101,13 +101,18 @@ describe('daily_show descriptor', () => {
     expect(tool.bodyLimit).toBeLessThanOrEqual(4096);
     expect(tool.description.length).toBeLessThanOrEqual(4000);
     expect(tool.description).toContain('daily_query');
+    expect(tool.description).toMatch(/chart is drawn for workout duration/iu);
     expect(tool.description).toMatch(/adds no calculations/iu);
     expect(tool.description).toMatch(/never zero/iu);
   });
 
   it('offers a closed schema with exactly the showable sources and no cursor', () => {
     const { tool } = fixture();
-    const schema = tool.inputSchema as { required: string[]; additionalProperties: boolean; properties: Record<string, { enum?: string[] }> };
+    const schema = tool.inputSchema as {
+      required: string[];
+      additionalProperties: boolean;
+      properties: Record<string, { enum?: string[]; description?: string }>;
+    };
     expect(schema.required).toEqual(['source']);
     expect(schema.additionalProperties).toBe(false);
     expect([...(schema.properties.source?.enum ?? [])].sort()).toEqual([
@@ -117,6 +122,7 @@ describe('daily_show descriptor', () => {
     expect(schema.properties.source?.enum).toEqual([...dailyShowSources]);
     expect(Object.keys(schema.properties).sort()).toEqual(['display', 'endDate', 'limit', 'metric', 'source', 'startDate', 'workoutId']);
     expect(schema.properties.display?.enum).toEqual(['table', 'chart']);
+    expect(schema.properties.display?.description).toMatch(/workout duration/iu);
   });
 });
 
@@ -228,7 +234,7 @@ describe('daily_show input', () => {
     ['one named measurement as a table', { source: sources.metrics, ...week, metric: 'step_count' }, maxShownRows],
     ['a table of sleep', sleepWeek, undefined],
     ['a chart of sleep', { ...sleepWeek, display: 'chart' }, maxShownRows],
-    ['a chart request for workouts, which cannot be drawn', { source: sources.workouts, ...week, display: 'chart' }, undefined],
+    ['a chart of workouts', { source: sources.workouts, ...week, display: 'chart' }, maxShownRows],
     ['a chart request for meals, which cannot be drawn', { source: sources.meals, ...week, display: 'chart' }, undefined],
     ['a table of heart rate', { source: sources.heartRate, workoutId: 'workout-alpha' }, undefined],
     ['a chart of heart rate', { source: sources.heartRate, workoutId: 'workout-alpha', display: 'chart' }, maxShownRows],
@@ -369,11 +375,11 @@ describe('daily_show publishing', () => {
     expect(outcome.result.coverage.hasMore).toBe(true);
   });
 
-  it('shows a table with the reason when a chart cannot be drawn for the source', async () => {
+  it('shows workout duration as a chart when requested', async () => {
     const f = fixture(answer(sources.workouts, [workout]));
     const outcome = await run(f, { source: sources.workouts, ...week, display: 'chart' });
-    expect(outcome.view.renderer).toBe('table');
-    expect(outcome.view.notes).toEqual(['A chart is not offered for workouts, so a table is shown.']);
+    expect(firstRead(f).query).toEqual({ source: sources.workouts, ...week, limit: maxShownRows });
+    expect(outcome.view).toMatchObject({ renderer: 'chart', viewId: 'daily-workouts-chart', rowsShown: 1, notes: [] });
   });
 
   it('shows sync evidence as one detail view without dates', async () => {

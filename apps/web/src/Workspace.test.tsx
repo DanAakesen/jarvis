@@ -136,7 +136,7 @@ describe('Workspace', () => {
     expect(onClose).toHaveBeenCalledTimes(1);
     host.remove();
   });
-  it('uses the one-view phone workspace on short coarse-pointer landscape screens', () => {
+  it('uses the one-view phone workspace without a foreground-view tab bar', () => {
     const matchMedia = vi.fn((query: string) => ({
       matches: query === PHONE_LAYOUT_MEDIA_QUERY,
       addEventListener: vi.fn(),
@@ -147,8 +147,26 @@ describe('Workspace', () => {
     render(<Workspace views={views} />);
 
     expect(screen.getAllByRole('article')).toHaveLength(1);
-    expect(screen.getByRole('navigation', { name: 'Switch foreground view' })).not.toBeNull();
+    expect(screen.queryByRole('navigation', { name: 'Switch foreground view' })).toBeNull();
     expect(matchMedia).toHaveBeenCalledWith(PHONE_LAYOUT_MEDIA_QUERY);
+  });
+
+  it('opens new phone views in the foreground instead of adding them to a tab bar', () => {
+    phoneViewport();
+    const controller = createRef<WorkspaceController>();
+    render(<Workspace ref={controller} views={[views[0]!]} />);
+
+    act(() => {
+      expect(controller.current?.dispatch({
+        commandId: 'create-phone-report',
+        operation: 'create',
+        viewId: 'phone-report',
+        view: { ...savedView, title: 'Phone report' },
+      })).toBe(true);
+    });
+
+    expect(screen.queryByRole('navigation', { name: 'Switch foreground view' })).toBeNull();
+    expect(screen.getByRole('article', { name: 'Phone report' }).getAttribute('aria-hidden')).toBeNull();
   });
 
   it('bounds retained agent-closed windows and invalidates retained content when an ID is reused', () => {
@@ -562,24 +580,28 @@ describe('Workspace', () => {
     expect(screen.queryByText('This generated view is invalid.')).toBeNull();
   });
 
-  it('keeps one phone view foreground, retains content state and supports named and keyboard switching', async () => {
+  it('keeps one phone view foreground, retains state and supports workspace focus commands', async () => {
     phoneViewport();
     const user = userEvent.setup();
-    render(<Workspace views={[
+    const controller = createRef<WorkspaceController>();
+    render(<Workspace ref={controller} views={[
       { ...views[0]!, content: { status: 'ready', content: <input aria-label="Research note" defaultValue="Original" /> } },
       views[1]!,
     ]} />);
     expect(screen.getAllByRole('article')).toHaveLength(1);
     expect(screen.queryByRole('article', { name: 'Sources' })).toBeNull();
+    expect(screen.queryByRole('navigation', { name: 'Switch foreground view' })).toBeNull();
     expect(screen.queryByText('Arrange')).toBeNull();
     await user.type(screen.getByRole('textbox', { name: 'Research note' }), ' retained');
-    await user.click(screen.getByRole('button', { name: 'Show Sources' }));
+    act(() => {
+      expect(controller.current?.dispatch({ commandId: 'focus-sources', operation: 'focus', viewId: 'sources' })).toBe(true);
+    });
     expect(screen.getAllByRole('article')).toHaveLength(1);
     expect(document.activeElement).toBe(screen.getByRole('heading', { name: 'Sources' }));
-    expect(screen.getByRole('button', { name: 'Show Sources' }).getAttribute('aria-current')).toBe('true');
     expect(document.querySelector('article[hidden]')?.hasAttribute('inert')).toBe(true);
-    screen.getByRole('button', { name: 'Show Sources' }).focus();
-    await user.keyboard('{Home}');
+    act(() => {
+      expect(controller.current?.dispatch({ commandId: 'focus-research', operation: 'focus', viewId: 'research' })).toBe(true);
+    });
     expect(document.activeElement).toBe(screen.getByRole('heading', { name: 'Research summary' }));
     expect((screen.getByRole('textbox', { name: 'Research note' }) as HTMLInputElement).value).toBe('Original retained');
   });
