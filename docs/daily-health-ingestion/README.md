@@ -17,6 +17,14 @@ Dan directly approved the revised #719 design on 13 October 2026: reuse Jarvis's
 
 Uploads are at most **8 MiB**; ignored heartbeat bodies are at most **32 KiB**. The SQL inbox has a **256 MiB raw-byte ceiling and 10,000-row ceiling per owner** (a rehearsal caller may lower the byte limit, never raise it). All retained raw rows count, including processed/quarantined rows. Identical retries still work at capacity; new sessions fail closed. This is storage backpressure, not a billing cap or measured production sizing.
 
+The Daily `daily.sync` source exposes numeric `inbox.retained_bytes` (the sum of
+stored `byte_count` for every retained owner row), `inbox.byte_limit` and
+`inbox.row_limit`, alongside retained/pending/quarantined counts and timestamps.
+Pending, processing, processed and quarantined rows all consume capacity; other
+owners' rows never count. An empty inbox reports zero retained bytes and still
+returns both limits. No payload content is returned. See the
+[Daily query reference](../../apps/backend/src/daily/README.md).
+
 **This slice retains raw rows indefinitely within that ceiling and performs no age-based deletion or compaction.** Pending/quarantined evidence must not expire while processing, reconciliation or rollback needs it. A later reviewed change may compact processed raw bytes while preserving acceptance/checksum/idempotency evidence. No automatic cleanup or source-record deletion is authorized here.
 
 Maintained rate guards run before the credential lookup/body/SQL work: default 60 requests/client and 120/instance per minute, 512 client buckets plus one instance bucket, eight active requests, 10-second verifier and 30-second acceptance signals. SQL lock acquisition is limited to five seconds; the existing backend pool has a 30-second acquisition bound. Cancellation cancels active queries and rolls back uncommitted work. No automatic database retry is added.
