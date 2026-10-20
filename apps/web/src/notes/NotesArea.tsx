@@ -52,6 +52,7 @@ export function NotesArea({ backendUrl, getAccessToken }: AreaProps) {
   const tasksToggle = useRef<HTMLButtonElement>(null);
   const treeToggle = useRef<HTMLButtonElement>(null);
   const [treeOpen, setTreeOpen] = useState(false);
+  const [seenTasksOpen, setSeenTasksOpen] = useState(tasksOpen);
   const alive = useRef(true);
   const editorInput = useRef<HTMLTextAreaElement>(null);
   const popup = useRef<HTMLElement>(null);
@@ -119,7 +120,10 @@ export function NotesArea({ backendUrl, getAccessToken }: AreaProps) {
     return client.listDirectory(directory, offset, signal);
   }, [client]);
   // The tree and the task list share the left of the map, so only one is open at a time.
-  useEffect(() => { if (tasksOpen) setTreeOpen(false); }, [tasksOpen]);
+  if (seenTasksOpen !== tasksOpen) {
+    setSeenTasksOpen(tasksOpen);
+    if (tasksOpen) setTreeOpen(false);
+  }
 
   const change = (action: () => void) => {
     if (saving) return;

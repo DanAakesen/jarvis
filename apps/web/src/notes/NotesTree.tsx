@@ -37,48 +37,54 @@ export function NotesTree({ id, loadTree, loadNotes, selectedPath, refreshKey = 
 }) {
   const panel = useRef<HTMLElement>(null);
   const items = useRef(new Map<string, HTMLElement>());
-  const session = useRef<{ controller: AbortController; started: Set<string> } | null>(null);
+  const session = useRef<{ controller: AbortController; started: Set<string>; key: string } | null>(null);
   const [revision, setRevision] = useState(0);
-  const [inventory, setInventory] = useState<NoteTree | null>(null);
-  const [treeError, setTreeError] = useState('');
-  const [listings, setListings] = useState<Record<string, Listing>>({});
+  // Results are tagged with the request that produced them, so a reload shows a fresh state without resetting it in an effect.
+  const requestKey = `${revision}:${refreshKey}`;
+  const [treeState, setTreeState] = useState<{ key: string; inventory: NoteTree | null; error: string }>({ key: '', inventory: null, error: '' });
+  const [listingState, setListingState] = useState<{ key: string; map: Record<string, Listing> }>({ key: '', map: {} });
+  const inventory = treeState.key === requestKey ? treeState.inventory : null;
+  const treeError = treeState.key === requestKey ? treeState.error : '';
+  const listings = useMemo(() => listingState.key === requestKey ? listingState.map : {}, [listingState, requestKey]);
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set());
   const [active, setActive] = useState('');
 
   useEffect(() => { panel.current?.focus({ preventScroll: true }); }, []);
   useEffect(() => {
     const controller = new AbortController();
-    session.current = { controller, started: new Set() };
-    setInventory(null); setTreeError(''); setListings({});
+    session.current = { controller, started: new Set(), key: requestKey };
     void loadTree(controller.signal).then(next => {
-      if (!controller.signal.aborted) setInventory(next);
+      if (!controller.signal.aborted) setTreeState({ key: requestKey, inventory: next, error: '' });
     }).catch((cause: unknown) => {
-      if (!controller.signal.aborted) setTreeError(failure(cause));
+      if (!controller.signal.aborted) setTreeState({ key: requestKey, inventory: null, error: failure(cause) });
     });
     return () => controller.abort();
-  }, [loadTree, revision, refreshKey]);
+  }, [loadTree, requestKey]);
 
   const fetchDirectory = useCallback((directory: string, offset: number) => {
     const current = session.current;
     const key = `${directory}:${offset}`;
     if (!current || current.started.has(key)) return;
     current.started.add(key);
-    setListings(previous => ({ ...previous, [directory]: { notes: previous[directory]?.notes ?? [], hasMore: false, status: 'loading', error: '' } }));
+    const update = (change: (map: Record<string, Listing>) => Record<string, Listing>) => setListingState(previous => ({
+      key: current.key, map: change(previous.key === current.key ? previous.map : {}),
+    }));
+    update(previous => ({ ...previous, [directory]: { notes: previous[directory]?.notes ?? [], hasMore: false, status: 'loading', error: '' } }));
     loadNotes(directory, offset, current.controller.signal).then(page => {
       if (current.controller.signal.aborted) return;
-      setListings(previous => {
+      update(previous => {
         const known = offset === 0 ? [] : previous[directory]?.notes ?? [];
         const seen = new Set(known.map(note => note.path));
         return { ...previous, [directory]: { notes: [...known, ...page.notes.filter(note => !seen.has(note.path))], hasMore: page.hasMore, status: 'ready', error: '' } };
       });
     }).catch((cause: unknown) => {
       if (current.controller.signal.aborted) return;
-      setListings(previous => ({ ...previous, [directory]: { notes: previous[directory]?.notes ?? [], hasMore: false, status: 'error', error: failure(cause) } }));
+      update(previous => ({ ...previous, [directory]: { notes: previous[directory]?.notes ?? [], hasMore: false, status: 'error', error: failure(cause) } }));
     });
   }, [loadNotes]);
   useEffect(() => {
     for (const directory of ['', ...expanded]) fetchDirectory(directory, 0);
-  }, [expanded, fetchDirectory, revision, refreshKey]);
+  }, [expanded, fetchDirectory, requestKey]);
 
   const retry = (directory: string, offset: number) => {
     session.current?.started.delete(`${directory}:${offset}`);
