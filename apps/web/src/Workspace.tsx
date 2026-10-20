@@ -1381,24 +1381,6 @@ export const Workspace = forwardRef<WorkspaceController, {
         }}>Retry pin change</button>}
       </div>}
       </>, feedbackHost)}
-      {phone && primaryViews.length > 1 && (
-        <nav className="workspace-view-switcher" aria-label="Switch foreground view">
-          {primaryViews.map((view, index) => (
-            <button className="workspace-tab" key={view.id} type="button"
-              aria-label={`Show ${view.title}`} aria-current={foreground?.id === view.id ? 'true' : undefined}
-              onClick={() => focusView(view.id)}
-              onKeyDown={(event) => {
-                const nextIndex = event.key === 'Home' ? 0 : event.key === 'End' ? primaryViews.length - 1
-                  : event.key === 'ArrowLeft' ? Math.max(0, index - 1) : event.key === 'ArrowRight' ? Math.min(primaryViews.length - 1, index + 1) : null;
-                if (nextIndex === null) return;
-                event.preventDefault();
-                focusView(primaryViews[nextIndex]!.id);
-              }}>
-              {view.title}
-            </button>
-          ))}
-        </nav>
-      )}
       {tabViews.length > 0 && maybePortal(
         <nav className="workspace-tabs" aria-label={tabsHost ? 'Open windows' : 'Minimised views'}>
           {tabViews.map((view) => {

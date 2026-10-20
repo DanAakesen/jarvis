@@ -326,16 +326,44 @@ describe('daily show view builder: sleep, workouts and heart rate', () => {
     expect(none.receipt.notes).toEqual(['No row has a sleep value to draw, so a table is shown.']);
   });
 
-  it('shows workouts and offers no chart for them', () => {
+  it('shows workouts in a table by default', () => {
     const rows: Row[] = [{ id: 'workout-alpha', workout_date: '2026-10-17', workout_type: 'Running', duration_seconds: 1800, avg_heart_rate: null }];
-    const build = show(read(sources.workouts, rows), chart);
+    const build = show(read(sources.workouts, rows), table);
     expect(build.view.renderer).toBe('table');
     expect(build.viewId).toBe('daily-workouts-table');
     expect(body<Cells>(build)).toEqual({
       columns: ['Date', 'Workout', 'Duration (s)', 'Average heart rate (bpm)'],
       rows: [['17 Oct 2026', 'Running', '1800', 'Unknown']],
     });
-    expect(build.receipt.notes).toEqual(['A chart is not offered for workouts, so a table is shown.']);
+  });
+
+  it('charts recorded workout durations and keeps same-date workouts distinct', () => {
+    const rows: Row[] = [
+      { id: 'workout-alpha', workout_date: '2026-10-17', workout_type: 'Running', duration_seconds: 1800, avg_heart_rate: null },
+      { id: 'workout-beta', workout_date: '2026-10-17', workout_type: 'Cycling', duration_seconds: 2700, avg_heart_rate: 120 },
+      { id: 'workout-gamma', workout_date: '2026-10-16', workout_type: 'Walking', duration_seconds: null, avg_heart_rate: null },
+    ];
+    const build = show(read(sources.workouts, rows), chart);
+    expect(build.view.renderer).toBe('chart');
+    expect(build.viewId).toBe('daily-workouts-chart');
+    expect(body<Plot>(build)).toEqual({
+      kind: 'bar',
+      series: [{ name: 'Duration (s)', points: [{ x: '17 Oct', y: 1800 }, { x: '17 Oct #2', y: 2700 }] }],
+    });
+    expect(build.receipt).toMatchObject({
+      rowsShown: 2,
+      rowsReturned: 3,
+      partial: true,
+      notes: ['1 row without a value or unit left out of the chart.'],
+    });
+  });
+
+  it('falls back to a table when no workout has a recorded duration', () => {
+    const rows: Row[] = [{ id: 'workout-alpha', workout_date: '2026-10-17', workout_type: 'Running', duration_seconds: null, avg_heart_rate: 120 }];
+    const build = show(read(sources.workouts, rows), chart);
+    expect(build.view.renderer).toBe('table');
+    expect(build.viewId).toBe('daily-workouts-table');
+    expect(build.receipt.notes).toEqual(['No row has a workout duration to draw, so a table is shown.']);
   });
 
   it('shows heart rate in Copenhagen time, with one window per workout', () => {

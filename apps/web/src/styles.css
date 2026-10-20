@@ -867,9 +867,7 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
 .workspace-canvas-layered .workspace-window { position: absolute; top: var(--workspace-y); left: var(--workspace-x); width: var(--workspace-width); height: var(--workspace-height); }
 .workspace-window-minimized { display: none; opacity: 0; transform: translateY(-8px) scale(.96); }
 .workspace-window[hidden] { display: none; transition: none; }
-.workspace-view-switcher { display: flex; flex: 0 0 auto; gap: var(--space-2); overflow-x: auto; padding: var(--space-1); }
-.workspace-view-switcher .workspace-tab { flex: 0 0 auto; max-width: 80%; }
-.workspace-view-switcher .workspace-tab[aria-current="true"] { background: var(--state-selected-bg); color: var(--state-selected-fg); box-shadow: none; font-weight: 750; }
+
 .workspace-canvas-has-maximized .workspace-window-maximized { position: absolute; z-index: var(--z-window-front); inset: 0; width: auto; height: auto; }
 .workspace-window-heading { position: relative; display: flex; min-width: 0; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; gap: var(--space-2); }
 .workspace-window-heading h3 { min-width: 0; margin: 0; overflow-wrap: anywhere; }
@@ -3259,7 +3257,9 @@ a.task-chip:hover { background: var(--glass-pressed); }
 .app-shell[data-phone="true"][data-home="false"] .shell-main { padding-bottom: calc(var(--dock-space) + var(--space-4)); }
 .app-shell[data-phone="true"][data-home="true"] .jarvis-page { padding-bottom: var(--phone-dock-bottom); }
 .app-shell[data-phone="true"] #context-panel-toggle { display: none; }
-.app-shell[data-phone="true"] .app-topbar { gap: var(--space-1); padding-inline: var(--space-3) var(--space-2); }
+.app-shell[data-phone="true"] .app-topbar {
+  position: sticky; top: env(safe-area-inset-top); gap: var(--space-1); padding-inline: var(--space-3) var(--space-2);
+}
 .app-shell[data-phone="true"] .topbar-context { flex: 0 0 auto; }
 .app-shell[data-phone="true"] .brand { font-size: var(--type-lead); }
 .app-shell[data-phone="true"] .topbar-actions { gap: 0; }
