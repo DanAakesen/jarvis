@@ -1986,6 +1986,32 @@ full-width average/minimum/maximum heart-rate chart with its per-minute range ba
 and collapsed source JSON. Incomplete totals, unit separation, missing dates and
 source-completeness caveats remain explicit.
 
+20 October 2026 (P14-48; Refs #1116, #1137): the Workouts summary is replaced by
+a Training card below the existing shared period control, with Sessions and Calories burned,
+Gym/Run mini rings and Copenhagen-day energy bars. Gym, Run and Other have a
+labelled legend in bar order; Activity workouts join Other in the chart. Rings
+accept a weekly target, prorated by selected calendar days, but currently receive
+null and link “No target set” to `/settings#training-targets`; P14-45 owns the
+target source and its later wiring. No second targets client is introduced.
+The shell retains the only period control, avoiding competing custom-date drafts.
+Below are Gym (time, energy and heart rate), Run (also distance) and Activity
+(metric steps, active energy and exercise time per day) cards. Missing figures say
+“Not received”, except that a complete read with no sessions in a window or class
+reads 0 min and 0 kcal, as in the original; partial reads stay unknown. Session heart-rate averages are explicitly an unweighted mean.
+The Available data inventory has Summary candidates, Per-workout figures and
+Heart and provenance groups, built only from present workout fields and the
+period's catalogue entries. Catalogue presence does not claim non-null values
+or source completeness. Card bodies, chart and status slots reserve space
+across loading, empty, error and partial reads; inventory lists scroll within
+their reserved area. The three class cards and inventory groups stack on phones.
+Existing history, table disclosure and detail behavior remain unchanged.
+Only synthetic local verification is possible here; real-data/original-page
+parity and the owner's session acceptance remain unverified.
+The owner's Health naming update applies to all new visible and accessible copy:
+use Health or neutral “per day” wording, show human catalogue labels and local
+source-specific error copy, and keep technical identifiers unchanged for #1146.
+Existing shared copy and the route migration remain with #1147.
+
 Synthetic browser captures for the new list and detail presentation are in
 `docs/ui/p12-30/`; they show the actual Daily shell with isolated synthetic API
 responses, not Microsoft sign-in, live records, physical-device behavior or
