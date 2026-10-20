@@ -1747,6 +1747,27 @@ absent when the sync source is not served. The period control gains Today,
 Yesterday and Last 14 days presets, matching the original day ranges without
 changing the control.
 
+20 October 2026 (P14-41 Today cards): the Overview opens with a "Today at a
+glance" block above the existing summary tiles: Training this week, Protein today and
+Calories left today as three statistic cards, then a Meals today strip. Each card
+title links to its section. A ring is a thin SVG arc on the shared surface with the
+value in its centre and a label and caption beneath, so state never rests on colour
+or on text alone. Training shows three count rings (Strength, Running, Other) with no
+target arc; protein and calories draw their arc only when a nutrition target is set,
+and calories left is resting burn minus the deficit, before activity. The meal strip is
+one row per meal (time, name, kcal), not a list of paragraphs. A source that is not
+served shows one muted line that starts with a bold "Unavailable." (DailyUnavailable), never a loading or empty
+look; loading, empty, error and "Not set" states apply to served sources only. Each
+card keeps a freshness line and a "Partial history" note when pages are missing. No
+new tokens or colours: the arc uses the focus token on a surface-coloured track, drawn
+dashed and muted when no target is known, and forced colours map both to system
+colours. The rings do not animate. When the eaten total is a lower bound, the calories
+ring says so in words: the centre reads "≤ 500" or "≥ 300", the caption "kcal left, at
+most" or "kcal over, at least", and the accessible summary says "At most" or "At least"
+with "eaten is a lower bound". The cards follow the Copenhagen date: it advances at
+midnight, on focus and when the page becomes visible, and every card then asks for the
+new day.
+
 Checked the section shell in isolated Chromium against only synthetic capability
 and query responses at 320, 390×844, 768 and 1440×900 in light and dark, with
 reduced motion. Overview, Data and brief detail, keyboard/URL switching, shared
