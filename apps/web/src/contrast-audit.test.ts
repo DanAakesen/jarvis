@@ -405,11 +405,11 @@ function semanticPairings(): Pairing[] {
   }
 
   for (const [tone, token] of [['People', 'people'], ['Work', 'work'], ['Personal', 'personal'], ['General', 'general'], ['Tasks', 'tasks']] as const) {
-    for (const [state, percent] of [['row pill', 28], ['legend rest', 24], ['legend hover', 34], ['legend selected', 44], ['legend selected hover', 48]] as const) {
+    for (const [state, percent] of [['row pill and selected', 100], ['legend rest', 92], ['legend hover', 100]] as const) {
       pairings.push({
         label: `Knowledge ${tone} pill text / ${state}`,
-        foreground: 'var(--text)',
-        backgrounds: ['--surface-translucent', '--surface-muted'].map((name) => ({
+        foreground: 'var(--pill-ink)',
+        backgrounds: ['--stage-background', '--stage-floor'].map((name) => ({
           label: `${name} with ${percent}% tint`,
           layers: [`var(${name})`, `color-mix(in srgb, var(--graph-${token}) ${percent}%, transparent)`],
         })),
@@ -417,6 +417,16 @@ function semanticPairings(): Pairing[] {
       });
     }
   }
+
+  pairings.push({
+    label: 'Knowledge Tasks legend text / toggled off',
+    foreground: 'var(--text)',
+    backgrounds: ['--stage-background', '--stage-floor'].map((name) => ({
+      label: `${name} with 14% tint`,
+      layers: [`var(${name})`, 'color-mix(in srgb, var(--graph-tasks) 14%, transparent)'],
+    })),
+    threshold: 4.5,
+  });
 
   for (const pairing of buttonPairings) pairings.push(pairing);
   return pairings;

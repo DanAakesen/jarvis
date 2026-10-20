@@ -8,9 +8,7 @@ coloured pill at its top right with the folder name (or Tasks) and a note or
 task glyph; matching tasks lead the list and "Show all N tasks" opens the panel.
 Dots are gone everywhere, including the legend, which uses the same pills.
 Snippets are cleaned to one plain line by `cleanSnippet`. The Notes loading
-state is a small constellation without a card, still under reduced motion. Pill
-and legend tints were checked in the contrast audit; the selected-hover tint is
-capped at 48% so Work and Personal text stays at 4.5:1.
+state is a small constellation without a card, still under reduced motion. Pills and legend entries use the graph colour itself, so they match the stars, with dark text (white in the light theme) from `--pill-ink`; the contrast audit checks every pair at 4.5:1.
 
 ## P14-32 — One size scale for controls (20 October 2026; #1085)
 

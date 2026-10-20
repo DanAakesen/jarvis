@@ -2796,8 +2796,8 @@ a.task-chip:hover { background: var(--glass-pressed); }
 @media (prefers-reduced-motion: reduce) { .jobs-popover { animation: none; } .jobs-ring-value { transition: none; } }
 :root[data-motion="reduced"] .jobs-popover { animation: none; }
 /* Knowledge graph (P7-43): Dan's vault as a 3D star cloud. Folder colours are shared by stars, lines, labels and legend. */
-:root, :root[data-theme="dark"] { --graph-people: #4aa8ff; --graph-work: #ffb45c; --graph-personal: #3ddc97; --graph-general: #b69cff; --graph-tasks: #ff5da2; }
-:root[data-theme="light"] { --graph-people: #1f6acc; --graph-work: #9f5800; --graph-personal: #146d49; --graph-general: #6f4fd6; --graph-tasks: #b01842; }
+:root, :root[data-theme="dark"] { --graph-people: #4aa8ff; --graph-work: #ffb45c; --graph-personal: #3ddc97; --graph-general: #b69cff; --graph-tasks: #ff5da2; --pill-ink: #0a0f1a; }
+:root[data-theme="light"] { --graph-people: #1f6acc; --graph-work: #9f5800; --graph-personal: #146d49; --graph-general: #6f4fd6; --graph-tasks: #b01842; --pill-ink: #ffffff; }
 [data-folder="People"] { --folder: var(--graph-people); }
 [data-folder="Work"] { --folder: var(--graph-work); }
 [data-folder="Personal"] { --folder: var(--graph-personal); }
@@ -2858,10 +2858,10 @@ a.task-chip:hover { background: var(--glass-pressed); }
 .knowledge-result-snippet { display: -webkit-box; overflow: hidden; color: var(--text-muted); font-size: var(--type-caption); font-weight: 400; overflow-wrap: anywhere; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
 .knowledge-results .knowledge-results-more { justify-content: center; color: var(--text-muted); font-size: var(--type-caption); }
 .knowledge-neighbours .knowledge-result-title { flex: 1 1 auto; }
-.knowledge-pill { display: inline-flex; flex: 0 0 auto; min-height: var(--pill-size); max-width: 45%; align-items: center; padding: 0 var(--space-3); overflow: hidden; border-radius: var(--radius-pill); background: color-mix(in srgb, var(--folder, var(--text-muted)) 28%, transparent); color: var(--text); font-size: var(--type-caption); font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.knowledge-pill { display: inline-flex; flex: 0 0 auto; min-height: var(--pill-size); max-width: 45%; align-items: center; padding: 0 var(--space-3); overflow: hidden; border-radius: var(--radius-pill); background: var(--folder, var(--text-muted)); color: var(--pill-ink); font-size: var(--type-caption); font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
 .knowledge-legend { position: absolute; z-index: 3; bottom: 16px; left: 16px; display: flex; flex-wrap: wrap; gap: var(--space-2); margin: 0; padding: 0; list-style: none; }
-.knowledge-legend li { --pill-tint: 24%; display: inline-flex; min-height: var(--pill-size); align-items: center; gap: var(--space-2); padding: 0 var(--space-3); border-radius: var(--radius-pill); background: color-mix(in srgb, var(--folder, var(--text-muted)) var(--pill-tint), var(--stage-glass)); backdrop-filter: blur(12px); color: var(--text); font-size: var(--type-caption); font-weight: 600; }
-.knowledge-legend-count { color: var(--text-muted); font-weight: 500; }
+.knowledge-legend li { --pill-tint: 92%; display: inline-flex; min-height: var(--pill-size); align-items: center; gap: var(--space-2); padding: 0 var(--space-3); border-radius: var(--radius-pill); background: color-mix(in srgb, var(--folder, var(--text-muted)) var(--pill-tint), var(--stage-glass)); backdrop-filter: blur(12px); color: var(--pill-ink); font-size: var(--type-caption); font-weight: 600; }
+.knowledge-legend-count { font-weight: 500; }
 .knowledge-legend .knowledge-sample { background: color-mix(in srgb, var(--warning) 22%, transparent); }
 .knowledge-label {
   position: absolute; z-index: 2; top: 0; left: 0; max-width: 220px; margin: var(--space-3) 0 0 var(--space-3); padding: var(--space-1) var(--space-2); overflow: hidden;
@@ -2899,10 +2899,10 @@ a.task-chip:hover { background: var(--glass-pressed); }
 .knowledge-stage { background: radial-gradient(ellipse at 50% 45%, color-mix(in srgb, var(--stage-background) 72%, transparent), color-mix(in srgb, var(--stage-background) 92%, transparent)); }
 .knowledge-legend li:has(> button) { padding: 0; }
 .knowledge-legend button { display: inline-flex; min-height: var(--pill-size); align-items: center; gap: var(--space-2); padding: 0 var(--space-3); border: 0; border-radius: inherit; background: transparent; color: inherit; font: inherit; cursor: pointer; }
-.knowledge-legend li:has(> button:hover:not(:disabled)) { --pill-tint: 34%; }
-.knowledge-legend li:not([data-tasks]):has(> button[aria-pressed="true"]) { --pill-tint: 44%; }
-.knowledge-legend li:not([data-tasks]):has(> button[aria-pressed="true"]:hover:not(:disabled)) { --pill-tint: 48%; }
-.knowledge-legend li[data-tasks]:has(> button[aria-pressed="false"]:not(:hover)) { --pill-tint: 8%; }
+.knowledge-legend li:has(> button:hover:not(:disabled)) { --pill-tint: 100%; }
+.knowledge-legend li:not([data-tasks]):has(> button[aria-pressed="true"]) { --pill-tint: 100%; }
+.knowledge-legend li:not([data-tasks]):has(> button[aria-pressed="true"]:hover:not(:disabled)) { --pill-tint: 100%; }
+.knowledge-legend li[data-tasks]:has(> button[aria-pressed="false"]:not(:hover)) { --pill-tint: 14%; color: var(--text); }
 .knowledge-legend button:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }/* Shell windows float at every desktop width (Dan, 7 October): the old ≤900 px stacking is for the classic workspace only. */
 @media (width > 700px) and (width <= 900px) and (not ((max-height: 500px) and (pointer: coarse))) {
   .app-shell:not(.app-signed-out) .workspace-canvas-layered { display: block; height: auto; min-height: 0; overflow: visible; }
@@ -3676,7 +3676,7 @@ a.task-chip:hover { background: var(--glass-pressed); }
   outline: 3px solid var(--focus);
   outline-offset: 2px;
 }
-.knowledge-legend li:has(> button:active:not(:disabled)) { --pill-tint: 48%; }
+.knowledge-legend li:has(> button:active:not(:disabled)) { --pill-tint: 100%; }
 :is(.settings-back, .release-trail-button, .release-trail-open, .knowledge-reset, .folio-action):active:not(:disabled) {
   background: var(--glass-pressed);
 }
