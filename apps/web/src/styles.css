@@ -2796,8 +2796,8 @@ a.task-chip:hover { background: var(--glass-pressed); }
 @media (prefers-reduced-motion: reduce) { .jobs-popover { animation: none; } .jobs-ring-value { transition: none; } }
 :root[data-motion="reduced"] .jobs-popover { animation: none; }
 /* Knowledge graph (P7-43): Dan's vault as a 3D star cloud. Folder colours are shared by stars, lines, labels and legend. */
-:root, :root[data-theme="dark"] { --graph-people: #4aa8ff; --graph-work: #ffb45c; --graph-personal: #3ddc97; --graph-general: #b69cff; --graph-tasks: #ff5da2; }
-:root[data-theme="light"] { --graph-people: #1f6acc; --graph-work: #9f5800; --graph-personal: #146d49; --graph-general: #6f4fd6; --graph-tasks: #b01842; }
+:root, :root[data-theme="dark"] { --graph-people: #4aa8ff; --graph-work: #ffb45c; --graph-personal: #3ddc97; --graph-general: #b69cff; --graph-tasks: #ff5da2; --pill-ink: #0a0f1a; }
+:root[data-theme="light"] { --graph-people: #1f6acc; --graph-work: #9f5800; --graph-personal: #146d49; --graph-general: #6f4fd6; --graph-tasks: #b01842; --pill-ink: #ffffff; }
 [data-folder="People"] { --folder: var(--graph-people); }
 [data-folder="Work"] { --folder: var(--graph-work); }
 [data-folder="Personal"] { --folder: var(--graph-personal); }
@@ -2810,7 +2810,18 @@ a.task-chip:hover { background: var(--glass-pressed); }
 .knowledge-stage { position: absolute; inset: 0; background: radial-gradient(ellipse at 50% 45%, color-mix(in srgb, var(--stage-background) 30%, transparent), color-mix(in srgb, var(--stage-background) 70%, transparent)); }
 .knowledge-canvas { display: block; width: 100%; height: 100%; cursor: grab; touch-action: none; }
 .knowledge-canvas:active { cursor: grabbing; }
-.knowledge-status, .knowledge-loader { position: absolute; z-index: 2; top: 50%; left: 50%; display: grid; width: max-content; max-width: min(420px, 90%); justify-items: center; gap: var(--space-3); margin: 0; color: var(--text-muted); text-align: center; translate: -50% -50%; }
+.knowledge-status { position: absolute; z-index: 2; top: 50%; left: 50%; display: grid; width: max-content; max-width: min(420px, 90%); justify-items: center; gap: var(--space-3); margin: 0; color: var(--text-muted); text-align: center; translate: -50% -50%; }
+.knowledge-loader { position: absolute; z-index: 2; top: 50%; left: 50%; width: 96px; color: var(--text-muted); translate: -50% -50%; }
+.knowledge-loader svg { display: block; width: 100%; height: auto; overflow: visible; }
+.knowledge-loader path { fill: none; stroke: currentColor; stroke-opacity: .35; stroke-width: 1; stroke-linecap: round; }
+.knowledge-loader circle { fill: var(--graph-general); transform-box: fill-box; transform-origin: center; animation: knowledge-twinkle calc(var(--motion-state) * 6) ease-in-out infinite; animation-delay: calc(var(--star-index) * var(--motion-state)); }
+.knowledge-loader circle[data-kind="people"] { fill: var(--graph-people); }
+.knowledge-loader circle[data-kind="work"] { fill: var(--graph-work); }
+.knowledge-loader circle[data-kind="personal"] { fill: var(--graph-personal); }
+.knowledge-loader circle[data-kind="tasks"] { fill: var(--graph-tasks); }
+@keyframes knowledge-twinkle { 0%, 100% { opacity: .4; transform: scale(.8); } 50% { opacity: 1; transform: scale(1.25); } }
+@media (prefers-reduced-motion: reduce) { .knowledge-loader circle { animation: none; } }
+:root[data-motion="reduced"] .knowledge-loader circle { animation: none; }
 .knowledge-status p { margin: 0; }
 .knowledge-search {
   position: absolute; z-index: 3; top: 16px; left: 50%; display: flex; width: min(560px, calc(100% - 32px)); height: var(--control-size); min-height: var(--control-size); align-items: center; gap: var(--space-2);
@@ -2832,16 +2843,26 @@ a.task-chip:hover { background: var(--glass-pressed); }
 .knowledge-results.luminous-glass { border-color: var(--control-rule); }
 .knowledge-results.luminous-glass::before { content: none; }
 .knowledge-results button, .knowledge-neighbours button {
-  display: flex; width: 100%; min-height: 36px; align-items: center; gap: var(--space-2); padding: 0 var(--space-3); border: 0; border-radius: var(--radius-control);
+  display: flex; width: 100%; min-height: var(--control-size); align-items: center; gap: var(--space-2); padding: 0 var(--space-3); border: 0; border-radius: var(--radius-control);
   background: transparent; color: var(--text); font: inherit; font-size: var(--type-small); text-align: left; cursor: pointer;
 }
 .knowledge-results button:hover, .knowledge-neighbours button:hover { background: var(--glass-hover); }
 .knowledge-results button[aria-pressed="true"] { background: var(--state-selected-bg); color: var(--state-selected-fg); font-weight: 750; }
 .knowledge-results button:focus-visible, .knowledge-neighbours button:focus-visible { outline: 3px solid var(--focus); outline-offset: 1px; }
-.knowledge-dot { width: 8px; height: 8px; flex: 0 0 auto; border-radius: 50%; background: var(--folder, var(--text-muted)); box-shadow: 0 0 8px var(--folder, transparent); }
+.knowledge-neighbours button { justify-content: space-between; }
+.knowledge-result-list { display: grid; gap: var(--space-1); padding: 0; margin: 0; list-style: none; }
+.knowledge-results .knowledge-result { display: flex; width: 100%; min-width: 0; min-height: var(--control-size); align-items: flex-start; justify-content: flex-start; gap: var(--space-3); padding: var(--space-2) var(--space-3); text-align: left; }
+.knowledge-result-glyph { flex: 0 0 auto; width: 18px; height: var(--pill-size); color: var(--text-muted); }
+.knowledge-result-text { display: grid; flex: 1 1 auto; min-width: 0; }
+.knowledge-result-title { display: flex; min-width: 0; min-height: var(--pill-size); align-items: center; overflow-wrap: anywhere; }
+.knowledge-result-snippet { display: -webkit-box; overflow: hidden; color: var(--text-muted); font-size: var(--type-caption); font-weight: 400; overflow-wrap: anywhere; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.knowledge-results .knowledge-results-more { justify-content: center; color: var(--text-muted); font-size: var(--type-caption); }
+.knowledge-neighbours .knowledge-result-title { flex: 1 1 auto; }
+.knowledge-pill { display: inline-flex; flex: 0 0 auto; min-height: var(--pill-size); max-width: 45%; align-items: center; padding: 0 var(--space-3); overflow: hidden; border-radius: var(--radius-pill); background: var(--folder, var(--text-muted)); color: var(--pill-ink); font-size: var(--type-caption); font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
 .knowledge-legend { position: absolute; z-index: 3; bottom: 16px; left: 16px; display: flex; flex-wrap: wrap; gap: var(--space-2); margin: 0; padding: 0; list-style: none; }
 .knowledge-legend li { display: inline-flex; min-height: var(--pill-size); align-items: center; gap: var(--space-2); padding: 0 var(--space-3); border-radius: var(--radius-pill); background: var(--stage-glass); backdrop-filter: blur(12px); color: var(--text); font-size: var(--type-caption); font-weight: 600; }
 .knowledge-legend-count { color: var(--text-muted); font-weight: 500; }
+.knowledge-legend .knowledge-dot { width: 8px; height: 8px; flex: 0 0 auto; border-radius: 50%; background: var(--folder, var(--text-muted)); box-shadow: 0 0 8px var(--folder, transparent); }
 .knowledge-legend .knowledge-sample { background: color-mix(in srgb, var(--warning) 22%, transparent); }
 .knowledge-label {
   position: absolute; z-index: 2; top: 0; left: 0; max-width: 220px; margin: var(--space-3) 0 0 var(--space-3); padding: var(--space-1) var(--space-2); overflow: hidden;
@@ -2858,7 +2879,7 @@ a.task-chip:hover { background: var(--glass-pressed); }
 .knowledge-note-heading { display: flex; flex: 0 0 auto; align-items: flex-start; justify-content: space-between; gap: var(--space-2); }
 .knowledge-note-heading h3 { display: flex; min-width: 0; align-items: center; gap: var(--space-2); margin: var(--space-1) 0 0; font-size: var(--type-subsection); overflow-wrap: anywhere; }
 .knowledge-note-heading h3 .knowledge-note-title { display: -webkit-box; min-width: 0; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
-.knowledge-note-heading .knowledge-dot, .knowledge-note-heading .modal-close { flex-shrink: 0; }
+.knowledge-note-heading .modal-close { flex-shrink: 0; }
 .knowledge-note-meta { margin: var(--space-1) 0 var(--space-3); color: var(--text-muted); font-size: var(--type-caption); overflow-wrap: anywhere; }
 .knowledge-note-reader { position: relative; display: flex; flex: 1 1 auto; min-height: 0; flex-direction: column; }
 .knowledge-note-reader[data-more]::after { position: absolute; right: 0; bottom: 44px; left: 0; height: 32px; background: linear-gradient(transparent, var(--surface)); pointer-events: none; content: ""; }

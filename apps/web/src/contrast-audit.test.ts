@@ -404,6 +404,20 @@ function semanticPairings(): Pairing[] {
     }
   }
 
+  for (const [tone, token] of [['People', 'people'], ['Work', 'work'], ['Personal', 'personal'], ['General', 'general'], ['Tasks', 'tasks']] as const) {
+    for (const [state, percent] of [['row pill', 100]] as const) {
+      pairings.push({
+        label: `Knowledge ${tone} pill text / ${state}`,
+        foreground: 'var(--pill-ink)',
+        backgrounds: ['--stage-background', '--stage-floor'].map((name) => ({
+          label: `${name} with ${percent}% tint`,
+          layers: [`var(${name})`, `color-mix(in srgb, var(--graph-${token}) ${percent}%, transparent)`],
+        })),
+        threshold: 4.5,
+      });
+    }
+  }
+
   for (const pairing of buttonPairings) pairings.push(pairing);
   return pairings;
 }

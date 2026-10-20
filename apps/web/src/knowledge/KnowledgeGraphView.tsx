@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { MarkdownContent } from '../MarkdownContent';
 import {
   connectedNotes, KnowledgeUnavailable, knowledgeFolders, loadKnowledgeGraph, loadKnowledgeNote, matchTitles,
@@ -51,6 +51,45 @@ export function KnowledgeNoteReader({ children }: { children: ReactNode }) {
       }}>Scroll down <span aria-hidden="true">↓</span></button>}
     </div>
   );
+}
+
+const glyphProps = { 'aria-hidden': true, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round', strokeLinejoin: 'round' } as const;
+const NoteGlyph = () => <svg className="knowledge-result-glyph" {...glyphProps}><path d="M7 3.5h7l4 4V20a.5.5 0 0 1-.5.5h-10A.5.5 0 0 1 7 20z" /><path d="M14 3.5V8h4M10 12.5h5M10 16h5" /></svg>;
+const TaskGlyph = () => <svg className="knowledge-result-glyph" {...glyphProps}><circle cx="12" cy="12" r="8" /><path d="m8.5 12.2 2.4 2.4 4.6-5" /></svg>;
+
+/** The folder (or Tasks) a result belongs to, in its map colour. Decorative: the row names it with aria-describedby. */
+export function KnowledgePill({ folder, tasks = false, id }: { folder?: string; tasks?: boolean; id?: string }) {
+  return <span id={id} className="knowledge-pill" aria-hidden="true" {...(tasks ? { 'data-tasks': '' } : { 'data-folder': folder ?? '' })}>{tasks ? 'Tasks' : folder || 'Vault root'}</span>;
+}
+
+function KnowledgeLoader() {
+  return (
+    <div className="knowledge-loader" role="status">
+      <span className="visually-hidden">Loading your notes</span>
+      <svg aria-hidden="true" viewBox="0 0 96 64">
+        <path d="M14 44 34 20 58 36 82 14M34 20 40 52 58 36" />
+        {[[14, 44, 'people'], [34, 20, 'work'], [58, 36, 'personal'], [82, 14, 'general'], [40, 52, 'tasks']].map(([x, y, kind], index) => (
+          <circle key={kind} cx={x} cy={y} r="4" data-kind={kind} style={{ '--star-index': index } as CSSProperties} />
+        ))}
+      </svg>
+    </div>
+  );
+}
+
+function KnowledgeTaskRow({ task, pillId, onOpen }: { task: VaultTaskRead['items'][number]; pillId: string; onOpen?: () => void }) {
+  const content = (
+    <>
+      <TaskGlyph />
+      <span className="knowledge-result-text">
+        <span className="knowledge-result-title">{task.text}</span>
+        <time className="knowledge-result-snippet" dateTime={task.dueAt ?? task.dueDate ?? undefined}>{taskDateLabel(task.dueDate, task.dueTime, task.dueAt)}</time>
+      </span>
+      <KnowledgePill tasks id={pillId} />
+    </>
+  );
+  return onOpen
+    ? <button className="ghost-button knowledge-result" type="button" data-kind="task" aria-describedby={pillId} onClick={onOpen}>{content}</button>
+    : <div className="knowledge-result" data-kind="task">{content}</div>;
 }
 
 /**
@@ -248,7 +287,7 @@ export function KnowledgeGraphView({ backendUrl, getAccessToken, initialQuery = 
   return (
     <section className="knowledge" data-compact={compact || undefined} data-nodes={graph?.nodes.length} data-edges={graph?.edges.length} data-links={graph?.edges.filter((edge) => edge.type === 'link').length} data-similar={graph?.edges.filter((edge) => edge.type === 'similar').length} aria-label="Knowledge graph">
       <div ref={host} className="knowledge-stage" aria-hidden="true" />
-      {load.status === 'loading' && <StateMessage variant="loading" className="knowledge-loader" message="Mapping your knowledge" />}
+      {load.status === 'loading' && <KnowledgeLoader />}
       {load.status === 'error' && (
         <StateMessage variant="error" className="knowledge-status" message={load.message}
           actionLabel="Retry" onAction={() => { setLoad({ status: 'loading' }); setReload((value) => value + 1); }} />
@@ -300,28 +339,22 @@ export function KnowledgeGraphView({ backendUrl, getAccessToken, initialQuery = 
             ? hits.length > 0 || (showTaskMatches && (!!taskSearch.error || (!!taskSearch.result && taskSearch.result.total > 0)))
             : folder !== null) && (
             <div className="knowledge-results luminous-glass">
-              {query.trim() && showTaskMatches && taskSearch.result && taskSearch.result.total > 0 && (
-                <section className="knowledge-task-results" aria-labelledby={`${ids}-task-results`}>
-                  <h2 id={`${ids}-task-results`}>Tasks</h2>
-                  {(() => {
-                    const total = taskSearch.result.total;
-                    const label = `${total} matching ${total === 1 ? 'task' : 'tasks'}`;
-                    return onShowTasks
-                      ? <button className="knowledge-task-results-count" type="button" onClick={() => onShowTasks(query.trim())}>{label}</button>
-                      : <span className="knowledge-task-results-count">{label}</span>;
-                  })()}
-                  <ol>
-                    {taskSearch.result.items.slice(0, 3).map((task) => (
-                      <li key={task.id}>
-                        <span>{task.text}</span>
-                        <time dateTime={task.dueAt ?? task.dueDate ?? undefined}>
-                          {taskDateLabel(task.dueDate, task.dueTime, task.dueAt)}
-                        </time>
-                      </li>
-                    ))}
-                  </ol>
-                </section>
-              )}
+              {query.trim() && showTaskMatches && taskSearch.result && taskSearch.result.total > 0 && (() => {
+                const total = taskSearch.result.total;
+                const shown = taskSearch.result.items.slice(0, 3);
+                const openTasks = onShowTasks ? () => onShowTasks(query.trim()) : undefined;
+                return (
+                  <>
+                    <ol className="knowledge-result-list" aria-label="Matching tasks">
+                      {shown.map((task) => (
+                        <li key={task.id}><KnowledgeTaskRow task={task} pillId={`${ids}-pill-${task.id}`} {...(openTasks ? { onOpen: openTasks } : {})} /></li>
+                      ))}
+                    </ol>
+                    {openTasks && total > shown.length &&
+                      <button className="ghost-button knowledge-results-more" type="button" onClick={openTasks}>Show all {total} tasks</button>}
+                  </>
+                );
+              })()}
               {query.trim() && taskSearch.error && <p className="knowledge-task-search-error" role="status">{taskSearch.error}</p>}
               {(query.trim() ? hits.length > 0 : folder !== null) && (
                 <ol className="knowledge-result-list" aria-label={query.trim() ? 'Matching notes' : `${folder || 'Vault root'} notes`}>
@@ -330,12 +363,14 @@ export function KnowledgeGraphView({ backendUrl, getAccessToken, initialQuery = 
                     : graph.nodes.filter((node) => node.folder === folder).sort((left, right) => left.title.localeCompare(right.title)).slice(0, 60)
                   ).map((node) => (
                     <li key={node.id}>
-                      <button className="ghost-button" type="button" data-folder={node.folder} aria-pressed={node.id === selectedId} onClick={() => open(node.id)}>
-                        <span className="knowledge-dot" aria-hidden="true" />
-                        <span className="knowledge-result-note-text">
-                          <span>{node.title}</span>
+                      <button className="ghost-button knowledge-result" type="button" data-folder={node.folder} aria-pressed={node.id === selectedId}
+                        aria-describedby={query.trim() ? `${ids}-pill-${node.id}` : undefined} onClick={() => open(node.id)}>
+                        <NoteGlyph />
+                        <span className="knowledge-result-text">
+                          <span className="knowledge-result-title">{node.title}</span>
                           {noteSnippets[node.id] && <span className="knowledge-result-snippet">{noteSnippets[node.id]}</span>}
                         </span>
+                        {query.trim() && <KnowledgePill folder={node.folder} id={`${ids}-pill-${node.id}`} />}
                       </button>
                     </li>
                   ))}
@@ -353,7 +388,7 @@ export function KnowledgeGraphView({ backendUrl, getAccessToken, initialQuery = 
               </li>
             ))}
             {hasTaskCounts && (
-              <li>
+              <li data-tasks>
                 <button className="ghost-button" type="button" aria-pressed={taskMarksVisible}
                   aria-label={`Tasks, ${taskCountLabel}`}
                   disabled={!hasKnownTaskCount}
@@ -370,7 +405,7 @@ export function KnowledgeGraphView({ backendUrl, getAccessToken, initialQuery = 
           {selected && !onOpenNote && (
             <aside className="knowledge-note luminous-glass" aria-labelledby={`${ids}-note`}>
               <header className="knowledge-note-heading">
-                <h3 id={`${ids}-note`}><span className="knowledge-dot" data-folder={selected.folder} aria-hidden="true" />{selected.title}</h3>
+                <h3 id={`${ids}-note`}>{selected.title}</h3>
                 <button className="modal-close" type="button" aria-label={`Close ${selected.title}`} onClick={() => setSelectedId(null)}>
                   <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="m6 6 12 12M18 6 6 18" /></svg>
                 </button>
@@ -387,7 +422,7 @@ export function KnowledgeGraphView({ backendUrl, getAccessToken, initialQuery = 
                     <h4 className="knowledge-note-subheading">Connected notes</h4>
                     <ul className="knowledge-neighbours">
                       {neighbours.map((node) => (
-                        <li key={node.id}><button className="ghost-button" type="button" data-folder={node.folder} onClick={() => open(node.id)}><span className="knowledge-dot" aria-hidden="true" />{node.title}</button></li>
+                        <li key={node.id}><button className="ghost-button knowledge-neighbour" type="button" data-folder={node.folder} onClick={() => open(node.id)}><span className="knowledge-result-title">{node.title}</span><KnowledgePill folder={node.folder} /></button></li>
                       ))}
                     </ul>
                   </>

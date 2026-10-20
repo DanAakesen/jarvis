@@ -67,7 +67,6 @@ const sideBorderAllowlist: AllowlistEntry[] = [
   { file: 'daily/ui/daily-ui.css', selector: '.daily-scroll-table th, .daily-scroll-table td', property: 'border-bottom', value: '1px solid var(--rule)', reason: 'Daily scroll table row separator; file is owned by the parallel Daily work.' },
   { file: 'proactive.css', selector: '.proactive-block', property: 'border-bottom', value: '1px solid var(--rule)', reason: 'Separates Proactive page sections.' },
   { file: 'proactive.css', selector: '.proactive-item-row, .proactive-source-row, .proactive-runs-list > li', property: 'border-bottom', value: '1px solid var(--rule)', reason: 'Separates Proactive list rows.' },
-  { file: 'notes/NotesArea.css', selector: '.knowledge-task-results', property: 'border-bottom', value: '1px solid var(--rule)', reason: 'Separates task matches from note matches in Notes search results.' },
 ];
 
 const insetShadowAllowlist: AllowlistEntry[] = [
