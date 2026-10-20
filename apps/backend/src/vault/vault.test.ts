@@ -1161,6 +1161,17 @@ describe('GitHub vault', () => {
     })).json().notes).toEqual([expect.objectContaining({
       path: 'README.md', folder: '', directory: '',
     })]);
+    expect((await app.inject({
+      url: `/notes?${new URLSearchParams({ query: 'inventory' })}`, headers: apiAuthorization,
+    })).json().notes).toEqual([expect.objectContaining({ path: 'README.md', folder: '', directory: '' })]);
+    expect((await app.inject({
+      url: `/notes?${new URLSearchParams({ query: 'record', folder: 'Customers' })}`, headers: apiAuthorization,
+    })).json().notes).toEqual([expect.objectContaining({
+      path: 'Customers/Client.md', folder: 'Customers', directory: 'Customers',
+    })]);
+    expect((await app.inject({
+      url: `/notes?${new URLSearchParams({ directory: '' })}`, headers: apiAuthorization,
+    })).json().notes).toEqual([expect.objectContaining({ path: 'README.md', folder: '', directory: '' })]);
 
     const createdNotes = [
       { path: 'new-root.md', term: 'rootunique' },
@@ -1221,6 +1232,23 @@ describe('GitHub vault', () => {
         directory: path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '',
       })]));
     }
+    const rootSearch = await app.inject({
+      url: '/knowledge/search?q=inventory', headers: apiAuthorization,
+    });
+    expect(rootSearch.json().hits).toEqual(expect.arrayContaining([
+      expect.objectContaining({ nodeId: createHash('sha256').update('README.md').digest('hex') }),
+    ]));
+    const otherFolderSearch = await app.inject({
+      url: '/knowledge/search?q=record', headers: apiAuthorization,
+    });
+    expect(otherFolderSearch.json().hits).toEqual(expect.arrayContaining([
+      expect.objectContaining({ nodeId: createHash('sha256').update('Customers/Client.md').digest('hex') }),
+    ]));
+    const graphNodes = (await app.inject({ url: '/knowledge/graph', headers: apiAuthorization })).json().nodes;
+    expect(graphNodes).toEqual(expect.arrayContaining([
+      expect.objectContaining({ path: 'README.md', folder: '', directory: '' }),
+      expect.objectContaining({ path: 'Customers/Client.md', folder: 'Customers', directory: 'Customers' }),
+    ]));
     expect((await app.inject({ url: '/notes/tree', headers: apiAuthorization })).json()).toMatchObject({
       directories: expect.arrayContaining(['Invoices', 'Records', 'Records/2026', 'Records/2026/Q4']),
       rootNoteCount: 2,
