@@ -1681,6 +1681,16 @@ existing page and control geometry; each owns its content
 stylesheet and separately lazy-loaded component. Workouts, Nutrition and Body &
 sleep remain absent until their follow-up sections exist.
 
+20 October 2026 (P14-41 shell): the Daily page heading row carries a small
+freshness pill beside the single `Daily` headline. It reads only the served sync
+source and says "Phone contact" with the last-contact time, "No phone contact yet",
+"Checking sync" or "Sync status unavailable". It opens a small details panel
+(last contact and upload counts, plus Check again) that Escape and an outside
+press close. It is a 36 px bordered pill using existing surface tokens; it is
+absent when the sync source is not served. The period control gains Today,
+Yesterday and Last 14 days presets, matching the original day ranges without
+changing the control.
+
 Checked the section shell in isolated Chromium against only synthetic capability
 and query responses at 320, 390×844, 768 and 1440×900 in light and dark, with
 reduced motion. Overview, Data and brief detail, keyboard/URL switching, shared

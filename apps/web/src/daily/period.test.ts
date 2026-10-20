@@ -23,4 +23,11 @@ describe('Daily periods', () => {
       startDate: '2026-01-01', endDate: '2026-10-18',
     });
   });
+
+  it('creates single-day and fortnight presets', () => {
+    const now = new Date('2026-03-01T10:00:00Z');
+    expect(dailyPeriodFor('today', now)).toEqual({ startDate: '2026-03-01', endDate: '2026-03-01' });
+    expect(dailyPeriodFor('yesterday', now)).toEqual({ startDate: '2026-02-28', endDate: '2026-02-28' });
+    expect(dailyPeriodFor('14', now)).toEqual({ startDate: '2026-02-16', endDate: '2026-03-01' });
+  });
 });

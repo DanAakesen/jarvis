@@ -1,5 +1,16 @@
 # Decisions
 
+## P14-41 — Daily shell: freshness pill and short periods (20 October 2026; #1116)
+
+The Daily shell shows a freshness pill built only from the served sync source
+(last phone contact and upload counts); it never states a time Jarvis does not
+serve. The shared period gains Today, Yesterday and Last 14 days beside the
+existing presets, so the original short ranges are available without removing
+any current one. A greeting with a person's name is not added: no served source
+or area prop carries it.
+
+Refs #1116
+
 ## P14-40 — Full indexed-note scope in the Notes graph (20 October 2026; #1113)
 
 The graph, its folder filters, and note search follow the owner's P9-77 ruling:
