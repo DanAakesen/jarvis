@@ -27,11 +27,12 @@ export function readableJson(value: Row[string] | undefined): string {
     if (value.length > 16_000) return `${value.slice(0, 4000)}\n[Stored text truncated]`;
     try { parsed = JSON.parse(value); } catch { return `${value.slice(0, 4000)}${value.length > 4000 ? '\n[Stored text truncated]' : ''}`; }
   }
-  const labelSources = (entry: unknown): unknown => {
-    if (typeof entry === 'string') return healthSourceLabel(entry);
-    if (Array.isArray(entry)) return entry.map(labelSources);
+  /** Only a provenance `source` holds a system id; names, aliases and notes stay exactly as stored. */
+  const labelSources = (entry: unknown, key = ''): unknown => {
+    if (typeof entry === 'string') return key === 'source' ? healthSourceLabel(entry) : entry;
+    if (Array.isArray(entry)) return entry.map((item) => labelSources(item, key));
     if (entry !== null && typeof entry === 'object') {
-      return Object.fromEntries(Object.entries(entry).map(([key, item]) => [key, labelSources(item)]));
+      return Object.fromEntries(Object.entries(entry).map(([name, item]) => [name, labelSources(item, name)]));
     }
     return entry;
   };

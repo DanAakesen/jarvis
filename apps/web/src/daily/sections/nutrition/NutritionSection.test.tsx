@@ -428,6 +428,15 @@ describe('Nutrition section', () => {
     expect(readableJson('x'.repeat(20_000)).length).toBeLessThan(4100);
     expect(readableJson({ source: '<script>synthetic</script>' })).toContain('<script>');
   });
+  it('labels provenance sources but keeps every other stored string exact', () => {
+    const rendered = readableJson({
+      source: 'daily.metrics', origin: { source: 'daily-sql', alias: 'daily.com' }, aliases: ['daily.com'],
+    });
+    expect(rendered).toContain('"source": "Health · metrics"');
+    expect(rendered).toContain('"source": "Health · data store"');
+    expect(rendered).toContain('"alias": "daily.com"');
+    expect(rendered).toMatch(/\[\s*"daily\.com"\s*\]/u);
+  });
 
   function formatSynthetic(value: number) { return new Intl.NumberFormat('en-US').format(value); }
 });

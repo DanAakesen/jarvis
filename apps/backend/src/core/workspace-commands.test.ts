@@ -300,7 +300,8 @@ describe('workspace command delivery', () => {
       method: 'POST', url: '/tools/workspace_command', headers: agentHeaders, payload: command,
     });
     expect(response.json()).toMatchObject({ outcome: 'ok', result: { applied: true, ...command } });
-    expect(delivered).toEqual([command]);
+    // Tabs opened before the rename only know the legacy page value, so Health is delivered as `daily`.
+    expect(delivered).toEqual([page === 'health' ? { ...command, page: 'daily' } : command]);
     connection.close();
   });
   it.each(['daily', 'health'] as const)('refuses %s navigation before delivery when its data module is absent', async (page) => {

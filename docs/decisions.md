@@ -19,6 +19,12 @@ current paths, so P14-54 renames them after the other tasks have merged, with al
 for every deployed path and key and an owner-run check before an alias is removed.
 Until then "Daily" in code, issue titles and the documents below means the Health area.
 
+The navigation command that reaches open browser tabs still carries `daily` for this
+page: the backend accepts `health` from the assistant and maps it before delivery,
+because a tab opened before the deploy only knows `daily` and would reject `health`.
+P14-54 drops the mapping once those tabs are gone. Stored nutrition text is shown as
+saved; only a provenance `source` value is relabelled for display.
+
 Refs #1116
 
 ## P14-41 — Daily matches the original, except the recorded non-migrations (20 October 2026; #1116)

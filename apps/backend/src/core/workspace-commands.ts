@@ -83,6 +83,11 @@ function fingerprint(command: WorkspaceCommand): string {
   return createHash('sha256').update(serialized).digest('hex');
 }
 
+/** Tabs opened before the Health rename only know the `daily` page value, so that is what travels until P14-54. */
+function wireCommand(command: WorkspaceCommand): WorkspaceCommand {
+  return command.operation === 'navigate' && command.page === 'health' ? { ...command, page: 'daily' } : command;
+}
+
 export class WorkspaceCommandBroker {
   /** Every open signed-in tab per owner. */
   private readonly connections = new Map<string, Map<string, WorkspaceConnection>>();
@@ -238,13 +243,14 @@ export class WorkspaceCommandBroker {
     signal.addEventListener('abort', onAbort, { once: true });
 
     const expiresAt = Date.now() + commandTimeoutMs;
-    const frame = JSON.stringify({ command, expiresAt });
+    const delivered = wireCommand(command);
+    const frame = JSON.stringify({ command: delivered, expiresAt });
     if (Buffer.byteLength(frame) > 300 * 1024) {
       settleError(new ToolFailure('The workspace could not accept the command for delivery.'), 'error');
       return this.waitFor(promise, signal);
     }
     for (const connection of recipients) {
-      if (!connection.send('workspace-command', { command, expiresAt })) {
+      if (!connection.send('workspace-command', { command: delivered, expiresAt })) {
         this.decline(record, connection.sessionId, 'error', 'The workspace could not accept the command for delivery.');
       } else if (command.operation === 'create' || command.operation === 'update') {
         record.view = { viewId: command.viewId, view: structuredClone(command.view) };
