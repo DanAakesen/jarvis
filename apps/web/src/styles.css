@@ -3987,7 +3987,8 @@ a.task-chip:hover { background: var(--glass-pressed); }
   min-height: 38px;
   /* :is() takes its most specific argument, so plain padding overrides lose here; icon and chevron clearance use --field-padding-start/-end. */
   padding: var(--space-1) var(--field-padding-end, var(--space-3)) var(--space-1) var(--field-padding-start, var(--space-3));
-  border: 1px solid var(--control-rule);
+  /* The rim reads --field-rim, which the focus rule sets: this selector's :is() specificity would beat a plain border-color there. */
+  border: 1px solid var(--field-rim, var(--control-rule));
   border-radius: var(--radius-control);
   background-color: var(--surface);
   color: var(--text);
@@ -4117,6 +4118,7 @@ select.form-control {
   select, textarea
 ):focus-visible:where(:not(.composer textarea, .knowledge-search input, .folio-search input, .tasks-panel-search input)) {
   outline: none;
+  --field-rim: var(--field-focus-rule);
   border-color: var(--field-focus-rule);
   box-shadow: var(--field-focus-glow);
 }

@@ -5,7 +5,8 @@
 Every text entry field (input, select, textarea, `.form-control` and the Notes,
 Folio and Tasks search bars) shares one focus treatment: no outline, a thin
 border that shifts to a tint of `--focus` (`--field-focus-rule`) and a short soft
-light underneath (`--field-focus-glow`), echoing the composer. A zero-specificity
+light underneath (`--field-focus-glow`), echoing the composer. Fields in shared
+containers read the tint through `--field-rim`, so it applies at any specificity. A zero-specificity
 catch-all applies it to any field not named in a shared container. Search bars
 apply it to the whole bar. Invalid fields keep their error border. Forced colours
 fall back to a 2px `Highlight` outline. Increased-contrast mode makes the tint
