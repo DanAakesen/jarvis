@@ -144,7 +144,7 @@
 
 /* Cards: three glass panels in one row, each a tint of the same navy. */
 .daily-shell .daily-top { gap: var(--space-4); }
-.daily-shell .daily-top-card { gap: var(--space-4); padding: var(--space-4); border: 1px solid var(--health-edge); border-radius: var(--radius-window); background: var(--health-card-training); box-shadow: var(--health-card-shadow); }
+.daily-shell .daily-top-card { position: relative; gap: var(--space-4); padding: var(--space-4); border: 1px solid var(--health-edge); border-radius: var(--radius-window); background: var(--health-card-training); box-shadow: var(--health-card-shadow); }
 .daily-shell .daily-top-card[data-card="health"] { background: var(--health-card-health); }
 .daily-shell .daily-top-card[data-card="body"] { background: var(--health-card-body); }
 .daily-shell .daily-top-card h3 { flex: 1 1 auto; min-width: 0; font-size: var(--type-lead); font-weight: 700; }
@@ -155,7 +155,7 @@
 
 /* Rings: thick tracks, a disc behind a large numeral, and the class colour on the fill. */
 .daily-shell .daily-top-rings { gap: 0; justify-items: stretch; }
-.daily-shell .daily-ring { display: grid; gap: var(--space-2); padding-inline: var(--space-1); }
+.daily-shell .daily-ring { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-2); padding-inline: var(--space-1); }
 .daily-shell .daily-ring + .daily-ring { background: linear-gradient(var(--health-edge), var(--health-edge)) left / 1px 100% no-repeat; }
 .daily-shell .daily-ring--gym { --ring-tone: var(--health-gym); }
 .daily-shell .daily-ring--run { --ring-tone: var(--health-run); }
@@ -168,7 +168,7 @@
 .daily-shell .daily-ring-track { stroke: var(--health-track); }
 .daily-shell .daily-ring-track--unavailable { stroke: var(--health-track-strong); stroke-dasharray: 5 2.5; }
 .daily-shell .daily-ring-fill { stroke: var(--ring-tone, var(--focus)); }
-.daily-shell .daily-top-card .daily-ring-centre { max-width: 70%; font-size: var(--type-health-ring); font-weight: 750; }
+.daily-shell .daily-top-card .daily-ring-centre { max-width: 90%; font-size: var(--type-health-ring); font-weight: 750; overflow-wrap: normal; white-space: nowrap; }
 .daily-shell .daily-ring-caption { grid-row: 3; min-height: calc(var(--type-health-micro) * var(--line-tight) * 2); color: var(--text-muted); font-size: var(--type-health-micro); font-weight: 600; text-align: center; text-wrap: balance; }
 
 /* Tiles: a plain caption, a large figure with its unit set smaller, and a thin meter. */
@@ -228,6 +228,10 @@
 .daily-shell .health-panel .daily-stat-value { font-size: var(--type-lead); font-weight: 750; }
 .daily-shell .health-panel-freshness > div > span { font-weight: 600; }
 
+@media (max-width: 360px) {
+  .daily-shell .daily-ring-label { flex-direction: column; }
+  .daily-shell .daily-top-card .daily-ring-centre { font-size: var(--type-small); }
+}
 @media (prefers-reduced-motion: reduce) {
   .daily-shell .daily-section-tab { transition: none; }
 }
