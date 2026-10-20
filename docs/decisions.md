@@ -1,5 +1,24 @@
 # Decisions
 
+## P14-55 — Training targets have one shared read (20 October 2026; #1116, #1155)
+
+The owner-set gym, run and step targets (P14-45) are read once per visit to the Health
+area and shared by every view that compares against them: the Overview Training card,
+the Health panel, the Workouts rings and the Rules & sources editor. Choices: (1) the
+read starts only when a view needs it, so a section with no targets never asks; (2) a
+failed read says "Targets unavailable" and never "No target set", which is reserved for
+a successful read with an empty field, and a configured 0 is a real target that reads
+"of 0" or "0 sessions" in every view, never "No target set" (a ring with no target and
+a recorded value offers the Settings link, and a target of 0 draws no division);
+(3) the Rules & sources editor shows the shared read instead of reading again: it
+starts from the shared state, refreshes from it while the owner has no edits in
+progress and hands the server's answer to every save back to it, so the cards update
+without a reload, and a save cancels any read still in flight so a late answer can
+never replace a newer save; (4) the global Settings editor, which sits outside the
+Health area, keeps one read of its own and the next Health visit picks its save up;
+(5) a read that is not served at all offers no Retry, because retrying cannot change
+it.
+
 ## P14-46 — Overview cards report a failed refresh and keep honest figures (20 October 2026; #1116, #1143)
 
 Review of the Overview cards found five places where a card could read better than

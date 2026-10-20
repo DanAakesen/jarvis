@@ -116,11 +116,6 @@ const bodyMetricPatterns = {
 
 export type BodyMetricKey = keyof typeof bodyMetricPatterns;
 
-export type TrainingTargets = { gymSessionsPerWeek: number | null; runSessionsPerWeek: number | null; dailySteps: number | null };
-
-/** Owner-set targets are not served yet, so every ring says so instead of showing a made-up number. */
-export const noTrainingTargets: TrainingTargets = { gymSessionsPerWeek: null, runSessionsPerWeek: null, dailySteps: null };
-
 export const scaledTarget = (perPeriod: number | null, periods: number) => perPeriod === null ? null : perPeriod * periods;
 
 /** What is left of the calorie baseline. A partial eaten total is a lower bound, so left is at most and over is at least. */

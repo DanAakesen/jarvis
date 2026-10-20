@@ -2,7 +2,8 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
 import { dailyQuerySources as sources, isDailyQuery, type DailyJson, type DailySourceId } from '@jarvis/contracts';
-import { dailyFixture, jsonResponse } from '../../test-support';
+import { dailyFixture, jsonResponse, trainingTargetsFixture } from '../../test-support';
+import { TrainingTargetsContext } from '../../training-targets-context';
 import { TopCards } from './TopCards';
 
 type Row = Record<string, DailyJson>;
@@ -66,8 +67,11 @@ function stub(data: Record<string, Row[]> = rows, targets: unknown = targetReply
   }));
 }
 
-function view(ids: readonly DailySourceId[] = everything, version = 0) {
-  return <MemoryRouter><TopCards backendUrl="http://localhost:3999" getAccessToken={token} refreshVersion={version} available={ids} /></MemoryRouter>;
+function view(ids: readonly DailySourceId[] = everything, version = 0, targets: Parameters<typeof trainingTargetsFixture>[0] = {},
+  actions: Parameters<typeof trainingTargetsFixture>[1] = {}) {
+  return <MemoryRouter><TrainingTargetsContext.Provider value={trainingTargetsFixture(targets, actions)}>
+    <TopCards backendUrl="http://localhost:3999" getAccessToken={token} refreshVersion={version} available={ids} />
+  </TrainingTargetsContext.Provider></MemoryRouter>;
 }
 
 function article(title: string) {
@@ -118,6 +122,81 @@ describe('Overview cards', () => {
     expect(training.getByRole('img', { name: 'Run: 1 session, week to date, no target set' })).toBeTruthy();
     expect(training.getByRole('img', { name: 'Activity: 6,500 steps, no target set' })).toBeTruthy();
     expect(training.getAllByText('No target set')).toHaveLength(3);
+    expect(training.getAllByRole('link', { name: 'No target set' }).map(link => link.getAttribute('href')))
+      .toEqual(['/settings#training-targets', '/settings#training-targets', '/settings#training-targets']);
+  });
+
+  it('keeps a target of 0 apart from a target nobody set, with no division by zero', async () => {
+    stub();
+    const { container } = render(view(everything, 0, { gymSessionsPerWeek: 0, runSessionsPerWeek: null, dailySteps: 0 }));
+    const training = card('Training');
+    await waitFor(() => expect(training.getByRole('img', { name: 'Gym: 1 session, week to date of 0' })).toBeTruthy());
+    expect(training.getByRole('img', { name: 'Activity: 6,500 steps of 0' })).toBeTruthy();
+    expect(training.getByRole('img', { name: 'Run: 1 session, week to date, no target set' })).toBeTruthy();
+    expect(training.getAllByRole('link', { name: 'No target set' })).toHaveLength(1);
+    expect(training.getAllByText('of 0')).toHaveLength(2);
+    expect(container.querySelectorAll('.daily-ring-fill')).toHaveLength(2);
+    expect(container.textContent).not.toMatch(/NaN|Infinity/u);
+  });
+
+  it('shows no link while a target is loading or unreadable, only for a target nobody set', async () => {
+    stub();
+    const { unmount } = render(view(everything, 0, 'loading'));
+    await waitFor(() => expect(card('Training').getAllByText('Loading target')).toHaveLength(3));
+    expect(card('Training').queryByRole('link', { name: 'No target set' })).toBeNull();
+    unmount();
+    render(view(everything, 0, 'failed'));
+    await waitFor(() => expect(card('Training').getAllByText('Targets unavailable')).toHaveLength(3));
+    expect(card('Training').queryByRole('link', { name: 'No target set' })).toBeNull();
+  });
+
+  it('compares the rings with the owner-set targets, scaled to the selected period', async () => {
+    stub();
+    render(view(everything, 0, { gymSessionsPerWeek: 3, runSessionsPerWeek: 2, dailySteps: 8000 }));
+    const training = card('Training');
+    await waitFor(() => expect(training.getByRole('img', { name: 'Gym: 1 session, week to date of 3' })).toBeTruthy());
+    expect(training.getByRole('img', { name: 'Run: 1 session, week to date of 2' })).toBeTruthy();
+    expect(training.getByRole('img', { name: 'Activity: 6,500 steps of 8,000' })).toBeTruthy();
+    expect(training.queryByText('No target set')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: '1 week' }));
+    await waitFor(() => expect(training.getByRole('img', { name: 'Activity: 6,500 steps of 56,000' })).toBeTruthy());
+  });
+
+  it('says only the unset targets are not set', async () => {
+    stub();
+    render(view(everything, 0, { gymSessionsPerWeek: 3 }));
+    const training = card('Training');
+    await waitFor(() => expect(training.getByRole('img', { name: 'Gym: 1 session, week to date of 3' })).toBeTruthy());
+    expect(training.getAllByText('No target set')).toHaveLength(2);
+  });
+
+  it('says Loading target while the targets read is pending', async () => {
+    stub();
+    render(view(everything, 0, 'loading'));
+    const training = card('Training');
+    await waitFor(() => expect(training.getByRole('img', { name: 'Gym: 1 session, week to date, loading target' })).toBeTruthy());
+    expect(training.getAllByText('Loading target')).toHaveLength(3);
+    expect(training.queryByText('No target set')).toBeNull();
+  });
+
+  it('says Targets unavailable, never "No target set", when the targets read failed, and retries it', async () => {
+    stub();
+    const retry = vi.fn();
+    render(view(everything, 0, 'failed', { retry }));
+    const training = card('Training');
+    await waitFor(() => expect(training.getAllByText('Targets unavailable')).toHaveLength(3));
+    expect(training.queryByText('No target set')).toBeNull();
+    expect(training.getByRole('img', { name: 'Gym: 1 session, week to date, targets unavailable' })).toBeTruthy();
+    fireEvent.click(training.getByRole('button', { name: 'Retry' }));
+    expect(retry).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not offer a retry when the targets are simply not served', async () => {
+    stub();
+    render(view(everything, 0, 'unavailable'));
+    const training = card('Training');
+    await waitFor(() => expect(training.getAllByText('Targets unavailable')).toHaveLength(3));
+    expect(training.queryByRole('button', { name: 'Retry' })).toBeNull();
   });
 
   it('shows protein against its target and calories left against the baseline', async () => {

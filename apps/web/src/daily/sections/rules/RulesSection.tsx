@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom';
 import { dailyQuerySources } from '@jarvis/contracts';
 import { loadProfile } from '../../../auth';
 import { NutritionTargetsSettings } from '../../NutritionTargetsSettings';
+import { TrainingTargetsEditor } from '../../TrainingTargetsSettings';
+import { useTrainingTargetsShared } from '../../training-targets-context';
 import { useDailyQuery } from '../../useDailyQuery';
 import type { DailySectionProps } from '../types';
 import { sourceCoverage } from './coverage';
@@ -49,6 +51,8 @@ export default function RulesSection({ backendUrl, getAccessToken, sources, refr
   const syncAvailable = sources.includes(dailyQuerySources.sync);
   const sync = useDailyQuery(backendUrl, getAccessToken, syncAvailable ? syncQuery : null, refreshVersion);
   const coverage = sourceCoverage(sync.data, Boolean(sync.error));
+  // The editor shows the Health area's one shared read and hands what a save returns back to it, so no second read can compete.
+  const targets = useTrainingTargetsShared();
   return <div className="daily-rules">
     <header className="daily-rules-header">
       <Link to=".">Back to Health</Link>
@@ -58,7 +62,7 @@ export default function RulesSection({ backendUrl, getAccessToken, sources, refr
       <h2 id="daily-rules-targets">Targets</h2>
       <p>Set your own nutrition targets. Health does not estimate energy needs from body measurements.</p>
       <NutritionTargetsSettings backendUrl={backendUrl} getAccessToken={getAccessToken} />
-      <p className="daily-rules-note">Training targets are not available here yet.</p>
+      <TrainingTargetsEditor backendUrl={backendUrl} getAccessToken={getAccessToken} source={targets} />
     </section>
     <section aria-labelledby="daily-rules-heading">
       <h2 id="daily-rules-heading">Rules</h2>

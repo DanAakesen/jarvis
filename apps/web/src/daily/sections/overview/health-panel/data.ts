@@ -8,7 +8,6 @@ import { workoutDate } from '../../workouts/summary';
 
 export const healthTabs = ['overview', 'sleep', 'activity', 'workouts', 'body', 'nutrition', 'all'] as const;
 export type HealthTab = typeof healthTabs[number];
-export type HealthTargets = { gymSessionsPerWeek: number | null; runSessionsPerWeek: number | null } | null;
 export type Tile = { key: string; label: string; value: number | string; unit?: string | undefined; date?: string; note?: string };
 export type Records = { metrics: Row[]; catalog: Row[]; sleep: Row[]; workouts: Row[]; nutrition: Row[] };
 

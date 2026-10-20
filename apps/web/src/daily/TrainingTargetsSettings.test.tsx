@@ -1,8 +1,9 @@
 import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import type { ComponentProps } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { TrainingTargetsSettings } from './TrainingTargetsSettings';
-import type { TrainingTargetValues } from './training-targets';
+import { TrainingTargetsEditor, TrainingTargetsSettings } from './TrainingTargetsSettings';
+import { parseTrainingTargets, type TrainingTargetValues } from './training-targets';
 
 const backendUrl = 'https://api.example.com/';
 const getAccessToken = vi.fn(async () => 'synthetic-access-token');
@@ -162,5 +163,60 @@ describe('TrainingTargetsSettings', () => {
     view.unmount();
     expect(signal?.aborted).toBe(true);
     await act(async () => { resolve(reply()); });
+  });
+});
+
+describe('TrainingTargetsEditor on a shared read', () => {
+  type Source = ComponentProps<typeof TrainingTargetsEditor>['source'];
+  function shared(targets: TrainingTargetValues = configured, apply = vi.fn()): Source {
+    const missing = Object.entries(targets).filter(([, value]) => value === null).map(([key]) => key);
+    const state = parseTrainingTargets({ targets, missing, updatedAt: '2026-10-17T10:00:00.000Z', bounds })!;
+    return { view: { status: 'settled', state }, retry: vi.fn(), apply };
+  }
+  const editor = (source: Source) =>
+    <TrainingTargetsEditor backendUrl={backendUrl} getAccessToken={getAccessToken} source={source} />;
+
+  it('shows the shared state without a read of its own and hands the state a save returns back to it', async () => {
+    const user = userEvent.setup();
+    const apply = vi.fn();
+    fetchMock.mockResolvedValueOnce(reply({ ...configured, runSessionsPerWeek: 3 }));
+    render(editor(shared(configured, apply)));
+    expect(field('Run sessions (sessions/week)').value).toBe('2');
+    expect(fetchMock).not.toHaveBeenCalled();
+    await replace(user, 'Run sessions (sessions/week)', '3');
+    await user.click(saveButton());
+    expect(await screen.findByText('Saved')).not.toBeNull();
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({ method: 'PATCH', body: '{"runSessionsPerWeek":3}' });
+    expect(apply).toHaveBeenCalledOnce();
+    expect(apply).toHaveBeenLastCalledWith(expect.objectContaining({ targets: { ...configured, runSessionsPerWeek: 3 } }));
+  });
+
+  it('follows a newer shared state while nothing is being edited', () => {
+    const view = render(editor(shared()));
+    view.rerender(editor(shared({ ...configured, dailySteps: 9_000 })));
+    expect(field('Steps per day (steps/day)').value).toBe('9000');
+    expect(saveButton().disabled).toBe(true);
+  });
+
+  it('keeps what the owner is typing when the shared state is replaced', async () => {
+    const user = userEvent.setup();
+    const view = render(editor(shared()));
+    await replace(user, 'Gym sessions (sessions/week)', '5');
+    view.rerender(editor(shared({ ...configured, dailySteps: 9_000 })));
+    expect(field('Gym sessions (sessions/week)').value).toBe('5');
+    expect(saveButton().disabled).toBe(false);
+  });
+
+  it('says the shared read is loading, and offers its Retry after a failure, without reading again itself', async () => {
+    const user = userEvent.setup();
+    const retry = vi.fn();
+    const view = render(editor({ view: { status: 'loading' }, retry, apply: vi.fn() }));
+    expect(screen.getByText('Loading training targets…')).not.toBeNull();
+    view.unmount();
+    render(editor({ view: { status: 'error', kind: 'failed', message: 'Training targets could not be loaded. Try again.' }, retry, apply: vi.fn() }));
+    await user.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(retry).toHaveBeenCalledOnce();
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

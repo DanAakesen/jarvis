@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { awaitWithSignal, backendFetch } from '../backend-request';
 import { runDailyRead } from './client';
 
@@ -200,17 +200,21 @@ export type TrainingTargetsView =
   | { readonly status: 'error'; readonly kind: TrainingTargetsFailure; readonly message: string };
 
 /**
- * Shared on-demand training target read for Health Overview, Workouts and other consumers. It does not
- * alter those views or add another source of truth: each consumer gets loading/settled/error state and
- * a retry callback, and should render targets only from the server's validated response.
+ * One training target read. The Health area mounts it once through `TrainingTargetsProvider`, and the overview, health panel
+ * and workouts views take their targets from that single source. Each caller gets loading/settled/error state, a retry
+ * callback and `apply` for a state the server has just returned, and renders targets only from the validated response.
  */
 export function useTrainingTargets(backendUrl: string | null, getAccessToken: () => Promise<string>, enabled = true) {
   const [attempt, setAttempt] = useState(0);
   const key = JSON.stringify([backendUrl, attempt, enabled]);
   const [loaded, setLoaded] = useState<{ key: string; view: TrainingTargetsView }>({ key, view: { status: 'loading' } });
+  const current = useRef({ key, read: null as AbortController | null });
   useEffect(() => {
+    const latest = current.current;
+    latest.key = key;
     if (!enabled) return;
     const controller = new AbortController();
+    latest.read = controller;
     void loadTrainingTargets(backendUrl, getAccessToken, controller.signal).then(
       (state) => { if (!controller.signal.aborted) setLoaded({ key, view: { status: 'settled', state } }); },
       (error: unknown) => {
@@ -219,11 +223,33 @@ export function useTrainingTargets(backendUrl: string | null, getAccessToken: ()
         setLoaded({ key, view: { status: 'error', kind, message: trainingTargetsFailureMessage(kind, 'load') } });
       },
     );
-    return () => controller.abort();
+    return () => {
+      controller.abort();
+      if (latest.read === controller) latest.read = null;
+    };
   }, [backendUrl, getAccessToken, key, enabled]);
   const retry = useCallback(() => setAttempt((value) => value + 1), []);
+  // A save made elsewhere on the page is already the server's answer, so consumers take it without another read. A read
+  // still in flight may have started before that save, so it is cancelled and can never replace what the save returned.
+  const apply = useCallback((state: TrainingTargetsState) => {
+    current.current.read?.abort();
+    current.current.read = null;
+    setLoaded({ key: current.current.key, view: { status: 'settled', state } });
+  }, []);
   const view: TrainingTargetsView = !enabled
     ? { status: 'error', kind: 'unavailable', message: trainingTargetsFailureMessage('unavailable', 'load') }
     : loaded.key === key ? loaded.view : { status: 'loading' };
-  return { view, retry };
+  return { view, retry, apply };
+}
+
+/** One target as a card shows it: still loading, unreadable (never shown as "not set"), or read, with null meaning the owner set none. */
+export type TargetRead =
+  | { readonly status: 'loading' }
+  | { readonly status: 'failed' }
+  | { readonly status: 'ready'; readonly value: number | null };
+
+export function readTarget(view: TrainingTargetsView, key: TrainingTargetKey): TargetRead {
+  if (view.status === 'loading') return { status: 'loading' };
+  if (view.status === 'error') return { status: 'failed' };
+  return { status: 'ready', value: view.state.targets[key] };
 }

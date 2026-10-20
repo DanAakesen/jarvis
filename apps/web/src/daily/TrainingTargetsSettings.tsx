@@ -1,19 +1,15 @@
-import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
+import { useRef, useState, type FormEvent } from 'react';
 import { CollapsibleSection } from '../CollapsibleSection';
 import { Loader } from '../Loader';
 import {
-  draftText, loadTrainingTargets, parseTrainingDraft, saveTrainingTargets, trainingTargetChanges,
-  trainingTargetKeys, TrainingTargetsError, trainingTargetsFailureMessage,
+  draftText, parseTrainingDraft, saveTrainingTargets, trainingTargetChanges,
+  trainingTargetKeys, TrainingTargetsError, trainingTargetsFailureMessage, useTrainingTargets,
   type TrainingDraft, type TrainingTargetKey, type TrainingTargetsFailure, type TrainingTargetsState,
 } from './training-targets';
+import type { TrainingTargetsShared } from './training-targets-context';
 import './training-targets.css';
 
 type Drafts = Record<TrainingTargetKey, string>;
-type View =
-  | { status: 'loading' }
-  | { status: 'unavailable' }
-  | { status: 'error'; message: string }
-  | { status: 'ready'; state: TrainingTargetsState };
 interface Feedback { tone: 'success' | 'error'; message: string }
 
 const emptyDrafts: Drafts = { gymSessionsPerWeek: '', runSessionsPerWeek: '', dailySteps: '' };
@@ -30,52 +26,37 @@ function failureKind(error: unknown): TrainingTargetsFailure {
   return error instanceof TrainingTargetsError ? error.kind : 'failed';
 }
 
-export function TrainingTargetsSettings({ backendUrl, getAccessToken }: {
+/**
+ * The editor never reads targets itself. It shows what `source` holds and hands every state a save returns to
+ * `source.apply`, so the Health area's cards follow a save without another read.
+ */
+export function TrainingTargetsEditor({ backendUrl, getAccessToken, source }: {
   backendUrl: string | null;
   getAccessToken: () => Promise<string>;
+  source: Pick<TrainingTargetsShared, 'view' | 'retry' | 'apply'>;
 }) {
-  const [view, setView] = useState<View>({ status: backendUrl ? 'loading' : 'unavailable' });
-  const [drafts, setDrafts] = useState<Drafts>(emptyDrafts);
+  const { view, retry, apply } = source;
+  const ready = view.status === 'settled' ? view.state : null;
+  const [seen, setSeen] = useState(ready);
+  const [drafts, setDrafts] = useState<Drafts>(() => (ready ? draftsFrom(ready) : emptyDrafts));
   const [touched, setTouched] = useState<Partial<Record<TrainingTargetKey, boolean>>>({});
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState<Feedback | null>(null);
   const request = useRef<AbortController | null>(null);
   const inputs = useRef<Partial<Record<TrainingTargetKey, HTMLInputElement | null>>>({});
 
-  const refresh = useCallback(async () => {
-    request.current?.abort();
-    const controller = new AbortController();
-    request.current = controller;
-    setSaving(false);
-    setFeedback(null);
-    setTouched({});
-    setView({ status: 'loading' });
-    try {
-      const state = await loadTrainingTargets(backendUrl, getAccessToken, controller.signal);
-      if (controller.signal.aborted) return;
-      setDrafts(draftsFrom(state));
-      setView({ status: 'ready', state });
-    } catch (error) {
-      if (controller.signal.aborted) return;
-      const kind = failureKind(error);
-      setView(kind === 'unavailable'
-        ? { status: 'unavailable' }
-        : { status: 'error', message: trainingTargetsFailureMessage(kind, 'load') });
-    } finally {
-      if (request.current === controller) request.current = null;
+  // A newer answer from the server replaces the fields, unless the owner has edits in progress: those are kept and
+  // compared with the new answer.
+  if (ready !== null && ready !== seen) {
+    setSeen(ready);
+    const baseline = seen === null ? null : draftsFrom(seen);
+    if (baseline === null || trainingTargetKeys.every((key) => drafts[key] === baseline[key])) {
+      setDrafts(draftsFrom(ready));
+      setTouched({});
     }
-  }, [backendUrl, getAccessToken]);
+  }
+  if (ready === null && feedback !== null) setFeedback(null);
 
-  useEffect(() => {
-    let active = true;
-    void Promise.resolve().then(() => { if (active) void refresh(); });
-    return () => {
-      active = false;
-      request.current?.abort();
-    };
-  }, [refresh]);
-
-  const ready = view.status === 'ready' ? view.state : null;
   const parsed = ready
     ? Object.fromEntries(trainingTargetKeys.map((key) => [key, parseTrainingDraft(drafts[key], ready.bounds[key])])) as Record<TrainingTargetKey, TrainingDraft>
     : null;
@@ -100,43 +81,42 @@ export function TrainingTargetsSettings({ backendUrl, getAccessToken }: {
     }
     const changes = trainingTargetChanges(ready.targets, parsed);
     if (!changes) return;
+    // Leaving the page does not cancel a save: the server may already hold it, and its answer must still reach `apply`.
     const controller = new AbortController();
     request.current = controller;
     setSaving(true);
     setFeedback(null);
     try {
       const state = await saveTrainingTargets(backendUrl, getAccessToken, changes, controller.signal);
-      if (controller.signal.aborted) return;
       setDrafts(draftsFrom(state));
       setTouched({});
-      setView({ status: 'ready', state });
       setFeedback({ tone: 'success', message: 'Saved' });
+      apply(state);
     } catch (error) {
-      if (controller.signal.aborted) return;
       setFeedback({ tone: 'error', message: trainingTargetsFailureMessage(failureKind(error), 'save') });
     } finally {
-      if (request.current === controller) request.current = null;
-      if (!controller.signal.aborted) setSaving(false);
+      request.current = null;
+      setSaving(false);
     }
   }
 
   return (
     <CollapsibleSection storageKey="settings.training-targets" id="training-targets" headingId="training-targets-heading"
       title="Training targets" className="training-targets"
-      summary={view.status === 'ready' ? (view.state.missing.length ? 'Needs setup' : 'Configured') : undefined}>
+      summary={ready ? (ready.missing.length ? 'Needs setup' : 'Configured') : undefined}>
       {view.status === 'loading' && (
         <p className="settings-feedback" role="status">
           <Loader variant="inline" announce={false} label="Loading training targets…" />
         </p>
       )}
-      {view.status === 'unavailable' && (
+      {view.status === 'error' && view.kind === 'unavailable' && (
         <p className="settings-unavailable" role="status">Training targets are not available here.</p>
       )}
-      {view.status === 'error' && (
+      {view.status === 'error' && view.kind !== 'unavailable' && (
         <>
           <p className="settings-feedback" role="alert">{view.message}</p>
           <div className="settings-actions">
-            <button className="secondary-button" type="button" onClick={() => { void refresh(); }}>Retry</button>
+            <button className="secondary-button" type="button" onClick={retry}>Retry</button>
           </div>
         </>
       )}
@@ -174,4 +154,13 @@ export function TrainingTargetsSettings({ backendUrl, getAccessToken }: {
       )}
     </CollapsibleSection>
   );
+}
+
+/** The editor with a read of its own, for the Settings page, which sits outside the Health area and its shared read. */
+export function TrainingTargetsSettings({ backendUrl, getAccessToken }: {
+  backendUrl: string | null;
+  getAccessToken: () => Promise<string>;
+}) {
+  const source = useTrainingTargets(backendUrl, getAccessToken, backendUrl !== null);
+  return <TrainingTargetsEditor backendUrl={backendUrl} getAccessToken={getAccessToken} source={source} />;
 }

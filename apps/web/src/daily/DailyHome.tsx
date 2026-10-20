@@ -10,6 +10,7 @@ import { DailyRefreshContext } from './refresh';
 import { DailySectionNavigationContext } from './section-navigation';
 import { discoverDailySections, loadDailySectionModules } from './sections/discovery';
 import type { DailyPeriod, DailySectionDefinition } from './sections/types';
+import { TrainingTargetsProvider } from './TrainingTargetsProvider';
 import { useDailyCapabilities } from './useDailyCapabilities';
 import './daily.css';
 import './ui/daily-ui.css';
@@ -165,20 +166,22 @@ export function DailyHome({ backendUrl, getAccessToken }: AreaProps) {
       <DailyPeriodControl period={period} onPeriodChange={setPeriod} />
     </div>}
     <DailySectionNavigationContext.Provider value={navigation}>
-      <div className="daily-section-panel" id="daily-section-panel" role="tabpanel"
-        aria-labelledby={`daily-tab-${activeSection?.id ?? 'overview'}`} tabIndex={0} key={activeSection?.id}>
-        {!activeSection && sectionLoadError && <div className="daily-notice" role="alert">
-          <p>Sections unavailable.</p>
-          <button className="secondary-button" type="button" onClick={() => setSectionLoadAttempt(attempt => attempt + 1)}>Retry sections</button>
-        </div>}
-        {!activeSection && !sectionLoadError && <Loader
-          label={navigation.availabilityPending ? 'Checking Health availability' : 'Loading Health sections'} variant="rows" />}
-        {activeSection && navigation.availabilityPending && <Loader label="Checking Health availability" variant="rows" />}
-        {activeSection && !navigation.availabilityPending && <Suspense fallback={<Loader label={`Loading ${activeSection.label}`} variant="rows" />}>
-          <activeSection.Component backendUrl={backendUrl} getAccessToken={getAccessToken} sources={sources}
-            period={period} onPeriodChange={setPeriod} refreshVersion={refreshVersion} />
-        </Suspense>}
-      </div>
+      <TrainingTargetsProvider backendUrl={backendUrl} getAccessToken={getAccessToken}>
+        <div className="daily-section-panel" id="daily-section-panel" role="tabpanel"
+          aria-labelledby={`daily-tab-${activeSection?.id ?? 'overview'}`} tabIndex={0} key={activeSection?.id}>
+          {!activeSection && sectionLoadError && <div className="daily-notice" role="alert">
+            <p>Sections unavailable.</p>
+            <button className="secondary-button" type="button" onClick={() => setSectionLoadAttempt(attempt => attempt + 1)}>Retry sections</button>
+          </div>}
+          {!activeSection && !sectionLoadError && <Loader
+            label={navigation.availabilityPending ? 'Checking Health availability' : 'Loading Health sections'} variant="rows" />}
+          {activeSection && navigation.availabilityPending && <Loader label="Checking Health availability" variant="rows" />}
+          {activeSection && !navigation.availabilityPending && <Suspense fallback={<Loader label={`Loading ${activeSection.label}`} variant="rows" />}>
+            <activeSection.Component backendUrl={backendUrl} getAccessToken={getAccessToken} sources={sources}
+              period={period} onPeriodChange={setPeriod} refreshVersion={refreshVersion} />
+          </Suspense>}
+        </div>
+      </TrainingTargetsProvider>
     </DailySectionNavigationContext.Provider>
   </section>;
 }

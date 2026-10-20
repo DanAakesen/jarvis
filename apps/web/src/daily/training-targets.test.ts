@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   draftText, loadTrainingTargets, parseTrainingDraft, parseTrainingTargets, saveTrainingTargets,
   trainingTargetChanges, trainingTargetKeys, trainingTargetsFailureMessage, TrainingTargetsError,
-  useTrainingTargets,
+  readTarget, useTrainingTargets,
 } from './training-targets';
 
 const bounds = {
@@ -157,5 +157,53 @@ describe('useTrainingTargets', () => {
     const { result } = renderHook(() => useTrainingTargets(null, getAccessToken, false));
     await waitFor(() => expect(result.current.view).toMatchObject({ status: 'error', kind: 'unavailable' }));
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('takes a state the server just returned without another read', async () => {
+    fetchMock.mockResolvedValueOnce(json(reply()));
+    const { result } = renderHook(() => useTrainingTargets('https://api.example.com', getAccessToken));
+    await waitFor(() => expect(result.current.view.status).toBe('settled'));
+    const saved = parseTrainingTargets(reply({ targets: { ...synthetic, gymSessionsPerWeek: 5 } }))!;
+    act(() => result.current.apply(saved));
+    expect(result.current.view).toMatchObject({ status: 'settled', state: { targets: { gymSessionsPerWeek: 5 } } });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('never lets a read that was still in flight replace the state a save returned', async () => {
+    let finish: (response: Response) => void = () => undefined;
+    fetchMock.mockReturnValueOnce(new Promise<Response>((resolve) => { finish = resolve; }));
+    const { result } = renderHook(() => useTrainingTargets('https://api.example.com', getAccessToken));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const saved = parseTrainingTargets(reply({ targets: { ...synthetic, gymSessionsPerWeek: 5 } }))!;
+    act(() => result.current.apply(saved));
+    await act(async () => { finish(json(reply({ targets: { ...synthetic, gymSessionsPerWeek: 1 } }))); await Promise.resolve(); });
+    expect(result.current.view).toMatchObject({ status: 'settled', state: { targets: { gymSessionsPerWeek: 5 } } });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the applied state when the read that was in flight then fails', async () => {
+    let fail: (reason: unknown) => void = () => undefined;
+    fetchMock.mockReturnValueOnce(new Promise<Response>((_resolve, reject) => { fail = reject; }));
+    const { result } = renderHook(() => useTrainingTargets('https://api.example.com', getAccessToken));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    act(() => result.current.apply(parseTrainingTargets(reply())!));
+    await act(async () => { fail(new Error('synthetic network failure')); await Promise.resolve(); });
+    expect(result.current.view.status).toBe('settled');
+  });
+});
+
+describe('readTarget', () => {
+  const settled = { status: 'settled', state: parseTrainingTargets(reply({ targets: { ...synthetic, runSessionsPerWeek: null }, missing: ['runSessionsPerWeek'] }))! } as const;
+
+  it('reads loading, failed, set and not-set targets as different things', () => {
+    expect(readTarget({ status: 'loading' }, 'gymSessionsPerWeek')).toEqual({ status: 'loading' });
+    expect(readTarget({ status: 'error', kind: 'unavailable', message: 'x' }, 'gymSessionsPerWeek')).toEqual({ status: 'failed' });
+    expect(readTarget(settled, 'gymSessionsPerWeek')).toEqual({ status: 'ready', value: 3 });
+    expect(readTarget(settled, 'runSessionsPerWeek')).toEqual({ status: 'ready', value: null });
+  });
+
+  it('keeps a configured 0 as a value, not as no target', () => {
+    const zero = { status: 'settled', state: parseTrainingTargets(reply({ targets: { ...synthetic, gymSessionsPerWeek: 0 } }))! } as const;
+    expect(readTarget(zero, 'gymSessionsPerWeek')).toEqual({ status: 'ready', value: 0 });
   });
 });

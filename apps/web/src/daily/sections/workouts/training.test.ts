@@ -53,11 +53,13 @@ describe('training from synthetic retained rows', () => {
     expect(trainingSummary([], period).energy).toBeNull();
   });
 
-  it('scales only positive finite weekly targets to the selected days', () => {
+  it('scales only non-negative finite weekly targets to the selected days and keeps a target of 0', () => {
     expect(periodTarget(3, 7)).toBe(3);
     expect(periodTarget(3, 14)).toBe(6);
     expect(periodTarget(7, 1)).toBe(1);
-    for (const target of [null, 0, -1, NaN, Infinity]) expect(periodTarget(target, 7)).toBeNull();
+    expect(periodTarget(0, 7)).toBe(0);
+    for (const target of [null, -1, NaN, Infinity]) expect(periodTarget(target, 7)).toBeNull();
+    expect(periodTarget(3, 0)).toBeNull();
   });
 
   it('uses daily metric totals, preserves recorded zero, and does not substitute averages for missing totals', () => {

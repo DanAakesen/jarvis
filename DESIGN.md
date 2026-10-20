@@ -1899,6 +1899,18 @@ lower bound; a body trend uses one unit, the latest reading's; only Today may sh
 last night's sleep, so Yesterday needs its own night; Calories and Duration each
 carry their own lower-bound note.
 
+20 October 2026 (P14-55; Refs #1116, #1155): every ring and tile that compares
+against a training target reads the owner's targets from one shared read per
+visit to the Health area, so the Overview rings (steps scale with the selected days,
+sessions with the selected weeks), the Health panel weekly tiles and the Workouts
+rings agree and a save in Rules & sources changes them without a reload. The
+caption says what the read is: "Loading target" while it is pending, "No target
+set" (a link to the training targets in Settings, as in the Health panel and the
+Workouts rings) only when the read succeeded and the field is empty, "Targets
+unavailable" when it failed (with a Retry beside it, except where the source is not
+served at all), and a ring never draws a comparison for a target it does not have.
+A target of 0 is a real target: it reads "of 0" or "0 sessions", offers no Settings
+link and never divides.
 Checked the section shell in isolated Chromium against only synthetic capability
 and query responses at 320, 390×844, 768 and 1440×900 in light and dark, with
 reduced motion. Overview, Data and brief detail, keyboard/URL switching, shared
@@ -2086,9 +2098,10 @@ source-completeness caveats remain explicit.
 a Training card below the existing shared period control, with Sessions and Calories burned,
 Gym/Run mini rings and Copenhagen-day energy bars. Gym, Run and Other have a
 labelled legend in bar order; Activity workouts join Other in the chart. Rings
-accept a weekly target, prorated by selected calendar days, but currently receive
-null and link “No target set” to `/settings#training-targets`; P14-45 owns the
-target source and its later wiring. No second targets client is introduced.
+accept a weekly target, prorated by selected calendar days, and read it from the
+shared training targets (P14-55): "Loading target", "No target set" linking to
+`/settings#training-targets`, or "Targets unavailable" with a Retry targets control.
+No second targets client is introduced.
 The shell retains the only period control, avoiding competing custom-date drafts.
 Below are Gym (time, energy and heart rate), Run (also distance) and Activity
 (metric steps, active energy and exercise time per day) cards. Missing figures say

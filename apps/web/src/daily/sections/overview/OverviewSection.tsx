@@ -24,6 +24,6 @@ export default function OverviewSection({ backendUrl, getAccessToken, sources, r
       capabilities={{ sources: knownSources, error: navigation.availabilityError }}
       onRetryAvailability={navigation.retryAvailability} />
     {expanded && <HealthPanel backendUrl={backendUrl} getAccessToken={getAccessToken} sources={sources}
-      refreshVersion={refreshVersion} targets={null} />}
+      refreshVersion={refreshVersion} />}
   </>;
 }

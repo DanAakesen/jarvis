@@ -6,19 +6,25 @@ import { DailyState } from '../../ui/DailyState';
 import { Ring } from '../../ui/Ring';
 import { formatDuration, formatNumber } from '../../ui/formatters';
 import { useDailyPages, type DailyPages } from '../../ui/useDailyPages';
+import { readTarget, type TargetRead } from '../../training-targets';
+import { useTrainingTargetsShared } from '../../training-targets-context';
 import { summarizeWorkouts, type Workout } from './summary';
 import { activityFigures, availableData, calories, classifyWorkout, nonnegative, periodTarget, sumKnown, trainingSummary } from './training';
 
 export function TrainingRing({ label, count, target, days }: {
-  label: string; count: number | null; target: number | null; days: number;
+  label: string; count: number | null; target: TargetRead; days: number;
 }) {
-  const goal = periodTarget(target, days);
+  const weekly = target.status === 'ready' ? target.value : null;
+  const goal = periodTarget(weekly, days);
+  const spoken = target.status === 'loading' ? 'loading target' : target.status === 'failed' ? 'targets unavailable'
+    : goal === null ? 'no target set' : `${formatNumber(goal)} target for this period (${weekly} per week)`;
   return <div className="workouts-mini-ring">
     <Ring label={label} value={count} target={goal} centre={count === null ? '—' : formatNumber(count)}
       caption="Sessions in selected period"
-      summary={`${count === null ? 'Not received' : `${count} sessions`}; ${goal === null ? 'no target set' : `${formatNumber(goal)} target for this period (${target} per week)`}`} />
-    <p>{goal === null ? <Link to="/settings#training-targets">No target set</Link>
-      : `${formatNumber(goal)} in period · ${target} / week`}</p>
+      summary={`${count === null ? 'Not received' : `${count} sessions`}; ${spoken}`} />
+    <p>{target.status === 'loading' ? 'Loading target' : target.status === 'failed' ? 'Targets unavailable'
+      : goal === null ? <Link to="/settings#training-targets">No target set</Link>
+        : `${formatNumber(goal)} in period · ${weekly} / week`}</p>
   </div>;
 }
 
@@ -52,6 +58,7 @@ function ReadStatus({ pages, served, name }: { pages: DailyPages; served: boolea
 }
 
 export function WorkoutOverview({ pages, rows, ...props }: DailySectionProps & { pages: DailyPages; rows: Workout[] }) {
+  const targets = useTrainingTargetsShared();
   const hasMetrics = props.sources.includes(sources.metrics);
   const hasCatalogue = props.sources.includes(sources.metricCatalog);
   const metrics = useDailyPages(props.backendUrl, props.getAccessToken,
@@ -80,9 +87,14 @@ export function WorkoutOverview({ pages, rows, ...props }: DailySectionProps & {
         </dl>
         <div className="workouts-training-rings">
           {(['Gym', 'Run'] as const).map(label => <TrainingRing key={label} label={label}
-            count={pending ? null : summary.rows.filter(row => classifyWorkout(row) === label).length} target={null} days={summary.days} />)}
+            count={pending ? null : summary.rows.filter(row => classifyWorkout(row) === label).length}
+            target={readTarget(targets.view, label === 'Gym' ? 'gymSessionsPerWeek' : 'runSessionsPerWeek')} days={summary.days} />)}
         </div>
       </div>
+      {targets.view.status === 'error' && targets.view.kind !== 'unavailable' && <div className="workouts-card-status" role="status">
+        <DailyState status="error" message="Targets unavailable. Rings show sessions without a comparison."
+          onRetry={targets.retry} retryLabel="Retry targets" />
+      </div>}
       <p className="workouts-summary-note">Calories include only recorded workout energy with known units.
         Activity and unclassified workouts appear under Other. Days without received energy are gaps, not zero.
         Bars read Gym, Run, Other from left to right.</p>
