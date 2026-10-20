@@ -1640,6 +1640,38 @@ new animation is introduced.
 
 ## Daily migration visual requirement (12 October 2026)
 
+20 October 2026 (P14-47 / #1136): the expanded-by-default Health panel sits once
+below Overview. Its header contains Health, the age of the latest processed-upload
+receipt from `daily.sync`, and a labelled disclosure. Seven keyboard-operated
+tabs use the existing selected/focus states; below 700px they form three columns.
+`panel=closed` collapses it; `panel=health&healthTab=sleep` opens a selected view.
+The bounded, keyboard-scrollable body keeps the same height through loading,
+empty, error and partial reads. Overview uses shared `StatTile` captions/values
+and Gym/Run weekly rows; category views show latest samples, units and dates.
+Missing records say “Not received”; missing inputs or incomplete reads say
+“Unavailable”, never a fabricated zero. A complete workouts read with no sessions
+in a window reads 0 sessions, 0 min and 0 kcal, as in the original. Last night
+leads with total sleep and falls back to asleep only when total is absent, because
+staged exports report asleep as 0. Active calories read the exported `active_energy`
+series as well as `active_energy_burned`. Today and rolling/week windows use
+Copenhagen calendar dates, independently of the shell's selected period.
+All data includes every received metric in the panel's labelled seven-day read
+window, split by unit. Catalogue categories are respected only for their declared
+units; the current catalogue supplies no categories, so uncategorised metrics
+remain in All data and category-only views explain the unavailable grouping.
+Sleep, workout and nutrition sources also populate their own tabs directly.
+There is no retention claim without a served policy. Weekly targets enter through
+one nullable prop; unset targets link to Settings without a second targets client.
+Synthetic Chromium checks covered light/dark at 1280, 768, 390 and 320px, tab
+keys, disclosure/deep links and equal state heights. Screenshot-viewer limits
+prevented a complete pixel review; live owner data, physical devices and
+P14-45 target wiring remain unverified.
+
+20 October 2026 owner naming follow-up: all new panel copy and accessible
+announcements use Health, including inherited loading labels and read errors.
+Internal identifiers and existing routes remain unchanged for #1146/#1147;
+the panel introduces no hard-coded area-route links.
+
 20 October 2026 (P14-41 / #1116): the owner wants the original Daily components and data presentation rebuilt in Jarvis styling. Keep the original composition (cards, rings, tiles, panels) but draw it with existing Jarvis tokens, shared components, themes, density and motion; add no Daily-only skin or tokens. See the [audit](docs/ui/p14-41/audit.md).
 
 17 October brief-history source continuation reuses the existing collection
