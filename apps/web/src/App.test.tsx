@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from './App';
 import { getSignInGreeting } from './sign-in-greeting';
 import { publishJob } from './jobs-store';
-import { dailyQuerySources, factoryBoardColumnIds, isDailyQuery, type DailyQuery, type FactoryBoard, type GeneratedView, type WorkspaceCommand } from '@jarvis/contracts';
+import { dailyCapabilitiesVersion, dailyQuerySources, factoryBoardColumnIds, isDailyQuery, type DailyQuery, type FactoryBoard, type GeneratedView, type WorkspaceCommand } from '@jarvis/contracts';
 import { dailyFixture, jsonResponse } from './daily/test-support';
 
 const {
@@ -685,7 +685,7 @@ describe('App shell', () => {
     const queries: DailyQuery[] = [];
     fetchMock.mockImplementation(async (input, init) => {
       const path = new URL(String(input)).pathname;
-      if (path === '/daily/capabilities') return jsonResponse({ module: 'daily', version: 3, sources: Object.values(dailyQuerySources) });
+      if (path === '/daily/capabilities') return jsonResponse({ module: 'daily', version: dailyCapabilitiesVersion, sources: Object.values(dailyQuerySources) });
       if (path === '/daily/query') {
         const query: unknown = JSON.parse(String(init?.body));
         if (!isDailyQuery(query)) throw new Error('Invalid synthetic Daily query');
@@ -722,7 +722,7 @@ describe('App shell', () => {
     fetchMock.mockImplementation(async (input, init) => {
       const path = new URL(String(input)).pathname;
       if (path === '/daily/capabilities') return owner === 'first'
-        ? jsonResponse({ module: 'daily', version: 3, sources: Object.values(dailyQuerySources) })
+        ? jsonResponse({ module: 'daily', version: dailyCapabilitiesVersion, sources: Object.values(dailyQuerySources) })
         : jsonResponse({ error: 'forbidden' }, 403);
       if (path === '/daily/query') {
         const query: unknown = JSON.parse(String(init?.body));
