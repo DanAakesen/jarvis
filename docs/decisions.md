@@ -6,7 +6,10 @@ The owner rejected the 3px outline on fields. All text entry fields now use one
 treatment: a thin tinted border plus a soft glow underneath, defined by the
 `--field-focus-rule` and `--field-focus-glow` tokens, with the outline kept only
 as a forced-colours fallback. The per-component outline rules were removed so
-the shared rule is the single source. Non-text controls are unchanged.
+the shared rule is the single source. Non-text controls are unchanged. A
+zero-specificity catch-all covers fields outside the shared containers, and
+field selects now opt into the glass dropdown list (`appearance: base-select`)
+that the shared field system had overridden with `appearance: none`.
 
 ## P14-41 — Daily UI rebuild: original components, Jarvis styling (20 October 2026; #1116)
 

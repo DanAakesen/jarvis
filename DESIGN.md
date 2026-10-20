@@ -5,10 +5,16 @@
 Every text entry field (input, select, textarea, `.form-control` and the Notes,
 Folio and Tasks search bars) shares one focus treatment: no outline, a thin
 border that shifts to a tint of `--focus` (`--field-focus-rule`) and a short soft
-light underneath (`--field-focus-glow`), echoing the composer. Search bars apply
-it to the whole bar. Invalid fields keep their error border. Forced colours fall
-back to a 2px `Highlight` outline. Checkboxes, switches and buttons keep their
-own focus rings; the composer keeps its rim sweep.
+light underneath (`--field-focus-glow`), echoing the composer. A zero-specificity
+catch-all applies it to any field not named in a shared container. Search bars
+apply it to the whole bar. Invalid fields keep their error border. Forced colours
+fall back to a 2px `Highlight` outline. Checkboxes, switches, ranges and buttons
+keep their own focus rings; the composer keeps its rim sweep.
+
+Dropdowns: where `appearance: base-select` is supported, every field select
+(including those in shared containers and `select.form-control`) opens the glass
+list (rounded panel, lit hover, selected tint with checkmark) and uses the
+picker icon instead of a drawn chevron. Other browsers keep the native list.
 
 ## Vault mirror Status row (19 October 2026; P14-29)
 

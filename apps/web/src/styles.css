@@ -4067,6 +4067,16 @@ select.form-control {
   background-size: 5px 5px;
   color-scheme: inherit;
 }
+/* Where the browser supports it, every field select opens the glass list instead of the native one; the picker icon replaces the drawn chevron. */
+@supports (appearance: base-select) {
+  .app-shell :is(select, select.form-control), select.form-control {
+    appearance: base-select;
+    --field-padding-end: var(--space-3);
+    padding-right: var(--space-3);
+    background-image: none;
+  }
+  .app-shell :is(select, select.form-control)::picker-icon, select.form-control::picker-icon { margin-inline-start: auto; }
+}
 .app-shell :is(.knowledge-search input, .folio-search input) {
   min-height: 38px;
   font: var(--type-body)/var(--line-body) var(--font-body);
@@ -4084,13 +4094,23 @@ select.form-control {
   .timeline-toolbar, .usage-field, .role-controls, .kanban-search, .kanban-select, .proactive-feed-input,
   .daily-page, .notes-title-label, .notes-folder-input-row, .folio-rename
 ) :is(input, select, textarea):focus-visible,
-.form-control:focus-visible {
+.form-control:focus-visible,
+/* Catch-all so no entry field or dropdown anywhere is left with the default ring. Search bars and the composer own their rims. */
+:root :where(
+  input:not([type="checkbox"], [type="radio"], [type="range"], [type="color"], [type="file"], [type="hidden"],
+    [type="button"], [type="submit"], [type="reset"], [type="image"]),
+  select, textarea
+):focus-visible:where(:not(.composer textarea, .knowledge-search input, .folio-search input, .tasks-panel-search input)) {
   outline: none;
   border-color: var(--field-focus-rule);
   box-shadow: var(--field-focus-glow);
 }
 @media (forced-colors: active) {
-  .app-shell :is(input, select, textarea):focus-visible, .form-control:focus-visible,
+  :root :where(
+    input:not([type="checkbox"], [type="radio"], [type="range"], [type="color"], [type="file"], [type="hidden"],
+      [type="button"], [type="submit"], [type="reset"], [type="image"]),
+    select, textarea
+  ):focus-visible, .form-control:focus-visible,
   .knowledge-search:has(input:focus-visible), .folio-search:has(input:focus-visible),
   .tasks-panel-search:has(input:focus-visible) { outline: 2px solid Highlight; outline-offset: 1px; }
 }
