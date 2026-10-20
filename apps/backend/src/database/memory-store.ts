@@ -902,8 +902,6 @@ export function createVaultIndexStore(pool: sql.ConnectionPool): VaultIndexStore
         FROM (
           SELECT path, MAX(indexed_at) AS updated_at
           FROM dbo.vault_chunks
-          WHERE path LIKE N'People/%' OR path LIKE N'Work/%'
-            OR path LIKE N'Personal/%' OR path LIKE N'General/%'
           GROUP BY path
         ) AS notes
         OUTER APPLY (

@@ -3,6 +3,33 @@ import sql from 'mssql';
 import { createMemoryStore, createVaultIndexStore, rankByCosineSimilarity } from './memory-store.js';
 
 describe('JSON embedding ranking', () => {
+  it('returns indexed root and arbitrary-folder notes from the graph-file query', async () => {
+    const queries: string[] = [];
+    const rows = [
+      { path: 'README.md', title: 'Root note', updated_at: new Date('2026-10-07T12:00:00.000Z') },
+      { path: 'Archive/Old.md', title: 'Archived note', updated_at: new Date('2026-10-07T12:00:00.000Z') },
+    ];
+    const pool = {
+      request: () => ({
+        input() { return this; },
+        async query(statement: string) {
+          queries.push(statement);
+          return statement.includes('TYPE_ID(N\'vector\')')
+            ? { recordset: [{ vector_search: false, json_embedding_search: false }] }
+            : { recordset: rows };
+        },
+      }),
+    } as unknown as sql.ConnectionPool;
+    const store = createVaultIndexStore(pool);
+    await store.initialize();
+
+    await expect(store.graphFiles(new AbortController().signal)).resolves.toEqual([
+      { path: 'README.md', title: 'Root note', updatedAt: rows[0]!.updated_at },
+      { path: 'Archive/Old.md', title: 'Archived note', updatedAt: rows[1]!.updated_at },
+    ]);
+    expect(queries.at(-1)).not.toMatch(/path\s+LIKE\s+N'(?:People|Work|Personal|General)\//u);
+  });
+
   it('ranks valid vectors by cosine similarity and skips malformed dimensions and zero vectors', () => {
     const vector = (first: number, second: number) => [
       first, second, ...Array.from({ length: 1534 }, () => 0),

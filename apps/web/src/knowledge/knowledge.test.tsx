@@ -6,9 +6,13 @@ import { GeneratedViewRenderer } from '../GeneratedViewRenderer';
 import { KnowledgeBackendContext } from './knowledge-context';
 import { createKnowledgeLayout } from './knowledge-layout';
 import { KnowledgeGraphView } from './KnowledgeGraphView';
+import { folderColours, resolveFolderColour } from './knowledge-scene';
 
 const sceneMocks = vi.hoisted(() => ({ create: vi.fn(), showTasks: vi.fn() }));
-vi.mock('./knowledge-scene', () => ({ createKnowledgeScene: sceneMocks.create }));
+vi.mock('./knowledge-scene', async (importOriginal) => ({
+  ...await importOriginal<typeof import('./knowledge-scene')>(),
+  createKnowledgeScene: sceneMocks.create,
+}));
 
 const getAccessToken = vi.fn(async () => 'token');
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
@@ -99,12 +103,32 @@ describe('knowledge graph view', () => {
     ], edges: [] })));
     render(<KnowledgeGraphView backendUrl="https://api.example.com" getAccessToken={getAccessToken} />);
     expect(screen.queryByRole('button', { name: /^Tasks/u })).toBeNull();
-    fireEvent.click(await screen.findByRole('button', { name: 'Vault root1' }));
+    const rootFilter = await screen.findByRole('button', { name: 'Vault root1' });
+    expect(rootFilter.getAttribute('title')).toBe('Show only Vault root');
+    fireEvent.click(rootFilter);
     expect(screen.queryByText(/^\d+ notes?$/u)).toBeNull();
-    expect(within(screen.getByRole('list', { name: 'Vault root notes' })).getByRole('button', { name: 'Root fixture' })).not.toBeNull();
+    const rootNote = within(screen.getByRole('list', { name: 'Vault root notes' })).getByRole('button', { name: 'Root fixture' });
+    expect(rootNote).not.toBeNull();
+    fireEvent.click(rootNote);
+    expect(await screen.findByText('Vault root · AGENTS.md')).not.toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Customers1' }));
     expect(within(screen.getByRole('list', { name: 'Customers notes' })).getByRole('button', { name: 'Customer fixture' })).not.toBeNull();
     expect(screen.queryByRole('button', { name: 'General0' })).toBeNull();
+  });
+  it('uses the readable root label and muted star colour for root and unknown folders', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => json({ nodes: [
+      { id: 'root', path: 'AGENTS.md', title: 'Root fixture', folder: '' },
+      { id: 'archive', path: 'Archive/Old.md', title: 'Archived fixture', folder: 'Archive' },
+    ], edges: [] })));
+    render(<KnowledgeGraphView backendUrl="https://api.example.com" getAccessToken={getAccessToken} />);
+
+    expect(await screen.findByRole('button', { name: 'Vault root1' })).not.toBeNull();
+    expect(screen.getByRole('button', { name: 'Archive1' })).not.toBeNull();
+    const colours = folderColours(document.createElement('div'));
+    const fallback = colours.get('')!;
+    expect(resolveFolderColour(colours, '')).toBe(fallback);
+    expect(resolveFolderColour(colours, 'Archive')).toBe(fallback);
+    expect(fallback.getHexString()).toBe('a4b5bb');
   });
   it('shows the task-note count and toggles scene marks without filtering notes', async () => {
     const user = userEvent.setup();
