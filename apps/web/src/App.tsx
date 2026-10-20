@@ -953,7 +953,7 @@ export function App({ config = defaultConfig, dailyEnabled = false, pushEnabled 
               {areas.map(({ id, path, Component }) => (
                 <Route key={id} path={`${path}/*`} element={
                   <Component key={id === 'daily' ? dailyAccountKey : id} backendUrl={config.backendUrl}
-                    getAccessToken={session.getAccessToken} signIn={session.signIn} />
+                    getAccessToken={session.getAccessToken} signIn={session.signIn} profileName={session.profile?.name ?? null} />
                 } />
               ))}
               <Route path="settings" element={<SettingsRoute config={config} session={session}

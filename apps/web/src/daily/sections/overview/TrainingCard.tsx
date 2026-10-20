@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import { Loader } from '../../../Loader';
 import { DailyUnavailable } from '../../ui/DailyUnavailable';
 import { Ring } from '../../ui/Ring';
+import type { HealthIconName } from '../../ui/icons';
 import { formatClockTime, formatNumber } from '../../ui/formatters';
 import type { DailyPages } from '../../ui/useDailyPages';
 import { deleted, numeric, text, type Row as NutritionRow } from '../nutrition/totals';
@@ -18,14 +19,15 @@ const noValueCaption: Record<Exclude<BlockState, 'ready'>, string> = {
 };
 
 /** One ring. Every state renders the same ring and caption line, so nothing moves when values arrive. */
-function Gauge({ label, state, value, target, periods, unit, singular = unit }: {
+function Gauge({ label, state, value, target, periods, unit, singular = unit, tone, icon }: {
   label: string; state: BlockState; value: number | null; target: TargetRead; periods: number; unit: string; singular?: string;
+  tone: 'gym' | 'run' | 'activity'; icon: HealthIconName;
 }) {
   if (state !== 'ready') {
     return <Ring label={label} value={null} target={null} centre="—" caption={noValueCaption[state]}
-      summary={noValueCaption[state].toLowerCase()} />;
+      summary={noValueCaption[state].toLowerCase()} tone={tone} icon={icon} />;
   }
-  if (value === null) return <Ring label={label} value={null} target={null} centre="—" caption="Not recorded" summary="not recorded" />;
+  if (value === null) return <Ring label={label} value={null} target={null} centre="—" caption="Not recorded" summary="not recorded" tone={tone} icon={icon} />;
   const shown = formatNumber(value, 0);
   const goal = target.status === 'ready' ? scaledTarget(target.value, periods) : null;
   // Only a target the owner never set offers the way to set one; a target of 0 is a real target and reads "of 0".
@@ -33,7 +35,7 @@ function Gauge({ label, state, value, target, periods, unit, singular = unit }: 
     : goal === null ? <Link to="/settings#training-targets">No target set</Link> : `of ${formatNumber(goal, 0)}`;
   const spoken = target.status === 'loading' ? 'loading target' : target.status === 'failed' ? 'targets unavailable'
     : goal === null ? 'no target set' : `of ${formatNumber(goal, 0)}`;
-  return <Ring label={label} value={value} target={goal} centre={shown} caption={caption}
+  return <Ring label={label} value={value} target={goal} centre={shown} caption={caption} tone={tone} icon={icon}
     summary={`${shown} ${value === 1 ? singular : unit}${goal === null ? ', ' : ' '}${spoken}`} />;
 }
 
@@ -78,14 +80,14 @@ export function TrainingCard({ title, to, state, stale, onRetry, period, states,
   const counts = trainingCounts(data.workouts.items as Workout[], { startDate: period.sessionStart, endDate: period.endDate });
   const steps = stepsForWindow(data.steps.items, period);
   const scope = sessionScope(period);
-  return <TopCard title={title} to={to} state={state} onRetry={onRetry} stale={stale}>
+  return <TopCard title={title} icon="gym" to={to} state={state} onRetry={onRetry} stale={stale}>
     <div className="daily-top-rings">
       <Gauge label="Gym" state={states.workouts} value={counts.strength} unit={`sessions, ${scope}`} singular={`session, ${scope}`}
-        target={readTarget(targets, 'gymSessionsPerWeek')} periods={period.sessionWeeks} />
+        tone="gym" icon="gym" target={readTarget(targets, 'gymSessionsPerWeek')} periods={period.sessionWeeks} />
       <Gauge label="Run" state={states.workouts} value={counts.running} unit={`sessions, ${scope}`} singular={`session, ${scope}`}
-        target={readTarget(targets, 'runSessionsPerWeek')} periods={period.sessionWeeks} />
+        tone="run" icon="run" target={readTarget(targets, 'runSessionsPerWeek')} periods={period.sessionWeeks} />
       <Gauge label="Activity" state={states.steps} value={steps?.total ?? null} unit="steps" singular="step"
-        target={readTarget(targets, 'dailySteps')} periods={period.days} />
+        tone="activity" icon="steps" target={readTarget(targets, 'dailySteps')} periods={period.days} />
     </div>
     <div className="daily-top-tiles">
       <ProteinTile view={nutrition} />
