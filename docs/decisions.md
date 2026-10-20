@@ -1,5 +1,26 @@
 # Decisions
 
+## P14-46 — Overview top cards follow the original: Training, Health, Body (20 October 2026; #1116, #1143)
+
+The owner asked for parity with the original Overview, checked on the owner's own
+data. The Today block is replaced by a period control (Today, Yesterday, 1 week,
+2 weeks, 1 month) and three cards: Training (Gym, Run and Activity rings, Protein,
+Calories left and, for one day, the meals strip), Health (Sleep, Protein and a
+cumulative protein line with a target) and Body (Sessions, Calories, Duration and
+four measurement sparklines). Choices: (1) every number comes from a served source
+and each source states its own state, with "Not recorded" for a served source that
+holds nothing, "Unavailable" for one Jarvis does not serve, and "No target set"
+where an owner-set target is missing (weekly gym and run targets and the daily step
+target arrive with P14-45; nothing is defaulted); (2) body measurements are asked
+for only when the metric catalogue serves them, and no weight, fat or lean metric
+is invented; (3) the Overview summary tiles stay below the cards for now, and
+whether to remove them is the owner's call; (4) every ring, tile, chart and strip
+reserves its size, so no state changes the layout (P14-44); (5) the recomposition
+status, coaching, energy estimates and task or habit surfaces remain out, as ruled.
+New text says Health, never Daily.
+
+Refs #1116, #1143
+
 ## The Daily area is named Health (20 October 2026; #1116, #1147, #1146)
 
 The owner ruled that the area built as Daily is called Health and that the word

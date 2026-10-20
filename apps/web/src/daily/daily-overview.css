@@ -1,18 +1,44 @@
 /* Daily overview. Summary cards and collection coverage share the available width. */
 .daily-overview h2 { margin: 0; font-size: var(--type-subheading); }
 .daily-summary { margin-block: var(--space-3) var(--space-5); }
-.daily-today { display: grid; gap: var(--space-3); margin-block: var(--space-3); }
-.daily-today-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-3); }
-.daily-today-card { display: flex; flex-direction: column; gap: var(--space-3); height: auto; }
-.daily-today-card h3 { margin: 0; color: var(--text); font-size: var(--type-subsection); font-weight: 650; }
-.daily-today-card h3 a { display: inline-flex; align-items: center; min-height: 44px; color: var(--text); text-underline-offset: .2em; }
-.daily-today-card p { min-width: 0; margin: 0; overflow-wrap: anywhere; }
-.daily-today-card > .daily-tile-status { margin-top: auto; }
-.daily-today-rings { display: flex; flex-wrap: wrap; justify-content: space-around; gap: var(--space-3); }
-.daily-meal-strip { display: flex; flex-wrap: wrap; gap: var(--space-2); margin: 0; padding: 0; list-style: none; }
-.daily-meal-strip li { display: grid; gap: var(--space-1); min-width: 7rem; padding: var(--space-2) var(--space-3); border: 1px solid var(--rule); border-radius: var(--radius-control); font-size: var(--type-small); }
-.daily-meal-time, .daily-meal-kcal { color: var(--text-muted); font-variant-numeric: tabular-nums; }
-.daily-meal-name { color: var(--text); font-weight: 650; overflow-wrap: anywhere; }
+/* Overview cards: training, health and body share one period. Every tile reserves its size, so loading never moves the layout. */
+.daily-top { display: grid; gap: var(--space-3); min-width: 0; margin-block: var(--space-3); }
+.daily-top-presets { justify-self: start; max-width: 100%; }
+/* A swipeable row on phones; the grid takes over at 700px. */
+.daily-top-track { display: grid; grid-auto-flow: column; grid-auto-columns: 100%; gap: var(--space-3); overflow-x: auto; overscroll-behavior-x: contain; scroll-behavior: smooth; scroll-snap-type: x mandatory; scrollbar-width: none; }
+.daily-top-track::-webkit-scrollbar { display: none; }
+.daily-top-card { display: flex; flex-direction: column; gap: var(--space-3); min-width: 0; padding: var(--space-3); border: 1px solid var(--rule); border-radius: var(--radius-panel); background: var(--surface-translucent); scroll-snap-align: start; scroll-snap-stop: always; }
+.daily-top-card > header { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); min-height: 44px; }
+.daily-top-card h3 { margin: 0; color: var(--text); font-size: var(--type-subsection); font-weight: 650; }
+.daily-page .daily-top-card h3 a { display: inline-flex; align-items: center; gap: var(--space-1); min-height: 44px; color: var(--text); text-decoration: none; }
+.daily-page .daily-top-card h3 a:hover { text-decoration: underline; text-underline-offset: .2em; }
+.daily-top-card h3 svg { width: 1.1em; height: 1.1em; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; transition: transform var(--motion-press) var(--ease-standard); }
+.daily-page .daily-top-card h3 a:hover svg { transform: translateX(2px); }
+.daily-top-rings { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-2); justify-items: center; }
+.daily-top-card .daily-ring-graphic { width: min(5rem, 100%); }
+.daily-top-card .daily-ring-centre { max-width: 80%; font-size: var(--type-body); }
+.daily-top-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2); }
+.daily-top-tiles--three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.daily-top-tile { display: grid; align-content: start; gap: var(--space-1); min-width: 0; padding: var(--space-3); border-radius: var(--radius-control); background: var(--surface-muted); }
+.daily-top-tiles--three .daily-top-tile { padding: var(--space-2); }
+.daily-top-tile p { min-width: 0; margin: 0; overflow-wrap: anywhere; }
+.daily-top-tile-label { color: var(--text-muted); font-size: var(--type-small); }
+.daily-top-tile-value { display: grid; align-content: center; min-height: calc(var(--type-subheading) * var(--line-tight)); color: var(--text); font-size: var(--type-subheading); font-variant-numeric: tabular-nums; font-weight: 650; line-height: var(--line-tight); }
+.daily-top-tiles--three .daily-top-tile-value { min-height: calc(var(--type-body) * var(--line-tight) * 2); font-size: var(--type-body); }
+.daily-top-tile-note { display: grid; align-content: center; min-height: calc(var(--type-small) * var(--line-body)); color: var(--text-muted); font-size: var(--type-small); }
+.daily-top-tile-chart { min-height: 2rem; }
+.daily-top-strip { display: grid; align-items: center; min-height: 5.25rem; color: var(--text-muted); font-size: var(--type-small); }
+.daily-top-strip [role='region'] { min-width: 0; overflow-x: auto; }
+.daily-top-strip [role='region']:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.daily-top-strip ul { display: flex; gap: var(--space-2); width: max-content; margin: 0; padding: 0; list-style: none; }
+.daily-top-strip li { display: grid; gap: var(--space-1); min-width: 7rem; max-width: 12rem; padding: var(--space-2) var(--space-3); border-radius: var(--radius-control); background: var(--surface-muted); font-size: var(--type-small); }
+.daily-top-strip-time, .daily-top-strip-kcal { color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.daily-top-strip-name { overflow: hidden; color: var(--text); font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+.daily-top-dots { display: flex; justify-content: center; gap: var(--space-1); }
+.daily-page .daily-top-dot { display: grid; place-items: center; min-width: 44px; padding: 0; border: 0; background: transparent; }
+.daily-top-dot span { width: var(--space-2); height: var(--space-2); border-radius: var(--radius-pill); background: var(--text-muted); }
+.daily-top-dot:hover span { background: var(--text); }
+.daily-top-dot[aria-current='true'] span { width: var(--space-4); background: var(--focus); }
 .daily-summary .daily-summary-grid {
   grid-template-columns: minmax(0, 1fr);
   gap: var(--space-3);
@@ -26,25 +52,19 @@
 .daily-summary-tile .daily-summary-macros { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-3); font-size: var(--type-small); }
 /* The body and status slots stay mounted from skeleton to values, so a tile or card keeps its size while it loads. */
 .daily-tile-body { display: grid; align-content: start; gap: var(--space-2); min-width: 0; min-height: var(--tile-body-min, 5.75rem); }
-.daily-today-card .daily-tile-body { gap: var(--space-3); }
 .daily-tile-status { min-height: calc(var(--type-small) * var(--line-body)); }
 .daily-summary-tile > .daily-tile-status { min-height: calc(var(--type-small) * var(--line-body) + var(--space-3)); padding-top: var(--space-3); margin-top: auto; }
-.daily-summary-target, .daily-today-note { min-height: calc(var(--type-small) * var(--line-body)); }
-/* A grid keeps the inline skeleton from adding a line-box strut, so the loader and the note share one height. */
-.daily-today-note { display: grid; align-content: center; }
 .daily-summary-target { min-height: 4.625rem; }
-.daily-today-burn { min-height: calc(var(--type-small) * var(--line-body) * 2); }
 .daily-summary-tile[data-tile='workouts'] { --tile-body-min: 9.75rem; }
 .daily-summary-tile[data-tile='nutrition'] { --tile-body-min: 13rem; }
 .daily-summary-tile[data-tile='body'] { --tile-body-min: 9rem; }
 .daily-summary-tile[data-tile='sleep'] { --tile-body-min: 5.875rem; }
-.daily-today-training { --tile-body-min: 11.375rem; }
-.daily-today-protein { --tile-body-min: 11.625rem; }
-.daily-today-calories { --tile-body-min: 15rem; }
-/* Rings and macros wrap onto more rows on narrow phones, so those two reservations grow with them. */
+/* Macros wrap onto more rows on narrow phones, and ring captions onto a second line, so those reservations grow with them. */
 @media (max-width: 380px) {
-  .daily-today-training { --tile-body-min: 20rem; }
   .daily-summary-tile[data-tile='nutrition'] { --tile-body-min: 16rem; }
+}
+@media (max-width: 360px) {
+  .daily-top-rings .daily-ring-caption { min-height: calc(var(--type-small) * var(--line-body) * 2); }
 }
 .daily-overview-list { display: grid; margin: var(--space-3) 0 0; padding: 0; list-style: none; }
 .daily-overview-row {
@@ -90,20 +110,24 @@
 }
 @keyframes daily-status-in { from { opacity: 0; } to { opacity: 1; } }
 @media (min-width: 700px) {
-  .daily-today-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .daily-today-training { grid-column: 1 / -1; }
+  .daily-top-track { grid-auto-flow: row; grid-auto-columns: auto; grid-template-columns: repeat(2, minmax(0, 1fr)); overflow: visible; scroll-snap-type: none; }
+  .daily-top-card[data-card='training'] { grid-column: 1 / -1; }
+  .daily-top-dots { display: none; }
   .daily-summary .daily-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .daily-summary-tile:last-child:nth-child(odd) { grid-column: 1 / -1; }
   .daily-overview-row { gap: var(--space-3); }
   .daily-overview-actions { flex-direction: row; }
 }
 @media (min-width: 1200px) {
-  .daily-today-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-  .daily-today-training { grid-column: span 2; }
+  .daily-top-track { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .daily-top-card[data-card='training'] { grid-column: auto; }
   .daily-summary .daily-summary-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .daily-summary-tile:last-child:nth-child(odd) { grid-column: auto; }
   .daily-summary-tile:nth-child(5):last-child { grid-column: span 2; }
 }
 @media (prefers-reduced-motion: reduce) {
   .daily-status { animation: none; }
+  .daily-top-track { scroll-behavior: auto; }
+  .daily-top-card h3 svg { transition: none; }
+  .daily-page .daily-top-card h3 a:hover svg { transform: none; }
 }

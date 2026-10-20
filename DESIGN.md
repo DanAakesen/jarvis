@@ -1766,7 +1766,8 @@ ring says so in words: the centre reads "≤ 500" or "≥ 300", the caption "kca
 most" or "kcal over, at least", and the accessible summary says "At most" or "At least"
 with "eaten is a lower bound". The cards follow the Copenhagen date: it advances at
 midnight, on focus and when the page becomes visible, and every card then asks for the
-new day.
+new day. The P14-46 top cards below replace this block and keep its sources, date
+rules and lower-bound wording.
 
 20 October 2026 (P14-44 stable tiles): the Overview summary tiles and the Today
 cards keep their size from skeleton to values, so nothing below them moves while
@@ -1787,6 +1788,28 @@ adds an "Asleep" row only when it is greater than zero and differs. A week witho
 workouts reads "0 minutes". Body measurements with a raw snake_case key read in
 words ("Active energy"). At 380 px and below the Nutrition and Training bodies
 reserve more height because their content wraps.
+
+20 October 2026 (P14-46 top cards): the Overview opens with a period control
+(Today, Yesterday, 1 week, 2 weeks, 1 month; Today by default) and three cards, in
+the composition of the original: Training, Health and Body. The cards sit in one
+row from 1200 px, two columns from 700 px and a swipeable row below that, with
+one dot per card; the dots are real buttons and the row also scrolls by touch,
+trackpad and keyboard. Card chrome is the shared panel surface, rule and radius;
+no glass skin or new token. Training holds three rings (Gym, Run, Activity for
+steps), then a Protein tile, a Calories left tile and, for a single day, the meals
+strip (time, name, kcal). Health holds Sleep, Protein and a cumulative protein
+line across the day with a dashed target line when a target is set; its title
+links to Body and sleep until the Health panel lands. Body holds Sessions,
+Calories and Duration, then Weight, Fat mass, Fat % and Lean mass as small
+sparklines over the last 90 days. A ring or tile has the same size in every state.
+Wording separates the cases: "Not recorded" means the source is served and holds
+nothing for the period, "Unavailable" means Jarvis does not serve the source,
+"Could not load" carries a Retry button, "No target set" links to the setting, and
+nothing shows a default target. Sessions count from the Monday of the week for the
+one-day presets and over the window for longer ones; protein and calories left
+average per logged day over a range. Lower bounds read in words ("lower bound",
+"at most"), never by colour. No recomposition status, coaching or energy estimate
+is shown.
 
 Checked the section shell in isolated Chromium against only synthetic capability
 and query responses at 320, 390×844, 768 and 1440×900 in light and dark, with

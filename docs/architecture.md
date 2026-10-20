@@ -5796,6 +5796,18 @@ immediate. The opt-in `settle` option (used with `autoLoad` by the Overview tile
 and Today cards) publishes the chain once, after its last page, and keeps the
 previous records visible while a refresh runs (20 October 2026; P14-44).
 
+**Overview top cards (20 October 2026; P14-46).** `sections/overview/TopCards.tsx`
+owns the period control and calls `useTopCardData`, which makes one
+`useDailyPages` read per source with `settle`: workouts, steps, nutrition days,
+meals (single-day presets only), sleep, the metric catalogue and up to four body
+measurement metrics over a fixed 90 days, the last only for names the catalogue
+serves. `overview-window.ts` turns a preset and the Copenhagen date (`useToday`) into
+the window and the session range; `overview-values.ts` holds the pure figures. Nutrition
+targets are read only once a day with meals exists. `block-state.ts` reduces each
+read to `ready`, `loading`, `error` or `unavailable`, and `TrainingCard`,
+`HealthCard` and `BodyCard` draw those states at a fixed size. No endpoint, DTO or
+backend change.
+
 ### On-demand Daily views (18 October 2026; P12-16)
 
 `dailyShowTool(data.query)` (`apps/backend/src/daily/tools/show.ts`) is the seventh

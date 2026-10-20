@@ -13,8 +13,8 @@ const token = async () => 'synthetic-fixture';
 const backendUrl = 'http://localhost:3999';
 // The shell's freshness pill reads the sync source once per mount and once per refresh-stream step.
 const shellReads = 1;
-// Today cards: weekly workouts, today's nutrition day and today's meals.
-const todayReads = 3;
+// Overview cards: week workouts, steps, nutrition days, meals, sleep and the metric catalogue.
+const todayReads = 6;
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.restoreAllMocks(); window.history.replaceState({}, '', '/'); });
 
 const records: Partial<Record<DailySourceId, Record<string, DailyJson>>> = {
@@ -407,10 +407,11 @@ describe('Daily overview', () => {
     const user = userEvent.setup();
     await user.tab();
     expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Refresh overview' }));
-    for (const name of ['Training this week', 'Protein today', 'Calories left today', 'Meals today',
-      'Workouts', 'Nutrition', 'Body', 'Sleep', 'Briefs']) {
+    const named = (element: Element | null) => element?.getAttribute('aria-label') ?? element?.textContent;
+    for (const name of ['Today', 'Yesterday', '1 week', '2 weeks', '1 month', 'Training', 'Health', 'Body',
+      'Show Training', 'Show Health', 'Show Body', 'Workouts', 'Nutrition', 'Body', 'Sleep', 'Briefs']) {
       await user.tab();
-      expect(document.activeElement).toBe(screen.getByRole('link', { name }));
+      expect(named(document.activeElement)).toBe(name);
     }
     for (const source of dailySources) {
       await user.tab();
