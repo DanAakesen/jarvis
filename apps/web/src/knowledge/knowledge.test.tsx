@@ -30,6 +30,8 @@ afterEach(() => { vi.unstubAllGlobals(); });
 describe('knowledge graph data', () => {
   it('cleans search snippets into one plain line', () => {
     expect(cleanSnippet('<!-- id: 1 -->\n---\ntitle: Plan\ntags: [a]\n---\nThe plan is ready.')).toBe('The plan is ready.');
+    expect(cleanSnippet('---\ntitle: Plan\n---\n<!-- id: 2 -->\nThe plan is ready.')).toBe('The plan is ready.');
+    expect(cleanSnippet('---\ntitle: Plan\n---\n<!-- unclosed')).toBe('');
     expect(cleanSnippet('--- title: Plan tags: [a] --- The plan is ready.')).toBe('The plan is ready.');
     expect(cleanSnippet('---\ntitle: Plan\ntags: [a]')).toBe('');
     expect(cleanSnippet('<!-- unclosed')).toBe('');

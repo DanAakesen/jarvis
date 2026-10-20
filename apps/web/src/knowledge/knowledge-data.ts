@@ -104,18 +104,25 @@ export async function loadKnowledgeGraph(backendUrl: string, getAccessToken: () 
 
 const taskMarkers = '📅⏳🛫➕✅❌🏁⏫🔼🔽⏬🔺🆔⛔🕒🔁';
 
-/** A search snippet as one plain line: no comments, front matter, checkboxes or task-plugin markers. */
-export function cleanSnippet(raw: string): string {
-  let value = raw.trimStart();
+function stripLeadingComments(text: string): string | null {
+  let value = text.trimStart();
   while (value.startsWith('<!--')) {
     const end = value.indexOf('-->');
-    if (end === -1) return '';
+    if (end === -1) return null;
     value = value.slice(end + 3).trimStart();
   }
+  return value;
+}
+
+/** A search snippet as one plain line: no comments, front matter, checkboxes or task-plugin markers. */
+export function cleanSnippet(raw: string): string {
+  let value = stripLeadingComments(raw);
+  if (value === null) return '';
   if (/^---\s+[A-Za-z_][\w-]*\s*:/u.test(value)) {
     const close = /\s---(?:\s|$)/u.exec(value.slice(3));
     if (!close) return '';
-    value = value.slice(3 + close.index + close[0].length);
+    value = stripLeadingComments(value.slice(3 + close.index + close[0].length));
+    if (value === null) return '';
   }
   return value
     .replace(/(?:^|\s)[-*]\s*\[[ xX]\]\s*/gu, ' ')
