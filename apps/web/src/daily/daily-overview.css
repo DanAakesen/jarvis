@@ -1,6 +1,3 @@
-/* Daily overview. Summary cards and collection coverage share the available width. */
-.daily-overview h2 { margin: 0; font-size: var(--type-subheading); }
-.daily-summary { margin-block: var(--space-3) var(--space-5); }
 /* Overview cards: training, health and body share one period. Every tile reserves its size, so loading never moves the layout. */
 .daily-top { display: grid; gap: var(--space-3); min-width: 0; margin-block: var(--space-3); }
 .daily-top-presets { justify-self: start; max-width: 100%; }
@@ -40,94 +37,20 @@
 .daily-top-dot span { width: var(--space-2); height: var(--space-2); border-radius: var(--radius-pill); background: var(--text-muted); }
 .daily-top-dot:hover span { background: var(--text); }
 .daily-top-dot[aria-current='true'] span { width: var(--space-4); background: var(--focus); }
-.daily-summary .daily-summary-grid {
-  grid-template-columns: minmax(0, 1fr);
-  gap: var(--space-3);
-}
-.daily-summary-tile { display: flex; flex-direction: column; gap: var(--space-2); height: auto; }
-.daily-summary-tile h3 { margin: 0; color: var(--text); font-size: var(--type-subsection); font-weight: 650; }
-.daily-summary-tile h3 a { display: inline-flex; align-items: center; min-height: 44px; color: var(--text); text-underline-offset: .2em; }
-.daily-summary-tile p { min-width: 0; margin: 0; overflow-wrap: anywhere; }
-.daily-summary-tile .daily-tile-body > p:not(.daily-stat-value) { font-size: var(--type-small); }
-.daily-summary-workout { display: flex; align-items: center; gap: var(--space-2); }
-.daily-summary-tile .daily-summary-macros { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-3); font-size: var(--type-small); }
-/* The body and status slots stay mounted from skeleton to values, so a tile or card keeps its size while it loads. */
-.daily-tile-body { display: grid; align-content: start; gap: var(--space-2); min-width: 0; min-height: var(--tile-body-min, 5.75rem); }
-.daily-tile-status { min-height: calc(var(--type-small) * var(--line-body)); }
-.daily-summary-tile > .daily-tile-status { min-height: calc(var(--type-small) * var(--line-body) + var(--space-3)); padding-top: var(--space-3); margin-top: auto; }
-.daily-summary-target { min-height: 4.625rem; }
-.daily-summary-tile[data-tile='workouts'] { --tile-body-min: 9.75rem; }
-.daily-summary-tile[data-tile='nutrition'] { --tile-body-min: 13rem; }
-.daily-summary-tile[data-tile='body'] { --tile-body-min: 9rem; }
-.daily-summary-tile[data-tile='sleep'] { --tile-body-min: 5.875rem; }
-/* Macros wrap onto more rows on narrow phones, and ring captions onto a second line, so those reservations grow with them. */
-@media (max-width: 380px) {
-  .daily-summary-tile[data-tile='nutrition'] { --tile-body-min: 16rem; }
-}
+/* Ring captions wrap onto a second line on the narrowest phones, so that reservation grows with them. */
 @media (max-width: 360px) {
   .daily-top-rings .daily-ring-caption { min-height: calc(var(--type-small) * var(--line-body) * 2); }
 }
-.daily-overview-list { display: grid; margin: var(--space-3) 0 0; padding: 0; list-style: none; }
-.daily-overview-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: var(--space-2);
-  padding-block: var(--space-2);
-  border-top: 1px solid var(--rule);
-}
-.daily-overview-body { display: grid; gap: var(--space-2); min-width: 0; }
-.daily-overview-body p { margin: 0; overflow-wrap: anywhere; }
-.daily-overview-title { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); }
-.daily-overview-title :is(h3, h4) { flex: 1 1 10rem; margin: 0; font-size: var(--type-body); }
-.daily-overview-detail { font-size: var(--type-small); }
-.daily-status {
-  --status-tone: var(--text-muted);
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  min-height: 28px;
-  padding-inline: var(--space-3);
-  border-radius: var(--radius-pill);
-  background: color-mix(in srgb, var(--status-tone) 16%, transparent);
-  color: var(--text);
-  font-size: var(--type-caption);
-  font-weight: 650;
-  animation: daily-status-in var(--motion-fade) var(--ease-enter);
-}
-.daily-status[data-tone='records'] { --status-tone: var(--success); }
-.daily-status[data-tone='failed'] { --status-tone: var(--error); }
-.app-shell .daily-status svg { width: 16px; height: 16px; flex: none; color: var(--status-tone); }
-.daily-overview-actions { display: flex; flex-direction: column; flex-wrap: wrap; gap: var(--space-2); }
-.daily-overview .daily-data-notes summary:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
-/* aria-disabled keeps focus on a busy control, so it needs its own disabled look. */
-.daily-overview button[aria-disabled='true'],
-.daily-overview button[aria-disabled='true']:hover,
-.daily-overview button[aria-disabled='true']:active {
-  background: var(--disabled-surface);
-  color: var(--disabled-text);
-  cursor: progress;
-  transform: none;
-}
-@keyframes daily-status-in { from { opacity: 0; } to { opacity: 1; } }
 @media (min-width: 700px) {
   .daily-top-track { grid-auto-flow: row; grid-auto-columns: auto; grid-template-columns: repeat(2, minmax(0, 1fr)); overflow: visible; scroll-snap-type: none; }
   .daily-top-card[data-card='training'] { grid-column: 1 / -1; }
   .daily-top-dots { display: none; }
-  .daily-summary .daily-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .daily-summary-tile:last-child:nth-child(odd) { grid-column: 1 / -1; }
-  .daily-overview-row { gap: var(--space-3); }
-  .daily-overview-actions { flex-direction: row; }
 }
 @media (min-width: 1200px) {
   .daily-top-track { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .daily-top-card[data-card='training'] { grid-column: auto; }
-  .daily-summary .daily-summary-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .daily-summary-tile:last-child:nth-child(odd) { grid-column: auto; }
-  .daily-summary-tile:nth-child(5):last-child { grid-column: span 2; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .daily-status { animation: none; }
   .daily-top-track { scroll-behavior: auto; }
   .daily-top-card h3 svg { transition: none; }
   .daily-page .daily-top-card h3 a:hover svg { transform: none; }

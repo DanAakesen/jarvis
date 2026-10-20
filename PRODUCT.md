@@ -1565,7 +1565,9 @@ Synthetic browser checks do not establish live-data or original-site acceptance.
 
 ## Daily overview and Briefs integration (18 October 2026; P12-26)
 
-The overview keeps its existing “What Daily holds” inventory and adds
+(Superseded by P14-46: the overview is now a period control and three cards,
+Training, Health and Body, with no inventory list, notes, refresh button or
+summary tiles.) The overview kept its “What Daily holds” inventory and added
 independently loaded, section-linked summaries for exposed workout, nutrition,
 body measurement, sleep and Briefs sources. Summaries reuse each section's date,
 label and calculation helpers; unknown values stay unknown, while empty recent

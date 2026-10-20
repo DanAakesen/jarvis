@@ -13,8 +13,12 @@ holds nothing, "Unavailable" for one Jarvis does not serve, and "No target set"
 where an owner-set target is missing (weekly gym and run targets and the daily step
 target arrive with P14-45; nothing is defaulted); (2) body measurements are asked
 for only when the metric catalogue serves them, and no weight, fat or lean metric
-is invented; (3) the Overview summary tiles stay below the cards for now, and
-whether to remove them is the owner's call; (4) every ring, tile, chart and strip
+is invented; (3) the owner ruled the Overview is the cards only, so the old
+summary tiles, the collection list with its Open buttons, the "About this data"
+notes, the manual Refresh button, the "Today" heading and the Health Auto Export
+prompt are removed and nothing else sits on the page; data still reloads on focus,
+when the page becomes visible, on the shared refresh stream and with each card's
+Retry, and a card whose source holds nothing says so itself; (4) every ring, tile, chart and strip
 reserves its size, so no state changes the layout (P14-44); (5) the recomposition
 status, coaching, energy estimates and task or habit surfaces remain out, as ruled.
 New text says Health, never Daily.

@@ -7,8 +7,7 @@ import './overview.css';
 export default function OverviewSection({ backendUrl, getAccessToken, sources }: DailySectionProps) {
   const navigation = useContext(DailySectionNavigationContext);
   const knownSources = useMemo(() => [...sources], [sources]);
-  return <DailyOverview embedded backendUrl={backendUrl} getAccessToken={getAccessToken}
+  return <DailyOverview backendUrl={backendUrl} getAccessToken={getAccessToken}
     capabilities={{ sources: knownSources, error: navigation.availabilityError }}
-    onRetryAvailability={navigation.retryAvailability} onOpen={navigation.openSource}
-    returnFocusTo={navigation.initialSource} />;
+    onRetryAvailability={navigation.retryAvailability} />;
 }

@@ -1767,7 +1767,10 @@ most" or "kcal over, at least", and the accessible summary says "At most" or "At
 with "eaten is a lower bound". The cards follow the Copenhagen date: it advances at
 midnight, on focus and when the page becomes visible, and every card then asks for the
 new day. The P14-46 top cards below replace this block and keep its sources, date
-rules and lower-bound wording.
+rules and lower-bound wording. The older Overview blocks described further down in
+this file (the "What Daily holds today" collection list, its "About this data" notes
+and Refresh button, and the summary tiles) are removed; the Overview is now the
+period control and the three cards only.
 
 20 October 2026 (P14-44 stable tiles): the Overview summary tiles and the Today
 cards keep their size from skeleton to values, so nothing below them moves while
@@ -1791,7 +1794,10 @@ reserve more height because their content wraps.
 
 20 October 2026 (P14-46 top cards): the Overview opens with a period control
 (Today, Yesterday, 1 week, 2 weeks, 1 month; Today by default) and three cards, in
-the composition of the original: Training, Health and Body. The cards sit in one
+the composition of the original: Training, Health and Body. Nothing else is on the
+page: no heading above the cards, no collection list, no notes disclosure, no Refresh
+button and no summary tiles, so there is no text list on it. A card that has nothing
+for the period says so itself. The cards sit in one
 row from 1200 px, two columns from 700 px and a swipeable row below that, with
 one dot per card; the dots are real buttons and the row also scrolls by touch,
 trackpad and keyboard. Card chrome is the shared panel surface, rule and radius;

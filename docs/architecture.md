@@ -5724,7 +5724,9 @@ to that row's Open button. `useDailyCapabilities` reads `GET /daily/capabilities
 once and hands the exposed sources to the overview and to the browser (as
 `knownSources`), so the browser does not discover them a second time.
 
-`useDailyProbes` reads each exposed collection with one `POST /daily/query` of
+P14-46 removed the collection list: `useDailyProbes`, `overview.ts` and the
+per-collection probe reads no longer exist, and `DailyOverview` renders only the
+cards. The probe design below is kept as history. `useDailyProbes` read each exposed collection with one `POST /daily/query` of
 `limit: 1`, over the browser's default last-seven-days period for dated
 collections and with no period for sync evidence, through the same client and
 response validation as the browser. Two reads run at a time because
@@ -6574,8 +6576,10 @@ are recorded in `docs/ui/p12-36/audit.md`.
 
 ## Web Daily overview and Briefs integration (18 October 2026; P12-26)
 
-`sections/overview/summary.ts` composes the sections' pure helpers for recent
-workout, nutrition, metric, sleep and Briefs summaries. `SummaryTiles` mounts a
+P14-46 removed `SummaryTiles` and the inventory below it; the Overview mounts
+`TopCards` only (`summary.ts` still supplies the training counts). The rest of this
+entry is history. `sections/overview/summary.ts` composed the sections' pure helpers for recent
+workout, nutrition, metric, sleep and Briefs summaries. `SummaryTiles` mounted a
 separate bounded `useDailyPages` reader per exposed source and hides tiles whose
 required source pair is unavailable. Each tile owns its loading, empty, error,
 retry and freshness presentation; links select the existing section through the
