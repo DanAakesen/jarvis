@@ -1,6 +1,6 @@
 import { isDailyPeriod, copenhagenDate } from '../../period';
 import { dateStep } from '../nutrition/totals';
-import { dateOnly, metricDisplay, metricValue, type Row as MetricRow } from '../body-sleep/metrics';
+import { dateOnly, metricLabel, metricValue, type Row as MetricRow } from '../body-sleep/metrics';
 import { hours, nightStages } from '../body-sleep/sleep';
 import { numeric, sumNutrient, type Row as NutritionRow } from '../nutrition/totals';
 import { summarizeWorkouts, type Workout, typeLabel, workoutDate } from '../workouts/summary';
@@ -64,7 +64,7 @@ export function recentMeasurements(rows: readonly MetricRow[], limit = 3) {
     const unit = typeof row.unit === 'string' && row.unit.trim() ? row.unit : null;
     const key = JSON.stringify([row.metric_name, unit]);
     const group = groups.get(key) ?? {
-      name: row.metric_name, label: metricDisplay(row.metric_name).label, unit, readings: [],
+      name: row.metric_name, label: metricLabel(row.metric_name), unit, readings: [],
     };
     group.readings.push({ date, value: metricValue(row).value });
     groups.set(key, group);

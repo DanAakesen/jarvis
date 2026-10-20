@@ -7,7 +7,7 @@
 .daily-today-card h3 { margin: 0; color: var(--text); font-size: var(--type-subsection); font-weight: 650; }
 .daily-today-card h3 a { display: inline-flex; align-items: center; min-height: 44px; color: var(--text); text-underline-offset: .2em; }
 .daily-today-card p { min-width: 0; margin: 0; overflow-wrap: anywhere; }
-.daily-today-card > .daily-freshness { margin-top: auto; }
+.daily-today-card > .daily-tile-status { margin-top: auto; }
 .daily-today-rings { display: flex; flex-wrap: wrap; justify-content: space-around; gap: var(--space-3); }
 .daily-meal-strip { display: flex; flex-wrap: wrap; gap: var(--space-2); margin: 0; padding: 0; list-style: none; }
 .daily-meal-strip li { display: grid; gap: var(--space-1); min-width: 7rem; padding: var(--space-2) var(--space-3); border: 1px solid var(--rule); border-radius: var(--radius-control); font-size: var(--type-small); }
@@ -21,10 +21,31 @@
 .daily-summary-tile h3 { margin: 0; color: var(--text); font-size: var(--type-subsection); font-weight: 650; }
 .daily-summary-tile h3 a { display: inline-flex; align-items: center; min-height: 44px; color: var(--text); text-underline-offset: .2em; }
 .daily-summary-tile p { min-width: 0; margin: 0; overflow-wrap: anywhere; }
-.daily-summary-tile > p:not(.daily-stat-value) { font-size: var(--type-small); }
+.daily-summary-tile .daily-tile-body > p:not(.daily-stat-value) { font-size: var(--type-small); }
 .daily-summary-workout { display: flex; align-items: center; gap: var(--space-2); }
 .daily-summary-tile .daily-summary-macros { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-3); font-size: var(--type-small); }
-.daily-summary-tile > .daily-freshness { padding-top: var(--space-3); margin-top: auto; }
+/* The body and status slots stay mounted from skeleton to values, so a tile or card keeps its size while it loads. */
+.daily-tile-body { display: grid; align-content: start; gap: var(--space-2); min-width: 0; min-height: var(--tile-body-min, 5.75rem); }
+.daily-today-card .daily-tile-body { gap: var(--space-3); }
+.daily-tile-status { min-height: calc(var(--type-small) * var(--line-body)); }
+.daily-summary-tile > .daily-tile-status { min-height: calc(var(--type-small) * var(--line-body) + var(--space-3)); padding-top: var(--space-3); margin-top: auto; }
+.daily-summary-target, .daily-today-note { min-height: calc(var(--type-small) * var(--line-body)); }
+/* A grid keeps the inline skeleton from adding a line-box strut, so the loader and the note share one height. */
+.daily-today-note { display: grid; align-content: center; }
+.daily-summary-target { min-height: 4.625rem; }
+.daily-today-burn { min-height: calc(var(--type-small) * var(--line-body) * 2); }
+.daily-summary-tile[data-tile='workouts'] { --tile-body-min: 9.75rem; }
+.daily-summary-tile[data-tile='nutrition'] { --tile-body-min: 13rem; }
+.daily-summary-tile[data-tile='body'] { --tile-body-min: 9rem; }
+.daily-summary-tile[data-tile='sleep'] { --tile-body-min: 5.875rem; }
+.daily-today-training { --tile-body-min: 11.375rem; }
+.daily-today-protein { --tile-body-min: 11.625rem; }
+.daily-today-calories { --tile-body-min: 15rem; }
+/* Rings and macros wrap onto more rows on narrow phones, so those two reservations grow with them. */
+@media (max-width: 380px) {
+  .daily-today-training { --tile-body-min: 20rem; }
+  .daily-summary-tile[data-tile='nutrition'] { --tile-body-min: 16rem; }
+}
 .daily-overview-list { display: grid; margin: var(--space-3) 0 0; padding: 0; list-style: none; }
 .daily-overview-row {
   display: grid;

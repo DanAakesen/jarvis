@@ -35,21 +35,29 @@ function SummaryTile({ title, section, pages, children, emptyMessage }: {
   emptyMessage: string;
 }) {
   const hasItems = pages.items.length > 0;
-  return <article className="daily-stat-tile daily-summary-tile" aria-busy={pages.status === 'loading' || pages.loadingMore || undefined}>
+  const refreshing = pages.status === 'loading' && pages.first !== null;
+  // The body and status slots are always mounted and reserve their height, so a tile keeps its size from skeleton to values.
+  return <article className="daily-stat-tile daily-summary-tile" data-tile={title.toLowerCase()}
+    aria-busy={pages.status === 'loading' || pages.loadingMore || undefined}>
     <h3><Link to={`?section=${sections[section]}`}>{title}</Link></h3>
-    {pages.status === 'loading' && !pages.first
-      ? <Loader label={`Loading ${title.toLowerCase()} summary`} variant="rows" />
-      : pages.status === 'error' && !hasItems
-        ? <DailyState status="error" message={pages.error ?? 'Daily history could not be loaded.'} onRetry={pages.reload} />
-        : pages.first && !hasItems
-          ? <DailyState status="empty" emptyMessage={emptyMessage} />
-          : children}
-    {pages.status === 'loading' && pages.first && <p role="status">Refreshing…</p>}
+    <div className="daily-tile-body">
+      {pages.status === 'loading' && !pages.first
+        ? <Loader label={`Loading ${title.toLowerCase()} summary`} variant="lines" />
+        : pages.status === 'error' && !hasItems
+          ? <DailyState status="error" message={pages.error ?? 'Daily history could not be loaded.'} onRetry={pages.reload} />
+          : pages.first && !hasItems
+            ? <DailyState status="empty" emptyMessage={emptyMessage} />
+            : children}
+    </div>
     {pages.error && hasItems && <DailyState status="error" message={pages.error} onRetry={pages.reload} />}
-    {pages.hasMore && <DailyState status="partial" coverage={{ returned: pages.items.length, hasMore: true }}
-      {...(!pages.capped && !pages.loadingMore ? { onLoadMore: pages.loadMore } : {})} />}
-    {pages.first && <FreshnessLine observedAt={pages.first.freshness.observedAt}
-      count={pages.items.length} partial={pages.hasMore || pages.error !== null} />}
+    {/* A capped tile has no Load more and its freshness line already says "partial", so a loaded tile never gains this row. */}
+    {pages.hasMore && !pages.capped && <DailyState status="partial" coverage={{ returned: pages.items.length, hasMore: true }}
+      {...(!pages.loadingMore ? { onLoadMore: pages.loadMore } : {})} />}
+    <div className="daily-tile-status">
+      {refreshing ? <p className="daily-freshness" role="status">Refreshing…</p>
+        : pages.first && <FreshnessLine observedAt={pages.first.freshness.observedAt}
+          count={pages.items.length} partial={pages.hasMore || pages.error !== null} />}
+    </div>
   </article>;
 }
 
@@ -59,9 +67,11 @@ function WorkoutsTile({ backendUrl, getAccessToken, refreshVersion, period }: {
 }) {
   const pages = useDailyPages(backendUrl, getAccessToken, {
     source: sources.workouts, ...period.thirtyDays, limit: 500,
-  }, refreshVersion, { autoLoad: true, maxPages: 10 });
+  }, refreshVersion, { autoLoad: true, maxPages: 10, settle: true });
   const summary = workoutOverview(pages.items as Workout[], period.thirtyDays, period.thisWeek);
-  const weekMinutes = summary.week.durationSeconds === null ? null : summary.week.durationSeconds / 60;
+  // No sessions is a known zero; unknown only means sessions exist without a recorded duration.
+  const weekMinutes = summary.week.count === 0 ? 0
+    : summary.week.durationSeconds === null ? null : summary.week.durationSeconds / 60;
   const latest = summary.latest?.row;
   return <SummaryTile title="Workouts" section="workouts" pages={pages} emptyMessage="No workout in the last 30 days">
     {latest ? <>
@@ -82,7 +92,7 @@ function NutritionTile({ backendUrl, getAccessToken, refreshVersion, period }: {
 }) {
   const pages = useDailyPages(backendUrl, getAccessToken, {
     source: sources.days, ...period.sevenDays, limit: 400,
-  }, refreshVersion, { autoLoad: true, maxPages: 5 });
+  }, refreshVersion, { autoLoad: true, maxPages: 5, settle: true });
   const latest = latestNutritionDay(pages.items as NutritionRow[], period.sevenDays);
   const [targetAttempt, setTargetAttempt] = useState(0);
   const [targetResult, setTargetResult] = useState<{
@@ -113,10 +123,13 @@ function NutritionTile({ backendUrl, getAccessToken, refreshVersion, period }: {
     {latest && values && <>
       <p className="daily-meta">{latestKey === period.sevenDays.endDate ? 'Today' : `Latest day with meals: ${formatDate(latestKey)}`}</p>
       <p className="daily-stat-value">Energy: {formatNumber(values.energy.value)} kcal{partial('energy_kcal') ? ' (lower bound)' : ''}</p>
-      {currentTargetResult?.state && (baseline === null || baseline > 0
-        ? <Meter label="Energy intake against baseline allowance" value={values.energy.value}
-          target={baseline} unit="kcal" partial={partial('energy_kcal')} />
-        : <p>Baseline allowance: {formatNumber(baseline)} kcal.</p>)}
+      <div className="daily-summary-target">
+        {!currentTargetResult && <Loader label="Loading nutrition targets" variant="inline" />}
+        {currentTargetResult?.state && (baseline === null || baseline > 0
+          ? <Meter label="Energy intake against baseline allowance" value={values.energy.value}
+            target={baseline} unit="kcal" partial={partial('energy_kcal')} />
+          : <p>Baseline allowance: {formatNumber(baseline)} kcal.</p>)}
+      </div>
       <p className="daily-summary-macros">
         <span>Protein: {formatNumber(values.protein.value)} g{partial('protein_grams') ? ' (lower bound)' : ''}.</span>
         <span>Carbohydrate: {formatNumber(sumNutrient([latest], 'carbohydrates_grams').value)} g{partial('carbohydrates_grams') ? ' (lower bound)' : ''}.</span>
@@ -125,7 +138,6 @@ function NutritionTile({ backendUrl, getAccessToken, refreshVersion, period }: {
       {proteinTarget !== null && <p className="daily-meta">Protein target: {formatNumber(proteinTarget)} g</p>}
     </>}
     {!latest && <p>No meals recorded in the last 7 days</p>}
-    {latestKey && !currentTargetResult && <Loader label="Loading nutrition targets" variant="inline" />}
     {currentTargetResult?.error && <div role="alert"><p>{currentTargetResult.error}</p>
       <button className="secondary-button" type="button" onClick={() => setTargetAttempt(attempt => attempt + 1)}>Retry targets</button>
     </div>}
@@ -139,7 +151,7 @@ function BodyTile({ backendUrl, getAccessToken, refreshVersion, period }: {
 }) {
   const pages = useDailyPages(backendUrl, getAccessToken, {
     source: sources.metrics, ...period.thirtyDays, limit: 500,
-  }, refreshVersion, { autoLoad: true, maxPages: 5 });
+  }, refreshVersion, { autoLoad: true, maxPages: 5, settle: true });
   const measurements = recentMeasurements(pages.items as MetricRow[]);
   return <SummaryTile title="Body" section="body" pages={pages} emptyMessage="No measurements returned in the last 30 days">
     {measurements[0] ? <>
@@ -159,14 +171,18 @@ function SleepTile({ backendUrl, getAccessToken, refreshVersion, period }: {
 }) {
   const pages = useDailyPages(backendUrl, getAccessToken, {
     source: sources.sleep, ...period.sevenDays, limit: 500,
-  }, refreshVersion, { autoLoad: true, maxPages: 5 });
+  }, refreshVersion, { autoLoad: true, maxPages: 5, settle: true });
   const latest = latestSleepNight(pages.items as SleepRow[], period.sevenDays);
   const summary = latest ? sleepSummaryValues(latest) : null;
+  // Staged exports report asleep as 0 while total sleep is recorded, so total leads and asleep is only a fallback.
+  const headline = summary ? summary.total ?? summary.asleep : null;
+  const asleepRow = summary !== null && summary.total !== null && summary.asleep !== null &&
+    summary.asleep > 0 && summary.asleep !== summary.total;
   return <SummaryTile title="Sleep" section="sleep" pages={pages} emptyMessage="No sleep recorded in the last 7 days">
     {latest && summary && <>
-      <p className="daily-stat-value">{formatNumber(summary.asleep)} h asleep{pages.hasMore ? ' (partial history)' : ''}</p>
+      <p className="daily-stat-value">{headline === null ? 'Unknown' : `${formatNumber(headline)} h ${summary.total === null ? 'asleep' : 'total sleep'}`}{pages.hasMore ? ' (partial history)' : ''}</p>
       <p>Latest night: {formatDate(dateOnly(latest.sleep_date))}</p>
-      <p>Total: {formatNumber(summary.total)} h</p>
+      {asleepRow && <p>Asleep: {formatNumber(summary.asleep)} h</p>}
       <p>{summary.stages.length ? summary.stages.map(stage => `${stage.label}: ${formatNumber(stage.value)} h`).join(' · ') : 'Stages: Unknown'}</p>
     </>}
     {!latest && <p>Latest night: Unknown</p>}
@@ -177,7 +193,7 @@ function BriefsTile({ backendUrl, getAccessToken, refreshVersion }: {
   backendUrl: string | null; getAccessToken: () => Promise<string>; refreshVersion: number;
 }) {
   const query: DailyQuery = { source: sources.briefs, limit: 50 };
-  const pages = useDailyPages(backendUrl, getAccessToken, query, refreshVersion, { autoLoad: true, maxPages: 5 });
+  const pages = useDailyPages(backendUrl, getAccessToken, query, refreshVersion, { autoLoad: true, maxPages: 5, settle: true });
   const latest = pages.items[0];
   return <SummaryTile title="Briefs" section="briefs" pages={pages} emptyMessage="No briefs returned">
     {latest && <>

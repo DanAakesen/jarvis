@@ -32,6 +32,14 @@ export function metricDisplay(name: string): { label: string; group: Group } {
   return Object.hasOwn(names, name) ? names[name]! : { label: name, group: 'Other' };
 }
 
+/** The display name, or for an unmapped snake_case key those words in sentence case; other names stay verbatim. */
+export function metricLabel(name: string): string {
+  const known = metricDisplay(name);
+  if (known.group !== 'Other' || !/^[a-z][a-z0-9]*(_[a-z0-9]+)*$/u.test(name)) return known.label;
+  const words = name.replaceAll('_', ' ');
+  return `${words.charAt(0).toUpperCase()}${words.slice(1)}`;
+}
+
 export function finite(value: DailyJson | undefined): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }

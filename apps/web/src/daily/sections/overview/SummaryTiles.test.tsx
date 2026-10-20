@@ -60,7 +60,7 @@ function fixture({ failWorkouts = false, partialWorkouts = false, failSource, pa
     return jsonResponse(dailyFixture(query, rows[query.source] ?? [],
       (partialWorkouts && query.source === sources.workouts || query.source === partialSource)
         ? query.source === sources.briefs ? { startedAt: '2026-10-18T07:00:00', id: 'synthetic-next' }
-          : query.source === sources.days ? { date: period.sevenDays.endDate }
+          : query.source === sources.days ? { date: period.sevenDays.startDate }
             : { date: period.sevenDays.endDate, key: 'synthetic-next' } : null));
   });
   vi.stubGlobal('fetch', fetch);
@@ -104,8 +104,8 @@ describe('Daily overview summary tiles', () => {
     expect(tile('Body').getByText(/Change since previous: 1 kg/u)).toBeTruthy();
     expect(tile('Body').getByRole('img', { name: /Body mass \(kg\), recorded observations/u })).toBeTruthy();
     expect(tile('Body').getByRole('link', { name: 'Body' }).getAttribute('href')).toBe('/?section=body-sleep');
-    expect(tile('Sleep').getByText('7 h asleep')).toBeTruthy();
-    expect(tile('Sleep').getByText('Total: 8 h')).toBeTruthy();
+    expect(tile('Sleep').getByText('8 h total sleep')).toBeTruthy();
+    expect(tile('Sleep').getByText('Asleep: 7 h')).toBeTruthy();
     expect(tile('Sleep').getByText(/Deep: 1 h/u)).toBeTruthy();
     expect(tile('Sleep').getByRole('link', { name: 'Sleep' }).getAttribute('href')).toBe('/?section=body-sleep');
     expect(tile('Briefs').getByText('Scheduled brief')).toBeTruthy();
@@ -124,7 +124,7 @@ describe('Daily overview summary tiles', () => {
     const workouts = tile('Workouts');
     expect(await workouts.findByRole('alert')).toBeTruthy();
     expect(tile('Nutrition').getByText(/Energy: 1,200 kcal/u)).toBeTruthy();
-    expect(tile('Sleep').getByText(/Total: 8 h/u)).toBeTruthy();
+    expect(tile('Sleep').getByText(/8 h total sleep/u)).toBeTruthy();
     fireEvent.click(workouts.getByRole('button', { name: 'Retry' }));
     expect(await workouts.findByText('Running')).toBeTruthy();
     await waitFor(() => expect(f.queries.filter(query => query.source === sources.workouts)).toHaveLength(2));
@@ -151,7 +151,7 @@ describe('Daily overview summary tiles', () => {
     fixture({ partialWorkouts: true });
     render(view([sources.workouts]));
     await waitFor(() => expect(tile('Workouts').getAllByRole('status')
-      .some(status => status.textContent?.includes('Showing the first 20'))).toBe(true));
+      .some(status => status.textContent?.includes('20 records, partial'))).toBe(true));
     cleanup();
 
     let captured: AbortSignal | undefined;
@@ -224,7 +224,8 @@ describe('Daily overview summary tiles', () => {
     fixture({ partialSource: source });
     render(view());
     await waitFor(() => expect(tile(title).getByText(/^Read /u).textContent).toContain('partial'));
-    expect(tile(title).getByText(/Showing the first/u)).toBeTruthy();
+    expect(tile(title).queryByText(/Showing the first/u)).toBeNull();
+    expect(tile(title).queryByRole('button', { name: 'Load more' })).toBeNull();
     expect(tile(title).getByRole('link', { name: title })).toBeTruthy();
   });
 
@@ -250,7 +251,112 @@ describe('Daily overview summary tiles', () => {
     expect(tile('Nutrition').getByText(`Latest day with meals: ${formatDate(period.sevenDays.startDate)}`)).toBeTruthy();
     expect(tile('Body').getByText('Unknown kg')).toBeTruthy();
     expect(tile('Body').getByText('No trend available')).toBeTruthy();
-    expect(tile('Sleep').getByText('Unknown h asleep')).toBeTruthy();
+    expect(tile('Sleep').getByText('Unknown')).toBeTruthy();
+  });
+
+  it('leads the Sleep headline with total sleep and falls back to asleep only without a total', async () => {
+    fixture({ rows: { ...summaryRows, [sources.sleep]: [
+      { sleep_date: period.sevenDays.endDate, total_sleep_hours: 7.5, asleep_hours: 0 },
+    ] } });
+    const rendered = render(view());
+    expect(await tile('Sleep').findByText('7.5 h total sleep')).toBeTruthy();
+    expect(tile('Sleep').queryByText(/0 h asleep/u)).toBeNull();
+    expect(tile('Sleep').queryByText(/^Asleep:/u)).toBeNull();
+    rendered.unmount();
+
+    fixture({ rows: { ...summaryRows, [sources.sleep]: [
+      { sleep_date: period.sevenDays.endDate, total_sleep_hours: null, asleep_hours: 6.5 },
+    ] } });
+    render(view());
+    expect(await tile('Sleep').findByText('6.5 h asleep')).toBeTruthy();
+  });
+
+  it('reads a week without workouts as zero minutes, not unknown', async () => {
+    const older = { id: 'synthetic-workout-old', workout_date: period.thirtyDays.startDate, workout_type: 'running', duration_seconds: 600 };
+    fixture({ rows: { ...summaryRows, [sources.workouts]: [older] } });
+    render(view());
+    expect(await screen.findByText('This week: 0 workouts · 0 minutes')).toBeTruthy();
+    expect(screen.queryByText(/Unknown minutes/u)).toBeNull();
+  });
+
+  it('labels raw snake_case body metric keys in words', async () => {
+    fixture({ rows: { ...summaryRows, [sources.metrics]: [
+      { metric_name: 'active_energy', metric_date: period.sevenDays.endDate, value: 500, unit: 'kcal' },
+    ] } });
+    render(view());
+    expect(await tile('Body').findByText(/^Active energy ·/u)).toBeTruthy();
+    expect(tile('Body').queryByText(/active_energy/u)).toBeNull();
+  });
+
+  it('keeps one tile structure from loading to loaded so the cards keep their height', async () => {
+    let release!: () => void;
+    const held = new Promise<void>(resolve => { release = resolve; });
+    vi.stubGlobal('fetch', vi.fn(async (url: string | URL, init?: RequestInit) => {
+      await held;
+      if (String(url).endsWith('/daily/nutrition-targets')) return jsonResponse(targetReply);
+      const query = JSON.parse(String(init?.body)) as DailyQuery;
+      return jsonResponse(dailyFixture(query, summaryRows[query.source] ?? []));
+    }));
+    const { container } = render(view());
+    const structure = () => [...container.querySelectorAll('article')].map(article => ({
+      tile: article.getAttribute('data-tile'),
+      children: [...article.children].map(child => `${child.tagName}.${child.className}`),
+    }));
+    const loading = structure();
+    expect(loading.map(entry => entry.tile)).toEqual(['workouts', 'nutrition', 'body', 'sleep', 'briefs']);
+    for (const entry of loading) expect(entry.children).toEqual(['H3.', 'DIV.daily-tile-body', 'DIV.daily-tile-status']);
+    await act(async () => { release(); });
+    await screen.findByText('This week: 2 workouts · 40 minutes');
+    await waitFor(() => expect(screen.getAllByText(/^Read /u)).toHaveLength(5));
+    expect(structure()).toEqual(loading);
+  });
+
+  it('keeps a capped tile at its loading structure and says partial in its freshness line', async () => {
+    fixture({ partialWorkouts: true });
+    const { container } = render(view([sources.workouts]));
+    const article = () => container.querySelector('article')!;
+    const loading = [...article().children].map(child => `${child.tagName}.${child.className}`);
+    expect(loading).toEqual(['H3.', 'DIV.daily-tile-body', 'DIV.daily-tile-status']);
+    await waitFor(() => expect(tile('Workouts').getByText(/^Read /u).textContent).toContain('20 records, partial'));
+    expect([...article().children].map(child => `${child.tagName}.${child.className}`)).toEqual(loading);
+    expect(tile('Workouts').queryByRole('button', { name: 'Load more' })).toBeNull();
+  });
+
+  it('still offers Load more beside the error when a page fails part-way through auto-load', async () => {
+    const stub = vi.fn(async (_url: string | URL, init?: RequestInit) => {
+      const query = JSON.parse(String(init?.body)) as DailyQuery;
+      if ('cursor' in query) return jsonResponse({ error: 'synthetic' }, 503);
+      return jsonResponse(dailyFixture(query, [latestWorkout], { date: period.sevenDays.endDate, key: 'synthetic-next' }));
+    });
+    vi.stubGlobal('fetch', stub);
+    render(view([sources.workouts]));
+    expect(await tile('Workouts').findByRole('alert')).toBeTruthy();
+    expect(tile('Workouts').getByText(/Showing the first 1\./u)).toBeTruthy();
+    expect(tile('Workouts').getByRole('button', { name: 'Load more' })).toBeTruthy();
+  });
+
+  it('renders a multi-page auto-load once, with no partial row or Load more while it runs', async () => {
+    let release!: () => void;
+    const held = new Promise<void>(resolve => { release = resolve; });
+    const stub = vi.fn(async (_url: string | URL, init?: RequestInit) => {
+      const query = JSON.parse(String(init?.body)) as DailyQuery;
+      if ('cursor' in query) {
+        await held;
+        return jsonResponse(dailyFixture(query, [earlierWorkout]));
+      }
+      return jsonResponse(dailyFixture(query, [latestWorkout], { date: period.sevenDays.endDate, key: 'synthetic-next' }));
+    });
+    vi.stubGlobal('fetch', stub);
+    render(view([sources.workouts]));
+    const workouts = tile('Workouts');
+    await waitFor(() => expect(stub).toHaveBeenCalledTimes(2));
+    expect(workouts.getByText('Loading workouts summary')).toBeTruthy();
+    expect(workouts.queryByText('Running')).toBeNull();
+    expect(workouts.queryByRole('button', { name: 'Load more' })).toBeNull();
+    expect(workouts.queryByText(/Showing the first/u)).toBeNull();
+    await act(async () => { release(); });
+    expect(await screen.findByText('This week: 2 workouts · 40 minutes')).toBeTruthy();
+    expect(workouts.queryByRole('button', { name: 'Load more' })).toBeNull();
   });
 
   it('uses singular wording for one workout and one minute this week', async () => {

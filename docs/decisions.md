@@ -1,5 +1,30 @@
 # Decisions
 
+## P14-44 — Overview tiles hold their size; reads on focus wait a minute (20 October 2026; #1116, #1129)
+
+The Daily Overview summary tiles and Today cards jumped while loading: each tile
+swapped its skeleton, a "Refreshing…" row, a "Load more" row and the freshness line in
+and out, auto-load published every page as its own render, and every window focus
+read all sources again. Decisions: (1) each tile and card has a body and a status
+slot that are always mounted, with a per-tile minimum body height measured from the
+loaded tile (larger at 380 px and below), so height does not change between
+loading and loaded; (2) a refresh keeps the previous values on screen; (3) an
+auto-loading tile opts in to `settle` and publishes once, after its last page, so
+a tile that reaches its page cap says "partial" in its freshness line and adds no row
+(it has no Load more), and the "Showing the first N" row with "Load more" shows only
+after a read failed part-way, beside its error row; (4) the shared
+`useDailyPages` hook skips a focus or visibility refetch when the last successful read
+began less than 60 seconds ago (`focusRefreshWindowMs`), while a failed read is retried
+on focus and the Refresh button, a changed `refreshVersion` and Retry stay
+immediate. The window is a trade-off: the freshness pill and the data may be up to a
+minute old after returning to the tab, in exchange for a calm page. Sleep leads with
+total sleep and falls back to asleep, because staged exports report asleep as 0.
+A week without workouts is 0 minutes, not unknown. Unmapped snake_case metric keys
+read in words (`metricLabel`); unmapped names of any other shape stay verbatim. The
+tiles' loading semantics and wording otherwise stay as they were.
+
+Refs #1116, #1129
+
 ## P14-41 — Today cards read served sources and say so when one is not (20 October 2026; #1116)
 
 The Daily Overview now opens with Training this week, Protein today, Calories left

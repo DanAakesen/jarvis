@@ -23,12 +23,19 @@ const empty: PageState = {
   loadingMore: false, error: null, first: null, last: null,
 };
 
+/** Window focus and tab visibility refetch only when the last first-page read is older than this. Refresh and Retry are immediate. */
+export const focusRefreshWindowMs = 60_000;
+
+/**
+ * `settle` (with `autoLoad`) publishes once the automatic page chain has finished, so a card renders its start (previous
+ * values kept) and its end instead of once per page. Without it every page publishes, as list views expect.
+ */
 export function useDailyPages(
   backendUrl: string | null,
   getAccessToken: () => Promise<string>,
   query: DailyQuery | null,
   refreshVersion: number,
-  options?: { maxPages?: number; autoLoad?: boolean },
+  options?: { maxPages?: number; autoLoad?: boolean; settle?: boolean },
 ): DailyPages {
   const queryKey = JSON.stringify(query);
   const key = JSON.stringify([backendUrl, query]);
@@ -36,6 +43,7 @@ export function useDailyPages(
   const maxPages = Number.isFinite(requestedMaxPages)
     ? Math.max(1, Math.min(50, Math.floor(requestedMaxPages))) : 10;
   const autoLoad = options?.autoLoad ?? false;
+  const settle = autoLoad && (options?.settle ?? false);
   const [result, setResult] = useState<{ key: string; state: PageState }>({ key, state: empty });
   const actions = useRef({ loadMore: () => {}, reload: () => {} });
 
@@ -48,27 +56,40 @@ export function useDailyPages(
     let refreshPending = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
     let state: PageState = empty;
-    const publish = (next: PageState) => {
+    let shown: PageState = empty;
+    let readStartedAt: number | null = null;
+    const publish = (next: PageState, show = true) => {
       state = next;
+      if (!show) return;
+      shown = next;
       setResult({ key, state });
     };
-    const load = async (firstPage: boolean) => {
+    // `auto` marks a page chained by autoLoad, as opposed to a user's Load more.
+    const load = async (firstPage: boolean, auto = false) => {
       if (!active || running) return;
       const cursor = state.last?.coverage.next;
       if (!firstPage && (refreshPending || state.capped || !state.hasMore || !cursor)) return;
       running = true;
-      publish({ ...state, status: firstPage ? 'loading' : 'ready', loadingMore: !firstPage, error: null });
+      if (firstPage) {
+        readStartedAt = Date.now();
+        // Starts from what the page shows, so a refresh that lands mid-chain never shrinks the visible records.
+        publish({ ...shown, status: 'loading', loadingMore: false, error: null });
+      } else {
+        publish({ ...state, status: 'ready', loadingMore: true, error: null }, !(settle && auto));
+      }
       try {
         const data = await queryDaily(backendUrl,
           firstPage ? requested : { ...requested, cursor } as DailyQuery,
           getAccessToken, controller.signal);
         if (!active) return;
         const pages = firstPage ? 1 : state.pages + 1;
+        const capped = data.coverage.hasMore && pages >= maxPages;
+        const chaining = data.coverage.hasMore && !capped && Boolean(data.coverage.next);
         publish({
           status: 'ready', items: firstPage ? data.items : [...state.items, ...data.items],
-          pages, hasMore: data.coverage.hasMore, capped: data.coverage.hasMore && pages >= maxPages,
+          pages, hasMore: data.coverage.hasMore, capped,
           loadingMore: false, error: null, first: firstPage ? data : state.first, last: data,
-        });
+        }, !(settle && chaining));
       } catch (error) {
         if (!active || controller.signal.aborted) return;
         const message = error instanceof DailyReadError ? error.message : 'Daily could not be loaded.';
@@ -81,7 +102,7 @@ export function useDailyPages(
         running = false;
         if (active) {
           if (refreshPending) schedule();
-          else if (autoLoad && state.error === null) void load(false);
+          else if (autoLoad && state.error === null) void load(false, true);
         }
       }
     };
@@ -94,7 +115,12 @@ export function useDailyPages(
         void load(true);
       }, 200);
     };
-    const visible = () => { if (document.visibilityState !== 'hidden') schedule(); };
+    const visible = () => {
+      if (document.visibilityState === 'hidden') return;
+      const age = readStartedAt === null ? null : Date.now() - readStartedAt;
+      if (state.error === null && age !== null && age >= 0 && age < focusRefreshWindowMs) return;
+      schedule();
+    };
     actions.current = { loadMore: () => { void load(false); }, reload: schedule };
     window.addEventListener('focus', visible);
     document.addEventListener('visibilitychange', visible);
@@ -107,7 +133,7 @@ export function useDailyPages(
       window.removeEventListener('focus', visible);
       document.removeEventListener('visibilitychange', visible);
     };
-  }, [backendUrl, getAccessToken, key, queryKey, maxPages, autoLoad]);
+  }, [backendUrl, getAccessToken, key, queryKey, maxPages, autoLoad, settle]);
 
   const previousVersion = useRef(refreshVersion);
   useEffect(() => {

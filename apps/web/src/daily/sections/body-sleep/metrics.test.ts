@@ -1,9 +1,17 @@
 import { describe, expect, it } from 'vitest';
-import { dateOnly, finite, metricDisplay, metricSummary, metricValue, periodDays, splitUnits } from './metrics';
+import { dateOnly, finite, metricDisplay, metricLabel, metricSummary, metricValue, periodDays, splitUnits } from './metrics';
 
 const period = { startDate: '2026-10-01', endDate: '2026-10-07' };
 
 describe('Body measurements (synthetic)', () => {
+  it('reads unmapped snake_case keys in words while mapped and free-form names stay as they were', () => {
+    expect(metricLabel('active_energy')).toBe('Active energy');
+    expect(metricLabel('synthetic_walking_speed')).toBe('Synthetic walking speed');
+    expect(metricLabel('body_mass')).toBe('Body mass');
+    expect(metricLabel('synthetic_NEW_metric')).toBe('synthetic_NEW_metric');
+    expect(metricLabel('__proto__')).toBe('__proto__');
+    expect(metricLabel('Unknown metric')).toBe('Unknown metric');
+  });
   it('maps known names to readable groups and preserves unknown raw identifiers', () => {
     expect(metricDisplay('body_mass')).toEqual({ label: 'Body mass', group: 'Body composition' });
     expect(metricDisplay('step_count').group).toBe('Activity');

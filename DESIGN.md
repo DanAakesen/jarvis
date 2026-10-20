@@ -1768,6 +1768,26 @@ with "eaten is a lower bound". The cards follow the Copenhagen date: it advances
 midnight, on focus and when the page becomes visible, and every card then asks for the
 new day.
 
+20 October 2026 (P14-44 stable tiles): the Overview summary tiles and the Today
+cards keep their size from skeleton to values, so nothing below them moves while
+data arrives. Every tile has three parts: the title, a body and a status slot. The
+body reserves a per-tile minimum height measured from the loaded tile, and the
+status slot is always present, so "Refreshing…" and the freshness line share one
+line instead of one pushing the other in. The ring caption and the nutrition target
+line reserve their space too. A refresh keeps the previous values on screen and shows
+only "Refreshing…" in the status slot. A tile that auto-loads several pages
+shows its skeleton until the last page arrives and then appears once. A tile that hits
+its page cap says "partial" in its freshness line and gains no extra row, so a settled
+tile never grows. The "Showing the first N" row with "Load more" appears only after a
+read failed part-way, beside its error row. Returning to the tab
+within a minute of the last successful read does not read again; the Refresh button
+always does. A failed read is retried on the next focus. Sleep leads with total
+sleep ("7.9 h total sleep"), falls back to "asleep" only when there is no total and
+adds an "Asleep" row only when it is greater than zero and differs. A week without
+workouts reads "0 minutes". Body measurements with a raw snake_case key read in
+words ("Active energy"). At 380 px and below the Nutrition and Training bodies
+reserve more height because their content wraps.
+
 Checked the section shell in isolated Chromium against only synthetic capability
 and query responses at 320, 390×844, 768 and 1440×900 in light and dark, with
 reduced motion. Overview, Data and brief detail, keyboard/URL switching, shared

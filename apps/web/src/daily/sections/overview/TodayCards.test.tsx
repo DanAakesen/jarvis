@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
 import { dailyQuerySources as sources, isDailyQuery, type DailyJson, type DailySourceId } from '@jarvis/contracts';
@@ -144,6 +144,34 @@ describe('Today cards', () => {
       }
       expect(asked.some(q => q.source === sources.workouts && q.startDate === '2026-10-19')).toBe(true);
     });
+  });
+
+  it('keeps one card structure from loading to loaded and reserves the ring caption', async () => {
+    let release!: () => void;
+    const held = new Promise<void>(resolve => { release = resolve; });
+    vi.stubGlobal('fetch', vi.fn(async (url: string | URL, init?: RequestInit) => {
+      await held;
+      if (String(url).endsWith('/daily/nutrition-targets')) return jsonResponse(targetReply);
+      const query: unknown = JSON.parse(String(init?.body));
+      if (!isDailyQuery(query)) throw new Error('Invalid synthetic query');
+      return jsonResponse(dailyFixture(query, rows[query.source] ?? []));
+    }));
+    const { container } = render(view());
+    const structure = () => [...container.querySelectorAll('article')].map(article => ({
+      card: article.getAttribute('data-card'),
+      children: [...article.children].map(child => `${child.tagName}.${child.className}`),
+    }));
+    const loading = structure();
+    expect(loading.map(entry => entry.card)).toEqual(['training this week', 'protein today', 'calories left today', 'meals today']);
+    for (const entry of loading) expect(entry.children).toEqual(['H3.', 'DIV.daily-tile-body', 'DIV.daily-tile-status']);
+    await act(async () => { release(); });
+    await waitFor(() => expect(card('Protein today').getByRole('img', { name: 'Protein: 80 g of 100 g' })).toBeTruthy());
+    await waitFor(() => expect(screen.getAllByText(/^Read /u)).toHaveLength(4));
+    expect(structure()).toEqual(loading);
+    for (const title of ['Protein today', 'Calories left today']) {
+      const article = screen.getByRole('heading', { level: 3, name: title }).closest('article')!;
+      expect(article.querySelectorAll('.daily-ring-caption').length).toBeGreaterThan(0);
+    }
   });
 
   it('marks every card unavailable when its source is not served', () => {
