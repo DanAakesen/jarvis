@@ -7,8 +7,24 @@ reuses the existing owner resolver, bounded SQL readers, 30-second timeout and
 
 Capabilities are negotiated independently from the query contract. Version 1
 keeps its original nine sources, version 2 keeps its original eleven sources,
-and version 3 adds `daily.health.metric-catalog` and `daily.nutrition.days`.
-Clients that do not request a supported version receive version 1.
+version 3 adds `daily.health.metric-catalog` and `daily.nutrition.days`, and
+version 4 adds the optional Gmail attention and calendar feed sources. Feed
+sources appear in v4 capabilities only for the authenticated owner browser when
+the default-off feed composition exists. Versions 1–3 retain their source lists;
+clients that do not request a supported version receive version 1.
+
+- `daily.attention` reads retained waiting-for-you/waiting-on-others threads and
+  order attention, with business-day age and hidden state. Missing/stale Gmail
+  coverage is reported as partial, not as a successful empty result.
+- `daily.calendar` accepts an inclusive `from` and exclusive `to` ISO instant
+  with a maximum 62-day span. It filters only the retained calendar snapshot and
+  reports whether that snapshot covers the requested range. Older snapshots
+  without saved range metadata remain explicitly uncovered.
+- The owner browser can request a manual refresh, hide a thread, mark an order
+  received in Daily, or restore an exact hidden key through `/daily/feeds/*`.
+  These endpoints are owner-only and derive action intent from the authenticated
+  browser request; they accept no confirmation flag. The refresh retains the
+  existing 30-second cooldown.
 
 - `daily.health.metrics` optionally filters by the exact `metric_name`.
 - `daily.health.metric-catalog` pages metric names over a maximum 366-day

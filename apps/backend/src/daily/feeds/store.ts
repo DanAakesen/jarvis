@@ -4,15 +4,15 @@ import type { FastifyRequest } from 'fastify';
 import { resolveDailyFeedOwner } from '../owner.js';
 import { canonicalJson, instant, text } from '../nutrition/model.js';
 import { ToolFailure, ToolRefusal } from '../../core/tool-registry.js';
-import { classifyGmailThread, mergeOrders, orderIdentityKey, threadRevives, type Thread, type Order } from './attention.js';
-import { weekCalendar, weekEvent } from './calendars.js';
+import { classifyGmailThread, mergeOrders, orderIdentityKey, threadRevives, type Thread, type Order, type Waiting } from './attention.js';
+import { validateCalendarRange, weekCalendar, weekEvent, type CalendarRange } from './calendars.js';
 import { createDailyChanges, type DailyChangeSink } from '../revisions.js';
 
 export type FeedSource = 'Gmail' | 'GoogleCalendar';
 export interface FeedItem { type: 'thread' | 'order_update' | 'event'; id: string; title: string; content: Thread | Order | Record<string, unknown> }
 export interface SourceAttempt { source: FeedSource; status: 'ok' | 'error'; items: FeedItem[]; errorCode: string | null }
-export interface RefreshRun { runId: string; capturedAt: string; sources: SourceAttempt[] }
-export interface SourceView { source: FeedSource; status: 'Missing' | 'Stale' | 'Current'; capturedAt: string | null; attemptedAt: string | null; error: string | null; items: FeedItem[] }
+export interface RefreshRun { runId: string; capturedAt: string; calendarRange?: CalendarRange; sources: SourceAttempt[] }
+export interface SourceView { source: FeedSource; status: 'Missing' | 'Stale' | 'Current'; capturedAt: string | null; attemptedAt: string | null; error: string | null; items: FeedItem[]; range?: CalendarRange | null }
 export interface FeedSuppression {
   type: 'thread' | 'order'; key: string; suppressedAt: string;
   messageId: string | null; incomingAt: string | null; orderUpdatedAt: string | null;
@@ -34,9 +34,11 @@ export const MAX_SOURCE_BYTES = 480 * 1024;
  * Called after run shape validation; bytes remain identical for prior runs. */
 export function canonicalFeedRun(run: RefreshRun): string {
   text(run.runId); instant(run.capturedAt);
-  if (Object.keys(run).some((field) => !['runId','capturedAt','sources'].includes(field)) || !Array.isArray(run.sources) || run.sources.length !== 2 ||
+  if (Object.keys(run).some((field) => !['runId','capturedAt','calendarRange','sources'].includes(field)) || !Array.isArray(run.sources) || run.sources.length !== 2 ||
       new Set(run.sources.map((source) => source.source)).size !== 2 || run.sources.some((source) => !sources.includes(source.source))) throw new TypeError('Both in-scope sources required');
-  return `{"capturedAt":${canonicalJson(run.capturedAt)},"runId":${canonicalJson(run.runId)},"sources":[${run.sources.map((source) => canonicalJson(source)).join(',')}]}`;
+  if (run.calendarRange !== undefined) validateCalendarRange(run.calendarRange);
+  const range = run.calendarRange === undefined ? '' : `"calendarRange":${canonicalJson(run.calendarRange)},`;
+  return `{${range}"capturedAt":${canonicalJson(run.capturedAt)},"runId":${canonicalJson(run.runId)},"sources":[${run.sources.map((source) => canonicalJson(source)).join(',')}]}`;
 }
 /** Reserve room for both sources and run metadata; reject independently before SQL. */
 export function boundedSource(source: SourceAttempt, capturedAt?: string): SourceAttempt {
@@ -122,7 +124,10 @@ export class DailyFeedStore {
       if (existing) { if (existing.id !== input.runId || existing.checksum !== checksum) throw new ToolRefusal('Refresh operation key conflicts with prior content.'); return; }
       changed();
       await this.query(this.request(transaction).input('id', sql.NVarChar(256), input.runId).input('captured', sql.NVarChar(64), input.capturedAt).input('now', sql.NVarChar(64), now)
-        .input('checksum', sql.NVarChar(256), checksum).input('statuses', sql.NVarChar(sql.MAX), canonicalJson(Object.fromEntries(input.sources.map((source) => [source.source,source.status])))),
+        .input('checksum', sql.NVarChar(256), checksum).input('statuses', sql.NVarChar(sql.MAX), canonicalJson({
+          ...Object.fromEntries(input.sources.map((source) => [source.source,source.status])),
+          ...(input.calendarRange ? { calendarRange: input.calendarRange } : {}),
+        })),
         `INSERT daily.attention_runs(owner_object_id,id,idempotency_key,mode,captured_at,received_at,checksum,status,source_status_json,completed_at)
          VALUES(@owner,@id,@id,N'manual',@captured,@now,@checksum,N'completed',@statuses,@now);`, signal);
       for (const source of input.sources) {
@@ -155,7 +160,12 @@ export class DailyFeedStore {
   }
   private async latest(source: FeedSource, parent: sql.ConnectionPool | sql.Transaction, signal: AbortSignal): Promise<SourceView> {
     const read = (success: boolean) => this.query(this.request(parent).input('source', sql.NVarChar(256),source),
-      `SELECT TOP (1) id,status,captured_at,error_code FROM daily.attention_source_snapshots ${parent instanceof sql.Transaction ? 'WITH (UPDLOCK,HOLDLOCK)' : ''} WHERE owner_object_id=@owner AND source=@source ${success ? "AND status=N'ok'" : ''} ORDER BY CONVERT(datetimeoffset,captured_at) DESC,CONVERT(datetimeoffset,received_at) DESC,id DESC;`, signal);
+      `SELECT TOP (1) s.id,s.status,s.captured_at,s.error_code,r.source_status_json FROM daily.attention_source_snapshots s
+       ${parent instanceof sql.Transaction ? 'WITH (UPDLOCK,HOLDLOCK)' : ''}
+       JOIN daily.attention_runs r ${parent instanceof sql.Transaction ? 'WITH (UPDLOCK,HOLDLOCK)' : ''}
+         ON r.owner_object_id=s.owner_object_id AND r.id=s.run_id
+       WHERE s.owner_object_id=@owner AND s.source=@source ${success ? "AND s.status=N'ok'" : ''}
+       ORDER BY CONVERT(datetimeoffset,s.captured_at) DESC,CONVERT(datetimeoffset,s.received_at) DESC,s.id DESC;`, signal);
     const attempt = (await read(false)).recordset[0]; const success = (await read(true)).recordset[0]; let items: FeedItem[] = [];
     if (success) {
       const rows = (await this.query(this.request(parent).input('snapshot', sql.NVarChar(256),success.id),
@@ -164,8 +174,19 @@ export class DailyFeedStore {
       items = rows.map((row) => ({ type: row.item_type as FeedItem['type'], id: row.stable_id as string, title: row.title as string, content: JSON.parse(row.content_json as string) }));
     }
     const now = this.now(); instant(now);
+    let range: CalendarRange | null = null;
+    if (source === 'GoogleCalendar' && success?.source_status_json) {
+      try {
+        const metadata = JSON.parse(success.source_status_json as string) as Record<string, unknown>;
+        if (metadata.calendarRange) {
+          validateCalendarRange(metadata.calendarRange);
+          range = metadata.calendarRange as CalendarRange;
+        }
+      } catch { range = null; }
+    }
     return { source, status: !attempt ? 'Missing' : attempt.status !== 'ok' || !success || Date.parse(now) - Date.parse(success.captured_at as string) > 18 * 3600000 ? 'Stale' : 'Current',
-      capturedAt: success?.captured_at as string | undefined ?? null, attemptedAt: attempt?.captured_at as string | undefined ?? null, error: attempt?.error_code as string | undefined ?? null, items };
+      capturedAt: success?.captured_at as string | undefined ?? null, attemptedAt: attempt?.captured_at as string | undefined ?? null,
+      error: attempt?.error_code as string | undefined ?? null, items, range };
   }
   async sources(signal: AbortSignal): Promise<SourceView[]> {
     try { return await this.transaction(signal,async (transaction) => { const views: SourceView[] = []; for (const source of sources) views.push(await this.latest(source,transaction,signal)); return views; }); }
@@ -176,7 +197,15 @@ export class DailyFeedStore {
     try { return (await this.query(this.request(this.pool).input('id',sql.NVarChar(256),runId),`SELECT id FROM daily.attention_runs WHERE owner_object_id=@owner AND ${key('id','id')};`,signal)).recordset.length > 0; }
     catch { if (signal.aborted) throw signal.reason; throw new ToolFailure('Refresh state unavailable.'); }
   }
-  async attention(signal: AbortSignal): Promise<{ sources: SourceView[]; waiting: NonNullable<ReturnType<typeof classifyGmailThread>>[]; orders: Order[] }> {
+  async attention(signal: AbortSignal): Promise<{ sources: SourceView[]; waiting: Waiting[]; orders: Order[] }>;
+  async attention(signal: AbortSignal, includeHidden: true): Promise<{
+    sources: SourceView[]; waiting: (Waiting & { hidden: boolean; suppressionKey: string })[];
+    orders: (Order & { hidden: boolean; suppressionKey: string })[]; suppressions: FeedSuppression[];
+  }>;
+  async attention(signal: AbortSignal, includeHidden = false): Promise<{
+    sources: SourceView[]; waiting: Waiting[]; orders: Order[];
+    suppressions?: FeedSuppression[];
+  }> {
     return this.transaction(signal,async (transaction) => {
     const views: SourceView[] = []; for (const source of sources) views.push(await this.latest(source,transaction,signal)); const items = views[0]!.items;
     views[1]!.items = views[1]!.items.filter((item) => { const event = item.content as Record<string,unknown>; return event.status !== 'cancelled' && !weekCalendar(String(event.calendarName || '')) && !weekEvent(item.title); });
@@ -184,8 +213,16 @@ export class DailyFeedStore {
     const hiddenOrders = (await this.query(this.request(transaction),'SELECT TOP (1001) order_key FROM daily.order_suppressions WHERE owner_object_id=@owner;',signal)).recordset;
     if (hiddenThreads.length > 1000 || hiddenOrders.length > 1000) throw new ToolFailure('Suppression range exceeds limits.');
     const threadKeys = new Set(hiddenThreads.map((row) => row.thread_id)); const orderKeys = new Set(hiddenOrders.map((row) => row.order_key as string));
-    return { sources: views, waiting: items.filter((item) => item.type === 'thread' && !threadKeys.has(item.id)).map((item) => classifyGmailThread(item.content as Thread,this.now())).filter((item) => item !== null),
+    const waiting = items.filter((item) => item.type === 'thread')
+      .map((item) => classifyGmailThread(item.content as Thread,this.now())).filter((item) => item !== null);
+    if (!includeHidden) return { sources: views, waiting: waiting.filter(item => !threadKeys.has(item.thread.id)),
       orders: mergeOrders(items.filter((item) => item.type === 'order_update').map((item) => item.content as Order),orderKeys) };
+    const suppressions = await this.readSuppressions(transaction, signal);
+    return { sources: views,
+      waiting: waiting.map(item => ({ ...item, hidden: threadKeys.has(item.thread.id), suppressionKey: item.thread.id })),
+      orders: mergeOrders(items.filter((item) => item.type === 'order_update').map((item) => item.content as Order))
+        .map(order => ({ ...order, hidden: orderKeys.has(orderIdentityKey(order)), suppressionKey: orderIdentityKey(order) })),
+      suppressions };
     });
   }
   private target(view: SourceView, type: 'thread' | 'order', id: string): FeedItem {

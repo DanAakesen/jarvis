@@ -358,6 +358,38 @@ describe('one shared Daily read contract', () => {
     expect(await dailyQueryTool(f.service).execute(query, request(), signal())).toEqual(result);
     expect(Buffer.byteLength(JSON.stringify(result))).toBeLessThan(dailyResultByteLimit);
   });
+  it('keeps feed queries owner-browser-only and reports missing or uncovered snapshots as partial', async () => {
+    const f = fixture();
+    const feeds = {
+      queryAttention: vi.fn(async () => ({
+        items: [],
+        feedSources: [{ source: 'Gmail' as const, status: 'Missing' as const, capturedAt: null,
+          attemptedAt: null, error: 'not-configured' }],
+      })),
+      queryCalendar: vi.fn(async () => ({
+        items: [],
+        calendarRange: { from: '2026-10-01T00:00:00Z', to: '2026-10-03T00:00:00Z' },
+        feedSources: [{ source: 'GoogleCalendar' as const, status: 'Stale' as const, capturedAt: null,
+          attemptedAt: '2026-10-16T07:00:00Z', error: 'scope-denied',
+          range: null }],
+        rangeCovered: false,
+      })),
+    };
+    const service = new DailyQueryService(f.readers, () => Date.parse('2026-10-16T07:30:00Z'), feeds);
+    const attention = await service.query({ source: sources.attention }, request(), signal());
+    expect(attention).toMatchObject({ status: 'partial', items: [], feedSources: [{ error: 'not-configured' }] });
+    const calendar = await service.query({ source: sources.calendar, from: '2026-10-01T00:00:00Z', to: '2026-10-03T00:00:00Z' }, request(), signal());
+    expect(calendar).toMatchObject({ status: 'partial', items: [], rangeCovered: false, feedSources: [{ error: 'scope-denied' }] });
+    for (const identity of [
+      { principal: undefined, agentPrincipal: { kind: 'jarvis-agent' } },
+      { principal: undefined, dailyConnectorPrincipal: { kind: 'jarvis-daily-connector' } },
+    ]) {
+      await expect(service.query({ source: sources.attention }, request(identity), signal())).rejects.toThrow();
+    }
+    expect(feeds.queryAttention).toHaveBeenCalledTimes(1);
+    await expect(new DailyQueryService(f.readers).query({ source: sources.attention }, request(), signal()))
+      .rejects.toThrow('Daily attention feed is not configured');
+  });
   it('rejects foreign/service/ambiguous principals and malformed selectors before any read', async () => {
     const f = fixture();
     for (const extra of [

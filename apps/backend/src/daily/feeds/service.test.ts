@@ -52,14 +52,18 @@ function fixture(configured = true, now = () => at.getTime()) {
     { source: 'GoogleCalendar', status: 'Missing', capturedAt: null, attemptedAt: null, error: null, items: [] },
   ];
   const store = {
-    attention: vi.fn(async () => ({ sources, waiting: [{ thread, bucket: 'waiting_for_you' as const, label: '50h' }], orders: [] })),
+    attention: vi.fn(async (_signal: AbortSignal, includeHidden = false) => ({
+      sources, waiting: [{ thread, bucket: 'waiting_for_you' as const, label: '50h',
+        ...(includeHidden ? { hidden: false, suppressionKey: thread.id } : {}) }], orders: [],
+      ...(includeHidden ? { suppressions: [suppression] } : {}),
+    })),
     sources: vi.fn(async () => sources), completed: vi.fn(async () => false),
     suppressions: vi.fn(async () => [suppression]),
     suppression: vi.fn(async (type: 'thread' | 'order', key: string) => type === suppression.type && key === suppression.key ? suppression : null),
     suppressionTarget: vi.fn(async () => structuredClone(target)),
     suppress: vi.fn(async (_type: 'thread' | 'order', _id: string, intent: boolean, operationSignal: AbortSignal, revision?: string) => {
       operationSignal.throwIfAborted(); expect(intent).toBe(true);
-      if (revision !== feedRevision(target)) throw new ToolRefusal('The reviewed attention item changed.');
+      if (revision !== undefined && revision !== feedRevision(target)) throw new ToolRefusal('The reviewed attention item changed.');
       return true;
     }),
     clear: vi.fn(async () => true),
@@ -74,7 +78,8 @@ function fixture(configured = true, now = () => at.getTime()) {
       getSession: vi.fn(async () => session), getHistory: vi.fn(async () => ({ messages: [message] })),
     }, awayModeStore: { read: vi.fn(async () => mode) } } } as unknown as FastifyRequest;
   const storeFor = vi.fn(() => store);
-  const tool = dailyFeedTool(new DailyFeedService(storeFor, configured ? { refresh } : undefined, now));
+  const service = new DailyFeedService(storeFor, configured ? { refresh } : undefined, now);
+  const tool = dailyFeedTool(service);
   const begin = async (input: unknown, operationSignal = signal()) => {
     const pending = tool.execute(input, request, operationSignal);
     const settled = pending.then(value => ({ value, error: null }), error => ({ value: null, error: error as unknown }));
@@ -87,7 +92,7 @@ function fixture(configured = true, now = () => at.getTime()) {
       return result.value;
     }, settled };
   };
-  return { tool, request, store, sources, storeFor, refresh, notifications, notificationStore, mode, session, begin };
+  return { tool, service, request, store, sources, storeFor, refresh, notifications, notificationStore, mode, session, begin };
 }
 describe('inactive shared Daily feed workflow', () => {
   it('reads retained attention with separate freshness, no provider calls or approval, and no invented calendar range', async () => {
@@ -117,6 +122,44 @@ describe('inactive shared Daily feed workflow', () => {
       events: expect.arrayContaining([expect.objectContaining({ start: { dateTime: '2026-10-17T10:00:00+02:00', timeZone: 'Europe/Copenhagen' } })]),
       conflicts: { status: 'available', pairs: [['cal:one', 'cal:two']], truncated: false },
     });
+  });
+  it('projects owner attention with business-day age and explicit hidden state, and filters calendar reads to a covered range', async () => {
+    const f = fixture();
+    const attention = await f.service.queryAttention(f.request, signal());
+    expect(attention).toMatchObject({
+      items: [{ type: 'thread', bucket: 'waiting_for_you', ageBusinessDays: 1, hidden: false, suppressionKey: thread.id },
+        { type: 'suppression', itemType: 'order', hidden: true, suppressionKey: suppression.key }],
+      feedSources: [{ source: 'Gmail', status: 'Stale', error: 'semantic-unavailable' }],
+    });
+    const event = (id: string, start: string, end: string): FeedItem => ({
+      type: 'event', id, title: 'Synthetic calendar item', content: { id, title: 'Synthetic calendar item',
+        calendarId: 'synthetic-calendar', startsAt: start, endsAt: end, allDay: false },
+    });
+    f.sources[1] = { source: 'GoogleCalendar', status: 'Current', capturedAt: at.toISOString(),
+      attemptedAt: at.toISOString(), error: null, range, items: [
+        event('synthetic-calendar:inside', '2026-10-17T10:00:00Z', '2026-10-17T11:00:00Z'),
+        event('synthetic-calendar:outside', '2026-10-18T10:00:00Z', '2026-10-18T11:00:00Z'),
+      ] };
+    const calendar = await f.service.queryCalendar(f.request, range, signal());
+    expect(calendar).toMatchObject({
+      rangeCovered: true, calendarRange: range,
+      items: [{ id: 'synthetic-calendar:inside' }],
+      feedSources: [{ source: 'GoogleCalendar', status: 'Current', range }],
+    });
+  });
+  it('derives browser action intent server-side and denies model identities before storage work', async () => {
+    const f = fixture();
+    await expect(f.service.refreshFromBrowser(f.request, range, signal())).resolves.toMatchObject({ state: 'completed' });
+    expect(f.refresh).toHaveBeenCalledWith(f.request, expect.stringMatching(/^daily-browser:[\da-f-]+$/u), range, true, expect.any(AbortSignal));
+    await expect(f.service.hideThread(f.request, thread.id, signal())).resolves.toBe(true);
+    await expect(f.service.receiveOrder(f.request, 'synthetic-order', signal())).resolves.toBe(true);
+    await expect(f.service.restore(f.request, 'thread', thread.id, signal())).resolves.toBe(true);
+    expect(f.store.suppress).toHaveBeenCalledWith('thread', thread.id, true, expect.any(AbortSignal));
+    expect(f.store.suppress).toHaveBeenCalledWith('order', 'synthetic-order', true, expect.any(AbortSignal));
+    expect(f.store.clear).toHaveBeenCalledWith('thread', thread.id, true, expect.any(AbortSignal));
+    const agent = { ...f.request, principal: undefined, agentPrincipal: { kind: 'jarvis-agent' } } as FastifyRequest;
+    await expect(f.service.hideThread(agent, thread.id, signal())).rejects.toThrow();
+    expect(f.store.suppress).toHaveBeenCalledTimes(2);
   });
   it('uses actual one-time browser approval, freezes selectors, and binds the stored target', async () => {
     const f = fixture(); const input = { operation: 'dismiss_thread', id: thread.id };

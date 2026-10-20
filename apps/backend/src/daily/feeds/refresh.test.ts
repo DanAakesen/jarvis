@@ -61,4 +61,22 @@ describe('owner-bound bounded manual refresh lifecycle', () => {
     await runner.refresh(request,'run',range,true,signal());
     expect(ingest.mock.calls[0]?.[0]).toMatchObject({ sources: [{ source: 'Gmail',status: 'ok' },{ source: 'GoogleCalendar',status: 'error',errorCode: 'scope-denied' }] });
   });
+  it('enforces the existing per-owner manual refresh cooldown', async () => {
+    let clock = Date.parse(now);
+    const calendar = vi.fn(async () => ({ status: 'complete', freshness: 'fresh', events: [], issues: [] }));
+    const mail = vi.fn(async () => ({ status: 'ok', threads: [], orders: [] }));
+    const ingest = vi.fn(async () => undefined);
+    const runner = new DailyFeedRefresh(
+      { refresh: calendar } as unknown as DailyCalendarFeed,
+      { read: mail } as unknown as DailyGmailFeed,
+      () => ({ completed: async () => false, ingest }) as unknown as DailyFeedStore,
+      () => clock,
+    );
+    expect(await runner.refresh(request, 'first', range, true, signal())).toMatchObject({ state: 'completed' });
+    expect(await runner.refresh(request, 'too-soon', range, true, signal())).toMatchObject({ state: 'limited' });
+    expect(calendar).toHaveBeenCalledOnce();
+    clock += 30_000;
+    expect(await runner.refresh(request, 'after-cooldown', range, true, signal())).toMatchObject({ state: 'completed' });
+    expect(calendar).toHaveBeenCalledTimes(2);
+  });
 });
