@@ -1753,7 +1753,12 @@ look; loading, empty, error and "Not set" states apply to served sources only. E
 card keeps a freshness line and a "Partial history" note when pages are missing. No
 new tokens or colours: the arc uses the focus token on a surface-coloured track, drawn
 dashed and muted when no target is known, and forced colours map both to system
-colours. The rings do not animate.
+colours. The rings do not animate. When the eaten total is a lower bound, the calories
+ring says so in words: the centre reads "≤ 500" or "≥ 300", the caption "kcal left, at
+most" or "kcal over, at least", and the accessible summary says "At most" or "At least"
+with "eaten is a lower bound". The cards follow the Copenhagen date: it advances at
+midnight, on focus and when the page becomes visible, and every card then asks for the
+new day.
 
 Checked the section shell in isolated Chromium against only synthetic capability
 and query responses at 320, 390×844, 768 and 1440×900 in light and dark, with

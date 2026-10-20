@@ -55,7 +55,7 @@ function card(title: string) {
   return within(article);
 }
 
-afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.useRealTimers(); });
 
 describe('Today cards', () => {
   it('shows session counts in rings and says the weekly targets are not served', async () => {
@@ -93,6 +93,57 @@ describe('Today cards', () => {
     render(view());
     await waitFor(() => expect(card('Meals today').getByText('No meals logged today')).toBeTruthy());
     expect(card('Protein today').getByText('No meals logged today')).toBeTruthy();
+  });
+
+  it('says so when no workouts were logged this week', async () => {
+    stub({ ...rows, [sources.workouts]: [] });
+    render(view());
+    await waitFor(() => expect(card('Training this week').getByText('No workouts this week')).toBeTruthy());
+    expect(card('Training this week').queryByRole('img')).toBeNull();
+  });
+
+  it('turns calories left into an upper bound, and over into a lower bound, when eaten is a lower bound', async () => {
+    const day = rows[sources.days]![0]!;
+    stub({ ...rows, [sources.days]: [{ ...day, energy_kcal: 1200, partial_nutrients: ['energy_kcal'] }] });
+    const first = render(view());
+    await waitFor(() => expect(card('Calories left today').getByRole('img', {
+      name: 'Calories: At most 500 kcal left of 1,700 kcal, eaten is a lower bound',
+    })).toBeTruthy());
+    expect(card('Calories left today').getByText('≤ 500')).toBeTruthy();
+    expect(card('Calories left today').getByText('kcal left, at most')).toBeTruthy();
+    first.unmount();
+    stub({ ...rows, [sources.days]: [{ ...day, energy_kcal: 2000, partial_nutrients: ['energy_kcal'] }] });
+    render(view());
+    await waitFor(() => expect(card('Calories left today').getByRole('img', {
+      name: 'Calories: At least 300 kcal over of 1,700 kcal, eaten is a lower bound',
+    })).toBeTruthy());
+    expect(card('Calories left today').getByText('≥ 300')).toBeTruthy();
+    expect(card('Calories left today').getByText('kcal over, at least')).toBeTruthy();
+  });
+
+  it('asks for the new day, not the old one, after Copenhagen midnight passes while mounted', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-18T10:00:00Z'));
+    const asked: { source: string; startDate: string; endDate: string }[] = [];
+    vi.stubGlobal('fetch', vi.fn(async (url: string | URL, init?: RequestInit) => {
+      if (String(url).endsWith('/daily/nutrition-targets')) return jsonResponse(targetReply);
+      const query: unknown = JSON.parse(String(init?.body));
+      if (!isDailyQuery(query)) throw new Error('Invalid synthetic query');
+      const { startDate, endDate } = query as { startDate: string; endDate: string };
+      asked.push({ source: query.source, startDate, endDate });
+      return jsonResponse(dailyFixture(query, []));
+    }));
+    render(view());
+    await waitFor(() => expect(asked.some(q => q.source === sources.meals && q.endDate === '2026-10-18')).toBe(true));
+    expect(asked.find(q => q.source === sources.workouts)?.startDate).toBe('2026-10-12');
+    vi.setSystemTime(new Date('2026-10-19T10:00:00Z'));
+    window.dispatchEvent(new Event('focus'));
+    await waitFor(() => {
+      for (const source of [sources.days, sources.meals]) {
+        expect(asked.some(q => q.source === source && q.startDate === '2026-10-19' && q.endDate === '2026-10-19')).toBe(true);
+      }
+      expect(asked.some(q => q.source === sources.workouts && q.startDate === '2026-10-19')).toBe(true);
+    });
   });
 
   it('marks every card unavailable when its source is not served', () => {

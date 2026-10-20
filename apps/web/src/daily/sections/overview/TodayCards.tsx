@@ -7,6 +7,7 @@ import { DailyState } from '../../ui/DailyState';
 import { DailyUnavailable } from '../../ui/DailyUnavailable';
 import { FreshnessLine } from '../../ui/FreshnessLine';
 import { Ring } from '../../ui/Ring';
+import { copenhagenDate } from '../../period';
 import { formatClockTime, formatNumber } from '../../ui/formatters';
 import { useDailyPages, type DailyPages } from '../../ui/useDailyPages';
 import { deleted, numeric, targetBaseline, text, type Row as NutritionRow } from '../nutrition/totals';
@@ -19,6 +20,27 @@ type Shared = {
   refreshVersion: number;
   today: string;
 };
+
+// Midday UTC of a calendar date is the same Copenhagen date, so it is safe to derive the periods from it.
+const noonOf = (date: string) => new Date(`${date}T12:00:00Z`);
+
+// The Copenhagen date, advanced at midnight, on focus and on becoming visible. Queries are keyed by it, so every
+// refresh after a rollover asks for the new day instead of re-reading the old one under today's label.
+function useToday() {
+  const [today, setToday] = useState(() => copenhagenDate());
+  useEffect(() => {
+    const advance = () => setToday(copenhagenDate());
+    const timer = setInterval(advance, 60_000);
+    window.addEventListener('focus', advance);
+    document.addEventListener('visibilitychange', advance);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener('focus', advance);
+      document.removeEventListener('visibilitychange', advance);
+    };
+  }, []);
+  return today;
+}
 
 function TodayCard({ title, section, pages, empty, emptyMessage, className = '', children }: {
   title: string;
@@ -53,8 +75,8 @@ function UnavailableCard({ title, children, className = '' }: { title: string; c
   </article>;
 }
 
-function TrainingCard({ backendUrl, getAccessToken, refreshVersion }: Shared) {
-  const period = overviewPeriods();
+function TrainingCard({ backendUrl, getAccessToken, refreshVersion, today }: Shared) {
+  const period = overviewPeriods(noonOf(today));
   const pages = useDailyPages(backendUrl, getAccessToken, {
     source: sources.workouts, ...period.thisWeek, limit: 200,
   }, refreshVersion, { autoLoad: true, maxPages: 5 });
@@ -64,7 +86,7 @@ function TrainingCard({ backendUrl, getAccessToken, refreshVersion }: Shared) {
     { label: 'Running', count: counts.running },
     { label: 'Other', count: counts.other },
   ];
-  return <TodayCard title="Training this week" section="workouts" pages={pages} empty={false}
+  return <TodayCard title="Training this week" section="workouts" pages={pages} empty={pages.items.length === 0}
     emptyMessage="No workouts this week" className="daily-today-training">
     <div className="daily-today-rings">
       {rings.map(ring => <Ring key={ring.label} label={ring.label} value={ring.count} target={null}
@@ -120,6 +142,10 @@ function NutritionCards(shared: Shared) {
   const protein = values?.protein.value ?? null;
   const energy = values?.energy.value ?? null;
   const left = baseline !== null && energy !== null ? baseline - energy : null;
+  // A lower-bound eaten total makes "left" an upper bound and "over" a lower bound, so the card says so in words too.
+  const bound = partial('energy_kcal');
+  const leftKind = left === null ? '' : left >= 0 ? 'left' : 'over';
+  const leftBound = !bound || left === null ? '' : left >= 0 ? 'at most' : 'at least';
   return <>
     <TodayCard title="Protein today" section="nutrition" pages={pages} empty={!latest} emptyMessage="No meals logged today">
       <Ring label="Protein" value={protein} target={proteinTarget}
@@ -130,11 +156,12 @@ function NutritionCards(shared: Shared) {
     </TodayCard>
     <TodayCard title="Calories left today" section="nutrition" pages={pages} empty={!latest} emptyMessage="No meals logged today">
       <Ring label="Calories" value={energy} target={baseline}
-        centre={left === null ? (energy === null ? 'Unknown' : `${formatNumber(energy)} kcal`) : formatNumber(Math.abs(left))}
-        caption={left === null ? undefined : left >= 0 ? 'kcal left' : 'kcal over'}
-        summary={left === null ? (energy === null ? 'unknown' : `${formatNumber(energy)} kcal eaten, no baseline set`)
-          : `${formatNumber(Math.abs(left))} kcal ${left >= 0 ? 'left' : 'over'} of ${formatNumber(baseline)} kcal`} />
-      {left !== null && <p className="daily-meta">Resting burn minus deficit, before activity{partial('energy_kcal') ? '. Eaten is a lower bound' : ''}</p>}
+        centre={left === null ? (energy === null ? 'Unknown' : `${formatNumber(energy)} kcal`)
+          : `${leftBound === 'at most' ? '≤ ' : leftBound === 'at least' ? '≥ ' : ''}${formatNumber(Math.abs(left))}`}
+        caption={left === null ? undefined : `kcal ${leftKind}${leftBound ? `, ${leftBound}` : ''}`}
+        summary={left === null ? (energy === null ? 'unknown' : `${formatNumber(energy)} kcal eaten${bound ? ' (lower bound)' : ''}, no baseline set`)
+          : `${leftBound ? `${leftBound === 'at most' ? 'At most' : 'At least'} ` : ''}${formatNumber(Math.abs(left))} kcal ${leftKind} of ${formatNumber(baseline)} kcal${bound ? ', eaten is a lower bound' : ''}`} />
+      {left !== null && <p className="daily-meta">Resting burn minus deficit, before activity{bound ? '. Eaten is a lower bound' : ''}</p>}
       <TargetNote targets={targets.current} retry={targets.retry} missing={state !== null && baseline === null} />
     </TodayCard>
   </>;
@@ -169,7 +196,8 @@ function MealStrip({ backendUrl, getAccessToken, refreshVersion, today }: Shared
 export function TodayCards({ backendUrl, getAccessToken, refreshVersion, available }: Omit<Shared, 'today'> & {
   available: readonly DailySourceId[];
 }) {
-  const shared: Shared = { backendUrl, getAccessToken, refreshVersion, today: overviewPeriods().sevenDays.endDate };
+  const today = useToday();
+  const shared: Shared = { backendUrl, getAccessToken, refreshVersion, today };
   return <section className="daily-today" aria-label="Today at a glance">
     <div className="daily-today-grid">
       {available.includes(sources.workouts) ? <TrainingCard {...shared} />
