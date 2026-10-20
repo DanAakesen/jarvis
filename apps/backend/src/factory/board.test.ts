@@ -681,7 +681,7 @@ describe('Factory board', () => {
     ['pagination', 'result_limit'],
   ] as const)('reports the bounded source %s failure', async (failure, reason) => {
     const reader = createGitHubFactoryBoardReader(async (input) => {
-      if (failure === 'size') return new Response('private-response', { headers: { 'content-length': String(1024 * 1024 + 1) } });
+      if (failure === 'size') return new Response('private-response', { headers: { 'content-length': String(4 * 1024 * 1024 + 1) } });
       if (failure === 'json') return new Response('private-invalid-json');
       const url = String(input);
       return new Response('[]', { headers: { link: pageLink(url, 1, 11) } });
@@ -689,6 +689,67 @@ describe('Factory board', () => {
     await expect(reader.read(project.repo, 'reader-token', timestamp)).rejects.toMatchObject({
       stage: 'source', reason,
     });
+  });
+
+  it('serves a complete board when a 100-item closed list page exceeds 1 MiB', async () => {
+    const repository = 'sample-owner/sample-repo';
+    const closedAt = new Date(Date.now() - 1_000).toISOString();
+    const issues = Array.from({ length: 100 }, (_, index) => ({
+      number: index + 1, title: `Synthetic issue ${index + 1}`, body: 'x'.repeat(12 * 1024),
+      state: 'closed', closed_at: closedAt,
+      html_url: `https://github.com/${repository}/issues/${index + 1}`,
+      updated_at: timestamp, labels: [], issue_dependencies_summary: { blocked_by: 0 },
+    }));
+    const page = JSON.stringify(issues);
+    expect(Buffer.byteLength(page)).toBeGreaterThan(1024 * 1024);
+    expect(Buffer.byteLength(page)).toBeLessThan(4 * 1024 * 1024);
+    const fetchImpl = vi.fn(async (input: string | URL | Request) => {
+      const url = new URL(String(input));
+      expect(url.pathname.startsWith(`/repos/${repository}/`)).toBe(true);
+      expect(url.searchParams.get('per_page')).toBe('100');
+      return new Response(url.searchParams.get('state') === 'closed' ? page : '[]');
+    });
+    const reader = createGitHubFactoryBoardReader(fetchImpl);
+    const { app, projectStore } = fixture(vi.fn(reader.read));
+    projectStore.list = vi.fn(async () => [{ ...project, repo: repository }]);
+
+    const response = await app.inject({ url: '/factory/board?project=42', headers });
+
+    expect(response.statusCode).toBe(200);
+    const board = response.json<FactoryBoard>();
+    expect(isFactoryBoard(board)).toBe(true);
+    expect(board.stale).toBe(false);
+    expect(board.columns.find(({ id }) => id === 'done')?.cards.map(({ issue }) => issue.number))
+      .toEqual(issues.map(({ number }) => number).reverse());
+    expect(fetchImpl).toHaveBeenCalledTimes(3);
+  });
+
+  it.each([false, true])('accepts exactly 4 MiB with content-length present: %s', async (declaredLength) => {
+    const page = '[]'.padEnd(4 * 1024 * 1024);
+    const reader = createGitHubFactoryBoardReader(async () => new Response(page, {
+      headers: declaredLength ? { 'content-length': String(Buffer.byteLength(page)) } : {},
+    }));
+
+    await expect(reader.read('sample-owner/sample-repo', 'reader-token', timestamp))
+      .resolves.toEqual({ issues: [], pullRequests: [] });
+  });
+
+  it.each([undefined, '2'])('cancels streamed responses above 4 MiB with content-length %s', async (length) => {
+    const cancel = vi.fn();
+    const reader = createGitHubFactoryBoardReader(async (input) => {
+      if (!String(input).includes('state=closed')) return new Response('[]');
+      let chunks = 0;
+      return new Response(new ReadableStream<Uint8Array>({
+        pull(controller) {
+          controller.enqueue(Buffer.from(chunks++ === 0 ? '[]'.padEnd(4 * 1024 * 1024) : ' '));
+        },
+        cancel,
+      }), { headers: length === undefined ? {} : { 'content-length': length } });
+    });
+
+    await expect(reader.read('sample-owner/sample-repo', 'reader-token', timestamp))
+      .rejects.toMatchObject({ stage: 'source', reason: 'response_too_large' });
+    expect(cancel).toHaveBeenCalledOnce();
   });
 
   it('rejects missing projects and limits GitHub reads to the configured repository', async () => {
