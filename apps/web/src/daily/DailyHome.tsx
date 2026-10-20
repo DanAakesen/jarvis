@@ -1,8 +1,9 @@
 import { Suspense, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import type { DailySourceId } from '@jarvis/contracts';
+import { dailyQuerySources, type DailySourceId } from '@jarvis/contracts';
 import type { AreaProps } from '../areas';
 import { Loader } from '../Loader';
+import { DailyFreshnessPill } from './DailyFreshnessPill';
 import { DailyPeriodControl } from './DailyPeriodControl';
 import { initialDailyPeriodForShell } from './period';
 import { DailyRefreshContext } from './refresh';
@@ -147,6 +148,8 @@ export function DailyHome({ backendUrl, getAccessToken }: AreaProps) {
       <div>
         <h1 id="daily-heading" tabIndex={-1}>Daily</h1>
       </div>
+      <DailyFreshnessPill backendUrl={backendUrl} getAccessToken={getAccessToken} refreshVersion={refreshVersion}
+        enabled={sources.includes(dailyQuerySources.sync)} />
     </header>
     <nav ref={sectionNavigation} className="daily-section-nav" aria-label="Daily sections"
       data-overflow-start={sectionTabsEdges.start || undefined} data-overflow-end={sectionTabsEdges.end || undefined}>

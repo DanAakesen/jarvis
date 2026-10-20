@@ -3,7 +3,10 @@ import { dailyPeriodFor, initialDailyPeriodForShell, isDailyPeriod, type DailyPe
 import type { DailyPeriod } from './sections/types';
 
 const presets: { id: DailyPeriodPreset; label: string }[] = [
+  { id: 'today', label: 'Today' },
+  { id: 'yesterday', label: 'Yesterday' },
   { id: '7', label: 'Last 7 days' },
+  { id: '14', label: 'Last 14 days' },
   { id: '30', label: 'Last 30 days' },
   { id: '90', label: 'Last 90 days' },
   { id: 'year', label: 'This year' },

@@ -166,6 +166,47 @@
   font: inherit;
 }
 .daily-period-control > .error-text { flex-basis: 100%; margin: 0; }
+.daily-freshness-pill { position: relative; max-width: 100%; }
+.daily-page .daily-freshness-trigger {
+  display: inline-flex;
+  min-height: var(--control-size-inset);
+  max-width: 100%;
+  align-items: center;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--control-rule);
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: var(--type-small);
+  cursor: pointer;
+}
+.daily-page .daily-freshness-trigger:hover { background: var(--glass-hover); }
+.daily-page .daily-freshness-trigger:active { background: var(--glass-pressed); }
+.daily-page .daily-freshness-trigger[aria-expanded="true"] { background: var(--state-selected-bg); color: var(--state-selected-fg); }
+.daily-page .daily-freshness-trigger[data-state="error"] { font-weight: 650; }
+.daily-page .daily-freshness-trigger:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.daily-freshness-panel {
+  position: absolute;
+  z-index: var(--z-menu);
+  top: calc(100% + var(--space-2));
+  right: 0;
+  display: grid;
+  width: min(22rem, calc(100vw - var(--space-5)));
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid var(--control-rule);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+}
+.daily-freshness-panel p { margin: 0; }
+.daily-freshness-panel .daily-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+/* On narrow screens the panel anchors to the header and spans its width, so it cannot leave the viewport wherever the pill wraps. */
+@media (max-width: 640px) {
+  .daily-shell > .daily-heading { position: relative; }
+  .daily-freshness-pill { position: static; }
+  .daily-freshness-panel { right: 0; left: 0; width: auto; }
+}
 .daily-embedded-actions { margin-bottom: var(--space-3); }
 @media (max-width: 480px) {
   .daily-section-tabs { gap: 0; }
