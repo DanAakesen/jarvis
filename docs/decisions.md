@@ -10,6 +10,31 @@ rule now reads its border colour from `--field-rim`, which the focus rule sets t
 dropdown's picker icon is drawn as the slim chevron the closed selects had, not
 the browser's solid triangle.
 
+## P14-41 — Freshness pill reports the last processed upload (20 October 2026; #1116)
+
+The pill's primary label is the newest `accepted_evidence_at` across the served
+sync feeds, worded as an upload time. The phone heartbeat is written only by the
+separate Shortcuts route, so an uploader that uses the ingest route never has one
+and the pill wrongly read "No phone contact yet" while uploads were processed. The
+heartbeat is now an optional details row. Waiting or processing uploads with no
+processed time read "Upload being processed"; "No uploads yet" appears only with
+neither. The served sync item now includes `inbox.processing` (previously
+dropped by the projection) so the processing state is real rather than inferred.
+No new source is read.
+
+Refs #1116
+
+## P14-42 — Expose retained health upload usage in Daily sync (20 October 2026; #1120)
+
+Add owner-scoped `retained_bytes`, `byte_limit` and `row_limit` to the existing
+sync inbox and shared query projection. Sum stored byte counts for every
+retained row, independent of processing status, and reuse the upload store's
+exported limits. Empty stores still return zero bytes and both limits.
+This is read-only capacity visibility; ingest, processing, retention and the
+web UI remain unchanged. Cleanup or compaction requires a separate owner decision.
+
+Refs #1120
+
 ## P14-32 — One subtle focus style for entry fields (20 October 2026; #1085)
 
 The owner rejected the 3px outline on fields. All text entry fields now use one

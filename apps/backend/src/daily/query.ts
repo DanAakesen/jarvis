@@ -27,7 +27,7 @@ export interface DailyReaders {
   briefs(request: FastifyRequest): Pick<DailyBriefReadModel, 'history' | 'detail'>;
 }
 const feedFields = ['feed_kind', 'accepted_evidence_at', 'processed_committed_at', 'metric_rows', 'sleep_rows', 'workout_rows', 'heart_rate_minutes'];
-const inboxFields = ['retained', 'pending', 'quarantined', 'last_accepted_at', 'last_processed_upload_at'];
+const inboxFields = ['retained', 'retained_bytes', 'byte_limit', 'row_limit', 'pending', 'processing', 'quarantined', 'last_accepted_at', 'last_processed_upload_at'];
 function latest(values: unknown[]): string | null {
   const times = values.filter(value => value !== null && value !== undefined).map(value => {
     if (!(typeof value === 'string' || value instanceof Date)) throw new ToolFailure('Daily timestamps are unavailable.');

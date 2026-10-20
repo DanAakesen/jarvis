@@ -6,7 +6,8 @@ Every text entry field (input, select, textarea, `.form-control` and the Notes,
 Folio and Tasks search bars) shares one focus treatment: no outline, a thin
 border that shifts to a tint of `--focus` (`--field-focus-rule`) and a short soft
 light underneath (`--field-focus-glow`), echoing the composer. Fields in shared
-containers read the tint through `--field-rim`, so it applies at any specificity. A zero-specificity
+containers read the tint through `--field-rim`, so it applies at any specificity.
+A zero-specificity
 catch-all applies it to any field not named in a shared container. Search bars
 apply it to the whole bar. Invalid fields keep their error border. Forced colours
 fall back to a 2px `Highlight` outline. Increased-contrast mode makes the tint
@@ -1728,10 +1729,13 @@ sleep remain absent until their follow-up sections exist.
 
 20 October 2026 (P14-41 shell): the Daily page heading row carries a small
 freshness pill beside the single `Daily` headline. It reads only the served sync
-source and says "Phone contact" with the last-contact time, "No phone contact yet",
-"Checking sync" or "Sync status unavailable". When a refresh fails but earlier data
+source and says "Last upload" with the newest processed upload time, "Upload being
+processed" (uploads waiting or processing, none processed yet), "No uploads yet",
+"Checking sync" or "Sync status unavailable". The phone heartbeat is not the label: it
+is an optional "Phone last contacted" row in the details panel, shown only when one
+exists. When a refresh fails but earlier data
 is kept, it adds ", refresh failed" to the label (bolder text, never colour alone).
-It opens a small details panel (last contact and upload counts, plus Check again)
+It opens a small details panel (last upload, optional phone contact and upload counts, plus Check again)
 that Escape (from anywhere on the page) and an outside press close. On screens up
 to 640 px the panel anchors to the header and spans its width. It is a 36 px
 bordered pill using existing surface tokens; it is

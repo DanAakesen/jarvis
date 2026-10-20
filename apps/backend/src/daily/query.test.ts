@@ -10,6 +10,7 @@ import { createDailyChanges } from './revisions.js';
 import { createEventHub } from '../core/event-hub.js';
 import type { NowFeedUpdate } from '../core/now.js';
 import { canonicalJson } from './nutrition/model.js';
+import { healthInboxByteLimit, healthInboxRowLimit } from './health-upload/sql-buffer.js';
 
 const owner = '11111111-1111-4111-8111-111111111111';
 const request = (extra = {}) => ({ server: { ownerObjectId: owner }, principal: { objectId: owner }, ...extra }) as FastifyRequest;
@@ -344,6 +345,18 @@ describe('one shared Daily read contract', () => {
     f.sync.mockRejectedValue(new Error('synthetic-secret-and-health-record'));
     await expect(f.service.query({ source: sources.sync }, request(), signal())).rejects.toThrow('Daily data is unavailable');
     await expect(f.service.query(input, request(), signal())).rejects.not.toThrow('synthetic-secret');
+  });
+  it.each([0, 1234])('projects numeric sync inbox usage of %i bytes without exposing payloads', async retainedBytes => {
+    const f = fixture();
+    const inbox = { retained: retainedBytes ? 2 : 0, retained_bytes: retainedBytes,
+      byte_limit: healthInboxByteLimit, row_limit: healthInboxRowLimit, pending: retainedBytes ? 1 : 0,
+      processing: retainedBytes ? 1 : 0, quarantined: 0, last_accepted_at: null, last_processed_upload_at: null };
+    f.sync.mockResolvedValue({ feeds: [], heartbeat: null, inbox: { ...inbox, raw_bytes: 'synthetic-payload', owner_object_id: owner } });
+    const query = { source: sources.sync };
+    const result = await f.service.query(query, request(), signal());
+    expect(result.items).toEqual([{ feeds: [], heartbeat: null, inbox }]);
+    expect(await dailyQueryTool(f.service).execute(query, request(), signal())).toEqual(result);
+    expect(Buffer.byteLength(JSON.stringify(result))).toBeLessThan(dailyResultByteLimit);
   });
   it('rejects foreign/service/ambiguous principals and malformed selectors before any read', async () => {
     const f = fixture();

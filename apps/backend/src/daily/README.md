@@ -18,6 +18,14 @@ Clients that do not request a supported version receive version 1.
   meals. Totals sum recorded values; null totals are unknown, nutrients with
   some but not all meal values are marked partial lower bounds, and empty days
   are never fabricated.
+- `daily.sync` returns separate `feeds`, `heartbeat` and `inbox` evidence.
+  Inbox fields are `retained`, `retained_bytes`, `byte_limit`, `row_limit`,
+  `pending`, `processing`, `quarantined`, `last_accepted_at` and `last_processed_upload_at`.
+  `retained_bytes` sums stored `byte_count` across all retained rows for the
+  authenticated owner, regardless of processing status. It is zero for an
+  empty inbox. The numeric limits always report the shared upload store ceilings
+  (256 MiB and 10,000 rows), including when empty. These additive fields expose
+  no payload content and do not change ingest, processing or retention.
 
 Both new collection queries use keyset cursors and parameterized SQL bounded
 to `TOP(@limit + 1)`. Metric catalogues default to 100 (maximum 500) rows;
