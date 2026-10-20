@@ -50,6 +50,7 @@ describe('Daily SQL owner schema on real SQL Server', () => {
     expect(tables).toEqual(Object.keys(dailyTables).sort());
     expect((await pool.request().query('SELECT id FROM dbo.existing_jarvis_fixture')).recordset).toEqual([{ id: 7 }]);
     for (const table of Object.keys(dailyTables)) expect((await pool.request().query(`SELECT COUNT(*) AS count FROM daily.[${table}]`)).recordset[0].count).toBe(0);
+  });
 
   it('preserves global-source keys, null unknown metrics and measurements on recovery dates', async () => {
     await pool.request().input('owner', sql.UniqueIdentifier, owner).batch(`
