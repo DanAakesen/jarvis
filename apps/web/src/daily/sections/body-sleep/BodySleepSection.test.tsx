@@ -255,7 +255,7 @@ describe('Body & sleep section (synthetic records only)', () => {
     const chart = await screen.findByRole('img', { name: 'Body mass — kg' });
     chart.focus();
     fireEvent.keyDown(chart, { key: 'ArrowRight' });
-    expect([...document.querySelectorAll('.daily-chart-readout')][0]?.textContent).toContain('Daily value');
+    expect([...document.querySelectorAll('.daily-chart-readout')][0]?.textContent).toContain('Value per day');
   });
 
   it('opens a URL-linked night, focuses detail and returns focus to its row on close', async () => {
@@ -294,7 +294,7 @@ describe('Body & sleep section (synthetic records only)', () => {
     await screen.findByRole('img', { name: 'synthetic_other — count' });
     const unit = screen.getByRole('region', { name: 'synthetic_other — count' });
     fireEvent.click(within(unit).getByText('View data table'));
-    const scroll = within(unit).getByRole('region', { name: /recorded daily rows/ });
+    const scroll = within(unit).getByRole('region', { name: /recorded values by day/ });
     scroll.scrollLeft = 80;
     fireEvent.change(screen.getByLabelText('Search'), { target: { value: 'synthetic' } });
     pending = true;
@@ -312,7 +312,7 @@ describe('Body & sleep section (synthetic records only)', () => {
     let resolve!: (response: Response) => void;
     stub(() => new Promise(done => { resolve = done; }));
     mount({ sources: [sources.sleep] });
-    expect(screen.getByText('Loading Daily history')).toBeTruthy();
+    expect(screen.getByText('Loading Health history')).toBeTruthy();
     await waitFor(() => expect(resolve).toBeTypeOf('function'));
     await act(async () => { resolve(jsonResponse(dailyFixture({ source: sources.sleep, ...period }, []))); });
     expect(await screen.findByRole('link', { name: 'Health upload settings' })).toBeTruthy();

@@ -12,11 +12,11 @@ describe('DailyChart', () => {
   });
 
   it.each(['line', 'bar', 'area'] as const)('draws an accessible %s chart and provides a disclosed data table', kind => {
-    const { container } = render(<DailyChart kind={kind} name="Synthetic daily values" series={series} />);
-    expect(screen.getByRole('img', { name: 'Synthetic daily values' })).toBeTruthy();
-    expect(screen.queryByRole('table', { name: 'Synthetic daily values data' })).toBeNull();
+    const { container } = render(<DailyChart kind={kind} name="Synthetic values by day" series={series} />);
+    expect(screen.getByRole('img', { name: 'Synthetic values by day' })).toBeTruthy();
+    expect(screen.queryByRole('table', { name: 'Synthetic values by day data' })).toBeNull();
     fireEvent.click(screen.getByText('View data table'));
-    const table = screen.getByRole('table', { name: 'Synthetic daily values data' });
+    const table = screen.getByRole('table', { name: 'Synthetic values by day data' });
     expect(within(table).getByRole('columnheader', { name: 'Series' })).toBeTruthy();
     expect(within(table).getAllByRole('columnheader')).toHaveLength(5);
     expect(within(table).getAllByRole('rowheader', { name: 'Synthetic mass' })).toHaveLength(2);
@@ -46,7 +46,7 @@ describe('DailyChart', () => {
     }));
     const { container } = render(<DailyChart kind="line" name="Synthetic body mass"
       description="Readings no more than 3 calendar days apart are connected; wider gaps remain disconnected. Values are not interpolated."
-      maxGapDays={3} series={[{ name: 'Daily value', points }]} />);
+      maxGapDays={3} series={[{ name: 'Value per day', points }]} />);
     const figure = screen.getByRole('img', { name: 'Synthetic body mass' }).closest('figure')!;
     expect(within(figure).getByText(/Readings no more than 3 calendar days apart/u)).toBeTruthy();
     expect(within(figure).getAllByRole('listitem')).toHaveLength(1);
@@ -57,7 +57,7 @@ describe('DailyChart', () => {
 
   it('breaks the line across gaps wider than the stated calendar-day limit', () => {
     const { container } = render(<DailyChart kind="line" name="Synthetic sparse values" maxGapDays={3}
-      series={[{ name: 'Daily value', points: [
+      series={[{ name: 'Value per day', points: [
         { x: '2026-10-01', y: 10 }, { x: '2026-10-03', y: 12 }, { x: '2026-10-10', y: 14 },
       ] }]} />);
     expect(container.querySelectorAll('.daily-chart-line')).toHaveLength(1);

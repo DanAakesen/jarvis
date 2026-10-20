@@ -354,7 +354,7 @@ describe('actual HTTP -> private Blob -> pointer Queue on synthetic Azurite',() 
     const stored = await manifests(); expect(stored).toHaveLength(2);
     const records = await Promise.all(stored.map(async row => JSON.parse((await raw.getBlobClient(row.value.rawKey as string).downloadToBuffer()).toString())));
     expect(records).toEqual(expect.arrayContaining([
-      { shortcutName: 'Daily Overview heartbeat',checkedFeeds: ['metrics','workouts'] },
+      { shortcutName: 'Health Overview heartbeat',checkedFeeds: ['metrics','workouts'] },
       { shortcutName: 'Synthetic shortcut marker',checkedFeeds: ['metrics','workouts'] },
     ]));
     for (const item of (await queue.peekMessages({ numberOfMessages: 32 })).peekedMessageItems) {

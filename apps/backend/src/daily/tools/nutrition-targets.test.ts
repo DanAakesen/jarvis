@@ -205,7 +205,7 @@ describe('daily_nutrition_targets set_targets', () => {
     expect(kind).toBe('other');
     expect(summary).toContain('Resting energy burn: 1750 kcal → 1800 kcal');
     expect(summary).toContain('Protein target: not set → 110 g');
-    expect(summary).not.toContain('Daily deficit');
+    expect(summary).not.toContain('Per-day deficit');
     expect(summary).toContain('Nothing has changed yet.');
     expect(summary.length).toBeLessThanOrEqual(4000);
     expect(await review.resolve()).toMatchObject({
@@ -219,7 +219,7 @@ describe('daily_nutrition_targets set_targets', () => {
   it('shows a clear as a move to not set and deletes only that target on approval', async () => {
     const f = fixture(synthetic);
     const review = await f.begin({ operation: 'set_targets', targets: { deficitKcal: null } });
-    expect(f.runConfirmed.mock.calls[0]![1]).toContain('Daily deficit: 350 kcal → not set');
+    expect(f.runConfirmed.mock.calls[0]![1]).toContain('Per-day deficit: 350 kcal → not set');
     expect(await review.resolve()).toMatchObject({
       status: 'committed', changed: ['deficitKcal'], missing: ['deficitKcal'], targets: { restingKcal: 1750, deficitKcal: null, proteinGrams: 110 },
     });

@@ -84,7 +84,7 @@ type Pending = z.infer<typeof pendingSchema>;
 type Responses = Parameters<typeof inputResponse>[0];
 
 function response(value: Record<string, unknown>): CallToolResult {
-  if (Buffer.byteLength(JSON.stringify(value)) > dailyResultByteLimit) throw new ToolRefusal('Nutrition response exceeds the shared Daily limit. No complete result is available.');
+  if (Buffer.byteLength(JSON.stringify(value)) > dailyResultByteLimit) throw new ToolRefusal('Nutrition response exceeds the shared Health limit. No complete result is available.');
   return { content: [{ type: 'text', text: JSON.stringify(value) }], structuredContent: value };
 }
 function savedReceipt(row: Record<string, unknown>, operation: string, source: 'favorite' | 'plan'): CallToolResult {
@@ -247,7 +247,7 @@ export function dailyMcpRoutes(query: Pick<DailyQueryService, 'query'>, options:
                 provenance: { store: 'daily-sql', detail: 'retained-record' },
                 freshness: { observedAt: new Date(readContext.requestTime).toISOString(), staleness: 'unknown' },
               };
-              if (Buffer.byteLength(JSON.stringify(result)) > dailyResultByteLimit) throw new ToolRefusal('Saved food exceeds the shared Daily response limit. No complete result is available.');
+              if (Buffer.byteLength(JSON.stringify(result)) > dailyResultByteLimit) throw new ToolRefusal('Saved food exceeds the shared Health response limit. No complete result is available.');
               return response(result);
             }
             if (input.components === undefined) throw new ToolRefusal('Supply either savedName or components for food lookup.');

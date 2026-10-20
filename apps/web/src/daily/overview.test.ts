@@ -61,7 +61,7 @@ describe('probeState', () => {
 
 describe('rowView', () => {
   const settled = (state: 'records' | 'none'): DailyProbe => ({ state, observedAt });
-  const failed: DailyProbe = { state: 'failed', message: 'Daily is unavailable (HTTP 503).' };
+  const failed: DailyProbe = { state: 'failed', message: 'Health is unavailable (HTTP 503).' };
   it('checks until a first result exists', () => {
     expect(rowView(undefined, true, true)).toEqual({ tone: 'checking', label: 'Checking' });
     expect(rowView(undefined, false, true)).toEqual({ tone: 'checking', label: 'Checking' });

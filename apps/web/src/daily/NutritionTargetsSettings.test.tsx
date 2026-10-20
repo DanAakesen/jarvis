@@ -11,7 +11,7 @@ interface Targets { restingKcal: number | null; deficitKcal: number | null; prot
 
 const bounds = {
   restingKcal: { label: 'Resting energy burn', unit: 'kcal', min: 1000, max: 4000 },
-  deficitKcal: { label: 'Daily deficit', unit: 'kcal', min: 0, max: 2000 },
+  deficitKcal: { label: 'Per-day deficit', unit: 'kcal', min: 0, max: 2000 },
   proteinGrams: { label: 'Protein target', unit: 'g', min: 30, max: 400 },
 };
 const filled: Targets = { restingKcal: 1750, deficitKcal: 350, proteinGrams: 110 };
@@ -69,7 +69,7 @@ describe('NutritionTargetsSettings', () => {
     await act(async () => { pending.resolve(reply()); });
     expect(await screen.findByLabelText('Resting energy burn (kcal)')).not.toBeNull();
     expect(field('Resting energy burn (kcal)').value).toBe('1750');
-    expect(field('Daily deficit (kcal)').value).toBe('350');
+    expect(field('Per-day deficit (kcal)').value).toBe('350');
     expect(field('Protein target (g)').value).toBe('110');
     expect(screen.queryByText(/Last saved|Not set yet|Whole number from/u)).toBeNull();
     expect(saveButton().disabled).toBe(true);
@@ -86,7 +86,7 @@ describe('NutritionTargetsSettings', () => {
     fetchMock.mockResolvedValueOnce(reply(unset, null));
     renderSettings();
     await screen.findByLabelText('Resting energy burn (kcal)');
-    for (const label of ['Resting energy burn (kcal)', 'Daily deficit (kcal)', 'Protein target (g)']) {
+    for (const label of ['Resting energy burn (kcal)', 'Per-day deficit (kcal)', 'Protein target (g)']) {
       expect(field(label).value).toBe('');
       expect(field(label).hasAttribute('placeholder')).toBe(false);
     }
@@ -167,7 +167,7 @@ describe('NutritionTargetsSettings', () => {
     expect(resting.getAttribute('aria-invalid')).toBe('true');
     expect(resting.getAttribute('aria-describedby')).toBe('nutrition-restingKcal-error');
 
-    await user.click(field('Daily deficit (kcal)'));
+    await user.click(field('Per-day deficit (kcal)'));
     await user.click(saveButton());
     expect(document.activeElement).toBe(resting);
     expect(fetchMock).toHaveBeenCalledTimes(1);

@@ -14,7 +14,7 @@ import {
 
 const bounds = {
   restingKcal: { label: 'Resting energy burn', unit: 'kcal', min: 1000, max: 4000 },
-  deficitKcal: { label: 'Daily deficit', unit: 'kcal', min: 0, max: 2000 },
+  deficitKcal: { label: 'Per-day deficit', unit: 'kcal', min: 0, max: 2000 },
   proteinGrams: { label: 'Protein target', unit: 'g', min: 30, max: 400 },
 };
 const synthetic = { restingKcal: 1750, deficitKcal: 350, proteinGrams: 110 };
