@@ -25,7 +25,7 @@ const uuid = /^[\da-f]{8}(-[\da-f]{4}){3}-[\da-f]{12}$/iu;
 /**
  * The only production entry point to Daily. Off, it returns nothing and touches nothing, so Jarvis keeps its
  * route table, tool catalogue and startup exactly. On, it composes the owner-bound nutrition slice over the
- * existing pool: reads, owner-approved food and target writes, and the budget-aware suggestion. It adds no
+ * existing pool: reads, owner-approved food writes, owner-only Settings target routes and the budget-aware suggestion. It adds no
  * timer, job, import, provider/device connector, Frida lookup or Google/Gmail feed.
  */
 export function composeDaily(options: DailyCompositionOptions): BackendModule | undefined {

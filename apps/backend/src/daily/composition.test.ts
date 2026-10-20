@@ -21,7 +21,7 @@ const owner = config.auth.ownerObjectId;
 const agent = '11111111-1111-4111-8111-111111111111';
 const other = '22222222-2222-4222-8222-222222222222';
 const dailyToolNames = [
-  'daily_query', 'daily_show', 'daily_food', 'daily_food_review', 'daily_saved_food', 'daily_nutrition_targets', 'daily_training_targets', 'daily_nutrition_suggest',
+  'daily_query', 'daily_show', 'daily_food', 'daily_food_review', 'daily_saved_food', 'daily_nutrition_targets', 'daily_nutrition_suggest',
   'daily_health_summary', 'daily_nutrition_history', 'daily_coach_status',
 ];
 type App = ReturnType<typeof buildApp>;
@@ -203,7 +203,7 @@ describe('Daily composition', () => {
         expect((await send(app, probe, kind)).statusCode, `${probe.method} ${probe.url} as ${kind}`).toBe(403);
       }
     }
-    // The hosted agent reaches target changes only through the approved tool, never the Settings routes.
+    // Training-target Settings routes are restricted to the signed-in owner.
     for (const probe of dailyRoutes.filter(({ url }) => url.endsWith('-targets'))) {
       expect((await send(app, probe, 'agent')).statusCode, `${probe.method} ${probe.url} as agent`).toBe(403);
     }
@@ -225,7 +225,6 @@ describe('Daily composition', () => {
     const toolCalls: readonly (readonly [string, object])[] = [
       ['daily_nutrition_suggest', {}],
       ['daily_nutrition_targets', { operation: 'read' }],
-      ['daily_training_targets', { operation: 'read' }],
       ['daily_show', { source: dailyQuerySources.metrics, startDate: '2026-10-01', endDate: '2026-10-16' }],
     ];
     for (const [name, payload] of toolCalls) {

@@ -6024,16 +6024,15 @@ targets plus an update timestamp. SQL constraints and the shared server contract
 bound weekly sessions and daily steps; reads return those bounds and `null` for
 every unset target.
 
-The eighth optional `createDailyModules` accessor, `trainingTargets`, is
-request-bound and composes only with Daily and shared Daily data. The
-signed-in-owner `GET`/`PATCH /daily/training-targets` route rejects agents,
+The optional `createDailyModules` accessor, `trainingTargets`, is request-bound
+and composes only with Daily and shared Daily data. The signed-in-owner
+`GET`/`PATCH /daily/training-targets` route rejects agents,
 runners, connectors, other identities and query selectors. A patch is strict,
 partial and transactional; `null` clears a field and removing the last set
-value deletes the row. Read-back occurs before commit. The
-`daily_training_targets` tool supports `read` and `set_targets` through the same
-owner binding, rejects the nutrition-only connector and phone channel, marks
-the data sensitive for audit redaction, and requires exact browser Now approval
-for changes. Daily-off composition registers no target routes or tool.
+value deletes the row. Read-back occurs before commit. The assistant has no
+training-target write tool because the production tool catalogue must retain at
+least eight free slots; a read-only query source may be added later. Daily-off
+composition registers no target routes.
 
 The web Settings editor loads and saves only validated server responses. Its
 `useTrainingTargets` hook documents the shared loading/settled/error/retry
@@ -6131,7 +6130,8 @@ Gmail read, job or timer. The targets and health accessors also compare the
 resolved owner with the composed owner and refuse a mismatch, on top of the check
 inside the data accessors. Root authentication is unchanged: a connector or
 runner principal is refused on every Daily route, and an agent is refused on the
-targets route because it reaches targets only through the approved tool.
+training-targets route because those Settings operations are owner-only; no
+assistant training-target tool is registered.
 
 The code default is off. Production sets `JARVIS_DAILY_ENABLED` and the web switch
 `VITE_DAILY_ENABLED` (read at build time by the Daily overview page) in exactly two

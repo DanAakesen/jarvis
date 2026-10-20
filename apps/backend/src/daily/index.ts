@@ -10,7 +10,6 @@ import { dailyFoodTool, type InternalNutrition } from './tools/food.js';
 import { dailyFoodReviewTool } from './tools/food-review.js';
 import { dailySavedFoodTool, type InternalSavedNutrition } from './tools/saved-food.js';
 import { dailyNutritionTargetsTool } from './tools/nutrition-targets.js';
-import { dailyTrainingTargetsTool } from './tools/training-targets.js';
 import { dailyNutritionSuggestTool } from './tools/nutrition-suggest.js';
 import { nutritionTargetsRoutes } from './routes/nutrition-targets.js';
 import { trainingTargetsRoutes } from './routes/training-targets.js';
@@ -37,7 +36,6 @@ export function createDailyModules(enabled = false, data?: DailyData, connector?
     ...(internalNutrition ? [dailyFoodTool(internalNutrition), dailyFoodReviewTool(internalNutrition)] : []),
     ...(savedNutrition ? [dailySavedFoodTool(savedNutrition)] : []),
     ...(nutritionTargets ? [dailyNutritionTargetsTool(nutritionTargets)] : []),
-    ...(trainingTargets ? [dailyTrainingTargetsTool(trainingTargets)] : []),
     ...(nutritionTargets && nutritionSuggestions ? [dailyNutritionSuggestTool(nutritionTargets, nutritionSuggestions)] : []),
     ...(data.health && data.nutrition && data.coach ? dailySourceTools(data, data.nutrition, data.coach) : []),
   ] : [];

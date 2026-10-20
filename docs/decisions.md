@@ -6,10 +6,11 @@ The original Daily's weekly Gym/Run session targets and daily step target came
 from a task source outside the approved Jarvis scope. Use owner-set values
 instead: nullable whole numbers stored in a new owner-keyed Daily table, with
 server-owned bounds and no seed or target defaults. Settings routes are signed-in
-owner-only; the `daily_training_targets` tool is owner-bound, sensitive and
-requires browser Now approval to change values. Clearing the final value leaves
-the owner with no stored row. Settings adds a separate `#training-targets`
-section and a validated `useTrainingTargets` contract for follow-up consumers.
+owner-only. The assistant gets no training-target write tool because the
+production tool catalogue must keep at least eight spare slots; a read-only
+query source can be added later. Clearing the final value leaves the owner with
+no stored row. Settings adds a separate `#training-targets` section and a
+validated `useTrainingTargets` contract for follow-up consumers.
 Overview, Workouts and Health panels remain unchanged in this slice; their
 real-data presentation and owner-session UI checks are deferred to the tasks
 that consume the hook. The migration rollback refuses to discard saved targets.
@@ -2067,8 +2068,9 @@ acceptance.** It is the last invisible Daily slice, built under these conditions
   data accessor, and the targets and health readers that the composition wraps,
   re-check the signed-in owner against the composed owner, so a mismatch is
   refused before any SQL read. A connector or runner is refused on every Daily
-  route, and an agent reaches the targets only through the approved tool, whose
-  changes keep the exact browser Now approval.
+  route. Nutrition target changes still require the nutrition tool's exact
+  browser Now approval; training-target writes are Settings-only and have no
+  assistant tool.
 - Unchanged and out of scope: accounts, consent, grants, secrets, RBAC,
   resources, imports, provider, device and private reads or writes, and live
   probes. Rollback is leaving the switch off.
