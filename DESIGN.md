@@ -17,7 +17,9 @@ the composer keeps its rim sweep.
 Dropdowns: where `appearance: base-select` is supported, every field select
 (including those in shared containers and `select.form-control`) opens the glass
 list (rounded panel, lit hover, selected tint with checkmark) and uses the
-picker icon instead of a drawn chevron. Other browsers keep the native list.
+picker icon, drawn as the same slim chevron the closed selects always had (a mask,
+not the browser's solid triangle; `ButtonText` under forced colours). Other
+browsers keep the native list.
 
 ## Vault mirror Status row (19 October 2026; P14-29)
 
