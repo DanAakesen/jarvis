@@ -31,7 +31,7 @@ let failMeals: boolean;
 let failTargets: boolean;
 let mealPages: Row[][] | null;
 function Location() { return <output aria-label="URL">{useLocation().search}</output>; }
-function Wrapper({ version = 0, sources = props.sources, entry = '/daily?section=nutrition' }: {
+function Wrapper({ version = 0, sources = props.sources, entry = '?section=nutrition' }: {
   version?: number; sources?: readonly DailySourceId[]; entry?: string;
 }) {
   return <MemoryRouter initialEntries={[entry]}><NutritionSection {...props} sources={sources} refreshVersion={version} /><Location /></MemoryRouter>;
@@ -79,12 +79,13 @@ describe('Nutrition section', () => {
       unknown_nutrients: ['fiber_grams'], partial_nutrients: [], latest_updated_at: '2026-10-18T09:00:00Z',
     }];
     targets = { restingKcal: 2000, deficitKcal: 500, proteinGrams: 100 };
-    render(<Wrapper entry="/daily?nutritionView=day" />);
+    render(<Wrapper entry="?nutritionView=day" />);
     await screen.findByText('500 kcal left');
     expect(screen.getByText('50 g left')).toBeTruthy();
     expect(document.querySelector('.nutrition-today-values')?.textContent).toContain('2');
     expect(screen.getByText('Staleness unknown')).toBeTruthy();
     expect(screen.getByText(/Read/u)).toBeTruthy();
+    expect(document.body.textContent).not.toMatch(/\bDaily\b/u);
     expect(queries.some(query => query.source === ids.days && query.startDate === '2026-10-18' && query.endDate === '2026-10-18')).toBe(true);
   });
 
@@ -96,26 +97,26 @@ describe('Nutrition section', () => {
       partial_nutrients: ['energy_kcal', 'protein_grams'], latest_updated_at: '2026-10-18T09:00:00Z',
     }];
     targets = { restingKcal: 2000, deficitKcal: 500, proteinGrams: 100 };
-    render(<Wrapper entry="/daily?nutritionView=day" />);
+    render(<Wrapper entry="?nutritionView=day" />);
     await screen.findByText('At most 500 kcal left');
     expect(screen.getByText('At most 50 g left')).toBeTruthy();
     expect(document.querySelector('.nutrition-today-card')?.textContent).not.toContain('Live');
   });
 
   it('links targets that are not set to Settings', async () => {
-    render(<Wrapper entry="/daily?nutritionView=day" />);
+    render(<Wrapper entry="?nutritionView=day" />);
     expect(await screen.findAllByText('Target not set')).toHaveLength(2);
     expect(screen.getByRole('link', { name: 'Set targets in Settings' }).getAttribute('href')).toBe('/settings#nutrition-targets');
   });
 
   it('uses an explicit unavailable state when day totals are not served', async () => {
-    render(<Wrapper sources={[ids.meals]} entry="/daily?nutritionView=day" />);
-    expect(await screen.findByText('Daily nutrition day totals are not served.')).toBeTruthy();
+    render(<Wrapper sources={[ids.meals]} entry="?nutritionView=day" />);
+    expect(await screen.findByText('Health nutrition totals are not available.')).toBeTruthy();
     expect(screen.queryByText('0 kcal left')).toBeNull();
   });
 
   it('refreshes the served Today row after Copenhagen midnight when the page regains focus', async () => {
-    render(<Wrapper entry="/daily?nutritionView=day" />);
+    render(<Wrapper entry="?nutritionView=day" />);
     await waitFor(() => expect(queries.some(query => query.source === ids.days && query.startDate === '2026-10-18')).toBe(true));
     vi.setSystemTime(new Date('2026-10-18T22:30:00Z'));
     fireEvent.focus(window);
@@ -127,7 +128,7 @@ describe('Nutrition section', () => {
       { name: 'Synthetic component 9001', grams: 125 },
       { name: 'Synthetic component 9002', grams: null },
     ] }];
-    render(<Wrapper entry="/daily?nutritionView=day" />);
+    render(<Wrapper entry="?nutritionView=day" />);
     const name = await screen.findByRole('heading', { name: 'Synthetic meal 9001' });
     const meal = name.closest('article')!;
     expect(meal.textContent).toContain('2026');
@@ -152,7 +153,7 @@ describe('Nutrition section', () => {
       energy_kcal: null, protein_grams: null, carbohydrates_grams: null, fat_grams: null,
       confidence: null, capture_method: null, nutrient_provenance_json: null,
     }];
-    render(<Wrapper entry="/daily?nutritionView=day" />);
+    render(<Wrapper entry="?nutritionView=day" />);
     const meal = (await screen.findByRole('heading', { name: 'Not recorded' })).closest('article')!;
     expect(meal.textContent).toContain('Not recorded');
     expect(meal.textContent).toContain('Export stateNot recorded');
@@ -166,7 +167,7 @@ describe('Nutrition section', () => {
       [{ ...syntheticMeal, id: 'synthetic-meal-page-1', meal_name: 'Synthetic first-page meal' }],
       [{ ...syntheticMeal, id: 'synthetic-meal-page-2', meal_name: 'Synthetic second-page meal' }],
     ];
-    render(<Wrapper entry="/daily?nutritionView=day" />);
+    render(<Wrapper entry="?nutritionView=day" />);
     await screen.findByRole('heading', { name: 'Synthetic first-page meal' });
     fireEvent.click(screen.getByRole('button', { name: 'Load more meals' }));
     await screen.findByRole('heading', { name: 'Synthetic second-page meal' });
@@ -189,16 +190,17 @@ describe('Nutrition section', () => {
         unknown_nutrients: ['energy_kcal', 'protein_grams', 'carbohydrates_grams', 'fat_grams', 'fiber_grams'],
         partial_nutrients: [], latest_updated_at: '2026-10-18T09:00:00Z' },
     ];
-    render(<Wrapper entry="/daily?nutritionView=trend" />);
-    await screen.findByRole('img', { name: 'Daily calorie balance (kcal)' });
-    expect(screen.getByRole('img', { name: 'Daily protein intake (g)' })).toBeTruthy();
+    render(<Wrapper entry="?nutritionView=trend" />);
+    await screen.findByRole('img', { name: 'Health calorie balance (kcal)' });
+    expect(screen.getByRole('img', { name: 'Health protein intake (g)' })).toBeTruthy();
+    expect(document.body.textContent).not.toMatch(/\bDaily\b/u);
     expect(screen.getByText(/At most 400 kcal below baseline/u)).toBeTruthy();
     expect(screen.getByText(/At least 55 g\/day \(lower bound\)/u)).toBeTruthy();
     expect(screen.getByText('3 of 7 days have meals; 1 day has partial nutrients.')).toBeTruthy();
     expect(screen.getByText(/Partial energy totals are lower bounds/u)).toBeTruthy();
     expect(document.querySelectorAll('.daily-chart-bars path')).toHaveLength(2);
     expect(document.querySelectorAll('.daily-chart-series circle')).toHaveLength(2);
-    const balance = screen.getByRole('img', { name: 'Daily calorie balance (kcal)' }).closest('figure')!;
+    const balance = screen.getByRole('img', { name: 'Health calorie balance (kcal)' }).closest('figure')!;
     fireEvent.click(balance.querySelector('summary')!);
     expect(balance.querySelector('table')?.textContent).toContain('At most 500 kcal below baseline');
     expect(balance.querySelector('table')?.textContent).toContain('Lower-bound source total');
@@ -206,7 +208,7 @@ describe('Nutrition section', () => {
 
   it('keeps an empty trend readable and reserves space for settled states', async () => {
     meals = [];
-    render(<Wrapper entry="/daily?nutritionView=trend" />);
+    render(<Wrapper entry="?nutritionView=trend" />);
     await screen.findByText('No records');
     expect(screen.getByText('0 of 7 days have meals; 0 days have partial nutrients.')).toBeTruthy();
     expect(document.querySelector('.nutrition-trend')?.className).toContain('nutrition-trend');
@@ -224,7 +226,7 @@ describe('Nutrition section', () => {
         { name: 'Synthetic plan item 9002', nutrients: { energyKcal: 9002, proteinGrams: 9003 } },
       ],
     }];
-    render(<Wrapper sources={[ids.meals, ids.days, ids.favorites, ids.plans]} entry="/daily?nutritionView=library" />);
+    render(<Wrapper sources={[ids.meals, ids.days, ids.favorites, ids.plans]} entry="?nutritionView=library" />);
     expect(await screen.findByText('Synthetic favourite 9001')).toBeTruthy();
     const plan = screen.getByText('Synthetic plan 9001');
     fireEvent.click(plan);
@@ -242,7 +244,7 @@ describe('Nutrition section', () => {
       id: 'synthetic-plan-9001', plan_name: 'Synthetic plan 9001', description: 'Synthetic description 9002',
       items_json: [{ name: 'Synthetic plan item 9003', nutrients: { energyKcal: 9001 } }],
     }];
-    render(<Wrapper sources={[ids.meals, ids.plans]} entry="/daily?nutritionView=library" />);
+    render(<Wrapper sources={[ids.meals, ids.plans]} entry="?nutritionView=library" />);
     await screen.findByText('Synthetic plan 9001');
     for (const filter of ['description 9002', 'item 9003']) {
       fireEvent.change(screen.getByRole('searchbox'), { target: { value: filter } });
@@ -264,7 +266,7 @@ describe('Nutrition section', () => {
         id: `synthetic-favorite-${9000 + page}`, favorite_name: `Synthetic favourite ${9000 + page}`,
       }], page < 6 ? { id: `synthetic-favorite-${9000 + page}` } : null));
     });
-    render(<Wrapper sources={[ids.meals, ids.favorites]} entry="/daily?nutritionView=library" />);
+    render(<Wrapper sources={[ids.meals, ids.favorites]} entry="?nutritionView=library" />);
     expect(await screen.findByText('Page limit reached.')).toBeTruthy();
     expect(page).toBe(5);
     expect(screen.getByText('Synthetic favourite 9005')).toBeTruthy();
@@ -273,7 +275,7 @@ describe('Nutrition section', () => {
 
   it('shows a recoverable meal read error without hiding the today card', async () => {
     failMeals = true;
-    render(<Wrapper entry="/daily?nutritionView=day" />);
+    render(<Wrapper entry="?nutritionView=day" />);
     expect(await screen.findByRole('alert')).toBeTruthy();
     expect(screen.getByRole('heading', { name: 'Today so far' })).toBeTruthy();
     failMeals = false;
@@ -283,7 +285,7 @@ describe('Nutrition section', () => {
 
   it('shows independent target-load failure and retries without changing nutrition reads', async () => {
     failTargets = true;
-    render(<Wrapper entry="/daily?nutritionView=day" />);
+    render(<Wrapper entry="?nutritionView=day" />);
     expect(await screen.findByRole('alert')).toBeTruthy();
     expect(document.querySelector('.nutrition-meals-list')?.textContent).toContain('Synthetic meal 9001');
     failTargets = false;

@@ -121,7 +121,7 @@ function TodaySoFar({ props, targets }: {
   return <article className="daily-stat-tile daily-today-card nutrition-today-card" aria-busy={pages.status === 'loading' || undefined}>
     <h3>Today so far</h3>
     <div className="daily-tile-body nutrition-today-body">
-      {!served ? <DailyUnavailable>Daily nutrition day totals are not served.</DailyUnavailable>
+      {!served ? <DailyUnavailable>Health nutrition totals are not available.</DailyUnavailable>
         : pages.status === 'loading' && !pages.first ? <DailyState status="loading" />
           : pages.status === 'error' && !row ? <DailyState status="error" message={pages.error ?? 'Today’s nutrition totals could not be loaded.'} onRetry={pages.reload} />
             : <>
@@ -166,7 +166,7 @@ function balanceValue(value: number | null, lowerBound: boolean) {
 
 function trendDataTable(rows: Row[], kind: 'balance' | 'protein', baseline: number | null) {
   const isBalance = kind === 'balance';
-  const title = isBalance ? 'Daily calorie balance' : 'Daily protein intake';
+  const title = isBalance ? 'Health calorie balance' : 'Health protein intake';
   return <ScrollTable label={`${title} chart data`}><table>
     <caption>{title}; averages use known logged days only</caption>
     <thead><tr><th scope="col">Date</th><th scope="col">{isBalance ? 'Balance' : 'Protein'}</th><th scope="col">Data quality</th></tr></thead>
@@ -218,7 +218,7 @@ function Trend({ days, targets, period, targetPending, targetError, retryTargets
     {days.status === 'ready' && !rows.length && <DailyState status="empty" />}
     {rows.length > 0 && <>
       <dl className="nutrition-period-averages">
-        <div><dt>Average daily balance</dt><dd>{balanceLabel(averages.balance.value, averages.balance.lowerBound, averages.balance.count, averages.balance.missing)}</dd></div>
+        <div><dt>Average balance per day</dt><dd>{balanceLabel(averages.balance.value, averages.balance.lowerBound, averages.balance.count, averages.balance.missing)}</dd></div>
         <div><dt>Average protein</dt><dd>{averageProtein(averages.protein.value, averages.protein.lowerBound, averages.protein.count, averages.protein.missing)}</dd></div>
       </dl>
           {baseline === null && targets !== null && <p className="nutrition-partial">Calorie balance needs both resting energy and deficit targets. {targetLink()}.</p>}
@@ -226,12 +226,12 @@ function Trend({ days, targets, period, targetPending, targetError, retryTargets
         <p className="nutrition-partial">Partial energy totals are lower bounds, so their calorie balances are upper bounds.</p>}
       {averages.protein.lowerBound && <p className="nutrition-partial">Partial protein totals are lower bounds.</p>}
       <div className="nutrition-charts">
-        <DailyChart name="Daily calorie balance (kcal)" kind="bar"
+        <DailyChart name="Health calorie balance (kcal)" kind="bar"
           description="Balance is the resting-energy-minus-deficit target less logged energy. Positive values are below baseline; partial energy makes balance an upper bound."
           series={[{ name: 'Balance vs baseline (kcal)', points: balancePoints(rows, baseline) }]}
           target={{ value: 0, label: 'Baseline (0 kcal)' }} dataTable={trendDataTable(rows, 'balance', baseline)} />
-        <DailyChart name="Daily protein intake (g)" kind="line"
-          description="Daily logged protein. Partial protein totals are lower bounds."
+        <DailyChart name="Health protein intake (g)" kind="line"
+          description="Protein logged per day. Partial protein totals are lower bounds."
           series={[{ name: 'Protein (g)', points: trendPoints(rows, 'protein_grams') }]}
           {...(targets?.proteinGrams !== null && targets ? { target: { value: targets.proteinGrams, label: 'Protein target (g)' } } : {})}
           dataTable={trendDataTable(rows, 'protein', baseline)} />

@@ -1892,7 +1892,7 @@ composer at 320px. The six JPEG captures cover phone Day in both themes,
 desktop Trend in both themes, Library at 768px light and 320px dark. They are
 synthetic desktop-browser evidence, not live-owner or physical-phone checks.
 
-## Daily Nutrition parity (20 October 2026; P14-49)
+## Health Nutrition parity (20 October 2026; P14-49)
 
 The Nutrition section keeps its shared period selector and the existing Plans and
 Favourites library. The Today view leads with one “Today so far” card: kcal left
@@ -1902,7 +1902,7 @@ and protein are labelled as bounds; missing targets link to Settings. A neutral
 “Staleness unknown” pill is used because the nutrition query reports staleness as
 unknown, alongside its read-time line.
 
-Trend summarizes average daily balance and average protein over known logged
+Trend summarizes average balance per day and average protein over known logged
 days, then plots calorie balance against the zero baseline and protein intake.
 Its inventory counts days with meals and partial days; an expandable list names
 the partial dates and nutrients. Chart tables retain per-day lower-bound wording.
