@@ -388,7 +388,7 @@ describe('one shared Daily read contract', () => {
     }
     expect(feeds.queryAttention).toHaveBeenCalledTimes(1);
     await expect(new DailyQueryService(f.readers).query({ source: sources.attention }, request(), signal()))
-      .rejects.toThrow('Daily attention feed is not configured');
+      .rejects.toThrow('Health attention source is not configured');
   });
   it('rejects foreign/service/ambiguous principals and malformed selectors before any read', async () => {
     const f = fixture();
@@ -397,7 +397,7 @@ describe('one shared Daily read contract', () => {
       { nutritionExportPrincipal: {} }, { pcBridgePrincipal: {} }, { deployPrincipal: {} },
       { phoneEventGridPrincipal: {} }, { agentPrincipal: { kind: 'jarvis-agent' } },
     ]) await expect(f.service.query(input, request(extra), signal())).rejects.toThrow();
-    await expect(f.service.query({ ...input, owner }, request(), signal())).rejects.toThrow('Invalid Daily query');
+    await expect(f.service.query({ ...input, owner }, request(), signal())).rejects.toThrow('Invalid Health query');
     expect(f.readers.health).not.toHaveBeenCalled();
     await f.service.query(input, request({ principal: undefined, agentPrincipal: { kind: 'jarvis-agent' } }), signal());
   });

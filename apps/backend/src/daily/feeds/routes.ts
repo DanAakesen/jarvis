@@ -16,7 +16,7 @@ const json = (value: unknown) => value !== null && typeof value === 'object' && 
 function body<T>(schema: z.ZodType<T>, request: FastifyRequest, reply: FastifyReply): T | undefined {
   const parsed = schema.safeParse(request.body);
   if (!parsed.success) {
-    void reply.code(400).send({ error: 'Invalid Daily feed request' });
+    void reply.code(400).send({ error: 'Invalid Health feed request' });
     return undefined;
   }
   return parsed.data;
@@ -40,7 +40,7 @@ async function execute<T>(request: FastifyRequest, reply: FastifyReply, work: (s
   catch (error) {
     if (error instanceof ToolRefusal) return reply.code(400).send({ error: error.message });
     if (error instanceof ToolFailure) return reply.code(503).send({ error: error.message });
-    if (error instanceof AuthenticationDenied) return reply.code(error.statusCode).send({ error: 'Daily feed access denied' });
+    if (error instanceof AuthenticationDenied) return reply.code(error.statusCode).send({ error: 'Health feed access denied' });
     throw error;
   } finally { abort.cleanup(); }
 }
@@ -53,11 +53,11 @@ export function dailyFeedRoutes(service: Pick<DailyFeedService, 'refreshFromBrow
         resolveDailyBrowserOwner(request);
         reply.header('Cache-Control', 'no-store');
         if (Object.keys(request.query as Record<string, unknown>).length) {
-          return reply.code(400).send({ error: 'Invalid Daily feed request' });
+          return reply.code(400).send({ error: 'Invalid Health feed request' });
         }
       },
       preValidation: async (request: FastifyRequest, reply: FastifyReply) => {
-        if (!json(request.body)) return reply.code(400).send({ error: 'Invalid Daily feed request' });
+        if (!json(request.body)) return reply.code(400).send({ error: 'Invalid Health feed request' });
       },
     };
     app.post('/daily/feeds/refresh', config, async (request, reply) => {

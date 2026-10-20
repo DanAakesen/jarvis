@@ -45,7 +45,7 @@ export class DailyQueryService {
 
   async query(input: unknown, request: FastifyRequest, signal: AbortSignal): Promise<DailyQueryResult> {
     resolveDailyOwner(request);
-    if (!isDailyQuery(input)) throw new ToolRefusal('Invalid Daily query. Use one source with only its supported selectors and exact returned cursor.');
+    if (!isDailyQuery(input)) throw new ToolRefusal('Invalid Health query. Use one source with only its supported selectors and exact returned cursor.');
     if (input.source === sources.attention || input.source === sources.calendar) resolveDailyBrowserOwner(request);
     if ((input.source === sources.briefs || input.source === sources.brief) && request.dailyConnectorPrincipal) throw new AuthenticationDenied(403);
     signal = AbortSignal.any([signal, AbortSignal.timeout(30_000)]);
@@ -68,13 +68,13 @@ export class DailyQueryService {
     let units: Record<string, string>;
     const brief = input.source === sources.briefs || input.source === sources.brief;
     if (input.source === sources.attention) {
-      if (!this.feeds) throw new ToolFailure('Daily attention feed is not configured. No empty result is available.');
+      if (!this.feeds) throw new ToolFailure('Health attention source is not configured. No empty result is available.');
       const result = await this.feeds.queryAttention(request, signal);
       items = result.items as Record<string, DailyJson>[];
       feedSources = result.feedSources;
       units = {};
     } else if (input.source === sources.calendar) {
-      if (!this.feeds) throw new ToolFailure('Daily calendar feed is not configured. No empty result is available.');
+      if (!this.feeds) throw new ToolFailure('Health calendar source is not configured. No empty result is available.');
       const result = await this.feeds.queryCalendar(request, { from: input.from, to: input.to }, signal);
       items = result.items as Record<string, DailyJson>[];
       feedSources = result.feedSources;
@@ -186,7 +186,7 @@ export class DailyQueryService {
       coverage: { returned: items.length, hasMore: next !== null, next, sourceCompleteness: 'unknown' },
       revision: '0'.repeat(64), // Reserve the final fingerprint bytes in the response budget.
     };
-    if (Buffer.byteLength(JSON.stringify(result)) > dailyResultByteLimit) throw new ToolRefusal('Daily result exceeds the shared response limit. Request a smaller page; oversized single detail remains unavailable.');
+    if (Buffer.byteLength(JSON.stringify(result)) > dailyResultByteLimit) throw new ToolRefusal('Health result exceeds the shared response limit. Request a smaller page; oversized single detail remains unavailable.');
     // Exclude observation time; independent reads are not an atomic/global snapshot.
     // Read DTOs use their response budget, not nutrition's per-write JSON limits.
     result.revision = createHash('sha256').update(JSON.stringify({

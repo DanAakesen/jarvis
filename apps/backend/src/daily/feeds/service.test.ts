@@ -95,6 +95,12 @@ function fixture(configured = true, now = () => at.getTime()) {
   return { tool, service, request, store, sources, storeFor, refresh, notifications, notificationStore, mode, session, begin };
 }
 describe('inactive shared Daily feed workflow', () => {
+  it('uses Health wording in the assistant-facing feed tool description', () => {
+    const { tool } = fixture();
+    expect(tool.description).toContain('Health Gmail attention');
+    expect(tool.description).not.toContain('Daily');
+  });
+
   it('reads retained attention with separate freshness, no provider calls or approval, and no invented calendar range', async () => {
     const f = fixture();
     const result = await f.tool.execute({ operation: 'read_attention' }, f.request, signal());

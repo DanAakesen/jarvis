@@ -4,6 +4,11 @@ import { dailyCellValue, dailyColumns, dailyPlots, dailyRequest, dailyRowKey, da
 import { formatTime } from './ui/formatters';
 
 describe('retained Daily record presentation', () => {
+  it('provides human-readable columns for attention and calendar rows', () => {
+    expect(dailyColumns('daily.attention').map(column => column.label)).toEqual(['Type', 'Waiting', 'Age (business days)', 'Hidden']);
+    expect(dailyColumns('daily.calendar').map(column => column.label)).toEqual(['Event', 'Starts', 'Ends', 'Calendar', 'Location']);
+  });
+
   it('chooses Copenhagen calendar days across UTC midnight and year boundaries', () => {
     expect(initialDailyPeriod(new Date('2026-01-01T23:30:00Z'))).toEqual({ startDate: '2025-12-27', endDate: '2026-01-02' });
   });
