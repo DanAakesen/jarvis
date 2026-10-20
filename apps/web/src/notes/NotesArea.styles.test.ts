@@ -8,7 +8,8 @@ describe('mobile notes search styling', () => {
     const mobile = styles.slice(styles.indexOf('@media (max-width: 700px)'));
     expect(mobile).toContain('.notes-page .knowledge-search input { font-size: var(--type-body); }');
     expect(mobile).toContain('.notes-page .knowledge-results { width: calc(100% - 16px); }');
-    expect(mobile).toContain('.notes-page .notes-tasks-toggle { top: 8px; left: 8px; width: 44px;');
+    expect(mobile).toContain('.notes-page .notes-tasks-toggle { width: 44px;');
+    expect(mobile).toContain('.notes-page .notes-toolbar { top: 8px; left: 8px; }');
     expect(styles).not.toMatch(/(?:touch-action:\s*none|zoom:|scale\()/u);
   });
 });

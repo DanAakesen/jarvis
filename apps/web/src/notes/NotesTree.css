@@ -1,0 +1,51 @@
+.notes-tree-panel {
+  position: absolute; z-index: 4; top: 76px; left: 16px; display: flex; width: min(380px, calc(100% - 32px)); max-height: calc(100% - 140px); min-height: 0;
+  flex-direction: column; gap: var(--space-2); padding: var(--space-2); overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain;
+  border-radius: var(--radius-panel); animation: notes-tree-in var(--motion-state) var(--ease-enter);
+}
+/* Like the task list beside it, the panel drops the glass ring: that ring overhangs its box by 1px and adds phantom scrollbars to a scroller. */
+.notes-tree-panel.luminous-glass { border-color: var(--control-rule); }
+.notes-tree-panel.luminous-glass::before { content: none; }
+.notes-tree-panel:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+.notes-tree-panel > * { flex: 0 0 auto; }
+.notes-tree { padding: 0; margin: 0; list-style: none; }
+.notes-tree-item { display: block; outline: none; cursor: pointer; }
+.notes-tree-row {
+  display: flex; min-width: 0; min-height: var(--control-size); align-items: center; gap: var(--space-2); padding: 0 var(--space-2) 0 calc(var(--space-2) + (var(--level, 1) - 1) * var(--space-4));
+  border-radius: var(--radius-control); color: var(--text); font-size: var(--type-small);
+  transition: background-color var(--motion-press) var(--ease-standard), color var(--motion-press) var(--ease-standard);
+}
+.notes-tree-item:hover > .notes-tree-row { background: var(--glass-hover); }
+.notes-tree-item:active > .notes-tree-row { background: var(--glass-pressed); }
+.notes-tree-item[aria-selected="true"] > .notes-tree-row { background: var(--state-selected-bg); color: var(--state-selected-fg); font-weight: 650; }
+.notes-tree-item[aria-selected="true"]:hover > .notes-tree-row { background: var(--state-selected-hover); }
+.notes-tree-item[aria-selected="true"]:active > .notes-tree-row { background: var(--state-selected-pressed); }
+.notes-tree-item:focus-visible > .notes-tree-row { outline: 3px solid var(--focus); outline-offset: -3px; }
+.notes-tree-chevron, .notes-tree-spacer, .notes-tree-glyph { flex: 0 0 auto; width: 18px; height: 18px; }
+.notes-tree-chevron { color: var(--text-muted); transition: rotate var(--motion-press) var(--ease-standard); }
+.notes-tree-item[aria-expanded="true"] > .notes-tree-row .notes-tree-chevron { rotate: 90deg; }
+.notes-tree-glyph { color: var(--folder, var(--text-muted)); }
+.notes-tree-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.notes-tree-status { display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: var(--space-3); padding: var(--space-1) var(--space-2) var(--space-1) calc(var(--space-2) + var(--level, 1) * var(--space-4)); color: var(--text-muted); font-size: var(--type-caption); }
+.notes-tree-status p { min-width: 0; margin: 0; overflow-wrap: anywhere; }
+.notes-tree-status [role="alert"] { color: var(--error); }
+.notes-tree-action {
+  flex: 0 0 auto; min-height: var(--control-size); padding: 0 var(--space-3); border: 0; border-radius: var(--radius-control); background: var(--glass-hover); color: var(--text);
+  font: inherit; font-size: var(--type-caption); font-weight: 650; cursor: pointer;
+}
+.notes-tree-action:hover { background: var(--glass-pressed); }
+.notes-tree-action:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.notes-tree-empty { margin: 0; padding: var(--space-3); color: var(--text-muted); font-size: var(--type-caption); }
+@keyframes notes-tree-in { from { opacity: 0; translate: -8px 0; } }
+@media (max-width: 700px), (max-height: 500px) and (pointer: coarse) {
+  .notes-tree-panel {
+    top: auto; right: calc(env(safe-area-inset-right) + 8px); bottom: calc(68px + var(--phone-dock-bottom, 16px) + 36px); left: calc(env(safe-area-inset-left) + 8px); width: auto;
+    max-height: min(65dvh, calc(100% - 68px - var(--phone-dock-bottom, 16px) - 36px - var(--control-size) - var(--space-4)));
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .notes-tree-panel { animation: none; }
+  .notes-tree-row, .notes-tree-chevron { transition: none; }
+}
+:root[data-motion="reduced"] .notes-tree-panel { animation: none; }
+:root[data-motion="reduced"] :is(.notes-tree-row, .notes-tree-chevron) { transition: none; }

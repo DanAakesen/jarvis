@@ -695,6 +695,15 @@ note in place. Jarvis never creates, edits, completes, reorders or deletes these
 tasks; Dan completes them in Obsidian. Agent work remains on the Software Factory
 board.
 
+A **notes tree** icon button beside **Show tasks** opens a tree of the vault's
+folders and Markdown notes, including notes at the vault root; hidden dot-folders
+stay out. It sits in the same place as the task panel, so one panel is open at a
+time. Folders load lazily through `GET /notes/tree` and
+`GET /notes?directory=` a page at a time, and selecting a note opens it in the
+existing note popup with its safe preview, Edit and explicit Save. Notes at the root
+and outside People, Work, Personal and General are listed because the backend index
+covers every indexed note (#1113, P14-40).
+
 Notes search shows the matching plain-text snippet under each note title and, when
 open tasks match, a Tasks result group whose count opens the panel with that
 search. In chat and voice, task/to-do/reminder requests use the read-only tasks

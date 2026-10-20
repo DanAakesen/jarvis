@@ -9,8 +9,10 @@ longer means recomposing the original layout. Components may therefore follow
 the original composition, restyled with existing Jarvis tokens, shared
 components, themes, density and motion.
 
-Data limits are unchanged: only what Jarvis serves is shown, and unserved data
-gets loading, empty and error states and is listed as a gap, never invented.
+Data limits are unchanged: only what Jarvis serves is shown. Served sources get
+loading, empty and error states. A component whose source is not served shows an
+explicit unavailable state, never an empty one (which would imply a successful
+read), and is listed as a gap. Values are never invented.
 This ruling does not by itself lift earlier scope exclusions (task, habit and
 countdown source, coaching and recomposition automation, separate Workouts and
 Nutrition pages); each needs its own owner ruling before it is built. The
@@ -18,6 +20,17 @@ Nutrition pages); each needs its own owner ruling before it is built. The
 code was not available, so the audit works from screenshots only.
 
 Refs #1116
+
+## P14-32 — Notes tree beside Show tasks (20 October 2026; #1085)
+
+Dan asked for a tree of all notes he can preview and edit. An icon-only button
+beside Show tasks opens a lazy folder-and-note tree; the task panel and the tree
+share one place, so only one is open. Notes open in the existing popup rather than
+a second editor. The tree uses only existing endpoints: `/notes/tree` for folders
+and `GET /notes?directory=` per opened folder. Notes at the vault root and in
+folders outside People, Work, Personal and General were hidden by the backend
+index until #1113 (P14-40) removed that filter; the tree lists them without a
+client change.
 
 ## P14-40 — Full indexed-note scope in the Notes graph (20 October 2026; #1113)
 

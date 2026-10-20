@@ -83,8 +83,12 @@ components and data presentation in Jarvis styling (see [decisions](../../decisi
 4. Workouts: class cards, day bars with legend, history.
 5. Nutrition: coach plan, trend, meals list.
 6. Health panel: Overview stat grid, Activity tab.
-7. Attention, tasks, countdowns, habits: states built, data pending (blocked on the gaps above).
-8. Rules & sources.
+7. Attention (waiting for you, waiting on others): blocked until a read source is served. An explicit
+   unavailable state can ship earlier.
+8. Tasks, countdowns, habits: deferred. Their sources are excluded from approved scope, so nothing is built
+   until the owner rules on each.
+9. Rules & sources.
 
-Every component ships loading, empty, error and unavailable states. Values that are not served are never
+Components with a served source ship loading, empty and error states. A component with no served source
+ships only an explicit unavailable state, never an empty one. Values that are not served are never
 invented.

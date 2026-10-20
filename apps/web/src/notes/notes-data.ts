@@ -57,6 +57,27 @@ export function noteTitleFromPath(path: string): string {
   return path.split('/').at(-1)?.replace(/\.md$/iu, '').replace(/[-_]/gu, ' ') || 'Vault note';
 }
 
+export interface Folder { path: string; name: string; children: Folder[] }
+export const ancestors = (path: string) => path ? path.split('/').map((_, index, segments) => segments.slice(0, index + 1).join('/')) : [];
+
+export function folderTree(paths: readonly string[]): Folder[] {
+  const folders = new Map<string, Folder>();
+  for (const path of paths) {
+    for (const parent of ancestors(path)) {
+      if (!folders.has(parent)) folders.set(parent, { path: parent, name: parent.split('/').at(-1)!, children: [] });
+    }
+  }
+  const roots: Folder[] = [];
+  for (const folder of folders.values()) {
+    const parent = folder.path.includes('/') ? folders.get(folder.path.slice(0, folder.path.lastIndexOf('/'))) : null;
+    (parent?.children ?? roots).push(folder);
+  }
+  for (const children of [roots, ...[...folders.values()].map(folder => folder.children)]) {
+    children.sort((left, right) => left.name.localeCompare(right.name, undefined, { numeric: true }));
+  }
+  return roots;
+}
+
 export function readNote(value: unknown): Note {
   const note = object(value);
   if (!note || !safeNotePath(note.path) || !content(note.content) || !sha(note.sha) || !githubUrl(note.url)) {
@@ -164,6 +185,16 @@ export function createNotesClient(backendUrl: string, getAccessToken: () => Prom
       if (folder) params.set('folder', folder);
       const page = readNotePage(await request(`/notes?${params}`, { signal }));
       if (page.offset !== offset || page.limit !== 50) throw new Error('Jarvis returned the wrong notes page.');
+      return page;
+    },
+    /** The notes directly inside one vault directory ('' is the vault root), one page at a time. */
+    async listDirectory(directory: string, offset: number, signal: AbortSignal) {
+      if (!safeNoteFolder(directory) || !Number.isInteger(offset) || offset < 0 || offset > 10_000) throw new Error('Use a valid notes folder and page.');
+      const params = new URLSearchParams({ limit: '50', offset: String(offset), directory });
+      const page = readNotePage(await request(`/notes?${params}`, { signal }));
+      if (page.offset !== offset || page.limit !== 50 || page.notes.some(note => note.directory !== directory)) {
+        throw new Error('Jarvis returned the wrong notes page.');
+      }
       return page;
     },
     async read(path: string, signal?: AbortSignal) {
