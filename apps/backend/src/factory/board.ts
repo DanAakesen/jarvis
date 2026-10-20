@@ -10,7 +10,7 @@ import { boardReadError, FactoryBoardReadError, readBoardStage } from './board-e
 
 const githubApi = 'https://api.github.com';
 const repositoryPattern = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/u;
-const maxResponseBytes = 1024 * 1024;
+const maxResponseBytes = 4 * 1024 * 1024;
 const maxPages = 10;
 const pageSize = 100;
 const maxConcurrentRequests = 8;

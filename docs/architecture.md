@@ -1710,8 +1710,13 @@ field remains accepted by the log filter for compatibility, but ordinary task
 publication no longer emits it. Versions are process-local and are not a durable
 event sequence. No polling, endpoint, resource, or client behavior is added.
 
-The 25-second source deadline, ten-page/100-row pagination,
-one-minute/32-entry cache and 1-MiB byte limits are unchanged. Within a snapshot,
+P14-43 caps each GitHub source response at 4 MiB (declared length and streamed
+bytes), allowing 100-item pages with large issue/PR bodies. The board API output
+cap stays at 1 MiB. The 25-second source deadline, ten-page/100-row pagination
+(1,000 items per list) and one-minute/32-entry cache are unchanged. The three
+primary lists use at most 30 requests and 120 MiB of source JSON per read;
+parsing/copies add memory overhead. Dependency lists retain the same per-list
+bounds. Within a snapshot,
 one request limiter caps all GitHub reads at eight concurrent requests. Offset
 pages are fetched concurrently only when provider metadata supplies a consistent
 last page; cursor pages, including links with both an incrementing page and

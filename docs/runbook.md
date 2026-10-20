@@ -117,11 +117,33 @@ The authenticated UI and an authorized operator own the post-deploy readback.
    that readback. Coordinate with #810's UI owner; preserve the original Note
    and checkout. Fixture tests and deployment smoke cannot close this gate.
 
-Confirmed offline correction: both cache rejection paths previously replaced
+### P14-43 source response size (20 October 2026)
+
+Each GitHub response is now capped at 4 MiB, checked against both declared
+`content-length` and consumed stream bytes. The public board response remains
+capped at 1 MiB: issue bodies are source data, not board-card output.
+Pagination remains 100 items × 10 pages per list, with eight concurrent requests
+and a 25-second source deadline. Three primary lists therefore allow at most
+30 requests / 120 MiB source JSON, before parsing/copy overhead; dependency
+lists keep the same bounds. Oversized, incomplete, repeated and foreign-repository
+pages still fail closed. See the P14-43 decision for closed-window headroom.
+
+The issue's production evidence identifies `stage: source`,
+`reason: response_too_large` for this recurrence. After deployment, the authorized
+operator must observe a fresh complete HTTP 200 board as above and no new
+`response_too_large` warnings in the recorded observation window. Keep #1127
+open until that is observed; local tests and deployment success are insufficient.
+
+`factory.board_task_event_failed` is a separate path: the event subscriber reads
+`taskStore.get(taskId, 0, 0)` to resolve the project and publishes an invalidation;
+it does not read GitHub. `kind: internal` is the safe fallback for an unclassified
+exception (including a missing task), not evidence of a response-size failure.
+Its production cause remains unverified and needs separate task-store evidence.
+
+Confirmed offline correction for the earlier incident: both cache rejection paths previously replaced
 the original error, and stale fallback hid refresh failure. Typed boundary
 diagnostics now survive those paths and the stdout/telemetry allowlist.
-The actual recurring production failing stage remains unconfirmed until the
-authorized post-deploy readback; no runtime-cause correction is claimed yet.
+Those earlier diagnostics alone did not establish the historical runtime cause.
 
 ## Factory board source latency (#813)
 
