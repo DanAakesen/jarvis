@@ -122,6 +122,15 @@ code was not available, so the audit works from screenshots only.
 
 Refs #1116
 
+P14-47 follow-up (#1136): Health panel state belongs to `panel` and `healthTab`
+search parameters. Its read window is the current Copenhagen day plus six preceding
+days; weekly targets count Monday through today. Retained-record completeness is
+still unknown. Catalogue units keep series separate; categories are used only
+when served, with uncategorised metrics retained in All data rather than inferred
+from a personal metric list. The current catalogue has no category field or
+retention policy. Gym/Run targets remain a nullable prop pending P14-45 (#1132);
+no parallel targets client is introduced.
+
 ## P14-32 — Notes tree beside Show tasks (20 October 2026; #1085)
 
 Dan asked for a tree of all notes he can preview and edit. An icon-only button

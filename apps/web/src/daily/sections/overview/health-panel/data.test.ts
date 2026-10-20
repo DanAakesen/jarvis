@@ -83,6 +83,9 @@ describe('Health catalogue views', () => {
       expect(categoryTiles(records, tab)).toHaveLength(1);
     }
     expect(categoryTiles(records, 'all')).toHaveLength(6);
+    records.metrics.push({ metric_name: 'synthetic_a', metric_date: '2026-10-20', unit: 'unlisted-unit', value: 5 });
+    expect(categoryTiles(records, 'body')).toHaveLength(2);
+    expect(categoryTiles(records, 'all')).toHaveLength(7);
   });
 
   it('keeps uncategorised and unrecognised metrics in All data, without guessing', () => {

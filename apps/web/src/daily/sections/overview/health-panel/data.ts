@@ -24,18 +24,19 @@ function category(value: DailyJson | undefined): HealthTab {
 
 export function metricTiles(metrics: readonly Row[], catalog: readonly Row[]) {
   const groups = new Map<string, Tile & { category: HealthTab }>();
-  const categories = new Map(catalog.map(row => [row.metric_name, category(row.category)]));
+  const catalogue = new Map(catalog.map(row => [row.metric_name, row]));
   for (const row of metrics) {
     if (typeof row.metric_name !== 'string') continue;
     const date = dateOnly(row.metric_date);
     if (!date) continue;
     const unit = typeof row.unit === 'string' && row.unit.trim() ? row.unit : undefined;
+    const entry = catalogue.get(row.metric_name);
     const key = JSON.stringify(['metrics', row.metric_name, unit]);
     const previous = groups.get(key);
     if (previous?.date && previous.date > date) continue;
     groups.set(key, {
       key, label: metricLabel(row.metric_name), value: metricValue(row).value ?? unavailable,
-      unit, date, category: categories.get(row.metric_name) ?? 'all',
+      unit, date, category: unit && Array.isArray(entry?.units) && entry.units.includes(unit) ? category(entry.category) : 'all',
       ...(metricValue(row).average ? { note: 'Average of the latest sample day.' } : {}),
     });
   }
@@ -43,7 +44,8 @@ export function metricTiles(metrics: readonly Row[], catalog: readonly Row[]) {
 }
 
 function latest(rows: readonly Row[], date: (row: Row) => string | null) {
-  return rows.filter(row => date(row)).sort((a, b) => date(b)!.localeCompare(date(a)!))[0];
+  const started = (row: Row) => typeof row.start_at === 'string' && Number.isFinite(Date.parse(row.start_at)) ? Date.parse(row.start_at) : 0;
+  return rows.filter(row => date(row)).sort((a, b) => date(b)!.localeCompare(date(a)!) || started(b) - started(a))[0];
 }
 
 export function categoryTiles(records: Records, tab: HealthTab): Tile[] {
@@ -63,7 +65,8 @@ export function categoryTiles(records: Records, tab: HealthTab): Tile[] {
   if (tab === 'sleep' || tab === 'all') {
     const row = latest(records.sleep, row => dateOnly(row.sleep_date));
     add('sleep', row, dateOnly(row?.sleep_date), Object.keys(row ?? {})
-      .filter(key => key.endsWith('_hours')).map(key => ({ key, unit: 'h', label: metricLabel(key.replace(/_hours$/u, '')) })));
+      .filter(key => key.endsWith('_hours') || key === 'segment_count')
+      .map(key => ({ key, unit: key.endsWith('_hours') ? 'h' : 'segments', label: metricLabel(key.replace(/_hours$/u, '')) })));
   }
   if (tab === 'workouts' || tab === 'all') {
     const date = (row: Row) => workoutDate(row.workout_date) ?? workoutDate(row.start_at);
@@ -81,7 +84,8 @@ export function categoryTiles(records: Records, tab: HealthTab): Tile[] {
     const row = latest(records.nutrition, row => dateOnly(row.meal_date));
     add('nutrition', row, dateOnly(row?.meal_date), Object.keys(row ?? {})
       .filter(key => key.endsWith('_grams') || key === 'energy_kcal' || key === 'meal_count')
-      .map(key => ({ key, unit: key.endsWith('_grams') ? 'g' : key === 'energy_kcal' ? 'kcal' : 'meals' })));
+      .map(key => ({ key, label: metricLabel(key.replace(/_(?:grams|kcal)$/u, '')),
+        unit: key.endsWith('_grams') ? 'g' : key === 'energy_kcal' ? 'kcal' : 'meals' })));
   }
   return tiles;
 }

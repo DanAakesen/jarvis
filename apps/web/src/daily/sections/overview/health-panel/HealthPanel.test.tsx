@@ -23,7 +23,7 @@ function mount(url = '/', available = allSources, targets: Parameters<typeof Hea
 function panel() { return screen.getByRole('tabpanel'); }
 async function settled() {
   await waitFor(() => expect(screen.getByText('No sync received')).toBeTruthy());
-  await waitFor(() => expect(screen.queryAllByLabelText('Loading Daily history')).toHaveLength(0));
+  await waitFor(() => expect(screen.queryAllByText('Loading Daily history')).toHaveLength(0));
   await waitFor(() => expect(within(panel()).getAllByText(/Read /u).length).toBeGreaterThan(0));
 }
 
@@ -128,6 +128,18 @@ describe('Health panel', () => {
     mount('/?healthTab=activity', []);
     expect(screen.getByText('Health metrics is not served by this backend.')).toBeTruthy();
     expect(screen.queryByText('No data received for this view.')).toBeNull();
+  });
+
+  it('does not label missing catalogue categories as an empty category', async () => {
+    rows[sources.metricCatalog] = [{ metric_name: 'synthetic_metric', units: ['kg'],
+      first_date: '2026-10-20', last_date: '2026-10-20', day_count: 1, latest_updated_at: '2026-10-20T10:00:00Z' }];
+    rows[sources.metrics] = [{ metric_name: 'synthetic_metric', metric_date: '2026-10-20', value: 42, unit: 'kg' }];
+    mount('/?healthTab=body');
+    await settled();
+    expect(screen.getByText('Category grouping is unavailable without catalogue categories. See All data for received metrics.')).toBeTruthy();
+    expect(screen.queryByText('No data received for this view.')).toBeNull();
+    fireEvent.click(screen.getByRole('tab', { name: 'All data' }));
+    expect(screen.getByRole('heading', { name: 'Synthetic metric' })).toBeTruthy();
   });
 
   it('exposes errors and retries through the existing read lifecycle', async () => {

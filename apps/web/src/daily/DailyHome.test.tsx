@@ -15,6 +15,8 @@ const backendUrl = 'http://localhost:3999';
 const shellReads = 1;
 // Today cards: weekly workouts, today's nutrition day and today's meals.
 const todayReads = 3;
+// Health panel: metrics, catalogue, sleep, workouts, nutrition days and sync.
+const healthReads = 6;
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.restoreAllMocks(); window.history.replaceState({}, '', '/'); });
 
 const records: Partial<Record<DailySourceId, Record<string, DailyJson>>> = {
@@ -62,6 +64,7 @@ function home(refreshVersion = 0, initialPath = '/daily') {
   </MemoryRouter>;
 }
 const settled = () => screen.findByText(/^Checked \d+ collections?:/u);
+const sectionTabs = () => within(screen.getByRole('tablist', { name: 'Daily sections' }));
 const probes = (queries: readonly DailyQuery[]) => queries.filter(query => !('limit' in query) || query.limit === 1);
 function row(name: string) {
   const item = screen.getAllByRole('heading', { name }).map(heading => heading.closest('li')).find(Boolean) ?? null;
@@ -134,7 +137,7 @@ describe('Daily overview', () => {
     expect(f.queries).toHaveLength(2);
     hold.open();
     await settled();
-    expect(f.queries).toHaveLength(dailySources.length + 5 + todayReads + shellReads);
+    expect(f.queries).toHaveLength(dailySources.length + 5 + todayReads + shellReads + healthReads);
   });
   it('shows a failed collection on its own row, keeps the rest, and Retry reads again and keeps keyboard focus in that row', async () => {
     let sleepFails = true;
@@ -163,19 +166,19 @@ describe('Daily overview', () => {
     const f = fixture({ answer: async query => { if (gated) await hold.opened; return jsonResponse(dailyFixture(query, items(query))); } });
     render(home());
     await settled();
-    await waitFor(() => expect(f.queries).toHaveLength(dailySources.length + 5 + todayReads + shellReads));
+    await waitFor(() => expect(f.queries).toHaveLength(dailySources.length + 5 + todayReads + shellReads + healthReads));
     gated = true;
     fireEvent.click(screen.getByRole('button', { name: 'Refresh overview' }));
     const busy = await screen.findByRole('button', { name: 'Refreshing…' });
     expect(busy.getAttribute('aria-disabled')).toBe('true');
     expect(row('Measurements').getByText('Has records')).toBeTruthy();
-    await waitFor(() => expect(probes(f.queries).length).toBe(dailySources.length + 2 + shellReads));
+    await waitFor(() => expect(probes(f.queries).length).toBe(dailySources.length + 2 + shellReads + 1));
     fireEvent.click(busy);
     await flush();
-    expect(probes(f.queries)).toHaveLength(dailySources.length + 2 + shellReads);
+    expect(probes(f.queries)).toHaveLength(dailySources.length + 2 + shellReads + 1);
     hold.open();
     await screen.findByRole('button', { name: 'Refresh overview' });
-    await waitFor(() => expect(f.queries).toHaveLength((dailySources.length + 5 + todayReads) * 2 + shellReads));
+    await waitFor(() => expect(f.queries).toHaveLength((dailySources.length + 5 + todayReads) * 2 + shellReads + healthReads));
     expect(screen.queryByRole('button', { name: 'Refreshing…' })).toBeNull();
   });
   it('re-reads when the existing Daily refresh stream advances', async () => {
@@ -183,28 +186,28 @@ describe('Daily overview', () => {
     const { rerender } = render(home(0));
     await settled();
     rerender(home(1));
-    await waitFor(() => expect(f.queries).toHaveLength((dailySources.length + 5 + todayReads) * 2 + shellReads * 2));
+    await waitFor(() => expect(f.queries).toHaveLength((dailySources.length + 5 + todayReads + healthReads) * 2 + shellReads * 2));
     await settled();
   });
   it('shows only implemented sections and keeps the shared period when switching sections', async () => {
     const f = fixture({ capabilities: () => capabilityList(Object.values(sources).filter(source => source !== sources.workouts)) });
     render(home());
     await settled();
-    expect(screen.getByRole('tab', { name: 'Overview' })).toBeTruthy();
-    expect(screen.getByRole('tab', { name: 'Briefs' })).toBeTruthy();
-    expect(screen.getByRole('tab', { name: 'Data' })).toBeTruthy();
-    expect(screen.queryByRole('tab', { name: 'Workouts' })).toBeNull();
-    expect(screen.getByRole('tab', { name: 'Nutrition' })).toBeTruthy();
-    expect(screen.getByRole('tab', { name: 'Body & sleep' })).toBeTruthy();
+    expect(sectionTabs().getByRole('tab', { name: 'Overview' })).toBeTruthy();
+    expect(sectionTabs().getByRole('tab', { name: 'Briefs' })).toBeTruthy();
+    expect(sectionTabs().getByRole('tab', { name: 'Data' })).toBeTruthy();
+    expect(sectionTabs().queryByRole('tab', { name: 'Workouts' })).toBeNull();
+    expect(sectionTabs().getByRole('tab', { name: 'Nutrition' })).toBeTruthy();
+    expect(sectionTabs().getByRole('tab', { name: 'Body & sleep' })).toBeTruthy();
 
-    fireEvent.click(screen.getByRole('tab', { name: 'Data' }));
+    fireEvent.click(sectionTabs().getByRole('tab', { name: 'Data' }));
     await screen.findByLabelText('Browse');
     fireEvent.change(screen.getByLabelText('Period'), { target: { value: '30' } });
     await waitFor(() => expect(f.queries.at(-1)).toMatchObject({ source: sources.metrics }));
     expect((screen.getByLabelText('Period') as HTMLSelectElement).value).toBe('30');
-    fireEvent.click(screen.getByRole('tab', { name: 'Briefs' }));
+    fireEvent.click(sectionTabs().getByRole('tab', { name: 'Briefs' }));
     await screen.findByRole('heading', { level: 2, name: 'Briefs' });
-    fireEvent.click(screen.getByRole('tab', { name: 'Data' }));
+    fireEvent.click(sectionTabs().getByRole('tab', { name: 'Data' }));
     await screen.findByLabelText('Browse');
     expect((screen.getByLabelText('Period') as HTMLSelectElement).value).toBe('30');
   });
@@ -213,7 +216,7 @@ describe('Daily overview', () => {
     fixture({ capabilities: () => capabilityList(Object.values(sources).filter(source => source !== sources.workouts)) });
     render(home(0, '/daily?section=unknown'));
     await settled();
-    const overview = screen.getByRole('tab', { name: 'Overview' });
+    const overview = sectionTabs().getByRole('tab', { name: 'Overview' });
     await waitFor(() => expect(overview.getAttribute('aria-selected')).toBe('true'));
     expect(screen.getByTestId('daily-section-url').textContent).toBe('unknown');
 
@@ -228,12 +231,12 @@ describe('Daily overview', () => {
     expect(document.activeElement).toBe(nextTab);
     expect(screen.getByTestId('daily-section-url').textContent).toBe(nextTab.id.replace('daily-tab-', ''));
     fireEvent.keyDown(nextTab, { key: 'End' });
-    const data = screen.getByRole('tab', { name: 'Data' });
+    const data = sectionTabs().getByRole('tab', { name: 'Data' });
     expect(data.getAttribute('aria-selected')).toBe('true');
     expect(document.activeElement).toBe(data);
     expect(screen.getByTestId('daily-section-url').textContent).toBe('data');
     fireEvent.keyDown(data, { key: 'Home' });
-    expect(screen.getByRole('tab', { name: 'Overview' }).getAttribute('aria-selected')).toBe('true');
+    expect(sectionTabs().getByRole('tab', { name: 'Overview' }).getAttribute('aria-selected')).toBe('true');
     expect(document.activeElement).toBe(overview);
     expect(tablist.getAllByRole('tab').filter(tab => tab.getAttribute('tabindex') === '0')).toHaveLength(1);
   });
@@ -254,7 +257,7 @@ describe('Daily overview', () => {
       expect(stripScrolls().every(scroll => scroll.options.behavior === 'auto')).toBe(true);
 
       Object.defineProperty(strip, 'clientWidth', { configurable: true, value: 390 });
-      const data = screen.getByRole('tab', { name: 'Data' });
+      const data = sectionTabs().getByRole('tab', { name: 'Data' });
       Object.defineProperty(data, 'offsetLeft', { configurable: true, value: 600 });
       Object.defineProperty(data, 'offsetWidth', { configurable: true, value: 80 });
       scrolls.length = 0;
@@ -263,7 +266,7 @@ describe('Daily overview', () => {
 
       document.documentElement.dataset.motion = 'reduced';
       scrolls.length = 0;
-      fireEvent.click(screen.getByRole('tab', { name: 'Overview' }));
+      fireEvent.click(sectionTabs().getByRole('tab', { name: 'Overview' }));
       expect(stripScrolls()).toEqual([{ element: strip, options: { left: 0, behavior: 'auto' } }]);
     } finally {
       delete document.documentElement.dataset.motion;
@@ -320,7 +323,8 @@ describe('Daily overview', () => {
     render(home());
     const names = ['Overview', 'Briefs', 'Workouts', 'Nutrition', 'Body & sleep'];
     for (let index = 0; index < 20; index += 1) {
-      fireEvent.click(await screen.findByRole('tab', { name: names[index % names.length]! }));
+      const tablist = await screen.findByRole('tablist', { name: 'Daily sections' });
+      fireEvent.click(within(tablist).getByRole('tab', { name: names[index % names.length]! }));
       await flush();
     }
     await waitFor(() => expect(aborted).toBeGreaterThan(0));
@@ -339,12 +343,12 @@ describe('Daily overview', () => {
     await waitFor(() => expect(f.queries.at(-1)).toMatchObject({ source: sources.metrics, limit: 50 }));
     expect(screen.queryByRole('heading', { name: 'What Daily holds today' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Back to overview' })).toBeNull();
-    fireEvent.click(screen.getByRole('tab', { name: 'Overview' }));
+    fireEvent.click(sectionTabs().getByRole('tab', { name: 'Overview' }));
     await settled();
-    expect(screen.getByRole('tab', { name: 'Overview' }).getAttribute('aria-selected')).toBe('true');
+    expect(sectionTabs().getByRole('tab', { name: 'Overview' }).getAttribute('aria-selected')).toBe('true');
     expect(row('Measurements').getByRole('button', { name: 'Open Measurements' })).toBeTruthy();
     expect(f.capabilityCalls()).toBe(1);
-    expect(f.queries.filter(query => !('limit' in query) || query.limit === 1)).toHaveLength(dailySources.length * 2 + shellReads);
+    expect(f.queries.filter(query => !('limit' in query) || query.limit === 1)).toHaveLength(dailySources.length * 2 + shellReads + 2);
   });
   it.each([
     [404, 'Daily is not enabled on this backend.'],
@@ -362,7 +366,7 @@ describe('Daily overview', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Retry availability' }));
     await settled();
     expect(screen.getAllByRole('listitem')).toHaveLength(1);
-    expect(f.queries).toHaveLength(1);
+    expect(f.queries).toHaveLength(2);
     expect(screen.queryByRole('alert')).toBeNull();
   });
   it('says so plainly when the backend exposes no browsable collection', async () => {
