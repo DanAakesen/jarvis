@@ -7,6 +7,7 @@ import { overviewSummary, rowView } from './overview';
 import { dailyValue } from './presentation';
 import { useDailyProbes, type ProbeRow } from './useDailyProbes';
 import { OverviewSummaryTiles } from './sections/overview/SummaryTiles';
+import { TodayCards } from './sections/overview/TodayCards';
 import { DailyRefreshContext } from './refresh';
 import { DataNotes } from './ui/DataNotes';
 import './daily.css';
@@ -109,6 +110,8 @@ export function DailyOverview({ backendUrl, getAccessToken, capabilities, onRetr
           : <>
             {hasSummarySource && <>
               {!embedded && <h2 id="daily-summary-heading">Today</h2>}
+              <TodayCards backendUrl={backendUrl} getAccessToken={getAccessToken}
+                refreshVersion={refreshVersion + summaryRefresh} available={available} />
               <OverviewSummaryTiles backendUrl={backendUrl} getAccessToken={getAccessToken}
                 refreshVersion={refreshVersion + summaryRefresh} available={available} />
             </>}

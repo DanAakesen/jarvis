@@ -3,7 +3,7 @@ import { dateStep } from '../nutrition/totals';
 import { dateOnly, metricDisplay, metricValue, type Row as MetricRow } from '../body-sleep/metrics';
 import { hours, nightStages } from '../body-sleep/sleep';
 import { numeric, sumNutrient, type Row as NutritionRow } from '../nutrition/totals';
-import { summarizeWorkouts, type Workout, workoutDate } from '../workouts/summary';
+import { summarizeWorkouts, type Workout, typeLabel, workoutDate } from '../workouts/summary';
 import type { Row as SleepRow } from '../body-sleep/metrics';
 
 export function overviewPeriods(now = new Date()) {
@@ -29,6 +29,20 @@ export function workoutOverview(rows: readonly Workout[], period: { startDate: s
   const latest = [...dated].sort((a, b) => b.date.localeCompare(a.date) || startedAt(b.row) - startedAt(a.row))[0] ?? null;
   const week = dated.filter(item => item.date >= weekPeriod.startDate && item.date <= weekPeriod.endDate).map(item => item.row);
   return { latest, week: summarizeWorkouts(week) };
+}
+
+/** Sessions in the period, grouped by what the recorded type says; nothing is inferred beyond the type. */
+export function trainingCounts(rows: readonly Workout[], period: { startDate: string; endDate: string }) {
+  const counts = { strength: 0, running: 0, other: 0 };
+  for (const row of rows) {
+    const date = workoutDate(row.workout_date) ?? workoutDate(row.start_at);
+    if (!date || date < period.startDate || date > period.endDate) continue;
+    const label = typeLabel(row);
+    if (/strength/iu.test(label)) counts.strength += 1;
+    else if (label === 'Running') counts.running += 1;
+    else counts.other += 1;
+  }
+  return counts;
 }
 
 export function latestNutritionDay(rows: readonly NutritionRow[], period: { startDate: string; endDate: string }) {
