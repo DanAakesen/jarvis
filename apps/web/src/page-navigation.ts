@@ -25,7 +25,8 @@ const pages: Record<string, string> = {
   status: '/status',
   knowledge: '/notes',
   notes: '/notes',
-  daily: '/daily',
+  daily: '/health',
+  health: '/health',
 };
 export const settingsAnchors: Record<string, string> = {
   appearance: 'appearance-settings-heading',
@@ -61,7 +62,7 @@ export function readNavigateCommand(command: unknown): NavigateRequest | null {
 }
 
 export function resolveNavigation({ page, section, taskId, issueNumber }: NavigateRequest, dailyEnabled = false): NavigateTarget {
-  if (page === 'daily' && dailyEnabled !== true) return { ok: false, reason: 'Daily is not enabled in this client.' };
+  if ((page === 'daily' || page === 'health') && dailyEnabled !== true) return { ok: false, reason: 'Health is not enabled in this client.' };
   if (issueNumber !== undefined && (page !== 'factory' || !Number.isSafeInteger(issueNumber) || issueNumber <= 0)) {
     return { ok: false, reason: 'An issue can only be opened on the Software Factory board by its positive whole number.' };
   }
@@ -141,7 +142,8 @@ const pagePrefixes: readonly [string, WorkspaceNavigationPage][] = [
 
 /** The shell page for a route, for the `view` Dan is looking at (P9-43). */
 export function pageForPath(pathname: string, dailyEnabled = false): WorkspaceNavigationPage {
-  if (dailyEnabled === true && (pathname === '/daily' || pathname.startsWith('/daily/'))) return 'daily';
+  if (dailyEnabled === true && (pathname === '/health' || pathname.startsWith('/health/') ||
+      pathname === '/daily' || pathname.startsWith('/daily/'))) return 'health';
   return pagePrefixes.find(([prefix]) => pathname === prefix || pathname.startsWith(`${prefix}/`))?.[1] ?? 'home';
 }
 

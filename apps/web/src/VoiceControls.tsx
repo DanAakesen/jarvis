@@ -232,7 +232,7 @@ export function VoiceControls({
       onVisionLimit: (limit) => {
         if (client.current !== voice || visualResultItem.current !== limit.itemId) return;
         notify(limit.code === 'daily_limit'
-          ? 'Daily camera limit reached in voice. Jarvis has no fresh frame for this turn.'
+          ? 'The per-day camera limit was reached in voice. Jarvis has no fresh frame for this turn.'
           : limit.code === 'budget_exhausted'
             ? 'Camera image budget reached in voice. No image was supplied for this turn.'
             : limit.code === 'budget_unavailable'

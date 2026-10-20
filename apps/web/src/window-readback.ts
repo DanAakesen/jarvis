@@ -161,7 +161,7 @@ export function useReadback<T>(collect: () => T, enabled: boolean, key: string):
   return enabled ? value : undefined;
 }
 
-const pageTitles: Partial<Record<WorkspaceNavigationPage, string>> = { settings: 'Settings', knowledge: 'Graph', notes: 'Notes', status: 'Status', daily: 'Daily' };
+const pageTitles: Partial<Record<WorkspaceNavigationPage, string>> = { settings: 'Settings', knowledge: 'Graph', notes: 'Notes', status: 'Status', daily: 'Health', health: 'Health' };
 
 /**
  * The page Dan is on (Settings section, Graph, Notes, Status) and the Folio pane as snapshot windows, so `read_window` can

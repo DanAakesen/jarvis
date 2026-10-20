@@ -839,6 +839,11 @@ function TasksRedirect() {
   return <Navigate to={`/notes?${new URLSearchParams(query ? { tasks: '1', q: query } : { tasks: '1' })}`} replace />;
 }
 
+function DailyRedirect() {
+  const { pathname, search, hash } = useLocation();
+  return <Navigate to={{ pathname: pathname.replace(/^\/daily(?=\/|$)/u, '/health'), search, hash }} replace />;
+}
+
 /** Every Jarvis page needs Dan's verified session; until then the page shows sign-in instead. */
 function RequireSignIn({ session }: { session: SignInSession }) {
   return session.state === 'signed-in' && session.profile ? <Outlet /> : <SignInPage session={session} />;
@@ -942,6 +947,7 @@ export function App({ config = defaultConfig, dailyEnabled = false, pushEnabled 
             dailyEnabled={dailyEnabled} proactiveEnabled={proactiveEnabled} />}>
             <Route element={<RequireSignIn session={session} />}>
               <Route index element={<h1 className="visually-hidden">Welcome, {session.profile?.name ?? ''}</h1>} />
+              <Route path="daily/*" element={<DailyRedirect />} />
               {areas.map(({ id, path, Component }) => (
                 <Route key={id} path={`${path}/*`} element={
                   <Component key={id === 'daily' ? dailyAccountKey : id} backendUrl={config.backendUrl}

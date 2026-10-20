@@ -42,7 +42,7 @@ const inputSchema = {
     source: {
       type: 'string',
       enum: [...dailyShowSources],
-      description: 'What to show: daily.health.metrics (named measurements such as steps), daily.health.metric-catalog (measurements available in a period), daily.health.sleep, daily.health.workouts, daily.health.heart-rate (during one workout), daily.nutrition.meals (logged food), daily.nutrition.days (per-day totals derived from retained meals), daily.nutrition.favorites, daily.nutrition.plans or daily.sync (upload and processing evidence).',
+      description: 'What to show: retained measurements such as steps, the measurement catalogue, sleep, workouts, heart rate during one workout, logged food, per-day nutrition totals, saved favourites, meal plans or upload and processing evidence.',
     },
     startDate: { type: 'string', description: 'First day, YYYY-MM-DD, Europe/Copenhagen, inclusive. Required for measurements, the metric catalogue, sleep, workouts, meals and nutrition days; not accepted for the other sources.' },
     endDate: { type: 'string', description: 'Last day, YYYY-MM-DD, inclusive, at most 366 days after startDate. Required with startDate.' },
@@ -134,7 +134,7 @@ function parse(raw: unknown): ShowRequest {
     const limit = input.limit ?? (drawn || metric !== undefined ? cap : undefined);
     if (limit !== undefined) query.limit = limit;
   }
-  if (!isDailyQuery(query)) throw new ToolRefusal('Those selectors do not make a valid Daily read. Check the source, dates and workout id.');
+  if (!isDailyQuery(query)) throw new ToolRefusal('Those selectors do not make a valid Health read. Check the source, dates and workout id.');
   return { query, display, metric, workoutId };
 }
 
@@ -146,7 +146,7 @@ async function publish(
   const command = (operation: 'create' | 'update'): WorkspaceCommand => {
     const candidate: WorkspaceCommand = { commandId: randomUUID(), operation, viewId: build.viewId, view: build.view };
     if (!isWorkspaceCommand(candidate, generatedViewValidationOptions(request.server))) {
-      throw new ToolFailure('The Daily view did not pass workspace validation.');
+      throw new ToolFailure('The Health view did not pass workspace validation.');
     }
     return candidate;
   };
@@ -169,18 +169,18 @@ async function publish(
 export function dailyShowTool(service: Pick<DailyQueryService, 'query'>): JarvisTool {
   return {
     name: 'daily_show',
-    description: 'Show retained Daily data on screen in the signed-in workspace as a table, a chart or a detail view, instead of only describing it. Use it when the owner asks to see, chart, plot or compare a measurement catalogue, sleep, a measurement such as steps, workouts, heart rate during one workout, logged meals, per-day nutrition totals, saved favourites, meal plans or sync evidence. To answer in words only, use daily_query. Choose the source and its period: measurements, the metric catalogue, sleep, workouts, meals and nutrition days need startDate and endDate (YYYY-MM-DD, Europe/Copenhagen, at most 366 days); heart rate needs the exact workoutId of one workout, read from the id in a workouts result; favourites, meal plans and sync take no dates. Nutrition-day totals are derived from retained non-deleted meals; nutrients missing from every meal are Unknown, and partial totals are lower bounds. metric keeps one measurement from the page, named as returned (the readable name shown on screen also works), for measurements and heart rate. display is table (the default) or chart. A chart is drawn only for sleep hours, one measurement or heart rate during a workout; otherwise a table is shown and the result notes say why. The view adds no calculations, estimates or fill-ins; nutrition-day totals are displayed from the shared query result. An unknown value stays Unknown and is never zero, and completeness and freshness are not established. Each source, form and measurement keeps one view, so asking again refreshes it with the newest window instead of opening another. This shows one page: when the result says partial or hasMore, narrow the dates or name one measurement, and never claim a longer period was shown. Brief history and a single workout are not shown here; use daily_query. Report only what the result says: the view form actually shown (view.renderer), its notes, and facts from the returned records. This is private health data: it is not available on the phone, and nothing is logged, changed or sent.',
+    description: 'Show retained Health data on screen in the signed-in workspace as a table, a chart or a detail view, instead of only describing it. Use it when the owner asks to see, chart, plot or compare a measurement catalogue, sleep, a measurement such as steps, workouts, heart rate during one workout, logged meals, per-day nutrition totals, saved favourites, meal plans or sync evidence. To answer in words only, use daily_query. Choose the source and its period: measurements, the metric catalogue, sleep, workouts, meals and nutrition days need startDate and endDate (YYYY-MM-DD, Europe/Copenhagen, at most 366 days); heart rate needs the exact workoutId of one workout, read from the id in a workouts result; favourites, meal plans and sync take no dates. Nutrition-day totals are derived from retained non-deleted meals; nutrients missing from every meal are Unknown, and partial totals are lower bounds. metric keeps one measurement from the page, named as returned (the readable name shown on screen also works), for measurements and heart rate. display is table (the default) or chart. A chart is drawn only for sleep hours, one measurement or heart rate during a workout; otherwise a table is shown and the result notes say why. The view adds no calculations, estimates or fill-ins; nutrition-day totals are displayed from the shared query result. An unknown value stays Unknown and is never zero, and completeness and freshness are not established. Each source, form and measurement keeps one view, so asking again refreshes it with the newest window instead of opening another. This shows one page: when the result says partial or hasMore, narrow the dates or name one measurement, and never claim a longer period was shown. Brief history and a single workout are not shown here; use daily_query. Report only what the result says: the view form actually shown (view.renderer), its notes, and facts from the returned records. This is private health data: it is not available on the phone, and nothing is logged, changed or sent.',
     inputSchema,
     bodyLimit: 2048,
     sensitive: true,
     denyOnPhone: true,
     execute: async (raw, request, signal) => {
       const ownerId = resolveDailyOwner(request);
-      if (request.dailyConnectorPrincipal) throw new ToolRefusal('Daily views are for the signed-in workspace, not for external clients.');
+      if (request.dailyConnectorPrincipal) throw new ToolRefusal('Health views are for the signed-in workspace, not for external clients.');
       const { query, display, metric, workoutId } = parse(raw);
       // Refuse before reading: private data that cannot be shown should not be fetched.
       if (!request.server.workspaceCommands.isConnected(ownerId)) {
-        throw new ToolRefusal('Open the signed-in conversation workspace to see a Daily view, or read the records with daily_query and answer in words.');
+        throw new ToolRefusal('Open the signed-in conversation workspace to see a Health view, or read the records with daily_query and answer in words.');
       }
       const operationSignal = AbortSignal.any([signal, AbortSignal.timeout(showDeadlineMs)]);
       try {
@@ -194,7 +194,7 @@ export function dailyShowTool(service: Pick<DailyQueryService, 'query'>): Jarvis
       } catch (error) {
         // An outer abort passes through untouched; only this tool's own deadline becomes a clear failure.
         if (signal.aborted) throw signal.reason;
-        if (operationSignal.aborted) throw new ToolFailure('Showing the Daily view took too long. Try again with a shorter period.');
+        if (operationSignal.aborted) throw new ToolFailure('Showing the Health view took too long. Try again with a shorter period.');
         throw error;
       }
     },

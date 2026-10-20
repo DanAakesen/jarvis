@@ -183,7 +183,7 @@ describe('VoiceControls', () => {
     act(() => options.onVisionLimit({ itemId: 'item-1', code: 'frame_rate_limited' }));
     expect(screen.getByText('Voice camera is rate-limited. Jarvis has no fresh frame for this turn.')).not.toBeNull();
     act(() => options.onVisionLimit({ itemId: 'obsolete-item', code: 'daily_limit' }));
-    expect(screen.queryByText('Daily camera limit reached in voice. Jarvis has no fresh frame for this turn.')).toBeNull();
+    expect(screen.queryByText('Camera capture limit reached in voice. Jarvis has no fresh frame for this turn.')).toBeNull();
     await act(async () => { options.onVisionRequest('camera', 'And now?', 'item-1'); });
     expect(camera.inspectTurn).toHaveBeenCalledOnce();
     fireEvent.click(screen.getByRole('button', { name: 'More options' }));
@@ -220,7 +220,7 @@ describe('VoiceControls', () => {
   it('releases a voice hold with the typed capture budget denial and no cached image', async () => {
     const camera = { sharing: true, conversation: true, starting: false, inspecting: false, error: '',
       start: vi.fn(async () => {}), stop: vi.fn(), inspect: vi.fn(),
-      inspectTurn: vi.fn(async () => { throw new VisionInspectionError('Daily vision budget reached.', 429, 'budget_exhausted'); }) };
+      inspectTurn: vi.fn(async () => { throw new VisionInspectionError('Vision budget reached.', 429, 'budget_exhausted'); }) };
     render(<VoiceControls client={{} as PublicClientApplication} config={config} camera={camera} />);
     const { instance, options, listen } = startVoice();
     listen();
@@ -230,7 +230,7 @@ describe('VoiceControls', () => {
       itemId: 'budget-item', reason: 'budget_exhausted',
     });
     expect(instance.client.sendScreenContext).not.toHaveBeenCalled();
-    expect(screen.getByText('Daily vision budget reached.')).not.toBeNull();
+    expect(screen.getByText('Vision budget reached.')).not.toBeNull();
   });
 
   it('releases a correlated voice hold after ten seconds and ignores a late frame', async () => {

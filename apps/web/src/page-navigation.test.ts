@@ -19,6 +19,8 @@ describe('page navigation', () => {
     expect(resolveNavigation({ page: 'knowledge' })).toEqual({ ok: true, path: '/notes' });
     expect(resolveNavigation({ page: 'notes' })).toEqual({ ok: true, path: '/notes' });
     expect(resolveNavigation({ page: 'status' })).toEqual({ ok: true, path: '/status' });
+    expect(resolveNavigation({ page: 'daily' }, true)).toEqual({ ok: true, path: '/health' });
+    expect(resolveNavigation({ page: 'health' }, true)).toEqual({ ok: true, path: '/health' });
     expect(resolveNavigation({ page: 'settings', section: 'routines' }))
       .toEqual({ ok: true, path: '/settings', anchorId: 'routines-heading' });
     expect(resolveNavigation({ page: 'factory', taskId: '42' })).toEqual({ ok: true, path: '/factory/kanban', taskId: '42' });
@@ -99,9 +101,15 @@ describe('page navigation', () => {
     expect(['/', '/factory/kanban', '/factory/tasks/42', '/settings', '/usage', '/status', '/notes', '/knowledge', '/nowhere'].map(path => pageForPath(path)))
       .toEqual(['home', 'factory', 'factory', 'settings', 'usage', 'status', 'notes', 'knowledge', 'home']);
     expect(pageForPath('/daily')).toBe('home');
-    expect(pageForPath('/daily', true)).toBe('daily');
-    expect(resolveNavigation({ page: 'daily' }).ok).toBe(false);
-    expect(resolveNavigation({ page: 'daily' }, true)).toEqual({ ok: true, path: '/daily' });
+    expect(pageForPath('/health')).toBe('home');
+    expect(pageForPath('/daily', true)).toBe('health');
+    expect(pageForPath('/health', true)).toBe('health');
+    for (const page of ['daily', 'health'] as const) {
+      const refused = resolveNavigation({ page });
+      expect(refused.ok).toBe(false);
+      if (!refused.ok) expect(refused.reason).not.toMatch(/\bdaily\b/iu);
+      expect(resolveNavigation({ page }, true)).toEqual({ ok: true, path: '/health' });
+    }
     expect(isWorkspaceSnapshot({
       windows: [], contextPanelOpen: false, view: { page: 'factory', issueNumber: 793 },
     })).toBe(true);

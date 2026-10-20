@@ -169,7 +169,7 @@ export class VisionWatchService {
         throw new ScreenVisionError(404, 'Active conversation session not found.');
       }
       if (reservation.outcome === 'limit') {
-        throw new ScreenVisionError(429, 'The daily vision budget is exhausted or too little remains to safely watch another frame. Watching resumes on the next UTC day.');
+        throw new ScreenVisionError(429, 'The per-day vision budget is exhausted or too little remains to safely watch another frame. Watching resumes on the next UTC day.');
       }
       if (reservation.outcome === 'rate-limited') {
         throw new ScreenVisionError(429, 'Please wait 2.5 seconds before watching another frame from this source.');

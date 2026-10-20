@@ -19,6 +19,12 @@ current paths, so P14-54 renames them after the other tasks have merged, with al
 for every deployed path and key and an owner-run check before an alias is removed.
 Until then "Daily" in code, issue titles and the documents below means the Health area.
 
+The navigation command that reaches open browser tabs still carries `daily` for this
+page: the backend accepts `health` from the assistant and maps it before delivery,
+because a tab opened before the deploy only knows `daily` and would reject `health`.
+P14-54 drops the mapping once those tabs are gone. Stored nutrition text is shown as
+saved; only a provenance `source` value is relabelled for display.
+
 Refs #1116
 
 ## P14-41 — Daily matches the original, except the recorded non-migrations (20 October 2026; #1116)
@@ -73,6 +79,12 @@ read in words (`metricLabel`); unmapped names of any other shape stay verbatim. 
 tiles' loading semantics and wording otherwise stay as they were.
 
 Refs #1116, #1129
+
+P14-53 (#1147) applies the 20 October naming ruling: the owner-facing area and
+route are Health and `/health`, with legacy `/daily` UI links replaced to the
+matching Health URL. The internal area id, `dailyEnabled` options, API paths,
+tool/source ids, query contracts, settings keys, environment variables and log
+event names stay unchanged until #1146.
 
 ## P14-41 — Today cards read served sources and say so when one is not (20 October 2026; #1116)
 

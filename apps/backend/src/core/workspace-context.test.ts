@@ -3,6 +3,16 @@ import { workspaceContext } from './workspace-context.js';
 import { WorkspaceCommandBroker } from './workspace-commands.js';
 
 describe('workspace turn context', () => {
+  it('labels both the Health page and its legacy alias as Health', () => {
+    for (const page of ['health', 'daily'] as const) {
+      const context = workspaceContext({
+        windows: [], contextPanelOpen: false, view: { page },
+      });
+      expect(context).toContain('Health');
+      expect(context).not.toMatch(/\bdaily\b/iu);
+    }
+  });
+
   it('includes connected kinds and the default recipient without exposing device labels', () => {
     const broker = new WorkspaceCommandBroker();
     expect(broker.deviceContext('owner')).toBeUndefined();
