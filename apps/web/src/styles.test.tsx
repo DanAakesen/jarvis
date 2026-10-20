@@ -1029,6 +1029,8 @@ describe('shared glass tokens', () => {
     expect(ruleDeclaration(source, /\n\.knowledge-search\s*\{([^}]*)\}/, 'padding')).toBe('0 var(--space-1) 0 var(--space-4)');
     expect(ruleDeclaration(notes, /\.notes-page \.knowledge-search \.notes-create-button\s*\{([^}]*)\}/, 'min-height')).toBe('var(--control-size-inset)');
     expect(ruleDeclaration(notes, /\.notes-page \.notes-tasks-toggle\s*\{([^}]*)\}/, 'min-height')).toBe('var(--control-size)');
+    expect(ruleDeclaration(notes, /\.notes-page \.notes-tree-toggle\s*\{([^}]*)\}/, 'min-height')).toBe('var(--control-size)');
+    expect(ruleDeclaration(notes, /\.notes-page \.notes-tree-toggle\s*\{([^}]*)\}/, 'width')).toBe('var(--control-size)');
     expect(ruleDeclaration(source, /\n\.knowledge-reset\s*\{([^}]*)\}/, 'min-height')).toBe('var(--control-size-inset)');
     expect(ruleDeclaration(source, /\.topbar-feature-button, \.settings-link, \.topbar-icon-button\s*\{([^}]*)\}/, 'height')).toBe('var(--control-size)');
     expect(notes).not.toMatch(/\.notes-page \.knowledge-reset\s*\{\s*min-height: 44px/);

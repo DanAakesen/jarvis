@@ -278,7 +278,8 @@ Control sizes (P14-32, 20 October 2026) come from three tokens in `styles.css`,
 and new rules use them instead of ad-hoc heights: `--control-size` (44px) for a
 standalone control or bar, `--control-size-inset` (36px) for a control nested in a
 44px bar, and `--pill-size` (28px) for a pill. Siblings in a row share one height:
-the Notes search bar and "Show tasks" are both 44px with the "+" and "Reset view"
+the Notes search bar and "Show tasks" are both 44px, the notes-tree button beside it
+is a 44px square, with the "+" and "Reset view"
 at 36px inside the bar, the top-bar icon buttons and Settings link are 44px, and the
 Tasks panel refresh and retry controls are 44px. Inset controls keep a 44px hit area
 through an invisible extension. The Notes legend items are 28px pills.
@@ -446,6 +447,26 @@ high-priority icon with its label. A source link opens the note in place; Escape
 closes the panel and returns focus to the button, and on a narrow screen the panel
 gives way to the note it opens. Keep rows scannable, text readable at narrow
 widths, and use existing control tokens and button/field systems.
+
+**Notes tree (P14-32).** An icon-only 44px button (a small tree glyph, named
+**Show notes tree** / **Hide notes tree**) sits beside **Show tasks** in one toolbar
+at the top left of the map, outside the search bar. It opens a glass panel in the
+same place as the task panel, so only one of the two is open at a time. The panel
+is a text-light tree of folders and notes: a chevron that turns when a folder opens,
+a folder or note glyph tinted by its top-level folder, and a single-line name, with
+no headline, description or counts. Folders list their subfolders first, then their
+notes; notes at the vault root appear after the top-level folders. Rows are 44px,
+indented by level with spacing tokens, hover and press use the glass fills, and the
+selected note uses the selected-state tokens plus a heavier weight so it is not
+colour alone. It is a real ARIA tree (`role=tree`/`treeitem`, `aria-expanded`,
+levels and positions) with one tab stop and arrow, Home, End, Enter and Space keys;
+Escape closes it and returns focus to the button. Folders read lazily, a page at a
+time, with a text-free loader row, a short Empty row, an inline Retry for a failed
+folder, **Show more** for long folders and **No notes** for an empty vault.
+Selecting a note opens the existing note popup (preview, Edit, explicit Save), and
+on a narrow screen the tree steps aside for it. On a phone the panel docks above
+the controls like the task panel. Hidden dot-folders never appear. Entrance motion
+and the chevron turn are removed under reduced motion.
 
 Show vault freshness and truncation near the list. Loading, no-open-tasks,
 no-matches, unavailable and retry states remain explicit; task text is never
@@ -1590,6 +1611,8 @@ that the repository is public. Text, not colour alone, conveys every state; no
 new animation is introduced.
 
 ## Daily migration visual requirement (12 October 2026)
+
+20 October 2026 (P14-41 / #1116): the owner wants the original Daily components and data presentation rebuilt in Jarvis styling. Keep the original composition (cards, rings, tiles, panels) but draw it with existing Jarvis tokens, shared components, themes, density and motion; add no Daily-only skin or tokens. See the [audit](docs/ui/p14-41/audit.md).
 
 17 October brief-history source continuation reuses the existing collection
 selector, exact paging and in-page detail/back interaction. Historical timestamps
