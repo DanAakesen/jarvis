@@ -71,11 +71,12 @@ components and data presentation in Jarvis styling (see [decisions](../../decisi
 1. No served source for: mail attention (waiting for you and on others, with hide), weekly gym/run
    targets, a step target, tasks, habits, countdowns, calendar events, recomposition status.
 2. Approved scope currently excludes the task, habit and countdown source, coaching and recomposition
-   automation, and separate Workouts and Nutrition pages. The rebuild needs an owner ruling per item.
+   automation, and separate Workouts and Nutrition pages. The 20 October ruling at the end of this
+   document keeps those exclusions and builds everything else.
 3. The original source code is not in the pack, so exact field-level parity (for example meal
    uncertainty and capture method) is checked against the screenshots only.
 
-## Proposed split
+## Proposed split (superseded by the task map at the end)
 
 1. P14-41-01: decision, scope reconciliation and this audit (docs only).
 2. Shell: greeting, freshness pill and popover, period presets.
@@ -92,3 +93,31 @@ components and data presentation in Jarvis styling (see [decisions](../../decisi
 Components with a served source ship loading, empty and error states. A component with no served source
 ships only an explicit unavailable state, never an empty one. Values that are not served are never
 invented.
+
+## Ruling and task map (20 October 2026)
+
+The owner ruled that Daily matches the original screen for screen, on production data, except for what
+was already decided not to migrate: task, habit and countdown surfaces and their source, meal plans and
+the live meal coach, coaching and recomposition automation including the baseline status, energy
+estimates, the widget and football (see [decisions](../../decisions.md)). The split above is replaced by
+these tasks.
+
+| Task | Issue | Covers |
+| --- | --- | --- |
+| P14-45 | [#1132](https://github.com/DanAakesen/jarvis/issues/1132) | Owner-set weekly gym and run session targets and a daily step target (the Gap-data targets) |
+| P14-46 | [#1143](https://github.com/DanAakesen/jarvis/issues/1143) | Shell, top cards, small-screen carousel, and checking every Daily task on production data |
+| P14-47 | [#1136](https://github.com/DanAakesen/jarvis/issues/1136) | Health panel |
+| P14-48 | [#1137](https://github.com/DanAakesen/jarvis/issues/1137) | Workouts |
+| P14-49 | [#1139](https://github.com/DanAakesen/jarvis/issues/1139) | Nutrition without the meal coach |
+| P14-50 | [#1141](https://github.com/DanAakesen/jarvis/issues/1141) | Rules & sources |
+| P14-51 | [#1133](https://github.com/DanAakesen/jarvis/issues/1133) | Gmail attention and calendar read sources, dark behind a flag (#725) |
+| P14-52 | [#1145](https://github.com/DanAakesen/jarvis/issues/1145) | Waiting lists and calendar agenda on the overview |
+| P14-53 | [#1147](https://github.com/DanAakesen/jarvis/issues/1147) | Rename the visible surface from Daily to Health (route, labels, copy, owner-facing API text) |
+| P14-54 | [#1146](https://github.com/DanAakesen/jarvis/issues/1146) | Rename the internal identifiers from Daily to Health, with aliases for deployed paths and keys |
+
+Workouts and Nutrition stay sections of the one Daily page. The recomposition status, task, habit and
+countdown components stay unbuilt.
+
+Naming: the owner later ruled that the area is called Health and that the word "Daily" must not appear
+anywhere the owner can see or hear it. This audit keeps "Daily" because it describes the original
+screens and the earlier name; new owner-visible copy says Health (see [decisions](../../decisions.md)).
