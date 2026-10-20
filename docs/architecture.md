@@ -3655,8 +3655,10 @@ notes added later can resolve without rewriting their source.
 
 `GET /knowledge/graph` and `GET /knowledge/search?q=...` are Dan-only. Graph note
 IDs are lowercase SHA-256 hashes of vault paths. Nodes include the note path,
-title, one of the four routed folders, the last index timestamp for that note,
-and its degree. Link edges represent resolved wiki/Markdown links; similarity
+title, its top-level folder (empty for vault-root notes), the last index timestamp
+for that note, and its degree. Every indexed safe Markdown note is eligible,
+regardless of folder; hidden, invalid, redacted and graph-excluded paths remain
+filtered before response. Link edges represent resolved wiki/Markdown links; similarity
 edges prefer application cosine scores over the mean of each note's chunk
 embeddings, retaining the three highest scores above `0.35` per note. SQL vector
 similarities remain the fallback when application embeddings are unavailable. The response

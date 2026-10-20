@@ -22,7 +22,7 @@ const fitFill = 0.8;
 // A click or hover finds the nearest star within this many pixels.
 const pickRadius = 9;
 
-function folderColours(element: HTMLElement): Map<string, THREE.Color> {
+export function folderColours(element: HTMLElement): Map<string, THREE.Color> {
   const styles = getComputedStyle(element);
   const read = (name: string, fallback: string) => new THREE.Color(styles.getPropertyValue(name).trim() || fallback);
   return new Map([
@@ -33,6 +33,10 @@ function folderColours(element: HTMLElement): Map<string, THREE.Color> {
     ['Tasks', read('--graph-tasks', '#ff5da2')],
     ['', read('--text-muted', '#a4b5bb')],
   ]);
+}
+
+export function resolveFolderColour(colours: ReadonlyMap<string, THREE.Color>, folder: string): THREE.Color {
+  return colours.get(folder) ?? colours.get('')!;
 }
 
 // Idle life on a flat map (Dan, 8 October, 19 October): each note floats on its own orbit while a soft swell runs through
@@ -130,7 +134,7 @@ export function createKnowledgeScene(host: HTMLElement, graph: KnowledgeGraph, c
   const sizeAttribute = new THREE.BufferAttribute(sizes, 1);
   const lit = new Float32Array(count);
   graph.nodes.forEach((node, index) => {
-    const colour = node.openTaskCount ? colours.get('Tasks')! : colours.get(node.folder) ?? colours.get('')!;
+    const colour = node.openTaskCount ? colours.get('Tasks')! : resolveFolderColour(colours, node.folder);
     colourArray.set([colour.r, colour.g, colour.b], index * 3);
     sizes[index] = (1.9 + Math.min(3, Math.sqrt(node.degree) * 0.7)) * (node.openTaskCount ? 1.3 : 1);
   });
@@ -174,7 +178,7 @@ export function createKnowledgeScene(host: HTMLElement, graph: KnowledgeGraph, c
     // Links are firm; similarity lines brighten with their score (median about 0.32).
     const strength = similar ? 0.06 + 0.42 * score : 0.5;
     for (const [end, node] of [[0, source], [1, target]] as const) {
-      const colour = colours.get(graph.nodes[node]!.folder) ?? colours.get('')!;
+      const colour = resolveFolderColour(colours, graph.nodes[node]!.folder);
       baseLineColours.set([colour.r * strength, colour.g * strength, colour.b * strength], edge * 6 + end * 3);
     }
   });
@@ -479,7 +483,7 @@ export function createKnowledgeScene(host: HTMLElement, graph: KnowledgeGraph, c
   const applyTaskMarks = () => {
     graph.nodes.forEach((node, index) => {
       const marked = taskMarksVisible && !!node.openTaskCount;
-      const colour = marked ? colours.get('Tasks')! : colours.get(node.folder) ?? colours.get('')!;
+      const colour = marked ? colours.get('Tasks')! : resolveFolderColour(colours, node.folder);
       colourArray.set([colour.r, colour.g, colour.b], index * 3);
       sizes[index] = (1.9 + Math.min(3, Math.sqrt(node.degree) * 0.7)) * (marked ? 1.3 : 1);
     });

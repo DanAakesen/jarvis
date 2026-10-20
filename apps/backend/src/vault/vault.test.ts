@@ -1170,6 +1170,11 @@ describe('GitHub vault', () => {
       path: 'Customers/Client.md', folder: 'Customers', directory: 'Customers',
     })]);
     expect((await app.inject({
+      url: `/notes?${new URLSearchParams({ directory: 'Customers' })}`, headers: apiAuthorization,
+    })).json().notes).toEqual([expect.objectContaining({
+      path: 'Customers/Client.md', folder: 'Customers', directory: 'Customers',
+    })]);
+    expect((await app.inject({
       url: `/notes?${new URLSearchParams({ directory: '' })}`, headers: apiAuthorization,
     })).json().notes).toEqual([expect.objectContaining({ path: 'README.md', folder: '', directory: '' })]);
 

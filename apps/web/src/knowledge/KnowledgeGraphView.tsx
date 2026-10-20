@@ -11,6 +11,7 @@ import { StateMessage } from '../StateMessage';
 import { formatDateOnly, formatTimeOnly } from '../format/date-time';
 
 type Load = { status: 'loading' } | { status: 'unavailable' } | { status: 'error'; message: string } | { status: 'ready'; graph: KnowledgeGraph };
+const folderLabel = (folder: string) => folder || 'Root';
 
 const reducedMotion = () => (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false) ||
   document.documentElement.dataset.motion === 'reduced';
@@ -59,7 +60,7 @@ const TaskGlyph = () => <svg className="knowledge-result-glyph" {...glyphProps}>
 
 /** The folder (or Tasks) a result belongs to, in its map colour. Decorative: the row names it with aria-describedby. */
 export function KnowledgePill({ folder, tasks = false, id }: { folder?: string; tasks?: boolean; id?: string }) {
-  return <span id={id} className="knowledge-pill" aria-hidden="true" {...(tasks ? { 'data-tasks': '' } : { 'data-folder': folder ?? '' })}>{tasks ? 'Tasks' : folder || 'Vault root'}</span>;
+  return <span id={id} className="knowledge-pill" aria-hidden="true" {...(tasks ? { 'data-tasks': '' } : { 'data-folder': folder ?? '' })}>{tasks ? 'Tasks' : folderLabel(folder ?? '')}</span>;
 }
 
 function KnowledgeLoader() {
@@ -357,7 +358,7 @@ export function KnowledgeGraphView({ backendUrl, getAccessToken, initialQuery = 
               })()}
               {query.trim() && taskSearch.error && <p className="knowledge-task-search-error" role="status">{taskSearch.error}</p>}
               {(query.trim() ? hits.length > 0 : folder !== null) && (
-                <ol className="knowledge-result-list" aria-label={query.trim() ? 'Matching notes' : `${folder || 'Vault root'} notes`}>
+                <ol className="knowledge-result-list" aria-label={query.trim() ? 'Matching notes' : `${folderLabel(folder ?? '')} notes`}>
                   {(query.trim()
                     ? hits.slice(0, compact ? 6 : 12).flatMap((id) => nodesById.get(id) ?? [])
                     : graph.nodes.filter((node) => node.folder === folder).sort((left, right) => left.title.localeCompare(right.title)).slice(0, 60)
@@ -381,9 +382,9 @@ export function KnowledgeGraphView({ backendUrl, getAccessToken, initialQuery = 
           <ul className="knowledge-legend" aria-label="Map legend">
             {folders.map((name) => (
               <li key={name} data-folder={name}>
-                <button className="ghost-button" type="button" aria-pressed={folder === name} title={folder === name ? 'Show every folder' : `Show only ${name}`}
+                <button className="ghost-button" type="button" aria-pressed={folder === name} title={folder === name ? 'Show every folder' : `Show only ${folderLabel(name)}`}
                   onClick={() => setFolder((current) => current === name ? null : name)}>
-                  <span className="knowledge-dot" aria-hidden="true" />{name || 'Vault root'}<span className="knowledge-legend-count">{counts.get(name)}</span>
+                  <span className="knowledge-dot" aria-hidden="true" />{folderLabel(name)}<span className="knowledge-legend-count">{counts.get(name)}</span>
                 </button>
               </li>
             ))}
@@ -411,7 +412,7 @@ export function KnowledgeGraphView({ backendUrl, getAccessToken, initialQuery = 
                 </button>
               </header>
               <KnowledgeNoteReader key={selected.id}>
-                <p className="knowledge-note-meta">{selected.folder} · {selected.path}</p>
+                <p className="knowledge-note-meta">{folderLabel(selected.folder)} · {selected.path}</p>
                 {!currentNote ? <StateMessage variant="loading" loaderVariant="lines" message="Opening the note" />
                     : currentNote.error ? <StateMessage variant="error" message={currentNote.error} />
                       : currentNote.value!.content ? <MarkdownContent source={currentNote.value!.content} />
