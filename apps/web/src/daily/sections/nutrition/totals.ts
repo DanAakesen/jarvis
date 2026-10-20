@@ -126,14 +126,58 @@ export function weeklyAverages(rows: readonly Row[]) {
   }));
 }
 
-export function trendPoints(rows: readonly Row[], key: Nutrient) {
+function periodRows(rows: readonly Row[], period: { startDate: string; endDate: string }) {
+  return rows.filter(row => {
+    const date = text(row.meal_date, '');
+    return date >= period.startDate && date <= period.endDate &&
+      isDailyPeriod({ startDate: date, endDate: date }) &&
+      (numeric(row.meal_count) ?? 0) > 0;
+  }).sort((a, b) => text(a.meal_date).localeCompare(text(b.meal_date)));
+}
+
+export function nutritionPeriodAverages(rows: readonly Row[], period: { startDate: string; endDate: string }, baseline: number | null) {
+  const days = periodRows(rows, period);
+  const average = (key: Nutrient, convert: (value: number) => number) => {
+    const known = days.flatMap(day => {
+      const value = numeric(day[key]);
+      return value === null ? [] : [convert(value)];
+    });
+    return {
+      value: known.length ? known.reduce((sum, value) => sum + value, 0) / known.length : null,
+      count: known.length,
+      missing: days.length - known.length,
+      lowerBound: days.some(day => Array.isArray(day.partial_nutrients) && day.partial_nutrients.includes(key)),
+    };
+  };
+  return {
+    daysWithData: days.length,
+    partialDays: days.filter(day => Array.isArray(day.partial_nutrients) && day.partial_nutrients.length > 0).length,
+    balance: baseline === null
+      ? { value: null, count: 0, missing: days.length, lowerBound: false }
+      : average('energy_kcal', value => baseline - value),
+    protein: average('protein_grams', value => value),
+  };
+}
+
+function points(rows: readonly Row[], valueFor: (row: Row) => number | null) {
   const sorted = [...rows].sort((a, b) => text(a.meal_date).localeCompare(text(b.meal_date)));
   return sorted.flatMap((row, index) => {
     const date = text(row.meal_date);
     const previous = index > 0 ? text(sorted[index - 1]!.meal_date) : null;
-    const point = { x: date, y: numeric(row[key]) };
+    const point = { x: date, y: valueFor(row) };
     return previous !== null && dateStep(previous, 1) < date
       ? [{ x: dateStep(previous, 1), y: null }, point] : [point];
+  });
+}
+
+export function trendPoints(rows: readonly Row[], key: Nutrient) {
+  return points(rows, row => numeric(row[key]));
+}
+
+export function balancePoints(rows: readonly Row[], baseline: number | null) {
+  return points(rows, row => {
+    const energy = numeric(row.energy_kcal);
+    return energy === null || baseline === null ? null : baseline - energy;
   });
 }
 

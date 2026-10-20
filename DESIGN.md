@@ -1892,6 +1892,28 @@ composer at 320px. The six JPEG captures cover phone Day in both themes,
 desktop Trend in both themes, Library at 768px light and 320px dark. They are
 synthetic desktop-browser evidence, not live-owner or physical-phone checks.
 
+## Daily Nutrition parity (20 October 2026; P14-49)
+
+The Nutrition section keeps its shared period selector and the existing Plans and
+Favourites library. The Today view leads with one “Today so far” card: kcal left
+against resting energy minus deficit, protein left, and logged meals, using the
+served Copenhagen day row and the existing owner-target loader. Partial energy
+and protein are labelled as bounds; missing targets link to Settings. A neutral
+“Staleness unknown” pill is used because the nutrition query reports staleness as
+unknown, alongside its read-time line.
+
+Trend summarizes average daily balance and average protein over known logged
+days, then plots calorie balance against the zero baseline and protein intake.
+Its inventory counts days with meals and partial days; an expandable list names
+the partial dates and nutrients. Chart tables retain per-day lower-bound wording.
+Meals lists the selected period chronologically and pages through all served
+records. Rows show the recorded name, Copenhagen date/time, component names and
+quantities, four macros, confidence, capture method, and the explicit
+“Not recorded” export state, which the meal query does not serve. Loading,
+empty, error, and paged states retain their reserved card/list heights. The
+composition and data states are covered by synthetic web tests; the owner's
+real-data session check remains a pre-merge acceptance step.
+
 ## Daily today dashboard (18 October 2026; P12-33)
 
 Overview now leads with one `DailyGrid` of section-linked workout, nutrition,

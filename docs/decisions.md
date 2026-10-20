@@ -25,6 +25,20 @@ tiles' loading semantics and wording otherwise stay as they were.
 
 Refs #1116, #1129
 
+## P14-49 — Nutrition parity uses only served freshness and meal fields (20 October 2026; #1116, #1139)
+
+The Nutrition Today view uses the served Copenhagen day total and the existing
+owner-target loader. Trend averages and charts use the selected period's
+`daily.nutrition.days`; the meal list pages through `daily.nutrition.meals`.
+Partial nutrient values retain lower-bound wording, with calorie balance
+described as an upper bound when energy is partial. The meal query does not serve
+an export state, and the query contract sets staleness to `unknown`; therefore
+the UI says “Not recorded” and “Staleness unknown” instead of inferring either
+value. Existing Plans and Favourites remain unchanged; meal coaching stays out
+of scope.
+
+Refs #1116, #1139
+
 ## P14-41 — Today cards read served sources and say so when one is not (20 October 2026; #1116)
 
 The Daily Overview now opens with Training this week, Protein today, Calories left
