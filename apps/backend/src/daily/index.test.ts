@@ -179,7 +179,7 @@ describe('Daily integration contract', () => {
         headers: { ...headers(kind), 'x-jarvis-message-id': '42' }, payload: { operation: 'read' } })).statusCode).toBe(403);
     }
     expect(read).toHaveBeenCalledTimes(3);
-    // The Settings route serves the signed-in owner only; the hosted agent uses the approved tool.
+    // The nutrition Settings route serves the signed-in owner only; the agent uses the approved nutrition tool.
     const settings = await app.inject({ url: '/daily/nutrition-targets', headers: headers() });
     expect(settings.statusCode).toBe(200);
     expect(settings.json()).toMatchObject({ missing: ['restingKcal', 'deficitKcal', 'proteinGrams'], updatedAt: null });

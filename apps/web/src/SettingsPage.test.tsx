@@ -104,6 +104,11 @@ function renderSettingsPage(url: string | null = backendUrl, healthUpload?: Reac
               <p>Nutrition target fixture</p>
             </CollapsibleSection>
           : undefined}
+        trainingTargets={deepLinkTargets
+          ? <CollapsibleSection storageKey="settings.training-targets" id="training-targets" title="Training targets">
+              <p>Training target fixture</p>
+            </CollapsibleSection>
+          : undefined}
         proactive={deepLinkTargets
           ? <CollapsibleSection storageKey="settings.proactive" id="proactive-settings" title="Proactive" persist={false} initiallyOpen={false}>
               <p>Proactive fixture</p>
@@ -135,6 +140,7 @@ describe('SettingsPage', () => {
     { hash: 'projects', key: 'settings.projects' },
     { hash: 'proactive-settings', key: 'settings.proactive' },
     { hash: 'nutrition-targets', key: 'settings.nutrition-targets' },
+    { hash: 'training-targets', key: 'settings.training-targets' },
   ])('opens and scrolls to the #$hash section after Settings is ready', async ({ hash, key }) => {
     window.history.replaceState({}, '', `/settings#${hash}`);
     localStorage.setItem(`jarvis.sections.${key}`, '0');

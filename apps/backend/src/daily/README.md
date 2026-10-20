@@ -46,3 +46,30 @@ npm run test:database --workspace @jarvis/backend -- src/database/daily-schema.i
 
 The real-SQL test requires the existing isolated loopback SQL Server fixture;
 it must not target production data.
+
+## Owner training targets (P14-45, #1132)
+
+The owner sets weekly gym sessions, weekly run sessions and steps per day in
+Settings. The target values have no defaults; every read returns `null` for an
+unset value and the server-owned bounds. Migration `0061_daily_training_targets`
+stores only nonempty, owner-keyed rows in `daily.training_targets`; a down
+migration refuses to discard any such row.
+
+`GET` and `PATCH /daily/training-targets` are signed-in-owner Settings routes
+only. They reject agent, runner, connector and other identities, query strings
+and invalid or oversized patches. A clear is `null`; partial updates preserve
+the other values and commit transactionally. The assistant has no training
+target write tool because the production tool catalogue must retain at least
+eight free slots. A read-only query source may be added later.
+
+The web client validates the full target response and owns the Settings
+editor's load/save recovery states. `useTrainingTargets` provides a validated
+loading/settled/error read and retry contract for later Overview, Workouts and
+Health consumers; this change does not modify those views.
+
+Focused checks:
+
+```sh
+npm test --workspace @jarvis/backend -- src/daily/training/targets.test.ts src/daily/training/targets-store.test.ts src/daily/routes/training-targets.test.ts src/daily/composition.test.ts src/daily/index.test.ts src/database/migrations.test.ts
+npm test --workspace @jarvis/web -- src/daily/training-targets.test.ts src/daily/TrainingTargetsSettings.test.tsx src/SettingsPage.test.tsx
+```

@@ -12,20 +12,23 @@ import { dailySavedFoodTool, type InternalSavedNutrition } from './tools/saved-f
 import { dailyNutritionTargetsTool } from './tools/nutrition-targets.js';
 import { dailyNutritionSuggestTool } from './tools/nutrition-suggest.js';
 import { nutritionTargetsRoutes } from './routes/nutrition-targets.js';
+import { trainingTargetsRoutes } from './routes/training-targets.js';
 import type { NutritionSuggestionSources } from './nutrition/suggestion-adapter.js';
 import type { NutritionTargetsAccess } from './nutrition/targets-store.js';
+import type { TrainingTargetsAccess } from './training/targets-store.js';
 import { dailyFoodLookupTool } from './tools/food-lookup.js';
 import { dailyFeedTool } from './tools/feed.js';
 import { dailySourceTools } from './tools/source-tools.js';
 
 /** Trusted server composition flag. Not a request parameter or a production rollout. */
-export function createDailyModules(enabled = false, data?: DailyData, connector?: DailyMcpOptions, internalNutrition?: InternalNutrition, savedNutrition?: InternalSavedNutrition, nutritionTargets?: NutritionTargetsAccess, nutritionSuggestions?: NutritionSuggestionSources): readonly BackendModule[] {
+export function createDailyModules(enabled = false, data?: DailyData, connector?: DailyMcpOptions, internalNutrition?: InternalNutrition, savedNutrition?: InternalSavedNutrition, nutritionTargets?: NutritionTargetsAccess, nutritionSuggestions?: NutritionSuggestionSources, trainingTargets?: TrainingTargetsAccess): readonly BackendModule[] {
   if (enabled !== true) return [];
   if (connector && !data) throw new TypeError('Daily MCP requires the shared Daily query service');
   if (internalNutrition && !data) throw new TypeError('Daily food writes require shared Daily data');
   if (savedNutrition && !data) throw new TypeError('Daily saved food requires shared Daily data');
   if (nutritionTargets && !data) throw new TypeError('Daily nutrition targets require shared Daily data');
   if (nutritionSuggestions && !data) throw new TypeError('Daily nutrition suggestions require shared Daily data');
+  if (trainingTargets && !data) throw new TypeError('Daily training targets require shared Daily data');
   if (nutritionSuggestions && !nutritionTargets) throw new TypeError('Daily nutrition suggestions require nutrition targets');
   const tools = data ? [dailyQueryTool(data.query), dailyShowTool(data.query),
     ...(data.foodLookup ? [dailyFoodLookupTool(data.foodLookup)] : []),
@@ -43,6 +46,7 @@ export function createDailyModules(enabled = false, data?: DailyData, connector?
       if (data) {
         await app.register(dailyQueryRoutes(data.query));
         if (nutritionTargets) await app.register(nutritionTargetsRoutes(nutritionTargets));
+        if (trainingTargets) await app.register(trainingTargetsRoutes(trainingTargets));
         if (connector) await app.register(dailyMcpRoutes(data.query, connector));
         const unsubscribe = data.changes.subscribe(change => {
           if (change.owner.toLowerCase() === app.ownerObjectId.toLowerCase()) app.nowEventHub.publish({ type: 'refresh' });
