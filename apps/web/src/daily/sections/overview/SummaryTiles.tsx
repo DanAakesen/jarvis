@@ -50,8 +50,9 @@ function SummaryTile({ title, section, pages, children, emptyMessage }: {
             : children}
     </div>
     {pages.error && hasItems && <DailyState status="error" message={pages.error} onRetry={pages.reload} />}
-    {pages.hasMore && <DailyState status="partial" coverage={{ returned: pages.items.length, hasMore: true }}
-      {...(!pages.capped && !pages.loadingMore ? { onLoadMore: pages.loadMore } : {})} />}
+    {/* A capped tile has no Load more and its freshness line already says "partial", so a loaded tile never gains this row. */}
+    {pages.hasMore && !pages.capped && <DailyState status="partial" coverage={{ returned: pages.items.length, hasMore: true }}
+      {...(!pages.loadingMore ? { onLoadMore: pages.loadMore } : {})} />}
     <div className="daily-tile-status">
       {refreshing ? <p className="daily-freshness" role="status">Refreshing…</p>
         : pages.first && <FreshnessLine observedAt={pages.first.freshness.observedAt}

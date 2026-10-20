@@ -60,7 +60,7 @@ function fixture({ failWorkouts = false, partialWorkouts = false, failSource, pa
     return jsonResponse(dailyFixture(query, rows[query.source] ?? [],
       (partialWorkouts && query.source === sources.workouts || query.source === partialSource)
         ? query.source === sources.briefs ? { startedAt: '2026-10-18T07:00:00', id: 'synthetic-next' }
-          : query.source === sources.days ? { date: period.sevenDays.endDate }
+          : query.source === sources.days ? { date: period.sevenDays.startDate }
             : { date: period.sevenDays.endDate, key: 'synthetic-next' } : null));
   });
   vi.stubGlobal('fetch', fetch);
@@ -151,7 +151,7 @@ describe('Daily overview summary tiles', () => {
     fixture({ partialWorkouts: true });
     render(view([sources.workouts]));
     await waitFor(() => expect(tile('Workouts').getAllByRole('status')
-      .some(status => status.textContent?.includes('Showing the first 20'))).toBe(true));
+      .some(status => status.textContent?.includes('20 records, partial'))).toBe(true));
     cleanup();
 
     let captured: AbortSignal | undefined;
@@ -224,7 +224,8 @@ describe('Daily overview summary tiles', () => {
     fixture({ partialSource: source });
     render(view());
     await waitFor(() => expect(tile(title).getByText(/^Read /u).textContent).toContain('partial'));
-    expect(tile(title).getByText(/Showing the first/u)).toBeTruthy();
+    expect(tile(title).queryByText(/Showing the first/u)).toBeNull();
+    expect(tile(title).queryByRole('button', { name: 'Load more' })).toBeNull();
     expect(tile(title).getByRole('link', { name: title })).toBeTruthy();
   });
 
@@ -308,6 +309,30 @@ describe('Daily overview summary tiles', () => {
     await screen.findByText('This week: 2 workouts · 40 minutes');
     await waitFor(() => expect(screen.getAllByText(/^Read /u)).toHaveLength(5));
     expect(structure()).toEqual(loading);
+  });
+
+  it('keeps a capped tile at its loading structure and says partial in its freshness line', async () => {
+    fixture({ partialWorkouts: true });
+    const { container } = render(view([sources.workouts]));
+    const article = () => container.querySelector('article')!;
+    const loading = [...article().children].map(child => `${child.tagName}.${child.className}`);
+    expect(loading).toEqual(['H3.', 'DIV.daily-tile-body', 'DIV.daily-tile-status']);
+    await waitFor(() => expect(tile('Workouts').getByText(/^Read /u).textContent).toContain('20 records, partial'));
+    expect([...article().children].map(child => `${child.tagName}.${child.className}`)).toEqual(loading);
+    expect(tile('Workouts').queryByRole('button', { name: 'Load more' })).toBeNull();
+  });
+
+  it('still offers Load more beside the error when a page fails part-way through auto-load', async () => {
+    const stub = vi.fn(async (_url: string | URL, init?: RequestInit) => {
+      const query = JSON.parse(String(init?.body)) as DailyQuery;
+      if ('cursor' in query) return jsonResponse({ error: 'synthetic' }, 503);
+      return jsonResponse(dailyFixture(query, [latestWorkout], { date: period.sevenDays.endDate, key: 'synthetic-next' }));
+    });
+    vi.stubGlobal('fetch', stub);
+    render(view([sources.workouts]));
+    expect(await tile('Workouts').findByRole('alert')).toBeTruthy();
+    expect(tile('Workouts').getByText(/Showing the first 1\./u)).toBeTruthy();
+    expect(tile('Workouts').getByRole('button', { name: 'Load more' })).toBeTruthy();
   });
 
   it('renders a multi-page auto-load once, with no partial row or Load more while it runs', async () => {

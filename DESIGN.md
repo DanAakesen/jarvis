@@ -1776,8 +1776,10 @@ status slot is always present, so "Refreshing…" and the freshness line share o
 line instead of one pushing the other in. The ring caption and the nutrition target
 line reserve their space too. A refresh keeps the previous values on screen and shows
 only "Refreshing…" in the status slot. A tile that auto-loads several pages
-shows its skeleton until the last page arrives and then appears once, and "Load more"
-shows only when pages remain after auto-load has finished. Returning to the tab
+shows its skeleton until the last page arrives and then appears once. A tile that hits
+its page cap says "partial" in its freshness line and gains no extra row, so a settled
+tile never grows. The "Showing the first N" row with "Load more" appears only after a
+read failed part-way, beside its error row. Returning to the tab
 within a minute of the last successful read does not read again; the Refresh button
 always does. A failed read is retried on the next focus. Sleep leads with total
 sleep ("7.9 h total sleep"), falls back to "asleep" only when there is no total and

@@ -10,7 +10,9 @@ slot that are always mounted, with a per-tile minimum body height measured from 
 loaded tile (larger at 380 px and below), so height does not change between
 loading and loaded; (2) a refresh keeps the previous values on screen; (3) an
 auto-loading tile opts in to `settle` and publishes once, after its last page, so
-"Load more" can only show once auto-load is done; (4) the shared
+a tile that reaches its page cap says "partial" in its freshness line and adds no row
+(it has no Load more), and the "Showing the first N" row with "Load more" shows only
+after a read failed part-way, beside its error row; (4) the shared
 `useDailyPages` hook skips a focus or visibility refetch when the last successful read
 began less than 60 seconds ago (`focusRefreshWindowMs`), while a failed read is retried
 on focus and the Refresh button, a changed `refreshVersion` and Retry stay
