@@ -734,7 +734,7 @@ describe('App shell', () => {
       ['body-sleep', 'Body & sleep'],
       ['briefs', 'Briefs'],
       ['data', 'Data'],
-    ]) {
+    ] as const) {
       fireEvent.click(screen.getByRole('tab', { name: label }));
       await waitFor(() => expect(document.getElementById('daily-section-panel')?.getAttribute('aria-labelledby')).toBe(`daily-tab-${id}`));
       await waitFor(() => expect(screen.queryByText(`Loading ${label}`)).toBeNull());
