@@ -1612,6 +1612,8 @@ new animation is introduced.
 
 ## Daily migration visual requirement (12 October 2026)
 
+20 October 2026 (P14-41 / #1116): the owner wants the original Daily components and data presentation rebuilt in Jarvis styling. Keep the original composition (cards, rings, tiles, panels) but draw it with existing Jarvis tokens, shared components, themes, density and motion; add no Daily-only skin or tokens. See the [audit](docs/ui/p14-41/audit.md).
+
 17 October brief-history source continuation reuses the existing collection
 selector, exact paging and in-page detail/back interaction. Historical timestamps
 remain verbatim with explicit stored-order/timezone limitations; no calendar

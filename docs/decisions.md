@@ -1,6 +1,27 @@
 # Decisions
 
-## P14-32 — Notes tree beside Show tasks (21 October 2026; #1085)
+## P14-41 — Daily UI rebuild: original components, Jarvis styling (20 October 2026; #1116)
+
+The owner ruled that Daily is rebuilt with the original app's components and
+data presentation, in Jarvis styling. The earlier P12 line "no separate Daily
+skin" still holds and is read as: no second theme, shell or token set. It no
+longer means recomposing the original layout. Components may therefore follow
+the original composition, restyled with existing Jarvis tokens, shared
+components, themes, density and motion.
+
+Data limits are unchanged: only what Jarvis serves is shown. Served sources get
+loading, empty and error states. A component whose source is not served shows an
+explicit unavailable state, never an empty one (which would imply a successful
+read), and is listed as a gap. Values are never invented.
+This ruling does not by itself lift earlier scope exclusions (task, habit and
+countdown source, coaching and recomposition automation, separate Workouts and
+Nutrition pages); each needs its own owner ruling before it is built. The
+[audit](ui/p14-41/audit.md) lists the components and gaps. The original source
+code was not available, so the audit works from screenshots only.
+
+Refs #1116
+
+## P14-32 — Notes tree beside Show tasks (20 October 2026; #1085)
 
 Dan asked for a tree of all notes he can preview and edit. An icon-only button
 beside Show tasks opens a lazy folder-and-note tree; the task panel and the tree
