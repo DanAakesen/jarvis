@@ -1,5 +1,19 @@
 # Decisions
 
+## P14-46 — The Health panel opens from the Health card (20 October 2026; #1116, #1143)
+
+Merging the Health panel (P14-47) into the cards-only Overview left two Health
+surfaces: the card and an always-open panel below it. The original keeps one: the
+Health card's chevron expands the panel on the same page. Choices: (1) the panel is
+closed on arrival and the Health card title is a button with `aria-expanded` and
+`aria-controls` that opens and closes it, kept in the address as `panel=health` so a
+link or reload reopens it, with `healthTab` unchanged; (2) the panel mounts only while
+open, so the landing view makes no panel reads and no tile appears twice; (3) closing
+it returns focus to the card button; (4) Training and Body titles stay links. The
+panel's own Collapse button still writes `panel=closed`, which also reads as closed.
+
+Refs #1116, #1143
+
 ## P14-46 — Overview top cards follow the original: Training, Health, Body (20 October 2026; #1116, #1143)
 
 The owner asked for parity with the original Overview, checked on the owner's own
@@ -207,6 +221,17 @@ Nutrition pages); each needs its own owner ruling before it is built. The
 code was not available, so the audit works from screenshots only.
 
 Refs #1116
+
+P14-47 follow-up (#1136): Health panel state belongs to `panel` and `healthTab`
+search parameters. Its read window is the current Copenhagen day plus six preceding
+days; weekly targets count Monday through today. Retained-record completeness is
+still unknown. Catalogue units keep series separate; categories are used only
+when served, with uncategorised metrics retained in All data rather than inferred
+from a personal metric list. The current catalogue has no category field or
+retention policy. A complete workouts read with no sessions reads as zero; total
+sleep leads and asleep is only a fallback; `active_energy` is accepted as the
+active-calories series. Gym/Run targets remain a nullable prop pending P14-45 (#1132);
+no parallel targets client is introduced.
 
 ## P14-32 — Notes tree beside Show tasks (20 October 2026; #1085)
 

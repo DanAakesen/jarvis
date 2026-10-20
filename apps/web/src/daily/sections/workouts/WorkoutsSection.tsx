@@ -2,20 +2,18 @@ import { useLayoutEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { dailyQuerySources as sources } from '@jarvis/contracts';
 import type { DailySectionProps } from '../types';
-import { DailyChart } from '../../ui/DailyChart';
 import { DailyState } from '../../ui/DailyState';
 import { ScrollTable } from '../../ui/ScrollTable';
-import { StatTile } from '../../ui/StatTile';
-import { DailyGrid, DailyGridItem } from '../../ui/DailyGrid';
 import { DailySectionHeader } from '../../ui/DailySectionHeader';
 import { FreshnessLine } from '../../ui/FreshnessLine';
 import { WorkoutGlyph } from '../../ui/WorkoutGlyph';
 import { formatDuration, formatNumber } from '../../ui/formatters';
 import { useWorkoutPages } from './useWorkoutPages';
-import { loadedScope, numeric, summarizeWorkouts, text, typeLabel, volumeBuckets, workoutType, type Workout } from './summary';
+import { numeric, text, typeLabel, workoutType, type Workout } from './summary';
 import { UnknownCell } from './WorkoutFigures';
 import { measurement, setting, workoutTime } from './presentation';
 import { WorkoutDetail } from './WorkoutDetail';
+import { WorkoutOverview } from './WorkoutOverview';
 import './workouts.css';
 
 type Sort = 'date' | 'duration' | 'distance' | 'energy';
@@ -38,79 +36,6 @@ function sortedWorkouts(rows: readonly Workout[], sort: Sort) {
     }
     return right - left;
   });
-}
-
-function WorkoutSummary({ rows, partial, period }: { rows: Workout[]; partial: boolean; period: DailySectionProps['period'] }) {
-  const summary = summarizeWorkouts(rows);
-  const volume = volumeBuckets(rows, period);
-  const scope = loadedScope(rows.length, partial);
-  const unitValues = (values: typeof summary.distance.values) => values.length
-    ? values.map(item => `${formatNumber(item.value)} ${item.unit}`).join('\n') : null;
-  const types = new Map<string, { name: string; count: number; seconds: number | null }>();
-  for (const row of rows) {
-    const type = workoutType(row);
-    const entry = types.get(type) ?? { name: typeLabel(row), count: 0, seconds: null };
-    entry.count += 1;
-    const seconds = numeric(row.duration_seconds);
-    if (seconds !== null && seconds >= 0) entry.seconds = (entry.seconds ?? 0) + seconds;
-    types.set(type, entry);
-  }
-  const typeRows = [...types].map(([type, entry]) => ({ type, ...entry }))
-    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
-  const longest = Math.max(0, ...typeRows.flatMap(item => item.seconds === null ? [] : [item.seconds]));
-  const scopeNote = (missing: number) => partial || missing > 0
-    ? ['Lower bound', missing > 0 ? `${missing} not recorded` : '', partial ? scope : ''].filter(Boolean).join('; ')
-    : undefined;
-  return <>
-    <div className="workouts-stats" aria-label="Workout summary">
-      <StatTile compact label="Workouts" value={summary.count} note={partial ? 'More may exist.' : undefined} />
-      <StatTile compact label="Active days" value={summary.activeDays} />
-      <StatTile compact label="Total time" value={summary.durationSeconds === null ? null : formatDuration(summary.durationSeconds)}
-        note={scopeNote(summary.missingDuration)}
-        sparkline={{ values: volume.buckets.map(bucket => bucket.minutes), label: `Recorded workout minutes per ${volume.grain}; gaps are not zero` }} />
-      <StatTile compact label="Distance" value={unitValues(summary.distance.values)}
-        note={scopeNote(summary.distance.missing)} />
-      <StatTile compact label="Active energy" value={unitValues(summary.energy.values)}
-        note={scopeNote(summary.energy.missing)} />
-    </div>
-    <DailyGrid columns="twelve" className="workouts-analysis">
-      <DailyGridItem span={8}>
-        <section aria-labelledby="workouts-volume">
-          <h3 id="workouts-volume">Workout volume</h3>
-          <DailyChart kind="bar" name={`Recorded workout minutes per ${volume.grain}`} series={[{
-            name: 'Recorded minutes',
-            points: volume.buckets.map(bucket => ({ x: bucket.start, y: bucket.minutes })),
-          }]} />
-          {volume.buckets.some(bucket => bucket.minutes === null || bucket.missingDuration > 0) &&
-            <details className="workouts-coverage-detail">
-              <summary>View volume coverage</summary>
-              <ScrollTable label="Workout volume coverage">
-                <table><caption>Workout coverage by {volume.grain}</caption>
-                  <thead><tr><th scope="col">Starting</th><th scope="col">Loaded workouts</th><th scope="col">Durations not recorded</th></tr></thead>
-                  <tbody>{volume.buckets.filter(bucket => bucket.minutes === null || bucket.missingDuration > 0).map(bucket =>
-                    <tr key={bucket.start}><th scope="row">{bucket.start}</th>
-                      <td>{bucket.count}</td><td>{bucket.missingDuration}</td></tr>)}</tbody>
-                </table>
-              </ScrollTable>
-            </details>}
-        </section>
-      </DailyGridItem>
-      <DailyGridItem span={4}>
-        <section className="workouts-by-type" aria-labelledby="workouts-by-type-heading">
-          <h3 id="workouts-by-type-heading">By type</h3>
-          {typeRows.length ? <ul>{typeRows.map(item => <li key={item.type}>
-            <div className="workouts-type-label"><WorkoutGlyph type={item.type} /><span>{item.name}</span><strong>{item.count}</strong></div>
-            <div className="workouts-type-volume">
-              {item.seconds === null
-                ? <span>Not recorded</span>
-                : <><span className="workouts-type-track" aria-hidden="true"><span style={{ width: `${longest > 0 ? item.seconds / longest * 100 : 0}%` }} /></span>
-                  <span>{formatDuration(item.seconds)}</span></>}
-            </div>
-          </li>)}</ul> : <p>No workouts in the selected type.</p>}
-        </section>
-      </DailyGridItem>
-    </DailyGrid>
-  </>;
 }
 
 function WorkoutTable({ rows, onOpen }: { rows: Workout[]; onOpen: (row: Workout, button: HTMLButtonElement) => void }) {
@@ -274,9 +199,9 @@ export default function WorkoutsSection(props: DailySectionProps) {
         : <p role="status">Workout not found in the loaded period.</p>}
     </>}
     <div ref={list} hidden={selected !== null} aria-busy={result.status === 'loading' || result.loadingMore}>
+      <WorkoutOverview {...props} pages={result} rows={filtered} />
       {(result.status === 'idle' || result.status === 'loading') && result.items.length === 0 && <DailyState status="loading" />}
       {result.items.length > 0 && <>
-        <WorkoutSummary rows={filtered} partial={partial} period={props.period} />
         <section aria-labelledby="workouts-list-heading">
           <h3 id="workouts-list-heading">Workout history</h3>
           {filtered.length === 0 ? <p>No workouts of this type.</p>

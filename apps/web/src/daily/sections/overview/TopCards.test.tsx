@@ -88,7 +88,7 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.useRealTimers(); });
 
 describe('Overview cards', () => {
-  it('shows the three cards with Today selected, and links each heading to its section', async () => {
+  it('shows the three cards with Today selected, links Training and Body to their sections, and lets Health open its panel', async () => {
     stub();
     render(view());
     await settled();
@@ -97,8 +97,15 @@ describe('Overview cards', () => {
       expect(screen.getByRole('button', { name: label }).getAttribute('aria-pressed')).toBe('false');
     }
     expect(screen.getByRole('link', { name: 'Training' }).getAttribute('href')).toMatch(/\?section=workouts$/u);
-    expect(screen.getByRole('link', { name: 'Health' }).getAttribute('href')).toMatch(/\?section=body-sleep$/u);
     expect(screen.getByRole('link', { name: 'Body' }).getAttribute('href')).toMatch(/\?section=body-sleep$/u);
+    expect(screen.queryByRole('link', { name: 'Health' })).toBeNull();
+    const toggle = screen.getByRole('button', { name: 'Health' });
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    expect(toggle.getAttribute('aria-controls')).toBe('health-panel');
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
   });
 
   it('counts sessions in rings and steps in the activity ring, and says no target is set', async () => {

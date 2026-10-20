@@ -10,17 +10,24 @@ function Chevron() {
   return <svg aria-hidden="true" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6" /></svg>;
 }
 
-/** One card. The heading is the link to the section behind it; the body is laid out by the caller and keeps its size. */
-export function TopCard({ title, to, state, onRetry, children }: {
+/**
+ * One card. The heading opens what is behind it: a link to a section, or a button that expands a panel on this page.
+ * The body is laid out by the caller and keeps its size.
+ */
+export function TopCard({ title, to, panel, state, onRetry, children }: {
   title: string;
-  to: string;
+  to?: string;
+  panel?: { expanded: boolean; controls: string; onToggle: () => void };
   state: BlockState;
   onRetry?: () => void;
   children: ReactNode;
 }) {
   return <article className="daily-top-card" data-card={title.toLowerCase()} aria-busy={state === 'loading' || undefined}>
     <header>
-      <h3><Link to={to}>{title}<Chevron /></Link></h3>
+      <h3>{panel
+        ? <button className="daily-top-card-toggle" type="button" aria-expanded={panel.expanded} aria-controls={panel.controls}
+          onClick={panel.onToggle}>{title}<Chevron /></button>
+        : <Link to={to ?? '.'}>{title}<Chevron /></Link>}</h3>
       {state === 'error' && onRetry && <button className="ghost-button" type="button" onClick={onRetry}>Retry</button>}
     </header>
     {state === 'loading' && <span className="visually-hidden" role="status">Loading {title.toLowerCase()}</span>}

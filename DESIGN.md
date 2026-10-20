@@ -1640,6 +1640,42 @@ new animation is introduced.
 
 ## Daily migration visual requirement (12 October 2026)
 
+20 October 2026 (P14-47 / #1136, composition revised by P14-46 / #1143): the Health
+panel sits once below the Overview cards and is closed until asked for, as in the
+original. The chevron on the Health card title opens and closes it (`panel=health`)
+and returns focus to that button on close; the panel mounts only while open, so
+its reads do not run on the landing view. Its header contains Health, the age of
+the latest processed-upload
+receipt from `daily.sync`, and a labelled disclosure. Seven keyboard-operated
+tabs use the existing selected/focus states; below 700px they form three columns.
+`panel=closed` collapses it; `panel=health&healthTab=sleep` opens a selected view.
+The bounded, keyboard-scrollable body keeps the same height through loading,
+empty, error and partial reads. Overview uses shared `StatTile` captions/values
+and Gym/Run weekly rows; category views show latest samples, units and dates.
+Missing records say “Not received”; missing inputs or incomplete reads say
+“Unavailable”, never a fabricated zero. A complete workouts read with no sessions
+in a window reads 0 sessions, 0 min and 0 kcal, as in the original. Last night
+leads with total sleep and falls back to asleep only when total is absent, because
+staged exports report asleep as 0. Active calories read the exported `active_energy`
+series as well as `active_energy_burned`. Today and rolling/week windows use
+Copenhagen calendar dates, independently of the shell's selected period.
+All data includes every received metric in the panel's labelled seven-day read
+window, split by unit. Catalogue categories are respected only for their declared
+units; the current catalogue supplies no categories, so uncategorised metrics
+remain in All data and category-only views explain the unavailable grouping.
+Sleep, workout and nutrition sources also populate their own tabs directly.
+There is no retention claim without a served policy. Weekly targets enter through
+one nullable prop; unset targets link to Settings without a second targets client.
+Synthetic Chromium checks covered light/dark at 1280, 768, 390 and 320px, tab
+keys, disclosure/deep links and equal state heights. Screenshot-viewer limits
+prevented a complete pixel review; live owner data, physical devices and
+P14-45 target wiring remain unverified.
+
+20 October 2026 owner naming follow-up: all new panel copy and accessible
+announcements use Health, including inherited loading labels and read errors.
+Internal identifiers and existing routes remain unchanged for #1146/#1147;
+the panel introduces no hard-coded area-route links.
+
 20 October 2026 (P14-41 / #1116): the owner wants the original Daily components and data presentation rebuilt in Jarvis styling. Keep the original composition (cards, rings, tiles, panels) but draw it with existing Jarvis tokens, shared components, themes, density and motion; add no Daily-only skin or tokens. See the [audit](docs/ui/p14-41/audit.md).
 
 17 October brief-history source continuation reuses the existing collection
@@ -1809,8 +1845,9 @@ trackpad and keyboard. Card chrome is the shared panel surface, rule and radius;
 no glass skin or new token. Training holds three rings (Gym, Run, Activity for
 steps), then a Protein tile, a Calories left tile and, for a single day, the meals
 strip (time, name, kcal). Health holds Sleep, Protein and a cumulative protein
-line across the day with a dashed target line when a target is set; its title
-links to Body and sleep until the Health panel lands. Body holds Sessions,
+line across the day with a dashed target line when a target is set; its title is a
+button with a turning chevron that opens the Health panel below the cards (the
+Training and Body titles stay links to their sections). Body holds Sessions,
 Calories and Duration, then Weight, Fat mass, Fat % and Lean mass as small
 sparklines over the last 90 days. A ring or tile has the same size in every state.
 Wording separates the cases: "Not recorded" means the source is served and holds
@@ -1984,6 +2021,32 @@ filtering, sort, paging and focus return, and presents recorded figures, a
 full-width average/minimum/maximum heart-rate chart with its per-minute range band,
 and collapsed source JSON. Incomplete totals, unit separation, missing dates and
 source-completeness caveats remain explicit.
+
+20 October 2026 (P14-48; Refs #1116, #1137): the Workouts summary is replaced by
+a Training card below the existing shared period control, with Sessions and Calories burned,
+Gym/Run mini rings and Copenhagen-day energy bars. Gym, Run and Other have a
+labelled legend in bar order; Activity workouts join Other in the chart. Rings
+accept a weekly target, prorated by selected calendar days, but currently receive
+null and link “No target set” to `/settings#training-targets`; P14-45 owns the
+target source and its later wiring. No second targets client is introduced.
+The shell retains the only period control, avoiding competing custom-date drafts.
+Below are Gym (time, energy and heart rate), Run (also distance) and Activity
+(metric steps, active energy and exercise time per day) cards. Missing figures say
+“Not received”, except that a complete read with no sessions in a window or class
+reads 0 min and 0 kcal, as in the original; partial reads stay unknown. Session heart-rate averages are explicitly an unweighted mean.
+The Available data inventory has Summary candidates, Per-workout figures and
+Heart and provenance groups, built only from present workout fields and the
+period's catalogue entries. Catalogue presence does not claim non-null values
+or source completeness. Card bodies, chart and status slots reserve space
+across loading, empty, error and partial reads; inventory lists scroll within
+their reserved area. The three class cards and inventory groups stack on phones.
+Existing history, table disclosure and detail behavior remain unchanged.
+Only synthetic local verification is possible here; real-data/original-page
+parity and the owner's session acceptance remain unverified.
+The owner's Health naming update applies to all new visible and accessible copy:
+use Health or neutral “per day” wording, show human catalogue labels and local
+source-specific error copy, and keep technical identifiers unchanged for #1146.
+Existing shared copy and the route migration remain with #1147.
 
 Synthetic browser captures for the new list and detail presentation are in
 `docs/ui/p12-30/`; they show the actual Daily shell with isolated synthetic API

@@ -9,6 +9,7 @@ import { ProteinTile, type NutritionView } from './NutritionTiles';
 import { Tile, TopCard, type BlockState } from './TopBlocks';
 import { cumulativeProtein, dailyProtein, sleepForWindow } from './overview-values';
 import type { OverviewWindow } from './overview-window';
+import { healthPanelId, useHealthPanel } from './useHealthPanel';
 
 function ChartSlot({ state, children }: { state: BlockState; children: ReactNode }) {
   if (state === 'ready') return children;
@@ -19,9 +20,8 @@ function ChartSlot({ state, children }: { state: BlockState; children: ReactNode
   </div>;
 }
 
-export function HealthCard({ title, to, state, onRetry, period, today, hour, states, data, nutrition }: {
+export function HealthCard({ title, state, onRetry, period, today, hour, states, data, nutrition }: {
   title: string;
-  to: string;
   state: BlockState;
   onRetry: () => void;
   period: OverviewWindow;
@@ -31,11 +31,13 @@ export function HealthCard({ title, to, state, onRetry, period, today, hour, sta
   data: { sleep: DailyPages; meals: DailyPages; days: DailyPages };
   nutrition: NutritionView;
 }) {
+  const panel = useHealthPanel();
   const sleep = sleepForWindow(data.sleep.items, period);
   const target = nutrition.proteinTarget;
   const day = cumulativeProtein(data.meals.items as NutritionRow[], period.endDate, period.endDate === today ? hour : null);
   const points = period.single ? day.total === null ? [] : day.points : dailyProtein(data.days.items as NutritionRow[], period);
-  return <TopCard title={title} to={to} state={state} onRetry={onRetry}>
+  return <TopCard title={title} panel={{ expanded: panel.expanded, controls: healthPanelId, onToggle: panel.toggle }}
+    state={state} onRetry={onRetry}>
     <div className="daily-top-tiles">
       <Tile label="Sleep" state={states.sleep} unavailable="Sleep is not served."
         value={sleep === null ? null : `${formatNumber(sleep.value, 1)} h`}

@@ -9,8 +9,11 @@
 .daily-top-card h3 { margin: 0; color: var(--text); font-size: var(--type-subsection); font-weight: 650; }
 .daily-page .daily-top-card h3 a { display: inline-flex; align-items: center; gap: var(--space-1); min-height: 44px; color: var(--text); text-decoration: none; }
 .daily-page .daily-top-card h3 a:hover { text-decoration: underline; text-underline-offset: .2em; }
+.daily-page .daily-top-card h3 .daily-top-card-toggle { display: inline-flex; align-items: center; gap: var(--space-1); min-height: 44px; padding: 0; border: 0; background: transparent; color: var(--text); font: inherit; cursor: pointer; }
+.daily-page .daily-top-card h3 .daily-top-card-toggle:hover { text-decoration: underline; text-underline-offset: .2em; }
 .daily-top-card h3 svg { width: 1.1em; height: 1.1em; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; transition: transform var(--motion-press) var(--ease-standard); }
-.daily-page .daily-top-card h3 a:hover svg { transform: translateX(2px); }
+.daily-page .daily-top-card h3 a:hover svg, .daily-page .daily-top-card h3 .daily-top-card-toggle[aria-expanded="false"]:hover svg { transform: translateX(2px); }
+.daily-page .daily-top-card h3 .daily-top-card-toggle[aria-expanded="true"] svg { transform: rotate(90deg); }
 .daily-top-rings { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-2); justify-items: center; }
 .daily-top-card .daily-ring-graphic { width: min(5rem, 100%); }
 .daily-top-card .daily-ring-centre { max-width: 80%; font-size: var(--type-body); }
@@ -53,5 +56,5 @@
 @media (prefers-reduced-motion: reduce) {
   .daily-top-track { scroll-behavior: auto; }
   .daily-top-card h3 svg { transition: none; }
-  .daily-page .daily-top-card h3 a:hover svg { transform: none; }
+  .daily-page .daily-top-card h3 a:hover svg, .daily-page .daily-top-card h3 .daily-top-card-toggle[aria-expanded="false"]:hover svg { transform: none; }
 }

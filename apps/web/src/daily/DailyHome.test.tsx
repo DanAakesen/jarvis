@@ -14,6 +14,8 @@ const backendUrl = 'http://localhost:3999';
 const shellReads = 1;
 // Overview cards: week workouts, steps, nutrition days, meals, sleep and the metric catalogue.
 const todayReads = 6;
+// Health panel, once expanded: metrics, catalogue, sleep, workouts, nutrition days and sync.
+const healthReads = 6;
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.restoreAllMocks(); window.history.replaceState({}, '', '/'); });
 
 const records: Partial<Record<DailySourceId, Record<string, DailyJson>>> = {
@@ -61,6 +63,7 @@ function home(refreshVersion = 0, initialPath = '/health') {
   </MemoryRouter>;
 }
 const settled = () => screen.findByRole('heading', { name: 'Training' });
+const sectionTabs = () => within(screen.getByRole('tablist', { name: 'Health sections' }));
 const flush = () => act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); });
 
 describe('Daily overview', () => {
@@ -88,6 +91,37 @@ describe('Daily overview', () => {
     hold.open();
     await settled();
   });
+  it('keeps the Health panel closed until the Health card opens it, and returns focus to the card when it closes', async () => {
+    const f = fixture();
+    render(home());
+    await settled();
+    await waitFor(() => expect(f.queries).toHaveLength(todayReads + shellReads));
+    expect(document.getElementById('health-panel')).toBeNull();
+    const toggle = screen.getByRole('button', { name: 'Health' });
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    expect(toggle.getAttribute('aria-controls')).toBe('health-panel');
+    fireEvent.click(toggle);
+    await waitFor(() => expect(document.getElementById('health-panel')).not.toBeNull());
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    await waitFor(() => expect(f.queries).toHaveLength(todayReads + shellReads + healthReads));
+    const collapse = screen.getByRole('button', { name: 'Collapse Health' });
+    collapse.focus();
+    fireEvent.click(collapse);
+    await waitFor(() => expect(document.getElementById('health-panel')).toBeNull());
+    await waitFor(() => expect(document.activeElement).toBe(toggle));
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    fireEvent.click(toggle);
+    await waitFor(() => expect(document.getElementById('health-panel')).not.toBeNull());
+    fireEvent.click(toggle);
+    await waitFor(() => expect(document.getElementById('health-panel')).toBeNull());
+  });
+  it('opens the Health panel straight from an address that asks for it', async () => {
+    fixture();
+    render(home(0, '/health?section=overview&panel=health&healthTab=sleep'));
+    await settled();
+    expect(await screen.findByRole('tab', { name: 'Sleep', selected: true })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Health' }).getAttribute('aria-expanded')).toBe('true');
+  });
   it('reads at most two collections at a time', async () => {
     const hold = gate();
     const f = fixture({ answer: async query => { await hold.opened; return jsonResponse(dailyFixture(query, items(query))); } });
@@ -99,7 +133,7 @@ describe('Daily overview', () => {
     await settled();
     await waitFor(() => expect(f.queries).toHaveLength(todayReads + shellReads));
   });
-  it('re-reads when the existing Daily refresh stream advances', async () => {
+  it('re-reads when the existing Health refresh stream advances', async () => {
     const f = fixture();
     const { rerender } = render(home(0));
     await settled();
@@ -111,21 +145,21 @@ describe('Daily overview', () => {
     const f = fixture({ capabilities: () => capabilityList(Object.values(sources).filter(source => source !== sources.workouts)) });
     render(home());
     await settled();
-    expect(screen.getByRole('tab', { name: 'Overview' })).toBeTruthy();
-    expect(screen.getByRole('tab', { name: 'Briefs' })).toBeTruthy();
-    expect(screen.getByRole('tab', { name: 'Data' })).toBeTruthy();
-    expect(screen.queryByRole('tab', { name: 'Workouts' })).toBeNull();
-    expect(screen.getByRole('tab', { name: 'Nutrition' })).toBeTruthy();
-    expect(screen.getByRole('tab', { name: 'Body & sleep' })).toBeTruthy();
+    expect(sectionTabs().getByRole('tab', { name: 'Overview' })).toBeTruthy();
+    expect(sectionTabs().getByRole('tab', { name: 'Briefs' })).toBeTruthy();
+    expect(sectionTabs().getByRole('tab', { name: 'Data' })).toBeTruthy();
+    expect(sectionTabs().queryByRole('tab', { name: 'Workouts' })).toBeNull();
+    expect(sectionTabs().getByRole('tab', { name: 'Nutrition' })).toBeTruthy();
+    expect(sectionTabs().getByRole('tab', { name: 'Body & sleep' })).toBeTruthy();
 
-    fireEvent.click(screen.getByRole('tab', { name: 'Data' }));
+    fireEvent.click(sectionTabs().getByRole('tab', { name: 'Data' }));
     await screen.findByLabelText('Browse');
     fireEvent.change(screen.getByLabelText('Period'), { target: { value: '30' } });
     await waitFor(() => expect(f.queries.at(-1)).toMatchObject({ source: sources.metrics }));
     expect((screen.getByLabelText('Period') as HTMLSelectElement).value).toBe('30');
-    fireEvent.click(screen.getByRole('tab', { name: 'Briefs' }));
+    fireEvent.click(sectionTabs().getByRole('tab', { name: 'Briefs' }));
     await screen.findByRole('heading', { level: 2, name: 'Briefs' });
-    fireEvent.click(screen.getByRole('tab', { name: 'Data' }));
+    fireEvent.click(sectionTabs().getByRole('tab', { name: 'Data' }));
     await screen.findByLabelText('Browse');
     expect((screen.getByLabelText('Period') as HTMLSelectElement).value).toBe('30');
   });
@@ -134,7 +168,7 @@ describe('Daily overview', () => {
     fixture({ capabilities: () => capabilityList(Object.values(sources).filter(source => source !== sources.workouts)) });
     render(home(0, '/daily?section=unknown'));
     await settled();
-    const overview = screen.getByRole('tab', { name: 'Overview' });
+    const overview = sectionTabs().getByRole('tab', { name: 'Overview' });
     await waitFor(() => expect(overview.getAttribute('aria-selected')).toBe('true'));
     expect(screen.getByTestId('daily-section-url').textContent).toBe('unknown');
 
@@ -149,12 +183,12 @@ describe('Daily overview', () => {
     expect(document.activeElement).toBe(nextTab);
     expect(screen.getByTestId('daily-section-url').textContent).toBe(nextTab.id.replace('daily-tab-', ''));
     fireEvent.keyDown(nextTab, { key: 'End' });
-    const data = screen.getByRole('tab', { name: 'Data' });
+    const data = sectionTabs().getByRole('tab', { name: 'Data' });
     expect(data.getAttribute('aria-selected')).toBe('true');
     expect(document.activeElement).toBe(data);
     expect(screen.getByTestId('daily-section-url').textContent).toBe('data');
     fireEvent.keyDown(data, { key: 'Home' });
-    expect(screen.getByRole('tab', { name: 'Overview' }).getAttribute('aria-selected')).toBe('true');
+    expect(sectionTabs().getByRole('tab', { name: 'Overview' }).getAttribute('aria-selected')).toBe('true');
     expect(document.activeElement).toBe(overview);
     expect(tablist.getAllByRole('tab').filter(tab => tab.getAttribute('tabindex') === '0')).toHaveLength(1);
   });
@@ -175,7 +209,7 @@ describe('Daily overview', () => {
       expect(stripScrolls().every(scroll => scroll.options.behavior === 'auto')).toBe(true);
 
       Object.defineProperty(strip, 'clientWidth', { configurable: true, value: 390 });
-      const data = screen.getByRole('tab', { name: 'Data' });
+      const data = sectionTabs().getByRole('tab', { name: 'Data' });
       Object.defineProperty(data, 'offsetLeft', { configurable: true, value: 600 });
       Object.defineProperty(data, 'offsetWidth', { configurable: true, value: 80 });
       scrolls.length = 0;
@@ -184,7 +218,7 @@ describe('Daily overview', () => {
 
       document.documentElement.dataset.motion = 'reduced';
       scrolls.length = 0;
-      fireEvent.click(screen.getByRole('tab', { name: 'Overview' }));
+      fireEvent.click(sectionTabs().getByRole('tab', { name: 'Overview' }));
       expect(stripScrolls()).toEqual([{ element: strip, options: { left: 0, behavior: 'auto' } }]);
     } finally {
       delete document.documentElement.dataset.motion;
@@ -241,7 +275,8 @@ describe('Daily overview', () => {
     render(home());
     const names = ['Overview', 'Briefs', 'Workouts', 'Nutrition', 'Body & sleep'];
     for (let index = 0; index < 20; index += 1) {
-      fireEvent.click(await screen.findByRole('tab', { name: names[index % names.length]! }));
+      const tablist = await screen.findByRole('tablist', { name: 'Health sections' });
+      fireEvent.click(within(tablist).getByRole('tab', { name: names[index % names.length]! }));
       await flush();
     }
     await waitFor(() => expect(aborted).toBeGreaterThan(0));
@@ -259,9 +294,9 @@ describe('Daily overview', () => {
     await waitFor(() => expect(f.queries.at(-1)).toMatchObject({ source: sources.metrics, limit: 50 }));
     expect(screen.queryByRole('heading', { name: 'Training' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Back to overview' })).toBeNull();
-    fireEvent.click(screen.getByRole('tab', { name: 'Overview' }));
+    fireEvent.click(sectionTabs().getByRole('tab', { name: 'Overview' }));
     await settled();
-    expect(screen.getByRole('tab', { name: 'Overview' }).getAttribute('aria-selected')).toBe('true');
+    expect(sectionTabs().getByRole('tab', { name: 'Overview' }).getAttribute('aria-selected')).toBe('true');
     expect(f.capabilityCalls()).toBe(1);
   });
   it.each([

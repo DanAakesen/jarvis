@@ -15,7 +15,7 @@ import { useTopCardData } from './useTopCardData';
 
 const cards = [
   { id: 'training', title: 'Training', to: '?section=workouts' },
-  { id: 'health', title: 'Health', to: '?section=body-sleep' },
+  { id: 'health', title: 'Health' },
   { id: 'body', title: 'Body', to: '?section=body-sleep' },
 ] as const;
 
