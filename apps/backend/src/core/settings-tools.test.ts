@@ -225,7 +225,7 @@ describe('Jarvis settings tools', () => {
 
     expect(runConfirmed).toHaveBeenCalledWith(
       'other',
-      'Change chat model settings and the daily vision budget in Jarvis settings.',
+      'Change chat model settings and the per-day vision budget in Jarvis settings.',
       expect.any(Function),
       expect.any(AbortSignal),
     );

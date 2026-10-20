@@ -30,9 +30,9 @@ const feedFields = ['feed_kind', 'accepted_evidence_at', 'processed_committed_at
 const inboxFields = ['retained', 'retained_bytes', 'byte_limit', 'row_limit', 'pending', 'processing', 'quarantined', 'last_accepted_at', 'last_processed_upload_at'];
 function latest(values: unknown[]): string | null {
   const times = values.filter(value => value !== null && value !== undefined).map(value => {
-    if (!(typeof value === 'string' || value instanceof Date)) throw new ToolFailure('Daily timestamps are unavailable.');
+    if (!(typeof value === 'string' || value instanceof Date)) throw new ToolFailure('Health timestamps are unavailable.');
     const timestamp = value instanceof Date ? value.getTime() : Date.parse(value);
-    if (!Number.isFinite(timestamp)) throw new ToolFailure('Daily timestamps are unavailable.');
+    if (!Number.isFinite(timestamp)) throw new ToolFailure('Health timestamps are unavailable.');
     return new Date(timestamp).toISOString();
   });
   return times.sort().at(-1) ?? null;
@@ -44,7 +44,7 @@ export class DailyQueryService {
 
   async query(input: unknown, request: FastifyRequest, signal: AbortSignal): Promise<DailyQueryResult> {
     resolveDailyOwner(request);
-    if (!isDailyQuery(input)) throw new ToolRefusal('Invalid Daily query. Use one source with only its supported selectors and exact returned cursor.');
+    if (!isDailyQuery(input)) throw new ToolRefusal('Invalid Health query. Use one source with only its supported selectors and exact returned cursor.');
     if ((input.source === sources.briefs || input.source === sources.brief) && request.dailyConnectorPrincipal) throw new AuthenticationDenied(403);
     signal = AbortSignal.any([signal, AbortSignal.timeout(30_000)]);
     signal.throwIfAborted();
@@ -52,7 +52,7 @@ export class DailyQueryService {
     catch (error) {
       if (signal.aborted) throw signal.reason;
       if (error instanceof ToolRefusal || error instanceof ToolFailure || error instanceof AuthenticationDenied) throw error;
-      throw new ToolFailure('Daily data is unavailable. No complete result or fresh source is claimed.');
+      throw new ToolFailure('Health data is unavailable. No complete result or fresh source is claimed.');
     }
   }
 
@@ -161,7 +161,7 @@ export class DailyQueryService {
       coverage: { returned: items.length, hasMore: next !== null, next, sourceCompleteness: 'unknown' },
       revision: '0'.repeat(64), // Reserve the final fingerprint bytes in the response budget.
     };
-    if (Buffer.byteLength(JSON.stringify(result)) > dailyResultByteLimit) throw new ToolRefusal('Daily result exceeds the shared response limit. Request a smaller page; oversized single detail remains unavailable.');
+    if (Buffer.byteLength(JSON.stringify(result)) > dailyResultByteLimit) throw new ToolRefusal('Health result exceeds the shared response limit. Request a smaller page; oversized single detail remains unavailable.');
     // Exclude observation time; independent reads are not an atomic/global snapshot.
     // Read DTOs use their response budget, not nutrition's per-write JSON limits.
     result.revision = createHash('sha256').update(JSON.stringify({

@@ -20,7 +20,7 @@ type MenuPage = { readonly to: string; readonly label: string; readonly end?: tr
 
 /** Same order as the rail (`appAreas`): Proactive follows the first area, which is Daily when that is on. */
 function menuPages(dailyEnabled: boolean, proactiveEnabled: boolean): readonly MenuPage[] {
-  const list: readonly MenuPage[] = dailyEnabled ? [pages[0], { to: '/daily', label: 'Daily' }, ...pages.slice(1)] : pages;
+  const list: readonly MenuPage[] = dailyEnabled ? [pages[0], { to: '/health', label: 'Health' }, ...pages.slice(1)] : pages;
   return proactiveEnabled ? [...list.slice(0, 2), { to: '/proactive', label: 'Proactive' }, ...list.slice(2)] : list;
 }
 

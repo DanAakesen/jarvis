@@ -1,4 +1,7 @@
-# Daily read models
+# Health read models
+
+The area is named Health in the owner-facing workspace. Internal module and API
+identifiers, including the `/daily/*` routes and `daily` source ids, remain unchanged.
 
 `DailyQueryService` is the shared read-only boundary for `/daily/query`,
 `daily_query`, the generated-view tool and the nutrition MCP connector. It

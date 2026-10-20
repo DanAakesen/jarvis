@@ -54,7 +54,7 @@ function SectionUrlProbe() {
   const [params] = useSearchParams();
   return <output data-testid="daily-section-url">{params.get('section') ?? 'no section parameter'}</output>;
 }
-function home(refreshVersion = 0, initialPath = '/daily') {
+function home(refreshVersion = 0, initialPath = '/health') {
   return <MemoryRouter initialEntries={[initialPath]}>
     <DailyRefreshContext.Provider value={refreshVersion}><DailyHome backendUrl={backendUrl} getAccessToken={token} /></DailyRefreshContext.Provider>
     <SectionUrlProbe />
@@ -69,10 +69,10 @@ describe('Daily overview', () => {
     render(home());
     await settled();
     await waitFor(() => expect(f.queries).toHaveLength(todayReads + shellReads));
-    expect(screen.getByRole('heading', { level: 1, name: 'Daily' })).toBeTruthy();
+    expect(screen.getByRole('heading', { level: 1, name: 'Health' })).toBeTruthy();
     for (const name of ['Training', 'Health', 'Body']) expect(screen.getByRole('heading', { level: 3, name })).toBeTruthy();
-    expect(screen.queryByRole('heading', { name: 'What Daily holds today' })).toBeNull();
-    expect(screen.queryByRole('list', { name: 'What Daily holds today' })).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'What Health holds today' })).toBeNull();
+    expect(screen.queryByRole('list', { name: 'What Health holds today' })).toBeNull();
     expect(screen.queryByText('About this data')).toBeNull();
     expect(screen.queryByRole('button', { name: /^(Open |Refresh overview)/u })).toBeNull();
     expect(new Set(f.fetch.mock.calls.map(([url, init]) => `${init?.method} ${new URL(String(url)).pathname}`)))
@@ -82,7 +82,7 @@ describe('Daily overview', () => {
     const hold = gate();
     const f = fixture({ capabilities: async () => { await hold.opened; return capabilityList(); } });
     render(home());
-    expect(screen.getByText('Checking Daily availability')).toBeTruthy();
+    expect(screen.getByText('Checking Health availability')).toBeTruthy();
     expect(screen.queryByRole('heading', { name: 'Training' })).toBeNull();
     expect(f.queries).toHaveLength(0);
     hold.open();
@@ -138,10 +138,10 @@ describe('Daily overview', () => {
     await waitFor(() => expect(overview.getAttribute('aria-selected')).toBe('true'));
     expect(screen.getByTestId('daily-section-url').textContent).toBe('unknown');
 
-    const tablist = within(screen.getByRole('tablist', { name: 'Daily sections' }));
+    const tablist = within(screen.getByRole('tablist', { name: 'Health sections' }));
     const tabs = tablist.getAllByRole('tab');
     const nextTab = tabs[1]!;
-    expect(screen.getByRole('navigation', { name: 'Daily sections' })).toBeTruthy();
+    expect(screen.getByRole('navigation', { name: 'Health sections' })).toBeTruthy();
     expect(tabs.filter(tab => tab.getAttribute('tabindex') === '0')).toHaveLength(1);
     overview.focus();
     fireEvent.keyDown(overview, { key: 'ArrowRight' });
@@ -169,7 +169,7 @@ describe('Daily overview', () => {
       fixture();
       render(home());
       await settled();
-      const strip = screen.getByRole('navigation', { name: 'Daily sections' });
+      const strip = screen.getByRole('navigation', { name: 'Health sections' });
       const stripScrolls = () => scrolls.filter(scroll => scroll.element === strip);
       expect(stripScrolls().length).toBeGreaterThan(0);
       expect(stripScrolls().every(scroll => scroll.options.behavior === 'auto')).toBe(true);
@@ -196,7 +196,7 @@ describe('Daily overview', () => {
     fixture();
     render(home());
     await settled();
-    const strip = screen.getByRole('navigation', { name: 'Daily sections' });
+    const strip = screen.getByRole('navigation', { name: 'Health sections' });
     const edges = () => [strip.dataset.overflowStart, strip.dataset.overflowEnd];
     expect(edges()).toEqual([undefined, undefined]);
 
@@ -265,9 +265,9 @@ describe('Daily overview', () => {
     expect(f.capabilityCalls()).toBe(1);
   });
   it.each([
-    [404, 'Daily is not enabled on this backend.'],
-    [403, 'Daily access could not be verified. Sign in as the configured owner.'],
-    [503, 'Daily is unavailable (HTTP 503).'],
+    [404, 'Health is not enabled on this backend.'],
+    [403, 'Health access could not be verified. Sign in as the configured owner.'],
+    [503, 'Health is unavailable (HTTP 503).'],
   ])('explains a failed availability check (HTTP %i), reads nothing, and retries on request', async (status, message) => {
     let failing = true;
     const f = fixture({ capabilities: () => failing ? jsonResponse({ error: 'synthetic' }, status) : capabilityList() });
@@ -284,7 +284,7 @@ describe('Daily overview', () => {
   it('says so plainly when the backend exposes no browsable collection', async () => {
     const f = fixture({ capabilities: () => capabilityList([sources.workout]) });
     render(home());
-    await screen.findByText('No Daily data');
+    await screen.findByText('No Health data');
     expect(f.queries).toHaveLength(0);
   });
   it('keeps a single page heading when Overview is embedded in the Daily shell', async () => {

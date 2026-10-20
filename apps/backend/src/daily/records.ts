@@ -22,7 +22,7 @@ export function dailyJson(value: unknown): DailyJson {
   if (value instanceof Date) return value.toISOString();
   if (Array.isArray(value)) return value.map(dailyJson);
   if (typeof value === 'object' && value !== null) return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, dailyJson(item)]));
-  throw new ToolFailure('Daily data could not be represented safely.');
+  throw new ToolFailure('Health data could not be represented safely.');
 }
 
 export function projectDailyRecord(row: Record<string, unknown>, fields: readonly string[]): Record<string, DailyJson> {

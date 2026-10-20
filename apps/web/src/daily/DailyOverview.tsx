@@ -7,7 +7,7 @@ import './daily.css';
 import './daily-overview.css';
 
 /**
- * The Daily landing view: the Training, Health and Body cards for one period.
+ * The Health landing view: the Training, Health and Body cards for one period.
  */
 export function DailyOverview({ backendUrl, getAccessToken, capabilities, onRetryAvailability }: {
   backendUrl: string | null;
@@ -26,10 +26,10 @@ export function DailyOverview({ backendUrl, getAccessToken, capabilities, onRetr
     {capabilities.error
       ? <div className="daily-notice" role="alert"><p>{capabilities.error}</p>
         <button className="secondary-button" type="button" onClick={onRetryAvailability}>Retry availability</button></div>
-      : !capabilities.sources ? <Loader label="Checking Daily availability" variant="rows" />
+      : !capabilities.sources ? <Loader label="Checking Health availability" variant="rows" />
         : hasCardSource
           ? <TopCards backendUrl={backendUrl} getAccessToken={getAccessToken} refreshVersion={refreshVersion} available={available} />
-          : <p className="daily-empty" role="status">No Daily data</p>}
+          : <p className="daily-empty" role="status">No Health data</p>}
   </section>;
 }
 

@@ -388,7 +388,7 @@ describe('daily_show publishing', () => {
     const f = fixture();
     const error = await rejection(run(f, { source: sources.metrics, ...week }));
     expect(error).toBeInstanceOf(ToolFailure);
-    expect((error as ToolFailure).message).toBe('The Daily view did not pass workspace validation.');
+    expect((error as ToolFailure).message).toBe('The Health view did not pass workspace validation.');
     expect(f.execute).not.toHaveBeenCalled();
   });
 });
