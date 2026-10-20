@@ -3949,6 +3949,50 @@ upload nor zero alerts proves complete generated-code coverage or no defects.
   allowing any title-write request. Live exact-head CI/CodeQL evidence is tracked
   in the PR, separately from local proof.
 
+## P14-43: bound larger Factory board source pages (20 October 2026)
+
+Refs #1127. Raise the GitHub reader's per-response ceiling from 1 MiB to 4 MiB,
+enforced against both declared length and streamed bytes. Keep 100 items per
+page, 10 pages (1,000 items) per list, eight concurrent GitHub reads and the
+25-second source deadline. This accommodates the reproduced 100-item page with
+12 KiB synthetic bodies without multiplying requests as smaller pages would.
+REST list responses include full bodies; changing API/field selection is a
+larger integration change. The limit remains finite: 40 MiB source JSON per
+list, at most 30 primary-list requests / 120 MiB source JSON per read, plus
+parsing/copy overhead. At most eight response streams consume bytes concurrently
+(32 MiB at their ceilings). Dependency lists retain the same finite per-list
+bounds and shared limiter. These are source-byte bounds, not a measured RSS cap;
+no request, item, timeout, cache or dependency budget is raised.
+
+Pagination headroom was re-checked using GitHub indexed counts at about
+11:37–11:38 UTC on 20 October: closed issues updated since
+`2026-10-06T11:37:23Z` = 263; closed PRs updated since that cutoff = 424.
+Queries used `repo:DanAakesen/jarvis is:issue is:closed updated:>=…` and
+`repo:DanAakesen/jarvis is:pr is:closed updated:>=…`. The REST issues endpoint
+includes PRs and `since` filters updates, not closure dates, so both counts
+matter, including older closures updated within the window. The combined
+687 items require seven pages, leaving 313 item slots (31.3% of capacity,
+about 46% growth over the observed count) before the unchanged 1,000-item cap.
+This indexed snapshot is not an atomic REST/production-App read; indexing lag
+and concurrent updates remain limitations. It supports retaining the cap now,
+not a guarantee of future headroom. Continue to fail closed with `result_limit`
+if a list grows beyond it.
+
+The public board output remains capped at 1 MiB. Contract, columns, UI, repository
+validation, duplicate/truncation rejection and stale-cache behavior are unchanged.
+Synthetic regressions exercise a >1-MiB page through the actual route, exactly
+4 MiB with/without declared length, and rejection/cancellation above 4 MiB even
+when length is absent or understated; the declared-length rejection test uses
+4 MiB + 1 byte. Existing pagination boundaries remain covered.
+
+The separate `factory.board_task_event_failed` subscriber only resolves the
+task's project through `taskStore.get` and publishes an invalidation; it never
+calls the GitHub reader. `kind: internal` does not establish its production
+cause, and this source-limit change does not claim to fix that warning.
+Production acceptance remains pending: an authorized post-deploy read must
+return a fresh complete HTTP 200 board and its observation window must have no
+new `response_too_large` warnings. Keep #1127 open until observed.
+
 ## #813 bound Factory board source reads (13 October 2026)
 
 Use one eight-request limiter for every GitHub source request in a board snapshot,
