@@ -59,7 +59,7 @@
 .body-sleep-sources { color: var(--text-muted); font-size: var(--type-small); overflow-wrap: anywhere; }
 .body-sleep-table { min-width: 0; }
 .body-sleep-table > summary { min-height: 44px; align-content: center; cursor: pointer; }
-.body-sleep :is([tabindex], input, select, button, summary):focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.body-sleep :is([tabindex], button, summary):focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 @media (max-width: 900px) {
   .body-sleep-picker { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .body-sleep-picker > .daily-period-control { grid-column: 1 / -1; }
