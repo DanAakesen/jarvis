@@ -96,7 +96,7 @@ describe('Daily Data records', () => {
       matches: phone, addEventListener: (_: string, listener: () => void) => { change = listener; }, removeEventListener: vi.fn(),
     })));
     render(<DataRecords source={sources.meals} rows={[row]} />);
-    const cards = screen.getByRole('list', { name: 'Daily records' });
+    const cards = screen.getByRole('list', { name: 'Health records' });
     expect(screen.queryByRole('table')).toBeNull();
     expect(within(cards).getByRole('heading').textContent).not.toContain('Unknown');
     expect(cards.querySelector('.daily-record-summary')?.textContent).toContain('Energy: 0 kcal');
@@ -105,7 +105,7 @@ describe('Daily Data records', () => {
     expect(within(cards).getByRole('button', { name: /Details for/u }).classList.contains('secondary-button')).toBe(true);
     act(() => { phone = false; change(); });
     expect(screen.getByRole('table')).toBeTruthy();
-    expect(screen.queryByRole('list', { name: 'Daily records' })).toBeNull();
+    expect(screen.queryByRole('list', { name: 'Health records' })).toBeNull();
   });
 
   it('keeps long recorded values intact in phone summaries', () => {
@@ -136,7 +136,7 @@ describe('Daily Data records', () => {
     expect(raw.open).toBe(true);
     expect(document.activeElement).toBe(summary);
     rendered.rerender(<DataRecords source={sources.metrics} rows={[]} />);
-    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('group', { name: 'Daily records' })));
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('group', { name: 'Health records' })));
     expect(screen.queryByRole('region', { name: /Details for/u })).toBeNull();
   });
 
@@ -194,7 +194,7 @@ describe('Daily Data records', () => {
   it('shows a plain unavailable-collection state with a Health upload link and no query', () => {
     const fetch = vi.fn(); vi.stubGlobal('fetch', fetch);
     render(<DailyPage embedded backendUrl="http://localhost" getAccessToken={async () => 'synthetic'} knownSources={[]} />);
-    expect(screen.getByRole('status').textContent).toContain('No Daily data');
+    expect(screen.getByRole('status').textContent).toContain('No Health data');
     expect(screen.getByRole('link', { name: 'Settings, Health upload' }).getAttribute('href')).toBe('/settings#health-upload');
     expect(screen.queryByRole('combobox')).toBeNull();
     expect(fetch).not.toHaveBeenCalled();
@@ -224,7 +224,7 @@ describe('Daily Data records', () => {
       jsonResponse(dailyFixture(JSON.parse(String(init.body)))));
     vi.stubGlobal('fetch', fetch);
     render(<DailyPage embedded backendUrl="http://localhost" getAccessToken={async () => 'synthetic'} knownSources={[sources.meals]} initialSource={sources.meals} />);
-    expect(screen.getByRole('status').textContent).toContain('Loading Daily history');
+    expect(screen.getByRole('status').textContent).toContain('Loading Health history');
     await act(async () => { finish(jsonResponse({}, 503)); });
     expect((await screen.findByRole('alert')).textContent).toContain('HTTP 503');
     fireEvent.click(screen.getByRole('button', { name: 'Retry records' }));

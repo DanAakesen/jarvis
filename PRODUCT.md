@@ -279,7 +279,7 @@ Keep implementation phases and progress in [PLAN.md](PLAN.md), feature summaries
 | --- | --- |
 | **1 — Software Factory** | Voice or chat → coding agent → GitHub → live board and voice updates. Start with one project, then verify parallel tasks. |
 | **2 — Banking** | Integrate the existing Banking app into Jarvis with shared UI and voice access. Scope open. |
-| **3 — Health and fitness (Daily)** | Clean up the existing Daily solution and migrate valuable functions, integrations, and history to Azure. |
+| **3 — Health and fitness** | Clean up the existing health solution and migrate valuable functions, integrations, and history to Azure. |
 | **4 — Windows app** | The same core experience through the shared backend. Framework open. |
 
 Only phase 1 is in scope now, extended by P7 (Jarvis everywhere: web and voice confirmations, screen and camera, PC control, calendar, mail and notes search) and P8 (the complete Jarvis UI) in [PLAN.md](PLAN.md). Banking, health and fitness, and other areas get no tables, pages, or code until their phase starts.
@@ -1258,7 +1258,7 @@ connections to vetted public DNS addresses, rejects redirects and unsafe XML,
 and returns only bounded, sanitized titles. The source does not itself activate a
 scheduler, model call or proactive delivery, and this slice sets no proactive flag.
 
-## Daily migration (approved P12)
+## Health migration (approved P12)
 
 Tool parity is an acceptance requirement for every retained Daily capability,
 not a later convenience. The page and Jarvis chat/voice must use the same
@@ -1395,13 +1395,13 @@ reviewed production deployment files turn it on (18 October 2026). The suggest t
 reports energy and protein left and the saved
 favourites that fit, using the stored active energy and only the meals logged in
 Jarvis, so food eaten but never logged is not counted. The Settings section
-appears only while Daily is on. It shows the three targets as whole-number fields
+appears only while Health is enabled. It shows the three targets as whole-number fields
 with their allowed ranges, saves on its own rather than with Save settings, and
 clears a target when its field is emptied. It ships no defaults, placeholders or
 example figures, and a failed load or save shows page-owned wording, never server
 text. Checking it with his real figures is Dan's own step.
 
-The Daily page (P12-15 / #730) opens on an overview so Dan can see what is
+The Health page (P12-15 / #730) opens on an overview so Dan can see what is
 actually stored before he browses it. For each retained collection the backend
 exposes (measurements, sleep, workouts, food history, saved favourites, meal
 plans, brief history and sync evidence) it says in plain English what the
@@ -1424,7 +1424,7 @@ production deployment files then set it together with the backend switch (18
 October 2026). Acceptance with real data, a physical phone and the original source
 stays open.
 
-18 October 2026 (P12-20 / #964): Daily keeps that single destination and now has
+18 October 2026 (P12-20 / #964): Health keeps that single destination and now has
 one page heading, a section switcher and an active section. The shipped sections
 are Overview, Briefs and Data; Overview still opens a collection in the existing
 browser, and Briefs reuses its history and detail. Unavailable section
@@ -1434,8 +1434,8 @@ period (Today, Yesterday, Last 7, 14, 30 or 90 days, This year, or a validated c
 Workouts, Nutrition and Body & sleep views remain follow-up work; there are no
 separate navigation destinations, widget, coaching/recovery/recomp or TickTick.
 
-On-demand Daily views (P12-16 / #731) let Dan ask Jarvis in chat or voice to show
-what Daily holds, and the answer appears as a table, chart or detail in the existing
+On-demand Health views (P12-16 / #731) let Dan ask Jarvis in chat or voice to show
+what Health holds, and the answer appears as a table, chart or detail in the existing
 workspace window instead of a fixed native screen. The `daily_show` tool covers
 measurements, sleep, workouts, one workout's heart rate, food history, saved
 favourites, meal plans and sync status. It reads through the same

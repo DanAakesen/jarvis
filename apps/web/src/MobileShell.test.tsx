@@ -85,9 +85,9 @@ describe('mobile menu pages', () => {
   // The rail lists Conversation, then the areas with Proactive after the first one (`appAreas`); the menu adds Settings.
   it.each([
     { dailyEnabled: false, proactiveEnabled: false, pages: ['Jarvis', 'Software Factory', 'Notes', 'Usage', 'Status', 'Settings'] },
-    { dailyEnabled: true, proactiveEnabled: false, pages: ['Jarvis', 'Daily', 'Software Factory', 'Notes', 'Usage', 'Status', 'Settings'] },
+    { dailyEnabled: true, proactiveEnabled: false, pages: ['Jarvis', 'Health', 'Software Factory', 'Notes', 'Usage', 'Status', 'Settings'] },
     { dailyEnabled: false, proactiveEnabled: true, pages: ['Jarvis', 'Software Factory', 'Proactive', 'Notes', 'Usage', 'Status', 'Settings'] },
-    { dailyEnabled: true, proactiveEnabled: true, pages: ['Jarvis', 'Daily', 'Proactive', 'Software Factory', 'Notes', 'Usage', 'Status', 'Settings'] },
+    { dailyEnabled: true, proactiveEnabled: true, pages: ['Jarvis', 'Health', 'Proactive', 'Software Factory', 'Notes', 'Usage', 'Status', 'Settings'] },
   ])('lists the pages in rail order (daily $dailyEnabled, proactive $proactiveEnabled)', async ({ pages, ...flags }) => {
     const navigation = await openPages(flags);
     expect(navigation.getAllByRole('link').map((link) => link.textContent)).toEqual(pages);

@@ -19,7 +19,7 @@ export function useDailyCapabilities(backendUrl: string | null, getAccessToken: 
       sources => { if (!controller.signal.aborted) setLoaded({ key, sources }); },
       error => {
         if (!controller.signal.aborted) setLoaded({ key,
-          error: error instanceof DailyReadError ? error.message : 'Daily availability could not be checked.' });
+          error: error instanceof DailyReadError ? error.message : 'Health availability could not be checked.' });
       },
     );
     return () => controller.abort();

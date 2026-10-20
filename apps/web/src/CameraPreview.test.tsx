@@ -16,8 +16,8 @@ afterEach(() => vi.restoreAllMocks());
 
 describe('Camera preview', () => {
   it('shows camera limit freshness without changing the composer or pretending a cached image is live', () => {
-    render(<CameraPreview camera={camera({ conversation: true, observationNotice: 'Daily camera limit reached. Using an observation from 20 seconds ago.' })} />);
-    expect(screen.getByText(/Daily camera limit reached/u).getAttribute('role')).toBe('status');
+    render(<CameraPreview camera={camera({ conversation: true, observationNotice: 'Camera capture limit reached. Using an observation from 20 seconds ago.' })} />);
+    expect(screen.getByText(/Camera capture limit reached/u).getAttribute('role')).toBe('status');
     expect(screen.getByText(/each chat or voice turn/u)).not.toBeNull();
     expect(screen.queryByRole('button', { name: 'Look now' })).toBeNull();
   });

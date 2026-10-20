@@ -153,7 +153,7 @@ export function registerConversationSummaryRoutes(app: FastifyInstance): void {
         return reply.code(422).send({ error: 'Invalid conversation summary range' });
       }
       return reply.code(429).send({
-        error: 'Daily conversation summary limit reached',
+        error: 'Conversation summary limit for today reached',
         budget: { limit, usedLast24h: result.used },
       });
     } catch {

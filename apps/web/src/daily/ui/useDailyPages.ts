@@ -92,7 +92,7 @@ export function useDailyPages(
         }, !(settle && chaining));
       } catch (error) {
         if (!active || controller.signal.aborted) return;
-        const message = error instanceof DailyReadError ? error.message : 'Daily could not be loaded.';
+        const message = error instanceof DailyReadError ? error.message : 'Health could not be loaded.';
         const clear = error instanceof DailyReadError && (error.kind === 'auth' || error.kind === 'disabled');
         publish({
           ...(clear ? empty : state), status: firstPage || clear ? 'error' : 'ready',

@@ -28,7 +28,7 @@ export function parseVisualResult(value: unknown): VisualResult | undefined {
 export function visualResultText(result: VisualResult): string {
   if (result.visualPath === 'image') return 'Image supplied to Jarvis for this turn.';
   const reason = result.visualReason;
-  const detail = reason === 'daily_limit' ? ' The daily image limit was reached.'
+  const detail = reason === 'daily_limit' ? ' The per-day image limit was reached.'
     : reason === 'budget_exhausted' ? ' The image budget was reached.'
     : reason === 'budget_unavailable' ? ' The image budget could not be checked.'
     : reason === 'frame_rate_limited' ? ' Image input was rate-limited.'

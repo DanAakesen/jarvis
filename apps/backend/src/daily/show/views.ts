@@ -222,8 +222,8 @@ function scopeSentence(result: DailyQueryResult): string {
   if (result.source === sources.days) {
     return `Per-day totals derived from retained, non-deleted meals${period ? `, ${period} (Copenhagen dates)` : ''}. Partial nutrient totals are lower bounds.`;
   }
-  if (period) return `Retained Daily records, ${period} (Copenhagen dates).`;
-  return result.source === sources.heartRate ? 'Retained Daily records for one workout.' : 'Retained Daily records.';
+  if (period) return `Retained Health records, ${period} (Copenhagen dates).`;
+  return result.source === sources.heartRate ? 'Retained Health records for one workout.' : 'Retained Health records.';
 }
 
 function titleFor(label: string, result: DailyQueryResult): string {
@@ -410,7 +410,7 @@ function syncView(result: DailyQueryResult, options: DailyViewOptions): DailyVie
 
 export function buildDailyView(result: DailyQueryResult, options: DailyViewOptions): DailyViewBuild {
   const sourceId = result.source;
-  if (!isDailyShowSource(sourceId)) throw new TypeError('This Daily source has no on-screen view.');
+  if (!isDailyShowSource(sourceId)) throw new TypeError('This Health source has no on-screen view.');
   if (sourceId === sources.sync) return syncView(result, options);
   const meta = metas[sourceId];
   const returned = result.items.length;

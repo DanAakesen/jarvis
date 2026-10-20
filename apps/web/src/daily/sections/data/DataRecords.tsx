@@ -96,8 +96,8 @@ export function DataRecords({ source, rows, units = {}, onOpenRecord, openLabel 
     {recordValue(source, field, row[field])}
     {(field === 'meal_name' || field === 'plan_name') && row.deleted_at != null && <span className="daily-deleted">Deleted record</span>}
   </>;
-  return <div className="daily-data-records" ref={records} role="group" aria-label="Daily records" tabIndex={-1}>
-    {phone ? <ul className="daily-record-cards" aria-label="Daily records">{rows.map((row, index) =>
+  return <div className="daily-data-records" ref={records} role="group" aria-label="Health records" tabIndex={-1}>
+    {phone ? <ul className="daily-record-cards" aria-label="Health records">{rows.map((row, index) =>
       <li key={keys[index]}>
         <h3>{value(row, columns[0]!.key)}</h3>
         <p className="daily-record-summary">{columns.slice(1, 3).map(column => {
@@ -110,9 +110,9 @@ export function DataRecords({ source, rows, units = {}, onOpenRecord, openLabel 
         })}</dl>
         {details(row, index)}
       </li>)}</ul> :
-      <ScrollTable label="Daily record table" stickyFirstColumn>
+      <ScrollTable label="Health record table" stickyFirstColumn>
         <table>
-          <caption className="visually-hidden">Recorded Daily values; unknown values are not zero</caption>
+          <caption className="visually-hidden">Recorded Health values; unknown values are not zero</caption>
           <thead><tr>{columns.map(column => {
             const unit = fieldUnit(source, column.key, {}, units);
             return <th scope="col" key={column.key} className={numericColumns.has(column.key) ? 'daily-record-number' : undefined}>

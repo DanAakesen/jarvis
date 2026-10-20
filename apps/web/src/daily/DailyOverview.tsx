@@ -94,7 +94,7 @@ export function DailyOverview({ backendUrl, getAccessToken, capabilities, onRetr
   return <section className={`daily-page daily-overview${embedded ? ' daily-overview-embedded' : ''}`} aria-labelledby="daily-heading" ref={root}>
     <header className="daily-heading">
       {!embedded && <div>
-        <h1 id="daily-heading">Daily</h1>
+        <h1 id="daily-heading">Health</h1>
       </div>}
       {embedded && hasSummarySource && <h2 id="daily-summary-heading">Today</h2>}
       {rows.length > 0 && <div className="daily-heading-actions">
@@ -105,8 +105,8 @@ export function DailyOverview({ backendUrl, getAccessToken, capabilities, onRetr
     {capabilities.error
       ? <div className="daily-notice" role="alert"><p>{capabilities.error}</p>
         <button className="secondary-button" type="button" onClick={onRetryAvailability}>Retry availability</button></div>
-      : !capabilities.sources ? <Loader label="Checking Daily availability" variant="rows" />
-        : rows.length === 0 && !hasSummarySource ? <p className="daily-empty" role="status">No Daily data</p>
+      : !capabilities.sources ? <Loader label="Checking Health availability" variant="rows" />
+        : rows.length === 0 && !hasSummarySource ? <p className="daily-empty" role="status">No Health data</p>
           : <>
             {hasSummarySource && <>
               {!embedded && <h2 id="daily-summary-heading">Today</h2>}
@@ -116,7 +116,7 @@ export function DailyOverview({ backendUrl, getAccessToken, capabilities, onRetr
                 refreshVersion={refreshVersion + summaryRefresh} available={available} />
             </>}
             {rows.length > 0 && <>
-              <h2 id="daily-holds-heading">What Daily holds today</h2>
+              <h2 id="daily-holds-heading">What Health holds today</h2>
               <ul className="daily-overview-list" aria-labelledby="daily-holds-heading">
                 {rows.map(row => <OverviewRow key={row.source.id} row={row} onOpen={onOpen} onRetry={reload} />)}
               </ul>
