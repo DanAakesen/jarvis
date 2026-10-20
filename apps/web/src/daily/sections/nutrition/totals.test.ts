@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { chartLayout } from '../../../chart-data';
-import { dateStep, groupedMeals, mealDate, planItems, proteinTargetComparison, sumNutrient, targetBaseline, trendPoints, trendSeries, weeklyAverages, type Row } from './totals';
+import { balancePoints, dateStep, groupedMeals, mealDate, nutritionPeriodAverages, planItems, proteinTargetComparison, sumNutrient, targetBaseline, trendPoints, trendSeries, weeklyAverages, type Row } from './totals';
+import { copenhagenDate } from '../../period';
 
 const meal = (overrides: Row = {}): Row => ({
   id: 'synthetic-meal-9001', meal_date: '2026-10-18', occurred_at: '2026-10-18T09:00:00Z',
@@ -80,6 +81,24 @@ describe('nutrition totals', () => {
     expect(weeks[0]?.values[1]).toMatchObject({ value: 9004, count: 1, partial: true });
     expect(weeks[1]?.values[0]?.value).toBeNull();
   });
+  it('averages only period rows by Copenhagen day and marks lower-bound measures', () => {
+    const update = '2026-10-17T22:30:00Z';
+    expect(copenhagenDate(new Date(update))).toBe('2026-10-18');
+    const rows = [
+      meal({ meal_date: '2026-10-17', meal_count: 1, energy_kcal: 100, protein_grams: 10 }),
+      meal({ meal_date: '2026-10-18', meal_count: 2, energy_kcal: 800, protein_grams: 40,
+        partial_nutrients: ['energy_kcal', 'protein_grams'], latest_updated_at: update }),
+      meal({ meal_date: '2026-10-19', meal_count: 1, energy_kcal: 600, protein_grams: null, partial_nutrients: [] }),
+      meal({ meal_date: '2026-10-20', meal_count: 1, energy_kcal: null, protein_grams: 60, partial_nutrients: [] }),
+      meal({ meal_date: '2026-10-21', meal_count: 0, energy_kcal: 900, protein_grams: 90 }),
+    ];
+    const averages = nutritionPeriodAverages(rows, { startDate: '2026-10-18', endDate: '2026-10-20' }, 1000);
+    expect(averages).toEqual({
+      daysWithData: 3, partialDays: 1,
+      balance: { value: 300, count: 2, missing: 1, lowerBound: true },
+      protein: { value: 50, count: 2, missing: 1, lowerBound: true },
+    });
+  });
   it('splits at unlogged and unknown days and aligns flat target dates', () => {
     const rows = [
       meal({ meal_date: '2026-10-11', energy_kcal: null }),
@@ -116,6 +135,19 @@ describe('nutrition totals', () => {
       { x: '2026-10-15', y: null },
       { x: '2026-10-16', y: 0 },
     ]);
+  });
+  it('charts balance against the baseline without replacing unknown dates with zero', () => {
+    expect(balancePoints([
+      meal({ meal_date: '2026-10-12', energy_kcal: 800 }),
+      meal({ meal_date: '2026-10-14', energy_kcal: null }),
+      meal({ meal_date: '2026-10-15', energy_kcal: 1200 }),
+    ], 1000)).toEqual([
+      { x: '2026-10-12', y: 200 },
+      { x: '2026-10-13', y: null },
+      { x: '2026-10-14', y: null },
+      { x: '2026-10-15', y: -200 },
+    ]);
+    expect(balancePoints([meal()], null)[0]?.y).toBeNull();
   });
   it('derives null-aware plan totals from stored item nutrients instead of trusting cached totals', () => {
     const items = planItems([

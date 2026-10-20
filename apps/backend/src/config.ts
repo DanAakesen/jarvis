@@ -38,6 +38,8 @@ export interface BackendConfig {
   };
   /** Present only when JARVIS_DAILY_ENABLED is exactly "true". Absent means Daily is off and Jarvis is unchanged. */
   dailyEnabled?: true;
+  /** Present only when JARVIS_DAILY_FEEDS_ENABLED is exactly "true"; it does not activate deployment by itself. */
+  dailyFeedsEnabled?: true;
   auth: AuthConfig;
 }
 
@@ -222,6 +224,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BackendConfig 
   if (dailySetting !== undefined && dailySetting !== 'true' && dailySetting !== 'false') {
     throw new ConfigurationError('JARVIS_DAILY_ENABLED must be true or false');
   }
+  const dailyFeedsSetting = env.JARVIS_DAILY_FEEDS_ENABLED;
+  if (dailyFeedsSetting !== undefined && dailyFeedsSetting !== 'true' && dailyFeedsSetting !== 'false') {
+    throw new ConfigurationError('JARVIS_DAILY_FEEDS_ENABLED must be true or false');
+  }
   const healthUploadSetting = env.JARVIS_HEALTH_UPLOAD_ENABLED;
   if (healthUploadSetting !== undefined && healthUploadSetting !== 'true' && healthUploadSetting !== 'false') {
     throw new ConfigurationError('JARVIS_HEALTH_UPLOAD_ENABLED must be true or false');
@@ -256,6 +262,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BackendConfig 
     healthUploadEnabled: healthUploadSetting === 'true',
     ...(phone ? { phone } : {}),
     ...(dailySetting === 'true' ? { dailyEnabled: true as const } : {}),
+    ...(dailyFeedsSetting === 'true' ? { dailyFeedsEnabled: true as const } : {}),
   };
 }
 

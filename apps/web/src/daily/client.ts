@@ -1,4 +1,4 @@
-import { dailyCapabilitiesAccept, dailyCapabilitiesVersion, dailyQuerySources, dailyQuerySourcesV1, dailyQuerySourcesV2, dailyQuerySourcesV3, isDailyQuery, type DailyJson, type DailyQuery, type DailyQueryResult, type DailySourceId } from '@jarvis/contracts';
+import { dailyCapabilitiesAccept, dailyCapabilitiesVersion, dailyQuerySources, dailyQuerySourcesV1, dailyQuerySourcesV2, dailyQuerySourcesV3, dailyQuerySourcesV4, isDailyQuery, type DailyJson, type DailyQuery, type DailyQueryResult, type DailySourceId } from '@jarvis/contracts';
 import { awaitWithSignal, backendFetch } from '../backend-request';
 
 const responseLimit = 1024 * 1024;
@@ -191,10 +191,11 @@ export async function loadDailySources(backendUrl: string | null, getAccessToken
     const source = (input: unknown): input is DailySourceId => typeof input === 'string' &&
       Object.values(dailyQuerySources).some(known => known === input);
     if (!object(value) || value.module !== 'daily' ||
-        (value.version !== 1 && value.version !== 2 && value.version !== dailyCapabilitiesVersion) ||
+        (value.version !== 1 && value.version !== 2 && value.version !== 3 && value.version !== dailyCapabilitiesVersion) ||
         !Array.isArray(value.sources) || value.sources.length === 0 || !value.sources.every(source) ||
         new Set(value.sources).size !== value.sources.length) throw new DailyReadError('Health data services are not available yet.', 'disabled');
-    const allowed = value.version === 1 ? dailyQuerySourcesV1 : value.version === 2 ? dailyQuerySourcesV2 : dailyQuerySourcesV3;
+    const allowed = value.version === 1 ? dailyQuerySourcesV1 : value.version === 2 ? dailyQuerySourcesV2
+      : value.version === 3 ? dailyQuerySourcesV3 : dailyQuerySourcesV4;
     if (value.sources.some(id => !allowed.some(known => known === id))) {
       throw new DailyReadError(`Health returned incompatible version ${value.version} capabilities. No collections were claimed.`, 'invalid');
     }

@@ -151,12 +151,10 @@ describe('app-wide control contract', () => {
     expect(nutrition).toContain('min-height: 44px');
     expect(ruleDeclaration(workouts, /\.workouts-detail\s*>\s*h3\s*\{([^}]*)\}/, 'margin')).toBe('0');
     expect(overview).toContain('@media (prefers-reduced-motion: reduce)');
-    expect(ruleDeclaration(overview, /\.daily-summary \.daily-summary-grid\s*\{([^}]*)\}/, 'grid-template-columns')).toBe('minmax(0, 1fr)');
     expect(overview).toContain('@media (min-width: 700px)');
     expect(overview).toContain('grid-template-columns: repeat(2, minmax(0, 1fr))');
     expect(overview).toContain('@media (min-width: 1200px)');
     expect(overview).toContain('grid-template-columns: repeat(3, minmax(0, 1fr))');
-    expect(ruleDeclaration(overview, /\.daily-summary-tile\s*>\s*\.daily-tile-status\s*\{([^}]*)\}/, 'margin-top')).toBe('auto');
     expect(shared).toContain('.daily-coverage-note > summary:focus-visible');
     expect(shared).toContain('min-height: 44px; align-content: center; cursor: pointer');
   });
@@ -646,9 +644,19 @@ describe('shared glass tokens', () => {
   it('keeps the phone top bar inside 320px: Settings lives in the menu and presence yields on narrow handsets', () => {
     const source = readFileSync('src/styles.css', 'utf8');
     expect(ruleDeclaration(source, /\.app-shell\[data-phone="true"\] \.settings-link\s*\{([^}]*)\}/, 'display')).toBe('none');
+    expect(ruleDeclaration(source, /\.app-shell\[data-phone="true"\] \.app-topbar\s*\{([^}]*)\}/, 'position')).toBe('sticky');
+    expect(ruleDeclaration(source, /\.app-shell\[data-phone="true"\] \.app-topbar\s*\{([^}]*)\}/, 'top')).toBe('env(safe-area-inset-top)');
     const narrow = mediaBlocks(source).filter(({ query }) => /max-width:\s*380px/.test(query)).map(({ body }) => body).join('\n');
     expect(narrow).toMatch(/\.app-shell\[data-phone="true"\] \.presence-chip\s*\{\s*display:\s*none;\s*\}/);
     expect(ruleDeclaration(source, /\.app-shell\[data-phone="true"\] \.topbar-actions\s*\{([^}]*)\}/, 'gap')).toBe('0');
+  });
+
+  it('keeps phone message times on the bubble rim rather than below the bubble', () => {
+    const history = readFileSync('src/ConversationHistory.css', 'utf8');
+    expect(ruleDeclaration(history, /\.conversation-message \.message-metadata\s*\{([^}]*)\}/, 'position')).toBe('absolute');
+    const touchRules = mediaBlocks(history).filter(({ query }) => /hover:\s*none/u.test(query)).map(({ body }) => body).join('\n');
+    expect(touchRules).toContain('.message-metadata { opacity: 1; }');
+    expect(touchRules).not.toMatch(/\.conversation-message \.message-metadata\s*\{[^}]*position:\s*static/su);
   });
 
   it('keeps phone window rows at their natural touch height rather than the desktop tab basis', () => {
@@ -977,7 +985,6 @@ describe('shared glass tokens', () => {
       /\.sidebar-link\[aria-current="page"\]\s*\{([^}]*)\}/,
       /\.mobile-menu-link\[aria-current="page"\]\s*\{([^}]*)\}/,
       /\.camera-control-button\[aria-pressed="true"\], \.topbar-icon-button\[aria-expanded="true"\], \.settings-link\[aria-current="page"\]\s*\{([^}]*)\}/,
-      /\.workspace-view-switcher \.workspace-tab\[aria-current="true"\]\s*\{([^}]*)\}/,
       /\.workspace-arrangement-options \[aria-pressed="true"\]\s*\{([^}]*)\}/,
       /\.folio-kind\[aria-pressed="true"\]\s*\{([^}]*)\}/,
       /\.usage-segmented button\[aria-pressed="true"\]\s*\{([^}]*)\}/,

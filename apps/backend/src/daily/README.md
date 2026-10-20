@@ -10,8 +10,24 @@ reuses the existing owner resolver, bounded SQL readers, 30-second timeout and
 
 Capabilities are negotiated independently from the query contract. Version 1
 keeps its original nine sources, version 2 keeps its original eleven sources,
-and version 3 adds `daily.health.metric-catalog` and `daily.nutrition.days`.
-Clients that do not request a supported version receive version 1.
+version 3 adds `daily.health.metric-catalog` and `daily.nutrition.days`, and
+version 4 adds the optional Gmail attention and calendar feed sources. Feed
+sources appear in v4 capabilities only for the authenticated owner browser when
+the default-off feed composition exists. Versions 1–3 retain their source lists;
+clients that do not request a supported version receive version 1.
+
+- `daily.attention` reads retained waiting-for-you/waiting-on-others threads and
+  order attention, with business-day age and hidden state. Missing/stale Gmail
+  coverage is reported as partial, not as a successful empty result.
+- `daily.calendar` accepts an inclusive `from` and exclusive `to` ISO instant
+  with a maximum 62-day span. It filters only the retained calendar snapshot and
+  reports whether that snapshot covers the requested range. Older snapshots
+  without saved range metadata remain explicitly uncovered.
+- The owner browser can request a manual refresh, hide a thread, mark an order
+  received in Daily, or restore an exact hidden key through `/daily/feeds/*`.
+  These endpoints are owner-only and derive action intent from the authenticated
+  browser request; they accept no confirmation flag. The refresh retains the
+  existing 30-second cooldown.
 
 - `daily.health.metrics` optionally filters by the exact `metric_name`.
 - `daily.health.metric-catalog` pages metric names over a maximum 366-day
@@ -46,3 +62,30 @@ npm run test:database --workspace @jarvis/backend -- src/database/daily-schema.i
 
 The real-SQL test requires the existing isolated loopback SQL Server fixture;
 it must not target production data.
+
+## Owner training targets (P14-45, #1132)
+
+The owner sets weekly gym sessions, weekly run sessions and steps per day in
+Settings. The target values have no defaults; every read returns `null` for an
+unset value and the server-owned bounds. Migration `0061_daily_training_targets`
+stores only nonempty, owner-keyed rows in `daily.training_targets`; a down
+migration refuses to discard any such row.
+
+`GET` and `PATCH /daily/training-targets` are signed-in-owner Settings routes
+only. They reject agent, runner, connector and other identities, query strings
+and invalid or oversized patches. A clear is `null`; partial updates preserve
+the other values and commit transactionally. The assistant has no training
+target write tool because the production tool catalogue must retain at least
+eight free slots. A read-only query source may be added later.
+
+The web client validates the full target response and owns the Settings
+editor's load/save recovery states. `useTrainingTargets` provides a validated
+loading/settled/error read and retry contract for later Overview, Workouts and
+Health consumers; this change does not modify those views.
+
+Focused checks:
+
+```sh
+npm test --workspace @jarvis/backend -- src/daily/training/targets.test.ts src/daily/training/targets-store.test.ts src/daily/routes/training-targets.test.ts src/daily/composition.test.ts src/daily/index.test.ts src/database/migrations.test.ts
+npm test --workspace @jarvis/web -- src/daily/training-targets.test.ts src/daily/TrainingTargetsSettings.test.tsx src/SettingsPage.test.tsx
+```

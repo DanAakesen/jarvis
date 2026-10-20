@@ -291,6 +291,18 @@ type ChartDecision = { readonly plan: ChartPlan } | { readonly fallback: string 
  * a real value; otherwise the honest answer is a table. Every series covers the same rows, in row order.
  */
 function planChart(source: TabularSource, rows: readonly Row[]): ChartDecision {
+  if (source === sources.workouts) {
+    const usable = rows.filter((row) => finite(row.duration_seconds));
+    if (!usable.length) return { fallback: 'No row has a workout duration to draw, so a table is shown.' };
+    const labels = uniqueLabels(usable.map((row) => shortDate(row.workout_date)));
+    return {
+      plan: {
+        title: 'Workout duration (s)',
+        series: [{ name: 'Duration (s)', points: usable.map((row, index) => ({ x: labels[index] ?? '', y: Number(row.duration_seconds) })) }],
+        plotted: usable.length, considered: rows.length, notes: [],
+      },
+    };
+  }
   if (source === sources.sleep) {
     const wanted = [['Asleep (h)', 'asleep_hours'], ['Total sleep (h)', 'total_sleep_hours']] as const;
     const drawn = wanted.filter(([, key]) => rows.some((row) => finite(row[key])));

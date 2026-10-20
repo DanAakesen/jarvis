@@ -1195,13 +1195,14 @@ phone sheets also respect the top and landscape side insets. Canonical spacing
 lives in `styles.css`; desktop geometry is unchanged.
 
 At 700px and below, one non-minimised view occupies the main space above the
-floating composer. Named view buttons switch foreground; left/right swipes on
-non-interactive content and Left/Right/Home/End on those buttons are alternatives.
-Selection focuses the view title and announces the change. Background views
-remain mounted, hidden and inert; desktop arrangements and geometry survive
-viewport changes. Phone windows keep only minimise and close title actions.
-Selection, announcements and lifecycle fallback use the combined page and
-agent-created view collection; commands retain P8-15's required `commandId`.
+floating composer. New views open directly as foreground sheets; do not show an
+inline foreground-view tab bar. Switch by horizontal swipes on non-interactive
+content, the Open windows picker, or the existing focus/restore command.
+Background views remain mounted, hidden and inert; desktop arrangements and
+geometry survive viewport changes. Phone windows keep only minimise and close
+title actions. The top bar stays sticky at the safe-area edge while the page
+scrolls. Selection, announcements and lifecycle fallback use the combined page
+and agent-created view collection; commands retain P8-15's required `commandId`.
 
 During voice, the foreground window ends above the safe-area-aware orb dock;
 P8-23 keeps the microphone and inspection actions in the orb's control group
@@ -1604,7 +1605,7 @@ camera correction. Reduced motion retains solid text without the sweep.
 - **Memory:** a Settings section to browse, search and filter (People, Work, Personal, General) what Jarvis knows, with sync status and counts. Choosing an entry shows it beside the list with its history, a Save correction action (vault notes link to the resulting commit) and Forget. Forget explains the outcome first: memories Jarvis keeps are forgotten at once; vault notes need approval in the conversation, and the page reports when approval is pending, refused while away, or unavailable.
 - **Top bar (7 October):** the brand, then every open window as a Chrome-style tab (the conversation has none; the orb brings it back), then a tab per background job, the presence chip and the controls. There is no breadcrumb. Tabs share the glass hover of every icon button; the front window's tab uses the selected surface. An empty tab area shows nothing.
 - **Floating windows:** shell windows float, drag by the title bar and resize from the right and bottom edges; Tab to a title, then arrows move and Alt+arrows resize. There is no Arrange menu. Windows stay inside the window area and may sit over the docked conversation. Long titles wrap to two lines with the full title on hover.
-- **Chat turn in progress:** Jarvis's bubble shows the amber working core (the orb's brain) with rotating first-person phrases from large shuffled sets (thinking, working, composing), each tool as a line on a thin lit trail with a running core or a round tick or cross, then the streamed answer. Tool calls sit on Jarvis's reply, not Dan's message. Bubbles use compact body type and tighter speaker spacing (revised 12 October below); the time is a glass tag on the bubble's top-right rim shown on hover. Sharing starts in the ⋯ menu. Screen sharing retains its live line/Stop above typing; camera controls live in Camera preview. The top bar has no capture controls.
+- **Chat turn in progress:** Jarvis's bubble shows the amber working core (the orb's brain) with rotating first-person phrases from large shuffled sets (thinking, working, composing), each tool as a line on a thin lit trail with a running core or a round tick or cross, then the streamed answer. Tool calls sit on Jarvis's reply, not Dan's message. Bubbles use compact body type and tighter speaker spacing (revised 12 October below); the time is a glass tag on the bubble's top-right rim, shown on hover/focus on desktop and always on touch. Sharing starts in the ⋯ menu. Screen sharing retains its live line/Stop above typing; camera controls live in Camera preview. The top bar has no capture controls.
 - **Movable chat and density (Dan, 12 October; local, unreleased):** Dan rejected visible corner brackets. The existing glass rim is the resize affordance: invisible pointer regions cover every edge and corner, with directional resize cursors and keyboard focus only. There are no brackets, hover decorations or extra top grip. The Move icon sits beside Maximise; moving/resizing keeps the composer attached without reparenting its draft or voice client. Preferred position and size survive refresh on this browser and fit smaller viewports. Cancellation restores the prior placement. Minimise leaves the composer in place with messages hidden, as Dan selected; maximise/restore preserves the placement. A first drag interrupts the opening spring using its visible rectangle, rather than applying a scaled height twice. Top-border Up/Down and Home/End retain height shortcuts; other borders/corners and Move use arrows, with Shift for larger steps. Touch corners have 44 px hit regions; title actions retain priority over overlapping resize regions. Compact `--type-small` message paragraphs, lists and quotes remain distinct from the composer's readable `--type-body`. Initial shell-history loading is a screen-reader status, not skeleton content in the empty room. Standalone history still uses its ordinary loader; errors retain Retry. No camera UI or evidence wording changes.
   Side resize regions sit outside the transcript, on the rim and its outer side. Corner hit regions exclude their inward quadrant so the entire native scrollbar track stays usable, including beside the corners. Scrollbar dragging and touch scrolling do not change window geometry.
 - **Modals:** one Modal component, rendered at the document root near the top of the viewport, with an X, Escape and click-outside to close. The card never scrolls itself; a card taller than the viewport scrolls with its backdrop.
@@ -1671,8 +1672,12 @@ new animation is introduced.
 
 ## Daily migration visual requirement (12 October 2026)
 
-20 October 2026 (P14-47 / #1136): the expanded-by-default Health panel sits once
-below Overview. Its header contains Health, the age of the latest processed-upload
+20 October 2026 (P14-47 / #1136, composition revised by P14-46 / #1143): the Health
+panel sits once below the Overview cards and is closed until asked for, as in the
+original. The chevron on the Health card title opens and closes it (`panel=health`)
+and returns focus to that button on close; the panel mounts only while open, so
+its reads do not run on the landing view. Its header contains Health, the age of
+the latest processed-upload
 receipt from `daily.sync`, and a labelled disclosure. Seven keyboard-operated
 tabs use the existing selected/focus states; below 700px they form three columns.
 `panel=closed` collapses it; `panel=health&healthTab=sleep` opens a selected view.
@@ -1834,7 +1839,11 @@ ring says so in words: the centre reads "≤ 500" or "≥ 300", the caption "kca
 most" or "kcal over, at least", and the accessible summary says "At most" or "At least"
 with "eaten is a lower bound". The cards follow the Copenhagen date: it advances at
 midnight, on focus and when the page becomes visible, and every card then asks for the
-new day.
+new day. The P14-46 top cards below replace this block and keep its sources, date
+rules and lower-bound wording. The older Overview blocks described further down in
+this file (the "What Daily holds today" collection list, its "About this data" notes
+and Refresh button, and the summary tiles) are removed; the Overview is now the
+period control and the three cards only.
 
 20 October 2026 (P14-44 stable tiles): the Overview summary tiles and the Today
 cards keep their size from skeleton to values, so nothing below them moves while
@@ -1855,6 +1864,40 @@ adds an "Asleep" row only when it is greater than zero and differs. A week witho
 workouts reads "0 minutes". Body measurements with a raw snake_case key read in
 words ("Active energy"). At 380 px and below the Nutrition and Training bodies
 reserve more height because their content wraps.
+
+20 October 2026 (P14-46 top cards): the Overview opens with a period control
+(Today, Yesterday, 1 week, 2 weeks, 1 month; Today by default) and three cards, in
+the composition of the original: Training, Health and Body. Nothing else is on the
+page: no heading above the cards, no collection list, no notes disclosure, no Refresh
+button and no summary tiles, so there is no text list on it. A card that has nothing
+for the period says so itself. The cards sit in one
+row from 1200 px, two columns from 700 px and a swipeable row below that, with
+one dot per card; the dots are real buttons and the row also scrolls by touch,
+trackpad and keyboard. Card chrome is the shared panel surface, rule and radius;
+no glass skin or new token. Training holds three rings (Gym, Run, Activity for
+steps), then a Protein tile, a Calories left tile and, for a single day, the meals
+strip (time, name, kcal). Health holds Sleep, Protein and a cumulative protein
+line across the day with a dashed target line when a target is set; its title is a
+button with a turning chevron that opens the Health panel below the cards (the
+Training and Body titles stay links to their sections). Body holds Sessions,
+Calories and Duration, then Weight, Fat mass, Fat % and Lean mass as small
+sparklines over the last 90 days. A ring or tile has the same size in every state.
+Wording separates the cases: "Not recorded" means the source is served and holds
+nothing for the period and is shown as a quiet dash, as in the original, with the
+words kept for assistive technology and the hover title; "Unavailable" means Jarvis
+does not serve the source,
+"Could not load" carries a Retry button, "No target set" links to the setting, and
+nothing shows a default target. Sessions count from the Monday of the week for the
+one-day presets and over the window for longer ones; protein and calories left
+average per logged day over a range. Lower bounds read in words ("lower bound",
+"at most"), never by colour. No recomposition status, coaching or energy estimate
+is shown. A read that fails after it returned values (a refresh, or a later page)
+keeps those values and adds a quiet "Could not refresh" with Retry beside the card
+title; it never reads as loaded and never swaps the values for a skeleton. Averages
+spread the known amount over every logged day, so an unknown day keeps the result a
+lower bound; a body trend uses one unit, the latest reading's; only Today may show
+last night's sleep, so Yesterday needs its own night; Calories and Duration each
+carry their own lower-bound note.
 
 Checked the section shell in isolated Chromium against only synthetic capability
 and query responses at 320, 390×844, 768 and 1440×900 in light and dark, with
@@ -1959,6 +2002,28 @@ reduced motion. Expanded plan content remained reachable above the mobile
 composer at 320px. The six JPEG captures cover phone Day in both themes,
 desktop Trend in both themes, Library at 768px light and 320px dark. They are
 synthetic desktop-browser evidence, not live-owner or physical-phone checks.
+
+## Health Nutrition parity (20 October 2026; P14-49)
+
+The Nutrition section keeps its shared period selector and the existing Plans and
+Favourites library. The Today view leads with one “Today so far” card: kcal left
+against resting energy minus deficit, protein left, and logged meals, using the
+served Copenhagen day row and the existing owner-target loader. Partial energy
+and protein are labelled as bounds; missing targets link to Settings. A neutral
+“Staleness unknown” pill is used because the nutrition query reports staleness as
+unknown, alongside its read-time line.
+
+Trend summarizes average balance per day and average protein over known logged
+days, then plots calorie balance against the zero baseline and protein intake.
+Its inventory counts days with meals and partial days; an expandable list names
+the partial dates and nutrients. Chart tables retain per-day lower-bound wording.
+Meals lists the selected period chronologically and pages through all served
+records. Rows show the recorded name, Copenhagen date/time, component names and
+quantities, four macros, confidence, capture method, and the explicit
+“Not recorded” export state, which the meal query does not serve. Loading,
+empty, error, and paged states retain their reserved card/list heights. The
+composition and data states are covered by synthetic web tests; the owner's
+real-data session check remains a pre-merge acceptance step.
 
 ## Daily today dashboard (18 October 2026; P12-33)
 

@@ -1513,7 +1513,7 @@ Jarvis is one backend with a shared core and one module per area, a static web a
 
 ### Shell windows, chat dock, presence and memory in the web client
 
-- **One window layer.** `Workspace` is mounted by the shell on every page. Off the home page it is a fixed overlay above the page (pointer events only on windows). Minimised windows are portalled as tabs into `.window-tabbar` under the top bar; `window-fly-away.ts` animates inert copies for close and minimise.
+- **One window layer.** `Workspace` is mounted by the shell on every page. Off the home page it is a fixed overlay above the page (pointer events only on windows). On phones, new views open directly in the foreground with no inline view-tab bar; the Open windows picker retains access to other views. The phone top bar stays sticky while page content scrolls. Minimised windows are portalled as tabs into `.window-tabbar` under the top bar; `window-fly-away.ts` animates inert copies for close and minimise.
 - **Task windows.** `task-windows.ts` keeps open task windows (`task-<id>` views rendering `TaskDetailPage`) and saves `{ taskId, title }` entries (at most 12) in `localStorage` under `jarvis.windows.tasks`, so they return as tabs after a reload. `TaskWindowLink` opens a window on plain clicks and keeps `/factory/tasks/:id` for new tabs; that route opens the window and redirects to Kanban. No server state is added (#430's server-side pinning remains open).
 - **Chat dock.** `JarvisPage` (conversation, composer and voice) stays mounted in the shell for every signed-in page. `.app-shell[data-home]` and `[data-chat="home|out|rail"]` drive its placement; `chat-flight.ts` animates the bar into and out of the rail orb. Starting voice off the home page navigates home.
 - **History loading (local, 12 October).** The shell conversation view is available before its history request finishes. Its existing portal hosts loading placeholders, messages, empty text and initial error/Retry without replacing the window. Phone minimisation and voice lifecycle remain shell-owned. Workspace-pin GET requests use bounded transient retries; failed loads retry on online/visible events, without replaying pin writes or overriding owner cancellation. Token-acquisition failures retain explicit sign-in guidance.
@@ -5727,7 +5727,9 @@ to that row's Open button. `useDailyCapabilities` reads `GET /daily/capabilities
 once and hands the exposed sources to the overview and to the browser (as
 `knownSources`), so the browser does not discover them a second time.
 
-`useDailyProbes` reads each exposed collection with one `POST /daily/query` of
+P14-46 removed the collection list: `useDailyProbes`, `overview.ts` and the
+per-collection probe reads no longer exist, and `DailyOverview` renders only the
+cards. The probe design below is kept as history. `useDailyProbes` read each exposed collection with one `POST /daily/query` of
 `limit: 1`, over the browser's default last-seven-days period for dated
 collections and with no period for sync evidence, through the same client and
 response validation as the browser. Two reads run at a time because
@@ -5806,6 +5808,18 @@ refetches only when the last read failed or began 60 s or more ago
 immediate. The opt-in `settle` option (used with `autoLoad` by the Overview tiles
 and Today cards) publishes the chain once, after its last page, and keeps the
 previous records visible while a refresh runs (20 October 2026; P14-44).
+
+**Overview top cards (20 October 2026; P14-46).** `sections/overview/TopCards.tsx`
+owns the period control and calls `useTopCardData`, which makes one
+`useDailyPages` read per source with `settle`: workouts, steps, nutrition days,
+meals (single-day presets only), sleep, the metric catalogue and up to four body
+measurement metrics over a fixed 90 days, the last only for names the catalogue
+serves. `overview-window.ts` turns a preset and the Copenhagen date (`useToday`) into
+the window and the session range; `overview-values.ts` holds the pure figures. Nutrition
+targets are read only once a day with meals exists. `block-state.ts` reduces each
+read to `ready`, `loading`, `error` or `unavailable`, and `TrainingCard`,
+`HealthCard` and `BodyCard` draw those states at a fixed size. No endpoint, DTO or
+backend change.
 
 ### On-demand Daily views (18 October 2026; P12-16)
 
@@ -6024,6 +6038,32 @@ The values are personal
 health data in a public repository: none appears in code, fixtures, documents,
 logs or audit.
 
+### Owner training targets (20 October 2026; P14-45, #1116, #1132)
+
+The original Daily's weekly Gym/Run targets and daily step target came from an
+original task source that is outside approved scope. Jarvis stores the owner's
+replacement values in `daily.training_targets`, added by migration
+`0061_daily_training_targets`; there are no seeded rows or target defaults.
+Each row is keyed by the configured owner and contains nullable whole-number
+targets plus an update timestamp. SQL constraints and the shared server contract
+bound weekly sessions and daily steps; reads return those bounds and `null` for
+every unset target.
+
+The optional `createDailyModules` accessor, `trainingTargets`, is request-bound
+and composes only with Daily and shared Daily data. The signed-in-owner
+`GET`/`PATCH /daily/training-targets` route rejects agents,
+runners, connectors, other identities and query selectors. A patch is strict,
+partial and transactional; `null` clears a field and removing the last set
+value deletes the row. Read-back occurs before commit. The assistant has no
+training-target write tool because the production tool catalogue must retain at
+least eight free slots; a read-only query source may be added later. Daily-off
+composition registers no target routes.
+
+The web Settings editor loads and saves only validated server responses. Its
+`useTrainingTargets` hook documents the shared loading/settled/error/retry
+contract for later Overview, Workouts and Health consumers; those views are
+intentionally unchanged here.
+
 ### Personalised suggestion adapter (17 October 2026)
 
 A seventh optional `createDailyModules` argument, `nutritionSuggestions`
@@ -6115,7 +6155,8 @@ Gmail read, job or timer. The targets and health accessors also compare the
 resolved owner with the composed owner and refuse a mismatch, on top of the check
 inside the data accessors. Root authentication is unchanged: a connector or
 runner principal is refused on every Daily route, and an agent is refused on the
-targets route because it reaches targets only through the approved tool.
+training-targets route because those Settings operations are owner-only; no
+assistant training-target tool is registered.
 
 The code default is off. Production sets `JARVIS_DAILY_ENABLED` and the web switch
 `VITE_DAILY_ENABLED` (read at build time by the Daily overview page) in exactly two
@@ -6211,10 +6252,12 @@ Fingerprint serialization uses the bounded read DTO, not nutrition's per-write
 node/depth budget; supported full pages and retained nested JSON stay readable.
 The response byte budget includes the final 64-byte revision before hashing.
 
-Capability negotiation preserves the exact v1 nine-source and v2 eleven-source
-advertisements. Version 2 remains opt-in for established brief history/detail;
-version 3 adds only `daily.health.metric-catalog` and `daily.nutrition.days`.
-Unversioned/unknown clients still receive v1. The web client requests v3 but
+Capability negotiation preserves the exact v1 nine-source, v2 eleven-source
+and v3 thirteen-source advertisements. Version 2 remains opt-in for established
+brief history/detail; version 3 adds `daily.health.metric-catalog` and
+`daily.nutrition.days`. Version 4 conditionally adds `daily.attention` and
+`daily.calendar`; when feeds are not composed, v4 returns the v3 source list.
+Unversioned/unknown clients still receive v1. The web client prefers v4 and
 validates each response against its version's source allowlist.
 
 `daily.health.metrics` accepts an optional exact `metric` name while preserving
@@ -6232,6 +6275,34 @@ days (default 50). Both additions use parameterized, owner-filtered
 identifies totals as derived from retained meals; completeness and freshness
 remain unknown. The generated-view tool may display either source, while the
 Daily Overview's collection rows and visible page layout remain unchanged.
+
+### Default-off Gmail attention and calendar feeds (P14-51; 20 October 2026)
+
+Production creates feed services only when both `JARVIS_DAILY_ENABLED` and
+`JARVIS_DAILY_FEEDS_ENABLED` are exactly true. The new switch defaults off and
+is not set in infrastructure. Composition passes the existing Google client
+and, when its current endpoint, identity, settings, catalogue and usage stores
+are available, the existing strict Foundry semantic adapter. Construction does
+not call Google or the model. Missing Gmail semantics reports
+`semantic-unavailable`; missing snapshots report `not-configured`, never a
+successful empty source.
+
+Owner-browser queries use `POST /daily/query`: `daily.attention` returns
+waiting-for-you/waiting-on-others items, business-day ages and hidden state;
+`daily.calendar` accepts an inclusive/exclusive ISO-instant range of at most 62
+days and filters retained events. Refreshes persist their exact calendar range
+in the existing run metadata. Older snapshots without that metadata and
+requests not fully covered by a retained snapshot report partial coverage.
+Both sources keep the existing 30-second query deadline and 768 KiB response
+ceiling. New browser-only `/daily/feeds/refresh`, `/hide`, `/receive` and
+`/restore` actions derive trusted intent from the authenticated owner request;
+they reject agents, runners, other identities and the nutrition connector.
+Refresh keeps the existing per-owner 30-second cooldown. No scheduler is added.
+
+The current Google consent does not include CalendarList enumeration. Owner
+consent, deployed identity/model parity, protected backup/import and physical
+device acceptance remain open; this change adds no grants, scopes, resources or
+production activation.
 
 `createDailyData` shares one process-local change hub between the existing
 explicit health processor and owner-bound nutrition store. Optional handler
@@ -6573,8 +6644,10 @@ are recorded in `docs/ui/p12-36/audit.md`.
 
 ## Web Daily overview and Briefs integration (18 October 2026; P12-26)
 
-`sections/overview/summary.ts` composes the sections' pure helpers for recent
-workout, nutrition, metric, sleep and Briefs summaries. `SummaryTiles` mounts a
+P14-46 removed `SummaryTiles` and the inventory below it; the Overview mounts
+`TopCards` only (`summary.ts` still supplies the training counts). The rest of this
+entry is history. `sections/overview/summary.ts` composed the sections' pure helpers for recent
+workout, nutrition, metric, sleep and Briefs summaries. `SummaryTiles` mounted a
 separate bounded `useDailyPages` reader per exposed source and hides tiles whose
 required source pair is unavailable. Each tile owns its loading, empty, error,
 retry and freshness presentation; links select the existing section through the

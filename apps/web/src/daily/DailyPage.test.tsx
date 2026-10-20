@@ -1,6 +1,6 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { dailyQuerySources as sources, isDailyQuery, type DailyQuery } from '@jarvis/contracts';
+import { dailyCapabilitiesVersion, dailyQuerySources as sources, isDailyQuery, type DailyQuery } from '@jarvis/contracts';
 import { DailyPage } from './DailyPage';
 import { DailyRefreshContext } from './refresh';
 import { dailyFixture, jsonResponse } from './test-support';
@@ -11,7 +11,7 @@ afterEach(() => { cleanup(); vi.useRealTimers(); vi.unstubAllGlobals(); });
 function fixture(answer?: (query: DailyQuery) => Response | Promise<Response>) {
   const queries: DailyQuery[] = [];
   const fetch = vi.fn(async (url: string | URL, init?: RequestInit) => {
-    if (String(url).endsWith('/daily/capabilities')) return jsonResponse({ module: 'daily', version: 3, sources: Object.values(sources) });
+    if (String(url).endsWith('/daily/capabilities')) return jsonResponse({ module: 'daily', version: dailyCapabilitiesVersion, sources: Object.values(sources) });
     const input: unknown = JSON.parse(String(init?.body));
     if (!isDailyQuery(input)) throw new Error('Invalid synthetic query');
     queries.push(input);

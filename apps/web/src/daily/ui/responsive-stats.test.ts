@@ -22,10 +22,11 @@ describe('Daily phone stat layouts', () => {
     expect(phoneStyles).toContain('.daily-grid:not(.daily-summary-grid)');
   });
 
-  it('keeps the five summary tiles on a one-column phone grid and fills the wide final row', () => {
+  it('keeps the overview cards on a swipeable phone row and a two- then three-column grid', () => {
     const css = readFileSync('src/daily/daily-overview.css', 'utf8');
-    expect(css).toMatch(/\.daily-summary \.daily-summary-grid\s*\{\s*grid-template-columns:\s*minmax\(0,\s*1fr\)/u);
-    expect(css).toMatch(/\.daily-summary-tile:nth-child\(5\):last-child\s*\{\s*grid-column:\s*span 2;/u);
+    expect(css).toMatch(/\.daily-top-track\s*\{[^}]*grid-auto-columns:\s*100%;[^}]*overflow-x:\s*auto;[^}]*scroll-snap-type:\s*x mandatory;/u);
+    expect(css).toMatch(/@media \(min-width: 700px\)\s*\{\s*\.daily-top-track\s*\{[^}]*grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\);/u);
+    expect(css).toMatch(/@media \(min-width: 1200px\)\s*\{\s*\.daily-top-track\s*\{\s*grid-template-columns:\s*repeat\(3, minmax\(0, 1fr\)\);/u);
   });
 
   it('contains Nutrition view tabs in their narrow panel and exposes horizontal scrolling', () => {
