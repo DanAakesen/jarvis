@@ -21,6 +21,36 @@ from the `jarvis-infra` deployment outputs instead of guessing them.
 4. Confirm the relevant Deploy or Runner deploy jobs and smoke checks succeeded.
    A successful build alone is not production acceptance.
 
+## Enable Health Gmail attention and calendar reads
+
+These feeds are off by default and this procedure does not claim they are
+enabled. Enabling them requires a separate reviewed deployment change; do not
+set the flag as an ad hoc portal override.
+
+1. Confirm the backend Health module is already enabled. In a reviewed change,
+   add `JARVIS_DAILY_FEEDS_ENABLED: 'true'` to the backend container environment
+   in `infra/main.bicep` and extend
+   `apps/backend/src/daily/default-off.test.ts` so the switch is allowed only in
+   that deployment file and is set exactly once to `true`. Do not change the
+   web build switch to enable these backend feeds. Deploy through the normal
+   Deploy workflow above; the flag remains off if absent or `false`.
+2. Before the deployment, complete the existing Google OAuth consent procedure
+   in [Google Calendar and Gmail setup](../infra/README.md#google-calendar-and-gmail-setup).
+   The consent must include the calendar-list read permission used to enumerate
+   the owner's calendars. If that permission has not been consented, update the
+   configured consent screen as documented there and rerun the setup procedure
+   to replace the protected refresh token. This runbook records the step; it
+   does not perform consent or access a token.
+3. After deployment, use the authorized Health read-only acceptance procedure
+   to confirm the feeds are composed, source coverage is reported truthfully,
+   and missing permission or partial data is not presented as an empty success.
+   The read endpoints and capability discovery are backend behavior; this
+   change does not add the attention list or agenda to the web page.
+4. To disable the feeds, remove the flag or set it to `false` in a reviewed
+   deployment change, deploy normally, and confirm the feed routes are absent
+   and the feed sources are no longer advertised. Do not remove existing
+   retained rows as part of disabling the flag.
+
 ### Chat capability smoke diagnosis
 
 Read the retained result with the ordinary authenticated `GET /status`; this
