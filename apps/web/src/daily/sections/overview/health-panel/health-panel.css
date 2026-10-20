@@ -1,0 +1,23 @@
+.health-panel { min-width: 0; margin-top: var(--space-5); }
+.health-panel-header { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); }
+.health-panel-header h2 { margin: 0; }
+.health-panel-header p { margin: var(--space-1) 0 0; color: var(--text-muted); font-size: var(--type-small); }
+.health-panel-tabs { display: flex; flex-wrap: wrap; gap: var(--space-1); margin-block: var(--space-3); }
+.health-panel-tabs button { min-height: var(--control-size); flex: 1 1 auto; }
+.health-panel-view { height: 40rem; min-width: 0; overflow-y: auto; scrollbar-gutter: stable; padding: var(--space-1); }
+.health-panel-view:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; }
+.health-panel-status { display: grid; gap: var(--space-2); min-height: 7rem; align-content: start; margin-bottom: var(--space-3); }
+.health-panel-status > p { margin: 0; color: var(--text-muted); font-size: var(--type-small); }
+.health-panel-tiles, .health-panel-targets { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-3); }
+.health-panel-tiles > .daily-stat-tile { min-height: 8rem; height: auto; }
+.health-panel-targets { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: var(--space-3); }
+.health-panel-targets > .daily-stat-tile { min-height: 9rem; height: auto; }
+.health-panel-freshness { display: grid; gap: var(--space-2); margin-top: var(--space-3); color: var(--text-muted); font-size: var(--type-small); }
+@media (max-width: 700px) {
+  .health-panel-header { align-items: flex-start; }
+  .health-panel-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .health-panel-tabs button { min-width: 0; padding-inline: var(--space-1); }
+  .health-panel-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .health-panel-targets { grid-template-columns: minmax(0, 1fr); }
+  .health-panel-view { height: 52rem; }
+}
