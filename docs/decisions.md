@@ -1,5 +1,17 @@
 # Decisions
 
+## P14-41 — Freshness pill reports the last processed upload (20 October 2026; #1116)
+
+The pill's primary label is the newest `accepted_evidence_at` across the served
+sync feeds, worded as an upload time. The phone heartbeat is written only by the
+separate Shortcuts route, so an uploader that uses the ingest route never has one
+and the pill wrongly read "No phone contact yet" while uploads were processed. The
+heartbeat is now an optional details row. Waiting or processing uploads with no
+processed time read "Upload being processed"; "No uploads yet" appears only with
+neither. No new source is read.
+
+Refs #1116
+
 ## P14-41 — Daily shell: freshness pill and short periods (20 October 2026; #1116)
 
 The Daily shell shows a freshness pill built only from the served sync source
