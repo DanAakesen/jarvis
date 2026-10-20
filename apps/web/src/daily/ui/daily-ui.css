@@ -65,7 +65,7 @@
 .daily-ring-track { stroke: var(--surface); }
 .daily-ring-track--unavailable { stroke: var(--text-muted); stroke-dasharray: 1.5 3.5; }
 .daily-ring-fill { stroke: var(--focus); stroke-linecap: round; }
-.daily-ring-centre { max-width: 70%; color: var(--text); font-size: var(--type-subsection); font-variant-numeric: tabular-nums; font-weight: 650; line-height: 1.1; text-align: center; overflow-wrap: anywhere; }
+.daily-ring-centre { max-width: 70%; color: var(--text); font-size: var(--type-subsection); font-variant-numeric: tabular-nums; font-weight: 650; line-height: var(--line-tight); text-align: center; overflow-wrap: anywhere; }
 .daily-ring figcaption { display: grid; justify-items: center; gap: var(--space-1); text-align: center; }
 .daily-ring-label { color: var(--text); font-size: var(--type-small); font-weight: 650; }
 .daily-ring-caption { color: var(--text-muted); font-size: var(--type-small); }

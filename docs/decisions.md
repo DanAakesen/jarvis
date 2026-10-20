@@ -1,5 +1,18 @@
 # Decisions
 
+## P14-41 — Today cards read served sources and say so when one is not (20 October 2026; #1116)
+
+The Daily Overview now opens with Training this week, Protein today, Calories left
+today and a Meals today strip. Training shows count rings only, because weekly
+session targets are not served; protein and calories draw an arc only when the
+owner has set a nutrition target. Nutrition targets load only once a day with meals
+exists, so an empty day makes no extra request. A source that is not served renders
+an explicit unavailable line, never an empty or loading look. The existing summary
+tiles stay below the cards for now; whether to merge them is the owner's call.
+Tasks, countdowns, habits and mail attention rows are still not built.
+
+Refs #1116
+
 ## P14-41 — Freshness pill reports the last processed upload (20 October 2026; #1116)
 
 The pill's primary label is the newest `accepted_evidence_at` across the served
