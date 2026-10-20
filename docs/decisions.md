@@ -1,5 +1,16 @@
 # Decisions
 
+## P14-32 — Notes tree beside Show tasks (21 October 2026; #1085)
+
+Dan asked for a tree of all notes he can preview and edit. An icon-only button
+beside Show tasks opens a lazy folder-and-note tree; the task panel and the tree
+share one place, so only one is open. Notes open in the existing popup rather than
+a second editor. The tree uses only existing endpoints: `/notes/tree` for folders
+and `GET /notes?directory=` per opened folder. Notes at the vault root and in
+folders outside People, Work, Personal and General were hidden by the backend
+index until #1113 (P14-40) removed that filter; the tree lists them without a
+client change.
+
 ## P14-40 — Full indexed-note scope in the Notes graph (20 October 2026; #1113)
 
 The graph, its folder filters, and note search follow the owner's P9-77 ruling:

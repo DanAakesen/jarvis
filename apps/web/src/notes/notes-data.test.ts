@@ -111,6 +111,30 @@ describe('Notes contract', () => {
     expect(init?.headers).toMatchObject({ Authorization: 'Bearer fixture-token' });
     expect(init?.cache).toBe('no-store');
   });
+  it('lists one directory at a time, including the vault root, and rejects a page from another directory', async () => {
+    const rootNote = { path: 'Readme.md', title: 'Readme', folder: '', directory: '', updatedAt: '2026-10-11T00:00:00Z' };
+    const fetch = vi.fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(json({ notes: [rootNote], limit: 50, offset: 0, hasMore: false }))
+      .mockResolvedValueOnce(json({ notes: [summary], limit: 50, offset: 50, hasMore: true }))
+      .mockResolvedValueOnce(json({ notes: [summary], limit: 50, offset: 0, hasMore: false }));
+    vi.stubGlobal('fetch', fetch);
+    const signal = new AbortController().signal;
+    const root = await client().listDirectory('', 0, signal);
+    expect(root.notes.map(item => item.path)).toEqual(['Readme.md']);
+    const first = new URL(String(fetch.mock.calls[0]![0])).searchParams;
+    expect(first.get('directory')).toBe('');
+    expect(first.has('directory')).toBe(true);
+    expect(first.get('limit')).toBe('50');
+    expect(fetch.mock.calls[0]![1]?.headers).toMatchObject({ Authorization: 'Bearer fixture-token' });
+
+    const work = await client().listDirectory('Work', 50, signal);
+    expect(work.hasMore).toBe(true);
+    expect(new URL(String(fetch.mock.calls[1]![0])).searchParams.get('directory')).toBe('Work');
+    expect(new URL(String(fetch.mock.calls[1]![0])).searchParams.get('offset')).toBe('50');
+    await expect(client().listDirectory('Customers', 0, signal)).rejects.toThrow('wrong notes page');
+    await expect(client().listDirectory('../Work', 0, signal)).rejects.toThrow('valid notes folder');
+    expect(fetch).toHaveBeenCalledTimes(3);
+  });
   it('uses POST without a revision for create and PUT with the loaded blob SHA for edit', async () => {
     const fetch = vi.fn<typeof globalThis.fetch>(async () => json({ path: note.path, commit, url: `https://github.com/example/vault/commit/${commit}` }));
     vi.stubGlobal('fetch', fetch);

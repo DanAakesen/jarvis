@@ -10,6 +10,7 @@ import { Modal } from '../Modal';
 import { NavigationGuardContext } from '../page-navigation';
 import { createNotesClient, maxNoteBytes, newNotePath, noteTitleFromPath, NoteConflict, NoteSaveUnverified, safeNotePath, validNoteText } from './notes-data';
 import { NoteFolderPicker } from './NoteFolderPicker';
+import { NotesTree } from './NotesTree';
 import { ShellIcon } from '../ShellIcon';
 import { TasksPanel } from '../tasks/TasksPanel';
 import { formatDateTime } from '../format/date-time';
@@ -49,6 +50,9 @@ export function NotesArea({ backendUrl, getAccessToken }: AreaProps) {
   const tasksOpen = searchParams.has('tasks');
   const tasksQuery = (searchParams.get('q') ?? '').slice(0, 200);
   const tasksToggle = useRef<HTMLButtonElement>(null);
+  const treeToggle = useRef<HTMLButtonElement>(null);
+  const [treeOpen, setTreeOpen] = useState(false);
+  const [seenTasksOpen, setSeenTasksOpen] = useState(tasksOpen);
   const alive = useRef(true);
   const editorInput = useRef<HTMLTextAreaElement>(null);
   const popup = useRef<HTMLElement>(null);
@@ -106,6 +110,20 @@ export function NotesArea({ backendUrl, getAccessToken }: AreaProps) {
     if (!signal.aborted) setFolderUpdatedAt(tree.updatedAt);
     return tree;
   }, [client]);
+
+  const loadTree = useCallback(async (signal: AbortSignal) => {
+    if (!client) throw new Error('Connect to Jarvis to load vault notes.');
+    return client.tree(signal);
+  }, [client]);
+  const loadDirectory = useCallback(async (directory: string, offset: number, signal: AbortSignal) => {
+    if (!client) throw new Error('Connect to Jarvis to load vault notes.');
+    return client.listDirectory(directory, offset, signal);
+  }, [client]);
+  // The tree and the task list share the left of the map, so only one is open at a time.
+  if (seenTasksOpen !== tasksOpen) {
+    setSeenTasksOpen(tasksOpen);
+    if (tasksOpen) setTreeOpen(false);
+  }
 
   const change = (action: () => void) => {
     if (saving) return;
@@ -219,6 +237,31 @@ export function NotesArea({ backendUrl, getAccessToken }: AreaProps) {
       void openNote(path, noteTitleFromPath(path));
     });
   };
+  const toggleTree = () => {
+    if (treeOpen) { setTreeOpen(false); return; }
+    // On a phone the note sheet and the tree share the bottom dock, so the tree replaces an open note (after the draft guard).
+    const phone = window.matchMedia?.('(max-width: 700px)').matches ?? false;
+    const show = () => {
+      if (tasksOpen) setTasks(false);
+      if (phone && (editor || opening)) { returnFocus.current = null; clearEditor(); }
+      setTreeOpen(true);
+    };
+    if (phone && editor) change(show); else show();
+  };
+  const closeTree = () => {
+    setTreeOpen(false);
+    treeToggle.current?.focus();
+  };
+  const openTreeNote = (path: string, title: string) => {
+    if (path === editor?.path && !opening) return;
+    const origin = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const narrow = window.matchMedia?.('(max-width: 900px)').matches ?? false;
+    change(() => {
+      if (!editor) returnFocus.current = narrow ? treeToggle.current : origin;
+      if (narrow) setTreeOpen(false);
+      void openNote(path, title);
+    });
+  };
   const discard = () => {
     const action = pendingChange;
     setPendingChange(null);
@@ -244,12 +287,21 @@ export function NotesArea({ backendUrl, getAccessToken }: AreaProps) {
               setDraftNumber(value => value + 1); setPreview(false); setError(''); setFeedback(''); setCommitUrl(''); setConflict(null); setCompare(false);
             });
           }}><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg></button>}>
-        <button className="notes-tasks-toggle luminous-glass" type="button" ref={tasksToggle} data-open={tasksOpen || undefined}
-          aria-controls={tasksOpen ? `${id}-tasks` : undefined} onClick={toggleTasks}>
-          <ShellIcon name="tasks" /><span className="notes-tasks-toggle-label">{tasksOpen ? 'Hide tasks' : 'Show tasks'}</span>
-        </button>
+        <div className="notes-toolbar">
+          <button className="notes-tasks-toggle luminous-glass" type="button" ref={tasksToggle} data-open={tasksOpen || undefined}
+            aria-controls={tasksOpen ? `${id}-tasks` : undefined} onClick={toggleTasks}>
+            <ShellIcon name="tasks" /><span className="notes-tasks-toggle-label">{tasksOpen ? 'Hide tasks' : 'Show tasks'}</span>
+          </button>
+          <button className="notes-tree-toggle luminous-glass" type="button" ref={treeToggle} data-open={treeOpen || undefined} disabled={!client}
+            aria-expanded={treeOpen} aria-controls={treeOpen ? `${id}-tree` : undefined}
+            aria-label={treeOpen ? 'Hide notes tree' : 'Show notes tree'} title={treeOpen ? 'Hide notes tree' : 'Show notes tree'} onClick={toggleTree}>
+            <ShellIcon name="notes_tree" />
+          </button>
+        </div>
         {tasksOpen && <TasksPanel key={location.key} id={`${id}-tasks`} backendUrl={backendUrl} getAccessToken={getAccessToken}
           initialQuery={tasksQuery} onOpenNote={openTaskNote} onClose={closeTasks} />}
+        {treeOpen && client && <NotesTree id={`${id}-tree`} loadTree={loadTree} loadNotes={loadDirectory}
+          {...(editorPath ? { selectedPath: editorPath } : {})} refreshKey={reload} onOpenNote={openTreeNote} onClose={closeTree} />}
         {(editor || opening || error) && createPortal(<aside ref={popup} className={`knowledge-note luminous-glass notes-popup${editor?.created ? ' notes-popup-creating' : ''}`} role="dialog"
           aria-labelledby={`${id}-note`} aria-busy={saving || opening} onKeyDown={event => {
             if (event.key === 'Escape' && !pendingChange && blocker.state !== 'blocked') { event.preventDefault(); change(clearEditor); }

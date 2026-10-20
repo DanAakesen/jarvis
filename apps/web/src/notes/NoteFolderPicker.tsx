@@ -1,27 +1,6 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
-import { safeNoteFolder, type NoteTree } from './notes-data';
+import { ancestors, folderTree, safeNoteFolder, type Folder, type NoteTree } from './notes-data';
 import { StateMessage } from '../StateMessage';
-
-interface Folder { path: string; name: string; children: Folder[] }
-const ancestors = (path: string) => path ? path.split('/').map((_, index, segments) => segments.slice(0, index + 1).join('/')) : [];
-
-function folderTree(paths: readonly string[]): Folder[] {
-  const folders = new Map<string, Folder>();
-  for (const path of paths) {
-    for (const parent of ancestors(path)) {
-      if (!folders.has(parent)) folders.set(parent, { path: parent, name: parent.split('/').at(-1)!, children: [] });
-    }
-  }
-  const roots: Folder[] = [];
-  for (const folder of folders.values()) {
-    const parent = folder.path.includes('/') ? folders.get(folder.path.slice(0, folder.path.lastIndexOf('/'))) : null;
-    (parent?.children ?? roots).push(folder);
-  }
-  for (const children of [roots, ...[...folders.values()].map(folder => folder.children)]) {
-    children.sort((left, right) => left.name.localeCompare(right.name, undefined, { numeric: true }));
-  }
-  return roots;
-}
 
 function FolderIcon() {
   return <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round"><path d="M3 7V5h6l2 2h10v12H3Z" /></svg>;

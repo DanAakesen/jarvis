@@ -122,6 +122,77 @@ describe('Notes workflow', () => {
     })).toBe(true));
   });
 
+  it('opens a tree of every folder and note beside the task button and shows a note in the existing popup', async () => {
+    const base = fetchMock.getMockImplementation()!;
+    const rootNote = { path: 'Readme.md', title: 'Readme', folder: '', updatedAt: '2026-10-11T00:00:00Z' };
+    const inboxNote = { path: 'Inbox/Idea.md', title: 'Idea', folder: 'Inbox', updatedAt: '2026-10-11T00:00:00Z' };
+    fetchMock.mockImplementation(async (input, init) => {
+      const url = new URL(String(input));
+      if (url.pathname === '/notes/tree') return json({ directories: ['Inbox', 'Work'], rootNoteCount: 1, truncated: false, updatedAt: '2026-10-11T17:00:00Z' });
+      if (url.pathname === '/notes' && url.searchParams.has('directory')) {
+        const directory = url.searchParams.get('directory');
+        const notes = directory === '' ? [rootNote] : directory === 'Inbox' ? [inboxNote] : directory === 'Work' ? [summary] : [];
+        return json({ notes, limit: 50, offset: 0, hasMore: false });
+      }
+      return base(input, init);
+    });
+    mount();
+    const toggle = await screen.findByRole('button', { name: 'Show notes tree' });
+    expect(toggle.closest('.knowledge-search')).toBeNull();
+    expect(toggle.closest('.notes-toolbar')).toBe(screen.getByRole('button', { name: 'Show tasks' }).closest('.notes-toolbar'));
+    expect(screen.queryByRole('region', { name: 'Notes tree' })).toBeNull();
+
+    fireEvent.click(toggle);
+    const panel = await screen.findByRole('region', { name: 'Notes tree' });
+    expect(screen.getByRole('button', { name: 'Hide notes tree' }).getAttribute('aria-controls')).toBe(panel.id);
+    fireEvent.click(await within(panel).findByRole('treeitem', { name: /Inbox/ }));
+    expect(within(panel).getByRole('treeitem', { name: /Readme/ })).not.toBeNull();
+
+    fireEvent.click(await within(panel).findByRole('treeitem', { name: /Idea/ }));
+    const dialog = await screen.findByRole('dialog', { name: 'Idea' });
+    expect(lastRead).toBe('Inbox/Idea.md');
+    expect(within(dialog).getByRole('region', { name: 'Markdown preview' })).not.toBeNull();
+    expect(within(dialog).getByRole('button', { name: 'Edit Markdown' })).not.toBeNull();
+    expect(screen.getByRole('region', { name: 'Notes tree' })).not.toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show tasks' }));
+    await screen.findByRole('region', { name: 'Task list' });
+    expect(screen.queryByRole('region', { name: 'Notes tree' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Show notes tree' }));
+    await screen.findByRole('region', { name: 'Notes tree' });
+    expect(screen.queryByRole('region', { name: 'Task list' })).toBeNull();
+  });
+
+  it('replaces an open note with the tree on a phone, asking first when a draft is unsaved', async () => {
+    vi.stubGlobal('matchMedia', vi.fn((query: string) => ({
+      matches: query.includes('max-width: 700px'), media: query, addEventListener: vi.fn(), removeEventListener: vi.fn(),
+    })));
+    mount();
+    const input = await openFixture();
+    fireEvent.change(input, { target: { value: 'Unsaved draft' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Show notes tree' }));
+    expect(screen.getByRole('dialog', { name: 'Unsaved changes' })).not.toBeNull();
+    expect(screen.queryByRole('region', { name: 'Notes tree' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Keep editing' }));
+    expect((screen.getByRole('textbox', { name: 'Markdown' }) as HTMLTextAreaElement).value).toBe('Unsaved draft');
+    expect(screen.queryByRole('region', { name: 'Notes tree' })).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show notes tree' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Discard changes and continue' }));
+    await screen.findByRole('region', { name: 'Notes tree' });
+    expect(screen.queryByRole('dialog', { name: 'Fixture' })).toBeNull();
+    expect(saveCalls()).toHaveLength(0);
+  });
+
+  it('puts the tree away on Escape and returns focus to its button', async () => {
+    mount();
+    fireEvent.click(await screen.findByRole('button', { name: 'Show notes tree' }));
+    const panel = await screen.findByRole('region', { name: 'Notes tree' });
+    fireEvent.keyDown(panel, { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByRole('region', { name: 'Notes tree' })).toBeNull());
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Show notes tree' }));
+  });
+
   it('closes the task list when the browser goes back from it', async () => {
     const { router } = mount();
     fireEvent.click(await screen.findByRole('button', { name: 'Show tasks' }));
