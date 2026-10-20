@@ -29,6 +29,29 @@ describe('DailyFreshnessPill', () => {
     expect(document.activeElement).toBe(trigger);
   });
 
+  it('flags retained data as stale when a refresh fails, and Escape closes the panel after focus has left it', async () => {
+    let calls = 0;
+    vi.stubGlobal('fetch', vi.fn(async (_url: string | URL, init?: RequestInit) => {
+      calls += 1;
+      if (calls > 1) return jsonResponse({ error: 'synthetic failure' }, 500);
+      return jsonResponse(dailyFixture(JSON.parse(String(init?.body)),
+        [{ feeds: [], heartbeat: { last_received_at: '2026-10-17T08:30:00Z' }, inbox: { accepted: 1, processing: 0, quarantined: 0 } }]));
+    }));
+    const user = userEvent.setup();
+    render(<><DailyFreshnessPill backendUrl="http://localhost:3999" getAccessToken={token} enabled refreshVersion={0} />
+      <button type="button">Elsewhere</button></>);
+    const trigger = await screen.findByRole('button', { name: /^Phone contact / });
+    expect(trigger.getAttribute('data-state')).toBe('ready');
+    await user.click(trigger);
+    await user.click(screen.getByRole('button', { name: 'Check again' }));
+    await waitFor(() => expect(trigger.textContent).toMatch(/^Phone contact .+, refresh failed$/));
+    expect(trigger.getAttribute('data-state')).toBe('error');
+    screen.getByRole('button', { name: 'Elsewhere' }).focus();
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('group', { name: 'Sync details' })).toBeNull();
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Elsewhere' }));
+  });
+
   it('says plainly when the phone has never made contact', async () => {
     vi.stubGlobal('fetch', vi.fn(async (_url: string | URL, init?: RequestInit) => jsonResponse(dailyFixture(
       JSON.parse(String(init?.body)), [{ feeds: [], heartbeat: null, inbox: { pending: 0, quarantined: 0 } }],

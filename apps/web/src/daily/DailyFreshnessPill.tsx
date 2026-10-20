@@ -31,8 +31,18 @@ export function DailyFreshnessPill({ backendUrl, getAccessToken, enabled, refres
     const outside = (event: PointerEvent) => {
       if (root.current && event.target instanceof Node && !root.current.contains(event.target)) setOpen(false);
     };
+    const escape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      const focusInside = root.current?.contains(document.activeElement) ?? false;
+      setOpen(false);
+      if (focusInside) trigger.current?.focus();
+    };
     document.addEventListener('pointerdown', outside);
-    return () => document.removeEventListener('pointerdown', outside);
+    document.addEventListener('keydown', escape);
+    return () => {
+      document.removeEventListener('pointerdown', outside);
+      document.removeEventListener('keydown', escape);
+    };
   }, [open]);
 
   if (!enabled) return null;
@@ -40,15 +50,15 @@ export function DailyFreshnessPill({ backendUrl, getAccessToken, enabled, refres
   const heartbeat = row(item?.heartbeat);
   const inbox = row(item?.inbox);
   const contact = typeof heartbeat?.last_received_at === 'string' ? heartbeat.last_received_at : null;
+  // A failed refresh keeps the previous data, so say it is stale in words rather than looking current.
+  const stale = query.data && query.error ? ', refresh failed' : '';
   const label = query.data
-    ? contact ? `Phone contact ${formatTime(contact)}` : 'No phone contact yet'
+    ? `${contact ? `Phone contact ${formatTime(contact)}` : 'No phone contact yet'}${stale}`
     : query.error ? 'Sync status unavailable' : 'Checking sync';
 
-  return <div className="daily-freshness-pill" ref={root} onKeyDown={event => {
-    if (event.key === 'Escape' && open) { event.stopPropagation(); setOpen(false); trigger.current?.focus(); }
-  }}>
+  return <div className="daily-freshness-pill" ref={root}>
     <button ref={trigger} type="button" className="daily-freshness-trigger" aria-expanded={open} aria-controls={panelId}
-      aria-haspopup="true" data-state={query.data ? 'ready' : query.error ? 'error' : 'pending'} onClick={() => setOpen(value => !value)}>
+      aria-haspopup="true" data-state={query.error ? 'error' : query.data ? 'ready' : 'pending'} onClick={() => setOpen(value => !value)}>
       {label}
     </button>
     {open && <div id={panelId} className="daily-freshness-panel" role="group" aria-label="Sync details">

@@ -169,7 +169,7 @@
 .daily-period-control select:focus-visible, .daily-period-control input:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 .daily-period-control > .error-text { flex-basis: 100%; margin: 0; }
 .daily-freshness-pill { position: relative; max-width: 100%; }
-.daily-freshness-trigger {
+.daily-page .daily-freshness-trigger {
   display: inline-flex;
   min-height: var(--control-size-inset);
   max-width: 100%;
@@ -183,11 +183,11 @@
   font-size: var(--type-small);
   cursor: pointer;
 }
-.daily-freshness-trigger:hover { background: var(--glass-hover); }
-.daily-freshness-trigger:active { background: var(--glass-pressed); }
-.daily-freshness-trigger[aria-expanded="true"] { background: var(--state-selected-bg); color: var(--state-selected-fg); }
-.daily-freshness-trigger[data-state="error"] { font-weight: 650; }
-.daily-freshness-trigger:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.daily-page .daily-freshness-trigger:hover { background: var(--glass-hover); }
+.daily-page .daily-freshness-trigger:active { background: var(--glass-pressed); }
+.daily-page .daily-freshness-trigger[aria-expanded="true"] { background: var(--state-selected-bg); color: var(--state-selected-fg); }
+.daily-page .daily-freshness-trigger[data-state="error"] { font-weight: 650; }
+.daily-page .daily-freshness-trigger:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 .daily-freshness-panel {
   position: absolute;
   z-index: var(--z-menu);
@@ -203,8 +203,11 @@
 }
 .daily-freshness-panel p { margin: 0; }
 .daily-freshness-panel .daily-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-@media (max-width: 480px) {
-  .daily-freshness-panel { right: auto; left: 0; }
+/* On narrow screens the panel anchors to the header and spans its width, so it cannot leave the viewport wherever the pill wraps. */
+@media (max-width: 640px) {
+  .daily-shell > .daily-heading { position: relative; }
+  .daily-freshness-pill { position: static; }
+  .daily-freshness-panel { right: 0; left: 0; width: auto; }
 }
 .daily-embedded-actions { margin-bottom: var(--space-3); }
 @media (max-width: 480px) {
