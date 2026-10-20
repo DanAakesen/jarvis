@@ -5821,6 +5821,20 @@ read to `ready`, `loading`, `error` or `unavailable`, and `TrainingCard`,
 `HealthCard` and `BodyCard` draw those states at a fixed size. No endpoint, DTO or
 backend change.
 
+**Health look (20 October 2026; P14-56).** The look is a presentation layer over the
+same components and reads. `daily/health-look.css`, imported by `DailyHome`, declares
+the Health-scoped `--health-*` and `--type-health-*` tokens on `.daily-shell` (and
+the dark values on `:root[data-theme="dark"] .daily-shell`) and restyles the existing
+class names, so no other area is affected; `daily-overview.css` is unchanged. New
+markup is small: `daily/ui/icons.tsx` (`HealthIcon`, `IconChip`, decorative and
+`aria-hidden`), an optional `tone` and `icon` on `ui/Ring.tsx`, `Figure`, `icon` and
+`meter` in `overview/TopBlocks.tsx`, and titled chart and trend panels in the cards.
+`daily/greeting.ts` derives the headline from `AreaProps.profileName`, which `App`
+passes from the signed-in profile; it never leaves the browser. `DailyFreshnessPill`
+reads the same sync status as before and now derives a status dot (`data-freshness`
+recent, behind or pending; 36 hours) and a "Last sync" table from the feed rows it
+already receives, so no endpoint, DTO or backend change.
+
 ### On-demand Daily views (18 October 2026; P12-16)
 
 `dailyShowTool(data.query)` (`apps/backend/src/daily/tools/show.ts`) is the seventh

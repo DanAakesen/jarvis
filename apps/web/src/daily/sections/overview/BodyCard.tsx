@@ -51,9 +51,12 @@ export function BodyCard({ title, to, state, stale, onRetry, period, workoutsSta
       <Tile label="Duration" state={workoutsState} unavailable="Workouts are not served." note={sessions.partialDuration ? 'lower bound' : null}
         value={sessions.sessions === 0 ? <Figure value="0" unit="min" /> : formatDuration(sessions.durationSeconds)} />
     </div>
-    <div className="daily-top-tiles daily-top-trends">
-      {trends.map(({ key, label }) => <Trend key={key} label={label} name={names[key]} catalogue={catalogueState}
-        pages={data.body[key]} period={trendPeriod} />)}
+    <div className="daily-top-chart daily-top-trend-panel">
+      <p className="daily-top-chart-title">Body trend</p>
+      <div className="daily-top-tiles daily-top-trends">
+        {trends.map(({ key, label }) => <Trend key={key} label={label} name={names[key]} catalogue={catalogueState}
+          pages={data.body[key]} period={trendPeriod} />)}
+      </div>
     </div>
   </TopCard>;
 }

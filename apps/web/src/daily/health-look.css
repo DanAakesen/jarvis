@@ -6,7 +6,7 @@
 .daily-shell {
   --type-health-display: clamp(32px, 5.5vw, 52px);
   --type-health-figure: 28px;
-  --type-health-ring: 22px;
+  --type-health-ring: 20px;
   --type-health-micro: 12px;
   --health-page: #eef2fc;
   --health-glow:
@@ -154,8 +154,8 @@
 .daily-shell .daily-top-card h3 .daily-icon-chip { width: 2.25rem; height: 2.25rem; }
 
 /* Rings: thick tracks, a disc behind a large numeral, and the class colour on the fill. */
-.daily-shell .daily-top-rings { gap: 0; }
-.daily-shell .daily-ring { display: grid; gap: var(--space-2); padding-inline: var(--space-2); }
+.daily-shell .daily-top-rings { gap: 0; justify-items: stretch; }
+.daily-shell .daily-ring { display: grid; gap: var(--space-2); padding-inline: var(--space-1); }
 .daily-shell .daily-ring + .daily-ring { background: linear-gradient(var(--health-edge), var(--health-edge)) left / 1px 100% no-repeat; }
 .daily-shell .daily-ring--gym { --ring-tone: var(--health-gym); }
 .daily-shell .daily-ring--run { --ring-tone: var(--health-run); }
@@ -164,16 +164,18 @@
 .daily-shell .daily-ring-label { display: inline-flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: var(--space-2); grid-row: 1; color: var(--ring-tone, var(--text)); font-size: var(--type-small); font-weight: 700; }
 .daily-shell .daily-ring-label .daily-icon-chip { --chip-tone: var(--ring-tone, var(--text)); }
 .daily-shell .daily-top-card .daily-ring-graphic { grid-row: 2; width: min(6.5rem, 100%); background: radial-gradient(closest-side, var(--health-disc) 72%, transparent 73%); }
-.daily-shell .daily-ring-graphic circle { stroke-width: 11; }
+.daily-shell .daily-ring-graphic circle { stroke-width: 10; }
 .daily-shell .daily-ring-track { stroke: var(--health-track); }
+.daily-shell .daily-ring-track--unavailable { stroke: var(--health-track-strong); stroke-dasharray: 5 2.5; }
 .daily-shell .daily-ring-fill { stroke: var(--ring-tone, var(--focus)); }
 .daily-shell .daily-top-card .daily-ring-centre { max-width: 70%; font-size: var(--type-health-ring); font-weight: 750; }
-.daily-shell .daily-ring-caption { grid-row: 3; min-height: calc(var(--type-health-micro) * var(--line-tight) * 2); color: var(--text-muted); font-size: var(--type-health-micro); font-weight: 650; letter-spacing: .06em; text-align: center; text-transform: uppercase; text-wrap: balance; }
+.daily-shell .daily-ring-caption { grid-row: 3; min-height: calc(var(--type-health-micro) * var(--line-tight) * 2); color: var(--text-muted); font-size: var(--type-health-micro); font-weight: 600; text-align: center; text-wrap: balance; }
 
-/* Tiles: a small uppercase caption, a large figure with its unit set smaller, and a thin meter. */
+/* Tiles: a plain caption, a large figure with its unit set smaller, and a thin meter. */
 .daily-shell .daily-top-tile { gap: var(--space-2); padding: var(--space-3) var(--space-4); border: 1px solid var(--health-tile-edge); border-radius: var(--radius-panel); background: var(--health-tile); }
 .daily-shell .daily-top-tiles--three .daily-top-tile { padding: var(--space-3) var(--space-2); }
-.daily-shell .daily-top-tile-label { display: flex; align-items: center; gap: var(--space-2); font-size: var(--type-health-micro); font-weight: 650; letter-spacing: .06em; text-transform: uppercase; }
+.daily-shell .daily-top-tile-label { display: flex; align-items: center; gap: var(--space-2); color: var(--text-muted); font-size: var(--type-small); font-weight: 650; }
+.daily-shell .daily-top-tile-label:has(.daily-icon-chip) { color: var(--text); }
 .daily-shell .daily-top-tile-value { display: flex; flex-wrap: wrap; align-content: center; align-items: baseline; gap: 0 var(--space-1); min-height: calc(var(--type-health-figure) * var(--line-tight)); font-size: var(--type-health-figure); font-weight: 750; }
 .daily-shell .daily-top-tiles--three .daily-top-tile-value { min-height: calc(var(--type-health-ring) * var(--line-tight) * 2); font-size: var(--type-health-ring); }
 .daily-shell .daily-top-unit { color: var(--text-muted); font-size: var(--type-small); font-weight: 600; }
@@ -183,17 +185,20 @@
 
 /* The Health card's chart sits in its own panel; the empty and ready states share that panel, so it never changes height. */
 .daily-top-chart { display: grid; gap: var(--space-2); padding: var(--space-3) var(--space-4); border: 1px solid var(--health-tile-edge); border-radius: var(--radius-panel); background: var(--health-tile); }
-.daily-top-chart-title { margin: 0; color: var(--text-muted); font-size: var(--type-health-micro); font-weight: 650; letter-spacing: .06em; text-transform: uppercase; }
+.daily-top-chart-title { margin: 0; color: var(--text); font-size: var(--type-small); font-weight: 700; }
 .daily-top-chart .daily-minichart--empty { background: transparent; }
+.daily-shell .daily-top-card[data-card="health"] .daily-top-chart, .daily-shell .daily-top-trend-panel { flex: 1 1 auto; grid-template-rows: auto minmax(0, 1fr); }
+.daily-top-chart .daily-minichart:not(.daily-minichart--empty) { grid-template-rows: minmax(4rem, 1fr) auto; }
 .daily-top-chart .daily-minichart-line { stroke: var(--health-protein); }
 .daily-top-chart .daily-minichart-area { fill: color-mix(in srgb, var(--health-protein) 16%, transparent); }
 .daily-top-chart .daily-minichart-bar { fill: var(--health-protein); }
 .daily-top-chart .daily-minichart-target { stroke: var(--health-amber); }
 
-/* Body measurements read as rows: label, trend, latest value. */
-.daily-shell .daily-top-trends { grid-template-columns: minmax(0, 1fr); }
-.daily-shell .daily-top-trends .daily-top-tile { grid-template-columns: minmax(0, 1fr) minmax(5rem, 8rem) auto; grid-template-areas: "label chart value"; align-items: center; column-gap: var(--space-3); padding: var(--space-2) var(--space-4); }
-.daily-shell .daily-top-trends .daily-top-tile-label { grid-area: label; font-size: var(--type-small); font-weight: 400; letter-spacing: 0; text-transform: none; }
+/* Body measurements read as rows in one panel: label, trend, latest value, with a hairline between rows. */
+.daily-shell .daily-top-trends { grid-template-columns: minmax(0, 1fr); gap: 0; }
+.daily-shell .daily-top-trends .daily-top-tile { grid-template-columns: max-content minmax(3rem, 1fr) max-content; grid-template-areas: "label chart value"; align-items: center; column-gap: var(--space-3); padding: var(--space-2) 0; border: 0; border-radius: 0; background: transparent; }
+.daily-shell .daily-top-trends .daily-top-tile + .daily-top-tile { background: linear-gradient(var(--health-tile-edge), var(--health-tile-edge)) top / 100% 1px no-repeat; }
+.daily-shell .daily-top-trends .daily-top-tile-label { grid-area: label; font-weight: 400; }
 .daily-shell .daily-top-trends .daily-top-tile-chart { grid-area: chart; min-height: 0; }
 .daily-shell .daily-top-trends .daily-top-tile-note { grid-area: chart; min-height: 0; justify-self: end; font-size: var(--type-caption); text-align: right; }
 .daily-shell .daily-top-trends .daily-top-tile-value { grid-area: value; justify-content: flex-end; min-height: 0; font-size: var(--type-lead); }
@@ -202,10 +207,26 @@
 
 /* The meals strip and the card carousel dots. */
 .daily-shell .daily-top-strip li { border: 1px solid var(--health-tile-edge); border-radius: var(--radius-panel); background: var(--health-tile); }
+.daily-shell .daily-top-strip:not(:has(ul)) { padding: var(--space-3) var(--space-4); border: 1px solid var(--health-tile-edge); border-radius: var(--radius-panel); background: var(--health-tile); }
+.daily-top-meals { display: grid; gap: var(--space-2); }
 .daily-top-strip-label { margin: 0; color: var(--text-muted); font-size: var(--type-health-micro); font-weight: 650; letter-spacing: .06em; text-transform: uppercase; }
 .daily-shell .daily-top-dot span { background: var(--health-track-strong); }
 .daily-shell .daily-top-dot:hover span { background: var(--text); }
 .daily-shell .daily-top-dot[aria-current="true"] span { background: var(--health-dot-active); }
+
+/* The Health panel: an icon-chip header with the last-synced line, pill tabs and a grid of dark tiles. */
+.daily-shell .health-panel { padding: var(--space-4); border: 1px solid var(--health-edge); border-radius: var(--radius-window); background: var(--health-tile); box-shadow: var(--health-card-shadow); }
+.daily-shell .health-panel-header { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: var(--space-3); padding-bottom: var(--space-3); background: linear-gradient(var(--health-edge), var(--health-edge)) bottom / 100% 1px no-repeat; }
+.daily-shell .health-panel-header .daily-icon-chip { --chip-tone: var(--health-flame); width: 2.5rem; height: 2.5rem; }
+.daily-shell .health-panel-header h2 { font-size: var(--type-lead); font-weight: 700; }
+.daily-shell .health-panel-header .ghost-button { border: 1px solid var(--health-edge); border-radius: var(--radius-pill); background: transparent; color: var(--text-muted); font-size: var(--type-small); font-weight: 600; }
+.daily-shell .health-panel-header .ghost-button:hover { background: var(--glass-hover); color: var(--text); }
+.daily-shell .health-panel-tabs { justify-content: flex-start; }
+.daily-shell .health-panel-tabs button { flex: 0 0 auto; padding-inline: var(--space-3); font-size: var(--type-small); }
+.daily-shell .health-panel .daily-stat-tile { padding: var(--space-3) var(--space-4); border-color: var(--health-tile-edge); background: var(--health-tile); }
+.daily-shell .health-panel .daily-stat-tile h3 { font-weight: 600; }
+.daily-shell .health-panel .daily-stat-value { font-size: var(--type-lead); font-weight: 750; }
+.daily-shell .health-panel-freshness > div > span { font-weight: 600; }
 
 @media (prefers-reduced-motion: reduce) {
   .daily-shell .daily-section-tab { transition: none; }

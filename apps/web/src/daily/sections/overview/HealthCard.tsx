@@ -46,11 +46,14 @@ export function HealthCard({ title, state, stale, onRetry, period, today, hour, 
           : `average of ${sleep.nights} ${sleep.nights === 1 ? 'night' : 'nights'}`} />
       <ProteinTile view={nutrition} />
     </div>
-    <ChartSlot state={period.single ? states.meals : states.days}>
-      <MiniChart label={period.single ? 'Protein across the day' : 'Protein per day'} points={points}
-        kind={period.single ? 'line' : 'bars'} target={target} unit="g"
-        startLabel={period.single ? '00:00' : formatDate(period.startDate)}
-        endLabel={period.single ? '24:00' : formatDate(period.endDate)} />
-    </ChartSlot>
+    <div className="daily-top-chart">
+      <p className="daily-top-chart-title" aria-hidden="true">{period.single ? 'Protein across the day' : 'Protein per day'}</p>
+      <ChartSlot state={period.single ? states.meals : states.days}>
+        <MiniChart label={period.single ? 'Protein across the day' : 'Protein per day'} points={points}
+          kind={period.single ? 'line' : 'bars'} target={target} unit="g"
+          startLabel={period.single ? '00:00' : formatDate(period.startDate)}
+          endLabel={period.single ? '24:00' : formatDate(period.endDate)} />
+      </ChartSlot>
+    </div>
   </TopCard>;
 }

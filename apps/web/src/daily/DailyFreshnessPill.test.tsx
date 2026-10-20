@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { DailyJson } from '@jarvis/contracts';
@@ -6,7 +6,7 @@ import { DailyFreshnessPill } from './DailyFreshnessPill';
 import { dailyFixture, jsonResponse } from './test-support';
 
 const token = async () => 'synthetic-fixture';
-afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.useRealTimers(); });
 
 function pill(enabled = true) {
   return render(<DailyFreshnessPill backendUrl="http://localhost:3999" getAccessToken={token} enabled={enabled} refreshVersion={0} />);
@@ -135,11 +135,62 @@ describe('DailyFreshnessPill', () => {
     vi.stubGlobal('fetch', vi.fn(async () => jsonResponse({ error: 'synthetic failure' }, 500)));
     const view = pill();
     await waitFor(() => expect(screen.getByRole('button', { name: 'Sync status unavailable' })).toBeTruthy());
+    expect(screen.getByRole('button', { name: 'Sync status unavailable' }).getAttribute('data-freshness')).toBe('behind');
     view.unmount();
     const fetch = vi.fn();
     vi.stubGlobal('fetch', fetch);
     const hidden = pill(false);
     expect(hidden.container.textContent).toBe('');
     expect(fetch).not.toHaveBeenCalled();
+  });
+
+  async function dotAt(now: string) {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(now));
+    vi.stubGlobal('fetch', vi.fn(async (_url: string | URL, init?: RequestInit) => jsonResponse(dailyFixture(
+      JSON.parse(String(init?.body)), [{ feeds: [upload], heartbeat: null, inbox: { accepted: 1, processing: 0, quarantined: 0 } }],
+    ))));
+    pill();
+    return (await screen.findByRole('button', { name: /^Last upload \d/ })).getAttribute('data-freshness');
+  }
+
+  it('turns the dot amber only when the newest upload is more than 36 hours old', async () => {
+    expect(await dotAt('2026-10-17T20:00:00Z')).toBe('recent');
+    cleanup();
+    expect(await dotAt('2026-10-19T08:31:00Z')).toBe('behind');
+  });
+
+  it('lists each source in the Last sync table and says Not received instead of a time when a feed has none', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (_url: string | URL, init?: RequestInit) => jsonResponse(dailyFixture(
+      JSON.parse(String(init?.body)),
+      [{
+        feeds: [
+          { feed_kind: 'metrics', accepted_evidence_at: '2026-10-17T08:30:00Z' },
+          { feed_kind: 'workouts', accepted_evidence_at: null },
+          { feed_kind: 'sketchy', accepted_evidence_at: 'not a time' },
+          { feed_kind: '', accepted_evidence_at: '2026-10-17T08:30:00Z' },
+        ],
+        heartbeat: null, inbox: { accepted: 1, processing: 0, quarantined: 0 },
+      }],
+    ))));
+    const user = userEvent.setup();
+    pill();
+    await user.click(await screen.findByRole('button', { name: /^Last upload \d/ }));
+    const table = screen.getByRole('table', { name: 'Last sync by source' });
+    const rows = within(table).getAllByRole('row').slice(1);
+    expect(rows.map(item => within(item).getByRole('rowheader').textContent)).toEqual(['Health metrics', 'Workouts', 'Sketchy']);
+    expect(within(rows[0]!).getByRole('cell').textContent).toMatch(/^\d/u);
+    expect(within(rows[1]!).getByRole('cell').textContent).toBe('Not received');
+    expect(within(rows[2]!).getByRole('cell').textContent).toBe('Not received');
+  });
+
+  it('never shows a time or a green dot when every upload time is unparseable', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (_url: string | URL, init?: RequestInit) => jsonResponse(dailyFixture(
+      JSON.parse(String(init?.body)),
+      [{ feeds: [{ feed_kind: 'sketchy', accepted_evidence_at: 'not a time' }], heartbeat: null, inbox: { accepted: 0, processing: 0, quarantined: 0 } }],
+    ))));
+    pill();
+    const trigger = await screen.findByRole('button', { name: 'No uploads yet' });
+    expect(trigger.getAttribute('data-freshness')).toBe('behind');
   });
 });

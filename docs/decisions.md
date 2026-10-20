@@ -57,9 +57,22 @@ look and applies it to the header, overview cards and Health panel, and P14-57 a
 it to the other sections. P14-52 is built in the new look after P14-56. The comparison
 source is the owner's private reference set, which is never committed.
 
-`PRODUCT.md` and `DESIGN.md` still carry the earlier "no separate skin" wording until
-P14-56 replaces it together with the implementation. Until then this entry governs the
-Health look.
+Documented tokens (P14-56). The look lives in one stylesheet, `daily/health-look.css`,
+whose custom properties are declared on the Health shell only and swapped for the dark
+theme, so light and dark share one structure and nothing outside Health changes:
+type (`--type-health-display`, `-figure`, `-ring`, `-micro`); surfaces
+(`--health-page`, `-glow`, `-edge`, `-tile`, `-tile-edge`, `-disc`, `-popover`, the
+three card gradients `-card-training|health|body`, `-card-shadow`); ring tracks
+(`--health-track`, `-track-strong`); selection (`--health-selected-bg`, `-bg-hover`,
+`-fg`, `-edge`); and class colours (`--health-gym`, `-run`, `-activity`, `-protein`,
+`-flame`, `-heart`, `-body`, `-amber`, `-ok`, `-pending`, `-dot-active`). Radii, spacing,
+motion and the remaining type sizes still come from the shared Jarvis tokens. The
+gradient and glass are surfaces only: numerals and text are solid colours, class colour
+always comes with an icon and a word, and the `prefers-contrast: more`,
+`forced-colors` and reduced-motion branches flatten or remove the glass and motion.
+Measured contrast of the overview text is at least 4.5:1 in both themes. This replaces
+the "no separate skin" wording in `PRODUCT.md` and `DESIGN.md`; it narrows it to "no
+second shell, window manager or voice, and no Health token outside the Health area".
 
 Refs #1116
 Refs #1155

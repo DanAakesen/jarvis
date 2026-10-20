@@ -213,12 +213,12 @@ describe('Overview cards', () => {
     stub({ ...rows, [sources.days]: [{ ...day, energy_kcal: 1200, partial_nutrients: ['energy_kcal'] }] });
     const first = render(view());
     await waitFor(() => expect(within(tile('Training', 'Calories left')).getByText('At most 500 kcal left')).toBeTruthy());
-    expect(within(tile('Training', 'Calories left')).getByText('≤ 500 kcal')).toBeTruthy();
+    expect(within(tile('Training', 'Calories left')).getByText('≤ 500').parentElement?.textContent).toBe('≤ 500 kcal');
     first.unmount();
     stub({ ...rows, [sources.days]: [{ ...day, energy_kcal: 2000, partial_nutrients: ['energy_kcal'] }] });
     render(view());
     await waitFor(() => expect(within(tile('Training', 'Calories left')).getByText('At least 300 kcal over')).toBeTruthy());
-    expect(within(tile('Training', 'Calories left')).getByText('≥ 300 kcal')).toBeTruthy();
+    expect(within(tile('Training', 'Calories left')).getByText('≥ 300').parentElement?.textContent).toBe('≥ 300 kcal');
   });
 
   it('lists the meals of the day in time order without removed meals', async () => {
@@ -251,7 +251,7 @@ describe('Overview cards', () => {
     render(view());
     await waitFor(() => expect(within(tile('Training', 'Protein')).getByRole('link', { name: 'No target set' }).getAttribute('href'))
       .toBe('/settings#nutrition-targets'));
-    expect(within(tile('Training', 'Calories left')).getByText('1,200 kcal eaten')).toBeTruthy();
+    expect(within(tile('Training', 'Calories left')).getByText('1,200').parentElement?.textContent).toBe('1,200 kcal eaten');
   });
 
   it('reads sleep from the total and draws protein across the day against the target', async () => {
@@ -261,6 +261,26 @@ describe('Overview cards', () => {
     expect(tile('Health', 'Sleep').textContent).not.toContain('0 h');
     const chart = await waitFor(() => card('Health').getByRole('img', { name: /^Protein across the day/u }));
     expect(chart.getAttribute('aria-label')).toContain('target 100 g');
+  });
+
+  it('gives each card an icon chip, a figure and unit, and a titled chart or trend panel', async () => {
+    stub();
+    render(view());
+    await settled();
+    const icons = (title: string) => [...article(title).querySelectorAll('.daily-icon-chip')].map(chip => chip.getAttribute('data-icon'));
+    expect(icons('Training')).toEqual(['gym', 'gym', 'run', 'steps', 'protein', 'flame']);
+    expect(icons('Health')).toEqual(['heart', 'moon', 'protein']);
+    expect(icons('Body')).toEqual(['pulse']);
+    for (const chip of article('Training').querySelectorAll('.daily-icon-chip')) expect(chip.getAttribute('aria-hidden')).toBe('true');
+    const sleep = tile('Health', 'Sleep');
+    expect(sleep.querySelector('.daily-top-figure')?.textContent).toBe('7.8');
+    expect(sleep.querySelector('.daily-top-unit')?.textContent).toBe('h');
+    expect(article('Health').querySelector('.daily-top-chart-title')?.textContent).toBe('Protein across the day');
+    expect(article('Body').querySelector('.daily-top-chart-title')?.textContent).toBe('Body trend');
+    expect(article('Training').querySelector('.daily-top-strip-label')?.textContent).toBe('Meals');
+    fireEvent.click(screen.getByRole('button', { name: '1 week' }));
+    await waitFor(() => expect(article('Training').querySelector('.daily-top-strip-label')).toBeNull());
+    expect(article('Health').querySelector('.daily-top-chart-title')?.textContent).toBe('Protein per day');
   });
 
   it('shows body totals, trends from the catalogue, and not recorded for measurements it does not serve', async () => {

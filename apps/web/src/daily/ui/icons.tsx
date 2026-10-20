@@ -21,5 +21,5 @@ export function HealthIcon({ name }: { name: HealthIconName }) {
 
 /** An icon on a tinted round chip; the tone is set by the surrounding card or ring. */
 export function IconChip({ name }: { name: HealthIconName }) {
-  return <span className="daily-icon-chip" aria-hidden="true"><HealthIcon name={name} /></span>;
+  return <span className="daily-icon-chip" data-icon={name} aria-hidden="true"><HealthIcon name={name} /></span>;
 }

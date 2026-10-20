@@ -93,6 +93,9 @@ export function TrainingCard({ title, to, state, stale, onRetry, period, states,
       <ProteinTile view={nutrition} />
       <CaloriesLeftTile view={nutrition} />
     </div>
-    {period.single && <MealStrip pages={data.meals} state={states.meals} />}
+    {period.single && <div className="daily-top-meals">
+      <p className="daily-top-strip-label" aria-hidden="true">Meals</p>
+      <MealStrip pages={data.meals} state={states.meals} />
+    </div>}
   </TopCard>;
 }
