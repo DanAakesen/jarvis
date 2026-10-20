@@ -20,7 +20,7 @@ Clients that do not request a supported version receive version 1.
   are never fabricated.
 - `daily.sync` returns separate `feeds`, `heartbeat` and `inbox` evidence.
   Inbox fields are `retained`, `retained_bytes`, `byte_limit`, `row_limit`,
-  `pending`, `quarantined`, `last_accepted_at` and `last_processed_upload_at`.
+  `pending`, `processing`, `quarantined`, `last_accepted_at` and `last_processed_upload_at`.
   `retained_bytes` sums stored `byte_count` across all retained rows for the
   authenticated owner, regardless of processing status. It is zero for an
   empty inbox. The numeric limits always report the shared upload store ceilings
