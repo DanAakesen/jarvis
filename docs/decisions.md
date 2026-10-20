@@ -1,5 +1,13 @@
 # Decisions
 
+## P14-32 — One subtle focus style for entry fields (20 October 2026; #1085)
+
+The owner rejected the 3px outline on fields. All text entry fields now use one
+treatment: a thin tinted border plus a soft glow underneath, defined by the
+`--field-focus-rule` and `--field-focus-glow` tokens, with the outline kept only
+as a forced-colours fallback. The per-component outline rules were removed so
+the shared rule is the single source. Non-text controls are unchanged.
+
 ## P14-41 — Daily UI rebuild: original components, Jarvis styling (20 October 2026; #1116)
 
 The owner ruled that Daily is rebuilt with the original app's components and

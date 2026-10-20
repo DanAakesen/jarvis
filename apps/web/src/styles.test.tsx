@@ -432,8 +432,8 @@ describe('app-wide control contract', () => {
     expect(ruleDeclaration(source, /\.signin-button\.luminous-glass::before\s*\{([^}]*)\}/, 'content')).toBe('none');
     expect(source).toContain('.primary-button:focus-visible');
     expect(source).toContain('.danger-button--filled:focus-visible');
-    expect(source).toContain('.knowledge-search:has(input:focus-visible) { outline: 3px solid var(--focus);');
-    expect(source).toContain('.folio-search:has(input:focus-visible) { outline: 3px solid var(--focus);');
+    expect(source).toContain('.knowledge-search:has(input:focus-visible) { border-color: var(--field-focus-rule); box-shadow: var(--field-focus-glow); }');
+    expect(source).toContain('.folio-search:has(input:focus-visible) { border-color: var(--field-focus-rule); box-shadow: var(--field-focus-glow); }');
   });
 
   function matchingDivClose(source: string, openingIndex: number, openingLength: number): number {

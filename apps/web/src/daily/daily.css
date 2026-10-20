@@ -39,7 +39,6 @@
   color: var(--text);
   font: inherit;
 }
-.daily-page input:focus-visible, .daily-page select:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 .daily-toolbar { align-items: flex-end; justify-content: flex-start; margin-bottom: var(--space-4); }
 .daily-toolbar > label { flex: 1 1 210px; }
 .daily-period { align-items: flex-end; justify-content: flex-start; }
@@ -166,7 +165,6 @@
   color: var(--text);
   font: inherit;
 }
-.daily-period-control select:focus-visible, .daily-period-control input:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 .daily-period-control > .error-text { flex-basis: 100%; margin: 0; }
 .daily-embedded-actions { margin-bottom: var(--space-3); }
 @media (max-width: 480px) {
