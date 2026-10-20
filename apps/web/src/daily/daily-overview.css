@@ -24,6 +24,7 @@
 .daily-top-tile p { min-width: 0; margin: 0; overflow-wrap: anywhere; }
 .daily-top-tile-label { color: var(--text-muted); font-size: var(--type-small); }
 .daily-top-tile-value { display: grid; align-content: center; min-height: calc(var(--type-subheading) * var(--line-tight)); color: var(--text); font-size: var(--type-subheading); font-variant-numeric: tabular-nums; font-weight: 650; line-height: var(--line-tight); }
+.daily-top-tile-none { color: var(--text-muted); font-weight: 400; cursor: help; }
 .daily-top-tiles--three .daily-top-tile-value { min-height: calc(var(--type-body) * var(--line-tight) * 2); font-size: var(--type-body); }
 .daily-top-tile-note { display: grid; align-content: center; min-height: calc(var(--type-small) * var(--line-body)); color: var(--text-muted); font-size: var(--type-small); }
 .daily-top-tile-chart { min-height: 2rem; }

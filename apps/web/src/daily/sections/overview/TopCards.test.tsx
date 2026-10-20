@@ -152,6 +152,10 @@ describe('Overview cards', () => {
     await waitFor(() => expect(card('Training').getByText('No meals logged')).toBeTruthy());
     expect(tile('Training', 'Protein').textContent).toContain('Not recorded');
     expect(tile('Training', 'Calories left').textContent).toContain('Not recorded');
+    const dash = tile('Training', 'Protein').querySelector('.daily-top-tile-none');
+    expect(dash?.textContent).toBe('—');
+    expect(dash?.getAttribute('aria-hidden')).toBe('true');
+    expect(tile('Training', 'Protein').querySelector('.visually-hidden')?.textContent).toBe('Not recorded');
   });
 
   it('points a missing nutrition target at the settings', async () => {

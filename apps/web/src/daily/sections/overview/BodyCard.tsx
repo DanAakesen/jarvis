@@ -25,7 +25,7 @@ function Trend({ label, name, catalogue, pages, period }: {
   const state = catalogue !== 'ready' || name === null ? catalogue : pagesState(pages, true);
   const trend = name === null ? null : bodyTrend(pages.items, period);
   return <Tile label={label} state={state} unavailable="Body measurements are not served."
-    value={trend === null ? 'Not recorded' : `${formatNumber(trend.latest, 1)}${trend.unit ? ` ${trend.unit}` : ''}`}
+    value={trend === null ? null : `${formatNumber(trend.latest, 1)}${trend.unit ? ` ${trend.unit}` : ''}`}
     chart={trend === null ? null : <Sparkline values={trend.values} label={`${label} trend`} />} />;
 }
 

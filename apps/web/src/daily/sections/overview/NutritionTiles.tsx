@@ -29,7 +29,7 @@ export function ProteinTile({ view, label = 'Protein' }: { view: NutritionView; 
   const protein = view.figures?.protein ?? null;
   const known = protein?.value != null;
   return <Tile label={label} state={view.state} unavailable="Nutrition totals are not served."
-    value={view.figures === null ? 'Not recorded' : known ? `${formatNumber(protein.value, 0)} g` : 'Unknown'}
+    value={view.figures === null ? null : known ? `${formatNumber(protein.value, 0)} g` : 'Unknown'}
     note={view.figures === null ? null : targetNote(view, view.proteinTarget === null ? null
       : joined(`of ${formatNumber(view.proteinTarget, 0)} g`, protein?.partial === true && 'lower bound', view.range && 'average per day'))} />;
 }
@@ -41,7 +41,7 @@ export function CaloriesLeftTile({ view }: { view: NutritionView }) {
   const amount = balance === null ? null : formatNumber(balance.amount, 0);
   const spoken = balance === null ? null
     : `${bound === 'at most' ? 'At most ' : bound === 'at least' ? 'At least ' : ''}${amount} kcal ${balance.kind}`;
-  const value = view.figures === null ? 'Not recorded'
+  const value = view.figures === null ? null
     : balance === null ? eaten === null ? 'Unknown' : `${formatNumber(eaten, 0)} kcal eaten`
       : <><span aria-hidden="true">{bound === 'at most' ? '≤ ' : bound === 'at least' ? '≥ ' : ''}{amount} kcal</span>
         <span className="visually-hidden">{spoken}</span></>;

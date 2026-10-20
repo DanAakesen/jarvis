@@ -1803,7 +1803,9 @@ links to Body and sleep until the Health panel lands. Body holds Sessions,
 Calories and Duration, then Weight, Fat mass, Fat % and Lean mass as small
 sparklines over the last 90 days. A ring or tile has the same size in every state.
 Wording separates the cases: "Not recorded" means the source is served and holds
-nothing for the period, "Unavailable" means Jarvis does not serve the source,
+nothing for the period and is shown as a quiet dash, as in the original, with the
+words kept for assistive technology and the hover title; "Unavailable" means Jarvis
+does not serve the source,
 "Could not load" carries a Retry button, "No target set" links to the setting, and
 nothing shows a default target. Sessions count from the Monday of the week for the
 one-day presets and over the window for longer ones; protein and calories left

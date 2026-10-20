@@ -38,7 +38,7 @@ export function HealthCard({ title, to, state, onRetry, period, today, hour, sta
   return <TopCard title={title} to={to} state={state} onRetry={onRetry}>
     <div className="daily-top-tiles">
       <Tile label="Sleep" state={states.sleep} unavailable="Sleep is not served."
-        value={sleep === null ? 'Not recorded' : `${formatNumber(sleep.value, 1)} h`}
+        value={sleep === null ? null : `${formatNumber(sleep.value, 1)} h`}
         note={sleep === null ? null : sleep.date !== null ? formatDate(sleep.date)
           : `average of ${sleep.nights} ${sleep.nights === 1 ? 'night' : 'nights'}`} />
       <ProteinTile view={nutrition} />

@@ -28,7 +28,10 @@ export function TopCard({ title, to, state, onRetry, children }: {
   </article>;
 }
 
-/** A label, one value and one line under it. The three slots are always mounted and reserve their height. */
+/**
+ * A label, one value and one line under it. The three slots are always mounted and reserve their height.
+ * A null value in a ready tile is a figure that was not recorded: a quiet dash, spoken as "Not recorded".
+ */
 export function Tile({ label, state, value, note, chart, unavailable }: {
   label: string;
   state: BlockState;
@@ -41,7 +44,9 @@ export function Tile({ label, state, value, note, chart, unavailable }: {
   return <div className="daily-top-tile" data-state={state} role="group" aria-label={label}>
     <p className="daily-top-tile-label">{label}</p>
     <p className="daily-top-tile-value">
-      {state === 'ready' ? value : state === 'loading' ? <Loader label={`Loading ${label.toLowerCase()}`} variant="inline" announce={false} /> : '—'}
+      {state === 'ready' ? value === null
+        ? <><span className="daily-top-tile-none" aria-hidden="true" title="Not recorded">—</span><span className="visually-hidden">Not recorded</span></>
+        : value : state === 'loading' ? <Loader label={`Loading ${label.toLowerCase()}`} variant="inline" announce={false} /> : '—'}
     </p>
     {chart !== undefined && <div className="daily-top-tile-chart">{state === 'ready' ? chart : null}</div>}
     <div className="daily-top-tile-note">
