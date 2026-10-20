@@ -6,7 +6,7 @@ describe('DailyState', () => {
   it('announces loading, empty, partial and error states with the appropriate live roles', () => {
     const { rerender } = render(<DailyState status="loading" />);
     const loading = screen.getByRole('status');
-    expect(loading.textContent).toContain('Loading Daily history');
+    expect(loading.textContent).toContain('Loading Health history');
     expect(loading.getAttribute('aria-live')).toBe('polite');
 
     rerender(<DailyState status="empty" emptyMessage="No synthetic records were returned." />);

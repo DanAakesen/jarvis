@@ -351,11 +351,11 @@ describe('Nutrition section', () => {
     pending = () => new Promise<Response>(done => { resolve = done; });
     render(<Wrapper />);
     await waitFor(() => expect(resolve).toBeTypeOf('function'));
-    expect(screen.getByText('Loading Daily history')).toBeTruthy();
+    expect(screen.getByText('Loading Health history')).toBeTruthy();
     expect((screen.getByLabelText('Meal date') as HTMLInputElement).value).toBe('2026-10-18');
     await act(async () => { resolve(jsonResponse(dailyFixture(queries[0]!, [syntheticMeal]))); });
     await screen.findByText('Synthetic meal 9001');
-    expect(screen.queryByText('Loading Daily history')).toBeNull();
+    expect(screen.queryByText('Loading Health history')).toBeNull();
   });
   it('shows independent target recovery without hiding recorded meals or inventing targets', async () => {
     const previous = vi.mocked(fetch).getMockImplementation()!;

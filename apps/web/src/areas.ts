@@ -38,7 +38,7 @@ export const areas: readonly Area[] = [
 ];
 
 const withDaily: readonly Area[] = [
-  { id: 'daily', label: 'Daily', path: 'daily', navigation: [{ label: 'Daily', path: '/daily' }], Component: DailyHome },
+  { id: 'daily', label: 'Health', path: 'health', navigation: [{ label: 'Health', path: '/health' }], Component: DailyHome },
   ...areas,
 ];
 

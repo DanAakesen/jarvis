@@ -86,7 +86,7 @@ describe('Workouts section', () => {
   it('shows the shared loader while the initial read is pending', () => {
     read.mockReturnValue(new Promise(() => {}));
     mount();
-    expect(screen.getByText('Loading Daily history')).toBeTruthy();
+    expect(screen.getByText('Loading Health history')).toBeTruthy();
     expect(read.mock.calls[0]?.[1]).toEqual({ source: sources.workouts, ...props.period, limit: 500 });
   });
 
@@ -278,7 +278,7 @@ describe('Workouts section', () => {
     read.mockImplementation(async (_url, query) => query.source === sources.heartRate ? pending.promise : respond(query));
     mount({}, '/daily?section=workouts&workout=synthetic-run');
     await screen.findByRole('heading', { name: /^Running ·/u });
-    expect(screen.getAllByText('Loading Daily history').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Loading Health history').length).toBeGreaterThan(0);
     await waitFor(() => expect(read.mock.calls.some(call => call[1].source === sources.heartRate)).toBe(true));
     const query = read.mock.calls.find(call => call[1].source === sources.heartRate)![1];
     await act(async () => pending.resolve(dailyFixture(query)));

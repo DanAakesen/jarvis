@@ -25,6 +25,12 @@ tiles' loading semantics and wording otherwise stay as they were.
 
 Refs #1116, #1129
 
+P14-53 (#1147) applies the 20 October naming ruling: the owner-facing area and
+route are Health and `/health`, with legacy `/daily` UI links replaced to the
+matching Health URL. The internal area id, `dailyEnabled` options, API paths,
+tool/source ids, query contracts, settings keys, environment variables and log
+event names stay unchanged until #1146.
+
 ## P14-41 — Today cards read served sources and say so when one is not (20 October 2026; #1116)
 
 The Daily Overview now opens with Training this week, Protein today, Calories left
