@@ -2,6 +2,7 @@ import type { DailyJson } from '@jarvis/contracts';
 import type { ChartSeries } from '../../../chart-data';
 import type { NutritionTargetValues } from '../../nutrition-targets';
 import { copenhagenDate, isDailyPeriod } from '../../period';
+import { healthSourceLabel } from '../../presentation';
 
 export type Row = Record<string, DailyJson>;
 export const nutrients = [
@@ -26,8 +27,17 @@ export function readableJson(value: Row[string] | undefined): string {
     if (value.length > 16_000) return `${value.slice(0, 4000)}\n[Stored text truncated]`;
     try { parsed = JSON.parse(value); } catch { return `${value.slice(0, 4000)}${value.length > 4000 ? '\n[Stored text truncated]' : ''}`; }
   }
+  /** Only a provenance `source` holds a system id; names, aliases and notes stay exactly as stored. */
+  const labelSources = (entry: unknown, key = ''): unknown => {
+    if (typeof entry === 'string') return key === 'source' ? healthSourceLabel(entry) : entry;
+    if (Array.isArray(entry)) return entry.map((item) => labelSources(item, key));
+    if (entry !== null && typeof entry === 'object') {
+      return Object.fromEntries(Object.entries(entry).map(([name, item]) => [name, labelSources(item, name)]));
+    }
+    return entry;
+  };
   try {
-    const rendered = JSON.stringify(parsed, null, 2);
+    const rendered = JSON.stringify(labelSources(parsed), null, 2);
     return rendered.length > 16_000 ? `${rendered.slice(0, 16_000)}\n[Stored detail truncated]` : rendered;
   } catch { return 'Stored detail could not be displayed safely.'; }
 }

@@ -2,7 +2,7 @@ import type { WorkspaceSnapshot, WorkspaceViewLocation } from '@jarvis/contracts
 
 const pageLabels = {
   home: 'Jarvis home', factory: 'Factory board', settings: 'Settings', usage: 'Usage',
-  notes: 'Notes', knowledge: 'Knowledge graph', folio: 'Folio pane', status: 'Status', daily: 'Daily',
+  notes: 'Notes', knowledge: 'Knowledge graph', folio: 'Folio pane', status: 'Status', daily: 'Health', health: 'Health',
 };
 
 function locationText(location: WorkspaceViewLocation): string {

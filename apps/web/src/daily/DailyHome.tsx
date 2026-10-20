@@ -146,14 +146,14 @@ export function DailyHome({ backendUrl, getAccessToken }: AreaProps) {
   return <section className="daily-page daily-shell" aria-labelledby="daily-heading">
     <header className="daily-heading">
       <div>
-        <h1 id="daily-heading" tabIndex={-1}>Daily</h1>
+        <h1 id="daily-heading" tabIndex={-1}>Health</h1>
       </div>
       <DailyFreshnessPill backendUrl={backendUrl} getAccessToken={getAccessToken} refreshVersion={refreshVersion}
         enabled={sources.includes(dailyQuerySources.sync)} />
     </header>
-    <nav ref={sectionNavigation} className="daily-section-nav" aria-label="Daily sections"
+    <nav ref={sectionNavigation} className="daily-section-nav" aria-label="Health sections"
       data-overflow-start={sectionTabsEdges.start || undefined} data-overflow-end={sectionTabsEdges.end || undefined}>
-      <div className="daily-section-tabs" role="tablist" aria-label="Daily sections" onKeyDown={onTabKeyDown}>
+      <div className="daily-section-tabs" role="tablist" aria-label="Health sections" onKeyDown={onTabKeyDown}>
         {availableSections.map(item => <button key={item.id} id={`daily-tab-${item.id}`} className="daily-section-tab" type="button" role="tab"
           aria-selected={item.id === activeSection?.id} aria-controls="daily-section-panel"
           tabIndex={item.id === activeSection?.id ? 0 : -1} onClick={() => selectSection(item.id)}>
@@ -172,8 +172,8 @@ export function DailyHome({ backendUrl, getAccessToken }: AreaProps) {
           <button className="secondary-button" type="button" onClick={() => setSectionLoadAttempt(attempt => attempt + 1)}>Retry sections</button>
         </div>}
         {!activeSection && !sectionLoadError && <Loader
-          label={navigation.availabilityPending ? 'Checking Daily availability' : 'Loading Daily sections'} variant="rows" />}
-        {activeSection && navigation.availabilityPending && <Loader label="Checking Daily availability" variant="rows" />}
+          label={navigation.availabilityPending ? 'Checking Health availability' : 'Loading Health sections'} variant="rows" />}
+        {activeSection && navigation.availabilityPending && <Loader label="Checking Health availability" variant="rows" />}
         {activeSection && !navigation.availabilityPending && <Suspense fallback={<Loader label={`Loading ${activeSection.label}`} variant="rows" />}>
           <activeSection.Component backendUrl={backendUrl} getAccessToken={getAccessToken} sources={sources}
             period={period} onPeriodChange={setPeriod} refreshVersion={refreshVersion} />

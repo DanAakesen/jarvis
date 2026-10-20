@@ -97,7 +97,7 @@ describe('Briefs section', () => {
       signal?.addEventListener('abort', () => reject(signal.reason), { once: true });
     }));
     render(<MemoryRouter><BriefsSection {...props} /></MemoryRouter>);
-    expect(screen.getByText('Loading Daily history')).toBeTruthy();
+    expect(screen.getByText('Loading Health history')).toBeTruthy();
   });
 
   it('offers Retry after a history error and recovers on the next request', async () => {

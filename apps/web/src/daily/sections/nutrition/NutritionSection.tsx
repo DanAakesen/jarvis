@@ -11,6 +11,7 @@ import { DailyUnavailable } from '../../ui/DailyUnavailable';
 import { FreshnessLine } from '../../ui/FreshnessLine';
 import { ScrollTable } from '../../ui/ScrollTable';
 import { formatClockTime, formatDate, formatNumber, formatTime } from '../../ui/formatters';
+import { healthSourceLabel } from '../../presentation';
 import { useDailyPages, type DailyPages } from '../../ui/useDailyPages';
 import type { DailySectionProps } from '../types';
 import { balancePoints, deleted, mealDate, nutrients, numeric, nutritionPeriodAverages, planItems, readableJson, sumNutrient, targetBaseline, text, trendPoints, type Row } from './totals';
@@ -70,7 +71,7 @@ function RecordDetails({ row, name, meal = false }: { row: Row; name: string; me
     </span></summary>
     <NutrientList row={row} />
     {!meal && <p>Aliases: {readableJson(row.aliases_json)}</p>}
-    {meal && <p>Type: {text(row.meal_type, 'Other')}. Confidence: {text(row.confidence)}. Capture method: {text(row.capture_method)}. Source: {text(row.source)}. Revision: {text(String(row.revision ?? 'Unknown'))}.</p>}
+    {meal && <p>Type: {text(row.meal_type, 'Other')}. Confidence: {text(row.confidence)}. Capture method: {text(row.capture_method)}. Source: {healthSourceLabel(text(row.source))}. Revision: {text(String(row.revision ?? 'Unknown'))}.</p>}
     <details><summary>Components</summary><pre>{readableJson(row.components_json)}</pre></details>
     <details><summary>Nutrient provenance</summary><pre>{readableJson(row.nutrient_provenance_json)}</pre></details>
   </details>;

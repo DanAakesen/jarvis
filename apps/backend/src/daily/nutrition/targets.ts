@@ -24,7 +24,7 @@ const bound = (label: string, unit: 'kcal' | 'g', min: number, max: number): Nut
 /** Sanity bounds that catch typos and unit slips; they are not recommendations. */
 export const nutritionTargetBounds: Readonly<Record<NutritionTargetField, NutritionTargetBound>> = Object.freeze({
   restingKcal: bound('Resting energy burn', 'kcal', 1000, 4000),
-  deficitKcal: bound('Daily deficit', 'kcal', 0, 2000),
+  deficitKcal: bound('Per-day deficit', 'kcal', 0, 2000),
   proteinGrams: bound('Protein target', 'g', 30, 400),
 });
 

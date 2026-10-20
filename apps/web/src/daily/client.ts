@@ -149,7 +149,7 @@ async function readJson(response: Response): Promise<unknown> {
   if (!response.body || !response.headers.get('content-type')?.toLowerCase().includes('application/json') ||
       declared !== null && (!/^\d+$/u.test(declared) || Number(declared) > responseLimit)) {
     await response.body?.cancel();
-    throw new DailyReadError('Daily returned an invalid or oversized response.');
+    throw new DailyReadError('Health returned an invalid or oversized response.');
   }
   const reader = response.body.getReader();
   const decoder = new TextDecoder('utf-8', { fatal: true });
@@ -158,7 +158,7 @@ async function readJson(response: Response): Promise<unknown> {
     while (true) {
       const part = await reader.read(); if (part.done) break;
       bytes += part.value.byteLength;
-      if (bytes > responseLimit) throw new DailyReadError('Daily returned too much data. Narrow the period.');
+      if (bytes > responseLimit) throw new DailyReadError('Health returned too much data. Narrow the period.');
       parts.push(decoder.decode(part.value, { stream: true }));
     }
     parts.push(decoder.decode());
@@ -167,11 +167,11 @@ async function readJson(response: Response): Promise<unknown> {
   } finally { await reader.cancel().catch(() => undefined); reader.releaseLock(); }
 }
 async function requestJson(backendUrl: string | null, path: string, getAccessToken: () => Promise<string>, signal: AbortSignal, body?: DailyQuery, accept = 'application/json'): Promise<unknown> {
-  if (!backendUrl) throw new DailyReadError('The Daily backend is not configured.', 'disabled');
+  if (!backendUrl) throw new DailyReadError('The Health backend is not configured.', 'disabled');
   signal = AbortSignal.any([signal, AbortSignal.timeout(120_000)]);
   let token: string;
   try { token = await awaitWithSignal(getAccessToken, signal); }
-  catch { signal.throwIfAborted(); throw new DailyReadError('Sign in again to read your Daily records.', 'auth'); }
+  catch { signal.throwIfAborted(); throw new DailyReadError('Sign in again to read your Health records.', 'auth'); }
   const response = await backendFetch(`${backendUrl.replace(/\/+$/u, '')}${path}`, {
     method: body ? 'POST' : 'GET', signal, cache: 'no-store',
     headers: { Authorization: ['Bearer', token].join(' '), Accept: accept, ...(body ? { 'Content-Type': 'application/json' } : {}) },
@@ -179,9 +179,9 @@ async function requestJson(backendUrl: string | null, path: string, getAccessTok
   });
   if (!response.ok) {
     await response.body?.cancel();
-    if (response.status === 404) throw new DailyReadError('Daily is not enabled on this backend.', 'disabled');
-    if (response.status === 401 || response.status === 403) throw new DailyReadError('Daily access could not be verified. Sign in as the configured owner.', 'auth');
-    throw new DailyReadError(`Daily is unavailable (HTTP ${response.status}).`);
+    if (response.status === 404) throw new DailyReadError('Health is not enabled on this backend.', 'disabled');
+    if (response.status === 401 || response.status === 403) throw new DailyReadError('Health access could not be verified. Sign in as the configured owner.', 'auth');
+    throw new DailyReadError(`Health is unavailable (HTTP ${response.status}).`);
   }
   return readJson(response);
 }
@@ -193,19 +193,19 @@ export async function loadDailySources(backendUrl: string | null, getAccessToken
     if (!object(value) || value.module !== 'daily' ||
         (value.version !== 1 && value.version !== 2 && value.version !== dailyCapabilitiesVersion) ||
         !Array.isArray(value.sources) || value.sources.length === 0 || !value.sources.every(source) ||
-        new Set(value.sources).size !== value.sources.length) throw new DailyReadError('Daily data services are not available yet.', 'disabled');
+        new Set(value.sources).size !== value.sources.length) throw new DailyReadError('Health data services are not available yet.', 'disabled');
     const allowed = value.version === 1 ? dailyQuerySourcesV1 : value.version === 2 ? dailyQuerySourcesV2 : dailyQuerySourcesV3;
     if (value.sources.some(id => !allowed.some(known => known === id))) {
-      throw new DailyReadError(`Daily returned incompatible version ${value.version} capabilities. No collections were claimed.`, 'invalid');
+      throw new DailyReadError(`Health returned incompatible version ${value.version} capabilities. No collections were claimed.`, 'invalid');
     }
     return value.sources;
   });
 }
 export async function queryDaily(backendUrl: string | null, query: DailyQuery, getAccessToken: () => Promise<string>, signal: AbortSignal): Promise<DailyQueryResult> {
-  if (!isDailyQuery(query)) throw new DailyReadError('Choose a valid period and source before loading Daily.', 'invalid');
+  if (!isDailyQuery(query)) throw new DailyReadError('Choose a valid period and source before loading Health.', 'invalid');
   return runDailyRead(signal, async () => {
     const value = await requestJson(backendUrl, '/daily/query', getAccessToken, signal, query);
-    if (!isDailyResult(value, query)) throw new DailyReadError('Daily returned mismatched or incomplete evidence. No complete result is claimed.');
+    if (!isDailyResult(value, query)) throw new DailyReadError('Health returned mismatched or incomplete evidence. No complete result is claimed.');
     return value;
   });
 }
