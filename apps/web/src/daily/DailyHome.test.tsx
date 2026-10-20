@@ -64,7 +64,7 @@ function home(refreshVersion = 0, initialPath = '/health') {
   </MemoryRouter>;
 }
 const settled = () => screen.findByText(/^Checked \d+ collections?:/u);
-const sectionTabs = () => within(screen.getByRole('tablist', { name: 'Daily sections' }));
+const sectionTabs = () => within(screen.getByRole('tablist', { name: 'Health sections' }));
 const probes = (queries: readonly DailyQuery[]) => queries.filter(query => !('limit' in query) || query.limit === 1);
 function row(name: string) {
   const item = screen.getAllByRole('heading', { name }).map(heading => heading.closest('li')).find(Boolean) ?? null;
@@ -323,7 +323,7 @@ describe('Daily overview', () => {
     render(home());
     const names = ['Overview', 'Briefs', 'Workouts', 'Nutrition', 'Body & sleep'];
     for (let index = 0; index < 20; index += 1) {
-      const tablist = await screen.findByRole('tablist', { name: 'Daily sections' });
+      const tablist = await screen.findByRole('tablist', { name: 'Health sections' });
       fireEvent.click(within(tablist).getByRole('tab', { name: names[index % names.length]! }));
       await flush();
     }
