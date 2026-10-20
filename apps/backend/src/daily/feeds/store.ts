@@ -56,7 +56,7 @@ export function boundedSource(source: SourceAttempt, capturedAt?: string): Sourc
 }
 function validate(run: RefreshRun): void {
   text(run.runId); instant(run.capturedAt);
-  if (Object.keys(run).some((field) => !['runId','capturedAt','sources'].includes(field)) || !Array.isArray(run.sources) || run.sources.length !== 2 || new Set(run.sources.map((source) => source.source)).size !== 2) throw new TypeError('Both in-scope sources must report independently');
+  if (Object.keys(run).some((field) => !['runId','capturedAt','calendarRange','sources'].includes(field)) || !Array.isArray(run.sources) || run.sources.length !== 2 || new Set(run.sources.map((source) => source.source)).size !== 2) throw new TypeError('Both in-scope sources must report independently');
   for (const source of run.sources) {
     if (Object.keys(source).some((field) => !['source','status','items','errorCode'].includes(field))) throw new TypeError('Invalid source fields');
     if (!sources.includes(source.source) || !['ok','error'].includes(source.status) || !Array.isArray(source.items) || source.items.length > MAX_SOURCE_ITEMS || Buffer.byteLength(canonicalJson(source), 'utf8') > MAX_SOURCE_BYTES ||
