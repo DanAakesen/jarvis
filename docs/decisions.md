@@ -1,5 +1,24 @@
 # Decisions
 
+## P14-41 — Daily UI rebuild: original components, Jarvis styling (20 October 2026; #1116)
+
+The owner ruled that Daily is rebuilt with the original app's components and
+data presentation, in Jarvis styling. The earlier P12 line "no separate Daily
+skin" still holds and is read as: no second theme, shell or token set. It no
+longer means recomposing the original layout. Components may therefore follow
+the original composition, restyled with existing Jarvis tokens, shared
+components, themes, density and motion.
+
+Data limits are unchanged: only what Jarvis serves is shown, and unserved data
+gets loading, empty and error states and is listed as a gap, never invented.
+This ruling does not by itself lift earlier scope exclusions (task, habit and
+countdown source, coaching and recomposition automation, separate Workouts and
+Nutrition pages); each needs its own owner ruling before it is built. The
+[audit](ui/p14-41/audit.md) lists the components and gaps. The original source
+code was not available, so the audit works from screenshots only.
+
+Refs #1116
+
 ## P14-40 — Full indexed-note scope in the Notes graph (20 October 2026; #1113)
 
 The graph, its folder filters, and note search follow the owner's P9-77 ruling:
