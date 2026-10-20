@@ -350,7 +350,7 @@ describe('one shared Daily read contract', () => {
     const f = fixture();
     const inbox = { retained: retainedBytes ? 2 : 0, retained_bytes: retainedBytes,
       byte_limit: healthInboxByteLimit, row_limit: healthInboxRowLimit, pending: retainedBytes ? 1 : 0,
-      quarantined: 0, last_accepted_at: null, last_processed_upload_at: null };
+      processing: retainedBytes ? 1 : 0, quarantined: 0, last_accepted_at: null, last_processed_upload_at: null };
     f.sync.mockResolvedValue({ feeds: [], heartbeat: null, inbox: { ...inbox, raw_bytes: 'synthetic-payload', owner_object_id: owner } });
     const query = { source: sources.sync };
     const result = await f.service.query(query, request(), signal());

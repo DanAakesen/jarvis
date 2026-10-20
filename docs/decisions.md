@@ -1,5 +1,19 @@
 # Decisions
 
+## P14-41 — Freshness pill reports the last processed upload (20 October 2026; #1116)
+
+The pill's primary label is the newest `accepted_evidence_at` across the served
+sync feeds, worded as an upload time. The phone heartbeat is written only by the
+separate Shortcuts route, so an uploader that uses the ingest route never has one
+and the pill wrongly read "No phone contact yet" while uploads were processed. The
+heartbeat is now an optional details row. Waiting or processing uploads with no
+processed time read "Upload being processed"; "No uploads yet" appears only with
+neither. The served sync item now includes `inbox.processing` (previously
+dropped by the projection) so the processing state is real rather than inferred.
+No new source is read.
+
+Refs #1116
+
 ## P14-42 — Expose retained health upload usage in Daily sync (20 October 2026; #1120)
 
 Add owner-scoped `retained_bytes`, `byte_limit` and `row_limit` to the existing

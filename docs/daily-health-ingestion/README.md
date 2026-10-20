@@ -19,7 +19,7 @@ Uploads are at most **8 MiB**; ignored heartbeat bodies are at most **32 KiB**. 
 
 The Daily `daily.sync` source exposes numeric `inbox.retained_bytes` (the sum of
 stored `byte_count` for every retained owner row), `inbox.byte_limit` and
-`inbox.row_limit`, alongside retained/pending/quarantined counts and timestamps.
+`inbox.row_limit`, alongside retained/pending/processing/quarantined counts and timestamps.
 Pending, processing, processed and quarantined rows all consume capacity; other
 owners' rows never count. An empty inbox reports zero retained bytes and still
 returns both limits. No payload content is returned. See the

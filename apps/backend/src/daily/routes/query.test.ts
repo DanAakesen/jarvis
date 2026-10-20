@@ -77,7 +77,7 @@ describe('inactive Daily HTTP/module integration', () => {
   });
   it('returns additive numeric inbox usage through the authenticated sync contract', async () => {
     const f = fixture();
-    const inbox = { retained: 2, pending: 1, quarantined: 0, retained_bytes: 1234,
+    const inbox = { retained: 2, pending: 1, processing: 1, quarantined: 0, retained_bytes: 1234,
       byte_limit: healthInboxByteLimit, row_limit: healthInboxRowLimit };
     f.sync.mockResolvedValue({ feeds: [], heartbeat: null, inbox: { ...inbox, raw_bytes: 'synthetic-payload' } });
     for (const kind of ['owner', 'agent']) {

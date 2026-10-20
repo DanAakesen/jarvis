@@ -14,6 +14,21 @@ function count(value: DailyJson | undefined) {
   return typeof value === 'number' && Number.isFinite(value) ? String(value) : 'Unknown';
 }
 
+function positive(value: DailyJson | undefined) {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0;
+}
+
+// Newest processed upload across the feeds; unparseable times are ignored rather than shown.
+function newestUpload(feeds: DailyJson | undefined) {
+  let best: { at: string; ms: number } | null = null;
+  for (const entry of Array.isArray(feeds) ? feeds : []) {
+    const at = row(entry)?.accepted_evidence_at;
+    const ms = typeof at === 'string' ? Date.parse(at) : Number.NaN;
+    if (typeof at === 'string' && Number.isFinite(ms) && (!best || ms > best.ms)) best = { at, ms };
+  }
+  return best?.at ?? null;
+}
+
 export function DailyFreshnessPill({ backendUrl, getAccessToken, enabled, refreshVersion }: {
   backendUrl: string | null;
   getAccessToken: () => Promise<string>;
@@ -50,11 +65,12 @@ export function DailyFreshnessPill({ backendUrl, getAccessToken, enabled, refres
   const heartbeat = row(item?.heartbeat);
   const inbox = row(item?.inbox);
   const contact = typeof heartbeat?.last_received_at === 'string' ? heartbeat.last_received_at : null;
+  const upload = newestUpload(item?.feeds);
+  const inProgress = positive(inbox?.pending) || positive(inbox?.processing);
   // A failed refresh keeps the previous data, so say it is stale in words rather than looking current.
   const stale = query.data && query.error ? ', refresh failed' : '';
-  const label = query.data
-    ? `${contact ? `Phone contact ${formatTime(contact)}` : 'No phone contact yet'}${stale}`
-    : query.error ? 'Sync status unavailable' : 'Checking sync';
+  const state = upload ? `Last upload ${formatTime(upload)}` : inProgress ? 'Upload being processed' : 'No uploads yet';
+  const label = query.data ? `${state}${stale}` : query.error ? 'Sync status unavailable' : 'Checking sync';
 
   return <div className="daily-freshness-pill" ref={root}>
     <button ref={trigger} type="button" className="daily-freshness-trigger" aria-expanded={open} aria-controls={panelId}
@@ -65,7 +81,8 @@ export function DailyFreshnessPill({ backendUrl, getAccessToken, enabled, refres
       {query.error && <p className="error-text" role="alert">{query.error}</p>}
       {query.data
         ? <dl className="daily-facts">
-          <div><dt>Phone last contacted</dt><dd>{contact ? formatTime(contact) : 'Never'}</dd></div>
+          <div><dt>Last upload</dt><dd>{upload ? formatTime(upload) : inProgress ? 'Being processed' : 'None yet'}</dd></div>
+          {contact && <div><dt>Phone last contacted</dt><dd>{formatTime(contact)}</dd></div>}
           <div><dt>Accepted uploads</dt><dd>{count(inbox?.accepted ?? inbox?.pending)}</dd></div>
           <div><dt>Processing uploads</dt><dd>{count(inbox?.processing)}</dd></div>
           <div><dt>Quarantined uploads</dt><dd>{count(inbox?.quarantined)}</dd></div>
