@@ -383,7 +383,7 @@ export function KnowledgeGraphView({ backendUrl, getAccessToken, initialQuery = 
               <li key={name} data-folder={name}>
                 <button className="ghost-button" type="button" aria-pressed={folder === name} title={folder === name ? 'Show every folder' : `Show only ${name}`}
                   onClick={() => setFolder((current) => current === name ? null : name)}>
-                  {name || 'Vault root'}<span className="knowledge-legend-count">{counts.get(name)}</span>
+                  <span className="knowledge-dot" aria-hidden="true" />{name || 'Vault root'}<span className="knowledge-legend-count">{counts.get(name)}</span>
                 </button>
               </li>
             ))}
@@ -394,6 +394,7 @@ export function KnowledgeGraphView({ backendUrl, getAccessToken, initialQuery = 
                   disabled={!hasKnownTaskCount}
                   title={!hasKnownTaskCount ? 'Task marks are unavailable right now' : undefined}
                   onClick={() => setTaskMarksVisible((current) => !current)}>
+                  <span className="knowledge-dot" data-tasks aria-hidden="true" />
                   Tasks
                   <span className="knowledge-legend-count">{hasKnownTaskCount ? taskNoteCount : '—'}</span>
                 </button>

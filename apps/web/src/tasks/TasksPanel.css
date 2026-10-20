@@ -70,7 +70,7 @@
 @media (max-width: 700px), (max-height: 500px) and (pointer: coarse) {
   .tasks-panel {
     top: auto; right: calc(env(safe-area-inset-right) + 8px); bottom: calc(68px + var(--phone-dock-bottom, 16px) + 36px); left: calc(env(safe-area-inset-left) + 8px); width: auto;
-    max-height: min(65dvh, calc(100dvh - env(safe-area-inset-top) - var(--rail-size, 48px) - 68px - var(--phone-dock-bottom, 16px) - 48px));
+    max-height: min(65dvh, calc(100% - 68px - var(--phone-dock-bottom, 16px) - 36px - var(--control-size) - var(--space-4)));
   }
 }
 @media (prefers-reduced-motion: reduce) {
