@@ -1,5 +1,16 @@
 # Decisions
 
+## P14-42 — Expose retained health upload usage in Daily sync (20 October 2026; #1120)
+
+Add owner-scoped `retained_bytes`, `byte_limit` and `row_limit` to the existing
+sync inbox and shared query projection. Sum stored byte counts for every
+retained row, independent of processing status, and reuse the upload store's
+exported limits. Empty stores still return zero bytes and both limits.
+This is read-only capacity visibility; ingest, processing, retention and the
+web UI remain unchanged. Cleanup or compaction requires a separate owner decision.
+
+Refs #1120
+
 ## P14-41 — Daily shell: freshness pill and short periods (20 October 2026; #1116)
 
 The Daily shell shows a freshness pill built only from the served sync source

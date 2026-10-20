@@ -6180,6 +6180,10 @@ Queries reuse `DailyHealthReadModel` and `NutritionStore.history/favorites/plans
 reads, a second normalizer, a meal writer or a new dispatcher/persistence layer.
 Whitelisted DTOs retain canonical units, dates, lineage, nulls, nutrient
 provenance, revisions and tombstones without exposing owner/device columns.
+The `daily.sync` inbox projection also returns numeric `retained_bytes` (the
+owner-scoped sum of `byte_count` across all processing states), `byte_limit`
+and `row_limit` from the existing upload-store constants. Empty stores report
+zero bytes and both limits; payload reads, ingest and retention are unchanged.
 Responses share a 768 KiB bound; oversized detail is explicitly unavailable,
 never a silently truncated success.
 Fingerprint serialization uses the bounded read DTO, not nutrition's per-write
