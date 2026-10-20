@@ -11,13 +11,13 @@ import './rules.css';
 
 const syncQuery = { source: dailyQuerySources.sync };
 const rules = [
-  ['Access', 'Daily is owner-only. The backend verifies your Microsoft sign-in before allowing access to your data.'],
-  ['Behaviour', 'Daily shows retained health, workout and nutrition records. Missing values stay unknown. Coaching and recomposition automation are not enabled.'],
-  ['Mail', 'Gmail attention belongs to the opt-in Daily feed. It is not connected here until the owner enables it and a web source is served.'],
-  ['Calendar', 'Calendar attention belongs to the opt-in Daily feed. It is not connected here until the owner enables it and a web source is served.'],
+  ['Access', 'Health is owner-only. The backend verifies your Microsoft sign-in before allowing access to your data.'],
+  ['Behaviour', 'Health shows retained health, workout and nutrition records. Missing values stay unknown. Coaching and recomposition automation are not enabled.'],
+  ['Mail', 'Gmail attention belongs to the opt-in Health feed. It is not connected here until the owner enables it and a web source is served.'],
+  ['Calendar', 'Calendar attention belongs to the opt-in Health feed. It is not connected here until the owner enables it and a web source is served.'],
   ['Refresh', 'Refresh reads the data Jarvis already holds; it does not fetch new health data from your phone. Phone contact, upload receipt and completed processing are different events.'],
-  ['Notification', 'Recurring Daily notifications remain off. Reading historical briefs does not generate or deliver a new brief.'],
-  ['Sources', 'Health uploads and nutrition capture feed Daily. Coverage below reports only served sync evidence; a recent read or phone contact does not prove fresh data.'],
+  ['Notification', 'Recurring Health notifications remain off. Reading historical briefs does not generate or deliver a new brief.'],
+  ['Sources', 'Health uploads and nutrition capture feed Health. Coverage below reports only served sync evidence; a recent read or phone contact does not prove fresh data.'],
 ] as const;
 
 function AccountPill({ backendUrl, getAccessToken }: Pick<DailySectionProps, 'backendUrl' | 'getAccessToken'>) {
@@ -51,12 +51,12 @@ export default function RulesSection({ backendUrl, getAccessToken, sources, refr
   const coverage = sourceCoverage(sync.data, Boolean(sync.error));
   return <div className="daily-rules">
     <header className="daily-rules-header">
-      <Link to="/daily">Back to Daily</Link>
+      <Link to=".">Back to Health</Link>
       <AccountPill backendUrl={backendUrl} getAccessToken={getAccessToken} />
     </header>
     <section aria-labelledby="daily-rules-targets">
       <h2 id="daily-rules-targets">Targets</h2>
-      <p>Set your own nutrition targets. Daily does not estimate energy needs from body measurements.</p>
+      <p>Set your own nutrition targets. Health does not estimate energy needs from body measurements.</p>
       <NutritionTargetsSettings backendUrl={backendUrl} getAccessToken={getAccessToken} />
       <p className="daily-rules-note">Training targets are not available here yet.</p>
     </section>
@@ -71,7 +71,7 @@ export default function RulesSection({ backendUrl, getAccessToken, sources, refr
     <section aria-labelledby="daily-rules-coverage">
       <h2 id="daily-rules-coverage">Source coverage</h2>
       {syncAvailable && sync.pending && <p role="status">Checking sync status…</p>}
-      {sync.error && <p role="alert">{sync.error} Previous sync evidence, if shown, may be stale.</p>}
+      {sync.error && <p role="alert">Health sync status could not be loaded. Check sync again, or sign in again if access needs attention. Previous sync evidence, if shown, may be stale.</p>}
       {!syncAvailable && <p>Sync status is not served here.</p>}
       <ul className="daily-rules-sources">
         {coverage.map(source => <li key={source.label}>

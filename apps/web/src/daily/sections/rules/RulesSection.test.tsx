@@ -1,8 +1,8 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { MemoryRouter, useLocation } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { dailyQuerySources as sources, type DailyQueryResult } from '@jarvis/contracts';
-import { queryDaily } from '../../client';
+import { DailyReadError, queryDaily } from '../../client';
 import { dailyFixture, jsonResponse } from '../../test-support';
 import { discoverDailySections, loadDailySectionModules } from '../discovery';
 import type { DailySectionDefinition, DailySectionProps } from '../types';
@@ -26,16 +26,19 @@ const nutrition = {
   targets: { restingKcal: null, deficitKcal: null, proteinGrams: null }, missing: ['restingKcal', 'deficitKcal', 'proteinGrams'], updatedAt: null,
   bounds: {
     restingKcal: { label: 'Resting energy burn', unit: 'kcal', min: 1000, max: 4000 },
-    deficitKcal: { label: 'Daily deficit', unit: 'kcal', min: 0, max: 2000 },
+    deficitKcal: { label: 'Deficit per day', unit: 'kcal', min: 0, max: 2000 },
     proteinGrams: { label: 'Protein target', unit: 'g', min: 30, max: 400 },
   },
 };
 
 function Location() {
-  return <output aria-label="Location">{useLocation().pathname}</output>;
+  const location = useLocation();
+  return <output aria-label="Location">{location.pathname}{location.search}</output>;
 }
-function mount(overrides: Partial<DailySectionProps> = {}) {
-  return render(<MemoryRouter initialEntries={['/daily?section=rules']}><Location /><RulesSection {...props} {...overrides} /></MemoryRouter>);
+function mount(overrides: Partial<DailySectionProps> = {}, areaPath = '/health') {
+  return render(<MemoryRouter initialEntries={[`${areaPath}?section=rules`]}><Location />
+    <Routes><Route path={`${areaPath}/*`} element={<RulesSection {...props} {...overrides} />} /></Routes>
+  </MemoryRouter>);
 }
 function source(name: string) {
   return within(screen.getByRole('heading', { name: 'Source coverage' }).closest('section')!).getByRole('heading', { name }).closest('li')!;
@@ -75,14 +78,23 @@ describe('Rules & sources section', () => {
     expect(screen.queryByRole('heading', { name: 'Tasks' })).toBeNull();
     expect(await screen.findByText('Protected · Synthetic Owner')).not.toBeNull();
     expect(await screen.findByLabelText('Resting energy burn (kcal)')).not.toBeNull();
-    expect(screen.getByLabelText('Daily deficit (kcal)')).not.toBeNull();
+    expect(screen.getByLabelText('Deficit per day (kcal)')).not.toBeNull();
     expect(screen.getByLabelText('Protein target (g)')).not.toBeNull();
     expect(screen.getByText('Training targets are not available here yet.')).not.toBeNull();
     expect(fetchMock.mock.calls.find(([url]) => String(url).endsWith('/me'))?.[1]).toMatchObject({
       headers: { Authorization: `${['Bear', 'er'].join('')} synthetic-session` },
     });
-    fireEvent.click(screen.getByRole('link', { name: 'Back to Daily' }));
-    expect(screen.getByLabelText('Location').textContent).toBe('/daily');
+    expect(document.body.textContent).not.toMatch(/\bdaily\b/iu);
+    expect(document.body.textContent).not.toContain('daily.sync');
+  });
+
+  it.each(['/health', '/wellness'])('returns to the current area overview at %s without hard-coding a route', async areaPath => {
+    mount({}, areaPath);
+    await screen.findByText('Protected · Synthetic Owner');
+    const back = screen.getByRole('link', { name: 'Back to Health' });
+    expect(back.getAttribute('href')).toBe(areaPath);
+    fireEvent.click(back);
+    expect(screen.getByLabelText('Location').textContent).toBe(areaPath);
   });
 
   it('shows completed health sync, not phone contact or receipt, and explicit unserved sources', async () => {
@@ -100,10 +112,12 @@ describe('Rules & sources section', () => {
   it('keeps prior evidence visibly stale after a failed refresh, then recovers', async () => {
     mount();
     await within(source('Health uploads')).findByText('Synced');
-    read.mockRejectedValueOnce(new Error('Synthetic failure'));
+    read.mockRejectedValueOnce(new DailyReadError('Daily could not be loaded: daily.sync'));
     fireEvent.click(screen.getByRole('button', { name: 'Check sync again' }));
     expect(await within(source('Health uploads')).findByText('Stale')).not.toBeNull();
     expect(screen.getByRole('alert').textContent).toContain('Previous sync evidence');
+    expect(screen.getByRole('alert').textContent).toContain('Health sync status could not be loaded.');
+    expect(document.body.textContent).not.toMatch(/\bdaily\b/iu);
     expect(source('Health uploads').querySelector('time')?.dateTime).toBe(processedAt);
     fireEvent.click(screen.getByRole('button', { name: 'Check sync again' }));
     await within(source('Health uploads')).findByText('Synced');

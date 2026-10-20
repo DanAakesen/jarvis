@@ -1,8 +1,8 @@
 # Design
 
-## Daily Rules & sources (20 October 2026; P14-50)
+## Health Rules & sources (20 October 2026; P14-50)
 
-The last Daily tab has no period control. Its header pairs Back to Daily with
+The last Health tab has no period control. Its header pairs Back to Health with
 a compact Protected pill naming the account verified through the existing
 session's `/me` reader. Targets reuse `NutritionTargetsSettings`, including its
 folding, validation and save feedback; no body-measurement or derived-energy
@@ -24,6 +24,12 @@ reduced motion, editor save feedback, retry/stale/missing source states and
 keyboard navigation. The embedded editor title wraps at narrow widths using
 section-local CSS. Owner-session verification against real data remains
 required before merge.
+
+The owner's 20 October naming update applies to this section's new copy and
+accessible names: Health replaces the former area name, source IDs are not
+shown, and the back link resolves relative to the area route. Internal names
+stay unchanged pending #1146; existing shared copy and the route move belong
+to #1147.
 
 ## Entry-field focus (20 October 2026; P14-32)
 
