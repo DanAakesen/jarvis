@@ -15,6 +15,38 @@ Calories and Duration keep separate lower-bound flags.
 
 Refs #1116, #1143
 
+## P14-56 — Health follows the original look (20 October 2026; #1116, #1155, #1156, #1157)
+
+The owner reviewed the rebuilt Health pages and ruled that they must look like the
+original Daily app: the neutral, flat bordered panels do not match it. This
+supersedes "original components, Jarvis styling" of P14-41, and its rule that Health
+adds no Daily-only skin or tokens, for the Health area only. The rest of the
+application keeps the shared Jarvis design language.
+
+Unchanged: Health stays one page with sections and is called Health wherever it is
+visible; the recorded non-migrations stay out (task, habit and countdown surfaces,
+meal plans and the live meal coach, coaching and recomposition automation, the widget
+and football); no interface is shown on synthetic data; loading, not set, not
+received, unavailable and error states stay visible and distinct; card heights stay
+stable; AA contrast, 44 px targets, keyboard focus and reduced motion still apply, and
+meaning never rests on colour alone.
+
+Changed: Health gets its own look from documented, Health-scoped tokens, with a light
+counterpart at AA contrast. It is delivered in three steps: P14-55 connects the
+owner's training targets to every surface that shows them, P14-56 builds the shared
+look and applies it to the header, overview cards and Health panel, and P14-57 applies
+it to the other sections. P14-52 is built in the new look after P14-56. The comparison
+source is the owner's private reference set, which is never committed.
+
+`PRODUCT.md` and `DESIGN.md` still carry the earlier "no separate skin" wording until
+P14-56 replaces it together with the implementation. Until then this entry governs the
+Health look.
+
+Refs #1116
+Refs #1155
+Refs #1156
+Refs #1157
+
 ## P14-51 — Serve Health attention and calendar feeds behind a flag (20 October 2026; #1133)
 
 Read-only Gmail attention and bounded calendar reads are composed only when both
