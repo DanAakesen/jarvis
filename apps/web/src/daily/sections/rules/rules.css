@@ -1,0 +1,15 @@
+.daily-rules { display: grid; gap: var(--space-5); min-width: 0; }
+.daily-rules-header, .daily-rules-source-title { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--space-2); }
+.daily-rules-header > a { min-height: 44px; align-content: center; }
+.daily-rules-account { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); min-width: 0; }
+.daily-rules .collapsible-title { flex: 0 1 auto; min-width: 0; overflow-wrap: anywhere; }
+.daily-rules-pill { display: inline-block; padding: var(--space-1) var(--space-2); border-radius: var(--radius-pill); background: var(--surface-translucent); font-size: var(--type-small); overflow-wrap: anywhere; }
+.daily-rules-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: var(--space-3); }
+.daily-rules-card { min-width: 0; padding: var(--space-3); border: 1px solid var(--rule); border-radius: var(--radius-panel); background: var(--surface-translucent); }
+.daily-rules h3 { margin: 0; font-size: var(--type-body); }
+.daily-rules p { overflow-wrap: anywhere; }
+.daily-rules-card p { margin-bottom: 0; }
+.daily-rules-note { color: var(--text-muted); font-size: var(--type-small); }
+.daily-rules-sources { list-style: none; padding: 0; margin: 0 0 var(--space-3); }
+.daily-rules-sources li { padding-block: var(--space-3); }
+.daily-rules-sources p { margin: var(--space-2) 0 0; }
