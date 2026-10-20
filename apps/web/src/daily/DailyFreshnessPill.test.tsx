@@ -1,6 +1,7 @@
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { DailyJson } from '@jarvis/contracts';
 import { DailyFreshnessPill } from './DailyFreshnessPill';
 import { dailyFixture, jsonResponse } from './test-support';
 
@@ -85,6 +86,49 @@ describe('DailyFreshnessPill', () => {
     ))));
     pill();
     expect(await screen.findByRole('button', { name: 'No uploads yet' })).toBeTruthy();
+  });
+
+  async function storedRow(inbox: Record<string, DailyJson>) {
+    vi.stubGlobal('fetch', vi.fn(async (_url: string | URL, init?: RequestInit) => jsonResponse(dailyFixture(
+      JSON.parse(String(init?.body)), [{ feeds: [upload], heartbeat: null, inbox }],
+    ))));
+    const user = userEvent.setup();
+    pill();
+    await user.click(await screen.findByRole('button', { name: /^Last upload \d/ }));
+    return screen.getByText('Stored').closest('div')!;
+  }
+  const mib = 1024 * 1024;
+
+  it('shows stored size against the byte and row caps in the details panel', async () => {
+    const row = await storedRow({ retained: 12, retained_bytes: 3.25 * mib, byte_limit: 256 * mib, row_limit: 1000, processing: 0 });
+    expect(row.querySelector('dd')?.textContent).toBe('3.3 of 256 MiB · 12 of 1000 uploads');
+  });
+
+  it('shows zero stored when the inbox is empty, without a nearly full flag', async () => {
+    const row = await storedRow({ retained: 0, retained_bytes: 0, byte_limit: 256 * mib, row_limit: 1000 });
+    expect(row.querySelector('dd')?.textContent).toBe('0.0 of 256 MiB · 0 of 1000 uploads');
+    expect(row.textContent).not.toContain('nearly full');
+  });
+
+  it('adds the words nearly full when either figure reaches 80% of its cap', async () => {
+    const bytes = await storedRow({ retained: 5, retained_bytes: 205 * mib, byte_limit: 256 * mib, row_limit: 1000 });
+    expect(bytes.querySelector('dd')?.textContent).toBe('205.0 of 256 MiB · 5 of 1000 uploads · nearly full');
+    expect(bytes.querySelector('strong')?.textContent).toBe('nearly full');
+    cleanup();
+    const rows = await storedRow({ retained: 800, retained_bytes: mib, byte_limit: 256 * mib, row_limit: 1000 });
+    expect(rows.querySelector('dd')?.textContent).toBe('1.0 of 256 MiB · 800 of 1000 uploads · nearly full');
+    cleanup();
+    const below = await storedRow({ retained: 799, retained_bytes: 204 * mib, byte_limit: 256 * mib, row_limit: 1000 });
+    expect(below.textContent).not.toContain('nearly full');
+  });
+
+  it('reads Unknown for any missing or non-finite figure, and never flags a cap it cannot compare', async () => {
+    const partial = await storedRow({ retained: 4, retained_bytes: null, byte_limit: 256 * mib, row_limit: 'many' });
+    expect(partial.querySelector('dd')?.textContent).toBe('Unknown of 256 MiB · 4 of Unknown uploads');
+    expect(partial.textContent).not.toContain('nearly full');
+    cleanup();
+    const none = await storedRow({ accepted: 1, processing: 0, quarantined: 0 });
+    expect(none.querySelector('dd')?.textContent).toBe('Unknown');
   });
 
   it('reports a failed read instead of inventing a time, and renders nothing when sync is not served', async () => {

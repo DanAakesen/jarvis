@@ -13,6 +13,16 @@ Tasks, countdowns, habits and mail attention rows are still not built.
 
 Refs #1116
 
+## P14-32 — Same focus rim on every field; slim select chevron (20 October 2026; #1085)
+
+The owner chose a thin tinted rim plus the soft glow on every entry field and
+dropdown. The shared field rule's `:is()` list out-ranked the focus rule, so
+fields in shared containers kept a grey rim and showed only the glow. The shared
+rule now reads its border colour from `--field-rim`, which the focus rule sets to
+`--field-focus-rule`, so the tint no longer depends on specificity. The glass
+dropdown's picker icon is drawn as the slim chevron the closed selects had, not
+the browser's solid triangle.
+
 ## P14-41 — Freshness pill reports the last processed upload (20 October 2026; #1116)
 
 The pill's primary label is the newest `accepted_evidence_at` across the served
@@ -33,8 +43,12 @@ Add owner-scoped `retained_bytes`, `byte_limit` and `row_limit` to the existing
 sync inbox and shared query projection. Sum stored byte counts for every
 retained row, independent of processing status, and reuse the upload store's
 exported limits. Empty stores still return zero bytes and both limits.
-This is read-only capacity visibility; ingest, processing, retention and the
-web UI remain unchanged. Cleanup or compaction requires a separate owner decision.
+This is read-only capacity visibility; ingest, processing and retention remain
+unchanged. The Daily freshness pill's details panel now shows the figures in a
+"Stored" row (`{MiB} of {limit} MiB · {n} of {limit} uploads`), adding the words
+"nearly full" at 80% or more of either cap. A missing or non-finite figure reads
+"Unknown" and is never flagged. Cleanup or compaction requires a separate owner
+decision.
 
 Refs #1120
 

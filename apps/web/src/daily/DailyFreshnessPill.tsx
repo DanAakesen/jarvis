@@ -18,6 +18,26 @@ function positive(value: DailyJson | undefined) {
   return typeof value === 'number' && Number.isFinite(value) && value > 0;
 }
 
+const mebibyte = 1024 * 1024;
+
+function usable(value: DailyJson | undefined): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0;
+}
+
+// Stored upload size against the served caps. Missing or non-finite figures read "Unknown", never a made-up number.
+function stored(inbox: Row | null) {
+  const { retained_bytes: bytes, byte_limit: byteLimit, retained, row_limit: rowLimit } = inbox ?? {};
+  if (![bytes, byteLimit, retained, rowLimit].some(usable)) return null;
+  const used = usable(bytes) ? (bytes / mebibyte).toFixed(1) : 'Unknown';
+  const cap = usable(byteLimit) ? String(Number((byteLimit / mebibyte).toFixed(1))) : 'Unknown';
+  const full = (value: DailyJson | undefined, limit: DailyJson | undefined) =>
+    usable(value) && usable(limit) && limit > 0 && value / limit >= 0.8;
+  return {
+    text: `${used} of ${cap} MiB · ${usable(retained) ? retained : 'Unknown'} of ${usable(rowLimit) ? rowLimit : 'Unknown'} uploads`,
+    nearlyFull: full(bytes, byteLimit) || full(retained, rowLimit),
+  };
+}
+
 // Newest processed upload across the feeds; unparseable times are ignored rather than shown.
 function newestUpload(feeds: DailyJson | undefined) {
   let best: { at: string; ms: number } | null = null;
@@ -66,6 +86,7 @@ export function DailyFreshnessPill({ backendUrl, getAccessToken, enabled, refres
   const inbox = row(item?.inbox);
   const contact = typeof heartbeat?.last_received_at === 'string' ? heartbeat.last_received_at : null;
   const upload = newestUpload(item?.feeds);
+  const storage = stored(inbox);
   const inProgress = positive(inbox?.pending) || positive(inbox?.processing);
   // A failed refresh keeps the previous data, so say it is stale in words rather than looking current.
   const stale = query.data && query.error ? ', refresh failed' : '';
@@ -86,6 +107,7 @@ export function DailyFreshnessPill({ backendUrl, getAccessToken, enabled, refres
           <div><dt>Accepted uploads</dt><dd>{count(inbox?.accepted ?? inbox?.pending)}</dd></div>
           <div><dt>Processing uploads</dt><dd>{count(inbox?.processing)}</dd></div>
           <div><dt>Quarantined uploads</dt><dd>{count(inbox?.quarantined)}</dd></div>
+          <div><dt>Stored</dt><dd>{storage ? <>{storage.text}{storage.nearlyFull && <> · <strong>nearly full</strong></>}</> : 'Unknown'}</dd></div>
         </dl>
         : !query.error && <p>Reading sync status.</p>}
       <button type="button" className="secondary-button" onClick={() => query.reload()}>Check again</button>

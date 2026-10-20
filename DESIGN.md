@@ -5,7 +5,9 @@
 Every text entry field (input, select, textarea, `.form-control` and the Notes,
 Folio and Tasks search bars) shares one focus treatment: no outline, a thin
 border that shifts to a tint of `--focus` (`--field-focus-rule`) and a short soft
-light underneath (`--field-focus-glow`), echoing the composer. A zero-specificity
+light underneath (`--field-focus-glow`), echoing the composer. Fields in shared
+containers read the tint through `--field-rim`, so it applies at any specificity.
+A zero-specificity
 catch-all applies it to any field not named in a shared container. Search bars
 apply it to the whole bar. Invalid fields keep their error border. Forced colours
 fall back to a 2px `Highlight` outline. Increased-contrast mode makes the tint
@@ -17,7 +19,9 @@ the composer keeps its rim sweep.
 Dropdowns: where `appearance: base-select` is supported, every field select
 (including those in shared containers and `select.form-control`) opens the glass
 list (rounded panel, lit hover, selected tint with checkmark) and uses the
-picker icon instead of a drawn chevron. Other browsers keep the native list.
+picker icon, drawn as the same slim chevron the closed selects always had (a mask,
+not the browser's solid triangle; `ButtonText` under forced colours). Other
+browsers keep the native list.
 
 ## Vault mirror Status row (19 October 2026; P14-29)
 
@@ -1731,8 +1735,12 @@ processed" (uploads waiting or processing, none processed yet), "No uploads yet"
 is an optional "Phone last contacted" row in the details panel, shown only when one
 exists. When a refresh fails but earlier data
 is kept, it adds ", refresh failed" to the label (bolder text, never colour alone).
-It opens a small details panel (last upload, optional phone contact and upload counts, plus Check again)
-that Escape (from anywhere on the page) and an outside press close. On screens up
+It opens a small details panel (last upload, optional phone contact, upload counts, a
+"Stored" row and Check again)
+that Escape (from anywhere on the page) and an outside press close. The "Stored" row
+reads `{MiB} of {limit} MiB · {n} of {limit} uploads` from the served inbox size and
+caps only; any missing or non-finite figure reads "Unknown", and at 80% or more of
+either cap it adds the words "nearly full" in bold text, never colour alone. On screens up
 to 640 px the panel anchors to the header and spans its width. It is a 36 px
 bordered pill using existing surface tokens; it is
 absent when the sync source is not served. The period control gains Today,
