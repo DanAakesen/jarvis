@@ -435,6 +435,8 @@ describe('app-wide control contract', () => {
     expect(source).toContain('.knowledge-search:has(input:focus-visible) { border-color: var(--field-focus-rule); box-shadow: var(--field-focus-glow); }');
     expect(source).toContain('.folio-search:has(input:focus-visible) { border-color: var(--field-focus-rule); box-shadow: var(--field-focus-glow); }');
     expect(source).not.toContain(') :is(input, select, textarea):focus-visible');
+    expect(source).toContain('border: 1px solid var(--field-rim, var(--control-rule));');
+    expect(source).toContain('--field-rim: var(--field-focus-rule);');
     expect(ruleDeclaration(source, /\.app-shell input\[type="range"\]:focus-visible,[^{]*\{([^}]*)\}/, 'outline')).toBe('3px solid var(--focus)');
   });
 

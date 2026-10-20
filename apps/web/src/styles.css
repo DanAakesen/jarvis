@@ -2173,8 +2173,17 @@ a.task-card-title { text-decoration: none; }
 @supports (appearance: base-select) {
   select, ::picker(select) { appearance: base-select; }
   select { display: flex; align-items: center; gap: var(--space-2); cursor: pointer; }
-  select::picker-icon { color: var(--text-muted); transition: rotate var(--motion-state) var(--ease-standard); }
+  /* A slim drawn chevron, as the closed selects had before the glass list, instead of the default solid triangle. */
+  select::picker-icon {
+    content: "";
+    width: 12px;
+    height: 12px;
+    background: var(--text-muted);
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 4.5 6 8l3.5-3.5' fill='none' stroke='black' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat;
+    transition: rotate var(--motion-state) var(--ease-standard);
+  }
   select:open::picker-icon { rotate: 180deg; }
+  @media (forced-colors: active) { select::picker-icon { background: ButtonText; forced-color-adjust: none; } }
   ::picker(select) {
     margin-block: var(--space-2);
     padding: var(--space-2);
@@ -3978,7 +3987,8 @@ a.task-chip:hover { background: var(--glass-pressed); }
   min-height: 38px;
   /* :is() takes its most specific argument, so plain padding overrides lose here; icon and chevron clearance use --field-padding-start/-end. */
   padding: var(--space-1) var(--field-padding-end, var(--space-3)) var(--space-1) var(--field-padding-start, var(--space-3));
-  border: 1px solid var(--control-rule);
+  /* The rim reads --field-rim, which the focus rule sets: this selector's :is() specificity would beat a plain border-color there. */
+  border: 1px solid var(--field-rim, var(--control-rule));
   border-radius: var(--radius-control);
   background-color: var(--surface);
   color: var(--text);
@@ -4108,6 +4118,7 @@ select.form-control {
   select, textarea
 ):focus-visible:where(:not(.composer textarea, .knowledge-search input, .folio-search input, .tasks-panel-search input)) {
   outline: none;
+  --field-rim: var(--field-focus-rule);
   border-color: var(--field-focus-rule);
   box-shadow: var(--field-focus-glow);
 }

@@ -1,5 +1,15 @@
 # Decisions
 
+## P14-32 — Same focus rim on every field; slim select chevron (20 October 2026; #1085)
+
+The owner chose a thin tinted rim plus the soft glow on every entry field and
+dropdown. The shared field rule's `:is()` list out-ranked the focus rule, so
+fields in shared containers kept a grey rim and showed only the glow. The shared
+rule now reads its border colour from `--field-rim`, which the focus rule sets to
+`--field-focus-rule`, so the tint no longer depends on specificity. The glass
+dropdown's picker icon is drawn as the slim chevron the closed selects had, not
+the browser's solid triangle.
+
 ## P14-41 — Freshness pill reports the last processed upload (20 October 2026; #1116)
 
 The pill's primary label is the newest `accepted_evidence_at` across the served
