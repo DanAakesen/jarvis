@@ -31,26 +31,40 @@ function items(query: DailyQuery): Record<string, DailyJson>[] {
   return record ? [record] : [];
 }
 const capabilityList = (ids: readonly DailySourceId[] = Object.values(sources)) => jsonResponse({ module: 'daily', version: dailyCapabilitiesVersion, sources: ids });
+const trainingReply = {
+  targets: { gymSessionsPerWeek: 3, runSessionsPerWeek: null, dailySteps: 8_000 }, missing: ['runSessionsPerWeek'], updatedAt: '2026-10-17T10:00:00.000Z',
+  bounds: {
+    gymSessionsPerWeek: { label: 'Gym sessions', unit: 'sessions/week', min: 0, max: 21 },
+    runSessionsPerWeek: { label: 'Run sessions', unit: 'sessions/week', min: 0, max: 21 },
+    dailySteps: { label: 'Steps per day', unit: 'steps/day', min: 0, max: 100_000 },
+  },
+};
 function gate() {
   let open = () => {};
   const opened = new Promise<void>(resolve => { open = resolve; });
   return { opened, open };
 }
 
-function fixture({ capabilities = () => capabilityList(), answer = query => jsonResponse(dailyFixture(query, items(query))) }: {
+function fixture({ capabilities = () => capabilityList(), answer = query => jsonResponse(dailyFixture(query, items(query))), targets = () => jsonResponse(trainingReply) }: {
   capabilities?: () => Response | Promise<Response>;
   answer?: (query: DailyQuery) => Response | Promise<Response>;
+  targets?: () => Response | Promise<Response>;
 } = {}) {
   const queries: DailyQuery[] = [];
   const fetch = vi.fn(async (url: string | URL, init?: RequestInit) => {
     if (String(url).endsWith('/daily/capabilities')) return capabilities();
+    if (String(url).endsWith('/daily/training-targets')) return targets();
     const input: unknown = JSON.parse(String(init?.body));
     if (!isDailyQuery(input)) throw new Error('Invalid synthetic query');
     queries.push(input);
     return answer(input);
   });
   vi.stubGlobal('fetch', fetch);
-  return { queries, fetch, capabilityCalls: () => fetch.mock.calls.filter(([url]) => String(url).endsWith('/daily/capabilities')).length };
+  return {
+    queries, fetch,
+    capabilityCalls: () => fetch.mock.calls.filter(([url]) => String(url).endsWith('/daily/capabilities')).length,
+    targetCalls: () => fetch.mock.calls.filter(([url]) => String(url).endsWith('/daily/training-targets')).length,
+  };
 }
 function SectionUrlProbe() {
   const [params] = useSearchParams();

@@ -2,7 +2,8 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import { MemoryRouter, useLocation, useNavigate } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { dailyQuerySources as sources, type DailyJson, type DailyQuery } from '@jarvis/contracts';
-import { dailyFixture, jsonResponse } from '../../../test-support';
+import { dailyFixture, jsonResponse, trainingTargetsFixture } from '../../../test-support';
+import { TrainingTargetsContext } from '../../../training-targets-context';
 import { HealthPanel } from './HealthPanel';
 
 const getAccessToken = async () => 'synthetic-fixture';
@@ -16,9 +17,11 @@ function Location() {
     <button onClick={() => navigate(-1)}>Back fixture</button>
     <button onClick={() => navigate('?panel=health&healthTab=body&keep=yes')}>Deep link fixture</button></>;
 }
-function mount(url = '/', available = allSources, targets: Parameters<typeof HealthPanel>[0]['targets'] = null) {
-  return render(<MemoryRouter initialEntries={[url]}><Location /><HealthPanel backendUrl="https://synthetic.invalid"
-    getAccessToken={getAccessToken} sources={available} refreshVersion={0} targets={targets} /></MemoryRouter>);
+function mount(url = '/', available = allSources, targets: Parameters<typeof trainingTargetsFixture>[0] = {}, actions: Parameters<typeof trainingTargetsFixture>[1] = {}) {
+  return render(<MemoryRouter initialEntries={[url]}><Location />
+    <TrainingTargetsContext.Provider value={trainingTargetsFixture(targets, actions)}>
+      <HealthPanel backendUrl="https://synthetic.invalid" getAccessToken={getAccessToken} sources={available} refreshVersion={0} />
+    </TrainingTargetsContext.Provider></MemoryRouter>);
 }
 function panel() { return screen.getByRole('tabpanel'); }
 async function settled() {
@@ -138,6 +141,33 @@ describe('Health panel', () => {
     expect(screen.queryByText(/retention/iu)).toBeNull();
   });
 
+  it.each([
+    ['loading', 'Loading target'],
+    ['failed', 'Targets unavailable'],
+    ['unavailable', 'Targets unavailable'],
+  ] as const)('says "%s" targets in words and never "No target set"', async (read, text) => {
+    mount('/', allSources, read);
+    await settled();
+    expect(screen.getAllByText(text)).toHaveLength(2);
+    expect(screen.queryByText('No target set')).toBeNull();
+    expect(screen.queryByText(/sessions remaining/u)).toBeNull();
+  });
+
+  it('retries a failed targets read from the weekly tiles', async () => {
+    const retry = vi.fn();
+    mount('/', allSources, 'failed', { retry });
+    await settled();
+    const tile = screen.getByRole('heading', { name: 'Gym weekly target' }).closest('article')!;
+    fireEvent.click(within(tile).getByRole('button', { name: 'Retry' }));
+    expect(retry).toHaveBeenCalledTimes(1);
+  });
+
+  it('offers no retry for targets that are not served at all', async () => {
+    mount('/', allSources, 'unavailable');
+    await settled();
+    const tile = screen.getByRole('heading', { name: 'Gym weekly target' }).closest('article')!;
+    expect(within(tile).queryByRole('button', { name: 'Retry' })).toBeNull();
+  });
   it('renders weekly target arithmetic and inclusive days remaining', async () => {
     rows[sources.workouts] = [
       { workout_date: '2026-10-19', workout_type: 'strength_training' },

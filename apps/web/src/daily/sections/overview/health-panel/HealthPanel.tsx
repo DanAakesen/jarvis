@@ -8,14 +8,16 @@ import { DailyState } from '../../../ui/DailyState';
 import { DailyUnavailable } from '../../../ui/DailyUnavailable';
 import { FreshnessLine } from '../../../ui/FreshnessLine';
 import { formatDate } from '../../../ui/formatters';
-import { categoryTiles, healthSummary, healthTabs, healthWindow, syncStatus, weeklyProgress, type HealthTab, type HealthTargets, type Tile } from './data';
+import { categoryTiles, healthSummary, healthTabs, healthWindow, syncStatus, weeklyProgress, type HealthTab, type Tile } from './data';
+import { readTarget } from '../../../training-targets';
+import { useTrainingTargetsShared } from '../../../training-targets-context';
 import './health-panel.css';
 
 const labels: Record<HealthTab, string> = {
   overview: 'Overview', sleep: 'Sleep', activity: 'Activity', workouts: 'Workouts',
   body: 'Body', nutrition: 'Nutrition', all: 'All data',
 };
-type Props = Pick<DailySectionProps, 'backendUrl' | 'getAccessToken' | 'sources' | 'refreshVersion'> & { targets: HealthTargets };
+type Props = Pick<DailySectionProps, 'backendUrl' | 'getAccessToken' | 'sources' | 'refreshVersion'>;
 
 function healthMessage(message: string) {
   return message.replace(/\bdaily\b/giu, 'Health');
@@ -37,6 +39,7 @@ function ReadStatus({ name, page, served }: { name: string; page: DailyPages; se
 }
 
 export function HealthPanel(props: Props) {
+  const targets = useTrainingTargetsShared();
   const [params, setParams] = useSearchParams();
   const requested = params.get('healthTab');
   const tab = healthTabs.find(item => item === requested) ?? 'overview';
@@ -132,9 +135,15 @@ export function HealthPanel(props: Props) {
             <Tiles tiles={summary} />
             <div className="health-panel-targets">
               {(['gym', 'run'] as const).map(kind => {
-                const progress = weeklyProgress(workouts.items, kind === 'gym' ? props.targets?.gymSessionsPerWeek : props.targets?.runSessionsPerWeek, kind, now);
+                const read = readTarget(targets.view, kind === 'gym' ? 'gymSessionsPerWeek' : 'runSessionsPerWeek');
+                const progress = weeklyProgress(workouts.items, read.status === 'ready' ? read.value : null, kind, now);
                 const unavailable = incomplete(workouts, sources.workouts);
-                return <StatTile compact key={kind} label={`${kind === 'gym' ? 'Gym' : 'Run'} weekly target`}
+                const label = `${kind === 'gym' ? 'Gym' : 'Run'} weekly target`;
+                if (read.status === 'loading') return <StatTile compact key={kind} label={label} value="Loading target" />;
+                if (read.status === 'failed') return <StatTile compact key={kind} label={label} value="Targets unavailable"
+                  note={targets.view.status === 'error' && targets.view.kind === 'unavailable' ? undefined
+                    : <button className="ghost-button" type="button" onClick={targets.retry}>Retry</button>} />;
+                return <StatTile compact key={kind} label={label}
                   value={progress.target === null ? 'No target set' : unavailable ? 'Unavailable' : `${progress.done} / ${progress.target} sessions`}
                   note={progress.target === null ? <a href="/settings#training-targets">Set training targets</a> :
                     unavailable ? 'A complete workout read is needed to calculate remaining sessions.' :

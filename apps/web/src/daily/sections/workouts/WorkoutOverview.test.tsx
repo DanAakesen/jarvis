@@ -3,7 +3,8 @@ import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { dailyQuerySources as sources, type DailyQuery } from '@jarvis/contracts';
 import { DailyReadError, queryDaily } from '../../client';
-import { dailyFixture } from '../../test-support';
+import { dailyFixture, trainingTargetsFixture } from '../../test-support';
+import { TrainingTargetsContext } from '../../training-targets-context';
 import type { DailyPages } from '../../ui/useDailyPages';
 import type { DailySectionProps } from '../types';
 import { TrainingRing, WorkoutOverview } from './WorkoutOverview';
@@ -31,8 +32,10 @@ function pages(items: Workout[] = rows, overrides: Partial<DailyPages> = {}): Da
   return { items, first: result, last: result, status: 'ready', pages: 1, hasMore: false, capped: false,
     loadingMore: false, error: null, loadMore: vi.fn(), reload: vi.fn(), ...overrides };
 }
-function mount(result = pages(), overrides: Partial<DailySectionProps> = {}) {
-  return render(<MemoryRouter><WorkoutOverview {...props} {...overrides} pages={result} rows={result.items} /></MemoryRouter>);
+function mount(result = pages(), overrides: Partial<DailySectionProps> = {}, targets: Parameters<typeof trainingTargetsFixture>[0] = {}, actions: Parameters<typeof trainingTargetsFixture>[1] = {}) {
+  return render(<MemoryRouter><TrainingTargetsContext.Provider value={trainingTargetsFixture(targets, actions)}>
+    <WorkoutOverview {...props} {...overrides} pages={result} rows={result.items} />
+  </TrainingTargetsContext.Provider></MemoryRouter>);
 }
 const card = (name: string) => screen.getByRole('region', { name: `${name} class` });
 function figure(name: string, label: string) {
@@ -196,7 +199,7 @@ describe('Workout parity composition', () => {
 describe('target-ready mini ring', () => {
   it.each([[2, 3, 7, 200 / 3], [9, 3, 7, 100], [3, 3, 14, 50], [0, 3, 7, 0]] as const)(
     'renders %s sessions with weekly target %s over %s days', (count, target, days, percent) => {
-      const view = render(<MemoryRouter><TrainingRing label="Gym" count={count} target={target} days={days} /></MemoryRouter>);
+      const view = render(<MemoryRouter><TrainingRing label="Gym" count={count} target={{ status: 'ready', value: target }} days={days} /></MemoryRouter>);
       const fill = view.container.querySelector('.daily-ring-fill');
       if (percent === 0) expect(fill).toBeNull();
       else expect(Number(fill?.getAttribute('stroke-dasharray')?.split(' ')[0])).toBeCloseTo(percent);
@@ -204,9 +207,44 @@ describe('target-ready mini ring', () => {
     });
 
   it('draws no progress arc without a target, but preserves the session count and settings link', () => {
-    const view = render(<MemoryRouter><TrainingRing label="Run" count={4} target={null} days={7} /></MemoryRouter>);
+    const view = render(<MemoryRouter><TrainingRing label="Run" count={4} target={{ status: 'ready', value: null }} days={7} /></MemoryRouter>);
     expect(view.container.querySelector('.daily-ring-fill')).toBeNull();
     expect(screen.getByRole('img', { name: 'Run: 4 sessions; no target set' })).toBeTruthy();
     expect(screen.getByRole('link', { name: 'No target set' }).getAttribute('href')).toBe('/settings#training-targets');
+  });
+
+  it.each([
+    ['loading', 'Loading target', 'loading target'],
+    ['failed', 'Targets unavailable', 'targets unavailable'],
+  ] as const)('says a %s target in words, never "No target set", and draws no progress arc', (status, text, spoken) => {
+    const view = render(<MemoryRouter><TrainingRing label="Run" count={4} target={{ status }} days={7} /></MemoryRouter>);
+    expect(screen.getByText(text)).toBeTruthy();
+    expect(screen.queryByText('No target set')).toBeNull();
+    expect(screen.getByRole('img', { name: `Run: 4 sessions; ${spoken}` })).toBeTruthy();
+    expect(view.container.querySelector('.daily-ring-fill')).toBeNull();
+  });
+});
+
+describe('shared training targets', () => {
+  it('scales the owner-set weekly targets to the selected days', () => {
+    mount(pages(), {}, { gymSessionsPerWeek: 3, runSessionsPerWeek: 2 });
+    expect(screen.getByText('3 in period · 3 / week')).toBeTruthy();
+    expect(screen.getByText('2 in period · 2 / week')).toBeTruthy();
+    expect(screen.queryByRole('link', { name: 'No target set' })).toBeNull();
+  });
+
+  it('says Loading target while the read is pending and keeps the rings unchanged in size', () => {
+    mount(pages(), {}, 'loading');
+    expect(screen.getAllByText('Loading target')).toHaveLength(2);
+    expect(screen.queryByRole('button', { name: 'Retry targets' })).toBeNull();
+  });
+
+  it('offers one Retry targets after a failed read and never claims no target is set', () => {
+    const retry = vi.fn();
+    mount(pages(), {}, 'failed', { retry });
+    expect(screen.getAllByText('Targets unavailable').length).toBeGreaterThanOrEqual(2);
+    expect(screen.queryByRole('link', { name: 'No target set' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry targets' }));
+    expect(retry).toHaveBeenCalledTimes(1);
   });
 });

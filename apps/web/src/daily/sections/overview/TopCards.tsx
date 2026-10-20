@@ -7,11 +7,12 @@ import { combineStates, pagesStale, pagesState, type BlockState } from './block-
 import { HealthCard } from './HealthCard';
 import type { NutritionView } from './NutritionTiles';
 import { TrainingCard } from './TrainingCard';
-import { nutritionForWindow, noTrainingTargets, type BodyMetricKey } from './overview-values';
+import { nutritionForWindow, type BodyMetricKey } from './overview-values';
 import { defaultOverviewPreset, overviewPresets, overviewWindow, type OverviewPresetId } from './overview-window';
 import { useNutritionTargets } from './useNutritionTargets';
 import { useToday } from './useToday';
 import { useTopCardData } from './useTopCardData';
+import { useTrainingTargetsShared } from '../../training-targets-context';
 
 const cards = [
   { id: 'training', title: 'Training', to: '?section=workouts' },
@@ -65,6 +66,7 @@ export function TopCards({ backendUrl, getAccessToken, refreshVersion, available
   const data = useTopCardData({ backendUrl, getAccessToken, refreshVersion }, period, today, available);
   // Targets are only needed to judge logged values, so nothing is requested for a period with no nutrition record.
   const nutritionTargets = useNutritionTargets(backendUrl, getAccessToken, available.includes(sources.days) && data.days.items.length > 0);
+  const trainingTargets = useTrainingTargetsShared();
   const has = (id: DailySourceId) => available.includes(id);
 
   const states = {
@@ -86,9 +88,11 @@ export function TopCards({ backendUrl, getAccessToken, refreshVersion, available
     range: !period.single,
   };
   const targetsFailed: BlockState = nutritionTargets.current?.error ? 'error' : 'ready';
+  // A training targets read that is not served at all is not a failure to retry; the rings say "Targets unavailable" themselves.
+  const trainingFailed: BlockState = trainingTargets.view.status === 'error' && trainingTargets.view.kind !== 'unavailable' ? 'error' : 'ready';
   const body = (Object.keys(data.body) as BodyMetricKey[]).filter(key => data.names[key] !== null).map(key => data.body[key]);
   const cardState = {
-    training: combineStates(states.workouts, states.steps, states.days, states.meals, targetsFailed),
+    training: combineStates(states.workouts, states.steps, states.days, states.meals, targetsFailed, trainingFailed),
     health: combineStates(states.sleep, states.days, states.meals, targetsFailed),
     body: combineStates(states.workouts, states.catalogue, ...body.map(pages => pagesState(pages, true))),
   };
@@ -100,8 +104,9 @@ export function TopCards({ backendUrl, getAccessToken, refreshVersion, available
     body: [data.workouts, data.catalogue, ...body].some(pagesStale),
   };
   const retryTargets = () => { if (nutritionTargets.current?.error) nutritionTargets.retry(); };
+  const retryTrainingTargets = () => { if (trainingTargets.view.status === 'error') trainingTargets.retry(); };
   const retry = {
-    training: () => { reloadFailed(data.workouts, data.steps, data.days, data.meals)(); retryTargets(); },
+    training: () => { reloadFailed(data.workouts, data.steps, data.days, data.meals)(); retryTargets(); retryTrainingTargets(); },
     health: () => { reloadFailed(data.sleep, data.days, data.meals)(); retryTargets(); },
     body: reloadFailed(data.workouts, data.catalogue, ...body),
   };
@@ -114,7 +119,7 @@ export function TopCards({ backendUrl, getAccessToken, refreshVersion, available
     </div>
     <CardCarousel titles={cards.map(card => card.title)}>
       <TrainingCard {...training} state={cardState.training} stale={stale.training} onRetry={retry.training} period={period} states={states}
-        data={data} nutrition={nutrition} targets={noTrainingTargets} />
+        data={data} nutrition={nutrition} targets={trainingTargets.view} />
       <HealthCard {...health} state={cardState.health} stale={stale.health} onRetry={retry.health} period={period} today={today} hour={hour}
         states={states} data={data} nutrition={nutrition} />
       <BodyCard {...bodyCard} state={cardState.body} stale={stale.body} onRetry={retry.body} period={period} workoutsState={states.workouts}

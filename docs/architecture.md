@@ -6061,8 +6061,15 @@ composition registers no target routes.
 
 The web Settings editor loads and saves only validated server responses. Its
 `useTrainingTargets` hook documents the shared loading/settled/error/retry
-contract for later Overview, Workouts and Health consumers; those views are
-intentionally unchanged here.
+contract, and since P14-55 the Health area consumes it once: `TrainingTargetsProvider`
+(`daily/TrainingTargetsProvider.tsx`) wraps the section panel in `DailyHome`, starts
+the read the first time a view calls `useTrainingTargetsShared()` (so a section with
+no targets never asks) and offers `retry` and `apply`. The Overview top cards, the
+Health panel, the Workouts rings and the Rules & sources editor read the same view
+through `readTarget`; the editor hands each state it loads or saves to `apply`, so
+the cards follow a save without another read. Outside the provider the default view
+is an unavailable error, which reads "Targets unavailable". The global Settings
+editor stays separate, so a save there is picked up by the next visit to Health.
 
 ### Personalised suggestion adapter (17 October 2026)
 

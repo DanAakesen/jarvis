@@ -91,6 +91,20 @@ describe('TrainingTargetsSettings', () => {
     expect(saveButton().disabled).toBe(true);
   });
 
+  it('tells the page about the state it reads and about every saved state', async () => {
+    const user = userEvent.setup();
+    const onState = vi.fn();
+    fetchMock.mockResolvedValueOnce(reply()).mockResolvedValueOnce(reply({ ...configured, runSessionsPerWeek: 3 }));
+    render(<TrainingTargetsSettings backendUrl={backendUrl} getAccessToken={getAccessToken} onState={onState} />);
+    await screen.findByLabelText('Gym sessions (sessions/week)');
+    expect(onState).toHaveBeenLastCalledWith(expect.objectContaining({ targets: configured }));
+    await replace(user, 'Run sessions (sessions/week)', '3');
+    await user.click(saveButton());
+    expect(await screen.findByText('Saved')).not.toBeNull();
+    expect(onState).toHaveBeenCalledTimes(2);
+    expect(onState).toHaveBeenLastCalledWith(expect.objectContaining({ targets: { ...configured, runSessionsPerWeek: 3 } }));
+  });
+
   it('clears a target when the field is emptied', async () => {
     const user = userEvent.setup();
     fetchMock.mockResolvedValueOnce(reply()).mockResolvedValueOnce(reply({ ...configured, dailySteps: null }));

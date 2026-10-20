@@ -200,9 +200,9 @@ export type TrainingTargetsView =
   | { readonly status: 'error'; readonly kind: TrainingTargetsFailure; readonly message: string };
 
 /**
- * Shared on-demand training target read for Health Overview, Workouts and other consumers. It does not
- * alter those views or add another source of truth: each consumer gets loading/settled/error state and
- * a retry callback, and should render targets only from the server's validated response.
+ * One training target read. The Health area mounts it once through `TrainingTargetsProvider`, and the overview, health panel
+ * and workouts views take their targets from that single source. Each caller gets loading/settled/error state, a retry
+ * callback and `apply` for a state the server has just returned, and renders targets only from the validated response.
  */
 export function useTrainingTargets(backendUrl: string | null, getAccessToken: () => Promise<string>, enabled = true) {
   const [attempt, setAttempt] = useState(0);
@@ -222,8 +222,22 @@ export function useTrainingTargets(backendUrl: string | null, getAccessToken: ()
     return () => controller.abort();
   }, [backendUrl, getAccessToken, key, enabled]);
   const retry = useCallback(() => setAttempt((value) => value + 1), []);
+  // A save made elsewhere on the page is already the server's answer, so consumers take it without another read.
+  const apply = useCallback((state: TrainingTargetsState) => setLoaded({ key, view: { status: 'settled', state } }), [key]);
   const view: TrainingTargetsView = !enabled
     ? { status: 'error', kind: 'unavailable', message: trainingTargetsFailureMessage('unavailable', 'load') }
     : loaded.key === key ? loaded.view : { status: 'loading' };
-  return { view, retry };
+  return { view, retry, apply };
+}
+
+/** One target as a card shows it: still loading, unreadable (never shown as "not set"), or read, with null meaning the owner set none. */
+export type TargetRead =
+  | { readonly status: 'loading' }
+  | { readonly status: 'failed' }
+  | { readonly status: 'ready'; readonly value: number | null };
+
+export function readTarget(view: TrainingTargetsView, key: TrainingTargetKey): TargetRead {
+  if (view.status === 'loading') return { status: 'loading' };
+  if (view.status === 'error') return { status: 'failed' };
+  return { status: 'ready', value: view.state.targets[key] };
 }

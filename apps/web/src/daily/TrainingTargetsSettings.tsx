@@ -30,9 +30,11 @@ function failureKind(error: unknown): TrainingTargetsFailure {
   return error instanceof TrainingTargetsError ? error.kind : 'failed';
 }
 
-export function TrainingTargetsSettings({ backendUrl, getAccessToken }: {
+export function TrainingTargetsSettings({ backendUrl, getAccessToken, onState }: {
   backendUrl: string | null;
   getAccessToken: () => Promise<string>;
+  /** Told about every state the server returns, so other views on the page can follow a save. */
+  onState?: (state: TrainingTargetsState) => void;
 }) {
   const [view, setView] = useState<View>({ status: backendUrl ? 'loading' : 'unavailable' });
   const [drafts, setDrafts] = useState<Drafts>(emptyDrafts);
@@ -41,6 +43,8 @@ export function TrainingTargetsSettings({ backendUrl, getAccessToken }: {
   const [feedback, setFeedback] = useState<Feedback | null>(null);
   const request = useRef<AbortController | null>(null);
   const inputs = useRef<Partial<Record<TrainingTargetKey, HTMLInputElement | null>>>({});
+  const announce = useRef(onState);
+  useEffect(() => { announce.current = onState; }, [onState]);
 
   const refresh = useCallback(async () => {
     request.current?.abort();
@@ -55,6 +59,7 @@ export function TrainingTargetsSettings({ backendUrl, getAccessToken }: {
       if (controller.signal.aborted) return;
       setDrafts(draftsFrom(state));
       setView({ status: 'ready', state });
+      announce.current?.(state);
     } catch (error) {
       if (controller.signal.aborted) return;
       const kind = failureKind(error);
@@ -111,6 +116,7 @@ export function TrainingTargetsSettings({ backendUrl, getAccessToken }: {
       setTouched({});
       setView({ status: 'ready', state });
       setFeedback({ tone: 'success', message: 'Saved' });
+      announce.current?.(state);
     } catch (error) {
       if (controller.signal.aborted) return;
       setFeedback({ tone: 'error', message: trainingTargetsFailureMessage(failureKind(error), 'save') });

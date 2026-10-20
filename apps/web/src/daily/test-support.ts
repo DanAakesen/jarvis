@@ -1,5 +1,7 @@
 import { dailyQuerySources } from '@jarvis/contracts';
 import type { DailyCursor, DailyJson, DailyQuery, DailyQueryResult } from '@jarvis/contracts';
+import { trainingTargetKeys, trainingTargetsFailureMessage, type TrainingTargetValues } from './training-targets';
+import type { TrainingTargetsShared } from './training-targets-context';
 
 export function dailyFixture(query: DailyQuery, items: Record<string, DailyJson>[] = [], next: DailyCursor | null = null): DailyQueryResult {
   return {
@@ -18,4 +20,27 @@ export function dailyFixture(query: DailyQuery, items: Record<string, DailyJson>
 }
 export function jsonResponse(value: unknown, status = 200) {
   return new Response(JSON.stringify(value), { status, headers: { 'Content-Type': 'application/json' } });
+}
+
+const targetBounds = {
+  gymSessionsPerWeek: { label: 'Gym sessions', unit: 'sessions/week', min: 0, max: 21 },
+  runSessionsPerWeek: { label: 'Run sessions', unit: 'sessions/week', min: 0, max: 21 },
+  dailySteps: { label: 'Steps per day', unit: 'steps/day', min: 0, max: 100_000 },
+};
+
+/** The shared training targets a view sees, for tests: values the owner set (null for none), or a loading, failed or unserved read. */
+export function trainingTargetsFixture(
+  read: Partial<TrainingTargetValues> | 'loading' | 'failed' | 'unavailable' = {},
+  actions: Partial<Pick<TrainingTargetsShared, 'retry' | 'apply'>> = {},
+): TrainingTargetsShared {
+  const noop = () => {};
+  const base = { retry: actions.retry ?? noop, apply: actions.apply ?? noop, want: noop };
+  if (read === 'loading') return { ...base, view: { status: 'loading' } };
+  if (read === 'failed' || read === 'unavailable') {
+    const kind = read === 'failed' ? 'failed' : 'unavailable';
+    return { ...base, view: { status: 'error', kind, message: trainingTargetsFailureMessage(kind, 'load') } };
+  }
+  const targets: TrainingTargetValues = { gymSessionsPerWeek: null, runSessionsPerWeek: null, dailySteps: null, ...read };
+  const missing = trainingTargetKeys.filter(key => targets[key] === null);
+  return { ...base, view: { status: 'settled', state: { targets, bounds: targetBounds, missing, updatedAt: null } } };
 }

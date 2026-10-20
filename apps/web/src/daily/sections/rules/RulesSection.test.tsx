@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { dailyQuerySources as sources, type DailyQueryResult } from '@jarvis/contracts';
 import { DailyReadError, queryDaily } from '../../client';
 import { dailyFixture, jsonResponse } from '../../test-support';
+import { TrainingTargetsContext } from '../../training-targets-context';
 import { discoverDailySections, loadDailySectionModules } from '../discovery';
 import type { DailySectionDefinition, DailySectionProps } from '../types';
 import RulesSection from './RulesSection';
@@ -30,6 +31,14 @@ const nutrition = {
     proteinGrams: { label: 'Protein target', unit: 'g', min: 30, max: 400 },
   },
 };
+const training = {
+  targets: { gymSessionsPerWeek: 3, runSessionsPerWeek: null, dailySteps: 9_000 }, missing: ['runSessionsPerWeek'], updatedAt: '2026-10-17T10:00:00.000Z',
+  bounds: {
+    gymSessionsPerWeek: { label: 'Gym sessions', unit: 'sessions/week', min: 0, max: 21 },
+    runSessionsPerWeek: { label: 'Run sessions', unit: 'sessions/week', min: 0, max: 21 },
+    dailySteps: { label: 'Steps per day', unit: 'steps/day', min: 0, max: 100_000 },
+  },
+};
 
 function Location() {
   const location = useLocation();
@@ -53,6 +62,7 @@ beforeEach(() => {
   fetchMock.mockReset().mockImplementation(async url => {
     if (String(url).endsWith('/me')) return jsonResponse({ name: 'Synthetic Owner' });
     if (String(url).endsWith('/daily/nutrition-targets')) return jsonResponse(nutrition);
+    if (String(url).endsWith('/daily/training-targets')) return jsonResponse(training);
     throw new Error('Unexpected fixture request');
   });
   vi.stubGlobal('fetch', fetchMock);
@@ -80,12 +90,26 @@ describe('Rules & sources section', () => {
     expect(await screen.findByLabelText('Resting energy burn (kcal)')).not.toBeNull();
     expect(screen.getByLabelText('Deficit per day (kcal)')).not.toBeNull();
     expect(screen.getByLabelText('Protein target (g)')).not.toBeNull();
-    expect(screen.getByText('Training targets are not available here yet.')).not.toBeNull();
+    expect(await screen.findByLabelText('Gym sessions (sessions/week)')).not.toBeNull();
+    expect(screen.getByLabelText('Run sessions (sessions/week)')).not.toBeNull();
+    expect(screen.getByLabelText('Steps per day (steps/day)')).not.toBeNull();
+    expect(screen.queryByText(/Training targets are not available here yet/u)).toBeNull();
     expect(fetchMock.mock.calls.find(([url]) => String(url).endsWith('/me'))?.[1]).toMatchObject({
       headers: { Authorization: `${['Bear', 'er'].join('')} synthetic-session` },
     });
     expect(document.body.textContent).not.toMatch(/\bdaily\b/iu);
     expect(document.body.textContent).not.toContain('daily.sync');
+  });
+
+  it('hands the training targets it reads to the shared state of the Health area', async () => {
+    const apply = vi.fn();
+    render(<MemoryRouter initialEntries={['/health?section=rules']}>
+      <TrainingTargetsContext.Provider value={{ view: { status: 'loading' }, retry: vi.fn(), apply, want: vi.fn() }}>
+        <RulesSection {...props} />
+      </TrainingTargetsContext.Provider>
+    </MemoryRouter>);
+    await screen.findByLabelText('Gym sessions (sessions/week)');
+    expect(apply).toHaveBeenCalledWith(expect.objectContaining({ targets: training.targets }));
   });
 
   it.each(['/health', '/wellness'])('returns to the current area overview at %s without hard-coding a route', async areaPath => {
