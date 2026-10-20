@@ -1911,7 +1911,10 @@ none, grey while loading; the label always states the time or the problem) and a
 button that opens a "Last sync" table with one row per source and "Not received" for a
 source without a time, above the existing upload facts. Navigation is a centred pill
 group and the period control a segmented pill group; the selected pill is filled,
-tinted and outlined, so selection never rests on colour alone. Cards: three
+tinted and outlined, so selection never rests on colour alone. This is a deliberate
+Health-only exception to the shared control contract (`--radius-control` geometry and
+the `--state-selected-*` tokens): the pill geometry and the Health selection tokens stay
+inside the Health shell, and every other area keeps the shared controls. Cards: three
 equal-height glass cards (Training blue to violet, Health violet, Body teal to violet,
 large radius, soft shadow) each opened by a title with an icon chip. Training uses
 class colours for Gym (blue), Run (rose) and Activity (violet), each with a tinted icon

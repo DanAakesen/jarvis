@@ -66,7 +66,11 @@ three card gradients `-card-training|health|body`, `-card-shadow`); ring tracks
 (`--health-track`, `-track-strong`); selection (`--health-selected-bg`, `-bg-hover`,
 `-fg`, `-edge`); and class colours (`--health-gym`, `-run`, `-activity`, `-protein`,
 `-flame`, `-heart`, `-body`, `-amber`, `-ok`, `-pending`, `-dot-active`). Radii, spacing,
-motion and the remaining type sizes still come from the shared Jarvis tokens. The
+motion and the remaining type sizes still come from the shared Jarvis tokens. Section
+tabs and period choices are a deliberate Health-only exception to the shared control
+contract: they use pill geometry (`--radius-pill`) and the Health selection tokens
+instead of `--radius-control` and `--state-selected-*`, because the owner's reference
+shows them that way; other areas are unchanged. The
 gradient and glass are surfaces only: numerals and text are solid colours, class colour
 always comes with an icon and a word, and the `prefers-contrast: more`,
 `forced-colors` and reduced-motion branches flatten or remove the glass and motion.
