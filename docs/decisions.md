@@ -1,5 +1,18 @@
 # Decisions
 
+## P14-32 — One subtle focus style for entry fields (20 October 2026; #1085)
+
+The owner rejected the 3px outline on fields. All text entry fields now use one
+treatment: a thin tinted border plus a soft glow underneath, defined by the
+`--field-focus-rule` and `--field-focus-glow` tokens, with the outline kept only
+as a forced-colours fallback. The per-component outline rules were removed so
+the shared rule is the single source. Non-text controls are unchanged. A
+zero-specificity catch-all covers fields outside the shared containers, and
+field selects now opt into the glass dropdown list (`appearance: base-select`)
+that the shared field system had overridden with `appearance: none`. Range
+sliders keep the solid 3px outline, and increased-contrast mode swaps the glow
+for a separated solid ring because the tint then equals the resting border.
+
 ## P14-41 — Daily shell: freshness pill and short periods (20 October 2026; #1116)
 
 The Daily shell shows a freshness pill built only from the served sync source
