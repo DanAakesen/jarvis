@@ -1,5 +1,30 @@
 # Design
 
+## Daily Rules & sources (20 October 2026; P14-50)
+
+The last Daily tab has no period control. Its header pairs Back to Daily with
+a compact Protected pill naming the account verified through the existing
+session's `/me` reader. Targets reuse `NutritionTargetsSettings`, including its
+folding, validation and save feedback; no body-measurement or derived-energy
+form is added. P14-45's training editor is absent in this checkout, so training
+targets are explicitly unavailable rather than replaced with another editor.
+
+Seven short rule cards cover Access, Behaviour, Mail, Calendar, Refresh,
+Notification and Sources. They follow the original composition using Jarvis
+surfaces, type, neutral structural borders and responsive columns. No Tasks
+card or new theme is introduced. Source coverage uses stacked rows with text
+status pills and last-sync times. Health sync uses completed processing from
+`daily.sync`, never receipt or phone contact. Synced does not imply known source
+freshness; a failed refresh marks retained evidence Stale. Missing evidence,
+nutrition sync (not served), Gmail and calendar say Not connected, with the
+nutrition limitation distinguished from absence of nutrition records.
+
+Synthetic Chromium checks covered 1440px dark and 390px/320px light with
+reduced motion, editor save feedback, retry/stale/missing source states and
+keyboard navigation. The embedded editor title wraps at narrow widths using
+section-local CSS. Owner-session verification against real data remains
+required before merge.
+
 ## Entry-field focus (20 October 2026; P14-32)
 
 Every text entry field (input, select, textarea, `.form-control` and the Notes,

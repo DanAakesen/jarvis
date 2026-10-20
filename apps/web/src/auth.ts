@@ -127,7 +127,7 @@ export async function restoreProfile(client: PublicClientApplication, config: Pu
   return loadProfile(config, result.accessToken);
 }
 
-async function loadProfile(config: PublicConfig, accessToken: string): Promise<UserProfile> {
+export async function loadProfile(config: Pick<PublicConfig, 'backendUrl'>, accessToken: string, signal?: AbortSignal): Promise<UserProfile> {
   if (!config.backendUrl) throw new Error('Sign-in is unavailable until the backend is deployed.');
 
   let response: Response;
@@ -135,7 +135,7 @@ async function loadProfile(config: PublicConfig, accessToken: string): Promise<U
     const bearerScheme = ['Bear', 'er'].join('');
     response = await fetch(`${config.backendUrl}/me`, {
       headers: { Authorization: `${bearerScheme} ${accessToken}` },
-      signal: AbortSignal.timeout(10_000),
+      signal: AbortSignal.any([AbortSignal.timeout(10_000), ...(signal ? [signal] : [])]),
     });
   } catch {
     throw new Error('Jarvis could not reach the backend. Try again.');

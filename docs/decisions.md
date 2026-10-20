@@ -1,5 +1,19 @@
 # Decisions
 
+## P14-50 — Rules & sources uses served evidence (20 October 2026; #1116, #1141)
+
+Add the original Rules & sources composition as the final discovered Daily
+section, without shell changes or a period control. Reuse the nutrition editor
+and existing authenticated profile reader; the latter needs one `/me` read
+because the section receives the session token supplier, not the shell profile.
+P14-45's training editor is not present and is explicitly unavailable pending
+its merge. `daily.sync` serves health processing evidence only: do not infer
+nutrition sync, mail/calendar connectivity, or source freshness from it.
+Retained health evidence is labelled Stale after a failed refresh, not by an
+invented age threshold. Nutrition sync stays Not connected with an explanatory
+coverage gap; existing nutrition records remain usable. Real owner-session
+verification and training-editor integration remain outstanding.
+
 ## P14-44 — Overview tiles hold their size; reads on focus wait a minute (20 October 2026; #1116, #1129)
 
 The Daily Overview summary tiles and Today cards jumped while loading: each tile
