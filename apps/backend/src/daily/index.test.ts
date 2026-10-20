@@ -186,6 +186,34 @@ describe('Daily integration contract', () => {
     expect((await app.inject({ url: '/daily/nutrition-targets', headers: headers('agent') })).statusCode).toBe(403);
     expect((await app.inject({ url: '/daily/nutrition-targets', headers: headers('other') })).statusCode).toBe(403);
   });
+  it('adds owner training target routes and the sensitive tool only with its separate accessor', async () => {
+    const data: DailyData = { query: { query: vi.fn() }, changes: createDailyChanges() };
+    const read = vi.fn(async () => ({ targets: { gymSessionsPerWeek: null, runSessionsPerWeek: null, dailySteps: null }, updatedAt: null }));
+    const write = vi.fn();
+    const targets = vi.fn(() => ({ read, write }));
+    expect(createDailyModules(false, data, undefined, undefined, undefined, undefined, undefined, targets)).toEqual([]);
+    expect(createDailyModules(true, data)[0]!.tools.map(tool => tool.name)).toEqual(['daily_query', 'daily_show']);
+    expect(() => createDailyModules(true, undefined, undefined, undefined, undefined, undefined, undefined, targets))
+      .toThrow('shared Daily data');
+    const calls: ToolCallRecord[] = [];
+    const app = buildApp(config, undefined, { auth, modules: [coreModule,
+      ...createDailyModules(true, data, undefined, undefined, undefined, undefined, undefined, targets)],
+    toolCallStore: { record: async call => { calls.push(call); } } });
+    apps.push(app);
+    const names = (await app.inject({ url: '/tools', headers: headers() })).json() as { name: string }[];
+    expect(names.map(({ name }) => name)).toContain('daily_training_targets');
+    expect((await app.inject({ url: '/daily/capabilities', headers: headers() })).json())
+      .toMatchObject({ tools: expect.arrayContaining(['daily_training_targets']) });
+    const reply = await app.inject({ method: 'POST', url: '/tools/daily_training_targets',
+      headers: { ...headers('agent'), 'x-jarvis-message-id': '42' }, payload: { operation: 'read' } });
+    expect(reply.json()).toMatchObject({
+      outcome: 'ok', result: { status: 'needs-configuration', missing: ['gymSessionsPerWeek', 'runSessionsPerWeek', 'dailySteps'] },
+    });
+    expect(calls).toContainEqual(expect.objectContaining({
+      tool: 'daily_training_targets', outcome: 'ok', arguments: { redacted: true }, result: { redacted: true },
+    }));
+    expect((await app.inject({ url: '/daily/training-targets', headers: headers('agent') })).statusCode).toBe(403);
+  });
   it('leaves Jarvis unchanged when Daily is off, even if the nutrition targets accessor is supplied', async () => {
     const data: DailyData = { query: { query: vi.fn() }, changes: createDailyChanges() };
     const targets = vi.fn();
