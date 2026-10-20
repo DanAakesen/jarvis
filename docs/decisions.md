@@ -7,8 +7,20 @@ beside Show tasks opens a lazy folder-and-note tree; the task panel and the tree
 share one place, so only one is open. Notes open in the existing popup rather than
 a second editor. The tree uses only existing endpoints: `/notes/tree` for folders
 and `GET /notes?directory=` per opened folder. Notes at the vault root and in
-folders outside People, Work, Personal and General stay hidden by the backend
-index until #1113 ships, then appear without a client change.
+folders outside People, Work, Personal and General were hidden by the backend
+index until #1113 (P14-40) removed that filter; the tree lists them without a
+client change.
+
+## P14-40 — Full indexed-note scope in the Notes graph (20 October 2026; #1113)
+
+The graph, its folder filters, and note search follow the owner's P9-77 ruling:
+all indexed safe Markdown notes are in scope, including vault-root notes and
+notes in any normal folder. P7-43's four-folder SQL predicate only reflected
+the original map layout; it also caused shared graph-file callers to drop valid
+notes from graph, search and `/notes`. Remove that predicate and retain path
+validation, hidden-folder and redaction exclusions, and existing result bounds.
+
+Refs #1113
 
 ## P14-32 — Result pills and a text-free loader (21 October 2026; #1085)
 
