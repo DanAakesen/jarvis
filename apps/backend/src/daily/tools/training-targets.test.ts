@@ -58,7 +58,7 @@ describe('daily_training_targets', () => {
     expect(await f.tool.execute({ operation: 'read' }, f.request, signal())).toMatchObject({
       status: 'needs-configuration', targets: emptyTrainingTargets,
       missing: trainingTargetFields, bounds: trainingTargetBounds,
-      provenance: { store: 'daily-training-targets', enteredBy: 'owner' },
+      provenance: { store: 'Health training targets', enteredBy: 'owner' },
     });
     expect(f.runConfirmed).not.toHaveBeenCalled();
     expect(f.store.write).not.toHaveBeenCalled();

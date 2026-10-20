@@ -16,7 +16,7 @@ const bound = (label: string, unit: TrainingTargetBound['unit'], min: number, ma
 export const trainingTargetBounds: Readonly<Record<TrainingTargetField, TrainingTargetBound>> = Object.freeze({
   gymSessionsPerWeek: bound('Gym sessions', 'sessions/week', 0, 21),
   runSessionsPerWeek: bound('Run sessions', 'sessions/week', 0, 21),
-  dailySteps: bound('Daily steps', 'steps/day', 0, 100_000),
+  dailySteps: bound('Steps per day', 'steps/day', 0, 100_000),
 });
 
 export const emptyTrainingTargets: TrainingTargets = Object.freeze({

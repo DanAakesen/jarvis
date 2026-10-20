@@ -69,7 +69,7 @@ export class TrainingTargetsStore {
 
   static forRequest(pool: sql.ConnectionPool, request: FastifyRequest): TrainingTargetsStore {
     const owner = resolveDailyOwner(request);
-    if (!/^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/iu.test(owner)) throw new TypeError('Invalid Daily owner');
+    if (!/^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/iu.test(owner)) throw new TypeError('Invalid Health owner');
     return new TrainingTargetsStore(pool, owner.toLowerCase());
   }
 

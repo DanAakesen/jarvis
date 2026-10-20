@@ -200,7 +200,7 @@ export type TrainingTargetsView =
   | { readonly status: 'error'; readonly kind: TrainingTargetsFailure; readonly message: string };
 
 /**
- * Shared on-demand training target read for Daily Overview, Workouts and Health consumers. It does not
+ * Shared on-demand training target read for Health Overview, Workouts and other consumers. It does not
  * alter those views or add another source of truth: each consumer gets loading/settled/error state and
  * a retry callback, and should render targets only from the server's validated response.
  */

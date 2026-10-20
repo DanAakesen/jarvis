@@ -10,7 +10,7 @@ const fetchMock = vi.fn<typeof fetch>();
 const bounds = {
   gymSessionsPerWeek: { label: 'Gym sessions', unit: 'sessions/week', min: 0, max: 21 },
   runSessionsPerWeek: { label: 'Run sessions', unit: 'sessions/week', min: 0, max: 21 },
-  dailySteps: { label: 'Daily steps', unit: 'steps/day', min: 0, max: 100_000 },
+  dailySteps: { label: 'Steps per day', unit: 'steps/day', min: 0, max: 100_000 },
 };
 const configured = { gymSessionsPerWeek: 3, runSessionsPerWeek: 2, dailySteps: 8_000 };
 const unset = { gymSessionsPerWeek: null, runSessionsPerWeek: null, dailySteps: null };
@@ -59,7 +59,7 @@ describe('TrainingTargetsSettings', () => {
     expect(document.getElementById('training-targets')).not.toBeNull();
     expect(field('Gym sessions (sessions/week)').value).toBe('3');
     expect(field('Run sessions (sessions/week)').value).toBe('2');
-    expect(field('Daily steps (steps/day)').value).toBe('8000');
+    expect(field('Steps per day (steps/day)').value).toBe('8000');
     expect(saveButton().disabled).toBe(true);
     expect(fetchMock.mock.calls[0]?.[0]).toBe('https://api.example.com/daily/training-targets');
     expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({ method: 'GET', cache: 'no-store' });
@@ -68,8 +68,8 @@ describe('TrainingTargetsSettings', () => {
   it('keeps unset targets empty with no placeholder or example value', async () => {
     fetchMock.mockResolvedValueOnce(reply(unset, null));
     renderSettings();
-    await screen.findByLabelText('Daily steps (steps/day)');
-    for (const label of ['Gym sessions (sessions/week)', 'Run sessions (sessions/week)', 'Daily steps (steps/day)']) {
+    await screen.findByLabelText('Steps per day (steps/day)');
+    for (const label of ['Gym sessions (sessions/week)', 'Run sessions (sessions/week)', 'Steps per day (steps/day)']) {
       expect(field(label).value).toBe('');
       expect(field(label).hasAttribute('placeholder')).toBe(false);
     }
@@ -95,19 +95,19 @@ describe('TrainingTargetsSettings', () => {
     const user = userEvent.setup();
     fetchMock.mockResolvedValueOnce(reply()).mockResolvedValueOnce(reply({ ...configured, dailySteps: null }));
     renderSettings();
-    await screen.findByLabelText('Daily steps (steps/day)');
-    await replace(user, 'Daily steps (steps/day)', '');
+    await screen.findByLabelText('Steps per day (steps/day)');
+    await replace(user, 'Steps per day (steps/day)', '');
     await user.click(saveButton());
     expect(await screen.findByText('Saved')).not.toBeNull();
     expect(fetchMock.mock.calls[1]?.[1]).toMatchObject({ method: 'PATCH', body: '{"dailySteps":null}' });
-    expect(field('Daily steps (steps/day)').value).toBe('');
+    expect(field('Steps per day (steps/day)').value).toBe('');
   });
 
   it('validates before sending and focuses the invalid field', async () => {
     const user = userEvent.setup();
     fetchMock.mockResolvedValueOnce(reply());
     renderSettings();
-    await screen.findByLabelText('Daily steps (steps/day)');
+    await screen.findByLabelText('Steps per day (steps/day)');
     const gym = await replace(user, 'Gym sessions (sessions/week)', '22');
     await user.click(saveButton());
     expect(await screen.findByText('Gym sessions: enter a whole number from 0 to 21 sessions/week, or leave it empty.')).not.toBeNull();
@@ -123,8 +123,8 @@ describe('TrainingTargetsSettings', () => {
     const user = userEvent.setup();
     fetchMock.mockResolvedValueOnce(reply()).mockResolvedValueOnce(failure(status));
     renderSettings();
-    await screen.findByLabelText('Daily steps (steps/day)');
-    const steps = await replace(user, 'Daily steps (steps/day)', '9000');
+    await screen.findByLabelText('Steps per day (steps/day)');
+    const steps = await replace(user, 'Steps per day (steps/day)', '9000');
     await user.click(saveButton());
     expect((await screen.findByRole('alert')).textContent).toBe(message);
     expect(screen.queryByText('Private server detail')).toBeNull();

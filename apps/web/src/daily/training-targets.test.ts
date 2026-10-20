@@ -9,7 +9,7 @@ import {
 const bounds = {
   gymSessionsPerWeek: { label: 'Gym sessions', unit: 'sessions/week', min: 0, max: 21 },
   runSessionsPerWeek: { label: 'Run sessions', unit: 'sessions/week', min: 0, max: 21 },
-  dailySteps: { label: 'Daily steps', unit: 'steps/day', min: 0, max: 100_000 },
+  dailySteps: { label: 'Steps per day', unit: 'steps/day', min: 0, max: 100_000 },
 };
 const synthetic = { gymSessionsPerWeek: 3, runSessionsPerWeek: 2, dailySteps: 8_000 };
 const timestamp = '2026-10-17T10:00:00.000Z';

@@ -49,7 +49,7 @@ function show(field: TrainingTargetField, value: number | null): string {
 function summary(current: TrainingTargets, patch: TrainingTargetsPatch, changed: readonly TrainingTargetField[]): string {
   return [
     'Review this exact change to your training targets in Now. Nothing has changed yet.',
-    'These owner-set targets stay in private Daily settings and are not sent to Teams.',
+    'These owner-set targets stay in private Health settings and are not sent to Teams.',
     ...changed.map((field) => `${trainingTargetBounds[field].label}: ${show(field, current[field])} → ${show(field, patch[field] ?? null)}`),
   ].join('\n');
 }
@@ -59,7 +59,7 @@ function present(stored: StoredTrainingTargets) {
   return {
     status: view.missing.length ? 'needs-configuration' : 'configured',
     ...view,
-    provenance: { store: 'daily-training-targets', enteredBy: 'owner' },
+    provenance: { store: 'Health training targets', enteredBy: 'owner' },
   };
 }
 
@@ -67,7 +67,7 @@ export function dailyTrainingTargetsTool(targets: TrainingTargetsAccess): Jarvis
   const pending = new Set<string>();
   return {
     name: 'daily_training_targets',
-    description: 'Read or change the owner-set targets for gym sessions per week, run sessions per week and daily steps. read needs no approval and returns each stored value, or null where none is set, with the allowed ranges. set_targets changes only the targets you name (null clears one) and every change needs the exact browser Now approval within two minutes. Never guess, default or estimate a value: ask for it. These values are private owner data; do not repeat them outside this conversation. No phone or Teams.',
+    description: 'Read or change the owner-set targets for gym sessions per week, run sessions per week and steps per day. read needs no approval and returns each stored value, or null where none is set, with the allowed ranges. set_targets changes only the targets you name (null clears one) and every change needs the exact browser Now approval within two minutes. Never guess, default or estimate a value: ask for it. These values are private owner data; do not repeat them outside this conversation. No phone or Teams.',
     inputSchema,
     bodyLimit: 2 * 1024,
     sensitive: true,
