@@ -1671,8 +1671,12 @@ new animation is introduced.
 
 ## Daily migration visual requirement (12 October 2026)
 
-20 October 2026 (P14-47 / #1136): the expanded-by-default Health panel sits once
-below Overview. Its header contains Health, the age of the latest processed-upload
+20 October 2026 (P14-47 / #1136, composition revised by P14-46 / #1143): the Health
+panel sits once below the Overview cards and is closed until asked for, as in the
+original. The chevron on the Health card title opens and closes it (`panel=health`)
+and returns focus to that button on close; the panel mounts only while open, so
+its reads do not run on the landing view. Its header contains Health, the age of
+the latest processed-upload
 receipt from `daily.sync`, and a labelled disclosure. Seven keyboard-operated
 tabs use the existing selected/focus states; below 700px they form three columns.
 `panel=closed` collapses it; `panel=health&healthTab=sleep` opens a selected view.
@@ -1834,7 +1838,11 @@ ring says so in words: the centre reads "≤ 500" or "≥ 300", the caption "kca
 most" or "kcal over, at least", and the accessible summary says "At most" or "At least"
 with "eaten is a lower bound". The cards follow the Copenhagen date: it advances at
 midnight, on focus and when the page becomes visible, and every card then asks for the
-new day.
+new day. The P14-46 top cards below replace this block and keep its sources, date
+rules and lower-bound wording. The older Overview blocks described further down in
+this file (the "What Daily holds today" collection list, its "About this data" notes
+and Refresh button, and the summary tiles) are removed; the Overview is now the
+period control and the three cards only.
 
 20 October 2026 (P14-44 stable tiles): the Overview summary tiles and the Today
 cards keep their size from skeleton to values, so nothing below them moves while
@@ -1855,6 +1863,40 @@ adds an "Asleep" row only when it is greater than zero and differs. A week witho
 workouts reads "0 minutes". Body measurements with a raw snake_case key read in
 words ("Active energy"). At 380 px and below the Nutrition and Training bodies
 reserve more height because their content wraps.
+
+20 October 2026 (P14-46 top cards): the Overview opens with a period control
+(Today, Yesterday, 1 week, 2 weeks, 1 month; Today by default) and three cards, in
+the composition of the original: Training, Health and Body. Nothing else is on the
+page: no heading above the cards, no collection list, no notes disclosure, no Refresh
+button and no summary tiles, so there is no text list on it. A card that has nothing
+for the period says so itself. The cards sit in one
+row from 1200 px, two columns from 700 px and a swipeable row below that, with
+one dot per card; the dots are real buttons and the row also scrolls by touch,
+trackpad and keyboard. Card chrome is the shared panel surface, rule and radius;
+no glass skin or new token. Training holds three rings (Gym, Run, Activity for
+steps), then a Protein tile, a Calories left tile and, for a single day, the meals
+strip (time, name, kcal). Health holds Sleep, Protein and a cumulative protein
+line across the day with a dashed target line when a target is set; its title is a
+button with a turning chevron that opens the Health panel below the cards (the
+Training and Body titles stay links to their sections). Body holds Sessions,
+Calories and Duration, then Weight, Fat mass, Fat % and Lean mass as small
+sparklines over the last 90 days. A ring or tile has the same size in every state.
+Wording separates the cases: "Not recorded" means the source is served and holds
+nothing for the period and is shown as a quiet dash, as in the original, with the
+words kept for assistive technology and the hover title; "Unavailable" means Jarvis
+does not serve the source,
+"Could not load" carries a Retry button, "No target set" links to the setting, and
+nothing shows a default target. Sessions count from the Monday of the week for the
+one-day presets and over the window for longer ones; protein and calories left
+average per logged day over a range. Lower bounds read in words ("lower bound",
+"at most"), never by colour. No recomposition status, coaching or energy estimate
+is shown. A read that fails after it returned values (a refresh, or a later page)
+keeps those values and adds a quiet "Could not refresh" with Retry beside the card
+title; it never reads as loaded and never swaps the values for a skeleton. Averages
+spread the known amount over every logged day, so an unknown day keeps the result a
+lower bound; a body trend uses one unit, the latest reading's; only Today may show
+last night's sleep, so Yesterday needs its own night; Calories and Duration each
+carry their own lower-bound note.
 
 Checked the section shell in isolated Chromium against only synthetic capability
 and query responses at 320, 390×844, 768 and 1440×900 in light and dark, with

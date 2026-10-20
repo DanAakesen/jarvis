@@ -1,5 +1,20 @@
 # Decisions
 
+## P14-46 — Overview cards report a failed refresh and keep honest figures (20 October 2026; #1116, #1143)
+
+Review of the Overview cards found five places where a card could read better than
+its data. Choices: (1) a read that fails after returning values keeps them and adds
+"Could not refresh" with Retry in the card header, which already reserves its height,
+so the failure is visible and recoverable without a skeleton or a layout change;
+(2) a per-day average divides the known amount by every logged day, so a day without
+the nutrient keeps it a lower bound (80 g and one unknown day is 40 g at least) and
+the calorie bounds follow; (3) a body trend uses the latest reading's unit only, so
+units never mix; (4) last night's sleep stands in only for Today, and Yesterday or
+another single past day needs an exact date match or reads "Not recorded"; (5)
+Calories and Duration keep separate lower-bound flags.
+
+Refs #1116, #1143
+
 ## P14-56 — Health follows the original look (20 October 2026; #1116, #1155, #1156, #1157)
 
 The owner reviewed the rebuilt Health pages and ruled that they must look like the
@@ -91,6 +106,45 @@ Owner naming update (20 October): new owner-facing copy uses Health and human
 source labels. The back link is route-relative, ready for #1147's route move;
 internal identifiers remain unchanged for #1146. Existing shared copy is left
 to #1147.
+
+## P14-46 — The Health panel opens from the Health card (20 October 2026; #1116, #1143)
+
+Merging the Health panel (P14-47) into the cards-only Overview left two Health
+surfaces: the card and an always-open panel below it. The original keeps one: the
+Health card's chevron expands the panel on the same page. Choices: (1) the panel is
+closed on arrival and the Health card title is a button with `aria-expanded` and
+`aria-controls` that opens and closes it, kept in the address as `panel=health` so a
+link or reload reopens it, with `healthTab` unchanged; (2) the panel mounts only while
+open, so the landing view makes no panel reads and no tile appears twice; (3) closing
+it returns focus to the card button; (4) Training and Body titles stay links. The
+panel's own Collapse button still writes `panel=closed`, which also reads as closed.
+
+Refs #1116, #1143
+
+## P14-46 — Overview top cards follow the original: Training, Health, Body (20 October 2026; #1116, #1143)
+
+The owner asked for parity with the original Overview, checked on the owner's own
+data. The Today block is replaced by a period control (Today, Yesterday, 1 week,
+2 weeks, 1 month) and three cards: Training (Gym, Run and Activity rings, Protein,
+Calories left and, for one day, the meals strip), Health (Sleep, Protein and a
+cumulative protein line with a target) and Body (Sessions, Calories, Duration and
+four measurement sparklines). Choices: (1) every number comes from a served source
+and each source states its own state, with "Not recorded" for a served source that
+holds nothing, "Unavailable" for one Jarvis does not serve, and "No target set"
+where an owner-set target is missing (weekly gym and run targets and the daily step
+target arrive with P14-45; nothing is defaulted); (2) body measurements are asked
+for only when the metric catalogue serves them, and no weight, fat or lean metric
+is invented; (3) the owner ruled the Overview is the cards only, so the old
+summary tiles, the collection list with its Open buttons, the "About this data"
+notes, the manual Refresh button, the "Today" heading and the Health Auto Export
+prompt are removed and nothing else sits on the page; data still reloads on focus,
+when the page becomes visible, on the shared refresh stream and with each card's
+Retry, and a card whose source holds nothing says so itself; (4) every ring, tile, chart and strip
+reserves its size, so no state changes the layout (P14-44); (5) the recomposition
+status, coaching, energy estimates and task or habit surfaces remain out, as ruled.
+New text says Health, never Daily.
+
+Refs #1116, #1143
 
 ## The Daily area is named Health (20 October 2026; #1116, #1147, #1146)
 

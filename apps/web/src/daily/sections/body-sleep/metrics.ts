@@ -15,6 +15,7 @@ const names: Record<string, { label: string; group: Group }> = {
   step_count: { label: 'Steps', group: 'Activity' },
   steps: { label: 'Steps', group: 'Activity' },
   flights_climbed: { label: 'Flights climbed', group: 'Activity' },
+  active_energy: { label: 'Active energy', group: 'Activity' },
   active_energy_burned: { label: 'Active energy', group: 'Activity' },
   basal_energy_burned: { label: 'Resting energy', group: 'Activity' },
   distance_walking_running: { label: 'Walking and running distance', group: 'Activity' },

@@ -820,10 +820,10 @@ again after that final layout correction.
 
 ## Daily overview page checks (18 October 2026; P12-15)
 
-The Daily area opens on an overview (`daily/DailyHome`, `DailyOverview`,
-`useDailyProbes`, `overview`) behind the build-time switch `VITE_DAILY_ENABLED`
+The Daily area opens on an overview (`daily/DailyHome`, `DailyOverview`, the cards
+in `sections/overview`) behind the build-time switch `VITE_DAILY_ENABLED`
 (see "Daily switch checks"). From `apps/web`, run
-`npx vitest run src/daily/overview.test.ts src/daily/DailyHome.test.tsx src/daily/DailyPage.test.tsx config/daily-switch.test.ts src/App.test.tsx`,
+`npx vitest run src/daily/sections/overview src/daily/DailyHome.test.tsx src/daily/DailyPage.test.tsx config/daily-switch.test.ts src/App.test.tsx`,
 then `npx tsc --noEmit` and `npx eslint <changed files> --max-warnings 0`. Run
 one heavy command at a time. A Vitest worker that stalls on start is the pool's own
 start timeout, not a test failure, so retry it once. The tests mock `fetch` with
@@ -1002,8 +1002,8 @@ the scan test's new expectations together, or set both to `false` and update
 that test in CI before Deploy can run. Both files are release inputs, so the next
 deploy re-applies infrastructure, backend, web and agent; stored Daily data stays. After a deploy that sets the switches, the owner's
 read-only live check is: `/health` is OK, Daily appears in the side rail and the
-phone menu and opens on "What Daily holds today" with a status on each row (None
-returned is a valid answer before any data exists), and Settings shows the
+phone menu and opens on the period control and the Training, Health and Body cards
+(a card saying "Not recorded" is a valid answer before any data exists), and Settings shows the
 Nutrition targets section, empty until Dan enters his own values. None of it needs
 a write, and a failed read is a finding to record.
 
