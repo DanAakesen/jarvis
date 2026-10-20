@@ -5,13 +5,14 @@ import { loadConfig } from '../config.js';
 import { coreModule } from '../core/index.js';
 import type { TokenVerifier } from '../auth/verify.js';
 import { createDailyModules } from './index.js';
+import { DailyQueryService } from './query.js';
 import { resolveDailyOwner } from './owner.js';
 import { createDailyChanges } from './revisions.js';
 import type { DailyData, DailyFoodLookup } from './query.js';
 import type { InternalSavedNutrition } from './tools/saved-food.js';
 import { suggest, type BudgetContext, type Suggestion } from './nutrition/model.js';
 import type { NutritionSuggestionSources } from './nutrition/suggestion-adapter.js';
-import { dailyCapabilitiesAccept, dailyQuerySources, dailyQuerySourcesV1, dailyQuerySourcesV2, dailyQuerySourcesV3, dailyViewIds } from '@jarvis/contracts';
+import { dailyCapabilitiesAccept, dailyQuerySources, dailyQuerySourcesV1, dailyQuerySourcesV2, dailyQuerySourcesV3, dailyQuerySourcesV4, dailyViewIds } from '@jarvis/contracts';
 import type { ToolCallRecord } from '../core/tool-calls.js';
 
 const config = { ...loadConfig({}), logLevel: 'silent' as const };
@@ -79,7 +80,7 @@ describe('Daily integration contract', () => {
       expect((await app.inject({ url: `/daily/capabilities?${field}=${other}`, headers: headers() })).statusCode).toBe(400);
     }
   });
-  it('pins byte-identical v1/v2 capability bodies and offers new sources only to v3 clients', async () => {
+  it('pins byte-identical v1/v2/v3 capability bodies and withholds feed sources until enabled', async () => {
     const query = vi.fn();
     const data: DailyData = { query: { query }, changes: createDailyChanges() };
     const app = buildApp(config, undefined, { auth, modules: [coreModule, ...createDailyModules(true, data)] });
@@ -89,7 +90,7 @@ describe('Daily integration contract', () => {
       pages: [], tools: ['daily_query', 'daily_show'], sources,
       refresh: { event: 'now', refetchOn: ['connect', 'reconnect', 'refocus'], revision: 'query-content-sha256' },
     });
-    for (const accept of [undefined, 'application/json', 'application/json;version=4']) {
+    for (const accept of [undefined, 'application/json', 'application/json;version=99']) {
       const response = await app.inject({ url: '/daily/capabilities', headers: { ...headers(), ...(accept ? { accept } : {}) } });
       expect(response.body).toBe(responseBody(1, dailyQuerySourcesV1));
       expect(response.headers['cache-control']).toBe('no-store');
@@ -101,15 +102,97 @@ describe('Daily integration contract', () => {
     expect(new MIMEType(String(v2.headers['content-type'])).params.get('version')).toBe('2');
     expect(dailyQuerySourcesV2).not.toContain(dailyQuerySources.metricCatalog);
     expect(dailyQuerySourcesV2).not.toContain(dailyQuerySources.days);
-    for (const accept of [dailyCapabilitiesAccept, 'application/json;version="3", application/json']) {
+    const v3 = await app.inject({ url: '/daily/capabilities', headers: { ...headers(), accept: 'application/json;version="3", application/json' } });
+    expect(v3.statusCode).toBe(200);
+    expect(v3.json()).toMatchObject({ version: 3, sources: dailyQuerySourcesV3 });
+    for (const accept of [dailyCapabilitiesAccept, 'application/json;version="4", application/json']) {
       const modern = await app.inject({ url: '/daily/capabilities', headers: { ...headers(), accept } });
       expect(modern.statusCode).toBe(200);
       const type = new MIMEType(String(modern.headers['content-type']));
       expect(type.essence).toBe('application/json');
-      expect(type.params.get('version')).toBe('3');
-      expect(modern.json()).toMatchObject({ version: 3, sources: dailyQuerySourcesV3 });
+      expect(type.params.get('version')).toBe('4');
+      expect(modern.json()).toMatchObject({ version: 4, sources: dailyQuerySourcesV3 });
+      expect(modern.json().sources).not.toContain(dailyQuerySources.attention);
+      expect(modern.json().sources).not.toContain(dailyQuerySources.calendar);
     }
     expect(query).not.toHaveBeenCalled();
+  });
+  it('registers owner-only browser feed routes and v4 query sources only when feeds are composed', async () => {
+    const feedReads = {
+      queryAttention: vi.fn(async () => ({
+        items: [{ type: 'thread', id: 'synthetic-thread', bucket: 'waiting_for_you', ageBusinessDays: 1, hidden: false }],
+        feedSources: [{ source: 'Gmail' as const, status: 'Current' as const, capturedAt: '2026-10-16T10:00:00Z',
+          attemptedAt: '2026-10-16T10:00:00Z', error: null }],
+      })),
+      queryCalendar: vi.fn(async () => ({
+        items: [{ id: 'synthetic-calendar:event-01', title: 'Synthetic event' }],
+        calendarRange: { from: '2026-10-16T00:00:00Z', to: '2026-10-17T00:00:00Z' },
+        feedSources: [{ source: 'GoogleCalendar' as const, status: 'Current' as const,
+          capturedAt: '2026-10-16T10:00:00Z', attemptedAt: '2026-10-16T10:00:00Z', error: null,
+          range: { from: '2026-10-01T00:00:00Z', to: '2026-11-01T00:00:00Z' } }],
+        rangeCovered: true,
+      })),
+    };
+    const query = new DailyQueryService({
+      health: () => ({ history: vi.fn(), metricCatalog: vi.fn(), sync: vi.fn(), workoutDetail: vi.fn(), heartRate: vi.fn() }),
+      nutrition: () => ({ history: vi.fn(), days: vi.fn(), favorites: vi.fn(), plans: vi.fn() }),
+      briefs: () => ({ history: vi.fn(), detail: vi.fn() }),
+    }, () => Date.parse('2026-10-16T12:00:00Z'), feedReads);
+    const actions = {
+      execute: vi.fn(),
+      refreshFromBrowser: vi.fn(async () => ({ runId: 'synthetic-run', state: 'completed' })),
+      hideThread: vi.fn(async () => true),
+      receiveOrder: vi.fn(async () => true),
+      restore: vi.fn(async () => true),
+    };
+    const data: DailyData = { query, changes: createDailyChanges(), feeds: actions };
+    const app = buildApp(config, undefined, { auth, modules: [coreModule, ...createDailyModules(true, data)] });
+    const unconfigured = buildApp(config, undefined, { auth, modules: [
+      coreModule, ...createDailyModules(true, { query: { query: vi.fn() }, changes: createDailyChanges() }),
+    ] });
+    apps.push(app, unconfigured);
+    const range = { from: '2026-10-16T00:00:00Z', to: '2026-10-17T00:00:00Z' };
+    const capability = await app.inject({ url: '/daily/capabilities', headers: { ...headers(), accept: 'application/json;version=4' } });
+    expect(capability.statusCode).toBe(200);
+    expect(capability.json().sources).toEqual(dailyQuerySourcesV4);
+    expect((await unconfigured.inject({ url: '/daily/capabilities', headers: { ...headers(), accept: 'application/json;version=4' } })).json().sources)
+      .toEqual(dailyQuerySourcesV3);
+    for (const path of ['/daily/feeds/refresh', '/daily/feeds/hide', '/daily/feeds/receive', '/daily/feeds/restore']) {
+      expect((await unconfigured.inject({ method: 'POST', url: path, headers: headers(), payload: {} })).statusCode).toBe(404);
+    }
+
+    const attention = await app.inject({ method: 'POST', url: '/daily/query', headers: headers(), payload: { source: dailyQuerySources.attention } });
+    expect(attention.statusCode).toBe(200);
+    expect(attention.json()).toMatchObject({ status: 'available', items: [{ ageBusinessDays: 1, hidden: false }] });
+    const calendar = await app.inject({ method: 'POST', url: '/daily/query', headers: headers(), payload: { source: dailyQuerySources.calendar, ...range } });
+    expect(calendar.statusCode).toBe(200);
+    expect(calendar.json()).toMatchObject({ status: 'available', rangeCovered: true, calendarRange: range });
+    expect((await app.inject({ method: 'POST', url: '/daily/query', headers: headers('agent'), payload: { source: dailyQuerySources.attention } })).statusCode)
+      .toBe(403);
+
+    const actionsToCall = [
+      { path: '/daily/feeds/refresh', payload: range, expected: { runId: 'synthetic-run', state: 'completed' } },
+      { path: '/daily/feeds/hide', payload: { id: 'synthetic-thread' }, expected: { status: 'hidden' } },
+      { path: '/daily/feeds/receive', payload: { id: 'synthetic-order' }, expected: { status: 'received' } },
+      { path: '/daily/feeds/restore', payload: { type: 'thread', key: 'synthetic-thread' }, expected: { status: 'restored' } },
+    ];
+    for (const action of actionsToCall) {
+      const response = await app.inject({ method: 'POST', url: action.path, headers: headers(), payload: action.payload });
+      expect(response.statusCode, action.path).toBe(200);
+      expect(response.json()).toMatchObject(action.expected);
+      for (const kind of ['agent', 'runner', 'other', 'connector']) {
+        expect((await app.inject({ method: 'POST', url: action.path, headers: headers(kind), payload: action.payload })).statusCode)
+          .toBe(403);
+      }
+    }
+    expect(actions.refreshFromBrowser).toHaveBeenCalledWith(expect.anything(), range, expect.any(AbortSignal));
+    expect(actions.hideThread).toHaveBeenCalledOnce();
+    expect(actions.receiveOrder).toHaveBeenCalledOnce();
+    expect(actions.restore).toHaveBeenCalledOnce();
+    const invalid = await app.inject({ method: 'POST', url: '/daily/feeds/refresh', headers: headers(),
+      payload: { ...range, confirmed: true } });
+    expect(invalid.statusCode).toBe(400);
+    expect(actions.refreshFromBrowser).toHaveBeenCalledOnce();
   });
   it('requires an explicit internal store factory rather than enabling writes with read-only data', async () => {
     const data: DailyData = { query: { query: vi.fn() }, changes: createDailyChanges() };
@@ -284,7 +367,9 @@ describe('Daily integration contract', () => {
   it('adds only the explicit feed capability, uses the existing dispatcher/audit and bridges owner commits until shutdown', async () => {
     const execute = vi.fn(async () => ({ operation: 'read_attention', sources: [], waiting: [{ private: 'synthetic private mail' }] }));
     const changes = createDailyChanges();
-    const data: DailyData = { query: { query: vi.fn() }, changes, feeds: { execute } };
+    const data: DailyData = { query: { query: vi.fn() }, changes, feeds: {
+      execute, refreshFromBrowser: vi.fn(), hideThread: vi.fn(), receiveOrder: vi.fn(), restore: vi.fn(),
+    } };
     expect(createDailyModules(false, data)).toEqual([]);
     expect(createDailyModules(true, { query: data.query, changes })[0]!.tools.map(tool => tool.name)).toEqual(['daily_query', 'daily_show']);
     const calls: ToolCallRecord[] = [];

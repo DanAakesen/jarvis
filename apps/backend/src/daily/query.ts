@@ -7,7 +7,7 @@ import type { FastifyRequest } from 'fastify';
 import type sql from 'mssql';
 import { ToolFailure, ToolRefusal } from '../core/tool-registry.js';
 import { AuthenticationDenied } from '../auth/verify.js';
-import { resolveDailyOwner } from './owner.js';
+import { resolveDailyBrowserOwner, resolveDailyOwner } from './owner.js';
 import { DailyHealthReadModel } from './health/read-model.js';
 import { healthDefinitions } from './health/persistence.js';
 import { SqlHealthProcessor } from './health/processor.js';
@@ -40,11 +40,13 @@ function latest(values: unknown[]): string | null {
 
 /** One read path for HTTP, shared tools and future browsing/GenUI; never an intake writer. */
 export class DailyQueryService {
-  constructor(private readonly readers: DailyReaders, private readonly now: () => number = Date.now) {}
+  constructor(private readonly readers: DailyReaders, private readonly now: () => number = Date.now,
+    private readonly feeds?: Pick<DailyFeedService, 'queryAttention' | 'queryCalendar'>) {}
 
   async query(input: unknown, request: FastifyRequest, signal: AbortSignal): Promise<DailyQueryResult> {
     resolveDailyOwner(request);
     if (!isDailyQuery(input)) throw new ToolRefusal('Invalid Health query. Use one source with only its supported selectors and exact returned cursor.');
+    if (input.source === sources.attention || input.source === sources.calendar) resolveDailyBrowserOwner(request);
     if ((input.source === sources.briefs || input.source === sources.brief) && request.dailyConnectorPrincipal) throw new AuthenticationDenied(403);
     signal = AbortSignal.any([signal, AbortSignal.timeout(30_000)]);
     signal.throwIfAborted();
@@ -60,9 +62,26 @@ export class DailyQueryService {
     let items: Record<string, DailyJson>[] = [];
     let next: DailyCursor | null = null;
     let sourceProcessedCommittedAt: string | null = null;
+    let feedSources: DailyQueryResult['feedSources'];
+    let calendarRange: DailyQueryResult['calendarRange'];
+    let rangeCovered: boolean | undefined;
     let units: Record<string, string>;
     const brief = input.source === sources.briefs || input.source === sources.brief;
-    if (input.source === sources.briefs) {
+    if (input.source === sources.attention) {
+      if (!this.feeds) throw new ToolFailure('Health attention source is not configured. No empty result is available.');
+      const result = await this.feeds.queryAttention(request, signal);
+      items = result.items as Record<string, DailyJson>[];
+      feedSources = result.feedSources;
+      units = {};
+    } else if (input.source === sources.calendar) {
+      if (!this.feeds) throw new ToolFailure('Health calendar source is not configured. No empty result is available.');
+      const result = await this.feeds.queryCalendar(request, { from: input.from, to: input.to }, signal);
+      items = result.items as Record<string, DailyJson>[];
+      feedSources = result.feedSources;
+      calendarRange = result.calendarRange;
+      rangeCovered = result.rangeCovered;
+      units = {};
+    } else if (input.source === sources.briefs) {
       const page = await this.readers.briefs(request).history({
         limit: input.limit ?? 50, ...(input.cursor ? { after: input.cursor } : {}),
       }, signal);
@@ -152,7 +171,13 @@ export class DailyQueryService {
     const result: DailyQueryResult = {
       source: input.source,
       period: 'startDate' in input ? { startDate: input.startDate, endDate: input.endDate, timeZone: 'Europe/Copenhagen' } : null,
-      items, status: next ? 'partial' : items.length ? 'available' : 'empty', units,
+      ...(calendarRange ? { calendarRange } : {}),
+      ...(feedSources ? { feedSources } : {}),
+      ...(rangeCovered === undefined ? {} : { rangeCovered }),
+      items,
+      status: next || feedSources?.some(source => source.status !== 'Current') || rangeCovered === false
+        ? 'partial' : items.length ? 'available' : 'empty',
+      units,
       provenance: { store: 'daily-sql', detail: 'retained-record',
         calculations: input.source === sources.days ? 'derived-from-retained-meals' : 'existing-read-model',
         consistency: 'independent-committed-reads' },
@@ -193,14 +218,15 @@ export function createDailyData(pool: sql.ConnectionPool, owner: string, now: ()
   const foodLookup: DailyFoodLookup | undefined = frida
     ? async (input, request, signal) => { checkOwner(request); return frida.lookup(input, signal); }
     : undefined;
+  const feedService = feeds ? createDailyFeeds(pool, owner, changes, feeds, now) : undefined;
   return {
-    query: new DailyQueryService(readers, now), changes,
+    query: new DailyQueryService(readers, now, feedService), changes,
     health: (request: FastifyRequest) => { checkOwner(request); return readers.health(request); },
     nutrition,
     coach: (request: FastifyRequest) => { checkOwner(request); return SqlDailyCoachStore.forRequest(pool, request); },
     processor: new SqlHealthProcessor(pool, owner, now, changes),
     ...(foodLookup ? { foodLookup } : {}),
-    ...(feeds ? { feeds: createDailyFeeds(pool, owner, changes, feeds, now) } : {}),
+    ...(feedService ? { feeds: feedService } : {}),
   };
 }
 export interface DailyData {
@@ -210,5 +236,5 @@ export interface DailyData {
   nutrition?: (request: FastifyRequest) => Pick<NutritionStore, 'history' | 'days' | 'feedback' | 'preferences'>;
   coach?: (request: FastifyRequest) => DailyCoachStore;
   foodLookup?: DailyFoodLookup;
-  feeds?: Pick<DailyFeedService, 'execute'>;
+  feeds?: Pick<DailyFeedService, 'execute' | 'refreshFromBrowser' | 'hideThread' | 'receiveOrder' | 'restore'>;
 }

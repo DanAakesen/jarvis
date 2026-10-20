@@ -1,5 +1,29 @@
 # Decisions
 
+## P14-51 — Serve Health attention and calendar feeds behind a flag (20 October 2026; #1133)
+
+Read-only Gmail attention and bounded calendar reads are composed only when both
+the existing Health module and `JARVIS_DAILY_FEEDS_ENABLED` are exactly `true`.
+The feed flag defaults off and is not set by infrastructure. Browser actions remain
+owner-only and reviewed; no provider writes, new infrastructure, or scheduled
+refresh is part of this change. Google Calendar enumeration also depends on the
+owner completing the existing consent flow for the calendar-list read permission;
+this was not performed or verified here.
+
+A scheduled refresh is a proposal, not an approved implementation. A future task
+could add a managed timer that invokes the existing bounded refresh for an
+explicit range, with per-owner exclusion, idempotent run IDs, and observable
+partial/source failures. Each run would still spend Google API quota on calendar
+enumeration/event reads and Gmail scanning, plus SQL and compute; Gmail may also
+make up to 50 existing model classifications (up to 1,024 output tokens each)
+at the configured rates. Repetition scales these reads and model usage with
+schedule frequency. No dollar estimate is claimed; frequency, operational
+ownership, and budget limits require a separate decision.
+
+Refs DanAakesen/jarvis#1116
+Refs DanAakesen/jarvis#725
+Refs #1133
+
 ## P14-45 — Owner-set gym, run and step targets (20 October 2026; #1116, #1132)
 
 The original Daily's weekly Gym/Run session targets and daily step target came

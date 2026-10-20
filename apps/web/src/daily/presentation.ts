@@ -38,6 +38,8 @@ const columns: Record<DailySourceId, readonly Column[]> = {
   [sources.briefs]: [{ key: 'started_at', label: 'Started as recorded' }, { key: 'trigger', label: 'Trigger' }, { key: 'status', label: 'Historical status' }, { key: 'delivery_status', label: 'Historical delivery' }],
   [sources.brief]: [{ key: 'id', label: 'Brief ID' }, { key: 'started_at', label: 'Started as recorded' }, { key: 'status', label: 'Historical status' }, { key: 'delivery_status', label: 'Historical delivery' }],
   [sources.sync]: [{ key: 'feed_kind', label: 'Feed' }, { key: 'accepted_evidence_at', label: 'Accepted' }, { key: 'processed_committed_at', label: 'Processed' }],
+  [sources.attention]: [{ key: 'type', label: 'Type' }, { key: 'bucket', label: 'Waiting' }, { key: 'ageBusinessDays', label: 'Age (business days)', numeric: true }, { key: 'hidden', label: 'Hidden' }],
+  [sources.calendar]: [{ key: 'title', label: 'Event' }, { key: 'startsAt', label: 'Starts' }, { key: 'endsAt', label: 'Ends' }, { key: 'calendarName', label: 'Calendar' }, { key: 'location', label: 'Location' }],
 };
 export function dailyColumns(source: DailySourceId) { return columns[source]; }
 // A column that carries a unit or is flagged numeric holds quantities even when a page records none of them.

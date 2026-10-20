@@ -10,6 +10,7 @@ import { NutritionTargetsStore, type NutritionTargetsAccess } from './nutrition/
 import { TrainingTargetsStore, type TrainingTargetsAccess } from './training/targets-store.js';
 import { resolveDailyOwner } from './owner.js';
 import { createDailyData } from './query.js';
+import type { DailyFeedProviders } from './feeds/service.js';
 
 export interface DailyCompositionOptions {
   /** The trusted server switch (JARVIS_DAILY_ENABLED). Anything other than true composes nothing. */
@@ -18,6 +19,9 @@ export interface DailyCompositionOptions {
   readonly pool: sql.ConnectionPool | undefined;
   /** The configured owner; every Daily accessor also re-resolves the caller per request and fails closed. */
   readonly ownerObjectId: string;
+  /** Separate default-off switch; an empty provider set reports not configured rather than empty coverage. */
+  readonly feedsEnabled?: boolean;
+  readonly feeds?: DailyFeedProviders;
 }
 
 const uuid = /^[\da-f]{8}(-[\da-f]{4}){3}-[\da-f]{12}$/iu;
@@ -33,7 +37,8 @@ export function composeDaily(options: DailyCompositionOptions): BackendModule | 
   if (!options.pool) throw new ConfigurationError('SQL is required for Daily');
   if (!uuid.test(options.ownerObjectId)) throw new ConfigurationError('The Daily owner must be a UUID');
   const { pool } = options;
-  const data = createDailyData(pool, options.ownerObjectId);
+  const data = createDailyData(pool, options.ownerObjectId, Date.now, undefined,
+    options.feedsEnabled === true ? options.feeds ?? {} : undefined);
   // createDailyData applies this check to its own accessors; the two composed here get the same one.
   const owned = (request: FastifyRequest) => {
     if (resolveDailyOwner(request).toLowerCase() !== options.ownerObjectId.toLowerCase()) throw new AuthenticationDenied(403);

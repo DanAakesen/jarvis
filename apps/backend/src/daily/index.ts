@@ -1,4 +1,4 @@
-import { dailyContractVersion, dailyCapabilitiesVersion, dailyModuleId, dailyViewIds, dailyQuerySourcesV1, dailyQuerySourcesV2, dailyQuerySourcesV3 } from '@jarvis/contracts';
+import { dailyContractVersion, dailyCapabilitiesVersion, dailyModuleId, dailyViewIds, dailyQuerySourcesV1, dailyQuerySourcesV2, dailyQuerySourcesV3, dailyQuerySourcesV4 } from '@jarvis/contracts';
 import type { BackendModule } from '../modules.js';
 import { resolveDailyOwner } from './owner.js';
 import type { DailyData } from './query.js';
@@ -19,6 +19,7 @@ import type { TrainingTargetsAccess } from './training/targets-store.js';
 import { dailyFoodLookupTool } from './tools/food-lookup.js';
 import { dailyFeedTool } from './tools/feed.js';
 import { dailySourceTools } from './tools/source-tools.js';
+import { dailyFeedRoutes } from './feeds/routes.js';
 
 /** Trusted server composition flag. Not a request parameter or a production rollout. */
 export function createDailyModules(enabled = false, data?: DailyData, connector?: DailyMcpOptions, internalNutrition?: InternalNutrition, savedNutrition?: InternalSavedNutrition, nutritionTargets?: NutritionTargetsAccess, nutritionSuggestions?: NutritionSuggestionSources, trainingTargets?: TrainingTargetsAccess): readonly BackendModule[] {
@@ -45,6 +46,7 @@ export function createDailyModules(enabled = false, data?: DailyData, connector?
     registerRoutes: async (app) => {
       if (data) {
         await app.register(dailyQueryRoutes(data.query));
+        if (data.feeds) await app.register(dailyFeedRoutes(data.feeds));
         if (nutritionTargets) await app.register(nutritionTargetsRoutes(nutritionTargets));
         if (trainingTargets) await app.register(trainingTargetsRoutes(trainingTargets));
         if (connector) await app.register(dailyMcpRoutes(data.query, connector));
@@ -72,7 +74,8 @@ export function createDailyModules(enabled = false, data?: DailyData, connector?
         }) ?? [];
         const hasVersion = (version: number) => accepted.includes(`application/json;version=${version}`) ||
           accepted.includes(`application/json;version="${version}"`);
-        const version = hasVersion(dailyCapabilitiesVersion) ? dailyCapabilitiesVersion : hasVersion(2) ? 2 : dailyContractVersion;
+        const version = hasVersion(dailyCapabilitiesVersion) ? dailyCapabilitiesVersion
+          : hasVersion(3) ? 3 : hasVersion(2) ? 2 : dailyContractVersion;
         const vary = reply.getHeader('Vary');
         reply.header('Vary', [...(Array.isArray(vary) ? vary : vary ? [String(vary)] : []), 'Accept'].join(', '));
         reply.type(version > dailyContractVersion ? `application/json;version=${version}` : 'application/json');
@@ -86,7 +89,10 @@ export function createDailyModules(enabled = false, data?: DailyData, connector?
           tools: tools.map(tool => tool.name),
           ...(connector ? { connector: { transport: 'streamable-http', path: '/daily/mcp', writes: connector.writesEnabled === true } } : {}),
           ...(data ? {
-            sources: version === 1 ? dailyQuerySourcesV1 : version === 2 ? dailyQuerySourcesV2 : dailyQuerySourcesV3,
+            sources: version === 1 ? dailyQuerySourcesV1 : version === 2 ? dailyQuerySourcesV2
+              : version === 3 ? dailyQuerySourcesV3
+                : data.feeds && request.principal && !request.agentPrincipal && !request.dailyConnectorPrincipal
+                  ? dailyQuerySourcesV4 : dailyQuerySourcesV3,
             refresh: { event: 'now', refetchOn: ['connect', 'reconnect', 'refocus'], revision: 'query-content-sha256' },
           } : {}),
         };

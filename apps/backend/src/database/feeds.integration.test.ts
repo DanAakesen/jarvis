@@ -148,6 +148,22 @@ describe('Daily feed snapshots and suppressions on real isolated SQL Server', ()
     await store().clear('thread','01',true,signal()); await store().clear('thread','01',true,signal());
     expect((await store().attention(signal())).waiting).toHaveLength(1);
   });
+  it('round-trips a hidden thread and its exact restore key in the existing SQL store', async () => {
+    await store().ingest(run('hide-restore'),signal());
+    await store().suppress('thread',thread.id,true,signal());
+    const hidden = await store().attention(signal(),true);
+    expect(hidden.waiting).toMatchObject([{ thread: { id: thread.id }, hidden: true, suppressionKey: thread.id }]);
+    expect(hidden.suppressions).toMatchObject([{ type: 'thread', key: thread.id }]);
+    expect(await store().clear('thread',thread.id,true,signal())).toBe(true);
+    expect((await store().attention(signal(),true)).waiting).toMatchObject([{ thread: { id: thread.id }, hidden: false }]);
+    expect(await store().clear('thread',thread.id,true,signal())).toBe(false);
+  });
+  it('retains the requested calendar range with the successful snapshot in existing run metadata', async () => {
+    const calendarRange = { from: '2026-10-11T00:00:00Z', to: '2026-10-13T00:00:00Z' };
+    await store().ingest({ ...run('calendar-range',[]), calendarRange },signal());
+    expect((await store().sources(signal()))[1]).toMatchObject({ status: 'Current', range: calendarRange });
+    expect(canonicalFeedRun(run('legacy-range-shape'))).not.toContain('calendarRange');
+  });
   it('keeps source IDs distinct from owner-local order suppression keys and never auto-revives same-key updates', async () => {
     await store().ingest(run('first',[item(order)]),signal()); await store(other).ingest(run('first',[item(order)]),signal());
     await Promise.all([store().suppress('order',order.id,true,signal()),store().suppress('order',order.id,true,signal())]);

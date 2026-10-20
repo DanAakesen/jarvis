@@ -249,6 +249,15 @@ describe('backend configuration', () => {
       expect(() => loadConfig({ JARVIS_DAILY_ENABLED })).toThrow(/^JARVIS_DAILY_ENABLED must be true or false$/);
     }
   });
+  it('keeps Daily Google feeds off unless their separate server switch is exactly true', () => {
+    const baseline = loadConfig({});
+    expect(baseline).not.toHaveProperty('dailyFeedsEnabled');
+    expect(loadConfig({ JARVIS_DAILY_FEEDS_ENABLED: 'false' })).toEqual(baseline);
+    expect(loadConfig({ JARVIS_DAILY_FEEDS_ENABLED: 'true' })).toEqual({ ...baseline, dailyFeedsEnabled: true });
+    for (const JARVIS_DAILY_FEEDS_ENABLED of ['', 'TRUE', 'True', '1', '0', 'yes', 'on', ' true', 'true ', 'enabled']) {
+      expect(() => loadConfig({ JARVIS_DAILY_FEEDS_ENABLED })).toThrow(/^JARVIS_DAILY_FEEDS_ENABLED must be true or false$/);
+    }
+  });
   it.each(['', '0', '-1', '65536', '3000.5', ' 3000', 'junk'])('rejects invalid port %j', (PORT) => {
     expect(() => loadConfig({ PORT })).toThrow('PORT');
   });

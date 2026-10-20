@@ -6238,10 +6238,12 @@ Fingerprint serialization uses the bounded read DTO, not nutrition's per-write
 node/depth budget; supported full pages and retained nested JSON stay readable.
 The response byte budget includes the final 64-byte revision before hashing.
 
-Capability negotiation preserves the exact v1 nine-source and v2 eleven-source
-advertisements. Version 2 remains opt-in for established brief history/detail;
-version 3 adds only `daily.health.metric-catalog` and `daily.nutrition.days`.
-Unversioned/unknown clients still receive v1. The web client requests v3 but
+Capability negotiation preserves the exact v1 nine-source, v2 eleven-source
+and v3 thirteen-source advertisements. Version 2 remains opt-in for established
+brief history/detail; version 3 adds `daily.health.metric-catalog` and
+`daily.nutrition.days`. Version 4 conditionally adds `daily.attention` and
+`daily.calendar`; when feeds are not composed, v4 returns the v3 source list.
+Unversioned/unknown clients still receive v1. The web client prefers v4 and
 validates each response against its version's source allowlist.
 
 `daily.health.metrics` accepts an optional exact `metric` name while preserving
@@ -6259,6 +6261,34 @@ days (default 50). Both additions use parameterized, owner-filtered
 identifies totals as derived from retained meals; completeness and freshness
 remain unknown. The generated-view tool may display either source, while the
 Daily Overview's collection rows and visible page layout remain unchanged.
+
+### Default-off Gmail attention and calendar feeds (P14-51; 20 October 2026)
+
+Production creates feed services only when both `JARVIS_DAILY_ENABLED` and
+`JARVIS_DAILY_FEEDS_ENABLED` are exactly true. The new switch defaults off and
+is not set in infrastructure. Composition passes the existing Google client
+and, when its current endpoint, identity, settings, catalogue and usage stores
+are available, the existing strict Foundry semantic adapter. Construction does
+not call Google or the model. Missing Gmail semantics reports
+`semantic-unavailable`; missing snapshots report `not-configured`, never a
+successful empty source.
+
+Owner-browser queries use `POST /daily/query`: `daily.attention` returns
+waiting-for-you/waiting-on-others items, business-day ages and hidden state;
+`daily.calendar` accepts an inclusive/exclusive ISO-instant range of at most 62
+days and filters retained events. Refreshes persist their exact calendar range
+in the existing run metadata. Older snapshots without that metadata and
+requests not fully covered by a retained snapshot report partial coverage.
+Both sources keep the existing 30-second query deadline and 768 KiB response
+ceiling. New browser-only `/daily/feeds/refresh`, `/hide`, `/receive` and
+`/restore` actions derive trusted intent from the authenticated owner request;
+they reject agents, runners, other identities and the nutrition connector.
+Refresh keeps the existing per-owner 30-second cooldown. No scheduler is added.
+
+The current Google consent does not include CalendarList enumeration. Owner
+consent, deployed identity/model parity, protected backup/import and physical
+device acceptance remain open; this change adds no grants, scopes, resources or
+production activation.
 
 `createDailyData` shares one process-local change hub between the existing
 explicit health processor and owner-bound nutrition store. Optional handler
