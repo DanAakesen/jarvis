@@ -115,19 +115,117 @@ mislykket handling er gennemført.
 ${rules}`;
 }
 
-// Voice Live rejects untyped combinator branches such as `anyOf: [{ required: [...] }]` (L103).
+function schemaRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function modelSchema(schema: unknown, root = false): unknown {
+  if (Array.isArray(schema)) return schema.map((entry) => modelSchema(entry));
+  if (!schemaRecord(schema)) return schema;
+  const result: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(schema)) {
+    if (['allOf', 'not', 'if', 'then', 'else', 'const'].includes(key) ||
+        root && ['oneOf', 'anyOf', 'enum'].includes(key)) continue;
+    if ((key === 'anyOf' || key === 'oneOf') &&
+        (!Array.isArray(value) || !value.every((branch) => schemaRecord(branch) && 'type' in branch))) continue;
+    result[key] = modelSchema(value);
+  }
+  if (Object.hasOwn(schema, 'const') && !root) result.enum = [schema.const];
+  return result;
+}
+
+function operationHints(
+  branches: readonly Record<string, unknown>[],
+  discriminator: string,
+): string {
+  return branches.map((branch, index) => {
+    const properties = schemaRecord(branch.properties) ? branch.properties : {};
+    const operation = schemaRecord(properties[discriminator]) ? properties[discriminator].const : undefined;
+    const name = typeof operation === 'string' ? operation : `variant ${index + 1}`;
+    const required = Array.isArray(branch.required)
+      ? branch.required.filter((field): field is string => typeof field === 'string' && field !== discriminator)
+      : [];
+    const optional = Object.keys(properties).filter((field) => field !== discriminator && !required.includes(field));
+    return `${name}: required ${required.join(', ') || 'none'}; optional ${optional.join(', ') || 'none'}`;
+  }).join('. ');
+}
+
+// Voice Live rejects untyped combinator branches (L103) and any combinator at the root (L121).
 // The model gets a simplified schema; tool calls are still validated against the full schema.
 export function toModelToolSchema(schema: unknown): unknown {
-  if (Array.isArray(schema)) return schema.map(toModelToolSchema);
-  if (schema === null || typeof schema !== 'object') return schema;
-  const result: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(schema as Record<string, unknown>)) {
-    if (['allOf', 'not', 'if', 'then', 'else'].includes(key)) continue;
-    if ((key === 'anyOf' || key === 'oneOf') && (!Array.isArray(value) || !value.every((branch) =>
-      branch !== null && typeof branch === 'object' && 'type' in branch))) continue;
-    result[key] = toModelToolSchema(value);
+  if (!schemaRecord(schema)) return modelSchema(schema, true);
+
+  const unionKey = ['oneOf', 'anyOf'].find((key) => {
+    const branches = schema[key];
+    return Array.isArray(branches) && branches.length > 0 &&
+      branches.every((branch) => schemaRecord(branch) && branch.type === 'object' &&
+        (branch.properties === undefined || schemaRecord(branch.properties)));
+  });
+  if (!unionKey) {
+    const result = modelSchema(schema, true);
+    return schemaRecord(result) ? { ...result, properties: schemaRecord(result.properties) ? result.properties : {} } : result;
   }
-  return result;
+
+  const branches = schema[unionKey] as Record<string, unknown>[];
+  const root = { ...schema };
+  delete root.oneOf;
+  delete root.anyOf;
+  const flattened = modelSchema(root, true) as Record<string, unknown>;
+  const propertySchemas = new Map<string, unknown[]>();
+  const addProperties = (properties: unknown) => {
+    if (!schemaRecord(properties)) return;
+    for (const [name, value] of Object.entries(properties)) {
+      const values = propertySchemas.get(name) ?? [];
+      values.push(value);
+      propertySchemas.set(name, values);
+    }
+  };
+  addProperties(schema.properties);
+  for (const branch of branches) addProperties(branch.properties);
+
+  const properties: Record<string, unknown> = {};
+  for (const [name, values] of propertySchemas) {
+    const normalized = values.map((value) => modelSchema(value));
+    const unique = normalized.filter((value, index) =>
+      normalized.findIndex((candidate) => JSON.stringify(candidate) === JSON.stringify(value)) === index);
+    properties[name] = unique.length === 1 ? unique[0] : { anyOf: unique };
+  }
+
+  const discriminator = Object.keys(schemaRecord(branches[0]?.properties) ? branches[0].properties : {})
+    .find((name) => branches.every((branch) => {
+      const branchProperties = schemaRecord(branch.properties) ? branch.properties : {};
+      return schemaRecord(branchProperties[name]) && Object.hasOwn(branchProperties[name], 'const');
+    }));
+  if (discriminator) {
+    const values = branches.map((branch) => {
+      const branchProperties = branch.properties as Record<string, Record<string, unknown>>;
+      return branchProperties[discriminator]!.const;
+    });
+    const existing = schemaRecord(properties[discriminator]) ? properties[discriminator] : {};
+    const operationProperty = Object.fromEntries(Object.entries(existing)
+      .filter(([key]) => key !== 'anyOf' && key !== 'oneOf' && key !== 'enum' && key !== 'const'));
+    properties[discriminator] = {
+      ...operationProperty,
+      type: 'string',
+      enum: [...new Set(values)],
+      description: [typeof operationProperty.description === 'string' ? operationProperty.description : '',
+        operationHints(branches, discriminator)].filter(Boolean).join(' '),
+    };
+  }
+
+  const required = Array.isArray(branches[0]?.required)
+    ? branches[0].required.filter((field): field is string => typeof field === 'string' &&
+      branches.every((branch) => Array.isArray(branch.required) && branch.required.includes(field)))
+    : [];
+  const rootRequired = Array.isArray(flattened.required)
+    ? flattened.required.filter((field): field is string => typeof field === 'string')
+    : [];
+  flattened.type = 'object';
+  flattened.properties = properties;
+  flattened.required = [...new Set([...rootRequired, ...required])];
+  delete flattened.additionalProperties;
+  if (branches.every((branch) => branch.additionalProperties === false)) flattened.additionalProperties = false;
+  return flattened;
 }
 
 // Voice Live (api-version 2026-07-15) accepts only its flat session shape; `session.type`,

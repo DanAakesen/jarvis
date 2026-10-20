@@ -2152,11 +2152,23 @@ function registerVoiceRoute(
           if (typeof event?.type === 'string' && upstreamEventTypes.size < 40 &&
               /^[a-z_.]{1,80}$/u.test(event.type)) upstreamEventTypes.add(event.type);
           if (event?.type === 'error') {
-            const detail = (event as { error?: { code?: unknown; message?: unknown; type?: unknown } }).error;
+            const detail = (event as {
+              error?: { code?: unknown; message?: unknown; type?: unknown; param?: unknown; function_name?: unknown; functionName?: unknown };
+            }).error;
             const text = [detail?.type, detail?.code]
               .filter((part): part is string => typeof part === 'string').join(': ');
+            const invalidFunctionParameters = detail?.code === 'invalid_function_parameters';
+            const parameter = [detail?.param, detail?.function_name, detail?.functionName]
+              .find((value): value is string => typeof value === 'string');
             request.log.warn({
               failure: text.replace(/[^A-Za-z0-9 .:,'()_-]/gu, ' ').slice(0, 120) || 'unknown',
+              ...(invalidFunctionParameters ? {
+                errorCode: 'invalid_function_parameters',
+                ...(parameter ? { param: parameter.replace(/[^A-Za-z0-9 .:,'()_-]/gu, ' ').slice(0, 120) } : {}),
+                ...(typeof detail?.message === 'string'
+                  ? { upstreamMessage: detail.message.replace(/[^A-Za-z0-9 .:,'()_-]/gu, ' ').slice(0, 300) }
+                  : {}),
+              } : {}),
               language,
             }, 'voice.upstream_event_error');
           }
