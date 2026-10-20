@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { dailyQuerySources, type DailyQuery, type DailyQueryResult } from '@jarvis/contracts';
 import { DailyReadError, queryDaily } from '../client';
 import { dailyFixture } from '../test-support';
-import { useDailyPages } from './useDailyPages';
+import { focusRefreshWindowMs, useDailyPages, type DailyPages } from './useDailyPages';
 
 vi.mock('../client', async importOriginal => ({
   ...await importOriginal<typeof import('../client')>(),
@@ -29,7 +29,7 @@ function deferred() {
 }
 async function settle() { await act(async () => { await Promise.resolve(); }); }
 async function tick(ms = 200) { await act(async () => { await vi.advanceTimersByTimeAsync(ms); }); }
-function hook(options?: { maxPages?: number; autoLoad?: boolean }) {
+function hook(options?: { maxPages?: number; autoLoad?: boolean; settle?: boolean }) {
   return renderHook(() => useDailyPages(backendUrl, token, query, 0, options));
 }
 
@@ -196,7 +196,7 @@ describe('useDailyPages', () => {
     expect(result.current.items).toEqual(third.items);
   });
 
-  it('refreshes on changed refreshVersion, window focus and visible tabs', async () => {
+  it('refreshes immediately on a changed refreshVersion, even inside the freshness window', async () => {
     read.mockResolvedValue(third);
     const { rerender } = renderHook(({ version }) => useDailyPages(backendUrl, token, query, version),
       { initialProps: { version: 0 } });
@@ -207,18 +207,81 @@ describe('useDailyPages', () => {
     rerender({ version: 1 });
     await tick();
     expect(read).toHaveBeenCalledTimes(2);
+  });
+
+  it('skips focus and visibility refetches inside the freshness window and performs them outside it', async () => {
+    read.mockResolvedValue(third);
+    renderHook(() => useDailyPages(backendUrl, token, query, 0));
+    await settle();
+    expect(read).toHaveBeenCalledTimes(1);
+    await tick(focusRefreshWindowMs - 1000);
+    act(() => { window.dispatchEvent(new Event('focus')); document.dispatchEvent(new Event('visibilitychange')); });
+    await tick();
+    expect(read).toHaveBeenCalledTimes(1);
+    await tick(1000);
     act(() => window.dispatchEvent(new Event('focus')));
     await tick();
-    expect(read).toHaveBeenCalledTimes(3);
+    expect(read).toHaveBeenCalledTimes(2);
+    act(() => window.dispatchEvent(new Event('focus')));
+    await tick();
+    expect(read).toHaveBeenCalledTimes(2);
+    await tick(focusRefreshWindowMs);
     vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
     act(() => { document.dispatchEvent(new Event('visibilitychange')); window.dispatchEvent(new Event('focus')); });
     await tick();
-    expect(read).toHaveBeenCalledTimes(3);
+    expect(read).toHaveBeenCalledTimes(2);
     vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
     act(() => document.dispatchEvent(new Event('visibilitychange')));
     await tick();
-    expect(read).toHaveBeenCalledTimes(4);
+    expect(read).toHaveBeenCalledTimes(3);
     vi.restoreAllMocks();
+  });
+
+  it('refetches a failed read on focus even inside the freshness window', async () => {
+    read.mockRejectedValueOnce(new Error('private detail')).mockResolvedValueOnce(third);
+    const { result } = hook();
+    await settle();
+    expect(result.current.status).toBe('error');
+    act(() => window.dispatchEvent(new Event('focus')));
+    await tick();
+    expect(read).toHaveBeenCalledTimes(2);
+    expect(result.current).toMatchObject({ status: 'ready', items: third.items, error: null });
+  });
+
+  it('publishes a settled auto-load chain once, with no per-page states', async () => {
+    read.mockResolvedValueOnce(first).mockResolvedValueOnce(second).mockResolvedValueOnce(third);
+    const states: DailyPages[] = [];
+    renderHook(() => {
+      const pages = useDailyPages(backendUrl, token, query, 0, { autoLoad: true, settle: true });
+      states.push(pages);
+      return pages;
+    });
+    await settle();
+    expect(read).toHaveBeenCalledTimes(3);
+    expect(states.some(state => state.loadingMore)).toBe(false);
+    expect(states.filter(state => state.items.length > 0).map(state => state.pages)).toEqual([3]);
+    expect(states.at(-1)).toMatchObject({
+      status: 'ready', pages: 3, items: [...first.items, ...second.items, ...third.items], hasMore: false,
+    });
+  });
+
+  it('keeps the previous records on screen while a settled refresh chains pages', async () => {
+    const pending = deferred();
+    read.mockResolvedValueOnce(third).mockResolvedValueOnce(first).mockReturnValueOnce(pending.promise)
+      .mockResolvedValueOnce(third);
+    const { result } = hook({ autoLoad: true, settle: true });
+    await settle();
+    expect(result.current).toMatchObject({ status: 'ready', items: third.items, pages: 1 });
+    act(() => result.current.reload());
+    await tick();
+    expect(read).toHaveBeenCalledTimes(3);
+    expect(result.current).toMatchObject({
+      status: 'loading', items: third.items, pages: 1, first: third, loadingMore: false,
+    });
+    await act(async () => { pending.resolve(second); });
+    expect(result.current).toMatchObject({
+      status: 'ready', pages: 3, items: [...first.items, ...second.items, ...third.items], first,
+    });
   });
 
   it.each([

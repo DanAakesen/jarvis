@@ -5784,7 +5784,12 @@ default, or automatically follows cursors up to `maxPages` (default 10, ceiling
 unknown. Query/backend changes abort and clear the old read. Debounced refreshes
 retain records until the new first page arrives; later-page failures retain the
 cursor for retry, while auth/disabled failures clear records. Existing overview
-probes and the single-page Data browser are unchanged.
+probes and the single-page Data browser are unchanged. A focus or visibility event
+refetches only when the last read failed or began 60 s or more ago
+(`focusRefreshWindowMs`); `reload`, Retry and a changed `refreshVersion` are always
+immediate. The opt-in `settle` option (used with `autoLoad` by the Overview tiles
+and Today cards) publishes the chain once, after its last page, and keeps the
+previous records visible while a refresh runs (20 October 2026; P14-44).
 
 ### On-demand Daily views (18 October 2026; P12-16)
 

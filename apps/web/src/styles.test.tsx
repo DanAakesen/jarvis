@@ -156,7 +156,7 @@ describe('app-wide control contract', () => {
     expect(overview).toContain('grid-template-columns: repeat(2, minmax(0, 1fr))');
     expect(overview).toContain('@media (min-width: 1200px)');
     expect(overview).toContain('grid-template-columns: repeat(3, minmax(0, 1fr))');
-    expect(ruleDeclaration(overview, /\.daily-summary-tile\s*>\s*\.daily-freshness\s*\{([^}]*)\}/, 'margin-top')).toBe('auto');
+    expect(ruleDeclaration(overview, /\.daily-summary-tile\s*>\s*\.daily-tile-status\s*\{([^}]*)\}/, 'margin-top')).toBe('auto');
     expect(shared).toContain('.daily-coverage-note > summary:focus-visible');
     expect(shared).toContain('min-height: 44px; align-content: center; cursor: pointer');
   });

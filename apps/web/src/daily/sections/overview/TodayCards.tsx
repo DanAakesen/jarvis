@@ -52,19 +52,26 @@ function TodayCard({ title, section, pages, empty, emptyMessage, className = '',
   children: ReactNode;
 }) {
   const hasItems = pages.items.length > 0;
-  return <article className={`daily-stat-tile daily-today-card ${className}`.trim()}
+  const refreshing = pages.status === 'loading' && pages.first !== null;
+  // The body and status slots are always mounted and reserve their height, so a card keeps its size from skeleton to values.
+  return <article className={`daily-stat-tile daily-today-card ${className}`.trim()} data-card={title.toLowerCase()}
     aria-busy={pages.status === 'loading' || pages.loadingMore || undefined}>
     <h3><Link to={`?section=${section}`}>{title}</Link></h3>
-    {pages.status === 'loading' && !pages.first
-      ? <Loader label={`Loading ${title.toLowerCase()}`} variant="rows" />
-      : pages.status === 'error' && !hasItems
-        ? <DailyState status="error" message={pages.error ?? 'Daily history could not be loaded.'} onRetry={pages.reload} />
-        : pages.first && empty
-          ? <DailyState status="empty" emptyMessage={emptyMessage} />
-          : children}
+    <div className="daily-tile-body">
+      {pages.status === 'loading' && !pages.first
+        ? <Loader label={`Loading ${title.toLowerCase()}`} variant="lines" />
+        : pages.status === 'error' && !hasItems
+          ? <DailyState status="error" message={pages.error ?? 'Daily history could not be loaded.'} onRetry={pages.reload} />
+          : pages.first && empty
+            ? <DailyState status="empty" emptyMessage={emptyMessage} />
+            : children}
+    </div>
     {pages.error && hasItems && <DailyState status="error" message={pages.error} onRetry={pages.reload} />}
-    {pages.first && <FreshnessLine observedAt={pages.first.freshness.observedAt}
-      count={pages.items.length} partial={pages.hasMore || pages.error !== null} />}
+    <div className="daily-tile-status">
+      {refreshing ? <p className="daily-freshness" role="status">Refreshing…</p>
+        : pages.first && <FreshnessLine observedAt={pages.first.freshness.observedAt}
+          count={pages.items.length} partial={pages.hasMore || pages.error !== null} />}
+    </div>
   </article>;
 }
 
@@ -79,7 +86,7 @@ function TrainingCard({ backendUrl, getAccessToken, refreshVersion, today }: Sha
   const period = overviewPeriods(noonOf(today));
   const pages = useDailyPages(backendUrl, getAccessToken, {
     source: sources.workouts, ...period.thisWeek, limit: 200,
-  }, refreshVersion, { autoLoad: true, maxPages: 5 });
+  }, refreshVersion, { autoLoad: true, maxPages: 5, settle: true });
   const counts = trainingCounts(pages.items as Workout[], period.thisWeek);
   const rings = [
     { label: 'Strength', count: counts.strength },
@@ -121,17 +128,20 @@ function useNutritionTargets({ backendUrl, getAccessToken }: Shared, enabled: bo
 function TargetNote({ targets, retry, missing }: {
   targets: ReturnType<typeof useNutritionTargets>['current']; retry: () => void; missing: boolean;
 }) {
-  if (!targets) return <Loader label="Loading nutrition targets" variant="inline" />;
-  if (targets.error) return <div role="alert"><p>{targets.error}</p>
-    <button className="secondary-button" type="button" onClick={retry}>Retry targets</button></div>;
-  return missing ? <p className="daily-meta">Not set. <Link to="/settings#nutrition-targets">Set it in Settings</Link>.</p> : null;
+  // The wrapper is always mounted, so the line the note needs is reserved before the targets arrive.
+  return <div className="daily-today-note">
+    {!targets ? <Loader label="Loading nutrition targets" variant="inline" />
+      : targets.error ? <div role="alert"><p>{targets.error}</p>
+        <button className="secondary-button" type="button" onClick={retry}>Retry targets</button></div>
+        : missing ? <p className="daily-meta">Not set. <Link to="/settings#nutrition-targets">Set it in Settings</Link>.</p> : null}
+  </div>;
 }
 
 function NutritionCards(shared: Shared) {
   const { backendUrl, getAccessToken, refreshVersion, today } = shared;
   const pages = useDailyPages(backendUrl, getAccessToken, {
     source: sources.days, startDate: today, endDate: today, limit: 10,
-  }, refreshVersion, { autoLoad: true, maxPages: 2 });
+  }, refreshVersion, { autoLoad: true, maxPages: 2, settle: true });
   const latest = latestNutritionDay(pages.items as NutritionRow[], { startDate: today, endDate: today });
   const targets = useNutritionTargets(shared, latest !== null);
   const values = latest ? nutritionSummaryValues(latest) : null;
@@ -147,21 +157,21 @@ function NutritionCards(shared: Shared) {
   const leftKind = left === null ? '' : left >= 0 ? 'left' : 'over';
   const leftBound = !bound || left === null ? '' : left >= 0 ? 'at most' : 'at least';
   return <>
-    <TodayCard title="Protein today" section="nutrition" pages={pages} empty={!latest} emptyMessage="No meals logged today">
-      <Ring label="Protein" value={protein} target={proteinTarget}
+    <TodayCard title="Protein today" section="nutrition" pages={pages} empty={!latest} emptyMessage="No meals logged today" className="daily-today-protein">
+      <Ring label="Protein" value={protein} target={proteinTarget} reserveCaption
         centre={protein === null ? 'Unknown' : `${formatNumber(protein)} g`}
         caption={proteinTarget === null ? undefined : `of ${formatNumber(proteinTarget)} g${partial('protein_grams') ? ', lower bound' : ''}`}
         summary={protein === null ? 'unknown' : `${formatNumber(protein)} g${proteinTarget === null ? ', no target set' : ` of ${formatNumber(proteinTarget)} g`}`} />
       <TargetNote targets={targets.current} retry={targets.retry} missing={state !== null && proteinTarget === null} />
     </TodayCard>
-    <TodayCard title="Calories left today" section="nutrition" pages={pages} empty={!latest} emptyMessage="No meals logged today">
-      <Ring label="Calories" value={energy} target={baseline}
+    <TodayCard title="Calories left today" section="nutrition" pages={pages} empty={!latest} emptyMessage="No meals logged today" className="daily-today-calories">
+      <Ring label="Calories" value={energy} target={baseline} reserveCaption
         centre={left === null ? (energy === null ? 'Unknown' : `${formatNumber(energy)} kcal`)
           : `${leftBound === 'at most' ? '≤ ' : leftBound === 'at least' ? '≥ ' : ''}${formatNumber(Math.abs(left))}`}
         caption={left === null ? undefined : `kcal ${leftKind}${leftBound ? `, ${leftBound}` : ''}`}
         summary={left === null ? (energy === null ? 'unknown' : `${formatNumber(energy)} kcal eaten${bound ? ' (lower bound)' : ''}, no baseline set`)
           : `${leftBound ? `${leftBound === 'at most' ? 'At most' : 'At least'} ` : ''}${formatNumber(Math.abs(left))} kcal ${leftKind} of ${formatNumber(baseline)} kcal${bound ? ', eaten is a lower bound' : ''}`} />
-      {left !== null && <p className="daily-meta">Resting burn minus deficit, before activity{bound ? '. Eaten is a lower bound' : ''}</p>}
+      <div className="daily-today-note daily-today-burn">{left !== null && <p className="daily-meta">Resting burn minus deficit, before activity{bound ? '. Eaten is a lower bound' : ''}</p>}</div>
       <TargetNote targets={targets.current} retry={targets.retry} missing={state !== null && baseline === null} />
     </TodayCard>
   </>;
@@ -170,7 +180,7 @@ function NutritionCards(shared: Shared) {
 function MealStrip({ backendUrl, getAccessToken, refreshVersion, today }: Shared) {
   const pages = useDailyPages(backendUrl, getAccessToken, {
     source: sources.meals, startDate: today, endDate: today, limit: 100,
-  }, refreshVersion, { autoLoad: true, maxPages: 3 });
+  }, refreshVersion, { autoLoad: true, maxPages: 3, settle: true });
   const meals = (pages.items as NutritionRow[]).filter(row => !deleted(row)).sort((a, b) => {
     const first = Date.parse(text(a.occurred_at, ''));
     const second = Date.parse(text(b.occurred_at, ''));

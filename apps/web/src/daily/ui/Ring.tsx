@@ -1,9 +1,11 @@
-export function Ring({ label, value, target, centre, caption, summary }: {
+export function Ring({ label, value, target, centre, caption, reserveCaption = false, summary }: {
   label: string;
   value: number | null | undefined;
   target: number | null | undefined;
   centre: string;
   caption?: string | undefined;
+  /** Keeps the caption line in place before the text is known, so the ring does not move when it arrives. */
+  reserveCaption?: boolean;
   summary: string;
 }) {
   const known = typeof value === 'number' && Number.isFinite(value) && value >= 0 &&
@@ -18,6 +20,8 @@ export function Ring({ label, value, target, centre, caption, summary }: {
       </svg>
       <span className="daily-ring-centre" aria-hidden="true">{centre}</span>
     </div>
-    <figcaption><span className="daily-ring-label">{label}</span>{caption && <span className="daily-ring-caption">{caption}</span>}</figcaption>
+    <figcaption><span className="daily-ring-label">{label}</span>
+      {caption ? <span className="daily-ring-caption">{caption}</span>
+        : reserveCaption && <span className="daily-ring-caption" aria-hidden="true">{'\u00a0'}</span>}</figcaption>
   </figure>;
 }
