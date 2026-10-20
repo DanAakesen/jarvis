@@ -66,6 +66,7 @@ describe('GET /daily/nutrition-targets', () => {
       updatedAt: at,
       bounds: nutritionTargetBounds,
     });
+    expect(JSON.stringify(response.json().bounds)).not.toMatch(/\bdaily\b/iu);
     expect(f.store.read).toHaveBeenCalledOnce();
     expect(f.store.read.mock.calls[0]![0]).toBeInstanceOf(AbortSignal);
   });

@@ -764,7 +764,7 @@ export function SettingsPage({ backendUrl, getAccessToken, presence, notificatio
                   onChange={(event) => update('global', 'maxParallelTasks', Number(event.target.value))} />
               </div>
               <div className="settings-field settings-number-field">
-                <label htmlFor="screen-share-daily-frame-cap">Daily screen inspection limit</label>
+                <label htmlFor="screen-share-daily-frame-cap">Screen inspection limit</label>
                 <input id="screen-share-daily-frame-cap" type="number" min="1" max="300" step="1"
                   value={settings.global.screenShareDailyFrameCap} disabled={saving}
                   onChange={(event) => update('global', 'screenShareDailyFrameCap', Number(event.target.value))} />
@@ -780,7 +780,7 @@ export function SettingsPage({ backendUrl, getAccessToken, presence, notificatio
               )}
               {typeof settings.global.visionDailyBudgetUsd === 'number' && (
                 <div className="settings-field settings-number-field">
-                  <label htmlFor="vision-daily-budget">Daily watch budget (USD)</label>
+                  <label htmlFor="vision-daily-budget">Per-day watch budget (USD)</label>
                   <input id="vision-daily-budget" type="number" min="0" max="100" step="0.1"
                     value={settings.global.visionDailyBudgetUsd} disabled={saving}
                     onChange={(event) => update('global', 'visionDailyBudgetUsd', event.target.valueAsNumber)} />

@@ -119,7 +119,7 @@ function MetricUnit({ name, unit, rows, period }: {
   const unitLabel = unit ?? 'Unit unknown';
   const chartName = `${name} — ${unitLabel}`;
   const sorted = [...rows].sort((a, b) => String(b.metric_date).localeCompare(String(a.metric_date)));
-  const series = [{ name: 'Daily value', points: summary.days.map(day => ({ x: day.date, y: day.value, low: day.low, high: day.high })) }];
+  const series = [{ name: 'Value per day', points: summary.days.map(day => ({ x: day.date, y: day.value, low: day.low, high: day.high })) }];
   const hasRanges = summary.days.some(day => day.low !== null && day.high !== null);
   const days = periodDates(period);
   const values = new Map(summary.days.map(day => [day.date, day.value]));
@@ -131,7 +131,7 @@ function MetricUnit({ name, unit, rows, period }: {
         delta={summary.change === null ? { current: null, previous: null } : {
           current: summary.latest?.value, previous: summary.first?.value, ...(unit ? { unit } : {}),
         }}
-        sparkline={{ values: days.map(date => values.get(date) ?? null), label: `${chartName} daily trend with missing days shown as gaps` }} />
+        sparkline={{ values: days.map(date => values.get(date) ?? null), label: `${chartName} day-by-day trend with missing days shown as gaps` }} />
       <StatTile label="Average" value={summary.average} unit={unit ?? ''}
         note={`${summary.count} of ${summary.total} ${summary.total === 1 ? 'day' : 'days'} with numeric values`} />
       <StatTile label="Minimum" value={summary.minimum?.value} unit={unit ?? ''}
@@ -143,7 +143,7 @@ function MetricUnit({ name, unit, rows, period }: {
       description="Lines connect recorded readings no more than 3 calendar days apart; wider gaps remain disconnected. Missing values are not interpolated."
       {...(hasRanges ? { rangeLabel: `Recorded minimum–maximum (${unitLabel})` } : {})}
       series={series} dataTable={
-        <ScrollTable label={`${chartName} recorded daily rows`}>
+        <ScrollTable label={`${chartName} recorded values by day`}>
           <table><caption>{chartName}: newest first</caption>
             <thead><tr>{['Date', 'Shown value', 'Basis', 'Unit', 'Recorded minimum', 'Recorded average', 'Recorded maximum', 'Samples'].map(label =>
               <th key={label} scope="col">{label}</th>)}</tr></thead>
@@ -151,7 +151,7 @@ function MetricUnit({ name, unit, rows, period }: {
               const shown = metricValue(row);
               return <tr key={`${String(row.metric_date)}-${index}`}>
                 <th scope="row">{formatDate(dateOnly(row.metric_date))}</th>
-                <td>{formatNumber(shown.value)}</td><td>{shown.average ? 'Recorded average (fallback)' : shown.value !== null ? 'Daily value' : 'Unknown'}</td>
+                <td>{formatNumber(shown.value)}</td><td>{shown.average ? 'Recorded average (fallback)' : shown.value !== null ? 'Value for the day' : 'Unknown'}</td>
                 <td>{unitLabel}</td>{['min_value', 'avg_value', 'max_value', 'sample_count'].map(key => <td key={key}>{formatNumber(finite(row[key]))}</td>)}
               </tr>;
             })}</tbody>

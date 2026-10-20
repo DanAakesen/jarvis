@@ -93,7 +93,7 @@ export async function registerHealthUploadRoutes(app: FastifyInstance,options: H
     if (kind === 'upload' && (!automation || !session)) throw new TypeError('Missing upload identity');
     request.healthUploadIdentity = { automationId: automation ?? 'heartbeat',sessionId: session ?? randomUUID() };
     if (kind === 'heartbeat') {
-      const name = header(request,'shortcut-name') ?? 'Daily Overview heartbeat';
+      const name = header(request,'shortcut-name') ?? 'Health Overview heartbeat';
       opaqueId(name,256); request.healthHeartbeatName = name;
     } else for (const name of ['checksum','x-payload-checksum']) { const checksum = header(request,name); if (checksum !== undefined && !/^[a-f\d]{64}$/iu.test(checksum)) throw new TypeError('Invalid checksum'); }
   };

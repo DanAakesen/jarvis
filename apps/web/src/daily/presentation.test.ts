@@ -1,9 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import { dailyQuerySources as sources, isDailyQuery } from '@jarvis/contracts';
-import { dailyCellValue, dailyColumns, dailyPlots, dailyRequest, dailyRowKey, dailySources, dailyValue, initialDailyPeriod } from './presentation';
+import { dailyCellValue, dailyColumns, dailyPlots, dailyRequest, dailyRowKey, dailySources, dailyValue, healthSourceLabel, initialDailyPeriod } from './presentation';
 import { formatTime } from './ui/formatters';
 
 describe('retained Daily record presentation', () => {
+  it('shows a human Health label instead of internal source ids', () => {
+    expect(healthSourceLabel('daily.metrics')).toBe('Health · metrics');
+    expect(healthSourceLabel('daily-sql')).toBe('Health · data store');
+    expect(healthSourceLabel('other-source')).toBe('other-source');
+    expect(healthSourceLabel('daily.metrics')).not.toMatch(/\bdaily\b/iu);
+  });
+
   it('chooses Copenhagen calendar days across UTC midnight and year boundaries', () => {
     expect(initialDailyPeriod(new Date('2026-01-01T23:30:00Z'))).toEqual({ startDate: '2025-12-27', endDate: '2026-01-02' });
   });

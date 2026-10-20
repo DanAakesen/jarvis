@@ -61,7 +61,7 @@ function TodayCard({ title, section, pages, empty, emptyMessage, className = '',
       {pages.status === 'loading' && !pages.first
         ? <Loader label={`Loading ${title.toLowerCase()}`} variant="lines" />
         : pages.status === 'error' && !hasItems
-          ? <DailyState status="error" message={pages.error ?? 'Daily history could not be loaded.'} onRetry={pages.reload} />
+          ? <DailyState status="error" message={pages.error ?? 'Health history could not be loaded.'} onRetry={pages.reload} />
           : pages.first && empty
             ? <DailyState status="empty" emptyMessage={emptyMessage} />
             : children}
@@ -213,8 +213,8 @@ export function TodayCards({ backendUrl, getAccessToken, refreshVersion, availab
       {available.includes(sources.workouts) ? <TrainingCard {...shared} />
         : <UnavailableCard title="Training this week" className="daily-today-training">Workouts are not served.</UnavailableCard>}
       {available.includes(sources.days) ? <NutritionCards {...shared} /> : <>
-        <UnavailableCard title="Protein today">Daily nutrition totals are not served.</UnavailableCard>
-        <UnavailableCard title="Calories left today">Daily nutrition totals are not served.</UnavailableCard>
+        <UnavailableCard title="Protein today">Nutrition totals for the day are not available.</UnavailableCard>
+        <UnavailableCard title="Calories left today">Nutrition totals for the day are not available.</UnavailableCard>
       </>}
     </div>
     {available.includes(sources.meals) ? <MealStrip {...shared} />

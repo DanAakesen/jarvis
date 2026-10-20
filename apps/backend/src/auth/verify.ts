@@ -57,7 +57,7 @@ export function createTokenVerifier(config: AuthConfig, keys?: JWTVerifyGetKey):
   if (config.dailyConnectorClientId !== undefined &&
       (!/^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/iu.test(config.dailyConnectorClientId) ||
        [config.apiClientId, config.pcBridgeClientId].some(id => id?.toLowerCase() === config.dailyConnectorClientId?.toLowerCase()))) {
-    throw new ConfigurationError('The Daily connector must identify a separate approved OAuth client');
+    throw new ConfigurationError('The Health connector must identify a separate approved OAuth client');
   }
   const issuer = `https://login.microsoftonline.com/${config.tenantId}/v2.0`;
   const v1Issuer = `https://sts.windows.net/${config.tenantId}/`;

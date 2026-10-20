@@ -389,7 +389,7 @@ describe('inactive hosted nutrition MCP adapter', () => {
     const { client } = await f.connect('read');
     const result = await client.callTool({ name: 'lookup_food', arguments: { savedName: 'Synthetic oversized meal' } });
     expect(result.isError).toBe(true);
-    expect(result.content).toEqual([{ type: 'text', text: 'Saved food exceeds the shared Daily response limit. No complete result is available.' }]);
+    expect(result.content).toEqual([{ type: 'text', text: 'Saved food exceeds the shared Health response limit. No complete result is available.' }]);
     expect(f.nutrition.lookup).not.toHaveBeenCalled();
   });
 

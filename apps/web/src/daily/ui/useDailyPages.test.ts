@@ -177,7 +177,7 @@ describe('useDailyPages', () => {
     await tick();
     expect(result.current).toMatchObject({
       status: 'error', items: first.items, pages: 1, first, last: first,
-      error: 'Daily could not be loaded.',
+      error: 'Health could not be loaded.',
     });
   });
 
@@ -286,7 +286,7 @@ describe('useDailyPages', () => {
 
   it.each([
     [new DailyReadError('Synthetic unavailable'), 'Synthetic unavailable'],
-    [new Error('private detail'), 'Daily could not be loaded.'],
+    [new Error('private detail'), 'Health could not be loaded.'],
   ])('reports a first-page failure with the shared recovery message', async (error, message) => {
     read.mockRejectedValueOnce(error);
     const { result } = hook();
