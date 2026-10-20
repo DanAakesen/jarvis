@@ -103,14 +103,14 @@ describe('knowledge graph view', () => {
     ], edges: [] })));
     render(<KnowledgeGraphView backendUrl="https://api.example.com" getAccessToken={getAccessToken} />);
     expect(screen.queryByRole('button', { name: /^Tasks/u })).toBeNull();
-    const rootFilter = await screen.findByRole('button', { name: 'Root1' });
-    expect(rootFilter.getAttribute('title')).toBe('Show only Root');
+    const rootFilter = await screen.findByRole('button', { name: 'Vault root1' });
+    expect(rootFilter.getAttribute('title')).toBe('Show only Vault root');
     fireEvent.click(rootFilter);
     expect(screen.queryByText(/^\d+ notes?$/u)).toBeNull();
-    const rootNote = within(screen.getByRole('list', { name: 'Root notes' })).getByRole('button', { name: 'Root fixture' });
+    const rootNote = within(screen.getByRole('list', { name: 'Vault root notes' })).getByRole('button', { name: 'Root fixture' });
     expect(rootNote).not.toBeNull();
     fireEvent.click(rootNote);
-    expect(await screen.findByText('Root · AGENTS.md')).not.toBeNull();
+    expect(await screen.findByText('Vault root · AGENTS.md')).not.toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Customers1' }));
     expect(within(screen.getByRole('list', { name: 'Customers notes' })).getByRole('button', { name: 'Customer fixture' })).not.toBeNull();
     expect(screen.queryByRole('button', { name: 'General0' })).toBeNull();
@@ -122,7 +122,7 @@ describe('knowledge graph view', () => {
     ], edges: [] })));
     render(<KnowledgeGraphView backendUrl="https://api.example.com" getAccessToken={getAccessToken} />);
 
-    expect(await screen.findByRole('button', { name: 'Root1' })).not.toBeNull();
+    expect(await screen.findByRole('button', { name: 'Vault root1' })).not.toBeNull();
     expect(screen.getByRole('button', { name: 'Archive1' })).not.toBeNull();
     const colours = folderColours(document.createElement('div'));
     const fallback = colours.get('')!;

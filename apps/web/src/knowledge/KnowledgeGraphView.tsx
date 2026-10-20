@@ -11,7 +11,7 @@ import { StateMessage } from '../StateMessage';
 import { formatDateOnly, formatTimeOnly } from '../format/date-time';
 
 type Load = { status: 'loading' } | { status: 'unavailable' } | { status: 'error'; message: string } | { status: 'ready'; graph: KnowledgeGraph };
-const folderLabel = (folder: string) => folder || 'Root';
+const folderLabel = (folder: string) => folder || 'Vault root';
 
 const reducedMotion = () => (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false) ||
   document.documentElement.dataset.motion === 'reduced';
