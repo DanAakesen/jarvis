@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { awaitWithSignal, backendFetch } from '../backend-request';
 import { runDailyRead } from './client';
 
@@ -208,9 +208,13 @@ export function useTrainingTargets(backendUrl: string | null, getAccessToken: ()
   const [attempt, setAttempt] = useState(0);
   const key = JSON.stringify([backendUrl, attempt, enabled]);
   const [loaded, setLoaded] = useState<{ key: string; view: TrainingTargetsView }>({ key, view: { status: 'loading' } });
+  const current = useRef({ key, read: null as AbortController | null });
   useEffect(() => {
+    const latest = current.current;
+    latest.key = key;
     if (!enabled) return;
     const controller = new AbortController();
+    latest.read = controller;
     void loadTrainingTargets(backendUrl, getAccessToken, controller.signal).then(
       (state) => { if (!controller.signal.aborted) setLoaded({ key, view: { status: 'settled', state } }); },
       (error: unknown) => {
@@ -219,11 +223,19 @@ export function useTrainingTargets(backendUrl: string | null, getAccessToken: ()
         setLoaded({ key, view: { status: 'error', kind, message: trainingTargetsFailureMessage(kind, 'load') } });
       },
     );
-    return () => controller.abort();
+    return () => {
+      controller.abort();
+      if (latest.read === controller) latest.read = null;
+    };
   }, [backendUrl, getAccessToken, key, enabled]);
   const retry = useCallback(() => setAttempt((value) => value + 1), []);
-  // A save made elsewhere on the page is already the server's answer, so consumers take it without another read.
-  const apply = useCallback((state: TrainingTargetsState) => setLoaded({ key, view: { status: 'settled', state } }), [key]);
+  // A save made elsewhere on the page is already the server's answer, so consumers take it without another read. A read
+  // still in flight may have started before that save, so it is cancelled and can never replace what the save returned.
+  const apply = useCallback((state: TrainingTargetsState) => {
+    current.current.read?.abort();
+    current.current.read = null;
+    setLoaded({ key: current.current.key, view: { status: 'settled', state } });
+  }, []);
   const view: TrainingTargetsView = !enabled
     ? { status: 'error', kind: 'unavailable', message: trainingTargetsFailureMessage('unavailable', 'load') }
     : loaded.key === key ? loaded.view : { status: 'loading' };

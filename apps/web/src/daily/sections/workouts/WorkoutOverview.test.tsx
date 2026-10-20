@@ -213,6 +213,20 @@ describe('target-ready mini ring', () => {
     expect(screen.getByRole('link', { name: 'No target set' }).getAttribute('href')).toBe('/settings#training-targets');
   });
 
+  it('treats a weekly target of 0 as a set target: it shows 0, offers no settings link and never divides by zero', () => {
+    const view = render(<MemoryRouter><TrainingRing label="Gym" count={2} target={{ status: 'ready', value: 0 }} days={7} /></MemoryRouter>);
+    expect(screen.getByText('0 in period · 0 / week')).toBeTruthy();
+    expect(screen.queryByRole('link', { name: 'No target set' })).toBeNull();
+    expect(screen.getByRole('img', { name: 'Gym: 2 sessions; 0 target for this period (0 per week)' })).toBeTruthy();
+    expect(view.container.querySelector('.daily-ring-track--unavailable')).toBeNull();
+    expect(view.container.querySelector('.daily-ring-fill')?.getAttribute('stroke-dasharray')).toBe('100 100');
+    cleanup();
+    const empty = render(<MemoryRouter><TrainingRing label="Gym" count={0} target={{ status: 'ready', value: 0 }} days={7} /></MemoryRouter>);
+    expect(empty.container.querySelector('.daily-ring-fill')).toBeNull();
+    expect(empty.container.querySelector('.daily-ring-track--unavailable')).toBeNull();
+    expect(empty.container.textContent).not.toMatch(/NaN|Infinity/u);
+  });
+
   it.each([
     ['loading', 'Loading target', 'loading target'],
     ['failed', 'Targets unavailable', 'targets unavailable'],
@@ -226,6 +240,11 @@ describe('target-ready mini ring', () => {
 });
 
 describe('shared training targets', () => {
+  it('keeps a target of 0 apart from a target nobody set', () => {
+    mount(pages(), {}, { gymSessionsPerWeek: 0, runSessionsPerWeek: null });
+    expect(screen.getByText('0 in period · 0 / week')).toBeTruthy();
+    expect(screen.getAllByRole('link', { name: 'No target set' })).toHaveLength(1);
+  });
   it('scales the owner-set weekly targets to the selected days', () => {
     mount(pages(), {}, { gymSessionsPerWeek: 3, runSessionsPerWeek: 2 });
     expect(screen.getByText('3 in period · 3 / week')).toBeTruthy();

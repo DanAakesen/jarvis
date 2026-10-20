@@ -1904,9 +1904,12 @@ visit to the Health area, so the Overview rings (steps scale with the selected d
 sessions with the selected weeks), the Health panel weekly tiles and the Workouts
 rings agree and a save in Rules & sources changes them without a reload. The
 caption says what the read is: "Loading target" while it is pending, "No target
-set" only when the read succeeded and the field is empty, "Targets unavailable" when
-it failed (with a Retry beside it, except where the source is not served at all),
-and a ring never draws a comparison for a target it does not have.
+set" (a link to the training targets in Settings, as in the Health panel and the
+Workouts rings) only when the read succeeded and the field is empty, "Targets
+unavailable" when it failed (with a Retry beside it, except where the source is not
+served at all), and a ring never draws a comparison for a target it does not have.
+A target of 0 is a real target: it reads "of 0" or "0 sessions", offers no Settings
+link and never divides.
 Checked the section shell in isolated Chromium against only synthetic capability
 and query responses at 320, 390×844, 768 and 1440×900 in light and dark, with
 reduced motion. Overview, Data and brief detail, keyboard/URL switching, shared

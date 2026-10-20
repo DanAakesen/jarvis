@@ -6066,10 +6066,17 @@ contract, and since P14-55 the Health area consumes it once: `TrainingTargetsPro
 the read the first time a view calls `useTrainingTargetsShared()` (so a section with
 no targets never asks) and offers `retry` and `apply`. The Overview top cards, the
 Health panel, the Workouts rings and the Rules & sources editor read the same view
-through `readTarget`; the editor hands each state it loads or saves to `apply`, so
-the cards follow a save without another read. Outside the provider the default view
-is an unavailable error, which reads "Targets unavailable". The global Settings
-editor stays separate, so a save there is picked up by the next visit to Health.
+through `readTarget`. The editor (`TrainingTargetsEditor`) holds no read of its own:
+it starts from the shared state, follows a newer one while the owner has no edits in
+progress (edits in progress are kept), and hands the state each save returns to
+`apply`, which also aborts any read still in flight, so a late read can never replace
+a newer save. A configured target of 0 is a value in every consumer (`readTarget`
+returns `{status: 'ready', value: 0}`; the rings treat it as a known target and never
+divide by it); only `null` means no target is set. Outside the provider the default
+view is an unavailable error, which reads "Targets unavailable". The global Settings
+page sits outside the Health area, so `TrainingTargetsSettings` there wraps the same
+editor around one `useTrainingTargets` read of its own, and a save there is picked
+up by the next visit to Health.
 
 ### Personalised suggestion adapter (17 October 2026)
 

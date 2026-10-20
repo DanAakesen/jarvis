@@ -60,7 +60,7 @@ export function trainingSummary(rows: readonly Workout[], period: DailyPeriod) {
 }
 
 export function periodTarget(weeklyTarget: number | null, days: number) {
-  return weeklyTarget !== null && Number.isFinite(weeklyTarget) && weeklyTarget > 0 && days > 0
+  return weeklyTarget !== null && Number.isFinite(weeklyTarget) && weeklyTarget >= 0 && days > 0
     ? weeklyTarget * days / 7 : null;
 }
 

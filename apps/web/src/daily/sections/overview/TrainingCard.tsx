@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import { Loader } from '../../../Loader';
 import { DailyUnavailable } from '../../ui/DailyUnavailable';
 import { Ring } from '../../ui/Ring';
@@ -27,8 +28,9 @@ function Gauge({ label, state, value, target, periods, unit, singular = unit }: 
   if (value === null) return <Ring label={label} value={null} target={null} centre="—" caption="Not recorded" summary="not recorded" />;
   const shown = formatNumber(value, 0);
   const goal = target.status === 'ready' ? scaledTarget(target.value, periods) : null;
+  // Only a target the owner never set offers the way to set one; a target of 0 is a real target and reads "of 0".
   const caption = target.status === 'loading' ? 'Loading target' : target.status === 'failed' ? 'Targets unavailable'
-    : goal === null ? 'No target set' : `of ${formatNumber(goal, 0)}`;
+    : goal === null ? <Link to="/settings#training-targets">No target set</Link> : `of ${formatNumber(goal, 0)}`;
   const spoken = target.status === 'loading' ? 'loading target' : target.status === 'failed' ? 'targets unavailable'
     : goal === null ? 'no target set' : `of ${formatNumber(goal, 0)}`;
   return <Ring label={label} value={value} target={goal} centre={shown} caption={caption}

@@ -180,6 +180,19 @@ describe('Health panel', () => {
     expect(screen.getByText('0 sessions remaining · 6 days remaining including today')).toBeTruthy();
   });
 
+  it('keeps a weekly target of 0 apart from a target nobody set', async () => {
+    rows[sources.workouts] = [{ workout_date: '2026-10-19', workout_type: 'strength_training' }];
+    mount('/', allSources, { gymSessionsPerWeek: 0, runSessionsPerWeek: null });
+    await settled();
+    const gym = screen.getByRole('heading', { name: 'Gym weekly target' }).closest('article')!;
+    expect(within(gym).getByText('1 / 0 sessions')).toBeTruthy();
+    expect(within(gym).queryByRole('link', { name: 'Set training targets' })).toBeNull();
+    const run = screen.getByRole('heading', { name: 'Run weekly target' }).closest('article')!;
+    expect(within(run).getByText('No target set')).toBeTruthy();
+    expect(within(run).getByRole('link', { name: 'Set training targets' }).getAttribute('href')).toBe('/settings#training-targets');
+    expect(gym.textContent).not.toMatch(/NaN|Infinity/u);
+  });
+
   it('shows catalogue categories, latest values, units and sample dates', async () => {
     rows[sources.metricCatalog] = [{ metric_name: 'synthetic_metric', category: 'body', units: ['kg'],
       first_date: '2026-10-20', last_date: '2026-10-20', day_count: 1, latest_updated_at: '2026-10-20T10:00:00Z' }];

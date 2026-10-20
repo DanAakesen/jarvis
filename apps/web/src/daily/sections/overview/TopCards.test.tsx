@@ -122,6 +122,32 @@ describe('Overview cards', () => {
     expect(training.getByRole('img', { name: 'Run: 1 session, week to date, no target set' })).toBeTruthy();
     expect(training.getByRole('img', { name: 'Activity: 6,500 steps, no target set' })).toBeTruthy();
     expect(training.getAllByText('No target set')).toHaveLength(3);
+    expect(training.getAllByRole('link', { name: 'No target set' }).map(link => link.getAttribute('href')))
+      .toEqual(['/settings#training-targets', '/settings#training-targets', '/settings#training-targets']);
+  });
+
+  it('keeps a target of 0 apart from a target nobody set, with no division by zero', async () => {
+    stub();
+    const { container } = render(view(everything, 0, { gymSessionsPerWeek: 0, runSessionsPerWeek: null, dailySteps: 0 }));
+    const training = card('Training');
+    await waitFor(() => expect(training.getByRole('img', { name: 'Gym: 1 session, week to date of 0' })).toBeTruthy());
+    expect(training.getByRole('img', { name: 'Activity: 6,500 steps of 0' })).toBeTruthy();
+    expect(training.getByRole('img', { name: 'Run: 1 session, week to date, no target set' })).toBeTruthy();
+    expect(training.getAllByRole('link', { name: 'No target set' })).toHaveLength(1);
+    expect(training.getAllByText('of 0')).toHaveLength(2);
+    expect(container.querySelectorAll('.daily-ring-fill')).toHaveLength(2);
+    expect(container.textContent).not.toMatch(/NaN|Infinity/u);
+  });
+
+  it('shows no link while a target is loading or unreadable, only for a target nobody set', async () => {
+    stub();
+    const { unmount } = render(view(everything, 0, 'loading'));
+    await waitFor(() => expect(card('Training').getAllByText('Loading target')).toHaveLength(3));
+    expect(card('Training').queryByRole('link', { name: 'No target set' })).toBeNull();
+    unmount();
+    render(view(everything, 0, 'failed'));
+    await waitFor(() => expect(card('Training').getAllByText('Targets unavailable')).toHaveLength(3));
+    expect(card('Training').queryByRole('link', { name: 'No target set' })).toBeNull();
   });
 
   it('compares the rings with the owner-set targets, scaled to the selected period', async () => {

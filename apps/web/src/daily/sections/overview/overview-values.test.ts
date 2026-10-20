@@ -177,6 +177,7 @@ describe('calorieBalance', () => {
 describe('scaledTarget', () => {
   it('multiplies an owner-set target by the periods and keeps a missing target missing', () => {
     expect(scaledTarget(3, 2)).toBe(6);
+    expect(scaledTarget(0, 2)).toBe(0);
     expect(scaledTarget(null, 2)).toBeNull();
   });
 });

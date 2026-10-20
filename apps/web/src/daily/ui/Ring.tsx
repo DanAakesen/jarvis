@@ -1,16 +1,20 @@
+import type { ReactNode } from 'react';
+
 export function Ring({ label, value, target, centre, caption, reserveCaption = false, summary }: {
   label: string;
   value: number | null | undefined;
   target: number | null | undefined;
   centre: string;
-  caption?: string | undefined;
+  /** Text, or a link to where a missing target is set. */
+  caption?: ReactNode;
   /** Keeps the caption line in place before the text is known, so the ring does not move when it arrives. */
   reserveCaption?: boolean;
   summary: string;
 }) {
+  // A target of 0 is a real target, so the ring is known; only null, a missing value or a negative number is not.
   const known = typeof value === 'number' && Number.isFinite(value) && value >= 0 &&
-    typeof target === 'number' && Number.isFinite(target) && target > 0;
-  const ratio = known ? Math.min(1, value / target) : 0;
+    typeof target === 'number' && Number.isFinite(target) && target >= 0;
+  const ratio = known ? (target === 0 ? (value > 0 ? 1 : 0) : Math.min(1, value / target)) : 0;
   return <figure className="daily-ring">
     <div className="daily-ring-graphic" role="img" aria-label={`${label}: ${summary}`}>
       <svg aria-hidden="true" viewBox="0 0 100 100">
