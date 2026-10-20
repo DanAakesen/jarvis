@@ -2,7 +2,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { dailyQuerySources as sources, type DailyQuery } from '@jarvis/contracts';
-import { queryDaily } from '../../client';
+import { DailyReadError, queryDaily } from '../../client';
 import { dailyFixture } from '../../test-support';
 import type { DailyPages } from '../../ui/useDailyPages';
 import type { DailySectionProps } from '../types';
@@ -135,6 +135,35 @@ describe('Workout parity composition', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Retry activity metrics' }));
     await waitFor(() => expect(screen.queryByRole('button', { name: 'Retry activity metrics' })).toBeNull());
     expect(read.mock.calls.filter(call => call[1].source === sources.metrics)).toHaveLength(2);
+  });
+
+  it('uses neutral notice and accessible copy while retaining technical query identifiers', async () => {
+    read.mockImplementation(async (_url, query) => dailyFixture(query, query.source === sources.metricCatalog ? [
+      { metric_name: 'daily.metrics', first_date: '2026-10-02', last_date: '2026-10-02', day_count: 1, units: ['count'] },
+    ] : []));
+    const view = mount();
+    expect(await screen.findByText('Metrics — 1 recorded day · count')).toBeTruthy();
+    expect(screen.getByText('Metrics per day, not a sum of workouts. Known values only; missing days are not zero.')).toBeTruthy();
+    expect(view.container.textContent).not.toMatch(/\bdaily\b/iu);
+    for (const element of view.container.querySelectorAll('[aria-label], [title], [alt], [placeholder]')) {
+      for (const attribute of ['aria-label', 'title', 'alt', 'placeholder']) {
+        expect(element.getAttribute(attribute) ?? '').not.toMatch(/\bdaily\b/iu);
+      }
+    }
+    expect(read.mock.calls.map(call => call[1].source).sort()).toEqual([sources.metricCatalog, sources.metrics].sort());
+  });
+
+  it.each([sources.metrics, sources.metricCatalog])('keeps %s error text human-readable without relaying raw identifiers', async source => {
+    read.mockImplementation(async (_url, query) => {
+      if (query.source === source) throw new DailyReadError(`Daily unavailable: ${source}`);
+      return dailyFixture(query);
+    });
+    const view = mount();
+    const name = source === sources.metrics ? 'activity metrics' : 'metric catalogue';
+    const alert = await screen.findByRole('alert');
+    expect(alert.textContent).toContain(`Could not load ${name}. Please retry.`);
+    expect(within(alert).getByRole('button', { name: `Retry ${name}` })).toBeTruthy();
+    expect(view.container.textContent).not.toMatch(/\bdaily\b/iu);
   });
 
   it('reports partial metric/catalogue pages instead of claiming full totals', async () => {

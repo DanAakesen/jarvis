@@ -98,4 +98,15 @@ describe('training from synthetic retained rows', () => {
       'Summary candidates': [], 'Per-workout figures': [], 'Heart and provenance': [],
     });
   });
+
+  it('humanizes technical catalogue names without exposing the former area name', () => {
+    const catalogue = ['daily.metrics', 'daily.health.step_count', 'daily_steps'].map(metric_name => ({
+      metric_name, units: ['count'], first_date: '2026-10-24', last_date: '2026-10-24', day_count: 1,
+    }));
+    expect(availableData([], catalogue, period)['Summary candidates']).toEqual([
+      'Metrics — 1 recorded day · count',
+      'Health step count — 1 recorded day · count',
+      'Per day steps — 1 recorded day · count',
+    ]);
+  });
 });

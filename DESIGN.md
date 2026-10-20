@@ -1958,7 +1958,7 @@ null and link “No target set” to `/settings#training-targets`; P14-45 owns t
 target source and its later wiring. No second targets client is introduced.
 The shell retains the only period control, avoiding competing custom-date drafts.
 Below are Gym (time, energy and heart rate), Run (also distance) and Activity
-(daily metric steps, active energy and exercise time) cards. Missing figures say
+(metric steps, active energy and exercise time per day) cards. Missing figures say
 “Not received”; session heart-rate averages are explicitly an unweighted mean.
 The Available data inventory has Summary candidates, Per-workout figures and
 Heart and provenance groups, built only from present workout fields and the
@@ -1969,6 +1969,10 @@ their reserved area. The three class cards and inventory groups stack on phones.
 Existing history, table disclosure and detail behavior remain unchanged.
 Only synthetic local verification is possible here; real-data/original-page
 parity and the owner's session acceptance remain unverified.
+The owner's Health naming update applies to all new visible and accessible copy:
+use Health or neutral “per day” wording, show human catalogue labels and local
+source-specific error copy, and keep technical identifiers unchanged for #1146.
+Existing shared copy and the route migration remain with #1147.
 
 Synthetic browser captures for the new list and detail presentation are in
 `docs/ui/p12-30/`; they show the actual Daily shell with isolated synthetic API

@@ -42,7 +42,8 @@ function classFigures(rows: Workout[]) {
 function ReadStatus({ pages, served, name }: { pages: DailyPages; served: boolean; name: string }) {
   return <div className="workouts-card-status" role="status">
     {!served ? <p>Unavailable. {name} is not served.</p>
-      : pages.error ? <DailyState status="error" message={pages.error} onRetry={pages.reload} retryLabel={`Retry ${name}`} />
+      : pages.error ? <DailyState status="error" message={`Could not load ${name}. Please retry.`}
+        onRetry={pages.reload} retryLabel={`Retry ${name}`} />
         : <p>{pages.status === 'loading' || pages.status === 'idle' ? `Loading ${name}…`
           : pages.loadingMore ? `Loading more ${name}…`
             : pages.hasMore || pages.last?.status === 'partial' ? `Partial ${name}: only loaded records are shown.`
@@ -126,7 +127,7 @@ export function WorkoutOverview({ pages, rows, ...props }: DailySectionProps & {
           <Figure label="Activity time" value={activity.seconds === null ? null : formatDuration(activity.seconds)} loading={metricsLoading} />
         </dl>
         <ReadStatus pages={metrics} served={hasMetrics} name="activity metrics" />
-        <p className="workouts-summary-note">Daily metrics, not a sum of workouts. Known daily values only; missing days are not zero.</p>
+        <p className="workouts-summary-note">Metrics per day, not a sum of workouts. Known values only; missing days are not zero.</p>
       </section>
     </div>
     <section className="daily-stat-tile workouts-inventory" aria-labelledby="workouts-inventory-heading">

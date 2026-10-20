@@ -115,7 +115,7 @@ export function availableData(rows: readonly Workout[], catalogue: readonly Work
     const count = nonnegative(row.day_count);
     if (!name || count === null || count === 0 || !first || !last || first > period.endDate || last < period.startDate) continue;
     const units = Array.isArray(row.units) ? row.units.flatMap(unit => text(unit) ? [String(unit)] : []) : [];
-    const label = name.replaceAll('_', ' ');
+    const label = name.replace(/^daily\./iu, '').replace(/[._-]+/gu, ' ').replace(/\bdaily\b/giu, 'per day');
     const entry = `${label.charAt(0).toUpperCase()}${label.slice(1)} — ${count} recorded ${count === 1 ? 'day' : 'days'}${units.length ? ` · ${units.join(', ')}` : ''}`;
     const group = /heart|vo2/iu.test(name) ? 'Heart and provenance' : 'Summary candidates';
     groups[group]!.push(entry);
