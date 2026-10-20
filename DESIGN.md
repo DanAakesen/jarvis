@@ -8,8 +8,11 @@ border that shifts to a tint of `--focus` (`--field-focus-rule`) and a short sof
 light underneath (`--field-focus-glow`), echoing the composer. A zero-specificity
 catch-all applies it to any field not named in a shared container. Search bars
 apply it to the whole bar. Invalid fields keep their error border. Forced colours
-fall back to a 2px `Highlight` outline. Checkboxes, switches, ranges and buttons
-keep their own focus rings; the composer keeps its rim sweep.
+fall back to a 2px `Highlight` outline. Increased-contrast mode makes the tint
+match the resting rim, so `--field-focus-glow` becomes a separated solid ring
+(3px of page colour, then 2px of text colour). Checkboxes, switches, ranges and
+buttons keep their own focus rings (the shared rule names text-like inputs only);
+the composer keeps its rim sweep.
 
 Dropdowns: where `appearance: base-select` is supported, every field select
 (including those in shared containers and `select.form-control`) opens the glass

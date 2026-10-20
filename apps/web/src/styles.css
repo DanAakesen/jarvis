@@ -3873,6 +3873,8 @@ a.task-chip:hover { background: var(--glass-pressed); }
   :root, :root[data-theme="light"], :root[data-theme="dark"] {
     --focus: var(--text);
     --control-rule: var(--text);
+    /* The tint and soft glow collapse to the resting rim here, so the focus cue becomes a separated solid ring. */
+    --field-focus-glow: 0 0 0 3px var(--page), 0 0 0 5px var(--text);
   }
   :is(.primary-button, .secondary-button, .ghost-button, .danger-button, .danger-button--filled,
     .jobs-action, .conversation-latest):not(:disabled) {
@@ -4093,7 +4095,11 @@ select.form-control {
   .settings-field, .project-form, .task-filter-field, .task-form-field, .task-create-form, .task-control-form,
   .timeline-toolbar, .usage-field, .role-controls, .kanban-search, .kanban-select, .proactive-feed-input,
   .daily-page, .notes-title-label, .notes-folder-input-row, .folio-rename
-) :is(input, select, textarea):focus-visible,
+) :is(
+  input:where(:not([type="checkbox"], [type="radio"], [type="range"], [type="color"], [type="file"], [type="hidden"],
+    [type="button"], [type="submit"], [type="reset"], [type="image"])),
+  select, textarea
+):focus-visible,
 .form-control:focus-visible,
 /* Catch-all so no entry field or dropdown anywhere is left with the default ring. Search bars and the composer own their rims. */
 :root :where(
@@ -4199,6 +4205,7 @@ select.form-control {
   accent-color: var(--focus);
 }
 .app-shell input:is([type="checkbox"], [type="radio"]):not([role="switch"]):focus-visible,
+.app-shell input[type="range"]:focus-visible,
 .app-shell input[role="switch"]:focus-visible,
 .app-shell :is(.usage-segmented button, .advanced-segmented button, .presence-option, .presence-mode-card):focus-visible {
   outline: 3px solid var(--focus);

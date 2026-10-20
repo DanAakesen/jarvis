@@ -434,6 +434,8 @@ describe('app-wide control contract', () => {
     expect(source).toContain('.danger-button--filled:focus-visible');
     expect(source).toContain('.knowledge-search:has(input:focus-visible) { border-color: var(--field-focus-rule); box-shadow: var(--field-focus-glow); }');
     expect(source).toContain('.folio-search:has(input:focus-visible) { border-color: var(--field-focus-rule); box-shadow: var(--field-focus-glow); }');
+    expect(source).not.toContain(') :is(input, select, textarea):focus-visible');
+    expect(ruleDeclaration(source, /\.app-shell input\[type="range"\]:focus-visible,[^{]*\{([^}]*)\}/, 'outline')).toBe('3px solid var(--focus)');
   });
 
   function matchingDivClose(source: string, openingIndex: number, openingLength: number): number {
