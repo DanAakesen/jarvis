@@ -64,7 +64,7 @@
 .notes-title-label, .notes-source-label { display: grid; gap: var(--space-2); font-size: var(--type-small); font-weight: 600; }
 .notes-title-label input, .notes-folder-input-row input { width: 100%; margin: 0; }
 .notes-source-label textarea { padding: var(--space-3); border: 1px solid var(--control-rule); border-radius: var(--radius-control); background: var(--surface-muted); color: var(--text); font: inherit; font-weight: 400; }
-.notes-source-label textarea:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.notes-source-label textarea:focus-visible { outline: none; border-color: var(--field-focus-rule); box-shadow: var(--field-focus-glow); }
 .notes-source-label textarea { width: 100%; min-height: 320px; margin: 0; resize: vertical; font: var(--type-small)/var(--line-body) var(--font-mono); tab-size: 2; }
 .notes-source-label textarea:read-only { opacity: .8; }
 .notes-preview { overflow-wrap: anywhere; }

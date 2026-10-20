@@ -4,7 +4,7 @@ import sql from 'mssql';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { loadDatabaseConfig } from './config.js';
 import { applyMigrations, readDownMigration, readMigrations, revertMigration } from './migrations.js';
-import { SqlHealthBuffer } from '../daily/health-upload/sql-buffer.js';
+import { SqlHealthBuffer, healthInboxByteLimit, healthInboxRowLimit } from '../daily/health-upload/sql-buffer.js';
 import { SqlHealthCapabilities } from '../daily/health-upload/sql-capabilities.js';
 import { HealthConflict, HealthUnavailable, sha256, type HealthCapability, type HealthKind } from '../daily/health-upload/contracts.js';
 import { SqlHealthProcessor, processingRetryDelays } from '../daily/health/processor.js';
@@ -222,6 +222,34 @@ describe('inactive processor on real isolated SQL Server, synthetic records only
     clock += 45_001;
     expect(await processor().processNext(signal())).toMatchObject({ state: 'processed', acceptanceId: receipt.acceptanceId });
     expect((await readModel().sync(signal())).inbox).toMatchObject({ accepted: 0, processing: 0, succeeded: 1, quarantined: 0 });
+  });
+  it('reports all retained bytes and limits for only the owner, including an empty inbox', async () => {
+    const limits = { byte_limit: healthInboxByteLimit, row_limit: healthInboxRowLimit };
+    expect((await readModel().sync(signal())).inbox).toMatchObject({ retained: 0, retained_bytes: 0, ...limits });
+    const device = await provision();
+    const processed = raw(payload());
+    await accept(device, processed);
+    expect(await processor().processNext(signal())).toMatchObject({ state: 'processed' });
+    const quarantined = raw({ invalid: 'synthetic' });
+    await accept(device, quarantined);
+    expect(await processor().processNext(signal())).toMatchObject({ state: 'quarantined' });
+    const processing = raw(payload(300));
+    const receipt = await accept(device, processing);
+    await pool.request().input('id', sql.UniqueIdentifier, receipt.acceptanceId)
+      .input('lease', sql.DateTime2(3), new Date(clock + 45_000))
+      .query("UPDATE daily.health_upload_inbox SET processing_status='processing',processing_attempts=1,processing_next_attempt_at=@lease WHERE acceptance_id=@id;");
+    const pending = raw(payload(200));
+    await accept(device, pending);
+    const foreign = await provision(other);
+    const foreignBytes = raw(payload(400));
+    await accept(foreign, foreignBytes);
+    const retainedBytes = processed.length + pending.length + quarantined.length + processing.length;
+    expect((await readModel().sync(signal())).inbox).toMatchObject({
+      retained: 4, retained_bytes: retainedBytes, pending: 1, processing: 1, succeeded: 1, quarantined: 1, ...limits,
+    });
+    expect((await readModel(other).sync(signal())).inbox).toMatchObject({
+      retained: 1, retained_bytes: foreignBytes.length, pending: 1, ...limits,
+    });
   });
   it('commits exact raw lineage, normalization and freshness together once across concurrent processors/reconstruction', async () => {
     const device = await provision(); const bytes = raw(payload()); const receipt = await accept(device, bytes, 'same');

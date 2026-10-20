@@ -511,6 +511,7 @@ describe('app-wide theme contrast audit', () => {
     expect(source).toContain('@media (prefers-contrast: more)');
     expect(source).toContain('--focus: var(--text)');
     expect(source).toContain('--control-rule: var(--text)');
+    expect(source).toContain('--field-focus-glow: 0 0 0 3px var(--page), 0 0 0 5px var(--text);');
     expect(source).toContain('@media (forced-colors: active)');
     expect(source).toContain('border-color: FieldText;');
     expect(source).toContain('background-color: Field;');

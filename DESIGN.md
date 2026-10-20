@@ -1,5 +1,24 @@
 # Design
 
+## Entry-field focus (20 October 2026; P14-32)
+
+Every text entry field (input, select, textarea, `.form-control` and the Notes,
+Folio and Tasks search bars) shares one focus treatment: no outline, a thin
+border that shifts to a tint of `--focus` (`--field-focus-rule`) and a short soft
+light underneath (`--field-focus-glow`), echoing the composer. A zero-specificity
+catch-all applies it to any field not named in a shared container. Search bars
+apply it to the whole bar. Invalid fields keep their error border. Forced colours
+fall back to a 2px `Highlight` outline. Increased-contrast mode makes the tint
+match the resting rim, so `--field-focus-glow` becomes a separated solid ring
+(3px of page colour, then 2px of text colour). Checkboxes, switches, ranges and
+buttons keep their own focus rings (the shared rule names text-like inputs only);
+the composer keeps its rim sweep.
+
+Dropdowns: where `appearance: base-select` is supported, every field select
+(including those in shared containers and `select.form-control`) opens the glass
+list (rounded panel, lit hover, selected tint with checkmark) and uses the
+picker icon instead of a drawn chevron. Other browsers keep the native list.
+
 ## Vault mirror Status row (19 October 2026; P14-29)
 
 Use one quiet row within System checks, with the Vault mirror label, a text
@@ -1706,10 +1725,13 @@ sleep remain absent until their follow-up sections exist.
 
 20 October 2026 (P14-41 shell): the Daily page heading row carries a small
 freshness pill beside the single `Daily` headline. It reads only the served sync
-source and says "Phone contact" with the last-contact time, "No phone contact yet",
-"Checking sync" or "Sync status unavailable". When a refresh fails but earlier data
+source and says "Last upload" with the newest processed upload time, "Upload being
+processed" (uploads waiting or processing, none processed yet), "No uploads yet",
+"Checking sync" or "Sync status unavailable". The phone heartbeat is not the label: it
+is an optional "Phone last contacted" row in the details panel, shown only when one
+exists. When a refresh fails but earlier data
 is kept, it adds ", refresh failed" to the label (bolder text, never colour alone).
-It opens a small details panel (last contact and upload counts, plus Check again)
+It opens a small details panel (last upload, optional phone contact and upload counts, plus Check again)
 that Escape (from anywhere on the page) and an outside press close. On screens up
 to 640 px the panel anchors to the header and spans its width. It is a 36 px
 bordered pill using existing surface tokens; it is

@@ -9,6 +9,7 @@ import type { NowFeedUpdate } from '../../core/now.js';
 import { createDailyModules } from '../index.js';
 import { createDailyChanges } from '../revisions.js';
 import { DailyQueryService } from '../query.js';
+import { healthInboxByteLimit, healthInboxRowLimit } from '../health-upload/sql-buffer.js';
 
 const config = { ...loadConfig({}), logLevel: 'silent' as const };
 const owner = config.auth.ownerObjectId;
@@ -73,6 +74,18 @@ describe('inactive Daily HTTP/module integration', () => {
     expect((await f.app.inject({ method: 'POST', url: '/daily/query', headers: headers(), payload: { operation: 'log-intake' } })).statusCode).toBe(400);
     expect(f.history).not.toHaveBeenCalled();
     expect((await f.app.inject({ method: 'POST', url: '/daily/nutrition/log', headers: headers(), payload: {} })).statusCode).toBe(404);
+  });
+  it('returns additive numeric inbox usage through the authenticated sync contract', async () => {
+    const f = fixture();
+    const inbox = { retained: 2, pending: 1, processing: 1, quarantined: 0, retained_bytes: 1234,
+      byte_limit: healthInboxByteLimit, row_limit: healthInboxRowLimit };
+    f.sync.mockResolvedValue({ feeds: [], heartbeat: null, inbox: { ...inbox, raw_bytes: 'synthetic-payload' } });
+    for (const kind of ['owner', 'agent']) {
+      const response = await f.app.inject({ method: 'POST', url: '/daily/query', headers: headers(kind),
+        payload: { source: dailyQuerySources.sync } });
+      expect(response.statusCode).toBe(200);
+      expect(response.json().items[0].inbox).toEqual(inbox);
+    }
   });
   it('reports unavailable rather than fabricated empty history', async () => {
     const f = fixture(); f.sync.mockRejectedValue(new Error('synthetic-private-record'));

@@ -13,7 +13,7 @@
 .tasks-panel-search svg { width: 18px; height: 18px; flex: 0 0 auto; }
 .tasks-panel-search input { flex: 1 1 auto; min-width: 0; height: 36px; padding: 0; border: 0; background: transparent; color: var(--text); font: inherit; font-size: var(--type-small); }
 .tasks-panel-search input:focus-visible { outline: none; }
-.tasks-panel-search:has(input:focus-visible) { outline: 3px solid var(--focus); outline-offset: 2px; }
+.tasks-panel-search:has(input:focus-visible) { box-shadow: 0 0 0 1px var(--field-focus-rule), var(--field-focus-glow); }
 /* The refresh action is a bare icon: no fill, border or shadow in any state. Hover tints it and turns it a quarter; while a refresh runs it spins. */
 .tasks-panel-refresh {
   display: grid; place-items: center; width: var(--control-size); height: var(--control-size); padding: 0; border: 0; border-radius: var(--radius-control);
