@@ -5,6 +5,37 @@
 The owner-facing area is Health and its route is `/health`. Keep the legacy area
 and API identifiers internal; `/daily` remains a compatibility route, not a label.
 
+## Health Rules & sources (20 October 2026; P14-50)
+
+The last Health tab has no period control. Its header pairs Back to Health with
+a compact Protected pill naming the account verified through the existing
+session's `/me` reader. Targets reuse `NutritionTargetsSettings`, including its
+folding, validation and save feedback; no body-measurement or derived-energy
+form is added. P14-45's training editor is absent in this checkout, so training
+targets are explicitly unavailable rather than replaced with another editor.
+
+Seven short rule cards cover Access, Behaviour, Mail, Calendar, Refresh,
+Notification and Sources. They follow the original composition using Jarvis
+surfaces, type, neutral structural borders and responsive columns. No Tasks
+card or new theme is introduced. Source coverage uses stacked rows with text
+status pills and last-sync times. Health sync uses completed processing from
+`daily.sync`, never receipt or phone contact. Synced does not imply known source
+freshness; a failed refresh marks retained evidence Stale. Missing evidence,
+nutrition sync (not served), Gmail and calendar say Not connected, with the
+nutrition limitation distinguished from absence of nutrition records.
+
+Synthetic Chromium checks covered 1440px dark and 390px/320px light with
+reduced motion, editor save feedback, retry/stale/missing source states and
+keyboard navigation. The embedded editor title wraps at narrow widths using
+section-local CSS. Owner-session verification against real data remains
+required before merge.
+
+The owner's 20 October naming update applies to this section's new copy and
+accessible names: Health replaces the former area name, source IDs are not
+shown, and the back link resolves relative to the area route. Internal names
+stay unchanged pending #1146; existing shared copy and the route move were
+delivered by #1147.
+
 ## Entry-field focus (20 October 2026; P14-32)
 
 Every text entry field (input, select, textarea, `.form-control` and the Notes,
@@ -1964,6 +1995,28 @@ reduced motion. Expanded plan content remained reachable above the mobile
 composer at 320px. The six JPEG captures cover phone Day in both themes,
 desktop Trend in both themes, Library at 768px light and 320px dark. They are
 synthetic desktop-browser evidence, not live-owner or physical-phone checks.
+
+## Health Nutrition parity (20 October 2026; P14-49)
+
+The Nutrition section keeps its shared period selector and the existing Plans and
+Favourites library. The Today view leads with one “Today so far” card: kcal left
+against resting energy minus deficit, protein left, and logged meals, using the
+served Copenhagen day row and the existing owner-target loader. Partial energy
+and protein are labelled as bounds; missing targets link to Settings. A neutral
+“Staleness unknown” pill is used because the nutrition query reports staleness as
+unknown, alongside its read-time line.
+
+Trend summarizes average balance per day and average protein over known logged
+days, then plots calorie balance against the zero baseline and protein intake.
+Its inventory counts days with meals and partial days; an expandable list names
+the partial dates and nutrients. Chart tables retain per-day lower-bound wording.
+Meals lists the selected period chronologically and pages through all served
+records. Rows show the recorded name, Copenhagen date/time, component names and
+quantities, four macros, confidence, capture method, and the explicit
+“Not recorded” export state, which the meal query does not serve. Loading,
+empty, error, and paged states retain their reserved card/list heights. The
+composition and data states are covered by synthetic web tests; the owner's
+real-data session check remains a pre-merge acceptance step.
 
 ## Daily today dashboard (18 October 2026; P12-33)
 

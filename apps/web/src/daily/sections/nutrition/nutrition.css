@@ -169,11 +169,116 @@
   color: var(--text-muted);
   font-size: var(--type-small);
 }
+.nutrition-today-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  height: auto;
+  --tile-body-min: 16rem;
+}
+.nutrition-today-card h3 { margin: 0; color: var(--text); font-size: var(--type-subsection); font-weight: 650; }
+.nutrition-today-card p { min-width: 0; margin: 0; overflow-wrap: anywhere; }
+.nutrition-today-card > .daily-tile-status { margin-top: auto; }
+.nutrition-today-card .daily-tile-body {
+  display: grid;
+  align-content: center;
+  gap: var(--space-3);
+  min-width: 0;
+  min-height: var(--tile-body-min);
+}
+.nutrition-today-card > .daily-tile-status {
+  display: grid;
+  align-content: start;
+  gap: var(--space-1);
+  min-height: calc(var(--type-small) * var(--line-body) * 2 + var(--space-2));
+}
+.nutrition-today-values, .nutrition-period-averages, .nutrition-meal-fields {
+  display: grid;
+  gap: var(--space-3);
+  margin: 0;
+}
+.nutrition-today-values {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  text-align: center;
+}
+.nutrition-today-values > div, .nutrition-period-averages > div, .nutrition-meal-fields > div {
+  display: grid;
+  align-content: start;
+  gap: var(--space-1);
+  min-width: 0;
+}
+.nutrition-today-values dt, .nutrition-period-averages dt, .nutrition-meal-fields dt {
+  color: var(--text-muted);
+  font-size: var(--type-small);
+}
+.nutrition-today-values dd, .nutrition-period-averages dd, .nutrition-meal-fields dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.nutrition-today-values dd {
+  font-size: var(--type-subsection);
+  font-weight: 650;
+}
+.nutrition-target-link { margin: 0; font-size: var(--type-small); }
+.nutrition-freshness-pill {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  min-height: var(--pill-size);
+  margin: 0;
+  padding-inline: var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--surface-translucent);
+  color: var(--text-muted);
+  font-size: var(--type-small);
+}
+.nutrition-trend { min-height: 44rem; }
+.nutrition-period-averages {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  padding-block: var(--space-3);
+}
+.nutrition-period-averages dd { font-variant-numeric: tabular-nums; }
+.nutrition-inventory, .nutrition-page-status { min-height: calc(var(--type-small) * var(--line-body)); }
+.nutrition-meals-list { min-height: 28rem; }
+.nutrition-meal-list {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.nutrition-meal {
+  min-width: 0;
+  padding-block: var(--space-3);
+  border-bottom: 1px solid var(--rule);
+  overflow-wrap: anywhere;
+}
+.nutrition-meal article { display: grid; gap: var(--space-2); }
+.nutrition-meal h4, .nutrition-meal p { margin: 0; }
+.nutrition-meal h4 { font-size: var(--type-body); }
+.nutrition-meal-time, .nutrition-meal-deleted { color: var(--text-muted); font-size: var(--type-small); }
+.nutrition-meal-macros {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-2);
+  margin: 0;
+}
+.nutrition-meal-macros > div { min-width: 0; }
+.nutrition-meal-macros dt { color: var(--text-muted); font-size: var(--type-small); }
+.nutrition-meal-macros dd { margin: 0; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.nutrition-meal-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.nutrition-meal-fields ul { display: grid; gap: var(--space-1); margin: 0; padding-inline-start: var(--space-4); }
+.nutrition-meal-fields li { overflow-wrap: anywhere; }
 @media (pointer: fine) {
   .nutrition-controls .secondary-button { min-height: 38px; }
 }
 @media (max-width: 480px) {
   .nutrition-controls { display: grid; grid-template-columns: max-content minmax(0, 1fr); }
+  .nutrition-today-card { --tile-body-min: 20rem; }
+  .nutrition-today-values { grid-template-columns: minmax(0, 1fr); text-align: start; }
+  .nutrition-period-averages, .nutrition-meal-fields { grid-template-columns: minmax(0, 1fr); }
+  .nutrition-meal-macros { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (min-width: 900px) {
   .nutrition-meters, .nutrition-other-nutrients { grid-template-columns: repeat(4, minmax(0, 1fr)); }

@@ -183,11 +183,11 @@ describe('Daily overview', () => {
     expect(document.activeElement).toBe(nextTab);
     expect(screen.getByTestId('daily-section-url').textContent).toBe(nextTab.id.replace('daily-tab-', ''));
     fireEvent.keyDown(nextTab, { key: 'End' });
-    const data = sectionTabs().getByRole('tab', { name: 'Data' });
-    expect(data.getAttribute('aria-selected')).toBe('true');
-    expect(document.activeElement).toBe(data);
-    expect(screen.getByTestId('daily-section-url').textContent).toBe('data');
-    fireEvent.keyDown(data, { key: 'Home' });
+    const rules = sectionTabs().getByRole('tab', { name: 'Rules & sources' });
+    expect(rules.getAttribute('aria-selected')).toBe('true');
+    expect(document.activeElement).toBe(rules);
+    expect(screen.getByTestId('daily-section-url').textContent).toBe('rules');
+    fireEvent.keyDown(rules, { key: 'Home' });
     expect(sectionTabs().getByRole('tab', { name: 'Overview' }).getAttribute('aria-selected')).toBe('true');
     expect(document.activeElement).toBe(overview);
     expect(tablist.getAllByRole('tab').filter(tab => tab.getAttribute('tabindex') === '0')).toHaveLength(1);
