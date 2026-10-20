@@ -63,6 +63,9 @@ rollback and cutover gates remain unchanged. Scope the acceptance campaign to
 retained capabilities, not removed coaching/widget/fixed-view deliverables.
 Original Daily continues normal authorized use and remains canonical before
 cutover; original source/schema/data and retained records are not changed.
+The original Gym/Run weekly targets and daily steps came from a task source
+outside this approved scope; P14-45 replaces that source only with owner-set
+Jarvis targets and adds no task-source integration.
 
 Dan approved P12 on 12 October 2026 and explicitly released only P12-01 for this worker. The later [execution authorization](https://github.com/DanAakesen/jarvis/issues/716#issuecomment-6124634183) supersedes the original backlog-only and extra cutover-approval wording: any eventual production cutover follows dependency, source-parity, rollback and retention gates. Original Daily continues ordinary authorized food/health writes and remains running/canonical before cutover. The cancelled database-export/import tooling must not alter its application/source code/schema or rewrite records; the source-contract-first API/schema and supported historical ingestion/replay are specified in #1005. Any future final-delta reconciliation accounts for ongoing normal use. Legacy operation may be deprecated only after all in-scope data, features and sync are migrated and verified and rollback is protected; never delete the original repository or data. New secrets/access and unapproved paid resources retain their explicit-confirmation boundaries. This issue performs no cutover or production writes.
 

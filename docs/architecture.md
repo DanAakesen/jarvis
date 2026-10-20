@@ -6013,6 +6013,33 @@ The values are personal
 health data in a public repository: none appears in code, fixtures, documents,
 logs or audit.
 
+### Owner training targets (20 October 2026; P14-45, #1116, #1132)
+
+The original Daily's weekly Gym/Run targets and daily step target came from an
+original task source that is outside approved scope. Jarvis stores the owner's
+replacement values in `daily.training_targets`, added by migration
+`0061_daily_training_targets`; there are no seeded rows or target defaults.
+Each row is keyed by the configured owner and contains nullable whole-number
+targets plus an update timestamp. SQL constraints and the shared server contract
+bound weekly sessions and daily steps; reads return those bounds and `null` for
+every unset target.
+
+The eighth optional `createDailyModules` accessor, `trainingTargets`, is
+request-bound and composes only with Daily and shared Daily data. The
+signed-in-owner `GET`/`PATCH /daily/training-targets` route rejects agents,
+runners, connectors, other identities and query selectors. A patch is strict,
+partial and transactional; `null` clears a field and removing the last set
+value deletes the row. Read-back occurs before commit. The
+`daily_training_targets` tool supports `read` and `set_targets` through the same
+owner binding, rejects the nutrition-only connector and phone channel, marks
+the data sensitive for audit redaction, and requires exact browser Now approval
+for changes. Daily-off composition registers no target routes or tool.
+
+The web Settings editor loads and saves only validated server responses. Its
+`useTrainingTargets` hook documents the shared loading/settled/error/retry
+contract for later Overview, Workouts and Health consumers; those views are
+intentionally unchanged here.
+
 ### Personalised suggestion adapter (17 October 2026)
 
 A seventh optional `createDailyModules` argument, `nutritionSuggestions`

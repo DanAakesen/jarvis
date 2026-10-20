@@ -1,5 +1,21 @@
 # Decisions
 
+## P14-45 — Owner-set gym, run and step targets (20 October 2026; #1116, #1132)
+
+The original Daily's weekly Gym/Run session targets and daily step target came
+from a task source outside the approved Jarvis scope. Use owner-set values
+instead: nullable whole numbers stored in a new owner-keyed Daily table, with
+server-owned bounds and no seed or target defaults. Settings routes are signed-in
+owner-only; the `daily_training_targets` tool is owner-bound, sensitive and
+requires browser Now approval to change values. Clearing the final value leaves
+the owner with no stored row. Settings adds a separate `#training-targets`
+section and a validated `useTrainingTargets` contract for follow-up consumers.
+Overview, Workouts and Health panels remain unchanged in this slice; their
+real-data presentation and owner-session UI checks are deferred to the tasks
+that consume the hook. The migration rollback refuses to discard saved targets.
+
+Refs DanAakesen/jarvis#1116, #1132
+
 ## P14-44 — Overview tiles hold their size; reads on focus wait a minute (20 October 2026; #1116, #1129)
 
 The Daily Overview summary tiles and Today cards jumped while loading: each tile
