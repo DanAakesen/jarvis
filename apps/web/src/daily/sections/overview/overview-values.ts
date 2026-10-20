@@ -1,3 +1,4 @@
+import { formatTimeOnly } from '../../../format/date-time';
 import { copenhagenDate } from '../../period';
 import { dateOnly, metricSummary, type Row as MetricRow } from '../body-sleep/metrics';
 import { hours } from '../body-sleep/sleep';
@@ -48,8 +49,7 @@ export function sleepForWindow(rows: readonly MetricRow[], window: OverviewWindo
 }
 
 export function copenhagenHour(date: Date) {
-  const parts = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Copenhagen', hour: '2-digit', hourCycle: 'h23' }).format(date);
-  return Number(parts);
+  return Number.parseInt(formatTimeOnly(date, { timeZone: 'Europe/Copenhagen' }), 10);
 }
 
 const pad = (hour: number) => String(hour).padStart(2, '0');
