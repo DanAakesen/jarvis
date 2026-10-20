@@ -2,7 +2,7 @@ import { useContext, useEffect, useRef, useState, type FormEvent } from 'react';
 import { dailyQuerySources as sources, type DailyCursor, type DailyJson, type DailySourceId } from '@jarvis/contracts';
 import type { AreaProps } from '../areas';
 import { Loader } from '../Loader';
-import { dailyPlots, dailyRequest, dailySources, dailyValue, initialDailyPeriod, readable, type Row } from './presentation';
+import { dailyPlots, dailyRequest, dailySources, dailyValue, healthSourceLabel, initialDailyPeriod, readable, type Row } from './presentation';
 import { DailyRefreshContext } from './refresh';
 import { useDailyCapabilities } from './useDailyCapabilities';
 import { useDailyQuery } from './useDailyQuery';
@@ -103,7 +103,7 @@ export function DailyPage({ backendUrl, getAccessToken, knownSources, initialSou
   const canOpenRecord = detailSource !== null && current.sources?.includes(detailSource);
   return <section className={`daily-page daily-data-page${embedded ? ' daily-data-embedded' : ''}${embeddedClassName ? ` ${embeddedClassName}` : ''}`} aria-labelledby={embedded ? 'daily-records-heading' : 'daily-heading'}>
     {!embedded
-      ? <header className="daily-heading"><div><h1 id="daily-heading" tabIndex={-1}>Daily</h1></div>
+      ? <header className="daily-heading"><div><h1 id="daily-heading" tabIndex={-1}>Health</h1></div>
         {onBack && <button className="secondary-button" type="button" onClick={onBack}>Back to overview</button>}
       </header>
       : null}
@@ -127,8 +127,8 @@ export function DailyPage({ backendUrl, getAccessToken, knownSources, initialSou
       </>}
       freshness={data && <FreshnessLine observedAt={data.freshness.observedAt} count={data.coverage.returned} partial={data.coverage.hasMore} />} />
     {current.error ? <div className="daily-notice" role="alert"><p>{current.error}</p><button className="secondary-button" type="button" onClick={current.reload}>Retry availability</button></div> :
-      !current.sources ? <Loader label="Checking Daily availability" variant="rows" /> : <>
-        {available.length === 0 && <><DailyState status="empty" emptyMessage="No Daily data" /><a href="/settings#health-upload">Settings, Health upload</a></>}
+      !current.sources ? <Loader label="Checking Health availability" variant="rows" /> : <>
+        {available.length === 0 && <><DailyState status="empty" emptyMessage="No Health data" /><a href="/settings#health-upload">Settings, Health upload</a></>}
         {selected?.dated && !workout && sharedPeriod === undefined && !draftValid && <p className="error-text" role="alert">Choose valid start and end dates in chronological order.</p>}
         <section className="daily-records" aria-labelledby="daily-records-heading" aria-busy={result.pending} data-pending={result.pending || undefined}>
           <div className="daily-records-heading">
@@ -181,7 +181,7 @@ export function DailyPage({ backendUrl, getAccessToken, knownSources, initialSou
             <details className="daily-contract-details"><summary>Source, units and coverage</summary>
               {data.period && <p>Applied period: {formatDate(data.period.startDate)} to {formatDate(data.period.endDate)} (Europe/Copenhagen).</p>}
               <p>Last source processing: {dailyValue(data.freshness.sourceProcessedCommittedAt)}. Freshness and completeness not established.</p>
-              <dl className="daily-facts"><div><dt>Source</dt><dd>{data.source}</dd></div>
+              <dl className="daily-facts"><div><dt>Source</dt><dd>{healthSourceLabel(data.source)}</dd></div>
                 <div><dt>Consistency</dt><dd>Independent committed reads, not an atomic snapshot</dd></div>
                 <div><dt>Latest returned update</dt><dd>{dailyValue(data.freshness.latestReturnedRecordUpdatedAt)}</dd></div>
                 {Object.entries(data.units).map(([field, unit]) => <div key={field}><dt>{readable(field)}</dt><dd>{unit}</dd></div>)}</dl>

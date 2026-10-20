@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
 import { SettingsPage } from './SettingsPage';
+import { expectNoDailyInRenderedContent } from './test/visible-copy';
 import { ResearchSection } from './SettingsAdvanced';
 import { ProjectsPage } from './factory/ProjectsPage';
 import { ThemePreferenceContext, type ThemeMode, type ThemePreference } from './theme-preference-context';
@@ -227,8 +228,8 @@ describe('SettingsPage', () => {
     await user.selectOptions(screen.getByRole('combobox', { name: 'Default language' }), 'en');
     await user.clear(screen.getByRole('spinbutton', { name: 'Maximum parallel tasks' }));
     await user.type(screen.getByRole('spinbutton', { name: 'Maximum parallel tasks' }), '3');
-    await user.clear(screen.getByRole('spinbutton', { name: 'Daily screen inspection limit' }));
-    await user.type(screen.getByRole('spinbutton', { name: 'Daily screen inspection limit' }), '240');
+    await user.clear(screen.getByRole('spinbutton', { name: 'Screen inspection limit' }));
+    await user.type(screen.getByRole('spinbutton', { name: 'Screen inspection limit' }), '240');
     await user.click(screen.getByRole('button', { name: 'Save settings' }));
 
     expect(await screen.findByText('Saved')).not.toBeNull();
@@ -761,12 +762,13 @@ describe('SettingsPage', () => {
     const attempts = await screen.findByRole('spinbutton', { name: 'Check repair attempts' });
     await user.clear(attempts);
     await user.type(attempts, '5');
-    const budget = screen.getByRole('spinbutton', { name: 'Daily watch budget (USD)' });
+    const budget = screen.getByRole('spinbutton', { name: 'Per-day watch budget (USD)' });
     await user.clear(budget);
     await user.type(budget, '2.5');
     await user.click(screen.getByRole('button', { name: 'Save settings' }));
     await screen.findByText('Saved');
     expect(JSON.parse(String(fetchMock.mock.calls[1]![1]?.body))).toEqual({ settings: { global: { maxCheckAttempts: 5, visionDailyBudgetUsd: 2.5 } } });
+    expectNoDailyInRenderedContent(document.body);
   });
 
   it('renews the Codex credential on request and reports a busy agent', async () => {

@@ -1019,7 +1019,10 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   route shows sign-in and the header hides navigation; unknown addresses still
   show the not-found page. `src/areas.ts` registers each area (`id`, label, top-level
   path, component). The shell renders its navigation entry and mounts it at
-  `/<path>/*`; the area renders its own nested routes. Software Factory
+  `/<path>/*`; the area renders its own nested routes. The existing area id
+  `daily` is presented to the owner as Health at `/health`; `/daily` UI links
+  redirect to the matching Health path with query and hash preserved. Backend
+  `/daily/*` API routes and source identifiers remain unchanged. Software Factory
   (`src/factory/`) owns `/factory/tasks`, `/factory/tasks/:id`,
   `/factory/projects`, `/factory/projects/new`, `/factory/projects/:id` and
   `/factory/releases/:id`;
@@ -5739,6 +5742,14 @@ ignored. The overview adds no endpoint, DTO, writer, calculation, provider call,
 login or storage.
 
 ### Daily section shell and extension contract (18 October 2026; P12-20)
+
+P14-50 adds `sections/rules`, ordered last without period controls. It embeds
+the nutrition target editor and reuses the session token supplier with the
+existing `/me` profile reader (no additional sign-in). Source coverage reads
+`daily.sync` and distinguishes completed health processing from unknown
+freshness and failed refreshes. Nutrition sync and mail/calendar attention
+are not served there and remain explicitly Not connected; the training editor
+is unavailable until P14-45 is merged.
 
 `DailyHome` owns the active section (`?section=<id>`), one Copenhagen-calendar
 period and the known capability source IDs. `sections/*/index.tsx` modules are

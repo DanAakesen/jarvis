@@ -69,7 +69,7 @@ describe('GeneratedViewRenderer table', () => {
 });
 
 describe('GeneratedViewRenderer source note', () => {
-  const reason = 'Retained Daily records, 1–16 Oct 2026 (Copenhagen dates). Read 17 Oct 2026, 09:00 Copenhagen time. '
+  const reason = 'Retained Health records, 1–16 Oct 2026 (Copenhagen dates). Read 17 Oct 2026, 09:00 Copenhagen time. '
     + 'Completeness and freshness are not established. Unknown means no value was recorded, not zero.';
   const source = { id: 'now', status: 'partial', updatedAt: '2026-10-17T07:00:00.000Z', reason };
   const content = {

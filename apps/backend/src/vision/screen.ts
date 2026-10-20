@@ -136,8 +136,8 @@ export class ScreenVisionService {
       sessionId: input.sessionId, eventId, dailyCap: input.dailyCap, at,
     });
     if (reservation === 'inactive') throw new ScreenVisionError(404, 'Active conversation session not found.');
-    if (reservation === 'limit') throw new ScreenVisionError(429, 'The daily screen-inspection limit has been reached.', 'daily_limit');
-    if (reservation === 'budget-exhausted') throw new ScreenVisionError(429, 'The daily vision budget has been exhausted.', 'budget_exhausted');
+    if (reservation === 'limit') throw new ScreenVisionError(429, 'The per-day screen-inspection limit has been reached.', 'daily_limit');
+    if (reservation === 'budget-exhausted') throw new ScreenVisionError(429, 'The per-day vision budget has been exhausted.', 'budget_exhausted');
     if (reservation === 'rate-limited') {
       throw new ScreenVisionError(429, 'Please wait before inspecting another screen frame.', 'frame_rate_limited', 3_000);
     }
@@ -158,7 +158,7 @@ export class ScreenVisionService {
       throw new ScreenVisionError(503, 'Screen inspection budget or pricing is unavailable.');
     }
     if (input.limitUsd === 0) {
-      throw new ScreenVisionError(429, 'The daily vision budget has been exhausted.', 'budget_exhausted');
+      throw new ScreenVisionError(429, 'The per-day vision budget has been exhausted.', 'budget_exhausted');
     }
     const startedAt = performance.now();
     try {
@@ -166,7 +166,7 @@ export class ScreenVisionService {
         model: input.model, limitDkk: input.limitUsd * DKK_PER_USD, at: this.requestReceivedAt() });
       if (reservation === 'inactive') throw new ScreenVisionError(404, 'Active conversation session not found.');
       if (reservation === 'limit') throw new ScreenVisionError(429,
-        'The daily vision budget has been exhausted.', 'budget_exhausted');
+        'The per-day vision budget has been exhausted.', 'budget_exhausted');
       if (input.signal.aborted) throw new Error('Cancelled');
       const result = await this.model.describe({ image: input.image, model: input.model, signal: input.signal,
         ...(input.reasoningEffort === undefined ? {} : { reasoningEffort: input.reasoningEffort }),

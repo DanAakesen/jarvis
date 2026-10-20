@@ -32,7 +32,7 @@ function confirmationSummary(patch: SettingsPatch): string | null {
   for (const role of modelRoles) {
     if (patch.roles?.[role]) changes.push(`${role} model settings`);
   }
-  if (patch.global?.visionDailyBudgetUsd !== undefined) changes.push('the daily vision budget');
+  if (patch.global?.visionDailyBudgetUsd !== undefined) changes.push('the per-day vision budget');
   return changes.length ? `Change ${changes.join(' and ')} in Jarvis settings.` : null;
 }
 
@@ -105,7 +105,7 @@ export const getSettingsTool: JarvisTool = {
 
 export const updateSettingsTool: JarvisTool = {
   name: 'update_settings',
-  description: 'Update supported non-secret Jarvis settings; read get_settings first when unsure of fields or values. Model-role and daily vision budget changes require Now confirmation.',
+  description: 'Update supported non-secret Jarvis settings; read get_settings first when unsure of fields or values. Model-role and per-day vision budget changes require Now confirmation.',
   inputSchema: updateSettingsSchema,
   sensitive: true,
   async execute(input, request, signal) {

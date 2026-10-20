@@ -15,6 +15,8 @@ const backendUrl = 'http://localhost:3999';
 const shellReads = 1;
 // Today cards: weekly workouts, today's nutrition day and today's meals.
 const todayReads = 3;
+// Health panel: metrics, catalogue, sleep, workouts, nutrition days and sync.
+const healthReads = 6;
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.restoreAllMocks(); window.history.replaceState({}, '', '/'); });
 
 const records: Partial<Record<DailySourceId, Record<string, DailyJson>>> = {
@@ -55,13 +57,14 @@ function SectionUrlProbe() {
   const [params] = useSearchParams();
   return <output data-testid="daily-section-url">{params.get('section') ?? 'no section parameter'}</output>;
 }
-function home(refreshVersion = 0, initialPath = '/daily') {
+function home(refreshVersion = 0, initialPath = '/health') {
   return <MemoryRouter initialEntries={[initialPath]}>
     <DailyRefreshContext.Provider value={refreshVersion}><DailyHome backendUrl={backendUrl} getAccessToken={token} /></DailyRefreshContext.Provider>
     <SectionUrlProbe />
   </MemoryRouter>;
 }
 const settled = () => screen.findByText(/^Checked \d+ collections?:/u);
+const sectionTabs = () => within(screen.getByRole('tablist', { name: 'Health sections' }));
 const probes = (queries: readonly DailyQuery[]) => queries.filter(query => !('limit' in query) || query.limit === 1);
 function row(name: string) {
   const item = screen.getAllByRole('heading', { name }).map(heading => heading.closest('li')).find(Boolean) ?? null;
@@ -77,9 +80,9 @@ describe('Daily overview', () => {
     await settled();
     await screen.findByText('No meals recorded in the last 7 days');
     await screen.findByText('No sleep recorded in the last 7 days');
-    expect(screen.getByRole('heading', { level: 1, name: 'Daily' })).toBeTruthy();
-    expect(screen.getByRole('heading', { level: 2, name: 'What Daily holds today' })).toBeTruthy();
-    expect(within(screen.getByRole('list', { name: 'What Daily holds today' })).getAllByRole('listitem')).toHaveLength(dailySources.length);
+    expect(screen.getByRole('heading', { level: 1, name: 'Health' })).toBeTruthy();
+    expect(screen.getByRole('heading', { level: 2, name: 'What Health holds today' })).toBeTruthy();
+    expect(within(screen.getByRole('list', { name: 'What Health holds today' })).getAllByRole('listitem')).toHaveLength(dailySources.length);
     const notes = screen.getByText('About this data').closest('details')!;
     expect(notes.open).toBe(false);
     expect(notes.textContent).toContain('Freshness and completeness are not established.');
@@ -119,8 +122,8 @@ describe('Daily overview', () => {
     const hold = gate();
     const f = fixture({ capabilities: async () => { await hold.opened; return capabilityList(); } });
     render(home());
-    expect(screen.getByText('Checking Daily availability')).toBeTruthy();
-    expect(screen.queryByRole('heading', { name: 'What Daily holds today' })).toBeNull();
+    expect(screen.getByText('Checking Health availability')).toBeTruthy();
+    expect(screen.queryByRole('heading', { name: 'What Health holds today' })).toBeNull();
     expect(f.queries).toHaveLength(0);
     hold.open();
     await settled();
@@ -134,7 +137,7 @@ describe('Daily overview', () => {
     expect(f.queries).toHaveLength(2);
     hold.open();
     await settled();
-    expect(f.queries).toHaveLength(dailySources.length + 5 + todayReads + shellReads);
+    expect(f.queries).toHaveLength(dailySources.length + 5 + todayReads + shellReads + healthReads);
   });
   it('shows a failed collection on its own row, keeps the rest, and Retry reads again and keeps keyboard focus in that row', async () => {
     let sleepFails = true;
@@ -144,7 +147,7 @@ describe('Daily overview', () => {
     await settled();
     expect(screen.getByText('Checked 8 collections: 3 with records, 4 with none returned, 1 that could not be read.')).toBeTruthy();
     expect(row('Sleep').getByText('Could not be read')).toBeTruthy();
-    expect(row('Sleep').getByText('Daily is unavailable (HTTP 503).')).toBeTruthy();
+    expect(row('Sleep').getByText('Health is unavailable (HTTP 503).')).toBeTruthy();
     expect(row('Measurements').getByText('Has records')).toBeTruthy();
     expect(screen.getAllByRole('button', { name: /^Retry / })).toHaveLength(1);
     const retry = row('Sleep').getByRole('button', { name: 'Retry Sleep' });
@@ -163,19 +166,19 @@ describe('Daily overview', () => {
     const f = fixture({ answer: async query => { if (gated) await hold.opened; return jsonResponse(dailyFixture(query, items(query))); } });
     render(home());
     await settled();
-    await waitFor(() => expect(f.queries).toHaveLength(dailySources.length + 5 + todayReads + shellReads));
+    await waitFor(() => expect(f.queries).toHaveLength(dailySources.length + 5 + todayReads + shellReads + healthReads));
     gated = true;
     fireEvent.click(screen.getByRole('button', { name: 'Refresh overview' }));
     const busy = await screen.findByRole('button', { name: 'Refreshing…' });
     expect(busy.getAttribute('aria-disabled')).toBe('true');
     expect(row('Measurements').getByText('Has records')).toBeTruthy();
-    await waitFor(() => expect(probes(f.queries).length).toBe(dailySources.length + 2 + shellReads));
+    await waitFor(() => expect(probes(f.queries).length).toBe(dailySources.length + 2 + shellReads + 1));
     fireEvent.click(busy);
     await flush();
-    expect(probes(f.queries)).toHaveLength(dailySources.length + 2 + shellReads);
+    expect(probes(f.queries)).toHaveLength(dailySources.length + 2 + shellReads + 1);
     hold.open();
     await screen.findByRole('button', { name: 'Refresh overview' });
-    await waitFor(() => expect(f.queries).toHaveLength((dailySources.length + 5 + todayReads) * 2 + shellReads));
+    await waitFor(() => expect(f.queries).toHaveLength((dailySources.length + 5 + todayReads) * 2 + shellReads + healthReads));
     expect(screen.queryByRole('button', { name: 'Refreshing…' })).toBeNull();
   });
   it('re-reads when the existing Daily refresh stream advances', async () => {
@@ -183,28 +186,28 @@ describe('Daily overview', () => {
     const { rerender } = render(home(0));
     await settled();
     rerender(home(1));
-    await waitFor(() => expect(f.queries).toHaveLength((dailySources.length + 5 + todayReads) * 2 + shellReads * 2));
+    await waitFor(() => expect(f.queries).toHaveLength((dailySources.length + 5 + todayReads + healthReads) * 2 + shellReads * 2));
     await settled();
   });
   it('shows only implemented sections and keeps the shared period when switching sections', async () => {
     const f = fixture({ capabilities: () => capabilityList(Object.values(sources).filter(source => source !== sources.workouts)) });
     render(home());
     await settled();
-    expect(screen.getByRole('tab', { name: 'Overview' })).toBeTruthy();
-    expect(screen.getByRole('tab', { name: 'Briefs' })).toBeTruthy();
-    expect(screen.getByRole('tab', { name: 'Data' })).toBeTruthy();
-    expect(screen.queryByRole('tab', { name: 'Workouts' })).toBeNull();
-    expect(screen.getByRole('tab', { name: 'Nutrition' })).toBeTruthy();
-    expect(screen.getByRole('tab', { name: 'Body & sleep' })).toBeTruthy();
+    expect(sectionTabs().getByRole('tab', { name: 'Overview' })).toBeTruthy();
+    expect(sectionTabs().getByRole('tab', { name: 'Briefs' })).toBeTruthy();
+    expect(sectionTabs().getByRole('tab', { name: 'Data' })).toBeTruthy();
+    expect(sectionTabs().queryByRole('tab', { name: 'Workouts' })).toBeNull();
+    expect(sectionTabs().getByRole('tab', { name: 'Nutrition' })).toBeTruthy();
+    expect(sectionTabs().getByRole('tab', { name: 'Body & sleep' })).toBeTruthy();
 
-    fireEvent.click(screen.getByRole('tab', { name: 'Data' }));
+    fireEvent.click(sectionTabs().getByRole('tab', { name: 'Data' }));
     await screen.findByLabelText('Browse');
     fireEvent.change(screen.getByLabelText('Period'), { target: { value: '30' } });
     await waitFor(() => expect(f.queries.at(-1)).toMatchObject({ source: sources.metrics }));
     expect((screen.getByLabelText('Period') as HTMLSelectElement).value).toBe('30');
-    fireEvent.click(screen.getByRole('tab', { name: 'Briefs' }));
+    fireEvent.click(sectionTabs().getByRole('tab', { name: 'Briefs' }));
     await screen.findByRole('heading', { level: 2, name: 'Briefs' });
-    fireEvent.click(screen.getByRole('tab', { name: 'Data' }));
+    fireEvent.click(sectionTabs().getByRole('tab', { name: 'Data' }));
     await screen.findByLabelText('Browse');
     expect((screen.getByLabelText('Period') as HTMLSelectElement).value).toBe('30');
   });
@@ -213,14 +216,14 @@ describe('Daily overview', () => {
     fixture({ capabilities: () => capabilityList(Object.values(sources).filter(source => source !== sources.workouts)) });
     render(home(0, '/daily?section=unknown'));
     await settled();
-    const overview = screen.getByRole('tab', { name: 'Overview' });
+    const overview = sectionTabs().getByRole('tab', { name: 'Overview' });
     await waitFor(() => expect(overview.getAttribute('aria-selected')).toBe('true'));
     expect(screen.getByTestId('daily-section-url').textContent).toBe('unknown');
 
-    const tablist = within(screen.getByRole('tablist', { name: 'Daily sections' }));
+    const tablist = within(screen.getByRole('tablist', { name: 'Health sections' }));
     const tabs = tablist.getAllByRole('tab');
     const nextTab = tabs[1]!;
-    expect(screen.getByRole('navigation', { name: 'Daily sections' })).toBeTruthy();
+    expect(screen.getByRole('navigation', { name: 'Health sections' })).toBeTruthy();
     expect(tabs.filter(tab => tab.getAttribute('tabindex') === '0')).toHaveLength(1);
     overview.focus();
     fireEvent.keyDown(overview, { key: 'ArrowRight' });
@@ -228,12 +231,12 @@ describe('Daily overview', () => {
     expect(document.activeElement).toBe(nextTab);
     expect(screen.getByTestId('daily-section-url').textContent).toBe(nextTab.id.replace('daily-tab-', ''));
     fireEvent.keyDown(nextTab, { key: 'End' });
-    const data = screen.getByRole('tab', { name: 'Data' });
-    expect(data.getAttribute('aria-selected')).toBe('true');
-    expect(document.activeElement).toBe(data);
-    expect(screen.getByTestId('daily-section-url').textContent).toBe('data');
-    fireEvent.keyDown(data, { key: 'Home' });
-    expect(screen.getByRole('tab', { name: 'Overview' }).getAttribute('aria-selected')).toBe('true');
+    const rules = sectionTabs().getByRole('tab', { name: 'Rules & sources' });
+    expect(rules.getAttribute('aria-selected')).toBe('true');
+    expect(document.activeElement).toBe(rules);
+    expect(screen.getByTestId('daily-section-url').textContent).toBe('rules');
+    fireEvent.keyDown(rules, { key: 'Home' });
+    expect(sectionTabs().getByRole('tab', { name: 'Overview' }).getAttribute('aria-selected')).toBe('true');
     expect(document.activeElement).toBe(overview);
     expect(tablist.getAllByRole('tab').filter(tab => tab.getAttribute('tabindex') === '0')).toHaveLength(1);
   });
@@ -248,13 +251,13 @@ describe('Daily overview', () => {
       fixture();
       render(home());
       await settled();
-      const strip = screen.getByRole('navigation', { name: 'Daily sections' });
+      const strip = screen.getByRole('navigation', { name: 'Health sections' });
       const stripScrolls = () => scrolls.filter(scroll => scroll.element === strip);
       expect(stripScrolls().length).toBeGreaterThan(0);
       expect(stripScrolls().every(scroll => scroll.options.behavior === 'auto')).toBe(true);
 
       Object.defineProperty(strip, 'clientWidth', { configurable: true, value: 390 });
-      const data = screen.getByRole('tab', { name: 'Data' });
+      const data = sectionTabs().getByRole('tab', { name: 'Data' });
       Object.defineProperty(data, 'offsetLeft', { configurable: true, value: 600 });
       Object.defineProperty(data, 'offsetWidth', { configurable: true, value: 80 });
       scrolls.length = 0;
@@ -263,7 +266,7 @@ describe('Daily overview', () => {
 
       document.documentElement.dataset.motion = 'reduced';
       scrolls.length = 0;
-      fireEvent.click(screen.getByRole('tab', { name: 'Overview' }));
+      fireEvent.click(sectionTabs().getByRole('tab', { name: 'Overview' }));
       expect(stripScrolls()).toEqual([{ element: strip, options: { left: 0, behavior: 'auto' } }]);
     } finally {
       delete document.documentElement.dataset.motion;
@@ -275,7 +278,7 @@ describe('Daily overview', () => {
     fixture();
     render(home());
     await settled();
-    const strip = screen.getByRole('navigation', { name: 'Daily sections' });
+    const strip = screen.getByRole('navigation', { name: 'Health sections' });
     const edges = () => [strip.dataset.overflowStart, strip.dataset.overflowEnd];
     expect(edges()).toEqual([undefined, undefined]);
 
@@ -320,7 +323,8 @@ describe('Daily overview', () => {
     render(home());
     const names = ['Overview', 'Briefs', 'Workouts', 'Nutrition', 'Body & sleep'];
     for (let index = 0; index < 20; index += 1) {
-      fireEvent.click(await screen.findByRole('tab', { name: names[index % names.length]! }));
+      const tablist = await screen.findByRole('tablist', { name: 'Health sections' });
+      fireEvent.click(within(tablist).getByRole('tab', { name: names[index % names.length]! }));
       await flush();
     }
     await waitFor(() => expect(aborted).toBeGreaterThan(0));
@@ -337,38 +341,38 @@ describe('Daily overview', () => {
     expect((browse as HTMLSelectElement).value).toBe(sources.metrics);
     await waitFor(() => expect(document.activeElement?.id).toBe('daily-heading'));
     await waitFor(() => expect(f.queries.at(-1)).toMatchObject({ source: sources.metrics, limit: 50 }));
-    expect(screen.queryByRole('heading', { name: 'What Daily holds today' })).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'What Health holds today' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Back to overview' })).toBeNull();
-    fireEvent.click(screen.getByRole('tab', { name: 'Overview' }));
+    fireEvent.click(sectionTabs().getByRole('tab', { name: 'Overview' }));
     await settled();
-    expect(screen.getByRole('tab', { name: 'Overview' }).getAttribute('aria-selected')).toBe('true');
+    expect(sectionTabs().getByRole('tab', { name: 'Overview' }).getAttribute('aria-selected')).toBe('true');
     expect(row('Measurements').getByRole('button', { name: 'Open Measurements' })).toBeTruthy();
     expect(f.capabilityCalls()).toBe(1);
-    expect(f.queries.filter(query => !('limit' in query) || query.limit === 1)).toHaveLength(dailySources.length * 2 + shellReads);
+    expect(f.queries.filter(query => !('limit' in query) || query.limit === 1)).toHaveLength(dailySources.length * 2 + shellReads + 2);
   });
   it.each([
-    [404, 'Daily is not enabled on this backend.'],
-    [403, 'Daily access could not be verified. Sign in as the configured owner.'],
-    [503, 'Daily is unavailable (HTTP 503).'],
+    [404, 'Health is not enabled on this backend.'],
+    [403, 'Health access could not be verified. Sign in as the configured owner.'],
+    [503, 'Health is unavailable (HTTP 503).'],
   ])('explains a failed availability check (HTTP %i), reads nothing, and retries on request', async (status, message) => {
     let failing = true;
     const f = fixture({ capabilities: () => failing ? jsonResponse({ error: 'synthetic' }, status) : capabilityList([sources.metrics]) });
     render(home());
     expect((await screen.findByRole('alert')).textContent).toContain(message);
     expect(f.queries).toHaveLength(0);
-    expect(screen.queryByRole('heading', { name: 'What Daily holds today' })).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'What Health holds today' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Refresh overview' })).toBeNull();
     failing = false;
     fireEvent.click(screen.getByRole('button', { name: 'Retry availability' }));
     await settled();
     expect(screen.getAllByRole('listitem')).toHaveLength(1);
-    expect(f.queries).toHaveLength(1);
+    expect(f.queries).toHaveLength(2);
     expect(screen.queryByRole('alert')).toBeNull();
   });
   it('says so plainly when the backend exposes no browsable collection', async () => {
     const f = fixture({ capabilities: () => capabilityList([sources.workout]) });
     render(home());
-    await screen.findByText('No Daily data');
+    await screen.findByText('No Health data');
     expect(f.queries).toHaveLength(0);
     expect(screen.queryByRole('button', { name: 'Refresh overview' })).toBeNull();
   });

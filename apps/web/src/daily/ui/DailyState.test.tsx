@@ -6,7 +6,7 @@ describe('DailyState', () => {
   it('announces loading, empty, partial and error states with the appropriate live roles', () => {
     const { rerender } = render(<DailyState status="loading" />);
     const loading = screen.getByRole('status');
-    expect(loading.textContent).toContain('Loading Daily history');
+    expect(loading.textContent).toContain('Loading Health history');
     expect(loading.getAttribute('aria-live')).toBe('polite');
 
     rerender(<DailyState status="empty" emptyMessage="No synthetic records were returned." />);
@@ -25,6 +25,12 @@ describe('DailyState', () => {
   it('shows a plain empty state', () => {
     render(<DailyState status="empty" />);
     expect(screen.getByRole('status').textContent).toBe('No records');
+  });
+
+  it('allows a loading announcement override without changing the shared presentation', () => {
+    render(<DailyState status="loading" loadingLabel="Loading Health history" />);
+    expect(screen.getByRole('status').textContent).toContain('Loading Health history');
+    expect(screen.queryByText(/daily/iu)).toBeNull();
   });
 
   it('allows a specific empty-state sentence without changing the shared presentation', () => {

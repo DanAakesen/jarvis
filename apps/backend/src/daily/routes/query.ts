@@ -12,10 +12,10 @@ export function dailyQueryRoutes(service: Pick<DailyQueryService, 'query'>): Fas
       onRequest: async (request, reply) => {
         resolveDailyOwner(request);
         reply.header('Cache-Control', 'no-store');
-        if (Object.keys(request.query as Record<string, unknown>).length) return reply.code(400).send({ error: 'Invalid Daily query' });
+        if (Object.keys(request.query as Record<string, unknown>).length) return reply.code(400).send({ error: 'Invalid Health query' });
       },
       preValidation: async (request, reply) => {
-        if (!isDailyQuery(request.body)) return reply.code(400).send({ error: 'Invalid Daily query' });
+        if (!isDailyQuery(request.body)) return reply.code(400).send({ error: 'Invalid Health query' });
       },
       schema: { body: dailyQuerySchema },
     }, async (request, reply) => {

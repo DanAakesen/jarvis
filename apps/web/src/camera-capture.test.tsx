@@ -281,7 +281,7 @@ describe('camera frame capture', () => {
         description: 'Three fingers.', question: 'Count fingers', capturedAt: new Date().toISOString(), frameId: 'fixture_id',
       })))
       .mockResolvedValueOnce(new Response(JSON.stringify({
-        error: 'Daily vision budget reached.', code: 'budget_exhausted', turnId: 'budget-item',
+        error: 'Vision budget reached.', code: 'budget_exhausted', turnId: 'budget-item',
       }), { status: 429 }));
     vi.stubGlobal('fetch', fetchMock);
     const result = vi.fn();
@@ -295,7 +295,7 @@ describe('camera frame capture', () => {
     expect(failure.mock.calls[0]?.[0]).toBeInstanceOf(VisionInspectionError);
     expect(failure.mock.calls[0]?.[0]).toMatchObject({ status: 429, code: 'budget_exhausted' });
     expect(result).toHaveBeenCalledOnce();
-    expect(screen.getByTestId('observation-notice').textContent).toBe('Daily vision budget reached.');
+    expect(screen.getByTestId('observation-notice').textContent).toBe('Vision budget reached.');
   });
 
   it('does not mask an inspection failure with a cached observation or truncate an oversized question', async () => {

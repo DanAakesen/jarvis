@@ -17,6 +17,25 @@ that consume the hook. The migration rollback refuses to discard saved targets.
 
 Refs DanAakesen/jarvis#1116, #1132
 
+## P14-50 — Rules & sources uses served evidence (20 October 2026; #1116, #1141)
+
+Add the original Rules & sources composition as the final discovered Health
+section, without shell changes or a period control. Reuse the nutrition editor
+and existing authenticated profile reader; the latter needs one `/me` read
+because the section receives the session token supplier, not the shell profile.
+P14-45's training editor is not present and is explicitly unavailable pending
+its merge. `daily.sync` serves health processing evidence only: do not infer
+nutrition sync, mail/calendar connectivity, or source freshness from it.
+Retained health evidence is labelled Stale after a failed refresh, not by an
+invented age threshold. Nutrition sync stays Not connected with an explanatory
+coverage gap; existing nutrition records remain usable. Real owner-session
+verification and training-editor integration remain outstanding.
+
+Owner naming update (20 October): new owner-facing copy uses Health and human
+source labels. The back link is route-relative, ready for #1147's route move;
+internal identifiers remain unchanged for #1146. Existing shared copy is left
+to #1147.
+
 ## The Daily area is named Health (20 October 2026; #1116, #1147, #1146)
 
 The owner ruled that the area built as Daily is called Health and that the word
@@ -35,6 +54,12 @@ storage keys. The owner's phone uploader and connectors may be configured agains
 current paths, so P14-54 renames them after the other tasks have merged, with aliases
 for every deployed path and key and an owner-run check before an alias is removed.
 Until then "Daily" in code, issue titles and the documents below means the Health area.
+
+The navigation command that reaches open browser tabs still carries `daily` for this
+page: the backend accepts `health` from the assistant and maps it before delivery,
+because a tab opened before the deploy only knows `daily` and would reject `health`.
+P14-54 drops the mapping once those tabs are gone. Stored nutrition text is shown as
+saved; only a provenance `source` value is relabelled for display.
 
 Refs #1116
 
@@ -90,6 +115,26 @@ read in words (`metricLabel`); unmapped names of any other shape stay verbatim. 
 tiles' loading semantics and wording otherwise stay as they were.
 
 Refs #1116, #1129
+
+P14-53 (#1147) applies the 20 October naming ruling: the owner-facing area and
+route are Health and `/health`, with legacy `/daily` UI links replaced to the
+matching Health URL. The internal area id, `dailyEnabled` options, API paths,
+tool/source ids, query contracts, settings keys, environment variables and log
+event names stay unchanged until #1146.
+
+## P14-49 — Nutrition parity uses only served freshness and meal fields (20 October 2026; #1116, #1139)
+
+The Nutrition Today view uses the served Copenhagen day total and the existing
+owner-target loader. Trend averages and charts use the selected period's
+`daily.nutrition.days`; the meal list pages through `daily.nutrition.meals`.
+Partial nutrient values retain lower-bound wording, with calorie balance
+described as an upper bound when energy is partial. The meal query does not serve
+an export state, and the query contract sets staleness to `unknown`; therefore
+the UI says “Not recorded” and “Staleness unknown” instead of inferring either
+value. Existing Plans and Favourites remain unchanged; meal coaching stays out
+of scope.
+
+Refs #1116, #1139
 
 ## P14-41 — Today cards read served sources and say so when one is not (20 October 2026; #1116)
 
@@ -187,6 +232,17 @@ Nutrition pages); each needs its own owner ruling before it is built. The
 code was not available, so the audit works from screenshots only.
 
 Refs #1116
+
+P14-47 follow-up (#1136): Health panel state belongs to `panel` and `healthTab`
+search parameters. Its read window is the current Copenhagen day plus six preceding
+days; weekly targets count Monday through today. Retained-record completeness is
+still unknown. Catalogue units keep series separate; categories are used only
+when served, with uncategorised metrics retained in All data rather than inferred
+from a personal metric list. The current catalogue has no category field or
+retention policy. A complete workouts read with no sessions reads as zero; total
+sleep leads and asleep is only a fallback; `active_energy` is accepted as the
+active-calories series. Gym/Run targets remain a nullable prop pending P14-45 (#1132);
+no parallel targets client is introduced.
 
 ## P14-32 — Notes tree beside Show tasks (20 October 2026; #1085)
 

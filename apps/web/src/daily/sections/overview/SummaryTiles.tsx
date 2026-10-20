@@ -44,7 +44,7 @@ function SummaryTile({ title, section, pages, children, emptyMessage }: {
       {pages.status === 'loading' && !pages.first
         ? <Loader label={`Loading ${title.toLowerCase()} summary`} variant="lines" />
         : pages.status === 'error' && !hasItems
-          ? <DailyState status="error" message={pages.error ?? 'Daily history could not be loaded.'} onRetry={pages.reload} />
+          ? <DailyState status="error" message={pages.error ?? 'Health history could not be loaded.'} onRetry={pages.reload} />
           : pages.first && !hasItems
             ? <DailyState status="empty" emptyMessage={emptyMessage} />
             : children}

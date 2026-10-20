@@ -86,23 +86,26 @@ describe('Workouts section', () => {
   it('shows the shared loader while the initial read is pending', () => {
     read.mockReturnValue(new Promise(() => {}));
     mount();
-    expect(screen.getByText('Loading Daily history')).toBeTruthy();
+    expect(screen.getByText('Loading Health history')).toBeTruthy();
     expect(read.mock.calls[0]?.[1]).toEqual({ source: sources.workouts, ...props.period, limit: 500 });
   });
 
-  it('uses the standard empty sentence without inventing totals', async () => {
+  it('keeps the training composition on a complete empty read and reads it as zero', async () => {
     read.mockImplementation(async (_url, query) => dailyFixture(query));
     mount();
     expect(await screen.findByText('No records')).toBeTruthy();
-    expect(screen.queryByLabelText('Workout summary')).toBeNull();
+    expect(screen.getByLabelText('Workout summary').textContent).toContain('Sessions0');
+    expect(screen.getByLabelText('Workout summary').textContent).toContain('Calories burned0 kcal');
   });
 
-  it('shows freshness, a compact overview, type breakdown, and one visible history layout', async () => {
+  it('shows freshness, training, class cards, and one visible history layout', async () => {
     mount();
     expect(await screen.findByRole('list', { name: 'Recorded workout history' })).toBeTruthy();
     expect(screen.getByText(/3 records/u)).toBeTruthy();
-    expect(screen.getByRole('heading', { name: 'By type' })).toBeTruthy();
-    expect(screen.getByRole('img', { name: 'Recorded workout minutes per week' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Training' })).toBeTruthy();
+    expect(screen.getByRole('region', { name: 'Run class' })).toBeTruthy();
+    expect(screen.getByRole('img', { name: 'Calories burned by Copenhagen day (kcal)' })).toBeTruthy();
+    expect(screen.queryByRole('combobox', { name: 'Period' })).toBeNull();
     expect(screen.getAllByText('Not recorded').length).toBeGreaterThan(0);
     expect(screen.queryByRole('region', { name: 'Workouts in the loaded rows' })).toBeNull();
     table();
@@ -154,8 +157,8 @@ describe('Workouts section', () => {
     fireEvent.change(screen.getByLabelText('Workout type'), { target: { value: 'running' } });
     expect(within(table()).queryByText('Cycling')).toBeNull();
     const summary = screen.getByLabelText('Workout summary');
-    expect(within(summary).getAllByRole('article')[0]?.textContent).toMatch(/Workouts1/u);
-    expect(within(summary).getByText('3 km')).toBeTruthy();
+    expect(summary.textContent).toContain('Sessions1');
+    expect(within(screen.getByRole('region', { name: 'Run class' })).getByText('3 km')).toBeTruthy();
   });
 
   it('caps automatic reads at ten pages, scopes totals, and loads more on request', async () => {
@@ -278,7 +281,7 @@ describe('Workouts section', () => {
     read.mockImplementation(async (_url, query) => query.source === sources.heartRate ? pending.promise : respond(query));
     mount({}, '/daily?section=workouts&workout=synthetic-run');
     await screen.findByRole('heading', { name: /^Running ·/u });
-    expect(screen.getAllByText('Loading Daily history').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Loading Health history').length).toBeGreaterThan(0);
     await waitFor(() => expect(read.mock.calls.some(call => call[1].source === sources.heartRate)).toBe(true));
     const query = read.mock.calls.find(call => call[1].source === sources.heartRate)![1];
     await act(async () => pending.resolve(dailyFixture(query)));
