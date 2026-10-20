@@ -12,7 +12,7 @@ function Chevron() {
 }
 
 /** A figure with its unit set smaller beside it. The space between them is real text, so the value still reads as one. */
-export function Figure({ value, unit }: { value: string; unit?: string }) {
+export function Figure({ value, unit }: { value: string; unit?: string | undefined }) {
   return <><span className="daily-top-figure">{value}</span>{unit ? <>{' '}<span className="daily-top-unit">{unit}</span></> : null}</>;
 }
 

@@ -27,10 +27,10 @@ const joined = (...parts: (string | false | null)[]) => parts.filter(Boolean).jo
 
 export function ProteinTile({ view, label = 'Protein' }: { view: NutritionView; label?: string }) {
   const protein = view.figures?.protein ?? null;
-  const known = protein?.value != null;
-  const share = known && view.proteinTarget !== null && view.proteinTarget > 0 ? Math.min(1, protein.value / view.proteinTarget) : null;
+  const amount = protein?.value ?? null;
+  const share = amount !== null && view.proteinTarget !== null && view.proteinTarget > 0 ? Math.min(1, amount / view.proteinTarget) : null;
   return <Tile label={label} icon="protein" state={view.state} unavailable="Nutrition totals are not served."
-    value={view.figures === null ? null : known ? <Figure value={formatNumber(protein.value, 0)} unit="g" /> : 'Unknown'}
+    value={view.figures === null ? null : amount !== null ? <Figure value={formatNumber(amount, 0)} unit="g" /> : 'Unknown'}
     note={view.figures === null ? null : targetNote(view, view.proteinTarget === null ? null
       : joined(`of ${formatNumber(view.proteinTarget, 0)} g`, protein?.partial === true && 'lower bound', view.range && 'average per day'))}
     meter={share === null ? null : <span style={{ width: `${share * 100}%` }} />} />;
