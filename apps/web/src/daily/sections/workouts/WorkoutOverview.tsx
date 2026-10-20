@@ -1,7 +1,6 @@
 import { Link } from 'react-router-dom';
 import { dailyQuerySources as sources } from '@jarvis/contracts';
 import type { DailySectionProps } from '../types';
-import { DailyPeriodControl } from '../../DailyPeriodControl';
 import { DailyChart } from '../../ui/DailyChart';
 import { DailyState } from '../../ui/DailyState';
 import { Ring } from '../../ui/Ring';
@@ -71,7 +70,6 @@ export function WorkoutOverview({ pages, rows, ...props }: DailySectionProps & {
   return <div className="workouts-overview">
     <section className="daily-stat-tile workouts-training" aria-labelledby="workouts-training-heading">
       <h3 id="workouts-training-heading">Training</h3>
-      <DailyPeriodControl period={props.period} onPeriodChange={props.onPeriodChange} />
       <div className="workouts-training-body">
         <dl className="workouts-training-totals" aria-label="Workout summary">
           <Figure label="Sessions" value={pending ? null : formatNumber(summary.count)} loading={loading} />

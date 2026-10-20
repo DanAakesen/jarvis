@@ -64,8 +64,7 @@ describe('Workout parity composition', () => {
       .map(item => item.textContent)).toEqual(['1Gym', '2Run', '3Other']);
     expect(screen.getByRole('img', { name: 'Calories burned by Copenhagen day (kcal)' })).toBeTruthy();
     await waitFor(() => expect(figure('Activity', 'Steps')?.textContent).toBe('Not received'));
-    fireEvent.change(screen.getByRole('combobox', { name: 'Period' }), { target: { value: '14' } });
-    expect(props.onPeriodChange).toHaveBeenCalledOnce();
+    expect(screen.queryByRole('combobox', { name: 'Period' })).toBeNull();
   });
 
   it('shows every missing class figure as Not received without deriving heart rate or activity time from workouts', async () => {

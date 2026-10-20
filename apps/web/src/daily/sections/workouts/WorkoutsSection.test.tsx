@@ -105,6 +105,7 @@ describe('Workouts section', () => {
     expect(screen.getByRole('heading', { name: 'Training' })).toBeTruthy();
     expect(screen.getByRole('region', { name: 'Run class' })).toBeTruthy();
     expect(screen.getByRole('img', { name: 'Calories burned by Copenhagen day (kcal)' })).toBeTruthy();
+    expect(screen.queryByRole('combobox', { name: 'Period' })).toBeNull();
     expect(screen.getAllByText('Not recorded').length).toBeGreaterThan(0);
     expect(screen.queryByRole('region', { name: 'Workouts in the loaded rows' })).toBeNull();
     table();
