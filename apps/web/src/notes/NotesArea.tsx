@@ -238,8 +238,15 @@ export function NotesArea({ backendUrl, getAccessToken }: AreaProps) {
     });
   };
   const toggleTree = () => {
-    if (!treeOpen && tasksOpen) setTasks(false);
-    setTreeOpen(!treeOpen);
+    if (treeOpen) { setTreeOpen(false); return; }
+    // On a phone the note sheet and the tree share the bottom dock, so the tree replaces an open note (after the draft guard).
+    const phone = window.matchMedia?.('(max-width: 700px)').matches ?? false;
+    const show = () => {
+      if (tasksOpen) setTasks(false);
+      if (phone && (editor || opening)) { returnFocus.current = null; clearEditor(); }
+      setTreeOpen(true);
+    };
+    if (phone && editor) change(show); else show();
   };
   const closeTree = () => {
     setTreeOpen(false);

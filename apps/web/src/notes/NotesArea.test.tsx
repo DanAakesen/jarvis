@@ -163,6 +163,27 @@ describe('Notes workflow', () => {
     expect(screen.queryByRole('region', { name: 'Task list' })).toBeNull();
   });
 
+  it('replaces an open note with the tree on a phone, asking first when a draft is unsaved', async () => {
+    vi.stubGlobal('matchMedia', vi.fn((query: string) => ({
+      matches: query.includes('max-width: 700px'), media: query, addEventListener: vi.fn(), removeEventListener: vi.fn(),
+    })));
+    mount();
+    const input = await openFixture();
+    fireEvent.change(input, { target: { value: 'Unsaved draft' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Show notes tree' }));
+    expect(screen.getByRole('dialog', { name: 'Unsaved changes' })).not.toBeNull();
+    expect(screen.queryByRole('region', { name: 'Notes tree' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Keep editing' }));
+    expect((screen.getByRole('textbox', { name: 'Markdown' }) as HTMLTextAreaElement).value).toBe('Unsaved draft');
+    expect(screen.queryByRole('region', { name: 'Notes tree' })).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show notes tree' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Discard changes and continue' }));
+    await screen.findByRole('region', { name: 'Notes tree' });
+    expect(screen.queryByRole('dialog', { name: 'Fixture' })).toBeNull();
+    expect(saveCalls()).toHaveLength(0);
+  });
+
   it('puts the tree away on Escape and returns focus to its button', async () => {
     mount();
     fireEvent.click(await screen.findByRole('button', { name: 'Show notes tree' }));

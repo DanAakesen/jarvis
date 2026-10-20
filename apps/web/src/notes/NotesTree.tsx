@@ -117,6 +117,7 @@ export function NotesTree({ id, loadTree, loadNotes, selectedPath, refreshKey = 
   const navigable = useMemo(() => entries.filter((entry): entry is Extract<Entry, { type: 'folder' | 'note' }> => entry.type === 'folder' || entry.type === 'note'), [entries]);
   const tabKey = navigable.some(entry => entry.key === active) ? active : navigable[0]?.key;
   const treeReady = !!inventory && listings['']?.status === 'ready';
+  const busy = (!inventory && !treeError) || Object.values(listings).some(listing => listing.status === 'loading');
   const nothing = treeReady && navigable.length === 0 && !treeError;
 
   const focusItem = (entry: { key: string } | undefined) => {
@@ -176,7 +177,7 @@ export function NotesTree({ id, loadTree, loadNotes, selectedPath, refreshKey = 
     </span>
   </li>;
 
-  return <section ref={panel} id={id} className="notes-tree-panel luminous-glass" aria-label="Notes tree" aria-busy={!treeReady && !treeError} tabIndex={-1}
+  return <section ref={panel} id={id} className="notes-tree-panel luminous-glass" aria-label="Notes tree" aria-busy={busy} tabIndex={-1}
     onKeyDown={event => { if (event.key === 'Escape') { event.preventDefault(); onClose(); } }}>
     <ul className="notes-tree" role="tree" aria-label="Vault notes" onKeyDown={onKeyDown}>
       {entries.map(entry => {

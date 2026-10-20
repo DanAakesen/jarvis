@@ -167,6 +167,19 @@ describe('NotesTree', () => {
     expect(await screen.findByText('Some folders may be missing.')).not.toBeNull();
   });
 
+  it('stops reporting busy when the root listing fails and offers Retry', async () => {
+    const loadNotes = vi.fn<(directory: string, offset: number) => Promise<NotePage>>()
+      .mockRejectedValueOnce(new Error('Root is unavailable.'))
+      .mockImplementation(async (directory, offset) => page(vault[directory] ?? [], offset));
+    setup({ loadNotes });
+    const alert = await screen.findByRole('alert');
+    expect(alert.textContent).toBe('Root is unavailable.');
+    expect(screen.getByRole('region', { name: 'Notes tree' }).getAttribute('aria-busy')).not.toBe('true');
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    await screen.findByRole('treeitem', { name: /Readme/ });
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
   it('closes on Escape', async () => {
     const { onClose } = setup();
     await screen.findByRole('treeitem', { name: /Readme/ });
