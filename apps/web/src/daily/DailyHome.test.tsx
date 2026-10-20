@@ -13,6 +13,8 @@ const token = async () => 'synthetic-fixture';
 const backendUrl = 'http://localhost:3999';
 // The shell's freshness pill reads the sync source once per mount and once per refresh-stream step.
 const shellReads = 1;
+// Today cards: weekly workouts, today's nutrition day and today's meals.
+const todayReads = 3;
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.restoreAllMocks(); window.history.replaceState({}, '', '/'); });
 
 const records: Partial<Record<DailySourceId, Record<string, DailyJson>>> = {
@@ -77,7 +79,7 @@ describe('Daily overview', () => {
     await screen.findByText('No sleep recorded in the last 7 days');
     expect(screen.getByRole('heading', { level: 1, name: 'Daily' })).toBeTruthy();
     expect(screen.getByRole('heading', { level: 2, name: 'What Daily holds today' })).toBeTruthy();
-    expect(screen.getAllByRole('listitem')).toHaveLength(dailySources.length);
+    expect(within(screen.getByRole('list', { name: 'What Daily holds today' })).getAllByRole('listitem')).toHaveLength(dailySources.length);
     const notes = screen.getByText('About this data').closest('details')!;
     expect(notes.open).toBe(false);
     expect(notes.textContent).toContain('Freshness and completeness are not established.');
@@ -132,7 +134,7 @@ describe('Daily overview', () => {
     expect(f.queries).toHaveLength(2);
     hold.open();
     await settled();
-    expect(f.queries).toHaveLength(dailySources.length + 5 + shellReads);
+    expect(f.queries).toHaveLength(dailySources.length + 5 + todayReads + shellReads);
   });
   it('shows a failed collection on its own row, keeps the rest, and Retry reads again and keeps keyboard focus in that row', async () => {
     let sleepFails = true;
@@ -161,7 +163,7 @@ describe('Daily overview', () => {
     const f = fixture({ answer: async query => { if (gated) await hold.opened; return jsonResponse(dailyFixture(query, items(query))); } });
     render(home());
     await settled();
-    await waitFor(() => expect(f.queries).toHaveLength(dailySources.length + 5 + shellReads));
+    await waitFor(() => expect(f.queries).toHaveLength(dailySources.length + 5 + todayReads + shellReads));
     gated = true;
     fireEvent.click(screen.getByRole('button', { name: 'Refresh overview' }));
     const busy = await screen.findByRole('button', { name: 'Refreshing…' });
@@ -173,7 +175,7 @@ describe('Daily overview', () => {
     expect(probes(f.queries)).toHaveLength(dailySources.length + 2 + shellReads);
     hold.open();
     await screen.findByRole('button', { name: 'Refresh overview' });
-    await waitFor(() => expect(f.queries).toHaveLength((dailySources.length + 5) * 2 + shellReads));
+    await waitFor(() => expect(f.queries).toHaveLength((dailySources.length + 5 + todayReads) * 2 + shellReads));
     expect(screen.queryByRole('button', { name: 'Refreshing…' })).toBeNull();
   });
   it('re-reads when the existing Daily refresh stream advances', async () => {
@@ -181,7 +183,7 @@ describe('Daily overview', () => {
     const { rerender } = render(home(0));
     await settled();
     rerender(home(1));
-    await waitFor(() => expect(f.queries).toHaveLength((dailySources.length + 5) * 2 + shellReads * 2));
+    await waitFor(() => expect(f.queries).toHaveLength((dailySources.length + 5 + todayReads) * 2 + shellReads * 2));
     await settled();
   });
   it('shows only implemented sections and keeps the shared period when switching sections', async () => {
@@ -405,7 +407,8 @@ describe('Daily overview', () => {
     const user = userEvent.setup();
     await user.tab();
     expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Refresh overview' }));
-    for (const name of ['Workouts', 'Nutrition', 'Body', 'Sleep', 'Briefs']) {
+    for (const name of ['Training this week', 'Protein today', 'Calories left today', 'Meals today',
+      'Workouts', 'Nutrition', 'Body', 'Sleep', 'Briefs']) {
       await user.tab();
       expect(document.activeElement).toBe(screen.getByRole('link', { name }));
     }

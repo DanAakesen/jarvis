@@ -5,7 +5,9 @@
 Every text entry field (input, select, textarea, `.form-control` and the Notes,
 Folio and Tasks search bars) shares one focus treatment: no outline, a thin
 border that shifts to a tint of `--focus` (`--field-focus-rule`) and a short soft
-light underneath (`--field-focus-glow`), echoing the composer. A zero-specificity
+light underneath (`--field-focus-glow`), echoing the composer. Fields in shared
+containers read the tint through `--field-rim`, so it applies at any specificity.
+A zero-specificity
 catch-all applies it to any field not named in a shared container. Search bars
 apply it to the whole bar. Invalid fields keep their error border. Forced colours
 fall back to a 2px `Highlight` outline. Increased-contrast mode makes the tint
@@ -17,7 +19,9 @@ the composer keeps its rim sweep.
 Dropdowns: where `appearance: base-select` is supported, every field select
 (including those in shared containers and `select.form-control`) opens the glass
 list (rounded panel, lit hover, selected tint with checkmark) and uses the
-picker icon instead of a drawn chevron. Other browsers keep the native list.
+picker icon, drawn as the same slim chevron the closed selects always had (a mask,
+not the browser's solid triangle; `ButtonText` under forced colours). Other
+browsers keep the native list.
 
 ## Vault mirror Status row (19 October 2026; P14-29)
 
@@ -1731,13 +1735,38 @@ processed" (uploads waiting or processing, none processed yet), "No uploads yet"
 is an optional "Phone last contacted" row in the details panel, shown only when one
 exists. When a refresh fails but earlier data
 is kept, it adds ", refresh failed" to the label (bolder text, never colour alone).
-It opens a small details panel (last upload, optional phone contact and upload counts, plus Check again)
-that Escape (from anywhere on the page) and an outside press close. On screens up
+It opens a small details panel (last upload, optional phone contact, upload counts, a
+"Stored" row and Check again)
+that Escape (from anywhere on the page) and an outside press close. The "Stored" row
+reads `{MiB} of {limit} MiB · {n} of {limit} uploads` from the served inbox size and
+caps only; any missing or non-finite figure reads "Unknown", and at 80% or more of
+either cap it adds the words "nearly full" in bold text, never colour alone. On screens up
 to 640 px the panel anchors to the header and spans its width. It is a 36 px
 bordered pill using existing surface tokens; it is
 absent when the sync source is not served. The period control gains Today,
 Yesterday and Last 14 days presets, matching the original day ranges without
 changing the control.
+
+20 October 2026 (P14-41 Today cards): the Overview opens with a "Today at a
+glance" block above the existing summary tiles: Training this week, Protein today and
+Calories left today as three statistic cards, then a Meals today strip. Each card
+title links to its section. A ring is a thin SVG arc on the shared surface with the
+value in its centre and a label and caption beneath, so state never rests on colour
+or on text alone. Training shows three count rings (Strength, Running, Other) with no
+target arc; protein and calories draw their arc only when a nutrition target is set,
+and calories left is resting burn minus the deficit, before activity. The meal strip is
+one row per meal (time, name, kcal), not a list of paragraphs. A source that is not
+served shows one muted line that starts with a bold "Unavailable." (DailyUnavailable), never a loading or empty
+look; loading, empty, error and "Not set" states apply to served sources only. Each
+card keeps a freshness line and a "Partial history" note when pages are missing. No
+new tokens or colours: the arc uses the focus token on a surface-coloured track, drawn
+dashed and muted when no target is known, and forced colours map both to system
+colours. The rings do not animate. When the eaten total is a lower bound, the calories
+ring says so in words: the centre reads "≤ 500" or "≥ 300", the caption "kcal left, at
+most" or "kcal over, at least", and the accessible summary says "At most" or "At least"
+with "eaten is a lower bound". The cards follow the Copenhagen date: it advances at
+midnight, on focus and when the page becomes visible, and every card then asks for the
+new day.
 
 Checked the section shell in isolated Chromium against only synthetic capability
 and query responses at 320, 390×844, 768 and 1440×900 in light and dark, with
