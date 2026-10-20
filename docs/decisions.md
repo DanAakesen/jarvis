@@ -1,5 +1,24 @@
 # Decisions
 
+## P14-50 — Rules & sources uses served evidence (20 October 2026; #1116, #1141)
+
+Add the original Rules & sources composition as the final discovered Health
+section, without shell changes or a period control. Reuse the nutrition editor
+and existing authenticated profile reader; the latter needs one `/me` read
+because the section receives the session token supplier, not the shell profile.
+P14-45's training editor is not present and is explicitly unavailable pending
+its merge. `daily.sync` serves health processing evidence only: do not infer
+nutrition sync, mail/calendar connectivity, or source freshness from it.
+Retained health evidence is labelled Stale after a failed refresh, not by an
+invented age threshold. Nutrition sync stays Not connected with an explanatory
+coverage gap; existing nutrition records remain usable. Real owner-session
+verification and training-editor integration remain outstanding.
+
+Owner naming update (20 October): new owner-facing copy uses Health and human
+source labels. The back link is route-relative, ready for #1147's route move;
+internal identifiers remain unchanged for #1146. Existing shared copy is left
+to #1147.
+
 ## The Daily area is named Health (20 October 2026; #1116, #1147, #1146)
 
 The owner ruled that the area built as Daily is called Health and that the word
@@ -196,6 +215,17 @@ Nutrition pages); each needs its own owner ruling before it is built. The
 code was not available, so the audit works from screenshots only.
 
 Refs #1116
+
+P14-47 follow-up (#1136): Health panel state belongs to `panel` and `healthTab`
+search parameters. Its read window is the current Copenhagen day plus six preceding
+days; weekly targets count Monday through today. Retained-record completeness is
+still unknown. Catalogue units keep series separate; categories are used only
+when served, with uncategorised metrics retained in All data rather than inferred
+from a personal metric list. The current catalogue has no category field or
+retention policy. A complete workouts read with no sessions reads as zero; total
+sleep leads and asleep is only a fallback; `active_energy` is accepted as the
+active-calories series. Gym/Run targets remain a nullable prop pending P14-45 (#1132);
+no parallel targets client is introduced.
 
 ## P14-32 — Notes tree beside Show tasks (20 October 2026; #1085)
 

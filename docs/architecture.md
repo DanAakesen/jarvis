@@ -5743,6 +5743,14 @@ login or storage.
 
 ### Daily section shell and extension contract (18 October 2026; P12-20)
 
+P14-50 adds `sections/rules`, ordered last without period controls. It embeds
+the nutrition target editor and reuses the session token supplier with the
+existing `/me` profile reader (no additional sign-in). Source coverage reads
+`daily.sync` and distinguishes completed health processing from unknown
+freshness and failed refreshes. Nutrition sync and mail/calendar attention
+are not served there and remain explicitly Not connected; the training editor
+is unavailable until P14-45 is merged.
+
 `DailyHome` owns the active section (`?section=<id>`), one Copenhagen-calendar
 period and the known capability source IDs. `sections/*/index.tsx` modules are
 discovered with the lazy `import.meta.glob`; each exports its

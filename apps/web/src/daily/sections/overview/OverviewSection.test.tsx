@@ -5,6 +5,8 @@ import { DailySectionNavigationContext } from '../../section-navigation';
 import type { DailySectionProps } from '../types';
 import OverviewSection from './OverviewSection';
 
+vi.mock('./health-panel/HealthPanel', () => ({ HealthPanel: () => null }));
+
 vi.mock('../../DailyOverview', () => ({
   DailyOverview: ({ capabilities, onOpen }: { capabilities: { sources: string[] }; onOpen: (source: string) => void }) =>
     <button onClick={() => onOpen(capabilities.sources[0]!)}>Open fixture source</button>,
