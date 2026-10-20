@@ -1,6 +1,14 @@
-# Inactive Daily Google feed checkpoint (#725)
+# Default-off Daily Google feeds (#725, P14-51)
 
-`DailyCalendarFeed` is a reusable read boundary, not production composition. Construct it with the existing server-owned `GoogleApiClient`; every refresh resolves the authenticated Jarvis owner, denies runners/other identities and the nutrition-only connector, and accepts no caller-selected account/owner. Provider operations are GET only. Existing Gmail/Calendar writes, OAuth setup and tool catalogue limits are unchanged.
+`DailyCalendarFeed` and `DailyGmailFeed` are composed in production only when both
+`JARVIS_DAILY_ENABLED=true` and the separate `JARVIS_DAILY_FEEDS_ENABLED=true`.
+The feed flag defaults off and is not set by infrastructure. Composition reuses
+the server-owned Google API client and existing Foundry identity, chat settings,
+model catalogue and usage store. Construction performs no Google/model request.
+Every feed boundary resolves the authenticated Jarvis owner, denies runners,
+agents, other identities and the nutrition-only connector, and accepts no
+caller-selected account/owner. Provider operations are GET only. Existing
+Gmail/Calendar writes, OAuth setup and tool catalogue limits are unchanged.
 
 Calendar-list pages include hidden visible calendars; each listed calendar gets separately paged event reads. Snapshot IDs preserve the producer's calendarId:eventId format, with original date-only/offset/time-zone metadata alongside normalized source fields. Cancelled/deleted and source week-number calendars/titles are excluded; only timed overlaps are conflicts (bounded output reports truncation). No guessed primary-only fallback. Bounds: 62-day range, 10 pages per enumeration/read, 32 calendars, 2000 events, four concurrent requests/cache ranges, 30-second manual-refresh cooldown and 20-second combined cancellation/deadline. Duplicate/repeated-page or invalid responses fail truthfully. Coverage limits and individual denied calendars report partial coverage. Only complete snapshots enter the in-memory owner/range cache; failed refresh can return the last complete snapshot explicitly stale, with its original capture timestamp. Cancellation never claims success.
 
@@ -12,7 +20,7 @@ Full threads allow 100 messages with bounded MIME/headers. Plain text precedes H
 
 `attention.ts` implements the verified seven-state selectors, exact Copenhagen business-day/holiday calendar, producer-ID/consumer-key distinction, order merge/terminal behavior and incoming-only thread revival. The consumer punctuation helper is copied semantically from the coordinator's pure source evidence: no diacritic folding/prefix stripping; grouping compares trimmed lowercase raw numbers separately from canonical keys. Received is terminal for visibility even though the producer considered it active.
 
-`DailyFeedStore` uses the existing owner-bound 0041 tables, parameterized SQL and transaction-owned per-owner locks for run/checksum idempotency, source snapshots, suppressions and consistent reads. Latest attempt and success are selected independently by capture/receipt time; Missing/Stale/Current and the strict >18-hour age rule retain successful items after failed/incomplete attempts. Explicit trusted intent is required for dismiss/Received/clear; automatic refresh can only mark the defined newer-incoming thread revival, retaining history. Order suppressions never auto-revive. Exact imported keys/IDs are not rewritten; TickTick/task/habit/countdown sources/types are refused. No new migration or production data is added.
+`DailyFeedStore` uses the existing owner-bound 0041 tables, parameterized SQL and transaction-owned per-owner locks for run/checksum idempotency, source snapshots, suppressions and consistent reads. Latest attempt and success are selected independently by capture/receipt time; Missing/Stale/Current and the strict >18-hour age rule retain successful items after failed/incomplete attempts. Explicit trusted intent is required for dismiss/Received/clear; automatic refresh can only mark the defined newer-incoming thread revival, retaining history. Order suppressions never auto-revive. Exact imported keys/IDs are not rewritten; TickTick/task/habit/countdown sources/types are refused. Requested calendar ranges are retained in existing run metadata; older snapshots without a range remain unknown. No new migration or production data is added.
 
 `DailyFeedRefresh` executes bounded manual refresh with running/completed/limited states and independent source errors. Before the combined transaction, each source is limited to 1000 items, 480 KiB serialized UTF-8 and 32000 UTF-8 bytes per content object. Transport may return 2000 calendar events, but an oversized source becomes an explicit coverage-limit error with no partial items; healthy Gmail still commits and prior calendar success remains available. Two reserved source budgets fit the unchanged 1 MiB run ceiling; persistence enforces the same byte limits. It never dispatches the original workflow, claims queued work was processed, or promotes stale/partial cache to a new success. Durable ingestion is duplicate-safe; in-flight provider work is coalesced within the service instance. Repeated provider/model reads across backend instances are not claimed exactly once. P12-09 owns runtime registration and derives intent from trusted Jarvis metadata, never model/client confirmation booleans.
 
@@ -32,9 +40,22 @@ a fabricated empty success.
 `read_suppressions`, `refresh`, `dismiss_thread`, `receive_order` and
 `clear_suppression`. The same shared service retains the existing selectors,
 source metadata, exact IDs/consumer keys and bounded timed conflicts. Read DTOs
-have the shared768KiB ceiling; raw Gmail snapshots are not duplicated. The
-retained calendar request range is unknown. Query/capability source versions
-and the external nutrition MCP allowlist do not change.
+have the shared768KiB ceiling; raw Gmail snapshots are not duplicated. Daily
+query capability v4 conditionally adds `daily.attention` and `daily.calendar`;
+v1–v3 source lists remain unchanged. Both sources read retained SQL only.
+Calendar requests are bounded to 62 days, filter retained events and report
+whether the saved snapshot range covers them. Missing or uncovered coverage is
+partial, never a successful empty result.
+
+The owner browser also receives four direct routes under `/daily/feeds`: manual
+refresh, thread hide, order received (Daily visibility only), and exact-key
+restore. Routes are registered only with the feeds, reject agents/runners and
+the nutrition connector, and derive trusted intent from authenticated owner
+context rather than a client/model confirmation field. Manual refresh keeps its
+30-second cooldown. No scheduler is composed. A future scheduled refresh is a
+proposal only; each run would make Google reads and may require up to 50 existing
+chat-model classifications (maximum 1,024 output tokens each), billed at
+existing configured rates. This is a bound, not an invoice estimate.
 
 The four mutating operations require a current verified Dan chat/browser-voice
 session, present mode and one-time browser-only Now approval. Review lasts
@@ -53,8 +74,9 @@ principals, including direct store/provider-service calls.
 
 New acknowledged snapshot/suppression commits publish `daily.feed` through the
 existing change hub/Now refresh; reads, replay, no-op and failed transactions do
-not. Listener failures are isolated after commit. No route, scheduler, migration,
-production composition, grant or live acceptance is added.
+not. Listener failures are isolated after commit. Production composition and
+routes remain dark by default. No scheduler, migration, grant, new resource or
+live acceptance is added.
 
 New active suppressions are refused at1,000 per type inside the owner transaction;
 existing updates/no-ops remain allowed. Restoration reads and rechecks only its

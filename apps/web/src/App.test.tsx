@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from './App';
 import { getSignInGreeting } from './sign-in-greeting';
 import { publishJob } from './jobs-store';
-import { dailyQuerySources, factoryBoardColumnIds, isDailyQuery, type DailyQuery, type FactoryBoard, type GeneratedView, type WorkspaceCommand } from '@jarvis/contracts';
+import { dailyCapabilitiesVersion, dailyQuerySources, factoryBoardColumnIds, isDailyQuery, type DailyQuery, type FactoryBoard, type GeneratedView, type WorkspaceCommand } from '@jarvis/contracts';
 import { dailyFixture, jsonResponse } from './daily/test-support';
 import { expectNoDailyInRenderedContent } from './test/visible-copy';
 
@@ -706,7 +706,7 @@ describe('App shell', () => {
     const queries: DailyQuery[] = [];
     fetchMock.mockImplementation(async (input, init) => {
       const path = new URL(String(input)).pathname;
-      if (path === '/daily/capabilities') return jsonResponse({ module: 'daily', version: 3, sources: Object.values(dailyQuerySources) });
+      if (path === '/daily/capabilities') return jsonResponse({ module: 'daily', version: dailyCapabilitiesVersion, sources: Object.values(dailyQuerySources) });
       if (path === '/daily/query') {
         const query: unknown = JSON.parse(String(init?.body));
         if (!isDailyQuery(query)) throw new Error('Invalid synthetic Daily query');
@@ -720,9 +720,9 @@ describe('App shell', () => {
     const navigation = phone ? screen.getByRole('navigation', { name: 'Pages' }) : screen.getByRole('navigation', { name: 'Areas' });
     expectNoDailyInRenderedContent(document.body);
     fireEvent.click(within(navigation).getByRole('link', { name: 'Health' }));
-    await screen.findByRole('heading', { name: 'What Health holds today' });
+    await screen.findByRole('heading', { name: 'Training' });
     expectNoDailyInRenderedContent(document.body);
-    fireEvent.click(await screen.findByRole('button', { name: 'Open Measurements' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Data' }));
     await screen.findByText('Synthetic shell measurement');
     fireEvent.click(screen.getByText('Source, units and coverage'));
     expect(screen.getByText('Health · metrics')).toBeTruthy();
@@ -760,7 +760,7 @@ describe('App shell', () => {
     fetchMock.mockImplementation(async (input, init) => {
       const path = new URL(String(input)).pathname;
       if (path === '/daily/capabilities') return owner === 'first'
-        ? jsonResponse({ module: 'daily', version: 3, sources: Object.values(dailyQuerySources) })
+        ? jsonResponse({ module: 'daily', version: dailyCapabilitiesVersion, sources: Object.values(dailyQuerySources) })
         : jsonResponse({ error: 'forbidden' }, 403);
       if (path === '/daily/query') {
         const query: unknown = JSON.parse(String(init?.body));
@@ -775,9 +775,8 @@ describe('App shell', () => {
         <App config={config} dailyEnabled /></>;
     }
     render(<MemoryRouter initialEntries={['/daily']}><AccountHarness /></MemoryRouter>);
-    await screen.findByText(/^Checked \d+ collections?:/u);
-    expect(screen.getAllByText('Has records').length).toBeGreaterThan(0);
-    fireEvent.click(screen.getByRole('button', { name: 'Open Measurements' }));
+    await screen.findByRole('heading', { name: 'Training' });
+    fireEvent.click(screen.getByRole('tab', { name: 'Data' }));
     await screen.findByText('Synthetic first owner');
     owner = 'second';
     client.getActiveAccount.mockReturnValue({ homeAccountId: 'second' });
@@ -786,7 +785,6 @@ describe('App shell', () => {
     expect(screen.queryByText('Synthetic first owner')).toBeNull();
     await screen.findByText(/Health access could not be verified/u);
     expect(screen.queryByText('Synthetic first owner')).toBeNull();
-    expect(screen.queryByText('Has records')).toBeNull();
   });
 
   it.each([200, 503])('acknowledges a broker pin only after storage replies with status %s', async (status) => {

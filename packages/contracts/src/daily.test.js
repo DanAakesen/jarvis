@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { dailyViewIds, dailyModuleId, dailyContractVersion, dailyQuerySources, dailyQuerySourcesV1, dailyQuerySourcesV2, dailyQuerySourcesV3, dailyCapabilitiesVersion, dailyCapabilitiesAccept, dailyQuerySchema, isDailyQuery } from './index.js';
+import { dailyViewIds, dailyModuleId, dailyContractVersion, dailyQuerySources, dailyQuerySourcesV1, dailyQuerySourcesV2, dailyQuerySourcesV3, dailyQuerySourcesV4, dailyCapabilitiesVersion, dailyCapabilitiesAccept, dailyQuerySchema, isDailyQuery } from './index.js';
 
 test('Daily reserves four distinct stable view IDs without registering renderers', () => {
   assert.equal(dailyModuleId, 'daily');
@@ -12,9 +12,9 @@ test('Daily reserves four distinct stable view IDs without registering renderers
   assert.ok(Object.isFrozen(dailyViewIds));
 });
 
-test('capability v1/v2 source lists remain fixed while v3 adds the Daily read models', () => {
-  assert.equal(dailyCapabilitiesVersion, 3);
-  assert.equal(dailyCapabilitiesAccept, 'application/json;version=3, application/json;version=2, application/json');
+test('capability v1/v2/v3 source lists remain fixed while v4 adds the feed read models', () => {
+  assert.equal(dailyCapabilitiesVersion, 4);
+  assert.equal(dailyCapabilitiesAccept, 'application/json;version=4, application/json;version=3, application/json;version=2, application/json');
   assert.deepEqual(dailyQuerySourcesV1, [
     'daily.health.metrics', 'daily.health.sleep', 'daily.health.workouts', 'daily.health.workout',
     'daily.health.heart-rate', 'daily.nutrition.meals', 'daily.nutrition.favorites', 'daily.nutrition.plans', 'daily.sync',
@@ -28,8 +28,35 @@ test('capability v1/v2 source lists remain fixed while v3 adds the Daily read mo
   assert.deepEqual(dailyQuerySourcesV3, [
     ...dailyQuerySourcesV2, 'daily.health.metric-catalog', 'daily.nutrition.days',
   ]);
+  assert.deepEqual(dailyQuerySourcesV4, [
+    ...dailyQuerySourcesV3, 'daily.attention', 'daily.calendar',
+  ]);
   assert.ok(Object.isFrozen(dailyQuerySourcesV2));
   assert.ok(Object.isFrozen(dailyQuerySourcesV3));
+  assert.ok(Object.isFrozen(dailyQuerySourcesV4));
+});
+
+test('attention and calendar source queries accept only their bounded selectors', () => {
+  const attention = { source: dailyQuerySources.attention };
+  assert.equal(isDailyQuery(attention), true);
+  for (const patch of [{ owner: 'foreign' }, { from: '2026-10-01T00:00:00Z' }, { cursor: {} }]) {
+    assert.equal(isDailyQuery({ ...attention, ...patch }), false);
+  }
+
+  const calendar = {
+    source: dailyQuerySources.calendar,
+    from: '2026-10-01T00:00:00Z',
+    to: '2026-12-02T00:00:00Z',
+  };
+  assert.equal(isDailyQuery(calendar), true);
+  assert.equal(isDailyQuery({ ...calendar, to: '2026-10-01T00:00:00Z' }), false);
+  assert.equal(isDailyQuery({ ...calendar, to: '2026-12-03T00:00:00Z' }), false);
+  for (const patch of [
+    { from: '2026-02-30T00:00:00Z' }, { from: '2026-10-01' }, { to: null },
+    { cursor: {} }, { owner: 'foreign' }, { extra: true },
+  ]) assert.equal(isDailyQuery({ ...calendar, ...patch }), false, JSON.stringify(patch));
+  assert.ok(dailyQuerySchema.properties.source.enum.includes(dailyQuerySources.attention));
+  assert.ok(dailyQuerySchema.properties.source.enum.includes(dailyQuerySources.calendar));
 });
 
 test('metric filters and metric catalogue queries validate their exact selector and key cursor', () => {

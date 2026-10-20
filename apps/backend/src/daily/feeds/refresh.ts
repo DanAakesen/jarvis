@@ -50,7 +50,7 @@ export class DailyFeedRefresh {
           : { ...google,errorCode: identityTooLong ? 'coverage-limit' : result.issues[0]?.kind || 'incomplete' };
       }
       gmail = boundedSource(gmail,capturedAt); google = boundedSource(google,capturedAt);
-      await store.ingest({ runId,capturedAt,sources: [gmail,google] },signal);
+      await store.ingest({ runId,capturedAt,calendarRange: range,sources: [gmail,google] },signal);
       return { runId,state: 'completed',sources: [gmail,google].map((source) => ({ source: source.source,status: source.status,error: source.errorCode })) };
     } finally { this.running.delete(owner); }
   }

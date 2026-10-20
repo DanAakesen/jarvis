@@ -4,6 +4,11 @@ import { dailyCellValue, dailyColumns, dailyPlots, dailyRequest, dailyRowKey, da
 import { formatTime } from './ui/formatters';
 
 describe('retained Daily record presentation', () => {
+  it('provides human-readable columns for attention and calendar rows', () => {
+    expect(dailyColumns('daily.attention').map(column => column.label)).toEqual(['Type', 'Waiting', 'Age (business days)', 'Hidden']);
+    expect(dailyColumns('daily.calendar').map(column => column.label)).toEqual(['Event', 'Starts', 'Ends', 'Calendar', 'Location']);
+  });
+
   it('shows a human Health label instead of internal source ids', () => {
     expect(healthSourceLabel('daily.metrics')).toBe('Health · metrics');
     expect(healthSourceLabel('daily-sql')).toBe('Health · data store');

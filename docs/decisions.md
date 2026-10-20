@@ -1,5 +1,93 @@
 # Decisions
 
+## P14-46 — Overview cards report a failed refresh and keep honest figures (20 October 2026; #1116, #1143)
+
+Review of the Overview cards found five places where a card could read better than
+its data. Choices: (1) a read that fails after returning values keeps them and adds
+"Could not refresh" with Retry in the card header, which already reserves its height,
+so the failure is visible and recoverable without a skeleton or a layout change;
+(2) a per-day average divides the known amount by every logged day, so a day without
+the nutrient keeps it a lower bound (80 g and one unknown day is 40 g at least) and
+the calorie bounds follow; (3) a body trend uses the latest reading's unit only, so
+units never mix; (4) last night's sleep stands in only for Today, and Yesterday or
+another single past day needs an exact date match or reads "Not recorded"; (5)
+Calories and Duration keep separate lower-bound flags.
+
+Refs #1116, #1143
+
+## P14-56 — Health follows the original look (20 October 2026; #1116, #1155, #1156, #1157)
+
+The owner reviewed the rebuilt Health pages and ruled that they must look like the
+original Daily app: the neutral, flat bordered panels do not match it. This
+supersedes "original components, Jarvis styling" of P14-41, and its rule that Health
+adds no Daily-only skin or tokens, for the Health area only. The rest of the
+application keeps the shared Jarvis design language.
+
+Unchanged: Health stays one page with sections and is called Health wherever it is
+visible; the recorded non-migrations stay out (task, habit and countdown surfaces,
+meal plans and the live meal coach, coaching and recomposition automation, the widget
+and football); no interface is shown on synthetic data; loading, not set, not
+received, unavailable and error states stay visible and distinct; card heights stay
+stable; AA contrast, 44 px targets, keyboard focus and reduced motion still apply, and
+meaning never rests on colour alone.
+
+Changed: Health gets its own look from documented, Health-scoped tokens, with a light
+counterpart at AA contrast. It is delivered in three steps: P14-55 connects the
+owner's training targets to every surface that shows them, P14-56 builds the shared
+look and applies it to the header, overview cards and Health panel, and P14-57 applies
+it to the other sections. P14-52 is built in the new look after P14-56. The comparison
+source is the owner's private reference set, which is never committed.
+
+`PRODUCT.md` and `DESIGN.md` still carry the earlier "no separate skin" wording until
+P14-56 replaces it together with the implementation. Until then this entry governs the
+Health look.
+
+Refs #1116
+Refs #1155
+Refs #1156
+Refs #1157
+
+## P14-51 — Serve Health attention and calendar feeds behind a flag (20 October 2026; #1133)
+
+Read-only Gmail attention and bounded calendar reads are composed only when both
+the existing Health module and `JARVIS_DAILY_FEEDS_ENABLED` are exactly `true`.
+The feed flag defaults off and is not set by infrastructure. Browser actions remain
+owner-only and reviewed; no provider writes, new infrastructure, or scheduled
+refresh is part of this change. Google Calendar enumeration also depends on the
+owner completing the existing consent flow for the calendar-list read permission;
+this was not performed or verified here.
+
+A scheduled refresh is a proposal, not an approved implementation. A future task
+could add a managed timer that invokes the existing bounded refresh for an
+explicit range, with per-owner exclusion, idempotent run IDs, and observable
+partial/source failures. Each run would still spend Google API quota on calendar
+enumeration/event reads and Gmail scanning, plus SQL and compute; Gmail may also
+make up to 50 existing model classifications (up to 1,024 output tokens each)
+at the configured rates. Repetition scales these reads and model usage with
+schedule frequency. No dollar estimate is claimed; frequency, operational
+ownership, and budget limits require a separate decision.
+
+Refs DanAakesen/jarvis#1116
+Refs DanAakesen/jarvis#725
+Refs #1133
+
+## P14-45 — Owner-set gym, run and step targets (20 October 2026; #1116, #1132)
+
+The original Daily's weekly Gym/Run session targets and daily step target came
+from a task source outside the approved Jarvis scope. Use owner-set values
+instead: nullable whole numbers stored in a new owner-keyed Daily table, with
+server-owned bounds and no seed or target defaults. Settings routes are signed-in
+owner-only. The assistant gets no training-target write tool because the
+production tool catalogue must keep at least eight spare slots; a read-only
+query source can be added later. Clearing the final value leaves the owner with
+no stored row. Settings adds a separate `#training-targets` section and a
+validated `useTrainingTargets` contract for follow-up consumers.
+Overview, Workouts and Health panels remain unchanged in this slice; their
+real-data presentation and owner-session UI checks are deferred to the tasks
+that consume the hook. The migration rollback refuses to discard saved targets.
+
+Refs DanAakesen/jarvis#1116, #1132
+
 ## P14-50 — Rules & sources uses served evidence (20 October 2026; #1116, #1141)
 
 Add the original Rules & sources composition as the final discovered Health
@@ -18,6 +106,45 @@ Owner naming update (20 October): new owner-facing copy uses Health and human
 source labels. The back link is route-relative, ready for #1147's route move;
 internal identifiers remain unchanged for #1146. Existing shared copy is left
 to #1147.
+
+## P14-46 — The Health panel opens from the Health card (20 October 2026; #1116, #1143)
+
+Merging the Health panel (P14-47) into the cards-only Overview left two Health
+surfaces: the card and an always-open panel below it. The original keeps one: the
+Health card's chevron expands the panel on the same page. Choices: (1) the panel is
+closed on arrival and the Health card title is a button with `aria-expanded` and
+`aria-controls` that opens and closes it, kept in the address as `panel=health` so a
+link or reload reopens it, with `healthTab` unchanged; (2) the panel mounts only while
+open, so the landing view makes no panel reads and no tile appears twice; (3) closing
+it returns focus to the card button; (4) Training and Body titles stay links. The
+panel's own Collapse button still writes `panel=closed`, which also reads as closed.
+
+Refs #1116, #1143
+
+## P14-46 — Overview top cards follow the original: Training, Health, Body (20 October 2026; #1116, #1143)
+
+The owner asked for parity with the original Overview, checked on the owner's own
+data. The Today block is replaced by a period control (Today, Yesterday, 1 week,
+2 weeks, 1 month) and three cards: Training (Gym, Run and Activity rings, Protein,
+Calories left and, for one day, the meals strip), Health (Sleep, Protein and a
+cumulative protein line with a target) and Body (Sessions, Calories, Duration and
+four measurement sparklines). Choices: (1) every number comes from a served source
+and each source states its own state, with "Not recorded" for a served source that
+holds nothing, "Unavailable" for one Jarvis does not serve, and "No target set"
+where an owner-set target is missing (weekly gym and run targets and the daily step
+target arrive with P14-45; nothing is defaulted); (2) body measurements are asked
+for only when the metric catalogue serves them, and no weight, fat or lean metric
+is invented; (3) the owner ruled the Overview is the cards only, so the old
+summary tiles, the collection list with its Open buttons, the "About this data"
+notes, the manual Refresh button, the "Today" heading and the Health Auto Export
+prompt are removed and nothing else sits on the page; data still reloads on focus,
+when the page becomes visible, on the shared refresh stream and with each card's
+Retry, and a card whose source holds nothing says so itself; (4) every ring, tile, chart and strip
+reserves its size, so no state changes the layout (P14-44); (5) the recomposition
+status, coaching, energy estimates and task or habit surfaces remain out, as ruled.
+New text says Health, never Daily.
+
+Refs #1116, #1143
 
 ## The Daily area is named Health (20 October 2026; #1116, #1147, #1146)
 
@@ -104,6 +231,20 @@ route are Health and `/health`, with legacy `/daily` UI links replaced to the
 matching Health URL. The internal area id, `dailyEnabled` options, API paths,
 tool/source ids, query contracts, settings keys, environment variables and log
 event names stay unchanged until #1146.
+
+## P14-49 — Nutrition parity uses only served freshness and meal fields (20 October 2026; #1116, #1139)
+
+The Nutrition Today view uses the served Copenhagen day total and the existing
+owner-target loader. Trend averages and charts use the selected period's
+`daily.nutrition.days`; the meal list pages through `daily.nutrition.meals`.
+Partial nutrient values retain lower-bound wording, with calorie balance
+described as an upper bound when energy is partial. The meal query does not serve
+an export state, and the query contract sets staleness to `unknown`; therefore
+the UI says “Not recorded” and “Staleness unknown” instead of inferring either
+value. Existing Plans and Favourites remain unchanged; meal coaching stays out
+of scope.
+
+Refs #1116, #1139
 
 ## P14-41 — Today cards read served sources and say so when one is not (20 October 2026; #1116)
 
@@ -2093,8 +2234,9 @@ acceptance.** It is the last invisible Daily slice, built under these conditions
   data accessor, and the targets and health readers that the composition wraps,
   re-check the signed-in owner against the composed owner, so a mismatch is
   refused before any SQL read. A connector or runner is refused on every Daily
-  route, and an agent reaches the targets only through the approved tool, whose
-  changes keep the exact browser Now approval.
+  route. Nutrition target changes still require the nutrition tool's exact
+  browser Now approval; training-target writes are Settings-only and have no
+  assistant tool.
 - Unchanged and out of scope: accounts, consent, grants, secrets, RBAC,
   resources, imports, provider, device and private reads or writes, and live
   probes. Rollback is leaving the switch off.

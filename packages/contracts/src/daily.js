@@ -20,19 +20,24 @@ const legacyQuerySources = Object.freeze({
   sync: 'daily.sync',
 });
 export const dailyQuerySourcesV1 = Object.freeze(Object.values(legacyQuerySources));
-export const dailyCapabilitiesVersion = 3;
-export const dailyCapabilitiesAccept = 'application/json;version=3, application/json;version=2, application/json';
+export const dailyCapabilitiesVersion = 4;
+export const dailyCapabilitiesAccept = 'application/json;version=4, application/json;version=3, application/json;version=2, application/json';
 export const dailyQuerySources = Object.freeze({
   ...legacyQuerySources,
   briefs: 'daily.briefs.history',
   brief: 'daily.briefs.detail',
   metricCatalog: 'daily.health.metric-catalog',
   days: 'daily.nutrition.days',
+  attention: 'daily.attention',
+  calendar: 'daily.calendar',
 });
 export const dailyQuerySourcesV2 = Object.freeze([
   ...dailyQuerySourcesV1, dailyQuerySources.briefs, dailyQuerySources.brief,
 ]);
-export const dailyQuerySourcesV3 = Object.freeze(Object.values(dailyQuerySources));
+export const dailyQuerySourcesV3 = Object.freeze([
+  ...dailyQuerySourcesV2, dailyQuerySources.metricCatalog, dailyQuerySources.days,
+]);
+export const dailyQuerySourcesV4 = Object.freeze(Object.values(dailyQuerySources));
 const record = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 const keys = (v, allowed) => Object.keys(v).every((key) => allowed.includes(key));
 const key = (v) => typeof v === 'string' && v.length > 0 && v.length <= 256 &&
@@ -50,6 +55,12 @@ export function isDailyQuery(v) {
   if (!record(v) || !Object.values(dailyQuerySources).includes(v.source)) return false;
   if (Object.values(v).some(value => value === undefined)) return false;
   if (v.source === dailyQuerySources.sync) return keys(v, ['source']);
+  if (v.source === dailyQuerySources.attention) return keys(v, ['source']);
+  if (v.source === dailyQuerySources.calendar) {
+    if (!keys(v, ['source', 'from', 'to']) || !instant(v.from) || !instant(v.to)) return false;
+    const range = Date.parse(v.to) - Date.parse(v.from);
+    return range > 0 && range <= 62 * 86400000;
+  }
   if (v.source === dailyQuerySources.workout) return keys(v, ['source', 'workoutId']) && key(v.workoutId);
   if (v.source === dailyQuerySources.brief) return keys(v, ['source', 'briefId']) && briefId(v.briefId);
   if (v.source === dailyQuerySources.briefs) {
@@ -94,6 +105,8 @@ export const dailyQuerySchema = Object.freeze({
     source: { type: 'string', enum: Object.values(dailyQuerySources) },
     startDate: { type: 'string', description: 'Inclusive Europe/Copenhagen date, YYYY-MM-DD; required for health/nutrition history, not briefs.' },
     endDate: { type: 'string', description: 'Inclusive calendar date; at most 366 days after startDate.' },
+    from: { type: 'string', description: 'Inclusive ISO instant; only for daily.calendar. The range is at most 62 days.' },
+    to: { type: 'string', description: 'Exclusive ISO instant; only for daily.calendar.' },
     metric: { type: 'string', minLength: 1, maxLength: 256, description: 'Exact metric_name filter; only for daily.health.metrics.' },
     workoutId: { type: 'string', maxLength: 256 },
     briefId: { type: 'string', minLength: 1, maxLength: 256, description: 'Exact returned legacy brief ID, without trimming; only for brief detail.' },

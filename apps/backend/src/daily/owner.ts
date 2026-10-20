@@ -19,3 +19,8 @@ export function resolveDailyFeedOwner(request: FastifyRequest): string {
   if (request.dailyConnectorPrincipal) throw new AuthenticationDenied(403);
   return resolveDailyOwner(request);
 }
+
+export function resolveDailyBrowserOwner(request: FastifyRequest): string {
+  if (!request.principal || request.agentPrincipal) throw new AuthenticationDenied(403);
+  return resolveDailyFeedOwner(request);
+}

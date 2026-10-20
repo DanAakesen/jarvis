@@ -8,9 +8,9 @@ describe('Daily reduced motion', () => {
     const shared = readFileSync('src/daily/ui/daily-ui.css', 'utf8');
 
     expect(daily).toMatch(/@media \(prefers-reduced-motion: reduce\)[\s\S]*?\.daily-records\s*\{\s*transition:\s*none;/u);
-    expect(overview).toMatch(/@media \(prefers-reduced-motion: reduce\)[\s\S]*?\.daily-status\s*\{\s*animation:\s*none;/u);
+    expect(overview).toMatch(/@media \(prefers-reduced-motion: reduce\)[\s\S]*?\.daily-top-track\s*\{\s*scroll-behavior:\s*auto;/u);
     expect(shared).toMatch(/@media \(prefers-reduced-motion: reduce\)[\s\S]*?\.daily-meter-track span\s*\{\s*transition:\s*none;/u);
-    expect(overview).toContain('.daily-status[data-tone=');
+    expect(overview).toContain('.daily-top-card h3 svg { transition: none; }');
     expect(shared).toContain('.daily-meter-values');
   });
 });
