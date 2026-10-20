@@ -1,6 +1,6 @@
 import { formatTimeOnly } from '../../../format/date-time';
 import { copenhagenDate } from '../../period';
-import { dateOnly, metricSummary, type Row as MetricRow } from '../body-sleep/metrics';
+import { dateOnly, metricSummary, metricValue, type Row as MetricRow } from '../body-sleep/metrics';
 import { hours } from '../body-sleep/sleep';
 import { dateStep, deleted, numeric, sumNutrient, text, type Row as NutritionRow } from '../nutrition/totals';
 import { summarizeWorkouts, workoutDate, type Workout } from '../workouts/summary';
@@ -16,10 +16,10 @@ export function nutritionForWindow(rows: readonly NutritionRow[], window: Overvi
   if (logged.length === 0) return null;
   const figure = (key: 'energy_kcal' | 'protein_grams') => {
     const sum = sumNutrient(logged, key);
-    const valued = sum.count - sum.missing;
     const partial = sum.missing > 0
       || logged.some(row => Array.isArray(row.partial_nutrients) && row.partial_nutrients.includes(key));
-    return { value: sum.value === null || valued === 0 ? null : sum.value / valued, partial };
+    // The known amount is spread over every logged day, so a day that lacks the nutrient keeps the average a lower bound.
+    return { value: sum.value === null ? null : sum.value / sum.count, partial };
   };
   return { loggedDays: logged.length, energy: figure('energy_kcal'), protein: figure('protein_grams') };
 }
@@ -30,9 +30,9 @@ export function stepsForWindow(rows: readonly MetricRow[], window: OverviewWindo
   return summary.count === 0 ? null : { total: summary.days.reduce((sum, day) => sum + day.value, 0), days: summary.count };
 }
 
-/** One night for a single date (last night counts until today's is processed), the average per recorded night for a range. */
+/** One night for a single date, the average per recorded night for a range. Only Today may show last night, until today's is processed. */
 export function sleepForWindow(rows: readonly MetricRow[], window: OverviewWindow) {
-  const from = window.single ? dateStep(window.endDate, -1) : window.startDate;
+  const from = window.preset === 'today' ? dateStep(window.endDate, -1) : window.startDate;
   const nights = rows.flatMap(row => {
     const date = dateOnly(row.sleep_date);
     if (date === null || date < from || date > window.endDate) return [];
@@ -101,7 +101,9 @@ export function windowWorkouts(rows: readonly Workout[], window: OverviewWindow)
     sessions: summary.count,
     durationSeconds: summary.count === 0 ? 0 : summary.durationSeconds,
     kcal: summary.count === 0 ? 0 : kcal,
-    partial: summary.energy.missing > 0 || summary.missingDuration > 0,
+    // Each total is a lower bound only for its own missing figures.
+    partialEnergy: summary.energy.missing > 0,
+    partialDuration: summary.missingDuration > 0,
   };
 }
 
@@ -139,10 +141,18 @@ export function bodyMetricNames(catalogue: readonly MetricRow[]): Record<BodyMet
   return { weight: pick('weight'), fatPercent: pick('fatPercent'), leanMass: pick('leanMass'), fatMass: pick('fatMass') };
 }
 
-/** Recorded days in order, the latest reading, and the unit the rows declare. */
+/** Recorded days in order, the latest reading, and its unit. Only rows in the latest reading's unit are used, so units never mix. */
 export function bodyTrend(rows: readonly MetricRow[], period: { startDate: string; endDate: string }) {
-  const summary = metricSummary(rows, period);
-  const unit = rows.map(row => typeof row.unit === 'string' && row.unit.trim() ? row.unit : null).find(item => item !== null) ?? null;
+  const unitOf = (row: MetricRow) => typeof row.unit === 'string' && row.unit.trim() ? row.unit : null;
+  let latest: { date: string; unit: string | null } | null = null;
+  for (const row of rows) {
+    const date = dateOnly(row.metric_date);
+    if (date === null || date < period.startDate || date > period.endDate || metricValue(row).value === null) continue;
+    if (latest === null || date >= latest.date) latest = { date, unit: unitOf(row) };
+  }
+  if (latest === null) return null;
+  const { unit } = latest;
+  const summary = metricSummary(rows.filter(row => unitOf(row) === unit), period);
   return summary.latest === null ? null
     : { latest: summary.latest.value, values: summary.days.map(day => day.value), count: summary.count, unit };
 }

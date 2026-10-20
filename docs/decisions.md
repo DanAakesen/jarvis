@@ -1,5 +1,20 @@
 # Decisions
 
+## P14-46 — Overview cards report a failed refresh and keep honest figures (20 October 2026; #1116, #1143)
+
+Review of the Overview cards found five places where a card could read better than
+its data. Choices: (1) a read that fails after returning values keeps them and adds
+"Could not refresh" with Retry in the card header, which already reserves its height,
+so the failure is visible and recoverable without a skeleton or a layout change;
+(2) a per-day average divides the known amount by every logged day, so a day without
+the nutrient keeps it a lower bound (80 g and one unknown day is 40 g at least) and
+the calorie bounds follow; (3) a body trend uses the latest reading's unit only, so
+units never mix; (4) last night's sleep stands in only for Today, and Yesterday or
+another single past day needs an exact date match or reads "Not recorded"; (5)
+Calories and Duration keep separate lower-bound flags.
+
+Refs #1116, #1143
+
 ## P14-51 — Serve Health attention and calendar feeds behind a flag (20 October 2026; #1133)
 
 Read-only Gmail attention and bounded calendar reads are composed only when both

@@ -11,6 +11,9 @@ export function pagesState(pages: DailyPages, served: boolean): BlockState {
   return pages.first === null ? 'loading' : 'ready';
 }
 
+/** A read that failed after returning values: a refresh, or a later page. The values stay shown, so the card must say so and offer Retry. */
+export const pagesStale = (pages: DailyPages) => pages.error !== null && pages.items.length > 0;
+
 /** A card built from several reads shows the least settled of them. A read that is not served does not count: the tile that needs it says so itself. */
 export function combineStates(...states: readonly BlockState[]): BlockState {
   return states.reduce<BlockState>((worst, state) => severity[state] > severity[worst] ? state : worst, 'ready');

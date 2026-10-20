@@ -29,10 +29,11 @@ function Trend({ label, name, catalogue, pages, period }: {
     chart={trend === null ? null : <Sparkline values={trend.values} label={`${label} trend`} />} />;
 }
 
-export function BodyCard({ title, to, state, onRetry, period, workoutsState, catalogueState, data, names, trendPeriod }: {
+export function BodyCard({ title, to, state, stale, onRetry, period, workoutsState, catalogueState, data, names, trendPeriod }: {
   title: string;
   to: string;
   state: BlockState;
+  stale: boolean;
   onRetry: () => void;
   period: OverviewWindow;
   workoutsState: BlockState;
@@ -42,13 +43,12 @@ export function BodyCard({ title, to, state, onRetry, period, workoutsState, cat
   trendPeriod: { startDate: string; endDate: string };
 }) {
   const sessions = windowWorkouts(data.workouts.items as Workout[], period);
-  const note = sessions.partial ? 'lower bound' : null;
-  return <TopCard title={title} to={to} state={state} onRetry={onRetry}>
+  return <TopCard title={title} to={to} state={state} onRetry={onRetry} stale={stale}>
     <div className="daily-top-tiles daily-top-tiles--three">
       <Tile label="Sessions" state={workoutsState} unavailable="Workouts are not served." value={formatNumber(sessions.sessions, 0)} />
-      <Tile label="Calories" state={workoutsState} unavailable="Workouts are not served." note={note}
+      <Tile label="Calories" state={workoutsState} unavailable="Workouts are not served." note={sessions.partialEnergy ? 'lower bound' : null}
         value={sessions.kcal === null ? 'Unknown' : `${formatNumber(sessions.kcal, 0)} kcal`} />
-      <Tile label="Duration" state={workoutsState} unavailable="Workouts are not served." note={note}
+      <Tile label="Duration" state={workoutsState} unavailable="Workouts are not served." note={sessions.partialDuration ? 'lower bound' : null}
         value={sessions.sessions === 0 ? '0 min' : formatDuration(sessions.durationSeconds)} />
     </div>
     <div className="daily-top-tiles">

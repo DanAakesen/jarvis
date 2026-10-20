@@ -1890,7 +1890,13 @@ nothing shows a default target. Sessions count from the Monday of the week for t
 one-day presets and over the window for longer ones; protein and calories left
 average per logged day over a range. Lower bounds read in words ("lower bound",
 "at most"), never by colour. No recomposition status, coaching or energy estimate
-is shown.
+is shown. A read that fails after it returned values (a refresh, or a later page)
+keeps those values and adds a quiet "Could not refresh" with Retry beside the card
+title; it never reads as loaded and never swaps the values for a skeleton. Averages
+spread the known amount over every logged day, so an unknown day keeps the result a
+lower bound; a body trend uses one unit, the latest reading's; only Today may show
+last night's sleep, so Yesterday needs its own night; Calories and Duration each
+carry their own lower-bound note.
 
 Checked the section shell in isolated Chromium against only synthetic capability
 and query responses at 320, 390×844, 768 and 1440×900 in light and dark, with

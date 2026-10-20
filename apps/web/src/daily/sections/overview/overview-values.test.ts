@@ -31,7 +31,13 @@ describe('nutritionForWindow', () => {
     expect(partial?.energy.partial).toBe(true);
     expect(partial?.protein.partial).toBe(false);
     const missing = nutritionForWindow([day('2026-10-19'), day('2026-10-20', { protein_grams: null })], week);
-    expect(missing?.protein).toEqual({ value: 80, partial: true });
+    expect(missing?.protein).toEqual({ value: 40, partial: true });
+  });
+
+  it('spreads the known amount over every logged day, so an unknown day keeps the average a lower bound', () => {
+    const rows = [day('2026-10-19', { protein_grams: 80 }), day('2026-10-20', { protein_grams: null })];
+    expect(nutritionForWindow(rows, week)?.protein).toEqual({ value: 40, partial: true });
+    expect(nutritionForWindow([day('2026-10-20', { protein_grams: null })], today)?.protein).toEqual({ value: null, partial: true });
   });
 
   it('is null when nothing was logged', () => {
@@ -62,9 +68,16 @@ describe('sleepForWindow', () => {
     expect(sleepForWindow([{ sleep_date: '2026-10-20', asleep_hours: 0 }], today)).toBeNull();
   });
 
-  it('shows last night until today has been processed', () => {
+  it('shows last night on Today until today has been processed', () => {
     const rows = [{ sleep_date: '2026-10-19', total_sleep_hours: 8 }];
     expect(sleepForWindow(rows, today)).toEqual({ value: 8, nights: 1, date: '2026-10-19' });
+  });
+
+  it('needs the exact night for Yesterday and never borrows the night before', () => {
+    const yesterday = overviewWindow('yesterday', '2026-10-20');
+    expect(sleepForWindow([{ sleep_date: '2026-10-18', total_sleep_hours: 8 }], yesterday)).toBeNull();
+    expect(sleepForWindow([{ sleep_date: '2026-10-19', total_sleep_hours: 6.5 }], yesterday))
+      .toEqual({ value: 6.5, nights: 1, date: '2026-10-19' });
   });
 
   it('averages the nights of a range', () => {
@@ -116,17 +129,30 @@ describe('windowWorkouts', () => {
   }) as never;
 
   it('counts zero, not unknown, for an empty window', () => {
-    expect(windowWorkouts([row('2026-10-01')], week)).toEqual({ sessions: 0, durationSeconds: 0, kcal: 0, partial: false });
+    expect(windowWorkouts([row('2026-10-01')], week)).toEqual({
+      sessions: 0, durationSeconds: 0, kcal: 0, partialEnergy: false, partialDuration: false,
+    });
   });
 
   it('totals sessions, time and active energy inside the window', () => {
     const rows = [row('2026-10-19'), row('2026-10-20', { duration_seconds: 1200, active_energy_value: 150 }), row('2026-10-01')];
-    expect(windowWorkouts(rows, week)).toEqual({ sessions: 2, durationSeconds: 3000, kcal: 350, partial: false });
+    expect(windowWorkouts(rows, week)).toEqual({
+      sessions: 2, durationSeconds: 3000, kcal: 350, partialEnergy: false, partialDuration: false,
+    });
   });
 
   it('marks totals as a lower bound when a session lacks a figure', () => {
     const rows = [row('2026-10-19'), row('2026-10-20', { duration_seconds: null, active_energy_value: null })];
-    expect(windowWorkouts(rows, week)).toMatchObject({ sessions: 2, durationSeconds: 1800, kcal: 200, partial: true });
+    expect(windowWorkouts(rows, week)).toMatchObject({
+      sessions: 2, durationSeconds: 1800, kcal: 200, partialEnergy: true, partialDuration: true,
+    });
+  });
+
+  it('flags calories and duration separately', () => {
+    expect(windowWorkouts([row('2026-10-19', { active_energy_value: null })], week))
+      .toMatchObject({ partialEnergy: true, partialDuration: false });
+    expect(windowWorkouts([row('2026-10-19', { duration_seconds: null })], week))
+      .toMatchObject({ partialEnergy: false, partialDuration: true });
   });
 });
 
@@ -167,5 +193,15 @@ describe('body measurements', () => {
       latest: 80.4, values: [81.2, 80.4], count: 2, unit: 'kg',
     });
     expect(bodyTrend([], { startDate: '2026-07-23', endDate: '2026-10-20' })).toBeNull();
+  });
+
+  it('uses one unit, the latest reading\'s, so pounds and kilograms never mix in a value or a sparkline', () => {
+    const period = { startDate: '2026-07-23', endDate: '2026-10-20' };
+    const rows = [
+      { metric_date: '2026-09-01', value: 180, unit: 'lb' }, { metric_date: '2026-09-15', value: 178, unit: 'lb' },
+      { metric_date: '2026-10-01', value: 80.9, unit: 'kg' }, { metric_date: '2026-10-20', value: 80.4, unit: 'kg' },
+    ];
+    expect(bodyTrend(rows, period)).toEqual({ latest: 80.4, values: [80.9, 80.4], count: 2, unit: 'kg' });
+    expect(bodyTrend([...rows].reverse(), period)).toEqual({ latest: 80.4, values: [80.9, 80.4], count: 2, unit: 'kg' });
   });
 });

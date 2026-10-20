@@ -20,9 +20,10 @@ function ChartSlot({ state, children }: { state: BlockState; children: ReactNode
   </div>;
 }
 
-export function HealthCard({ title, state, onRetry, period, today, hour, states, data, nutrition }: {
+export function HealthCard({ title, state, stale, onRetry, period, today, hour, states, data, nutrition }: {
   title: string;
   state: BlockState;
+  stale: boolean;
   onRetry: () => void;
   period: OverviewWindow;
   today: string;
@@ -37,7 +38,7 @@ export function HealthCard({ title, state, onRetry, period, today, hour, states,
   const day = cumulativeProtein(data.meals.items as NutritionRow[], period.endDate, period.endDate === today ? hour : null);
   const points = period.single ? day.total === null ? [] : day.points : dailyProtein(data.days.items as NutritionRow[], period);
   return <TopCard title={title} panel={{ expanded: panel.expanded, controls: healthPanelId, onToggle: panel.toggle }}
-    state={state} onRetry={onRetry}>
+    state={state} onRetry={onRetry} stale={stale}>
     <div className="daily-top-tiles">
       <Tile label="Sleep" state={states.sleep} unavailable="Sleep is not served."
         value={sleep === null ? null : `${formatNumber(sleep.value, 1)} h`}

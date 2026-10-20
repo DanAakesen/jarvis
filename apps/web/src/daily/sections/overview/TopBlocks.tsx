@@ -14,21 +14,27 @@ function Chevron() {
  * One card. The heading opens what is behind it: a link to a section, or a button that expands a panel on this page.
  * The body is laid out by the caller and keeps its size.
  */
-export function TopCard({ title, to, panel, state, onRetry, children }: {
+export function TopCard({ title, to, panel, state, onRetry, stale = false, children }: {
   title: string;
   to?: string;
   panel?: { expanded: boolean; controls: string; onToggle: () => void };
   state: BlockState;
   onRetry?: () => void;
+  /** A read failed but the values it had already returned are still shown. */
+  stale?: boolean;
   children: ReactNode;
 }) {
+  const failed = state === 'error' || stale;
   return <article className="daily-top-card" data-card={title.toLowerCase()} aria-busy={state === 'loading' || undefined}>
     <header>
       <h3>{panel
         ? <button className="daily-top-card-toggle" type="button" aria-expanded={panel.expanded} aria-controls={panel.controls}
           onClick={panel.onToggle}>{title}<Chevron /></button>
         : <Link to={to ?? '.'}>{title}<Chevron /></Link>}</h3>
-      {state === 'error' && onRetry && <button className="ghost-button" type="button" onClick={onRetry}>Retry</button>}
+      {failed && onRetry && <div className="daily-top-card-recovery">
+        {stale && state !== 'error' && <span role="status">Could not refresh</span>}
+        <button className="ghost-button" type="button" onClick={onRetry}>Retry</button>
+      </div>}
     </header>
     {state === 'loading' && <span className="visually-hidden" role="status">Loading {title.toLowerCase()}</span>}
     {children}

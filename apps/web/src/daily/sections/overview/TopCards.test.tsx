@@ -52,8 +52,10 @@ const targetReply = {
 type Asked = { source: string; metric?: string; startDate: string; endDate: string };
 let asked: Asked[] = [];
 
-function stub(data: Record<string, Row[]> = rows, targets: unknown = targetReply, failing: readonly string[] = []) {
+function stub(data: Record<string, Row[]> = rows, targets: unknown = targetReply, failing: readonly string[] = [],
+  gate: { wait: Promise<void> } = { wait: Promise.resolve() }) {
   vi.stubGlobal('fetch', vi.fn(async (url: string | URL, init?: RequestInit) => {
+    await gate.wait;
     if (String(url).endsWith('/daily/nutrition-targets')) return jsonResponse(targets);
     const query: unknown = JSON.parse(String(init?.body));
     if (!isDailyQuery(query)) throw new Error('Invalid synthetic query');
@@ -64,8 +66,8 @@ function stub(data: Record<string, Row[]> = rows, targets: unknown = targetReply
   }));
 }
 
-function view(ids: readonly DailySourceId[] = everything) {
-  return <MemoryRouter><TopCards backendUrl="http://localhost:3999" getAccessToken={token} refreshVersion={0} available={ids} /></MemoryRouter>;
+function view(ids: readonly DailySourceId[] = everything, version = 0) {
+  return <MemoryRouter><TopCards backendUrl="http://localhost:3999" getAccessToken={token} refreshVersion={version} available={ids} /></MemoryRouter>;
 }
 
 function article(title: string) {
@@ -192,6 +194,15 @@ describe('Overview cards', () => {
     for (const label of ['Fat mass', 'Fat %', 'Lean mass']) expect(tile('Body', label).textContent).toContain('Not recorded');
   });
 
+  it('notes a lower bound only on the Body tile whose figure is incomplete', async () => {
+    const [, first, second] = rows[sources.workouts]!;
+    stub({ ...rows, [sources.workouts]: [first!, { ...second!, duration_seconds: null }] });
+    render(view());
+    await waitFor(() => expect(tile('Body', 'Sessions').textContent).toContain('2'));
+    expect(tile('Body', 'Duration').textContent).toContain('lower bound');
+    expect(tile('Body', 'Calories').textContent).not.toContain('lower bound');
+  });
+
   it('shows zero minutes, not unknown, for an empty window', async () => {
     stub({ ...rows, [sources.workouts]: [] });
     render(view());
@@ -274,6 +285,51 @@ describe('Overview cards', () => {
     const before = asked.filter(query => query.source === sources.workouts).length;
     fireEvent.click(retry);
     await waitFor(() => expect(asked.filter(query => query.source === sources.workouts).length).toBeGreaterThan(before));
+  });
+
+  it('keeps the values and says so when a refresh fails, then recovers on Retry', async () => {
+    const failing: string[] = [];
+    stub(rows, targetReply, failing);
+    const { rerender } = render(view());
+    await settled();
+    await waitFor(() => expect(card('Training').getByRole('img', { name: /^Gym: 1 session/u })).toBeTruthy());
+    expect(screen.queryByText('Could not refresh')).toBeNull();
+    failing.push(sources.workouts);
+    rerender(view(everything, 1));
+    await waitFor(() => expect(card('Training').getByText('Could not refresh')).toBeTruthy());
+    expect(card('Body').getByText('Could not refresh')).toBeTruthy();
+    expect(card('Health').queryByText('Could not refresh')).toBeNull();
+    expect(card('Training').getByRole('img', { name: /^Gym: 1 session/u })).toBeTruthy();
+    expect(tile('Body', 'Sessions').textContent).toContain('2');
+    expect(article('Training').getAttribute('aria-busy')).toBeNull();
+    failing.length = 0;
+    fireEvent.click(card('Training').getByRole('button', { name: 'Retry' }));
+    await waitFor(() => expect(screen.queryByText('Could not refresh')).toBeNull());
+    expect(card('Training').queryByRole('button', { name: 'Retry' })).toBeNull();
+    expect(tile('Body', 'Sessions').textContent).toContain('2');
+  });
+
+  it('keeps the values and never shows a loading state while a refresh is read', async () => {
+    const gate = { wait: Promise.resolve() };
+    stub(rows, targetReply, [], gate);
+    const { rerender } = render(view());
+    await settled();
+    await waitFor(() => expect(tile('Body', 'Weight').textContent).toContain('80.4 kg'));
+    const before = vi.mocked(fetch).mock.calls.length;
+    let release!: () => void;
+    gate.wait = new Promise<void>(resolve => { release = resolve; });
+    rerender(view(everything, 1));
+    await waitFor(() => expect(vi.mocked(fetch).mock.calls.length).toBeGreaterThan(before));
+    for (const title of ['Training', 'Health', 'Body']) {
+      expect(article(title).getAttribute('aria-busy')).toBeNull();
+      expect(card(title).queryByRole('status')).toBeNull();
+    }
+    expect(tile('Training', 'Protein').textContent).toContain('80 g');
+    expect(tile('Body', 'Weight').textContent).toContain('80.4 kg');
+    await act(async () => { release(); });
+    await settled();
+    expect(article('Body').getAttribute('aria-busy')).toBeNull();
+    expect(screen.queryByText('Could not refresh')).toBeNull();
   });
 
   it('has a dot per card that marks the chosen card', async () => {

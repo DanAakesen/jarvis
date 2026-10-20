@@ -56,10 +56,11 @@ function MealStrip({ pages, state }: { pages: DailyPages; state: BlockState }) {
   </div>;
 }
 
-export function TrainingCard({ title, to, state, onRetry, period, states, data, nutrition, targets }: {
+export function TrainingCard({ title, to, state, stale, onRetry, period, states, data, nutrition, targets }: {
   title: string;
   to: string;
   state: BlockState;
+  stale: boolean;
   onRetry: () => void;
   period: OverviewWindow;
   states: { workouts: BlockState; steps: BlockState; meals: BlockState };
@@ -70,7 +71,7 @@ export function TrainingCard({ title, to, state, onRetry, period, states, data, 
   const counts = trainingCounts(data.workouts.items as Workout[], { startDate: period.sessionStart, endDate: period.endDate });
   const steps = stepsForWindow(data.steps.items, period);
   const scope = sessionScope(period);
-  return <TopCard title={title} to={to} state={state} onRetry={onRetry}>
+  return <TopCard title={title} to={to} state={state} onRetry={onRetry} stale={stale}>
     <div className="daily-top-rings">
       <Gauge label="Gym" state={states.workouts} value={counts.strength} unit={`sessions, ${scope}`} singular={`session, ${scope}`}
         target={scaledTarget(targets.gymSessionsPerWeek, period.sessionWeeks)} />

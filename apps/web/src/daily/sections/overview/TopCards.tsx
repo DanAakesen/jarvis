@@ -3,7 +3,7 @@ import { dailyQuerySources as sources, type DailySourceId } from '@jarvis/contra
 import type { DailyPages } from '../../ui/useDailyPages';
 import { targetBaseline } from '../nutrition/totals';
 import { BodyCard } from './BodyCard';
-import { combineStates, pagesState, type BlockState } from './block-state';
+import { combineStates, pagesStale, pagesState, type BlockState } from './block-state';
 import { HealthCard } from './HealthCard';
 import type { NutritionView } from './NutritionTiles';
 import { TrainingCard } from './TrainingCard';
@@ -46,7 +46,7 @@ function CardCarousel({ titles, children }: { titles: readonly string[]; childre
 }
 
 const reloadFailed = (...pages: DailyPages[]) => () => {
-  for (const page of pages) if (page.status === 'error') page.reload();
+  for (const page of pages) if (page.error !== null) page.reload();
 };
 
 /**
@@ -92,6 +92,13 @@ export function TopCards({ backendUrl, getAccessToken, refreshVersion, available
     health: combineStates(states.sleep, states.days, states.meals, targetsFailed),
     body: combineStates(states.workouts, states.catalogue, ...body.map(pages => pagesState(pages, true))),
   };
+  // Only the reads a card actually uses count: meals are read for a single date, names the catalogue lacks are not queried.
+  const meals = period.single ? [data.meals] : [];
+  const stale = {
+    training: [data.workouts, data.steps, data.days, ...meals].some(pagesStale),
+    health: [data.sleep, data.days, ...meals].some(pagesStale),
+    body: [data.workouts, data.catalogue, ...body].some(pagesStale),
+  };
   const retryTargets = () => { if (nutritionTargets.current?.error) nutritionTargets.retry(); };
   const retry = {
     training: () => { reloadFailed(data.workouts, data.steps, data.days, data.meals)(); retryTargets(); },
@@ -106,11 +113,11 @@ export function TopCards({ backendUrl, getAccessToken, refreshVersion, available
         aria-pressed={item.id === preset} onClick={() => setPreset(item.id)}>{item.label}</button>)}
     </div>
     <CardCarousel titles={cards.map(card => card.title)}>
-      <TrainingCard {...training} state={cardState.training} onRetry={retry.training} period={period} states={states}
+      <TrainingCard {...training} state={cardState.training} stale={stale.training} onRetry={retry.training} period={period} states={states}
         data={data} nutrition={nutrition} targets={noTrainingTargets} />
-      <HealthCard {...health} state={cardState.health} onRetry={retry.health} period={period} today={today} hour={hour}
+      <HealthCard {...health} state={cardState.health} stale={stale.health} onRetry={retry.health} period={period} today={today} hour={hour}
         states={states} data={data} nutrition={nutrition} />
-      <BodyCard {...bodyCard} state={cardState.body} onRetry={retry.body} period={period} workoutsState={states.workouts}
+      <BodyCard {...bodyCard} state={cardState.body} stale={stale.body} onRetry={retry.body} period={period} workoutsState={states.workouts}
         catalogueState={states.catalogue} data={data} names={data.names} trendPeriod={data.trendPeriod} />
     </CardCarousel>
   </section>;
