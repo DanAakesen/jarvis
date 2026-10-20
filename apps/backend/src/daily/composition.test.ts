@@ -105,6 +105,8 @@ const dailyRoutes: readonly Probe[] = [
   { method: 'POST', url: '/daily/query', payload: { source: dailyQuerySources.metrics, startDate: '2026-10-01', endDate: '2026-10-16' } },
   { method: 'GET', url: '/daily/nutrition-targets' },
   { method: 'PATCH', url: '/daily/nutrition-targets', payload: { restingKcal: 1750 } },
+  { method: 'GET', url: '/daily/training-targets' },
+  { method: 'PATCH', url: '/daily/training-targets', payload: { gymSessionsPerWeek: 3 } },
 ];
 const send = (app: App, { method, url, payload }: Probe, kind?: string) => app.inject({
   method, url, ...(kind ? { headers: headers(kind) } : {}), ...(payload ? { payload } : {}),
@@ -163,7 +165,7 @@ describe('Daily composition', () => {
     expect(await off.backgroundJobs.list()).toEqual([]);
   });
 
-  it('adds only the owner-bound nutrition module, its three routes and its seven tools when Daily is on', async () => {
+  it('adds only the owner-bound Daily routes and tools when Daily is on', async () => {
     const { module, touched } = composed();
     expect(Object.keys(module).sort()).toEqual(['id', 'registerRoutes', 'tools']);
     expect(module.id).toBe('daily');
@@ -174,7 +176,8 @@ describe('Daily composition', () => {
     const baselineRoutes = await routeTable(baseline);
     const onRoutes = await routeTable(on);
     expect([...onRoutes].filter((url) => !baselineRoutes.has(url)).sort()).toEqual([
-      '/daily/capabilities', '/daily/nutrition-targets', '/daily/query', ...dailyToolNames.map((name) => `/tools/${name}`),
+      '/daily/capabilities', '/daily/nutrition-targets', '/daily/training-targets', '/daily/query',
+      ...dailyToolNames.map((name) => `/tools/${name}`),
     ].sort());
     expect([...baselineRoutes].filter((url) => !onRoutes.has(url))).toEqual([]);
 
@@ -200,8 +203,8 @@ describe('Daily composition', () => {
         expect((await send(app, probe, kind)).statusCode, `${probe.method} ${probe.url} as ${kind}`).toBe(403);
       }
     }
-    // The hosted agent reaches nutrition targets only through the approved tool, never the Settings route.
-    for (const probe of dailyRoutes.filter(({ url }) => url === '/daily/nutrition-targets')) {
+    // Training-target Settings routes are restricted to the signed-in owner.
+    for (const probe of dailyRoutes.filter(({ url }) => url.endsWith('-targets'))) {
       expect((await send(app, probe, 'agent')).statusCode, `${probe.method} ${probe.url} as agent`).toBe(403);
     }
     expect(touched).toEqual([]);

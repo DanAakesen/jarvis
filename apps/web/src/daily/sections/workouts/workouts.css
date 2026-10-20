@@ -2,6 +2,42 @@
 .workouts-section h3 { overflow-wrap: normal; }
 .workouts-section > .daily-freshness { margin-block: var(--space-3); }
 .workouts-section [hidden] { display: none; }
+.workouts-overview { display: grid; gap: var(--space-4); margin-block: var(--space-4); }
+.workouts-training, .workouts-class, .workouts-inventory { min-width: 0; }
+.workouts-training > h3, .workouts-class > h3, .workouts-inventory > h3 { margin-top: 0; }
+.workouts-training-body { display: grid; gap: var(--space-3); margin-top: var(--space-3); }
+.workouts-training-totals, .workouts-training-rings { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); }
+.workouts-training-totals { align-content: center; margin: 0; }
+.workouts-training-totals dt, .workouts-class-figures dt { color: var(--text-muted); font-size: var(--type-small); }
+.workouts-training-totals dd { margin: var(--space-1) 0 0; font-size: var(--type-subheading); font-weight: 600; height: 5rem; overflow: auto; overflow-wrap: anywhere; }
+.workouts-mini-ring { min-width: 0; text-align: center; }
+.workouts-mini-ring .daily-ring { margin: 0; }
+.workouts-mini-ring > p { min-height: 2.5rem; margin-bottom: 0; font-size: var(--type-small); }
+.workouts-summary-note { color: var(--text-muted); font-size: var(--type-small); min-height: 4.5rem; }
+.workouts-day-chart { height: 29rem; overflow: auto; }
+.workouts-day-chart .daily-chart-legend { display: none; }
+.workouts-day-chart .daily-chart-bars + .daily-chart-bars + .daily-chart-bars { fill: var(--text-muted); }
+.workouts-energy-legend { display: flex; flex-wrap: wrap; gap: var(--space-4); padding: 0; margin: 0; list-style: none; }
+.workouts-energy-legend li { display: flex; align-items: center; gap: var(--space-2); }
+.workouts-energy-legend span { display: grid; place-items: center; width: 1.5rem; height: 1.5rem; background: var(--glass-edge-cool); color: var(--surface); }
+.workouts-energy-legend li:nth-child(2) span { background: var(--chart-series-warm); }
+.workouts-energy-legend li:nth-child(3) span { background: var(--text-muted); }
+.workouts-classes { display: grid; gap: var(--space-3); }
+.workouts-class-figures { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-content: start; gap: var(--space-3); height: 12rem; overflow: auto; margin: 0; }
+.workouts-class-figures dd { margin: var(--space-1) 0 0; min-height: 1.5rem; overflow-wrap: anywhere; }
+.workouts-card-status { height: 8rem; overflow: auto; font-size: var(--type-small); color: var(--text-muted); }
+.workouts-card-status p { margin-block: var(--space-2); }
+.workouts-inventory-groups { display: grid; gap: var(--space-3); }
+.workouts-inventory-list { height: 12rem; overflow: auto; font-size: var(--type-small); }
+.workouts-inventory-list ul { padding-inline-start: var(--space-4); }
+.workouts-inventory-list li { margin-block: var(--space-2); overflow-wrap: anywhere; }
+@media (min-width: 900px) {
+  .workouts-training-body { grid-template-columns: 1fr 1fr; align-items: center; }
+  .workouts-classes, .workouts-inventory-groups { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 600px) {
+  .workouts-day-chart { height: 25rem; }
+}
 .workouts-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 9rem), 1fr)); grid-auto-rows: 1fr; align-items: stretch; gap: var(--space-2); margin-block: var(--space-4); }
 .workouts-detail { display: grid; gap: var(--space-3); min-width: 0; }
 .workouts-detail > button { justify-self: start; }

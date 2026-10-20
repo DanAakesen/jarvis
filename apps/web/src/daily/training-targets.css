@@ -1,0 +1,8 @@
+.training-targets-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr));
+  gap: var(--space-4);
+  align-items: start;
+}
+.training-targets .settings-actions { align-items: center; }
+.training-targets .settings-actions .primary-button { margin-top: 0; }

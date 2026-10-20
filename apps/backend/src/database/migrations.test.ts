@@ -36,6 +36,19 @@ describe('committed SQL manifest', () => {
     expect(migration?.sql).toContain("CHECK (kind = N'test')");
     expect((await readDownMigration('0054_proactive_push.sql')).sql).toContain('cannot roll back while rows exist');
   });
+  it('stores owner-set Daily training targets without defaults and protects them on rollback', async () => {
+    const migration = (await readMigrations()).find(({ name }) => name === '0061_daily_training_targets.sql');
+    expect(migration?.sql).toContain('CREATE TABLE daily.training_targets');
+    expect(migration?.sql).toContain('owner_object_id uniqueidentifier NOT NULL');
+    expect(migration?.sql).toContain('gym_sessions_per_week int NULL');
+    expect(migration?.sql).toContain('run_sessions_per_week int NULL');
+    expect(migration?.sql).toContain('daily_steps int NULL');
+    expect(migration?.sql).toContain('CHECK (daily_steps IS NULL OR daily_steps BETWEEN 0 AND 100000)');
+    expect(migration?.sql).not.toMatch(/\bDEFAULT\b/iu);
+    const down = await readDownMigration('0061_daily_training_targets.sql');
+    expect(down.sql).toContain('TABLOCKX,HOLDLOCK');
+    expect(down.sql).toContain('must be retained');
+  });
   it('adds the proactive operational schema and a reversible proactive job kind', async () => {
     const foundation = (await readMigrations()).find(({ name }) => name === '0055_proactive_foundation.sql');
     expect(foundation?.sql).toContain("CHECK (kind IN (N'test', N'finding'))");
@@ -234,6 +247,7 @@ describe('committed SQL manifest', () => {
       '0058_proactive_todo_receipts.sql',
       '0059_proactive_reminders.sql',
       '0060_daily_health_processing_state.sql',
+      '0061_daily_training_targets.sql',
     ]);
     for (const migration of migrations) await expect(readDownMigration(migration.name)).resolves.toMatchObject({ name: migration.name });
   });

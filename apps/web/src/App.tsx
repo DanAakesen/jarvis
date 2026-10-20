@@ -7,6 +7,7 @@ import { useJarvisActivity } from './activity-context';
 import { JarvisActivityProvider } from './activity-provider';
 import { appAreas } from './areas';
 import { NutritionTargetsSettings } from './daily/NutritionTargetsSettings';
+import { TrainingTargetsSettings } from './daily/TrainingTargetsSettings';
 import { HealthUploadSettings } from './HealthUploadSettings';
 import { DailyRefreshContext } from './daily/refresh';
 import { ContextPanel, ContextPanelProvider } from './ContextPanel';
@@ -872,6 +873,7 @@ function SettingsRoute({ config, session, nutritionKey, pushEnabled, proactiveEn
         <ProjectsPage backendUrl={config.backendUrl} getAccessToken={session.getAccessToken} projectDefaults={projectDefaults} />
       )}
       {...(nutritionKey ? { nutrition: <NutritionTargetsSettings key={nutritionKey} backendUrl={config.backendUrl} getAccessToken={session.getAccessToken} /> } : {})}
+      {...(nutritionKey ? { trainingTargets: <TrainingTargetsSettings key={nutritionKey} backendUrl={config.backendUrl} getAccessToken={session.getAccessToken} /> } : {})}
       {...(nutritionKey ? { healthUpload: <HealthUploadSettings backendUrl={config.backendUrl} getAccessToken={session.getAccessToken} /> } : {})}
       {...(proactiveEnabled ? { proactive: <ProactiveSettings backendUrl={config.backendUrl}
         getAccessToken={session.getAccessToken} signIn={session.signIn} /> } : {})}

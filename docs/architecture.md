@@ -5743,6 +5743,14 @@ login or storage.
 
 ### Daily section shell and extension contract (18 October 2026; P12-20)
 
+P14-50 adds `sections/rules`, ordered last without period controls. It embeds
+the nutrition target editor and reuses the session token supplier with the
+existing `/me` profile reader (no additional sign-in). Source coverage reads
+`daily.sync` and distinguishes completed health processing from unknown
+freshness and failed refreshes. Nutrition sync and mail/calendar attention
+are not served there and remain explicitly Not connected; the training editor
+is unavailable until P14-45 is merged.
+
 `DailyHome` owns the active section (`?section=<id>`), one Copenhagen-calendar
 period and the known capability source IDs. `sections/*/index.tsx` modules are
 discovered with the lazy `import.meta.glob`; each exports its
@@ -6016,6 +6024,32 @@ The values are personal
 health data in a public repository: none appears in code, fixtures, documents,
 logs or audit.
 
+### Owner training targets (20 October 2026; P14-45, #1116, #1132)
+
+The original Daily's weekly Gym/Run targets and daily step target came from an
+original task source that is outside approved scope. Jarvis stores the owner's
+replacement values in `daily.training_targets`, added by migration
+`0061_daily_training_targets`; there are no seeded rows or target defaults.
+Each row is keyed by the configured owner and contains nullable whole-number
+targets plus an update timestamp. SQL constraints and the shared server contract
+bound weekly sessions and daily steps; reads return those bounds and `null` for
+every unset target.
+
+The optional `createDailyModules` accessor, `trainingTargets`, is request-bound
+and composes only with Daily and shared Daily data. The signed-in-owner
+`GET`/`PATCH /daily/training-targets` route rejects agents,
+runners, connectors, other identities and query selectors. A patch is strict,
+partial and transactional; `null` clears a field and removing the last set
+value deletes the row. Read-back occurs before commit. The assistant has no
+training-target write tool because the production tool catalogue must retain at
+least eight free slots; a read-only query source may be added later. Daily-off
+composition registers no target routes.
+
+The web Settings editor loads and saves only validated server responses. Its
+`useTrainingTargets` hook documents the shared loading/settled/error/retry
+contract for later Overview, Workouts and Health consumers; those views are
+intentionally unchanged here.
+
 ### Personalised suggestion adapter (17 October 2026)
 
 A seventh optional `createDailyModules` argument, `nutritionSuggestions`
@@ -6107,7 +6141,8 @@ Gmail read, job or timer. The targets and health accessors also compare the
 resolved owner with the composed owner and refuse a mismatch, on top of the check
 inside the data accessors. Root authentication is unchanged: a connector or
 runner principal is refused on every Daily route, and an agent is refused on the
-targets route because it reaches targets only through the approved tool.
+training-targets route because those Settings operations are owner-only; no
+assistant training-target tool is registered.
 
 The code default is off. Production sets `JARVIS_DAILY_ENABLED` and the web switch
 `VITE_DAILY_ENABLED` (read at build time by the Daily overview page) in exactly two

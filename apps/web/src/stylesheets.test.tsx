@@ -58,6 +58,7 @@ const sideBorderAllowlist: AllowlistEntry[] = [
   { file: 'daily/sections/workouts/workouts.css', selector: '.workouts-history-row', property: 'border-bottom', value: '1px solid var(--rule)', reason: 'Structural separator between workout history rows.' },
   { file: 'daily/sections/nutrition/nutrition.css', selector: '.nutrition-record', property: 'border-bottom', value: '1px solid var(--rule)', reason: 'Structural separator between recorded meals and library rows.' },
   { file: 'daily/sections/nutrition/nutrition.css', selector: '.nutrition-weekly-list > li', property: 'border-bottom', value: '1px solid var(--rule)', reason: 'Structural separator between weekly nutrition summaries.' },
+  { file: 'daily/sections/nutrition/nutrition.css', selector: '.nutrition-meal', property: 'border-bottom', value: '1px solid var(--rule)', reason: 'Structural separator between meals in the period list.' },
   { file: 'styles.css', selector: '.area-sidebar', property: 'border-bottom', value: '1px solid var(--rule)', reason: 'Structural boundary below the sidebar on narrow layouts.' },
   { file: 'styles.css', selector: '.context-panel', property: 'border-bottom', value: '1px solid var(--rule)', reason: 'Structural boundary below the context panel on narrow layouts.' },
   { file: 'styles.css', selector: '.mobile-menu-actions', property: 'border-top', value: '1px solid var(--rule)', reason: 'Separates navigation from menu actions.' },
