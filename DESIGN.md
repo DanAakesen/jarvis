@@ -1959,7 +1959,8 @@ target source and its later wiring. No second targets client is introduced.
 The shell retains the only period control, avoiding competing custom-date drafts.
 Below are Gym (time, energy and heart rate), Run (also distance) and Activity
 (metric steps, active energy and exercise time per day) cards. Missing figures say
-“Not received”; session heart-rate averages are explicitly an unweighted mean.
+“Not received”, except that a complete read with no sessions in a window or class
+reads 0 min and 0 kcal, as in the original; partial reads stay unknown. Session heart-rate averages are explicitly an unweighted mean.
 The Available data inventory has Summary candidates, Per-workout figures and
 Heart and provenance groups, built only from present workout fields and the
 period's catalogue entries. Catalogue presence does not claim non-null values

@@ -68,13 +68,15 @@ export function WorkoutOverview({ pages, rows, ...props }: DailySectionProps & {
   const metricsLoading = hasMetrics && metrics.first === null && metrics.error === null;
   const partial = pages.hasMore || pages.error !== null || pages.loadingMore || pages.status === 'loading' || pages.last?.status === 'partial';
   const amount = (value: number | null, unit: string) => value === null ? null : `${formatNumber(value)} ${unit}`;
+  // A complete read with no sessions is a received zero; partial or loading reads stay unknown.
+  const complete = !pending && !partial;
   return <div className="workouts-overview">
     <section className="daily-stat-tile workouts-training" aria-labelledby="workouts-training-heading">
       <h3 id="workouts-training-heading">Training</h3>
       <div className="workouts-training-body">
         <dl className="workouts-training-totals" aria-label="Workout summary">
           <Figure label="Sessions" value={pending ? null : formatNumber(summary.count)} loading={loading} />
-          <Figure label="Calories burned" value={pending ? null : amount(summary.energy, 'kcal')} loading={loading} />
+          <Figure label="Calories burned" value={pending ? null : amount(complete && summary.count === 0 ? 0 : summary.energy, 'kcal')} loading={loading} />
         </dl>
         <div className="workouts-training-rings">
           {(['Gym', 'Run'] as const).map(label => <TrainingRing key={label} label={label}
@@ -105,12 +107,14 @@ export function WorkoutOverview({ pages, rows, ...props }: DailySectionProps & {
     </section>
     <div className="workouts-classes">
       {(['Gym', 'Run'] as const).map(name => {
-        const figures = classFigures(summary.rows.filter(row => classifyWorkout(row) === name));
+        const classRows = summary.rows.filter(row => classifyWorkout(row) === name);
+        const figures = classFigures(classRows);
+        const none = complete && classRows.length === 0;
         return <section className="daily-stat-tile workouts-class" key={name} aria-label={`${name} class`}>
           <h3>{name}</h3>
           <dl className="workouts-class-figures">
-            <Figure label="Time" value={pending ? null : figures.time} loading={loading} />
-            <Figure label="Energy" value={pending ? null : amount(figures.energy, 'kcal')} loading={loading} />
+            <Figure label="Time" value={pending ? null : none ? '0 min' : figures.time} loading={loading} />
+            <Figure label="Energy" value={pending ? null : none ? '0 kcal' : amount(figures.energy, 'kcal')} loading={loading} />
             {name === 'Run' && <Figure label="Distance" value={pending ? null : figures.distance} loading={loading} />}
             <Figure label="Average heart rate" value={pending ? null : amount(figures.average, 'bpm')} loading={loading} />
             <Figure label="Maximum heart rate" value={pending ? null : amount(figures.maximum, 'bpm')} loading={loading} />

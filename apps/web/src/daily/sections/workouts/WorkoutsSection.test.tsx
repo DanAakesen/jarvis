@@ -90,12 +90,12 @@ describe('Workouts section', () => {
     expect(read.mock.calls[0]?.[1]).toEqual({ source: sources.workouts, ...props.period, limit: 500 });
   });
 
-  it('keeps the training composition on an empty read without inventing energy', async () => {
+  it('keeps the training composition on a complete empty read and reads it as zero', async () => {
     read.mockImplementation(async (_url, query) => dailyFixture(query));
     mount();
     expect(await screen.findByText('No records')).toBeTruthy();
     expect(screen.getByLabelText('Workout summary').textContent).toContain('Sessions0');
-    expect(screen.getByLabelText('Workout summary').textContent).toContain('Calories burnedNot received');
+    expect(screen.getByLabelText('Workout summary').textContent).toContain('Calories burned0 kcal');
   });
 
   it('shows freshness, training, class cards, and one visible history layout', async () => {

@@ -81,6 +81,24 @@ describe('Workout parity composition', () => {
     expect(screen.getByLabelText('Workout summary').textContent).toContain('Calories burnedNot received');
   });
 
+  it('reads a class with no sessions as zero in a complete read, but not in a partial one', async () => {
+    mount(pages([rows[0]!]));
+    expect(figure('Run', 'Time')?.textContent).toBe('0 min');
+    expect(figure('Run', 'Energy')?.textContent).toBe('0 kcal');
+    expect(figure('Run', 'Distance')?.textContent).toBe('Not received');
+    expect(figure('Run', 'Average heart rate')?.textContent).toBe('Not received');
+    expect(figure('Gym', 'Time')?.textContent).toBe('10 min');
+    cleanup();
+    mount(pages([]));
+    expect(screen.getByLabelText('Workout summary').textContent).toBe('Sessions0Calories burned0 kcal');
+    expect(figure('Gym', 'Time')?.textContent).toBe('0 min');
+    cleanup();
+    mount(pages([rows[0]!], { hasMore: true }));
+    expect(figure('Run', 'Time')?.textContent).toBe('Not received');
+    expect(figure('Run', 'Energy')?.textContent).toBe('Not received');
+    await waitFor(() => expect(read).toHaveBeenCalled());
+  });
+
   it('loads activity from metrics and inventory from catalogue rows, never workout detail', async () => {
     read.mockImplementation(async (_url, query) => dailyFixture(query, query.source === sources.metrics ? [
       { metric_name: 'step_count', metric_date: '2026-10-02', value: 123, unit: 'count' },
