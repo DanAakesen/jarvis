@@ -2578,7 +2578,11 @@ word partial from the Tasks legend. P14-40 makes every indexed vault note visibl
 searchable, including notes in the vault root. P14-41 rebuilds the Daily screens from
 the original component set in Jarvis styling. P14-42 shows how much of the health
 upload inbox's 256 MiB and 10,000-row caps is used, so the owner can size a large
-backfill before ingest starts refusing uploads.
+backfill before ingest starts refusing uploads. P14-43 lets the Software Factory
+board read GitHub list pages larger than 1 MiB, which had turned every board read
+into an error since 19 October; it closes only after production returns 200. P14-44
+stops the Daily Overview tiles from jumping while they load and corrects the Sleep
+headline.
 
 ## Factory canonical-status parity (16 October 2026)
 
