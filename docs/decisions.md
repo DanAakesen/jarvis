@@ -19,6 +19,55 @@ source labels. The back link is route-relative, ready for #1147's route move;
 internal identifiers remain unchanged for #1146. Existing shared copy is left
 to #1147.
 
+## The Daily area is named Health (20 October 2026; #1116, #1147, #1146)
+
+The owner ruled that the area built as Daily is called Health and that the word
+"Daily" must not appear anywhere the owner can see or hear it. P14-53 renames
+everything visible: the route (`/health`, with `/daily` redirecting and keeping the
+query string and hash), the navigation and mobile menu labels, headings, accessible
+names, notices, document titles, owner-facing API labels and messages, the assistant's
+navigation target (`health`, with `daily` kept as an alias) and the display of raw ids
+such as `daily.metrics`. "Daily" used only as an adjective is reworded ("per day",
+"today's"). New owner-visible copy in the parallel P14-45 to P14-52 tasks says Health
+from the start.
+
+Internal identifiers keep the old name for now: folders, component, hook and CSS class
+names, API paths (`/daily/...`), tool names, query source ids, the module id and
+storage keys. The owner's phone uploader and connectors may be configured against the
+current paths, so P14-54 renames them after the other tasks have merged, with aliases
+for every deployed path and key and an owner-run check before an alias is removed.
+Until then "Daily" in code, issue titles and the documents below means the Health area.
+
+Refs #1116
+
+## P14-41 — Daily matches the original, except the recorded non-migrations (20 October 2026; #1116)
+
+The owner ruled that Daily is built to match the original screen for screen, on the
+owner's production data, and not staged behind gaps in what Jarvis serves: what the
+original showed is built, and a source is added where Jarvis has none. The
+exceptions are the things already decided not to migrate in
+[the migration scope](daily-migration.md), which stay out: task, habit and countdown
+surfaces and their source, meal plans and the live meal coach, coaching and
+recomposition automation including the baseline status, energy estimates, the widget
+and football. This replaces the earlier requirement that each unbuilt item wait for
+its own ruling: anything the original shows and those exclusions do not cover is
+built. Workouts and Nutrition remain sections of the one Daily page.
+
+Where the original read a weekly session target or a daily step target from the
+excluded task source, the owner sets the targets in Jarvis (P14-45). Until a target is
+set the interface says "No target set"; no default is shown. The Gmail waiting lists
+and the calendar agenda stay under #725: P14-51 serves them read-only and dark behind
+a flag, P14-52 shows them, and they are not claimed live until the owner's Google
+consent, deployed-model and device acceptance gates are met.
+
+Verification changes with it: no component merges on synthetic data alone. Each task
+is checked against the owner's production data in the owner's local session, at
+desktop and 500 px widths and against the original screenshots, before its pull
+request merges. Tests keep clearly synthetic values, and the original's screenshots
+and values stay out of the repository.
+
+Refs #1116
+
 ## P14-44 — Overview tiles hold their size; reads on focus wait a minute (20 October 2026; #1116, #1129)
 
 The Daily Overview summary tiles and Today cards jumped while loading: each tile
