@@ -1949,6 +1949,26 @@ full-width average/minimum/maximum heart-rate chart with its per-minute range ba
 and collapsed source JSON. Incomplete totals, unit separation, missing dates and
 source-completeness caveats remain explicit.
 
+20 October 2026 (P14-48; Refs #1116, #1137): the Workouts summary is replaced by
+a Training card with the existing period control, Sessions and Calories burned,
+Gym/Run mini rings and Copenhagen-day energy bars. Gym, Run and Other have a
+labelled legend in bar order; Activity workouts join Other in the chart. Rings
+accept a weekly target, prorated by selected calendar days, but currently receive
+null and link “No target set” to `/settings#training-targets`; P14-45 owns the
+target source and its later wiring. No second targets client is introduced.
+Below are Gym (time, energy and heart rate), Run (also distance) and Activity
+(daily metric steps, active energy and exercise time) cards. Missing figures say
+“Not received”; session heart-rate averages are explicitly an unweighted mean.
+The Available data inventory has Summary candidates, Per-workout figures and
+Heart and provenance groups, built only from present workout fields and the
+period's catalogue entries. Catalogue presence does not claim non-null values
+or source completeness. Card bodies, chart and status slots reserve space
+across loading, empty, error and partial reads; inventory lists scroll within
+their reserved area. The three class cards and inventory groups stack on phones.
+Existing history, table disclosure and detail behavior remain unchanged.
+Only synthetic local verification is possible here; real-data/original-page
+parity and the owner's session acceptance remain unverified.
+
 Synthetic browser captures for the new list and detail presentation are in
 `docs/ui/p12-30/`; they show the actual Daily shell with isolated synthetic API
 responses, not Microsoft sign-in, live records, physical-device behavior or
