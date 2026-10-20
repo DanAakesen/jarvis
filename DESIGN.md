@@ -1644,7 +1644,11 @@ The bounded, keyboard-scrollable body keeps the same height through loading,
 empty, error and partial reads. Overview uses shared `StatTile` captions/values
 and Gym/Run weekly rows; category views show latest samples, units and dates.
 Missing records say “Not received”; missing inputs or incomplete reads say
-“Unavailable”, never a fabricated zero. Today and rolling/week windows use
+“Unavailable”, never a fabricated zero. A complete workouts read with no sessions
+in a window reads 0 sessions, 0 min and 0 kcal, as in the original. Last night
+leads with total sleep and falls back to asleep only when total is absent, because
+staged exports report asleep as 0. Active calories read the exported `active_energy`
+series as well as `active_energy_burned`. Today and rolling/week windows use
 Copenhagen calendar dates, independently of the shell's selected period.
 All data includes every received metric in the panel's labelled seven-day read
 window, split by unit. Catalogue categories are respected only for their declared

@@ -40,7 +40,10 @@ describe('Health panel calculations', () => {
 
   it('distinguishes absent records, uncomputable totals, zero and incompatible units', () => {
     const rows = empty();
-    expect(Object.values(values(rows)).every(value => value === 'Not received')).toBe(true);
+    const absent = values(rows);
+    expect(Object.entries(absent).filter(([, value]) => value === 'Not received').map(([key]) => key).sort())
+      .toEqual(['active', 'food', 'night', 'resting', 'sleep-average', 'steps']);
+    expect(absent).toMatchObject({ workouts: 0, week: 0, 'workout-energy': 0, 'workout-duration': 0 });
     rows.metrics = [{ metric_name: 'active_energy_burned', metric_date: '2026-10-20', value: 80, unit: 'kJ' }];
     rows.workouts = [
       { workout_date: '2026-10-20', duration_seconds: null, active_energy_value: 100, active_energy_unit: 'kcal' },
@@ -54,6 +57,26 @@ describe('Health panel calculations', () => {
     });
     rows.nutrition = [{ meal_date: '2026-10-20', energy_kcal: 0 }];
     expect(values(rows).food).toBe(0);
+  });
+
+  it('leads with total sleep, falls back to asleep, and reads the exported active energy series', () => {
+    const rows = empty();
+    rows.sleep = [
+      { sleep_date: '2026-10-19', total_sleep_hours: 7, asleep_hours: 0 },
+      { sleep_date: '2026-10-20', total_sleep_hours: 8, asleep_hours: 0 },
+    ];
+    rows.metrics = [{ metric_name: 'active_energy', metric_date: '2026-10-20', value: 150, unit: 'kcal' }];
+    expect(values(rows)).toMatchObject({ night: 8, 'sleep-average': 7.5, active: 150 });
+    rows.sleep = [{ sleep_date: '2026-10-20', total_sleep_hours: null, asleep_hours: 6 }];
+    expect(values(rows)).toMatchObject({ night: 6, 'sleep-average': 6 });
+    rows.metrics.push({ metric_name: 'active_energy_burned', metric_date: '2026-10-20', value: 150, unit: 'kcal' });
+    expect(values(rows).active).toBe('Unavailable');
+  });
+
+  it('reads a workout-free window as zero while other empty sources stay not received', () => {
+    const rows = empty();
+    rows.workouts = [{ workout_date: '2026-10-13', duration_seconds: 600, active_energy_value: 50, active_energy_unit: 'kcal' }];
+    expect(values(rows)).toMatchObject({ workouts: 0, week: 0, 'workout-energy': 0, 'workout-duration': 0, night: 'Not received', food: 'Not received' });
   });
 
   it('never sums alternative metric series or substitutes an average for daily steps', () => {

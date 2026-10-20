@@ -177,7 +177,9 @@ days; weekly targets count Monday through today. Retained-record completeness is
 still unknown. Catalogue units keep series separate; categories are used only
 when served, with uncategorised metrics retained in All data rather than inferred
 from a personal metric list. The current catalogue has no category field or
-retention policy. Gym/Run targets remain a nullable prop pending P14-45 (#1132);
+retention policy. A complete workouts read with no sessions reads as zero; total
+sleep leads and asleep is only a fallback; `active_energy` is accepted as the
+active-calories series. Gym/Run targets remain a nullable prop pending P14-45 (#1132);
 no parallel targets client is introduced.
 
 ## P14-32 — Notes tree beside Show tasks (20 October 2026; #1085)

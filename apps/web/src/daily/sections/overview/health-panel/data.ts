@@ -96,12 +96,15 @@ export function healthSummary(records: Records, now: Date): Tile[] {
   const inRange = (date: string | null, start = sevenDays.startDate) => date !== null && date >= start && date <= today;
   const nights = records.sleep.filter(row => inRange(dateOnly(row.sleep_date)));
   const night = nights.find(row => row.sleep_date === today);
-  const sleepValues = nights.map(row => hours(row.asleep_hours) ?? hours(row.total_sleep_hours));
+  // Staged exports report asleep_hours as 0, so total sleep leads and asleep is the fallback.
+  const sleepHours = (row: Row) => hours(row.total_sleep_hours) ?? hours(row.asleep_hours);
+  const sleepValues = nights.map(sleepHours);
   const workouts = records.workouts.filter(row => inRange(workoutDate(row.workout_date) ?? workoutDate(row.start_at)));
   const todaysWorkouts = workouts.filter(row => (workoutDate(row.workout_date) ?? workoutDate(row.start_at)) === today);
   const week = workouts.filter(row => inRange(workoutDate(row.workout_date) ?? workoutDate(row.start_at), thisWeek.startDate));
-  const sum = (rows: Row[], field: string, unitField?: string): number | string => {
-    if (!rows.length) return missing;
+  // An empty workouts list is a received zero once the panel has a complete read; other sources stay "Not received".
+  const sum = (rows: Row[], field: string, unitField?: string, empty: number | string = missing): number | string => {
+    if (!rows.length) return empty;
     const values = rows.map(row => finite(row[field]));
     if (values.some(value => value === null || value < 0) ||
       unitField && rows.some(row => row[unitField] !== 'kcal')) return unavailable;
@@ -117,20 +120,20 @@ export function healthSummary(records: Records, now: Date): Tile[] {
   };
   const food = records.nutrition.filter(row => row.meal_date === today);
   const foodPartial = food.some(row => Array.isArray(row.partial_nutrients) && row.partial_nutrients.includes('energy_kcal'));
-  const duration = sum(todaysWorkouts, 'duration_seconds');
+  const duration = sum(todaysWorkouts, 'duration_seconds', undefined, 0);
   return [
-    { key: 'night', label: "Last night's sleep", value: night ? hours(night.asleep_hours) ?? hours(night.total_sleep_hours) ?? unavailable : missing, unit: 'h' },
+    { key: 'night', label: "Last night's sleep", value: night ? sleepHours(night) ?? unavailable : missing, unit: 'h' },
     { key: 'sleep-average', label: 'Sleep, trailing 7-day average', value: nights.length
       ? sleepValues.some(value => value === null) ? unavailable : sleepValues.reduce<number>((total, value) => total + value!, 0) / nights.length
       : missing, unit: 'h', note: `${nights.length} received nights; missing nights are not zero.` },
     { key: 'steps', label: 'Steps today', value: metric(/^(?:step_count|steps)$/u, 'count'), unit: 'steps' },
-    { key: 'active', label: 'Active calories', value: metric(/^active_energy_burned$/u, 'kcal'), unit: 'kcal' },
+    { key: 'active', label: 'Active calories', value: metric(/^(?:active_energy_burned|active_energy)$/u, 'kcal'), unit: 'kcal' },
     { key: 'resting', label: 'Resting calories', value: metric(/^(?:basal|resting)_energy_burned$/u, 'kcal'), unit: 'kcal' },
     { key: 'food', label: 'Food today', value: foodPartial ? unavailable : sum(food, 'energy_kcal'), unit: 'kcal' },
-    { key: 'workouts', label: 'Workouts, rolling 7 days', value: workouts.length || missing, unit: 'sessions' },
-    { key: 'workout-energy', label: 'Workout calories, rolling 7 days', value: sum(workouts, 'active_energy_value', 'active_energy_unit'), unit: 'kcal' },
+    { key: 'workouts', label: 'Workouts, rolling 7 days', value: workouts.length, unit: 'sessions' },
+    { key: 'workout-energy', label: 'Workout calories, rolling 7 days', value: sum(workouts, 'active_energy_value', 'active_energy_unit', 0), unit: 'kcal' },
     { key: 'workout-duration', label: 'Workout duration today', value: typeof duration === 'number' ? duration / 60 : duration, unit: 'min' },
-    { key: 'week', label: 'Workouts this week', value: week.length || missing, unit: 'sessions' },
+    { key: 'week', label: 'Workouts this week', value: week.length, unit: 'sessions' },
   ];
 }
 
