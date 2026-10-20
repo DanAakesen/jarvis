@@ -20,7 +20,7 @@ describe('visual input evidence', () => {
     expect(visualResultText({ visualPath: 'caption', visualReason: 'image_input_unverified' }))
       .toBe('Caption only - no image supplied to Jarvis for this turn. Model image support has not been verified.');
     expect(visualResultText({ visualPath: 'caption', visualReason: 'daily_limit' }))
-      .toContain('daily image limit was reached');
+      .toContain('per-day image limit was reached');
     expect(visualResultText({ visualPath: 'caption', visualReason: 'budget_exhausted' }))
       .toContain('image budget was reached');
     expect(visualResultText({ visualPath: 'caption', visualReason: 'budget_unavailable' }))
