@@ -1,6 +1,6 @@
 import type { DailyPeriod } from './sections/types';
 
-export type DailyPeriodPreset = '7' | '30' | '90' | 'year' | 'custom';
+export type DailyPeriodPreset = 'today' | 'yesterday' | '7' | '14' | '30' | '90' | 'year' | 'custom';
 
 const day = 86_400_000;
 const dateParts = new Intl.DateTimeFormat('en-CA', {
@@ -27,6 +27,12 @@ export function dailyPeriodFor(preset: Exclude<DailyPeriodPreset, 'custom'>, now
   const endDate = copenhagenDate(now);
   const start = new Date(`${endDate}T12:00:00Z`);
   if (preset === 'year') return { startDate: `${endDate.slice(0, 4)}-01-01`, endDate };
+  if (preset === 'today') return { startDate: endDate, endDate };
+  if (preset === 'yesterday') {
+    start.setUTCDate(start.getUTCDate() - 1);
+    const date = start.toISOString().slice(0, 10);
+    return { startDate: date, endDate: date };
+  }
   start.setUTCDate(start.getUTCDate() - (Number(preset) - 1));
   return { startDate: start.toISOString().slice(0, 10), endDate };
 }

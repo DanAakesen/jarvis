@@ -11,6 +11,8 @@ import { dailyFixture, jsonResponse } from './test-support';
 
 const token = async () => 'synthetic-fixture';
 const backendUrl = 'http://localhost:3999';
+// The shell's freshness pill reads the sync source once per mount and once per refresh-stream step.
+const shellReads = 1;
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.restoreAllMocks(); window.history.replaceState({}, '', '/'); });
 
 const records: Partial<Record<DailySourceId, Record<string, DailyJson>>> = {
@@ -130,7 +132,7 @@ describe('Daily overview', () => {
     expect(f.queries).toHaveLength(2);
     hold.open();
     await settled();
-    expect(f.queries).toHaveLength(dailySources.length + 5);
+    expect(f.queries).toHaveLength(dailySources.length + 5 + shellReads);
   });
   it('shows a failed collection on its own row, keeps the rest, and Retry reads again and keeps keyboard focus in that row', async () => {
     let sleepFails = true;
@@ -159,19 +161,19 @@ describe('Daily overview', () => {
     const f = fixture({ answer: async query => { if (gated) await hold.opened; return jsonResponse(dailyFixture(query, items(query))); } });
     render(home());
     await settled();
-    await waitFor(() => expect(f.queries).toHaveLength(dailySources.length + 5));
+    await waitFor(() => expect(f.queries).toHaveLength(dailySources.length + 5 + shellReads));
     gated = true;
     fireEvent.click(screen.getByRole('button', { name: 'Refresh overview' }));
     const busy = await screen.findByRole('button', { name: 'Refreshing…' });
     expect(busy.getAttribute('aria-disabled')).toBe('true');
     expect(row('Measurements').getByText('Has records')).toBeTruthy();
-    await waitFor(() => expect(probes(f.queries).length).toBe(dailySources.length + 2));
+    await waitFor(() => expect(probes(f.queries).length).toBe(dailySources.length + 2 + shellReads));
     fireEvent.click(busy);
     await flush();
-    expect(probes(f.queries)).toHaveLength(dailySources.length + 2);
+    expect(probes(f.queries)).toHaveLength(dailySources.length + 2 + shellReads);
     hold.open();
     await screen.findByRole('button', { name: 'Refresh overview' });
-    await waitFor(() => expect(f.queries).toHaveLength((dailySources.length + 5) * 2));
+    await waitFor(() => expect(f.queries).toHaveLength((dailySources.length + 5) * 2 + shellReads));
     expect(screen.queryByRole('button', { name: 'Refreshing…' })).toBeNull();
   });
   it('re-reads when the existing Daily refresh stream advances', async () => {
@@ -179,7 +181,7 @@ describe('Daily overview', () => {
     const { rerender } = render(home(0));
     await settled();
     rerender(home(1));
-    await waitFor(() => expect(f.queries).toHaveLength((dailySources.length + 5) * 2));
+    await waitFor(() => expect(f.queries).toHaveLength((dailySources.length + 5) * 2 + shellReads * 2));
     await settled();
   });
   it('shows only implemented sections and keeps the shared period when switching sections', async () => {
@@ -340,7 +342,7 @@ describe('Daily overview', () => {
     expect(screen.getByRole('tab', { name: 'Overview' }).getAttribute('aria-selected')).toBe('true');
     expect(row('Measurements').getByRole('button', { name: 'Open Measurements' })).toBeTruthy();
     expect(f.capabilityCalls()).toBe(1);
-    expect(f.queries.filter(query => !('limit' in query) || query.limit === 1)).toHaveLength(dailySources.length * 2);
+    expect(f.queries.filter(query => !('limit' in query) || query.limit === 1)).toHaveLength(dailySources.length * 2 + shellReads);
   });
   it.each([
     [404, 'Daily is not enabled on this backend.'],
