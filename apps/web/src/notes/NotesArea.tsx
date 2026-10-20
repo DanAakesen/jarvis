@@ -2,7 +2,7 @@ import { useCallback, useContext, useEffect, useId, useLayoutEffect, useMemo, us
 import { createPortal } from 'react-dom';
 import { useBlocker, useLocation, useSearchParams } from 'react-router-dom';
 import type { AreaProps } from '../areas';
-import { KnowledgeGraphView, KnowledgeNoteReader } from '../knowledge/KnowledgeGraphView';
+import { KnowledgeGraphView, KnowledgeNoteReader, KnowledgePill } from '../knowledge/KnowledgeGraphView';
 import { connectedNotes, withoutFrontMatter, type KnowledgeGraph, type KnowledgeNode } from '../knowledge/knowledge-data';
 import { StateMessage } from '../StateMessage';
 import { MarkdownContent } from '../MarkdownContent';
@@ -256,7 +256,6 @@ export function NotesArea({ backendUrl, getAccessToken }: AreaProps) {
           }}>
           <header className="knowledge-note-heading">
             <h3 id={`${id}-note`} title={editor?.created ? 'New note' : editor?.title ?? openingTitle}>
-              {!editor?.created && <span className="knowledge-dot" data-folder={editor?.path.split('/')[0]} aria-hidden="true" />}
               <span className="knowledge-note-title">{editor?.created ? 'New note' : editor?.title ?? openingTitle}</span>
             </h3>
             {editor?.created && folderUpdatedAt && <p className="notes-folder-updated">Vault folders. Updated <time dateTime={folderUpdatedAt}>{formatDateTime(folderUpdatedAt)}</time>.</p>}
@@ -324,8 +323,8 @@ export function NotesArea({ backendUrl, getAccessToken }: AreaProps) {
               {neighbours.length > 0 && graph && <section>
                 <h4 className="knowledge-note-subheading">Connected notes</h4>
                 <ul className="knowledge-neighbours">{neighbours.map(node => <li key={node.id}>
-                  <button className="ghost-button" type="button" data-folder={node.folder} disabled={saving} onClick={() => openGraphNote(node, graph)}>
-                    <span className="knowledge-dot" aria-hidden="true" />{node.title}
+                  <button className="ghost-button knowledge-neighbour" type="button" data-folder={node.folder} disabled={saving} onClick={() => openGraphNote(node, graph)}>
+                    <span className="knowledge-result-title">{node.title}</span><KnowledgePill folder={node.folder} />
                   </button>
                 </li>)}</ul>
               </section>}

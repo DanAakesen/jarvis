@@ -1,5 +1,17 @@
 # Decisions
 
+## P14-32 — Result pills and a text-free loader (21 October 2026; #1085)
+
+Search results used coloured dots, a separate Tasks heading and raw snippets
+that leaked front matter and task markup. Each result row now carries a
+coloured pill at its top right with the folder name (or Tasks) and a note or
+task glyph; matching tasks lead the list and "Show all N tasks" opens the panel.
+Dots are gone everywhere, including the legend, which uses the same pills.
+Snippets are cleaned to one plain line by `cleanSnippet`. The Notes loading
+state is a small constellation without a card, still under reduced motion. Pill
+and legend tints were checked in the contrast audit; the selected-hover tint is
+capped at 48% so Work and Personal text stays at 4.5:1.
+
 ## P14-32 — One size scale for controls (20 October 2026; #1085)
 
 Controls in the same row had drifted to different heights (the Notes search bar

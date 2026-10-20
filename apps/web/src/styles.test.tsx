@@ -283,12 +283,16 @@ describe('app-wide control contract', () => {
     }
   });
 
-  it('shows the knowledge graph messages as a compact centred card instead of a pane-wide overlay', () => {
-    const card = sharedStyles.match(/\.knowledge-status, \.knowledge-loader\s*\{([^}]*)\}/)?.[1] ?? '';
+  it('shows the knowledge graph loader as a text-free constellation and its messages as a compact centred card', () => {
+    const card = sharedStyles.match(/\n\.knowledge-status\s*\{([^}]*)\}/)?.[1] ?? '';
     expect(card).toMatch(/(?:^|[;\s])position:\s*absolute;/u);
     expect(card).toMatch(/(?:^|[;\s])width:\s*max-content;/u);
     expect(card).toMatch(/(?:^|[;\s])max-width:\s*min\(420px, 90%\);/u);
-    expect(sharedStyles).not.toMatch(/\.knowledge-loader\s*\{[^}]*inset:\s*0/u);
+    const loader = sharedStyles.match(/\n\.knowledge-loader\s*\{([^}]*)\}/)?.[1] ?? '';
+    expect(loader).toMatch(/(?:^|[;\s])width:\s*96px;/u);
+    expect(loader).not.toMatch(/background|border|padding|inset/u);
+    expect(sharedStyles).toContain('@media (prefers-reduced-motion: reduce) { .knowledge-loader circle { animation: none; } }');
+    expect(sharedStyles).toContain(':root[data-motion="reduced"] .knowledge-loader circle { animation: none; }');
   });
 
   it('puts the Proactive page, Usage range switch, Status intro and 404 page on readable surfaces', () => {

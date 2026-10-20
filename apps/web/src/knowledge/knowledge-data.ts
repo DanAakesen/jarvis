@@ -102,6 +102,32 @@ export async function loadKnowledgeGraph(backendUrl: string, getAccessToken: () 
   return readKnowledgeGraph(await request(backendUrl, getAccessToken, '/knowledge/graph', signal));
 }
 
+const taskMarkers = '📅⏳🛫➕✅❌🏁⏫🔼🔽⏬🔺🆔⛔🕒🔁';
+
+/** A search snippet as one plain line: no comments, front matter, checkboxes or task-plugin markers. */
+export function cleanSnippet(raw: string): string {
+  let value = raw.trimStart();
+  while (value.startsWith('<!--')) {
+    const end = value.indexOf('-->');
+    if (end === -1) return '';
+    value = value.slice(end + 3).trimStart();
+  }
+  if (/^---\s+[A-Za-z_][\w-]*\s*:/u.test(value)) {
+    const close = /\s---(?:\s|$)/u.exec(value.slice(3));
+    if (!close) return '';
+    value = value.slice(3 + close.index + close[0].length);
+  }
+  return value
+    .replace(/(?:^|\s)[-*]\s*\[[ xX]\]\s*/gu, ' ')
+    .replace(/\[(?:priority|due|scheduled|start|created|done|repeat|id)::[^\]]*\]/giu, ' ')
+    .replace(new RegExp(`🔁\\uFE0F?\\s*(?:every|when)[^${taskMarkers}\\[]*`, 'gu'), ' ')
+    .replace(/[🆔⛔]\uFE0F?\s*[\w,-]+/gu, ' ')
+    .replace(/[📅⏳🛫➕✅❌🏁🕒]\uFE0F?\s*(?:\d{4}-\d{2}-\d{2})?(?:\s+\d{1,2}:\d{2})?/gu, ' ')
+    .replace(/[⏫🔼🔽⏬🔺]\uFE0F?/gu, ' ')
+    .replace(/\s+/gu, ' ')
+    .trim();
+}
+
 /** Search returns the matching node ids in rank order. */
 export interface KnowledgeSearchHit { nodeId: string; snippet: string }
 
@@ -113,7 +139,7 @@ export async function searchKnowledge(backendUrl: string, getAccessToken: () => 
     const value = record(hit);
     const id = typeof hit === 'string' ? hit : value?.nodeId ?? value?.id;
     if (typeof id === 'string' || typeof id === 'number') {
-      results.push({ nodeId: String(id), snippet: text(value?.snippet, 500) });
+      results.push({ nodeId: String(id), snippet: cleanSnippet(text(value?.snippet, 500)) });
     }
   }
   return results;

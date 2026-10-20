@@ -51,10 +51,10 @@ error and partial variants keep their current look, and `.usage-empty`,
 `StateMessage` empty and loading call sites were traced to their container.
 
 The Notes graph overlay `.knowledge-loader` covered the whole pane, so a surface
-would have been a full-pane slab and its text sat at the far left. It and
-`.knowledge-status` are now one compact centred card
-(`width: max-content; max-width: min(420px, 90%)`); without `max-content` the
-`left: 50%` box shrank to half the pane (195px at 390).
+would have been a full-pane slab and its text sat at the far left. It was first
+made one compact centred card with `.knowledge-status`; it is now a text-free,
+boxless constellation (P14-32 result pills), while `.knowledge-status` stays a
+centred `max-content` message.
 
 Checked with the untracked scratch harness: the real app in headless Edge with
 sign-in stubbed and synthetic data, 34 empty and loading scenarios (Folio, chat

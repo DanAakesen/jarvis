@@ -449,10 +449,16 @@ widths, and use existing control tokens and button/field systems.
 
 Show vault freshness and truncation near the list. Loading, no-open-tasks,
 no-matches, unavailable and retry states remain explicit; task text is never
-editable from Jarvis. Notes search keeps notes labelled as notes and places
-plain-text snippets below titles; matching open tasks use a Tasks result group
-whose count opens the panel with the same query. The full one-page layout is
-design-led (#1085) and follows once a design exists.
+editable from Jarvis. Notes search results are one list: up to three
+matching tasks first, each with a task glyph, due time and a Tasks pill, then a
+"Show all N tasks" button that opens the panel with the same query, then the
+notes. Every row carries a coloured pill at its top right with the folder name
+(or Tasks), a glyph for its kind, and a one-line plain-text snippet with
+front matter, comments and task markers removed. There are no coloured dots
+anywhere; the map legend entries are the same pills. Loading shows a small
+text-free constellation with no card or box; it holds still under reduced
+motion. The full one-page layout is design-led (#1085) and follows once a design
+exists.
 
 The map legend includes a default-on **Tasks** toggle and the number of notes with
 open tasks on the map. Its accessible name gives that count as notes with open

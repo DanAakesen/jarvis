@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { matchTitles, readKnowledgeGraph, sampleKnowledgeGraph, vaultMemoryId } from './knowledge-data';
+import { cleanSnippet, matchTitles, readKnowledgeGraph, sampleKnowledgeGraph, vaultMemoryId } from './knowledge-data';
 import { GeneratedViewRenderer } from '../GeneratedViewRenderer';
 import { KnowledgeBackendContext } from './knowledge-context';
 import { createKnowledgeLayout } from './knowledge-layout';
@@ -28,6 +28,16 @@ beforeEach(() => {
 afterEach(() => { vi.unstubAllGlobals(); });
 
 describe('knowledge graph data', () => {
+  it('cleans search snippets into one plain line', () => {
+    expect(cleanSnippet('<!-- id: 1 -->\n---\ntitle: Plan\ntags: [a]\n---\nThe plan is ready.')).toBe('The plan is ready.');
+    expect(cleanSnippet('--- title: Plan tags: [a] --- The plan is ready.')).toBe('The plan is ready.');
+    expect(cleanSnippet('---\ntitle: Plan\ntags: [a]')).toBe('');
+    expect(cleanSnippet('<!-- unclosed')).toBe('');
+    expect(cleanSnippet('- [ ] Buy a mirror 📅 2031-04-09 ⏫ [priority:: high]')).toBe('Buy a mirror');
+    expect(cleanSnippet('- [x] Ship it ✅ 2031-04-09 🔁 every week 🆔 abc-1')).toBe('Ship it');
+    expect(cleanSnippet('---\n\nA rule above plain text')).toBe('--- A rule above plain text');
+  });
+
   it('preserves full-vault folders and drops dangling or self edges', () => {
     const graph = readKnowledgeGraph({
       nodes: [
@@ -295,15 +305,20 @@ describe('knowledge graph view', () => {
     render(<KnowledgeGraphView backendUrl="https://api.example.com" getAccessToken={getAccessToken} showTaskMatches onShowTasks={onShowTasks} />);
     fireEvent.change(await screen.findByLabelText('Search your knowledge'), { target: { value: 'mirror' } });
     expect(await screen.findByText('The hallway is ready for a new mirror.')).not.toBeNull();
-    const taskHeading = await screen.findByRole('heading', { name: 'Tasks' });
-    expect(screen.queryByRole('link', { name: '3 matching tasks' })).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: '3 matching tasks' }));
+    expect(screen.queryByRole('heading', { name: 'Tasks' })).toBeNull();
+    expect(screen.queryByText(/matching tasks?/)).toBeNull();
+    const tasks = await screen.findByRole('list', { name: 'Matching tasks' });
+    expect(within(tasks).getByText('Tasks')).not.toBeNull();
+    fireEvent.click(within(tasks).getByRole('button', { name: /Buy a mirror/ }));
     expect(onShowTasks).toHaveBeenCalledWith('mirror');
-    expect(screen.getByText('Buy a mirror')).not.toBeNull();
-    expect(screen.getByText('9 Apr 2031, 12:30')).not.toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Show all 3 tasks' }));
+    expect(onShowTasks).toHaveBeenCalledTimes(2);
+    expect(screen.getByText(/9 Apr 2031/)).not.toBeNull();
     const notes = screen.getByRole('list', { name: 'Matching notes' });
-    expect(taskHeading.compareDocumentPosition(notes) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(within(notes).getByRole('button', { name: /Home note/ })).not.toBeNull();
+    expect(tasks.compareDocumentPosition(notes) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const note = within(notes).getByRole('button', { name: /Home note/ });
+    expect(within(note).getByText('Personal')).not.toBeNull();
+    expect(note.getAttribute('aria-describedby')).toBe(within(note).getByText('Personal').id);
   });
 });
 
