@@ -116,7 +116,7 @@ const optionLabels: Record<string, string> = {
   complete_without_deployment: 'Complete without deployment',
 };
 
-const settingsDeepLinkIds = new Set(['health-upload', 'projects', 'proactive-settings', 'nutrition-targets']);
+const settingsDeepLinkIds = new Set(['health-upload', 'projects', 'proactive-settings', 'nutrition-targets', 'training-targets']);
 
 const defaultPersonality: Settings['personality'] = {
   tone: 'british_butler',
@@ -285,7 +285,7 @@ function SelectField({
   );
 }
 
-export function SettingsPage({ backendUrl, getAccessToken, presence, notifications, projects, renderProjects, nutrition, healthUpload, proactive, memory, onBack }: {
+export function SettingsPage({ backendUrl, getAccessToken, presence, notifications, projects, renderProjects, nutrition, trainingTargets, healthUpload, proactive, memory, onBack }: {
   backendUrl: string | null;
   getAccessToken: () => Promise<string>;
   /** Presence mode and instructions per mode, shown before the saved settings. */
@@ -297,6 +297,8 @@ export function SettingsPage({ backendUrl, getAccessToken, presence, notificatio
   renderProjects?: (projectDefaults: ReactNode) => ReactNode;
   /** Daily nutrition targets, saved on their own; only supplied while Daily is on. */
   nutrition?: ReactNode;
+  /** Daily training targets, saved on their own; only supplied while Daily is on. */
+  trainingTargets?: ReactNode;
   /** Health upload credential management, supplied only while the Daily area is enabled. */
   healthUpload?: ReactNode;
   /** Proactive settings, supplied only while the independent web feature gate is on. */
@@ -826,6 +828,7 @@ export function SettingsPage({ backendUrl, getAccessToken, presence, notificatio
       )}
       {renderProjects ? renderProjects(projectDefaults) : projects}
       {nutrition}
+      {trainingTargets}
       {healthUpload && <CollapsibleSection storageKey="settings.health-upload" id="health-upload" headingId="health-upload-heading"
         title="Health upload" initiallyOpen={healthUploadAnchor} persist={!healthUploadAnchor}>{healthUpload}</CollapsibleSection>}
       {proactive}
