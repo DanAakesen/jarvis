@@ -147,7 +147,7 @@ describe('Rules & sources section', () => {
     let reject!: (error: Error) => void;
     read.mockReturnValueOnce(new Promise<DailyQueryResult>((_resolve, no) => { reject = no; }));
     mount();
-    expect(screen.getByText('Checking sync status…')).not.toBeNull();
+    expect(screen.getByText('Checking sync status…').classList.contains('visually-hidden')).toBe(true);
     await act(async () => { reject(new Error('Synthetic failure')); });
     expect(await screen.findByRole('alert')).not.toBeNull();
     expect(within(source('Health uploads')).getByText('Not connected')).not.toBeNull();

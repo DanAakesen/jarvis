@@ -70,7 +70,7 @@ export default function RulesSection({ backendUrl, getAccessToken, sources, refr
     </section>
     <section aria-labelledby="daily-rules-coverage">
       <h2 id="daily-rules-coverage">Source coverage</h2>
-      {syncAvailable && sync.pending && <p role="status">Checking sync status…</p>}
+      {syncAvailable && sync.pending && <p role="status" className="visually-hidden">Checking sync status…</p>}
       {sync.error && <p role="alert">Health sync status could not be loaded. Check sync again, or sign in again if access needs attention. Previous sync evidence, if shown, may be stale.</p>}
       {!syncAvailable && <p>Sync status is not served here.</p>}
       <ul className="daily-rules-sources">
