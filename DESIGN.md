@@ -1735,8 +1735,12 @@ processed" (uploads waiting or processing, none processed yet), "No uploads yet"
 is an optional "Phone last contacted" row in the details panel, shown only when one
 exists. When a refresh fails but earlier data
 is kept, it adds ", refresh failed" to the label (bolder text, never colour alone).
-It opens a small details panel (last upload, optional phone contact and upload counts, plus Check again)
-that Escape (from anywhere on the page) and an outside press close. On screens up
+It opens a small details panel (last upload, optional phone contact, upload counts, a
+"Stored" row and Check again)
+that Escape (from anywhere on the page) and an outside press close. The "Stored" row
+reads `{MiB} of {limit} MiB · {n} of {limit} uploads` from the served inbox size and
+caps only; any missing or non-finite figure reads "Unknown", and at 80% or more of
+either cap it adds the words "nearly full" in bold text, never colour alone. On screens up
 to 640 px the panel anchors to the header and spans its width. It is a 36 px
 bordered pill using existing surface tokens; it is
 absent when the sync source is not served. The period control gains Today,

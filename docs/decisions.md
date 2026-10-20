@@ -30,8 +30,12 @@ Add owner-scoped `retained_bytes`, `byte_limit` and `row_limit` to the existing
 sync inbox and shared query projection. Sum stored byte counts for every
 retained row, independent of processing status, and reuse the upload store's
 exported limits. Empty stores still return zero bytes and both limits.
-This is read-only capacity visibility; ingest, processing, retention and the
-web UI remain unchanged. Cleanup or compaction requires a separate owner decision.
+This is read-only capacity visibility; ingest, processing and retention remain
+unchanged. The Daily freshness pill's details panel now shows the figures in a
+"Stored" row (`{MiB} of {limit} MiB · {n} of {limit} uploads`), adding the words
+"nearly full" at 80% or more of either cap. A missing or non-finite figure reads
+"Unknown" and is never flagged. Cleanup or compaction requires a separate owner
+decision.
 
 Refs #1120
 
