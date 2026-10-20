@@ -22,7 +22,7 @@ export function dailyFoodLookupTool(lookup: DailyFoodLookup): JarvisTool {
       signal.throwIfAborted();
       const response = { ...result, intakeLogged: false };
       if (Buffer.byteLength(JSON.stringify(response)) > dailyResultByteLimit) {
-        throw new ToolRefusal('Food reference result exceeds the shared Daily response limit. Request fewer components; no complete result is claimed.');
+        throw new ToolRefusal('Food reference result exceeds the shared Health response limit. Request fewer components; no complete result is claimed.');
       }
       return response;
     },

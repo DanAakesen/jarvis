@@ -113,7 +113,7 @@ describe('one shared Daily read contract', () => {
     f.briefDetail.mockResolvedValue(null);
     expect(await f.service.query({ source: sources.brief, briefId: 'missing' }, request(), signal())).toMatchObject({ status: 'empty', items: [] });
     f.briefDetail.mockRejectedValue(new Error('synthetic-private'));
-    await expect(f.service.query({ source: sources.brief, briefId: 'missing' }, request(), signal())).rejects.toThrow('Daily data is unavailable');
+    await expect(f.service.query({ source: sources.brief, briefId: 'missing' }, request(), signal())).rejects.toThrow('Health data is unavailable');
   });
   it('rejects the nutrition-only connector at the shared brief boundary before any reader is invoked', async () => {
     const f = fixture();
@@ -343,7 +343,7 @@ describe('one shared Daily read contract', () => {
     const result = await f.service.query({ source: sources.sync }, request(), signal());
     expect(result.items[0]).toHaveProperty('heartbeat');
     f.sync.mockRejectedValue(new Error('synthetic-secret-and-health-record'));
-    await expect(f.service.query({ source: sources.sync }, request(), signal())).rejects.toThrow('Daily data is unavailable');
+    await expect(f.service.query({ source: sources.sync }, request(), signal())).rejects.toThrow('Health data is unavailable');
     await expect(f.service.query(input, request(), signal())).rejects.not.toThrow('synthetic-secret');
   });
   it.each([0, 1234])('projects numeric sync inbox usage of %i bytes without exposing payloads', async retainedBytes => {

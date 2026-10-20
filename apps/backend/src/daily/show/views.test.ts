@@ -105,7 +105,7 @@ describe('daily show view builder: measurements', () => {
     });
     expect(build.view.source).toEqual({
       id: 'now', status: 'complete', updatedAt: observedAt,
-      reason: `Retained Daily records, 11 Oct 2026 to 17 Oct 2026 (Copenhagen dates). 2 rows shown. Read 17 Oct 2026, 21:26 Copenhagen time. ${closing}`,
+      reason: `Retained Health records, 11 Oct 2026 to 17 Oct 2026 (Copenhagen dates). 2 rows shown. Read 17 Oct 2026, 21:26 Copenhagen time. ${closing}`,
     });
     expect(build.receipt).toEqual({ renderer: 'table', rowsShown: 2, rowsReturned: 2, partial: false, notes: [] });
   });
@@ -153,7 +153,7 @@ describe('daily show view builder: measurements', () => {
     const day = { startDate: '2026-10-17', endDate: '2026-10-17', timeZone: 'Europe/Copenhagen' } as const;
     const build = show(read(sources.metrics, [steps('2026-10-17', 5)], { period: day }), table);
     expect(build.view.title).toBe('Measurements, 17 Oct 2026');
-    expect(reason(build)).toContain('Retained Daily records, 17 Oct 2026 (Copenhagen dates).');
+    expect(reason(build)).toContain('Retained Health records, 17 Oct 2026 (Copenhagen dates).');
   });
 
   it('draws one measurement in one unit as a bar chart, with the unit in the title and a stable window', () => {
@@ -346,7 +346,7 @@ describe('daily show view builder: sleep, workouts and heart rate', () => {
       columns: ['Minute', 'Measurement', 'Minimum', 'Average', 'Maximum', 'Unit'],
       rows: [['17 Oct 2026, 09:00', 'Heart rate', '60', '80', '99', 'bpm'], ['17 Oct 2026, 09:01', 'Heart rate', '60', 'Unknown', '99', 'bpm']],
     });
-    expect(reason(build)).toContain('Retained Daily records for one workout.');
+    expect(reason(build)).toContain('Retained Health records for one workout.');
     const again = show(read(sources.heartRate, rows, { period: null }), { display: 'table', workoutId: 'workout-alpha' });
     const other = show(read(sources.heartRate, rows, { period: null }), { display: 'table', workoutId: 'workout-beta' });
     expect(build.viewId).toMatch(/^daily-heart-rate-table-[0-9a-f]{8}$/u);
@@ -394,7 +394,7 @@ describe('daily show view builder: food, favourites and plans', () => {
     expect(build.view.title).toBe('Saved favourites');
     expect(build.viewId).toBe('daily-favourites-table');
     expect(body<Cells>(build).rows).toEqual([['Porridge', 'oats, breakfast', '250', '9', 'logged'], ['Plain', 'None', 'Unknown', 'Unknown', 'Unknown']]);
-    expect(reason(build)).toMatch(/^Retained Daily records\. 2 rows shown\./u);
+    expect(reason(build)).toMatch(/^Retained Health records\. 2 rows shown\./u);
   });
 
   it('shows meal plans with revisions and deleted records marked', () => {

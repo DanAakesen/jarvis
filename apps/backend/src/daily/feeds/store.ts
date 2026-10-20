@@ -268,7 +268,7 @@ export class DailyFeedStore {
     const table = type === 'thread' ? 'gmail_suppressions' : 'order_suppressions';
     const row = (await this.query(this.request(transaction),
       `SELECT COUNT_BIG(*) AS count FROM daily.${table} WHERE owner_object_id=@owner ${type === 'thread' ? 'AND revived_at IS NULL' : ''};`, signal)).recordset[0];
-    if (BigInt(String(row?.count)) >= 1000n) throw new ToolRefusal('Daily suppression capacity is full for this type. Restore an existing exact suppression before adding another.');
+    if (BigInt(String(row?.count)) >= 1000n) throw new ToolRefusal('Health suppression capacity is full for this type. Restore an existing exact suppression before adding another.');
   }
   async suppressions(signal: AbortSignal): Promise<FeedSuppression[]> {
     return this.transaction(signal, transaction => this.readSuppressions(transaction, signal));

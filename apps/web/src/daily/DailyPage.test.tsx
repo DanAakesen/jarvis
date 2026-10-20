@@ -61,7 +61,7 @@ describe('inactive single Daily data page', () => {
       { metric_name: 'synthetic_scan_mass', metric_date: '2026-10-17', value: null, unit: 'kg' },
     ])));
     const { container } = render(page());
-    const table = await screen.findByRole('table', { name: /Recorded Daily values/u });
+    const table = await screen.findByRole('table', { name: /Recorded Health values/u });
     expect(within(table).getAllByRole('row')).toHaveLength(4);
     expect(within(table).getByText('0')).toBeTruthy();
     expect(within(table).getAllByText('Not recorded').length).toBeGreaterThan(0);
@@ -122,7 +122,7 @@ describe('inactive single Daily data page', () => {
   it('settles disabled availability honestly without querying records or starting another login', async () => {
     const fetch = vi.fn().mockImplementation(() => Promise.resolve(jsonResponse({ error: 'disabled' }, 404)));
     vi.stubGlobal('fetch', fetch); render(page());
-    expect((await screen.findByRole('alert')).textContent).toContain('Daily is not enabled');
+    expect((await screen.findByRole('alert')).textContent).toContain('Health is not enabled');
     expect(screen.queryByLabelText('Browse')).toBeNull();
     expect(fetch).toHaveBeenCalledTimes(1);
     expect(screen.getByRole('button', { name: 'Retry availability' })).toBeTruthy();

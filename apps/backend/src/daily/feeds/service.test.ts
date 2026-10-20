@@ -97,7 +97,7 @@ function fixture(configured = true, now = () => at.getTime()) {
 describe('inactive shared Daily feed workflow', () => {
   it('uses Health wording in the assistant-facing feed tool description', () => {
     const { tool } = fixture();
-    expect(tool.description).toContain('Health Gmail attention');
+    expect(tool.description).toContain('Health email attention');
     expect(tool.description).not.toContain('Daily');
   });
 

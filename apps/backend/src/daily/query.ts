@@ -30,9 +30,9 @@ const feedFields = ['feed_kind', 'accepted_evidence_at', 'processed_committed_at
 const inboxFields = ['retained', 'retained_bytes', 'byte_limit', 'row_limit', 'pending', 'processing', 'quarantined', 'last_accepted_at', 'last_processed_upload_at'];
 function latest(values: unknown[]): string | null {
   const times = values.filter(value => value !== null && value !== undefined).map(value => {
-    if (!(typeof value === 'string' || value instanceof Date)) throw new ToolFailure('Daily timestamps are unavailable.');
+    if (!(typeof value === 'string' || value instanceof Date)) throw new ToolFailure('Health timestamps are unavailable.');
     const timestamp = value instanceof Date ? value.getTime() : Date.parse(value);
-    if (!Number.isFinite(timestamp)) throw new ToolFailure('Daily timestamps are unavailable.');
+    if (!Number.isFinite(timestamp)) throw new ToolFailure('Health timestamps are unavailable.');
     return new Date(timestamp).toISOString();
   });
   return times.sort().at(-1) ?? null;
@@ -54,7 +54,7 @@ export class DailyQueryService {
     catch (error) {
       if (signal.aborted) throw signal.reason;
       if (error instanceof ToolRefusal || error instanceof ToolFailure || error instanceof AuthenticationDenied) throw error;
-      throw new ToolFailure('Daily data is unavailable. No complete result or fresh source is claimed.');
+      throw new ToolFailure('Health data is unavailable. No complete result or fresh source is claimed.');
     }
   }
 

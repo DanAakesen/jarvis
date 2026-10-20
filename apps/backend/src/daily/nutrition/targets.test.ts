@@ -19,6 +19,7 @@ describe('nutrition target bounds', () => {
       expect(Object.isFrozen(range)).toBe(true);
       expect(range.min).toBeLessThan(range.max);
       expect(range.label.length).toBeGreaterThan(0);
+      expect(range.label).not.toMatch(/\bdaily\b/iu);
     }
     expect(Object.isFrozen(emptyNutritionTargets)).toBe(true);
     expect(Object.values(emptyNutritionTargets)).toEqual([null, null, null]);

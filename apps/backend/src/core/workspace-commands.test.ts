@@ -286,7 +286,7 @@ describe('workspace command delivery', () => {
   });
 
   it.each(workspaceNavigationPages)('delivers navigation to %s through the shared tool', async (page) => {
-    const { app, broker } = fixture(page === 'daily');
+    const { app, broker } = fixture(page === 'daily' || page === 'health');
     const command = { commandId: `navigate-${page}`, operation: 'navigate', page };
     const delivered: WorkspaceCommand[] = [];
     const connection = broker.connect(ownerId, (event, data) => {
@@ -300,17 +300,20 @@ describe('workspace command delivery', () => {
       method: 'POST', url: '/tools/workspace_command', headers: agentHeaders, payload: command,
     });
     expect(response.json()).toMatchObject({ outcome: 'ok', result: { applied: true, ...command } });
-    expect(delivered).toEqual([command]);
+    // Tabs opened before the rename only know the legacy page value, so Health is delivered as `daily`.
+    expect(delivered).toEqual([page === 'health' ? { ...command, page: 'daily' } : command]);
     connection.close();
   });
-  it('refuses Daily navigation before delivery when its data module is absent', async () => {
+  it.each(['daily', 'health'] as const)('refuses %s navigation before delivery when its data module is absent', async (page) => {
     const { app, broker } = fixture();
     const send = vi.fn(() => true);
     const connection = broker.connect(ownerId, send);
     try {
       const response = await app.inject({ method: 'POST', url: '/tools/workspace_command', headers: agentHeaders,
-        payload: { commandId: 'disabled-daily', operation: 'navigate', page: 'daily' } });
+        payload: { commandId: `disabled-${page}`, operation: 'navigate', page } });
+      const refusal = response.json().result.refused as string;
       expect(response.json()).toMatchObject({ outcome: 'refused', result: { refused: expect.stringContaining('not enabled') } });
+      expect(refusal).not.toMatch(/\bdaily\b/iu);
       expect(send).not.toHaveBeenCalled();
     } finally { connection.close(); }
   });

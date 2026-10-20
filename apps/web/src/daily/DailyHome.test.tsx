@@ -55,7 +55,7 @@ function SectionUrlProbe() {
   const [params] = useSearchParams();
   return <output data-testid="daily-section-url">{params.get('section') ?? 'no section parameter'}</output>;
 }
-function home(refreshVersion = 0, initialPath = '/daily') {
+function home(refreshVersion = 0, initialPath = '/health') {
   return <MemoryRouter initialEntries={[initialPath]}>
     <DailyRefreshContext.Provider value={refreshVersion}><DailyHome backendUrl={backendUrl} getAccessToken={token} /></DailyRefreshContext.Provider>
     <SectionUrlProbe />
@@ -77,9 +77,9 @@ describe('Daily overview', () => {
     await settled();
     await screen.findByText('No meals recorded in the last 7 days');
     await screen.findByText('No sleep recorded in the last 7 days');
-    expect(screen.getByRole('heading', { level: 1, name: 'Daily' })).toBeTruthy();
-    expect(screen.getByRole('heading', { level: 2, name: 'What Daily holds today' })).toBeTruthy();
-    expect(within(screen.getByRole('list', { name: 'What Daily holds today' })).getAllByRole('listitem')).toHaveLength(dailySources.length);
+    expect(screen.getByRole('heading', { level: 1, name: 'Health' })).toBeTruthy();
+    expect(screen.getByRole('heading', { level: 2, name: 'What Health holds today' })).toBeTruthy();
+    expect(within(screen.getByRole('list', { name: 'What Health holds today' })).getAllByRole('listitem')).toHaveLength(dailySources.length);
     const notes = screen.getByText('About this data').closest('details')!;
     expect(notes.open).toBe(false);
     expect(notes.textContent).toContain('Freshness and completeness are not established.');
@@ -119,8 +119,8 @@ describe('Daily overview', () => {
     const hold = gate();
     const f = fixture({ capabilities: async () => { await hold.opened; return capabilityList(); } });
     render(home());
-    expect(screen.getByText('Checking Daily availability')).toBeTruthy();
-    expect(screen.queryByRole('heading', { name: 'What Daily holds today' })).toBeNull();
+    expect(screen.getByText('Checking Health availability')).toBeTruthy();
+    expect(screen.queryByRole('heading', { name: 'What Health holds today' })).toBeNull();
     expect(f.queries).toHaveLength(0);
     hold.open();
     await settled();
@@ -144,7 +144,7 @@ describe('Daily overview', () => {
     await settled();
     expect(screen.getByText('Checked 8 collections: 3 with records, 4 with none returned, 1 that could not be read.')).toBeTruthy();
     expect(row('Sleep').getByText('Could not be read')).toBeTruthy();
-    expect(row('Sleep').getByText('Daily is unavailable (HTTP 503).')).toBeTruthy();
+    expect(row('Sleep').getByText('Health is unavailable (HTTP 503).')).toBeTruthy();
     expect(row('Measurements').getByText('Has records')).toBeTruthy();
     expect(screen.getAllByRole('button', { name: /^Retry / })).toHaveLength(1);
     const retry = row('Sleep').getByRole('button', { name: 'Retry Sleep' });
@@ -217,10 +217,10 @@ describe('Daily overview', () => {
     await waitFor(() => expect(overview.getAttribute('aria-selected')).toBe('true'));
     expect(screen.getByTestId('daily-section-url').textContent).toBe('unknown');
 
-    const tablist = within(screen.getByRole('tablist', { name: 'Daily sections' }));
+    const tablist = within(screen.getByRole('tablist', { name: 'Health sections' }));
     const tabs = tablist.getAllByRole('tab');
     const nextTab = tabs[1]!;
-    expect(screen.getByRole('navigation', { name: 'Daily sections' })).toBeTruthy();
+    expect(screen.getByRole('navigation', { name: 'Health sections' })).toBeTruthy();
     expect(tabs.filter(tab => tab.getAttribute('tabindex') === '0')).toHaveLength(1);
     overview.focus();
     fireEvent.keyDown(overview, { key: 'ArrowRight' });
@@ -248,7 +248,7 @@ describe('Daily overview', () => {
       fixture();
       render(home());
       await settled();
-      const strip = screen.getByRole('navigation', { name: 'Daily sections' });
+      const strip = screen.getByRole('navigation', { name: 'Health sections' });
       const stripScrolls = () => scrolls.filter(scroll => scroll.element === strip);
       expect(stripScrolls().length).toBeGreaterThan(0);
       expect(stripScrolls().every(scroll => scroll.options.behavior === 'auto')).toBe(true);
@@ -275,7 +275,7 @@ describe('Daily overview', () => {
     fixture();
     render(home());
     await settled();
-    const strip = screen.getByRole('navigation', { name: 'Daily sections' });
+    const strip = screen.getByRole('navigation', { name: 'Health sections' });
     const edges = () => [strip.dataset.overflowStart, strip.dataset.overflowEnd];
     expect(edges()).toEqual([undefined, undefined]);
 
@@ -337,7 +337,7 @@ describe('Daily overview', () => {
     expect((browse as HTMLSelectElement).value).toBe(sources.metrics);
     await waitFor(() => expect(document.activeElement?.id).toBe('daily-heading'));
     await waitFor(() => expect(f.queries.at(-1)).toMatchObject({ source: sources.metrics, limit: 50 }));
-    expect(screen.queryByRole('heading', { name: 'What Daily holds today' })).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'What Health holds today' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Back to overview' })).toBeNull();
     fireEvent.click(screen.getByRole('tab', { name: 'Overview' }));
     await settled();
@@ -347,16 +347,16 @@ describe('Daily overview', () => {
     expect(f.queries.filter(query => !('limit' in query) || query.limit === 1)).toHaveLength(dailySources.length * 2 + shellReads);
   });
   it.each([
-    [404, 'Daily is not enabled on this backend.'],
-    [403, 'Daily access could not be verified. Sign in as the configured owner.'],
-    [503, 'Daily is unavailable (HTTP 503).'],
+    [404, 'Health is not enabled on this backend.'],
+    [403, 'Health access could not be verified. Sign in as the configured owner.'],
+    [503, 'Health is unavailable (HTTP 503).'],
   ])('explains a failed availability check (HTTP %i), reads nothing, and retries on request', async (status, message) => {
     let failing = true;
     const f = fixture({ capabilities: () => failing ? jsonResponse({ error: 'synthetic' }, status) : capabilityList([sources.metrics]) });
     render(home());
     expect((await screen.findByRole('alert')).textContent).toContain(message);
     expect(f.queries).toHaveLength(0);
-    expect(screen.queryByRole('heading', { name: 'What Daily holds today' })).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'What Health holds today' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Refresh overview' })).toBeNull();
     failing = false;
     fireEvent.click(screen.getByRole('button', { name: 'Retry availability' }));
@@ -368,7 +368,7 @@ describe('Daily overview', () => {
   it('says so plainly when the backend exposes no browsable collection', async () => {
     const f = fixture({ capabilities: () => capabilityList([sources.workout]) });
     render(home());
-    await screen.findByText('No Daily data');
+    await screen.findByText('No Health data');
     expect(f.queries).toHaveLength(0);
     expect(screen.queryByRole('button', { name: 'Refresh overview' })).toBeNull();
   });

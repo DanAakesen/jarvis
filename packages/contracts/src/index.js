@@ -456,7 +456,7 @@ export const workspaceViewIdSchema = {
   pattern: '^[A-Za-z][A-Za-z0-9_-]{0,63}$',
 };
 export const workspaceNavigationPages = Object.freeze([
-  'home', 'factory', 'settings', 'usage', 'notes', 'knowledge', 'folio', 'status', 'daily',
+  'home', 'factory', 'settings', 'usage', 'notes', 'knowledge', 'folio', 'status', 'daily', 'health',
 ]);
 export const workspaceSettingsSections = Object.freeze([
   'appearance', 'jarvis', 'personality', 'voice', 'presence', 'memory',

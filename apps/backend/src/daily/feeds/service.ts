@@ -201,7 +201,7 @@ export class DailyFeedService {
       if (input.operation === 'clear_suppression' && !suppression) throw new ToolRefusal('The exact active owned suppression was not found. Nothing was changed.');
       const expected = target ? feedRevision(target) : suppression ? feedRevision(suppression) : undefined;
       const summary = input.operation === 'refresh'
-        ? `Refresh the Health Gmail attention and all-calendar snapshot for ${input.from} to ${input.to}. Provider/model reads may be billed at existing rates. Missing grants, incomplete scans and source errors remain explicit; no email or calendar event is changed.`
+        ? `Refresh the Health email attention and all-calendar snapshot for ${input.from} to ${input.to}. Provider/model reads may be billed at existing rates. Missing grants, incomplete scans and source errors remain explicit; no email or calendar event is changed.`
         : `Health ${input.operation}: ${JSON.stringify(target ? {
           type, id: target.id, title: target.title.slice(0, 500), revision: expected,
           content: projectDailyRecord(target.content as Record<string, unknown>, type === 'thread'

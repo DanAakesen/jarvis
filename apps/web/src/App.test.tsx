@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { createMemoryRouter, RouterProvider, useNavigate } from 'react-router-dom';
+import { createMemoryRouter, RouterProvider, useLocation, useNavigate } from 'react-router-dom';
 import { useState, type ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from './App';
@@ -8,6 +8,7 @@ import { getSignInGreeting } from './sign-in-greeting';
 import { publishJob } from './jobs-store';
 import { dailyCapabilitiesVersion, dailyQuerySources, factoryBoardColumnIds, isDailyQuery, type DailyQuery, type FactoryBoard, type GeneratedView, type WorkspaceCommand } from '@jarvis/contracts';
 import { dailyFixture, jsonResponse } from './daily/test-support';
+import { expectNoDailyInRenderedContent } from './test/visible-copy';
 
 const {
   createAuthClient,
@@ -131,6 +132,11 @@ function HistoryControls() {
   </>;
 }
 
+function LocationProbe() {
+  const { pathname, search, hash } = useLocation();
+  return <output data-testid="location">{pathname}{search}{hash}</output>;
+}
+
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
@@ -143,6 +149,21 @@ afterEach(() => {
 });
 
 describe('Jarvis routes', () => {
+  it.each([
+    ['/daily', '/health'],
+    ['/daily?section=data', '/health?section=data'],
+    ['/daily#training-targets', '/health#training-targets'],
+  ])('replaces legacy route %s with %s and keeps the URL suffix', async (path, expected) => {
+    restoreProfile.mockResolvedValue({ name: 'Dan Aakesen' });
+    render(<MemoryRouter initialEntries={['/', path]} initialIndex={1}>
+      <><App config={config} /><LocationProbe /><HistoryControls /></>
+    </MemoryRouter>);
+    await screen.findByRole('navigation', { name: 'Areas' });
+    await waitFor(() => expect(screen.getByTestId('location').textContent).toBe(expected));
+    fireEvent.click(screen.getByRole('button', { name: 'Previous page' }));
+    await waitFor(() => expect(screen.getByTestId('location').textContent).toBe('/'));
+  });
+
   it('opens existing context content idempotently when overlapping reflex opens arrive', async () => {
     restoreProfile.mockResolvedValue({ name: 'Dan Aakesen' });
     fetchMock.mockImplementation(async (input) => {
@@ -666,8 +687,8 @@ describe('App shell', () => {
     await renderSignedIn('/daily');
     await waitFor(() => expect(activityStream).not.toBeNull());
     if (phone) fireEvent.click(screen.getByRole('button', { name: 'Menu' }));
-    expect(screen.queryByRole('link', { name: 'Daily' })).toBeNull();
-    expect(screen.queryByRole('heading', { name: 'Daily' })).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Health' })).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Health' })).toBeNull();
     workspace.ready();
     workspace.publishCommand({ commandId: 'daily-disabled', operation: 'navigate', page: 'daily' });
     await waitFor(() => expect(workspace.ack('daily-disabled')).toBeTruthy());
@@ -697,11 +718,28 @@ describe('App shell', () => {
     await renderSignedIn('/', true);
     if (phone) fireEvent.click(screen.getByRole('button', { name: 'Menu' }));
     const navigation = phone ? screen.getByRole('navigation', { name: 'Pages' }) : screen.getByRole('navigation', { name: 'Areas' });
-    fireEvent.click(within(navigation).getByRole('link', { name: 'Daily' }));
-    await screen.findByRole('heading', { name: 'What Daily holds today' });
+    expectNoDailyInRenderedContent(document.body);
+    fireEvent.click(within(navigation).getByRole('link', { name: 'Health' }));
+    await screen.findByRole('heading', { name: 'What Health holds today' });
+    expectNoDailyInRenderedContent(document.body);
     fireEvent.click(await screen.findByRole('button', { name: 'Open Measurements' }));
     await screen.findByText('Synthetic shell measurement');
-    expect(screen.getByRole('heading', { name: 'Daily' })).toBeTruthy();
+    fireEvent.click(screen.getByText('Source, units and coverage'));
+    expect(screen.getByText('Health · metrics')).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Health' })).toBeTruthy();
+    expectNoDailyInRenderedContent(document.body);
+    for (const [id, label] of [
+      ['workouts', 'Workouts'],
+      ['nutrition', 'Nutrition'],
+      ['body-sleep', 'Body & sleep'],
+      ['briefs', 'Briefs'],
+      ['data', 'Data'],
+    ] as const) {
+      fireEvent.click(screen.getByRole('tab', { name: label }));
+      await waitFor(() => expect(document.getElementById('daily-section-panel')?.getAttribute('aria-labelledby')).toBe(`daily-tab-${id}`));
+      await waitFor(() => expect(screen.queryByText(`Loading ${label}`)).toBeNull());
+      expectNoDailyInRenderedContent(document.body);
+    }
     await waitFor(() => expect(activityStream).not.toBeNull());
     const count = queries.length;
     workspace.ready();
@@ -746,7 +784,7 @@ describe('App shell', () => {
     client.getAllAccounts.mockReturnValue([{ homeAccountId: 'second' }]);
     fireEvent.click(screen.getByRole('button', { name: 'Refresh synthetic owner' }));
     expect(screen.queryByText('Synthetic first owner')).toBeNull();
-    await screen.findByText(/Daily access could not be verified/u);
+    await screen.findByText(/Health access could not be verified/u);
     expect(screen.queryByText('Synthetic first owner')).toBeNull();
     expect(screen.queryByText('Has records')).toBeNull();
   });
@@ -2017,7 +2055,7 @@ describe('App shell', () => {
           updatedAt: '2026-10-17T09:30:00.000Z',
           bounds: {
             restingKcal: bound('Resting energy burn', 'kcal', 1000, 4000),
-            deficitKcal: bound('Daily deficit', 'kcal', 0, 2000),
+            deficitKcal: bound('Per-day deficit', 'kcal', 0, 2000),
             proteinGrams: bound('Protein target', 'g', 30, 400),
           },
         }

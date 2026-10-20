@@ -20,7 +20,7 @@ const dateSchema = { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$' };
 const rangeProperties = { startDate: dateSchema, endDate: dateSchema };
 const toolInput = (input: unknown, allowed: readonly string[]): Input => {
   if (!input || typeof input !== 'object' || Array.isArray(input) ||
-      Object.keys(input).some(key => !allowed.includes(key))) throw new ToolRefusal('Use only the documented fields for this Daily operation.');
+      Object.keys(input).some(key => !allowed.includes(key))) throw new ToolRefusal('Use only the documented fields for this Health operation.');
   return input as Input;
 };
 const inputDate = (value: unknown) => {
@@ -41,12 +41,12 @@ function range(input: Input, now: number, maximumDays: number) {
   return { startDate, endDate, timeZone: 'Europe/Copenhagen' as const };
 }
 function bound<T>(result: T): T {
-  if (Buffer.byteLength(JSON.stringify(result)) > dailyResultByteLimit) throw new ToolRefusal('Daily result exceeds the shared response limit. Request a smaller date range.');
+  if (Buffer.byteLength(JSON.stringify(result)) > dailyResultByteLimit) throw new ToolRefusal('Health result exceeds the shared response limit. Request a smaller date range.');
   return result;
 }
 function rows<T extends Record<string, unknown>>(page: { items?: T[]; rows?: T[] }) { return page.items ?? page.rows ?? []; }
 async function healthSummary(data: DailyData, request: FastifyRequest, signal: AbortSignal, now: number) {
-  if (!data.health) throw new ToolFailure('Daily health reads are unavailable.');
+  if (!data.health) throw new ToolFailure('Health reads are unavailable.');
   const health = data.health(request);
   const today = copenhagenToday(now);
   const weekStart = new Date(Date.parse(`${today}T00:00:00Z`) - 6 * 86_400_000).toISOString().slice(0, 10);
@@ -97,7 +97,7 @@ export function dailySourceTools(data: DailyData, nutrition: NutritionAccess, co
       const limit = input.limit === undefined ? 50 : Number(input.limit);
       if (!Number.isInteger(limit) || limit < 1 || limit > 100) throw new ToolRefusal('Limit must be from 1 to 100 per category.');
       const health = data.health?.(request);
-      if (!health) throw new ToolFailure('Daily health reads are unavailable.');
+      if (!health) throw new ToolFailure('Health reads are unavailable.');
       const [metrics, sleep, workouts, sync] = await Promise.all([
         health.history('metrics', { ...period, limit }, signal),
         health.history('sleep', { ...period, limit }, signal),
@@ -131,7 +131,7 @@ export function dailySourceTools(data: DailyData, nutrition: NutritionAccess, co
       };
     });
   const nutritionAnalyzeTool = readTool('daily_nutrition_analyze',
-    'Analyze retained named-meal totals over at most 366 Europe/Copenhagen dates. Daily, weekly and monthly series report only known nutrient values; unknown values stay null and partial totals are labelled lower bounds. Recovery dates are excluded. Not an estimate or a complete-source claim.',
+    'Analyze retained named-meal totals over at most 366 Europe/Copenhagen dates. Per-day, weekly and monthly series report only known nutrient values; unknown values stay null and partial totals are labelled lower bounds. Recovery dates are excluded. Not an estimate or a complete-source claim.',
     schema({ ...rangeProperties, granularity: { type: 'string', enum: ['auto', 'day', 'week', 'month'] } }), async (raw, request, signal) => {
       const input = toolInput(raw, ['startDate', 'endDate', 'granularity']);
       const period = range(input, now(), 366);
@@ -182,7 +182,7 @@ export function dailySourceTools(data: DailyData, nutrition: NutritionAccess, co
       const input = toolInput(raw, ['startDate', 'endDate']);
       const period = range(input, now(), 366);
       const health = data.health?.(request);
-      if (!health) throw new ToolFailure('Daily health reads are unavailable.');
+      if (!health) throw new ToolFailure('Health reads are unavailable.');
       const [mealDays, metricsPage, recovery] = await Promise.all([
         nutrition(request).days({ from: period.startDate, to: period.endDate, limit: 400 }, signal),
         health.history('metrics', { ...period, limit: 500 }, signal),
@@ -354,14 +354,14 @@ export function dailySourceTools(data: DailyData, nutrition: NutritionAccess, co
       name, description, inputSchema: { type: 'object', oneOf: variants }, sensitive: true, denyOnPhone: true, bodyLimit: 16 * 1024,
       execute: async (raw, request, signal) => {
         if (!raw || typeof raw !== 'object' || Array.isArray(raw) || typeof (raw as Input).operation !== 'string') {
-          throw new ToolRefusal('Choose one supported Daily capability operation.');
+          throw new ToolRefusal('Choose one supported Health capability operation.');
         }
         const input = raw as Input;
         const route = routeByOperation.get(input.operation as string);
-        if (!route) throw new ToolRefusal('Choose one supported Daily capability operation.');
+        if (!route) throw new ToolRefusal('Choose one supported Health capability operation.');
         const allowed = new Set(['operation', ...Object.keys(route.tool.inputSchema.properties as Record<string, unknown>)
           .filter(key => key !== 'operation' && !route.exclude?.includes(key))]);
-        if (Object.keys(input).some(key => !allowed.has(key))) throw new ToolRefusal('Use only fields supported by the selected Daily operation.');
+        if (Object.keys(input).some(key => !allowed.has(key))) throw new ToolRefusal('Use only fields supported by the selected Health operation.');
         return route.tool.execute({ ...route.injected, ...Object.fromEntries(Object.entries(input).filter(([key]) => key !== 'operation')) }, request, signal);
       },
     };

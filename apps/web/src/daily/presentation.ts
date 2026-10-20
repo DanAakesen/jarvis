@@ -18,7 +18,7 @@ export const dailySources: readonly { id: DailySourceId; label: string; dated: b
   { id: sources.plans, label: 'Meal plans', dated: false,
     purpose: 'Meal plans you have saved.' },
   { id: sources.briefs, label: 'Brief history', dated: false,
-    purpose: 'Past daily briefs, as stored.' },
+    purpose: 'Past briefs, as stored.' },
   { id: sources.sync, label: 'Sync evidence', dated: false,
     purpose: 'Whether your phone is sending data.' },
 ];
@@ -63,6 +63,14 @@ export function dailyRequest(source: DailySourceId, period: { startDate: string;
 export function readable(value: string) {
   const text = value.replace(/_/gu, ' ');
   return text.charAt(0).toUpperCase() + text.slice(1);
+}
+export function healthSourceLabel(value: string) {
+  if (value === 'daily-sql') return 'Health · data store';
+  if (value.startsWith('daily.')) {
+    const source = value.slice('daily.'.length).replace(/^health\./u, '').replace(/[._]/gu, ' ').trim();
+    return source ? `Health · ${source}` : 'Health';
+  }
+  return value;
 }
 export function dailyValue(value: DailyJson | undefined, locale = dailyLocale()): string {
   if (value === undefined || value === null) return 'Unknown';

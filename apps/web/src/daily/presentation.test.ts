@@ -1,12 +1,19 @@
 import { describe, expect, it } from 'vitest';
 import { dailyQuerySources as sources, isDailyQuery } from '@jarvis/contracts';
-import { dailyCellValue, dailyColumns, dailyPlots, dailyRequest, dailyRowKey, dailySources, dailyValue, initialDailyPeriod } from './presentation';
+import { dailyCellValue, dailyColumns, dailyPlots, dailyRequest, dailyRowKey, dailySources, dailyValue, healthSourceLabel, initialDailyPeriod } from './presentation';
 import { formatTime } from './ui/formatters';
 
 describe('retained Daily record presentation', () => {
   it('provides human-readable columns for attention and calendar rows', () => {
     expect(dailyColumns('daily.attention').map(column => column.label)).toEqual(['Type', 'Waiting', 'Age (business days)', 'Hidden']);
     expect(dailyColumns('daily.calendar').map(column => column.label)).toEqual(['Event', 'Starts', 'Ends', 'Calendar', 'Location']);
+  });
+
+  it('shows a human Health label instead of internal source ids', () => {
+    expect(healthSourceLabel('daily.metrics')).toBe('Health · metrics');
+    expect(healthSourceLabel('daily-sql')).toBe('Health · data store');
+    expect(healthSourceLabel('other-source')).toBe('other-source');
+    expect(healthSourceLabel('daily.metrics')).not.toMatch(/\bdaily\b/iu);
   });
 
   it('chooses Copenhagen calendar days across UTC midnight and year boundaries', () => {
