@@ -543,7 +543,11 @@ function registerVoiceRoute(
     const sessionReady = diagnostics.bound('session_creation', 10_000, () =>
       store.createSession({ channel: 'voice', language }).then(async (session) => {
         if (controller.signal.aborted) {
-          await store.endSession(session.id);
+          try {
+            if (!await store.endSession(session.id)) throw new Error('Voice session was not ended');
+          } catch {
+            request.log.warn('voice.session_persistence_failed');
+          }
           return;
         }
         sessionId = session.id;

@@ -265,6 +265,28 @@ describe('voice startup without network', () => {
     expect(f.summaries()).toHaveLength(1);
   });
 
+  it.each(['false', 'rejection'])('reports late session cleanup failure (%s) after browser closure', async (failure) => {
+    let created!: (session: { id: string }) => void;
+    const endSession = vi.fn(async () => {
+      if (failure === 'rejection') throw new Error('private database error');
+      return false;
+    });
+    const f = await fixture({
+      conversationStore: {
+        createSession: () => new Promise((resolve) => { created = resolve; }), endSession,
+      } as unknown as ConversationStore,
+    });
+    f.browser.close(1000, '');
+    await vi.advanceTimersByTimeAsync(0);
+    const warningsBefore = f.records.filter((record) => record.msg === 'voice.session_persistence_failed').length;
+    created({ id: '42' });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(endSession).toHaveBeenCalledWith('42');
+    expect(f.records.filter((record) => record.msg === 'voice.session_persistence_failed')).toHaveLength(warningsBefore + 1);
+    expect(f.summaries()).toHaveLength(1);
+    expect(JSON.stringify(f.records)).not.toContain('private');
+  });
+
   it.each(['settings', 'catalogue', 'away_mode', 'project_context'] as const)(
     'falls back after a stalled %s read and ignores late work', async (stage) => {
       const pending = () => new Promise<never>(() => {});
