@@ -93,3 +93,11 @@ export function formatDateOnly(value: DateTimeValue, options: DateTimeOptions = 
 export function formatTimeOnly(value: DateTimeValue, options: DateTimeOptions = {}): string {
   return formatDate(value, options, { timeStyle: 'short', hourCycle: 'h23' });
 }
+
+export function formatShortWeekday(value: DateTimeValue, options: DateTimeOptions = {}): string {
+  return formatDate(value, options, { weekday: 'short' });
+}
+
+export function formatShortMonth(value: DateTimeValue, options: DateTimeOptions = {}): string {
+  return formatDate(value, options, { month: 'short' });
+}

@@ -1,5 +1,39 @@
 # Design
 
+## Overview waiting lists and calendar agenda (21 October 2026; P14-52)
+
+The existing Training, Health and Body cards and their period selector stay.
+Below them, a dated Calendar agenda occupies the wide column; Waiting for you
+and Waiting on others form the side column. Below 1000px these stack, agenda
+first, with both waiting lists beneath it. This extends P14-46's cards-only
+composition; it does not restore the collection inventory or health refresh.
+Cards, nested event/thread tiles and age/count chips reuse the Health look's
+surfaces, typography, radii and theme tokens. Date rails use neutral structural
+rules, not coloured accents. There is no tasks slot or priority filter.
+
+Each waiting row discloses plain-text detail, the service's business-day age
+and Hide. Acknowledged hides offer Undo with the exact suppression key; focus
+moves to Undo and returns to the disclosure after restoration. Failed actions
+keep the previous visibility and recovery control. The agenda groups all-day
+and timed events by Copenhagen date, repeats spanning events on their covered
+dates and labels timed overlaps “Time conflict”; all-day events never conflict.
+Its count is distinct events, not repeated date rows.
+
+List and agenda shells retain their height in loading, empty, disconnected,
+failed and populated states; content scrolls inside them, including expanded
+details. Successful captures, stale evidence, failed updates and partial
+calendar coverage remain explicit. Missing capabilities show unavailable,
+never a successful empty list; when neither source is advertised, one combined
+unavailable state replaces the feeds. Refresh feeds is manual and reports the
+service's running, completed, limited and failed outcomes, with a visible
+30-second cooldown. Completion with source errors never claims fresh data.
+
+Synthetic Chromium checks covered 48 state/theme/width combinations at 1440px,
+390px and 320px, including reduced motion, fixed-height measurements, wrapping,
+keyboard disclosure, repeated input, hide/undo focus and refresh cooldown.
+No private data or live Google/session access was used. The owner's real-data
+session remains the pre-merge acceptance gate.
+
 ## Health area naming (20 October 2026)
 
 The owner-facing area is Health and its route is `/health`. Keep the legacy area

@@ -6327,6 +6327,17 @@ ceiling. New browser-only `/daily/feeds/refresh`, `/hide`, `/receive` and
 they reject agents, runners, other identities and the nutrition connector.
 Refresh keeps the existing per-owner 30-second cooldown. No scheduler is added.
 
+P14-52's web overview mounts `daily/sections/overview/attention/` without
+changing backend composition or activation. A local period context shares the
+existing card selector with Copenhagen calendar-range queries (including DST).
+Waiting lists and agenda independently gate on advertised capabilities and use
+the existing bounded, abortable Daily query reader. Feed actions reuse its
+authenticated, no-store JSON transport and the browser-only routes above.
+Hide/restore update visibility only after acknowledgement; refresh completion
+invalidates both retained queries, while running/limited outcomes never imply
+freshness or automatically start another provider request. Missing capture,
+stale evidence and incomplete calendar range remain visible.
+
 The current Google consent does not include CalendarList enumeration. Owner
 consent, deployed identity/model parity, protected backup/import and physical
 device acceptance remain open; this change adds no grants, scopes, resources or

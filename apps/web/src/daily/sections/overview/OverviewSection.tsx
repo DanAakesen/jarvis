@@ -4,6 +4,7 @@ import { DailySectionNavigationContext } from '../../section-navigation';
 import type { DailySectionProps } from '../types';
 import { HealthPanel } from './health-panel/HealthPanel';
 import { useHealthPanel } from './useHealthPanel';
+import { AttentionOverview } from './attention/AttentionOverview';
 import './overview.css';
 
 export default function OverviewSection({ backendUrl, getAccessToken, sources, refreshVersion }: DailySectionProps) {
@@ -19,11 +20,11 @@ export default function OverviewSection({ backendUrl, getAccessToken, sources, r
       document.querySelector<HTMLElement>('[data-card="health"] [aria-expanded]')?.focus();
     }
   }, [expanded]);
-  return <>
+  return <AttentionOverview backendUrl={backendUrl} getAccessToken={getAccessToken} sources={sources} refreshVersion={refreshVersion}>
     <DailyOverview backendUrl={backendUrl} getAccessToken={getAccessToken}
       capabilities={{ sources: knownSources, error: navigation.availabilityError }}
       onRetryAvailability={navigation.retryAvailability} />
     {expanded && <HealthPanel backendUrl={backendUrl} getAccessToken={getAccessToken} sources={sources}
       refreshVersion={refreshVersion} />}
-  </>;
+  </AttentionOverview>;
 }

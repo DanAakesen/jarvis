@@ -166,7 +166,7 @@ async function readJson(response: Response): Promise<unknown> {
     return value;
   } finally { await reader.cancel().catch(() => undefined); reader.releaseLock(); }
 }
-async function requestJson(backendUrl: string | null, path: string, getAccessToken: () => Promise<string>, signal: AbortSignal, body?: DailyQuery, accept = 'application/json'): Promise<unknown> {
+export async function requestJson(backendUrl: string | null, path: string, getAccessToken: () => Promise<string>, signal: AbortSignal, body?: DailyQuery | Record<string, DailyJson>, accept = 'application/json'): Promise<unknown> {
   if (!backendUrl) throw new DailyReadError('The Health backend is not configured.', 'disabled');
   signal = AbortSignal.any([signal, AbortSignal.timeout(120_000)]);
   let token: string;

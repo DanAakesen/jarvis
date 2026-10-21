@@ -1,5 +1,21 @@
 # Decisions
 
+## P14-52 — Overview attention uses retained owner feeds (21 October 2026; #1145, #1116, #725)
+
+The approved overview extension keeps the existing cards and shares their period
+selector with an events-only agenda; it adds no tasks or priority toggle.
+Waiting lists sit beside the agenda on wide screens and below it on phones,
+using the Health look rather than a new panel theme. Each feed requires its
+advertised capability and distinguishes missing captures from empty results.
+Hide and Undo use the existing owner-browser routes and exact suppression keys;
+visibility changes only after acknowledgement. Manual refresh shows service
+outcomes and enforces a local 30-second cooldown as well as the backend limit,
+without automatic provider retries. A running response asks for a later manual
+check because no refresh-status read route exists. Fixed-height scrollable shells
+keep asynchronous states and disclosures from moving adjacent content. Synthetic
+tests and browser inspection establish web behaviour only; activation, consent
+and the owner's real-data acceptance are unchanged.
+
 ## P14-55 — Training targets have one shared read (20 October 2026; #1116, #1155)
 
 The owner-set gym, run and step targets (P14-45) are read once per visit to the Health
