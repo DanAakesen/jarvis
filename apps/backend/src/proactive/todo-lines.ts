@@ -23,18 +23,46 @@ export function sanitiseTodoText(value: string): string {
   return Array.from(withoutLeadingMarkers.replace(/\s+/gu, ' ').trim()).slice(0, 200).join('');
 }
 
-export function buildSuggestedTodoLine(text: string, dueAt: string | null, dedupeKey: string): string {
+export function buildSuggestedTodoLine(
+  text: string,
+  dueAt: string | null,
+  dedupeKey: string,
+  options: { dueHasTime?: boolean; highPriority?: boolean } = {},
+): string {
   if (Array.from(text).length < 3 || /[\r\n]/u.test(text) || !/^[a-f\d]{32}$/iu.test(dedupeKey)) {
     throw new RangeError('Invalid suggested todo');
   }
-  const due = dueAt === null ? '' : ` 📅 ${dayKey(new Date(dueAt))}`;
-  return `- [ ] ${text}${due} <!-- jarvis:p:${dedupeKey.slice(0, 16).toLowerCase()} -->`;
+  const cleanText = text.replace(/^(?:\(proactive\)\s*)+/iu, '').trim();
+  const dueDate = dueAt === null ? '' : dayKey(new Date(dueAt));
+  const dueTime = dueAt === null ? '' : new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Europe/Copenhagen', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+  }).format(new Date(dueAt));
+  const metadata = [
+    options.dueHasTime && dueTime ? `🕒 ${dueTime}` : '',
+    dueDate ? `📅 ${dueDate}` : '',
+    options.highPriority ? '⏫' : '',
+  ].filter(Boolean).join(' ');
+  return `- [ ] (proactive) ${cleanText}${metadata ? ` ${metadata}` : ''} <!-- jarvis:p:${dedupeKey.slice(0, 16).toLowerCase()} -->`;
+}
+
+export function appendTaskLines(existing: string, lines: readonly string[]): string {
+  if (lines.length === 0) return existing;
+  if (lines.some((line) => /[\r\n]/u.test(line))) throw new TypeError('Todo lines must be single lines');
+  if (isInsideCodeFence(existing)) throw new Error('Todo file is inside an unclosed code fence');
+  const ending = lineEnding(existing);
+  const prefix = existing.length === 0 || existing.endsWith(ending) ? '' : ending;
+  const result = `${existing}${prefix}${lines.join(ending)}`;
+  if (!result.startsWith(existing) || !result.slice(existing.length).endsWith(lines.join(ending))) {
+    throw new Error('Todo append would change existing content');
+  }
+  return result;
 }
 
 export function normaliseTodoText(value: string): string {
   return value
     .replace(/<!--\s*jarvis:p:[a-f\d]{16}\s*-->/giu, ' ')
     .replace(/(?:📅\s*|\bdue::?\s*)(?:\d{4}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2})?)?/giu, ' ')
+    .replace(/^\(proactive\)\s*/iu, '')
     .toLocaleLowerCase('en')
     .replace(/[\p{P}\p{S}]+/gu, ' ')
     .replace(/\s+/gu, ' ')
@@ -63,19 +91,6 @@ function lineEnding(existing: string): string {
   return firstNewline > 0 && existing[firstNewline - 1] === '\r' ? '\r\n' : '\n';
 }
 
-function hasJarvisHeading(existing: string): boolean {
-  const lines = existing.replace(/^\uFEFF/u, '').split(/\r?\n/u);
-  let lastHeading: string | undefined;
-  for (let index = 0; index < lines.length; index += 1) {
-    const atx = /^ {0,3}#{1,6}\s+(.+?)\s*#*\s*$/u.exec(lines[index]!);
-    if (atx) lastHeading = atx[1]!.trim();
-    else if (index > 0 && /^ {0,3}(?:=+|-+)\s*$/u.test(lines[index]!) && lines[index - 1]!.trim()) {
-      lastHeading = lines[index - 1]!.trim();
-    }
-  }
-  return lastHeading?.toLocaleLowerCase('en') === 'suggested by jarvis';
-}
-
 function isInsideCodeFence(existing: string): boolean {
   const fences = existing.split(/\r?\n/u).filter((line) => /^\s*(?:`{3,}|~{3,})/u.test(line));
   return fences.length % 2 === 1;
@@ -83,30 +98,4 @@ function isInsideCodeFence(existing: string): boolean {
 
 export function isTodoFileWritable(existing: string): boolean {
   return !isInsideCodeFence(existing);
-}
-
-export function appendTodos(existing: string, lines: readonly string[]): string {
-  if (lines.length === 0) return existing;
-  if (lines.some((line) => /[\r\n]/u.test(line))) throw new TypeError('Todo lines must be single lines');
-  if (isInsideCodeFence(existing)) throw new Error('Todo file is inside an unclosed code fence');
-
-  const ending = lineEnding(existing);
-  const heading = hasJarvisHeading(existing);
-  let prefix = '';
-  if (heading) {
-    if (!existing.endsWith(ending)) prefix = ending;
-  }
-  if (!heading) {
-    const trailingEndings = existing.match(/(?:\r?\n)+$/u)?.[0].match(/\r?\n/gu)?.length ?? 0;
-    if (existing.length === 0) prefix = ending;
-    else if (trailingEndings < 2) prefix = ending.repeat(2 - trailingEndings);
-    prefix += `## Suggested by Jarvis${ending}`;
-  }
-  const result = `${existing}${prefix}${lines.join(ending)}`;
-  const appended = result.slice(existing.length);
-  const expectedLines = lines.join(ending);
-  if (!result.startsWith(existing) || !appended.endsWith(expectedLines)) {
-    throw new Error('Todo append would change existing content');
-  }
-  return result;
 }

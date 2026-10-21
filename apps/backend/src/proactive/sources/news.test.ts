@@ -14,9 +14,10 @@ function context(newsFeeds: string[]): SourceContext {
   };
 }
 
-function rss(items: { title: string; date?: string }[] = []): string {
-  return `<rss version="2.0"><channel>${items.map(({ title, date }) =>
-    `<item><title><![CDATA[${title}]]></title>${date ? `<pubDate>${date}</pubDate>` : ''}</item>`).join('')}</channel></rss>`;
+function rss(items: { title: string; date?: string; id?: string }[] = []): string {
+  return `<rss version="2.0"><channel>${items.map(({ title, date, id }) =>
+    `<item><title><![CDATA[${title}]]></title>${date ? `<pubDate>${date}</pubDate>` : ''}` +
+    `${id ? `<guid>${id}</guid>` : ''}</item>`).join('')}</channel></rss>`;
 }
 
 function isoAgo(hours: number): string {
@@ -32,6 +33,7 @@ describe('news proactive source', () => {
         { title: 'Newest', date: isoAgo(1) },
       ]),
     });
+
     const result = await source.read(context(['https://feeds.example.com/rss']));
     expect(result.state).toBe('ok');
     expect(result.facts.map(({ text }) => text)).toEqual([
@@ -41,6 +43,17 @@ describe('news proactive source', () => {
     expect(result.facts.every((fact) => fact.kind === 'news' && fact.label === 'News' &&
       fact.text.length <= 300 && /^news:\d+$/u.test(fact.ref))).toBe(true);
     expect(result.facts[0]?.observedAt).toBe(isoAgo(1));
+  });
+
+  it('attaches stable source identity without exposing it in task text', async () => {
+    const source = createNewsSource({
+      fetchFeed: async () => rss([{ title: 'Synthetic article', date: isoAgo(1), id: 'synthetic-news-id' }]),
+    });
+    const result = await source.read(context(['https://feeds.example.com/rss']));
+    expect(result.facts[0]).toMatchObject({
+      identity: 'news-item:feeds.example.com:synthetic-news-id',
+      text: 'Synthetic article (feeds.example.com)',
+    });
   });
 
   it('limits each feed to eight and the overall result to thirty facts', async () => {

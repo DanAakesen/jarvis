@@ -2469,7 +2469,9 @@ deploy, so push milestone 1 is on. P13-14 (#935) enables milestone 2, the
 read-only checks, the same way, and P13-15 (#936) enables milestones 3 and 4, the
 suggested todos, alerts and reminders, with backend flags only. The user test is
 not proactive delivery, and real iPhone delivery remains
-unproven. Teams is not a delivery path.
+unproven. Teams is not a delivery path. P13-20 (#1186) replaces the old
+suggested-todo destination and selection rules without changing these gates or
+the schedule.
 
 | ID | Issue | Task | Acceptance criteria | Depends on | Status |
 | --- | --- | --- | --- | --- | --- |
@@ -2492,6 +2494,7 @@ unproven. Teams is not a delivery path.
 | P13-17 | [#996](https://github.com/DanAakesen/jarvis/issues/996) | Notify only for P1 - High vault tasks | Only open vault tasks marked P1 - High produce proactive todo findings, reminders and alerts, including manual checks; the priority is re-checked when a reminder is due and an unverifiable priority suppresses it; fake-based tests cover the filter and the failure path. | P13-13 | Complete |
 | P13-18 | [#999](https://github.com/DanAakesen/jarvis/issues/999) | Read vault tasks from Personal and Work notes using Obsidian Tasks markers | Open tasks in every safe note under `Personal/` and `Work/` (not `Archive/`) and the root task file reach reminders and findings; `⏫` counts as P1 - High and `🕒 HH:mm` is read before or after the date; scans are bounded and memoised, and a failed scan is unavailable, never empty; fake-based tests cover discovery, markers and re-fire identity. | P13-17 | Complete |
 | P13-19 | [#1015](https://github.com/DanAakesen/jarvis/issues/1015) | Vault tasks view and tool, separate from notes | A read-only, owner-only Tasks page and a tasks kind in the vault search tool keep tasks apart from notes; Notes search shows snippets and a separate Tasks group; no mutation controls; backend, web and tool tests; synthetic screenshots at 390x844 and 1440x900 in light and dark. | P13-18 | Complete |
+| P13-20 | [#1186](https://github.com/DanAakesen/jarvis/issues/1186) | Route safe proactive tasks to Personal/Work and exclude project work | Project/software/Factory/PR/build/check/engineering suggestions never become tasks; clearly scoped personal/work suggestions go once to existing inboxes with `(proactive)`; stable source/action receipts survive rewording, elapsed-time and route changes, completion/deletion and conflict recovery; ambiguous scope/destination fails closed; old suggestion lines, ordinary requested tasks and schedule remain unchanged; synthetic tests cover exclusions, routing and recovery. | P13-11, P13-18 | Complete |
 
 ## P14 — UI unification
 

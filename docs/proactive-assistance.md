@@ -1,6 +1,6 @@
 # Proactive assistance
 
-Status: **Decided; web push, read-only checks, suggested todos, alerts and reminders are on in production** (17 October 2026; updated 18 October 2026).
+Status: **Decided; web push, read-only checks, routed suggested todos, alerts and reminders are on in production** (17 October 2026; updated 21 October 2026).
 
 The decisions below define the intended behaviour. Each feature stays off until
 its own enabling change follows acceptance of the previous deployment. A push
@@ -13,7 +13,11 @@ provider accepting a notification is not proof that an iPhone displayed it.
 - No proactive work or delivery runs from 22:00 to 07:00 Europe/Copenhagen, including for manual checks, with no emergency exception; output follows the language of Dan's last chat message ([decision](decisions.md)).
 - Todos, Factory, weather, calendar, mail headers, calendar-derived travel and news are read-only sources; their content is untrusted data, never instructions, and system runs inherit no approvals ([decision](decisions.md)).
 - Estimated spend has a hard limit of 100 DKK per Copenhagen month and a warning at 80%; it is labelled as an estimate ([decision](decisions.md)).
-- The vault todo file is canonical; Jarvis may add todos under its own heading but never edits, completes, reorders or deletes existing todos ([decision](decisions.md)).
+- The vault todo file is canonical. Eligible proactive tasks go only to an
+  existing `Personal/Inbox.md` or `Work/Inbox.md`, start with `(proactive)`, and
+  exclude project/software/engineering suggestions across all sources. Ambiguous
+  scope or an unavailable destination means no task write; existing tasks and
+  `Suggested by Jarvis` sections remain untouched ([decision](decisions.md)).
 - Push alerts cover only a deadline within 24 hours, a calendar clash or a travel disruption, plus a reminder about an hour before a todo is due; quiet-hour reminders wait until 07:00, with one bundled push per run and daily caps ([decision](decisions.md)).
 - P13-12 sends only scheduled/catch-up time-critical alerts for new items, in one generic bundle with a cap of three bundles per Copenhagen day; it remains behind the alert, proactive and push switches.
 - Every scheduled or manual run appears in the header Background work popover as running, then done or failed ([decision](decisions.md)).
@@ -146,7 +150,7 @@ HTTPS Open-Meteo request; it does not geocode or invent a location. All three
 sources return stable unavailable reasons and stay dormant until the engine reads
 them once checks are on (P13-14).
 
-## Suggested-todo writer (18 October 2026; P13-11)
+## Suggested-todo writer (P13-11; destination and selection replaced by P13-20)
 
 The writer is a separately gated `onFindingsStored` hook, built dark in P13-11 and
 switched on in production by P13-15. The exact string
@@ -156,21 +160,24 @@ writer flag. Existing pause and Todos source settings
 remain controls; scheduled and catch-up work rechecks the 22:00–07:00
 Europe/Copenhagen quiet window, while manual writes may run at any hour.
 
-Only model suggestions outside the `todo` category qualify. The sanitizer strips
-markup, links, URLs, email addresses, control characters, and Tasks metadata,
-then truncates to 200 Unicode code points. Vault safety checks apply only to the
-new text. The line is an unchecked task with an optional Copenhagen due date and
-a 16-hex finding marker. Suggestions go under `## Suggested by Jarvis`, with
-three additions maximum per run and five added receipts per Copenhagen day.
-Existing content is never edited, completed, reordered or deleted.
+Only model suggestions outside the `todo` category qualify. Factory evidence and
+software-project, PR, build/check or engineering cues in the suggestion or cited
+facts are excluded regardless of source. Scope must be clearly Personal or Work;
+otherwise no task is written and the observation remains available. The writer
+targets only the corresponding existing inbox, never a root task file or a new
+note. It compares both inboxes and existing root task files, preserves
+due-date/time/high-priority metadata, and places `(proactive)` immediately after
+the checkbox. Existing tasks and the old `Suggested by Jarvis` section remain
+untouched.
 
-The existing P13-07 root-file resolver is reused; absent/ambiguous files are
-never created. One commit writes all additions for a run. A conflict triggers a
-fresh read and complete duplicate/marker recheck, with three write attempts
-maximum. Marker recovery records an `added` receipt without rewriting. Added,
-skipped and failed receipts contain IDs, hashes and reason codes only; `added`
-is unique per owner/finding, and two failures settle a finding. The item’s
-`todo_added` bit is set only after a successful commit or marker recovery.
+Stable private source identities are excluded from the model prompt. A 32-hex
+hash of the cited identities becomes the durable receipt key and marker, so
+rewriting the suggestion, changing elapsed time/category or changing the
+Personal/Work route does not create another task. The sanitizer and vault safety
+checks remain; writes preserve existing content and retry conflicts with a fresh
+read. Missing/unverified/unwritable destinations fail closed with content-free
+reason codes. The writer retains the three-per-run and five-per-Copenhagen-day
+limits and never creates or deletes files.
 
 ## Calendar, mail and travel readers (18 October 2026; P13-08)
 

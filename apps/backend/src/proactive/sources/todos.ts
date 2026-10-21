@@ -1,8 +1,9 @@
 import type { createGitHubVaultClient } from '../../vault/github-client.js';
 import { VaultFileTooLargeError } from '../../vault/github-client.js';
 import type { ProactiveSource, SourceContext, SourceResult } from '../types.js';
-import { readVaultTodos, TodoDiscoveryError } from '../todo-discovery.js';
+import { readVaultTasks, TodoDiscoveryError } from '../todo-discovery.js';
 import { normaliseFactText } from '../detect.js';
+import { createHash } from 'node:crypto';
 
 type VaultReader = Pick<ReturnType<typeof createGitHubVaultClient>, 'tree' | 'read'>;
 const sourceTimeoutMs = 20_000;
@@ -26,7 +27,7 @@ export function createTodosSource(vaultClient?: VaultReader): ProactiveSource {
       const timeoutId = setTimeout(() => timeout.abort(), sourceTimeoutMs);
       const sourceSignal = AbortSignal.any([signal, timeout.signal]);
       try {
-        const todos = await readVaultTodos(vaultClient, sourceSignal);
+        const todos = await readVaultTasks(vaultClient, sourceSignal);
         const seen = new Map<string, { dueHasTime: boolean }>();
         const open = todos.flatMap((todo, index) => {
           if (todo.done || !todo.highPriority) return [];
@@ -57,12 +58,20 @@ export function createTodosSource(vaultClient?: VaultReader): ProactiveSource {
           observedAt: now.toISOString(),
           facts: selected.map(({ todo, index }) => ({
             ref: `todo:${index + 1}`,
+            identity: `vault-task:${createHash('sha256').update(JSON.stringify([
+              todo.path, normaliseFactText(todo.text),
+            ])).digest('hex')}`,
+            ...(/^(?:Personal|Work)\//u.test(todo.path) && !/(?:^|\/)projects?(?:\/|$)/iu.test(todo.path)
+              ? { taskScope: todo.path.startsWith('Personal/') ? 'personal' as const : 'work' as const }
+              : {}),
+            ...(/(?:^|\/)projects?(?:\/|$)/iu.test(todo.path) ? { projectRelated: true } : {}),
             kind: 'todo',
             label: 'Todo list',
             text: todo.text,
             observedAt: now.toISOString(),
             dueAt: todo.dueAt,
             dueHasTime: todo.dueHasTime,
+            highPriority: todo.highPriority,
           })),
         };
       } catch (error) {

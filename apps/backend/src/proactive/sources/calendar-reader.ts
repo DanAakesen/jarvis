@@ -7,6 +7,7 @@ const MAX_EVENTS = 50;
 const MAX_PAGES = 2;
 
 export interface CalendarEvent {
+  id?: string;
   title: string;
   location: string;
   startsAt: Date;
@@ -58,6 +59,7 @@ function normalizeEvent(value: unknown): CalendarEvent | undefined {
   const title = typeof event.summary === 'string' ? event.summary : '';
   const location = typeof event.location === 'string' ? event.location : '';
   return {
+    ...(typeof event.id === 'string' && event.id ? { id: event.id } : {}),
     title,
     location,
     startsAt: start.date,
