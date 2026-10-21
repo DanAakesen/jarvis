@@ -1,5 +1,35 @@
 # Decisions
 
+## Bound voice startup and summarize every session (21 October 2026; #1177)
+
+Refs DanAakesen/jarvis#1153. Accepted upstream WebSockets were followed by no
+readiness event and no useful relay diagnosis. Keep the existing payload and
+permissions; do not assume undocumented tool/schema limits or provider degradation
+caused the production stall.
+
+Use separate 15-second upstream-connect and readiness watchdogs. Readiness matches
+the client: English `session.updated`, Danish `session.created` or `session.updated`,
+including the realtime Danish route. Close with application code 4010 and a fixed
+retry message without waiting for session persistence. Bound settings/catalogue,
+away-mode and project-context reads to five seconds with existing defaults, and
+session creation to ten seconds with connection failure. Ignore late read results;
+end a session created after its caller disconnected rather than leaving it active.
+
+Record request-relative stages and exactly one terminal `voice.session_summary`
+outside cancellation/end-request log gates. Only fixed stage/event vocabularies,
+server-owned tool names, counts, serialized UTF-8 sizes and timings are exported.
+Explicitly report failed/not-open sends rather than silently discarding them.
+Socket-send completion is not a service acknowledgement.
+
+No applicable numeric Voice Live schema size, nesting, keyword, description,
+tool-count or combined instruction/tool-context limit was verified for this API
+version. Microsoft's [SDK contract](https://github.com/Azure/azure-sdk-for-python/blob/main/sdk/voicelive/azure-ai-voicelive/azure/ai/voicelive/models/_models.py)
+documents `session.updated` as the update acknowledgement; SDK types do not
+establish unlimited server acceptance. No speculative payload reduction is made.
+Fake sockets/timers cover normal, silent, connecting and early-close paths,
+fallbacks and privacy filtering. Production cause and acceptance remain open
+until the owner makes a real attempt after deployment and inspects its summary.
+
 ## P14-55 — Training targets have one shared read (20 October 2026; #1116, #1155)
 
 The owner-set gym, run and step targets (P14-45) are read once per visit to the Health

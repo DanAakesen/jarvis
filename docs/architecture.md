@@ -4986,6 +4986,19 @@ flowchart LR
 
 Proven 2 October 2026 in a separate prototype ([voice report](reference/voice-prototype/REPORT.md)).
 
+Startup now records request-relative `voice.session_stage` events and one
+`voice.session_summary` on the first browser/upstream/relay/shutdown close.
+Session creation is bounded to 10 seconds; settings plus model catalogue,
+away-mode and project-context reads each fall back after 5 seconds. Connecting
+and waiting for readiness each have a separate 15-second watchdog. English
+requires `session.updated`; Danish accepts `session.created` or `session.updated`.
+Timeouts emit `voice.stage_timeout` and close the browser with 4010 immediately,
+independently of storage finalization. The client displays fixed retry wording
+and preserves backoff. The summary exports only stages/timings, allowlisted event
+types, close ownership/code, and initial configuration tool count/UTF-8 size plus
+the five largest server-owned tool names/sizes. No payload content is logged.
+See [voice startup diagnosis](runbook.md#voice-startup-diagnosis).
+
 | Area | Design | Evidence |
 | --- | --- | --- |
 | Browser connection | The composer orb explicitly connects to the selected authenticated `/voice` or `/voice/da` WebSocket using its delegated API token in the WebSocket subprotocol. Readiness never opens capture: a separate Enable microphone action captures and sends mono 24 kHz PCM. Explicit active/muted protocol events start/stop parallel Speech recognition; reconnect returns to microphone-off readiness. Provider credentials never enter the browser or URL. | Browser-client tests cover relay selection, warm-up ordering, explicit activation, mute signaling, permission denial, interruption, stop during activation, and reconnect. Real microphone/audio-device behavior and Azure interoperability remain unverified. |
