@@ -33,7 +33,7 @@ export function CalendarAgenda({ period, ...props }: Props) {
   const conflicts = conflictingEvents(events);
   const days = eventDays(events, period);
   const ready = enabled && read.data && !invalid && !disconnected;
-  const partial = ready && (!read.data!.rangeCovered || read.data!.status === 'partial');
+  const partial = ready && !read.data!.rangeCovered;
   return <section className="attention-card attention-agenda" aria-labelledby={heading} aria-busy={read.pending}>
     <header className="attention-heading"><h3 id={heading}>Calendar agenda</h3>
       <span className="attention-chip" aria-label={ready ? `${events.length} events` : 'Event count unavailable'}>{ready ? events.length : '—'}</span></header>

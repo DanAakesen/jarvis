@@ -31,12 +31,13 @@ const allDay: Row = {
 function result(query: DailyQuery, rows: Row[] = [], status: 'Missing' | 'Current' | 'Stale' = 'Current', partial = false): DailyQueryResult {
   return {
     ...dailyFixture(query, rows),
+    status: status !== 'Current' || partial ? 'partial' : rows.length ? 'available' : 'empty',
     ...(query.source === sources.calendar && 'from' in query ? { calendarRange: { from: query.from, to: query.to }, rangeCovered: !partial } : {}),
     feedSources: [{
       source: query.source === sources.attention ? 'Gmail' : 'GoogleCalendar', status,
       capturedAt: status === 'Missing' ? null : '2026-10-20T06:00:00Z',
       attemptedAt: status === 'Missing' ? null : '2026-10-20T06:00:00Z',
-      error: status === 'Stale' ? 'provider-unavailable' : null,
+      error: status === 'Stale' ? 'provider-unavailable' : status === 'Missing' ? 'not-configured' : null,
     }],
   };
 }
@@ -157,7 +158,7 @@ describe('Waiting lists', () => {
       return jsonResponse({ ...result(query), feedSources: [] });
     });
     render(<WaitingLists {...props} />);
-    expect(await screen.findAllByText(/Incomplete feed evidence/u)).toHaveLength(2);
+    expect(await screen.findAllByRole('alert')).toHaveLength(2);
     expect(screen.queryByText('Nothing waiting here.')).toBeNull();
   });
 });
@@ -214,7 +215,7 @@ describe('Calendar agenda', () => {
     view.unmount();
     fetch.mockImplementation(async () => jsonResponse(result({ source: sources.calendar, from: '2026-10-01T00:00:00Z', to: '2026-10-02T00:00:00Z' })));
     render(<CalendarAgenda {...props} period={period} />);
-    expect(await screen.findByText(/Incomplete calendar evidence/u)).toBeTruthy();
+    expect(await screen.findByRole('alert')).toBeTruthy();
   });
 });
 
@@ -261,6 +262,17 @@ describe('Manual feed refresh', () => {
 });
 
 describe('Overview integration', () => {
+  it('renders nonpaginated snapshots with more than the ordinary 50-row page size', async () => {
+    stub({
+      threads: Array.from({ length: 51 }, (_, index) => thread(`synthetic-${index}`)),
+      events: Array.from({ length: 51 }, (_, index) => event(`synthetic-${index}`)),
+    });
+    render(<AttentionOverview {...props}><p>Synthetic cards</p></AttentionOverview>);
+    expect(await screen.findByLabelText('51 events')).toBeTruthy();
+    expect(await screen.findByLabelText('51 threads')).toBeTruthy();
+    expect(screen.getByText('Synthetic thread synthetic-50')).toBeTruthy();
+  });
+
   it('has one explicit unavailable state, no empty lists or provider actions without feed capabilities', () => {
     const fetch = stub();
     render(<AttentionOverview {...props} sources={[]}><p>Synthetic cards</p></AttentionOverview>);

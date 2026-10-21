@@ -6,7 +6,7 @@ export function FeedState({ result, source }: { result: DailyQueryResult; source
   const feed = feedSource(result, source);
   return <p className="attention-source">
     {feed.status === 'Stale' && feed.capturedAt ? 'Stale retained data. ' : ''}
-    {feed.error ? 'The last source update failed. ' : ''}
+    {feed.error && feed.attemptedAt ? 'The last source update failed. ' : ''}
     {feed.capturedAt ? `Last successful capture: ${formatTime(feed.capturedAt)}.` : 'No successful capture recorded.'}
   </p>;
 }

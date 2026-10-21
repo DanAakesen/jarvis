@@ -6333,6 +6333,8 @@ existing card selector with Copenhagen calendar-range queries (including DST).
 Waiting lists and agenda independently gate on advertised capabilities and use
 the existing bounded, abortable Daily query reader. Feed actions reuse its
 authenticated, no-store JSON transport and the browser-only routes above.
+Feed validation accepts nonpaginated partial snapshots with matching source/range
+evidence, bounded to 1,000 calendar rows or 3,000 attention/suppression rows.
 Hide/restore update visibility only after acknowledgement; refresh completion
 invalidates both retained queries, while running/limited outcomes never imply
 freshness or automatically start another provider request. Missing capture,

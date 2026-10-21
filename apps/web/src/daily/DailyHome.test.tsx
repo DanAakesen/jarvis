@@ -48,9 +48,10 @@ function gate() {
 function overviewResult(query: DailyQuery) {
   const result = dailyFixture(query, items(query));
   if (query.source === sources.attention || query.source === sources.calendar) {
+    result.status = 'partial';
     result.feedSources = [{
       source: query.source === sources.attention ? 'Gmail' : 'GoogleCalendar', status: 'Missing',
-      capturedAt: null, attemptedAt: null, error: null,
+      capturedAt: null, attemptedAt: null, error: 'not-configured',
     }];
     if (query.source === sources.calendar) {
       result.calendarRange = { from: query.from, to: query.to }; result.rangeCovered = false;
