@@ -58,12 +58,23 @@ afterEach(async () => {
   }));
 });
 
-async function echoServer(onConnection: (socket: WebSocket, request: IncomingMessage) => void) {
+async function echoServer(
+  onConnection: (socket: WebSocket, request: IncomingMessage) => void,
+  acknowledgeStartup = true,
+) {
   const server = new WebSocketServer({ host: '127.0.0.1', port: 0 });
   servers.push(server);
   await once(server, 'listening');
   const address = server.address() as AddressInfo;
-  server.on('connection', onConnection);
+  server.on('connection', (socket, request) => {
+    // English readiness is the first session.updated; acknowledge the startup frame like Voice Live does.
+    if (acknowledgeStartup) socket.once('message', (data) => {
+      if ((JSON.parse(data.toString()) as { type?: unknown }).type === 'session.update') {
+        socket.send(JSON.stringify({ type: 'session.updated' }));
+      }
+    });
+    onConnection(socket, request);
+  });
   return `ws://127.0.0.1:${address.port}`;
 }
 
@@ -635,7 +646,7 @@ describe('backend-relayed Voice Live WebSocket', () => {
       const upstreamUrl = await echoServer((socket) => {
         upstream = socket;
         socket.on('message', (data) => received.push(JSON.parse(data.toString()) as Record<string, unknown>));
-      });
+      }, false);
       let speak!: (text: string) => boolean;
       const unregister = vi.fn();
       const visionWatch = {

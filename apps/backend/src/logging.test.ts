@@ -52,6 +52,30 @@ describe('structured log export', () => {
     expect(records.join('') + JSON.stringify(sink.trackTrace.mock.calls)).not.toContain('private');
   });
 
+  it('exports only rung names, outcomes, counts, sizes and timings for the voice tool budget', () => {
+    const records: string[] = [];
+    const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
+    const logger = createLogger({ logLevel: 'info' }, undefined, output);
+    logger.warn({
+      language: 'en', rung: 'R1', toolCount: 100, toolBytes: 90_000, instructionsBytes: 9_000, frameBytes: 99_500,
+      outcome: 'timeout', elapsedMs: 6_000, instructions: 'private', tools: [{ name: 'private' }],
+    }, 'voice.tool_budget_attempt');
+    logger.info({ language: 'en', rung: 'private', remembered: true, attempts: 2, arguments: 'private' }, 'voice.tool_budget_selected');
+    logger.warn({ language: 'en', attempts: 5, payload: 'private' }, 'voice.tool_budget_exhausted');
+    logger.info({ language: 'en', closedBy: 'relay', closeCode: 4010, toolBudgetRung: null, toolBudgetAttempts: 5 }, 'voice.session_summary');
+    expect(records.map((record) => JSON.parse(record))).toEqual([
+      expect.objectContaining({
+        msg: 'voice.tool_budget_attempt', language: 'en', rung: 'R1', toolCount: 100, toolBytes: 90_000,
+        instructionsBytes: 9_000, frameBytes: 99_500, outcome: 'timeout', elapsedMs: 6_000,
+      }),
+      expect.objectContaining({ msg: 'voice.tool_budget_selected', language: 'en', remembered: true, attempts: 2 }),
+      expect.objectContaining({ msg: 'voice.tool_budget_exhausted', language: 'en', attempts: 5 }),
+      expect.objectContaining({ msg: 'voice.session_summary', toolBudgetRung: null, toolBudgetAttempts: 5 }),
+    ]);
+    expect(JSON.parse(records[1]!)).not.toHaveProperty('rung');
+    expect(records.join('')).not.toContain('private');
+  });
+
   it('exports only code, IDs, counts and duration for proactive todo writer logs', () => {
     const records: string[] = [];
     const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
