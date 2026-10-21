@@ -87,7 +87,8 @@ trend, Body & sleep measurements and last night), lists and records are panel ca
 (Workouts inventory and history, Nutrition meals, the nights, Briefs, Rules & sources
 groups, Data records), and figures sit on the dark tile. Class colour (Gym, Run,
 Activity) tints a card, a ring or a history glyph only together with its word and an
-icon. The change adds decorative, `aria-hidden` icon chips to headings and `data-class`
+icon. Actions in these sections keep the shared control radius; pill geometry stays the
+Health-only exception for tabs and period choices recorded above. The change adds decorative, `aria-hidden` icon chips to headings and `data-class`
 or `data-metric` attributes for styling; reads, values, states, section ids and fixed
 heights are unchanged, and the waiting lists and calendar agenda stay with P14-52.
 

@@ -53,10 +53,9 @@
   text-transform: uppercase;
 }
 
-/* Buttons are pills with a quiet edge; fields share the dark tile surface. Focus and disabled styles stay the shared ones. */
+/* Buttons keep the shared control radius (only Health tabs and period choices are pills); the edge is quiet and the fill clear. */
 .daily-shell :is(.workouts-section, .daily-nutrition, .body-sleep, .daily-briefs, .daily-rules, .daily-data-page) .secondary-button {
   border-color: var(--health-edge);
-  border-radius: var(--radius-pill);
   background: transparent;
 }
 .daily-shell :is(.workouts-section, .daily-nutrition, .body-sleep, .daily-briefs, .daily-rules, .daily-data-page) .secondary-button:hover:not(:disabled, [aria-busy="true"]) { background: var(--glass-hover); }
@@ -116,7 +115,7 @@
 .daily-shell .workouts-inventory-list li { margin-block: 0; padding-block: var(--space-2); }
 .daily-shell .workouts-inventory-list li + li { background: linear-gradient(var(--health-tile-edge), var(--health-tile-edge)) top / 100% 1px no-repeat; }
 
-/* Workouts: the history is a panel of hairline-separated rows with a class-tinted glyph chip and pill values. */
+/* Workouts: the history is a panel of hairline-separated rows with a class-tinted glyph chip and outlined values. */
 .daily-shell .workouts-history-row { border-bottom: 0; background: linear-gradient(var(--health-tile-edge), var(--health-tile-edge)) bottom / 100% 1px no-repeat; }
 .daily-shell .workouts-history-row:last-child { background: none; }
 .daily-shell .workouts-history-heading { gap: var(--space-3); }

@@ -1943,13 +1943,14 @@ protein colour, charts on tiles with an amber target line), and Body & sleep
 measurements and "Last night". Workouts Gym, Run and Activity are tinted cards whose
 heading carries the class colour with its chip and word. Lists and records are panel
 cards: the Workouts inventory (amber uppercase group headings, three columns on wide
-screens, hairline rows), the Workouts history (a round class-tinted glyph chip, pill
-values and a pill Open button, hairline rows), Nutrition meals (hairline rows, outlined
+screens, hairline rows), the Workouts history (a round class-tinted glyph chip, outlined
+values and the shared Open button, hairline rows), Nutrition meals (hairline rows, outlined
 macro pills), the sleep nights, the Briefs history and detail (outlined month rows and
 chips), the Rules & sources groups (outlined rule cards and status pills) and the Data
 records. Figure captions are small uppercase labels, never a heading. Rows use hairline
-gradients rather than side borders, buttons in these sections are pills with a quiet
-edge, and `prefers-contrast: more`, `forced-colors` (system colours, no glass) and
+gradients rather than side borders, actions keep the shared control radius with a quiet
+edge (pill geometry stays the Health-only exception for tabs and period choices),
+and `prefers-contrast: more`, `forced-colors` (system colours, no glass) and
 reduced motion inherit the P14-56 handling. Stable heights, the Not received,
 Unavailable, Could not load and No target set states, and every section id are
 unchanged.
