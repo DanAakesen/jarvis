@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type ReactNode } from 'react';
+import { useContext, useMemo, useRef, useState, type ReactNode } from 'react';
 import { dailyQuerySources as sources, type DailySourceId } from '@jarvis/contracts';
 import type { DailyPages } from '../../ui/useDailyPages';
 import { targetBaseline } from '../nutrition/totals';
@@ -13,6 +13,7 @@ import { useNutritionTargets } from './useNutritionTargets';
 import { useToday } from './useToday';
 import { useTopCardData } from './useTopCardData';
 import { useTrainingTargetsShared } from '../../training-targets-context';
+import { OverviewPeriodContext } from './attention/period-context';
 
 const cards = [
   { id: 'training', title: 'Training', to: '?section=workouts' },
@@ -61,7 +62,9 @@ export function TopCards({ backendUrl, getAccessToken, refreshVersion, available
   available: readonly DailySourceId[];
 }) {
   const { today, hour } = useToday();
-  const [preset, setPreset] = useState<OverviewPresetId>(defaultOverviewPreset);
+  const [localPreset, setLocalPreset] = useState<OverviewPresetId>(defaultOverviewPreset);
+  const sharedPeriod = useContext(OverviewPeriodContext);
+  const { preset, setPreset } = sharedPeriod ?? { preset: localPreset, setPreset: setLocalPreset };
   const period = useMemo(() => overviewWindow(preset, today), [preset, today]);
   const data = useTopCardData({ backendUrl, getAccessToken, refreshVersion }, period, today, available);
   // Targets are only needed to judge logged values, so nothing is requested for a period with no nutrition record.

@@ -1567,6 +1567,17 @@ Synthetic browser checks do not establish live-data or original-site acceptance.
 
 ## Daily overview and Briefs integration (18 October 2026; P12-26)
 
+P14-52 (21 October 2026) extends the three-card overview with the
+capability-advertised Gmail waiting lists and retained calendar agenda.
+Waiting rows show the service's business-day age, expandable detail and
+owner-authorised Hide/Undo. The agenda follows the existing overview period
+in Copenhagen time, includes all-day events and labels timed conflicts and
+partial coverage. Tasks and priority filtering remain excluded. Manual feed
+refresh respects the service's 30-second cooldown and independent source
+outcomes. Unavailable capabilities, disconnected feeds, stale captures and
+failed reads are not presented as successful empty lists. Feed activation and
+real-data owner acceptance remain separate from this web implementation.
+
 (Superseded by P14-46: the overview is now a period control and three cards,
 Training, Health and Body, with no inventory list, notes, refresh button or
 summary tiles.) The overview kept its “What Daily holds” inventory and added

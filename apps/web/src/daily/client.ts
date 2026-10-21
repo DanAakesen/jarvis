@@ -84,8 +84,11 @@ function json(value: unknown, depth = 0): value is DailyJson {
   return object(value) && Object.values(value).every(item => json(item, depth + 1));
 }
 export function isDailyResult(value: unknown, query: DailyQuery): value is DailyQueryResult {
+  const feed = query.source === dailyQuerySources.attention || query.source === dailyQuerySources.calendar;
+  // Attention can include 1,000 retained items plus 1,000 orphan suppressions per type.
   const limit = query.source === dailyQuerySources.sync || query.source === dailyQuerySources.workout || query.source === dailyQuerySources.brief ? 1
-    : query.source === dailyQuerySources.metricCatalog ? query.limit ?? 100 : 'limit' in query ? query.limit ?? 50 : 50;
+    : query.source === dailyQuerySources.attention ? 3000 : query.source === dailyQuerySources.calendar ? 1000
+      : query.source === dailyQuerySources.metricCatalog ? query.limit ?? 100 : 'limit' in query ? query.limit ?? 50 : 50;
   if (!object(value) || value.source !== query.source || !Array.isArray(value.items) ||
       value.items.length > limit ||
       !value.items.every(item => object(item) && json(item)) ||
@@ -138,6 +141,21 @@ export function isDailyResult(value: unknown, query: DailyQuery): value is Daily
       time(item.latest_updated_at);
   })) return false;
   if (query.source === dailyQuerySources.sleep && value.units['*_hours'] !== 'h') return false;
+  if (feed) {
+    const expected = query.source === dailyQuerySources.attention ? 'Gmail' : 'GoogleCalendar';
+    if (!Array.isArray(value.feedSources) || value.feedSources.length !== 1 ||
+        !value.feedSources.every(source => object(source) && source.source === expected &&
+          ['Missing', 'Stale', 'Current'].includes(String(source.status)) &&
+          nullableTime(source.capturedAt) && nullableTime(source.attemptedAt) &&
+          (source.error === null || typeof source.error === 'string')) ||
+        value.coverage.hasMore || value.coverage.next !== null) return false;
+    if (query.source === dailyQuerySources.calendar &&
+        (!object(value.calendarRange) || value.calendarRange.from !== query.from || value.calendarRange.to !== query.to ||
+          typeof value.rangeCovered !== 'boolean')) return false;
+    const partial = value.feedSources.some(source => source.status !== 'Current') ||
+      query.source === dailyQuerySources.calendar && value.rangeCovered === false;
+    return value.status === (partial ? 'partial' : value.items.length ? 'available' : 'empty');
+  }
   if (value.coverage.hasMore) {
     if (!object(value.coverage.next) || !isDailyQuery({ ...query, cursor: value.coverage.next }) || value.status !== 'partial') return false;
   } else if (value.coverage.next !== null || value.status !== (value.items.length ? 'available' : 'empty')) return false;
@@ -166,7 +184,7 @@ async function readJson(response: Response): Promise<unknown> {
     return value;
   } finally { await reader.cancel().catch(() => undefined); reader.releaseLock(); }
 }
-async function requestJson(backendUrl: string | null, path: string, getAccessToken: () => Promise<string>, signal: AbortSignal, body?: DailyQuery, accept = 'application/json'): Promise<unknown> {
+export async function requestJson(backendUrl: string | null, path: string, getAccessToken: () => Promise<string>, signal: AbortSignal, body?: DailyQuery | Record<string, DailyJson>, accept = 'application/json'): Promise<unknown> {
   if (!backendUrl) throw new DailyReadError('The Health backend is not configured.', 'disabled');
   signal = AbortSignal.any([signal, AbortSignal.timeout(120_000)]);
   let token: string;

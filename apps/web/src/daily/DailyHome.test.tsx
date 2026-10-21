@@ -12,8 +12,8 @@ const token = async () => 'synthetic-fixture';
 const backendUrl = 'http://localhost:3999';
 // The shell's freshness pill reads the sync source once per mount and once per refresh-stream step.
 const shellReads = 1;
-// Overview cards: week workouts, steps, nutrition days, meals, sleep and the metric catalogue.
-const todayReads = 6;
+// Overview: week workouts, steps, nutrition days, meals, sleep, metric catalogue, attention and calendar.
+const todayReads = 8;
 // Health panel, once expanded: metrics, catalogue, sleep, workouts, nutrition days and sync.
 const healthReads = 6;
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.restoreAllMocks(); window.history.replaceState({}, '', '/'); });
@@ -45,7 +45,21 @@ function gate() {
   return { opened, open };
 }
 
-function fixture({ capabilities = () => capabilityList(), answer = query => jsonResponse(dailyFixture(query, items(query))), targets = () => jsonResponse(trainingReply) }: {
+function overviewResult(query: DailyQuery) {
+  const result = dailyFixture(query, items(query));
+  if (query.source === sources.attention || query.source === sources.calendar) {
+    result.status = 'partial';
+    result.feedSources = [{
+      source: query.source === sources.attention ? 'Gmail' : 'GoogleCalendar', status: 'Missing',
+      capturedAt: null, attemptedAt: null, error: 'not-configured',
+    }];
+    if (query.source === sources.calendar) {
+      result.calendarRange = { from: query.from, to: query.to }; result.rangeCovered = false;
+    }
+  }
+  return result;
+}
+function fixture({ capabilities = () => capabilityList(), answer = query => jsonResponse(overviewResult(query)), targets = () => jsonResponse(trainingReply) }: {
   capabilities?: () => Response | Promise<Response>;
   answer?: (query: DailyQuery) => Response | Promise<Response>;
   targets?: () => Response | Promise<Response>;
@@ -138,7 +152,7 @@ describe('Daily overview', () => {
   });
   it('reads at most two collections at a time', async () => {
     const hold = gate();
-    const f = fixture({ answer: async query => { await hold.opened; return jsonResponse(dailyFixture(query, items(query))); } });
+    const f = fixture({ answer: async query => { await hold.opened; return jsonResponse(overviewResult(query)); } });
     render(home());
     await waitFor(() => expect(f.queries.length).toBeGreaterThanOrEqual(2));
     await flush();

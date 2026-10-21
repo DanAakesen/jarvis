@@ -40,6 +40,36 @@ describe('owner-authenticated Daily query client', () => {
     expect(isDailyResult(dailyFixture(days, [{ ...total, unknown_nutrients: ['protein_grams'], partial_nutrients: ['protein_grams'] }]), days)).toBe(false);
     expect(isDailyResult(dailyFixture(days, [{ ...total, meal_count: 0 }]), days)).toBe(false);
   });
+  it.each([sources.attention, sources.calendar] as const)('accepts bounded, nonpaginated %s snapshots above 50 rows', source => {
+    const feedQuery: DailyQuery = source === sources.attention ? { source } :
+      { source, from: '2026-10-19T22:00:00Z', to: '2026-10-20T22:00:00Z' };
+    const rows = Array.from({ length: 51 }, (_, i) => ({ id: `synthetic-${i}` }));
+    const value = {
+      ...dailyFixture(feedQuery, rows),
+      feedSources: [{ source: source === sources.attention ? 'Gmail' : 'GoogleCalendar', status: 'Current',
+        capturedAt: '2026-10-20T06:00:00Z', attemptedAt: '2026-10-20T06:00:00Z', error: null }],
+      ...(source === sources.calendar ? { calendarRange: { from: '2026-10-19T22:00:00Z', to: '2026-10-20T22:00:00Z' }, rangeCovered: true } : {}),
+    };
+    expect(isDailyResult(value, feedQuery)).toBe(true);
+    const bound = source === sources.attention ? 3000 : 1000;
+    const atLimit = { ...value, items: Array.from({ length: bound }, () => rows[0]!), coverage: { ...value.coverage, returned: bound } };
+    expect(isDailyResult(atLimit, feedQuery)).toBe(true);
+    expect(isDailyResult({ ...atLimit, items: [...atLimit.items, rows[0]], coverage: { ...value.coverage, returned: bound + 1 } }, feedQuery)).toBe(false);
+    for (const status of ['Missing', 'Stale']) {
+      const partial = { ...value, status: 'partial', feedSources: [{ ...value.feedSources[0], status,
+        ...(status === 'Missing' ? { capturedAt: null, attemptedAt: null, error: 'not-configured' } : {}) }] };
+      expect(isDailyResult(partial, feedQuery)).toBe(true);
+      expect(isDailyResult({ ...partial, status: 'available' }, feedQuery)).toBe(false);
+    }
+    if (source === sources.calendar) {
+      expect(isDailyResult({ ...value, rangeCovered: false, status: 'partial' }, feedQuery)).toBe(true);
+      expect(isDailyResult({ ...value, calendarRange: { from: 'wrong', to: 'wrong' } }, feedQuery)).toBe(false);
+    }
+    expect(isDailyResult({ ...value, feedSources: [] }, feedQuery)).toBe(false);
+    expect(isDailyResult({ ...value, status: 'partial' }, feedQuery)).toBe(false);
+    expect(isDailyResult({ ...value, coverage: { ...value.coverage, hasMore: true } }, feedQuery)).toBe(false);
+    expect(isDailyResult({ ...dailyFixture(query, rows), status: 'partial' }, query)).toBe(false);
+  });
   it('uses the existing token supplier, read-only POST, no-store and an abort signal', async () => {
     const value = dailyFixture(query, [{ value: 0, unit: 'm' }]);
     const fetch = vi.fn().mockResolvedValue(jsonResponse(value)); vi.stubGlobal('fetch', fetch);

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatDateOnly, formatDateTime, formatTimeOnly } from './date-time';
+import { formatDateOnly, formatDateTime, formatShortMonth, formatShortWeekday, formatTimeOnly } from './date-time';
 
 describe('shared date and time formatting', () => {
   it('uses the stable en-GB date-time format in UTC and explicit time zones', () => {
@@ -16,6 +16,13 @@ describe('shared date and time formatting', () => {
     expect(formatDateOnly('2026-10-19', { timeZone: 'UTC' })).toBe('19 Oct 2026');
     expect(formatDateOnly('2026-10-19', { timeZone: 'America/Los_Angeles' })).toBe('19 Oct 2026');
     expect(formatTimeOnly('2026-10-19T00:05:00.000Z', { timeZone: 'UTC' })).toBe('00:05');
+  });
+
+  it('formats calendar rail labels without changing date-only values across timezones', () => {
+    expect(formatShortWeekday('2026-10-20', { timeZone: 'UTC' })).toBe('Tue');
+    expect(formatShortMonth('2026-10-20', { timeZone: 'UTC' })).toBe('Oct');
+    expect(formatShortWeekday('2026-10-20', { timeZone: 'America/Los_Angeles' })).toBe('Tue');
+    expect(formatShortWeekday(null)).toBe('—');
   });
 
   it('formats instants in the requested display timezone for date-only and date-time output', () => {
