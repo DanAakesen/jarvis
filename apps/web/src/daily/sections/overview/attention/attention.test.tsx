@@ -263,6 +263,8 @@ describe('Manual feed refresh', () => {
 
 describe('Overview integration', () => {
   it('renders nonpaginated snapshots with more than the ordinary 50-row page size', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-20T10:00:00Z'));
     stub({
       threads: Array.from({ length: 51 }, (_, index) => thread(`synthetic-${index}`)),
       events: Array.from({ length: 51 }, (_, index) => event(`synthetic-${index}`)),
@@ -284,6 +286,8 @@ describe('Overview integration', () => {
   });
 
   it('shares the existing card period selection with agenda reads', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-20T10:00:00Z'));
     const fetch = stub({ events: [], threads: [] });
     const available: DailySourceId[] = [sources.calendar];
     render(<MemoryRouter><AttentionOverview {...props} sources={available}>
