@@ -7,6 +7,7 @@ import { StatTile } from '../../../ui/StatTile';
 import { DailyState } from '../../../ui/DailyState';
 import { DailyUnavailable } from '../../../ui/DailyUnavailable';
 import { FreshnessLine } from '../../../ui/FreshnessLine';
+import { IconChip } from '../../../ui/icons';
 import { formatDate } from '../../../ui/formatters';
 import { categoryTiles, healthSummary, healthTabs, healthWindow, syncStatus, weeklyProgress, type HealthTab, type Tile } from './data';
 import { readTarget } from '../../../training-targets';
@@ -103,7 +104,8 @@ export function HealthPanel(props: Props) {
   const ready = visibleReads.every(read => served(read.source) && read.page.status === 'ready' && !read.page.error && !read.page.hasMore);
   return <section id="health-panel" className="health-panel" aria-labelledby={`${id}-heading`}>
     <header className="health-panel-header">
-      <div><h2 id={`${id}-heading`}>Health</h2>
+      <IconChip name="pulse" />
+      <div className="health-panel-heading"><h2 id={`${id}-heading`}>Health</h2>
         {served(sources.sync) ? <p role="status">{sync.status === 'ready' && !sync.error ? syncStatus(sync.items, now) :
           sync.error ? 'Sync status unavailable' : 'Checking sync status'}</p> :
           <DailyUnavailable>Sync status is not served by this backend.</DailyUnavailable>}

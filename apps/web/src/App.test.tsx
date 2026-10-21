@@ -726,7 +726,7 @@ describe('App shell', () => {
     await screen.findByText('Synthetic shell measurement');
     fireEvent.click(screen.getByText('Source, units and coverage'));
     expect(screen.getByText('Health · metrics')).toBeTruthy();
-    expect(screen.getByRole('heading', { name: 'Health' })).toBeTruthy();
+    expect(screen.getByRole('heading', { level: 1, name: 'Hey Dan' })).toBeTruthy();
     expectNoDailyInRenderedContent(document.body);
     for (const [id, label] of [
       ['workouts', 'Workouts'],

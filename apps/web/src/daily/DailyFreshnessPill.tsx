@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { dailyQuerySources, type DailyJson, type DailyQuery } from '@jarvis/contracts';
 import { useDailyQuery } from './useDailyQuery';
 import { formatTime } from './ui/formatters';
+import { HealthIcon } from './ui/icons';
 
 const syncQuery: DailyQuery = { source: dailyQuerySources.sync };
 type Row = Record<string, DailyJson>;
@@ -46,8 +47,27 @@ function newestUpload(feeds: DailyJson | undefined) {
     const ms = typeof at === 'string' ? Date.parse(at) : Number.NaN;
     if (typeof at === 'string' && Number.isFinite(ms) && (!best || ms > best.ms)) best = { at, ms };
   }
-  return best?.at ?? null;
+  return best;
 }
+
+const sourceNames: Record<string, string> = { metrics: 'Health metrics', workouts: 'Workouts' };
+
+// One row per feed the server reports. A feed with no accepted upload says so instead of showing a time.
+function syncRows(feeds: DailyJson | undefined) {
+  const rows: { kind: string; source: string; at: string | null }[] = [];
+  for (const entry of Array.isArray(feeds) ? feeds : []) {
+    const feed = row(entry);
+    const kind = typeof feed?.feed_kind === 'string' ? feed.feed_kind : null;
+    if (kind === null || kind === '') continue;
+    const at = typeof feed?.accepted_evidence_at === 'string' && Number.isFinite(Date.parse(feed.accepted_evidence_at))
+      ? feed.accepted_evidence_at : null;
+    rows.push({ kind, source: sourceNames[kind] ?? `${kind.charAt(0).toUpperCase()}${kind.slice(1)}`, at });
+  }
+  return rows;
+}
+
+/** An upload older than this reads as behind: the pill's dot turns amber. */
+const staleAfterMs = 36 * 60 * 60 * 1000;
 
 export function DailyFreshnessPill({ backendUrl, getAccessToken, enabled, refreshVersion }: {
   backendUrl: string | null;
@@ -57,9 +77,15 @@ export function DailyFreshnessPill({ backendUrl, getAccessToken, enabled, refres
 }) {
   const query = useDailyQuery(backendUrl, getAccessToken, enabled ? syncQuery : null, refreshVersion);
   const [open, setOpen] = useState(false);
+  const [now, setNow] = useState(() => Date.now());
   const root = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
   const panelId = useId();
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 60_000);
+    return () => clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     if (!open) return;
@@ -85,21 +111,38 @@ export function DailyFreshnessPill({ backendUrl, getAccessToken, enabled, refres
   const heartbeat = row(item?.heartbeat);
   const inbox = row(item?.inbox);
   const contact = typeof heartbeat?.last_received_at === 'string' ? heartbeat.last_received_at : null;
-  const upload = newestUpload(item?.feeds);
+  const newest = newestUpload(item?.feeds);
+  const upload = newest?.at ?? null;
   const storage = stored(inbox);
   const inProgress = positive(inbox?.pending) || positive(inbox?.processing);
+  const sources = syncRows(item?.feeds);
   // A failed refresh keeps the previous data, so say it is stale in words rather than looking current.
   const stale = query.data && query.error ? ', refresh failed' : '';
   const state = upload ? `Last upload ${formatTime(upload)}` : inProgress ? 'Upload being processed' : 'No uploads yet';
   const label = query.data ? `${state}${stale}` : query.error ? 'Sync status unavailable' : 'Checking sync';
+  // The dot repeats what the words say: amber when the data is behind or could not be checked, green when it is recent.
+  const freshness = !query.data && !query.error ? 'pending'
+    : query.error || newest === null || now - newest.ms > staleAfterMs ? 'behind' : 'recent';
 
   return <div className="daily-freshness-pill" ref={root}>
     <button ref={trigger} type="button" className="daily-freshness-trigger" aria-expanded={open} aria-controls={panelId}
-      aria-haspopup="true" data-state={query.error ? 'error' : query.data ? 'ready' : 'pending'} onClick={() => setOpen(value => !value)}>
+      aria-haspopup="true" data-state={query.error ? 'error' : query.data ? 'ready' : 'pending'} data-freshness={freshness}
+      onClick={() => setOpen(value => !value)}>
+      <span className="daily-freshness-dot" aria-hidden="true" />
       {label}
+      <span className="daily-freshness-info" aria-hidden="true"><HealthIcon name="info" /></span>
     </button>
     {open && <div id={panelId} className="daily-freshness-panel" role="group" aria-label="Sync details">
+      <p className="daily-freshness-title">Last sync</p>
       {query.error && <p className="error-text" role="alert">{query.error}</p>}
+      {sources.length > 0 && <table className="daily-sync-table">
+        <caption className="visually-hidden">Last sync by source</caption>
+        <thead><tr><th scope="col">Source</th><th scope="col">Last received</th></tr></thead>
+        <tbody>{sources.map(({ kind, source, at }) => <tr key={kind}>
+          <th scope="row">{source}</th>
+          <td>{at ? formatTime(at) : <span className="daily-sync-none">Not received</span>}</td>
+        </tr>)}</tbody>
+      </table>}
       {query.data
         ? <dl className="daily-facts">
           <div><dt>Last upload</dt><dd>{upload ? formatTime(upload) : inProgress ? 'Being processed' : 'None yet'}</dd></div>

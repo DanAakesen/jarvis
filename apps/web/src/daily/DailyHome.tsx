@@ -12,13 +12,15 @@ import { discoverDailySections, loadDailySectionModules } from './sections/disco
 import type { DailyPeriod, DailySectionDefinition } from './sections/types';
 import { TrainingTargetsProvider } from './TrainingTargetsProvider';
 import { useDailyCapabilities } from './useDailyCapabilities';
+import { healthHeadline } from './greeting';
+import './health-look.css';
 import './daily.css';
 import './ui/daily-ui.css';
 
 const sectionModules = import.meta.glob<{ section: DailySectionDefinition }>('./sections/*/index.tsx');
 const noSources: readonly DailySourceId[] = [];
 
-export function DailyHome({ backendUrl, getAccessToken }: AreaProps) {
+export function DailyHome({ backendUrl, getAccessToken, profileName }: AreaProps) {
   const capabilities = useDailyCapabilities(backendUrl, getAccessToken);
   const refreshVersion = useContext(DailyRefreshContext);
   const [searchParams, setSearchParams] = useSearchParams();
@@ -144,10 +146,10 @@ export function DailyHome({ backendUrl, getAccessToken }: AreaProps) {
     }
   }
 
-  return <section className="daily-page daily-shell" aria-labelledby="daily-heading">
+  return <section className="daily-page daily-shell" aria-label="Health">
     <header className="daily-heading">
       <div>
-        <h1 id="daily-heading" tabIndex={-1}>Health</h1>
+        <h1 id="daily-heading" tabIndex={-1}>{healthHeadline(profileName)}</h1>
       </div>
       <DailyFreshnessPill backendUrl={backendUrl} getAccessToken={getAccessToken} refreshVersion={refreshVersion}
         enabled={sources.includes(dailyQuerySources.sync)} />
