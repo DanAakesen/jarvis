@@ -1708,7 +1708,7 @@ announcements use Health, including inherited loading labels and read errors.
 Internal identifiers and existing routes remain unchanged for #1146/#1147;
 the panel introduces no hard-coded area-route links.
 
-20 October 2026 (P14-41 / #1116): the owner wants the original Daily components and data presentation rebuilt in Jarvis styling. Keep the original composition (cards, rings, tiles, panels) but draw it with existing Jarvis tokens, shared components, themes, density and motion; add no Daily-only skin or tokens. See the [audit](docs/ui/p14-41/audit.md).
+20 October 2026 (P14-41 / #1116): the owner wants the original Daily components and data presentation rebuilt in Jarvis styling. Keep the original composition (cards, rings, tiles, panels). For the Health area the styling part is superseded by P14-56 below: Health follows the original look from Health-scoped tokens. Other areas keep the shared Jarvis tokens. See the [audit](docs/ui/p14-41/audit.md).
 
 17 October brief-history source continuation reuses the existing collection
 selector, exact paging and in-page detail/back interaction. Historical timestamps
@@ -1873,8 +1873,7 @@ button and no summary tiles, so there is no text list on it. A card that has not
 for the period says so itself. The cards sit in one
 row from 1200 px, two columns from 700 px and a swipeable row below that, with
 one dot per card; the dots are real buttons and the row also scrolls by touch,
-trackpad and keyboard. Card chrome is the shared panel surface, rule and radius;
-no glass skin or new token. Training holds three rings (Gym, Run, Activity for
+trackpad and keyboard. Card chrome follows the Health look (P14-56 below). Training holds three rings (Gym, Run, Activity for
 steps), then a Protein tile, a Calories left tile and, for a single day, the meals
 strip (time, name, kcal). Health holds Sleep, Protein and a cumulative protein
 line across the day with a dashed target line when a target is set; its title is a
@@ -1898,6 +1897,41 @@ spread the known amount over every logged day, so an unknown day keeps the resul
 lower bound; a body trend uses one unit, the latest reading's; only Today may show
 last night's sleep, so Yesterday needs its own night; Calories and Duration each
 carry their own lower-bound note.
+
+20 October 2026 (P14-56 / #1156; Refs #1116; supersedes "no glass skin or new token"
+for the Health area): Health follows the look of the original app, from the
+Health-scoped tokens in `daily/health-look.css` (declared on the Health shell, swapped
+for dark; the full list is in the P14-56 entry of docs/decisions.md). Page: a deep navy
+surface with a faint blue glow top left and a violet glow top right in dark, a pale
+tinted wash in light; the glow is a background only and never carries text. Header: a
+large, bold headline, "Hey <first name>" from the signed-in profile and plain "Health"
+when no usable name is known; a freshness pill with a status dot (green when the newest
+accepted upload is within 36 hours, amber when it is older, a failed read or there is
+none, grey while loading; the label always states the time or the problem) and an info
+button that opens a "Last sync" table with one row per source and "Not received" for a
+source without a time, above the existing upload facts. Navigation is a centred pill
+group and the period control a segmented pill group; the selected pill is filled,
+tinted and outlined, so selection never rests on colour alone. This is a deliberate
+Health-only exception to the shared control contract (`--radius-control` geometry and
+the `--state-selected-*` tokens): the pill geometry and the Health selection tokens stay
+inside the Health shell, and every other area keeps the shared controls. Cards: three
+equal-height glass cards (Training blue to violet, Health violet, Body teal to violet,
+large radius, soft shadow) each opened by a title with an icon chip. Training uses
+class colours for Gym (blue), Run (rose) and Activity (violet), each with a tinted icon
+chip and its word, a thick ring track and the figure inside the ring; Protein is a
+large figure with a thin progress bar and Calories left has a flame chip; the meals
+strip has a small "Meals" label. Health holds Sleep, Protein and a titled "Protein
+across the day" panel with the dashed target line; Body holds the three totals and a
+titled "Body trend" panel with one row per measurement (label, sparkline, value).
+Figures are large with a small unit beside them; labels are normal case, and only the
+"Meals" label and the table headings are small uppercase. An unknown ring is a dashed
+track, never an empty one. The Health panel opens with the same chip and heading
+("Health", last synced line), a hairline, left-aligned pill tabs and dark tiles with a
+subtle outline. Heights stay fixed from loading to loaded. The light theme uses the
+same structure with brighter, tinted surfaces; contrast of the overview text was
+measured at 4.5:1 or better in both themes. `prefers-contrast: more` removes the glass
+and glow and uses solid edges, `forced-colors` keeps rings, tiles, tabs and the selected
+pill visible with system colours, and reduced motion removes the transitions.
 
 20 October 2026 (P14-55; Refs #1116, #1155): every ring and tile that compares
 against a training target reads the owner's targets from one shared read per

@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { Loader } from '../../../Loader';
 import { DailyUnavailable } from '../../ui/DailyUnavailable';
+import { IconChip, type HealthIconName } from '../../ui/icons';
 import type { BlockState } from './block-state';
 
 export type { BlockState };
@@ -10,12 +11,18 @@ function Chevron() {
   return <svg aria-hidden="true" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6" /></svg>;
 }
 
+/** A figure with its unit set smaller beside it. The space between them is real text, so the value still reads as one. */
+export function Figure({ value, unit }: { value: string; unit?: string | undefined }) {
+  return <><span className="daily-top-figure">{value}</span>{unit ? <>{' '}<span className="daily-top-unit">{unit}</span></> : null}</>;
+}
+
 /**
  * One card. The heading opens what is behind it: a link to a section, or a button that expands a panel on this page.
  * The body is laid out by the caller and keeps its size.
  */
-export function TopCard({ title, to, panel, state, onRetry, stale = false, children }: {
+export function TopCard({ title, icon, to, panel, state, onRetry, stale = false, children }: {
   title: string;
+  icon: HealthIconName;
   to?: string;
   panel?: { expanded: boolean; controls: string; onToggle: () => void };
   state: BlockState;
@@ -29,8 +36,8 @@ export function TopCard({ title, to, panel, state, onRetry, stale = false, child
     <header>
       <h3>{panel
         ? <button className="daily-top-card-toggle" type="button" aria-expanded={panel.expanded} aria-controls={panel.controls}
-          onClick={panel.onToggle}>{title}<Chevron /></button>
-        : <Link to={to ?? '.'}>{title}<Chevron /></Link>}</h3>
+          onClick={panel.onToggle}><IconChip name={icon} />{title}<Chevron /></button>
+        : <Link to={to ?? '.'}><IconChip name={icon} />{title}<Chevron /></Link>}</h3>
       {failed && onRetry && <div className="daily-top-card-recovery">
         {stale && state !== 'error' && <span role="status">Could not refresh</span>}
         <button className="ghost-button" type="button" onClick={onRetry}>Retry</button>
@@ -42,20 +49,23 @@ export function TopCard({ title, to, panel, state, onRetry, stale = false, child
 }
 
 /**
- * A label, one value and one line under it. The three slots are always mounted and reserve their height.
+ * A label, one value and one line under it. The slots are always mounted and reserve their height.
  * A null value in a ready tile is a figure that was not recorded: a quiet dash, spoken as "Not recorded".
  */
-export function Tile({ label, state, value, note, chart, unavailable }: {
+export function Tile({ label, state, value, note, chart, meter, icon, unavailable }: {
   label: string;
   state: BlockState;
   value: ReactNode;
   note?: ReactNode;
-  /** A trend under the value. Passing it, even as null, reserves its height. */
+  /** A trend beside the value. Passing it, even as null, reserves its space. */
   chart?: ReactNode;
+  /** A progress bar under the note. Passing it, even as null, reserves its height. */
+  meter?: ReactNode;
+  icon?: HealthIconName;
   unavailable: string;
 }) {
   return <div className="daily-top-tile" data-state={state} role="group" aria-label={label}>
-    <p className="daily-top-tile-label">{label}</p>
+    <p className="daily-top-tile-label">{icon && <IconChip name={icon} />}{label}</p>
     <p className="daily-top-tile-value">
       {state === 'ready' ? value === null
         ? <><span className="daily-top-tile-none" aria-hidden="true" title="Not recorded">—</span><span className="visually-hidden">Not recorded</span></>
@@ -66,5 +76,6 @@ export function Tile({ label, state, value, note, chart, unavailable }: {
       {state === 'ready' ? note : state === 'error' ? 'Could not load'
         : state === 'unavailable' ? <DailyUnavailable>{unavailable}</DailyUnavailable> : null}
     </div>
+    {meter !== undefined && <div className="daily-top-tile-meter" aria-hidden="true">{state === 'ready' ? meter : null}</div>}
   </div>;
 }

@@ -10,6 +10,8 @@ export interface AreaProps {
   backendUrl: string | null;
   getAccessToken: () => Promise<string>;
   signIn?: () => Promise<void>;
+  /** The signed-in user's display name, for areas that greet them. */
+  profileName?: string | null;
 }
 
 export interface Area {
