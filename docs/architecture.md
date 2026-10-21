@@ -2252,8 +2252,10 @@ Tree entries retain optional blob sizes for preflight bounds. Scans allow at mos
 the existing 20-second deadline. Oversized notes, exceeded caps, mismatched SHAs,
 missing reads and other partial failures yield unavailable, never an empty or
 partial success. Unknown sizes reserve the per-file maximum against the budget.
-`todo-file.ts` keeps the root-only writer resolver and shared parser; fenced
-examples/query blocks are ignored. One sanitizer removes
+`todo-file.ts` provides the shared parser; fenced examples/query blocks are
+ignored. The proactive writer reads available inbox and root task notes for
+deduplication but writes only to existing `Personal/Inbox.md` or `Work/Inbox.md`.
+One sanitizer removes
 control characters, HTML and markdown link destinations and caps fact text at
 300 characters. `🔺`, `⏫`, bracketed or parenthesized `priority:: highest` and
 `priority:: high` (case-insensitive), and legacy `priority:: P1 - High` qualify
@@ -2287,21 +2289,34 @@ may write at any hour; scheduled and catch-up runs recheck the Copenhagen quiet
 window. Per-run and per-Copenhagen-day limits are three and five additions.
 
 Only model findings with a suggested todo and a non-`todo` category qualify.
+The writer excludes Factory evidence and project/software/engineering cues in
+the suggestion or its cited facts, regardless of source or category. It routes
+only a clearly personal or non-project work task, and writes only to the
+corresponding existing `Personal/Inbox.md` or `Work/Inbox.md`. Missing identity,
+ambiguous scope, an unavailable destination or an unsafe file fails closed with
+a content-free reason; the finding remains stored as an observation.
+
 Suggestions are reduced to one plain-text line, bounded to 200 Unicode code
 points, checked by the vault's existing credential/secret/sensitive-data
-patterns, and compared against every parsed task and Jarvis marker before
-writing. The shared P13-07 resolver selects one existing root file; the writer
-uses only `tree`, `read`, and a single `write` per successful run. It never
-creates or deletes a note. Writes preserve the original bytes, BOM and line
-ending, append below `## Suggested by Jarvis`, and retry a write conflict at most
-twice using freshly-read content and SHA.
+patterns, and compared with both inboxes and any existing root task files before
+writing. New lines begin `- [ ] (proactive)` and preserve available due date,
+explicit time and high-priority metadata. The writer never creates a note,
+writes to root `Task.md`/`Tasks.md`, or modifies a `Suggested by Jarvis`
+section. It uses only `tree`, `read`, and `write`, preserves all existing bytes,
+and retries a write conflict at most twice using freshly-read content and SHA.
+Each source fact carries a stable private identity where its source provides one;
+it is not sent to the model. A task receipt and its hidden marker use a hash of
+the cited source identities, independent of wording, elapsed time, category or
+destination. Legacy finding keys and markers remain checked during migration.
 
 Migration 0058 adds `proactive_todo_receipts`, retaining item/run IDs, a 32-hex
-finding key, Copenhagen date, outcome/reason codes and commit SHA, but no todo
-text. The filtered owner/key index prevents a finding from being marked added
-twice; the owner/day/status index supports the daily cap. Successful commits
-record added receipts and set `proactive_items.todo_added`; marker recovery
-repairs a lost receipt. Two failed attempts settle a finding. Hook and receipt
+source/action key, Copenhagen date, outcome/reason codes and commit SHA, but no
+todo text or source identity. The filtered owner/key index prevents a task from
+being added twice across destinations; the owner/day/status index supports the
+daily cap. Successful commits record added receipts and set
+`proactive_items.todo_added`; marker recovery repairs a lost receipt, including
+after a conflict. Existing completed/deleted proactive tasks stay receipt-backed
+and are not re-added. Two failed attempts settle a task. Hook and receipt
 failures are isolated from run completion, and diagnostics contain only IDs,
 counts, durations and reason codes.
 
@@ -2554,10 +2569,9 @@ The reminder planner and ticker (P13-13) ride the alert flag, so they add no fla
 their own. There is no web flag: the Proactive page and its Settings section already
 show what these hooks produce, so `deploy.yml` and the web build are unchanged.
 
-At runtime, after each check the writer may append new lines under
-`## Suggested by Jarvis` in the one existing todo file: add-only, never creating,
-editing or deleting, at most three per run and five per Copenhagen day, in one vault
-commit per run. A scheduled or catch-up run may send one generic alert push for a
+At runtime, after each check the writer may append new lines to the corresponding
+existing Personal or Work inbox: add-only, never creating, editing or deleting,
+at most three per run and five per Copenhagen day. A scheduled or catch-up run may send one generic alert push for a
 new, time-critical deadline or clash finding: at most one per check and three per
 Copenhagen day, and never in the 22:00 to 07:00 quiet window, which is enforced in
 the hook and again at the sender. Reminders send one generic push about an hour

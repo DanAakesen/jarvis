@@ -93,14 +93,17 @@ push switched on and a subscribed device, and they share the one alert flag.
 
 What now happens, exactly:
 
-- Todos: after a check, Jarvis may add new lines under a `## Suggested by Jarvis`
-  heading in the owner's existing todo file in the vault repository. Each added
-  line ends with a small hidden marker. It never edits, moves or deletes an
-  existing line and never creates the file: if the file is missing it writes
-  nothing, and the Proactive page shows "Todo file not found" for the Todo list
-  source. It adds at most 3 lines per check and 5 per Copenhagen day, in one
-  commit per check, and it follows the pause switch and the Todo list source
-  switch.
+- Todos: eligible proactive tasks go only to an existing `Personal/Inbox.md` or
+  `Work/Inbox.md`; every new task starts `- [ ] (proactive)`. Project/software,
+  Factory, PR/build/check and engineering suggestions are excluded across all
+  sources. Ambiguous scope, missing identity or an unavailable/unwritable
+  destination means no write and a content-free skip reason. Stable source/action
+  receipts and hidden markers deduplicate across wording, elapsed time, finding
+  category and inbox routing, including after owner completion or removal.
+  Existing tasks and the `Suggested by Jarvis` section are untouched, and root
+  `Task.md`/`Tasks.md` is never a write destination. The writer adds at most 3
+  lines per check and 5 per Copenhagen day and follows pause, the Todo list
+  switch, and existing scheduled quiet-hour behavior.
 - Alerts: only a time-critical finding (a todo due within 24 hours, or a calendar
   clash starting within 48 hours) found by the scheduled 07:00 or 18:00 check, or
   its catch-up, can send a push. At most one push per check and 3 a day, never
@@ -408,7 +411,14 @@ check. The SQL snapshot is covered by the isolated database integration suite
 only when its loopback SQL Server fixture is available; do not claim it ran
 otherwise. No source flag is enabled by these checks.
 
-## P13-11 proactive suggested-todo writer (18 October 2026)
+## P13-11/P13-20 proactive suggested-todo writer (18/21 October 2026)
+
+P13-20 replaces the former root-dashboard destination and selection behavior.
+The writer now targets only existing Personal/Work inboxes and stores a
+content-free skip reason for excluded project suggestions or ambiguous scope.
+Its receipt key hashes stable cited source identities, not finding wording,
+category, elapsed time or the selected inbox. Missing or unverified destinations
+fail closed. The writer never changes old `Suggested by Jarvis` lines.
 
 The writer is constructed only inside the enabled proactive composition and
 only when `JARVIS_PROACTIVE_TODO_WRITES_ENABLED` is exactly `true`. The flag
@@ -416,11 +426,13 @@ defaults off in code; since P13-15 only `infra/main.bicep` sets it, and
 `src/proactive/todo-writes-default-off.test.ts` pins that. The existing
 pause/Todos switches and independent writer flag are the controls.
 The writer also requires the SQL pool for durable receipt and daily-cap storage.
-The hook reuses the P13-07 resolver/parser, does not create or delete files, and
-logs no suggestion text or vault path. SQL receipts are covered by the isolated
-schema integration suite.
+The hook keeps the P13-07 bounded limits and uses read-only task discovery for
+duplicates; its only write destinations are `Personal/Inbox.md` and
+`Work/Inbox.md`. It does not create or delete files and logs no suggestion text
+or vault path. SQL receipts are covered by the isolated schema integration suite.
 
 Focused checks:
+`npm test --workspace @jarvis/backend -- --run src/proactive/todo-writer.test.ts src/proactive/todo-lines.test.ts src/proactive/prompt.test.ts src/proactive/engine.test.ts src/proactive/sources/todos.test.ts src/proactive/sources/mail.test.ts src/proactive/sources/calendar.test.ts src/proactive/sources/calendar-reader.test.ts src/proactive/sources/news-parse.test.ts src/proactive/sources/news.test.ts src/proactive/sources/weather.test.ts src/proactive/sources/factory.test.ts`,
 `npm test --workspace @jarvis/backend -- --run src/config.test.ts src/logging.test.ts src/logging-source.test.ts src/proactive/todo-lines.test.ts src/proactive/todo-writer.test.ts src/proactive/composition.test.ts src/proactive/todo-writes-default-off.test.ts src/proactive/store.test.ts src/database/proactive-todo-store.test.ts src/database/migrations.test.ts src/vault/vault.test.ts`,
 `npm run build --workspace @jarvis/backend`, and
 `npm run lint --workspace @jarvis/backend`. SQL Server checks use

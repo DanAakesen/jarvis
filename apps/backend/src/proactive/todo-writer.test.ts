@@ -181,11 +181,12 @@ describe('proactive todo writer', () => {
   });
 
   it.each([
-    [{ source: 'factory' as const }, 'Factory finding'],
-    [{ evidenceText: 'Synthetic pull request awaiting review' }, 'Mail finding'],
-    [{ evidenceText: 'Synthetic software project build checks failed' }, 'Calendar finding'],
-    [{ evidenceText: 'Engineering follow-up for a synthetic repository' }, 'Other source'],
-  ])('keeps project and engineering suggestions as observations (%s)', async (evidence, _sourceLabel) => {
+    { source: 'factory' as const },
+    { evidenceText: 'Synthetic pull request awaiting review' },
+    { evidenceText: 'Synthetic software project build checks failed' },
+    { evidenceText: 'Synthetic build failed' },
+    { evidenceText: 'Engineering follow-up for a synthetic repository' },
+  ])('keeps project and engineering suggestions as observations (%s)', async (evidence) => {
     const state = await fixture();
     const run = await context(state.store, [{
       key: 8, text: 'Review the synthetic report', scope: 'work', category: 'prep',
@@ -216,6 +217,21 @@ describe('proactive todo writer', () => {
     expect(await state.receipts.list([actionKey(9)])).toMatchObject([{ skipped: true }]);
   });
 
+  it('fails closed with a content-free reason when source identity is unavailable', async () => {
+    const state = await fixture();
+    const run = await context(state.store, [{
+      key: 18, text: 'Pick up synthetic groceries', scope: 'personal', identity: null,
+    }]);
+
+    await state.writer(run);
+
+    expect(state.vault.tree).not.toHaveBeenCalled();
+    expect(state.vault.write).not.toHaveBeenCalled();
+    expect(state.logger.warn).toHaveBeenCalledWith(
+      expect.objectContaining({ reason: 'source_identity_unavailable' }), 'proactive.todo_writer',
+    );
+  });
+
   it('leaves existing dashboard suggestions untouched and never uses them as a destination', async () => {
     const state = await fixture();
     const legacy = '## Suggested by Jarvis\n- [ ] Review synthetic report <!-- jarvis:p:aaaaaaaaaaaaaaaa -->\n';
@@ -228,6 +244,20 @@ describe('proactive todo writer', () => {
     expect(state.vault.content('Tasks.md')).toBe(legacy);
     expect(state.logger.warn).toHaveBeenCalledWith(
       expect.objectContaining({ reason: 'duplicate' }), 'proactive.todo_writer',
+    );
+  });
+
+  it('does not append to an existing suggested section in a routed inbox', async () => {
+    const existing = '## Suggested by Jarvis\n- [ ] Existing synthetic task\n';
+    const state = await fixture({ content: existing });
+    await state.writer(await context(state.store, [
+      { key: 19, text: 'Review a synthetic note', scope: 'personal' },
+    ]));
+
+    expect(state.vault.write).not.toHaveBeenCalled();
+    expect(state.vault.content()).toBe(existing);
+    expect(state.logger.warn).toHaveBeenCalledWith(
+      expect.objectContaining({ reason: 'todo_destination_unwritable' }), 'proactive.todo_writer',
     );
   });
 
@@ -345,7 +375,7 @@ describe('proactive todo writer', () => {
     expect(state.vault.write.mock.calls[1]?.[1].match(/^- \[ \]/gmu)).toHaveLength(4);
   });
 
-  it('records missing and ambiguous resolver outcomes without creating a file', async () => {
+  it('never falls back to a root task file when an inbox destination is missing', async () => {
     for (const paths of [[], ['task.md', 'tasks.md']]) {
       const state = await fixture({ paths, content: null });
       const run = await context(state.store, [{ key: paths.length, text: 'Resolver synthetic task' }]);
@@ -353,6 +383,9 @@ describe('proactive todo writer', () => {
       expect(state.vault.write).not.toHaveBeenCalled();
       expect(state.vault.read).not.toHaveBeenCalled();
       expect(state.vault.delete).not.toHaveBeenCalled();
+      expect(state.logger.warn).toHaveBeenCalledWith(
+        expect.objectContaining({ reason: 'todo_destination_missing' }), 'proactive.todo_writer',
+      );
       expect(await state.receipts.list([key(paths.length)])).toEqual([]);
     }
   });

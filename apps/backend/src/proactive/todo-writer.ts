@@ -47,7 +47,7 @@ const inboxes = {
 } as const;
 const rootTaskPath = /^(?:task|tasks)\.md$/iu;
 const projectPattern = /\b(?:software|engineering|code(?:base| review|ing)?|repository|repo|pull requests?|merge requests?|pr\b|ci\/cd|pipelines?|deployment|deployments?|commits?|branches|unit tests?|test suites?|release engineering|build checks?|software factory|factory tasks?|project(?:s)?)\b/iu;
-const projectBuildPattern = /\b(?:build|check|test|review|follow[- ]?up)\b.{0,36}\b(?:software|code|repo|branch|pipeline|ci|pull request|pr\b|deployment|engineering|project)\b|\b(?:software|code|repo|branch|pipeline|ci|pull request|pr\b|deployment|engineering|project)\b.{0,36}\b(?:build|check|test|review|follow[- ]?up)\b/iu;
+const projectBuildPattern = /\b(?:build|check|test|review|follow[- ]?up)\b.{0,36}\b(?:software|code|repo|branch|pipeline|ci|pull request|pr\b|deployment|engineering|project)\b|\b(?:software|code|repo|branch|pipeline|ci|pull request|pr\b|deployment|engineering|project)\b.{0,36}\b(?:build|check|test|review|follow[- ]?up)\b|\b(?:build|checks?)\b.{0,16}\b(?:failed|failing|failure|passed|passing|pending|blocked|running)\b/iu;
 const personalScopePattern = /\b(?:personal|home|household|family|doctor|dentist|groceries|grocery|shopping|school|kids|children|birthday|rent|utilities|medicine|cleaning|laundry)\b/iu;
 const workScopePattern = /\b(?:work|office|job|manager|colleague|coworker|client|customer|supplier|business|workplace|professional|invoice|agenda)\b/iu;
 

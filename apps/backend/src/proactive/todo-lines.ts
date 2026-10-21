@@ -91,19 +91,6 @@ function lineEnding(existing: string): string {
   return firstNewline > 0 && existing[firstNewline - 1] === '\r' ? '\r\n' : '\n';
 }
 
-function hasJarvisHeading(existing: string): boolean {
-  const lines = existing.replace(/^\uFEFF/u, '').split(/\r?\n/u);
-  let lastHeading: string | undefined;
-  for (let index = 0; index < lines.length; index += 1) {
-    const atx = /^ {0,3}#{1,6}\s+(.+?)\s*#*\s*$/u.exec(lines[index]!);
-    if (atx) lastHeading = atx[1]!.trim();
-    else if (index > 0 && /^ {0,3}(?:=+|-+)\s*$/u.test(lines[index]!) && lines[index - 1]!.trim()) {
-      lastHeading = lines[index - 1]!.trim();
-    }
-  }
-  return lastHeading?.toLocaleLowerCase('en') === 'suggested by jarvis';
-}
-
 function isInsideCodeFence(existing: string): boolean {
   const fences = existing.split(/\r?\n/u).filter((line) => /^\s*(?:`{3,}|~{3,})/u.test(line));
   return fences.length % 2 === 1;
@@ -111,30 +98,4 @@ function isInsideCodeFence(existing: string): boolean {
 
 export function isTodoFileWritable(existing: string): boolean {
   return !isInsideCodeFence(existing);
-}
-
-export function appendTodos(existing: string, lines: readonly string[]): string {
-  if (lines.length === 0) return existing;
-  if (lines.some((line) => /[\r\n]/u.test(line))) throw new TypeError('Todo lines must be single lines');
-  if (isInsideCodeFence(existing)) throw new Error('Todo file is inside an unclosed code fence');
-
-  const ending = lineEnding(existing);
-  const heading = hasJarvisHeading(existing);
-  let prefix = '';
-  if (heading) {
-    if (!existing.endsWith(ending)) prefix = ending;
-  }
-  if (!heading) {
-    const trailingEndings = existing.match(/(?:\r?\n)+$/u)?.[0].match(/\r?\n/gu)?.length ?? 0;
-    if (existing.length === 0) prefix = ending;
-    else if (trailingEndings < 2) prefix = ending.repeat(2 - trailingEndings);
-    prefix += `## Suggested by Jarvis${ending}`;
-  }
-  const result = `${existing}${prefix}${lines.join(ending)}`;
-  const appended = result.slice(existing.length);
-  const expectedLines = lines.join(ending);
-  if (!result.startsWith(existing) || !appended.endsWith(expectedLines)) {
-    throw new Error('Todo append would change existing content');
-  }
-  return result;
 }

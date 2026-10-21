@@ -1,5 +1,32 @@
 # Decisions
 
+## Route proactive tasks to Personal/Work and exclude project work (21 October 2026; #1186)
+
+P13-20 replaces the suggested-todo destination and selection behavior from
+P13-11/#931 and P13-15/#936. Preserve proactive observations, alerts and
+reminders, but create a task only when its scope and source/action identity are
+known safely. Exclude Factory evidence and software-project, pull-request,
+build/check and engineering follow-up suggestions using both task text and all
+cited source facts, independent of source or finding category.
+
+Route clearly Personal and non-project Work tasks only to the corresponding
+existing `Personal/Inbox.md` or `Work/Inbox.md`. Do not create a file or use root
+`Task.md`/`Tasks.md`; do not append to, migrate or otherwise change any existing
+`Suggested by Jarvis` section. If scope, stable source identity, destination or
+writability is uncertain, do not write and retain the finding with a
+content-free reason.
+
+Every new proactive task is a native checkbox whose visible text begins exactly
+`(proactive)`. Hash stable source/action identities into existing receipts and
+markers, excluding observation time, elapsed time, model wording, finding
+category and destination. Check both inboxes and existing root task files for
+duplicates; preserve durable receipts after completion/removal and existing
+legacy receipts/markers. Keep the caps, pause/source gates, bounded add-only
+writes, conflict retry and recovery. Ordinary user-requested task creation,
+07:00/18:00 Copenhagen cadence, catch-up and quiet hours remain unchanged.
+
+Refs DanAakesen/jarvis#1186
+
 ## Bound voice startup and summarize every session (21 October 2026; #1177)
 
 Refs DanAakesen/jarvis#1153. Accepted upstream WebSockets were followed by no
@@ -1643,7 +1670,8 @@ the fact cap, preserving explicit-time eligibility across duplicates.
 The 30-second ticker cadence and existing one-hour reminder lead
 time, flags and release controls are unchanged.
 
-Keep the writer's root-only, add-only "Suggested by Jarvis" behavior unchanged.
+This writer destination and selection rule was superseded by P13-20/#1186 below.
+At the time, the root-only, add-only "Suggested by Jarvis" behavior was retained.
 Limitation: suggestion deduplication still checks the root file and durable
 receipts, not all source notes. Widening it would couple writes to scan limits,
 failures and snapshot freshness; defer that write-path change.
@@ -1926,7 +1954,8 @@ place (names kept, as `daily/default-off.test.ts` was when Daily went on) from
 
 What Jarvis may now do, and the limits that stay:
 
-- Todos: add new lines under a `## Suggested by Jarvis` heading in the owner's
+- Todos (destination and selection superseded by P13-20/#1186): add new lines
+  under a `## Suggested by Jarvis` heading in the owner's
   existing todo file, each ending with a small hidden marker. It never edits or
   deletes an existing line and never creates the file. At most 3 lines per check and
   5 per Copenhagen day. It follows the pause and Todo list source switches.
