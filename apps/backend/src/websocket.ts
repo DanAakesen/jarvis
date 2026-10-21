@@ -9,8 +9,6 @@ export const VOICE_SUBPROTOCOL = 'jarvis.voice.v1';
 export const PC_BRIDGE_SUBPROTOCOL = 'jarvis.pc.v1';
 
 export const MAX_WEBSOCKET_PAYLOAD_BYTES = 1_050_000;
-const supportedSubprotocols = new Set([VOICE_SUBPROTOCOL, PC_BRIDGE_SUBPROTOCOL]);
-
 export function registerWebSocketPlugin<Logger extends FastifyBaseLogger>(
   app: FastifyInstance<RawServerDefault, RawRequestDefaultExpression, RawReplyDefaultExpression, Logger>,
 ): () => void {
@@ -35,11 +33,12 @@ export function registerWebSocketPlugin<Logger extends FastifyBaseLogger>(
     options: {
       maxPayload: MAX_WEBSOCKET_PAYLOAD_BYTES,
       perMessageDeflate: false,
-      handleProtocols: (protocols) => {
-        for (const protocol of protocols) {
-          if (supportedSubprotocols.has(protocol)) return protocol;
-        }
-        return false;
+      handleProtocols: (protocols, request) => {
+        const path = request.url?.split('?')[0];
+        const expected = path === '/pc-bridge/connect'
+          ? PC_BRIDGE_SUBPROTOCOL
+          : path === '/voice' || path === '/voice/da' ? VOICE_SUBPROTOCOL : undefined;
+        return expected && protocols.has(expected) ? expected : false;
       },
     },
   });
