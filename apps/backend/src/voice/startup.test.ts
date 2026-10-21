@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildApp, type BuildAppOptions } from '../app.js';
 import { loadConfig } from '../config.js';
 import type { ConversationStore } from '../core/conversation-store.js';
+import { defaultAwayModeState } from '../core/away-mode.js';
 import { createLogger } from '../logging.js';
 import { createVoiceRelayModule } from './relay.js';
 
@@ -203,6 +204,26 @@ describe('voice startup without network', () => {
       toolCount: 1, totalBytes: expect.any(Number), closedBy: 'relay',
     })]);
     expect(f.browser.close).toHaveBeenCalledWith(1011, 'Voice connection failed');
+  });
+
+  it('retains a presence change during handshake for initial configuration without failing startup', async () => {
+    const f = await fixture({
+      awayModeStore: { read: async () => ({ ...defaultAwayModeState, mode: 'away' }) } as BuildAppOptions['awayModeStore'],
+    });
+    f.app.nowEventHub.publish({
+      type: 'mode_changed', mode: 'away', away: true, source: 'manual', changedAt: null,
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(f.browser.close).not.toHaveBeenCalled();
+    expect(f.upstream.sent).toEqual([]);
+    f.upstream.open();
+    const update = JSON.parse(f.upstream.sent[0]!);
+    expect(update.session.instructions).toContain('away');
+    f.upstream.event('session.updated');
+    f.browser.close(1000, '');
+    expect(f.summaries()).toHaveLength(1);
+    expect(f.timeouts()).toEqual([]);
+    expect(f.records.some((record) => record.msg === 'voice.connection_failed')).toBe(false);
   });
 
   it('summarizes shutdown once and cancels its startup deadline', async () => {

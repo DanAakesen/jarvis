@@ -1649,7 +1649,7 @@ function registerVoiceRoute(
           personality = settings.personality;
           memorySettings = settings.memory;
         }
-        if (english) sendUpstream(createRealtimeSessionUpdate(
+        if (english && upstream?.readyState === WebSocket.OPEN && !controller.signal.aborted) sendUpstream(createRealtimeSessionUpdate(
           app.jarvisTools, personality, presence, language, projects, transcriptionModel, voiceTuning, memorySettings,
         ));
       })().catch(() => request.log.warn('voice.presence_mode_update_failed'));
