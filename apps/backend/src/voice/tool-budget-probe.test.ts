@@ -75,6 +75,7 @@ describe('voice tool-budget background probes', () => {
   it('probes in fixed order and stops at the first ready frame without changing memory', async () => {
     const f = setup();
     expect(f.probe.start(f.context)).toBe(true);
+    expect(f.connect).not.toHaveBeenCalled();
     await vi.advanceTimersByTimeAsync(0);
     expect(f.connect).toHaveBeenCalledTimes(1);
     expect(f.probe.start(f.context)).toBe(false);

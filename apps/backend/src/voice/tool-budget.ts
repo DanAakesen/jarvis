@@ -90,20 +90,52 @@ export function createToolBudgetProbeTools(
   const copyCount = Math.max(0, all.length - rungOne.length);
   const targetBytes = all.reduce((sum, tool) => sum + definitionBytes(tool), 0);
   const baseBytes = rungOne.reduce((sum, tool) => sum + definitionBytes(tool), 0);
-  let remainingBytes = targetBytes - baseBytes;
-  const copies: RegisteredTool[] = [];
+  const targetAddedBytes = targetBytes - baseBytes;
+  const maximumAddedBytes = targetAddedBytes + Math.floor(targetBytes * 0.02);
+  const copySources = [...rungOne].sort((left, right) =>
+    left.name < right.name ? -1 : left.name > right.name ? 1 : 0);
+  let choices = new Map<number, RegisteredTool[]>([[0, []]]);
   for (let index = 0; index < copyCount && rungOne.length > 0; index += 1) {
     const name = `probe_copy_${String(index + 1).padStart(2, '0')}`;
-    const remainingCopies = copyCount - index;
-    const desiredBytes = remainingBytes / remainingCopies;
-    const selected = rungOne.map((tool) => {
+    const options = new Map<number, RegisteredTool>();
+    for (const tool of copySources) {
       const copy = { ...tool, name };
-      return { copy, sourceName: tool.name, bytes: definitionBytes(copy) };
-    }).sort((left, right) =>
-      Math.abs(left.bytes - desiredBytes) - Math.abs(right.bytes - desiredBytes) ||
-      (left.sourceName < right.sourceName ? -1 : left.sourceName > right.sourceName ? 1 : 0))[0]!;
-    copies.push(selected.copy);
-    remainingBytes -= selected.bytes;
+      const bytes = definitionBytes(copy);
+      if (!options.has(bytes)) options.set(bytes, copy);
+    }
+    const next = new Map<number, RegisteredTool[]>();
+    for (const [usedBytes, selected] of choices) {
+      for (const [copyBytes, copy] of options) {
+        const total = usedBytes + copyBytes;
+        if (total <= maximumAddedBytes && !next.has(total)) next.set(total, [...selected, copy]);
+      }
+    }
+    if (next.size === 0) {
+      choices.clear();
+      break;
+    }
+    choices = next;
+  }
+  const copies = [...choices.entries()]
+    .filter(([, selected]) => selected.length === copyCount)
+    .sort((left, right) =>
+      Math.abs(left[0] - targetAddedBytes) - Math.abs(right[0] - targetAddedBytes) ||
+      left[0] - right[0])[0]?.[1] ?? [];
+  if (copies.length !== copyCount) {
+    let remainingBytes = targetAddedBytes;
+    for (let index = 0; index < copyCount && rungOne.length > 0; index += 1) {
+      const name = `probe_copy_${String(index + 1).padStart(2, '0')}`;
+      const remainingCopies = copyCount - index;
+      const desiredBytes = remainingBytes / remainingCopies;
+      const selected = rungOne.map((tool) => {
+        const copy = { ...tool, name };
+        return { copy, sourceName: tool.name, bytes: definitionBytes(copy) };
+      }).sort((left, right) =>
+        Math.abs(left.bytes - desiredBytes) - Math.abs(right.bytes - desiredBytes) ||
+        (left.sourceName < right.sourceName ? -1 : left.sourceName > right.sourceName ? 1 : 0))[0]!;
+      copies.push(selected.copy);
+      remainingBytes -= selected.bytes;
+    }
   }
   return registryOf([...rungOne, ...copies]);
 }

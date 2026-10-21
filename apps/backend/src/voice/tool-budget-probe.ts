@@ -74,13 +74,12 @@ export function createVoiceToolBudgetProbe(
     let closeTimer: ReturnType<typeof setTimeout> | undefined;
     let settled = false;
     let resolveDone!: () => void;
-    let current!: ActiveProbe;
     const done = new Promise<void>((doneResolve) => { resolveDone = doneResolve; });
     const log = (outcome: 'timeout' | 'error' | 'closed' | 'ready') => {
       const fields = { probe, ...metrics, outcome, elapsedMs: Math.max(0, Math.round(now() - startedAt)) };
       context.log[outcome === 'ready' ? 'info' : 'warn'](fields, 'voice.tool_budget_probe');
     };
-    const finish = (outcome: 'timeout' | 'error' | 'closed' | 'ready') => {
+    function finish(outcome: 'timeout' | 'error' | 'closed' | 'ready') {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
@@ -105,8 +104,8 @@ export function createVoiceToolBudgetProbe(
       } else {
         finishClose();
       }
-    };
-    current = { done, finish };
+    }
+    const current = { done, finish };
     active = current;
     timer = setTimeout(() => finish('timeout'), TOOL_BUDGET_PROBE_DEADLINE_MS);
     timer.unref();
@@ -176,12 +175,18 @@ export function createVoiceToolBudgetProbe(
           (lastRunAt !== undefined && startedAt - lastRunAt < TOOL_BUDGET_PROBE_INTERVAL_MS)) return false;
       running = true;
       lastRunAt = startedAt;
-      void run(context).catch(() => {
-        context.log.warn({
-          probe: 'full', toolCount: 0, toolBytes: 0, instructionsBytes: 0, frameBytes: 0,
-          outcome: 'error', elapsedMs: 0,
-        }, 'voice.tool_budget_probe');
-      }).finally(() => { running = false; });
+      queueMicrotask(() => {
+        if (disposed) {
+          running = false;
+          return;
+        }
+        void run(context).catch(() => {
+          context.log.warn({
+            probe: 'full', toolCount: 0, toolBytes: 0, instructionsBytes: 0, frameBytes: 0,
+            outcome: 'error', elapsedMs: 0,
+          }, 'voice.tool_budget_probe');
+        }).finally(() => { running = false; });
+      });
       return true;
     },
     async close() {
