@@ -235,9 +235,9 @@ azure-monitor-opentelemetry-exporter==1.0.0b57 \
     --hash=sha256:55c9e2ff5db5406307cfe15090c749524b53769026ec588ed96611547f53d551 \
     --hash=sha256:7489a8a8b7a9cfcbf8476808e1921f4b646dc18aa143aa24d442d344e4d067ec
     # via microsoft-opentelemetry
-certifi==2026.7.22 \
-    --hash=sha256:62f22742b58a1a33014a2b6b706588a8d7e2a88ae7bd1a6ebe8c992928483775 \
-    --hash=sha256:741e2c3b351ddf169a738da9f2c048608ff7f2c5cc02f1ebc6b118bb090d5d55
+certifi==2026.10.19 \
+    --hash=sha256:035c1e85572b141bf1c3a3eff0e33a8eb74917522f2559075ff8d2fea780a1ae \
+    --hash=sha256:42d35340cc5b9ba78e818ddbff0c5b1c2b779de448a340fd1b989f5fa8670e1b
     # via
     #   httpcore
     #   httpx
