@@ -2902,6 +2902,8 @@ with Entra device code as the `jarvis-pc-bridge` public client and requests only
 to `/pc-bridge/connect` with subprotocol `jarvis.pc.v1`; it opens no listener or
 firewall port and retries after disconnect. Entra app-only identities, other
 delegated apps, and users other than Dan are rejected at the route boundary.
+`buildApp` registers `@fastify/websocket` once at application level before either
+the voice relay or PC bridge routes are added.
 
 The backend registers `pc_open`, `pc_media`, and `pc_active_window` in its
 existing tool registry. Protocol messages are bounded to 128 KiB, correlate UUID

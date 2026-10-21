@@ -1,7 +1,6 @@
 import { refuseGmailComputerAccess } from '../core/gmail-access-policy.js';
 import { randomUUID } from 'node:crypto';
 import type { FastifyRequest } from 'fastify';
-import websocket from '@fastify/websocket';
 import WebSocket, { type RawData } from 'ws';
 import {
   isClipboardReadResult,
@@ -28,12 +27,14 @@ import {
   type PcActPlanner,
   type PcActVisionModel,
 } from './pc-act.js';
+import { MAX_WEBSOCKET_PAYLOAD_BYTES } from '../websocket.js';
+
+export { PC_BRIDGE_SUBPROTOCOL } from '../websocket.js';
 
 const MAX_MESSAGE_BYTES = 128 * 1024;
-const MAX_CAPTURE_RESPONSE_BYTES = 1_050_000;
+const MAX_CAPTURE_RESPONSE_BYTES = MAX_WEBSOCKET_PAYLOAD_BYTES;
 const DEFAULT_TIMEOUT_MS = 15_000;
 export const DEFAULT_STARTUP_GRACE_MS = 2 * 60_000;
-export const PC_BRIDGE_SUBPROTOCOL = 'jarvis.pc.v1';
 const idPattern = /^[\da-f]{8}-[\da-f]{4}-4[\da-f]{3}-[89ab][\da-f]{3}-[\da-f]{12}$/iu;
 const controlActions = new Set<PcCommand['name']>([
   'open_url', 'open_app', 'close_app', 'open_folder', 'focus_window', 'uia_act', 'browser_act', 'media',
@@ -807,13 +808,6 @@ export function createPcBridgeModule(options: PcBridgeModuleOptions = {}): PcBri
     registerRoutes: async (app) => {
       // Run before the WebSocket plugin closes clients and emits disconnects.
       app.addHook('preClose', async () => { await bridge.close(); });
-      await app.register(websocket, {
-        options: {
-          maxPayload: MAX_CAPTURE_RESPONSE_BYTES,
-          perMessageDeflate: false,
-          handleProtocols: (protocols) => protocols.has(PC_BRIDGE_SUBPROTOCOL) ? PC_BRIDGE_SUBPROTOCOL : false,
-        },
-      });
       app.get('/pc-bridge/connect', {
         websocket: true,
         config: { jarvisPcBridge: true },

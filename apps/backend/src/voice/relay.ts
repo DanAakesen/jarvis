@@ -1,13 +1,10 @@
 import { randomUUID } from 'node:crypto';
 import { createToolBudgetMemory, createToolBudgetRungs, type ToolBudgetMemory, type ToolBudgetRung } from './tool-budget.js';
 import { createVoiceDiagnostics, VOICE_STARTUP_CLOSE_CODE, VoiceStageTimeout } from './diagnostics.js';
-import type { IncomingMessage } from 'node:http';
-import type { Duplex } from 'node:stream';
 import { workspaceContext } from '../core/workspace-context.js';
 import { runModelToolCall } from '../core/tool-origin.js';
 import { modeContext } from '../core/presence-instructions.js';
 import { projectContext, type ProjectContextEntry } from '../factory/project-context.js';
-import websocket from '@fastify/websocket';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import WebSocket, { type RawData } from 'ws';
 import { voiceLiveModels } from '../core/model-catalog.js';
@@ -49,9 +46,9 @@ import {
   type PartialSpeechRecognizer,
   type PartialSpeechRecognizerFactory,
 } from './speech-recognizer.js';
+export { VOICE_SUBPROTOCOL } from '../websocket.js';
 
 export const VOICE_LIVE_SCOPE = 'https://ai.azure.com/.default';
-export const VOICE_SUBPROTOCOL = 'jarvis.voice.v1';
 export const DANISH_VOICE_AGENT_NAME = 'jarvis-voice-mai';
 const MAX_MESSAGE_BYTES = 1_048_576;
 const MAX_TRANSCRIPT_CHARACTERS = 20_000;
@@ -2546,36 +2543,6 @@ export function createVoiceRelayModule(options: VoiceRelayOptions): BackendModul
     id: 'voice',
     tools: [],
     registerRoutes: async (app) => {
-      // Failed/incomplete upgrades are not WebSocketServer clients, but can keep HTTP close waiting.
-      const pendingUpgrades = new Set<Duplex>();
-      const trackUpgrade = (_request: IncomingMessage, socket: Duplex) => {
-        pendingUpgrades.add(socket);
-        socket.once('close', () => { pendingUpgrades.delete(socket); });
-        socket.once('end', () => {
-          if (pendingUpgrades.has(socket)) socket.destroy();
-        });
-      };
-      app.server.on('upgrade', trackUpgrade);
-      app.addHook('onClose', async () => { app.server.removeListener('upgrade', trackUpgrade); });
-      await app.register(websocket, {
-        preClose: async () => {
-          for (const socket of pendingUpgrades) socket.destroy();
-          for (const socket of app.websocketServer.clients) {
-            socket.close(1012, 'Service restarting; reconnect');
-          }
-          await new Promise<void>((resolve, reject) => {
-            app.websocketServer.close((error) => error ? reject(error) : resolve());
-          }).catch((error: unknown) => { app.shutdownErrors.push(error); });
-        },
-        options: {
-          maxPayload: MAX_MESSAGE_BYTES,
-          perMessageDeflate: false,
-          handleProtocols: (protocols) => protocols.has(VOICE_SUBPROTOCOL) ? VOICE_SUBPROTOCOL : false,
-        },
-      });
-      app.websocketServer.on('connection', (_socket, request) => {
-        pendingUpgrades.delete(request.socket);
-      });
       options.registerPhoneMediaRoute?.(app);
       if (options.connect) {
         registerVoiceRoute(
