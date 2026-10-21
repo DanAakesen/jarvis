@@ -83,6 +83,8 @@ describe('Nutrition section', () => {
     await screen.findByText('500 kcal left');
     expect(screen.getByText('50 g left')).toBeTruthy();
     expect(document.querySelector('.nutrition-today-values')?.textContent).toContain('2');
+    expect(screen.getByText('Protein left').closest('div')?.getAttribute('data-metric')).toBe('protein');
+    expect(document.querySelector('.nutrition-today-card > h3 .daily-icon-chip')?.getAttribute('aria-hidden')).toBe('true');
     expect(screen.getByText('Staleness unknown')).toBeTruthy();
     expect(screen.getByText(/Read/u)).toBeTruthy();
     expect(document.body.textContent).not.toMatch(/\bDaily\b/u);

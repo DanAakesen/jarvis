@@ -5835,6 +5835,18 @@ reads the same sync status as before and now derives a status dot (`data-freshne
 recent, behind or pending; 36 hours) and a "Last sync" table from the feed rows it
 already receives, so no endpoint, DTO or backend change.
 
+**Health look, other sections (P14-57).** `daily/health-look-sections.css`, imported by
+`DailyHome` right after `health-look.css`, restyles the Workouts, Nutrition, Body &
+sleep, Briefs, Data and Rules & sources markup with the same `--health-*` tokens and no
+new token; every selector starts with `.daily-shell`, so it wins over the section
+stylesheets in any import order and nothing leaks outside the Health area. The section
+stylesheets are unchanged. New markup is small and presentational: decorative
+`IconChip`s in headings (`WorkoutOverview`, `NutritionSection`, `SleepView`,
+`BodyView`), `tone` and `icon` on the Workouts rings, `data-class` on the Workouts class
+cards and on the new `.workouts-history-glyph` wrapper in `WorkoutsSection`,
+`workouts-history-card` on the history section and `data-metric="protein"` on the
+Nutrition protein tile. No read, endpoint, DTO, route or backend change.
+
 ### On-demand Daily views (18 October 2026; P12-16)
 
 `dailyShowTool(data.query)` (`apps/backend/src/daily/tools/show.ts`) is the seventh

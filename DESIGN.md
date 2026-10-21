@@ -1933,6 +1933,27 @@ measured at 4.5:1 or better in both themes. `prefers-contrast: more` removes the
 and glow and uses solid edges, `forced-colors` keeps rings, tiles, tabs and the selected
 pill visible with system colours, and reduced motion removes the transitions.
 
+20 October 2026 (P14-57 / #1157; Refs #1116): the other Health sections follow the same
+look from `daily/health-look-sections.css`, with the P14-56 tokens and no new one. Lead
+blocks are glass cards with an icon chip beside one headline: Workouts Training (blue to
+violet; Gym and Run rings with the disc and the figure inside, totals on dark tiles, the
+day chart on a tile with Gym blue, Run rose and a muted Other series and matching
+legend badges), Nutrition "Today so far" and "Nutrition trend" (Protein left in the warm
+protein colour, charts on tiles with an amber target line), and Body & sleep
+measurements and "Last night". Workouts Gym, Run and Activity are tinted cards whose
+heading carries the class colour with its chip and word. Lists and records are panel
+cards: the Workouts inventory (amber uppercase group headings, three columns on wide
+screens, hairline rows), the Workouts history (a round class-tinted glyph chip, pill
+values and a pill Open button, hairline rows), Nutrition meals (hairline rows, outlined
+macro pills), the sleep nights, the Briefs history and detail (outlined month rows and
+chips), the Rules & sources groups (outlined rule cards and status pills) and the Data
+records. Figure captions are small uppercase labels, never a heading. Rows use hairline
+gradients rather than side borders, buttons in these sections are pills with a quiet
+edge, and `prefers-contrast: more`, `forced-colors` (system colours, no glass) and
+reduced motion inherit the P14-56 handling. Stable heights, the Not received,
+Unavailable, Could not load and No target set states, and every section id are
+unchanged.
+
 20 October 2026 (P14-55; Refs #1116, #1155): every ring and tile that compares
 against a training target reads the owner's targets from one shared read per
 visit to the Health area, so the Overview rings (steps scale with the selected days,

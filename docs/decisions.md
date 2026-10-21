@@ -78,6 +78,19 @@ Measured contrast of the overview text is at least 4.5:1 in both themes. This re
 the "no separate skin" wording in `PRODUCT.md` and `DESIGN.md`; it narrows it to "no
 second shell, window manager or voice, and no Health token outside the Health area".
 
+Other sections (P14-57). Workouts, Nutrition, Body & sleep, Briefs, Data and Rules &
+sources take the same look from a second stylesheet, `daily/health-look-sections.css`,
+imported right after `health-look.css`. It adds no token: it reuses the documented
+`--health-*` and `--type-health-*` properties and the shared radii, spacing and type
+roles. A section's lead block is a glass card (Workouts Training, Nutrition today and
+trend, Body & sleep measurements and last night), lists and records are panel cards
+(Workouts inventory and history, Nutrition meals, the nights, Briefs, Rules & sources
+groups, Data records), and figures sit on the dark tile. Class colour (Gym, Run,
+Activity) tints a card, a ring or a history glyph only together with its word and an
+icon. The change adds decorative, `aria-hidden` icon chips to headings and `data-class`
+or `data-metric` attributes for styling; reads, values, states, section ids and fixed
+heights are unchanged, and the waiting lists and calendar agenda stay with P14-52.
+
 Refs #1116
 Refs #1155
 Refs #1156

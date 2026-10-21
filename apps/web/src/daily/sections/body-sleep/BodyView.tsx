@@ -8,6 +8,7 @@ import { ScrollTable } from '../../ui/ScrollTable';
 import { StatTile } from '../../ui/StatTile';
 import { DailySectionHeader } from '../../ui/DailySectionHeader';
 import { FreshnessLine } from '../../ui/FreshnessLine';
+import { IconChip } from '../../ui/icons';
 import { Sparkline } from '../../ui/Sparkline';
 import { formatDate, formatNumber } from '../../ui/formatters';
 import { useDailyPages } from '../../ui/useDailyPages';
@@ -124,7 +125,7 @@ function MetricUnit({ name, unit, rows, period }: {
   const days = periodDates(period);
   const values = new Map(summary.days.map(day => [day.date, day.value]));
   return <section className="body-sleep-unit" aria-label={chartName}>
-    <h3>{chartName}</h3>
+    <h3><IconChip name="pulse" />{chartName}</h3>
     <div className="body-sleep-stats">
       <StatTile label="Latest" value={summary.latest?.value} unit={unit ?? ''}
         note={summary.latest ? formatDate(summary.latest.date) : 'No numeric days recorded'}

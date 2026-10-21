@@ -3,6 +3,7 @@ import { dailyQuerySources as sources } from '@jarvis/contracts';
 import type { DailySectionProps } from '../types';
 import { DailyChart } from '../../ui/DailyChart';
 import { DailyState } from '../../ui/DailyState';
+import { IconChip } from '../../ui/icons';
 import { Ring } from '../../ui/Ring';
 import { formatDuration, formatNumber } from '../../ui/formatters';
 import { useDailyPages, type DailyPages } from '../../ui/useDailyPages';
@@ -20,6 +21,7 @@ export function TrainingRing({ label, count, target, days }: {
     : goal === null ? 'no target set' : `${formatNumber(goal)} target for this period (${weekly} per week)`;
   return <div className="workouts-mini-ring">
     <Ring label={label} value={count} target={goal} centre={count === null ? '—' : formatNumber(count)}
+      tone={label === 'Gym' ? 'gym' : 'run'} icon={label === 'Gym' ? 'gym' : 'run'}
       caption="Sessions in selected period"
       summary={`${count === null ? 'Not received' : `${count} sessions`}; ${spoken}`} />
     <p>{target.status === 'loading' ? 'Loading target' : target.status === 'failed' ? 'Targets unavailable'
@@ -79,7 +81,7 @@ export function WorkoutOverview({ pages, rows, ...props }: DailySectionProps & {
   const complete = !pending && !partial;
   return <div className="workouts-overview">
     <section className="daily-stat-tile workouts-training" aria-labelledby="workouts-training-heading">
-      <h3 id="workouts-training-heading">Training</h3>
+      <h3 id="workouts-training-heading"><IconChip name="gym" />Training</h3>
       <div className="workouts-training-body">
         <dl className="workouts-training-totals" aria-label="Workout summary">
           <Figure label="Sessions" value={pending ? null : formatNumber(summary.count)} loading={loading} />
@@ -122,8 +124,8 @@ export function WorkoutOverview({ pages, rows, ...props }: DailySectionProps & {
         const classRows = summary.rows.filter(row => classifyWorkout(row) === name);
         const figures = classFigures(classRows);
         const none = complete && classRows.length === 0;
-        return <section className="daily-stat-tile workouts-class" key={name} aria-label={`${name} class`}>
-          <h3>{name}</h3>
+        return <section className="daily-stat-tile workouts-class" key={name} data-class={name.toLowerCase()} aria-label={`${name} class`}>
+          <h3><IconChip name={name === 'Gym' ? 'gym' : 'run'} />{name}</h3>
           <dl className="workouts-class-figures">
             <Figure label="Time" value={pending ? null : none ? '0 min' : figures.time} loading={loading} />
             <Figure label="Energy" value={pending ? null : none ? '0 kcal' : amount(figures.energy, 'kcal')} loading={loading} />
@@ -135,8 +137,8 @@ export function WorkoutOverview({ pages, rows, ...props }: DailySectionProps & {
             Average heart rate is the mean of received session averages, not a sample-weighted average.</p></div>
         </section>;
       })}
-      <section className="daily-stat-tile workouts-class" aria-label="Activity class">
-        <h3>Activity</h3>
+      <section className="daily-stat-tile workouts-class" data-class="activity" aria-label="Activity class">
+        <h3><IconChip name="steps" />Activity</h3>
         <dl className="workouts-class-figures">
           <Figure label="Steps" value={amount(activity.steps, 'steps')} loading={metricsLoading} />
           <Figure label="Active energy" value={amount(activity.energy, 'kcal')} loading={metricsLoading} />

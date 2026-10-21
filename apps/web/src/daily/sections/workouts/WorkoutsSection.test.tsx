@@ -112,6 +112,14 @@ describe('Workouts section', () => {
     expect(screen.getByRole('region', { name: 'Workouts in the loaded rows' })).toBeTruthy();
   });
 
+  it('marks each history glyph with its workout class and keeps it decorative', async () => {
+    const { container } = mount();
+    await screen.findByRole('list', { name: 'Recorded workout history' });
+    const glyphs = [...container.querySelectorAll('.workouts-history-glyph')];
+    expect(glyphs.map(glyph => glyph.getAttribute('data-class')).sort()).toEqual(['other', 'other', 'run']);
+    for (const glyph of glyphs) expect(glyph.textContent).toBe('');
+  });
+
   it('shows errors with a working retry', async () => {
     read.mockRejectedValueOnce(new DailyReadError('Synthetic outage'));
     mount();

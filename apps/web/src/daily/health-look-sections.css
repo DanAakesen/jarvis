@@ -1,0 +1,189 @@
+/*
+ * P14-57: the Health look (health-look.css) carried to Workouts, Nutrition, Body & sleep, Briefs, Data and Rules & sources.
+ * It only restyles what those sections already render: no new tokens, no new data, no new states. Every selector starts with
+ * .daily-shell so it wins over the section stylesheets regardless of import order, and nothing leaks outside the Health page.
+ * Surfaces: glass cards for a section's lead blocks, panel cards for lists and records, dark tiles for figures.
+ */
+
+/* Tiles: the same dark tile the Health panel uses, for every shared stat tile in the area. */
+.daily-shell .daily-stat-tile { border-color: var(--health-tile-edge); border-radius: var(--radius-panel); background: var(--health-tile); }
+.daily-shell .daily-stat-tile h3 { font-weight: 600; }
+.daily-shell .daily-stat-tile:not(.daily-stat-tile--compact) .daily-stat-value { font-size: var(--type-lead); font-weight: 750; }
+
+/* Panel cards: one large rounded dark surface for a list, a set of records or a group of settings. */
+.daily-shell :is(.workouts-inventory, .workouts-history-card, .nutrition-meals-list, .body-sleep-nights, .daily-brief-history, .daily-brief-detail, .daily-rules > section, .daily-data-records) {
+  padding: var(--space-4);
+  border: 1px solid var(--health-edge);
+  border-radius: var(--radius-window);
+  background: var(--health-tile);
+  box-shadow: var(--health-card-shadow);
+}
+
+/* Glass cards: the lead block of a section, a tint of the same navy as the overview cards. */
+.daily-shell :is(.workouts-training, .nutrition-today-card, .nutrition-trend, .body-sleep-unit, .body-sleep-last-night) {
+  padding: var(--space-4);
+  border: 1px solid var(--health-edge);
+  border-radius: var(--radius-window);
+  background: var(--health-card-health);
+  box-shadow: var(--health-card-shadow);
+}
+.daily-shell .workouts-training { background: var(--health-card-training); }
+.daily-shell .body-sleep-unit { background: var(--health-card-body); }
+
+/* Card headings: one headline, with its icon chip beside it. */
+.daily-shell :is(.workouts-training, .workouts-class, .workouts-inventory, .workouts-history-card, .nutrition-today-card, .nutrition-trend, .nutrition-meals-list, .body-sleep-unit, .body-sleep-last-night, .body-sleep-nights, .daily-brief-detail) > h3,
+.daily-shell .daily-rules > section > h2 {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: 0;
+  color: var(--text);
+  font-size: var(--type-lead);
+  font-weight: 700;
+}
+.daily-shell :is(.workouts-training, .workouts-class, .nutrition-today-card, .nutrition-trend, .body-sleep-unit, .body-sleep-last-night) > h3 .daily-icon-chip { width: 2.25rem; height: 2.25rem; }
+.daily-shell .workouts-training .daily-icon-chip { --chip-tone: var(--health-gym); }
+
+/* Captions over figures are tiny uppercase labels, not eyebrows. */
+.daily-shell :is(.workouts-training-totals dt, .workouts-class-figures dt, .nutrition-today-values dt, .nutrition-period-averages dt, .nutrition-meal-macros dt, .nutrition-meal-fields dt, .body-sleep-detail dt, .workouts-history-values small, .daily-brief-month > h3) {
+  color: var(--text-muted);
+  font-size: var(--type-health-micro);
+  font-weight: 650;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+/* Buttons are pills with a quiet edge; fields share the dark tile surface. Focus and disabled styles stay the shared ones. */
+.daily-shell :is(.workouts-section, .daily-nutrition, .body-sleep, .daily-briefs, .daily-rules, .daily-data-page) .secondary-button {
+  border-color: var(--health-edge);
+  border-radius: var(--radius-pill);
+  background: transparent;
+}
+.daily-shell :is(.workouts-section, .daily-nutrition, .body-sleep, .daily-briefs, .daily-rules, .daily-data-page) .secondary-button:hover:not(:disabled, [aria-busy="true"]) { background: var(--glass-hover); }
+.daily-shell :is(.workouts-section, .daily-nutrition, .body-sleep, .daily-briefs, .daily-rules, .daily-data-page) .secondary-button:active:not(:disabled, [aria-busy="true"]) { background: var(--glass-pressed); }
+.daily-shell :is(.workouts-section, .daily-nutrition, .body-sleep, .daily-briefs, .daily-rules, .daily-data-page) :is(input, select, textarea):not([type="checkbox"], [type="radio"], [type="range"], [role="switch"], :focus-visible) {
+  border-color: var(--health-edge);
+  background-color: var(--health-tile);
+}
+
+/* Workouts: the Training card. */
+.daily-shell .workouts-training-totals > div,
+.daily-shell .nutrition-today-values > div,
+.daily-shell .nutrition-period-averages > div {
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--health-tile-edge);
+  border-radius: var(--radius-panel);
+  background: var(--health-tile);
+}
+.daily-shell .workouts-training-totals dd { font-size: var(--type-health-ring); font-weight: 750; }
+.daily-shell .workouts-mini-ring .daily-ring-graphic { grid-row: 2; width: min(6.5rem, 100%); background: radial-gradient(closest-side, var(--health-disc) 72%, transparent 73%); }
+.daily-shell .workouts-mini-ring .daily-ring-centre { max-width: 90%; font-size: var(--type-health-ring); font-weight: 750; overflow-wrap: normal; white-space: nowrap; }
+.daily-shell .workouts-day-chart { padding: var(--space-3); border: 1px solid var(--health-tile-edge); border-radius: var(--radius-panel); background: var(--health-tile); }
+.daily-shell .workouts-day-chart .daily-chart-bars { fill: var(--health-gym); }
+.daily-shell .workouts-day-chart .daily-chart-bars + .daily-chart-bars { fill: var(--health-run); }
+.daily-shell .workouts-day-chart .daily-chart-bars + .daily-chart-bars + .daily-chart-bars { fill: var(--text-muted); }
+.daily-shell .workouts-day-chart .daily-chart-target line { stroke: var(--health-amber); }
+.daily-shell .workouts-energy-legend span { border-radius: 50%; background: var(--health-gym); }
+.daily-shell .workouts-energy-legend li:nth-child(2) span { background: var(--health-run); }
+.daily-shell .workouts-energy-legend li:nth-child(3) span { background: var(--text-muted); }
+
+/* Workouts: class cards are tinted with their class colour; the word and the icon always come with it. */
+.daily-shell .workouts-class {
+  --class-tone: var(--text);
+  padding: var(--space-4);
+  border-color: color-mix(in srgb, var(--class-tone) 32%, var(--health-edge));
+  border-radius: var(--radius-window);
+  background: color-mix(in srgb, var(--class-tone) 10%, var(--health-tile));
+  box-shadow: var(--health-card-shadow);
+}
+.daily-shell .workouts-class[data-class="gym"] { --class-tone: var(--health-gym); }
+.daily-shell .workouts-class[data-class="run"] { --class-tone: var(--health-run); }
+.daily-shell .workouts-class[data-class="activity"] { --class-tone: var(--health-activity); }
+.daily-shell .workouts-class > h3 { color: var(--class-tone); }
+.daily-shell .workouts-class-figures dd { font-size: var(--type-body); font-weight: 700; }
+
+/* Workouts: the available-data inventory has amber group headings and hairline-separated rows. */
+.daily-shell .workouts-inventory-groups { gap: var(--space-4); }
+.daily-shell .workouts-inventory h4 {
+  margin: 0 0 var(--space-2);
+  color: var(--health-amber);
+  font-size: var(--type-health-micro);
+  font-weight: 650;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+.daily-shell .workouts-inventory-list ul { padding-inline-start: 0; list-style: none; }
+.daily-shell .workouts-inventory-list li { margin-block: 0; padding-block: var(--space-2); }
+.daily-shell .workouts-inventory-list li + li { background: linear-gradient(var(--health-tile-edge), var(--health-tile-edge)) top / 100% 1px no-repeat; }
+
+/* Workouts: the history is a panel of hairline-separated rows with a class-tinted glyph chip and pill values. */
+.daily-shell .workouts-history-row { border-bottom: 0; background: linear-gradient(var(--health-tile-edge), var(--health-tile-edge)) bottom / 100% 1px no-repeat; }
+.daily-shell .workouts-history-row:last-child { background: none; }
+.daily-shell .workouts-history-heading { gap: var(--space-3); }
+.daily-shell .workouts-history-glyph {
+  --class-tone: var(--text-muted);
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--class-tone) 16%, transparent);
+  color: var(--class-tone);
+}
+.daily-shell .workouts-history-glyph[data-class="gym"] { --class-tone: var(--health-gym); }
+.daily-shell .workouts-history-glyph[data-class="run"] { --class-tone: var(--health-run); }
+.daily-shell .workouts-history-glyph[data-class="activity"] { --class-tone: var(--health-activity); }
+.daily-shell .workouts-history-values > span { padding: var(--space-1) var(--space-3); border: 1px solid var(--health-tile-edge); border-radius: var(--radius-panel); background: transparent; font-weight: 650; }
+
+/* Nutrition: today's tiles, the trend card and the meals panel. */
+.daily-shell .nutrition-today-values dd { font-weight: 750; }
+.daily-shell .nutrition-today-values > div[data-metric="protein"] dd { color: var(--health-protein); }
+.daily-shell .nutrition-trend .nutrition-charts > * { padding: var(--space-3); border: 1px solid var(--health-tile-edge); border-radius: var(--radius-panel); background: var(--health-tile); }
+.daily-shell .nutrition-trend .nutrition-charts .daily-chart-bars { fill: var(--health-flame); }
+.daily-shell .nutrition-trend .nutrition-charts .daily-chart-target line { stroke: var(--health-amber); }
+.daily-shell .nutrition-freshness-pill { border: 1px solid var(--health-tile-edge); background: transparent; }
+.daily-shell .nutrition-meal { border-bottom: 0; background: linear-gradient(var(--health-tile-edge), var(--health-tile-edge)) bottom / 100% 1px no-repeat; }
+.daily-shell .nutrition-meal:last-child { background: none; }
+.daily-shell .nutrition-meal h4 { font-weight: 700; }
+.daily-shell .nutrition-meal-macros dd { font-weight: 700; }
+.daily-shell .nutrition-macro-chip { border: 1px solid var(--health-tile-edge); background: transparent; }
+
+/* Body & sleep: measurement cards, last night, and the nights panel. */
+.daily-shell .body-sleep-stats .daily-stat-tile { padding: var(--space-3) var(--space-4); }
+.daily-shell .body-sleep-last-value strong { font-size: var(--type-health-figure); font-weight: 750; }
+.daily-shell .body-sleep-stage-chips li { border: 1px solid var(--health-tile-edge); background: transparent; }
+.daily-shell .body-sleep-night-row { border-block-end: 0; background: linear-gradient(var(--health-tile-edge), var(--health-tile-edge)) bottom / 100% 1px no-repeat; }
+.daily-shell .body-sleep-night-row:last-child { background: none; }
+.daily-shell .body-sleep-detail { border-color: var(--health-tile-edge); background: var(--health-tile); }
+.daily-shell .body-sleep-shortcuts li > button { border-color: var(--health-tile-edge); border-radius: var(--radius-panel); background: var(--health-tile); }
+
+/* Briefs: history rows are quiet tiles inside a panel; chips are outlined pills. */
+.daily-shell .daily-briefs .daily-brief-row { border-color: var(--health-tile-edge); border-radius: var(--radius-panel); background: transparent; }
+.daily-shell .daily-briefs .daily-brief-row:hover { background: var(--glass-hover); }
+.daily-shell .daily-briefs .daily-brief-row:active { background: var(--glass-pressed); }
+.daily-shell .daily-brief-chips > span { border-color: var(--health-tile-edge); background: transparent; }
+.daily-shell .daily-brief-raw pre { border-color: var(--health-tile-edge); border-radius: var(--radius-panel); background: var(--health-track); }
+
+/* Rules & sources: setting groups and coverage are panels; rule cards and status pills are outlined, never colour-only. */
+.daily-shell .daily-rules-card { border-color: var(--health-tile-edge); background: transparent; }
+.daily-shell .daily-rules h3 { font-weight: 700; }
+.daily-shell .daily-rules-pill { border: 1px solid var(--health-tile-edge); background: transparent; }
+.daily-shell .daily-rules-sources li + li { background: linear-gradient(var(--health-tile-edge), var(--health-tile-edge)) top / 100% 1px no-repeat; }
+
+/* Data: the records sit in one panel; the open record is an inset tile. */
+.daily-shell .daily-record-cards > li + li { border-block-start: 0; background: linear-gradient(var(--health-tile-edge), var(--health-tile-edge)) top / 100% 1px no-repeat; }
+.daily-shell .daily-record-panel { padding: var(--space-4); border: 1px solid var(--health-tile-edge); border-radius: var(--radius-panel); background: transparent; }
+
+@media (max-width: 360px) {
+  .daily-shell :is(.workouts-inventory, .workouts-history-card, .nutrition-meals-list, .body-sleep-nights, .daily-brief-history, .daily-brief-detail, .daily-rules > section, .daily-data-records,
+    .workouts-training, .nutrition-today-card, .nutrition-trend, .body-sleep-unit, .body-sleep-last-night, .workouts-class) { padding: var(--space-3); }
+}
+@media (forced-colors: active) {
+  .daily-shell :is(.workouts-inventory, .workouts-history-card, .nutrition-meals-list, .body-sleep-nights, .daily-brief-history, .daily-brief-detail, .daily-rules > section, .daily-data-records,
+    .workouts-training, .nutrition-today-card, .nutrition-trend, .body-sleep-unit, .body-sleep-last-night, .workouts-class, .daily-stat-tile) { border-color: CanvasText; background: Canvas; }
+  .daily-shell .workouts-history-row, .daily-shell .nutrition-meal, .daily-shell .body-sleep-night-row { background: none; border-block-end: 1px solid CanvasText; }
+  .daily-shell .workouts-history-glyph { background: none; color: CanvasText; }
+  .daily-shell .workouts-day-chart .daily-chart-bars, .daily-shell .nutrition-trend .nutrition-charts .daily-chart-bars { fill: Highlight; }
+  .daily-shell .workouts-mini-ring .daily-ring-graphic { background: none; }
+}

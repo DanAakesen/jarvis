@@ -70,6 +70,21 @@ describe('Workout parity composition', () => {
     expect(screen.queryByRole('combobox', { name: 'Period' })).toBeNull();
   });
 
+  it('tints each class card and ring by its class and keeps the icon chips decorative', () => {
+    const { container } = mount();
+    expect(['Gym', 'Run', 'Activity'].map(name => card(name).getAttribute('data-class'))).toEqual(['gym', 'run', 'activity']);
+    expect(container.querySelector('.workouts-mini-ring .daily-ring--gym')).not.toBeNull();
+    expect(container.querySelector('.workouts-mini-ring .daily-ring--run')).not.toBeNull();
+    const chips = [...container.querySelectorAll('.daily-icon-chip')];
+    expect(chips.length).toBeGreaterThanOrEqual(4);
+    for (const chip of chips) {
+      expect(chip.getAttribute('aria-hidden')).toBe('true');
+      expect(chip.textContent).toBe('');
+    }
+    expect(screen.getByRole('heading', { name: 'Training' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Gym' })).toBeTruthy();
+  });
+
   it('shows every missing class figure as Not received without deriving heart rate or activity time from workouts', async () => {
     mount(pages([
       { workout_date: '2026-10-02', workout_type: 'strength_training' },
