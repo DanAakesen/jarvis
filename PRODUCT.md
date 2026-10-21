@@ -464,10 +464,15 @@ Presence has three modes: Present (`present`, green), Away (`away`, yellow), and
 English voice sessions use Ryan HD and the British butler persona. The backend owns the realtime session and executes registered tools; the browser never executes tool calls or supplies their results. Jarvis relays the backend-built confirmation for successful, refused, and failed actions.
 
 Voice startup must not silently wait for the browser's 60-second warm-up limit:
-upstream connection and readiness each have a 15-second relay deadline. A missed
-deadline closes the socket with code 4010 and shows “Voice service did not become
-ready. Retrying…” using the existing reconnect backoff. Readiness remains
-`session.updated` for English and `session.created` or `session.updated` for Danish.
+the Danish route's upstream connection and readiness each have a 15-second relay
+deadline. English instead tries up to five session sizes (all tools, then fewer
+tools, then none, then shorter instructions; 8 seconds for the first, 6 for each
+later one) and keeps the first that works, so voice stays usable even when some tools
+are unavailable; Jarvis then says so briefly and suggests the chat for what it cannot
+do. A missed deadline, or every size failing, closes the socket with code 4010 and
+shows “Voice service did not become ready. Retrying…” using the existing reconnect
+backoff. Readiness remains `session.updated` for English and `session.created` or
+`session.updated` for Danish.
 Content-free stage and terminal-summary logs support diagnosis; real provider
 acceptance still requires an owner voice attempt after deployment.
 

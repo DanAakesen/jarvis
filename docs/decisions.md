@@ -27,6 +27,37 @@ writes, conflict retry and recovery. Ordinary user-requested task creation,
 
 Refs DanAakesen/jarvis#1186
 
+## Measured tool-budget fallback for English voice (21 October 2026; #1184)
+
+Refs DanAakesen/jarvis#1177, Refs DanAakesen/jarvis#1153, Refs DanAakesen/jarvis#1182.
+Production logs of 21 October show nine English sessions in which Voice Live accepted
+the socket and sent `session.created` but never answered the 122-tool, about 129 KB
+`session.update` (no `session.updated`, no `error`; relay close 4010 after 15 s).
+Azure Monitor shows nine `onHandshake` calls and no `VoiceLive_SessionDone`. The last
+working English sessions are from 16-17 October; since then the frame gained the
+`daily_*` and `proactive_recent_items` tools, lost the Teams tools and grew its
+instruction text. This evidence justifies a measured fallback and supersedes the
+"no speculative payload reduction" part of the #1177 entry.
+
+The English route now tries a fixed ladder (R0 all tools; R1 without `daily_*` and
+`proactive_recent_items`; R2 about half of R0's tool bytes, always keeping
+`set_presence_mode` and `set_away_mode`; R3 no tools; R4 no tools and compact
+instructions), each with a fresh socket and an 8 s (R0) or 6 s (R1-R4) deadline to
+`session.updated`. Reduced rungs add one sentence telling Jarvis to say tools are
+unavailable and suggest the chat. The last rung that became ready is remembered per
+backend process (no expiry, no re-probing; a restart clears it), later frames and
+`response.create` instructions use the selected rung, and the relay refuses calls to
+tools outside it. Content-free `voice.tool_budget_attempt`, `_selected` and
+`_exhausted` logs plus `toolBudgetRung`/`toolBudgetAttempts` in the session summary
+show which size worked. Danish is unchanged. The new log messages are added to the
+structured-log allow-list with fixed vocabularies only.
+
+The limit itself is still unverified: no tool-count, tool-byte or context limit is
+documented for this Voice Live API version, and none can be measured from CI. The
+rung that produces `session.updated` after deployment is the first real measurement;
+the owner makes one English voice attempt and reads it from the logs
+([runbook](runbook.md#voice-startup-diagnosis)).
+
 ## Bound voice startup and summarize every session (21 October 2026; #1177)
 
 Refs DanAakesen/jarvis#1153. Accepted upstream WebSockets were followed by no

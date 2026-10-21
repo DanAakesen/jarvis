@@ -31,6 +31,7 @@ import { composeDaily } from './daily/composition.js';
 import { createMemoryProactiveStore } from './proactive/store.js';
 import { createProactiveToolsModule } from './proactive/tools.js';
 import { toModelToolSchema } from './voice/realtime.js';
+import { createToolBudgetRungs, TOOL_BUDGET_ALWAYS_KEPT_TOOLS } from './voice/tool-budget.js';
 
 const limits = JSON.parse(readFileSync(
   new URL('../../../agents/jarvis/limits.json', import.meta.url), 'utf8',
@@ -160,6 +161,35 @@ describe('production tool catalogue', () => {
       }
       assertTypedCombinators(schema, tool.name);
     }
+  });
+
+  it('keeps every always-kept voice tool-budget tool in the catalogue and builds the English fallback ladder from it', () => {
+    const registry = buildCatalogue(modulesWithEveryFeature());
+    for (const name of TOOL_BUDGET_ALWAYS_KEPT_TOOLS) {
+      expect(registry.get(name), `${name} is listed in TOOL_BUDGET_ALWAYS_KEPT_TOOLS but not in the catalogue`).toBeDefined();
+    }
+    const bytes = (tools: readonly { name: string; description: string; inputSchema: unknown }[]) =>
+      Buffer.byteLength(JSON.stringify(tools.map(({ name, description, inputSchema }) => ({
+        type: 'function', name, description, parameters: toModelToolSchema(inputSchema),
+      }))));
+    const rungs = createToolBudgetRungs(registry);
+    expect(rungs.map(({ name }) => name)).toEqual(['R0', 'R1', 'R2', 'R3', 'R4']);
+    expect(rungs.map(({ deadlineMs }) => deadlineMs)).toEqual([8_000, 6_000, 6_000, 6_000, 6_000]);
+    expect(rungs.map(({ instructions }) => instructions)).toEqual(['full', 'notice', 'notice', 'notice', 'compact']);
+    const [r0, r1, r2, r3, r4] = rungs.map(({ tools }) => tools.list());
+    expect(r0).toEqual(registry.list());
+    expect(r1!.map(({ name }) => name)).toEqual(registry.list().map(({ name }) => name)
+      .filter((name) => !name.startsWith('daily_') && name !== 'proactive_recent_items'));
+    expect(r2!.map(({ name }) => name)).toEqual(expect.arrayContaining([...TOOL_BUDGET_ALWAYS_KEPT_TOOLS]));
+    expect(bytes(r2!)).toBeLessThanOrEqual(bytes(r0!) / 2);
+    expect(bytes(r2!)).toBeGreaterThan(bytes(r0!) * 0.45);
+    // Everything kept is smaller than everything dropped, apart from the always-kept tools.
+    const kept = new Set(r2!.map(({ name }) => name));
+    const largestKept = Math.max(...r2!.filter(({ name }) => !(TOOL_BUDGET_ALWAYS_KEPT_TOOLS as readonly string[]).includes(name))
+      .map((tool) => bytes([tool])));
+    for (const tool of r0!.filter(({ name }) => !kept.has(name))) expect(bytes([tool])).toBeGreaterThanOrEqual(largestKept);
+    expect(r3).toEqual([]);
+    expect(r4).toEqual([]);
   });
 
   it('keeps the catalogue unchanged with proactive off and adds exactly one tool when enabled', () => {

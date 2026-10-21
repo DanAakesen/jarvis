@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { createToolBudgetMemory, createToolBudgetRungs, type ToolBudgetMemory, type ToolBudgetRung } from './tool-budget.js';
 import { createVoiceDiagnostics, VOICE_STARTUP_CLOSE_CODE, VoiceStageTimeout } from './diagnostics.js';
 import type { IncomingMessage } from 'node:http';
 import type { Duplex } from 'node:stream';
@@ -12,6 +13,7 @@ import WebSocket, { type RawData } from 'ws';
 import { voiceLiveModels } from '../core/model-catalog.js';
 import {
   createRealtimeSessionUpdate,
+  toolUnavailableOutput,
   resolveCalendarReply,
   calendarTurnContext,
   ENGLISH_REALTIME_MODEL,
@@ -342,6 +344,7 @@ function registerVoiceRoute(
   reserveImageBudget?: VoiceRelayOptions['reserveImageBudget'],
   recordImageUsage?: VoiceRelayOptions['recordImageUsage'],
   captionFrame?: VoiceRelayOptions['captionFrame'],
+  toolBudgetMemory?: ToolBudgetMemory,
 ): void {
   app.get(path, { websocket: true }, (browser, request) => {
     const controller = new AbortController();
@@ -363,6 +366,20 @@ function registerVoiceRoute(
       return;
     }
     let upstream: WebSocket | undefined;
+    // Only the English route probes for a working tool budget; Danish keeps its single full session update.
+    const toolBudgetRungs = language === 'en' && toolBudgetMemory ? createToolBudgetRungs(app.jarvisTools) : undefined;
+    let activeRung: ToolBudgetRung | undefined = toolBudgetRungs?.[0];
+    let rungIndex = 0;
+    let attemptCount = 0;
+    let attemptTimer: ReturnType<typeof setTimeout> | undefined;
+    let attemptStartedAt = 0;
+    let attemptFrame: ReturnType<typeof diagnostics.measure> | undefined;
+    controller.signal.addEventListener('abort', () => clearTimeout(attemptTimer), { once: true });
+    const activeTools = () => activeRung?.tools ?? app.jarvisTools;
+    const sessionUpdate = () => createRealtimeSessionUpdate(
+      activeTools(), personality, presence, language, projects, transcriptionModel, voiceTuning, memorySettings,
+      activeRung?.instructions,
+    );
     let configured = false;
     let upstreamSessionReady = false;
     let queuedBytes = 0;
@@ -1144,9 +1161,7 @@ function registerVoiceRoute(
             ...(instructions || finalAction || cameraInstructions ? {
               response: {
                 instructions: [
-                  ...(cameraTurn ? [createRealtimeSessionUpdate(
-                    app.jarvisTools, personality, presence, language, projects, transcriptionModel, voiceTuning, memorySettings,
-                  ).session.instructions] : []),
+                  ...(cameraTurn ? [sessionUpdate().session.instructions] : []),
                   instructions,
                   finalAction?.note,
                   cameraInstructions,
@@ -1325,10 +1340,11 @@ function registerVoiceRoute(
     app.shutdownConnections.add(shutdownSession);
     browser.once('close', () => { app.shutdownConnections.delete(shutdownSession); });
 
-    const sendUpstream = (message: unknown, sent?: () => void) => {
-      const sessionUpdate = (message as { type?: unknown })?.type === 'session.update';
+    const sendUpstream = (message: unknown, sent?: () => void, startupAttempt = false) => {
+      const isSessionUpdate = (message as { type?: unknown })?.type === 'session.update';
       const serialized = JSON.stringify(message);
-      if (sessionUpdate) diagnostics.update(message, serialized);
+      if (isSessionUpdate && startupAttempt) attemptFrame = diagnostics.attempt(message, serialized);
+      else if (isSessionUpdate) diagnostics.update(message, serialized);
       const failed = (failure: 'upstream_not_open' | 'upstream_send_failed') => {
         request.log.warn({ failure, language }, 'voice.connection_failed');
         close(1011, 'Voice connection failed');
@@ -1341,7 +1357,7 @@ function registerVoiceRoute(
         upstream.send(serialized, (error) => {
           if (error) failed('upstream_send_failed');
           else {
-            if (sessionUpdate) diagnostics.stage('session_update_sent');
+            if (isSessionUpdate) diagnostics.stage('session_update_sent');
             sent?.();
           }
         });
@@ -1523,10 +1539,7 @@ function registerVoiceRoute(
       pendingImageUsageItem = undefined;
       const response = next.response as Record<string, unknown> | undefined;
       const instructions = typeof response?.instructions === 'string' ? response.instructions :
-        createRealtimeSessionUpdate(
-          app.jarvisTools, personality, presence, language, projects, transcriptionModel, voiceTuning,
-          memorySettings,
-        ).session.instructions;
+        sessionUpdate().session.instructions;
       sendUpstream({
         ...next,
         response: {
@@ -1547,9 +1560,7 @@ function registerVoiceRoute(
 
     const updateCameraTurnDetection = () => {
       const turnDetection = english
-        ? createRealtimeSessionUpdate(
-          app.jarvisTools, personality, presence, language, projects, transcriptionModel, voiceTuning, memorySettings,
-        ).session.turn_detection
+        ? sessionUpdate().session.turn_detection
         : previousTurnDetection ?? { type: 'server_vad', create_response: false };
       sendUpstream({
         type: 'session.update',
@@ -1653,9 +1664,7 @@ function registerVoiceRoute(
           personality = settings.personality;
           memorySettings = settings.memory;
         }
-        if (english && upstream?.readyState === WebSocket.OPEN && !controller.signal.aborted) sendUpstream(createRealtimeSessionUpdate(
-          app.jarvisTools, personality, presence, language, projects, transcriptionModel, voiceTuning, memorySettings,
-        ));
+        if (english && upstream?.readyState === WebSocket.OPEN && !controller.signal.aborted) sendUpstream(sessionUpdate());
       })().catch(() => request.log.warn('voice.presence_mode_update_failed'));
     });
 
@@ -1772,8 +1781,10 @@ function registerVoiceRoute(
         ]);
         if (latestDanMessage) request.jarvisConversationMessage = latestDanMessage;
         try {
-          const output = await runModelToolCall(request, () =>
-            executeRealtimeToolCall(call, app.jarvisTools, request, signal));
+          const output = activeRung && !activeRung.tools.get(call.name) && app.jarvisTools.get(call.name)
+            ? toolUnavailableOutput(call.name)
+            : await runModelToolCall(request, () =>
+              executeRealtimeToolCall(call, activeTools(), request, signal));
           if (call.name.startsWith('calendar_')) calendarConversation = true;
           else if (call.name.startsWith('mail_')) calendarConversation = false;
           let outcome: 'ok' | 'refused' | 'error' = 'error';
@@ -1786,9 +1797,7 @@ function registerVoiceRoute(
           if (outcome === 'ok' && (call.name === 'set_presence_mode' || call.name === 'set_away_mode') && app.awayModeStore) {
             presence = await app.awayModeStore.read();
             awayMode = presence.mode !== 'present';
-            sendUpstream(createRealtimeSessionUpdate(
-              app.jarvisTools, personality, presence, language, projects, transcriptionModel, voiceTuning, memorySettings,
-            ));
+            sendUpstream(sessionUpdate());
           }
           if (toolTiming) {
             toolTiming.finishedMs = elapsedSinceSpeechStopped(toolTurnTiming) ?? toolTiming.startedMs;
@@ -2145,299 +2154,379 @@ function registerVoiceRoute(
         diagnostics.stage('project_context_loaded');
         diagnostics.stage('upstream_connecting');
         const startupFailed = () => close(VOICE_STARTUP_CLOSE_CODE, 'Voice service did not become ready');
-        diagnostics.watchdog('upstream_connecting', startupFailed);
-        upstream = connect(token, controller.signal, undefined, voiceModel);
-        upstream.once('open', () => {
-          if (controller.signal.aborted) return;
-          diagnostics.stage('upstream_open');
-          diagnostics.watchdog('upstream_ready', startupFailed);
-          if (english) sendUpstream(
-            createRealtimeSessionUpdate(
-              app.jarvisTools, personality, presence, language, projects, transcriptionModel, voiceTuning,
-              memorySettings,
-            ),
-            flushQueued,
-          );
-          else {
-            if (cameraOn) updateCameraTurnDetection();
-            flushQueued();
-          }
-        });
+
         const upstreamEventTypes = new Set<string>();
-        upstream.on('message', (data, binary) => {
-          const event = parseVoiceEvent(data, binary);
-          diagnostics.event(event?.type);
-          if (event?.type === 'session.updated') diagnostics.stage('session_updated');
-          if (event?.type === 'session.created') diagnostics.stage('session_created_received');
-          if (event?.type === 'conversation.item.created') {
-            const item = event.item as { id?: unknown } | undefined;
-            if (typeof item?.id === 'string' && attemptedImageItems.has(item.id)) {
-              if (pendingImage?.itemId === item.id) pendingImage.settle(true);
-              else if (attachedImageItemId !== item.id) deleteCameraImage(item.id);
-              return;
-            }
-          }
-          if (event?.type === 'conversation.item.deleted' && typeof event.item_id === 'string' &&
-              attemptedImageItems.has(event.item_id)) return;
-          if (event?.type === 'error') {
-            const detail = event.error as { event_id?: unknown; code?: unknown; message?: unknown } | undefined;
-            if (pendingImage && detail?.event_id === pendingImage.eventId) {
-              const code = typeof detail.code === 'string' ? detail.code : '';
-              const message = typeof detail.message === 'string' ? detail.message.slice(0, 1_000) : '';
-              const reason = /context.*(?:length|limit)|too_many_tokens/iu.test(code)
-                ? 'image_context_limit'
-                : /unsupported.*image|image.*unsupported/iu.test(code) ||
-                    /(?:image|input_image).{0,80}(?:not supported|unsupported)|(?:not supported|unsupported).{0,80}(?:image|input_image)/iu.test(message)
-                  ? 'image_input_unverified' : 'image_rejected';
-              pendingImage.settle(false, reason);
-              return;
-            }
-            if (typeof detail?.event_id === 'string' && imageEventIds.has(detail.event_id)) return;
-          }
-          if (!english && event?.type === 'session.created') {
-            const session = event.session as { turn_detection?: Record<string, unknown> } | undefined;
-            previousTurnDetection ??= session?.turn_detection;
-            if (cameraOn) updateCameraTurnDetection();
-          }
-          if ((event?.type === 'session.updated' || language === 'da' && event?.type === 'session.created') &&
-              !upstreamSessionReady &&
-              !controller.signal.aborted && !endRequested) {
-            upstreamSessionReady = true;
-            diagnostics.clearWatchdog();
-            if (sessionId && statusAnnouncer && visionWatch) {
-              unregisterVisionVoice = visionWatch.registerVoice(
-                sessionId,
-                (text) => statusAnnouncer?.announce(text) ?? false,
-              );
-            }
-          }
-          if (typeof event?.type === 'string' && upstreamEventTypes.size < 40 &&
-              /^[a-z_.]{1,80}$/u.test(event.type)) upstreamEventTypes.add(event.type);
-          if (event?.type === 'error') {
-            const detail = (event as {
-              error?: { code?: unknown; message?: unknown; type?: unknown; param?: unknown; function_name?: unknown; functionName?: unknown };
-            }).error;
-            const text = [detail?.type, detail?.code]
-              .filter((part): part is string => typeof part === 'string').join(': ');
-            const invalidFunctionParameters = detail?.code === 'invalid_function_parameters';
-            const parameter = [detail?.param, detail?.function_name, detail?.functionName]
-              .find((value): value is string => typeof value === 'string');
-            request.log.warn({
-              failure: text.replace(/[^A-Za-z0-9 .:,'()_-]/gu, ' ').slice(0, 120) || 'unknown',
-              ...(invalidFunctionParameters ? {
-                errorCode: 'invalid_function_parameters',
-                ...(parameter ? { param: parameter.replace(/[^A-Za-z0-9 .:,'()_-]/gu, ' ').slice(0, 120) } : {}),
-                ...(typeof detail?.message === 'string'
-                  ? { upstreamMessage: detail.message.replace(/[^A-Za-z0-9 .:,'()_-]/gu, ' ').slice(0, 300) }
-                  : {}),
-              } : {}),
-              language,
-            }, 'voice.upstream_event_error');
-          }
-          if (event?.type === 'conversation.item.input_audio_transcription.delta') {
-            partialTranscriptionDeltas += 1;
-            receiveTranscriptionDelta(event);
-          }
-          if (event?.type === 'input_audio_buffer.speech_started') {
-            clearCameraImage();
-            pendingImageUsageItem = undefined;
-            cameraGeneration += 1;
-            finishSharedScreenContextWait(null, true);
-            bufferedCameraContext = undefined;
-            pendingResponseCreate = undefined;
-            delete request.sharedScreenContext;
-            delete request.requireSharedScreenContext;
-            if (cameraItemId && cameraItemId !== event.item_id &&
-                supersededCameraItems.size < MAX_TRANSCRIPTS_PER_SESSION) supersededCameraItems.add(cameraItemId);
-            cameraItemId = typeof event.item_id === 'string' ? event.item_id : undefined;
-            cameraItemSettled = false;
-            if (assistantResponding) publishActivity('interrupted');
-            userSpeaking = true;
-            if (speechToFirstWordMs === undefined) speechStoppedAt = undefined;
-            const itemId = typeof event.item_id === 'string' &&
-              /^[A-Za-z0-9_-]{1,128}$/u.test(event.item_id)
-              ? event.item_id
-              : `partial_${randomUUID().replaceAll('-', '')}`;
-            if (partialSpeechStopped || !activePartialItemId ||
-                !hasPartialState(activePartialItemId)) activePartialItemId = itemId;
-            partialSpeechStopped = false;
-          }
-          if (event?.type === 'input_audio_buffer.speech_stopped') {
-            finishTurnTiming();
-            userSpeaking = false;
-            speechStoppedAt = performance.now();
-            turnTiming = {
-              id: randomUUID(),
-              startedAt: speechStoppedAt,
-              transcriptCompletedMs: null,
-              jevDecisionMs: null,
-              firstAudioDeltaMs: null,
-              responseDoneMs: null,
-              tools: [],
-            };
-            partialSpeechStopped = true;
-            if (activePartialItemId && !pendingPartialItemIds.includes(activePartialItemId)) {
-              pendingPartialItemIds.push(activePartialItemId);
-              if (pendingPartialItemIds.length > 32) pendingPartialItemIds.shift();
-            }
-            if (!speakBrowserProgress()) statusAnnouncer?.flush();
-          }
-          if ((event?.type === 'response.audio_transcript.delta' ||
-               event?.type === 'response.output_audio_transcript.delta') &&
-              typeof event.delta === 'string' && event.delta.trim() &&
-              speechStoppedAt !== undefined && speechToFirstWordMs === undefined) {
-            speechToFirstWordMs = performance.now() - speechStoppedAt;
-          }
-          if ((event?.type === 'response.audio.delta' ||
-               event?.type === 'response.output_audio.delta') &&
-              typeof event.delta === 'string' && event.delta &&
-              speechStoppedAt !== undefined && speechToFirstAudioMs === undefined) {
-            speechToFirstAudioMs = performance.now() - speechStoppedAt;
-          }
-          if ((event?.type === 'response.audio.delta' || event?.type === 'response.output_audio.delta') &&
-              typeof event.delta === 'string' && event.delta && turnTiming?.firstAudioDeltaMs === null) {
-            turnTiming.firstAudioDeltaMs = elapsedSinceSpeechStopped() ?? null;
-          }
-          if (event?.type === 'response.created') {
-            const response = event.response as { id?: unknown } | undefined;
-            if (responseImageUsageItem && typeof response?.id === 'string' &&
-                response.id.length <= 128) {
-              imageUsageResponses.set(response.id, responseImageUsageItem);
-              responseImageUsageItem = undefined;
-            }
-            responseCreateActive = true;
-            assistantResponding = true;
-            if (microphoneActive) publishActivity('thinking');
-          }
-          if (event?.type === 'response.done' || event?.type === 'response.cancelled') {
-            const response = event.response as {
-              id?: unknown;
-              usage?: { input_tokens?: unknown; output_tokens?: unknown;
-                input_token_details?: { image_tokens?: unknown };
-                input_tokens_details?: { image_tokens?: unknown } };
-            } | undefined;
-            const usageItem = typeof response?.id === 'string' ? imageUsageResponses.get(response.id) : undefined;
-            if (usageItem) imageUsageResponses.delete(response!.id as string);
-            if (usageItem && recordImageUsage && sessionId) {
-              const tokens = (value: unknown) => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
-                ? value : undefined;
-              const inputTokens = tokens(response?.usage?.input_tokens);
-              const outputTokens = tokens(response?.usage?.output_tokens);
-              const imageTokens = tokens(response?.usage?.input_token_details?.image_tokens ??
-                response?.usage?.input_tokens_details?.image_tokens);
-              void recordImageUsage({
-                sessionId, itemId: usageItem, model: voiceModel, signal: controller.signal,
-                ...(inputTokens === undefined ? {} : { inputTokens }),
-                ...(outputTokens === undefined ? {} : { outputTokens }),
-                ...(imageTokens === undefined ? {} : { imageTokens }),
-              }).catch(() => request.log.warn({
-                failure: 'image_usage_unavailable', language,
-              }, 'voice.upstream_event_error'));
-            }
-            if (usageItem && attachedImageTurnId === usageItem && attachedImageItemId) {
-              deleteCameraImage(attachedImageItemId);
-              attachedImageItemId = undefined;
-              attachedImageTurnId = undefined;
-            }
-            responseCreateActive = false;
-            assistantResponding = false;
-            flushQueuedToolOutputs();
-            if (event.type === 'response.done' && turnTiming && !toolCallsInResponse) {
-              turnTiming.responseDoneMs = elapsedSinceSpeechStopped() ?? null;
-              finishTurnTiming();
-            }
-            if (browserProgressResponse) browserProgressResponse = false;
-            if (!toolCallsInResponse) {
-              delete request.sharedScreenContext;
-              delete request.requireSharedScreenContext;
-              flushPendingResponseCreate();
-            }
-          }
-          if (event?.type === 'response.audio.delta' ||
-              event?.type === 'response.output_audio.delta') publishActivity('speaking');
-          if (english && event?.type === 'response.function_call_arguments.done') {
-            runToolCall(event as unknown as RealtimeFunctionCall);
+        const heldEvents: { data: RawData; binary: boolean }[] = [];
+        const startRung = toolBudgetMemory?.get();
+        const logAttempt = (outcome: 'ready' | 'timeout' | 'error' | 'closed') => {
+          const frame = attemptFrame ?? (() => {
+            const update = sessionUpdate();
+            return diagnostics.measure(update, JSON.stringify(update));
+          })();
+          request.log[outcome === 'ready' ? 'info' : 'warn']({
+            language, rung: activeRung!.name, ...frame, outcome,
+            elapsedMs: Math.round(performance.now() - attemptStartedAt),
+          }, 'voice.tool_budget_attempt');
+        };
+        const logUpstreamError = (event: Record<string, unknown>) => {
+          const detail = (event as {
+            error?: { code?: unknown; message?: unknown; type?: unknown; param?: unknown; function_name?: unknown; functionName?: unknown };
+          }).error;
+          const text = [detail?.type, detail?.code]
+            .filter((part): part is string => typeof part === 'string').join(': ');
+          const invalidFunctionParameters = detail?.code === 'invalid_function_parameters';
+          const parameter = [detail?.param, detail?.function_name, detail?.functionName]
+            .find((value): value is string => typeof value === 'string');
+          request.log.warn({
+            failure: text.replace(/[^A-Za-z0-9 .:,'()_-]/gu, ' ').slice(0, 120) || 'unknown',
+            ...(invalidFunctionParameters ? {
+              errorCode: 'invalid_function_parameters',
+              ...(parameter ? { param: parameter.replace(/[^A-Za-z0-9 .:,'()_-]/gu, ' ').slice(0, 120) } : {}),
+              ...(typeof detail?.message === 'string'
+                ? { upstreamMessage: detail.message.replace(/[^A-Za-z0-9 .:,'()_-]/gu, ' ').slice(0, 300) }
+                : {}),
+            } : {}),
+            language,
+          }, 'voice.upstream_event_error');
+        };
+        const connectionFailed = (error: unknown) => {
+          if (controller.signal.aborted) return;
+          request.log.warn({
+            failure: error instanceof Error ? error.message.replace(/[^A-Za-z0-9 .:,'()_-]/gu, ' ').slice(0, 120) : 'unknown',
+            language,
+          }, 'voice.connection_failed');
+          publishActivity('failed');
+          close(1011, 'Voice connection failed');
+        };
+        let openAttempt: (index: number) => void = () => {};
+        // Each attempt owns one fresh socket; an abandoned socket is closed and none of its events are used.
+        const stepDown = (outcome: 'timeout' | 'error' | 'closed') => {
+          if (controller.signal.aborted || endRequested || upstreamSessionReady) return;
+          clearTimeout(attemptTimer);
+          logAttempt(outcome);
+          const abandoned = upstream;
+          upstream = undefined;
+          heldEvents.length = 0;
+          if (abandoned) closeSocket(abandoned, 1000, 'Voice tool budget fallback');
+          if (rungIndex + 1 >= toolBudgetRungs!.length) {
+            request.log.warn({ language, attempts: attemptCount }, 'voice.tool_budget_exhausted');
+            startupFailed();
             return;
           }
-          if (english && (event?.type === 'response.done' || event?.type === 'response.cancelled') &&
-              toolCallsInResponse) {
-            responseDone = true;
-            if (!speakBrowserProgress()) resumeAfterTools();
+          try {
+            openAttempt(rungIndex + 1);
+          } catch (error) {
+            connectionFailed(error);
           }
-          if (event?.type === 'response.done' || event?.type === 'response.cancelled') {
-            statusAnnouncer?.flush();
-            if (microphoneActive && pendingToolCalls === 0) publishActivity('listening');
-            if (researchAnnouncementSpeaking) researchAnnouncementSpeaking = false;
-            speakResearchAnnouncement();
+        };
+        const attemptReady = () => {
+          clearTimeout(attemptTimer);
+          logAttempt('ready');
+          toolBudgetMemory!.set(rungIndex);
+          request.log.info({
+            language, rung: activeRung!.name, remembered: startRung !== undefined && startRung === rungIndex,
+            attempts: attemptCount,
+          }, 'voice.tool_budget_selected');
+          diagnostics.toolBudget(activeRung!.name, attemptCount);
+          for (const message of heldEvents.splice(0)) {
+            if (browser.readyState === WebSocket.OPEN) browser.send(message.data, { binary: message.binary });
           }
-          const finalTurnItemId =
-            (english && event?.type === 'conversation.item.input_audio_transcription.completed' ||
-             !english && event?.type === 'user.message' && Array.isArray(event.content)) &&
-            typeof event.item_id === 'string' && /^[A-Za-z0-9_-]{1,128}$/u.test(event.item_id)
-              ? resolveFinalItemId(event.item_id)
-              : undefined;
-          if ((event?.type === 'conversation.item.input_audio_transcription.completed' ||
-               event?.type === 'user.message') && turnTiming?.transcriptCompletedMs === null) {
-            turnTiming.transcriptCompletedMs = elapsedSinceSpeechStopped() ?? null;
-          }
-          if (event) persistTranscript(event, finalTurnItemId);
-          if (english && event?.type === 'conversation.item.input_audio_transcription.completed' &&
-              typeof event.item_id === 'string' && /^[A-Za-z0-9_-]{1,128}$/u.test(event.item_id) &&
-              typeof event.transcript === 'string' && event.transcript.trim() &&
-              event.transcript.length <= MAX_TRANSCRIPT_CHARACTERS) {
-            if (/^stop[.!?]*$/iu.test(event.transcript.trim())) {
-              browserProgressPending = false;
-              for (const task of activeBrowserStopControllers) task.abort();
+          flushQueued();
+        };
+        openAttempt = (index: number) => {
+          rungIndex = index;
+          activeRung = toolBudgetRungs?.[index];
+          attemptCount += 1;
+          attemptFrame = undefined;
+          if (toolBudgetRungs) diagnostics.toolBudget(null, attemptCount);
+          const socket = connect(token, controller.signal, undefined, voiceModel);
+          upstream = socket;
+          attemptStartedAt = performance.now();
+          if (toolBudgetRungs) {
+            attemptTimer = setTimeout(() => stepDown('timeout'), activeRung!.deadlineMs);
+            attemptTimer.unref();
+          } else diagnostics.watchdog('upstream_connecting', startupFailed);
+          socket.once('open', () => {
+            if (socket !== upstream || controller.signal.aborted) return;
+            diagnostics.stage('upstream_open');
+            if (!toolBudgetRungs) diagnostics.watchdog('upstream_ready', startupFailed);
+            if (toolBudgetRungs) sendUpstream(sessionUpdate(), undefined, true);
+            else if (english) sendUpstream(sessionUpdate(), flushQueued);
+            else {
+              if (cameraOn) updateCameraTurnDetection();
+              flushQueued();
+            }
+          });
+          socket.on('message', (data, binary) => {
+            if (socket !== upstream) return;
+            const event = parseVoiceEvent(data, binary);
+            diagnostics.event(event?.type);
+            if (event?.type === 'session.updated') diagnostics.stage('session_updated');
+            if (event?.type === 'session.created') diagnostics.stage('session_created_received');
+            if (toolBudgetRungs && !upstreamSessionReady && event?.type !== 'session.updated') {
+              if (event?.type === 'error') {
+                logUpstreamError(event);
+                stepDown('error');
+              } else if (heldEvents.length < 16) heldEvents.push({ data, binary });
+              return;
+            }
+            if (event?.type === 'conversation.item.created') {
+              const item = event.item as { id?: unknown } | undefined;
+              if (typeof item?.id === 'string' && attemptedImageItems.has(item.id)) {
+                if (pendingImage?.itemId === item.id) pendingImage.settle(true);
+                else if (attachedImageItemId !== item.id) deleteCameraImage(item.id);
+                return;
+              }
+            }
+            if (event?.type === 'conversation.item.deleted' && typeof event.item_id === 'string' &&
+                attemptedImageItems.has(event.item_id)) return;
+            if (event?.type === 'error') {
+              const detail = event.error as { event_id?: unknown; code?: unknown; message?: unknown } | undefined;
+              if (pendingImage && detail?.event_id === pendingImage.eventId) {
+                const code = typeof detail.code === 'string' ? detail.code : '';
+                const message = typeof detail.message === 'string' ? detail.message.slice(0, 1_000) : '';
+                const reason = /context.*(?:length|limit)|too_many_tokens/iu.test(code)
+                  ? 'image_context_limit'
+                  : /unsupported.*image|image.*unsupported/iu.test(code) ||
+                      /(?:image|input_image).{0,80}(?:not supported|unsupported)|(?:not supported|unsupported).{0,80}(?:image|input_image)/iu.test(message)
+                    ? 'image_input_unverified' : 'image_rejected';
+                pendingImage.settle(false, reason);
+                return;
+              }
+              if (typeof detail?.event_id === 'string' && imageEventIds.has(detail.event_id)) return;
+            }
+            if (!english && event?.type === 'session.created') {
+              const session = event.session as { turn_detection?: Record<string, unknown> } | undefined;
+              previousTurnDetection ??= session?.turn_detection;
+              if (cameraOn) updateCameraTurnDetection();
+            }
+            if ((event?.type === 'session.updated' || language === 'da' && event?.type === 'session.created') &&
+                !upstreamSessionReady &&
+                !controller.signal.aborted && !endRequested) {
+              upstreamSessionReady = true;
+              diagnostics.clearWatchdog();
+              if (toolBudgetRungs) attemptReady();
+              if (sessionId && statusAnnouncer && visionWatch) {
+                unregisterVisionVoice = visionWatch.registerVoice(
+                  sessionId,
+                  (text) => statusAnnouncer?.announce(text) ?? false,
+                );
+              }
+            }
+            if (typeof event?.type === 'string' && upstreamEventTypes.size < 40 &&
+                /^[a-z_.]{1,80}$/u.test(event.type)) upstreamEventTypes.add(event.type);
+            if (event?.type === 'error') logUpstreamError(event);
+            if (event?.type === 'conversation.item.input_audio_transcription.delta') {
+              partialTranscriptionDeltas += 1;
+              receiveTranscriptionDelta(event);
+            }
+            if (event?.type === 'input_audio_buffer.speech_started') {
+              clearCameraImage();
+              pendingImageUsageItem = undefined;
+              cameraGeneration += 1;
               finishSharedScreenContextWait(null, true);
+              bufferedCameraContext = undefined;
+              pendingResponseCreate = undefined;
+              delete request.sharedScreenContext;
+              delete request.requireSharedScreenContext;
+              if (cameraItemId && cameraItemId !== event.item_id &&
+                  supersededCameraItems.size < MAX_TRANSCRIPTS_PER_SESSION) supersededCameraItems.add(cameraItemId);
+              cameraItemId = typeof event.item_id === 'string' ? event.item_id : undefined;
+              cameraItemSettled = false;
+              if (assistantResponding) publishActivity('interrupted');
+              userSpeaking = true;
+              if (speechToFirstWordMs === undefined) speechStoppedAt = undefined;
+              const itemId = typeof event.item_id === 'string' &&
+                /^[A-Za-z0-9_-]{1,128}$/u.test(event.item_id)
+                ? event.item_id
+                : `partial_${randomUUID().replaceAll('-', '')}`;
+              if (partialSpeechStopped || !activePartialItemId ||
+                  !hasPartialState(activePartialItemId)) activePartialItemId = itemId;
+              partialSpeechStopped = false;
             }
-            void handleVoiceEndOfTurn(finalTurnItemId ?? event.item_id, event.transcript.trim(), event.item_id);
-          } else if (!english && event?.type === 'user.message' &&
-              typeof event.item_id === 'string' && /^[A-Za-z0-9_-]{1,128}$/u.test(event.item_id) &&
-              Array.isArray(event.content)) {
-            const text = event.content.flatMap((part) =>
-              part !== null && typeof part === 'object' && !Array.isArray(part) &&
-              (part as Record<string, unknown>).type === 'input_text' &&
-              typeof (part as Record<string, unknown>).text === 'string'
-                ? [(part as Record<string, unknown>).text as string]
-                : []).join('').trim();
-            if (text && text.length <= MAX_TRANSCRIPT_CHARACTERS) {
-              void handleVoiceEndOfTurn(finalTurnItemId ?? event.item_id, text, event.item_id);
+            if (event?.type === 'input_audio_buffer.speech_stopped') {
+              finishTurnTiming();
+              userSpeaking = false;
+              speechStoppedAt = performance.now();
+              turnTiming = {
+                id: randomUUID(),
+                startedAt: speechStoppedAt,
+                transcriptCompletedMs: null,
+                jevDecisionMs: null,
+                firstAudioDeltaMs: null,
+                responseDoneMs: null,
+                tools: [],
+              };
+              partialSpeechStopped = true;
+              if (activePartialItemId && !pendingPartialItemIds.includes(activePartialItemId)) {
+                pendingPartialItemIds.push(activePartialItemId);
+                if (pendingPartialItemIds.length > 32) pendingPartialItemIds.shift();
+              }
+              if (!speakBrowserProgress()) statusAnnouncer?.flush();
             }
-          } else if (english && event?.type === 'conversation.item.input_audio_transcription.failed') {
-            sendResponseCreate({ type: 'response.create' });
-          }
-          if (browser.readyState === WebSocket.OPEN) {
-            browser.send(data, { binary }, (error) => {
-              if (error) close(1011, 'Voice connection failed');
-            });
-          }
-        });
-        upstream.once('close', (code, reason) => {
-          diagnostics.summary('upstream', code);
-          if (!endRequested) {
+            if ((event?.type === 'response.audio_transcript.delta' ||
+                 event?.type === 'response.output_audio_transcript.delta') &&
+                typeof event.delta === 'string' && event.delta.trim() &&
+                speechStoppedAt !== undefined && speechToFirstWordMs === undefined) {
+              speechToFirstWordMs = performance.now() - speechStoppedAt;
+            }
+            if ((event?.type === 'response.audio.delta' ||
+                 event?.type === 'response.output_audio.delta') &&
+                typeof event.delta === 'string' && event.delta &&
+                speechStoppedAt !== undefined && speechToFirstAudioMs === undefined) {
+              speechToFirstAudioMs = performance.now() - speechStoppedAt;
+            }
+            if ((event?.type === 'response.audio.delta' || event?.type === 'response.output_audio.delta') &&
+                typeof event.delta === 'string' && event.delta && turnTiming?.firstAudioDeltaMs === null) {
+              turnTiming.firstAudioDeltaMs = elapsedSinceSpeechStopped() ?? null;
+            }
+            if (event?.type === 'response.created') {
+              const response = event.response as { id?: unknown } | undefined;
+              if (responseImageUsageItem && typeof response?.id === 'string' &&
+                  response.id.length <= 128) {
+                imageUsageResponses.set(response.id, responseImageUsageItem);
+                responseImageUsageItem = undefined;
+              }
+              responseCreateActive = true;
+              assistantResponding = true;
+              if (microphoneActive) publishActivity('thinking');
+            }
+            if (event?.type === 'response.done' || event?.type === 'response.cancelled') {
+              const response = event.response as {
+                id?: unknown;
+                usage?: { input_tokens?: unknown; output_tokens?: unknown;
+                  input_token_details?: { image_tokens?: unknown };
+                  input_tokens_details?: { image_tokens?: unknown } };
+              } | undefined;
+              const usageItem = typeof response?.id === 'string' ? imageUsageResponses.get(response.id) : undefined;
+              if (usageItem) imageUsageResponses.delete(response!.id as string);
+              if (usageItem && recordImageUsage && sessionId) {
+                const tokens = (value: unknown) => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
+                  ? value : undefined;
+                const inputTokens = tokens(response?.usage?.input_tokens);
+                const outputTokens = tokens(response?.usage?.output_tokens);
+                const imageTokens = tokens(response?.usage?.input_token_details?.image_tokens ??
+                  response?.usage?.input_tokens_details?.image_tokens);
+                void recordImageUsage({
+                  sessionId, itemId: usageItem, model: voiceModel, signal: controller.signal,
+                  ...(inputTokens === undefined ? {} : { inputTokens }),
+                  ...(outputTokens === undefined ? {} : { outputTokens }),
+                  ...(imageTokens === undefined ? {} : { imageTokens }),
+                }).catch(() => request.log.warn({
+                  failure: 'image_usage_unavailable', language,
+                }, 'voice.upstream_event_error'));
+              }
+              if (usageItem && attachedImageTurnId === usageItem && attachedImageItemId) {
+                deleteCameraImage(attachedImageItemId);
+                attachedImageItemId = undefined;
+                attachedImageTurnId = undefined;
+              }
+              responseCreateActive = false;
+              assistantResponding = false;
+              flushQueuedToolOutputs();
+              if (event.type === 'response.done' && turnTiming && !toolCallsInResponse) {
+                turnTiming.responseDoneMs = elapsedSinceSpeechStopped() ?? null;
+                finishTurnTiming();
+              }
+              if (browserProgressResponse) browserProgressResponse = false;
+              if (!toolCallsInResponse) {
+                delete request.sharedScreenContext;
+                delete request.requireSharedScreenContext;
+                flushPendingResponseCreate();
+              }
+            }
+            if (event?.type === 'response.audio.delta' ||
+                event?.type === 'response.output_audio.delta') publishActivity('speaking');
+            if (english && event?.type === 'response.function_call_arguments.done') {
+              runToolCall(event as unknown as RealtimeFunctionCall);
+              return;
+            }
+            if (english && (event?.type === 'response.done' || event?.type === 'response.cancelled') &&
+                toolCallsInResponse) {
+              responseDone = true;
+              if (!speakBrowserProgress()) resumeAfterTools();
+            }
+            if (event?.type === 'response.done' || event?.type === 'response.cancelled') {
+              statusAnnouncer?.flush();
+              if (microphoneActive && pendingToolCalls === 0) publishActivity('listening');
+              if (researchAnnouncementSpeaking) researchAnnouncementSpeaking = false;
+              speakResearchAnnouncement();
+            }
+            const finalTurnItemId =
+              (english && event?.type === 'conversation.item.input_audio_transcription.completed' ||
+               !english && event?.type === 'user.message' && Array.isArray(event.content)) &&
+              typeof event.item_id === 'string' && /^[A-Za-z0-9_-]{1,128}$/u.test(event.item_id)
+                ? resolveFinalItemId(event.item_id)
+                : undefined;
+            if ((event?.type === 'conversation.item.input_audio_transcription.completed' ||
+                 event?.type === 'user.message') && turnTiming?.transcriptCompletedMs === null) {
+              turnTiming.transcriptCompletedMs = elapsedSinceSpeechStopped() ?? null;
+            }
+            if (event) persistTranscript(event, finalTurnItemId);
+            if (english && event?.type === 'conversation.item.input_audio_transcription.completed' &&
+                typeof event.item_id === 'string' && /^[A-Za-z0-9_-]{1,128}$/u.test(event.item_id) &&
+                typeof event.transcript === 'string' && event.transcript.trim() &&
+                event.transcript.length <= MAX_TRANSCRIPT_CHARACTERS) {
+              if (/^stop[.!?]*$/iu.test(event.transcript.trim())) {
+                browserProgressPending = false;
+                for (const task of activeBrowserStopControllers) task.abort();
+                finishSharedScreenContextWait(null, true);
+              }
+              void handleVoiceEndOfTurn(finalTurnItemId ?? event.item_id, event.transcript.trim(), event.item_id);
+            } else if (!english && event?.type === 'user.message' &&
+                typeof event.item_id === 'string' && /^[A-Za-z0-9_-]{1,128}$/u.test(event.item_id) &&
+                Array.isArray(event.content)) {
+              const text = event.content.flatMap((part) =>
+                part !== null && typeof part === 'object' && !Array.isArray(part) &&
+                (part as Record<string, unknown>).type === 'input_text' &&
+                typeof (part as Record<string, unknown>).text === 'string'
+                  ? [(part as Record<string, unknown>).text as string]
+                  : []).join('').trim();
+              if (text && text.length <= MAX_TRANSCRIPT_CHARACTERS) {
+                void handleVoiceEndOfTurn(finalTurnItemId ?? event.item_id, text, event.item_id);
+              }
+            } else if (english && event?.type === 'conversation.item.input_audio_transcription.failed') {
+              sendResponseCreate({ type: 'response.create' });
+            }
+            if (browser.readyState === WebSocket.OPEN) {
+              browser.send(data, { binary }, (error) => {
+                if (error) close(1011, 'Voice connection failed');
+              });
+            }
+          });
+          socket.on('close', (code, reason) => {
+            if (socket !== upstream) return;
+            if (toolBudgetRungs && !upstreamSessionReady && !endRequested && !controller.signal.aborted) {
+              stepDown('closed');
+              return;
+            }
+            diagnostics.summary('upstream', code);
+            if (!endRequested) {
+              request.log.warn({
+                events: [...upstreamEventTypes].join(',').slice(0, 400),
+                closeCode: code,
+                failure: reason.toString('utf8').replace(/[^A-Za-z0-9 .:,'()_-]/gu, ' ').slice(0, 120) || 'none',
+                language,
+              }, 'voice.upstream_closed');
+            }
+            if (!endRequested && browser.readyState === WebSocket.OPEN) {
+              publishActivity(code === 1000 ? 'ended' : 'reconnecting');
+              close(code === 1000 ? 1000 : 1011, 'Voice connection ended', 'upstream');
+            }
+          });
+          socket.on('error', (error) => {
+            if (socket !== upstream || controller.signal.aborted) return;
+            const status = /Unexpected server response: (\d{3})/u.exec(error.message)?.[1];
             request.log.warn({
-              events: [...upstreamEventTypes].join(',').slice(0, 400),
-              closeCode: code,
-              failure: reason.toString('utf8').replace(/[^A-Za-z0-9 .:,'()_-]/gu, ' ').slice(0, 120) || 'none',
+              failure: error.message.replace(/[^A-Za-z0-9 .:,'()_-]/gu, ' ').slice(0, 120),
+              ...(status ? { httpStatus: Number(status) } : {}),
               language,
-            }, 'voice.upstream_closed');
-          }
-          if (!endRequested && browser.readyState === WebSocket.OPEN) {
-            publishActivity(code === 1000 ? 'ended' : 'reconnecting');
-            close(code === 1000 ? 1000 : 1011, 'Voice connection ended', 'upstream');
-          }
-        });
-        upstream.once('error', (error) => {
-          if (controller.signal.aborted) return;
-          const status = /Unexpected server response: (\d{3})/u.exec(error.message)?.[1];
-          request.log.warn({
-            failure: error.message.replace(/[^A-Za-z0-9 .:,'()_-]/gu, ' ').slice(0, 120),
-            ...(status ? { httpStatus: Number(status) } : {}),
-            language,
-          }, 'voice.upstream_error');
-          publishActivity('failed');
-          close(1011, 'Voice connection failed', 'upstream');
-        });
+            }, 'voice.upstream_error');
+            publishActivity('failed');
+            close(1011, 'Voice connection failed', 'upstream');
+          });
+        };
+        openAttempt(startRung ?? 0);
       } catch (error) {
         if (controller.signal.aborted) return;
         request.log.warn({
@@ -2452,6 +2541,7 @@ function registerVoiceRoute(
 }
 
 export function createVoiceRelayModule(options: VoiceRelayOptions): BackendModule {
+  const toolBudgetMemory = createToolBudgetMemory();
   return {
     id: 'voice',
     tools: [],
@@ -2501,6 +2591,7 @@ export function createVoiceRelayModule(options: VoiceRelayOptions): BackendModul
           options.reserveImageBudget,
           options.recordImageUsage,
           options.captionFrame,
+          toolBudgetMemory,
         );
       }
       if (options.connect) {

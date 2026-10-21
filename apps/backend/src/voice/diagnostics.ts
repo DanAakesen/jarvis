@@ -44,6 +44,20 @@ export function createVoiceDiagnostics(
   let summaryLogged = false;
   let watchdog: ReturnType<typeof setTimeout> | undefined;
   let update = { toolCount: 0, totalBytes: 0, largestTools: [] as { name: string; bytes: number }[] };
+  let toolBudget: { toolBudgetRung: string | null; toolBudgetAttempts: number } | undefined;
+  const measure = (message: unknown, serialized: string) => {
+    const session = (message as { session?: { instructions?: unknown; tools?: { name?: unknown }[] } }).session;
+    const tools = session?.tools ?? [];
+    return {
+      toolCount: tools.length, totalBytes: Buffer.byteLength(serialized),
+      toolBytes: Buffer.byteLength(JSON.stringify(tools)),
+      instructionsBytes: typeof session?.instructions === 'string' ? Buffer.byteLength(session.instructions) : 0,
+      largestTools: tools.flatMap((tool) => typeof tool.name === 'string' &&
+        /^[A-Za-z0-9_-]{1,64}$/u.test(tool.name)
+        ? [{ name: tool.name, bytes: Buffer.byteLength(JSON.stringify(tool)) }] : [])
+        .sort((left, right) => right.bytes - left.bytes).slice(0, 5),
+    };
+  };
   const stage = (name: string) => {
     if (summaryLogged || stages.some((entry) => entry.stage === name)) return;
     stages.push({ stage: name, elapsedMs: elapsed() });
@@ -62,16 +76,20 @@ export function createVoiceDiagnostics(
     },
     update(message: unknown, serialized: string) {
       if (update.totalBytes !== 0) return;
-      const session = (message as { session?: { tools?: { name?: unknown }[] } }).session;
-      const tools = session?.tools ?? [];
-      update = {
-        toolCount: tools.length, totalBytes: Buffer.byteLength(serialized),
-        largestTools: tools.flatMap((tool) => typeof tool.name === 'string' &&
-          /^[A-Za-z0-9_-]{1,64}$/u.test(tool.name)
-          ? [{ name: tool.name, bytes: Buffer.byteLength(JSON.stringify(tool)) }] : [])
-          .sort((left, right) => right.bytes - left.bytes).slice(0, 5),
-      };
+      const { toolCount, totalBytes, largestTools } = measure(message, serialized);
+      update = { toolCount, totalBytes, largestTools };
     },
+    /** Records one startup frame (the summary keeps the latest) and returns its content-free sizes. */
+    attempt(message: unknown, serialized: string) {
+      const { toolCount, totalBytes, largestTools, toolBytes, instructionsBytes } = measure(message, serialized);
+      update = { toolCount, totalBytes, largestTools };
+      return { toolCount, toolBytes, instructionsBytes, frameBytes: totalBytes };
+    },
+    measure(message: unknown, serialized: string) {
+      const { toolCount, totalBytes, toolBytes, instructionsBytes } = measure(message, serialized);
+      return { toolCount, toolBytes, instructionsBytes, frameBytes: totalBytes };
+    },
+    toolBudget(rung: string | null, attempts: number) { toolBudget = { toolBudgetRung: rung, toolBudgetAttempts: attempts }; },
     watchdog(name: 'upstream_connecting' | 'upstream_ready', fail: () => void) {
       clearWatchdog();
       watchdog = setTimeout(() => { timeout(name, 15_000); fail(); }, 15_000);
@@ -107,7 +125,7 @@ export function createVoiceDiagnostics(
       signal.removeEventListener('abort', clearWatchdog);
       log.info({
         language, closedBy, closeCode, durationMs: elapsed(), stages,
-        events: [...events], ...update,
+        events: [...events], ...update, ...toolBudget,
       }, 'voice.session_summary');
     },
   };
