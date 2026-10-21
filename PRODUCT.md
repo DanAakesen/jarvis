@@ -465,16 +465,22 @@ English voice sessions use Ryan HD and the British butler persona. The backend o
 
 Voice startup must not silently wait for the browser's 60-second warm-up limit:
 the Danish route's upstream connection and readiness each have a 15-second relay
-deadline. English instead tries up to five session sizes (all tools, then fewer
-tools, then none, then shorter instructions; 8 seconds for the first, 6 for each
-later one) and keeps the first that works, so voice stays usable even when some tools
-are unavailable; Jarvis then says so briefly and suggests the chat for what it cannot
-do. A missed deadline, or every size failing, closes the socket with code 4010 and
-shows “Voice service did not become ready. Retrying…” using the existing reconnect
-backoff. Readiness remains `session.updated` for English and `session.created` or
-`session.updated` for Danish.
-Content-free stage and terminal-summary logs support diagnosis; real provider
-acceptance still requires an owner voice attempt after deployment.
+deadline. English starts at R1, the known-good frame measured after the full R0
+frame stalled on 21 October, and steps down through the existing smaller sizes
+if needed. It keeps the first rung that works, so voice stays usable even when
+some tools are unavailable; Jarvis then says so briefly and suggests the chat
+for what it cannot do. After a session becomes ready below R0, an independent
+background probe can test larger frames no more than once every 30 minutes per
+process. A ready full-frame probe remembers R0 for later sessions; measurements
+never change the fallback ladder or active session. Probing is enabled by
+default and can be disabled with
+`JARVIS_VOICE_TOOL_BUDGET_PROBE_ENABLED=false`. A missed deadline, or every
+foreground size failing, closes the socket with code 4010 and shows “Voice
+service did not become ready. Retrying…” using the existing reconnect backoff.
+Readiness remains `session.updated` for English and `session.created` or
+`session.updated` for Danish. Content-free stage, attempt, probe and
+terminal-summary logs support diagnosis; real provider acceptance still
+requires an owner voice attempt after deployment.
 
 During an English voice session, Jarvis announces task completion, tasks needing attention, ready pull requests, and failed deployments. The backend merges bursts and waits until Dan is no longer speaking or Jarvis has finished its current response. Announcements use fixed, short wording rather than task titles, messages, or logs. `get_status_summary` answers status questions with aggregate counts from the Now feed.
 

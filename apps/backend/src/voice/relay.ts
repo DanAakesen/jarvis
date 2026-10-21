@@ -1,5 +1,9 @@
 import { randomUUID } from 'node:crypto';
-import { createToolBudgetMemory, createToolBudgetRungs, type ToolBudgetMemory, type ToolBudgetRung } from './tool-budget.js';
+import {
+  createToolBudgetMemory, createToolBudgetProbeTools, createToolBudgetRungs,
+  TOOL_BUDGET_COLD_START_RUNG, type ToolBudgetMemory, type ToolBudgetProbeName, type ToolBudgetRung,
+} from './tool-budget.js';
+import { createVoiceToolBudgetProbe, type VoiceToolBudgetProbe } from './tool-budget-probe.js';
 import { createVoiceDiagnostics, VOICE_STARTUP_CLOSE_CODE, VoiceStageTimeout } from './diagnostics.js';
 import { workspaceContext } from '../core/workspace-context.js';
 import { runModelToolCall } from '../core/tool-origin.js';
@@ -169,6 +173,7 @@ function ledgerInstructions(entries: readonly VoiceReflexLedgerEntry[]): string 
 
 export interface VoiceRelayOptions {
   readonly getToken: (scope: string, signal: AbortSignal) => Promise<string>;
+  readonly toolBudgetProbeEnabled?: boolean;
   readonly connect?: VoiceConnectionFactory;
   readonly connectDanish?: VoiceConnectionFactory;
   readonly createPartialRecognizer?: PartialSpeechRecognizerFactory;
@@ -216,11 +221,17 @@ type PendingSharedScreenContext = {
 
 function credential(getToken: VoiceRelayOptions['getToken'], signal: AbortSignal): Promise<string> {
   return new Promise((resolve, reject) => {
+    if (signal.aborted) {
+      reject(signal.reason ?? new Error('Voice authentication was cancelled'));
+      return;
+    }
     let timer: NodeJS.Timeout | undefined;
+    const onAbort = () => reject(signal.reason ?? new Error('Voice authentication was cancelled'));
     const timeout = new Promise<never>((_resolve, rejectTimeout) => {
       timer = setTimeout(() => rejectTimeout(new Error('Voice authentication timed out')), TOKEN_TIMEOUT_MS);
       timer.unref();
     });
+    signal.addEventListener('abort', onAbort, { once: true });
     void Promise.race([getToken(VOICE_LIVE_SCOPE, signal), timeout])
       .then((token) => {
         if (typeof token !== 'string' || !token.trim() || /[\r\n]/u.test(token)) {
@@ -228,7 +239,10 @@ function credential(getToken: VoiceRelayOptions['getToken'], signal: AbortSignal
         }
         resolve(token);
       }, reject)
-      .finally(() => { if (timer) clearTimeout(timer) });
+      .finally(() => {
+        if (timer) clearTimeout(timer);
+        signal.removeEventListener('abort', onAbort);
+      });
   });
 }
 
@@ -342,6 +356,7 @@ function registerVoiceRoute(
   recordImageUsage?: VoiceRelayOptions['recordImageUsage'],
   captionFrame?: VoiceRelayOptions['captionFrame'],
   toolBudgetMemory?: ToolBudgetMemory,
+  toolBudgetProbe?: VoiceToolBudgetProbe,
 ): void {
   app.get(path, { websocket: true }, (browser, request) => {
     const controller = new AbortController();
@@ -365,8 +380,8 @@ function registerVoiceRoute(
     let upstream: WebSocket | undefined;
     // Only the English route probes for a working tool budget; Danish keeps its single full session update.
     const toolBudgetRungs = language === 'en' && toolBudgetMemory ? createToolBudgetRungs(app.jarvisTools) : undefined;
-    let activeRung: ToolBudgetRung | undefined = toolBudgetRungs?.[0];
-    let rungIndex = 0;
+    let activeRung: ToolBudgetRung | undefined = toolBudgetRungs?.[TOOL_BUDGET_COLD_START_RUNG];
+    let rungIndex = toolBudgetRungs ? TOOL_BUDGET_COLD_START_RUNG : 0;
     let attemptCount = 0;
     let attemptTimer: ReturnType<typeof setTimeout> | undefined;
     let attemptStartedAt = 0;
@@ -2229,6 +2244,21 @@ function registerVoiceRoute(
             if (browser.readyState === WebSocket.OPEN) browser.send(message.data, { binary: message.binary });
           }
           flushQueued();
+          if (rungIndex !== 0 && toolBudgetProbe) {
+            toolBudgetProbe.start({
+              buildFrame: (probe: ToolBudgetProbeName) => {
+                const tools = createToolBudgetProbeTools(probe, app.jarvisTools);
+                return createRealtimeSessionUpdate(
+                  tools, personality, presence, 'en', projects, transcriptionModel, voiceTuning, memorySettings,
+                  probe === 'reduced_plus_copies' ? 'notice' : 'full',
+                );
+              },
+              acquireToken: (signal) => credential(getToken, signal),
+              voiceModel,
+              memory: toolBudgetMemory!,
+              log: request.log,
+            });
+          }
         };
         openAttempt = (index: number) => {
           rungIndex = index;
@@ -2523,7 +2553,7 @@ function registerVoiceRoute(
             close(1011, 'Voice connection failed', 'upstream');
           });
         };
-        openAttempt(startRung ?? 0);
+        openAttempt(startRung ?? TOOL_BUDGET_COLD_START_RUNG);
       } catch (error) {
         if (controller.signal.aborted) return;
         request.log.warn({
@@ -2539,10 +2569,16 @@ function registerVoiceRoute(
 
 export function createVoiceRelayModule(options: VoiceRelayOptions): BackendModule {
   const toolBudgetMemory = createToolBudgetMemory();
+  const toolBudgetProbe = options.connect
+    ? createVoiceToolBudgetProbe(options.connect, options.toolBudgetProbeEnabled ?? true)
+    : undefined;
   return {
     id: 'voice',
     tools: [],
     registerRoutes: async (app) => {
+      if (toolBudgetProbe) {
+        app.addHook('onClose', async () => { await toolBudgetProbe.close(); });
+      }
       options.registerPhoneMediaRoute?.(app);
       if (options.connect) {
         registerVoiceRoute(
@@ -2559,6 +2595,7 @@ export function createVoiceRelayModule(options: VoiceRelayOptions): BackendModul
           options.recordImageUsage,
           options.captionFrame,
           toolBudgetMemory,
+          toolBudgetProbe,
         );
       }
       if (options.connect) {

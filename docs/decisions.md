@@ -1,5 +1,29 @@
 # Decisions
 
+## Known-good English cold start and background probes (21 October 2026; #1188)
+
+Refs DanAakesen/jarvis#1184, Refs DanAakesen/jarvis#1177.
+
+The 21 October production measurement showed that R0 (122 tools, 129,098 frame
+bytes) stalled at 8,001 ms while R1 (111 tools, 107,755 frame bytes) became
+ready in 1,341 ms. New English voice sessions therefore start at R1 rather
+than paying for R0 after every backend restart. The existing foreground ladder,
+step-down behavior and successful-rung memory remain unchanged.
+
+After a session is ready below R0, one independent probe sequence per process
+may run every 30 minutes. It tests `full`, `no_proactive`, `no_daily`, then
+`reduced_plus_copies` using separate sockets and the normal realtime frame
+builder. Each probe has an 8-second deadline; only a ready `full` probe updates
+the remembered rung. Other probe frames measure tool-content and size
+hypotheses without changing the fallback ladder or active session. Content-free
+probe logs contain only fixed names, counts, byte sizes, outcomes and timings.
+Probing is enabled by default and can be disabled with
+`JARVIS_VOICE_TOOL_BUDGET_PROBE_ENABLED=false`.
+
+This supersedes the #1184 rule that new sessions start at the last known rung
+and that restart is required to try R0. Actual probe outcomes and provider
+acceptance still require an owner English voice attempt after deployment.
+
 ## Route proactive tasks to Personal/Work and exclude project work (21 October 2026; #1186)
 
 P13-20 replaces the suggested-todo destination and selection behavior from

@@ -5017,14 +5017,16 @@ the five largest server-owned tool names/sizes. No payload content is logged.
 See [voice startup diagnosis](runbook.md#voice-startup-diagnosis).
 
 **English tool-budget fallback** (`apps/backend/src/voice/tool-budget.ts`, 21 October
-2026, #1184). The English relay walks a deterministic ladder of session frames; only
-`tools` and the instruction text change, and every attempt uses a fresh upstream
-socket that counts from connect until `session.updated` (8 s at R0, 6 s at R1-R4,
-32 s worst case, inside the browser's 60-second warm-up). A deadline, an upstream
-`error` event or an upstream close before `session.updated` steps down; abandoned
-sockets are closed and none of their events reach the browser (held pre-ready events
-are forwarded only after readiness). If every rung fails the relay closes 4010 and logs
-`voice.tool_budget_exhausted`.
+2026, #1184). New processes start at R1, the known-good frame measured on
+21 October (R0 stalled at 8,001 ms; R1 became ready in 1,341 ms). The relay
+walks the unchanged deterministic ladder from the current rung; only `tools`
+and instruction text change, and every foreground attempt uses a fresh
+upstream socket waiting for `session.updated` (8 s at R0, 6 s at R1-R4;
+24 s worst case from cold R1, 32 s if a remembered R0 must step down). A
+deadline, upstream `error` or close before readiness steps down. Abandoned
+sockets are closed and none of their events reach the browser (held pre-ready
+events are forwarded only after readiness). If every rung fails the relay
+closes 4010 and logs `voice.tool_budget_exhausted`.
 
 | Rung | Tools | Instructions |
 |---|---|---|
@@ -5034,12 +5036,21 @@ are forwarded only after readiness). If every rung fails the relay closes 4010 a
 | R3 | none | full + notice |
 | R4 | none | base identity and style text + notice |
 
-The backend keeps the last rung that reached `session.updated` in process memory (no
-expiry; a restart clears it), starts new sessions there, steps down from it within the
-session if needed, and never remembers a rung that did not become ready. Every later
-frame (presence-mode updates, camera turn-detection updates, `response.create`
-instructions) is built for the selected rung, and a model call to a tool outside the
-active subset is refused without executing it. Danish does not use the ladder.
+The backend keeps the last rung that reached `session.updated` in process memory
+(a restart clears it), starts new sessions there, steps down from it within the
+session if needed, and never remembers a rung that did not become ready. After a
+non-R0 session becomes ready, a process-wide probe coordinator may run once per
+30 minutes. It builds independent `full`, `no_proactive`, `no_daily` and
+`reduced_plus_copies` frames through `createRealtimeSessionUpdate`, uses fresh
+credentialed sockets, sends no audio or conversation, and waits at most 8 seconds
+for `session.updated`. Probes do not forward events to the browser or delay the
+live session; only a ready `full` probe promotes memory to R0. The default-on
+`JARVIS_VOICE_TOOL_BUDGET_PROBE_ENABLED=false` switch disables probing.
+`voice.tool_budget_probe` exports fixed probe names, counts, byte sizes,
+outcomes and timings only. Every later live frame (presence-mode updates,
+camera turn-detection updates, `response.create` instructions) is built for the
+selected rung, and a model call to a tool outside the active subset is refused
+without executing it. Danish does not use the ladder or probes.
 
 | Area | Design | Evidence |
 | --- | --- | --- |

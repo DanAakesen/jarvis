@@ -124,6 +124,7 @@ function appFor(
   reserveImageBudget?: VoiceRelayOptions['reserveImageBudget'],
   recordImageUsage?: VoiceRelayOptions['recordImageUsage'],
   captionFrame?: VoiceRelayOptions['captionFrame'],
+  toolBudgetProbeEnabled = false,
 ) {
   const frameStore = new FrameStore();
   const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
@@ -135,6 +136,7 @@ function appFor(
       ...toolModules,
       createVoiceRelayModule({
         getToken,
+        toolBudgetProbeEnabled,
         frameStore,
         ...(reserveImageBudget ? { reserveImageBudget } : {}),
         ...(recordImageUsage ? { recordImageUsage } : {}),
@@ -3211,17 +3213,27 @@ describe('backend-relayed Voice Live WebSocket', () => {
         registerRoutes: async () => {},
       };
       let resolveSession: (session: Record<string, unknown>) => void = () => {};
+      let resolveR0Session: (session: Record<string, unknown>) => void = () => {};
       let resolveToolOutput: (output: Record<string, unknown>) => void = () => {};
       let resolveResponseRequest: () => void = () => {};
       const sessionSent = new Promise<Record<string, unknown>>((resolve) => { resolveSession = resolve; });
+      const r0SessionSent = new Promise<Record<string, unknown>>((resolve) => { resolveR0Session = resolve; });
       const toolOutputSent = new Promise<Record<string, unknown>>((resolve) => { resolveToolOutput = resolve; });
       const responseRequested = new Promise<void>((resolve) => { resolveResponseRequest = resolve; });
       const browserEvents: Record<string, unknown>[] = [];
+      const records: string[] = [];
+      const getToken = vi.fn(async () => voiceToken);
+      let fullFrames = 0;
       const upstreamUrl = await echoServer((socket) => {
         socket.on('message', (data) => {
           const event = JSON.parse(data.toString()) as Record<string, unknown>;
           if (event.type === 'session.update') {
-            resolveSession(event.session as Record<string, unknown>);
+            const session = event.session as Record<string, unknown>;
+            resolveSession(session);
+            if ((session.tools as { name: string }[]).some((tool) => tool.name === name)) {
+              fullFrames += 1;
+              if (fullFrames === 2) resolveR0Session(session);
+            }
             return;
           }
           if (event.type === 'input_audio_buffer.append') {
@@ -3249,25 +3261,51 @@ describe('backend-relayed Voice Live WebSocket', () => {
         (token, signal) => new WebSocket(upstreamUrl, {
           headers: { Authorization: ['Bearer', token].join(' ') }, signal,
         }),
-        vi.fn(async () => voiceToken),
-        [],
+        getToken,
+        records,
         [toolModule],
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        'info',
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        name.startsWith('daily_'),
       );
       const activityEvents: unknown[] = [];
       app.jarvisActivityHub.subscribe((event) => activityEvents.push(event));
       await app.listen({ host: '127.0.0.1', port: 0 });
       const address = app.server.address() as AddressInfo;
-      const browser = await openBrowser(`ws://127.0.0.1:${address.port}/voice`);
-      browser.on('message', (data) => {
+      let browser = await openBrowser(`ws://127.0.0.1:${address.port}/voice`);
+      const receiveBrowserEvents = (socket: WebSocket) => socket.on('message', (data) => {
         browserEvents.push(JSON.parse(data.toString()) as Record<string, unknown>);
       });
-      const session = await sessionSent;
+      receiveBrowserEvents(browser);
+      const firstSession = await sessionSent;
       expect(activityEvents).toEqual([]);
-      expect(session).toMatchObject({
+      expect(firstSession).toMatchObject({
         modalities: ['text', 'audio'],
         voice: { name: 'en-GB-Ryan:DragonHDLatestNeural', type: 'azure-standard' },
       });
-      expect(session).not.toHaveProperty('type');
+      expect(firstSession).not.toHaveProperty('type');
+      if (name.startsWith('daily_')) {
+        expect((firstSession.tools as { name: string }[]).some((tool) => tool.name === name)).toBe(false);
+        await vi.waitFor(() => expect(records.some((record) => {
+          const entry = JSON.parse(record) as Record<string, unknown>;
+          return entry.msg === 'voice.tool_budget_probe' && entry.probe === 'full' && entry.outcome === 'ready';
+        })).toBe(true));
+        const closed = once(browser, 'close');
+        browser.close(1000, 'Probe completed'); await closed;
+        activityEvents.length = 0;
+        browser = await openBrowser(`ws://127.0.0.1:${address.port}/voice`);
+        receiveBrowserEvents(browser);
+      }
+      const session = name.startsWith('daily_') ? await r0SessionSent : firstSession;
 
       expect(session.tools).toEqual(expect.arrayContaining([
         expect.objectContaining({ type: 'function', name }),
