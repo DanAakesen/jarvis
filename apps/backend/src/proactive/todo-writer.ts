@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import {
   VaultAppNotInstalledError,
   VaultWriteConflictError,
@@ -6,7 +7,7 @@ import {
 import { isVaultLineSafe } from '../vault/index.js';
 import type { FindingsStoredContext } from './engine.js';
 import {
-  appendTodos,
+  appendTaskLines,
   buildSuggestedTodoLine,
   hasDuplicateTodo,
   hasTodoMarker,
@@ -16,7 +17,7 @@ import {
 import type { ProactiveStore } from './store.js';
 import type { ProactiveTodoReceiptStore, TodoReceiptInput, TodoReceiptSummary } from './todo-store.js';
 import { dayKey, isQuietHour } from './time.js';
-import { MAX_VAULT_FILE_BYTES, resolveTodoFile } from './todo-file.js';
+import { MAX_VAULT_FILE_BYTES } from './todo-file.js';
 
 type VaultWriter = Pick<ReturnType<typeof createGitHubVaultClient>, 'tree' | 'read' | 'write'>;
 type WriterLogger = {
@@ -29,8 +30,26 @@ const perDayLimit = 5;
 interface PreparedTodo {
   itemId: string;
   dedupeKey: string;
+  legacyDedupeKey: string;
+  targetPath: string;
   line: string;
 }
+
+interface VaultFile {
+  path: string;
+  sha: string;
+  content: string;
+}
+
+const inboxes = {
+  personal: 'Personal/Inbox.md',
+  work: 'Work/Inbox.md',
+} as const;
+const rootTaskPath = /^(?:task|tasks)\.md$/iu;
+const projectPattern = /\b(?:software|engineering|code(?:base| review|ing)?|repository|repo|pull requests?|merge requests?|pr\b|ci\/cd|pipelines?|deployment|deployments?|commits?|branches|unit tests?|test suites?|release engineering|build checks?|software factory|factory tasks?|project(?:s)?)\b/iu;
+const projectBuildPattern = /\b(?:build|check|test|review|follow[- ]?up)\b.{0,36}\b(?:software|code|repo|branch|pipeline|ci|pull request|pr\b|deployment|engineering|project)\b|\b(?:software|code|repo|branch|pipeline|ci|pull request|pr\b|deployment|engineering|project)\b.{0,36}\b(?:build|check|test|review|follow[- ]?up)\b/iu;
+const personalScopePattern = /\b(?:personal|home|household|family|doctor|dentist|groceries|grocery|shopping|school|kids|children|birthday|rent|utilities|medicine|cleaning|laundry)\b/iu;
+const workScopePattern = /\b(?:work|office|job|manager|colleague|coworker|client|customer|supplier|business|workplace|professional|invoice|agenda)\b/iu;
 
 function safeWarn(logger: WriterLogger | undefined, data: Parameters<WriterLogger['warn']>[0]): void {
   try { logger?.warn(data, 'proactive.todo_writer'); } catch { /* A logging failure cannot fail the run. */ }
@@ -54,6 +73,57 @@ function sortedCandidates(context: FindingsStoredContext): FindingsStoredContext
         (Number.isFinite(rightDue) ? rightDue : Number.POSITIVE_INFINITY) ||
         left.dedupeKey.localeCompare(right.dedupeKey);
     });
+}
+
+function actionKey(
+  finding: FindingsStoredContext['findings'][number],
+  facts: FindingsStoredContext['facts'],
+): string | undefined {
+  const byRef = new Map(facts.map((fact) => [fact.ref, fact]));
+  const identities = finding.evidenceRefs.map((ref) => byRef.get(ref)?.identity);
+  if (identities.length === 0 || identities.some((identity) => !identity)) return undefined;
+  return createHash('sha256').update(JSON.stringify([...identities].sort())).digest('hex').slice(0, 32);
+}
+
+function isProjectRelated(
+  finding: FindingsStoredContext['findings'][number],
+  facts: FindingsStoredContext['facts'],
+  text: string,
+): boolean {
+  const cited = finding.evidenceRefs.flatMap((ref) => facts.filter((fact) => fact.ref === ref));
+  if (cited.some(({ source, kind, projectRelated }) =>
+    source === 'factory' || kind === 'factory' || projectRelated === true)) return true;
+  const evidence = cited.map(({ text: factText }) => factText).join(' ');
+  return projectPattern.test(`${text} ${evidence}`) || projectBuildPattern.test(`${text} ${evidence}`);
+}
+
+function taskScope(
+  finding: FindingsStoredContext['findings'][number],
+  facts: FindingsStoredContext['facts'],
+  text: string,
+): 'personal' | 'work' | undefined {
+  const cited = finding.evidenceRefs.flatMap((ref) => facts.filter((fact) => fact.ref === ref));
+  const explicit = new Set(cited.flatMap(({ taskScope: scope }) => scope ? [scope] : []));
+  if (explicit.size > 1) return undefined;
+  const context = `${text} ${cited.map(({ text: factText }) => factText).join(' ')}`;
+  const personal = personalScopePattern.test(context);
+  const work = workScopePattern.test(context);
+  const established = [...explicit][0];
+  if (personal && work) return undefined;
+  if (established !== undefined) {
+    return (personal && established !== 'personal') || (work && established !== 'work')
+      ? undefined : established;
+  }
+  return personal === work ? undefined : personal ? 'personal' : 'work';
+}
+
+function safeScopeText(value: string): string {
+  return value.replace(/^(?:\(proactive\)\s*)+/iu, '').trim();
+}
+
+function appendable(file: VaultFile): boolean {
+  return isTodoFileWritable(file.content) &&
+    !/(?:^|\r?\n)\s*#{1,6}\s+Suggested by Jarvis\s*#*\s*(?:\r?\n[\s\S]*)?$/iu.test(file.content);
 }
 
 export function createProactiveTodoWriter(options: ProactiveTodoWriterOptions) {
@@ -103,20 +173,41 @@ export function createProactiveTodoWriter(options: ProactiveTodoWriterOptions) {
         log(context, 'todo_daily_cap', candidates.map(({ itemId }) => itemId), 0, startedAt);
         return;
       }
-      const summaries = await options.receipts.list(candidates.map(({ dedupeKey }) => dedupeKey));
+      const actionKeys = new Map(candidates.map((finding) => [finding.itemId, actionKey(finding, context.facts)]));
+      for (const finding of candidates) {
+        if (!actionKeys.get(finding.itemId)) log(context, 'source_identity_unavailable', [finding.itemId], 1, startedAt);
+      }
+      const keys = candidates.flatMap((finding) =>
+        [actionKeys.get(finding.itemId), finding.dedupeKey].filter((key): key is string => key !== undefined));
+      const summaries = await options.receipts.list([...new Set(keys)]);
       const settled = new Map(summaries.map((summary) => [summary.dedupeKey, summary]));
-      const eligible = candidates.filter(({ dedupeKey }) => {
-        const receipt = settled.get(dedupeKey);
-        return !receipt?.added && !receipt?.skipped && (receipt?.failedAttempts ?? 0) < 2;
+      const eligible = candidates.filter((finding) => {
+        const stableKey = actionKeys.get(finding.itemId);
+        if (!stableKey) return false;
+        const receipt = settled.get(stableKey);
+        const legacyReceipt = settled.get(finding.dedupeKey);
+        return !receipt?.added && !receipt?.skipped && !legacyReceipt?.added && !legacyReceipt?.skipped &&
+          (receipt?.failedAttempts ?? 0) < 2 && (legacyReceipt?.failedAttempts ?? 0) < 2;
       });
       if (eligible.length === 0) return;
 
       const prepared: PreparedTodo[] = [];
+      const preparedKeys = new Set<string>();
       for (const finding of eligible) {
-        const text = sanitiseTodoText(finding.suggestedTodo ?? '');
+        const rawText = finding.suggestedTodo ?? '';
+        const stableKey = actionKeys.get(finding.itemId)!;
+        if (isProjectRelated(finding, context.facts, rawText)) {
+          await insertReceipt(options.receipts, settled, {
+            itemId: finding.itemId, dedupeKey: stableKey, dayKey: currentDay,
+            runId: context.runId, status: 'skipped', reason: 'project_related', commitSha: null,
+          }, options.logger, context);
+          log(context, 'project_related', [finding.itemId], 1, startedAt);
+          continue;
+        }
+        const text = sanitiseTodoText(safeScopeText(rawText));
         if (Array.from(text).length < 3) {
           await insertReceipt(options.receipts, settled, {
-            itemId: finding.itemId, dedupeKey: finding.dedupeKey, dayKey: currentDay,
+            itemId: finding.itemId, dedupeKey: stableKey, dayKey: currentDay,
             runId: context.runId, status: 'skipped', reason: 'invalid_text', commitSha: null,
           }, options.logger, context);
           log(context, 'invalid_text', [finding.itemId], 1, startedAt);
@@ -124,16 +215,32 @@ export function createProactiveTodoWriter(options: ProactiveTodoWriterOptions) {
         }
         if (!isVaultLineSafe(text)) {
           await insertReceipt(options.receipts, settled, {
-            itemId: finding.itemId, dedupeKey: finding.dedupeKey, dayKey: currentDay,
+            itemId: finding.itemId, dedupeKey: stableKey, dayKey: currentDay,
             runId: context.runId, status: 'skipped', reason: 'unsafe_text', commitSha: null,
           }, options.logger, context);
           log(context, 'unsafe_text', [finding.itemId], 1, startedAt);
           continue;
         }
+        const scope = taskScope(finding, context.facts, text);
+        if (!scope) {
+          await insertReceipt(options.receipts, settled, {
+            itemId: finding.itemId, dedupeKey: stableKey, dayKey: currentDay,
+            runId: context.runId, status: 'skipped', reason: 'scope_ambiguous', commitSha: null,
+          }, options.logger, context);
+          log(context, 'scope_ambiguous', [finding.itemId], 1, startedAt);
+          continue;
+        }
+        if (preparedKeys.has(stableKey)) continue;
+        preparedKeys.add(stableKey);
         prepared.push({
           itemId: finding.itemId,
-          dedupeKey: finding.dedupeKey,
-          line: buildSuggestedTodoLine(text, finding.dueAt, finding.dedupeKey),
+          dedupeKey: stableKey,
+          legacyDedupeKey: finding.dedupeKey,
+          targetPath: inboxes[scope],
+          line: buildSuggestedTodoLine(text, finding.dueAt, stableKey, {
+            dueHasTime: finding.dueHasTime,
+            highPriority: finding.highPriority,
+          }),
         });
       }
       if (prepared.length === 0) return;
@@ -144,67 +251,65 @@ export function createProactiveTodoWriter(options: ProactiveTodoWriterOptions) {
       }
 
       stage = 'vault';
-      const resolved = await resolveTodoFile(options.vault, context.signal);
-      if ('reason' in resolved) {
-        log(context, resolved.reason, undefined, 0, startedAt);
-        return;
+      const tree = await options.vault.tree(context.signal);
+      const available = new Set(tree.map(({ path }) => path));
+      const groups = new Map<string, PreparedTodo[]>();
+      for (const todo of prepared) {
+        if (!available.has(todo.targetPath)) {
+          log(context, 'todo_destination_missing', [todo.itemId], 0, startedAt);
+          continue;
+        }
+        const group = groups.get(todo.targetPath) ?? [];
+        group.push(todo);
+        groups.set(todo.targetPath, group);
       }
-      let file = await options.vault.read(resolved.path, context.signal);
-      if (!file) {
-        log(context, 'todo_file_missing', undefined, 0, startedAt);
-        return;
-      }
-      if (!isTodoFileWritable(file.content)) {
-        log(context, 'todo_file_unwritable', undefined, 0, startedAt);
-        return;
+      if (groups.size === 0) return;
+      const legacyPaths = tree.filter(({ path }) => !path.includes('/') && rootTaskPath.test(path)).map(({ path }) => path);
+      const inboxPaths = Object.values(inboxes).filter((path) => available.has(path));
+      const files = new Map<string, VaultFile>();
+      for (const path of new Set([...inboxPaths, ...legacyPaths])) {
+        const file = await options.vault.read(path, context.signal);
+        if (!file || file.path !== path) {
+          log(context, 'todo_destination_unverified', undefined, 0, startedAt);
+          return;
+        }
+        if (Buffer.byteLength(file.content, 'utf8') > MAX_VAULT_FILE_BYTES) {
+          log(context, inboxes.personal === path || inboxes.work === path
+            ? 'todo_file_too_large' : 'todo_destination_unverified', undefined, 0, startedAt);
+          return;
+        }
+        files.set(path, file);
       }
 
-      const recovered = new Set<string>();
-      let add: PreparedTodo[] = [];
-      for (let attempt = 0; attempt < 3; attempt += 1) {
-        if (context.signal.aborted || (context.trigger !== 'manual' && isQuietHour(now()))) {
-          log(context, context.signal.aborted ? 'run_aborted' : 'quiet_hours', undefined, 0, startedAt);
-          return;
+      let remainingRun = perRunLimit;
+      for (const [targetPath, todos] of groups) {
+        let file = files.get(targetPath);
+        if (!file) {
+          log(context, 'todo_destination_unverified', todos.map(({ itemId }) => itemId), 0, startedAt);
+          continue;
         }
-        const nextDay = dayKey(now());
-        if (nextDay !== currentDay) {
-          currentDay = nextDay;
-          stage = 'receipts';
-          roomToday = perDayLimit - await options.receipts.countAdded(currentDay);
-          stage = 'vault';
-          recovered.clear();
+        if (!appendable(file)) {
+          log(context, 'todo_destination_unwritable', todos.map(({ itemId }) => itemId), 0, startedAt);
+          continue;
         }
-        if (roomToday <= 0) {
-          log(context, 'todo_daily_cap', prepared.map(({ itemId }) => itemId), 0, startedAt);
-          return;
-        }
-        if (!isTodoFileWritable(file.content)) {
-          log(context, 'todo_file_unwritable', undefined, 0, startedAt);
-          return;
-        }
-        let remainingDay = roomToday - recovered.size;
-        let remainingRun = perRunLimit - recovered.size;
-        add = [];
-        let droppedForCap: PreparedTodo[] = [];
-        for (let index = 0; index < prepared.length; index += 1) {
-          const todo = prepared[index]!;
-          const receipt = settled.get(todo.dedupeKey);
-          if (receipt?.added || receipt?.skipped || (receipt?.failedAttempts ?? 0) >= 2) continue;
-          if (remainingDay <= 0 || remainingRun <= 0) {
-            droppedForCap = prepared.slice(index).filter(({ dedupeKey }) => {
-              const summary = settled.get(dedupeKey);
-              return !summary?.added && !summary?.skipped && (summary?.failedAttempts ?? 0) < 2;
-            });
-            break;
+        const add: PreparedTodo[] = [];
+        for (const todo of todos) {
+          if (roomToday <= 0 || remainingRun <= 0) {
+            log(context, roomToday <= 0 ? 'todo_daily_cap' : 'todo_run_cap',
+              [todo.itemId], 0, startedAt);
+            continue;
           }
-          if (hasTodoMarker(file.content, todo.dedupeKey)) {
+          const allFiles = [...files.values()];
+          const hasMarker = allFiles.some((entry) =>
+            hasTodoMarker(entry.content, todo.dedupeKey) ||
+            hasTodoMarker(entry.content, todo.legacyDedupeKey));
+          if (hasMarker) {
             await recoverReceipt(options, context, todo, currentDay, settled, startedAt);
-            recovered.add(todo.dedupeKey);
-            remainingDay -= 1;
+            roomToday -= 1;
             remainingRun -= 1;
             continue;
           }
-          if (hasDuplicateTodo(file.content, todo.line)) {
+          if (allFiles.some((entry) => hasDuplicateTodo(entry.content, todo.line))) {
             await insertReceipt(options.receipts, settled, {
               itemId: todo.itemId, dedupeKey: todo.dedupeKey, dayKey: currentDay,
               runId: context.runId, status: 'skipped', reason: 'duplicate', commitSha: null,
@@ -213,56 +318,91 @@ export function createProactiveTodoWriter(options: ProactiveTodoWriterOptions) {
             continue;
           }
           add.push(todo);
-          remainingDay -= 1;
+          roomToday -= 1;
           remainingRun -= 1;
         }
-        if (droppedForCap.length) {
-          log(context, remainingDay <= 0 ? 'todo_daily_cap' : 'todo_run_cap',
-            droppedForCap.map(({ itemId }) => itemId), droppedForCap.length, startedAt);
-        }
-        if (add.length === 0) return;
+        if (add.length === 0) continue;
 
-        let content: string;
-        try {
-          content = appendTodos(file.content, add.map(({ line }) => line));
-        } catch {
-          log(context, 'todo_file_unwritable', add.map(({ itemId }) => itemId), add.length, startedAt);
-          return;
-        }
-        if (Buffer.byteLength(content, 'utf8') > MAX_VAULT_FILE_BYTES) {
-          log(context, 'todo_file_too_large', add.map(({ itemId }) => itemId), add.length, startedAt);
-          return;
-        }
-        if (context.signal.aborted || (context.trigger !== 'manual' && isQuietHour(now()))) {
-          log(context, context.signal.aborted ? 'run_aborted' : 'quiet_hours', undefined, 0, startedAt);
-          return;
-        }
-
-        try {
-          const commitSha = await options.vault.write(
-            resolved.path,
-            content,
-            `jarvis: add ${add.length} suggested todos from a proactive check\n\nCo-authored-by: Jarvis`,
-            file.sha,
-            context.signal,
-          );
-          await recordCommittedTodos(options, context, add, currentDay, commitSha, settled, startedAt);
-          return;
-        } catch (error) {
-          if (!(error instanceof VaultWriteConflictError)) {
-            const reason = error instanceof VaultAppNotInstalledError
-              ? 'vault_app_not_installed' : 'vault_write_failed';
-            await recordFailedTodos(options, context, add, currentDay, reason, settled, startedAt);
+        for (let attempt = 0; attempt < 3; attempt += 1) {
+          if (context.signal.aborted || (context.trigger !== 'manual' && isQuietHour(now()))) {
+            log(context, context.signal.aborted ? 'run_aborted' : 'quiet_hours',
+              add.map(({ itemId }) => itemId), 0, startedAt);
             return;
           }
-          if (attempt === 2) {
-            await recordFailedTodos(options, context, add, currentDay, 'vault_conflict_exhausted', settled, startedAt);
+          if (dayKey(now()) !== currentDay) {
+            currentDay = dayKey(now());
+            stage = 'receipts';
+            roomToday = perDayLimit - await options.receipts.countAdded(currentDay);
+            stage = 'vault';
+            if (roomToday < add.length) {
+              const dropped = add.splice(Math.max(0, roomToday));
+              log(context, 'todo_daily_cap', dropped.map(({ itemId }) => itemId), dropped.length, startedAt);
+            }
+            roomToday -= add.length;
+          }
+          if (add.length === 0) break;
+          let content: string;
+          try {
+            const writable = appendable(file);
+            if (!writable) throw new Error('unwritable');
+            content = appendTaskLines(file.content, add.map(({ line }) => line));
+          } catch {
+            log(context, 'todo_destination_unwritable', add.map(({ itemId }) => itemId), add.length, startedAt);
             return;
           }
-          file = await options.vault.read(resolved.path, context.signal);
-          if (!file) {
-            log(context, 'todo_file_missing', add.map(({ itemId }) => itemId), 0, startedAt);
+          if (Buffer.byteLength(content, 'utf8') > MAX_VAULT_FILE_BYTES) {
+            log(context, 'todo_file_too_large', add.map(({ itemId }) => itemId), add.length, startedAt);
             return;
+          }
+          if (context.signal.aborted || (context.trigger !== 'manual' && isQuietHour(now()))) {
+            log(context, context.signal.aborted ? 'run_aborted' : 'quiet_hours', undefined, 0, startedAt);
+            return;
+          }
+          try {
+            const commitSha = await options.vault.write(
+              targetPath,
+              content,
+              `jarvis: add ${add.length} proactive todos from a proactive check\n\nCo-authored-by: Jarvis`,
+              file.sha,
+              context.signal,
+            );
+            await recordCommittedTodos(options, context, add, currentDay, commitSha, settled, startedAt);
+            break;
+          } catch (error) {
+            if (!(error instanceof VaultWriteConflictError)) {
+              const reason = error instanceof VaultAppNotInstalledError
+                ? 'vault_app_not_installed' : 'vault_write_failed';
+              await recordFailedTodos(options, context, add, currentDay, reason, settled, startedAt);
+              break;
+            }
+            if (attempt === 2) {
+              await recordFailedTodos(options, context, add, currentDay, 'vault_conflict_exhausted', settled, startedAt);
+              break;
+            }
+            const fresh = await options.vault.read(targetPath, context.signal);
+            if (!fresh || fresh.path !== targetPath) {
+              log(context, 'todo_destination_unverified', add.map(({ itemId }) => itemId), 0, startedAt);
+              break;
+            }
+            file = fresh;
+            files.set(targetPath, file);
+            for (const todo of [...add]) {
+              const allFiles = [...files.values()];
+              if (allFiles.some((entry) =>
+                hasTodoMarker(entry.content, todo.dedupeKey) ||
+                hasTodoMarker(entry.content, todo.legacyDedupeKey))) {
+                await recoverReceipt(options, context, todo, currentDay, settled, startedAt);
+                add.splice(add.indexOf(todo), 1);
+              } else if (allFiles.some((entry) => hasDuplicateTodo(entry.content, todo.line))) {
+                await insertReceipt(options.receipts, settled, {
+                  itemId: todo.itemId, dedupeKey: todo.dedupeKey, dayKey: currentDay,
+                  runId: context.runId, status: 'skipped', reason: 'duplicate', commitSha: null,
+                }, options.logger, context);
+                add.splice(add.indexOf(todo), 1);
+                log(context, 'duplicate', [todo.itemId], 1, startedAt);
+              }
+            }
+            if (add.length === 0) break;
           }
         }
       }

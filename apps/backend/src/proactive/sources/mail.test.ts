@@ -64,6 +64,7 @@ describe('proactive mail source', () => {
       kind: 'mail',
       label: 'Mail',
       observedAt: '2026-10-20T10:00:00.000Z',
+      identity: 'gmail-message:one',
       text: 'From José | Résumé status',
     });
     expect(result.facts[1]?.text).toBe('From domain.example | Plain subject');

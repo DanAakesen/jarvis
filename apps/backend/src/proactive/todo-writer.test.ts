@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
 import { VaultAppNotInstalledError, VaultWriteConflictError } from '../vault/github-client.js';
 import { createMemoryProactiveStore } from './store.js';
@@ -12,6 +13,10 @@ function key(index: number): string {
   return index.toString(16).padStart(16, '0') + '0'.repeat(16);
 }
 
+function actionKey(index: number, identity = `synthetic-action:${key(index)}`): string {
+  return createHash('sha256').update(JSON.stringify([identity])).digest('hex').slice(0, 32);
+}
+
 function fakeVault(options: {
   paths?: string[];
   content?: string | null;
@@ -19,31 +24,37 @@ function fakeVault(options: {
   conflictContent?: string;
   writeError?: Error;
 } = {}) {
-  let content = options.content === undefined ? '- [ ] Existing synthetic task' : options.content;
-  let sha = 'a'.repeat(40);
+  const paths = options.paths ?? ['Personal/Inbox.md', 'Work/Inbox.md', 'Tasks.md'];
+  const contents = new Map(paths.map((path) =>
+    [path, options.content === undefined ? '# Synthetic inbox\n' : options.content]));
+  const shas = new Map(paths.map((path) => [path, 'a'.repeat(40)]));
   let conflicts = options.conflicts ?? 0;
   const calls = {
-    tree: vi.fn(async () => (options.paths ?? ['Tasks.md']).map((path) => ({ path, sha }))),
-    read: vi.fn(async (path: string) => content === null ? null : ({ path, sha, content })),
+    tree: vi.fn(async () => paths.map((path) => ({ path, sha: shas.get(path)! }))),
+    read: vi.fn(async (path: string) => {
+      const content = contents.get(path);
+      return content === undefined || content === null ? null : ({ path, sha: shas.get(path)!, content });
+    }),
     write: vi.fn(async (...args: [string, string, string, string | undefined]) => {
-      const next = args[1];
+      const [path, next] = args;
       if (conflicts > 0) {
         conflicts -= 1;
-        if (options.conflictContent !== undefined) content = options.conflictContent;
-        sha = String.fromCharCode(98 + (options.conflicts! - conflicts - 1)).repeat(40);
+        if (options.conflictContent !== undefined) contents.set(path, options.conflictContent);
+        shas.set(path, String.fromCharCode(98 + (options.conflicts! - conflicts - 1)).repeat(40));
         throw new VaultWriteConflictError();
       }
       if (options.writeError) throw options.writeError;
-      content = next;
-      sha = 'f'.repeat(40);
-      return sha;
+      contents.set(path, next);
+      shas.set(path, 'f'.repeat(40));
+      return shas.get(path)!;
     }),
     delete: vi.fn(() => { throw new Error('delete must not be used'); }),
   };
   return {
     ...calls,
-    content: () => content,
-    sha: () => sha,
+    content: (path = 'Personal/Inbox.md') => contents.get(path),
+    sha: (path = 'Personal/Inbox.md') => shas.get(path),
+    replaceContent(path: string, content: string) { contents.set(path, content); },
   };
 }
 
@@ -59,7 +70,17 @@ async function fixture(options: Parameters<typeof fakeVault>[0] = {}, at = curre
 
 async function context(
   store: ReturnType<typeof createMemoryProactiveStore>,
-  todos: { key: number; text: string; dueAt?: string | null; category?: 'suggestion' | 'todo' }[],
+  todos: {
+    key: number;
+    text: string;
+    dueAt?: string | null;
+    category?: 'suggestion' | 'todo' | 'prep';
+    identity?: string | null;
+    scope?: 'personal' | 'work' | 'ambiguous';
+    source?: 'mail' | 'calendar' | 'factory' | 'weather';
+    evidenceText?: string;
+    projectRelated?: boolean;
+  }[],
   options: { trigger?: FindingsStoredContext['trigger']; signal?: AbortSignal; runId?: string } = {},
 ): Promise<FindingsStoredContext> {
   const findings: FindingsStoredContext['findings'] = [];
@@ -79,9 +100,12 @@ async function context(
     findings.push({
       itemId: item.id,
       dedupeKey,
+      evidenceRefs: [`fact:${todo.key}`],
       category: todo.category ?? 'suggestion',
       urgency: 'normal',
       dueAt: todo.dueAt ?? null,
+      dueHasTime: false,
+      highPriority: false,
       language: 'en',
       suggestedTodo: todo.text,
     });
@@ -92,7 +116,15 @@ async function context(
     now: currentTime,
     signal: options.signal ?? new AbortController().signal,
     findings,
-    facts: [],
+    facts: todos.map((todo) => ({
+      ref: `fact:${todo.key}`,
+      ...(todo.identity === null ? {} : { identity: todo.identity ?? `synthetic-action:${key(todo.key)}` }),
+      ...(todo.scope === 'ambiguous' ? {} : { taskScope: todo.scope ?? 'personal' }),
+      ...(todo.projectRelated ? { projectRelated: true } : {}),
+      source: todo.source ?? 'mail',
+      kind: todo.source === 'factory' ? 'factory' : 'mail',
+      text: todo.evidenceText ?? 'Synthetic evidence only.',
+    })),
     sources: [],
   };
 }
@@ -101,9 +133,9 @@ describe('proactive todo writer', () => {
   it('writes sorted suggestions in one safe add-only commit and marks their items', async () => {
     const fixtureState = await fixture();
     const run = await context(fixtureState.store, [
-      { key: 3, text: 'Later synthetic work' },
-      { key: 2, text: 'Soon synthetic work', dueAt: '2026-10-20T12:00:00.000Z' },
-      { key: 1, text: 'Earlier synthetic work', dueAt: '2026-10-19T23:30:00.000Z' },
+      { key: 3, text: 'Later synthetic work', scope: 'work' },
+      { key: 2, text: 'Soon synthetic work', scope: 'work', dueAt: '2026-10-20T12:00:00.000Z' },
+      { key: 1, text: 'Earlier synthetic work', scope: 'work', dueAt: '2026-10-19T23:30:00.000Z' },
       { key: 4, text: 'Excess synthetic work' },
       { key: 5, text: 'Not a writer finding', category: 'todo' },
     ]);
@@ -112,14 +144,17 @@ describe('proactive todo writer', () => {
 
     expect(fixtureState.vault.write).toHaveBeenCalledTimes(1);
     const [path, content, message, sha] = fixtureState.vault.write.mock.calls[0]!;
-    expect(path).toBe('Tasks.md');
+    expect(path).toBe('Work/Inbox.md');
     expect(sha).toBe('a'.repeat(40));
-    expect(content).toContain('## Suggested by Jarvis');
+    expect(content).not.toContain('## Suggested by Jarvis');
+    expect(content).toContain('- [ ] (proactive) Earlier synthetic work');
+    expect(content).toContain('- [ ] (proactive) Soon synthetic work');
+    expect(content.match(/\(proactive\)/gu)).toHaveLength(3);
     expect(content.indexOf('Earlier synthetic work')).toBeLessThan(content.indexOf('Soon synthetic work'));
     expect(content.indexOf('Soon synthetic work')).toBeLessThan(content.indexOf('Later synthetic work'));
     expect(content).not.toContain('Excess synthetic work');
     expect(content).toContain('📅 2026-10-20');
-    expect(message).toBe('jarvis: add 3 suggested todos from a proactive check\n\nCo-authored-by: Jarvis');
+    expect(message).toBe('jarvis: add 3 proactive todos from a proactive check\n\nCo-authored-by: Jarvis');
     expect(message).not.toContain('synthetic work');
     expect(fixtureState.vault.delete).not.toHaveBeenCalled();
     expect(fixtureState.vault.tree).toHaveBeenCalledTimes(1);
@@ -128,6 +163,123 @@ describe('proactive todo writer', () => {
       expect(await fixtureState.store.items.get(finding.itemId)).toMatchObject({ todoAdded: true });
     }
     expect(await fixtureState.receipts.countAdded('2026-10-18')).toBe(3);
+  });
+
+  it('routes scoped personal and work tasks only to their corresponding existing inboxes', async () => {
+    const state = await fixture();
+    await state.writer(await context(state.store, [
+      { key: 6, text: 'Pick up synthetic groceries', scope: 'personal' },
+      { key: 7, text: 'Send synthetic client invoice', scope: 'work' },
+    ]));
+
+    expect(state.vault.write.mock.calls.map(([path]) => path)).toEqual([
+      'Personal/Inbox.md', 'Work/Inbox.md',
+    ]);
+    expect(state.vault.content('Personal/Inbox.md')).toContain('- [ ] (proactive) Pick up synthetic groceries');
+    expect(state.vault.content('Work/Inbox.md')).toContain('- [ ] (proactive) Send synthetic client invoice');
+    expect(state.vault.content('Tasks.md')).toBe('# Synthetic inbox\n');
+  });
+
+  it.each([
+    [{ source: 'factory' as const }, 'Factory finding'],
+    [{ evidenceText: 'Synthetic pull request awaiting review' }, 'Mail finding'],
+    [{ evidenceText: 'Synthetic software project build checks failed' }, 'Calendar finding'],
+    [{ evidenceText: 'Engineering follow-up for a synthetic repository' }, 'Other source'],
+  ])('keeps project and engineering suggestions as observations (%s)', async (evidence, _sourceLabel) => {
+    const state = await fixture();
+    const run = await context(state.store, [{
+      key: 8, text: 'Review the synthetic report', scope: 'work', category: 'prep',
+      ...evidence,
+    }]);
+
+    await state.writer(run);
+
+    expect(state.vault.write).not.toHaveBeenCalled();
+    expect(state.logger.warn).toHaveBeenCalledWith(
+      expect.objectContaining({ reason: 'project_related' }), 'proactive.todo_writer',
+    );
+    expect(await state.receipts.list([actionKey(8)])).toMatchObject([{ skipped: true }]);
+    expect(await state.store.items.get(run.findings[0]!.itemId)).toBeDefined();
+  });
+
+  it('skips ambiguous scope without selecting a default inbox', async () => {
+    const state = await fixture();
+    await state.writer(await context(state.store, [
+      { key: 9, text: 'Review a synthetic note', scope: 'ambiguous' },
+    ]));
+
+    expect(state.vault.tree).not.toHaveBeenCalled();
+    expect(state.vault.write).not.toHaveBeenCalled();
+    expect(state.logger.warn).toHaveBeenCalledWith(
+      expect.objectContaining({ reason: 'scope_ambiguous' }), 'proactive.todo_writer',
+    );
+    expect(await state.receipts.list([actionKey(9)])).toMatchObject([{ skipped: true }]);
+  });
+
+  it('leaves existing dashboard suggestions untouched and never uses them as a destination', async () => {
+    const state = await fixture();
+    const legacy = '## Suggested by Jarvis\n- [ ] Review synthetic report <!-- jarvis:p:aaaaaaaaaaaaaaaa -->\n';
+    state.vault.replaceContent('Tasks.md', legacy);
+    await state.writer(await context(state.store, [
+      { key: 10, text: 'Review synthetic report', scope: 'personal' },
+    ]));
+
+    expect(state.vault.write).not.toHaveBeenCalled();
+    expect(state.vault.content('Tasks.md')).toBe(legacy);
+    expect(state.logger.warn).toHaveBeenCalledWith(
+      expect.objectContaining({ reason: 'duplicate' }), 'proactive.todo_writer',
+    );
+  });
+
+  it('does not turn findings without a suggested todo into proactive task writes', async () => {
+    const state = await fixture();
+    const run = await context(state.store, [{ key: 11, text: 'A user-requested synthetic task' }]);
+    delete run.findings[0]!.suggestedTodo;
+
+    await state.writer(run);
+
+    expect(state.vault.tree).not.toHaveBeenCalled();
+    expect(state.vault.write).not.toHaveBeenCalled();
+    expect(await state.store.items.get(run.findings[0]!.itemId)).toBeDefined();
+  });
+
+  it('deduplicates a changed suggestion across source, category, due date and inbox routing', async () => {
+    const state = await fixture();
+    const identity = 'stable synthetic source item';
+    await state.writer(await context(state.store, [{
+      key: 13, identity, text: 'Send a synthetic client update', scope: 'work', source: 'mail',
+      dueAt: '2026-10-20T12:00:00.000Z',
+    }]));
+    state.now.mockReturnValue(new Date('2026-10-19T10:00:00.000Z'));
+    await state.writer(await context(state.store, [{
+      key: 14, identity, text: 'Buy synthetic groceries for home', scope: 'personal', source: 'calendar',
+      category: 'prep', dueAt: '2026-10-22T12:00:00.000Z', evidenceText: 'Changed synthetic source wording.',
+    }], { runId: '22222222-2222-4222-8222-222222222222' }));
+
+    expect(state.vault.write).toHaveBeenCalledOnce();
+    expect(state.vault.write.mock.calls[0]?.[0]).toBe('Work/Inbox.md');
+    expect(await state.receipts.list([actionKey(13, identity)])).toMatchObject([{ added: true }]);
+  });
+
+  it('does not re-add a receipt-backed task after it was completed or removed', async () => {
+    const state = await fixture();
+    const identity = 'completed synthetic source action';
+    await state.writer(await context(state.store, [{
+      key: 15, identity, text: 'Pick up synthetic groceries', scope: 'personal',
+    }]));
+    state.vault.replaceContent(
+      'Personal/Inbox.md',
+      state.vault.content('Personal/Inbox.md')!.replace('- [ ] (proactive)', '- [x] (proactive)'),
+    );
+    await state.writer(await context(state.store, [{
+      key: 16, identity, text: 'Buy synthetic groceries', scope: 'personal', category: 'prep',
+    }], { runId: '33333333-3333-4333-8333-333333333333' }));
+    state.vault.replaceContent('Personal/Inbox.md', '# Owner removed the task\n');
+    await state.writer(await context(state.store, [{
+      key: 17, identity, text: 'Get synthetic groceries', scope: 'personal',
+    }], { runId: '44444444-4444-4444-8444-444444444444' }));
+
+    expect(state.vault.write).toHaveBeenCalledOnce();
   });
 
   it.each([
@@ -180,7 +332,7 @@ describe('proactive todo writer', () => {
     ]);
     await state.writer(first);
     expect(state.vault.write).toHaveBeenCalledOnce();
-    expect(state.vault.write.mock.calls[0]?.[1].match(/^- \[ \]/gmu)).toHaveLength(2);
+    expect(state.vault.write.mock.calls[0]?.[1].match(/^- \[ \]/gmu)).toHaveLength(1);
 
     state.now.mockReturnValue(new Date('2026-10-17T22:00:00.000Z'));
     const nextDay = await context(state.store, [
@@ -190,7 +342,7 @@ describe('proactive todo writer', () => {
     ], { runId: '22222222-2222-4222-8222-222222222222' });
     await state.writer(nextDay);
     expect(state.vault.write).toHaveBeenCalledTimes(2);
-    expect(state.vault.write.mock.calls[1]?.[1].match(/^- \[ \]/gmu)).toHaveLength(5);
+    expect(state.vault.write.mock.calls[1]?.[1].match(/^- \[ \]/gmu)).toHaveLength(4);
   });
 
   it('records missing and ambiguous resolver outcomes without creating a file', async () => {
@@ -213,9 +365,9 @@ describe('proactive todo writer', () => {
     ]);
     await state.writer(run);
     expect(state.vault.tree).not.toHaveBeenCalled();
-    expect(await state.receipts.list([key(30), key(31)])).toEqual([
-      { dedupeKey: key(30), added: false, skipped: true, failedAttempts: 0 },
-      { dedupeKey: key(31), added: false, skipped: true, failedAttempts: 0 },
+    expect(await state.receipts.list([actionKey(30), actionKey(31)])).toEqual([
+      { dedupeKey: actionKey(30), added: false, skipped: true, failedAttempts: 0 },
+      { dedupeKey: actionKey(31), added: false, skipped: true, failedAttempts: 0 },
     ]);
   });
 
@@ -241,9 +393,10 @@ describe('proactive todo writer', () => {
     ]);
     await state.writer(run);
     expect(state.vault.write).not.toHaveBeenCalled();
-    expect(await state.receipts.list(run.findings.map(({ dedupeKey }) => dedupeKey))).toEqual([
-      { dedupeKey: key(40), added: false, skipped: true, failedAttempts: 0 },
-      { dedupeKey: key(42), added: true, skipped: false, failedAttempts: 0 },
+    expect(await state.receipts.list(run.findings.map(({ itemId }) =>
+      itemId === run.findings[0]!.itemId ? actionKey(40) : actionKey(42)))).toEqual([
+      { dedupeKey: actionKey(40), added: false, skipped: true, failedAttempts: 0 },
+      { dedupeKey: actionKey(42), added: true, skipped: false, failedAttempts: 0 },
     ]);
     expect(await state.store.items.get(run.findings[1]!.itemId)).toMatchObject({ todoAdded: true });
   });
@@ -253,7 +406,7 @@ describe('proactive todo writer', () => {
     await fenced.writer(await context(fenced.store, [{ key: 50, text: 'Outside synthetic task' }]));
     expect(fenced.vault.write).not.toHaveBeenCalled();
     expect(fenced.logger.warn).toHaveBeenCalledWith(
-      expect.objectContaining({ reason: 'todo_file_unwritable' }), 'proactive.todo_writer',
+      expect.objectContaining({ reason: 'todo_destination_unwritable' }), 'proactive.todo_writer',
     );
 
     const oversized = await fixture({ content: `# Notes\n${'x'.repeat(256 * 1024 - 8)}` });
@@ -269,12 +422,12 @@ describe('proactive todo writer', () => {
     const run = await context(state.store, [{ key: 60 + conflicts, text: 'Conflict synthetic task' }]);
     await state.writer(run);
     expect(state.vault.write).toHaveBeenCalledTimes(conflicts + 1);
-    expect(state.vault.read).toHaveBeenCalledTimes(conflicts + 1);
+    expect(state.vault.read).toHaveBeenCalledTimes(conflicts + 3);
     expect(state.vault.write.mock.calls.map((call) => call[3])).toEqual(
       ['a', ...Array.from({ length: conflicts }, (_, index) => String.fromCharCode(98 + index))]
         .map((character) => character.repeat(40)),
     );
-    expect(await state.receipts.list([run.findings[0]!.dedupeKey])).toMatchObject([
+    expect(await state.receipts.list([actionKey(60 + conflicts)])).toMatchObject([
       { added: true, failedAttempts: 0 },
     ]);
   });
@@ -284,8 +437,8 @@ describe('proactive todo writer', () => {
     const run = await context(state.store, [{ key: 69, text: 'Conflict limit synthetic task' }]);
     await state.writer(run);
     expect(state.vault.write).toHaveBeenCalledTimes(3);
-    expect(state.vault.read).toHaveBeenCalledTimes(3);
-    expect(await state.receipts.list([key(69)])).toMatchObject([{ failedAttempts: 1, added: false }]);
+    expect(state.vault.read).toHaveBeenCalledTimes(5);
+    expect(await state.receipts.list([actionKey(69)])).toMatchObject([{ failedAttempts: 1, added: false }]);
     expect(state.logger.warn).toHaveBeenCalledWith(
       expect.objectContaining({ reason: 'vault_conflict_exhausted' }), 'proactive.todo_writer',
     );
@@ -299,8 +452,8 @@ describe('proactive todo writer', () => {
     const run = await context(state.store, [{ key: 68, text: 'Conflict synthetic task' }]);
     await state.writer(run);
     expect(state.vault.write).toHaveBeenCalledOnce();
-    expect(state.vault.read).toHaveBeenCalledTimes(2);
-    expect(await state.receipts.list([key(68)])).toMatchObject([{ added: false, skipped: true }]);
+    expect(state.vault.read).toHaveBeenCalledTimes(4);
+    expect(await state.receipts.list([actionKey(68)])).toMatchObject([{ added: false, skipped: true }]);
   });
 
   it('records two failed write attempts and then settles without another vault call', async () => {
@@ -310,7 +463,7 @@ describe('proactive todo writer', () => {
     await state.writer(await context(state.store, [item], { runId: '33333333-3333-4333-8333-333333333333' }));
     await state.writer(await context(state.store, [item], { runId: '44444444-4444-4444-8444-444444444444' }));
     expect(state.vault.write).toHaveBeenCalledTimes(2);
-    expect(await state.receipts.list([key(70)])).toMatchObject([{ failedAttempts: 2 }]);
+    expect(await state.receipts.list([actionKey(70)])).toMatchObject([{ failedAttempts: 2 }]);
   });
 
   it('makes no vault calls once the daily cap is already full', async () => {

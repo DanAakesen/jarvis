@@ -42,13 +42,18 @@ export interface FindingsStoredContext {
   findings: {
     itemId: string;
     dedupeKey: string;
+    evidenceRefs: string[];
     category: NonNullable<Item['category']>;
     urgency: Item['urgency'];
     dueAt: string | null;
+    dueHasTime: boolean;
+    highPriority: boolean;
     language: 'da' | 'en';
     suggestedTodo?: string;
   }[];
-  facts: Pick<ReadFact, 'ref' | 'source' | 'kind' | 'text' | 'dueAt' | 'dueHasTime' | 'startsAt' | 'endsAt' | 'allDay'>[];
+  facts: Pick<ReadFact,
+    'ref' | 'identity' | 'taskScope' | 'projectRelated' | 'source' | 'kind' | 'text' |
+    'dueAt' | 'dueHasTime' | 'highPriority' | 'startsAt' | 'endsAt' | 'allDay'>[];
   sources: { id: SourceId; state: 'ok' | 'unavailable'; reason?: string }[];
 }
 
@@ -210,15 +215,16 @@ export function createProactiveEngine(options: ProactiveEngineOptions) {
         ? await abortable(options.conversationStore.readRecentUserMessages(8), controller.signal) : [];
       const language = detectLanguage(messages);
       const deterministic = detectFindings(facts, now(), language);
-      const pending: (FindingInput & { suggestedTodo?: string })[] = deterministic.map((finding) => ({
+      const pending: (FindingInput & { suggestedTodo?: string; evidenceRefs: string[] })[] = deterministic.map((finding) => ({
         ...finding,
+        evidenceRefs: finding.evidence,
         evidence: finding.evidence.map((ref) => {
           const fact = facts.find((candidate) => candidate.ref === ref)!;
           return { source: fact.source, label: fact.label, observedAt: fact.observedAt };
         }),
         language, runId: run.id,
       }));
-      if (mirror) pending.push({ ...mirror, runId: run.id });
+      if (mirror) pending.push({ ...mirror, runId: run.id, evidenceRefs: [] });
       if (facts.length > 0) {
         check();
         // Re-check the calendar month immediately before incurring model spend.
@@ -253,6 +259,7 @@ export function createProactiveEngine(options: ProactiveEngineOptions) {
             title: finding.title, body: finding.body, category: finding.category,
             urgency: finding.urgency, dueAt: finding.dueAt ?? null,
             dedupeKey: modelDedupeKey(finding.category, cited),
+            evidenceRefs: finding.evidence,
             evidence: cited.map((fact) => ({ source: fact.source, label: fact.label, observedAt: fact.observedAt })),
             language, runId: run.id,
             ...(finding.suggestedTodo === undefined ? {} : { suggestedTodo: finding.suggestedTodo }),
@@ -265,7 +272,7 @@ export function createProactiveEngine(options: ProactiveEngineOptions) {
       }
       await current();
       const stored: FindingsStoredContext['findings'] = [];
-      for (const { suggestedTodo, ...finding } of pending) {
+      for (const { suggestedTodo, evidenceRefs, ...finding } of pending) {
         await current();
         let item: Item;
         try {
@@ -278,18 +285,30 @@ export function createProactiveEngine(options: ProactiveEngineOptions) {
         }
         findingCount++;
         stored.push({
-          itemId: item.id, dedupeKey: finding.dedupeKey, category: finding.category,
-          urgency: finding.urgency, dueAt: finding.dueAt, language,
+          itemId: item.id, dedupeKey: finding.dedupeKey, evidenceRefs, category: finding.category,
+          urgency: finding.urgency, dueAt: finding.dueAt,
+          dueHasTime: facts.some((fact) =>
+            evidenceRefs.includes(fact.ref) && fact.dueAt === finding.dueAt && fact.dueHasTime === true),
+          highPriority: facts.some((fact) =>
+            evidenceRefs.includes(fact.ref) && fact.highPriority === true),
+          language,
           ...(suggestedTodo === undefined ? {} : { suggestedTodo }),
         });
       }
       await current();
       const context: FindingsStoredContext = {
         runId: run.id, trigger: run.trigger, now: now(), signal: controller.signal, findings: stored,
-        facts: facts.map(({ ref, source, kind, text, dueAt, dueHasTime, startsAt, endsAt, allDay }) => ({
+        facts: facts.map(({
+          ref, identity, taskScope, projectRelated, source, kind, text, dueAt, dueHasTime,
+          highPriority, startsAt, endsAt, allDay,
+        }) => ({
           ref, source, kind, text,
+          ...(identity === undefined ? {} : { identity }),
+          ...(taskScope === undefined ? {} : { taskScope }),
+          ...(projectRelated === undefined ? {} : { projectRelated }),
           ...(dueAt === undefined ? {} : { dueAt }),
           ...(dueHasTime === undefined ? {} : { dueHasTime }),
+          ...(highPriority === undefined ? {} : { highPriority }),
           ...(startsAt === undefined ? {} : { startsAt }),
           ...(endsAt === undefined ? {} : { endsAt }),
           ...(allDay === undefined ? {} : { allDay }),

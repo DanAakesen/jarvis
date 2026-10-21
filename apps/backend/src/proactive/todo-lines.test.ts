@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  appendTaskLines,
   appendTodos,
   buildSuggestedTodoLine,
   hasDuplicateTodo,
@@ -41,9 +42,21 @@ describe('suggested todo text', () => {
 
   it('builds date-only lines and hashes markers without including private text in the marker', () => {
     expect(buildSuggestedTodoLine('Review the synthetic report', null, key))
-      .toBe('- [ ] Review the synthetic report <!-- jarvis:p:0123456789abcdef -->');
+      .toBe('- [ ] (proactive) Review the synthetic report <!-- jarvis:p:0123456789abcdef -->');
     expect(buildSuggestedTodoLine('Review the synthetic report', '2026-10-30T23:30:00.000Z', key))
-      .toBe('- [ ] Review the synthetic report 📅 2026-10-31 <!-- jarvis:p:0123456789abcdef -->');
+      .toBe('- [ ] (proactive) Review the synthetic report 📅 2026-10-31 <!-- jarvis:p:0123456789abcdef -->');
+    expect(buildSuggestedTodoLine(
+      '(proactive) Review the synthetic report', '2026-10-30T23:30:00.000Z', key,
+      { dueHasTime: true, highPriority: true },
+    )).toBe('- [ ] (proactive) Review the synthetic report 🕒 00:30 📅 2026-10-31 ⏫ <!-- jarvis:p:0123456789abcdef -->');
+  });
+
+  it('adds proactive checkbox lines at the existing inbox end without a catch-all heading', () => {
+    const existing = '# Inbox\n\n- [ ] Existing synthetic task\n';
+    const appended = appendTaskLines(existing, ['- [ ] (proactive) New synthetic task <!-- marker -->']);
+    expect(appended).toBe(`${existing}- [ ] (proactive) New synthetic task <!-- marker -->`);
+    expect(appended).toContain(existing);
+    expect(appended).not.toContain('Suggested by Jarvis');
   });
 });
 

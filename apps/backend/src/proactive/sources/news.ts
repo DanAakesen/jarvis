@@ -126,6 +126,7 @@ export function createNewsSource(
           const titleLimit = Math.min(200, Math.max(0, 297 - item.hostname.length));
           facts.push({
             ref: `news:${facts.length + 1}`,
+            ...(item.identity ? { identity: `news-item:${item.hostname}:${item.identity}` } : {}),
             kind: 'news',
             label: 'News',
             observedAt: item.publishedAt.toISOString(),
