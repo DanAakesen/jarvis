@@ -185,7 +185,7 @@ describe('scaledTarget', () => {
 describe('body measurements', () => {
   it('names only the measurements the catalogue serves', () => {
     const names = bodyMetricNames([{ metric_name: 'body_mass' }, { metric_name: 'step_count' }, { metric_name: 'body_fat_percentage' }]);
-    expect(names).toEqual({ weight: 'body_mass', fatPercent: 'body_fat_percentage', leanMass: null, fatMass: null });
+    expect(names).toEqual({ weight: 'body_mass', fatPercent: 'body_fat_percentage', leanMass: null });
   });
 
   it('keeps recorded days in order with the latest reading and the declared unit', () => {

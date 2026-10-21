@@ -1,8 +1,10 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { useState, type ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { MemoryRouter, useSearchParams } from 'react-router-dom';
+import { Link, MemoryRouter, useSearchParams } from 'react-router-dom';
 import userEvent from '@testing-library/user-event';
 import { dailyCapabilitiesVersion, dailyQuerySources as sources, isDailyQuery, type DailyJson, type DailyQuery, type DailySourceId } from '@jarvis/contracts';
+import { AreaSectionsContext, areaSectionLinks, type AreaSections } from '../area-sections';
 import { DailyHome } from './DailyHome';
 import { DailyOverview } from './DailyOverview';
 import { DailyRefreshContext } from './refresh';
@@ -70,14 +72,30 @@ function SectionUrlProbe() {
   const [params] = useSearchParams();
   return <output data-testid="daily-section-url">{params.get('section') ?? 'no section parameter'}</output>;
 }
+// Stands in for the shell's navigation panel: it lists the pages the area publishes and links to them.
+function ShellSections({ children }: { children: ReactNode }) {
+  const [sections, setSections] = useState<AreaSections | null>(null);
+  const links = sections ? areaSectionLinks('health', sections) : [];
+  return <AreaSectionsContext.Provider value={setSections}>
+    <nav aria-label="Health pages">
+      {links.map(link => <Link key={link.id} to={link.to} aria-current={link.current ? 'page' : undefined}>{link.label}</Link>)}
+    </nav>
+    {children}
+  </AreaSectionsContext.Provider>;
+}
 function home(refreshVersion = 0, initialPath = '/health') {
   return <MemoryRouter initialEntries={[initialPath]}>
-    <DailyRefreshContext.Provider value={refreshVersion}><DailyHome backendUrl={backendUrl} getAccessToken={token} /></DailyRefreshContext.Provider>
+    <ShellSections>
+      <DailyRefreshContext.Provider value={refreshVersion}><DailyHome backendUrl={backendUrl} getAccessToken={token} /></DailyRefreshContext.Provider>
+    </ShellSections>
     <SectionUrlProbe />
   </MemoryRouter>;
 }
 const settled = () => screen.findByRole('heading', { name: 'Training' });
-const sectionTabs = () => within(screen.getByRole('tablist', { name: 'Health sections' }));
+const sectionLinks = () => within(screen.getByRole('navigation', { name: 'Health pages' }));
+const sectionLink = (name: string) => sectionLinks().getByRole('link', { name });
+// The area publishes its pages from an effect, so the list can follow the page content by a tick.
+const listed = () => sectionLinks().findByRole('link', { name: 'Overview' });
 const flush = () => act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); });
 
 describe('Daily overview', () => {
@@ -86,7 +104,7 @@ describe('Daily overview', () => {
     render(home());
     await settled();
     await waitFor(() => expect(f.queries).toHaveLength(todayReads + shellReads));
-    expect(screen.getByRole('heading', { level: 1, name: 'Health' })).toBeTruthy();
+    expect(screen.getByRole('heading', { level: 1, name: 'Overview' })).toBeTruthy();
     for (const name of ['Training', 'Health', 'Body']) expect(screen.getByRole('heading', { level: 3, name })).toBeTruthy();
     expect(screen.queryByRole('heading', { name: 'What Health holds today' })).toBeNull();
     expect(screen.queryByRole('list', { name: 'What Health holds today' })).toBeNull();
@@ -155,116 +173,62 @@ describe('Daily overview', () => {
     rerender(home(1));
     await waitFor(() => expect(f.queries).toHaveLength(todayReads * 2 + shellReads * 2));
   });
-  it('shows only implemented sections and keeps the shared period when switching sections', async () => {
+  it('lists only implemented sections in the shell panel and keeps the shared period when switching sections', async () => {
     const f = fixture({ capabilities: () => capabilityList(Object.values(sources).filter(source => source !== sources.workouts)) });
     render(home());
     await settled();
-    expect(sectionTabs().getByRole('tab', { name: 'Overview' })).toBeTruthy();
-    expect(sectionTabs().getByRole('tab', { name: 'Briefs' })).toBeTruthy();
-    expect(sectionTabs().getByRole('tab', { name: 'Data' })).toBeTruthy();
-    expect(sectionTabs().queryByRole('tab', { name: 'Workouts' })).toBeNull();
-    expect(sectionTabs().getByRole('tab', { name: 'Nutrition' })).toBeTruthy();
-    expect(sectionTabs().getByRole('tab', { name: 'Body & sleep' })).toBeTruthy();
+    await listed();
+    expect(sectionLink('Overview')).toBeTruthy();
+    expect(sectionLink('Briefs')).toBeTruthy();
+    expect(sectionLink('Data')).toBeTruthy();
+    expect(sectionLinks().queryByRole('link', { name: 'Workouts' })).toBeNull();
+    expect(sectionLink('Nutrition')).toBeTruthy();
+    expect(sectionLink('Body & sleep')).toBeTruthy();
+    expect(screen.queryByRole('tablist', { name: 'Health sections' })).toBeNull();
+    expect(document.querySelector('.daily-section-panel')?.hasAttribute('role')).toBe(false);
 
-    fireEvent.click(sectionTabs().getByRole('tab', { name: 'Data' }));
+    fireEvent.click(sectionLink('Data'));
     await screen.findByLabelText('Browse');
     fireEvent.change(screen.getByLabelText('Period'), { target: { value: '30' } });
     await waitFor(() => expect(f.queries.at(-1)).toMatchObject({ source: sources.metrics }));
     expect((screen.getByLabelText('Period') as HTMLSelectElement).value).toBe('30');
-    fireEvent.click(sectionTabs().getByRole('tab', { name: 'Briefs' }));
+    fireEvent.click(sectionLink('Briefs'));
     await screen.findByRole('heading', { level: 2, name: 'Briefs' });
-    fireEvent.click(sectionTabs().getByRole('tab', { name: 'Data' }));
+    fireEvent.click(sectionLink('Data'));
     await screen.findByLabelText('Browse');
     expect((screen.getByLabelText('Period') as HTMLSelectElement).value).toBe('30');
   });
 
-  it('supports roving tab keys, stores selection in the URL and falls back from an unknown id', async () => {
-    fixture({ capabilities: () => capabilityList(Object.values(sources).filter(source => source !== sources.workouts)) });
+  it('publishes nothing until availability is known, then marks the active section, and stores the choice in the URL', async () => {
+    const hold = gate();
+    fixture({ capabilities: async () => { await hold.opened; return capabilityList(Object.values(sources).filter(source => source !== sources.workouts)); } });
     render(home(0, '/daily?section=unknown'));
+    expect(sectionLinks().queryAllByRole('link')).toHaveLength(0);
+    hold.open();
     await settled();
-    const overview = sectionTabs().getByRole('tab', { name: 'Overview' });
-    await waitFor(() => expect(overview.getAttribute('aria-selected')).toBe('true'));
+    await listed();
+    // An unknown id falls back to the first section and leaves the address as it was.
+    expect(sectionLinks().getAllByRole('link').map(link => link.textContent))
+      .toEqual(['Overview', 'Nutrition', 'Body & sleep', 'Briefs', 'Data', 'Rules & sources']);
+    expect(sectionLink('Overview').getAttribute('aria-current')).toBe('page');
+    expect(sectionLinks().getAllByRole('link').filter(link => link.hasAttribute('aria-current'))).toHaveLength(1);
     expect(screen.getByTestId('daily-section-url').textContent).toBe('unknown');
 
-    const tablist = within(screen.getByRole('tablist', { name: 'Health sections' }));
-    const tabs = tablist.getAllByRole('tab');
-    const nextTab = tabs[1]!;
-    expect(screen.getByRole('navigation', { name: 'Health sections' })).toBeTruthy();
-    expect(tabs.filter(tab => tab.getAttribute('tabindex') === '0')).toHaveLength(1);
-    overview.focus();
-    fireEvent.keyDown(overview, { key: 'ArrowRight' });
-    expect(nextTab.getAttribute('aria-selected')).toBe('true');
-    expect(document.activeElement).toBe(nextTab);
-    expect(screen.getByTestId('daily-section-url').textContent).toBe(nextTab.id.replace('daily-tab-', ''));
-    fireEvent.keyDown(nextTab, { key: 'End' });
-    const rules = sectionTabs().getByRole('tab', { name: 'Rules & sources' });
-    expect(rules.getAttribute('aria-selected')).toBe('true');
-    expect(document.activeElement).toBe(rules);
+    fireEvent.click(sectionLink('Nutrition'));
+    expect(screen.getByTestId('daily-section-url').textContent).toBe('nutrition');
+    expect(sectionLink('Nutrition').getAttribute('aria-current')).toBe('page');
+    expect(sectionLink('Overview').hasAttribute('aria-current')).toBe(false);
+    fireEvent.click(sectionLink('Rules & sources'));
     expect(screen.getByTestId('daily-section-url').textContent).toBe('rules');
-    fireEvent.keyDown(rules, { key: 'Home' });
-    expect(sectionTabs().getByRole('tab', { name: 'Overview' }).getAttribute('aria-selected')).toBe('true');
-    expect(document.activeElement).toBe(overview);
-    expect(tablist.getAllByRole('tab').filter(tab => tab.getAttribute('tabindex') === '0')).toHaveLength(1);
+    expect(sectionLink('Rules & sources').getAttribute('aria-current')).toBe('page');
   });
 
-  it('centres the selected tab by scrolling the tab strip only, instantly on first paint and under reduced motion', async () => {
-    const scrolls: { element: unknown; options: ScrollToOptions }[] = [];
-    Object.defineProperty(HTMLElement.prototype, 'scrollTo', {
-      configurable: true,
-      value(this: HTMLElement, options: ScrollToOptions) { scrolls.push({ element: this, options }); },
-    });
-    try {
-      fixture();
-      render(home());
-      await settled();
-      const strip = screen.getByRole('navigation', { name: 'Health sections' });
-      const stripScrolls = () => scrolls.filter(scroll => scroll.element === strip);
-      expect(stripScrolls().length).toBeGreaterThan(0);
-      expect(stripScrolls().every(scroll => scroll.options.behavior === 'auto')).toBe(true);
-
-      Object.defineProperty(strip, 'clientWidth', { configurable: true, value: 390 });
-      const data = sectionTabs().getByRole('tab', { name: 'Data' });
-      Object.defineProperty(data, 'offsetLeft', { configurable: true, value: 600 });
-      Object.defineProperty(data, 'offsetWidth', { configurable: true, value: 80 });
-      scrolls.length = 0;
-      fireEvent.click(data);
-      expect(stripScrolls()).toEqual([{ element: strip, options: { left: 445, behavior: 'smooth' } }]);
-
-      document.documentElement.dataset.motion = 'reduced';
-      scrolls.length = 0;
-      fireEvent.click(sectionTabs().getByRole('tab', { name: 'Overview' }));
-      expect(stripScrolls()).toEqual([{ element: strip, options: { left: 0, behavior: 'auto' } }]);
-    } finally {
-      delete document.documentElement.dataset.motion;
-      Reflect.deleteProperty(HTMLElement.prototype, 'scrollTo');
-    }
-  });
-
-  it('flags which edges of the tab strip have more tabs beyond them as it scrolls', async () => {
+  it('keeps the section from the address on a reload and has no section row in the page', async () => {
     fixture();
-    render(home());
-    await settled();
-    const strip = screen.getByRole('navigation', { name: 'Health sections' });
-    const edges = () => [strip.dataset.overflowStart, strip.dataset.overflowEnd];
-    expect(edges()).toEqual([undefined, undefined]);
-
-    let scrollLeft = 0;
-    Object.defineProperty(strip, 'scrollWidth', { configurable: true, value: 600 });
-    Object.defineProperty(strip, 'clientWidth', { configurable: true, value: 300 });
-    Object.defineProperty(strip, 'scrollLeft', { configurable: true, get: () => scrollLeft });
-    const scrollTo = (left: number) => {
-      scrollLeft = left;
-      fireEvent.scroll(strip);
-    };
-
-    scrollTo(0);
-    expect(edges()).toEqual([undefined, 'true']);
-    scrollTo(120);
-    expect(edges()).toEqual(['true', 'true']);
-    scrollTo(300);
-    expect(edges()).toEqual(['true', undefined]);
-    scrollTo(0);
-    expect(edges()).toEqual([undefined, 'true']);
+    render(home(0, '/health?section=briefs'));
+    await screen.findByRole('heading', { level: 2, name: 'Briefs' });
+    expect((await sectionLinks().findByRole('link', { name: 'Briefs' })).getAttribute('aria-current')).toBe('page');
+    expect(document.querySelector('.daily-section-nav')).toBeNull();
   });
 
   it('aborts old requests during twenty rapid section switches without warnings or a request backlog', async () => {
@@ -289,8 +253,8 @@ describe('Daily overview', () => {
     render(home());
     const names = ['Overview', 'Briefs', 'Workouts', 'Nutrition', 'Body & sleep'];
     for (let index = 0; index < 20; index += 1) {
-      const tablist = await screen.findByRole('tablist', { name: 'Health sections' });
-      fireEvent.click(within(tablist).getByRole('tab', { name: names[index % names.length]! }));
+      const navigation = await screen.findByRole('navigation', { name: 'Health pages' });
+      fireEvent.click(await within(navigation).findByRole('link', { name: names[index % names.length]! }));
       await flush();
     }
     await waitFor(() => expect(aborted).toBeGreaterThan(0));
@@ -298,19 +262,20 @@ describe('Daily overview', () => {
     expect(consoleError).not.toHaveBeenCalled();
   });
 
-  it('reaches the record browser through the Data tab without another availability request and returns through the Overview tab', async () => {
+  it('reaches the record browser through the Data page without another availability request and returns through the Overview page', async () => {
     const f = fixture();
     render(home());
     await settled();
-    fireEvent.click(screen.getByRole('tab', { name: 'Data' }));
+    await listed();
+    fireEvent.click(sectionLink('Data'));
     const browse = await screen.findByLabelText('Browse');
     expect((browse as HTMLSelectElement).value).toBe(sources.metrics);
     await waitFor(() => expect(f.queries.at(-1)).toMatchObject({ source: sources.metrics, limit: 50 }));
     expect(screen.queryByRole('heading', { name: 'Training' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Back to overview' })).toBeNull();
-    fireEvent.click(sectionTabs().getByRole('tab', { name: 'Overview' }));
+    fireEvent.click(sectionLink('Overview'));
     await settled();
-    expect(sectionTabs().getByRole('tab', { name: 'Overview' }).getAttribute('aria-selected')).toBe('true');
+    expect(sectionLink('Overview').getAttribute('aria-current')).toBe('page');
     expect(f.capabilityCalls()).toBe(1);
   });
   it.each([
@@ -344,7 +309,7 @@ describe('Daily overview', () => {
     expect(screen.queryByRole('heading', { name: 'Today' })).toBeNull();
     expect(screen.queryByText('Your workouts, nutrition, body, sleep and latest brief at a glance.')).toBeNull();
   });
-  it('keeps keyboard order as the period presets, then each card link and its carousel dot', async () => {
+  it('keeps keyboard order as each card link, the period dropdown in the Training card and each carousel dot', async () => {
     fixture({ answer: query => jsonResponse(dailyFixture(query)) });
     render(<MemoryRouter><DailyOverview backendUrl={backendUrl} getAccessToken={token}
       capabilities={{ sources: Object.values(sources) }} onRetryAvailability={() => {}} /></MemoryRouter>);
@@ -352,7 +317,7 @@ describe('Daily overview', () => {
     const user = userEvent.setup();
     await user.tab();
     const named = (element: Element | null) => element?.getAttribute('aria-label') ?? element?.textContent;
-    for (const name of ['Today', 'Yesterday', '1 week', '2 weeks', '1 month', 'Training', 'Health', 'Body',
+    for (const name of ['Training', 'Overview period', 'Health', 'Body',
       'Show Training', 'Show Health', 'Show Body']) {
       expect(named(document.activeElement)).toBe(name);
       await user.tab();

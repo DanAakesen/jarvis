@@ -108,8 +108,10 @@ alternative states this connection rule and the absence of interpolation.
 
 ## Daily accessibility and keyboard audit (P12-37, 18 October 2026)
 
-Keep the Daily section navigation and nested view switches as named tablists
-with a single roving tab stop and visible focus. Shared tables remain captioned
+Keep the nested Daily view switches (Nutrition, Body & sleep and the Health panel)
+as named tablists with a single roving tab stop and visible focus. The Health pages
+are links in a labelled navigation landmark in the shell's panel, with the current
+page marked by `aria-current` (P14-58). Shared tables remain captioned
 and navigable through a labelled, focusable scroll region; charts keep their
 recorded data available in a table, and value graphics expose text alternatives.
 Loading, empty, partial and error states use status or alert semantics without
@@ -121,13 +123,8 @@ without removing essential status or measurements. See
 
 ## Daily visual QA pass (P12-39, 18 October 2026)
 
-Keep the selected Daily section tab in view: when the selection changes, the
-tab strip scrolls horizontally to centre it. Only the strip scrolls, never the
-page. The move is instant on first paint, while availability is still loading
-and under reduced motion. The fade that cues more tabs is a mask on the strip,
-driven by its scroll position, so it stays on the visible edges (end, start or
-both) instead of scrolling over the tabs. Section tabs size to their label with
-a 44px minimum width, so the gaps between labels stay even. Headings inside a
+The Health section tab strip no longer exists (P14-58, below), so its scroll
+centring, edge fade and tab sizing rules are gone. Headings inside a
 section use `--type-subsection`; stat tiles that share a row have equal height;
 secondary text inside a Daily tile, an open Nutrition record and a Nutrition
 group subtotal uses `--type-small`. Buttons beside a field in the Nutrition
@@ -1843,7 +1840,7 @@ new day. The P14-46 top cards below replace this block and keep its sources, dat
 rules and lower-bound wording. The older Overview blocks described further down in
 this file (the "What Daily holds today" collection list, its "About this data" notes
 and Refresh button, and the summary tiles) are removed; the Overview is now the
-period control and the three cards only.
+period control and the three cards only (the period is the dropdown in the Training card header since P14-58).
 
 20 October 2026 (P14-44 stable tiles): the Overview summary tiles and the Today
 cards keep their size from skeleton to values, so nothing below them moves while
@@ -1865,10 +1862,12 @@ workouts reads "0 minutes". Body measurements with a raw snake_case key read in
 words ("Active energy"). At 380 px and below the Nutrition and Training bodies
 reserve more height because their content wraps.
 
-20 October 2026 (P14-46 top cards): the Overview opens with a period control
-(Today, Yesterday, 1 week, 2 weeks, 1 month; Today by default) and three cards, in
-the composition of the original: Training, Health and Body. Nothing else is on the
-page: no heading above the cards, no collection list, no notes disclosure, no Refresh
+20 October 2026 (P14-46 top cards): the Overview opens with three cards, in
+the composition of the original: Training, Health and Body, and the period (Today,
+Yesterday, 1 week, 2 weeks, 1 month; Today by default) is a dropdown in the Training card
+header that sets all three (changed in P14-58 from a row of pills above the cards). Nothing
+else is on the
+page but the page name and the freshness pill: no collection list, no notes disclosure, no Refresh
 button and no summary tiles, so there is no text list on it. A card that has nothing
 for the period says so itself. The cards sit in one
 row from 1200 px, two columns from 700 px and a swipeable row below that, with
@@ -1879,7 +1878,7 @@ strip (time, name, kcal). Health holds Sleep, Protein and a cumulative protein
 line across the day with a dashed target line when a target is set; its title is a
 button with a turning chevron that opens the Health panel below the cards (the
 Training and Body titles stay links to their sections). Body holds Sessions,
-Calories and Duration, then Weight, Fat mass, Fat % and Lean mass as small
+Calories and Duration, then Weight, Fat % and Lean mass as small
 sparklines over the last 90 days. A ring or tile has the same size in every state.
 Wording separates the cases: "Not recorded" means the source is served and holds
 nothing for the period and is shown as a quiet dash, as in the original, with the
@@ -1903,14 +1902,17 @@ for the Health area): Health follows the look of the original app, from the
 Health-scoped tokens in `daily/health-look.css` (declared on the Health shell, swapped
 for dark; the full list is in the P14-56 entry of docs/decisions.md). Page: a deep navy
 surface with a faint blue glow top left and a violet glow top right in dark, a pale
-tinted wash in light; the glow is a background only and never carries text. Header: a
-large, bold headline, "Hey <first name>" from the signed-in profile and plain "Health"
-when no usable name is known; a freshness pill with a status dot (green when the newest
+tinted wash in light; the glow is a background only and never carries text. Header: the page's own name as the headline ("Overview", "Workouts" and so on; P14-58, at the owner's request, replacing the greeting), in the shared title size, with a small
+freshness pill, 12px text, aligned to the right, with a status dot (green when the newest
 accepted upload is within 36 hours, amber when it is older, a failed read or there is
 none, grey while loading; the label always states the time or the problem) and an info
 button that opens a "Last sync" table with one row per source and "Not received" for a
-source without a time, above the existing upload facts. Navigation is a centred pill
-group and the period control a segmented pill group; the selected pill is filled,
+source without a time, above the existing upload facts. The pages of the area are not
+in the header: from P14-58 they are listed in the shell's navigation panel. The Overview
+period is a dropdown at the end of the Training card header (a native select named
+"Overview period"), not a row of pills; it still drives all three cards, and it takes the
+`--health-edge` and `--health-tile` surface of the other Health fields. Health tabs and the
+other period choices stay pills; the selected pill is filled,
 tinted and outlined, so selection never rests on colour alone. This is a deliberate
 Health-only exception to the shared control contract (`--radius-control` geometry and
 the `--state-selected-*` tokens): the pill geometry and the Health selection tokens stay
@@ -1954,6 +1956,23 @@ and `prefers-contrast: more`, `forced-colors` (system colours, no glass) and
 reduced motion inherit the P14-56 handling. Stable heights, the Not received,
 Unavailable, Could not load and No target set states, and every section id are
 unchanged.
+
+21 October 2026 (P14-58 / #1175; Refs #1116): the Health page has no section row. The
+pages (Overview, Workouts, Nutrition, Body & sleep, Briefs, Data, Rules & sources) are
+listed in the shell's sidebar, opened from the rail's Health icon, which toggles the
+panel and keeps the page the owner is on. The list is a labelled navigation landmark
+named for the area; the current page is a link marked with `aria-current="page"` and
+the shared selected-link styling, so it never rests on colour alone. A pick closes the
+panel and moves focus to the page content. A press outside the panel closes it too, and so
+does a press outside the Folio: that is the rule of the left sidebar slot, not of any one
+panel. The rail is exempt because its icons toggle the panels themselves, and a
+press that starts inside the panel (a resize drag, say) or is cancelled never closes it.
+While the area is still working out which
+pages exist the panel shows its loader, not a list that then changes. On phones the
+rail does not exist, so the "Go to" sheet lists the same pages indented under Health.
+The header, period control and cards move up into the space the row used; nothing in
+the pill look changes. Nested switches (Nutrition views, Body & sleep views and the
+Health panel tabs) stay tabs.
 
 20 October 2026 (P14-55; Refs #1116, #1155): every ring and tile that compares
 against a training target reads the owner's targets from one shared read per
@@ -2310,8 +2329,8 @@ status and category chips retain distinct text-backed meanings. Freshness stays
 next to the records it qualifies. Empty-state wording remains specific to each
 source; Health history links to Settings → Health upload.
 
-At narrow widths, the section and Nutrition view tab strips expose their
-horizontal scroll tracks. Summary tiles use one column on phones and fill the
+At narrow widths, the Nutrition view tab strip exposes its
+horizontal scroll track. Summary tiles use one column on phones and fill the
 last two-column desktop row. Nutrition Day has a deliberate two-row phone
 control layout. Body shortcuts have equal-height buttons and a visible scroller;
 stat notes wrap within tiles. `DailyChart` reserves enough left space for

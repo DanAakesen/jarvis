@@ -81,7 +81,8 @@ function article(title: string) {
 }
 const card = (title: string) => within(article(title));
 const tile = (title: string, label: string) => card(title).getByRole('group', { name: label });
-
+const periodSelect = () => card('Training').getByRole('combobox', { name: 'Overview period' }) as HTMLSelectElement;
+const choosePeriod = (id: string) => fireEvent.change(periodSelect(), { target: { value: id } });
 async function settled() {
   await waitFor(() => expect(tile('Training', 'Protein').textContent).toContain('80 g'));
 }
@@ -98,11 +99,9 @@ describe('Overview cards', () => {
     stub();
     render(view());
     await settled();
-    expect(screen.getByRole('button', { name: 'Today' }).getAttribute('aria-pressed')).toBe('true');
-    for (const label of ['Yesterday', '1 week', '2 weeks', '1 month']) {
-      expect(screen.getByRole('button', { name: label }).getAttribute('aria-pressed')).toBe('false');
-    }
-    expect(screen.getByRole('link', { name: 'Training' }).getAttribute('href')).toMatch(/\?section=workouts$/u);
+    expect(periodSelect().value).toBe('today');
+    expect(Array.from(periodSelect().options).map(option => option.textContent)).toEqual(['Today', 'Yesterday', '1 week', '2 weeks', '1 month']);
+    expect(screen.queryByRole('group', { name: 'Overview period' })).toBeNull();    expect(screen.getByRole('link', { name: 'Training' }).getAttribute('href')).toMatch(/\?section=workouts$/u);
     expect(screen.getByRole('link', { name: 'Body' }).getAttribute('href')).toMatch(/\?section=body-sleep$/u);
     expect(screen.queryByRole('link', { name: 'Health' })).toBeNull();
     const toggle = screen.getByRole('button', { name: 'Health' });
@@ -158,7 +157,7 @@ describe('Overview cards', () => {
     expect(training.getByRole('img', { name: 'Run: 1 session, week to date of 2' })).toBeTruthy();
     expect(training.getByRole('img', { name: 'Activity: 6,500 steps of 8,000' })).toBeTruthy();
     expect(training.queryByText('No target set')).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: '1 week' }));
+    choosePeriod('week');
     await waitFor(() => expect(training.getByRole('img', { name: 'Activity: 6,500 steps of 56,000' })).toBeTruthy());
   });
 
@@ -279,7 +278,7 @@ describe('Overview cards', () => {
     expect(article('Health').querySelector('.daily-top-chart-title')?.textContent).toBe('Protein across the day');
     expect(article('Body').querySelector('.daily-top-chart-title')?.textContent).toBe('Body trend');
     expect(article('Training').querySelector('.daily-top-strip-label')?.textContent).toBe('Meals');
-    fireEvent.click(screen.getByRole('button', { name: '1 week' }));
+    choosePeriod('week');
     await waitFor(() => expect(article('Training').querySelector('.daily-top-strip-label')).toBeNull());
     expect(article('Health').querySelector('.daily-top-chart-title')?.textContent).toBe('Protein per day');
   });
@@ -291,7 +290,7 @@ describe('Overview cards', () => {
     expect(tile('Body', 'Calories').textContent).toContain('200 kcal');
     expect(tile('Body', 'Duration').textContent).toMatch(/30\s*min/u);
     await waitFor(() => expect(tile('Body', 'Weight').textContent).toContain('80.4 kg'));
-    for (const label of ['Fat mass', 'Fat %', 'Lean mass']) expect(tile('Body', label).textContent).toContain('Not recorded');
+    for (const label of ['Fat %', 'Lean mass']) expect(tile('Body', label).textContent).toContain('Not recorded');
   });
 
   it('notes a lower bound only on the Body tile whose figure is incomplete', async () => {
@@ -315,13 +314,13 @@ describe('Overview cards', () => {
     stub();
     render(view());
     await settled();
-    fireEvent.click(screen.getByRole('button', { name: '1 week' }));
-    expect(screen.getByRole('button', { name: '1 week' }).getAttribute('aria-pressed')).toBe('true');
+    choosePeriod('week');
+    expect(periodSelect().value).toBe('week');
     await waitFor(() => expect(asked.some(query => query.source === sources.days && query.startDate === '2026-10-14' && query.endDate === today)).toBe(true));
     expect(card('Training').queryByRole('region', { name: 'Meals' })).toBeNull();
     await waitFor(() => expect(tile('Training', 'Protein').textContent).toContain('average per day'));
     expect(card('Health').getByRole('img', { name: /^Protein per day/u })).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'Yesterday' }));
+    choosePeriod('yesterday');
     await waitFor(() => expect(asked.some(query => query.source === sources.meals && query.startDate === '2026-10-19' && query.endDate === '2026-10-19')).toBe(true));
   });
 

@@ -4,7 +4,6 @@
  * and a word, never alone.
  */
 .daily-shell {
-  --type-health-display: clamp(32px, 5.5vw, 52px);
   --type-health-figure: 28px;
   --type-health-ring: 20px;
   --type-health-micro: 12px;
@@ -90,18 +89,18 @@
   border-radius: var(--radius-window);
   background: var(--health-glow), var(--health-page);
 }
-.daily-shell > .daily-heading { align-items: center; gap: var(--space-3); margin-bottom: var(--space-4); }
-.daily-shell .daily-heading h1 { font-size: var(--type-health-display); font-weight: 800; letter-spacing: -.02em; line-height: var(--line-tight); }
+.daily-shell > .daily-heading { align-items: center; gap: var(--space-3); margin-bottom: var(--space-3); }
+.daily-shell .daily-heading h1 { font-size: var(--type-title); font-weight: 800; letter-spacing: -.02em; line-height: var(--line-tight); }
 
-/* The freshness pill, with a dot that says whether the data is recent. */
-.daily-page.daily-shell .daily-freshness-trigger { gap: var(--space-2); border-color: var(--health-edge); background: var(--health-tile); }
+/* The freshness pill, with a dot that says whether the data is recent. It is a quiet status line, so it stays small. */
+.daily-page.daily-shell .daily-freshness-trigger { min-height: 0; gap: var(--space-2); padding: var(--space-1) var(--space-3); border-color: var(--health-edge); background: var(--health-tile); font-size: var(--type-health-micro); }
 .daily-page.daily-shell .daily-freshness-trigger:hover { background: var(--glass-hover); }
 .daily-page.daily-shell .daily-freshness-trigger[aria-expanded="true"] { background: var(--health-selected-bg); color: var(--health-selected-fg); }
-.daily-freshness-dot { flex: none; width: .5rem; height: .5rem; border-radius: 50%; background: var(--health-pending); }
+.daily-freshness-dot { flex: none; width: .4rem; height: .4rem; border-radius: 50%; background: var(--health-pending); }
 .daily-freshness-trigger[data-freshness="recent"] .daily-freshness-dot { background: var(--health-ok); }
 .daily-freshness-trigger[data-freshness="behind"] .daily-freshness-dot { background: var(--health-amber); }
 .daily-freshness-info { display: inline-grid; flex: none; place-items: center; color: var(--text-muted); }
-.app-shell .daily-freshness-info svg { width: 1.1rem; height: 1.1rem; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.app-shell .daily-freshness-info svg { width: .9rem; height: .9rem; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .daily-page.daily-shell .daily-freshness-panel { border-color: var(--health-edge); border-radius: var(--radius-panel); background: var(--health-popover); box-shadow: var(--health-card-shadow); }
 .daily-freshness-title { font-size: var(--type-lead); font-weight: 700; }
 .daily-sync-table { width: 100%; border-collapse: collapse; font-size: var(--type-small); }
@@ -122,12 +121,11 @@
   box-shadow: 0 0 0 1px var(--health-selected-edge);
 }
 .daily-shell .daily-section-tab[aria-selected="true"]:hover, .daily-shell .daily-view-switch .daily-section-tab[aria-pressed="true"]:hover { background: var(--health-selected-bg-hover); }
-.daily-shell .daily-top-presets { display: flex; flex-wrap: wrap; justify-self: stretch; gap: var(--space-1); padding: var(--space-1); border: 1px solid var(--health-edge); border-radius: var(--radius-panel); background: var(--health-tile); }
-.daily-shell .daily-top-presets .daily-section-tab { flex: 1 1 auto; padding-inline: var(--space-2); }
-@media (min-width: 700px) {
-  .daily-shell .daily-top-presets { flex-wrap: nowrap; justify-self: end; border-radius: var(--radius-pill); }
-  .daily-shell .daily-top-presets .daily-section-tab { flex: 0 0 auto; padding-inline: var(--space-3); }
-}
+
+/* The Overview period is a dropdown at the end of the Training card header; the title keeps its arrow beside it. */
+.daily-shell .daily-top-card[data-card="training"] h3 { flex: 0 1 auto; }
+.daily-shell .daily-top-card[data-card="training"] h3 > a { width: auto; }
+.daily-shell .daily-top-period { flex: none; min-width: 8rem; margin-inline-start: auto; border-color: var(--health-edge); background-color: var(--health-tile); }
 
 /* Icon chips: a tinted round chip behind a stroke icon. The tone follows the icon, and the icon always has a word beside it. */
 .daily-icon-chip { --chip-tone: var(--text); display: inline-grid; flex: none; place-items: center; width: 1.75rem; height: 1.75rem; border-radius: 50%; background: color-mix(in srgb, var(--chip-tone) 16%, transparent); color: var(--chip-tone); }
@@ -237,7 +235,7 @@
 }
 @media (forced-colors: active) {
   .daily-page.daily-shell, .daily-shell .daily-top-card, .daily-shell .daily-top-tile { background: Canvas; }
-  .daily-shell .daily-top-card, .daily-shell .daily-top-tile, .daily-shell .daily-section-tabs, .daily-shell .daily-top-presets { border-color: CanvasText; }
+  .daily-shell .daily-top-card, .daily-shell .daily-top-tile, .daily-shell .daily-section-tabs, .daily-shell .daily-top-period { border-color: CanvasText; }
   .daily-shell .daily-top-card .daily-ring-graphic { background: none; }
   .daily-shell .daily-ring-track { stroke: CanvasText; }
   .daily-shell .daily-ring-fill { stroke: Highlight; }
