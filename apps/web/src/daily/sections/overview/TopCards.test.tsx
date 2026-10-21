@@ -259,8 +259,9 @@ describe('Overview cards', () => {
     render(view());
     await waitFor(() => expect(tile('Health', 'Sleep').textContent).toContain('7.8 h'));
     expect(tile('Health', 'Sleep').textContent).not.toContain('0 h');
-    const chart = await waitFor(() => card('Health').getByRole('img', { name: /^Protein across the day/u }));
-    expect(chart.getAttribute('aria-label')).toContain('target 100 g');
+    // The target is a second read that starts after the day's records arrive, so the chart can draw before it lands.
+    await waitFor(() => expect(card('Health').getByRole('img', { name: /^Protein across the day/u }).getAttribute('aria-label'))
+      .toContain('target 100 g'));
   });
 
   it('gives each card an icon chip, a figure and unit, and a titled chart or trend panel', async () => {
