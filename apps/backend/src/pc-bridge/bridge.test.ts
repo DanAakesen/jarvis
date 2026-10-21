@@ -183,6 +183,7 @@ describe('authenticated PC bridge protocol', () => {
     const { app, record, records } = fixture({ logLevel: 'info' });
     const url = await listen(app);
     const bridge = await connectBridge(url);
+    expect(records.map((line) => JSON.parse(line).msg)).not.toContain('connection.upgrade_failed');
     const withoutCurrentMessage = await app.inject({
       method: 'POST',
       url: '/tools/pc_clipboard_read',

@@ -62,6 +62,7 @@ import {
   createSystemSmokeReader, createSystemStatusReader, type SystemSmokeReader, type SystemStatusProbe,
   type SystemStatusReader,
 } from './system-status.js';
+import { registerWebSocketPlugin } from './websocket.js';
 
 export interface BuildAppOptions {
   readonly databaseStatus?: () => boolean;
@@ -191,6 +192,7 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
     requestTimeout: 30_000,
     forceCloseConnections: 'idle',
   });
+  const registerWebSocketShutdown = registerWebSocketPlugin(app);
   const origins = new Set([localWebOrigin, config.staticWebAppOrigin].filter((origin) => origin !== undefined));
   app.decorate('shutdownConnections', new Set<() => void | Promise<void>>());
   app.decorate('shutdownErrors', []);
@@ -437,5 +439,6 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
     factoryModule,
     createSleepModule(options.containerAppScaler ?? null),
   ]);
+  registerWebSocketShutdown();
   return app;
 }

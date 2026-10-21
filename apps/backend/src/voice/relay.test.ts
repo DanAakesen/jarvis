@@ -234,6 +234,7 @@ async function connectedPartialVoice(
   await app.listen({ host: '127.0.0.1', port: 0 });
   const address = app.server.address() as AddressInfo;
   const browser = await openBrowser(`ws://127.0.0.1:${address.port}${path}`);
+  expect(records.map((record) => JSON.parse(record).msg)).not.toContain('connection.upgrade_failed');
   await vi.waitFor(() => expect(received.some((event) => event.type === 'session.update')).toBe(true));
   return { app, browser, conversationStore, frameStore, received, services, upstream };
 }
