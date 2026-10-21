@@ -53,6 +53,7 @@ function probeTool(name: string, size = 0, execute: JarvisTool['execute'] = asyn
 
 async function fixture(
   overrides: Partial<BuildAppOptions> = {}, language: 'en' | 'da' = 'en', extraTools: JarvisTool[] = [],
+  probeEnabled = false,
 ) {
   vi.useFakeTimers();
   const records: Record<string, unknown>[] = [];
@@ -84,7 +85,7 @@ async function fixture(
     endSession: vi.fn(async () => true),
   } as unknown as ConversationStore;
   const handlers = new Map<string, Handler>();
-  const voice = createVoiceRelayModule({ getToken: async () => 'unused', connect });
+  const voice = createVoiceRelayModule({ getToken: async () => 'unused', connect, toolBudgetProbeEnabled: probeEnabled });
   const config = { ...loadConfig({}), logLevel: 'info' as const };
   const app = buildApp(config, createLogger(config, undefined, output), {
     conversationStore: store,
@@ -200,7 +201,7 @@ describe('voice startup without network', () => {
     const f = await fixture();
     f.upstream.open();
     f.upstream.event('session.created');
-    await vi.advanceTimersByTimeAsync(7_999);
+    await vi.advanceTimersByTimeAsync(5_999);
     expect(f.connect).toHaveBeenCalledOnce();
     await vi.advanceTimersByTimeAsync(1);
     expect(f.connect).toHaveBeenCalledTimes(2);
@@ -379,31 +380,75 @@ const compactBytes = Buffer.byteLength(JSON.stringify(createRealtimeSessionUpdat
 )));
 
 describe('English voice tool-budget fallback', () => {
-  it('is ready at R0 with the full frame, one attempt and no timers left', async () => {
+  it('starts at the known-good R1 frame without an R0 foreground attempt', async () => {
     const f = await fixture({}, 'en', catalogue());
     f.upstream.open();
     f.upstream.event('session.created');
     f.upstream.event('session.updated');
-    expect(names(f.upstream)).toEqual(['github_write', 'proactive_recent_items', 'set_away_mode',
-      'set_presence_mode', 'startup_probe', 'tiny_tool', 'workspace_command', 'daily_show'].sort());
-    expect(frameOf(f.upstream).session.instructions).not.toContain(TOOLS_UNAVAILABLE_NOTICE);
+    expect(names(f.upstream)).toEqual(['github_write', 'set_away_mode', 'set_presence_mode',
+      'startup_probe', 'tiny_tool', 'workspace_command'].sort());
+    expect(frameOf(f.upstream).session.instructions).toContain(TOOLS_UNAVAILABLE_NOTICE);
     expect(f.attempts()).toEqual([expect.objectContaining({
-      rung: 'R0', outcome: 'ready', toolCount: 8, frameBytes: frameBytes(f.upstream),
+      rung: 'R1', outcome: 'ready', toolCount: 6, frameBytes: frameBytes(f.upstream),
       toolBytes: expect.any(Number), instructionsBytes: expect.any(Number), elapsedMs: 0,
     })]);
-    expect(f.selected()).toEqual([expect.objectContaining({ rung: 'R0', remembered: false })]);
+    expect(f.selected()).toEqual([expect.objectContaining({ rung: 'R1', remembered: false })]);
     expect(f.browser.sent.map((data) => JSON.parse(data).type)).toEqual([
       'session.created', 'jarvis.session.ready', 'session.updated',
     ]);
     await vi.advanceTimersByTimeAsync(60_000);
     expect(f.browser.close).not.toHaveBeenCalled();
     f.browser.close(1000, '');
-    expect(f.summaries()).toEqual([expect.objectContaining({ toolBudgetRung: 'R0', toolBudgetAttempts: 1 })]);
+    expect(f.summaries()).toEqual([expect.objectContaining({ toolBudgetRung: 'R1', toolBudgetAttempts: 1 })]);
     expect(f.connect).toHaveBeenCalledOnce();
   });
 
+  it('starts its independent full probe only after readiness and never forwards probe events', async () => {
+    const f = await fixture({}, 'en', catalogue(), true);
+    f.behaviour.onFrame = (socket) => {
+      socket.event('session.updated');
+      socket.event('response.audio.delta');
+    };
+    f.upstream.open();
+    f.upstream.event('session.created');
+    await vi.advanceTimersByTimeAsync(0);
+    expect(f.connect).toHaveBeenCalledOnce();
+    expect(f.records.some((record) => record.msg === 'voice.tool_budget_probe')).toBe(false);
+    expect(f.browser.sent).toEqual([]);
+
+    f.upstream.event('session.updated');
+    expect(f.browser.sent.map((data) => JSON.parse(data).type)).toEqual([
+      'session.created', 'jarvis.session.ready', 'session.updated',
+    ]);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(f.connect).toHaveBeenCalledTimes(2);
+    expect(f.attempts().map((record) => record.rung)).toEqual(['R1']);
+    expect(f.records).toContainEqual(expect.objectContaining({
+      msg: 'voice.tool_budget_probe', probe: 'full', outcome: 'ready',
+    }));
+    expect(f.browser.sent.map((data) => JSON.parse(data).type)).not.toContain('response.audio.delta');
+  });
+
+  it('remembers a full-ready probe so the next live session starts at R0', async () => {
+    const f = await fixture({}, 'en', catalogue(), true);
+    f.behaviour.onFrame = (socket) => { if (socket !== f.upstream) socket.event('session.updated'); };
+    f.upstream.open();
+    f.upstream.event('session.updated');
+    await vi.advanceTimersByTimeAsync(0);
+    expect(f.records).toContainEqual(expect.objectContaining({
+      msg: 'voice.tool_budget_probe', probe: 'full', outcome: 'ready',
+    }));
+
+    const browser = new FakeSocket();
+    browser.readyState = WebSocket.OPEN;
+    await f.start(browser);
+    expect(names(f.sockets[2]!)).toContain('daily_show');
+    expect(names(f.sockets[2]!)).toContain('proactive_recent_items');
+    expect(f.attempts().at(-1)).toEqual(expect.objectContaining({ rung: 'R0', outcome: 'ready' }));
+  });
+
   it.each([
-    ['R1', 1], ['R2', 2], ['R3', 3], ['R4', 4],
+    ['R1', 0], ['R2', 1], ['R3', 2], ['R4', 3],
   ] as const)('selects %s, the first rung below a silent byte threshold', async (rung, index) => {
     const f = await fixture({}, 'en', catalogue());
     // Measure each rung's frame in a throwaway session, then answer only frames that fit.
@@ -411,16 +456,16 @@ describe('English voice tool-budget fallback', () => {
     f.behaviour.onFrame = (socket) => { sizes.push(frameBytes(socket)); };
     f.upstream.open();
     f.behaviour.onFrame(f.upstream);
-    await vi.advanceTimersByTimeAsync(8_000 + 6_000 * 4);
-    expect(sizes).toHaveLength(5);
+    await vi.advanceTimersByTimeAsync(6_000 * 4);
+    expect(sizes).toHaveLength(4);
     expect(sizes.slice(1).every((size, i) => size < sizes[i]!)).toBe(true);
 
     const g = await fixture({}, 'en', catalogue());
     const threshold = sizes[index]!;
     g.behaviour.onFrame = (socket) => { if (frameBytes(socket) <= threshold) socket.event('session.updated'); };
     g.openFirst();
-    await vi.advanceTimersByTimeAsync(8_000 + 6_000 * 4);
-    expect(g.attempts().map(rungOf)).toEqual(['R0', 'R1', 'R2', 'R3', 'R4'].slice(0, index + 1));
+    await vi.advanceTimersByTimeAsync(6_000 * 4);
+    expect(g.attempts().map(rungOf)).toEqual(['R1', 'R2', 'R3', 'R4'].slice(0, index + 1));
     expect(g.attempts().map((record) => record.outcome)).toEqual([
       ...Array(index).fill('timeout'), 'ready',
     ]);
@@ -437,10 +482,10 @@ describe('English voice tool-budget fallback', () => {
     expect(g.browser.close).not.toHaveBeenCalled();
   });
 
-  it('gives R0 eight seconds and each later rung six seconds, with fresh sockets and abandoned ones closed', async () => {
+  it('gives each fallback rung six seconds and closes the abandoned socket', async () => {
     const f = await fixture({}, 'en', catalogue());
     f.upstream.open();
-    await vi.advanceTimersByTimeAsync(7_999);
+    await vi.advanceTimersByTimeAsync(5_999);
     expect(f.connect).toHaveBeenCalledOnce();
     await vi.advanceTimersByTimeAsync(1);
     expect(f.connect).toHaveBeenCalledTimes(2);
@@ -451,32 +496,32 @@ describe('English voice tool-budget fallback', () => {
     expect(f.connect).toHaveBeenCalledTimes(3);
     expect(f.sockets[1]!.close).toHaveBeenCalled();
     expect(f.attempts()).toEqual([
-      expect.objectContaining({ rung: 'R0', outcome: 'timeout', elapsedMs: 8_000 }),
       expect.objectContaining({ rung: 'R1', outcome: 'timeout', elapsedMs: 6_000 }),
+      expect.objectContaining({ rung: 'R2', outcome: 'timeout', elapsedMs: 6_000 }),
     ]);
   });
 
-  it('closes 4010 within 32 seconds and logs exhaustion when no rung ever answers', async () => {
+  it('closes 4010 within 24 seconds and logs exhaustion when no rung ever answers', async () => {
     const f = await fixture({}, 'en', catalogue());
     f.upstream.open();
-    await vi.advanceTimersByTimeAsync(31_999);
+    await vi.advanceTimersByTimeAsync(23_999);
     expect(f.browser.close).not.toHaveBeenCalled();
     await vi.advanceTimersByTimeAsync(1);
     expect(f.browser.close).toHaveBeenCalledWith(4010, 'Voice service did not become ready');
-    expect(f.attempts().map(rungOf)).toEqual(['R0', 'R1', 'R2', 'R3', 'R4']);
-    expect(f.exhausted()).toEqual([expect.objectContaining({ attempts: 5 })]);
+    expect(f.attempts().map(rungOf)).toEqual(['R1', 'R2', 'R3', 'R4']);
+    expect(f.exhausted()).toEqual([expect.objectContaining({ attempts: 4 })]);
     expect(f.selected()).toEqual([]);
-    expect(f.sockets).toHaveLength(5);
+    expect(f.sockets).toHaveLength(4);
     expect(f.sockets.every((socket) => socket.readyState === WebSocket.CLOSED)).toBe(true);
     expect(f.summaries()).toEqual([expect.objectContaining({
-      closedBy: 'relay', closeCode: 4010, toolBudgetRung: null, toolBudgetAttempts: 5, durationMs: 32_000,
+      closedBy: 'relay', closeCode: 4010, toolBudgetRung: null, toolBudgetAttempts: 4, durationMs: 24_000,
     })]);
     await vi.advanceTimersByTimeAsync(60_000);
-    expect(f.connect).toHaveBeenCalledTimes(5);
+    expect(f.connect).toHaveBeenCalledTimes(4);
     expect(f.summaries()).toHaveLength(1);
   });
 
-  it('steps down on an error event at R0 and is ready at R1', async () => {
+  it('steps down when the known-good R1 fails', async () => {
     const f = await fixture({}, 'en', catalogue());
     f.upstream.open();
     f.upstream.event('session.created');
@@ -487,10 +532,10 @@ describe('English voice tool-budget fallback', () => {
     f.sockets[1]!.event('session.created');
     f.sockets[1]!.event('session.updated');
     expect(f.attempts()).toEqual([
-      expect.objectContaining({ rung: 'R0', outcome: 'error' }),
-      expect.objectContaining({ rung: 'R1', outcome: 'ready' }),
+      expect.objectContaining({ rung: 'R1', outcome: 'error' }),
+      expect.objectContaining({ rung: 'R2', outcome: 'ready' }),
     ]);
-    expect(f.selected()).toEqual([expect.objectContaining({ rung: 'R1', remembered: false })]);
+    expect(f.selected()).toEqual([expect.objectContaining({ rung: 'R2', remembered: false })]);
     expect(f.browser.sent.map((data) => JSON.parse(data).type)).toEqual([
       'session.created', 'jarvis.session.ready', 'session.updated',
     ]);
@@ -503,24 +548,24 @@ describe('English voice tool-budget fallback', () => {
     f.upstream.close(1013, 'private reason');
     await vi.advanceTimersByTimeAsync(0);
     expect(f.connect).toHaveBeenCalledTimes(2);
-    expect(f.attempts()).toEqual([expect.objectContaining({ rung: 'R0', outcome: 'closed' })]);
+    expect(f.attempts()).toEqual([expect.objectContaining({ rung: 'R1', outcome: 'closed' })]);
     expect(f.browser.close).not.toHaveBeenCalled();
     f.sockets[1]!.event('session.updated');
-    expect(f.selected()).toEqual([expect.objectContaining({ rung: 'R1' })]);
+    expect(f.selected()).toEqual([expect.objectContaining({ rung: 'R2' })]);
   });
 
   it('remembers the working rung for the next session and steps down from it, updating the memory', async () => {
     const f = await fixture({}, 'en', catalogue());
-    f.behaviour.onFrame = (socket) => { if (frameBytes(socket) < frameBytes(f.upstream)) socket.event('session.updated'); };
     f.upstream.open();
-    await vi.advanceTimersByTimeAsync(8_000);
+    f.upstream.event('session.updated');
     expect(f.selected()).toEqual([expect.objectContaining({ rung: 'R1', remembered: false })]);
 
+    f.behaviour.onFrame = (socket) => socket.event('session.updated');
     const second = new FakeSocket();
     second.readyState = WebSocket.OPEN;
     await f.start(second);
-    const next = f.sockets[2]!;
-    expect(f.connect).toHaveBeenCalledTimes(3);
+    const next = f.sockets[1]!;
+    expect(f.connect).toHaveBeenCalledTimes(2);
     expect(toolNames(next)).not.toContain('daily_show');
     expect(frameOf(next).session.instructions).toContain(TOOLS_UNAVAILABLE_NOTICE);
     expect(f.selected().at(-1)).toEqual(expect.objectContaining({ rung: 'R1', remembered: true }));
@@ -530,7 +575,7 @@ describe('English voice tool-budget fallback', () => {
     const third = new FakeSocket();
     third.readyState = WebSocket.OPEN;
     await f.start(third);
-    expect(f.connect).toHaveBeenCalledTimes(4);
+    expect(f.connect).toHaveBeenCalledTimes(3);
     await vi.advanceTimersByTimeAsync(6_000);
     expect(f.attempts().slice(-2).map((record) => [record.rung, record.outcome])).toEqual([
       ['R1', 'timeout'], ['R2', 'ready'],
@@ -544,16 +589,16 @@ describe('English voice tool-budget fallback', () => {
     expect(f.selected().at(-1)).toEqual(expect.objectContaining({ rung: 'R2', remembered: true }));
   });
 
-  it('does not remember a rung that never reached session.updated', async () => {
+  it('keeps the R1 cold start when no session has ever reached session.updated', async () => {
     const f = await fixture({}, 'en', catalogue());
     f.upstream.open();
-    await vi.advanceTimersByTimeAsync(32_000);
+    await vi.advanceTimersByTimeAsync(24_000);
     const second = new FakeSocket();
     second.readyState = WebSocket.OPEN;
     await f.start(second);
-    expect(f.sockets).toHaveLength(6);
-    expect(names(f.sockets[5]!)).toContain('daily_show');
-    expect(frameOf(f.sockets[5]!).session.instructions).not.toContain(TOOLS_UNAVAILABLE_NOTICE);
+    expect(f.sockets).toHaveLength(5);
+    expect(names(f.sockets[4]!)).not.toContain('daily_show');
+    expect(frameOf(f.sockets[4]!).session.instructions).toContain(TOOLS_UNAVAILABLE_NOTICE);
     expect(f.selected()).toEqual([]);
   });
 
@@ -561,7 +606,7 @@ describe('English voice tool-budget fallback', () => {
     const f = await fixture({}, 'en', catalogue());
     f.upstream.open();
     f.behaviour.autoOpen = false;
-    await vi.advanceTimersByTimeAsync(8_000);
+    await vi.advanceTimersByTimeAsync(6_000);
     expect(f.connect).toHaveBeenCalledTimes(2);
     const pending = f.sockets[1]!;
     f.browser.close(1000, '');
@@ -570,7 +615,7 @@ describe('English voice tool-budget fallback', () => {
     expect(f.upstream.readyState).toBe(WebSocket.CLOSED);
     expect(pending.terminate).toHaveBeenCalled();
     expect(pending.readyState).toBe(WebSocket.CLOSED);
-    expect(f.attempts()).toEqual([expect.objectContaining({ rung: 'R0', outcome: 'timeout' })]);
+    expect(f.attempts()).toEqual([expect.objectContaining({ rung: 'R1', outcome: 'timeout' })]);
     expect(f.exhausted()).toEqual([]);
     expect(f.timeouts()).toEqual([]);
     expect(vi.getTimerCount()).toBe(0);
@@ -581,7 +626,7 @@ describe('English voice tool-budget fallback', () => {
     const f = await fixture({}, 'en', catalogue());
     f.upstream.open();
     f.upstream.event('session.created');
-    await vi.advanceTimersByTimeAsync(8_000);
+    await vi.advanceTimersByTimeAsync(6_000);
     const next = f.sockets[1]!;
     f.upstream.event('session.created');
     f.upstream.event('session.updated');
@@ -648,9 +693,9 @@ describe('English voice tool-budget fallback', () => {
     const f = await fixture({}, 'en', [probeTool('daily_show', 100, execute), probeTool('allowed_tool', 100)]);
     f.behaviour.onFrame = (socket) => { if (!toolNames(socket).includes('daily_show')) socket.event('session.updated'); };
     f.openFirst();
-    await vi.advanceTimersByTimeAsync(8_000);
     await vi.advanceTimersByTimeAsync(0);
-    const ready = f.sockets[1]!;
+    await vi.advanceTimersByTimeAsync(0);
+    const ready = f.sockets[0]!;
     expect(f.selected()).toEqual([expect.objectContaining({ rung: 'R1' })]);
     ready.event('response.function_call_arguments.done', { name: 'daily_show', call_id: 'call_1', arguments: '{}' });
     ready.event('response.function_call_arguments.done', { name: 'allowed_tool', call_id: 'call_2', arguments: '{}' });
@@ -672,7 +717,7 @@ describe('English voice tool-budget fallback', () => {
     f.behaviour.autoOpen = true;
     await vi.advanceTimersByTimeAsync(32_000);
     const budget = f.records.filter((record) => String(record.msg).startsWith('voice.tool_budget'));
-    expect(budget.length).toBeGreaterThanOrEqual(6);
+    expect(budget.length).toBeGreaterThanOrEqual(5);
     const text = JSON.stringify(budget);
     for (const secret of ['private', 'startup_probe', 'daily_show', 'github_write', 'I am Jarvis', 'Dan', 'unavailable']) {
       expect(text).not.toContain(secret);

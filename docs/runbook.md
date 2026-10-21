@@ -46,28 +46,40 @@ the five largest tool definitions (server-owned names and UTF-8 bytes).
 It survives browser-first closure and cancellation. No transcripts, instructions,
 tool arguments, payloads or close-reason text belong in these new diagnostics.
 
-English tool-budget fallback. Each English attempt uses a fresh socket and logs
+English tool-budget fallback. A new process starts at **R1**, the known-good
+frame measured on 21 October (R0 stalled at 8,001 ms; R1 became ready in
+1,341 ms). Each foreground attempt uses a fresh socket and logs
 `voice.tool_budget_attempt` with `rung` (R0-R4), `toolCount`, `toolBytes`,
 `instructionsBytes`, `frameBytes`, `outcome` (`ready`, `timeout`, `error` or
-`closed`) and `elapsedMs` since connect (deadline 8 s for R0, 6 s for R1-R4).
+`closed`) and `elapsedMs` since connect (8 s at R0, 6 s at R1-R4).
 `voice.tool_budget_selected` names the rung that reached `session.updated`;
-`remembered: true` means the session started at the rung remembered from an
-earlier session in this backend process and it worked without stepping down. The
-summary carries `toolBudgetRung` and `toolBudgetAttempts`. Read them like this:
+`remembered: true` means that rung had already succeeded in this process.
+The summary carries `toolBudgetRung` and `toolBudgetAttempts`. A failed R1
+still steps down to R2; a full-ready background probe promotes later sessions
+to R0. `voice.tool_budget_exhausted` (close 4010, `toolBudgetRung: null`) means
+all foreground rungs failed; check Azure Monitor and Voice Live status.
 
-- Ready at **R0**: the full frame works; the stall of 21 October is not present.
-- Ready only at **R1**: the `daily_*` tools or `proactive_recent_items` are the cause.
-- Ready only at **R2**: the total tool size matters, not one tool; compare `toolBytes`.
-- Ready only at **R3**: the size of the tool list, not one tool, is the cause (R2's
-  half-size list still failed).
-- Ready only at **R4**: the instruction text is the cause. Voice works without tools
-  and says so; use chat for actions.
-- `voice.tool_budget_exhausted` (close 4010, `toolBudgetRung: null`): every rung
-  failed, so the cause is not in the request content (service, region or
-  credentials); check Azure Monitor and Voice Live status.
+After a non-R0 session is ready, the backend may run one independent probe
+sequence per 30 minutes per process. Each `voice.tool_budget_probe` record
+contains only one of the fixed `probe` names (`full`, `no_proactive`,
+`no_daily`, `reduced_plus_copies`), tool/instruction/frame byte counts, tool
+count, outcome and elapsed milliseconds. Probes use separate sockets and do
+not send audio or affect the live session. The sequence stops at the first
+ready probe:
 
-The remembered rung is not re-probed upwards; restart the backend to try R0 again.
-No instructions, tool names, payloads or arguments appear in these logs.
+- **`full` ready** means the full set works again; the backend remembers R0.
+- While `full` stalls, **`reduced_plus_copies` stalling** means the limit is
+  tool count, tool bytes or context, rather than the content of the dropped
+  tools. Compare the `no_proactive` and `no_daily` measurements to see how
+  much headroom each excluded group buys.
+- **`reduced_plus_copies` ready** means the content of the dropped tools is the
+  cause. `no_proactive` ready alone points to `proactive_recent_items`;
+  `no_daily` ready alone points to the `daily_*` tools.
+
+Only `full` changes remembered state. Other probes are measurements; they do
+not reshape the fallback ladder. Set
+`JARVIS_VOICE_TOOL_BUDGET_PROBE_ENABLED=false` to disable probes. No
+instructions, tool names, payloads or arguments appear in probe logs.
 
 In the Voice Live resource's Azure Monitor metrics, compare `TotalCalls` split
 by operation for the same UTC window: `onHandshake` confirms accepted sockets;

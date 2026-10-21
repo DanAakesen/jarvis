@@ -30,6 +30,7 @@ export interface BackendConfig {
   proactiveTodoWritesEnabled: boolean;
   proactiveAlertsEnabled: boolean;
   healthUploadEnabled: boolean;
+  voiceToolBudgetProbeEnabled: boolean;
   phone?: {
     acsEndpoint: string;
     acsResourceId: string;
@@ -232,6 +233,11 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BackendConfig 
   if (healthUploadSetting !== undefined && healthUploadSetting !== 'true' && healthUploadSetting !== 'false') {
     throw new ConfigurationError('JARVIS_HEALTH_UPLOAD_ENABLED must be true or false');
   }
+  const voiceToolBudgetProbeSetting = env.JARVIS_VOICE_TOOL_BUDGET_PROBE_ENABLED;
+  if (voiceToolBudgetProbeSetting !== undefined &&
+      voiceToolBudgetProbeSetting !== 'true' && voiceToolBudgetProbeSetting !== 'false') {
+    throw new ConfigurationError('JARVIS_VOICE_TOOL_BUDGET_PROBE_ENABLED must be true or false');
+  }
   const auth = loadAuthConfig(env);
 
   return {
@@ -260,6 +266,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BackendConfig 
     proactiveTodoWritesEnabled: env.JARVIS_PROACTIVE_TODO_WRITES_ENABLED === 'true',
     proactiveAlertsEnabled: env.JARVIS_PROACTIVE_ALERTS_ENABLED === 'true',
     healthUploadEnabled: healthUploadSetting === 'true',
+    voiceToolBudgetProbeEnabled: voiceToolBudgetProbeSetting !== 'false',
     ...(phone ? { phone } : {}),
     ...(dailySetting === 'true' ? { dailyEnabled: true as const } : {}),
     ...(dailyFeedsSetting === 'true' ? { dailyFeedsEnabled: true as const } : {}),
