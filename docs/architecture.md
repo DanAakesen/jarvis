@@ -5770,10 +5770,26 @@ is unavailable until P14-45 is merged.
 period and the known capability source IDs. `sections/*/index.tsx` modules are
 discovered with the lazy `import.meta.glob`; each exports its
 `DailySectionDefinition`. The shell loads these small entry modules to discover
-labels, order, period use and source requirements before rendering the switcher.
+labels, order, period use and source requirements before publishing the page list.
 Each entry lazy-loads its own content component, so section UI and its queries
 remain split into a separate chunk and are loaded only when selected. Discovery
 filters out definitions whose required source IDs are not exposed.
+
+The page list is shown by the shell, not by `DailyHome` (P14-58). `apps/web/src/area-sections.ts`
+holds the contract: `AreaSectionsContext` carries a publish function down from
+`ShellLayout`, `usePublishAreaSections(sections | null)` publishes `{ areaId, items,
+activeId }` from an effect and clears it on unmount, and `areaSectionLinks(areaPath,
+sections)` builds the `/<path>?section=<id>` links. An `Area` opts in with
+`sections: true` (`areas.ts`; Health today). `ShellLayout` keeps the published list in
+state, renders it as links in the sidebar's navigation landmark (a loader while the
+area has published nothing, `aria-current="page"` on the active link) and passes it
+to `MobileMenu` (`sections` prop), which lists it indented under the area's own link
+because the rail and sidebar do not exist on phones. `DailyHome` publishes `null`
+until availability and the section modules are known, so the list never changes
+after it appears, and an empty list on a load error. The selection stays in
+`?section=<id>`, so links, the back button and reload keep the page. Clicking the
+rail icon of the area that is already open only toggles the panel and does not
+navigate. No endpoint, DTO, route, storage or backend change.
 
 To add a section, create `apps/web/src/daily/sections/<id>/index.tsx` exporting
 `section: DailySectionDefinition`, define its id/label/order/`usesPeriod` and
@@ -5823,7 +5839,9 @@ and Today cards) publishes the chain once, after its last page, and keeps the
 previous records visible while a refresh runs (20 October 2026; P14-44).
 
 **Overview top cards (20 October 2026; P14-46).** `sections/overview/TopCards.tsx`
-owns the period control and calls `useTopCardData`, which makes one
+owns the period and passes it to the Training card as a dropdown in its header (the
+optional `action` slot of `TopCard` in `TopBlocks.tsx`, since P14-58; it was a row of pills
+above the cards), then calls `useTopCardData`, which makes one
 `useDailyPages` read per source with `settle`: workouts, steps, nutrition days,
 meals (single-day presets only), sleep, the metric catalogue and up to four body
 measurement metrics over a fixed 90 days, the last only for names the catalogue
@@ -5842,8 +5860,10 @@ class names, so no other area is affected; `daily-overview.css` is unchanged. Ne
 markup is small: `daily/ui/icons.tsx` (`HealthIcon`, `IconChip`, decorative and
 `aria-hidden`), an optional `tone` and `icon` on `ui/Ring.tsx`, `Figure`, `icon` and
 `meter` in `overview/TopBlocks.tsx`, and titled chart and trend panels in the cards.
-`daily/greeting.ts` derives the headline from `AreaProps.profileName`, which `App`
-passes from the signed-in profile; it never leaves the browser. `DailyFreshnessPill`
+The page headline is the current section's label: `DailyHome` renders it as the `h1`
+(the `aria-labelledby` target and the focus target, "Health" while the list loads) beside the freshness pill. The earlier
+`daily/greeting.ts` and the `AreaProps.profileName` that fed it were removed in P14-58, so
+the profile name is not passed to any area. `DailyFreshnessPill`
 reads the same sync status as before and now derives a status dot (`data-freshness`
 recent, behind or pending; 36 hours) and a "Last sync" table from the feed rows it
 already receives, so no endpoint, DTO or backend change.

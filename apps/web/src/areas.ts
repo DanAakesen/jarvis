@@ -10,8 +10,6 @@ export interface AreaProps {
   backendUrl: string | null;
   getAccessToken: () => Promise<string>;
   signIn?: () => Promise<void>;
-  /** The signed-in user's display name, for areas that greet them. */
-  profileName?: string | null;
 }
 
 export interface Area {
@@ -20,6 +18,8 @@ export interface Area {
   /** Top-level path segment; the area's component renders its own nested routes. */
   path: string;
   navigation: readonly { label: string; path: string }[];
+  /** The area lists its own pages in the navigation panel, published at run time through `AreaSectionsContext`. */
+  sections?: true;
   Component: ComponentType<AreaProps>;
 }
 
@@ -40,7 +40,7 @@ export const areas: readonly Area[] = [
 ];
 
 const withDaily: readonly Area[] = [
-  { id: 'daily', label: 'Health', path: 'health', navigation: [{ label: 'Health', path: '/health' }], Component: DailyHome },
+  { id: 'daily', label: 'Health', path: 'health', navigation: [{ label: 'Health', path: '/health' }], sections: true, Component: DailyHome },
   ...areas,
 ];
 

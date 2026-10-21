@@ -102,21 +102,6 @@
   .daily-table th, .daily-table td { padding: var(--space-2); }
 }
 .daily-shell > .daily-heading { margin-bottom: var(--space-4); }
-.daily-section-nav { position: relative; min-width: 0; max-width: 100%; overflow-x: auto; margin-bottom: var(--space-4); scrollbar-width: none; }
-.daily-section-nav::-webkit-scrollbar { display: none; }
-/* The fade is a mask on the scroller, so it stays on the visible edges however far the tabs have scrolled. */
-.daily-section-nav[data-overflow-end='true'] {
-  -webkit-mask-image: linear-gradient(to right, var(--ink-solid) calc(100% - var(--space-5)), transparent);
-  mask-image: linear-gradient(to right, var(--ink-solid) calc(100% - var(--space-5)), transparent);
-}
-.daily-section-nav[data-overflow-start='true'] {
-  -webkit-mask-image: linear-gradient(to left, var(--ink-solid) calc(100% - var(--space-5)), transparent);
-  mask-image: linear-gradient(to left, var(--ink-solid) calc(100% - var(--space-5)), transparent);
-}
-.daily-section-nav[data-overflow-start='true'][data-overflow-end='true'] {
-  -webkit-mask-image: linear-gradient(to right, transparent, var(--ink-solid) var(--space-5), var(--ink-solid) calc(100% - var(--space-5)), transparent);
-  mask-image: linear-gradient(to right, transparent, var(--ink-solid) var(--space-5), var(--ink-solid) calc(100% - var(--space-5)), transparent);
-}
 .daily-section-tabs { display: flex; width: max-content; min-width: 100%; gap: var(--space-1); }
 .daily-section-tab {
   flex: 0 0 auto;
@@ -148,7 +133,6 @@
 .daily-view-switch .daily-section-tab[aria-pressed="true"]:active { background: var(--state-selected-pressed); }
 .daily-section-tab:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 .daily-section-panel { min-width: 0; min-height: 12rem; }
-.daily-section-panel:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; border-radius: var(--radius-control); }
 .daily-period-slot { margin-bottom: var(--space-4); }
 .daily-period-control { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--space-3); margin-bottom: 0; }
 .daily-period-control > label, .daily-custom-period > label { display: grid; gap: var(--space-1); font-size: var(--type-small); }

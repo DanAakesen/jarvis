@@ -1,5 +1,6 @@
-import { useRef } from 'react';
-import { NavLink } from 'react-router-dom';
+import { Fragment, useRef } from 'react';
+import { Link, NavLink } from 'react-router-dom';
+import type { AreaSectionLink } from './area-sections';
 import { useModalLifecycle } from './useModalLifecycle';
 import { ShellIcon } from './ShellIcon';
 
@@ -24,7 +25,7 @@ function menuPages(dailyEnabled: boolean, proactiveEnabled: boolean): readonly M
   return proactiveEnabled ? [...list.slice(0, 2), { to: '/proactive', label: 'Proactive' }, ...list.slice(2)] : list;
 }
 
-export function MobileMenu({ open, onClose, onNavigate, onFolio, onContext, dailyEnabled = false, proactiveEnabled = false }: {
+export function MobileMenu({ open, onClose, onNavigate, onFolio, onContext, dailyEnabled = false, proactiveEnabled = false, sections }: {
   open: boolean;
   onClose: () => void;
   onNavigate: () => void;
@@ -32,6 +33,8 @@ export function MobileMenu({ open, onClose, onNavigate, onFolio, onContext, dail
   onContext: () => void;
   dailyEnabled?: boolean;
   proactiveEnabled?: boolean;
+  /** The pages inside the area that is open, listed under that area's own link (the rail's sidebar does not exist on a phone). */
+  sections?: { label: string; links: readonly AreaSectionLink[] };
 }) {
   const sheet = useRef<HTMLDivElement>(null);
   const root = useRef<HTMLDivElement>(null);
@@ -48,7 +51,15 @@ export function MobileMenu({ open, onClose, onNavigate, onFolio, onContext, dail
         </header>
         <nav className="mobile-menu-body" aria-label="Pages">
           {menuPages(dailyEnabled, proactiveEnabled).map((page) => (
-            <NavLink key={page.to} className="mobile-menu-link" to={page.to} end={page.end === true} onClick={() => { onNavigate(); onClose(); }}>{page.label}</NavLink>
+            <Fragment key={page.to}>
+              <NavLink className="mobile-menu-link" to={page.to} end={page.end === true}
+                {...(sections?.label === page.label ? { 'aria-current': 'location' as const } : {})}
+                onClick={() => { onNavigate(); onClose(); }}>{page.label}</NavLink>
+              {sections?.label === page.label && sections.links.map((link) => (
+                <Link key={link.id} className="mobile-menu-link mobile-menu-sublink" to={link.to}
+                  aria-current={link.current ? 'page' : undefined} onClick={() => { onNavigate(); onClose(); }}>{link.label}</Link>
+              ))}
+            </Fragment>
           ))}
         </nav>
         <div className="mobile-menu-actions">

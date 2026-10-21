@@ -111,7 +111,6 @@ const bodyMetricPatterns = {
   weight: /^(weight_body_mass|body_mass|weight)$/u,
   fatPercent: /^body_fat_percentage$/u,
   leanMass: /^lean_body_mass$/u,
-  fatMass: /^(body_fat_mass|fat_mass)$/u,
 } as const;
 
 export type BodyMetricKey = keyof typeof bodyMetricPatterns;
@@ -133,7 +132,7 @@ export function calorieBalance(energy: { value: number | null; partial: boolean 
 export function bodyMetricNames(catalogue: readonly MetricRow[]): Record<BodyMetricKey, string | null> {
   const names = catalogue.flatMap(row => typeof row.metric_name === 'string' ? [row.metric_name] : []);
   const pick = (key: BodyMetricKey) => names.find(name => bodyMetricPatterns[key].test(name)) ?? null;
-  return { weight: pick('weight'), fatPercent: pick('fatPercent'), leanMass: pick('leanMass'), fatMass: pick('fatMass') };
+  return { weight: pick('weight'), fatPercent: pick('fatPercent'), leanMass: pick('leanMass') };
 }
 
 /** Recorded days in order, the latest reading, and its unit. Only rows in the latest reading's unit are used, so units never mix. */

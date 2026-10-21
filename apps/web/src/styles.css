@@ -3323,6 +3323,7 @@ a.task-chip:hover { background: var(--glass-pressed); }
 .mobile-menu-link:active { background: var(--glass-pressed); }
 .mobile-menu-sheet:focus { outline: none; }
 .mobile-menu-link[aria-current="page"] { background: var(--state-selected-bg); color: var(--state-selected-fg); box-shadow: none; font-weight: 750; }
+.mobile-menu-sublink { padding-inline-start: var(--space-6); font-weight: 500; }
 @keyframes mobile-sheet-in { from { opacity: 0; translate: 0 36px; } }
 @keyframes mobile-drop { from { opacity: 0; translate: 0 -10px; } }
 @keyframes mobile-fade { from { opacity: 0; } }

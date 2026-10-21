@@ -1,6 +1,7 @@
-import { Suspense, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { Suspense, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { dailyQuerySources, type DailySourceId } from '@jarvis/contracts';
+import { usePublishAreaSections, type AreaSections } from '../area-sections';
 import type { AreaProps } from '../areas';
 import { Loader } from '../Loader';
 import { DailyFreshnessPill } from './DailyFreshnessPill';
@@ -12,7 +13,6 @@ import { discoverDailySections, loadDailySectionModules } from './sections/disco
 import type { DailyPeriod, DailySectionDefinition } from './sections/types';
 import { TrainingTargetsProvider } from './TrainingTargetsProvider';
 import { useDailyCapabilities } from './useDailyCapabilities';
-import { healthHeadline } from './greeting';
 import './health-look.css';
 import './health-look-sections.css';
 import './daily.css';
@@ -21,7 +21,7 @@ import './ui/daily-ui.css';
 const sectionModules = import.meta.glob<{ section: DailySectionDefinition }>('./sections/*/index.tsx');
 const noSources: readonly DailySourceId[] = [];
 
-export function DailyHome({ backendUrl, getAccessToken, profileName }: AreaProps) {
+export function DailyHome({ backendUrl, getAccessToken }: AreaProps) {
   const capabilities = useDailyCapabilities(backendUrl, getAccessToken);
   const refreshVersion = useContext(DailyRefreshContext);
   const [searchParams, setSearchParams] = useSearchParams();
@@ -30,8 +30,6 @@ export function DailyHome({ backendUrl, getAccessToken, profileName }: AreaProps
   const [initialSource, setInitialSource] = useState<DailySourceId>();
   const [periodSlotHeight, setPeriodSlotHeight] = useState(70);
   const periodSlot = useRef<HTMLDivElement>(null);
-  const sectionNavigation = useRef<HTMLElement>(null);
-  const [sectionTabsEdges, setSectionTabsEdges] = useState({ start: false, end: false });
   const [sectionLoadAttempt, setSectionLoadAttempt] = useState(0);
   const [loadedSections, setLoadedSections] = useState<{
     attempt: number;
@@ -45,20 +43,15 @@ export function DailyHome({ backendUrl, getAccessToken, profileName }: AreaProps
   const activeSection = availableSections.find(item => item.id === activeId) ?? availableSections[0];
   const activeSectionId = activeSection?.id;
   const availabilityPending = capabilities.sources === undefined && capabilities.error === undefined;
-  const tabStripPositioned = useRef(false);
 
-  // Centre the selected tab by scrolling the strip only: the page's own scroll position must not move.
-  // Until availability settles the tab set is still changing, so those moves are instant.
-  useLayoutEffect(() => {
-    const strip = sectionNavigation.current;
-    const tab = activeSectionId ? document.getElementById(`daily-tab-${activeSectionId}`) : null;
-    if (!strip || !tab || typeof strip.scrollTo !== 'function') return;
-    const reduced = document.documentElement.dataset.motion === 'reduced'
-      || (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false);
-    const left = Math.max(0, tab.offsetLeft - (strip.clientWidth - tab.offsetWidth) / 2);
-    strip.scrollTo({ left, behavior: tabStripPositioned.current && !reduced ? 'smooth' : 'auto' });
-    tabStripPositioned.current = !availabilityPending;
-  }, [activeSectionId, availabilityPending]);
+  // The pages are listed in the shell's navigation panel. Until availability and the section modules are known the
+  // list is not final, so nothing is published and the panel shows a loader instead of a list that then changes.
+  const published = useMemo<AreaSections | null>(() => {
+    if (sectionLoadError) return { areaId: 'daily', items: [], activeId: undefined };
+    if (!modules || availabilityPending) return null;
+    return { areaId: 'daily', items: availableSections.map(({ id, label }) => ({ id, label })), activeId: activeSectionId };
+  }, [sectionLoadError, modules, availabilityPending, availableSections, activeSectionId]);
+  usePublishAreaSections(published);
 
   useEffect(() => {
     let active = true;
@@ -78,26 +71,6 @@ export function DailyHome({ backendUrl, getAccessToken, profileName }: AreaProps
     observer.observe(element);
     return () => observer.disconnect();
   }, [activeSection?.id, activeSection?.usesPeriod]);
-
-  useEffect(() => {
-    const navigation = sectionNavigation.current;
-    if (!navigation) return;
-    const measure = () => {
-      const offset = Math.abs(navigation.scrollLeft);
-      const start = offset > 1;
-      const end = navigation.scrollWidth - navigation.clientWidth - offset > 1;
-      setSectionTabsEdges(previous => previous.start === start && previous.end === end ? previous : { start, end });
-    };
-    measure();
-    navigation.addEventListener('scroll', measure, { passive: true });
-    const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(measure) : undefined;
-    observer?.observe(navigation);
-    if (navigation.firstElementChild) observer?.observe(navigation.firstElementChild);
-    return () => {
-      navigation.removeEventListener('scroll', measure);
-      observer?.disconnect();
-    };
-  }, [availableSections.length]);
 
   const setSection = (id: string, replace = false) => {
     setSearchParams(previous => {
@@ -131,47 +104,18 @@ export function DailyHome({ backendUrl, getAccessToken, profileName }: AreaProps
     retryAvailability: capabilities.reload,
   };
 
-  function onTabKeyDown(event: KeyboardEvent<HTMLDivElement>) {
-    if (!activeSection || availableSections.length === 0) return;
-    const current = availableSections.findIndex(item => item.id === activeSection.id);
-    let index: number | undefined;
-    if (event.key === 'ArrowRight') index = (current + 1) % availableSections.length;
-    if (event.key === 'ArrowLeft') index = (current - 1 + availableSections.length) % availableSections.length;
-    if (event.key === 'Home') index = 0;
-    if (event.key === 'End') index = availableSections.length - 1;
-    if (index !== undefined) {
-      event.preventDefault();
-      const section = availableSections[index]!;
-      selectSection(section.id);
-      document.getElementById(`daily-tab-${section.id}`)?.focus();
-    }
-  }
-
   return <section className="daily-page daily-shell" aria-label="Health">
     <header className="daily-heading">
-      <div>
-        <h1 id="daily-heading" tabIndex={-1}>{healthHeadline(profileName)}</h1>
-      </div>
+      <h1 id="daily-heading" tabIndex={-1}>{activeSection?.label ?? 'Health'}</h1>
       <DailyFreshnessPill backendUrl={backendUrl} getAccessToken={getAccessToken} refreshVersion={refreshVersion}
         enabled={sources.includes(dailyQuerySources.sync)} />
     </header>
-    <nav ref={sectionNavigation} className="daily-section-nav" aria-label="Health sections"
-      data-overflow-start={sectionTabsEdges.start || undefined} data-overflow-end={sectionTabsEdges.end || undefined}>
-      <div className="daily-section-tabs" role="tablist" aria-label="Health sections" onKeyDown={onTabKeyDown}>
-        {availableSections.map(item => <button key={item.id} id={`daily-tab-${item.id}`} className="daily-section-tab" type="button" role="tab"
-          aria-selected={item.id === activeSection?.id} aria-controls="daily-section-panel"
-          tabIndex={item.id === activeSection?.id ? 0 : -1} onClick={() => selectSection(item.id)}>
-          {item.label}
-        </button>)}
-      </div>
-    </nav>
     {activeSection?.id !== 'body-sleep' && activeSection?.usesPeriod && <div ref={periodSlot} className="daily-period-slot" style={{ minHeight: periodSlotHeight }}>
       <DailyPeriodControl period={period} onPeriodChange={setPeriod} />
     </div>}
     <DailySectionNavigationContext.Provider value={navigation}>
       <TrainingTargetsProvider backendUrl={backendUrl} getAccessToken={getAccessToken}>
-        <div className="daily-section-panel" id="daily-section-panel" role="tabpanel"
-          aria-labelledby={`daily-tab-${activeSection?.id ?? 'overview'}`} tabIndex={0} key={activeSection?.id}>
+        <div className="daily-section-panel" key={activeSection?.id}>
           {!activeSection && sectionLoadError && <div className="daily-notice" role="alert">
             <p>Sections unavailable.</p>
             <button className="secondary-button" type="button" onClick={() => setSectionLoadAttempt(attempt => attempt + 1)}>Retry sections</button>

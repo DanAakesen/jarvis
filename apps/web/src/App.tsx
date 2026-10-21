@@ -6,6 +6,8 @@ import type { PublicConfig } from '../config/public-config';
 import { useJarvisActivity } from './activity-context';
 import { JarvisActivityProvider } from './activity-provider';
 import { appAreas } from './areas';
+import { AreaSectionsContext, areaSectionLinks, type AreaSections } from './area-sections';
+import { Loader } from './Loader';
 import { NutritionTargetsSettings } from './daily/NutritionTargetsSettings';
 import { TrainingTargetsSettings } from './daily/TrainingTargetsSettings';
 import { HealthUploadSettings } from './HealthUploadSettings';
@@ -189,6 +191,7 @@ function ShellLayout({ signedIn, config, session, camera, screenShare, dailyEnab
     setFolioOpen(false);
   }
   const [navigationOpen, setNavigationOpen] = useState(false);
+  const [areaSections, setAreaSections] = useState<AreaSections | null>(null);
   const closePagePanels = useCallback(() => {
     if (document.activeElement?.closest('#folio-pane')) {
       document.getElementById('content')?.focus({ preventScroll: true });
@@ -580,9 +583,37 @@ function ShellLayout({ signedIn, config, session, camera, screenShare, dailyEnab
   const settingsActive = pathname.startsWith('/settings');
   const areaLabel = settingsActive ? 'Settings' : activeArea?.label ?? 'Jarvis';
   const navigationItems = activeArea?.navigation ?? [{ label: 'Conversation', path: '/' }];
+  // An area that lists its own sections has them as soon as it has loaded them; until then the panel shows a loader.
+  const sectionLinks = activeArea?.sections && areaSections?.areaId === activeArea.id
+    ? areaSectionLinks(activeArea.path, areaSections) : null;
   // The navigation panel only exists for an area with more than one page; otherwise there is nothing to choose.
-  const navigationAvailable = navigationItems.length > 1;
+  const navigationAvailable = navigationItems.length > 1 || activeArea?.sections === true;
   const navigationShown = navigationOpen && navigationAvailable && !folioOpen;
+
+  // The left sidebar slot holds either the area navigation or the Folio, and whichever is open collapses on a press that starts
+  // and ends outside it. The rail is exempt because its buttons toggle the panels themselves, and a press that starts inside
+  // (resizing the panel) never closes it, wherever the pointer is released.
+  const sidebarShown = navigationShown || folioOpen;
+  useEffect(() => {
+    if (!sidebarShown) return;
+    let pressedOutside = false;
+    const outside = (target: EventTarget | null) => target instanceof Element && !target.closest('#area-navigation, #folio-pane, .area-rail');
+    const onDown = (event: PointerEvent) => { pressedOutside = outside(event.target); };
+    const onUp = (event: PointerEvent) => {
+      const dismiss = pressedOutside && outside(event.target);
+      pressedOutside = false;
+      if (dismiss) { setNavigationOpen(false); setFolioOpen(false); }
+    };
+    const onCancel = () => { pressedOutside = false; };
+    document.addEventListener('pointerdown', onDown);
+    document.addEventListener('pointerup', onUp);
+    document.addEventListener('pointercancel', onCancel);
+    return () => {
+      document.removeEventListener('pointerdown', onDown);
+      document.removeEventListener('pointerup', onUp);
+      document.removeEventListener('pointercancel', onCancel);
+    };
+  }, [sidebarShown]);
 
   useEffect(() => {
     const media = window.matchMedia?.(PHONE_LAYOUT_MEDIA_QUERY);
@@ -674,7 +705,16 @@ function ShellLayout({ signedIn, config, session, camera, screenShare, dailyEnab
             <ShellIcon name="home" /><span className="visually-hidden">Jarvis</span>
           </NavLink>
           {areas.map((area) => (
-            <NavLink key={area.id} className="rail-link" data-tone={area.id} data-rail-tip={area.label} to={`/${area.path}`} aria-label={area.label} onClick={() => { setFolioOpen(false); setNavigationOpen(area.navigation.length > 1); }}>
+            <NavLink key={area.id} className="rail-link" data-tone={area.id} data-rail-tip={area.label} to={`/${area.path}`} aria-label={area.label} onClick={(event) => {
+              setFolioOpen(false);
+              if (area.sections && activeArea?.id === area.id) {
+                // Already on this area: toggle its pages and keep the page the owner is on instead of reloading the first one.
+                event.preventDefault();
+                setNavigationOpen((open) => folioOpen || !open);
+                return;
+              }
+              setNavigationOpen(area.navigation.length > 1 || area.sections === true);
+            }}>
               <ShellIcon name={area.id === 'daily' ? 'daily' : area.id === 'factory' ? 'factory' : area.id === 'notes' ? 'knowledge' : area.id === 'status' ? 'status' : 'usage'} /><span className="visually-hidden">{area.label}</span>
             </NavLink>
           ))}
@@ -701,7 +741,16 @@ function ShellLayout({ signedIn, config, session, camera, screenShare, dailyEnab
             </button>
           </div>
           <nav aria-label={activeArea?.label ?? 'Jarvis'}>
-            {navigationItems.map((item) => (
+            {sectionLinks?.map((item) => (
+              <Link key={item.id} className="sidebar-link" to={item.to} aria-current={item.current ? 'page' : undefined} onClick={() => {
+                setNavigationOpen(false);
+                window.requestAnimationFrame?.(() => document.getElementById('content')?.focus({ preventScroll: true }));
+              }}>
+                {item.label}
+              </Link>
+            ))}
+            {activeArea?.sections && !sectionLinks && <Loader label={`Loading ${activeArea.label} pages`} variant="rows" />}
+            {!activeArea?.sections && navigationItems.map((item) => (
               <NavLink key={item.path} className="sidebar-link" to={item.path} end={item.path === '/'} onClick={() => {
                 // Choosing a page closes the navigation; keyboard focus continues on the new page.
                 setNavigationOpen(false);
@@ -776,7 +825,9 @@ function ShellLayout({ signedIn, config, session, camera, screenShare, dailyEnab
               <NavigationGuardContext.Provider value={navigationGuard}>
                 <FactoryIssueNavigationContext.Provider value={factoryIssueNavigator}>
                   <div ref={setFeedbackHost} className="workspace-feedback-host" />
-                  <DailyRefreshContext.Provider value={dailyRefresh}><Outlet /></DailyRefreshContext.Provider>
+                  <DailyRefreshContext.Provider value={dailyRefresh}>
+                    <AreaSectionsContext.Provider value={setAreaSections}><Outlet /></AreaSectionsContext.Provider>
+                  </DailyRefreshContext.Provider>
                 </FactoryIssueNavigationContext.Provider>
               </NavigationGuardContext.Provider>
               {/* The chat stays mounted on every page, so a conversation or voice session survives navigation. */}
@@ -822,7 +873,8 @@ function ShellLayout({ signedIn, config, session, camera, screenShare, dailyEnab
       {signedIn && phone && (
         <>
           <MobileCaption text={workText ?? (working ? activityText : null)} />
-          <MobileMenu open={menuOpen} onClose={closeMenu} onNavigate={closePagePanels} onFolio={() => setFolioOpen(true)} onContext={contextPanel.toggle} dailyEnabled={dailyEnabled} proactiveEnabled={proactiveEnabled} />
+          <MobileMenu open={menuOpen} onClose={closeMenu} onNavigate={closePagePanels} onFolio={() => setFolioOpen(true)} onContext={contextPanel.toggle} dailyEnabled={dailyEnabled} proactiveEnabled={proactiveEnabled}
+            {...(sectionLinks && activeArea ? { sections: { label: activeArea.label, links: sectionLinks } } : {})} />
         </>
       )}
       {signedIn && <ContextPanel modal={phone} closeIcon={<ShellIcon name="close" />} resizeHandle={phone ? undefined : (
@@ -953,7 +1005,7 @@ export function App({ config = defaultConfig, dailyEnabled = false, pushEnabled 
               {areas.map(({ id, path, Component }) => (
                 <Route key={id} path={`${path}/*`} element={
                   <Component key={id === 'daily' ? dailyAccountKey : id} backendUrl={config.backendUrl}
-                    getAccessToken={session.getAccessToken} signIn={session.signIn} profileName={session.profile?.name ?? null} />
+                    getAccessToken={session.getAccessToken} signIn={session.signIn} />
                 } />
               ))}
               <Route path="settings" element={<SettingsRoute config={config} session={session}

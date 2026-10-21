@@ -38,7 +38,6 @@ export function useTopCardData(shared: Shared, window: OverviewWindow, today: st
     weight: usePages(shared, trend(names.weight), 2),
     fatPercent: usePages(shared, trend(names.fatPercent), 2),
     leanMass: usePages(shared, trend(names.leanMass), 2),
-    fatMass: usePages(shared, trend(names.fatMass), 2),
   };
   return { workouts, steps, days, meals, sleep, catalogue, names, body, trendPeriod };
 }

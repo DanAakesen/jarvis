@@ -1,6 +1,6 @@
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { useState } from 'react';
+import { useState, type ComponentProps } from 'react';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 import { MobileMenu } from './MobileShell';
@@ -10,6 +10,7 @@ function Harness({ onNavigate = () => {}, path = '/', ...flags }: {
   path?: string;
   dailyEnabled?: boolean;
   proactiveEnabled?: boolean;
+  sections?: NonNullable<ComponentProps<typeof MobileMenu>['sections']>;
 }) {
   const [open, setOpen] = useState(false);
   return <MemoryRouter initialEntries={[path]}>
@@ -99,5 +100,35 @@ describe('mobile menu pages', () => {
     expect(proactive.getAttribute('href')).toBe('/proactive');
     expect(proactive.getAttribute('aria-current')).toBe('page');
     expect(navigation.getByRole('link', { name: 'Jarvis' }).hasAttribute('aria-current')).toBe(false);
+  });
+
+  it('lists the published pages under their area only, marks the current one, and closes the sheet on a pick', async () => {
+    const sections = {
+      label: 'Health',
+      links: [
+        { id: 'overview', label: 'Overview', to: '/health?section=overview', current: false },
+        { id: 'nutrition', label: 'Nutrition', to: '/health?section=nutrition', current: true },
+      ],
+    };
+    const user = userEvent.setup();
+    const navigate = vi.fn();
+    render(<Harness dailyEnabled path="/health?section=nutrition" onNavigate={navigate} sections={sections} />);
+    await user.click(screen.getByRole('button', { name: 'Open menu' }));
+    const navigation = within(screen.getByRole('navigation', { name: 'Pages' }));
+    expect(navigation.getAllByRole('link').map((link) => link.textContent))
+      .toEqual(['Jarvis', 'Health', 'Overview', 'Nutrition', 'Software Factory', 'Notes', 'Usage', 'Status', 'Settings']);
+    expect(navigation.getByRole('link', { name: 'Health' }).getAttribute('aria-current')).toBe('location');
+    expect(navigation.getByRole('link', { name: 'Nutrition' }).getAttribute('aria-current')).toBe('page');
+    expect(navigation.getByRole('link', { name: 'Overview' }).hasAttribute('aria-current')).toBe(false);
+    expect(navigation.getByRole('link', { name: 'Overview' }).getAttribute('href')).toBe('/health?section=overview');
+    await user.click(navigation.getByRole('link', { name: 'Overview' }));
+    expect(navigate).toHaveBeenCalledOnce();
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('shows no sub-pages when the open area publishes none', async () => {
+    const navigation = await openPages({ dailyEnabled: true });
+    expect(navigation.getAllByRole('link').map((link) => link.textContent))
+      .toEqual(['Jarvis', 'Health', 'Software Factory', 'Notes', 'Usage', 'Status', 'Settings']);
   });
 });

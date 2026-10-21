@@ -1,6 +1,5 @@
 /* Overview cards: training, health and body share one period. Every tile reserves its size, so loading never moves the layout. */
 .daily-top { display: grid; gap: var(--space-3); min-width: 0; margin-block: var(--space-3); }
-.daily-top-presets { justify-self: start; max-width: 100%; }
 /* A swipeable row on phones; the grid takes over at 700px. */
 .daily-top-track { display: grid; grid-auto-flow: column; grid-auto-columns: 100%; gap: var(--space-3); overflow-x: auto; overscroll-behavior-x: contain; scroll-behavior: smooth; scroll-snap-type: x mandatory; scrollbar-width: none; }
 .daily-top-track::-webkit-scrollbar { display: none; }

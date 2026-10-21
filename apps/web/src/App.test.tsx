@@ -415,6 +415,17 @@ describe('App shell', () => {
     return rendered;
   }
 
+  // The Health pages are listed in the shell's navigation panel (the Go to sheet on a phone); a pick closes either.
+  async function openHealthPage(label: string, phone = false) {
+    if (phone) {
+      fireEvent.click(screen.getByRole('button', { name: 'Menu' }));
+      fireEvent.click(await within(screen.getByRole('navigation', { name: 'Pages' })).findByRole('link', { name: label }));
+      return;
+    }
+    if (!screen.queryByRole('navigation', { name: 'Health' })) fireEvent.click(screen.getByRole('button', { name: 'Expand area navigation' }));
+    fireEvent.click(await within(await screen.findByRole('navigation', { name: 'Health' })).findByRole('link', { name: label }));
+  }
+
   it('keeps push settings, item route, registration and requests absent when the gate is off', async () => {
     restoreProfile.mockResolvedValue({ name: 'Test User' });
     const register = vi.fn();
@@ -722,21 +733,15 @@ describe('App shell', () => {
     fireEvent.click(within(navigation).getByRole('link', { name: 'Health' }));
     await screen.findByRole('heading', { name: 'Training' });
     expectNoDailyInRenderedContent(document.body);
-    fireEvent.click(screen.getByRole('tab', { name: 'Data' }));
+    expect(screen.queryByRole('tablist', { name: 'Health sections' })).toBeNull();
+    await openHealthPage('Data', phone);
     await screen.findByText('Synthetic shell measurement');
     fireEvent.click(screen.getByText('Source, units and coverage'));
     expect(screen.getByText('Health · metrics')).toBeTruthy();
-    expect(screen.getByRole('heading', { level: 1, name: 'Hey Dan' })).toBeTruthy();
+    expect(screen.getByRole('heading', { level: 1, name: 'Data' })).toBeTruthy();
     expectNoDailyInRenderedContent(document.body);
-    for (const [id, label] of [
-      ['workouts', 'Workouts'],
-      ['nutrition', 'Nutrition'],
-      ['body-sleep', 'Body & sleep'],
-      ['briefs', 'Briefs'],
-      ['data', 'Data'],
-    ] as const) {
-      fireEvent.click(screen.getByRole('tab', { name: label }));
-      await waitFor(() => expect(document.getElementById('daily-section-panel')?.getAttribute('aria-labelledby')).toBe(`daily-tab-${id}`));
+    for (const label of ['Workouts', 'Nutrition', 'Body & sleep', 'Briefs', 'Data']) {
+      await openHealthPage(label, phone);
       await waitFor(() => expect(screen.queryByText(`Loading ${label}`)).toBeNull());
       expectNoDailyInRenderedContent(document.body);
     }
@@ -776,7 +781,7 @@ describe('App shell', () => {
     }
     render(<MemoryRouter initialEntries={['/daily']}><AccountHarness /></MemoryRouter>);
     await screen.findByRole('heading', { name: 'Training' });
-    fireEvent.click(screen.getByRole('tab', { name: 'Data' }));
+    await openHealthPage('Data');
     await screen.findByText('Synthetic first owner');
     owner = 'second';
     client.getActiveAccount.mockReturnValue({ homeAccountId: 'second' });
@@ -1775,6 +1780,149 @@ describe('App shell', () => {
     await user.click(screen.getByRole('link', { name: 'Software Factory' }));
     expect(await screen.findByRole('heading', { level: 1, name: 'Kanban' })).not.toBeNull();
     expect(document.documentElement.dataset.theme).toBe('dark');
+  });
+
+  function mockHealthBackend() {
+    streamWorkspaceCommands();
+    const respond = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation(async (input, init) => {
+      const path = new URL(String(input)).pathname;
+      if (path === '/daily/capabilities') return jsonResponse({ module: 'daily', version: dailyCapabilitiesVersion, sources: Object.values(dailyQuerySources) });
+      if (path === '/daily/query') {
+        const query: unknown = JSON.parse(String(init?.body));
+        if (!isDailyQuery(query)) throw new Error('Invalid synthetic Health query');
+        return jsonResponse(dailyFixture(query, []));
+      }
+      return respond(input, init);
+    });
+  }
+  const healthPages = ['Overview', 'Workouts', 'Nutrition', 'Body & sleep', 'Briefs', 'Data', 'Rules & sources'];
+
+  it('lists the Health pages in the navigation panel, marks the current one and closes the panel on a pick', async () => {
+    mockHealthBackend();
+    await renderSignedIn('/', true);
+    const rail = within(screen.getByRole('navigation', { name: 'Areas' }));
+    expect(screen.queryByRole('navigation', { name: 'Health' })).toBeNull();
+
+    fireEvent.click(rail.getByRole('link', { name: 'Health' }));
+    const pages = within(await screen.findByRole('navigation', { name: 'Health' }));
+    await pages.findByRole('link', { name: 'Overview' });
+    expect(pages.getAllByRole('link').map(link => link.textContent)).toEqual(healthPages);
+    expect(pages.getAllByRole('link').filter(link => link.hasAttribute('aria-current'))).toEqual([pages.getByRole('link', { name: 'Overview' })]);
+    expect(pages.getByRole('link', { name: 'Overview' }).getAttribute('aria-current')).toBe('page');
+    expect(screen.queryByRole('tablist', { name: 'Health sections' })).toBeNull();
+    expectNoDailyInRenderedContent(document.body);
+
+    fireEvent.click(pages.getByRole('link', { name: 'Nutrition' }));
+    await waitFor(() => expect(screen.queryByRole('navigation', { name: 'Health' })).toBeNull());
+    // The rail's Health link now only toggles the panel, so the page the owner is on is kept.
+    fireEvent.click(rail.getByRole('link', { name: 'Health' }));
+    const reopened = within(await screen.findByRole('navigation', { name: 'Health' }));
+    expect(reopened.getByRole('link', { name: 'Nutrition' }).getAttribute('aria-current')).toBe('page');
+    expect(reopened.getByRole('link', { name: 'Overview' }).hasAttribute('aria-current')).toBe(false);
+    fireEvent.click(rail.getByRole('link', { name: 'Health' }));
+    await waitFor(() => expect(screen.queryByRole('navigation', { name: 'Health' })).toBeNull());
+    expect(screen.getByRole('button', { name: 'Expand area navigation' })).toBeTruthy();
+  });
+
+  it('opens the Health page named in the address and keeps it marked in the navigation panel', async () => {
+    mockHealthBackend();
+    await renderSignedIn('/health?section=briefs', true);
+    await screen.findByRole('heading', { level: 2, name: 'Briefs' });
+    fireEvent.click(screen.getByRole('button', { name: 'Expand area navigation' }));
+    const pages = within(await screen.findByRole('navigation', { name: 'Health' }));
+    expect((await pages.findByRole('link', { name: 'Briefs' })).getAttribute('aria-current')).toBe('page');
+    expect(pages.getByRole('link', { name: 'Overview' }).getAttribute('href')).toBe('/health?section=overview');
+  });
+
+  it('shows a loader in the navigation panel until the Health pages are known, then the list', async () => {
+    mockHealthBackend();
+    const respond = fetchMock.getMockImplementation()!;
+    let release = () => {};
+    const held = new Promise<void>(resolve => { release = resolve; });
+    fetchMock.mockImplementation(async (input, init) => {
+      if (new URL(String(input)).pathname === '/daily/capabilities') await held;
+      return respond(input, init);
+    });
+    await renderSignedIn('/health', true);
+    fireEvent.click(screen.getByRole('button', { name: 'Expand area navigation' }));
+    const pages = within(await screen.findByRole('navigation', { name: 'Health' }));
+    expect(pages.queryAllByRole('link')).toHaveLength(0);
+    expect(pages.getByText('Loading Health pages')).toBeTruthy();
+    release();
+    await pages.findByRole('link', { name: 'Overview' });
+    expect(pages.queryByText('Loading Health pages')).toBeNull();
+  });
+
+  it('closes the navigation panel on a press outside it, and only then', async () => {
+    mockHealthBackend();
+    await renderSignedIn('/health', true);
+    fireEvent.click(screen.getByRole('button', { name: 'Expand area navigation' }));
+    const panel = await screen.findByRole('navigation', { name: 'Health' });
+    await within(panel).findByRole('link', { name: 'Overview' });
+    const content = document.getElementById('content')!;
+    const rail = screen.getByRole('navigation', { name: 'Areas' });
+    const heading = panel.closest('aside')!.querySelector('.sidebar-heading')!;
+    const press = (down: Element, up: Element = down) => { fireEvent.pointerDown(down); fireEvent.pointerUp(up); };
+    const stillOpen = () => expect(screen.getByRole('navigation', { name: 'Health' })).toBeTruthy();
+
+    press(heading);
+    press(within(panel).getByRole('link', { name: 'Workouts' }));
+    press(rail);
+    // A press that starts inside (resizing) or ends inside is not an outside press, and a cancelled touch is not a press at all.
+    press(heading, content);
+    press(content, heading);
+    fireEvent.pointerDown(content, { pointerType: 'touch' });
+    fireEvent.pointerCancel(content, { pointerType: 'touch' });
+    fireEvent.pointerUp(content, { pointerType: 'touch' });
+    stillOpen();
+
+    press(content);
+    await waitFor(() => expect(screen.queryByRole('navigation', { name: 'Health' })).toBeNull());
+    expect(document.activeElement).not.toBe(screen.getByRole('button', { name: 'Expand area navigation' }));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Expand area navigation' }));
+    expect(await screen.findByRole('navigation', { name: 'Health' })).toBeTruthy();
+  });
+
+  it('closes the Folio on a press outside it, as it does the area navigation, and not on a press inside it or on the rail', async () => {
+    const user = userEvent.setup();
+    await renderSignedIn('/');
+    const shell = document.querySelector('.app-shell')!;
+    await user.click(screen.getByRole('button', { name: 'Folio' }));
+    expect(shell.getAttribute('data-folio-open')).toBe('true');
+    const pane = document.getElementById('folio-pane')!;
+    const content = document.getElementById('content')!;
+    const press = (down: Element, up: Element = down) => { fireEvent.pointerDown(down); fireEvent.pointerUp(up); };
+
+    press(pane);
+    press(screen.getByRole('navigation', { name: 'Areas' }));
+    press(pane, content);
+    expect(shell.getAttribute('data-folio-open')).toBe('true');
+
+    press(content);
+    await waitFor(() => expect(shell.getAttribute('data-folio-open')).toBe('false'));
+    expect(shell.getAttribute('data-navigation-open')).toBe('false');
+  });
+
+  it('lists the Health pages under Health in the phone menu and nowhere else', async () => {
+    vi.stubGlobal('matchMedia', vi.fn((query: string) => ({
+      matches: query.includes('max-width: 700px'),
+      media: query, addEventListener: vi.fn(), removeEventListener: vi.fn(),
+    })));
+    mockHealthBackend();
+    await renderSignedIn('/health', true);
+    await screen.findByRole('heading', { name: 'Training' });
+    fireEvent.click(screen.getByRole('button', { name: 'Menu' }));
+    const pages = within(screen.getByRole('navigation', { name: 'Pages' }));
+    await pages.findByRole('link', { name: 'Overview' });
+    const labels = pages.getAllByRole('link').map(link => link.textContent);
+    const start = labels.indexOf('Health');
+    expect(labels.slice(start, start + 1 + healthPages.length)).toEqual(['Health', ...healthPages]);
+    expect(labels.filter(label => healthPages.includes(label!))).toHaveLength(healthPages.length);
+    expect(pages.getByRole('link', { name: 'Overview' }).getAttribute('aria-current')).toBe('page');
+    expect(pages.getByRole('link', { name: 'Health' }).getAttribute('aria-current')).toBe('location');
+    expect(screen.queryByRole('tablist', { name: 'Health sections' })).toBeNull();
   });
 
   it('offers no navigation panel for areas that have a single page', async () => {

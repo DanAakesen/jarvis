@@ -113,13 +113,13 @@ export function TopCards({ backendUrl, getAccessToken, refreshVersion, available
   const [training, health, bodyCard] = cards;
 
   return <section className="daily-top" aria-label="Overview cards">
-    <div className="daily-view-switch daily-top-presets" role="group" aria-label="Overview period">
-      {overviewPresets.map(item => <button key={item.id} className="daily-section-tab" type="button"
-        aria-pressed={item.id === preset} onClick={() => setPreset(item.id)}>{item.label}</button>)}
-    </div>
     <CardCarousel titles={cards.map(card => card.title)}>
       <TrainingCard {...training} state={cardState.training} stale={stale.training} onRetry={retry.training} period={period} states={states}
-        data={data} nutrition={nutrition} targets={trainingTargets.view} />
+        data={data} nutrition={nutrition} targets={trainingTargets.view} periodControl={
+          <select className="daily-top-period" aria-label="Overview period" value={preset}
+            onChange={event => setPreset(event.target.value as OverviewPresetId)}>
+            {overviewPresets.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}
+          </select>} />
       <HealthCard {...health} state={cardState.health} stale={stale.health} onRetry={retry.health} period={period} today={today} hour={hour}
         states={states} data={data} nutrition={nutrition} />
       <BodyCard {...bodyCard} state={cardState.body} stale={stale.body} onRetry={retry.body} period={period} workoutsState={states.workouts}

@@ -30,6 +30,39 @@ Fake sockets/timers cover normal, silent, connecting and early-close paths,
 fallbacks and privacy filtering. Production cause and acceptance remain open
 until the owner makes a real attempt after deployment and inspects its summary.
 
+## P14-58 — Health pages live in the shell sidebar, not in a row on the page (21 October 2026; #1116, #1175)
+
+The owner asked for the row of section tabs on the Health page to go, and for the pages to
+be listed in the sidebar that opens from the Health icon in the rail. Choices: (1) the
+area publishes its own page list to the shell (`area-sections.ts`), so the list stays
+filtered by the capabilities the backend serves and is not duplicated in the shell; (2) the
+sidebar lists them as links in a labelled navigation landmark, the current one marked with
+`aria-current="page"`, and shows a loader until the list is known instead of a list that
+changes; (3) a pick closes the panel and moves focus to the page, as every other area's
+sidebar already does, and the owner can have it stay open later if wanted; (4) selecting
+the rail icon of the open area toggles the panel and keeps the page the owner is on,
+instead of reloading the first page; (5) phones have no rail, so the "Go to" sheet lists
+the same pages indented under Health; (6) the page address, `?section=<id>`, is unchanged,
+so links, back and reload still keep the page, and nested switches (Nutrition views, Body &
+sleep views, Health panel tabs) stay tabs; (7) a press outside the open sidebar closes it, as
+a rule of the shell sidebar and not of any one panel: it applies to the area navigation and
+to the Folio alike, but only when the press both starts and ends outside the panel and the
+rail, so a resize drag or a cancelled touch never closes it. No read, endpoint or backend
+change.
+
+Follow-up, same day, on the owner's request: the "Hey <first name>" greeting is gone from the
+Health header and `daily/greeting.ts` with it, along with the `profileName` prop that only fed
+it, so the profile name no longer reaches any area. The header instead shows the name of the
+current page ("Overview", "Workouts" and so on, from the section label, "Health" while the
+list is still loading) as the page's `h1`, in the shared title size, beside the freshness
+pill; `--type-health-display` is removed because nothing uses it. The freshness pill is
+smaller (12px text, a slimmer pill, a smaller dot and info icon); its label, dot colours and
+"Last sync" panel are unchanged. The Overview period is no longer a row of pills above the
+cards: it is a dropdown (a native select named "Overview period") at the end of the Training
+card header. It is still one shared choice that drives the Training, Health and Body cards,
+so the Overview shows one period, and the Overview section still has no period control of its
+own above the cards.
+
 ## P14-55 — Training targets have one shared read (20 October 2026; #1116, #1155)
 
 The owner-set gym, run and step targets (P14-45) are read once per visit to the Health
@@ -90,7 +123,7 @@ source is the owner's private reference set, which is never committed.
 Documented tokens (P14-56). The look lives in one stylesheet, `daily/health-look.css`,
 whose custom properties are declared on the Health shell only and swapped for the dark
 theme, so light and dark share one structure and nothing outside Health changes:
-type (`--type-health-display`, `-figure`, `-ring`, `-micro`); surfaces
+type (`--type-health-figure`, `-ring`, `-micro`; the display size was removed in P14-58); surfaces
 (`--health-page`, `-glow`, `-edge`, `-tile`, `-tile-edge`, `-disc`, `-popover`, the
 three card gradients `-card-training|health|body`, `-card-shadow`); ring tracks
 (`--health-track`, `-track-strong`); selection (`--health-selected-bg`, `-bg-hover`,

@@ -9,7 +9,6 @@ import type { OverviewWindow } from './overview-window';
 
 const trends: readonly { key: BodyMetricKey; label: string }[] = [
   { key: 'weight', label: 'Weight' },
-  { key: 'fatMass', label: 'Fat mass' },
   { key: 'fatPercent', label: 'Fat %' },
   { key: 'leanMass', label: 'Lean mass' },
 ];
