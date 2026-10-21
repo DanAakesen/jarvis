@@ -9,6 +9,7 @@ import { DailySectionHeader } from '../../ui/DailySectionHeader';
 import { DailyState } from '../../ui/DailyState';
 import { DailyUnavailable } from '../../ui/DailyUnavailable';
 import { FreshnessLine } from '../../ui/FreshnessLine';
+import { IconChip } from '../../ui/icons';
 import { ScrollTable } from '../../ui/ScrollTable';
 import { formatClockTime, formatDate, formatNumber, formatTime } from '../../ui/formatters';
 import { healthSourceLabel } from '../../presentation';
@@ -120,7 +121,7 @@ function TodaySoFar({ props, targets }: {
   const hasTargetMissing = targets.state !== null &&
     (baseline === null || proteinTarget === null);
   return <article className="daily-stat-tile daily-today-card nutrition-today-card" aria-busy={pages.status === 'loading' || undefined}>
-    <h3>Today so far</h3>
+    <h3><IconChip name="flame" />Today so far</h3>
     <div className="daily-tile-body nutrition-today-body">
       {!served ? <DailyUnavailable>Health nutrition totals are not available.</DailyUnavailable>
         : pages.status === 'loading' && !pages.first ? <DailyState status="loading" />
@@ -128,7 +129,7 @@ function TodaySoFar({ props, targets }: {
             : <>
               <dl className="nutrition-today-values">
                 <div><dt>kcal left</dt><dd>{remaining(energy, baseline, partial('energy_kcal'), 'kcal', targets.pending, targets.error !== null)}</dd></div>
-                <div><dt>Protein left</dt><dd>{remaining(protein, proteinTarget, partial('protein_grams'), 'g', targets.pending, targets.error !== null)}</dd></div>
+                <div data-metric="protein"><dt>Protein left</dt><dd>{remaining(protein, proteinTarget, partial('protein_grams'), 'g', targets.pending, targets.error !== null)}</dd></div>
                 <div><dt>Logged meals</dt><dd>{count === null ? 'Not recorded' : formatNumber(count)}</dd></div>
               </dl>
               {hasTargetMissing && <p className="nutrition-target-link">One or more targets are not set. {targetLink()}.</p>}
@@ -200,7 +201,7 @@ function Trend({ days, targets, period, targetPending, targetError, retryTargets
   const partialDays = rows.filter(row => Array.isArray(row.partial_nutrients) && row.partial_nutrients.length > 0);
   const inventoryLabel = `${averages.daysWithData} of ${periodDays} ${dayWord(periodDays)} have meals; ${averages.partialDays} ${averages.partialDays === 1 ? 'day has' : 'days have'} partial nutrients.`;
   return <section className="nutrition-block nutrition-trend" aria-labelledby="nutrition-trend-heading">
-    <h3 id="nutrition-trend-heading">Nutrition trend</h3>
+    <h3 id="nutrition-trend-heading"><IconChip name="protein" />Nutrition trend</h3>
     {targetPending && <Loader label="Loading nutrition targets" variant="inline" />}
     {targetError && <DailyState status="error" message={targetError} onRetry={retryTargets} />}
     <PagesState pages={days} label="Trend" />

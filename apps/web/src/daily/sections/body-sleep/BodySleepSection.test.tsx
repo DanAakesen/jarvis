@@ -244,6 +244,7 @@ describe('Body & sleep section (synthetic records only)', () => {
     mount({}, '/daily?view=sleep');
     const lastNight = await screen.findByRole('region', { name: 'Body & sleep' });
     expect(within(lastNight).getByRole('heading', { name: 'Last night' })).toBeTruthy();
+    expect(lastNight.querySelector('.body-sleep-last-night > h3 .daily-icon-chip')?.getAttribute('aria-hidden')).toBe('true');
     expect(lastNight.querySelector('.body-sleep-last-value strong')?.textContent).toBe('Not recorded');
     expect(within(lastNight).getByRole('list', { name: 'Most recent night sleep stages' }).textContent).toContain('Stages not recorded');
     expect(within(lastNight).getByText('1 of 7')).toBeTruthy();

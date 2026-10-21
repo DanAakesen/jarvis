@@ -11,6 +11,7 @@ import { formatDuration, formatNumber } from '../../ui/formatters';
 import { useWorkoutPages } from './useWorkoutPages';
 import { numeric, text, typeLabel, workoutType, type Workout } from './summary';
 import { UnknownCell } from './WorkoutFigures';
+import { classifyWorkout } from './training';
 import { measurement, setting, workoutTime } from './presentation';
 import { WorkoutDetail } from './WorkoutDetail';
 import { WorkoutOverview } from './WorkoutOverview';
@@ -77,7 +78,7 @@ function WorkoutList({ rows, onOpen }: { rows: Workout[]; onOpen: (row: Workout,
         const duration = numeric(row.duration_seconds);
         return <li className="workouts-history-row" key={text(row.id) ?? `unknown-${index}`}>
           <div className="workouts-history-heading">
-            <WorkoutGlyph type={workoutType(row)} />
+            <span className="workouts-history-glyph" data-class={classifyWorkout(row).toLowerCase()}><WorkoutGlyph type={workoutType(row)} /></span>
             <div><strong className="workouts-type-name" title={typeLabel(row)}>{typeLabel(row)}</strong><span>{time === 'Unknown' ? 'Not recorded' : time}</span></div>
           </div>
           <div className="workouts-history-values">
@@ -202,7 +203,7 @@ export default function WorkoutsSection(props: DailySectionProps) {
       <WorkoutOverview {...props} pages={result} rows={filtered} />
       {(result.status === 'idle' || result.status === 'loading') && result.items.length === 0 && <DailyState status="loading" />}
       {result.items.length > 0 && <>
-        <section aria-labelledby="workouts-list-heading">
+        <section className="workouts-history-card" aria-labelledby="workouts-list-heading">
           <h3 id="workouts-list-heading">Workout history</h3>
           {filtered.length === 0 ? <p>No workouts of this type.</p>
             : <WorkoutList rows={sortedWorkouts(filtered, sort)} onOpen={onOpen} />}

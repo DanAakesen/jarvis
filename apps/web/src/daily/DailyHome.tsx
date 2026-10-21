@@ -14,6 +14,7 @@ import { TrainingTargetsProvider } from './TrainingTargetsProvider';
 import { useDailyCapabilities } from './useDailyCapabilities';
 import { healthHeadline } from './greeting';
 import './health-look.css';
+import './health-look-sections.css';
 import './daily.css';
 import './ui/daily-ui.css';
 

@@ -7,6 +7,7 @@ import { ScrollTable } from '../../ui/ScrollTable';
 import { StatTile } from '../../ui/StatTile';
 import { DailySectionHeader } from '../../ui/DailySectionHeader';
 import { FreshnessLine } from '../../ui/FreshnessLine';
+import { IconChip } from '../../ui/icons';
 import { formatDate, formatNumber } from '../../ui/formatters';
 import { useDailyPages } from '../../ui/useDailyPages';
 import { dateOnly, type Row } from './metrics';
@@ -59,7 +60,7 @@ export function SleepView({ backendUrl, getAccessToken, period, onPeriodChange, 
     {pages.status === 'ready' && pages.items.length === 0 && <HealthEmptyState name="sleep" />}
     {pages.items.length > 0 && <>
       {lastNight && stageSummary && <section className="body-sleep-last-night" aria-labelledby="body-sleep-last-night-heading">
-        <h3 id="body-sleep-last-night-heading">Last night</h3>
+        <h3 id="body-sleep-last-night-heading"><IconChip name="moon" />Last night</h3>
         <div className="body-sleep-last-value">
           <span>Time asleep</span>
           <strong>{hours(lastNight.asleep_hours) === null ? 'Not recorded' : `${formatNumber(hours(lastNight.asleep_hours))} h`}</strong>
