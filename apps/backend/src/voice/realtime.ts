@@ -29,6 +29,10 @@ written or on-screen record. Give details only if Dan asks. Report failed, parti
 results briefly and plainly, including what failed and the next step; never say a failed action is
 done. Never quote films.`;
 
+export const TOOLS_UNAVAILABLE_NOTICE =
+  'Some of my tools are unavailable in this voice session. When Dan asks for something I cannot do without them, I say so briefly and suggest the chat.';
+export type RealtimeInstructionMode = 'full' | 'notice' | 'compact';
+
 const MAX_TOOL_ARGUMENT_BYTES = 65_536;
 const MAX_TOOL_RESULT_BYTES = 1_048_576;
 
@@ -239,15 +243,18 @@ export function createRealtimeSessionUpdate(
   transcriptionModel = defaultSettings.roles.transcription.model,
   voiceTuning: VoiceTuningSettings = defaultSettings.voice,
   memory: Settings['memory'] = defaultSettings.memory,
+  instructionMode: RealtimeInstructionMode = 'full',
 ) {
   const danish = language === 'da';
   const proactiveEnabled = tools.get('proactive_recent_items') !== undefined;
+  const fullInstructions = danish
+    ? danishInstructions(personality, presence, projects, memory, proactiveEnabled)
+    : englishPersonalityInstructions(personality, presence, projects, memory, proactiveEnabled);
   return {
     type: 'session.update',
     session: {
-      instructions: danish
-        ? danishInstructions(personality, presence, projects, memory, proactiveEnabled)
-        : englishPersonalityInstructions(personality, presence, projects, memory, proactiveEnabled),
+      instructions: danish || instructionMode === 'full' ? fullInstructions
+        : `${instructionMode === 'compact' ? ENGLISH_REALTIME_INSTRUCTIONS : fullInstructions}\n\n${TOOLS_UNAVAILABLE_NOTICE}`,
       modalities: ['text', 'audio'],
       input_audio_sampling_rate: 24_000,
       input_audio_noise_reduction: { type: 'azure_deep_noise_suppression' },
@@ -307,6 +314,11 @@ function toolOutput(name: string, outcome: ToolCallOutcome, result: unknown): st
     result,
     confirmation: confirmToolCall(name, outcome, result),
   });
+}
+
+/** The relay refuses, without executing, a call to a tool the active voice session did not offer. */
+export function toolUnavailableOutput(name: string): string {
+  return toolOutput(name, 'refused', { reason: 'This tool is unavailable in this voice session; suggest the chat.' });
 }
 
 function toolFailure(name: string): string {

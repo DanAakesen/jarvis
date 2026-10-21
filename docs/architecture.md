@@ -4990,14 +4990,40 @@ Startup now records request-relative `voice.session_stage` events and one
 `voice.session_summary` on the first browser/upstream/relay/shutdown close.
 Session creation is bounded to 10 seconds; settings plus model catalogue,
 away-mode and project-context reads each fall back after 5 seconds. Connecting
-and waiting for readiness each have a separate 15-second watchdog. English
-requires `session.updated`; Danish accepts `session.created` or `session.updated`.
+and waiting for readiness each have a separate 15-second watchdog on the Danish
+route. English requires `session.updated` and instead runs the tool-budget
+fallback below; Danish accepts `session.created` or `session.updated`.
 Timeouts emit `voice.stage_timeout` and close the browser with 4010 immediately,
 independently of storage finalization. The client displays fixed retry wording
 and preserves backoff. The summary exports only stages/timings, allowlisted event
 types, close ownership/code, and initial configuration tool count/UTF-8 size plus
 the five largest server-owned tool names/sizes. No payload content is logged.
 See [voice startup diagnosis](runbook.md#voice-startup-diagnosis).
+
+**English tool-budget fallback** (`apps/backend/src/voice/tool-budget.ts`, 21 October
+2026, #1184). The English relay walks a deterministic ladder of session frames; only
+`tools` and the instruction text change, and every attempt uses a fresh upstream
+socket that counts from connect until `session.updated` (8 s at R0, 6 s at R1-R4,
+32 s worst case, inside the browser's 60-second warm-up). A deadline, an upstream
+`error` event or an upstream close before `session.updated` steps down; abandoned
+sockets are closed and none of their events reach the browser (held pre-ready events
+are forwarded only after readiness). If every rung fails the relay closes 4010 and logs
+`voice.tool_budget_exhausted`.
+
+| Rung | Tools | Instructions |
+|---|---|---|
+| R0 | all | full |
+| R1 | all except `daily_*` and `proactive_recent_items` | full + notice |
+| R2 | `set_presence_mode`, `set_away_mode` and the smallest others up to half of R0's definition bytes | full + notice |
+| R3 | none | full + notice |
+| R4 | none | base identity and style text + notice |
+
+The backend keeps the last rung that reached `session.updated` in process memory (no
+expiry; a restart clears it), starts new sessions there, steps down from it within the
+session if needed, and never remembers a rung that did not become ready. Every later
+frame (presence-mode updates, camera turn-detection updates, `response.create`
+instructions) is built for the selected rung, and a model call to a tool outside the
+active subset is refused without executing it. Danish does not use the ladder.
 
 | Area | Design | Evidence |
 | --- | --- | --- |

@@ -31,19 +31,43 @@ away mode, project context, upstream connecting/open, update sent and readiness.
 the configuration. English waits for `session.updated`; Danish accepts
 `session.created` or `session.updated`.
 
-`voice.stage_timeout` warns after 15 seconds connecting or awaiting readiness.
-The relay closes the browser with **4010**, “Voice service did not become ready”;
-the client shows a plain retry message and keeps its existing backoff.
+On the Danish route `voice.stage_timeout` warns after 15 seconds connecting or
+awaiting readiness; English uses the tool-budget attempts below instead. On
+either route a readiness failure closes the browser with **4010**, “Voice service
+did not become ready”; the client shows a plain retry message and keeps its existing backoff.
 Settings plus model-catalogue, away-mode and project-context reads each have a
 five-second fallback deadline. Session creation has a ten-second deadline and
 ends with `voice.connection_failed` rather than falling back.
 
 The exactly-once summary records language, first closer (`browser`, `upstream`,
 `relay` or `shutdown`), close code, duration, reached stages/timings, allowlisted
-upstream event types, and initial `session.update` tool count/UTF-8 bytes plus
+upstream event types, and the latest startup `session.update` tool count/UTF-8 bytes plus
 the five largest tool definitions (server-owned names and UTF-8 bytes).
 It survives browser-first closure and cancellation. No transcripts, instructions,
 tool arguments, payloads or close-reason text belong in these new diagnostics.
+
+English tool-budget fallback. Each English attempt uses a fresh socket and logs
+`voice.tool_budget_attempt` with `rung` (R0-R4), `toolCount`, `toolBytes`,
+`instructionsBytes`, `frameBytes`, `outcome` (`ready`, `timeout`, `error` or
+`closed`) and `elapsedMs` since connect (deadline 8 s for R0, 6 s for R1-R4).
+`voice.tool_budget_selected` names the rung that reached `session.updated`;
+`remembered: true` means the session started at the rung remembered from an
+earlier session in this backend process and it worked without stepping down. The
+summary carries `toolBudgetRung` and `toolBudgetAttempts`. Read them like this:
+
+- Ready at **R0**: the full frame works; the stall of 21 October is not present.
+- Ready only at **R1**: the `daily_*` tools or `proactive_recent_items` are the cause.
+- Ready only at **R2**: the total tool size matters, not one tool; compare `toolBytes`.
+- Ready only at **R3**: the size of the tool list, not one tool, is the cause (R2's
+  half-size list still failed).
+- Ready only at **R4**: the instruction text is the cause. Voice works without tools
+  and says so; use chat for actions.
+- `voice.tool_budget_exhausted` (close 4010, `toolBudgetRung: null`): every rung
+  failed, so the cause is not in the request content (service, region or
+  credentials); check Azure Monitor and Voice Live status.
+
+The remembered rung is not re-probed upwards; restart the backend to try R0 again.
+No instructions, tool names, payloads or arguments appear in these logs.
 
 In the Voice Live resource's Azure Monitor metrics, compare `TotalCalls` split
 by operation for the same UTC window: `onHandshake` confirms accepted sockets;
