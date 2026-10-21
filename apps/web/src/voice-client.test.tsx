@@ -5,15 +5,15 @@ class MockSocket extends EventTarget {
   readonly sent: Record<string, unknown>[] = [];
   readyState = 0;
 
-  constructor(readonly url: string, readonly protocols: string[]) {
+  constructor(readonly url: string, readonly protocols: string[], autoReady = true) {
     super();
     queueMicrotask(() => {
       this.readyState = 1;
       this.dispatchEvent(new Event('open'));
-      if (url.endsWith('/voice')) {
+      if (autoReady && url.endsWith('/voice')) {
         setTimeout(() => this.receive({ type: 'session.updated' }), 0);
       }
-      if (url.endsWith('/voice/da')) {
+      if (autoReady && url.endsWith('/voice/da')) {
         setTimeout(() => this.receive({ type: 'session.created' }), 0);
       }
     });
@@ -27,10 +27,10 @@ class MockSocket extends EventTarget {
     if (event.type === 'jarvis.session.end') this.receive({ type: 'jarvis.session.ended' });
   }
 
-  close() {
+  close(code = 1000, reason = '') {
     if (this.readyState === 3) return;
     this.readyState = 3;
-    this.dispatchEvent(new Event('close'));
+    this.dispatchEvent(new CloseEvent('close', { code, reason }));
   }
 
   receive(event: Record<string, unknown>) {
@@ -498,6 +498,48 @@ describe('BrowserVoiceClient', () => {
     expect(statuses.at(-1)).toBe('listening');
     expect(client.playbackLevel()).toBe(0);
     client.stop();
+  });
+
+  it.each([
+    ['en', 4010, 'Voice service did not become ready. Retrying…'],
+    ['da', 4010, 'Voice service did not become ready. Retrying…'],
+    ['en', 1006, 'Voice connection ended. Reconnecting…'],
+    ['da', 1006, 'Voice connection ended. Reconnecting…'],
+  ] as const)('reports %s warm-up close %i promptly and preserves reconnect backoff', async (language, code, message) => {
+    vi.useFakeTimers();
+    const sockets: MockSocket[] = [];
+    const onStatus = vi.fn();
+    const audio = audioAdapter();
+    const client = new BrowserVoiceClient({
+      backendUrl: 'https://api.example.com',
+      getAccessToken: async () => 'token',
+      language,
+      onStatus,
+      createAudio: () => audio,
+      createSocket: (url, protocols) => {
+        const socket = new MockSocket(url, protocols, sockets.length > 0);
+        sockets.push(socket);
+        return socket;
+      },
+    });
+    clients.push(client);
+    client.start();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(sockets[0]?.readyState).toBe(1);
+    expect(audio.open).not.toHaveBeenCalled();
+
+    sockets[0]!.close(code, 'Private provider failure details');
+    await vi.advanceTimersByTimeAsync(0);
+    expect(onStatus).toHaveBeenLastCalledWith('reconnecting', message);
+    expect(JSON.stringify(onStatus.mock.calls)).not.toContain('Private provider failure details');
+    expect(sockets).toHaveLength(1);
+    await vi.advanceTimersByTimeAsync(999);
+    expect(sockets).toHaveLength(1);
+    await vi.advanceTimersByTimeAsync(2);
+    expect(sockets).toHaveLength(2);
+    expect(onStatus).toHaveBeenLastCalledWith('listening', 'Listening for your voice.');
+    expect(audio.open).toHaveBeenCalledOnce();
+    expect(audio.requestMicrophone).toHaveBeenCalledOnce();
   });
 
   it('resumes capture after a transport reconnect without another enable step and keeps an explicit mute', async () => {

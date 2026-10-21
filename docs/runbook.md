@@ -21,6 +21,42 @@ from the `jarvis-infra` deployment outputs instead of guessing them.
 4. Confirm the relevant Deploy or Runner deploy jobs and smoke checks succeeded.
    A successful build alone is not production acceptance.
 
+## Voice startup diagnosis
+
+After deployment, the owner should make one voice attempt, end it, and find its
+`voice.session_summary` by `reqId`. `voice.session_stage` records each stage with
+milliseconds since `request.started`: session creation, credential, settings,
+away mode, project context, upstream connecting/open, update sent and readiness.
+`session_update_sent` means the socket send completed, not that Azure accepted
+the configuration. English waits for `session.updated`; Danish accepts
+`session.created` or `session.updated`.
+
+`voice.stage_timeout` warns after 15 seconds connecting or awaiting readiness.
+The relay closes the browser with **4010**, “Voice service did not become ready”;
+the client shows a plain retry message and keeps its existing backoff.
+Settings plus model-catalogue, away-mode and project-context reads each have a
+five-second fallback deadline. Session creation has a ten-second deadline and
+ends with `voice.connection_failed` rather than falling back.
+
+The exactly-once summary records language, first closer (`browser`, `upstream`,
+`relay` or `shutdown`), close code, duration, reached stages/timings, allowlisted
+upstream event types, and initial `session.update` tool count/UTF-8 bytes plus
+the five largest tool definitions (server-owned names and UTF-8 bytes).
+It survives browser-first closure and cancellation. No transcripts, instructions,
+tool arguments, payloads or close-reason text belong in these new diagnostics.
+
+In the Voice Live resource's Azure Monitor metrics, compare `TotalCalls` split
+by operation for the same UTC window: `onHandshake` confirms accepted sockets;
+`VoiceLive_SessionDone` and `VoiceLive_ResponseDone` help distinguish accepted
+connections from completed sessions/responses. Handshakes without SessionDone
+are not proof that `session.update` was accepted. Use summary stages to locate
+the stall; do not infer a schema limit or service degradation from counts alone.
+Microsoft's [session-update contract](https://learn.microsoft.com/en-us/python/api/azure-ai-voicelive/azure.ai.voicelive.models.clienteventsessionupdate?view=azure-python)
+expects `session.updated`. No applicable numeric tool/schema/instruction or
+combined-context limit was verified for the deployed API version in this change.
+The harmless `connection.upgrade_failed` duplicate-registration noise is tracked
+separately and is not a voice-stage failure.
+
 ## Enable Health Gmail attention and calendar reads
 
 These feeds are off by default and this procedure does not claim they are

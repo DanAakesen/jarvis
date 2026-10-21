@@ -4,6 +4,7 @@ import type { Contracts } from 'applicationinsights';
 import type { BackendConfig } from './config.js';
 import { systemSmokeCheckIds } from '@jarvis/contracts';
 import { safeSmokeReason } from './system-status.js';
+import { voiceStages, voiceTimeoutStages, voiceEventTypes } from './voice/diagnostics.js';
 
 // This is the external export boundary, replaced by an offline sink in tests.
 export interface TelemetrySink {
@@ -89,6 +90,7 @@ const events = new Set([
   'vision.watch', 'visual.path',
   'conversation.reply_failed', 'voice.connection_failed', 'voice.upstream_closed', 'voice.upstream_error',
   'voice.upstream_event_error', 'voice.turn_timing', 'pc_bridge.command_timing', 'pc_bridge.wake_word',
+  'voice.session_stage', 'voice.stage_timeout', 'voice.session_summary',
   'credentials.codex_renewal', 'dispatcher.start_failed',
   'tool.invalid_arguments', 'decision.provider_unavailable', 'approval.interpreted',
   'factory.issue_create_outcome_uncertain',
@@ -173,6 +175,43 @@ function safeBoardDuration(value: unknown): value is number {
 }
 
 function safeFields(input: Record<string, unknown>): Record<string, unknown> {
+  if (input.msg === 'voice.session_stage' || input.msg === 'voice.stage_timeout' ||
+      input.msg === 'voice.session_summary') {
+    const fields: Record<string, unknown> = {};
+    const nonnegative = (value: unknown): value is number =>
+      typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
+    if (safeRequestId(input.reqId)) fields.reqId = input.reqId;
+    if (input.language === 'en' || input.language === 'da') fields.language = input.language;
+    for (const key of ['elapsedMs', 'durationMs', 'timeoutMs', 'toolCount', 'totalBytes']) {
+      if (nonnegative(input[key])) fields[key] = input[key];
+    }
+    if (typeof input.stage === 'string' &&
+        (voiceStages.has(input.stage) || [...voiceTimeoutStages].some((stage) => stage === input.stage))) {
+      fields.stage = input.stage;
+    }
+    if (typeof input.lastStage === 'string' && voiceStages.has(input.lastStage)) fields.lastStage = input.lastStage;
+    if (['browser', 'upstream', 'relay', 'shutdown'].includes(String(input.closedBy))) fields.closedBy = input.closedBy;
+    if (nonnegative(input.closeCode) && input.closeCode >= 1000 && input.closeCode <= 4999) {
+      fields.closeCode = input.closeCode;
+    }
+    if (Array.isArray(input.stages)) fields.stages = input.stages.slice(0, voiceStages.size).flatMap((entry: unknown) => {
+      if (entry === null || typeof entry !== 'object') return [];
+      const { stage, elapsedMs } = entry as Record<string, unknown>;
+      return typeof stage === 'string' && voiceStages.has(stage) && nonnegative(elapsedMs)
+        ? [{ stage, elapsedMs }] : [];
+    });
+    if (Array.isArray(input.events)) {
+      fields.events = [...new Set(input.events.filter((event: unknown) =>
+        typeof event === 'string' && voiceEventTypes.has(event)))].slice(0, voiceEventTypes.size);
+    }
+    if (Array.isArray(input.largestTools)) fields.largestTools = input.largestTools.slice(0, 5).flatMap((tool: unknown) => {
+      if (tool === null || typeof tool !== 'object') return [];
+      const { name, bytes } = tool as Record<string, unknown>;
+      return typeof name === 'string' && /^[A-Za-z0-9_-]{1,64}$/u.test(name) && nonnegative(bytes)
+        ? [{ name, bytes }] : [];
+    });
+    return fields;
+  }
   if (input.msg === 'system.smoke_check') {
     const checkId = systemSmokeCheckIds.find((id) => id === input.checkId);
     if (!checkId) return {};

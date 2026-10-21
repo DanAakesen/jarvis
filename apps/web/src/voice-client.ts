@@ -58,6 +58,8 @@ const WARMUP_TIMEOUT_MS = 60_000;
 const MAX_RECONNECTS = 8;
 const STOP_TIMEOUT_MS = 15_000;
 
+class VoiceReadinessError extends Error {}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
@@ -183,9 +185,11 @@ function waitForVoiceEvent(
         reject(new Error('Voice session could not be started.'));
       }
     };
-    const onClose = () => {
+    const onClose = (event: Event) => {
       cleanup();
-      reject(new Error('Voice connection ended.'));
+      reject((event as CloseEvent).code === 4010
+        ? new VoiceReadinessError()
+        : new Error('Voice connection ended.'));
     };
     const onAbort = () => {
       cleanup();
@@ -713,6 +717,7 @@ export class BrowserVoiceClient {
       }
       while (this.running && !signal.aborted) {
         let socket: VoiceSocket | undefined;
+        let reconnectMessage = 'Voice connection ended. Reconnecting…';
         try {
           let token: string;
           try {
@@ -751,6 +756,9 @@ export class BrowserVoiceClient {
         } catch (error) {
           if (!this.running || signal.aborted) break;
           if (error instanceof DOMException && error.name === 'AbortError') break;
+          if (error instanceof VoiceReadinessError) {
+            reconnectMessage = 'Voice service did not become ready. Retrying…';
+          }
           reconnects += 1;
         } finally {
           if (socket) {
@@ -778,7 +786,7 @@ export class BrowserVoiceClient {
           this.publish('error', 'Voice could not reconnect. Stop voice and try again.');
           break;
         }
-        this.publish('reconnecting', 'Voice connection ended. Reconnecting…');
+        this.publish('reconnecting', reconnectMessage);
         await this.delay(Math.min(1_000 * 2 ** (reconnects - 1), 10_000), signal).catch(() => {});
       }
     } finally {

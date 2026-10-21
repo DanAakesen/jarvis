@@ -123,6 +123,9 @@ export interface BuildAppOptions {
 }
 
 declare module 'fastify' {
+  interface FastifyRequest {
+    requestStartedAt: number;
+  }
   interface FastifyInstance {
     ownerObjectId: string;
     databaseStatus: () => boolean;
@@ -210,7 +213,9 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
     if (app.shutdownErrors.length) throw app.shutdownErrors[0];
   });
 
+  app.decorateRequest('requestStartedAt', 0);
   app.addHook('onRequest', async (request, reply) => {
+    request.requestStartedAt = performance.now();
     request.log.info({
       method: request.method,
       ...(request.routeOptions.url === undefined ? {} : { route: request.routeOptions.url }),
