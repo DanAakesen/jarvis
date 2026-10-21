@@ -86,12 +86,15 @@ describe('owner-scoped proactive reminder SQL store', () => {
   });
 
   it('counts sent reminders by Copenhagen day and purges old terminal rows during planning', async () => {
-    const [row] = (await store.plan([candidate(2000)], new Date('2026-10-20T08:00:00.000Z'))).inserted;
+    const planNow = new Date('2026-10-20T08:00:00.000Z');
+    const [row] = (await store.plan([candidate(2000)], planNow)).inserted;
     await store.updatePending(row!.id, { state: 'sent', sentDayKey: '2026-10-20' });
     expect(await store.countSent('2026-10-20')).toBe(1);
+    // Age the row against the planning clock, not the CI clock, so the test does not expire.
     await pool.request().input('id', sql.UniqueIdentifier, row!.id)
-      .query('UPDATE dbo.proactive_reminders SET created_at = DATEADD(day, -31, SYSUTCDATETIME()) WHERE id = @id;');
-    const purged = await store.plan([], new Date('2026-10-20T08:00:00.000Z'));
+      .input('createdAt', sql.DateTime2, new Date(planNow.getTime() - 31 * 24 * 60 * 60_000))
+      .query('UPDATE dbo.proactive_reminders SET created_at = @createdAt WHERE id = @id;');
+    const purged = await store.plan([], planNow);
     expect(purged.purged).toBe(1);
     expect(await store.countSent('2026-10-20')).toBe(0);
   });
