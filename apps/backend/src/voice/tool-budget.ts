@@ -5,6 +5,12 @@ import { toModelToolSchema, type RealtimeInstructionMode } from './realtime.js';
 export const TOOL_BUDGET_ALWAYS_KEPT_TOOLS = ['set_presence_mode', 'set_away_mode'] as const;
 
 export type ToolBudgetRungName = 'R0' | 'R1' | 'R2' | 'R3' | 'R4';
+export const TOOL_BUDGET_COLD_START_RUNG = 1; // R1 was ready in 1,341 ms after R0 stalled at 8,001 ms on 21 October 2026.
+
+export const TOOL_BUDGET_PROBE_NAMES = [
+  'full', 'no_proactive', 'no_daily', 'reduced_plus_copies',
+] as const;
+export type ToolBudgetProbeName = typeof TOOL_BUDGET_PROBE_NAMES[number];
 
 export interface ToolBudgetRung {
   readonly name: ToolBudgetRungName;
@@ -64,6 +70,42 @@ export function createToolBudgetRungs(registry: ToolRegistry): readonly ToolBudg
     rung('R3', none, 'notice'),
     rung('R4', none, 'compact'),
   ]);
+}
+
+/** Deterministic independent measurement frames; these do not change the live-session ladder. */
+export function createToolBudgetProbeTools(
+  probe: ToolBudgetProbeName, registry: ToolRegistry,
+): ToolRegistry {
+  const all = registry.list();
+  if (probe === 'full') return registry;
+  if (probe === 'no_proactive') {
+    return registryOf(all.filter(({ name }) => name !== 'proactive_recent_items'));
+  }
+  if (probe === 'no_daily') {
+    return registryOf(all.filter(({ name }) => !name.startsWith('daily_')));
+  }
+
+  const rungOne = all.filter(({ name }) =>
+    !name.startsWith('daily_') && name !== 'proactive_recent_items');
+  const copyCount = Math.max(0, all.length - rungOne.length);
+  const targetBytes = all.reduce((sum, tool) => sum + definitionBytes(tool), 0);
+  const baseBytes = rungOne.reduce((sum, tool) => sum + definitionBytes(tool), 0);
+  let remainingBytes = targetBytes - baseBytes;
+  const copies: RegisteredTool[] = [];
+  for (let index = 0; index < copyCount && rungOne.length > 0; index += 1) {
+    const name = `probe_copy_${String(index + 1).padStart(2, '0')}`;
+    const remainingCopies = copyCount - index;
+    const desiredBytes = remainingBytes / remainingCopies;
+    const selected = rungOne.map((tool) => {
+      const copy = { ...tool, name };
+      return { copy, sourceName: tool.name, bytes: definitionBytes(copy) };
+    }).sort((left, right) =>
+      Math.abs(left.bytes - desiredBytes) - Math.abs(right.bytes - desiredBytes) ||
+      (left.sourceName < right.sourceName ? -1 : left.sourceName > right.sourceName ? 1 : 0))[0]!;
+    copies.push(selected.copy);
+    remainingBytes -= selected.bytes;
+  }
+  return registryOf([...rungOne, ...copies]);
 }
 
 /** Last rung that reached `session.updated` in this backend process; a restart clears it. */

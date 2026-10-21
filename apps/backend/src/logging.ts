@@ -92,6 +92,7 @@ const events = new Set([
   'voice.upstream_event_error', 'voice.turn_timing', 'pc_bridge.command_timing', 'pc_bridge.wake_word',
   'voice.session_stage', 'voice.stage_timeout', 'voice.session_summary',
   'voice.tool_budget_attempt', 'voice.tool_budget_selected', 'voice.tool_budget_exhausted',
+  'voice.tool_budget_probe',
   'credentials.codex_renewal', 'dispatcher.start_failed',
   'tool.invalid_arguments', 'decision.provider_unavailable', 'approval.interpreted',
   'factory.issue_create_outcome_uncertain',
@@ -178,7 +179,8 @@ function safeBoardDuration(value: unknown): value is number {
 function safeFields(input: Record<string, unknown>): Record<string, unknown> {
   if (input.msg === 'voice.session_stage' || input.msg === 'voice.stage_timeout' ||
       input.msg === 'voice.session_summary' || input.msg === 'voice.tool_budget_attempt' ||
-      input.msg === 'voice.tool_budget_selected' || input.msg === 'voice.tool_budget_exhausted') {
+      input.msg === 'voice.tool_budget_selected' || input.msg === 'voice.tool_budget_exhausted' ||
+      input.msg === 'voice.tool_budget_probe') {
     const fields: Record<string, unknown> = {};
     const nonnegative = (value: unknown): value is number =>
       typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
@@ -195,6 +197,10 @@ function safeFields(input: Record<string, unknown>): Record<string, unknown> {
       else if (key === 'toolBudgetRung' && input[key] === null) fields[key] = null;
     }
     if (['ready', 'timeout', 'error', 'closed'].includes(String(input.outcome))) fields.outcome = input.outcome;
+    if (input.msg === 'voice.tool_budget_probe' &&
+        ['full', 'no_proactive', 'no_daily', 'reduced_plus_copies'].includes(String(input.probe))) {
+      fields.probe = input.probe;
+    }
     if (typeof input.remembered === 'boolean') fields.remembered = input.remembered;
     if (typeof input.stage === 'string' &&
         (voiceStages.has(input.stage) || [...voiceTimeoutStages].some((stage) => stage === input.stage))) {

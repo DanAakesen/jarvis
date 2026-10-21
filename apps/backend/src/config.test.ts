@@ -32,6 +32,7 @@ describe('backend configuration', () => {
       proactiveTodoWritesEnabled: false,
       proactiveAlertsEnabled: false,
       healthUploadEnabled: false,
+      voiceToolBudgetProbeEnabled: true,
       auth: loadAuthConfig({}),
     });
   });
@@ -60,6 +61,13 @@ describe('backend configuration', () => {
     expect(loadConfig({ JARVIS_HEALTH_UPLOAD_ENABLED: 'false' }).healthUploadEnabled).toBe(false);
     expect(loadConfig({ JARVIS_HEALTH_UPLOAD_ENABLED: 'true' }).healthUploadEnabled).toBe(true);
     expect(() => loadConfig({ JARVIS_HEALTH_UPLOAD_ENABLED: 'TRUE' })).toThrow('JARVIS_HEALTH_UPLOAD_ENABLED must be true or false');
+  });
+  it('enables the voice tool-budget probe by default and accepts only an explicit boolean flag', () => {
+    expect(loadConfig({}).voiceToolBudgetProbeEnabled).toBe(true);
+    expect(loadConfig({ JARVIS_VOICE_TOOL_BUDGET_PROBE_ENABLED: 'true' }).voiceToolBudgetProbeEnabled).toBe(true);
+    expect(loadConfig({ JARVIS_VOICE_TOOL_BUDGET_PROBE_ENABLED: 'false' }).voiceToolBudgetProbeEnabled).toBe(false);
+    expect(() => loadConfig({ JARVIS_VOICE_TOOL_BUDGET_PROBE_ENABLED: 'TRUE' }))
+      .toThrow('JARVIS_VOICE_TOOL_BUDGET_PROBE_ENABLED must be true or false');
   });
   it('does not configure an external OneDrive notes folder', () => {
     expect(loadConfig({ JARVIS_NOTES_FOLDER_PATH: '/obsolete/path' })).not.toHaveProperty('notesFolderPath');
@@ -97,6 +105,7 @@ describe('backend configuration', () => {
       proactiveTodoWritesEnabled: false,
       proactiveAlertsEnabled: false,
       healthUploadEnabled: false,
+      voiceToolBudgetProbeEnabled: true,
     });
   });
   it('validates the configurable ChatGPT Codex tool model', () => {

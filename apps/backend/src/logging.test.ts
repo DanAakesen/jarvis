@@ -76,6 +76,34 @@ describe('structured log export', () => {
     expect(records.join('')).not.toContain('private');
   });
 
+  it('exports only fixed probe names, counts, sizes and timings', () => {
+    const records: string[] = [];
+    const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
+    const logger = createLogger({ logLevel: 'info' }, undefined, output);
+    logger.info({
+      probe: 'reduced_plus_copies', toolCount: 122, toolBytes: 108_462, instructionsBytes: 19_626,
+      frameBytes: 129_098, outcome: 'timeout', elapsedMs: 8_000,
+      toolName: 'private_tool', tools: [{ name: 'private_tool' }], instructions: 'private instructions',
+      payload: 'private payload', arguments: { secret: true },
+    }, 'voice.tool_budget_probe');
+    logger.warn({
+      probe: 'private probe', toolCount: 3, toolBytes: 4, instructionsBytes: 5, frameBytes: 6,
+      outcome: 'ready', elapsedMs: 7, toolName: 'private_tool',
+    }, 'voice.tool_budget_probe');
+    expect(records.map((record) => JSON.parse(record))).toEqual([
+      expect.objectContaining({
+        msg: 'voice.tool_budget_probe', probe: 'reduced_plus_copies', toolCount: 122, toolBytes: 108_462,
+        instructionsBytes: 19_626, frameBytes: 129_098, outcome: 'timeout', elapsedMs: 8_000,
+      }),
+      expect.objectContaining({
+        msg: 'voice.tool_budget_probe', toolCount: 3, toolBytes: 4, instructionsBytes: 5,
+        frameBytes: 6, outcome: 'ready', elapsedMs: 7,
+      }),
+    ]);
+    expect(JSON.parse(records[1]!)).not.toHaveProperty('probe');
+    expect(records.join('')).not.toContain('private');
+  });
+
   it('exports only code, IDs, counts and duration for proactive todo writer logs', () => {
     const records: string[] = [];
     const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
