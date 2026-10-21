@@ -29,6 +29,7 @@ describe('Stable attention layout', () => {
     expect(css).toMatch(/\.attention-agenda\s*\{[^}]*height: 42rem/u);
     expect(css).toMatch(/\.attention-list, \.attention-waiting-unavailable\s*\{[^}]*height: 19rem/u);
     expect(css).toMatch(/\.attention-scroll\s*\{[^}]*overflow: auto/u);
+    expect(css).toMatch(/\.attention-hidden\s*\{[^}]*max-height: 12rem/u);
     expect(css).toMatch(/@media \(min-width: 1000px\)/u);
     expect(css).not.toMatch(/transition: all/u);
   });

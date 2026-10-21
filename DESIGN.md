@@ -18,6 +18,10 @@ keep the previous visibility and recovery control. The agenda groups all-day
 and timed events by Copenhagen date, repeats spanning events on their covered
 dates and labels timed overlaps “Time conflict”; all-day events never conflict.
 Its count is distinct events, not repeated date rows.
+Hidden-thread recovery stays in a labelled, keyboard-focusable scroll region
+capped at 12rem, including persisted hides. Undo remains reachable and receives
+focus after a hide; restoration returns focus to the row disclosure. Calendar
+grouping and timed-overlap detection are memoised by snapshot and selected period.
 
 List and agenda shells retain their height in loading, empty, disconnected,
 failed and populated states; content scrolls inside them, including expanded
@@ -33,6 +37,11 @@ Synthetic Chromium checks covered 48 state/theme/width combinations at 1440px,
 keyboard disclosure, repeated input, hide/undo focus and refresh cooldown.
 No private data or live Google/session access was used. The owner's real-data
 session remains the pre-merge acceptance gate.
+Review follow-up: Chromium checked 1,000 persisted hidden threads at the same
+three widths in both themes. Recovery measured 192px high with 51,992px of
+scroll content at the default density; waiting cards remained 304px and the
+agenda 672px. Keyboard scrolling, Undo visibility/focus and restoration focus
+passed without horizontal overflow or page errors; 320px used reduced motion.
 
 ## Health area naming (20 October 2026)
 

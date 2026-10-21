@@ -10,6 +10,7 @@ import { WaitingLists } from './WaitingLists';
 import { CalendarAgenda } from './CalendarAgenda';
 import { FeedRefresh } from './FeedRefresh';
 import { calendarRange } from './data';
+import * as attentionData from './data';
 
 const token = async () => 'synthetic-fixture';
 const period = { startDate: '2026-10-20', endDate: '2026-10-20' };
@@ -61,9 +62,28 @@ function stub({ threads = [thread('a'), thread('b', 'waiting_on_others')], event
   return fetch;
 }
 
-afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers(); });
+afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers(); vi.restoreAllMocks(); });
 
 describe('Waiting lists', () => {
+  it('contains 1,000 persisted hides in a labelled recovery region and preserves hide/undo focus', async () => {
+    stub({ threads: [thread('a'), ...Array.from({ length: 1000 }, (_, index) => thread(`hidden-${index}`, 'waiting_for_you', true))] });
+    render(<WaitingLists {...props} />);
+    const recovery = await screen.findByRole('region', { name: 'Hidden threads' });
+    expect(recovery.tabIndex).toBe(0);
+    expect(recovery.classList.contains('attention-scroll')).toBe(true);
+    expect(within(recovery).getAllByRole('button')).toHaveLength(1000);
+    fireEvent.click(within(recovery).getByRole('button', { name: 'Undo hide Synthetic thread hidden-999' }));
+    await screen.findByRole('button', { name: 'Hide Synthetic thread hidden-999' });
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Synthetic thread hidden-999' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Hide Synthetic thread a' }));
+    const undo = await within(recovery).findByRole('button', { name: 'Undo hide Synthetic thread a' });
+    expect(document.activeElement).toBe(undo);
+    fireEvent.click(undo);
+    await screen.findByRole('button', { name: 'Hide Synthetic thread a' });
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Synthetic thread a' }));
+    expect(within(recovery).queryByRole('button', { name: 'Undo hide Synthetic thread a' })).toBeNull();
+  });
+
   it('shows both buckets, service ages, expandable detail, hides and restores with the exact suppression key', async () => {
     const fetch = stub();
     render(<WaitingLists {...props} />);
@@ -164,6 +184,20 @@ describe('Waiting lists', () => {
 });
 
 describe('Calendar agenda', () => {
+  it('reuses overlap calculations on rerender and recomputes for a new snapshot', async () => {
+    const overlap = vi.spyOn(attentionData, 'conflictingEvents');
+    stub({ events: Array.from({ length: 1000 }, (_, index) => event(`synthetic-${index}`)) });
+    const view = render(<CalendarAgenda {...props} period={period} />);
+    await screen.findByLabelText('1000 events');
+    const calls = overlap.mock.calls.length;
+    view.rerender(<CalendarAgenda {...props} period={{ ...period }} />);
+    expect(overlap).toHaveBeenCalledTimes(calls);
+    stub({ events: [event('replacement')] });
+    view.rerender(<CalendarAgenda {...props} period={{ ...period }} refreshVersion={1} />);
+    await screen.findByText('Synthetic event replacement');
+    expect(overlap).toHaveBeenCalledTimes(calls + 1);
+  });
+
   it('renders the date rail, all-day and timed events with only timed overlaps marked', async () => {
     stub();
     render(<CalendarAgenda {...props} period={period} />);

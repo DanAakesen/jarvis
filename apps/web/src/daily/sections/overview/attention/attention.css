@@ -25,6 +25,7 @@
 .attention-detail { display: grid; gap: var(--space-2); margin-block-start: var(--space-2); font-size: var(--type-caption); }
 .attention-feedback:empty { display: none; }
 .attention-feedback { display: grid; gap: var(--space-2); }
+.attention-hidden { display: grid; gap: var(--space-2); max-height: 12rem; }
 .attention-undo { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2); font-size: var(--type-caption); overflow-wrap: anywhere; }
 .attention-undo > span { min-width: 0; flex: 1 1 10rem; }
 .attention-day { display: grid; grid-template-columns: 3rem minmax(0, 1fr); gap: var(--space-3); }

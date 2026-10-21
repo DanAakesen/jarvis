@@ -37,6 +37,7 @@ export function WaitingLists(props: Props) {
       }));
     } catch { invalid = true; }
   }
+  const hiddenRows = rows.filter(row => row.hidden);
   const changeVisibility = async (row: WaitingRow, hidden: boolean) => {
     if (action.current || !enabled || !read.data) return;
     const revision = read.data.revision;
@@ -111,7 +112,8 @@ export function WaitingLists(props: Props) {
     })}
     <div className="attention-feedback" aria-live="polite">
       {actionError && <p role="alert">{actionError}</p>}
-      {rows.filter(row => row.hidden).map(row => <div className="attention-undo" key={row.suppressionKey}>
+      {hiddenRows.length > 0 && <div className="attention-hidden attention-scroll" role="region" aria-label="Hidden threads" tabIndex={0}>
+      {hiddenRows.map(row => <div className="attention-undo" key={row.suppressionKey}>
         <span>Hidden: {row.title}</span>
         <button type="button" className="secondary-button" disabled={pending !== null}
           ref={element => {
@@ -122,6 +124,7 @@ export function WaitingLists(props: Props) {
           aria-label={`Undo hide ${row.title}`} onClick={() => { void changeVisibility(row, false); }}>
           {pending === row.suppressionKey ? 'Restoring…' : 'Undo'}</button>
       </div>)}
+      </div>}
     </div>
     {read.data && !invalid && <FeedState result={read.data} source="Gmail" />}
   </div>;

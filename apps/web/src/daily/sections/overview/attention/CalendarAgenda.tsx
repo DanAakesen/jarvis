@@ -1,4 +1,4 @@
-import { useId } from 'react';
+import { useId, useMemo } from 'react';
 import { dailyQuerySources as sources } from '@jarvis/contracts';
 import { useDailyQuery } from '../../../useDailyQuery';
 import { formatClockTime, formatDate } from '../../../ui/formatters';
@@ -13,25 +13,27 @@ type Props = Pick<DailySectionProps, 'backendUrl' | 'getAccessToken' | 'sources'
 };
 
 export function CalendarAgenda({ period, ...props }: Props) {
+  const { startDate, endDate } = period;
   const enabled = props.sources.includes(sources.calendar);
   const range = calendarRange(period);
   const read = useDailyQuery(props.backendUrl, props.getAccessToken, enabled ? { source: sources.calendar, ...range } : null, props.refreshVersion);
   const heading = useId();
-  let events: ReturnType<typeof agendaEvents> = [];
-  let invalid = false;
-  let disconnected = false;
-  if (read.data) {
-    try {
-      const feed = feedSource(read.data, 'GoogleCalendar');
-      disconnected = feed.status === 'Missing' || feed.capturedAt === null;
-      if (read.data.calendarRange?.from !== range.from || read.data.calendarRange.to !== range.to ||
-          typeof read.data.rangeCovered !== 'boolean') throw new Error('Mismatched calendar range');
-      events = agendaEvents(read.data).filter(event => event.startDate <= period.endDate &&
-        (event.allDay ? event.endDate > period.startDate : event.endDate >= period.startDate));
-    } catch { invalid = true; }
-  }
-  const conflicts = conflictingEvents(events);
-  const days = eventDays(events, period);
+  const { events, invalid, disconnected, conflicts, days } = useMemo(() => {
+    let events: ReturnType<typeof agendaEvents> = [];
+    let invalid = false;
+    let disconnected = false;
+    if (read.data) {
+      try {
+        const feed = feedSource(read.data, 'GoogleCalendar');
+        disconnected = feed.status === 'Missing' || feed.capturedAt === null;
+        if (read.data.calendarRange?.from !== range.from || read.data.calendarRange.to !== range.to ||
+            typeof read.data.rangeCovered !== 'boolean') throw new Error('Mismatched calendar range');
+        events = agendaEvents(read.data).filter(event => event.startDate <= endDate &&
+          (event.allDay ? event.endDate > startDate : event.endDate >= startDate));
+      } catch { invalid = true; }
+    }
+    return { events, invalid, disconnected, conflicts: conflictingEvents(events), days: eventDays(events, { startDate, endDate }) };
+  }, [read.data, range.from, range.to, startDate, endDate]);
   const ready = enabled && read.data && !invalid && !disconnected;
   const partial = ready && !read.data!.rangeCovered;
   return <section className="attention-card attention-agenda" aria-labelledby={heading} aria-busy={read.pending}>
