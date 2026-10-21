@@ -52,6 +52,7 @@ export function calendarFact(
 ): SourceFact {
   return {
     ref,
+    ...(event.id ? { identity: `calendar-event:${event.id}` } : {}),
     kind: label === 'Calendar' ? 'event' : 'travel',
     label,
     text: eventFactText(event),

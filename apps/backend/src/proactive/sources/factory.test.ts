@@ -60,6 +60,7 @@ describe('proactive Factory source', () => {
       'Another project: Recover a synthetic task — needs attention; failed; waited 3h',
       'Delivery project: Review the synthetic change — open PR awaiting review; waited 25h',
     ]);
+    expect(result.facts[0]).toMatchObject({ identity: 'factory-task:41', projectRelated: true });
     expect(result.facts.at(-1)).toMatchObject({
       ref: 'factory:running',
       text: '2 running tasks',

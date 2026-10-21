@@ -41,6 +41,23 @@ describe('proactive prompt', () => {
     expect(PROACTIVE_SYSTEM_PROMPT).toContain('No time_critical');
   });
 
+  it('does not expose private source identities or routing metadata to the model', () => {
+    const prompt = buildProactivePrompt({
+      ...input,
+      facts: [{
+        ...fact('a', input.now.toISOString()),
+        identity: 'private-message-identifier',
+        taskScope: 'personal',
+        projectRelated: true,
+      }],
+    });
+    const data = JSON.parse(prompt.content);
+    expect(JSON.stringify(data)).not.toContain('private-message-identifier');
+    expect(data.facts[0]).not.toHaveProperty('identity');
+    expect(data.facts[0]).not.toHaveProperty('taskScope');
+    expect(data.facts[0]).not.toHaveProperty('projectRelated');
+  });
+
   it('bounds multibyte and escaped text, source count and guidance', () => {
     const facts = Array.from({ length: 300 }, (_, index) => ({
       ...fact(`todo:${index}`, input.now.toISOString()), text: '😀"\\\n'.repeat(4_000),

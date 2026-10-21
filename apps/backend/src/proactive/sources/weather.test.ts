@@ -51,6 +51,10 @@ describe('proactive weather source', () => {
       'Today (2026-10-20): Partly cloudy, 8–14°C; precipitation 20% / 0.1 mm; wind up to 8.4 km/h',
       'Tomorrow (2026-10-21): Slight rain, 6–12°C; precipitation 80% / 4.2 mm; wind up to 15 km/h',
     ]);
+    expect(result.facts.map(({ identity, taskScope }) => [identity, taskScope])).toEqual([
+      ['home-forecast:2026-10-20', 'personal'],
+      ['home-forecast:2026-10-21', 'personal'],
+    ]);
     expect(result.facts.every(({ text }) => !text.includes('55.7') && !text.includes('12.6'))).toBe(true);
     const [url, options] = fetcher.mock.calls[0]!;
     expect(String(url)).toContain('https://api.open-meteo.com/v1/forecast');

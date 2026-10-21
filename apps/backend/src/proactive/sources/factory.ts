@@ -52,6 +52,8 @@ export function createFactorySource(taskStore?: Pick<TaskStore, 'getProactiveSna
           const title = Array.from(sanitizeFactText(task.title)).slice(0, 120).join('');
           facts.push({
             ref: `factory:${facts.length + 1}`,
+            identity: `factory-task:${task.id}`,
+            projectRelated: true,
             kind: 'factory',
             label: 'Software Factory',
             text: sanitizeFactText(`${projectName}: ${title} — ${status}; waited ${waited}`),

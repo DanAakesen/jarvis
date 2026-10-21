@@ -9,6 +9,7 @@ const parser = new XMLParser({
 export interface ParsedNewsItem {
   title: string;
   publishedAt: Date;
+  identity?: string;
 }
 
 function asArray(value: unknown): unknown[] {
@@ -31,6 +32,19 @@ function dateValue(value: unknown): Date | null {
   return Number.isFinite(timestamp) ? new Date(timestamp) : null;
 }
 
+function identityValue(record: Record<string, unknown>): string | undefined {
+  for (const key of ['guid', 'id', 'link']) {
+    const value = record[key];
+    const candidate = textValue(value) ??
+      (typeof value === 'object' && value !== null && !Array.isArray(value) &&
+        typeof (value as Record<string, unknown>)['@_href'] === 'string'
+        ? (value as Record<string, unknown>)['@_href'] as string
+        : null);
+    if (candidate?.trim()) return candidate.trim().slice(0, 1_000);
+  }
+  return undefined;
+}
+
 function entries(value: unknown, titleKey: string, dateKeys: string[], now: Date): ParsedNewsItem[] {
   const items: ParsedNewsItem[] = [];
   for (const entry of asArray(value)) {
@@ -39,7 +53,8 @@ function entries(value: unknown, titleKey: string, dateKeys: string[], now: Date
     const title = textValue(record[titleKey]);
     const publishedAt = dateKeys.map((key) => dateValue(record[key])).find((date) => date !== null) ?? null;
     if (!title || !publishedAt || publishedAt.getTime() > now.getTime() + 60 * 60_000) continue;
-    items.push({ title, publishedAt });
+    const identity = identityValue(record);
+    items.push({ title, publishedAt, ...(identity ? { identity } : {}) });
   }
   return items;
 }
