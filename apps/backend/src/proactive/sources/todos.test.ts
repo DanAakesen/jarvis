@@ -11,11 +11,11 @@ function context(signal = new AbortController().signal): SourceContext {
   return { now, signal, settings: defaultProactiveSettings() };
 }
 
-function vault(content = '- [ ] synthetic todo') {
+function vault(content = '- [ ] synthetic todo', path = 'Tasks.md') {
   return {
-    tree: vi.fn(async () => [{ path: 'Tasks.md', sha: 'a'.repeat(40) }]),
+    tree: vi.fn(async () => [{ path, sha: 'a'.repeat(40) }]),
     read: vi.fn(async () => ({
-      path: 'Tasks.md', sha: 'a'.repeat(40), content,
+      path, sha: 'a'.repeat(40), content,
     })),
     write: vi.fn(),
   };
@@ -84,6 +84,19 @@ describe('proactive todos source', () => {
     });
     expect(detectFindings(result.facts, now, 'en').map(({ category }) => category))
       .toEqual(['deadline', 'deadline']);
+  });
+
+  it('provides stable identity and scope only from an established Personal or Work source note', async () => {
+    const personalText = '- [ ] Synthetic personal task ⏫';
+    const personal = await createTodosSource(vault(personalText, 'Personal/Inbox.md')).read(context());
+    const sameTask = await createTodosSource(vault(personalText, 'Personal/Inbox.md')).read(context());
+    const work = await createTodosSource(vault(personalText, 'Work/Inbox.md')).read(context());
+
+    expect(personal.facts[0]).toMatchObject({
+      taskScope: 'personal', highPriority: true, identity: expect.any(String),
+    });
+    expect(personal.facts[0]?.identity).toBe(sameTask.facts[0]?.identity);
+    expect(work.facts[0]?.taskScope).toBe('work');
   });
 
   it('maps missing dependencies, missing or ambiguous files, size errors, read failures and timeouts', async () => {

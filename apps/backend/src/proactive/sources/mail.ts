@@ -8,6 +8,7 @@ const MESSAGE_CONCURRENCY = 5;
 const METADATA_HEADERS = ['From', 'Subject', 'Date', 'List-Unsubscribe', 'Precedence'] as const;
 
 interface MailFactData {
+  id: string;
   sender: string;
   subject: string;
   observedAt: string;
@@ -43,7 +44,7 @@ function senderName(value: string): string | undefined {
   return cleanSourceText(withoutAddresses || domain, 120) || cleanSourceText(domain, 120);
 }
 
-function messageFact(payload: Record<string, unknown>): MailFactData | undefined {
+function messageFact(payload: Record<string, unknown>, id: string): MailFactData | undefined {
   const headers = gmailHeaders(payload);
   if (headers['list-unsubscribe']?.trim() ||
       /^(?:bulk|list|junk)$/iu.test(headers.precedence?.trim() ?? '')) return undefined;
@@ -51,6 +52,7 @@ function messageFact(payload: Record<string, unknown>): MailFactData | undefined
   const timestamp = Date.parse(headers.date ?? '');
   if (!sender || !Number.isFinite(timestamp)) return undefined;
   return {
+    id,
     sender,
     subject: cleanSourceText(decodeHeaderWords(headers.subject ?? '(no subject)')),
     observedAt: new Date(timestamp).toISOString(),
@@ -70,7 +72,7 @@ async function readMessage(
     `/users/me/messages/${encodeURIComponent(id)}?${query}`,
     { method: 'GET', signal },
   );
-  return messageFact(payload);
+  return messageFact(payload, id);
 }
 
 export function createMailSource(google?: GoogleApiClient): ProactiveSource {
@@ -117,6 +119,7 @@ export function createMailSource(google?: GoogleApiClient): ProactiveSource {
             if (!fact) continue;
             facts.push({
               ref: `mail:${facts.length + 1}`,
+              identity: `gmail-message:${fact.id}`,
               kind: 'mail',
               label: 'Mail',
               text: cleanSourceText(`From ${fact.sender} | ${fact.subject}`),

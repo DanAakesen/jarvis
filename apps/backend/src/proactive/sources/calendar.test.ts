@@ -40,6 +40,7 @@ describe('proactive calendar source', () => {
     expect(result.facts).toHaveLength(40);
     expect(result.facts[0]).toMatchObject({
       ref: 'cal:1',
+      identity: 'calendar-event:event-0',
       kind: 'event',
       label: 'Calendar',
       observedAt: now.toISOString(),

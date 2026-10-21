@@ -41,6 +41,9 @@ export type Item = {
 
 export interface SourceFact {
   ref: string;
+  identity?: string;
+  taskScope?: 'personal' | 'work';
+  projectRelated?: boolean;
   kind: 'todo' | 'event' | 'mail' | 'weather' | 'factory' | 'news' | 'travel';
   label: string;
   text: string;
@@ -50,6 +53,7 @@ export interface SourceFact {
   endsAt?: string | null;
   allDay?: boolean;
   dueHasTime?: boolean;
+  highPriority?: boolean;
 }
 
 export interface SourceResult {

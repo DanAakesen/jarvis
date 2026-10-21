@@ -94,6 +94,8 @@ function forecastFacts(value: unknown, observedAt: string): SourceFact[] | null 
     const period = index === 0 ? 'Today' : 'Tomorrow';
     return [{
       ref: `weather:${index + 1}`,
+      identity: `home-forecast:${date}`,
+      taskScope: 'personal',
       kind: 'weather',
       label: 'Weather',
       text: sanitizeFactText(
