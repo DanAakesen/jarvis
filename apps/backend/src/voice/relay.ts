@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { createVoiceDiagnostics, VOICE_STARTUP_CLOSE_CODE, VoiceStageTimeout } from './diagnostics.js';
 import type { IncomingMessage } from 'node:http';
 import type { Duplex } from 'node:stream';
 import { workspaceContext } from '../core/workspace-context.js';
@@ -56,7 +57,7 @@ const MAX_TRANSCRIPTS_PER_SESSION = 1_000;
 const MAX_REFLEX_ACTIONS_PER_TURN = 8;
 const MAX_REFLEX_CLASSIFICATIONS_PER_TURN = 8;
 const TOKEN_TIMEOUT_MS = 10_000;
-const CONNECTION_TIMEOUT_MS = 10_000;
+const CONNECTION_TIMEOUT_MS = 15_000;
 const MAX_QUEUED_PARTIAL_AUDIO_BYTES = 256_000;
 const SHARED_SCREEN_CONTEXT_TIMEOUT_MS = 15_000;
 const CAMERA_CONTEXT_TIMEOUT_MS = 12_000;
@@ -343,20 +344,24 @@ function registerVoiceRoute(
   captionFrame?: VoiceRelayOptions['captionFrame'],
 ): void {
   app.get(path, { websocket: true }, (browser, request) => {
+    const controller = new AbortController();
+    const diagnostics = createVoiceDiagnostics(request.log, language, controller.signal, request.requestStartedAt);
     if (app.isStopping) {
+      diagnostics.summary('shutdown', 1012);
       browser.close(1012, 'Service restarting; reconnect');
       return;
     }
     if (request.principal === null) {
+      diagnostics.summary('relay', 1008);
       browser.close(1008, 'Unauthorized');
       return;
     }
     const store = app.conversationStore;
     if (!store) {
+      diagnostics.summary('relay', 1011);
       browser.close(1011, 'Conversation storage unavailable');
       return;
     }
-    const controller = new AbortController();
     let upstream: WebSocket | undefined;
     let configured = false;
     let upstreamSessionReady = false;
@@ -535,8 +540,15 @@ function registerVoiceRoute(
     const elapsedSinceSpeechStopped = (timing = turnTiming) => timing
       ? Number(Math.max(0, performance.now() - timing.startedAt).toFixed(2))
       : undefined;
-    const sessionReady = store.createSession({ channel: 'voice', language })
-      .then((session) => { sessionId = session.id; });
+    const sessionReady = diagnostics.bound('session_creation', 10_000, () =>
+      store.createSession({ channel: 'voice', language }).then(async (session) => {
+        if (controller.signal.aborted) {
+          await store.endSession(session.id);
+          return;
+        }
+        sessionId = session.id;
+        diagnostics.stage('session_created');
+      }));
 
     const noteMicrophoneAudio = (data: RawData, binary: boolean) => {
       if (parseVoiceEvent(data, binary)?.type !== 'input_audio_buffer.append' || microphoneActive) return;
@@ -1275,7 +1287,9 @@ function registerVoiceRoute(
       return finalization;
     };
 
-    const close = (code: number, reason: string) => {
+    const close = (code: number, reason: string, closedBy: 'relay' | 'upstream' | 'shutdown' = 'relay') => {
+      diagnostics.summary(closedBy, code);
+      endRequested = true;
       logReflexMetrics();
       finishTurnTiming();
       finishActiveToolActivities();
@@ -1287,6 +1301,8 @@ function registerVoiceRoute(
       finishSharedScreenContextWait(null, true);
       closeAnnouncements();
       if (upstream) closeSocket(upstream, code, reason);
+      // Storage must not keep a timed-out startup socket alive beyond its deadline.
+      if (code === VOICE_STARTUP_CLOSE_CODE) closeSocket(browser, code, reason);
       void finalizeSession().then(
         () => closeSocket(browser, code, reason),
         () => {
@@ -1298,7 +1314,7 @@ function registerVoiceRoute(
 
     const shutdownSession = async () => {
       endRequested = true;
-      close(1012, 'Service restarting; reconnect');
+      close(1012, 'Service restarting; reconnect', 'shutdown');
       closeSocket(browser, 1012, 'Service restarting; reconnect');
       await finalizeSession();
     };
@@ -1306,11 +1322,28 @@ function registerVoiceRoute(
     browser.once('close', () => { app.shutdownConnections.delete(shutdownSession); });
 
     const sendUpstream = (message: unknown, sent?: () => void) => {
-      if (upstream?.readyState !== WebSocket.OPEN) return;
-      upstream.send(JSON.stringify(message), (error) => {
-        if (error) close(1011, 'Voice connection failed');
-        else sent?.();
-      });
+      const sessionUpdate = (message as { type?: unknown })?.type === 'session.update';
+      const serialized = JSON.stringify(message);
+      if (sessionUpdate) diagnostics.update(message, serialized);
+      const failed = (failure: 'upstream_not_open' | 'upstream_send_failed') => {
+        request.log.warn({ failure, language }, 'voice.connection_failed');
+        close(1011, 'Voice connection failed');
+      };
+      if (upstream?.readyState !== WebSocket.OPEN) {
+        if (!controller.signal.aborted && !endRequested) failed('upstream_not_open');
+        return;
+      }
+      try {
+        upstream.send(serialized, (error) => {
+          if (error) failed('upstream_send_failed');
+          else {
+            if (sessionUpdate) diagnostics.stage('session_update_sent');
+            sent?.();
+          }
+        });
+      } catch {
+        failed('upstream_send_failed');
+      }
     };
 
     const clearCameraImage = (discardFrame = true) => {
@@ -2032,6 +2065,7 @@ function registerVoiceRoute(
       queued.push({ data, binary });
     });
     browser.once('close', (code) => {
+      diagnostics.summary('browser', code);
       endRequested = true;
       finishTurnTiming();
       finishActiveToolActivities();
@@ -2047,6 +2081,7 @@ function registerVoiceRoute(
       void finalizeSession().catch(() => request.log.warn('voice.session_persistence_failed'));
     });
     browser.once('error', () => {
+      diagnostics.summary('browser', 1011);
       finishTurnTiming();
       finishActiveToolActivities();
       publishActivity('failed');
@@ -2063,10 +2098,12 @@ function registerVoiceRoute(
       try {
         await sessionReady;
         const token = await credential(getToken, controller.signal);
+        diagnostics.stage('credential_loaded');
         if (controller.signal.aborted || browser.readyState !== WebSocket.OPEN) return;
         if (english && app.settingsStore) {
           try {
-            const settings = await readSettings(app.settingsStore, await app.modelCatalogue.read());
+            const settings = await diagnostics.bound('settings', 5_000, async () =>
+              readSettings(app.settingsStore!, await app.modelCatalogue.read()));
             personality = settings.personality;
             voiceTuning = settings.voice;
             memorySettings = settings.memory;
@@ -2077,22 +2114,39 @@ function registerVoiceRoute(
           }
         } else if (app.settingsStore) {
           try {
-            memorySettings = (await readSettings(app.settingsStore)).memory;
+            memorySettings = (await diagnostics.bound('settings', 5_000, () =>
+              readSettings(app.settingsStore!))).memory;
           } catch {
             request.log.warn('voice.memory_settings_unavailable');
           }
         }
+        if (controller.signal.aborted) return;
+        diagnostics.stage('settings_loaded');
         if (app.awayModeStore) {
           try {
-            presence = await app.awayModeStore.read();
+            presence = await diagnostics.bound('away_mode', 5_000, () => app.awayModeStore!.read());
             awayMode = presence.mode !== 'present';
           } catch {
             request.log.warn('voice.away_mode_settings_unavailable');
           }
         }
-        projects = await projectContext(app);
+        if (controller.signal.aborted) return;
+        diagnostics.stage('away_mode_loaded');
+        try {
+          projects = await diagnostics.bound('project_context', 5_000, () => projectContext(app));
+        } catch (error) {
+          if (!(error instanceof VoiceStageTimeout)) throw error;
+        }
+        if (controller.signal.aborted) return;
+        diagnostics.stage('project_context_loaded');
+        diagnostics.stage('upstream_connecting');
+        const startupFailed = () => close(VOICE_STARTUP_CLOSE_CODE, 'Voice service did not become ready');
+        diagnostics.watchdog('upstream_connecting', startupFailed);
         upstream = connect(token, controller.signal, undefined, voiceModel);
         upstream.once('open', () => {
+          if (controller.signal.aborted) return;
+          diagnostics.stage('upstream_open');
+          diagnostics.watchdog('upstream_ready', startupFailed);
           if (english) sendUpstream(
             createRealtimeSessionUpdate(
               app.jarvisTools, personality, presence, language, projects, transcriptionModel, voiceTuning,
@@ -2108,6 +2162,9 @@ function registerVoiceRoute(
         const upstreamEventTypes = new Set<string>();
         upstream.on('message', (data, binary) => {
           const event = parseVoiceEvent(data, binary);
+          diagnostics.event(event?.type);
+          if (event?.type === 'session.updated') diagnostics.stage('session_updated');
+          if (event?.type === 'session.created') diagnostics.stage('session_created_received');
           if (event?.type === 'conversation.item.created') {
             const item = event.item as { id?: unknown } | undefined;
             if (typeof item?.id === 'string' && attemptedImageItems.has(item.id)) {
@@ -2138,10 +2195,11 @@ function registerVoiceRoute(
             previousTurnDetection ??= session?.turn_detection;
             if (cameraOn) updateCameraTurnDetection();
           }
-          if ((event?.type === 'session.updated' || !english && event?.type === 'session.created') &&
+          if ((event?.type === 'session.updated' || language === 'da' && event?.type === 'session.created') &&
               !upstreamSessionReady &&
               !controller.signal.aborted && !endRequested) {
             upstreamSessionReady = true;
+            diagnostics.clearWatchdog();
             if (sessionId && statusAnnouncer && visionWatch) {
               unregisterVisionVoice = visionWatch.registerVoice(
                 sessionId,
@@ -2351,6 +2409,7 @@ function registerVoiceRoute(
           }
         });
         upstream.once('close', (code, reason) => {
+          diagnostics.summary('upstream', code);
           if (!endRequested) {
             request.log.warn({
               events: [...upstreamEventTypes].join(',').slice(0, 400),
@@ -2361,7 +2420,7 @@ function registerVoiceRoute(
           }
           if (!endRequested && browser.readyState === WebSocket.OPEN) {
             publishActivity(code === 1000 ? 'ended' : 'reconnecting');
-            close(code === 1000 ? 1000 : 1011, 'Voice connection ended');
+            close(code === 1000 ? 1000 : 1011, 'Voice connection ended', 'upstream');
           }
         });
         upstream.once('error', (error) => {
@@ -2373,7 +2432,7 @@ function registerVoiceRoute(
             language,
           }, 'voice.upstream_error');
           publishActivity('failed');
-          close(1011, 'Voice connection failed');
+          close(1011, 'Voice connection failed', 'upstream');
         });
       } catch (error) {
         if (controller.signal.aborted) return;

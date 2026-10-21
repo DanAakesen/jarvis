@@ -12,6 +12,46 @@ vi.mock('applicationinsights', () => ({
 }));
 
 describe('structured log export', () => {
+  it('exports bounded voice startup diagnostics to stdout and telemetry without payload content', () => {
+    const records: string[] = [];
+    const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
+    const sink = { ...sdk, trackTrace: vi.fn() };
+    const logger = createLogger({ logLevel: 'info' }, sink, output);
+    logger.info({
+      language: 'en', closedBy: 'relay', closeCode: 4010, durationMs: 15_000,
+      toolCount: 2, totalBytes: 4096,
+      stages: [{ stage: 'upstream_open', elapsedMs: 10, instructions: 'private' },
+        { stage: 'private', elapsedMs: 20 }, { stage: 'session_updated', elapsedMs: -1 }],
+      events: ['session.created', 'private', 'session.created', 'error'],
+      largestTools: [{ name: 'list_projects', bytes: 300, parameters: 'private' },
+        { name: 'private tool content', bytes: 20 }, { name: 'invalid', bytes: Infinity }],
+      transcript: 'private', instructions: 'private', arguments: 'private', payload: 'private',
+    }, 'voice.session_summary');
+    const expected = {
+      language: 'en', closedBy: 'relay', closeCode: 4010, durationMs: 15_000,
+      toolCount: 2, totalBytes: 4096,
+      stages: [{ stage: 'upstream_open', elapsedMs: 10 }],
+      events: ['session.created', 'error'], largestTools: [{ name: 'list_projects', bytes: 300 }],
+    };
+    expect(JSON.parse(records[0]!)).toMatchObject({ msg: 'voice.session_summary', ...expected });
+    expect(sink.trackTrace).toHaveBeenCalledWith(expect.objectContaining({
+      message: 'voice.session_summary', properties: { service: 'jarvis-backend', ...expected },
+    }));
+    logger.warn({
+      language: 'da', stage: 'upstream_ready', lastStage: 'session_update_sent',
+      elapsedMs: 15_100, timeoutMs: 15_000, reason: 'private',
+    }, 'voice.stage_timeout');
+    expect(JSON.parse(records[1]!)).toMatchObject({
+      msg: 'voice.stage_timeout', language: 'da', stage: 'upstream_ready',
+      lastStage: 'session_update_sent', elapsedMs: 15_100, timeoutMs: 15_000,
+    });
+    logger.info({ stage: 'private', elapsedMs: NaN, language: 'private', closedBy: 'private' }, 'voice.session_stage');
+    expect(JSON.parse(records[2]!)).toEqual({
+      level: 30, time: expect.any(Number), service: 'jarvis-backend', msg: 'voice.session_stage',
+    });
+    expect(records.join('') + JSON.stringify(sink.trackTrace.mock.calls)).not.toContain('private');
+  });
+
   it('exports only code, IDs, counts and duration for proactive todo writer logs', () => {
     const records: string[] = [];
     const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
