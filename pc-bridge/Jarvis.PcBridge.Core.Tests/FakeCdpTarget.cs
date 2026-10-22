@@ -242,7 +242,8 @@ internal sealed class FakeCdpTarget : IAsyncDisposable
                 {
                     try { (await pendingAccept).Response.Abort(); }
                     catch (HttpListenerException) when (_stopping.IsCancellationRequested) { }
-                    catch (ObjectDisposedException) when (_stopping.IsCancellationRequested) { }
+                    catch (ObjectDisposedException error) when (
+                        error.ObjectName == typeof(HttpListener).FullName) { }
                 }
             }
             finally
