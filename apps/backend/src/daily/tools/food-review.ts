@@ -2,6 +2,8 @@ import { ToolFailure, ToolRefusal, type JarvisTool } from '../../core/tool-regis
 import { prepareMeal, storedMeal, type MealInput } from '../nutrition/model.js';
 import { exactLabelIntent, favoriteIntent } from '../nutrition/intent.js';
 import { foodRecordRevision, foodReviewFingerprint, foodReviewInputSchema, foodReviewSchema, foodReviewSummary, hasFoodReview, reviewedCorrection } from '../nutrition/review.js';
+import type { FridaLookup } from '../nutrition/frida.js';
+import { dailyResultByteLimit, type DailyFoodLookup } from '../query.js';
 import { resolveDailyOwner } from '../owner.js';
 import { projectNutritionRecord } from '../records.js';
 import { activeFoodSession, foodMessageIdentity, foodReceipt, foodSourceMessage, requireFoodReviewPresence, type InternalNutrition } from './food.js';
@@ -11,11 +13,32 @@ function optionalIntent<T>(parse: (text: string) => T, text: string): T | null {
   catch (error) { if (error instanceof ToolRefusal) return null; throw error; }
 }
 
-export function dailyFoodReviewTool(nutrition: InternalNutrition, now: () => number = Date.now): JarvisTool {
+function lookupReply(result: FridaLookup, status?: 'needs_details') {
+  const response = status ? { status, lookup: result, intakeLogged: false } : { ...result, intakeLogged: false };
+  if (Buffer.byteLength(JSON.stringify(response)) > dailyResultByteLimit) {
+    throw new ToolRefusal('Food reference result exceeds the shared Health response limit. Request fewer components; no complete result is claimed.');
+  }
+  return response;
+}
+
+function reviewComponents(result: FridaLookup) {
+  return result.components.map(({ input, match, unknowns }) => ({
+    name: input.name, grams: input.grams, preparationMethod: input.preparationMethod,
+    reference: match ? { foodId: match.foodId, name: match.name, values: match.values,
+      provenance: match.provenance, retrievedAt: match.retrievedAt } : null,
+    unknowns,
+  }));
+}
+
+function needsFoodDetails(result: FridaLookup): boolean {
+  return result.components.some(({ input, match }) => input.grams === null || !match) || result.totals.energyKcal === null;
+}
+
+export function dailyFoodReviewTool(nutrition: InternalNutrition, now: () => number = Date.now, lookup?: DailyFoodLookup): JarvisTool {
   const pending = new Set<string>();
   return {
     name: 'daily_food_review',
-    description: 'Review an estimated eaten meal, correction or soft deletion using the existing Now approval, with a two-minute review window. Nothing writes until Dan approves the exact displayed proposal. Use daily_food instead for direct exact labels or saved favourites; those must not gain redundant approval. Read the exact owned intake key/current revision before correction/deletion. Nutrient/component proposals remain estimates, never independently verified. Supply no owner, capture method, provenance, confidence or confirmation flags. Present-mode chat/voice only; no phone, Teams, Health export or claim that a spoken yes has approved the Now card.',
+    description: 'For food photos, use the existing image input only to propose generic food components and estimated grams; Frida is a nutrient reference, not image or portion recognition. Never describe estimates as measured. If an image is unreadable or not food, say so and ask for a clearer photo or description. If Frida fails, report that reference failure without guessing nutrition and offer a retry or text description. Use lookup_components with 1-25 {name, grams|null, preparationMethod|null} values to resolve references. Present the component/portion estimates, Frida totals and uncertainty to Dan and invite edits. Ask about missing quantities or preparation where needed. If identity, preparation or grams change, look up the edited components again. Then use log_estimate with referenceComponents and a mealName; the server re-resolves Frida and calculates totals. Nothing writes until Dan approves the exact Now proposal. Never supply totals, provider provenance, capture method, owner or confirmation flags for a reference estimate. Use daily_food for exact labels/favourites. Corrections/deletions require the exact owned intake key/current revision. Present-mode chat/browser voice only; no phone, Teams, Health export or spoken-yes authority.',
     inputSchema: foodReviewInputSchema,
     bodyLimit: 96 * 1024,
     sensitive: true,
@@ -30,6 +53,14 @@ export function dailyFoodReviewTool(nutrition: InternalNutrition, now: () => num
       const change = structuredClone(parsed.data.change);
       const source = structuredClone(await foodSourceMessage(request, signal));
       const identity = foodMessageIdentity(owner, source);
+      if (change.operation === 'lookup_components') {
+        if (!lookup) throw new ToolFailure('Food reference lookup is unavailable. No proposal or intake was created.');
+        await activeFoodSession(request, source, signal, now());
+        return lookupReply(await lookup(structuredClone(change.components), request, signal));
+      }
+      if (change.operation === 'log_estimate' && identity.hasPhoto && !change.food.referenceComponents) {
+        throw new ToolRefusal('A food-photo estimate needs Frida-resolved components before it can be reviewed.');
+      }
       const origin = { sourceMessageId: source.id, sourceFingerprint: identity.sourceFingerprint,
         operation: change.operation, proposalFingerprint: foodReviewFingerprint(change, identity.sourceFingerprint) };
       const key = change.operation === 'log_estimate' ? identity.key : change.idempotencyKey;
@@ -58,6 +89,9 @@ export function dailyFoodReviewTool(nutrition: InternalNutrition, now: () => num
         if (before.deleted_at !== null || revision !== expected) throw new ToolRefusal('The intake changed. Read its current revision before reviewing a change.');
       }
       const session = await activeFoodSession(request, source, signal, now());
+      const captureMethod = identity.hasPhoto
+        ? session.channel === 'voice' ? 'mixed' : 'photo'
+        : session.channel === 'voice' ? 'voice' : 'text';
       if (change.operation === 'log_estimate') {
         if (optionalIntent(exactLabelIntent, source.text)) throw new ToolRefusal('Use daily_food log_exact for this explicit exact label; no extra approval is needed.');
         const name = optionalIntent(favoriteIntent, source.text);
@@ -75,9 +109,32 @@ export function dailyFoodReviewTool(nutrition: InternalNutrition, now: () => num
       const requestTime = new Date(now()).toISOString();
       let after: MealInput | null;
       if (change.operation === 'log_estimate') {
-        after = prepareMeal({ ...change.food, occurredAt: change.food.occurredAt ?? source.at.toISOString(),
-          id: identity.id, idempotencyKey: key, confidence: 'estimate', captureMethod: session.channel === 'voice' ? 'voice' : 'text',
-          provenance: { source: 'jarvis-proposed', independentlyVerified: false, jarvisIntake: origin } }, requestTime);
+        const { referenceComponents, ...food } = change.food;
+        if (referenceComponents) {
+          if (!lookup) throw new ToolFailure('Food reference lookup is unavailable. No intake was changed.');
+          if (food.energyKcal !== undefined || food.proteinGrams !== null || food.carbohydratesGrams !== null ||
+              food.fatGrams !== null || food.fiberGrams !== null || food.components.length > 0) {
+            throw new ToolRefusal('Supply food identity, portion and preparation only; Frida totals and component provenance are server-derived.');
+          }
+          const reference = await lookup(structuredClone(referenceComponents), request, operationSignal);
+          if (needsFoodDetails(reference)) return lookupReply(reference, 'needs_details');
+          const totals = reference.totals;
+          after = prepareMeal({
+            ...food, components: reviewComponents(reference), energyKcal: totals.energyKcal!,
+            proteinGrams: totals.proteinGrams, carbohydratesGrams: totals.carbohydratesGrams,
+            fatGrams: totals.fatGrams, fiberGrams: totals.fiberGrams,
+            occurredAt: food.occurredAt ?? source.at.toISOString(),
+            id: identity.id, idempotencyKey: key, confidence: 'estimate', captureMethod,
+            provenance: { source: 'frida-estimate', independentlyVerified: false, reference: reference.reference,
+              matchedSubtotals: reference.matchedSubtotals, unknowns: reference.unknowns, jarvisIntake: origin },
+          }, requestTime);
+        } else {
+          const energyKcal = food.energyKcal;
+          if (typeof energyKcal !== 'number') throw new ToolRefusal('A calorie quantity or Frida-backed estimate is required.');
+          after = prepareMeal({ ...food, occurredAt: food.occurredAt ?? source.at.toISOString(),
+            energyKcal, id: identity.id, idempotencyKey: key, confidence: 'estimate', captureMethod,
+            provenance: { source: 'jarvis-proposed', independentlyVerified: false, jarvisIntake: origin } }, requestTime);
+        }
       } else after = change.operation === 'correct' ? reviewedCorrection(before!, change.changes, origin, requestTime) : null;
       const summary = foodReviewSummary(change.operation, before ? storedMeal(before) : null, after,
         change.operation === 'log_estimate' ? undefined : change.expectedRevision);

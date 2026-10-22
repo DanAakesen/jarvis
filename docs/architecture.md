@@ -6284,14 +6284,18 @@ instructions, voice session tools, startup, background jobs and timers are those
 of Jarvis without Daily.
 
 With the switch on it needs the shared SQL pool and a UUID owner (otherwise
-startup fails), builds `createDailyData(pool, owner)` and returns the module of
+startup fails), builds `createDailyData(pool, owner, Date.now, new
+FridaLookupAdapter())` and returns the module of
 `createDailyModules` for the nutrition rehearsal: `GET /daily/capabilities`,
-`POST /daily/query`, `GET`/`PATCH /daily/nutrition-targets` and seven tools
-(`daily_query`, `daily_show`, `daily_food`, `daily_food_review`, `daily_saved_food`,
-`daily_nutrition_targets`, `daily_nutrition_suggest`), which stay inside the
-catalogue's 128-tool limit (CI checks the headroom). The connector, Frida lookup, feeds and health-upload
-arguments are left out, so the module has no MCP route, provider call, Google or
-Gmail read, job or timer. The targets and health accessors also compare the
+`POST /daily/query`, `GET`/`PATCH /daily/nutrition-targets` and the existing ten
+tools, which stay inside the catalogue's 128-tool limit (CI checks the
+headroom). The Frida adapter is lazy: composition makes no provider request.
+Its read-only `lookup_components` operation is grouped into the existing
+`daily_food_review`; no separate `daily_food_lookup` tool is registered and no
+tool name is added. The owner-bound data callback checks the resolved owner
+before using Frida. The connector, feeds and health-upload arguments are left
+out, so the module has no MCP route, Google or Gmail read, job or timer. The
+targets and health accessors also compare the
 resolved owner with the composed owner and refuse a mismatch, on top of the check
 inside the data accessors. Root authentication is unchanged: a connector or
 runner principal is refused on every Daily route, and an agent is refused on the
@@ -6305,7 +6309,7 @@ other environment stays off. `daily/default-off.test.ts` scans configuration fil
 for both names, allows only those two files and checks their literal values.
 `daily/composition.test.ts` builds real
 applications: it compares a Daily-off one with one built without Daily, shows the
-module adds exactly its three routes and seven tools, and checks that
+module adds exactly its four route paths and ten tools, and checks that
 unauthenticated, other-user, runner, connector and mismatched-owner callers are
 refused before any SQL.
 

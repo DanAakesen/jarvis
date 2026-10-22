@@ -924,6 +924,27 @@ health200, actual13/15smokeok with PC bridge down/recurring identity degraded.
 No causal source/auth attribution or extra canary. Receipt6231173591 and #724
 opening matched independent readbacks; this inactive release is finished.
 
+## Food photo estimates and checks (22 October 2026; #1196)
+
+Use the existing conversation attachment and image-capable model paths. Frida
+resolves only generic food nutrients; it does not recognize food or measure
+portions. The existing `daily_food_review` groups read-only `lookup_components`
+and final `log_estimate`, preserving the tool catalogue count and the 128-name
+ceiling. Final component inputs are resolved again server-side before totals
+and the exact browser Now proposal are built. Unmatched identity, missing
+grams/calories and unknown macros remain explicit; no write occurs before the
+existing approval callback. Photo capture and source fingerprints derive from
+validated persisted attachment references, not model/tool arguments. Daily
+remains default-off; public Frida availability and physical-device acceptance
+are not established.
+
+Focused source checks passed: backend food review/composition/lookup tests
+(73 tests), backend build and lint, backend conversation/history persistence
+tests (74 tests), web conversation attachment tests (19 tests), and the existing
+agent image-input tests (`agents/jarvis/.venv/bin/python -m pytest -q
+agents/jarvis/tests/test_image_context.py`, 68 tests). Do not interpret local
+synthetic tests as live provider, deployment, or device acceptance.
+
 ## Internal Daily saved-food checks (17 October 2026; P12-09)
 
 The current source batch groups owned lookup/preferences and four native-reviewed

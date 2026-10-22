@@ -2,6 +2,9 @@ import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { ToolFailure, ToolRefusal } from '../../core/tool-registry.js';
 import { canonicalJson, copenhagenDate, storedMeal, writeMeal, type MealInput } from './model.js';
+import {
+  foodLookupComponentSchema, foodLookupComponents, foodLookupGramsSchema, foodLookupPreparationSchema,
+} from './lookup-schema.js';
 
 const label = (max = 256) => z.string().min(1).max(max).refine(value =>
   value.trim() === value && Array.from(value).every(character => character.charCodeAt(0) >= 32 && character.charCodeAt(0) !== 127));
@@ -16,31 +19,38 @@ const target = {
   idempotencyKey: label(),
   expectedRevision: z.string().regex(/^[1-9]\d{0,18}$/u).refine(value => BigInt(value) < 9223372036854775807n),
 };
+const estimateComponents = z.array(foodLookupComponentSchema.extend({
+  grams: foodLookupGramsSchema.unwrap(),
+})).min(1).max(25);
 const food = z.object({
-  ...fields, mealType: fields.mealType.default(null), components: fields.components.default([]),
-  occurredAt: fields.occurredAt.optional(), proteinGrams: macro.default(null),
-  carbohydratesGrams: macro.default(null), fatGrams: macro.default(null), fiberGrams: macro.default(null),
+  ...fields, energyKcal: fields.energyKcal.optional(), mealType: fields.mealType.default(null),
+  components: fields.components.default([]), occurredAt: fields.occurredAt.optional(),
+  proteinGrams: macro.default(null), carbohydratesGrams: macro.default(null), fatGrams: macro.default(null),
+  fiberGrams: macro.default(null), referenceComponents: estimateComponents.optional(),
 }).strict();
 const changes = z.object(fields).partial().strict().refine(value => Object.keys(value).length > 0);
 export const foodReviewSchema = z.object({ change: z.discriminatedUnion('operation', [
   z.object({ operation: z.literal('log_estimate'), food }).strict(),
+  z.object({ operation: z.literal('lookup_components'), components: foodLookupComponents }).strict(),
   z.object({ operation: z.literal('correct'), ...target, changes }).strict(),
   z.object({ operation: z.literal('delete'), ...target }).strict(),
 ]) }).strict();
 // Ajv removes valid branch fields with strict anyOf; the tool enforces the union.
 export const foodReviewInputSchema = z.toJSONSchema(z.object({
   change: z.object({
-    operation: z.enum(['log_estimate', 'correct', 'delete']), food: food.optional(),
+    operation: z.enum(['log_estimate', 'lookup_components', 'correct', 'delete']), food: food.optional(),
+    components: foodLookupComponents.optional(),
     idempotencyKey: target.idempotencyKey.optional(), expectedRevision: target.expectedRevision.optional(), changes: changes.optional(),
   }).strict(),
 }).strict(), {
   target: 'draft-7', io: 'input',
   override: ({ zodSchema, jsonSchema }) => {
-    if (zodSchema !== macro) return;
+    const nullable = [macro, foodLookupGramsSchema, foodLookupPreparationSchema].find(schema => schema === zodSchema);
+    if (!nullable) return;
     // A single nullable type prevents Ajv coercing unknown nulls into zero.
-    const numeric = z.toJSONSchema(macro.unwrap(), { target: 'draft-7', io: 'input' });
+    const numeric = z.toJSONSchema(nullable.unwrap(), { target: 'draft-7', io: 'input' });
     delete numeric.$schema;
-    Object.assign(jsonSchema, numeric, { type: ['number', 'null'] });
+    Object.assign(jsonSchema, numeric, { type: nullable === foodLookupPreparationSchema ? ['string', 'null'] : ['number', 'null'] });
     delete jsonSchema.anyOf;
   },
 });
@@ -84,12 +94,29 @@ export function reviewedCorrection(row: Record<string, unknown>, changes: Extrac
   return result;
 }
 function display(input: MealInput) {
+  const reference = input.provenance.source === 'frida-estimate' && input.provenance.reference &&
+    typeof input.provenance.reference === 'object' && !Array.isArray(input.provenance.reference)
+    ? input.provenance.reference as Record<string, unknown> : null;
+  const components = reference ? input.components.map(value => {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
+    const component = value as Record<string, unknown>;
+    const match = component.reference && typeof component.reference === 'object' && !Array.isArray(component.reference)
+      ? component.reference as Record<string, unknown> : null;
+    return {
+      name: component.name, grams: component.grams, preparationMethod: component.preparationMethod,
+      referenceFood: match?.name ?? null, nutrients: match?.values ?? null, unknowns: component.unknowns,
+    };
+  }) : input.components;
   return {
     mealName: input.mealName, mealType: input.mealType, occurredAt: input.occurredAt,
     mealDate: input.mealDate, timeZone: 'Europe/Copenhagen', captureMethod: input.captureMethod,
-    confidence: input.confidence, components: input.components,
+    confidence: input.confidence, components,
     energyKcal: input.energyKcal, proteinGrams: input.proteinGrams, carbohydratesGrams: input.carbohydratesGrams,
     fatGrams: input.fatGrams, fiberGrams: input.fiberGrams,
+    ...(reference ? { nutrientReference: {
+      provider: reference.provider, version: reference.version, releaseId: reference.releaseId,
+      attribution: reference.attribution, basis: reference.basis, unknowns: input.provenance.unknowns,
+    } } : {}),
   };
 }
 export function foodReviewSummary(operation: FoodReviewChange['operation'], before: MealInput | null, after: MealInput | null, expectedRevision?: string): string {
