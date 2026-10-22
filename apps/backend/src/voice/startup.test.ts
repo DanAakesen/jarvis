@@ -111,7 +111,10 @@ async function fixture(
   const start = async (target: FakeSocket = browser) => {
     handlers.get(language === 'da' ? '/voice/da' : '/voice')!(
       target as unknown as WebSocket,
-      { log: app.log, requestStartedAt: performance.now(), principal: { objectId: config.auth.ownerObjectId } } as FastifyRequest,
+    {
+      log: app.log, requestStartedAt: performance.now(), principal: { objectId: config.auth.ownerObjectId },
+      validateInput: () => true,
+    } as unknown as FastifyRequest,
     );
     await vi.advanceTimersByTimeAsync(0);
   };
@@ -380,7 +383,7 @@ const compactBytes = Buffer.byteLength(JSON.stringify(createRealtimeSessionUpdat
 )));
 
 describe('English voice tool-budget fallback', () => {
-  it('starts at the known-good R1 frame without an R0 foreground attempt', async () => {
+  it('starts at the known-good reduced frame without an R0 foreground attempt', async () => {
     const f = await fixture({}, 'en', catalogue());
     f.upstream.open();
     f.upstream.event('session.created');
@@ -389,17 +392,17 @@ describe('English voice tool-budget fallback', () => {
       'startup_probe', 'tiny_tool', 'workspace_command'].sort());
     expect(frameOf(f.upstream).session.instructions).toContain(TOOLS_UNAVAILABLE_NOTICE);
     expect(f.attempts()).toEqual([expect.objectContaining({
-      rung: 'R1', outcome: 'ready', toolCount: 6, frameBytes: frameBytes(f.upstream),
+      rung: 'R2', outcome: 'ready', toolCount: 6, frameBytes: frameBytes(f.upstream),
       toolBytes: expect.any(Number), instructionsBytes: expect.any(Number), elapsedMs: 0,
     })]);
-    expect(f.selected()).toEqual([expect.objectContaining({ rung: 'R1', remembered: false })]);
+    expect(f.selected()).toEqual([expect.objectContaining({ rung: 'R2', remembered: false })]);
     expect(f.browser.sent.map((data) => JSON.parse(data).type)).toEqual([
       'session.created', 'jarvis.session.ready', 'session.updated',
     ]);
     await vi.advanceTimersByTimeAsync(60_000);
     expect(f.browser.close).not.toHaveBeenCalled();
     f.browser.close(1000, '');
-    expect(f.summaries()).toEqual([expect.objectContaining({ toolBudgetRung: 'R1', toolBudgetAttempts: 1 })]);
+    expect(f.summaries()).toEqual([expect.objectContaining({ toolBudgetRung: 'R2', toolBudgetAttempts: 1 })]);
     expect(f.connect).toHaveBeenCalledOnce();
   });
 
@@ -422,7 +425,7 @@ describe('English voice tool-budget fallback', () => {
     ]);
     await vi.advanceTimersByTimeAsync(0);
     expect(f.connect).toHaveBeenCalledTimes(2);
-    expect(f.attempts().map((record) => record.rung)).toEqual(['R1']);
+    expect(f.attempts().map((record) => record.rung)).toEqual(['R2']);
     expect(f.records).toContainEqual(expect.objectContaining({
       msg: 'voice.tool_budget_probe', probe: 'full', outcome: 'ready',
     }));
@@ -447,8 +450,98 @@ describe('English voice tool-budget fallback', () => {
     expect(f.attempts().at(-1)).toEqual(expect.objectContaining({ rung: 'R0', outcome: 'ready' }));
   });
 
+  it('promotes a ready no-proactive probe to Health for later sessions, updates, and dispatch', async () => {
+    const execute = vi.fn(async () => ({ status: 'available' }));
+    const outsideExecute = vi.fn(async () => ({}));
+    const f = await fixture({
+      awayModeStore: {
+        read: async () => ({ ...defaultAwayModeState, mode: 'away' }),
+      } as BuildAppOptions['awayModeStore'],
+    }, 'en', [
+      probeTool('proactive_recent_items', 0, outsideExecute),
+      {
+        name: 'daily_health_summary',
+        description: 'Read a Health summary.',
+        inputSchema: {
+          type: 'object', properties: { note: { type: 'string', minLength: 1 } },
+          required: ['note'], additionalProperties: false,
+        },
+        execute,
+      },
+    ], true);
+    f.behaviour.onFrame = (socket) => {
+      if (socket === f.upstream) {
+        socket.event('session.updated');
+        return;
+      }
+      const names = toolNames(socket);
+      if (names.includes('daily_health_summary') && !names.includes('proactive_recent_items')) {
+        socket.event('session.updated');
+      }
+    };
+
+    f.openFirst();
+    expect(f.selected()).toEqual([expect.objectContaining({ rung: 'R2' })]);
+    await vi.advanceTimersByTimeAsync(8_000);
+    expect(f.records).toContainEqual(expect.objectContaining({
+      msg: 'voice.tool_budget_probe', probe: 'full', outcome: 'timeout',
+    }));
+    expect(f.records).toContainEqual(expect.objectContaining({
+      msg: 'voice.tool_budget_probe', probe: 'no_proactive', outcome: 'ready',
+    }));
+
+    const browser = new FakeSocket();
+    browser.readyState = WebSocket.OPEN;
+    await f.start(browser);
+    const ready = f.sockets.at(-1)!;
+    expect(f.selected().at(-1)).toEqual(expect.objectContaining({ rung: 'R1' }));
+    expect(toolNames(ready)).toContain('daily_health_summary');
+    expect(toolNames(ready)).not.toContain('proactive_recent_items');
+    expect(frameOf(ready).session.instructions).toContain(TOOLS_UNAVAILABLE_NOTICE);
+
+    f.app.nowEventHub.publish({
+      type: 'mode_changed', mode: 'away', away: true, source: 'manual', changedAt: null,
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    const update = frameOf(ready, ready.sent.length - 1).session;
+    expect(update.tools).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: 'daily_health_summary' }),
+    ]));
+    expect(update.tools).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: 'proactive_recent_items' }),
+    ]));
+    expect(update.instructions).toContain(TOOLS_UNAVAILABLE_NOTICE);
+
+    const activityEvents: unknown[] = [];
+    f.app.jarvisActivityHub.subscribe((event) => activityEvents.push(event));
+    ready.event('response.function_call_arguments.done', {
+      name: 'daily_health_summary', call_id: 'health_call', arguments: '{"note":"health"}',
+    });
+    ready.event('response.function_call_arguments.done', {
+      name: 'proactive_recent_items', call_id: 'outside_call', arguments: '{}',
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    const outputs = ready.sent.map((data) => JSON.parse(data))
+      .filter((message) => message.item?.type === 'function_call_output')
+      .map((message) => ({ callId: message.item.call_id, ...JSON.parse(message.item.output) }));
+    expect(activityEvents).toContainEqual(expect.objectContaining({
+      type: 'tool-call-started', toolName: 'daily_health_summary',
+    }));
+    expect(outputs).toEqual(expect.arrayContaining([
+      expect.objectContaining({ callId: 'health_call', tool: 'daily_health_summary', outcome: 'ok' }),
+      expect.objectContaining({ callId: 'outside_call', tool: 'proactive_recent_items', outcome: 'refused' }),
+    ]));
+    expect(execute).toHaveBeenCalledOnce();
+    expect(outsideExecute).not.toHaveBeenCalled();
+
+    browser.emit('message', Buffer.from(JSON.stringify({ type: 'response.create' })), false);
+    await vi.advanceTimersByTimeAsync(0);
+    const responseCreate = JSON.parse(ready.sent.at(-1)!);
+    expect(responseCreate.response.instructions).toContain(TOOLS_UNAVAILABLE_NOTICE);
+  });
+
   it.each([
-    ['R1', 0], ['R2', 1], ['R3', 2], ['R4', 3],
+    ['R2', 0], ['R3', 1], ['R4', 2], ['R5', 3],
   ] as const)('selects %s, the first rung below a silent byte threshold', async (rung, index) => {
     const f = await fixture({}, 'en', catalogue());
     // Measure each rung's frame in a throwaway session, then answer only frames that fit.
@@ -465,19 +558,21 @@ describe('English voice tool-budget fallback', () => {
     g.behaviour.onFrame = (socket) => { if (frameBytes(socket) <= threshold) socket.event('session.updated'); };
     g.openFirst();
     await vi.advanceTimersByTimeAsync(6_000 * 4);
-    expect(g.attempts().map(rungOf)).toEqual(['R1', 'R2', 'R3', 'R4'].slice(0, index + 1));
+    expect(g.attempts().map(rungOf)).toEqual(['R2', 'R3', 'R4', 'R5'].slice(0, index + 1));
     expect(g.attempts().map((record) => record.outcome)).toEqual([
       ...Array(index).fill('timeout'), 'ready',
     ]);
     expect(g.selected()).toEqual([expect.objectContaining({ rung, remembered: false })]);
     const ready = g.sockets[index]!;
-    if (rung === 'R1') expect(names(ready)).not.toContain('daily_show');
-    if (rung === 'R1') expect(names(ready)).not.toContain('proactive_recent_items');
     if (rung === 'R2') {
+      expect(names(ready)).not.toContain('daily_show');
+      expect(names(ready)).not.toContain('proactive_recent_items');
+    }
+    if (rung === 'R3') {
       expect(names(ready)).toEqual(expect.arrayContaining(['set_presence_mode', 'set_away_mode']));
       expect(names(ready)).not.toContain('workspace_command');
     }
-    if (rung === 'R3' || rung === 'R4') expect(toolNames(ready)).toEqual([]);
+    if (rung === 'R4' || rung === 'R5') expect(toolNames(ready)).toEqual([]);
     expect(frameOf(ready).session.instructions).toContain(TOOLS_UNAVAILABLE_NOTICE);
     expect(g.browser.close).not.toHaveBeenCalled();
   });
@@ -496,8 +591,8 @@ describe('English voice tool-budget fallback', () => {
     expect(f.connect).toHaveBeenCalledTimes(3);
     expect(f.sockets[1]!.close).toHaveBeenCalled();
     expect(f.attempts()).toEqual([
-      expect.objectContaining({ rung: 'R1', outcome: 'timeout', elapsedMs: 6_000 }),
       expect.objectContaining({ rung: 'R2', outcome: 'timeout', elapsedMs: 6_000 }),
+      expect.objectContaining({ rung: 'R3', outcome: 'timeout', elapsedMs: 6_000 }),
     ]);
   });
 
@@ -508,7 +603,7 @@ describe('English voice tool-budget fallback', () => {
     expect(f.browser.close).not.toHaveBeenCalled();
     await vi.advanceTimersByTimeAsync(1);
     expect(f.browser.close).toHaveBeenCalledWith(4010, 'Voice service did not become ready');
-    expect(f.attempts().map(rungOf)).toEqual(['R1', 'R2', 'R3', 'R4']);
+    expect(f.attempts().map(rungOf)).toEqual(['R2', 'R3', 'R4', 'R5']);
     expect(f.exhausted()).toEqual([expect.objectContaining({ attempts: 4 })]);
     expect(f.selected()).toEqual([]);
     expect(f.sockets).toHaveLength(4);
@@ -521,7 +616,7 @@ describe('English voice tool-budget fallback', () => {
     expect(f.summaries()).toHaveLength(1);
   });
 
-  it('steps down when the known-good R1 fails', async () => {
+  it('steps down when the known-good R2 fails', async () => {
     const f = await fixture({}, 'en', catalogue());
     f.upstream.open();
     f.upstream.event('session.created');
@@ -532,10 +627,10 @@ describe('English voice tool-budget fallback', () => {
     f.sockets[1]!.event('session.created');
     f.sockets[1]!.event('session.updated');
     expect(f.attempts()).toEqual([
-      expect.objectContaining({ rung: 'R1', outcome: 'error' }),
-      expect.objectContaining({ rung: 'R2', outcome: 'ready' }),
+      expect.objectContaining({ rung: 'R2', outcome: 'error' }),
+      expect.objectContaining({ rung: 'R3', outcome: 'ready' }),
     ]);
-    expect(f.selected()).toEqual([expect.objectContaining({ rung: 'R2', remembered: false })]);
+    expect(f.selected()).toEqual([expect.objectContaining({ rung: 'R3', remembered: false })]);
     expect(f.browser.sent.map((data) => JSON.parse(data).type)).toEqual([
       'session.created', 'jarvis.session.ready', 'session.updated',
     ]);
@@ -548,17 +643,17 @@ describe('English voice tool-budget fallback', () => {
     f.upstream.close(1013, 'private reason');
     await vi.advanceTimersByTimeAsync(0);
     expect(f.connect).toHaveBeenCalledTimes(2);
-    expect(f.attempts()).toEqual([expect.objectContaining({ rung: 'R1', outcome: 'closed' })]);
+    expect(f.attempts()).toEqual([expect.objectContaining({ rung: 'R2', outcome: 'closed' })]);
     expect(f.browser.close).not.toHaveBeenCalled();
     f.sockets[1]!.event('session.updated');
-    expect(f.selected()).toEqual([expect.objectContaining({ rung: 'R2' })]);
+    expect(f.selected()).toEqual([expect.objectContaining({ rung: 'R3' })]);
   });
 
   it('remembers the working rung for the next session and steps down from it, updating the memory', async () => {
     const f = await fixture({}, 'en', catalogue());
     f.upstream.open();
     f.upstream.event('session.updated');
-    expect(f.selected()).toEqual([expect.objectContaining({ rung: 'R1', remembered: false })]);
+    expect(f.selected()).toEqual([expect.objectContaining({ rung: 'R2', remembered: false })]);
 
     f.behaviour.onFrame = (socket) => socket.event('session.updated');
     const second = new FakeSocket();
@@ -568,9 +663,9 @@ describe('English voice tool-budget fallback', () => {
     expect(f.connect).toHaveBeenCalledTimes(2);
     expect(toolNames(next)).not.toContain('daily_show');
     expect(frameOf(next).session.instructions).toContain(TOOLS_UNAVAILABLE_NOTICE);
-    expect(f.selected().at(-1)).toEqual(expect.objectContaining({ rung: 'R1', remembered: true }));
+    expect(f.selected().at(-1)).toEqual(expect.objectContaining({ rung: 'R2', remembered: true }));
 
-    // A third session fails at the remembered rung, steps down to R2 and remembers that.
+    // A third session fails at the remembered rung, steps down to R3 and remembers that.
     f.behaviour.onFrame = (socket) => { if (frameBytes(socket) < frameBytes(next)) socket.event('session.updated'); };
     const third = new FakeSocket();
     third.readyState = WebSocket.OPEN;
@@ -578,18 +673,18 @@ describe('English voice tool-budget fallback', () => {
     expect(f.connect).toHaveBeenCalledTimes(3);
     await vi.advanceTimersByTimeAsync(6_000);
     expect(f.attempts().slice(-2).map((record) => [record.rung, record.outcome])).toEqual([
-      ['R1', 'timeout'], ['R2', 'ready'],
+      ['R2', 'timeout'], ['R3', 'ready'],
     ]);
-    expect(f.selected().at(-1)).toEqual(expect.objectContaining({ rung: 'R2', remembered: false }));
+    expect(f.selected().at(-1)).toEqual(expect.objectContaining({ rung: 'R3', remembered: false }));
 
     const fourth = new FakeSocket();
     fourth.readyState = WebSocket.OPEN;
     await f.start(fourth);
-    expect(f.attempts().at(-1)).toEqual(expect.objectContaining({ rung: 'R2', outcome: 'ready' }));
-    expect(f.selected().at(-1)).toEqual(expect.objectContaining({ rung: 'R2', remembered: true }));
+    expect(f.attempts().at(-1)).toEqual(expect.objectContaining({ rung: 'R3', outcome: 'ready' }));
+    expect(f.selected().at(-1)).toEqual(expect.objectContaining({ rung: 'R3', remembered: true }));
   });
 
-  it('keeps the R1 cold start when no session has ever reached session.updated', async () => {
+  it('keeps the known-good cold start when no session has ever reached session.updated', async () => {
     const f = await fixture({}, 'en', catalogue());
     f.upstream.open();
     await vi.advanceTimersByTimeAsync(24_000);
@@ -615,7 +710,7 @@ describe('English voice tool-budget fallback', () => {
     expect(f.upstream.readyState).toBe(WebSocket.CLOSED);
     expect(pending.terminate).toHaveBeenCalled();
     expect(pending.readyState).toBe(WebSocket.CLOSED);
-    expect(f.attempts()).toEqual([expect.objectContaining({ rung: 'R1', outcome: 'timeout' })]);
+    expect(f.attempts()).toEqual([expect.objectContaining({ rung: 'R2', outcome: 'timeout' })]);
     expect(f.exhausted()).toEqual([]);
     expect(f.timeouts()).toEqual([]);
     expect(vi.getTimerCount()).toBe(0);
@@ -644,12 +739,12 @@ describe('English voice tool-budget fallback', () => {
     expect(f.browser.close).not.toHaveBeenCalled();
   });
 
-  async function reduced(rung: 'R3' | 'R4', overrides: Partial<BuildAppOptions> = {}) {
+  async function reduced(rung: 'R4' | 'R5', overrides: Partial<BuildAppOptions> = {}) {
     const f = await fixture(overrides, 'en', catalogue());
-    const limit = rung === 'R4' ? compactBytes + 200 : 0;
+    const limit = rung === 'R5' ? compactBytes + 200 : 0;
     f.behaviour.onFrame = (socket) => {
       const frame = frameOf(socket).session;
-      if (rung === 'R4' ? frameBytes(socket) <= limit : frame.tools.length === 0) socket.event('session.updated');
+      if (rung === 'R5' ? frameBytes(socket) <= limit : frame.tools.length === 0) socket.event('session.updated');
     };
     f.openFirst();
     await vi.advanceTimersByTimeAsync(8_000 + 6_000 * 4);
@@ -658,7 +753,7 @@ describe('English voice tool-budget fallback', () => {
     return { f, ready };
   }
 
-  it.each(['R3', 'R4'] as const)('sends presence updates, camera updates and response.create at %s without the catalogue', async (rung) => {
+  it.each(['R4', 'R5'] as const)('sends presence updates, camera updates and response.create at %s without the catalogue', async (rung) => {
     const { f, ready } = await reduced(rung, {
       awayModeStore: { read: async () => ({ ...defaultAwayModeState, mode: 'away' }) } as BuildAppOptions['awayModeStore'],
     });
@@ -671,7 +766,7 @@ describe('English voice tool-budget fallback', () => {
     const presence = frameOf(ready, before).session;
     expect(presence.tools).toEqual([]);
     expect(presence.instructions).toContain(TOOLS_UNAVAILABLE_NOTICE);
-    expect(presence.instructions.includes('Visual grounding')).toBe(rung === 'R3');
+    expect(presence.instructions.includes('Visual grounding')).toBe(rung === 'R4');
 
     f.browser.emit('message', Buffer.from(JSON.stringify({ type: 'jarvis.camera.state', on: true })), false);
     await vi.advanceTimersByTimeAsync(0);
@@ -685,7 +780,7 @@ describe('English voice tool-budget fallback', () => {
     const created = JSON.parse(ready.sent.at(-1)!) as { type: string; response: { instructions: string } };
     expect(created.type).toBe('response.create');
     expect(created.response.instructions).toContain(TOOLS_UNAVAILABLE_NOTICE);
-    expect(created.response.instructions.includes('Visual grounding')).toBe(rung === 'R3');
+    expect(created.response.instructions.includes('Visual grounding')).toBe(rung === 'R4');
   });
 
   it('refuses a model call to a tool outside the active subset without executing it', async () => {
@@ -696,7 +791,7 @@ describe('English voice tool-budget fallback', () => {
     await vi.advanceTimersByTimeAsync(0);
     await vi.advanceTimersByTimeAsync(0);
     const ready = f.sockets[0]!;
-    expect(f.selected()).toEqual([expect.objectContaining({ rung: 'R1' })]);
+    expect(f.selected()).toEqual([expect.objectContaining({ rung: 'R2' })]);
     ready.event('response.function_call_arguments.done', { name: 'daily_show', call_id: 'call_1', arguments: '{}' });
     ready.event('response.function_call_arguments.done', { name: 'allowed_tool', call_id: 'call_2', arguments: '{}' });
     await vi.advanceTimersByTimeAsync(0);

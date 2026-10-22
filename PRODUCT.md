@@ -1325,6 +1325,10 @@ complete a capability. Reuse existing general tools where they provide the
 equivalent action rather than creating one tool per button. Missing tool
 coverage remains unfinished. This does not restore excluded features or waive
 private-data, provider, credential, device, approval or activation gates.
+English realtime voice advertises configured Daily tools only after Voice Live
+accepts a Health-capable session frame; until then its known-good reduced frame
+does not include them. A probe or passing CI is not production acceptance for
+Health parity.
 
 An independently opt-in `daily_feed` workflow shares the retained Gmail/calendar
 snapshot, attention, suppression and manual-refresh services. Reads preserve
