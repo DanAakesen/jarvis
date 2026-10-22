@@ -181,7 +181,8 @@ export function createProactiveStore(pool: sql.ConnectionPool, ownerObjectId: st
       .input('travelEnabled', sql.Bit, settings.categories.travel);
     return `AND (kind <> N'finding' OR category IS NULL OR (
       EXISTS (SELECT 1 FROM OPENJSON(@categoryFlags) AS category_flag
-        WHERE category_flag.[key] = category AND category_flag.[value] = N'true')
+        WHERE category_flag.[key] COLLATE Latin1_General_100_BIN2 = category
+          AND category_flag.[value] = N'true')
       AND (@suggestionScope = N'all' OR suggestion_scope = @suggestionScope)
       AND (@travelEnabled = 1 OR (
         category <> N'travel' AND NOT EXISTS (

@@ -150,7 +150,7 @@ describe('proactive engine pipeline', () => {
   });
 
   it('filters model-generated cross-category suggestions even when cited facts are otherwise allowed', async () => {
-    const fixture = setup();
+    const fixture = setup({ sources: [source('todos', [fact({ dueAt: '2026-10-25T11:00:00.000Z' })])] });
     await fixture.store.settings.patch({ categories: { travel: false } });
     fixture.model.summarize.mockImplementation(async (input) => ({
       findings: [{
@@ -169,10 +169,10 @@ describe('proactive engine pipeline', () => {
 
   it('keeps only exactly personal findings under personal-only scope', async () => {
     const todos = source('todos', [
-      fact({ ref: 'personal', text: 'Family appointment', taskScope: 'personal', dueAt: null }),
-      fact({ ref: 'work', text: 'Client agenda', taskScope: 'work', dueAt: null }),
-      fact({ ref: 'unknown', text: 'Prepare meeting notes', dueAt: null }),
-      fact({ ref: 'mixed', text: 'Family work trip', taskScope: 'personal', dueAt: null }),
+      fact({ ref: 'personal', text: 'Family appointment', taskScope: 'personal', dueAt: '2026-10-25T11:00:00.000Z' }),
+      fact({ ref: 'work', text: 'Client agenda', taskScope: 'work', dueAt: '2026-10-25T11:00:00.000Z' }),
+      fact({ ref: 'unknown', text: 'Prepare meeting notes', dueAt: '2026-10-25T11:00:00.000Z' }),
+      fact({ ref: 'mixed', text: 'Family work trip', taskScope: 'personal', dueAt: '2026-10-25T11:00:00.000Z' }),
     ]);
     const fixture = setup({ sources: [todos] });
     await fixture.store.settings.patch({ suggestionScope: 'personal' });
@@ -191,6 +191,24 @@ describe('proactive engine pipeline', () => {
     expect(fixture.model.summarize.mock.calls[0]![0].facts).toHaveLength(1);
     expect(await fixture.store.items.list('all', 20, new Date())).toMatchObject([
       { suggestionScope: 'personal', body: 'Family appointment' },
+    ]);
+  });
+
+  it('filters deterministic findings by personal-only scope', async () => {
+    const todos = source('todos', [
+      fact({ text: 'Family appointment', taskScope: 'personal' }),
+      fact({ text: 'Client agenda', taskScope: 'work' }),
+      fact({ text: 'Prepare meeting notes' }),
+      fact({ text: 'Family work trip', taskScope: 'personal' }),
+    ]);
+    const fixture = setup({ sources: [todos] });
+    await fixture.store.settings.patch({ suggestionScope: 'personal' });
+    fixture.model.summarize.mockResolvedValue({ findings: [], usage });
+
+    expect(await fixture.run()).toMatchObject({ status: 'done', findingCount: 1 });
+    expect(fixture.model.summarize.mock.calls[0]![0].facts.map(({ text }) => text)).toEqual(['Family appointment']);
+    expect(await fixture.store.items.list('all', 20, new Date())).toMatchObject([
+      { category: 'deadline', suggestionScope: 'personal' },
     ]);
   });
 

@@ -3,6 +3,7 @@ import { toModelToolSchema, type RealtimeInstructionMode } from './realtime.js';
 
 /** Tools every reduced rung that keeps any tools must offer; R2 adds the smallest others up to half of R0's bytes. */
 export const TOOL_BUDGET_ALWAYS_KEPT_TOOLS = ['set_presence_mode', 'set_away_mode'] as const;
+const proactiveTools = new Set(['proactive_recent_items', 'proactive_preferences']);
 
 export type ToolBudgetRungName = 'R0' | 'R1' | 'R2' | 'R3' | 'R4';
 export const TOOL_BUDGET_COLD_START_RUNG = 1; // R1 was ready in 1,341 ms after R0 stalled at 8,001 ms on 21 October 2026.
@@ -65,7 +66,7 @@ export function createToolBudgetRungs(registry: ToolRegistry): readonly ToolBudg
   return Object.freeze([
     rung('R0', registry, 'full'),
     rung('R1', registryOf(all.filter(({ name }) =>
-      !name.startsWith('daily_') && name !== 'proactive_recent_items')), 'notice'),
+      !name.startsWith('daily_') && !proactiveTools.has(name))), 'notice'),
     rung('R2', registryOf(halfBytesSubset(all)), 'notice'),
     rung('R3', none, 'notice'),
     rung('R4', none, 'compact'),
@@ -79,14 +80,14 @@ export function createToolBudgetProbeTools(
   const all = registry.list();
   if (probe === 'full') return registry;
   if (probe === 'no_proactive') {
-    return registryOf(all.filter(({ name }) => name !== 'proactive_recent_items'));
+    return registryOf(all.filter(({ name }) => !proactiveTools.has(name)));
   }
   if (probe === 'no_daily') {
     return registryOf(all.filter(({ name }) => !name.startsWith('daily_')));
   }
 
   const rungOne = all.filter(({ name }) =>
-    !name.startsWith('daily_') && name !== 'proactive_recent_items');
+    !name.startsWith('daily_') && !proactiveTools.has(name));
   const copyCount = Math.max(0, all.length - rungOne.length);
   const targetBytes = all.reduce((sum, tool) => sum + definitionBytes(tool), 0);
   const baseBytes = rungOne.reduce((sum, tool) => sum + definitionBytes(tool), 0);

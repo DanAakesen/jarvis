@@ -75,7 +75,7 @@ describe('committed SQL manifest', () => {
     expect(migration?.sql).toContain("DEFAULT N'all'");
     expect(migration?.sql).toContain("DEFAULT N'unknown'");
     const down = await readDownMigration('0062_proactive_suggestion_preferences.sql');
-    expect(down.sql).toContain('OPENJSON(categories_json)');
+    expect(down.sql).toContain('OPENJSON(CASE WHEN ISJSON(categories_json) = 1 THEN categories_json ELSE N\'{}\' END)');
     expect(down.sql).toContain('suggestion_scope <> N\'all\'');
     expect(down.sql).toContain("suggestion_scope <> N'unknown'");
     expect(down.sql).toContain('THROW 51000');
@@ -261,6 +261,7 @@ describe('committed SQL manifest', () => {
       '0059_proactive_reminders.sql',
       '0060_daily_health_processing_state.sql',
       '0061_daily_training_targets.sql',
+      '0062_proactive_suggestion_preferences.sql',
     ]);
     for (const migration of migrations) await expect(readDownMigration(migration.name)).resolves.toMatchObject({ name: migration.name });
   });

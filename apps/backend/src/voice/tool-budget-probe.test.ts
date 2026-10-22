@@ -180,7 +180,8 @@ describe('voice tool-budget background probes', () => {
       };
     });
     tools.push(...Array.from({ length: 11 }, (_, index) => ({
-      name: index === 0 ? 'proactive_recent_items' : `daily_tool_${index}`,
+      name: index === 0 ? 'proactive_recent_items'
+        : index === 1 ? 'proactive_preferences' : `daily_tool_${index}`,
       description: 'description',
       inputSchema: { type: 'object', properties: { value: { type: 'string', description: 'x'.repeat(1_800) } } },
       execute: async () => ({}), moduleId: 'test',
@@ -190,8 +191,8 @@ describe('voice tool-budget background probes', () => {
     expect(TOOL_BUDGET_PROBE_NAMES).toEqual(['full', 'no_proactive', 'no_daily', 'reduced_plus_copies']);
 
     const full = createRealtimeSessionUpdate(registry).session.tools;
-    expect(createToolBudgetProbeTools('no_proactive', registry).list()).toHaveLength(121);
-    expect(createToolBudgetProbeTools('no_daily', registry).list()).toHaveLength(112);
+    expect(createToolBudgetProbeTools('no_proactive', registry).list()).toHaveLength(120);
+    expect(createToolBudgetProbeTools('no_daily', registry).list()).toHaveLength(113);
     const copies = createToolBudgetProbeTools('reduced_plus_copies', registry).list();
     const copyFrame = createRealtimeSessionUpdate(
       createToolBudgetProbeTools('reduced_plus_copies', registry), undefined, undefined, 'en', [], undefined,

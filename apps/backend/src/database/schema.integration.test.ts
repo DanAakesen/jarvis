@@ -487,6 +487,11 @@ describe('committed domain schema (groups 1-8)', () => {
       newsFeeds: [],
       guidance: 'Existing synthetic settings',
     });
+    await createProactiveStore(rollbackPool, owner).settings.patch({ categories: { travel: false } });
+    await expect(revertMigration(
+      rollbackPool, committed, await readDownMigration(preferenceMigration.name),
+    )).rejects.toThrow('retain them before rollback');
+    expect((await createProactiveStore(rollbackPool, owner).settings.read()).categories.travel).toBe(false);
   }));
 
   it('persists add-only todo receipts, enforces the unique added key, and preserves todo-added findings', () => withRollbackDatabase(async (rollbackPool) => {
