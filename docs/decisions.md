@@ -1,5 +1,46 @@
 # Decisions
 
+## Catalogue count is not a global limit (22 October 2026; #1204)
+
+There is no fixed global tool-count ceiling or reserved-slot requirement.
+Counts are not a security control; each tool still relies on its existing
+schema, owner authorization, permission and confirmation policy, feature gate,
+dispatch validation and audit behavior. The backend and agent retain every
+valid descriptor. Existing description limits, the 1 MiB serialized catalogue
+and `/tools` response bounds, context/payload bounds, result limits, deadlines,
+and finite per-turn/tool-round budgets are unchanged. Smoke-only and voice
+advertised-subset behavior remains explicit; a count must never authorize a
+tool or silently remove a capability.
+
+The configured routes that can receive tools are distinct:
+
+| Route | Configured surface and repository path | Primary reference | Numeric tool/payload/context maximum |
+| --- | --- | --- | --- |
+| Foundry OpenAI Responses | Default chat deployment `gpt-5.6-luna`; `responses.create` with the catalogue's `tools` in `agents/jarvis/model_client.py` (`responses_base_url`, `model_client.py:240-263,1005-1017,1094`). | [Azure AI Foundry Responses API](https://learn.microsoft.com/en-us/rest/api/microsoft-foundry/azureopenai/responses) | Unknown for this route/model. |
+| Foundry Anthropic Messages | Claude-prefixed selected chat models; `messages.stream` with converted tools in `agents/jarvis/model_client.py:279-292,1018-1035`. | [Foundry Anthropic models](https://learn.microsoft.com/en-us/azure/ai-foundry/foundry-models/how-to/use-foundry-models-anthropic); [Anthropic Messages API](https://docs.anthropic.com/en/api/messages) | Unknown for this route/model. |
+| Azure Voice Live | English `gpt-realtime-2.1` / `gpt-realtime-2.1-mini`; `session.update` in `apps/backend/src/voice/realtime.ts:237-291`, connected by `apps/backend/src/voice/relay.ts`. The configured API version is `2026-07-15`. | [Voice Live](https://learn.microsoft.com/en-us/azure/ai-services/speech-service/voice-live); [Voice Live API reference](https://learn.microsoft.com/en-us/azure/ai-services/speech-service/voice-live-api-reference-2026-06-01-preview) | Unknown; the linked preview reference is not the configured API version. |
+| Foundry hosted Voice Agent | Danish route `/agents/jarvis-voice-mai/endpoint/protocols/voice`, `api-version=v1`, `VoiceAgents=V1Preview`, in `apps/backend/src/voice/relay.ts:314-341`. | [Voice-first hosted agent](https://learn.microsoft.com/en-us/azure/foundry/how-to/voice-first-with-hosted-agent) | Unknown for this distinct route. |
+
+These links identify route-specific primary documentation, not proof of a
+particular maximum. Direct retrieval of current provider documentation was
+unavailable during this review, so no numeric per-request definition, payload
+or context limit is marked verified. Do not project a Chat Completions limit
+onto Responses, Anthropic Messages, Voice Live or the hosted Voice Agent. The
+historical #1188 full/subset startup probes are diagnostic observations, not a
+provider ceiling; its bounded fallback and advertised-subset checks are
+unchanged. No live paid/provider probe was authorized or performed. Provider
+acceptance remains open; if a route-specific restriction is later verified,
+enforce it at that request/session boundary with capability-preserving
+discovery or an explicit failure, never silent pruning.
+
+This decision supersedes only earlier count ceilings and eight-slot reserves,
+including L131's recommendation to merge tools to remain below 128 and its
+unverified claim that 128 is a model API maximum. L131's observed historical
+application rejection remains useful evidence; its count-based remedy does not.
+This decision does not approve new tool capabilities such as assistant writes
+to Daily training targets, and it does not relax the safety or
+bounded-execution rules.
+
 ## Ticking a task proves the line is unchanged (22 October 2026; #1085, #1216)
 
 `PATCH /vault/tasks` compared only the visible text of the line, so a reordered file or a
@@ -520,11 +561,11 @@ The original Daily's weekly Gym/Run session targets and daily step target came
 from a task source outside the approved Jarvis scope. Use owner-set values
 instead: nullable whole numbers stored in a new owner-keyed Daily table, with
 server-owned bounds and no seed or target defaults. Settings routes are signed-in
-owner-only. The assistant gets no training-target write tool because the
-production tool catalogue must keep at least eight spare slots; a read-only
-query source can be added later. Clearing the final value leaves the owner with
-no stored row. Settings adds a separate `#training-targets` section and a
-validated `useTrainingTargets` contract for follow-up consumers.
+owner-only. The assistant gets no training-target write tool. The former eight-slot
+catalogue rationale is superseded by #1204; that decision does not approve this
+new capability. Clearing the final value leaves the owner with no stored row.
+Settings adds a separate `#training-targets` section and a validated
+`useTrainingTargets` contract for follow-up consumers.
 Overview, Workouts and Health panels remain unchanged in this slice; their
 real-data presentation and owner-session UI checks are deferred to the tasks
 that consume the hook. The migration rollback refuses to discard saved targets.
@@ -1005,12 +1046,12 @@ their documented shapes have been exercised or intentionally ruled out.
 **Question:** Keep the nine selected source operations grouped into three
 registry tools, or register nine distinct names?
 
-- **Option A — nine names:** matches source names directly but reduces the
-  existing catalogue headroom and may require revisiting its enforced limit.
-- **Option B — three grouped tools:** preserves the current catalogue
-  headroom, but remains a name-level mismatch.
+- **Option A — nine names:** matches source names directly.
+- **Option B — three grouped tools:** remains a name-level mismatch.
 
-**Recommendation:** Option B under the current tool limit. Keep the mismatch
+**Historical recommendation:** Option B was selected under the then-current
+count/reserve policy. #1204 supersedes that rationale, but does not change the
+selected API shape or resolve the name-level mismatch. Keep the mismatch
 visible; grouping is not proof of request/response/error parity.
 
 ### Favorites query contract
@@ -1826,9 +1867,10 @@ recursive `Personal/` and `Work/` notes and the root `task.md` or `tasks.md`,
 excluding hidden paths and Archive segments. Jarvis exposes them in an owner-only
 Tasks view, Notes task-search group, and the read-only tasks kind of `vault_search`.
 The same parser and direct vault read model serve the proactive engine and these
-surfaces. The tool catalogue is at its 120-tool all-features ceiling (the 128-tool
-platform limit minus the required eight-tool headroom), so tasks share
-`vault_search` through a flat `kind` argument instead of adding a tool.
+surfaces. At the time this design was recorded, tasks shared `vault_search`
+through a flat `kind` argument to preserve the then-required eight-tool
+headroom. #1204 supersedes that count-based rationale; the existing API shape
+remains and no new capability is implied.
 Jarvis never creates, edits, completes, reorders or deletes the owner's tasks;
 the owner completes them in Obsidian. Software Factory remains the separate
 agent-work board.
@@ -1853,10 +1895,10 @@ Retain all 16 owner-selected Daily v182 capabilities and exclude fixed status
 renderers, coach commitments/orders/experiments, meal plans and Apple Health meal
 write-back. Use the existing owner authorization and confirmation flow for
 writes, and preserve unknown values as unknown. The nine remaining source
-operations are grouped into three native registry tools to retain the enforced
-eight-tool catalogue headroom; this is a pragmatic assumption, but it does not
-meet the explicit request for nine distinct tool names and must remain reported
-as a mismatch rather than described as complete.
+operations were grouped into three native registry tools under the then-enforced
+eight-tool catalogue reserve. #1204 supersedes that count-based rationale; the
+grouping still does not meet the explicit request for nine distinct tool names
+and must remain reported as a mismatch rather than described as complete.
 
 Historical batches must preserve complete source metric/date groups, remain
 within 8 MiB ingress, 10,000 normalized rows/8 MiB output and 256 MiB/10,000
@@ -2225,7 +2267,8 @@ appears on screen the way other generated views do.
   deadline sits under the agent's 30-second read timeout, and a late success after
   it is a failure.
 - Same switch as everything else in Daily. With Daily off, Jarvis is unchanged; with
-  it on, the catalogue gains one tool, inside the 128-tool limit. This change sets no
+  it on, the catalogue gains one tool. The former 128-tool limit is superseded by
+  #1204. This change sets no
   flag. The reserved Status, Recomp, Review and Ready view IDs stay unused and #723
   stays withdrawn.
 - Evidence and limits. Synthetic unit tests, the web renderer tests and a headless
@@ -2677,7 +2720,7 @@ acceptance.** It is the last invisible Daily slice, built under these conditions
   without Daily. Tests compare each of them with a Daily-free application.
 - On means the smallest module. One owner-bound module over the existing
   nutrition data: the capabilities, query and nutrition-targets routes and six
-  tools, which brings the catalogue to 116 of its 128-tool limit. It adds no MCP
+  tools. The old 128-tool ceiling is superseded by #1204. It adds no MCP
   connector, Frida lookup, Google or Gmail feed, health upload, job or timer.
 - Fail closed. Missing SQL or an owner that is not a UUID stops startup. Every
   data accessor, and the targets and health readers that the composition wraps,
@@ -5145,7 +5188,7 @@ The nine design areas and where each stands. **Confirmed** = Dan's requirement o
 
 12 October 2026, standing Daily migration direction (historical): Dan authorized completion of approved migration work through coordinator dependency/gate releases without generic re-confirmation. At that time #717 remained protected-export blocked; the owner withdrew the database-export/import approach on 18 October and #1005 is now the source-contract-first direction. No independent downstream dispatch or own-PR merge. All migrated React/rich UI must fully reuse current Jarvis layout/styling, DESIGN.md, canonical styles.css tokens, shared components, themes/density/motion and phone/workspace patterns. Legacy Daily capabilities/data survive through recomposition, not a separate navy/plum/card theme. Generated views receive safe existing-bridge theme context without expanded permissions. Browser/mobile visual acceptance is mandatory in #730/#731/#732/#726; #718 starts no frontend work.
 
-18 October 2026, P12-29 / #1005: keep the complete source documentation, API, Azure SQL mapping and selected Jarvis capabilities in one issue and PR. The upload routes, owner-created credential and bounded SQL processor reuse the existing backend, pool, authentication and confirmation boundaries. The runtime flag defaults off and infrastructure explicitly sets it true; deployment, credential issuance, private handoff and phone acceptance remain unverified. The old #717/#721 export/import route is withdrawn. Preserve complete metric/date groups and published size limits in historical upload guidance; the source contract does not prove exporter UI behavior or complete-history delivery. Synthetic tests are not live evidence. The nine requested new tool names are grouped into three registry tools to retain required catalogue headroom; the name-level mismatch is unresolved.
+18 October 2026, P12-29 / #1005: keep the complete source documentation, API, Azure SQL mapping and selected Jarvis capabilities in one issue and PR. The upload routes, owner-created credential and bounded SQL processor reuse the existing backend, pool, authentication and confirmation boundaries. The runtime flag defaults off and infrastructure explicitly sets it true; deployment, credential issuance, private handoff and phone acceptance remain unverified. The old #717/#721 export/import route is withdrawn. Preserve complete metric/date groups and published size limits in historical upload guidance; the source contract does not prove exporter UI behavior or complete-history delivery. Synthetic tests are not live evidence. The nine requested tool names remain grouped into three registry tools; #1204 supersedes the former catalogue-headroom rationale, while the name-level mismatch remains unresolved.
 
 P12-03 (#718, 12 October 2026): additive empty tables use separate SQL schema `daily`, configured server owner prefixes legacy keys/uniqueness, and only the supplied explicit relationships become owner-composite foreign keys. Existing auth resolves the user/hosted agent; runners cannot construct the inactive store. Nullable unknown values, original/sanitized raw checksums, source timestamps/local dates, revisions/tombstones and recovery measurements remain distinct. Legacy OAuth/widget/claim credentials have no active target. Mixed attention data requires explicit source/JSON exclusion in any future source-compatible ingestion. [Mapping and compatibility limits](daily-schema-mapping.md) remain source-code/schema evidence, not a database export or proof of replay. The 18 October source-contract-first API/schema and historical-ingestion direction is tracked in #1005; the #717/#721 export/import approach is withdrawn. No personal seed, source mutation or Daily activation.
 
@@ -5188,8 +5231,10 @@ and focused tests are offline evidence; coordinator live permission/issue-read
 acceptance remains pending.
 
 P9-88 redo (12 October 2026, user-directed): the first design (#737) registered about
-25 GitHub tools, pushed the catalogue past the hosted agent's 128-tool limit and
-broke every chat turn (reverted in #744). GitHub capability is now three tools:
+25 GitHub tools, pushed the catalogue past the then-enforced application count
+limit and broke every chat turn (reverted in #744). The contemporaneous claim
+that 128 was a hosted-agent/provider maximum is unverified and superseded by
+#1204. GitHub capability is now three tools:
 `github_capabilities`, `github_read` and `github_write`, each of the latter with an
 `operation` enum, a plain root object schema and per-operation validation in the
 handler. A test fails when `githubAppTools` has more than three tools; no limit in
@@ -6151,7 +6196,7 @@ Windows/Chrome/Jev speedup remains live acceptance.
 | Date | Decision | Rationale and evidence | Status |
 | --- | --- | --- | --- |
 | 2026-10-17 | P10-10 (#909): Jarvis never sends Teams messages, cards, notifications, replies, or audio-card notes from any code path or configuration. Remove the bot, sender, card/audio implementation, runtime wiring, and Teams-specific configuration. Away does not change confirmation routing: staged-action and phone approvals wait in the same authenticated browser app as Present; phone call/media code remains. Task status stays in the app and active browser voice updates remain. | The former away confirmation, general notification, voice-note, Teams bot reply, and away task-status paths all reached the removed sender. Browser approvals and Now-only notification delivery continue through `OwnerInteractionService`; existing conversation/confirmation database tables and stored rows are retained without a migration. Regression coverage checks Away approvals, task PR-opened/Done/NeedsAttention/Cancelled events, ignored Teams environment variables, and phone configuration independent of Teams messaging. | Implemented offline; live deployment behavior remains unverified |
-| 2026-10-13 | P9-100 extends the hosted-chat smoke role into seven named acceptance checks while keeping the catalogue at 128 tools. | Reuse existing tools through smoke-only `get_system_health` operations; allow only fixed issue-700 read, bounded job counts, and a Settings navigation refusal. Keep the confirmation scenario in-memory and no-op until an exact later `yes`; persist no chat or tool audit. One 55-second deadline, two model rounds, one tool call and 256 output tokens per round bound runtime and usage. At 10,000 input tokens per round and published GPT-5.6-Luna rates, the conservative list-price estimate is $0.03692; other unpriced deployments remain unverified. No migration, new tool, web change, or root schema combinator (L120/L121). | Implemented with offline tests; deployed model behavior and actual usage require post-deploy confirmation |
+| 2026-10-13 | P9-100 extends the hosted-chat smoke role into seven named acceptance checks; the catalogue happened to contain 128 tools at that implementation snapshot. | Reuse existing tools through smoke-only `get_system_health` operations; allow only fixed issue-700 read, bounded job counts, and a Settings navigation refusal. Keep the confirmation scenario in-memory and no-op until an exact later `yes`; persist no chat or tool audit. One 55-second deadline, two model rounds, one tool call and 256 output tokens per round bound runtime and usage. At 10,000 input tokens per round and published GPT-5.6-Luna rates, the conservative list-price estimate is $0.03692; other unpriced deployments remain unverified. No migration, new tool, web change, or root schema combinator (L120/L121). | Implemented with offline tests; deployed model behavior and actual usage require post-deploy confirmation |
 | 2026-10-13 | P9-92 uses the existing hosted-chat invocation path for one backend-identity canary turn, with user history/context, persistence, and model tool execution disabled; catalogue validation remains enabled and usage is labelled `smoke`. | The smoke flag accepts only the fixed canary message. Migration 0045 extends `CK_usage_role`; the paired down batch refuses rollback while smoke usage rows remain so usage attribution is not rewritten or deleted. No tool schema, web surface, or deploy workflow changes. | Implemented and tested offline; deployed hosted-agent/model acceptance remains pending |
 | 2026-10-12 | P9-84 reuses Foundry hosted chat sessions with a deterministic UUIDv5 derived from authenticated owner + Jarvis conversation session, query-only affinity, and one content-free no-affinity retry for HTTP 4xx. Set the deploy-time idle timeout to 3600 seconds; continue loading verified backend history on every invocation. Preserve Dan's selected chat model and reasoning effort. | The issue's 5–10 s first-delta model interval and ~15,000-character prompt do not reveal a time split between prompt processing and reasoning; provider timings report only the aggregate. Fixed-name, bounded `chat.agent_session` and `chat.latency` events provide the next production evidence. No capability instruction or tool schema is changed; a future prompt experiment may remove only proven duplicate prose, preserving capabilities and L120/L121. | Implemented and tested offline; Foundry cold/warm behavior and latency improvement require coordinator verification after deploy |
 | 2026-10-11 | P9-64 (#641) handles the shared `workspace_command` operation `session` in the web UI: `language` (da/en), `voice` (end) and `camera` (front/rear/off). The shared contract gains only the additive `session` operation, `action` values and `value` field, matching the reviewed #667 specification, so this UI ships before that backend PR. Commands never prompt: the camera starts only when `navigator.permissions` already reports `granted` (otherwise refused with a reason), and facing reuses the one camera capture (`selectFacing`, which backs the existing front/back switch). The acknowledgement waits for the actual action (stream restart, voice stopped within 5 s); failures carry a bounded refusal reason. | Language and voice owners register narrow handlers in `session-commands.ts`; the camera comes from the existing shell capture state. No new controls, windows or second capture system. Unit, panel and capture tests cover each action, unknown values and each permission state. | Implemented offline; desktop/phone browser and live backend acceptance pending #667 |
@@ -6164,7 +6209,7 @@ Windows/Chrome/Jev speedup remains live acceptance.
 | 2026-10-10 | Decisions are scored by a selectable provider: Jev (default) or Microsoft-Decision-1, chosen by the `decisions.provider` setting for reflex, browser, recipe and PC decisions together. Dan can switch in Settings or by asking Jarvis; nothing switches provider automatically. | Dan wants to test Microsoft's new decision model against Jev himself. The two accept the same request (`model`, `state`, typed questions), so one target resolver replaces the fixed Jev key. Microsoft's speed and accuracy figures are vendor-run and disputed, our measured Jev time is about 274 ms (voice) and 398 ms (chat) p50, and the confidence thresholds are tuned for Jev, so the setting defaults to Jev and the providers are compared on our own `reflex.decision` logs (now with `provider`). Deployment `decision-1` (name cannot contain "microsoft"; quota 60 requests a minute) is in Bicep; Foundry host for the route is tried in two forms until one answers. | Implemented; live check on both providers pending |
 | 2026-10-12 | Image budget admission no longer requires a published price for the chat model. | Dan's live camera turns on 12 October all fell back to the caption path (`budget_unavailable`): `reserveImage` refused any model missing from the pricing table and `gpt-6.1-sol` is not in it, so the direct-image path could never run. An unpriced model is now admitted on the same conservative unverified 0.1 DKK hold; a known price above the hold is still refused and only a known cost replaces the hold. | Implemented; live image acceptance still unverified |
 | 2026-10-12 | User-directed: every tool confirmation (Google calendar/mail, issue creation, project archive, public screenshot) completes on a plain approval such as yes, approved, confirmed, go ahead (Danish equivalents too). No exact phrases or codes are spoken or typed. Safeguards stay: only Dan, only a later message, whole-message match (a reply that asks for anything else is not approval), 10-minute expiry, and only the latest pending action per scope can be approved. | Dan was on the move and Jarvis demanded 'confirm 74483420' by voice; this was a generic backend problem, not a Google one (closes the intent of #601, also relevant to #725). | Partly superseded by P11-10 (17 October 2026): the whole-message match gives way to the server-side meaning step; every other safeguard stands |
-| 2026-10-12 | The backend tool catalogue is capped at 128 tools, 4,000 characters per description and 1 MiB, enforced when the registry is built and mirrored in agents/jarvis/limits.json. Related tools are merged into one tool with an operation parameter rather than added one by one. | #737 added about 25 GitHub tools and pushed the catalogue past the agent's 128-tool limit, so the agent rejected the whole catalogue and every chat turn failed (reverted in #744). | Active |
+| 2026-10-12 (superseded by #1204) | The backend tool catalogue was capped at 128 tools and reserved eight slots, alongside 4,000-character descriptions and a 1 MiB serialized catalogue. | #737 added about 25 GitHub tools and pushed the catalogue past the then-enforced application count gate, so the agent rejected the catalogue and chat turns failed (reverted in #744). This did not verify a provider/API maximum. The description and byte bounds remain; the global count and reserve do not. | Historical; count policy superseded |
 | 2026-10-13 | The production database relies on Azure point-in-time restore (about seven days, locally redundant backup storage). A restore to a temporary copy was drilled and verified (P6-04, #65): 67 of 67 tables, counts match except rows written after the restore point; documented in docs/runbook.md. No long-term retention or geo-redundant backup is configured, which is an accepted risk for now and a candidate for Dan to revisit. | #65 was closed on 3 October with no drill performed; the drill was run for real on 13 October and the gap is now documented. | Active |
 | 2026-10-08 | P9-33 exposes explicit vault-note deletion through the shared sensitive tool registry. Reuse the GitHub App Contents-write client and require a present-mode Now confirmation naming the exact path; recheck the note SHA after approval, then remove its index rows and invalidate the graph cache. | Existing Contents API SHA protection, `OwnerInteractionService.runConfirmed`, and `VaultIndexStore.deleteFiles` cover the provider, approval and cleanup boundaries. No migration or web change is needed; focused fake-GitHub tests cover approval gating, concurrent edits, commit metadata, index removal and graph invalidation. | Implemented offline; live GitHub App access remains unverified |
 | 2026-10-08 | P9-31 adds `get_usage` through the existing agent-only tool registry and usage store. Reuse the shared usage period/entry contracts, support the current UTC day, and group spend by role/source and model without hiding estimated or unverified costs. Redact the financial result from durable generic tool-call audit records; add no migration or web changes. | `UsageStore.list` already bounds and groups persisted usage, including active sandbox estimates and cost coverage. Backend tests cover today’s UTC interval, per-area/model aggregation, cost status, tool registration and sensitive audit redaction. | Implemented offline; live provider billing remains unverified |
@@ -6617,7 +6662,7 @@ Mistakes made so far and the rule that prevents each one.
 | **L128** | Wake word: a 10-second gap before the chime | Dan heard the chime about 10 s after saying "Wake up Jarvis". A timing probe with Speech SDK 1.52.0, his `.table` model and real-time push audio showed the keyword detected at once, but `KeywordRecognizer.Dispose()` blocked for 10.01 s because the bridge never stopped the recognition session after a detection. Calling `StopRecognitionAsync()` before disposing cut that to 0.13 s. Always stop a Speech SDK recognizer before disposing it, and time detection and teardown separately when diagnosing latency. |
 | **L129** | The chat agent rejected every reply because the shared instructions grew past 10,000 characters | On 10 October, "hi" in the chat returned "Jarvis could not finish the reply". The backend log only said `conversation.reply_failed` / "Chat agent failed"; the hosted agent swallows the exception (`except Exception: yield "event: error"`), so the cause was invisible in Log Analytics. It was `capabilityInstructions` (the shared tool guidance sent with `GET /agent/settings`): 11,362 characters after the P9-5x tool additions, while `agents/jarvis/jarvis_tools.py` rejected anything over 10,000 as "invalid Jarvis settings" and the agent failed ~9 ms after reading settings. Every capability line added raises the risk and no test connected the two limits. The agent limit is now 20,000 and the budget lives in one shared file, `agents/jarvis/limits.json` (hard limit 20,000, headroom budget 15,000 code points): the agent reads it, and `capability-instructions.test.ts` checks the backend constant, the budget and BMP-only text against it. A failed chat turn now emits `event: error` with a short diagnostic `code` (for example `capability_instructions_too_large`), which the backend logs in the `failure` field of `conversation.reply_failed` as `Chat agent failed (<code>)`, with no message text. Some redundant wording was also trimmed. When a chat turn fails, filter Log Analytics for `conversation.reply_failed` and read `failure`. Two services enforced the same budget in different languages without a shared test, and a generic catch hid the cause. |
 | **L130** | File and screenshot contents are untrusted prompt data | P9-66 sends extracted document text or a bounded image description to the hosted agent so Jarvis can answer file questions. | Treat all file-derived content as data, label it untrusted, keep it out of logs and tool-call audits, and expose further reads only through owner-scoped sensitive tools. |
-| **L131** | A tool catalogue over 128 tools silently takes chat down | #737 (GitHub App tools) passed CI and deployed, then every chat turn failed with 'I could not finish the reply' (Chat agent failed (catalogue_unavailable)): the hosted agent rejects the whole /tools catalogue above 128 tools, which is also the model API limit. Nothing tested the production catalogue size. Fix: the registry now refuses more than the limit (and over-long descriptions or an over-large catalogue) when the backend starts, so the deploy fails its health gate and the previous revision keeps serving; the limits live in agents/jarvis/limits.json, with a backend and an agent test that they cannot drift. Add tools only by merging related ones into one tool with an operation parameter. | Check the tool count before adding tools and watch for `conversation.reply_failed` right after a deploy |
+| **L131** | A tool catalogue over 128 tools silently takes chat down | #737 (GitHub App tools) passed CI and deployed, then every chat turn failed with 'I could not finish the reply' (Chat agent failed (catalogue_unavailable)): the hosted agent rejects the whole /tools catalogue above 128 tools, which is also the model API limit. Nothing tested the production catalogue size. Fix: the registry now refuses more than the limit (and over-long descriptions or an over-large catalogue) when the backend starts, so the deploy fails its health gate and the previous revision keeps serving; the limits live in agents/jarvis/limits.json, with a backend and an agent test that they cannot drift. Add tools only by merging related ones into one tool with an operation parameter. | Historical only; count remedy superseded by #1204 and provider-limit claim unverified. |
 | **L132** | The post-deploy canary's model usage was rejected for hours | After the chat canary (#760) deployed, every `POST /usage/foundry` with role `smoke` returned 400 (14 calls from 01:15 UTC on 13 Oct, none succeeded). The route schema enum listed `smoke`, but a second hand-written role list in `validFoundryUsage` did not, so the schema accepted what the validator then refused. Chat usage kept working, so nothing visibly failed and the canary itself still passed; only a log query for non-2xx on the route showed it. Both places now read one `foundryUsageRoles` constant and a test posts every listed role. | Define a value set once and derive both the schema and the validator from it; after a deploy that adds a role, status or kind, check the 4xx counts on the routes that carry it |
 | **L133** | Parked issues sat in In progress on the board while labelled needs-decision | #717 and #719 carried `Codex` plus `needs-decision`, and #717 had a linked parked draft PR. The board script treats a worker label or a linked draft PR as claimed work, so both showed In progress while only Dan could move them, and the coordinator reported the board clean from labels without opening it. A worker label means actively working; a parked item drops it. The script now keeps a needs-decision issue in Needs Dan when only a draft PR links it, with a test. | Each round compare the real board columns to the labels (project item list), not only the labels; remove the worker label when work parks on Dan |
 | **L134** | A decision was requested on a stale premise | #396 asked Dan to pick a Danish voice because PRODUCT.md, architecture.md and the provisioner all said Harper. The live code had used Jeppe since P5-08 (`DANISH_REALTIME_VOICE`), so the question was already answered and the fix I proposed (re-provision `jarvis-voice-mai`) would have changed only an unused fallback. Docs lagged the code by a week. | Before asking Dan to decide or filing a change, confirm the current value in the code that runs in production (and its tests), not in the docs; correct the docs in the same change |
