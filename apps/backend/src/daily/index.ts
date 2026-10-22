@@ -16,7 +16,6 @@ import { trainingTargetsRoutes } from './routes/training-targets.js';
 import type { NutritionSuggestionSources } from './nutrition/suggestion-adapter.js';
 import type { NutritionTargetsAccess } from './nutrition/targets-store.js';
 import type { TrainingTargetsAccess } from './training/targets-store.js';
-import { dailyFoodLookupTool } from './tools/food-lookup.js';
 import { dailyFeedTool } from './tools/feed.js';
 import { dailySourceTools } from './tools/source-tools.js';
 import { dailyFeedRoutes } from './feeds/routes.js';
@@ -32,9 +31,8 @@ export function createDailyModules(enabled = false, data?: DailyData, connector?
   if (trainingTargets && !data) throw new TypeError('Daily training targets require shared Daily data');
   if (nutritionSuggestions && !nutritionTargets) throw new TypeError('Daily nutrition suggestions require nutrition targets');
   const tools = data ? [dailyQueryTool(data.query), dailyShowTool(data.query),
-    ...(data.foodLookup ? [dailyFoodLookupTool(data.foodLookup)] : []),
     ...(data.feeds ? [dailyFeedTool(data.feeds)] : []),
-    ...(internalNutrition ? [dailyFoodTool(internalNutrition), dailyFoodReviewTool(internalNutrition)] : []),
+    ...(internalNutrition ? [dailyFoodTool(internalNutrition), dailyFoodReviewTool(internalNutrition, Date.now, data.foodLookup)] : []),
     ...(savedNutrition ? [dailySavedFoodTool(savedNutrition)] : []),
     ...(nutritionTargets ? [dailyNutritionTargetsTool(nutritionTargets)] : []),
     ...(nutritionTargets && nutritionSuggestions ? [dailyNutritionSuggestTool(nutritionTargets, nutritionSuggestions)] : []),

@@ -165,10 +165,13 @@ describe('production tool catalogue', () => {
     for (const name of TOOL_BUDGET_ALWAYS_KEPT_TOOLS) {
       expect(registry.get(name), `${name} is listed in TOOL_BUDGET_ALWAYS_KEPT_TOOLS but not in the catalogue`).toBeDefined();
     }
-    const bytes = (tools: readonly { name: string; description: string; inputSchema: unknown }[]) =>
-      Buffer.byteLength(JSON.stringify(tools.map(({ name, description, inputSchema }) => ({
+    const definitionBytes = ({ name, description, inputSchema }: { name: string; description: string; inputSchema: unknown }) =>
+      Buffer.byteLength(JSON.stringify({
         type: 'function', name, description, parameters: toModelToolSchema(inputSchema),
-      }))));
+      }));
+    // Match the budget's per-definition accounting; array delimiters and separators are not budgeted.
+    const bytes = (tools: readonly { name: string; description: string; inputSchema: unknown }[]) =>
+      tools.reduce((sum, tool) => sum + definitionBytes(tool), 0);
     const rungs = createToolBudgetRungs(registry);
     expect(rungs.map(({ name }) => name)).toEqual(['R0', 'R1', 'R2', 'R3', 'R4', 'R5']);
     expect(rungs.map(({ deadlineMs }) => deadlineMs)).toEqual([8_000, 6_000, 6_000, 6_000, 6_000, 6_000]);
