@@ -129,7 +129,7 @@
 .tasks-panel-meta a:hover { background: var(--glass-pressed); color: var(--text); }
 .tasks-panel-dot { flex: 0 0 auto; width: var(--space-2); height: var(--space-2); border-radius: var(--radius-pill); background: var(--success); }
 .tasks-panel-row[data-scope="work"] .tasks-panel-dot { background: var(--state-selected-fg); }
-.tasks-panel-scope { color: var(--text); white-space: nowrap; }
+.tasks-panel-scope-cue { color: var(--text); white-space: nowrap; }
 .tasks-panel-meta a:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; border-radius: var(--radius-control); }
 .tasks-panel-note, .tasks-panel-empty { margin: 0; color: var(--text-muted); font-size: var(--type-caption); }
 .tasks-panel-error { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); color: var(--error); font-size: var(--type-small); }

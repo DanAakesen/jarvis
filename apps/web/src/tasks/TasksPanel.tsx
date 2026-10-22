@@ -85,7 +85,7 @@ function TaskRow({ task, done, phase, pending, fresh, showScope, onToggle, onOpe
             if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
             event.preventDefault();
             onOpenNote(task.path);
-          }}><span className="tasks-panel-dot" aria-hidden="true" />{showScope && <span className="tasks-panel-scope">{isWork(task) ? 'Work' : 'Personal'} ·</span>}{sourceName(task.path)}</a>
+          }}><span className="tasks-panel-dot" aria-hidden="true" />{showScope && <span className="tasks-panel-scope-cue">{isWork(task) ? 'Work' : 'Personal'} ·</span>}{sourceName(task.path)}</a>
       </div>
     </div>
     {phase ? <button className="tasks-panel-undo" type="button" disabled={pending} onClick={() => onToggle(task, false)}>Undo</button>
