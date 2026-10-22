@@ -353,15 +353,23 @@ describe('Daily integration contract', () => {
       headers: { ...headers(), 'x-jarvis-message-id': '42' }, payload: {} })).statusCode).toBe(404);
     for (const access of [targets, nutrition, health]) expect(access).not.toHaveBeenCalled();
   });
-  it('exposes public reference lookup only with an explicit provider capability and never calls it during composition', async () => {
+  it('registers Frida lookup through food review and never calls it during composition', async () => {
     const foodLookup = vi.fn<DailyFoodLookup>();
     const data: DailyData = { query: { query: vi.fn() }, changes: createDailyChanges(), foodLookup };
+    const internal = vi.fn(() => ({
+      intake: vi.fn(), lookupSaved: vi.fn(), log: vi.fn(), correct: vi.fn(), remove: vi.fn(),
+    }));
     expect(createDailyModules(false, data)).toEqual([]);
-    const app = buildApp(config, undefined, { auth, modules: [coreModule, ...createDailyModules(true, data)] });
+    const modules = createDailyModules(true, data, undefined, internal);
+    const app = buildApp(config, undefined, { auth, modules: [coreModule, ...modules] });
     apps.push(app);
     expect((await app.inject({ url: '/daily/capabilities', headers: headers() })).json()).toMatchObject({
-      stage: 'read-only', tools: ['daily_query', 'daily_show', 'daily_food_lookup'], pages: [],
+      stage: 'internal-nutrition-rehearsal', tools: ['daily_query', 'daily_show', 'daily_food', 'daily_food_review'], pages: [],
     });
+    const review = modules[0]!.tools.find(({ name }) => name === 'daily_food_review');
+    expect(review?.description).toContain('lookup_components');
+    expect(modules[0]!.tools.map(({ name }) => name)).not.toContain('daily_food_lookup');
+    expect(internal).not.toHaveBeenCalled();
     expect(foodLookup).not.toHaveBeenCalled();
   });
   it('adds only the explicit feed capability, uses the existing dispatcher/audit and bridges owner commits until shutdown', async () => {
