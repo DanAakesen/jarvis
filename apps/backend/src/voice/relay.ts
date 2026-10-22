@@ -27,6 +27,7 @@ import type { BackendModule } from '../modules.js';
 import type { ConversationMessage, ConversationRole } from '../core/conversation-store.js';
 import { normalizeVisualContext, visualContextText, type VisualContext } from '../core/visual-context.js';
 import { defaultSettings, readSettings } from '../core/settings.js';
+import { identityCompositionRevision } from '../core/identity-composition.js';
 import { defaultAwayModeState, type AwayModeState } from '../core/away-mode.js';
 import {
   createBrowserUrlTargets,
@@ -390,7 +391,7 @@ function registerVoiceRoute(
     const activeTools = () => activeRung?.tools ?? app.jarvisTools;
     const sessionUpdate = () => createRealtimeSessionUpdate(
       activeTools(), personality, presence, language, projects, transcriptionModel, voiceTuning, memorySettings,
-      activeRung?.instructions,
+      activeRung?.instructions, identitySettings,
     );
     let configured = false;
     let upstreamSessionReady = false;
@@ -404,8 +405,16 @@ function registerVoiceRoute(
     let presence: AwayModeState = defaultAwayModeState;
     let awayMode = false;
     let projects: ProjectContextEntry[] = [];
+    let identitySettings = defaultSettings.identity;
     let personality = defaultSettings.personality;
     let memorySettings = defaultSettings.memory;
+    let appliedCompositionRevision = '';
+    let desiredCompositionRevision = '';
+    let settingsRefreshGeneration = 0;
+    let settingsUpdatePending = false;
+    let settingsUpdateQueued = false;
+    let settingsUpdateTimer: ReturnType<typeof setTimeout> | undefined;
+    let pendingCompositionRevision: string | undefined;
     let voiceTuning = defaultSettings.voice;
     let voiceModel = ENGLISH_REALTIME_MODEL;
     let transcriptionModel = defaultSettings.roles.transcription.model;
@@ -441,7 +450,7 @@ function registerVoiceRoute(
       type: 'tool-call-finished' | 'interrupted' | 'failed',
       outcome?: 'ok' | 'refused' | 'error',
     ) => void>();
-    let unsubscribeAwayMode: (() => void) | undefined;
+    let unsubscribeSettings: (() => void) | undefined;
     // Declared early because closeAnnouncements can run before the announcer exists.
     // eslint-disable-next-line prefer-const
     let statusAnnouncer: ReturnType<typeof createVoiceStatusAnnouncer> | undefined;
@@ -461,8 +470,10 @@ function registerVoiceRoute(
       if (sessionId) frameStore?.forgetSession(sessionId);
       unregisterVisionVoice?.();
       unregisterVisionVoice = undefined;
-      unsubscribeAwayMode?.();
-      unsubscribeAwayMode = undefined;
+      unsubscribeSettings?.();
+      unsubscribeSettings = undefined;
+      clearTimeout(settingsUpdateTimer);
+      settingsUpdateTimer = undefined;
       statusAnnouncer?.close();
     };
     let transcriptQueue = Promise.resolve();
@@ -1539,7 +1550,7 @@ function registerVoiceRoute(
 
     const sendResponseCreate = (message: Record<string, unknown>) => {
       if (upstream?.readyState !== WebSocket.OPEN) return;
-      if (responseCreateActive) {
+      if (responseCreateActive || settingsUpdatePending || settingsUpdateQueued) {
         pendingResponseCreate = message;
         return;
       }
@@ -1550,8 +1561,11 @@ function registerVoiceRoute(
       responseImageUsageItem = pendingImageUsageItem;
       pendingImageUsageItem = undefined;
       const response = next.response as Record<string, unknown> | undefined;
-      const instructions = typeof response?.instructions === 'string' ? response.instructions :
-        sessionUpdate().session.instructions;
+      const composedInstructions = sessionUpdate().session.instructions;
+      const specialInstructions = typeof response?.instructions === 'string' ? response.instructions : '';
+      const instructions = specialInstructions
+        ? `${composedInstructions}\n\nAdditional response-specific instructions that do not replace the shared identity or fixed truthfulness and security kernel:\n${specialInstructions}`
+        : composedInstructions;
       sendUpstream({
         ...next,
         response: {
@@ -1564,10 +1578,36 @@ function registerVoiceRoute(
     };
 
     const flushPendingResponseCreate = () => {
-      if (responseCreateActive || (toolCallsInResponse && pendingToolCalls > 0) || !pendingResponseCreate) return;
+      if (responseCreateActive || settingsUpdatePending || settingsUpdateQueued ||
+          (toolCallsInResponse && pendingToolCalls > 0) || !pendingResponseCreate) return;
       const pending = pendingResponseCreate;
       pendingResponseCreate = undefined;
       sendResponseCreate(pending);
+    };
+
+    const applyQueuedSettingsUpdate = () => {
+      if (!settingsUpdateQueued || settingsUpdatePending || responseCreateActive ||
+          !upstreamSessionReady || upstream?.readyState !== WebSocket.OPEN) return;
+      settingsUpdateQueued = false;
+      settingsUpdatePending = true;
+      pendingCompositionRevision = desiredCompositionRevision;
+      sendUpstream(sessionUpdate(), () => {
+        settingsUpdateTimer = setTimeout(() => {
+          if (settingsUpdatePending) close(1012, 'Settings changed; reconnect');
+        }, 5_000);
+      });
+    };
+
+    const acknowledgeSettingsUpdate = () => {
+      if (!settingsUpdatePending) return;
+      clearTimeout(settingsUpdateTimer);
+      settingsUpdateTimer = undefined;
+      settingsUpdatePending = false;
+      appliedCompositionRevision = pendingCompositionRevision ?? desiredCompositionRevision;
+      pendingCompositionRevision = undefined;
+      if (desiredCompositionRevision !== appliedCompositionRevision) settingsUpdateQueued = true;
+      applyQueuedSettingsUpdate();
+      flushPendingResponseCreate();
     };
 
     const updateCameraTurnDetection = () => {
@@ -1665,19 +1705,37 @@ function registerVoiceRoute(
         });
       },
     });
-    unsubscribeAwayMode = app.nowEventHub.subscribe((event) => {
-      if (event.type !== 'mode_changed') return;
-      awayMode = event.away;
-      if (!app.awayModeStore) return;
+    unsubscribeSettings = app.nowEventHub.subscribe((event) => {
+      if (event.type !== 'mode_changed' && event.type !== 'settings_changed') return;
+      const generation = ++settingsRefreshGeneration;
       void (async () => {
-        presence = await app.awayModeStore!.read();
+        if (event.type === 'mode_changed' && app.awayModeStore) {
+          presence = await app.awayModeStore.read();
+          awayMode = presence.mode !== 'present';
+        }
         if (app.settingsStore) {
-          const settings = await readSettings(app.settingsStore);
+          const settings = await readSettings(
+            app.settingsStore,
+            english ? await app.modelCatalogue.read() : undefined,
+          );
+          if (generation !== settingsRefreshGeneration) return;
+          identitySettings = settings.identity;
           personality = settings.personality;
           memorySettings = settings.memory;
+          voiceTuning = settings.voice;
+          transcriptionModel = settings.roles.transcription.model;
         }
-        if (english && upstream?.readyState === WebSocket.OPEN && !controller.signal.aborted) sendUpstream(sessionUpdate());
-      })().catch(() => request.log.warn('voice.presence_mode_update_failed'));
+        if (generation !== settingsRefreshGeneration) return;
+        desiredCompositionRevision = identityCompositionRevision(identitySettings, personality, presence);
+        if (event.type === 'settings_changed' || desiredCompositionRevision !== appliedCompositionRevision) {
+          settingsUpdateQueued = true;
+        }
+        applyQueuedSettingsUpdate();
+      })().catch(() => {
+        if (generation !== settingsRefreshGeneration) return;
+        request.log.warn('voice.settings_refresh_failed');
+        if (event.type === 'settings_changed') close(1012, 'Settings changed; reconnect');
+      });
     });
 
     const flushQueued = () => {
@@ -2125,24 +2183,23 @@ function registerVoiceRoute(
         const token = await credential(getToken, controller.signal);
         diagnostics.stage('credential_loaded');
         if (controller.signal.aborted || browser.readyState !== WebSocket.OPEN) return;
-        if (english && app.settingsStore) {
+        if (app.settingsStore) {
           try {
             const settings = await diagnostics.bound('settings', 5_000, async () =>
-              readSettings(app.settingsStore!, await app.modelCatalogue.read()));
+              readSettings(
+                app.settingsStore!,
+                english ? await app.modelCatalogue.read() : undefined,
+              ));
+            identitySettings = settings.identity;
             personality = settings.personality;
-            voiceTuning = settings.voice;
             memorySettings = settings.memory;
-            voiceModel = settings.roles.voice.model;
-            transcriptionModel = settings.roles.transcription.model;
+            if (english) {
+              voiceTuning = settings.voice;
+              voiceModel = settings.roles.voice.model;
+              transcriptionModel = settings.roles.transcription.model;
+            }
           } catch {
-            request.log.warn('voice.personality_settings_unavailable');
-          }
-        } else if (app.settingsStore) {
-          try {
-            memorySettings = (await diagnostics.bound('settings', 5_000, () =>
-              readSettings(app.settingsStore!))).memory;
-          } catch {
-            request.log.warn('voice.memory_settings_unavailable');
+            request.log.warn('voice.identity_settings_unavailable');
           }
         }
         if (controller.signal.aborted) return;
@@ -2154,6 +2211,8 @@ function registerVoiceRoute(
           } catch {
             request.log.warn('voice.away_mode_settings_unavailable');
           }
+          desiredCompositionRevision = identityCompositionRevision(identitySettings, personality, presence);
+          appliedCompositionRevision = desiredCompositionRevision;
         }
         if (controller.signal.aborted) return;
         diagnostics.stage('away_mode_loaded');
@@ -2288,7 +2347,10 @@ function registerVoiceRoute(
             if (socket !== upstream) return;
             const event = parseVoiceEvent(data, binary);
             diagnostics.event(event?.type);
-            if (event?.type === 'session.updated') diagnostics.stage('session_updated');
+            if (event?.type === 'session.updated') {
+              diagnostics.stage('session_updated');
+              acknowledgeSettingsUpdate();
+            }
             if (event?.type === 'session.created') diagnostics.stage('session_created_received');
             if (toolBudgetRungs && !upstreamSessionReady && event?.type !== 'session.updated') {
               if (event?.type === 'error') {
@@ -2339,9 +2401,15 @@ function registerVoiceRoute(
                   (text) => statusAnnouncer?.announce(text) ?? false,
                 );
               }
+              applyQueuedSettingsUpdate();
             }
             if (typeof event?.type === 'string' && upstreamEventTypes.size < 40 &&
                 /^[a-z_.]{1,80}$/u.test(event.type)) upstreamEventTypes.add(event.type);
+            if (event?.type === 'error' && settingsUpdatePending) {
+              logUpstreamError(event);
+              close(1012, 'Settings changed; reconnect');
+              return;
+            }
             if (event?.type === 'error') logUpstreamError(event);
             if (event?.type === 'conversation.item.input_audio_transcription.delta') {
               partialTranscriptionDeltas += 1;
@@ -2450,6 +2518,7 @@ function registerVoiceRoute(
               }
               responseCreateActive = false;
               assistantResponding = false;
+              applyQueuedSettingsUpdate();
               flushQueuedToolOutputs();
               if (event.type === 'response.done' && turnTiming && !toolCallsInResponse) {
                 turnTiming.responseDoneMs = elapsedSinceSpeechStopped() ?? null;

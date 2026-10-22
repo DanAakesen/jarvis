@@ -1,7 +1,7 @@
 import { modelRoles } from '@jarvis/contracts';
 import type { FastifyRequest } from 'fastify';
 import {
-  readSettings, settingsFieldsForCatalogue, settingsOptionsForCatalogue, settingsPatchRefusal,
+  publishSettingsChanged, readSettings, settingsFieldsForCatalogue, settingsOptionsForCatalogue, settingsPatchRefusal,
   validateSettingsPatch, type SettingsPatch,
 } from './settings.js';
 import { ToolRefusal, type JarvisTool } from './tool-registry.js';
@@ -9,7 +9,7 @@ import { ToolRefusal, type JarvisTool } from './tool-registry.js';
 const getSettingsSchema = {
   type: 'object',
   properties: {
-    area: { type: 'string', enum: ['roles', 'voice', 'research', 'memory', 'timeouts', 'appearance', 'personality', 'decisions'] },
+    area: { type: 'string', enum: ['identity', 'roles', 'voice', 'research', 'memory', 'timeouts', 'appearance', 'personality', 'decisions'] },
   },
   additionalProperties: false,
 } as const;
@@ -57,6 +57,7 @@ export async function applySettingsPatch(
     const embeddingModelChanged = acceptedPatch.roles?.embedding?.model !== undefined &&
       acceptedPatch.roles.embedding.model !== latest.roles.embedding.model;
     await store.write(acceptedPatch);
+    publishSettingsChanged(request.server);
     if (embeddingModelChanged) await request.server.onEmbeddingModelChanged?.(request.server.backgroundJobs);
     return readSettings(store, catalogue);
   };
@@ -88,6 +89,7 @@ export const getSettingsTool: JarvisTool = {
       timeouts: ['timeoutSettings'],
       appearance: ['themes', 'backgrounds', 'themeMotions', 'themeDensities'],
       personality: ['personalityTones', 'personalityResponseStyles'],
+      identity: [],
       decisions: ['decisionProviders'],
     } as const;
     if (area === undefined) return { settings, options, fields };

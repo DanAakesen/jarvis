@@ -16,6 +16,7 @@ import {
 import { formatDateTime, formatTimeOnly } from './format/date-time';
 
 interface Settings {
+  identity: { description: string };
   appearance: { theme: 'light' | 'dark' | 'system' };
   jarvis: { model: string; reasoning: string };
   personality: {
@@ -164,6 +165,10 @@ function isSettingsResponse(value: unknown): value is SettingsResponse {
     (item.lastRenewedAt === null || (typeof item.lastRenewedAt === 'string' && Number.isFinite(Date.parse(item.lastRenewedAt)))));
   return validOptions && validCredentials &&
     isObject(settings.appearance) &&
+    isObject(settings.identity) &&
+    typeof settings.identity.description === 'string' &&
+    settings.identity.description.length <= 2_000 &&
+    !hasUnsupportedControlCharacters(settings.identity.description) &&
     (settings.appearance.theme === 'light' || settings.appearance.theme === 'dark' ||
       settings.appearance.theme === 'system') &&
     isObject(settings.jarvis) && isObject(settings.personality) && isObject(settings.voice) && isObject(settings.codex) &&
@@ -482,6 +487,9 @@ export function SettingsPage({ backendUrl, getAccessToken, presence, notificatio
   const personalityInstructionsValid = settings !== null &&
     settings.personality.customInstructions.length <= 2_000 &&
     !hasUnsupportedControlCharacters(settings.personality.customInstructions);
+  const identityDescriptionValid = settings !== null &&
+    settings.identity.description.length <= 2_000 &&
+    !hasUnsupportedControlCharacters(settings.identity.description);
   // Role-based models replace the older per-area model menus when the backend provides them.
   const roleModels = settings && options && isRoleSettings(settings.roles) && isRoleOptions(options.roles) ? options.roles : null;
   const hasVoiceTuning = settings !== null && typeof settings.voice.serverVadThreshold === 'number';
@@ -494,10 +502,11 @@ export function SettingsPage({ backendUrl, getAccessToken, presence, notificatio
   const projectDefaultsDirty = settings !== null && savedSettings !== null &&
     Object.keys(changedSettings(savedSettings, settings)).includes('newProjects');
   const saveDisabled = !dirty || !advancedValid || !globalLimitsValid || !maxTasksValid ||
-    !newProjectMaxTasksValid || !personalityInstructionsValid || saving;
+    !newProjectMaxTasksValid || !personalityInstructionsValid || !identityDescriptionValid || saving;
   const projectDefaultsDisabledReason = !newProjectMaxTasksValid
     ? 'Parallel tasks must be 1–100.'
-    : !advancedValid || !globalLimitsValid || !maxTasksValid || !personalityInstructionsValid
+    : !advancedValid || !globalLimitsValid || !maxTasksValid ||
+      !personalityInstructionsValid || !identityDescriptionValid
       ? 'Fix the invalid fields to save.'
       : '';
   const projectDefaults = state === 'loading' ? (
@@ -650,6 +659,27 @@ export function SettingsPage({ backendUrl, getAccessToken, presence, notificatio
               </div>
             </CollapsibleSection>
           )}
+
+          <CollapsibleSection storageKey="settings.identity" headingId="identity-settings-heading" title="Identitet og rolle">
+            <div className="settings-field">
+              <label htmlFor="identity-description">Identity and role description</label>
+              <textarea id="identity-description" rows={5} maxLength={2_000}
+                value={settings.identity.description} disabled={saving}
+                aria-describedby={`identity-description-help${identityDescriptionValid ? '' : ' identity-description-error'}`}
+                aria-invalid={!identityDescriptionValid}
+                onChange={(event) => update('identity', 'description', event.target.value)} />
+              <p className="settings-explanation" id="identity-description-help">
+                Describe the shared identity Jarvis should use in chat and voice. Leave this blank to use the default personal-assistant identity.
+                Identity and role guide perspective; Tone and Response style below guide how replies sound. This setting cannot grant permissions or capabilities.
+                {' '}{settings.identity.description.length} / 2,000 characters
+              </p>
+              {!identityDescriptionValid && (
+                <p className="settings-validation-error" id="identity-description-error" role="alert">
+                  Remove control characters other than line breaks, tabs, and spaces.
+                </p>
+              )}
+            </div>
+          </CollapsibleSection>
 
           <CollapsibleSection storageKey="settings.personality" headingId="personality-settings-heading" title="Jarvis Personality">
             <div className="settings-grid">

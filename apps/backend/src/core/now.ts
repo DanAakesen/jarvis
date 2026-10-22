@@ -58,6 +58,7 @@ export type NowFeedStatusKind = 'pull_request_ready' | 'deployment_failed' | 'ap
 export type NowFeedUpdate =
   | { type: 'refresh' }
   | { type: 'mode_changed'; mode: PresenceMode; away: boolean }
+  | { type: 'settings_changed' }
   | { type: 'status'; kind: NowFeedStatusKind }
   | { type: 'board'; projectId: string; version: number };
 
@@ -203,6 +204,7 @@ export function registerNowRoutes(app: FastifyInstance) {
     };
     unsubscribe = app.nowEventHub.subscribe((event) => {
       if (closed) return;
+      if (event.type === 'settings_changed') return;
       const frame: NowSseEvent = event.type === 'mode_changed'
         ? { event: 'mode', data: {} }
         : event.type === 'board'

@@ -445,15 +445,16 @@ Global defaults on the settings page; a task can override the coding-agent model
 
 Dan can also change Jarvis's model or reasoning by chat or voice for the next session, and change the agent or verified model options on a Ready coding task. Running-task model changes are refused with a reason; they never alter an active turn.
 
-Presence has three modes: Present (`present`, green), Away (`away`, yellow), and On the move (`on_the_move`, blue), in both themes. Away and On the move suppress spoken status updates; the Now feed and browser approvals remain available in all modes. The Settings API keeps `personality.customInstructions` as the base instruction and adds one instruction for each mode, each limited to 2,000 characters. Jarvis can change modes from chat or voice without confirmation and announces the change.
+Presence has three modes: Present (`present`, green), Away (`away`, yellow), and On the move (`on_the_move`, blue), in both themes. Away and On the move suppress spoken status updates; the Now feed and browser approvals remain available in all modes. Settings keeps `identity.description` separate from personality preferences: identity establishes the same broad Jarvis role in chat and voice, while tone and response style govern how replies sound. Mode instructions add situational behavior without replacing shared identity; identity and style text cannot grant permissions or capabilities. The Settings API keeps `personality.customInstructions` as the base style instruction and adds one instruction for each mode, each limited to 2,000 characters. Jarvis can change modes from chat or voice without confirmation and announces the change.
 
 | Area | Setting | Default |
 | --- | --- | --- |
 | Jarvis | Model and reasoning effort | `gpt-5.6-luna`, reasoning `none` (chat and Danish voice); `gpt-realtime-2.1` (English voice) |
 | Appearance | Light, dark, or system mode; approved theme tokens | Light |
-| Personality | Tone, response style, base custom instructions, and per-mode instructions (each up to 2,000 characters) | British butler, concise, no custom instructions |
+| Identity and role | Shared owner description for chat and voice (up to 2,000 characters) | Broad personal AI assistant |
+| Personality | Tone, response style, base custom instructions, and per-mode instructions (each up to 2,000 characters) | Courteous British-butler tone, concise, no custom instructions |
 | Voice | Speech to text | MAI Transcribe |
-| Voice | Voice per language | English: Ryan HD (British butler persona, addresses Dan as "sir"); Danish: Jeppe (`da-DK-JeppeNeural`, native male; live since P5-08) |
+| Voice | Voice per language | English: Ryan HD (British English, may address Dan as "sir"); Danish: Jeppe (`da-DK-JeppeNeural`, native male; live since P5-08) |
 | Voice | Default language | Danish |
 | Voice | Minimise all windows when starting voice | Off |
 | Global | Screen inspections per day | 300 (configurable from 1 to 300) |
@@ -628,7 +629,9 @@ displayed the notification.
 
 Manual gated actions—including a merge initiated through GitHub tools, deletion, sending mail, calendar changes, repository creation, destructive or externally consequential computer use outside the browser, and anything that spends money—always require Dan's confirmation. The automatic project-policy merge under **Complete without deployment** is distinct: selecting that policy is approval, and its automatic merge asks for no additional confirmation or message. Other gated actions fail closed if Jarvis approval is unavailable or expires. Provider credentials remain server-side; notification content, audio, tokens, and images are not written to logs, task events, or errors.
 
-Personality preferences are validated and persisted in Settings. They apply to new chat and voice sessions; changing or resetting them does not interrupt an active voice session. Reset restores the current British-butler, concise defaults and clears custom instructions. Preferences affect response style only, not Jarvis's identity, available tools, permissions, selected language, model or voice, or truthful reporting of action outcomes.
+The owner-editable **Identitet og rolle** setting is validated and persisted separately from Personality. Its versioned identity contract is shared by hosted chat, Danish and English realtime voice, hosted voice and reduced English voice. Composition order is the fixed truthfulness/security kernel, shared Jarvis identity, owner description, tone/response style, current mode, then situational/project context. Legacy personality and mode preferences remain unchanged; absent identity uses the broad personal-assistant default. A save refreshes an active voice session after the provider acknowledges the update; if refresh fails or times out, the relay closes so the client can reconnect. Chat refreshes its settings during the active conversation flow. “Saved” confirms persistence, not that an external provider or device accepted a live update.
+
+Personality preferences affect response style only, not Jarvis's identity, available tools, permissions, selected language, model or voice, or truthful reporting of action outcomes. Reset restores the current courteous British-butler tone, concise response style and empty custom instructions; it does not alter the separate identity description. Active voice updates apply only after acknowledgement; an unavailable in-place update requires reconnect.
 
 ### Page requirements
 
@@ -866,7 +869,8 @@ the last-release field is explicitly unavailable rather than inferred.
 | Appearance: light or dark mode across all signed-in pages | Change; persist across visits |
 | Jarvis: model and reasoning (chat and Danish voice); English speech-to-speech model | Change (applies to new sessions) |
 | Appearance: light/dark/system and approved theme tokens | Change (persisted across visits) |
-| Personality: tone, response style, custom instructions (up to 2,000 characters) | Change or reset (applies to new sessions) |
+| Identity and role: shared description (up to 2,000 characters), distinct from tone/style | Change; apply to active voice after provider acknowledgement, otherwise reconnect |
+| Personality: tone, response style, custom instructions (up to 2,000 characters) | Change or reset; preserves the separate identity description |
 | Voice: speech-to-text model, English voice, fixed Danish voice (Jeppe), default language, minimise windows on voice start (off by default) | Change supported preferences; Danish voice is read-only |
 | Coding agents: Codex default model and reasoning; Copilot default model | Change (applies to new tasks) |
 | Global: max parallel tasks; sleep switch | Change |

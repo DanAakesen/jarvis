@@ -15,7 +15,7 @@ import { createLogger } from '../logging.js';
 import { shutdown } from '../shutdown.js';
 import { coreModule } from '../core/index.js';
 import type { ConversationStore } from '../core/conversation-store.js';
-import type { SettingsStore } from '../core/settings.js';
+import { flattenSettings, type SettingsStore } from '../core/settings.js';
 import { defaultAwayModeState, type AwayModeStore, type AwayModeState } from '../core/away-mode.js';
 import type { ToolCallStore } from '../core/tool-calls.js';
 import { ToolRefusal } from '../core/tool-registry.js';
@@ -606,6 +606,157 @@ describe('backend-relayed Voice Live WebSocket', () => {
     first.close();
   });
 
+  it('refreshes a live identity after the current response and augments special responses', async () => {
+    const values: Record<string, unknown> = {
+      'identity.description': JSON.stringify('Synthetic original identity.'),
+    };
+    const read = vi.fn(async () => ({ ...values }));
+    const settingsStore: SettingsStore = {
+      read,
+      write: async (settings) => {
+        for (const { key, value } of flattenSettings(settings)) values[key] = value;
+      },
+    };
+    const received: Record<string, unknown>[] = [];
+    const sessionUpdates: Record<string, unknown>[] = [];
+    let upstream!: WebSocket;
+    const upstreamUrl = await echoServer((socket) => {
+      upstream = socket;
+      socket.on('message', (data) => {
+        const event = JSON.parse(data.toString()) as Record<string, unknown>;
+        received.push(event);
+        if (event.type === 'session.update' && event.session !== null &&
+            typeof event.session === 'object' && !Array.isArray(event.session)) {
+          sessionUpdates.push(event.session as Record<string, unknown>);
+          socket.send(JSON.stringify({ type: 'session.updated' }));
+        }
+      });
+    }, false);
+    const { app } = appFor(
+      (token, signal) => new WebSocket(upstreamUrl, {
+        headers: { Authorization: ['Bearer', token].join(' ') }, signal,
+      }),
+      undefined,
+      [],
+      [],
+      undefined,
+      undefined,
+      settingsStore,
+    );
+    await app.listen({ host: '127.0.0.1', port: 0 });
+    const address = app.server.address() as AddressInfo;
+    const browser = await openBrowser(`ws://127.0.0.1:${address.port}/voice`);
+    await vi.waitFor(() => expect(sessionUpdates).toHaveLength(1));
+    expect(String(sessionUpdates[0]?.instructions)).toContain('"Synthetic original identity."');
+
+    browser.send(JSON.stringify({
+      type: 'response.create',
+      response: { instructions: 'Acknowledge the request briefly.' },
+    }));
+    await vi.waitFor(() => expect(received.some((event) => event.type === 'response.create')).toBe(true));
+    const initialResponse = received.find((event) => event.type === 'response.create')?.response as {
+      instructions?: string;
+    };
+    expect(initialResponse.instructions).toContain('"Synthetic original identity."');
+    expect(initialResponse.instructions).toContain('Acknowledge the request briefly.');
+    upstream.send(JSON.stringify({ type: 'response.created' }));
+
+    const readsBeforeSave = read.mock.calls.length;
+    const saved = await app.inject({
+      method: 'PATCH',
+      url: '/settings',
+      headers: { authorization: ['Bearer', browserToken].join(' ') },
+      payload: { settings: { identity: { description: 'Synthetic updated identity.' } } },
+    });
+    expect(saved.statusCode).toBe(200);
+    await vi.waitFor(() => expect(read).toHaveBeenCalledTimes(readsBeforeSave + 3));
+    expect(sessionUpdates).toHaveLength(1);
+
+    upstream.send(JSON.stringify({ type: 'response.done' }));
+    await vi.waitFor(() => expect(sessionUpdates).toHaveLength(2));
+    expect(String(sessionUpdates[1]?.instructions)).toContain('"Synthetic updated identity."');
+
+    browser.send(JSON.stringify({
+      type: 'response.create',
+      response: { instructions: 'Confirm the updated preference.' },
+    }));
+    await vi.waitFor(() => expect(received.filter((event) => event.type === 'response.create')).toHaveLength(2));
+    const updatedResponse = received.filter((event) => event.type === 'response.create')[1]?.response as {
+      instructions?: string;
+    };
+    expect(updatedResponse.instructions).toContain('"Synthetic updated identity."');
+    expect(updatedResponse.instructions).toContain('Confirm the updated preference.');
+  });
+
+  it('ignores stale concurrent settings refreshes and applies the latest identity', async () => {
+    const values: Record<string, unknown> = {
+      'identity.description': JSON.stringify('Synthetic initial identity.'),
+    };
+    let delayNextRead = false;
+    let startStaleRead!: () => void;
+    let releaseStaleRead!: () => void;
+    let finishStaleRead!: () => void;
+    const staleReadStarted = new Promise<void>((resolve) => { startStaleRead = resolve; });
+    const staleReadFinished = new Promise<void>((resolve) => { finishStaleRead = resolve; });
+    const staleRead = new Promise<void>((resolve) => { releaseStaleRead = resolve; });
+    const settingsStore: SettingsStore = {
+      read: async () => {
+        const snapshot = { ...values };
+        if (delayNextRead) {
+          delayNextRead = false;
+          startStaleRead();
+          await staleRead;
+          finishStaleRead();
+        }
+        return snapshot;
+      },
+      write: async () => {},
+    };
+    const sessionUpdates: Record<string, unknown>[] = [];
+    const upstreamUrl = await echoServer((socket) => {
+      socket.on('message', (data) => {
+        const event = JSON.parse(data.toString()) as Record<string, unknown>;
+        if (event.type === 'session.update' && event.session !== null &&
+            typeof event.session === 'object' && !Array.isArray(event.session)) {
+          sessionUpdates.push(event.session as Record<string, unknown>);
+          socket.send(JSON.stringify({ type: 'session.updated' }));
+        }
+      });
+    }, false);
+    const { app } = appFor(
+      (token, signal) => new WebSocket(upstreamUrl, {
+        headers: { Authorization: ['Bearer', token].join(' ') }, signal,
+      }),
+      undefined,
+      [],
+      [],
+      undefined,
+      undefined,
+      settingsStore,
+    );
+    await app.listen({ host: '127.0.0.1', port: 0 });
+    const address = app.server.address() as AddressInfo;
+    const browser = await openBrowser(`ws://127.0.0.1:${address.port}/voice`);
+    await vi.waitFor(() => expect(sessionUpdates).toHaveLength(1));
+
+    delayNextRead = true;
+    values['identity.description'] = JSON.stringify('Synthetic stale identity.');
+    app.nowEventHub.publish({ type: 'settings_changed' });
+    await staleReadStarted;
+    values['identity.description'] = JSON.stringify('Synthetic latest identity.');
+    app.nowEventHub.publish({ type: 'settings_changed' });
+
+    await vi.waitFor(() => expect(sessionUpdates).toHaveLength(2));
+    expect(String(sessionUpdates[1]?.instructions)).toContain('"Synthetic latest identity."');
+    releaseStaleRead();
+    await staleReadFinished;
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(sessionUpdates).toHaveLength(2);
+    expect(sessionUpdates.some((session) => String(session.instructions).includes('"Synthetic stale identity."')))
+      .toBe(false);
+    browser.close();
+  });
+
   it('holds status announcements until Dan stops speaking', async () => {
     const received: Record<string, unknown>[] = [];
     let upstream: WebSocket | undefined;
@@ -636,9 +787,12 @@ describe('backend-relayed Voice Live WebSocket', () => {
 
     upstream!.send(JSON.stringify({ type: 'input_audio_buffer.speech_stopped' }));
     await vi.waitFor(() => expect(received.some((event) => event.type === 'response.create')).toBe(true));
-    expect(received.find((event) => event.type === 'response.create')).toMatchObject({
-      response: { instructions: `Speak this exact status update to Dan, verbatim: Task 1 is done.\n${modeContext(defaultAwayModeState)}\n${workspaceContext()}` },
-    });
+    const statusResponse = received.find((event) => event.type === 'response.create')?.response as {
+      instructions: string;
+    };
+    expect(statusResponse.instructions).toContain('Identity composition contract v1.');
+    expect(statusResponse.instructions).toContain('Additional response-specific instructions');
+    expect(statusResponse.instructions).toContain('Speak this exact status update to Dan, verbatim: Task 1 is done.');
   });
 
   it.each(['/voice', '/voice/da'])(
@@ -680,14 +834,13 @@ describe('backend-relayed Voice Live WebSocket', () => {
       expect(speak('The download has finished.')).toBe(true);
       expect(speak('A second update.')).toBe(false);
       await vi.waitFor(() => expect(received.filter((event) => event.type === 'response.create')).toHaveLength(1));
-      expect(received.find((event) => event.type === 'response.create')).toEqual({
-        type: 'response.create',
-        response: {
-          instructions: `Speak this exact status update to Dan, verbatim: The download has finished.\n${modeContext(defaultAwayModeState)}\n${workspaceContext()}`,
-          tools: [],
-          tool_choice: 'none',
-        },
-      });
+      const response = received.find((event) => event.type === 'response.create')?.response as {
+        instructions: string; tools: unknown[]; tool_choice: string;
+      };
+      expect(response).toMatchObject({ tools: [], tool_choice: 'none' });
+      expect(response.instructions).toContain('Identity composition contract v1.');
+      expect(response.instructions).toContain('Additional response-specific instructions');
+      expect(response.instructions).toContain('Speak this exact status update to Dan, verbatim: The download has finished.');
 
       await upstreamEvent('response.done');
       await upstreamEvent('input_audio_buffer.speech_started');
@@ -784,14 +937,13 @@ describe('backend-relayed Voice Live WebSocket', () => {
       expect(speak('Downloadet er færdigt.')).toBe(true);
       expect(speak('Another update.')).toBe(false);
       await vi.waitFor(() => expect(received).toHaveLength(1));
-      expect(received[0]).toEqual({
-        type: 'response.create',
-        response: {
-          instructions: `Speak this exact status update to Dan, verbatim: Downloadet er færdigt.\n${modeContext(defaultAwayModeState)}\n${workspaceContext()}`,
-          tools: [],
-          tool_choice: 'none',
-        },
-      });
+      const response = received[0]?.response as {
+        instructions: string; tools: unknown[]; tool_choice: string;
+      };
+      expect(response).toMatchObject({ tools: [], tool_choice: 'none' });
+      expect(response.instructions).toContain('Identity composition contract v1.');
+      expect(response.instructions).toContain('Additional response-specific instructions');
+      expect(response.instructions).toContain('Speak this exact status update to Dan, verbatim: Downloadet er færdigt.');
       await upstreamEvent('response.done');
       await upstreamEvent('input_audio_buffer.speech_started');
       expect(speak('Use chat while speaking.')).toBe(false);
@@ -3173,7 +3325,7 @@ describe('backend-relayed Voice Live WebSocket', () => {
       turn_detection: { type: 'server_vad', create_response: false },
       input_audio_transcription: { model: 'mai-transcribe', language: 'da' },
     });
-    expect(String(update.session?.instructions)).toContain('modern Danish');
+    expect(String(update.session?.instructions)).toContain('Tal naturligt dansk');
   });
   it.each([
     { outcome: 'ok', name: 'greet', timeout: 30_000 },
