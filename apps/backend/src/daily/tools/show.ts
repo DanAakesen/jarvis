@@ -47,9 +47,9 @@ const inputSchema = {
     startDate: { type: 'string', description: 'First day, YYYY-MM-DD, Europe/Copenhagen, inclusive. Required for measurements, the metric catalogue, sleep, workouts, meals and nutrition days; not accepted for the other sources.' },
     endDate: { type: 'string', description: 'Last day, YYYY-MM-DD, inclusive, at most 366 days after startDate. Required with startDate.' },
     workoutId: { type: 'string', minLength: 1, maxLength: 256, description: 'Heart rate only: the exact id of one workout, read from a workouts result.' },
-    metric: { type: 'string', minLength: 1, maxLength: 256, description: 'Measurements and heart rate only: keep just this measurement from the page, named as returned. Needed to chart one measurement.' },
+    metric: { type: 'string', minLength: 1, maxLength: 256, description: 'Measurements and heart rate only: keep one exact metric_name or its readable name (exact key wins). Filtering happens before the bounded page; needed to chart one measurement.' },
     display: { type: 'string', enum: ['table', 'chart'], description: 'table (the default) or chart. A chart is drawn only for workout duration, sleep hours, one measurement or heart rate during a workout; otherwise a table is shown and the notes say why.' },
-    limit: { type: 'integer', minimum: 1, maximum: maxShownRows, description: 'Rows to read. Meals, favourites and meal plans allow at most 100; the generated view allows at most 200 nutrition days. A chart or a named measurement reads a full page unless this is set.' },
+    limit: { type: 'integer', minimum: 1, maximum: maxShownRows, description: 'Rows to read after any measurement filter. Meals, favourites and meal plans allow at most 100; the generated view allows at most 200 nutrition days. A chart or a named measurement reads a full filtered page unless this is set.' },
   },
   required: ['source'],
   additionalProperties: false,
@@ -88,7 +88,7 @@ function parse(raw: unknown): ShowRequest {
   }
   if (!isDailyShowSource(source)) throw new ToolRefusal(`Choose a source: ${dailyShowSources.join(', ')}.`);
   if (Object.hasOwn(input, 'cursor')) {
-    throw new ToolRefusal('This tool shows one page and cannot continue a cursor. Narrow the dates or name one measurement instead.');
+    throw new ToolRefusal('This tool shows one bounded page and cannot continue a cursor. Narrow the dates or select one measurement to filter before the page limit.');
   }
   const allowed = selectors[source];
   if (Object.keys(input).some((key) => key !== 'source' && key !== 'display' && !allowed.includes(key))) {
@@ -123,6 +123,7 @@ function parse(raw: unknown): ShowRequest {
     workoutId = input.workoutId;
     query.workoutId = workoutId;
   }
+  if (metric !== undefined) query.metric = metric;
 
   if (allowed.includes('limit')) {
     const cap = limitCap(source);
@@ -169,7 +170,7 @@ async function publish(
 export function dailyShowTool(service: Pick<DailyQueryService, 'query'>): JarvisTool {
   return {
     name: 'daily_show',
-    description: 'Show retained Health data on screen in the signed-in workspace as a table, a chart or a detail view, instead of only describing it. Use it when the owner asks to see, chart, plot or compare a measurement catalogue, sleep, a measurement such as steps, workouts, heart rate during one workout, logged meals, per-day nutrition totals, saved favourites, meal plans or sync evidence. To answer in words only, use daily_query. Choose the source and its period: measurements, the metric catalogue, sleep, workouts, meals and nutrition days need startDate and endDate (YYYY-MM-DD, Europe/Copenhagen, at most 366 days); heart rate needs the exact workoutId of one workout, read from the id in a workouts result; favourites, meal plans and sync take no dates. Nutrition-day totals are derived from retained non-deleted meals; nutrients missing from every meal are Unknown, and partial totals are lower bounds. metric keeps one measurement from the page, named as returned (the readable name shown on screen also works), for measurements and heart rate. display is table (the default) or chart. A chart is drawn for workout duration, sleep hours, one measurement or heart rate during a workout; otherwise a table is shown and the result notes say why. Workout charts show each recorded duration in seconds by date; unknown durations stay out of the chart. The view adds no calculations, estimates or fill-ins; nutrition-day totals are displayed from the shared query result. An unknown value stays Unknown and is never zero, and completeness and freshness are not established. Each source, form and measurement keeps one view, so asking again refreshes it with the newest window instead of opening another. This shows one page: when the result says partial or hasMore, narrow the dates or name one measurement, and never claim a longer period was shown. Brief history and a single workout are not shown here; use daily_query. Report only what the result says: the view form actually shown (view.renderer), its notes, and facts from the returned records. This is private health data: it is not available on the phone, and nothing is logged, changed or sent.',
+    description: 'Show retained Health data on screen in the signed-in workspace as a table, a chart or a detail view, instead of only describing it. Use it when the owner asks to see, chart, plot or compare a measurement catalogue, sleep, a measurement such as steps, workouts, heart rate during one workout, logged meals, per-day nutrition totals, saved favourites, meal plans or sync evidence. To answer in words only, use daily_query. Choose the source and its period: measurements, the metric catalogue, sleep, workouts, meals and nutrition days need startDate and endDate (YYYY-MM-DD, Europe/Copenhagen, at most 366 days); heart rate needs the exact workoutId of one workout, read from the id in a workouts result; favourites, meal plans and sync take no dates. Nutrition-day totals are derived from retained non-deleted meals; nutrients missing from every meal are Unknown, and partial totals are lower bounds. For measurements and heart rate, metric selects one exact metric_name or the readable name shown on screen; the exact key wins and filtering is applied before the bounded row limit. display is table (the default) or chart. A chart is drawn for workout duration, sleep hours, one measurement or heart rate during a workout; otherwise a table is shown and the result notes say why. Workout charts show each recorded duration in seconds by date; unknown durations stay out of the chart. The view adds no calculations, estimates or fill-ins; nutrition-day totals are displayed from the shared query result. An unknown value stays Unknown and is never zero, and completeness and freshness are not established. Each source, form and measurement keeps one view, so asking again refreshes it with the newest window instead of opening another. This shows one bounded page of the filtered result: when the result says partial or hasMore, narrow the dates or choose a measurement, and never claim the entire requested period was shown. Brief history and a single workout are not shown here; use daily_query. Report only what the result says: the view form actually shown (view.renderer), its notes, and facts from the returned records. This is private health data: it is not available on the phone, and nothing is logged, changed or sent.',
     inputSchema,
     bodyLimit: 2048,
     sensitive: true,

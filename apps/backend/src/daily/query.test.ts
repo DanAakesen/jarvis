@@ -227,6 +227,16 @@ describe('one shared Daily read contract', () => {
       freshness: { latestReturnedRecordUpdatedAt: '2026-10-16T07:00:00.000Z' },
       provenance: { calculations: 'existing-read-model' } });
   });
+  it('applies readable measurement filters to heart-rate pages before their limit', async () => {
+    const f = fixture();
+    const query = { source: sources.heartRate, workoutId: 'workout-synthetic', metric: 'Heart rate', limit: 1 } as const;
+    const result = await f.service.query(query, request(), signal());
+    expect(f.heartRate).toHaveBeenCalledWith('workout-synthetic', {
+      limit: 1, metric: 'Heart rate',
+    }, expect.any(AbortSignal));
+    expect(result.items).toMatchObject([{ metric_name: 'heart_rate', avg_value: 90 }]);
+    expect(result.coverage).toMatchObject({ returned: 1, hasMore: false, next: null });
+  });
   it('returns retained-meal day totals with null, partial and complete nutrients and derived provenance', async () => {
     const f = fixture();
     const query = { source: sources.days, startDate: input.startDate, endDate: input.endDate, limit: 50 } as const;
