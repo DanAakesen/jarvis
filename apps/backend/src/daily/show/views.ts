@@ -371,14 +371,20 @@ function emptyView(source: TabularSource, result: DailyQueryResult, options: Dai
   const where = period
     ? (period.includes(' to ') ? ` from ${period}` : ` for ${period}`)
     : source === sources.heartRate ? ' for this workout' : '';
+  const selected = (source === sources.metrics || source === sources.heartRate) && options.metric
+    ? readable(options.metric)
+    : null;
+  const hasMore = result.coverage.hasMore;
   return {
     viewId: viewIdFor(source, 'table', options),
     view: make.text(
-      titleFor(meta.label, result),
-      sourceFor(result, false, [scopeSentence(result), 'No rows were returned.']),
-      `No ${meta.noun} records were returned${where}. That does not show the source is empty: completeness is not established. ${readSentence(result.freshness.observedAt)}`,
+      titleFor(selected ?? meta.label, result),
+      sourceFor(result, hasMore, [scopeSentence(result), selected ? `${selected} was selected before the page limit.` : 'No rows were returned.', ...(hasMore ? [moreSentence] : [])]),
+      selected
+        ? `No ${selected} measurement rows were returned${where}. That does not show the source is empty: completeness is not established. ${readSentence(result.freshness.observedAt)}`
+        : `No ${meta.noun} records were returned${where}. That does not show the source is empty: completeness is not established. ${readSentence(result.freshness.observedAt)}`,
     ),
-    receipt: receipt('text', 0, 0, false, []),
+    receipt: receipt('text', 0, 0, hasMore, hasMore ? [moreSentence] : []),
   };
 }
 

@@ -61,9 +61,15 @@ test('attention and calendar source queries accept only their bounded selectors'
 
 test('metric filters and metric catalogue queries validate their exact selector and key cursor', () => {
   const metrics = { source: dailyQuerySources.metrics, startDate: '2026-01-01', endDate: '2026-12-31' };
+  const heartRate = { source: dailyQuerySources.heartRate, workoutId: 'workout-1' };
   const catalog = { source: dailyQuerySources.metricCatalog, startDate: '2026-01-01', endDate: '2026-12-31' };
   assert.equal(isDailyQuery({ ...metrics, metric: 'body_mass' }), true);
   assert.equal(isDailyQuery({ ...metrics, metric: 'x'.repeat(256), limit: 1, cursor: { date: '2026-06-01', key: 'body_mass' } }), true);
+  assert.equal(isDailyQuery({ ...heartRate, metric: 'heart_rate', limit: 1, cursor: { minute: '2026-06-01T10:00:00Z', metric: 'heart_rate' } }), true);
+  for (const metric of ['', ' padded', 'padded ', 'x'.repeat(257), 'bad\nname', null]) {
+    assert.equal(isDailyQuery({ ...heartRate, metric }), false);
+  }
+  assert.equal(isDailyQuery({ ...heartRate, extra: true }), false);
   for (const metric of ['', ' padded', 'padded ', 'x'.repeat(257), 'bad\nname', null]) {
     assert.equal(isDailyQuery({ ...metrics, metric }), false);
   }

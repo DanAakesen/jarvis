@@ -135,6 +135,7 @@ export class DailyQueryService {
         } else if (input.source === sources.heartRate) {
           const page = await health.heartRate(input.workoutId, {
             limit: input.limit ?? 50, ...(input.cursor ? { after: input.cursor } : {}),
+            ...('metric' in input && input.metric !== undefined ? { metric: input.metric } : {}),
           }, signal);
           items = page.items.map(row => project(row, ['sample_minute', 'metric_name', 'min_value', 'avg_value', 'max_value', 'unit', 'sample_count']));
           next = page.next;
