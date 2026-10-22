@@ -1,7 +1,18 @@
 import type { PublicClientApplication } from '@azure/msal-browser';
+import { BrowserCacheLocation } from '@azure/msal-browser';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { PublicConfig } from '../config/public-config';
-import { isSignInRedirectPending, restoreProfile, saveSignInReturnPath, signIn, takeSignInReturnPath } from './auth';
+import {
+  clearSignInMarkers,
+  createAuthClient,
+  hasSignedInDeviceBefore,
+  isSignInRedirectPending,
+  restoreProfile,
+  saveSignInReturnPath,
+  signIn,
+  signOut,
+  takeSignInReturnPath,
+} from './auth';
 
 const config: PublicConfig = {
   tenantId: '11111111-1111-4111-8111-111111111111',
@@ -11,12 +22,23 @@ const config: PublicConfig = {
 };
 const account = { homeAccountId: 'account-id' } as never;
 const fetchMock = vi.fn();
-afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); sessionStorage.clear(); fetchMock.mockReset(); });
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+  clearSignInMarkers();
+  localStorage.clear();
+  sessionStorage.clear();
+  window.history.replaceState({}, '', '/');
+  fetchMock.mockReset();
+});
 
 function client(overrides: Partial<PublicClientApplication> = {}) {
   return {
     loginRedirect: vi.fn().mockResolvedValue(undefined),
+    logoutRedirect: vi.fn().mockResolvedValue(undefined),
+    clearCache: vi.fn().mockResolvedValue(undefined),
     handleRedirectPromise: vi.fn().mockResolvedValue(null),
+    ssoSilent: vi.fn().mockRejectedValue(Object.assign(new Error('no session'), { errorCode: 'login_required' })),
     setActiveAccount: vi.fn(),
     getActiveAccount: vi.fn().mockReturnValue(null),
     getAllAccounts: vi.fn().mockReturnValue([]),
@@ -26,7 +48,13 @@ function client(overrides: Partial<PublicClientApplication> = {}) {
 }
 
 describe('web authentication', () => {
-  it('redirects the page to Microsoft sign-in for the API scope and returns to the site root', async () => {
+  it('uses MSAL localStorage for its shared browser cache', () => {
+    const msal = createAuthClient(config);
+    expect(msal.getConfiguration().cache.cacheLocation).toBe(BrowserCacheLocation.LocalStorage);
+    expect(msal.getConfiguration().system.iframeBridgeTimeout).toBe(5_000);
+  });
+
+  it('does not force account selection on the default sign-in path', async () => {
     expect(isSignInRedirectPending()).toBe(false);
     const msal = client({ loginRedirect: vi.fn(async () => {
       expect(isSignInRedirectPending()).toBe(true);
@@ -35,6 +63,22 @@ describe('web authentication', () => {
     await expect(signIn(msal, config)).resolves.toBeUndefined();
 
     expect(msal.loginRedirect).toHaveBeenCalledWith({
+      scopes: [config.apiScope],
+      redirectUri: `${window.location.origin}/`,
+    });
+  });
+
+  it('offers account selection only when explicitly switching accounts', async () => {
+    const msal = client();
+
+    await signIn(msal, config);
+    await signIn(msal, config, true);
+
+    expect(msal.loginRedirect).toHaveBeenNthCalledWith(1, {
+      scopes: [config.apiScope],
+      redirectUri: `${window.location.origin}/`,
+    });
+    expect(msal.loginRedirect).toHaveBeenNthCalledWith(2, {
       scopes: [config.apiScope],
       prompt: 'select_account',
       redirectUri: `${window.location.origin}/`,
@@ -99,13 +143,93 @@ describe('web authentication', () => {
     saveSignInReturnPath('https://example.invalid/path');
     expect(takeSignInReturnPath()).toBeNull();
   });
-  it('silently restores a cached account and returns null when no account is cached', async () => {
+  it('silently restores a cached account and records that this device signed in', async () => {
     fetchMock.mockResolvedValue(new Response(JSON.stringify({ name: 'Dan Aakesen' }), { status: 200 }));
     vi.stubGlobal('fetch', fetchMock);
     const msal = client({ getActiveAccount: vi.fn().mockReturnValue(account) });
 
     await expect(restoreProfile(msal, config)).resolves.toEqual({ name: 'Dan Aakesen' });
     expect(msal.acquireTokenSilent).toHaveBeenCalledWith({ scopes: [config.apiScope], account });
-    expect(await restoreProfile(client(), config)).toBeNull();
+    expect(hasSignedInDeviceBefore()).toBe(true);
+  });
+
+  it('silently restores a cold start from the existing Microsoft session', async () => {
+    localStorage.setItem('jarvis.sign-in-device', 'previous');
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ name: 'Dan Aakesen' }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const msal = client({ ssoSilent: vi.fn().mockResolvedValue({ account, accessToken: 'silent-access-token' }) });
+
+    await expect(restoreProfile(msal, config)).resolves.toEqual({ name: 'Dan Aakesen' });
+
+    expect(msal.ssoSilent).toHaveBeenCalledWith({ scopes: [config.apiScope] });
+    expect(msal.setActiveAccount).toHaveBeenCalledWith(account);
+    expect(msal.loginRedirect).not.toHaveBeenCalled();
+  });
+
+  it('uses one guarded automatic redirect after silent SSO fails', async () => {
+    localStorage.setItem('jarvis.sign-in-device', 'previous');
+    const msal = client();
+
+    await expect(restoreProfile(msal, config)).resolves.toBeNull();
+    expect(msal.loginRedirect).toHaveBeenCalledTimes(1);
+    expect(msal.loginRedirect).toHaveBeenCalledWith({
+      scopes: [config.apiScope],
+      redirectUri: `${window.location.origin}/`,
+    });
+    expect(isSignInRedirectPending()).toBe(true);
+
+    await expect(restoreProfile(msal, config)).rejects.toThrow('Microsoft sign-in did not complete (login_required).');
+    expect(msal.loginRedirect).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not attempt automatic SSO or redirect on a device without the marker', async () => {
+    const msal = client();
+
+    await expect(restoreProfile(msal, config)).resolves.toBeNull();
+
+    expect(msal.ssoSilent).not.toHaveBeenCalled();
+    expect(msal.loginRedirect).not.toHaveBeenCalled();
+  });
+
+  it('recovers token renewal through one redirect and preserves the current route', async () => {
+    localStorage.setItem('jarvis.sign-in-device', 'previous');
+    window.history.pushState({}, '', '/settings?tab=appearance#theme');
+    const msal = client({
+      getActiveAccount: vi.fn().mockReturnValue(account),
+      acquireTokenSilent: vi.fn().mockRejectedValue(Object.assign(new Error('renewal failed'), {
+        errorCode: 'interaction_required',
+      })),
+    });
+
+    await expect(restoreProfile(msal, config)).resolves.toBeNull();
+
+    expect(msal.loginRedirect).toHaveBeenCalledTimes(1);
+    expect(takeSignInReturnPath()).toBe('/settings?tab=appearance#theme');
+  });
+
+  it('clears the MSAL cache and sign-in markers before returning to the app root', async () => {
+    localStorage.setItem('jarvis.sign-in-device', 'previous');
+    const msal = client();
+
+    await signOut(msal);
+
+    expect(msal.clearCache).toHaveBeenCalledTimes(1);
+    expect(msal.logoutRedirect).toHaveBeenCalledWith({
+      postLogoutRedirectUri: `${window.location.origin}/`,
+    });
+    expect(hasSignedInDeviceBefore()).toBe(false);
+    await expect(restoreProfile(msal, config)).resolves.toBeNull();
+    expect(msal.ssoSilent).not.toHaveBeenCalled();
+    expect(msal.loginRedirect).not.toHaveBeenCalled();
+  });
+
+  it('keeps the existing renewal message for failures that do not need interaction', async () => {
+    const msal = client({
+      getActiveAccount: vi.fn().mockReturnValue(account),
+      acquireTokenSilent: vi.fn().mockRejectedValue(new Error('network unavailable')),
+    });
+
+    await expect(restoreProfile(msal, config)).rejects.toThrow('Your Microsoft sign-in needs attention. Sign in again.');
+    expect(msal.loginRedirect).not.toHaveBeenCalled();
   });
 });

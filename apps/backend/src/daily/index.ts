@@ -1,4 +1,4 @@
-import { dailyContractVersion, dailyCapabilitiesVersion, dailyModuleId, dailyViewIds, dailyQuerySourcesV1, dailyQuerySourcesV2, dailyQuerySourcesV3, dailyQuerySourcesV4 } from '@jarvis/contracts';
+import { dailyContractVersion, dailyCapabilitiesVersion, dailyModuleId, dailyViewIds, dailyQuerySourcesV1, dailyQuerySourcesV2, dailyQuerySourcesV3, dailyQuerySourcesV4, dailyQuerySourcesV5, dailyQuerySourcesV5WithoutFeeds } from '@jarvis/contracts';
 import type { BackendModule } from '../modules.js';
 import { resolveDailyOwner } from './owner.js';
 import type { DailyData } from './query.js';
@@ -73,7 +73,7 @@ export function createDailyModules(enabled = false, data?: DailyData, connector?
         const hasVersion = (version: number) => accepted.includes(`application/json;version=${version}`) ||
           accepted.includes(`application/json;version="${version}"`);
         const version = hasVersion(dailyCapabilitiesVersion) ? dailyCapabilitiesVersion
-          : hasVersion(3) ? 3 : hasVersion(2) ? 2 : dailyContractVersion;
+          : hasVersion(4) ? 4 : hasVersion(3) ? 3 : hasVersion(2) ? 2 : dailyContractVersion;
         const vary = reply.getHeader('Vary');
         reply.header('Vary', [...(Array.isArray(vary) ? vary : vary ? [String(vary)] : []), 'Accept'].join(', '));
         reply.type(version > dailyContractVersion ? `application/json;version=${version}` : 'application/json');
@@ -89,8 +89,14 @@ export function createDailyModules(enabled = false, data?: DailyData, connector?
           ...(data ? {
             sources: version === 1 ? dailyQuerySourcesV1 : version === 2 ? dailyQuerySourcesV2
               : version === 3 ? dailyQuerySourcesV3
-                : data.feeds && request.principal && !request.agentPrincipal && !request.dailyConnectorPrincipal
-                  ? dailyQuerySourcesV4 : dailyQuerySourcesV3,
+                : version === 4
+                  ? data.feeds && request.principal && !request.agentPrincipal && !request.dailyConnectorPrincipal
+                    ? dailyQuerySourcesV4 : dailyQuerySourcesV3
+                  : data.trainingTargets
+                    ? data.feeds && request.principal && !request.agentPrincipal && !request.dailyConnectorPrincipal
+                      ? dailyQuerySourcesV5 : dailyQuerySourcesV5WithoutFeeds
+                    : data.feeds && request.principal && !request.agentPrincipal && !request.dailyConnectorPrincipal
+                      ? dailyQuerySourcesV4 : dailyQuerySourcesV3,
             refresh: { event: 'now', refetchOn: ['connect', 'reconnect', 'refocus'], revision: 'query-content-sha256' },
           } : {}),
         };

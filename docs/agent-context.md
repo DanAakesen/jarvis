@@ -1,5 +1,32 @@
 # Agent context
 
+## Bounded history continuation checks (22 October 2026; #1201)
+
+From the repository root, the following local checks passed:
+
+- `npm test --workspace @jarvis/backend -- src/daily src/core/agent-contract.test.ts src/core/tool-registry.test.ts`
+  — 1,093 tests across 62 files. This includes synthetic grouped-schema year
+  traversal for meals, metrics, sleep and workouts, independent exhaustion,
+  equal ordering keys, scope/cursor refusals, backdated/deleted meals, later-page
+  failures, cancellation, deadline/byte limits and assistant contract assertions.
+- `npm run build --workspace @jarvis/backend` and
+  `npm run lint --workspace @jarvis/backend`.
+- `npm test --workspace @jarvis/contracts` — 173 tests; contracts build and lint.
+- From `agents/jarvis`: `.venv/bin/python -m pytest -q` — 898 tests, and
+  `.venv/bin/python -m ruff check .`.
+
+No SQL fixture is configured in this sandbox; no live/private records, device
+completeness, model/provider acceptance, merge or deployment were exercised.
+The aggregate CI skips draft PRs. PR #1203's code commit `4809a9e` triggered
+run `39809082829`, which was skipped, not passed; its title gate separately
+failed because the generated title lacked the required
+task-ID/`fix-main:`/`docs:` format. Fresh exact-head qualification remains
+required after the PR metadata/ready gate permits it. Read-only review found
+no remaining significant issues after correcting legacy meal-ID replay.
+Secret scanning passed. The mandatory parallel validation was attempted, but
+its review binary was unavailable and its CodeQL analysis skipped for database
+size; neither is a clean automated-review/security qualification.
+
 ## Vault mirror freshness checks (19 October 2026; P14-29)
 
 Review corrections: `npm test --workspace @jarvis/backend -- src/proactive`
@@ -1063,7 +1090,10 @@ writes real data or probes a live service. `composition.test.ts` builds real
 Fastify applications, so it needs the pinned CI graph where those packages are
 unavailable locally. Check that Daily off leaves routes, tools, instructions and
 startup unchanged, that Daily on adds exactly the module's routes and seven tools,
-and that the tool count stays inside the 128-tool limit.
+and that all composed tools remain registered and advertised. There is no
+global tool-count ceiling or reserved-slot requirement; description and
+serialized-catalogue byte limits still apply (see
+[`docs/decisions.md`](decisions.md#catalogue-count-is-not-a-global-limit)).
 
 ## Internal Daily review checks (17 October 2026; P12-09)
 
@@ -3131,6 +3161,15 @@ Verified in Codex cloud for P0-02:
 | Focused P6-01 usage page and navigation tests | `npm test --workspace @jarvis/web -- --run src/usage/UsagePage.test.tsx src/App.test.tsx` |
 | Run web app | `npm run dev` in the repository root; open `http://localhost:5173` |
 | Watch web tests | `npm run test:watch --workspace @jarvis/web` |
+
+Web sign-in uses the fixed `http://localhost:5173` origin (`strictPort` in
+`apps/web/vite.config.ts`); both `http://localhost:5173/` and
+`http://localhost:5173/redirect.html` are registered in
+`infra/bootstrap.output.json`. Do not change the port or remove the redirect
+bridge URI without updating the Entra registration. On each device, tick
+Microsoft's **Stay signed in** option once when prompted. That keeps Microsoft's
+session across browser restarts; tenant sign-in-frequency policy and browser
+storage behavior can still require sign-in sooner.
 
 The Windows UI checkout can use its existing dependency junction and run from
 `apps\web`: `node ..\..\node_modules\typescript\bin\tsc --noEmit -p .`,

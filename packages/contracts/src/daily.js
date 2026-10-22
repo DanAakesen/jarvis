@@ -20,8 +20,8 @@ const legacyQuerySources = Object.freeze({
   sync: 'daily.sync',
 });
 export const dailyQuerySourcesV1 = Object.freeze(Object.values(legacyQuerySources));
-export const dailyCapabilitiesVersion = 4;
-export const dailyCapabilitiesAccept = 'application/json;version=4, application/json;version=3, application/json;version=2, application/json';
+export const dailyCapabilitiesVersion = 5;
+export const dailyCapabilitiesAccept = 'application/json;version=5, application/json;version=4, application/json;version=3, application/json;version=2, application/json';
 export const dailyQuerySources = Object.freeze({
   ...legacyQuerySources,
   briefs: 'daily.briefs.history',
@@ -30,6 +30,7 @@ export const dailyQuerySources = Object.freeze({
   days: 'daily.nutrition.days',
   attention: 'daily.attention',
   calendar: 'daily.calendar',
+  trainingTargets: 'daily.health.training-targets',
 });
 export const dailyQuerySourcesV2 = Object.freeze([
   ...dailyQuerySourcesV1, dailyQuerySources.briefs, dailyQuerySources.brief,
@@ -37,7 +38,11 @@ export const dailyQuerySourcesV2 = Object.freeze([
 export const dailyQuerySourcesV3 = Object.freeze([
   ...dailyQuerySourcesV2, dailyQuerySources.metricCatalog, dailyQuerySources.days,
 ]);
-export const dailyQuerySourcesV4 = Object.freeze(Object.values(dailyQuerySources));
+export const dailyQuerySourcesV4 = Object.freeze([
+  ...dailyQuerySourcesV3, dailyQuerySources.attention, dailyQuerySources.calendar,
+]);
+export const dailyQuerySourcesV5 = Object.freeze([...dailyQuerySourcesV4, dailyQuerySources.trainingTargets]);
+export const dailyQuerySourcesV5WithoutFeeds = Object.freeze([...dailyQuerySourcesV3, dailyQuerySources.trainingTargets]);
 const record = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 const keys = (v, allowed) => Object.keys(v).every((key) => allowed.includes(key));
 const key = (v) => typeof v === 'string' && v.length > 0 && v.length <= 256 &&
@@ -54,7 +59,7 @@ const instant = (v) => typeof v === 'string' && v.length <= 64 &&
 export function isDailyQuery(v) {
   if (!record(v) || !Object.values(dailyQuerySources).includes(v.source)) return false;
   if (Object.values(v).some(value => value === undefined)) return false;
-  if (v.source === dailyQuerySources.sync) return keys(v, ['source']);
+  if (v.source === dailyQuerySources.sync || v.source === dailyQuerySources.trainingTargets) return keys(v, ['source']);
   if (v.source === dailyQuerySources.attention) return keys(v, ['source']);
   if (v.source === dailyQuerySources.calendar) {
     if (!keys(v, ['source', 'from', 'to']) || !instant(v.from) || !instant(v.to)) return false;

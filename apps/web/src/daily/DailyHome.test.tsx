@@ -309,7 +309,20 @@ describe('Daily overview', () => {
     expect(screen.queryByRole('heading', { name: 'Today' })).toBeNull();
     expect(screen.queryByText('Your workouts, nutrition, body, sleep and latest brief at a glance.')).toBeNull();
   });
-  it('keeps keyboard order as each card link, the period dropdown in the Training card and each carousel dot', async () => {
+  it('keeps the status line above the title and the period dropdown at the end of the title row, outside the cards', async () => {
+    fixture();
+    render(home());
+    await settled();
+    const title = screen.getByRole('heading', { level: 1, name: 'Overview' });
+    const row = title.closest('.daily-heading-row');
+    const period = screen.getByRole('combobox', { name: 'Overview period' });
+    expect(row?.contains(period)).toBe(true);
+    expect(period.closest('article')).toBeNull();
+    const status = document.querySelector('.daily-heading-status');
+    expect(status?.compareDocumentPosition(title)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(status?.closest('.daily-heading')).toBe(row?.closest('.daily-heading'));
+  });
+  it('keeps keyboard order as each card link and each carousel dot, with the period dropdown in the standalone Overview', async () => {
     fixture({ answer: query => jsonResponse(dailyFixture(query)) });
     render(<MemoryRouter><DailyOverview backendUrl={backendUrl} getAccessToken={token}
       capabilities={{ sources: Object.values(sources) }} onRetryAvailability={() => {}} /></MemoryRouter>);
@@ -317,7 +330,7 @@ describe('Daily overview', () => {
     const user = userEvent.setup();
     await user.tab();
     const named = (element: Element | null) => element?.getAttribute('aria-label') ?? element?.textContent;
-    for (const name of ['Training', 'Overview period', 'Health', 'Body',
+    for (const name of ['Overview period', 'Training', 'Health', 'Body',
       'Show Training', 'Show Health', 'Show Body']) {
       expect(named(document.activeElement)).toBe(name);
       await user.tab();

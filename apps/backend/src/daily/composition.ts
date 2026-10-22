@@ -8,7 +8,6 @@ import { createDailyModules } from './index.js';
 import { FridaLookupAdapter } from './nutrition/frida.js';
 import type { NutritionSuggestionSources } from './nutrition/suggestion-adapter.js';
 import { NutritionTargetsStore, type NutritionTargetsAccess } from './nutrition/targets-store.js';
-import { TrainingTargetsStore, type TrainingTargetsAccess } from './training/targets-store.js';
 import { resolveDailyOwner } from './owner.js';
 import { createDailyData } from './query.js';
 import type { DailyFeedProviders } from './feeds/service.js';
@@ -48,10 +47,6 @@ export function composeDaily(options: DailyCompositionOptions): BackendModule | 
     owned(request);
     return NutritionTargetsStore.forRequest(pool, request);
   };
-  const trainingTargets: TrainingTargetsAccess = (request) => {
-    owned(request);
-    return TrainingTargetsStore.forRequest(pool, request);
-  };
   const suggestions: NutritionSuggestionSources = {
     nutrition: data.nutrition,
     health: (request) => {
@@ -59,5 +54,5 @@ export function composeDaily(options: DailyCompositionOptions): BackendModule | 
       return DailyHealthReadModel.forRequest(pool, request);
     },
   };
-  return createDailyModules(true, data, undefined, data.nutrition, data.nutrition, targets, suggestions, trainingTargets)[0];
+  return createDailyModules(true, data, undefined, data.nutrition, data.nutrition, targets, suggestions, data.trainingTargets)[0];
 }
