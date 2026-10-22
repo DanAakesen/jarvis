@@ -1,5 +1,29 @@
 # Decisions
 
+## Azure Speech partial-recognizer token configuration (22 October 2026; #1190)
+
+Construct the custom-endpoint `SpeechConfig` with `SpeechConfig.fromEndpoint(endpoint)`
+without an auth argument, then set `authorizationToken` and the selected `da-DK` or
+`en-GB` recognition language. The installed SDK rejects an empty-string auth
+argument even though its typings describe that usage. Keep Azure Speech optional:
+startup or cancellation failure remains visible as `voice.partials_unavailable`
+and does not disable Voice Live final-transcript handling. Existing reflex
+confidence, completion, confirmation, target, authorization, audit, duplicate and
+final-reconciliation checks remain unchanged.
+
+`npm test --workspace @jarvis/backend -- --run src/voice/speech-recognizer.test.ts src/voice/relay.test.ts`
+passed all 194 tests (11 recognizer and 183 relay). The recognizer tests exercise
+the installed SDK's Danish/English config, recognizing and canceled event
+objects, blank hypotheses, startup failure and abort cleanup. The relay test
+`relays an installed SDK recognizing event into the partial reflex path` proves
+the callback reaches the existing partial action and increments its metric.
+Backend build and lint also passed. The network start/stop callbacks were
+simulated; these checks do not prove acceptance of a live microphone or Azure
+provider session. The spoken-session acceptance in the runbook remains pending
+a separately authorized deployment.
+
+Refs DanAakesen/jarvis#1190.
+
 ## Push notifications carry bounded details (22 October 2026; P13-21 / #1194)
 
 The owner confirmed that proactive todo reminders and alerts should say what
