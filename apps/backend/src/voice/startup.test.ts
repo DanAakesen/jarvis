@@ -659,8 +659,11 @@ describe('English voice tool-budget fallback', () => {
   }
 
   it.each(['R3', 'R4'] as const)('sends presence updates, camera updates and response.create at %s without the catalogue', async (rung) => {
+    const presenceReads = vi.fn()
+      .mockResolvedValueOnce({ ...defaultAwayModeState, mode: 'present' })
+      .mockResolvedValue({ ...defaultAwayModeState, mode: 'away' });
     const { f, ready } = await reduced(rung, {
-      awayModeStore: { read: async () => ({ ...defaultAwayModeState, mode: 'away' }) } as BuildAppOptions['awayModeStore'],
+      awayModeStore: { read: presenceReads } as unknown as BuildAppOptions['awayModeStore'],
     });
     const before = ready.sent.length;
     f.app.nowEventHub.publish({
@@ -672,6 +675,7 @@ describe('English voice tool-budget fallback', () => {
     expect(presence.tools).toEqual([]);
     expect(presence.instructions).toContain(TOOLS_UNAVAILABLE_NOTICE);
     expect(presence.instructions.includes('Visual grounding')).toBe(rung === 'R3');
+    ready.event('session.updated');
 
     f.browser.emit('message', Buffer.from(JSON.stringify({ type: 'jarvis.camera.state', on: true })), false);
     await vi.advanceTimersByTimeAsync(0);

@@ -70,7 +70,7 @@ export async function applySettingsPatch(
 
 export const getSettingsTool: JarvisTool = {
   name: 'get_settings',
-  description: 'Read current non-secret settings, valid catalogue options and field constraints before updating. Optionally select an area. Credential values are never available.',
+  description: 'Read non-secret settings and valid options/constraints before updates. Optionally select an area. Secrets are never available.',
   inputSchema: getSettingsSchema,
   sensitive: true,
   async execute(input, request) {
