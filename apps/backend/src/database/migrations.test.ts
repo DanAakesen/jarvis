@@ -49,6 +49,19 @@ describe('committed SQL manifest', () => {
     expect(down.sql).toContain('TABLOCKX,HOLDLOCK');
     expect(down.sql).toContain('must be retained');
   });
+  it('tracks scoped GitHub App mint recovery while retaining unresolved legacy alerts', async () => {
+    const migration = (await readMigrations()).find(({ name }) => name === '0062_github_app_mint_recovery.sql');
+    expect(migration?.sql).toContain('github_app_scope_key char(64)');
+    expect(migration?.sql).toContain('recovered_at datetime2(7)');
+    expect(migration?.sql).toContain("EXEC(N'ALTER TABLE dbo.activity ADD");
+    expect(migration?.sql).toContain("alert_key LIKE N''credential:github-app:failed:%''");
+    expect(migration?.sql).toContain('CREATE TABLE dbo.github_app_mint_status');
+    expect(migration?.sql).toContain("status = N'failed'");
+    expect(migration?.sql).toContain('legacy-unscoped');
+    const down = await readDownMigration('0062_github_app_mint_recovery.sql');
+    expect(down.sql).toContain('SET github_app_scope_key = NULL, recovered_at = NULL');
+    expect(down.sql).not.toMatch(/\bDELETE\b/iu);
+  });
   it('adds the proactive operational schema and a reversible proactive job kind', async () => {
     const foundation = (await readMigrations()).find(({ name }) => name === '0055_proactive_foundation.sql');
     expect(foundation?.sql).toContain("CHECK (kind IN (N'test', N'finding'))");
@@ -248,6 +261,7 @@ describe('committed SQL manifest', () => {
       '0059_proactive_reminders.sql',
       '0060_daily_health_processing_state.sql',
       '0061_daily_training_targets.sql',
+      '0062_github_app_mint_recovery.sql',
     ]);
     for (const migration of migrations) await expect(readDownMigration(migration.name)).resolves.toMatchObject({ name: migration.name });
   });

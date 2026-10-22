@@ -919,6 +919,10 @@ function SettingsRoute({ config, session, nutritionKey, pushEnabled, proactiveEn
   }, [key, navigate]);
   return (
     <SettingsPage backendUrl={config.backendUrl} getAccessToken={session.getAccessToken} onBack={back}
+       account={<button className="secondary-button" type="button" onClick={() => { void session.signOut(); }}
+         disabled={session.state === 'signing-out'} aria-busy={session.state === 'signing-out' || undefined}>
+         {session.state === 'signing-out' ? 'Signing out…' : 'Sign out'}
+       </button>}
       presence={<PresenceSettings backendUrl={config.backendUrl} getAccessToken={session.getAccessToken} />}
       {...(pushEnabled ? { notifications: <PushNotifications backendUrl={config.backendUrl} getAccessToken={session.getAccessToken} /> } : {})}
       renderProjects={(projectDefaults) => (

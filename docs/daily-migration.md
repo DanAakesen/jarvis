@@ -412,9 +412,8 @@ off unless exactly `true`. It is off by default in code; production sets it, wit
 the web switch, in exactly two reviewed deployment files (18 October 2026), and a
 scan test allows no other file to mention either. With it off, Jarvis's routes,
 tools, instructions and startup are unchanged. With it on, one owner-bound module
-adds only the capabilities, query and nutrition-targets routes and seven tools
-(the 128-tool limit still holds and CI checks the headroom), fail-closed on the
-owner, with no connector, Google or Gmail feed,
+adds only the capabilities, query and nutrition-targets routes and seven tools,
+fail-closed on the owner, with no connector, Google or Gmail feed,
 provider call, upload, job or timer. No parity or acceptance is claimed.
 
 18 October source (P12-15): the page opens on an overview, "What Daily holds

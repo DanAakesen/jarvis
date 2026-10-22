@@ -48,15 +48,17 @@ export const dailyQuerySources: Readonly<{
   plans: 'daily.nutrition.plans'; sync: 'daily.sync';
   briefs: 'daily.briefs.history'; brief: 'daily.briefs.detail';
   metricCatalog: 'daily.health.metric-catalog'; days: 'daily.nutrition.days';
-  attention: 'daily.attention'; calendar: 'daily.calendar';
+  attention: 'daily.attention'; calendar: 'daily.calendar'; trainingTargets: 'daily.health.training-targets';
 }>;
 export type DailySourceId = typeof dailyQuerySources[keyof typeof dailyQuerySources];
-export const dailyQuerySourcesV1: readonly Exclude<DailySourceId, 'daily.briefs.history' | 'daily.briefs.detail' | 'daily.health.metric-catalog' | 'daily.nutrition.days'>[];
-export const dailyQuerySourcesV2: readonly Exclude<DailySourceId, 'daily.health.metric-catalog' | 'daily.nutrition.days'>[];
-export const dailyQuerySourcesV3: readonly Exclude<DailySourceId, 'daily.attention' | 'daily.calendar'>[];
-export const dailyQuerySourcesV4: readonly DailySourceId[];
-export const dailyCapabilitiesVersion: 4;
-export const dailyCapabilitiesAccept: 'application/json;version=4, application/json;version=3, application/json;version=2, application/json';
+export const dailyQuerySourcesV1: readonly Exclude<DailySourceId, 'daily.briefs.history' | 'daily.briefs.detail' | 'daily.health.metric-catalog' | 'daily.nutrition.days' | 'daily.attention' | 'daily.calendar' | 'daily.health.training-targets'>[];
+export const dailyQuerySourcesV2: readonly Exclude<DailySourceId, 'daily.health.metric-catalog' | 'daily.nutrition.days' | 'daily.attention' | 'daily.calendar' | 'daily.health.training-targets'>[];
+export const dailyQuerySourcesV3: readonly Exclude<DailySourceId, 'daily.attention' | 'daily.calendar' | 'daily.health.training-targets'>[];
+export const dailyQuerySourcesV4: readonly Exclude<DailySourceId, 'daily.health.training-targets'>[];
+export const dailyQuerySourcesV5: readonly DailySourceId[];
+export const dailyQuerySourcesV5WithoutFeeds: readonly Exclude<DailySourceId, 'daily.attention' | 'daily.calendar'>[];
+export const dailyCapabilitiesVersion: 5;
+export const dailyCapabilitiesAccept: 'application/json;version=5, application/json;version=4, application/json;version=3, application/json;version=2, application/json';
 export type DailyCursor = { date: string; key: string } | { key: string } | { date: string } | { minute: string; metric: string } | { createdAt: string; id: string } | { id: string } | { startedAt: string; id: string };
 export type DailyQuery =
   | { source: 'daily.health.metrics'; startDate: string; endDate: string; metric?: string; limit?: number; cursor?: { date: string; key: string } }
@@ -71,6 +73,7 @@ export type DailyQuery =
   | { source: 'daily.nutrition.plans'; limit?: number; cursor?: { id: string } }
   | { source: 'daily.briefs.history'; limit?: number; cursor?: { startedAt: string; id: string } }
   | { source: 'daily.briefs.detail'; briefId: string }
+  | { source: 'daily.health.training-targets' }
   | { source: 'daily.sync' }
   | { source: 'daily.attention' }
   | { source: 'daily.calendar'; from: string; to: string };
@@ -96,7 +99,7 @@ export interface DailyQueryResult {
     observedAt: string; sourceProcessedCommittedAt: string | null;
     latestReturnedRecordUpdatedAt: string | null; staleness: 'unknown';
   };
-  coverage: { returned: number; hasMore: boolean; next: DailyCursor | null; sourceCompleteness: 'unknown' };
+  coverage: { returned: number; hasMore: boolean; next: DailyCursor | null; sourceCompleteness: 'unknown'; detailMetricsTruncated?: boolean };
   /** Content fingerprint of this exact committed-read result, not a global ordering/replay token. */
   revision: string;
 }

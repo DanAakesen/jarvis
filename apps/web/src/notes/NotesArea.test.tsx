@@ -14,6 +14,7 @@ const second = { ...summary, path: 'General/other.md', title: 'Other', folder: '
 const vaultTask = (letter: string, text: string, taskPath: string, line: number) => ({
   id: letter.repeat(64), text, done: false, dueDate: '2031-04-09', dueTime: null, dueAt: null,
   priority: 'normal', path: taskPath, line, heading: 'Inbox',
+  version: letter.repeat(64),
 });
 const vaultTasks = [vaultTask('d', 'Buy a mirror', path, 3), vaultTask('e', 'Call about the frame', second.path, 1)];
 const json = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status, headers: { 'Content-Type': 'application/json' } });

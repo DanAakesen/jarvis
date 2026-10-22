@@ -2,7 +2,6 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
   createToolRegistry,
-  MAX_AGENT_TOOLS,
   MAX_CATALOGUE_BYTES,
   MAX_TOOL_DESCRIPTION_CHARACTERS,
   type JarvisTool,
@@ -10,7 +9,7 @@ import {
 
 const limits = JSON.parse(readFileSync(
   new URL('../../../../agents/jarvis/limits.json', import.meta.url), 'utf8',
-)) as { maxTools: number; maxToolDescriptionCharacters: number; maxCatalogueBytes: number };
+)) as { maxToolDescriptionCharacters: number; maxCatalogueBytes: number };
 
 function tool(name: string, overrides: Partial<JarvisTool> = {}): JarvisTool {
   return {
@@ -26,24 +25,17 @@ function tools(count: number): JarvisTool[] {
   return Array.from({ length: count }, (_, index) => tool(`tool_${index}`));
 }
 
-describe('tool catalogue limits (the agent rejects the whole catalogue, and every chat turn, past these)', () => {
-  it('keeps the backend limits identical to agents/jarvis/limits.json that the agent reads', () => {
-    expect(MAX_AGENT_TOOLS).toBe(limits.maxTools);
+describe('tool catalogue validation', () => {
+  it('keeps description and byte limits identical to agents/jarvis/limits.json', () => {
     expect(MAX_TOOL_DESCRIPTION_CHARACTERS).toBe(limits.maxToolDescriptionCharacters);
     expect(MAX_CATALOGUE_BYTES).toBe(limits.maxCatalogueBytes);
   });
 
-  it('accepts exactly the maximum number of tools across modules', () => {
-    const registry = createToolRegistry([
-      { id: 'a', tools: tools(MAX_AGENT_TOOLS - 10) },
-      { id: 'b', tools: Array.from({ length: 10 }, (_, index) => tool(`other_${index}`)) },
-    ]);
-    expect(registry.list()).toHaveLength(MAX_AGENT_TOOLS);
-  });
-
-  it('refuses one tool more than the maximum with a message that says how to fix it', () => {
-    expect(() => createToolRegistry([{ id: 'a', tools: tools(MAX_AGENT_TOOLS + 1) }]))
-      .toThrow(/129 tools.*at most 128.*operation parameter/su);
+  it.each([121, 129])('accepts all %i tools, including the former reserve and count boundaries', (count) => {
+    const definitions = tools(count);
+    const registry = createToolRegistry([{ id: 'a', tools: definitions }]);
+    expect(registry.list()).toHaveLength(count);
+    expect(registry.list().map(({ name }) => name)).toEqual(definitions.map(({ name }) => name));
   });
 
   it('refuses an over-long description and an oversized catalogue', () => {

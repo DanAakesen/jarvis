@@ -11,9 +11,10 @@ reuses the existing owner resolver, bounded SQL readers, 30-second timeout and
 Capabilities are negotiated independently from the query contract. Version 1
 keeps its original nine sources, version 2 keeps its original eleven sources,
 version 3 adds `daily.health.metric-catalog` and `daily.nutrition.days`, and
-version 4 adds the optional Gmail attention and calendar feed sources. Feed
-sources appear in v4 capabilities only for the authenticated owner browser when
-the default-off feed composition exists. Versions 1–3 retain their source lists;
+version 4 adds the optional Gmail attention and calendar feed sources. Version 5
+adds `daily.health.training-targets` when the existing owner-bound target reader
+is composed. Feed sources appear only for the authenticated owner browser when
+the default-off feed composition exists. Versions 1–4 retain their source lists;
 clients that do not request a supported version receive version 1.
 
 - `daily.attention` reads retained waiting-for-you/waiting-on-others threads and
@@ -36,6 +37,16 @@ clients that do not request a supported version receive version 1.
   trimming an unrelated page afterward. Its `rowsReturned`, `hasMore` and
   partial disclosures describe the filtered result; it does not fetch further
   pages or claim that a bounded page covers the full requested period.
+- Health metric rows include typed aggregation, bounded source labels and latest
+  sample metadata. Sleep and minute heart-rate rows include up to five source
+  labels and say when the list was capped; raw `fields_json` and `source_json`
+  are not returned by these projections.
+- `daily.health.training-targets` reads the existing owner target store. Missing
+  targets stay null and appear in `missing`; the query adds no write capability.
+- `daily.health.workout` keeps its existing detail and adds normalized
+  per-workout metrics not already summarized there. The additional list is capped
+  at 100; a cap hit marks both the record and result partial without a fabricated
+  continuation cursor.
 - `daily.health.metric-catalog` pages metric names over a maximum 366-day
   period, with sorted distinct non-null units (up to five), first/last dates,
   day count and latest update time.
@@ -56,7 +67,9 @@ Both new collection queries use keyset cursors and parameterized SQL bounded
 to `TOP(@limit + 1)`. Metric catalogues default to 100 (maximum 500) rows;
 nutrition days default to 50 (maximum 400). Neither requires a table or index
 migration. `docs/architecture.md` records the broader read boundary and
-version-compatibility details.
+version-compatibility details; [`docs/daily-health-read-coverage.md`](../../../../docs/daily-health-read-coverage.md)
+maps retained storage through shared reads to actual tools and records the
+remaining exclusions and partial-detail bound.
 
 Run the focused contracts and backend checks with:
 
@@ -64,6 +77,7 @@ Run the focused contracts and backend checks with:
 npm test --workspace @jarvis/contracts
 npm test --workspace @jarvis/backend -- --run src/daily/query.test.ts src/daily/index.test.ts src/daily/health/read-model.test.ts src/daily/show/views.test.ts src/daily/mcp/routes.test.ts
 npm run test:database --workspace @jarvis/backend -- src/database/daily-schema.integration.test.ts
+npm run test:database --workspace @jarvis/backend -- src/database/health-processing.integration.test.ts src/database/training-targets.integration.test.ts
 ```
 
 The real-SQL test requires the existing isolated loopback SQL Server fixture;
@@ -81,8 +95,10 @@ migration refuses to discard any such row.
 only. They reject agent, runner, connector and other identities, query strings
 and invalid or oversized patches. A clear is `null`; partial updates preserve
 the other values and commit transactionally. The assistant has no training
-target write tool because the production tool catalogue must retain at least
-eight free slots. A read-only query source may be added later.
+target write tool. The former eight-slot catalogue rationale is superseded by
+#1204; that issue does not approve this capability. The existing `daily_query`
+reads targets through the shared store and also returns them in
+`daily_health_summary`; no new catalogue entry is needed.
 
 The web client validates the full target response and owns the Settings
 editor's load/save recovery states. `useTrainingTargets` provides a validated
