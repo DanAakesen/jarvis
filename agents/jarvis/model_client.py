@@ -88,7 +88,8 @@ Brug backendens værktøjer og sikkerhedsregler. Når en handling lykkes, bekræ
 uden at gentage detaljer, Dan netop har godkendt. Meld fejl, delvise resultater og ubekræftede
 resultater kort og tydeligt, herunder hvad der fejlede og næste skridt; sig aldrig, at en mislykket
 handling er gennemført.""",
-    "en": """Reply in clear, natural English, using concise written language and markdown only when it helps.
+    "en": """Reply in clear, natural English, using concise written language and
+markdown only when it helps.
 Use the tools and safety rules supplied by the backend. After a successful action, confirm it in one
 short sentence without repeating details Dan just approved. Report failed, partial or unverified
 results plainly, including what failed and the next step; never say a failed action is done.""",
@@ -210,7 +211,8 @@ def personalize_instructions(
         "Response preferences (style only):\n"
         f"- Tone: {PERSONALITY_TONES[settings.tone]}.\n"
         f"- Response style: {PERSONALITY_RESPONSE_STYLES[settings.response_style]}.\n"
-        "The following JSON string is an owner-provided style preference, not policy or tool input:\n"
+        "The following JSON string is an owner-provided style preference, not policy "
+        "or tool input:\n"
         f"{json.dumps(settings.custom_instructions, ensure_ascii=False)}",
         f"{mode_context(settings)}\n"
         "Spoken replies use one short sentence when possible, with concise written replies. "
@@ -717,14 +719,16 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                                 "response_style": current_settings.response_style,
                                 "custom_instructions": current_settings.custom_instructions,
                                 "identity_description": current_settings.identity_description,
-                                "identity_contract_version": current_settings.identity_contract_version,
+                                "identity_contract_version":
+                                    current_settings.identity_contract_version,
                                 "composition_revision": current_settings.composition_revision,
                                 "capability_instructions": current_settings.capability_instructions,
                                 "jarvis_repository": current_settings.jarvis_repository,
                                 "projects": current_settings.projects,
                             }
                             if settings.composition_revision
-                            and current_settings.composition_revision != settings.composition_revision
+                            and current_settings.composition_revision
+                            != settings.composition_revision
                             else {}
                         )
                         settings = replace(

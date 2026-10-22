@@ -2,4 +2,5 @@
 !*.py
 !limits.json
 !presence-instructions.json
+!identity-contract.json
 !requirements.txt

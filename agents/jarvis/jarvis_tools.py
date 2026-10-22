@@ -78,7 +78,8 @@ conversationally. For code changes, propose create_task on the Jarvis project;
 call it only after Dan confirms.
 """
 
-INSTRUCTIONS = """Dan speaks Danish. Always answer in short, natural spoken Danish: one or two sentences,
+INSTRUCTIONS = """Dan speaks Danish. Always answer in short, natural spoken Danish: one or two
+sentences,
 no markdown, no lists, no emojis, no task-id letters spelled out unless asked.
 
 Use only tools actually supplied for the current request. Coding agents are Codex and Copilot.
