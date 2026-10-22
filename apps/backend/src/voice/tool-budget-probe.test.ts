@@ -72,7 +72,7 @@ function setup(enabled = true, now: () => number = () => performance.now()) {
 }
 
 describe('voice tool-budget background probes', () => {
-  it('probes in fixed order and stops at the first ready frame without changing memory', async () => {
+  it('probes in fixed order and promotes the first ready Health-capable frame', async () => {
     const f = setup();
     expect(f.probe.start(f.context)).toBe(true);
     expect(f.connect).not.toHaveBeenCalled();
@@ -95,7 +95,7 @@ describe('voice tool-budget background probes', () => {
     expect(f.records.filter((record) => record.msg === 'voice.tool_budget_probe').map((record) => [
       record.probe, record.outcome,
     ])).toEqual([['full', 'timeout'], ['no_proactive', 'ready']]);
-    expect(f.memory.get()).toBeUndefined();
+    expect(f.memory.get()).toBe(1);
     expect(f.connect).toHaveBeenCalledTimes(2);
     expect(f.maximumOpenSockets).toBe(1);
     expect(f.sockets.every((socket) => socket.sent.every((data) =>
@@ -130,6 +130,21 @@ describe('voice tool-budget background probes', () => {
       .toEqual([expect.objectContaining({ probe: 'full', outcome: 'ready' })]);
     expect(f.connect).toHaveBeenCalledOnce();
     expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('does not promote a ready no-daily frame that cannot provide Health tools', async () => {
+    const f = setup();
+    f.probe.start(f.context);
+    await vi.advanceTimersByTimeAsync(16_000);
+    expect(f.connect).toHaveBeenCalledTimes(3);
+    f.sockets[2]!.open();
+    f.sockets[2]!.event('session.updated');
+    await vi.advanceTimersByTimeAsync(0);
+    expect(f.records).toContainEqual(expect.objectContaining({
+      msg: 'voice.tool_budget_probe', probe: 'no_daily', outcome: 'ready',
+    }));
+    expect(f.memory.get()).toBeUndefined();
+    await f.probe.close();
   });
 
   it('honours the process cooldown and starts no overlapping probe socket', async () => {
@@ -180,7 +195,8 @@ describe('voice tool-budget background probes', () => {
       };
     });
     tools.push(...Array.from({ length: 11 }, (_, index) => ({
-      name: index === 0 ? 'proactive_recent_items' : `daily_tool_${index}`,
+      name: index === 0 ? 'proactive_recent_items'
+        : index === 1 ? 'proactive_preferences' : `daily_tool_${index}`,
       description: 'description',
       inputSchema: { type: 'object', properties: { value: { type: 'string', description: 'x'.repeat(1_800) } } },
       execute: async () => ({}), moduleId: 'test',
@@ -190,8 +206,8 @@ describe('voice tool-budget background probes', () => {
     expect(TOOL_BUDGET_PROBE_NAMES).toEqual(['full', 'no_proactive', 'no_daily', 'reduced_plus_copies']);
 
     const full = createRealtimeSessionUpdate(registry).session.tools;
-    expect(createToolBudgetProbeTools('no_proactive', registry).list()).toHaveLength(121);
-    expect(createToolBudgetProbeTools('no_daily', registry).list()).toHaveLength(112);
+    expect(createToolBudgetProbeTools('no_proactive', registry).list()).toHaveLength(120);
+    expect(createToolBudgetProbeTools('no_daily', registry).list()).toHaveLength(113);
     const copies = createToolBudgetProbeTools('reduced_plus_copies', registry).list();
     const copyFrame = createRealtimeSessionUpdate(
       createToolBudgetProbeTools('reduced_plus_copies', registry), undefined, undefined, 'en', [], undefined,

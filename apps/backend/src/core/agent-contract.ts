@@ -3,7 +3,6 @@ import {
   CAPABILITY_INSTRUCTIONS_MAX_CODE_POINTS,
 } from './capability-instructions.js';
 import {
-  MAX_AGENT_TOOLS,
   MAX_CATALOGUE_BYTES,
   MAX_TOOL_DESCRIPTION_CHARACTERS,
 } from './tool-registry.js';
@@ -116,7 +115,7 @@ function validAgentSettings(value: unknown): boolean {
 }
 
 function catalogueFailure(tools: readonly AgentToolDescriptor[]): string | undefined {
-  if (!Array.isArray(tools) || tools.length > MAX_AGENT_TOOLS) return 'Tool count exceeds the agent limit.';
+  if (!Array.isArray(tools)) return 'Tool catalogue is invalid.';
   const names = new Set<string>();
   for (const tool of tools) {
     if (!isRecord(tool) || typeof tool.name !== 'string' ||

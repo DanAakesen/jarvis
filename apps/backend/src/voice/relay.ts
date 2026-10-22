@@ -2309,7 +2309,7 @@ function registerVoiceRoute(
                 const tools = createToolBudgetProbeTools(probe, app.jarvisTools);
                 return createRealtimeSessionUpdate(
                   tools, personality, presence, 'en', projects, transcriptionModel, voiceTuning, memorySettings,
-                  probe === 'reduced_plus_copies' ? 'notice' : 'full',
+                  probe === 'reduced_plus_copies' || probe === 'no_proactive' ? 'notice' : 'full',
                 );
               },
               acquireToken: (signal) => credential(getToken, signal),

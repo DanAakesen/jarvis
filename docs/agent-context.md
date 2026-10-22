@@ -1,5 +1,32 @@
 # Agent context
 
+## Bounded history continuation checks (22 October 2026; #1201)
+
+From the repository root, the following local checks passed:
+
+- `npm test --workspace @jarvis/backend -- src/daily src/core/agent-contract.test.ts src/core/tool-registry.test.ts`
+  — 1,093 tests across 62 files. This includes synthetic grouped-schema year
+  traversal for meals, metrics, sleep and workouts, independent exhaustion,
+  equal ordering keys, scope/cursor refusals, backdated/deleted meals, later-page
+  failures, cancellation, deadline/byte limits and assistant contract assertions.
+- `npm run build --workspace @jarvis/backend` and
+  `npm run lint --workspace @jarvis/backend`.
+- `npm test --workspace @jarvis/contracts` — 173 tests; contracts build and lint.
+- From `agents/jarvis`: `.venv/bin/python -m pytest -q` — 898 tests, and
+  `.venv/bin/python -m ruff check .`.
+
+No SQL fixture is configured in this sandbox; no live/private records, device
+completeness, model/provider acceptance, merge or deployment were exercised.
+The aggregate CI skips draft PRs. PR #1203's code commit `4809a9e` triggered
+run `39809082829`, which was skipped, not passed; its title gate separately
+failed because the generated title lacked the required
+task-ID/`fix-main:`/`docs:` format. Fresh exact-head qualification remains
+required after the PR metadata/ready gate permits it. Read-only review found
+no remaining significant issues after correcting legacy meal-ID replay.
+Secret scanning passed. The mandatory parallel validation was attempted, but
+its review binary was unavailable and its CodeQL analysis skipped for database
+size; neither is a clean automated-review/security qualification.
+
 ## Vault mirror freshness checks (19 October 2026; P14-29)
 
 Review corrections: `npm test --workspace @jarvis/backend -- src/proactive`
@@ -274,6 +301,27 @@ Engine checks:
 `npm test --workspace @jarvis/backend -- --run src/proactive src/database/conversation-store.test.ts`,
 `npm run build --workspace @jarvis/backend`, and
 `npm run lint --workspace @jarvis/backend`.
+
+## Conversational proactive suggestion preferences (#1207)
+
+Chat, voice and the Proactive Settings section share owner-scoped category and
+personal/work preferences through `ProactiveStore.settings`. Migration 0062
+defaults all categories to enabled and scope to `all`, including for existing
+accounts. Restricted scopes exclude unknown/mixed findings. The tool requires a
+matching direct owner request and patches one category or scope; findings and
+source text cannot authorize it. These preferences constrain unsolicited
+proactive generation/delivery only, not explicit owner tasks. Re-enabling does
+not alter pause, sources, budget or unrelated settings. Existing findings,
+todos and reminders are not deleted.
+
+Focused local checks:
+`npm test --workspace @jarvis/backend -- --run src/proactive/tools.test.ts src/proactive/policy.test.ts src/proactive/engine.test.ts src/proactive/store.test.ts src/proactive/routes.test.ts src/proactive/todo-writer.test.ts src/proactive/alerts.test.ts src/proactive/reminder-ticker.test.ts src/proactive/vault-push-reminders.test.ts src/database/proactive-store.test.ts src/database/migrations.test.ts src/voice/realtime.test.ts src/voice/startup.test.ts src/core/settings.test.ts src/production-modules.test.ts`,
+`npm test --workspace @jarvis/web -- --run src/ProactiveSettings.test.tsx`,
+backend/web builds and lint. SQL persistence, existing-row migration defaults and
+rollback protection are covered by
+`npm run test:database --workspace @jarvis/backend -- src/database/schema.integration.test.ts`;
+it requires the isolated loopback SQL Server configuration. Local voice tests
+cover registration/dispatch inputs, not a live voice-provider session.
 
 ## P14-09 overlay verification (18 October 2026)
 
@@ -924,6 +972,27 @@ health200, actual13/15smokeok with PC bridge down/recurring identity degraded.
 No causal source/auth attribution or extra canary. Receipt6231173591 and #724
 opening matched independent readbacks; this inactive release is finished.
 
+## Food photo estimates and checks (22 October 2026; #1196)
+
+Use the existing conversation attachment and image-capable model paths. Frida
+resolves only generic food nutrients; it does not recognize food or measure
+portions. The existing `daily_food_review` groups read-only `lookup_components`
+and final `log_estimate`, preserving the tool catalogue count and the 128-name
+ceiling. Final component inputs are resolved again server-side before totals
+and the exact browser Now proposal are built. Unmatched identity, missing
+grams/calories and unknown macros remain explicit; no write occurs before the
+existing approval callback. Photo capture and source fingerprints derive from
+validated persisted attachment references, not model/tool arguments. Daily
+remains default-off; public Frida availability and physical-device acceptance
+are not established.
+
+Focused source checks passed: backend food review/composition/lookup tests
+(73 tests), backend build and lint, backend conversation/history persistence
+tests (74 tests), web conversation attachment tests (19 tests), and the existing
+agent image-input tests (`agents/jarvis/.venv/bin/python -m pytest -q
+agents/jarvis/tests/test_image_context.py`, 68 tests). Do not interpret local
+synthetic tests as live provider, deployment, or device acceptance.
+
 ## Internal Daily saved-food checks (17 October 2026; P12-09)
 
 The current source batch groups owned lookup/preferences and four native-reviewed
@@ -1042,7 +1111,10 @@ writes real data or probes a live service. `composition.test.ts` builds real
 Fastify applications, so it needs the pinned CI graph where those packages are
 unavailable locally. Check that Daily off leaves routes, tools, instructions and
 startup unchanged, that Daily on adds exactly the module's routes and seven tools,
-and that the tool count stays inside the 128-tool limit.
+and that all composed tools remain registered and advertised. There is no
+global tool-count ceiling or reserved-slot requirement; description and
+serialized-catalogue byte limits still apply (see
+[`docs/decisions.md`](decisions.md#catalogue-count-is-not-a-global-limit)).
 
 ## Internal Daily review checks (17 October 2026; P12-09)
 
@@ -3110,6 +3182,15 @@ Verified in Codex cloud for P0-02:
 | Focused P6-01 usage page and navigation tests | `npm test --workspace @jarvis/web -- --run src/usage/UsagePage.test.tsx src/App.test.tsx` |
 | Run web app | `npm run dev` in the repository root; open `http://localhost:5173` |
 | Watch web tests | `npm run test:watch --workspace @jarvis/web` |
+
+Web sign-in uses the fixed `http://localhost:5173` origin (`strictPort` in
+`apps/web/vite.config.ts`); both `http://localhost:5173/` and
+`http://localhost:5173/redirect.html` are registered in
+`infra/bootstrap.output.json`. Do not change the port or remove the redirect
+bridge URI without updating the Entra registration. On each device, tick
+Microsoft's **Stay signed in** option once when prompted. That keeps Microsoft's
+session across browser restarts; tenant sign-in-frequency policy and browser
+storage behavior can still require sign-in sooner.
 
 The Windows UI checkout can use its existing dependency junction and run from
 `apps\web`: `node ..\..\node_modules\typescript\bin\tsc --noEmit -p .`,

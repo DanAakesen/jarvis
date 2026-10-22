@@ -490,6 +490,188 @@ describe('GitHub vault', () => {
     expect(truncated.json().items).toHaveLength(500);
   });
 
+  it('ticks and unticks one task line, keeping line endings and refusing stale or out-of-scope requests', async () => {
+    const path = 'Personal/Inbox.md';
+    const { github, module } = moduleFor({
+      remote: {
+        [path]: { sha: sha('a'), content: '# Home\r\n- [ ] Buy a mirror 📅 2031-04-09\r\n- [x] Finished task\r\n' },
+        'General/Notes.md': { sha: sha('b'), content: '- [ ] Not in the task scope' },
+      },
+    });
+    const app = memoryApiApp(module);
+    const patch = (payload: object) => app.inject({
+      method: 'PATCH', url: '/vault/tasks', headers: apiAuthorization, payload,
+    });
+
+    const ver = (line: string) => createHash('sha256').update(line, 'utf8').digest('hex');
+    const mirrorOpen = ver('- [ ] Buy a mirror 📅 2031-04-09');
+    const mirrorDone = ver('- [x] Buy a mirror 📅 2031-04-09');
+    const listed = await app.inject({ url: '/vault/tasks', headers: apiAuthorization });
+    expect(listed.json().items).toEqual([expect.objectContaining({ line: 2, version: mirrorOpen })]);
+
+    const ticked = await patch({ path, line: 2, text: 'Buy a mirror', version: mirrorOpen, done: true });
+    expect(ticked.statusCode).toBe(200);
+    expect(ticked.json()).toMatchObject({ path, line: 2, done: true, commit: sha('f'), version: mirrorDone });
+    expect(github.files.get(path)?.content)
+      .toBe('# Home\r\n- [x] Buy a mirror 📅 2031-04-09\r\n- [x] Finished task\r\n');
+    const writes = github.calls.filter(({ method }) => method === 'PUT');
+    expect(writes).toHaveLength(1);
+    expect(writes[0]?.body).toMatchObject({ sha: sha('a'), message: expect.stringContaining('jarvis: complete a task') });
+
+    const again = await patch({ path, line: 2, text: 'Buy a mirror', version: mirrorDone, done: true });
+    expect(again.json()).toMatchObject({ done: true, commit: null, version: mirrorDone });
+    expect(github.calls.filter(({ method }) => method === 'PUT')).toHaveLength(1);
+
+    const undone = await patch({ path, line: 2, text: 'Buy a mirror', version: mirrorDone, done: false });
+    expect(undone.json()).toMatchObject({ done: false, version: mirrorOpen });
+    await patch({ path, line: 2, text: 'Buy a mirror', version: mirrorOpen, done: true });
+
+    const reopened = await patch({ path, line: 3, text: 'Finished task', version: ver('- [x] Finished task'), done: false });
+    expect(reopened.statusCode).toBe(200);
+    expect(github.files.get(path)?.content)
+      .toBe('# Home\r\n- [x] Buy a mirror 📅 2031-04-09\r\n- [ ] Finished task\r\n');
+
+    const version = ver('- [x] Buy a mirror 📅 2031-04-09');
+    expect((await patch({ path, line: 2, text: 'Something else', version, done: false })).statusCode).toBe(409);
+    expect((await patch({ path, line: 1, text: 'Home', version: ver('# Home'), done: true })).statusCode).toBe(409);
+    expect((await patch({ path: 'Personal/Missing.md', line: 1, text: 'x', version, done: true })).statusCode).toBe(409);
+    expect((await patch({ path: 'General/Notes.md', line: 1, text: 'Not in the task scope', version, done: true })).statusCode)
+      .toBe(400);
+    expect((await patch({ path: '.github/tasks.md', line: 1, text: 'x', version, done: true })).statusCode).toBe(400);
+    expect((await patch({ path, line: 0, text: 'x', version, done: true })).statusCode).toBe(400);
+    expect((await app.inject({ method: 'PATCH', url: '/vault/tasks', payload: {} })).statusCode).toBe(401);
+    const nonOwner = memoryApiApp(module, { auth: async () => ({
+      objectId: 'not-dan', tenantId: apiConfig.auth.tenantId, displayName: 'Other',
+    }) });
+    expect((await nonOwner.inject({
+      method: 'PATCH', url: '/vault/tasks', headers: apiAuthorization,
+      payload: { path, line: 2, text: 'Buy a mirror', version, done: false },
+    })).statusCode).toBe(403);
+  });
+
+  it('refuses a tick whose line moved or changed since it was read, and writes nothing', async () => {
+    const path = 'Personal/Inbox.md';
+    const ver = (line: string) => createHash('sha256').update(line, 'utf8').digest('hex');
+    const readAs = ver('- [ ] Call the bank 📅 2031-04-09');
+    const { github, module } = moduleFor({
+      remote: { [path]: {
+        sha: sha('a'),
+        content: '- [ ] Call the bank 📅 2031-04-12\n- [ ] Call the bank 📅 2031-04-09\n',
+      } },
+    });
+    const app = memoryApiApp(module);
+    const patch = (payload: object) => app.inject({
+      method: 'PATCH', url: '/vault/tasks', headers: apiAuthorization, payload,
+    });
+    const reordered = await patch({ path, line: 1, text: 'Call the bank', version: readAs, done: true });
+    expect(reordered.statusCode).toBe(409);
+    expect(reordered.json()).toMatchObject({ error: expect.stringContaining('changed') });
+    const edited = await patch({
+      path, line: 2, text: 'Call the bank', version: ver('- [ ] Call the bank 📅 2031-04-08'), done: true,
+    });
+    expect(edited.statusCode).toBe(409);
+    const priority = await patch({
+      path, line: 2, text: 'Call the bank', version: ver('- [ ] Call the bank ⏫ 📅 2031-04-09'), done: true,
+    });
+    expect(priority.statusCode).toBe(409);
+    expect(github.calls.some(({ method }) => method === 'PUT')).toBe(false);
+
+    const good = ver('- [ ] Call the bank 📅 2031-04-09');
+    expect((await patch({ path, line: 2, text: 'Call the bank', version: good, done: true })).statusCode).toBe(200);
+    expect(github.files.get(path)?.content).toBe('- [ ] Call the bank 📅 2031-04-12\n- [x] Call the bank 📅 2031-04-09\n');
+  });
+
+  it('requires a well-formed version to tick a task', async () => {
+    const path = 'Personal/Inbox.md';
+    const { github, module } = moduleFor({ remote: { [path]: { sha: sha('a'), content: '- [ ] Plan a garden\n' } } });
+    const patch = (payload: object) => memoryApiApp(module).inject({
+      method: 'PATCH', url: '/vault/tasks', headers: apiAuthorization, payload,
+    });
+    expect((await patch({ path, line: 1, text: 'Plan a garden', done: true })).statusCode).toBe(400);
+    expect((await patch({ path, line: 1, text: 'Plan a garden', version: 'abc', done: true })).statusCode).toBe(400);
+    expect((await patch({ path, line: 1, text: 'Plan a garden', version: 'G'.repeat(64), done: true })).statusCode).toBe(400);
+    expect(github.calls.some(({ method }) => method === 'PUT')).toBe(false);
+  });
+
+  it('refuses a tick when the note changes under it', async () => {
+    const path = 'Work/Projects.md';
+    const { module } = moduleFor({
+      remote: { [path]: { sha: sha('a'), content: '- [ ] Plan a garden' } },
+      conflicts: 1,
+    });
+    const response = await memoryApiApp(module).inject({
+      method: 'PATCH', url: '/vault/tasks', headers: apiAuthorization,
+      payload: {
+        path, line: 1, text: 'Plan a garden', done: true,
+        version: createHash('sha256').update('- [ ] Plan a garden', 'utf8').digest('hex'),
+      },
+    });
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toMatchObject({ error: expect.stringContaining('changed') });
+  });
+
+  it('adds a task to the Personal or Work Inbox, creating it when missing', async () => {
+    const { github, module } = moduleFor({
+      remote: { 'Work/Inbox.md': { sha: sha('a'), content: '# Inbox\n\n- [ ] Existing task' } },
+    });
+    const app = memoryApiApp(module);
+    const post = (payload: object) => app.inject({
+      method: 'POST', url: '/vault/tasks', headers: apiAuthorization, payload,
+    });
+
+    const work = await post({ text: '  Call the bank 📅  about the ✅ loan ', scope: 'work', due: '2031-04-09' });
+    expect(work.statusCode).toBe(200);
+    expect(work.json()).toMatchObject({
+      path: 'Work/Inbox.md', line: 4, done: false, commit: sha('f'),
+      version: createHash('sha256').update('- [ ] Call the bank about the loan 📅 2031-04-09', 'utf8').digest('hex'),
+    });
+    expect(github.files.get('Work/Inbox.md')?.content)
+      .toBe('# Inbox\n\n- [ ] Existing task\n- [ ] Call the bank about the loan 📅 2031-04-09\n');
+
+    const personal = await post({ text: 'Book a haircut', scope: 'personal' });
+    expect(personal.statusCode).toBe(200);
+    expect(personal.json()).toMatchObject({ path: 'Personal/Inbox.md', line: 3, done: false });
+    expect(github.files.get('Personal/Inbox.md')?.content).toBe('# Inbox\n\n- [ ] Book a haircut\n');
+    expect(github.calls.filter(({ method }) => method === 'PUT').map(({ body }) => body?.message))
+      .toEqual(['jarvis: add a task\n\nCo-authored-by: Jarvis', 'jarvis: add a task\n\nCo-authored-by: Jarvis']);
+
+    const timed = await post({ text: 'Send the report', scope: 'work', due: '2031-04-10', time: '09:30' });
+    expect(timed.statusCode).toBe(200);
+    expect(github.files.get('Work/Inbox.md')?.content).toMatch(/- \[ \] Send the report 📅 2031-04-10 09:30\n$/u);
+    const listed = await app.inject({ url: '/vault/tasks', headers: apiAuthorization });
+    expect(listed.json().items).toEqual(expect.arrayContaining([
+      expect.objectContaining({ text: 'Book a haircut', path: 'Personal/Inbox.md', line: 3, id: personal.json().id }),
+      expect.objectContaining({ text: 'Send the report', dueDate: '2031-04-10', dueTime: '09:30' }),
+    ]));
+  });
+
+  it('refuses unsafe, empty or invalid new tasks without writing', async () => {
+    const { github, module } = moduleFor({
+      remote: {
+        'Work/Inbox.md': { sha: sha('a'), content: '# Inbox\n\n```\n- [ ] open fence' },
+      },
+    });
+    const app = memoryApiApp(module);
+    const post = (payload: object) => app.inject({
+      method: 'POST', url: '/vault/tasks', headers: apiAuthorization, payload,
+    });
+    expect((await post({ text: 'password: hunter2hunter2', scope: 'personal' })).statusCode).toBe(400);
+    expect((await post({ text: ' 📅 ', scope: 'personal' })).statusCode).toBe(400);
+    expect((await post({ text: 'Fine text', scope: 'work' })).statusCode).toBe(400);
+    expect((await post({ text: 'Fine text', scope: 'other' })).statusCode).toBe(400);
+    expect((await post({ text: 'Fine text', scope: 'personal', due: 'tomorrow' })).statusCode).toBe(400);
+    expect((await post({ text: 'Fine text', scope: 'personal', time: '09:30' })).statusCode).toBe(400);
+    expect((await post({ text: 'Fine text', scope: 'personal', due: '2031-04-10', time: '25:00' })).statusCode).toBe(400);
+    expect((await app.inject({ method: 'POST', url: '/vault/tasks', payload: {} })).statusCode).toBe(401);
+    const nonOwner = memoryApiApp(module, { auth: async () => ({
+      objectId: 'not-dan', tenantId: apiConfig.auth.tenantId, displayName: 'Other',
+    }) });
+    expect((await nonOwner.inject({
+      method: 'POST', url: '/vault/tasks', headers: apiAuthorization, payload: { text: 'Fine text', scope: 'personal' },
+    })).statusCode).toBe(403);
+    expect(github.calls.some(({ method }) => method === 'PUT')).toBe(false);
+  });
+
   it('maps task source failures to stable 503 reasons', async () => {
     const assertReason = async (module: ReturnType<typeof createVaultModule>, reason: string) => {
       const response = await memoryApiApp(module).inject({ url: '/vault/tasks', headers: apiAuthorization });

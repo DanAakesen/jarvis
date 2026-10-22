@@ -1,4 +1,4 @@
-import { dailyCapabilitiesAccept, dailyCapabilitiesVersion, dailyQuerySources, dailyQuerySourcesV1, dailyQuerySourcesV2, dailyQuerySourcesV3, dailyQuerySourcesV4, isDailyQuery, type DailyJson, type DailyQuery, type DailyQueryResult, type DailySourceId } from '@jarvis/contracts';
+import { dailyCapabilitiesAccept, dailyCapabilitiesVersion, dailyQuerySources, dailyQuerySourcesV1, dailyQuerySourcesV2, dailyQuerySourcesV3, dailyQuerySourcesV4, dailyQuerySourcesV5, dailyQuerySourcesV5WithoutFeeds, isDailyQuery, type DailyJson, type DailyQuery, type DailyQueryResult, type DailySourceId } from '@jarvis/contracts';
 import { awaitWithSignal, backendFetch } from '../backend-request';
 
 const responseLimit = 1024 * 1024;
@@ -99,6 +99,8 @@ export function isDailyResult(value: unknown, query: DailyQuery): value is Daily
       !nullableTime(value.freshness.latestReturnedRecordUpdatedAt) || value.freshness.staleness !== 'unknown' ||
       !object(value.coverage) || value.coverage.returned !== value.items.length ||
       typeof value.coverage.hasMore !== 'boolean' || value.coverage.sourceCompleteness !== 'unknown' ||
+      value.coverage.detailMetricsTruncated !== undefined && typeof value.coverage.detailMetricsTruncated !== 'boolean' ||
+      value.coverage.detailMetricsTruncated === true && query.source !== dailyQuerySources.workout ||
       typeof value.revision !== 'string' || !/^[a-f0-9]{64}$/u.test(value.revision)) return false;
   const items = value.items as Record<string, unknown>[];
   if ('startDate' in query) {
@@ -140,7 +142,9 @@ export function isDailyResult(value: unknown, query: DailyQuery): value is Daily
   if (query.source === dailyQuerySources.sleep && value.units['*_hours'] !== 'h') return false;
   if (value.coverage.hasMore) {
     if (!object(value.coverage.next) || !isDailyQuery({ ...query, cursor: value.coverage.next }) || value.status !== 'partial') return false;
-  } else if (value.coverage.next !== null || value.status !== (value.items.length ? 'available' : 'empty')) return false;
+  } else if (value.coverage.next !== null || value.status !== (
+    value.coverage.detailMetricsTruncated === true ? 'partial' : value.items.length ? 'available' : 'empty'
+  )) return false;
   return true;
 }
 
@@ -191,11 +195,12 @@ export async function loadDailySources(backendUrl: string | null, getAccessToken
     const source = (input: unknown): input is DailySourceId => typeof input === 'string' &&
       Object.values(dailyQuerySources).some(known => known === input);
     if (!object(value) || value.module !== 'daily' ||
-        (value.version !== 1 && value.version !== 2 && value.version !== 3 && value.version !== dailyCapabilitiesVersion) ||
+        (value.version !== 1 && value.version !== 2 && value.version !== 3 && value.version !== 4 && value.version !== dailyCapabilitiesVersion) ||
         !Array.isArray(value.sources) || value.sources.length === 0 || !value.sources.every(source) ||
         new Set(value.sources).size !== value.sources.length) throw new DailyReadError('Health data services are not available yet.', 'disabled');
     const allowed = value.version === 1 ? dailyQuerySourcesV1 : value.version === 2 ? dailyQuerySourcesV2
-      : value.version === 3 ? dailyQuerySourcesV3 : dailyQuerySourcesV4;
+      : value.version === 3 ? dailyQuerySourcesV3 : value.version === 4 ? dailyQuerySourcesV4
+        : [...dailyQuerySourcesV5, ...dailyQuerySourcesV5WithoutFeeds];
     if (value.sources.some(id => !allowed.some(known => known === id))) {
       throw new DailyReadError(`Health returned incompatible version ${value.version} capabilities. No collections were claimed.`, 'invalid');
     }

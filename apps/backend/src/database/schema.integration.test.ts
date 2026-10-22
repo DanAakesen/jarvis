@@ -51,7 +51,8 @@ const pool = new sql.ConnectionPool({ ...configuration, database });
 const core = '0001_core_tables.sql';
 const tablesInSchema = [
   'activity', 'artifacts', 'background_job_dismissals', 'background_job_steps', 'background_jobs', 'conversation_attachments',
-  'conversation_summaries', 'credential_status', 'deployment_failure_receipts', 'deployments', 'factory_task_submissions', 'folio_items', 'jarvis_sessions',
+  'conversation_summaries', 'credential_status', 'deployment_failure_receipts', 'deployments', 'factory_task_submissions',
+  'folio_items', 'github_app_mint_status', 'jarvis_sessions',
   'memories', 'memory_deletions', 'memory_history', 'messages', 'phone_sessions', 'proactive_alerts', 'proactive_items',
   'proactive_reminders', 'proactive_runs', 'proactive_settings', 'proactive_source_status', 'proactive_spend', 'proactive_todo_receipts', 'projects',
   'pull_requests', 'push_subscriptions', 'push_vapid_keys', 'releases',
@@ -426,6 +427,72 @@ describe('committed domain schema (groups 1-8)', () => {
     });
     expect(await store.spend.monthTotal('2026-10')).toBe(1.2345);
     expect(await store.spend.monthTotal('2026-11')).toBe(0);
+  }));
+
+  it('persists preference updates across store instances and reverses them without deleting findings', () => withRollbackDatabase(async (rollbackPool) => {
+    const owner = randomUUID();
+    const first = createProactiveStore(rollbackPool, owner);
+    const now = new Date('2026-10-20T05:00:00.000Z');
+    const finding = await first.items.upsertFinding({
+      dedupeKey: 'integration:travel-preference',
+      title: 'Synthetic trip detail',
+      body: 'Synthetic travel evidence.',
+      category: 'travel',
+      suggestionScope: 'personal',
+      urgency: 'normal',
+      dueAt: null,
+      evidence: [],
+      runId: null,
+      language: 'en',
+    });
+    await first.items.markTodoAdded([finding.id]);
+    const concurrent = createProactiveStore(rollbackPool, owner);
+    await Promise.all([
+      first.settings.patch({ categories: { travel: false } }),
+      concurrent.settings.patch({ suggestionScope: 'personal' }),
+    ]);
+
+    const restarted = createProactiveStore(rollbackPool, owner);
+    expect(await restarted.settings.read()).toMatchObject({
+      paused: false, monthlyBudgetDkk: 100, sources: { travel: true },
+      categories: { travel: false }, suggestionScope: 'personal',
+    });
+    expect(await restarted.items.list('all', 20, now)).toEqual([]);
+    expect(await restarted.items.get(finding.id)).toBeUndefined();
+    expect(await restarted.items.applyFeedback(finding.id, 'dismiss')).toBeUndefined();
+
+    await restarted.settings.patch({ categories: { travel: true }, suggestionScope: 'all' });
+    expect(await first.items.get(finding.id)).toMatchObject({ id: finding.id, todoAdded: true });
+  }));
+
+  it('defaults pre-existing proactive settings rows to all categories and scope during migration', () => withRollbackDatabase(async (rollbackPool, committed) => {
+    const preferenceMigration = committed.find(({ name }) =>
+      name === '0063_proactive_suggestion_preferences.sql')!;
+    const reverted = await revertNewerThan(rollbackPool, committed, '0061_daily_training_targets.sql');
+    expect(reverted.map(({ name }) => name)).toContain(preferenceMigration.name);
+    const owner = randomUUID();
+    await rollbackPool.request()
+      .input('owner', sql.UniqueIdentifier, owner)
+      .query(`INSERT dbo.proactive_settings
+        (owner_object_id, paused, monthly_budget_dkk, sources_json, news_feeds_json, guidance)
+        VALUES (@owner, 1, 42, N'{"calendar":false}', N'[]', N'Existing synthetic settings');`);
+    await applyMigrations(rollbackPool, committed);
+
+    const settings = await createProactiveStore(rollbackPool, owner).settings.read();
+    expect(settings).toMatchObject({
+      paused: true,
+      monthlyBudgetDkk: 42,
+      sources: { calendar: false },
+      categories: defaultProactiveSettings().categories,
+      suggestionScope: 'all',
+      newsFeeds: [],
+      guidance: 'Existing synthetic settings',
+    });
+    await createProactiveStore(rollbackPool, owner).settings.patch({ categories: { travel: false } });
+    await expect(revertMigration(
+      rollbackPool, committed, await readDownMigration(preferenceMigration.name),
+    )).rejects.toThrow('retain them before rollback');
+    expect((await createProactiveStore(rollbackPool, owner).settings.read()).categories.travel).toBe(false);
   }));
 
   it('persists add-only todo receipts, enforces the unique added key, and preserves todo-added findings', () => withRollbackDatabase(async (rollbackPool) => {
@@ -1496,29 +1563,96 @@ describe('committed domain schema (groups 1-8)', () => {
       WHERE id = ${String(task)};`);
   });
 
-  it('records GitHub App mint health and alerts once per failure episode after commit', async () => {
+  it('recovers a scoped mint alert and re-alerts only for a new incident', async () => {
     const alertNotifier = vi.fn();
     const onAlert = vi.fn();
     const credentials = createCredentialStatusStore(pool, { alertNotifier, onAlert });
-    await credentials.updateGitHubAppStatus('ok', '2030-01-01T00:00:00.000Z');
-    await credentials.updateGitHubAppStatus('failed', '2030-01-01T01:00:00.000Z');
-    await credentials.updateGitHubAppStatus('failed', '2030-01-01T02:00:00.000Z');
+    const scopeKey = createHash('sha256').update(randomUUID()).digest('hex');
+    await credentials.updateGitHubAppStatus('ok', '2040-01-01T00:00:00.000Z', scopeKey);
+    await Promise.all([
+      credentials.updateGitHubAppStatus('failed', '2040-01-01T01:00:00.000Z', scopeKey),
+      credentials.updateGitHubAppStatus('failed', '2040-01-01T01:00:00.000Z', scopeKey),
+    ]);
+    await credentials.updateGitHubAppStatus('failed', '2040-01-01T02:00:00.000Z', scopeKey);
     expect((await credentials.list()).find((row) => row.name === 'github-app')).toEqual({
       name: 'github-app', status: 'failed', expiresAt: null,
-      lastRenewedAt: '2030-01-01T00:00:00.000Z', lastCheckedAt: '2030-01-01T02:00:00.000Z',
+      lastRenewedAt: '2040-01-01T00:00:00.000Z', lastCheckedAt: '2040-01-01T02:00:00.000Z',
     });
     expect(alertNotifier).toHaveBeenCalledOnce();
     expect(onAlert).toHaveBeenCalledOnce();
-    const { recordset } = await pool.request().query<{ title: string }>(`SELECT title FROM dbo.activity
-      WHERE alert_key = N'credential:github-app:failed:2030-01-01T01:00:00.000Z';`);
-    expect(recordset[0]?.title).toContain('GitHub App token mint failed');
-    await credentials.updateGitHubAppStatus('ok', '2029-01-01T00:00:00.000Z');
+    const { recordset: firstIncident } = await pool.request()
+      .input('scopeKey', sql.Char(64), scopeKey)
+      .query<{ id: string; title: string; dismissedAt: Date | null; recoveredAt: Date | null }>(`SELECT
+        CAST(id AS varchar(19)) AS id, title, dismissed_at AS dismissedAt, recovered_at AS recoveredAt
+        FROM dbo.activity WHERE github_app_scope_key = @scopeKey;`);
+    expect(firstIncident).toHaveLength(1);
+    expect(firstIncident[0]?.title).toContain('GitHub App token mint failed');
+
+    const restartedCredentials = createCredentialStatusStore(pool, { alertNotifier, onAlert });
+    const feed = createNowFeedStore(pool);
+    const incidentItem = (await feed.read()).items.find((item) => item.title.includes('GitHub App token mint failed'));
+    expect(incidentItem).toBeDefined();
+    expect(await feed.dismiss(incidentItem!.id)).toBe(true);
+    await restartedCredentials.updateGitHubAppStatus('ok', '2040-01-01T03:00:00.000Z', scopeKey);
+    await restartedCredentials.updateGitHubAppStatus('failed', '2040-01-01T04:00:00.000Z', scopeKey);
+    await restartedCredentials.updateGitHubAppStatus('failed', '2040-01-01T03:30:00.000Z', scopeKey);
     expect((await credentials.list()).find((row) => row.name === 'github-app')?.status).toBe('failed');
-    await credentials.updateGitHubAppStatus('ok', '2030-01-01T03:00:00.000Z');
-    await credentials.updateGitHubAppStatus('failed', '2030-01-01T04:00:00.000Z');
+    const { recordset: incidents } = await pool.request()
+      .input('scopeKey', sql.Char(64), scopeKey)
+      .query<{ dismissedAt: Date | null; recoveredAt: Date | null }>(`SELECT dismissed_at AS dismissedAt,
+        recovered_at AS recoveredAt FROM dbo.activity WHERE github_app_scope_key = @scopeKey ORDER BY id;`);
+    expect(incidents).toHaveLength(2);
+    expect(incidents[0]).toMatchObject({ dismissedAt: expect.any(Date), recoveredAt: expect.any(Date) });
+    expect(incidents[1]).toMatchObject({ dismissedAt: null, recoveredAt: null });
+    const activeItems = (await feed.read()).items.filter((item) =>
+      item.title.includes('GitHub App token mint failed'));
+    expect(activeItems).toHaveLength(1);
+    await credentials.updateGitHubAppStatus('ok', '2040-01-01T05:00:00.000Z', scopeKey);
     expect(alertNotifier).toHaveBeenCalledTimes(2);
-    await pool.request().query(`UPDATE dbo.credential_status SET status = N'unknown',
-      last_checked_at = NULL, last_renewed_at = NULL WHERE name = N'github-app';`);
+  });
+
+  it('keeps aggregate health truthful across scopes and leaves legacy alerts unresolved', async () => {
+    const credentials = createCredentialStatusStore(pool);
+    const scopeA = createHash('sha256').update(randomUUID()).digest('hex');
+    const scopeB = createHash('sha256').update(randomUUID()).digest('hex');
+    const legacyKey = `credential:github-app:failed:legacy-test:${randomUUID()}`;
+    try {
+      await pool.request()
+        .input('alertKey', sql.NVarChar(200), legacyKey)
+        .query(`INSERT dbo.activity (area, kind, title, alert_key)
+          VALUES (N'operations', N'credential_expiry', N'Legacy GitHub App mint failure', @alertKey);`);
+      await Promise.all([
+        credentials.updateGitHubAppStatus('failed', '2041-01-01T00:00:00.000Z', scopeA),
+        credentials.updateGitHubAppStatus('failed', '2041-01-01T00:00:00.000Z', scopeB),
+      ]);
+      await credentials.updateGitHubAppStatus('ok', '2041-01-01T01:00:00.000Z', scopeA);
+      expect((await credentials.list()).find((row) => row.name === 'github-app')?.status).toBe('failed');
+      let visible = (await createNowFeedStore(pool).read()).items
+        .filter((item) => item.title.includes('GitHub App token mint failed') || item.title.includes('Legacy GitHub App'));
+      expect(visible).toHaveLength(2);
+
+      await credentials.updateGitHubAppStatus('ok', '2041-01-01T02:00:00.000Z', scopeB);
+      expect((await credentials.list()).find((row) => row.name === 'github-app')?.status).toBe('unknown');
+      visible = (await createNowFeedStore(pool).read()).items
+        .filter((item) => item.title.includes('GitHub App token mint failed') || item.title.includes('Legacy GitHub App'));
+      expect(visible.map((item) => item.title)).toEqual(['Legacy GitHub App mint failure']);
+      const legacy = await pool.request()
+        .input('alertKey', sql.NVarChar(200), legacyKey)
+        .query<{ scopeKey: string | null; recoveredAt: Date | null }>(`SELECT github_app_scope_key AS scopeKey,
+          recovered_at AS recoveredAt FROM dbo.activity WHERE alert_key = @alertKey;`);
+      expect(legacy.recordset).toEqual([{ scopeKey: null, recoveredAt: null }]);
+      await credentials.updateGitHubAppStatus('ok', '2041-01-01T03:00:00.000Z', scopeA);
+      expect((await credentials.list()).find((row) => row.name === 'github-app')?.status).toBe('unknown');
+    } finally {
+      await pool.request().input('alertKey', sql.NVarChar(200), legacyKey)
+        .query('DELETE dbo.activity WHERE alert_key = @alertKey;');
+      await pool.request()
+        .input('scopeA', sql.Char(64), scopeA)
+        .input('scopeB', sql.Char(64), scopeB)
+        .query(`DELETE dbo.github_app_mint_status WHERE scope_key IN (@scopeA, @scopeB);
+          UPDATE dbo.credential_status SET status = N'unknown', last_checked_at = NULL, last_renewed_at = NULL
+          WHERE name = N'github-app';`);
+    }
   });
 
   it('serializes Codex starts against renewal acquisition and recovers expired leases', async () => {

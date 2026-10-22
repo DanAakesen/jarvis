@@ -1005,18 +1005,30 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   invalid identity fields or URLs stop startup. P0-11 must persist its
   `backendFqdn` as the public URL. Backend connectivity is unverified until then.
 - The home page uses a tenant-specific MSAL Browser client with the public web
-  client ID and API scope. MSAL stores its cache in session storage; sign-in
-  redirects the whole page to Entra (no popup, so embedded browsers and popup
-  blockers work) and returns to the registered site root, where
-  `handleRedirectPromise` completes it. A non-sensitive per-tab session-storage
-  marker, set just before `loginRedirect` and cleared when redirect handling
-  settles or launch fails, distinguishes returning `Signing you in` from
-  first-visit `Loading`; the outgoing button shows `Redirecting`. The marker
-  controls presentation only, never authentication or authorization.
-  It requests only the delegated API scope
-  and sends the access token to `/me`. Cached accounts use silent token
-  acquisition through the `/redirect.html` bridge. A missing backend URL disables
-  sign-in instead of presenting a false success state.
+  client ID and API scope. MSAL stores its cache in `localStorage`, sharing the
+  device's sign-in across tabs and relaunches. Since MSAL v4, cache entries are
+  encrypted with a key held in a session cookie unless the owner chose "Stay
+  signed in", so restart persistence depends on that Microsoft choice. A
+  separate identity-free device marker enables silent SSO only after a
+  successful prior sign-in. With no
+  cached account, Jarvis tries `ssoSilent` for at most five seconds; if that
+  fails, or silent token renewal reports an interaction-required error, it uses
+  one guarded top-level redirect per five-minute cooldown, without `prompt`.
+  The redirect returns to the registered site root, where `handleRedirectPromise`
+  completes it. A per-tab session-storage marker, set just before a redirect
+  and cleared when redirect handling settles or launch fails, distinguishes
+  returning `Signing you in` from first-visit `Loading`; the outgoing button
+  shows `Redirecting`. Validated same-origin return paths preserve the current
+  route across interactive recovery. The default sign-in does not select an
+  account; only **Use a different account** sets `prompt: select_account`.
+  Changes to MSAL account cache and the device marker update other tabs. Sign
+  out clears MSAL's cache and both persistent sign-in markers before
+  `logoutRedirect` returns to the site root. Tokens remain in MSAL and only the
+  delegated API scope is sent to `/me`. The marker controls recovery only,
+  never authentication or authorization. An SPA refresh token has a fixed
+  24-hour lifetime; tenant Conditional Access policy can require sign-in sooner.
+  Silent acquisition uses the `/redirect.html` bridge. A missing backend URL
+  disables sign-in instead of presenting a false success state.
 - P1-07 adds the app shell. `useSignIn` owns the MSAL session for the whole
   app, so navigation never repeats sign-in. Until `/me` succeeds, every shell
   route shows sign-in and the header hides navigation; unknown addresses still
@@ -2740,7 +2752,12 @@ The authenticated SSE endpoint, heartbeat and replay are P1-06. Factory also own
 projects and task APIs. The catalogue rejects duplicate
 module/tool identities, snapshots frozen schemas and exposes read-only descriptors
 with ownership and handlers. Authenticated `GET /tools` exposes every descriptor's
-name, description and input schema. The registry refuses catalogues beyond the shared 128-tool, 4,000-character description and 1 MiB limits in `agents/jarvis/limits.json`, so the backend fails its health gate rather than deploy an incompatible catalogue; backend CI builds the production module list with all optional modules enabled, checks eight tools of headroom, and reports per-module tool counts on failure. Related tools are merged into one tool with an operation parameter. The core registers a schema-validated
+name, description and input schema. There is no global tool-count ceiling or
+reserved-slot requirement. The registry retains the shared 4,000-character
+description and 1 MiB serialized-catalogue limits in `agents/jarvis/limits.json`;
+backend CI builds every production module with optional features enabled and
+checks that no valid tool is omitted. These count-independent bounds do not
+authorize execution: the core registers a schema-validated
 `POST /tools/{name}` for every tool at composition time, passes the request and
 cancellation signal to its handler, then writes the arguments, result and outcome
 to `tool_calls` using the process-owned SQL pool. A tool may provide a bounded safe
@@ -2858,9 +2875,10 @@ migration is added.
 `GET /status/smoke` forces fresh read-only Google, GitHub App, vault repository
 tree-metadata, embedding, and PC-bridge checks, adds a bounded research dry run,
 checks the agent contract, and makes a real chat turn through the existing hosted
-agent client. The contract check validates the live tool registry against the
-hosted agent's catalogue limits and builds the same `/agent/settings` payload
-used by the route, then verifies the shape accepted by the agent. The cached
+agent client. The contract check validates the complete live tool registry's
+names, schemas, descriptions and serialized size, and builds the same
+`/agent/settings` payload used by the route, then verifies the shape accepted by
+the agent. It imposes no catalogue-count ceiling. The cached
 `chat_canary` suite uses the backend's agent identity and runs seven fixed
 acceptance prompts under the existing `smoke` usage role. It has one 55-second
 suite deadline, a 25-second per-prompt deadline and a 60-second result cache.
@@ -2870,7 +2888,7 @@ two rounds, one tool call and 256 output tokens. The agent receives only
 `get_system_health`, `github_read` for issue 700, `list_jobs` and
 `workspace_command` for Settings navigation; the backend enforces the same
 allowlist. `list_capabilities` and the confirmation test are operations on the
-existing health tool, so the 128-tool catalogue does not grow. Smoke job results
+existing health tool; the smoke allowlist remains unchanged. Smoke job results
 are counts only, GitHub results are reduced to the issue number/title, and
 workspace navigation always returns the fixed no-tab refusal without contacting
 a connected browser. The confirmation test is an in-memory no-op: the backend
@@ -3752,7 +3770,8 @@ paths and Archive segments remain excluded.
 
 The route accepts `q` (up to 200 characters) and `state` (`open`, default;
 `done`; or `all`), and returns at most 500 matching task rows with source path,
-line, nearest heading, completion, due fields, priority, owner-local `today`,
+line, nearest heading, completion, due fields, priority (`high` for P1, `medium` for P2 or `🔼`,
+otherwise `normal`), owner-local `today`,
 `readAt`, total and truncation state. Scans retain the shared 256-file, 4-MiB
 total-content, 256-KiB-per-file, four-concurrent-read and 20-second limits.
 Task text is sanitized and secret-redacted before filtering or returning, and
@@ -3764,13 +3783,38 @@ The read-only sensitive `vault_search` chat/voice tool serves both reads through
 flat `kind` argument: `notes` (the default) searches the knowledge index, and
 `tasks` uses the same model and scope as the route, with query, state and
 optional bounded due window, returning at most 40 items. The schema has no
-combinators, so voice schemas stay valid, and no catalogue entry is added: the
-all-features production catalogue is held at 120 tools, leaving the required
-eight-tool headroom below the 128-tool platform limit. Task requests route to
+combinators, so voice schemas stay valid, and no catalogue entry is added for
+this existing read path. Task requests route to
 `kind` tasks; note requests continue through `vault_search` (notes) and
 `vault_read`. The Notes page retains search snippets and fetches
 matching open tasks separately; the count on its task group calls
 `KnowledgeGraphView`'s `onShowTasks`, which opens the Tasks panel with that query.
+The panel requests `state=open`, or `state=all` only while a query is typed (so
+completed tasks are searchable but never listed otherwise), and applies its
+All / Personal / Work switch in the browser: Work means a `Work/` path or a root
+task-file heading starting with Work.
+
+Two owner-only write routes sit beside it. Each GET item carries an opaque `version`
+(the SHA-256 of the exact raw line, so text, dates, priority and checkbox state all
+count). `PATCH /vault/tasks` takes `{path, line, text, version, done}`: the path must
+be in the task scope and pass the vault write-path check, and the current line must
+still hold that task text (compared after redaction) and hash to `version`; a
+mismatch (reordered, edited or moved line) returns 409 before anything is written, a
+missing or malformed `version` 400. Only the `[ ]`/`[x]` character is flipped,
+preserving line endings. An already-matching state returns `commit: null` without
+writing. Both PATCH and POST return the line's new `version` (a tick changes the line,
+so Undo sends the returned one). The write carries the file SHA and retries once; a
+changed or conflicting line returns 409, a refused path or scope 400.
+`POST /vault/tasks` takes `{text, scope: personal|work, due?, time?}`
+(`time` is `HH:MM` and needs `due`),
+strips control characters, comments and metadata emoji, caps text at 200 characters,
+refuses secret-looking text, and appends `- [ ] text` (with `📅 date`, plus ` HH:MM` when
+timed) to
+`Personal/Inbox.md` or `Work/Inbox.md`, creating the note when missing and refusing
+an open code fence or an oversized file. Both commit as Jarvis (`jarvis: complete a
+task`, `reopen a task` or `add a task`), refresh the notes index and log
+`vault.write`. Non-owners get 403. The web client (`tasks-data.ts`) maps 409 to
+`VaultTaskConflict`.
 
 Since 19 October 2026 there is no Tasks page. `NotesArea` owns the panel
 (`tasks/TasksPanel.tsx`, opened by the Show tasks button or by
@@ -3782,7 +3826,10 @@ the panel, changing the search or closing replaces it, and `TasksPanel` is keyed
 The unsaved-draft blocker ignores changes to those two parameters. The area registry
 and phone menu no longer list Tasks. A task's source link opens the note in place
 through the Notes read flow and its unsaved-draft guard, and on a narrow screen the
-panel closes first. Neither screen nor tool writes or changes task state.
+panel closes first. The panel ticks tasks optimistically through an override map
+keyed by task id (a lingering row for four seconds, rollback with a notice on failure,
+a list reload on conflict) and adds tasks through a small form that then reloads
+quietly; the chat and voice tool does not write or change task state.
 
 `knowledge/knowledge-scene.ts` frames the map: `measureFit` takes the mean of the
 visible notes and their 98th-percentile reach, and sets the camera to centre them
@@ -4356,19 +4403,35 @@ Key Vault response, or runner result is returned.
   status and log only a fixed diagnostic. The authenticated check is the sole
   owner of Copilot health: Codex renewal no longer copies runner expiry metadata
   into health, which could overwrite an authentication failure with `ok`.
-- GitHub App: all repository-scoped and catalog installation-token mint
-  paths record `ok` or `failed` and `lastCheckedAt`; successful mints also
-  update `lastRenewedAt`. `expiresAt` remains null because an installation
-  token's one-hour lifetime is not the App key's expiry. An older observation
-  cannot replace newer health. On transition to failed, status and a
-  `credential_expiry` activity alert commit together, then refresh Now and
-  notify the existing telemetry/email path. Repeated failures do not create
-  additional alerts until a successful mint resets health. Status-persistence
-  errors are logged without disrupting a valid mint.
-- Migration `0023_github_app_credential_health.sql` adds the health row and
-  check timestamp, with a matching reverse batch. `0022` is left available
-  for #432; recheck the sequence before merge. The legacy `github-app-key`
-  name remains permitted in SQL but is not part of the Settings list.
+- GitHub App mint observations use a versioned SHA-256 scope key over the
+  canonical operation kind, lower-cased repository or catalog owner, and
+  sorted requested permission map. The repository token path includes the
+  repository and its requested grants; catalog/tech-detection mints use the
+  installation-wide catalog owner and `contents:read`. Only the digest is
+  persisted. `github_app_mint_status` serializes observations and ignores an
+  older timestamp for that same scope. A transition into failed creates one
+  `credential_expiry` activity alert; repeated failures stay in that incident.
+  A successful mint recovers only undismissed or dismissed alert history for
+  its exact scope, and a later failure creates a new alert row. Recovered rows
+  remain in activity history while Now excludes them from active attention.
+  Manual dismissal remains row-specific.
+- Aggregate GitHub App health is `failed` while any known scope is failing,
+  `unknown` while only legacy unscoped failures remain unresolved, and `ok`
+  otherwise. A scoped success never recovers an old unscoped alert: those
+  alerts remain visible unless manually dismissed, and keep health unknown
+  because their originating repository/permissions cannot be established.
+  If a migration finds a failed legacy health row without any matching alert,
+  it creates one conservative unscoped history row. `lastRenewedAt` records
+  the latest successful mint across scopes; `expiresAt` remains null because
+  an installation token's one-hour lifetime is not the App key's expiry.
+  Status-persistence errors are logged without disrupting a valid mint.
+- Migration `0062_github_app_mint_recovery.sql` adds the per-scope status and
+  activity recovery metadata. Its reverse batch retains activity and restores
+  scoped alerts to unresolved legacy visibility rather than deleting history.
+  The earlier `0023_github_app_credential_health.sql` adds the shared health
+  row; the legacy `github-app-key` name remains permitted in SQL but is not
+  part of the Settings list. This source-level lifecycle does not establish
+  whether a production mint failure has recovered or what caused it.
 
 #### UI repair contract
 
@@ -4885,7 +4948,13 @@ P9-88 adds the shared GitHub App tool surface to `factory/github-app-tools.ts`. 
 | `github_read` | `issue_get`, `issue_comments`, `issue_search`, `labels_list`, `milestones_list` (Issues read); `pr_search`, `pr_list`, `pr_comments` (Pull requests read); `workflow_runs` (Actions read); `repo_branches`, `repo_commits`, `repo_compare` (Contents read) | Live grant for the operation, read |
 | `github_write` | `issue_update`, `label_create` (Issues write); `pr_create`, `pr_update`, `pr_comment`, `pr_review`, `pr_ready` (Pull requests write); `pr_merge` (Pull requests write plus Checks and Statuses read); `branch_create`, `file_write` (Contents write); `workflow_dispatch`, `workflow_rerun` (Actions write) | Live grant for the operation, write |
 
-The catalogue is limited to 128 tools (`agents/jarvis/limits.json`; the registry and a test enforce it), so GitHub capability is three tools with an `operation` parameter instead of one tool per operation. Each root schema stays a plain object (no `oneOf`/`anyOf`): `operation` plus the union of the operation properties, `additionalProperties: false`, with shared fields merged to their loosest form. The handler then applies the chosen operation's own required fields, types, enums, bounds and unknown-field rules and refuses invalid input. `issue_comment` remains a Factory tool.
+The GitHub surface currently exposes three grouped tools with an `operation`
+parameter; this API shape is not a global catalogue-count restriction. Each root
+schema stays a plain object (no `oneOf`/`anyOf`): `operation` plus the union of
+the operation properties, `additionalProperties: false`, with shared fields
+merged to their loosest form. The handler then applies the chosen operation's
+own required fields, types, enums, bounds and unknown-field rules and refuses
+invalid input. `issue_comment` remains a Factory tool.
 
 GitHub reads return labelled untrusted content, bound page sizes and output fields; each HTTP request has a ten-second timeout and one-megabyte response cap. Comments and issue bodies are byte-bounded. Outgoing text is secret-scanned. Ordinary writes execute when Dan requests them; issue/PR closure, PR merge, file writes to the default branch and public-repository file publication require a later Dan message, from the same session, that clearly approves the staged action (the shared approval interpreter decides the meaning). `pr_merge` verifies the expected head SHA and refuses failing check runs or commit statuses unless Dan explicitly says to proceed. Public image publication retains its visible warning and simple approval. No `apps/web`, persistence, migration or dependency changes.
 
@@ -5044,12 +5113,14 @@ the five largest server-owned tool names/sizes. No payload content is logged.
 See [voice startup diagnosis](runbook.md#voice-startup-diagnosis).
 
 **English tool-budget fallback** (`apps/backend/src/voice/tool-budget.ts`, 21 October
-2026, #1184). New processes start at R1, the known-good frame measured on
-21 October (R0 stalled at 8,001 ms; R1 became ready in 1,341 ms). The relay
-walks the unchanged deterministic ladder from the current rung; only `tools`
+2026, #1184; Health follow-up #1188). New processes start at R2, the same
+known-good reduced frame measured on 21 October under its previous name, R1
+(R0 stalled at 8,001 ms; the reduced frame became ready in 1,341 ms). R1 now
+omits only `proactive_recent_items` and includes configured `daily_*` tools.
+The relay walks the deterministic ladder from the current rung; only `tools`
 and instruction text change, and every foreground attempt uses a fresh
-upstream socket waiting for `session.updated` (8 s at R0, 6 s at R1-R4;
-24 s worst case from cold R1, 32 s if a remembered R0 must step down). A
+upstream socket waiting for `session.updated` (8 s at R0, 6 s at R1-R5;
+24 s worst case from cold R2, 38 s if a remembered R0 must step down). A
 deadline, upstream `error` or close before readiness steps down. Abandoned
 sockets are closed and none of their events reach the browser (held pre-ready
 events are forwarded only after readiness). If every rung fails the relay
@@ -5058,10 +5129,11 @@ closes 4010 and logs `voice.tool_budget_exhausted`.
 | Rung | Tools | Instructions |
 |---|---|---|
 | R0 | all | full |
-| R1 | all except `daily_*` and `proactive_recent_items` | full + notice |
-| R2 | `set_presence_mode`, `set_away_mode` and the smallest others up to half of R0's definition bytes | full + notice |
-| R3 | none | full + notice |
-| R4 | none | base identity and style text + notice |
+| R1 | all except `proactive_recent_items` | full + notice |
+| R2 | all except `daily_*` and `proactive_recent_items` | full + notice |
+| R3 | `set_presence_mode`, `set_away_mode` and the smallest others up to half of R0's definition bytes | full + notice |
+| R4 | none | full + notice |
+| R5 | none | base identity and style text + notice |
 
 The backend keeps the last rung that reached `session.updated` in process memory
 (a restart clears it), starts new sessions there, steps down from it within the
@@ -5071,13 +5143,17 @@ non-R0 session becomes ready, a process-wide probe coordinator may run once per
 `reduced_plus_copies` frames through `createRealtimeSessionUpdate`, uses fresh
 credentialed sockets, sends no audio or conversation, and waits at most 8 seconds
 for `session.updated`. Probes do not forward events to the browser or delay the
-live session; only a ready `full` probe promotes memory to R0. The default-on
-`JARVIS_VOICE_TOOL_BUDGET_PROBE_ENABLED=false` switch disables probing.
-`voice.tool_budget_probe` exports fixed probe names, counts, byte sizes,
-outcomes and timings only. Every later live frame (presence-mode updates,
-camera turn-detection updates, `response.create` instructions) is built for the
+live session. A ready `full` probe promotes memory to R0; a ready `no_proactive`
+probe promotes it to R1, whose exact tool set includes Daily. Other probe
+outcomes do not change the selected rung. Each later live frame (presence-mode
+updates, camera turn-detection updates, `response.create` instructions) uses the
 selected rung, and a model call to a tool outside the active subset is refused
-without executing it. Danish does not use the ladder or probes.
+without execution. Danish does not use the ladder or probes.
+`voice.tool_budget_probe` exports fixed probe names, counts, byte sizes,
+outcomes and timings only. Probe readiness confirms only that that frame received
+`session.updated`; it does not establish a tool-count, byte-size, context, or
+tool-content limit. The earlier R0/R1 timings establish a startup difference,
+not a cause.
 
 | Area | Design | Evidence |
 | --- | --- | --- |
@@ -5438,7 +5514,10 @@ done (the request never left the agent), or whether a timeout or broken
 connection after sending means the action may have happened. They cover unknown tools, invalid JSON,
 rejected arguments, refused identity, unavailable persistence and an unreachable
 backend. An unavailable catalogue fails the turn before the model is called.
-Responses are capped at 1 MiB, catalogues at 128 tools.
+The agent's `/tools` response is bounded to 1 MiB; tool descriptions and the
+serialized catalogue retain their existing limits. No global tool-count limit
+is applied. Provider-specific per-request limits remain route-dependent and
+unverified; see the [route inventory](decisions.md#catalogue-count-is-not-a-global-limit).
 `JARVIS_BACKEND_URL` must be an HTTPS origin, or HTTP only for localhost.
 The backend catalogue includes read-only repository tools and `list_capabilities`;
 the agent uses `repo_overview` before `repo_search` or `repo_read`, treats returned
@@ -5919,9 +5998,12 @@ and Today cards) publishes the chain once, after its last page, and keeps the
 previous records visible while a refresh runs (20 October 2026; P14-44).
 
 **Overview top cards (20 October 2026; P14-46).** `sections/overview/TopCards.tsx`
-owns the period and passes it to the Training card as a dropdown in its header (the
-optional `action` slot of `TopCard` in `TopBlocks.tsx`, since P14-58; it was a row of pills
-above the cards), then calls `useTopCardData`, which makes one
+owns the period and offers it to the page as a dropdown in the title row: `DailyHome` renders an empty
+`daily-heading-control` element in the title row and publishes it through `DailyHeadingSlotContext`
+(`daily/heading-slot-context.ts`), and `DailyHeadingControl` (`daily/heading-slot.tsx`) portals the
+select into it, or renders it in place when a section is mounted without a title row (the earlier
+Training-card `action` slot of `TopCard` was removed; before P14-58 the control was a row of pills
+above the cards). The period state stays in `TopCards`, so the page knows nothing about Overview internals. It then calls `useTopCardData`, which makes one
 `useDailyPages` read per source with `settle`: workouts, steps, nutrition days,
 meals (single-day presets only), sleep, the metric catalogue and up to four body
 measurement metrics over a fixed 90 days, the last only for names the catalogue
@@ -5941,7 +6023,7 @@ markup is small: `daily/ui/icons.tsx` (`HealthIcon`, `IconChip`, decorative and
 `aria-hidden`), an optional `tone` and `icon` on `ui/Ring.tsx`, `Figure`, `icon` and
 `meter` in `overview/TopBlocks.tsx`, and titled chart and trend panels in the cards.
 The page headline is the current section's label: `DailyHome` renders it as the `h1`
-(the `aria-labelledby` target and the focus target, "Health" while the list loads) beside the freshness pill. The earlier
+(the `aria-labelledby` target and the focus target, "Health" while the list loads) on its own row, under a status row that holds the freshness pill. The earlier
 `daily/greeting.ts` and the `AreaProps.profileName` that fed it were removed in P14-58, so
 the profile name is not passed to any area. `DailyFreshnessPill`
 reads the same sync status as before and now derives a status dot (`data-freshness`
@@ -5974,11 +6056,17 @@ its refusals use static wording and never echo input, and a cursor, brief histor
 or single-record read is refused toward `daily_query`. The tool refuses before
 reading when `workspaceCommands.isConnected(owner)` is false. One
 `service.query` page then runs over the read model behind `POST /daily/query`
-(at most 366 days and 200 rows, 100 for meals, favourites and plans). The pure
+(at most 366 days and 200 rows, 100 for meals, favourites and plans). A selected
+measurement is filtered by the shared read model before that row limit; exact
+keys take precedence over their readable labels. Its coverage and partial
+disclosures therefore describe the filtered page, not the full requested
+period. The pure
 `buildDailyView` (`apps/backend/src/daily/show/views.ts`) turns it into a view, and
 the tool publishes it through the workspace view lifecycle: `update` first, `create`
 when the view does not exist yet, and for a refresh a best-effort foreground `show`.
-The receipt says whether the view was created or refreshed.
+The receipt says whether the view was created or refreshed. Refresh success
+depends on an applied broker acknowledgement; the following foreground `show`
+is best-effort and cannot turn a successful refresh into a failure.
 
 `buildDailyView` maps stored rows onto the existing `table`, `chart`, `detail` and
 `text` generated-view contracts and calculates nothing: values and units pass
@@ -6194,9 +6282,10 @@ and composes only with Daily and shared Daily data. The signed-in-owner
 runners, connectors, other identities and query selectors. A patch is strict,
 partial and transactional; `null` clears a field and removing the last set
 value deletes the row. Read-back occurs before commit. The assistant has no
-training-target write tool because the production tool catalogue must retain at
-least eight free slots; a read-only query source may be added later. Daily-off
-composition registers no target routes.
+training-target write tool; this catalogue-count decision does not authorize
+adding that capability. A read-only source is now available through the existing
+`daily_query` tool in capability version 5 (see the read-coverage section below).
+Daily-off composition registers no target routes or read tool.
 
 The web Settings editor loads and saves only validated server responses. Its
 `useTrainingTargets` hook documents the shared loading/settled/error/retry
@@ -6297,14 +6386,18 @@ instructions, voice session tools, startup, background jobs and timers are those
 of Jarvis without Daily.
 
 With the switch on it needs the shared SQL pool and a UUID owner (otherwise
-startup fails), builds `createDailyData(pool, owner)` and returns the module of
+startup fails), builds `createDailyData(pool, owner, Date.now, new
+FridaLookupAdapter())` and returns the module of
 `createDailyModules` for the nutrition rehearsal: `GET /daily/capabilities`,
-`POST /daily/query`, `GET`/`PATCH /daily/nutrition-targets` and seven tools
-(`daily_query`, `daily_show`, `daily_food`, `daily_food_review`, `daily_saved_food`,
-`daily_nutrition_targets`, `daily_nutrition_suggest`), which stay inside the
-catalogue's 128-tool limit (CI checks the headroom). The connector, Frida lookup, feeds and health-upload
-arguments are left out, so the module has no MCP route, provider call, Google or
-Gmail read, job or timer. The targets and health accessors also compare the
+`POST /daily/query`, `GET`/`PATCH /daily/nutrition-targets` and the existing ten
+tools. Catalogue composition has no count-based ceiling; CI continues to check
+tool schemas, descriptions and serialized size. The Frida adapter is lazy:
+composition makes no provider request. Its read-only `lookup_components`
+operation is grouped into the existing `daily_food_review`; no separate
+`daily_food_lookup` tool is registered and no tool name is added. The
+owner-bound data callback checks the resolved owner before using Frida. The
+connector, feeds and health-upload arguments are left out, so the module has no
+MCP route, Google or Gmail read, job or timer. The targets and health accessors also compare the
 resolved owner with the composed owner and refuse a mismatch, on top of the check
 inside the data accessors. Root authentication is unchanged: a connector or
 runner principal is refused on every Daily route, and an agent is refused on the
@@ -6318,7 +6411,7 @@ other environment stays off. `daily/default-off.test.ts` scans configuration fil
 for both names, allows only those two files and checks their literal values.
 `daily/composition.test.ts` builds real
 applications: it compares a Daily-off one with one built without Daily, shows the
-module adds exactly its three routes and seven tools, and checks that
+module adds exactly its four route paths and ten tools, and checks that
 unauthenticated, other-user, runner, connector and mismatched-owner callers are
 refused before any SQL.
 
@@ -6405,13 +6498,40 @@ Fingerprint serialization uses the bounded read DTO, not nutrition's per-write
 node/depth budget; supported full pages and retained nested JSON stay readable.
 The response byte budget includes the final 64-byte revision before hashing.
 
-Capability negotiation preserves the exact v1 nine-source, v2 eleven-source
-and v3 thirteen-source advertisements. Version 2 remains opt-in for established
-brief history/detail; version 3 adds `daily.health.metric-catalog` and
-`daily.nutrition.days`. Version 4 conditionally adds `daily.attention` and
-`daily.calendar`; when feeds are not composed, v4 returns the v3 source list.
-Unversioned/unknown clients still receive v1. The web client prefers v4 and
-validates each response against its version's source allowlist.
+The grouped `daily_health_summary/get_health_history` and
+`daily_nutrition_history/get_nutrition_history` operations also expose
+`coverage.continuation`. Replay it with the original explicit `startDate` and
+`endDate` (and the desired bounded `limit`). The envelope binds the operation,
+requested dates, active window and exact source-specific keyset cursors.
+Health validation reuses `isDailyQuery`; meal cursors use the nutrition store's
+instant/text validators with exact fields, preserving valid legacy IDs without
+trimming or rewriting them. Readers receive the unchanged returned keys.
+Health reads one window of at most 93 inclusive Copenhagen dates per call,
+with at most 100 rows per live category (default 50) and one sync read. Null
+category cursors skip exhausted categories; only after all categories exhaust
+does the next call advance to the adjacent window. Nutrition retains its full
+meal-date filter and creation-time/ID ordering, including backdated meals and
+tombstones; its window is never split by meal date. No server-side paging loop
+or new persistence mechanism is introduced. Each call retains the 30-second
+deadline, cancellation and 768 KiB response bound. `period` is the current
+read window, `requestedPeriod` is the original requested range, and
+`coverage.hasMore` includes remaining Health windows. Final/empty pages only
+establish current-window retained exhaustion, not that prior pages were read
+or that all source records were ingested. Assistant contracts require further
+reads when needed or disclosure of loaded records/windows and remaining limits;
+the existing finite agent tool-round budget is unchanged, and failed,
+interrupted or budget-limited traversal remains partial. `daily_query` and its
+existing paging contract are unchanged.
+
+Capability negotiation preserves the exact v1 nine-source, v2 eleven-source,
+v3 thirteen-source and v4 feed-source advertisements. Version 2 remains opt-in
+for established brief history/detail; version 3 adds
+`daily.health.metric-catalog` and `daily.nutrition.days`. Version 4 conditionally
+adds `daily.attention` and `daily.calendar`; when feeds are not composed, v4
+returns the v3 source list. Version 5 adds `daily.health.training-targets` only
+when the existing target reader is composed; feed sources remain restricted to
+the authenticated owner browser. Unversioned/unknown clients still receive v1.
+The web client prefers v5 and validates against that version's source allowlist.
 
 `daily.health.metrics` accepts an optional exact `metric` name while preserving
 its date/name keyset order. The owner-scoped metric catalogue groups retained
@@ -6428,6 +6548,34 @@ days (default 50). Both additions use parameterized, owner-filtered
 identifies totals as derived from retained meals; completeness and freshness
 remain unknown. The generated-view tool may display either source, while the
 Daily Overview's collection rows and visible page layout remain unchanged.
+
+### Meaningful Health tool read coverage (22 October 2026; #1197)
+
+The existing `daily_query` entry now reads the owner-set Gym, Run and daily-step
+targets through the same `TrainingTargetsStore` used by `/daily/training-targets`;
+`daily_health_summary` reads that store too. Missing targets remain null and are
+listed as missing, zero remains a configured value, update time is retained, and
+no write tool or second target source is introduced. The query source is
+advertised in capability version 5 only when configured; versions 1–4 retain
+their exact source lists.
+
+Health metrics project the existing `fields_json` into aggregation, at most five
+source labels, and typed latest-sample timestamp/value/source-unit/source/device
+and conversion metadata. Sleep and minute heart-rate rows project at most five
+source labels and report truncation. The SQL reads extract only those allowlisted
+JSON paths; the new result fields do not return raw `fields_json` or
+`source_json`. Existing units, offsets, nulls, lineage and record timestamps are
+unchanged.
+
+Workout detail keeps its existing `detail_json` result and reads at most 100
+normalized `health_workout_metrics` rows. `additionalMetrics` omits metrics whose
+normalized numeric summary is already represented in detail. When the additional
+list exceeds the cap, `metricsTruncated` and `coverage.detailMetricsTruncated`
+make the query result partial; there is no new cursor or claim of complete
+detail. The response still observes the shared 768 KiB bound. No table,
+migration, catalogue entry, feature activation or access change is added.
+The source-linked [coverage matrix](daily-health-read-coverage.md) distinguishes
+these tool paths from the separate pinned-schema and source-parity inventory.
 
 ### Default-off Gmail attention and calendar feeds (P14-51; 20 October 2026)
 
@@ -6533,9 +6681,10 @@ SQL pool, Daily stores, owner authorization and native tool confirmation flow.
 The selected set includes conversational Status/profile/preference/recovery
 reads and writes, but not coach commitments, orders, experiments, meal plans,
 fixed renderers or Apple Health meal write-back. The nine remaining source
-operations are currently grouped into three registered tools to retain the
-catalogue's required eight-tool headroom; this does not satisfy the requested
-distinct tool names and is a recorded mismatch. Local tool/read-model and
+operations were grouped into three registered tools under the former
+eight-slot-reserve decision; #1204 supersedes that count-based rationale. This
+does not satisfy the requested distinct tool names and remains a recorded
+mismatch. Local tool/read-model and
 isolated-SQL tests do not prove exact source HTTP-path parity, all 31-table
 field parity, deployed acceptance, physical-phone use or owner handoff. The
 historical exporter limits are 8 MiB ingress; normalized output capped at 10,000
@@ -6591,6 +6740,33 @@ code-point boundaries, caps the serialized result at 8 KiB and marks it
 in generic tool-call audit records. Raw JSON validation runs before Fastify's
 AJV coercion; failures remain explicit tool refusals/errors. The module exposes
 no item mutation or approval capability.
+
+## Conversational proactive suggestion preferences (#1207)
+
+The existing `ProactiveStore.settings` is the single source of truth for the
+Settings UI and the sensitive `proactive_preferences` tool. Migration 0062 adds
+owner-scoped category flags and a `suggestion_scope` preference; existing
+settings rows default to every category enabled and scope `all`. Proactive items
+persist a classified scope, defaulting to `unknown` for existing rows. Rollback
+refuses to discard non-default preferences or any classified item data.
+
+The tool reads the effective category/scope values or patches exactly one
+category or scope. A write must match the latest direct owner message; findings,
+source text, and per-item feedback cannot authorize it. Chat and voice guidance
+mentions the capability only when it is present in the active advertised tool
+set. The preference does not turn off providers or constrain ordinary owner
+requests.
+
+The engine excludes disabled travel evidence across all enabled sources and
+filters both deterministic and model-generated findings by category and
+conservative scope classification. Only exact personal/work evidence passes a
+restricted scope; unknown and mixed evidence do not. A successful preference
+change cancels in-flight engine/reminder work, and SQL item writes re-check the
+current policy in their transaction. Item queries, push item detail, alerts,
+todo writing and reminder planning/delivery apply the current policy. Existing
+items are retained and reappear if re-enabled; preference changes do not delete
+owner tasks or reminders. Enabling a category changes no pause, source, budget
+or safety setting.
 
 ## Web Daily presentation kit and Workouts (18 October 2026; P12-30)
 

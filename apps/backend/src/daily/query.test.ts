@@ -30,7 +30,12 @@ function fixture() {
     heartbeat: { last_received_at: '2026-10-16T07:29:00Z' }, inbox: { pending: 1, quarantined: 0 },
   });
   const workoutDetail = vi.fn().mockResolvedValue({ id: '01', detail: { activity: 'synthetic' } });
+  const workoutMetrics = vi.fn().mockResolvedValue({ items: [], truncated: false });
   const heartRate = vi.fn().mockResolvedValue({ items: [{ sample_minute: '2026-10-16T07:00:00Z', metric_name: 'heart_rate', unit: 'bpm', avg_value: 90 }], next: null });
+  const targetRead = vi.fn().mockResolvedValue({
+    targets: { gymSessionsPerWeek: 0, runSessionsPerWeek: null, dailySteps: null },
+    updatedAt: '2026-10-16T07:00:00.000Z',
+  });
   const meals = vi.fn().mockResolvedValue({ rows: [{ id: '01', meal_date: new Date('2026-10-16'), energy_kcal: 123, protein_grams: null,
     components_json: '[]', nutrient_provenance_json: '{"kind":"synthetic-label"}', revision: 2n, deleted_at: null,
     owner_object_id: owner, apple_health_claim_token_hash: 'must-not-escape' }], next: null });
@@ -58,11 +63,12 @@ function fixture() {
     updated_at: 'legacy-unverified-time', owner_object_id: owner,
     source_snapshots_json: '{"credential":"must-not-escape"}', delivery_evidence_json: '{"token":"must-not-escape"}' });
   const readers: DailyReaders = {
-    health: vi.fn(() => ({ history, metricCatalog, sync, workoutDetail, heartRate })),
+    health: vi.fn(() => ({ history, metricCatalog, sync, workoutDetail, workoutMetrics, heartRate })),
     nutrition: vi.fn(() => ({ history: meals, days, favorites, plans })),
     briefs: vi.fn(() => ({ history: briefHistory, detail: briefDetail })),
+    trainingTargets: vi.fn(() => ({ read: targetRead })),
   };
-  return { service: new DailyQueryService(readers, () => clock), advance: () => { clock += 60000; }, readers, history, metricCatalog, sync, workoutDetail, heartRate, meals, days, favorites, plans, briefHistory, briefDetail };
+  return { service: new DailyQueryService(readers, () => clock), advance: () => { clock += 60000; }, readers, history, metricCatalog, sync, workoutDetail, workoutMetrics, heartRate, targetRead, meals, days, favorites, plans, briefHistory, briefDetail };
 }
 describe('one shared Daily read contract', () => {
   it('shares historical brief metadata/body through HTTP and the same sensitive tool, without interpreting time or delivering', async () => {
@@ -178,6 +184,28 @@ describe('one shared Daily read contract', () => {
     f.sync.mockResolvedValue({ feeds: [], heartbeat: { last_received_at: '2026-10-16T07:31:00Z' }, inbox: {} });
     expect((await f.service.query(input, request(), signal())).freshness.sourceProcessedCommittedAt).toBeNull();
   });
+  it('reads explicit owner training targets through the registered daily_query handler', async () => {
+    const f = fixture();
+    const data = { query: f.service, changes: createDailyChanges(),
+      trainingTargets: () => ({ read: f.targetRead, write: vi.fn() }) };
+    const module = createDailyModules(true, data)[0]!;
+    const tool = createToolRegistry([module]).get('daily_query')!;
+    const query = { source: sources.trainingTargets };
+    const result = await tool.execute(query, request(), signal());
+    expect(result).toMatchObject({
+      source: sources.trainingTargets, period: null, status: 'available',
+      items: [{ targets: { gymSessionsPerWeek: 0, runSessionsPerWeek: null, dailySteps: null },
+        missing: ['runSessionsPerWeek', 'dailySteps'], updatedAt: '2026-10-16T07:00:00.000Z' }],
+      units: { gymSessionsPerWeek: 'sessions/week', runSessionsPerWeek: 'sessions/week', dailySteps: 'steps/day' },
+      freshness: { latestReturnedRecordUpdatedAt: '2026-10-16T07:00:00.000Z', staleness: 'unknown' },
+      coverage: { sourceCompleteness: 'unknown' },
+    });
+    await expect(tool.execute(query, request({ principal: { objectId: '22222222-2222-4222-8222-222222222222' } }), signal()))
+      .rejects.toThrow();
+    expect(f.targetRead).toHaveBeenCalledOnce();
+    expect(JSON.stringify(result)).not.toContain(owner);
+    expect(createDailyModules(false, data)).toEqual([]);
+  });
   it('filters one exact measurement and exposes a paged metric catalogue with sorted mixed units', async () => {
     const f = fixture();
     const filtered = await f.service.query({ ...input, metric: 'waist_circumference', limit: 1,
@@ -198,6 +226,16 @@ describe('one shared Daily read contract', () => {
     expect(catalog).toMatchObject({ coverage: { hasMore: true, next: { key: 'weight' } },
       freshness: { latestReturnedRecordUpdatedAt: '2026-10-16T07:00:00.000Z' },
       provenance: { calculations: 'existing-read-model' } });
+  });
+  it('applies readable measurement filters to heart-rate pages before their limit', async () => {
+    const f = fixture();
+    const query = { source: sources.heartRate, workoutId: 'workout-synthetic', metric: 'Heart rate', limit: 1 } as const;
+    const result = await f.service.query(query, request(), signal());
+    expect(f.heartRate).toHaveBeenCalledWith('workout-synthetic', {
+      limit: 1, metric: 'Heart rate',
+    }, expect.any(AbortSignal));
+    expect(result.items).toMatchObject([{ metric_name: 'heart_rate', avg_value: 90 }]);
+    expect(result.coverage).toMatchObject({ returned: 1, hasMore: false, next: null });
   });
   it('returns retained-meal day totals with null, partial and complete nutrients and derived provenance', async () => {
     const f = fixture();
@@ -291,7 +329,7 @@ describe('one shared Daily read contract', () => {
     expect(() => canonicalJson(detail)).toThrow('limits');
     f.workoutDetail.mockResolvedValue({ id: '01', detail });
     const result = await f.service.query({ source: sources.workout, workoutId: '01' }, request(), signal());
-    expect(result.items).toEqual([{ id: '01', detail }]);
+    expect(result.items).toEqual([{ id: '01', detail, additionalMetrics: [], metricsTruncated: false }]);
     expect(result.revision).toMatch(/^[a-f0-9]{64}$/u);
     let reordered: DailyJson = { a: 1, b: 2 };
     for (let depth = 0; depth < 20; depth++) reordered = { nested: reordered };
@@ -316,7 +354,7 @@ describe('one shared Daily read contract', () => {
     f.workoutDetail.mockResolvedValue({ id: '01', detail: { activity } });
     const exact = await f.service.query(query, request(), signal());
     expect(Buffer.byteLength(JSON.stringify(exact))).toBe(dailyResultByteLimit);
-    expect(exact.items[0]).toEqual({ id: '01', detail: { activity } });
+    expect(exact.items[0]).toEqual({ id: '01', detail: { activity }, additionalMetrics: [], metricsTruncated: false });
     f.workoutDetail.mockResolvedValue({ id: '01', detail: { activity: `${activity}x` } });
     await expect(f.service.query(query, request(), signal())).rejects.toThrow('shared response limit');
   });
@@ -337,6 +375,29 @@ describe('one shared Daily read contract', () => {
     expect(f.heartRate).toHaveBeenCalledWith('01', expect.objectContaining({ after: { minute: '2026-10-16T07:00:00Z', metric: 'heart_rate' } }), expect.any(AbortSignal));
     f.workoutDetail.mockResolvedValue(null);
     expect(await f.service.query({ source: sources.workout, workoutId: '01' }, request(), signal())).toMatchObject({ status: 'empty', items: [] });
+  });
+  it('adds only normalized workout metrics not already represented by detail and labels the bounded remainder partial', async () => {
+    const f = fixture();
+    f.workoutDetail.mockResolvedValue({ id: '01', detail: {
+      heartRateData: { value: 90, unit: 'bpm', min_value: 80, avg_value: 90, max_value: 100, samples: 2 },
+      runningPower: { qty: 250, units: 'W' },
+    } });
+    f.workoutMetrics.mockResolvedValue({
+      items: [
+        { metric_name: 'heart_rate_data', unit: 'bpm', value: 90, min_value: 80, avg_value: 90, max_value: 100,
+          sample_count: 2, fields: { latestSample: { value: 100, sourceUnit: 'bpm' } } },
+        { metric_name: 'running_power', unit: 'W', value: 250, min_value: 250, avg_value: 250, max_value: 250,
+          sample_count: 1, fields: { latestSample: { value: 250, sourceUnit: 'W' } } },
+      ],
+      truncated: true,
+    });
+    const result = await f.service.query({ source: sources.workout, workoutId: '01' }, request(), signal());
+    expect(result).toMatchObject({
+      status: 'partial', coverage: { hasMore: false, next: null, detailMetricsTruncated: true },
+      items: [{ additionalMetrics: [{ metric_name: 'running_power', unit: 'W', value: 250,
+        fields: { latestSample: { value: 250, sourceUnit: 'W' } } }], metricsTruncated: true }],
+    });
+    expect(JSON.stringify(result)).not.toContain('heart_rate_data');
   });
   it('keeps sync acceptance/processed/heartbeat evidence separate and returns failures instead of empty-success', async () => {
     const f = fixture();

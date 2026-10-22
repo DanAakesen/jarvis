@@ -181,7 +181,6 @@ DAILY_FEED_TIMEOUT_SECONDS = 225.0
 BACKEND_HTTP_TIMEOUT_SECONDS = 10.0
 CATALOGUE_TTL_SECONDS = 60.0
 MAX_RESPONSE_BYTES = 1024 * 1024
-MAX_TOOLS: int = LIMITS["maxTools"]
 MAX_DESCRIPTION_CHARACTERS: int = LIMITS["maxToolDescriptionCharacters"]
 MAX_MESSAGE_ID = 9_223_372_036_854_775_807
 
@@ -657,7 +656,7 @@ class BackendToolClient:
             if response.status_code != 200:
                 raise RuntimeError(f"GET /tools returned HTTP {response.status_code}")
             body = json.loads(await _read_bounded(response))
-        if not isinstance(body, list) or len(body) > MAX_TOOLS:
+        if not isinstance(body, list):
             raise ValueError("invalid tool catalogue")
         tools: dict[str, BackendTool] = {}
         for entry in body:

@@ -280,8 +280,8 @@ try {
     if (!secret.value) throw new Error('GitHub App private key is unavailable');
     return secret.value;
   };
-  const onTokenMint = async (status: 'ok' | 'failed', checkedAt: string) => {
-    try { await credentialStatusStore?.updateGitHubAppStatus(status, checkedAt); }
+  const onTokenMint = async (status: 'ok' | 'failed', checkedAt: string, scopeKey: string) => {
+    try { await credentialStatusStore?.updateGitHubAppStatus(status, checkedAt, scopeKey); }
     catch { logger.warn('credentials.github_app_status_failed'); }
   };
   const githubAppTokenIssuer = config.githubAppId && githubAppKeyVault
@@ -1204,6 +1204,9 @@ try {
   });
   registerPushRoutes(app, config.pushEnabled, () => ({
     store: createPushStore(database!.pool),
+    ...(proactiveStore ? {
+      proactiveItems: { ownerObjectId: config.auth.ownerObjectId, store: proactiveStore.items },
+    } : {}),
     publicOrigin: config.staticWebAppOrigin!,
   }));
   const alertPushStore = config.proactiveEnabled && config.proactiveAlertsEnabled && config.pushEnabled &&

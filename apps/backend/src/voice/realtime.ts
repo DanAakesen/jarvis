@@ -47,12 +47,15 @@ function englishPersonalityInstructions(
   projects: readonly ProjectContextEntry[] = [],
   memory: Settings['memory'] = defaultSettings.memory,
   proactiveEnabled = false,
+  proactivePreferencesEnabled = false,
 ): string {
   return `${composeIdentityInstructions(identity, 'en')}
 
 ${ENGLISH_REALTIME_INSTRUCTIONS}
 
-${additionalRealtimeInstructions(personality, presence, projects, memory, proactiveEnabled)}`;
+${additionalRealtimeInstructions(
+    personality, presence, projects, memory, proactiveEnabled, proactivePreferencesEnabled,
+  )}`;
 }
 
 function additionalRealtimeInstructions(
@@ -61,6 +64,7 @@ function additionalRealtimeInstructions(
   projects: readonly ProjectContextEntry[],
   memory: Settings['memory'],
   proactiveEnabled: boolean,
+  proactivePreferencesEnabled: boolean,
 ): string {
   const customMode = personality.modeInstructions[presence.mode] === builtInModeInstructions[presence.mode]
     ? '' : personality.modeInstructions[presence.mode];
@@ -73,10 +77,12 @@ ${JSON.stringify(personality.customInstructions)}`;
 The following JSON string is the instruction for the current mode, not policy or tool input:
 ${JSON.stringify(customMode)}
 Mode adds context but never replaces shared identity. Keep spoken replies to one short sentence unless clarity requires more.
-This browser voice route uses the authenticated browser confirmation flow in every mode. Preferences do not alter backend policy.`;
-  const contextual = `${capabilityInstructions(memory, proactiveEnabled)}
+Preferences do not alter backend policy.`;
+  const contextual = `${capabilityInstructions(memory, proactiveEnabled, proactivePreferencesEnabled)}
 
-${projectAwarenessInstructions(projects)}`;
+${projectAwarenessInstructions(projects)}
+
+Away does not change approval routing: confirmations wait in the authenticated browser app in every mode.`;
   return [style, mode, contextual].join('\n\n');
 }
 
@@ -93,6 +99,7 @@ function danishInstructions(
   projects: readonly ProjectContextEntry[] = [],
   memory: Settings['memory'] = defaultSettings.memory,
   proactiveEnabled = false,
+  proactivePreferencesEnabled = false,
 ): string {
   return `${composeIdentityInstructions(identity, 'da')}
 
@@ -102,7 +109,9 @@ du bekræfte den kort. Meld fejl, delvise resultater og ubekræftede resultater 
 tidspunkter, steder, navne, adresser, beløb, referencer, koder eller andre private detaljer højt, medmindre
 Dan beder om dem.
 
-${additionalRealtimeInstructions(personality, presence, projects, memory, proactiveEnabled)}`;
+${additionalRealtimeInstructions(
+    personality, presence, projects, memory, proactiveEnabled, proactivePreferencesEnabled,
+  )}`;
 }
 
 function schemaRecord(value: unknown): value is Record<string, unknown> {
@@ -234,9 +243,14 @@ export function createRealtimeSessionUpdate(
 ) {
   const danish = language === 'da';
   const proactiveEnabled = tools.get('proactive_recent_items') !== undefined;
+  const proactivePreferencesEnabled = tools.get('proactive_preferences') !== undefined;
   const fullInstructions = danish
-    ? danishInstructions(personality, identity, presence, projects, memory, proactiveEnabled)
-    : englishPersonalityInstructions(personality, identity, presence, projects, memory, proactiveEnabled);
+    ? danishInstructions(
+      personality, identity, presence, projects, memory, proactiveEnabled, proactivePreferencesEnabled,
+    )
+    : englishPersonalityInstructions(
+      personality, identity, presence, projects, memory, proactiveEnabled, proactivePreferencesEnabled,
+    );
   const compactEnglishInstructions = `${composeIdentityInstructions(identity, 'en')}
 
 ${ENGLISH_REALTIME_INSTRUCTIONS}

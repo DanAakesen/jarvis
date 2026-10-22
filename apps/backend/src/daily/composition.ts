@@ -5,9 +5,9 @@ import { ConfigurationError } from '../configuration-error.js';
 import type { BackendModule } from '../modules.js';
 import { DailyHealthReadModel } from './health/read-model.js';
 import { createDailyModules } from './index.js';
+import { FridaLookupAdapter } from './nutrition/frida.js';
 import type { NutritionSuggestionSources } from './nutrition/suggestion-adapter.js';
 import { NutritionTargetsStore, type NutritionTargetsAccess } from './nutrition/targets-store.js';
-import { TrainingTargetsStore, type TrainingTargetsAccess } from './training/targets-store.js';
 import { resolveDailyOwner } from './owner.js';
 import { createDailyData } from './query.js';
 import type { DailyFeedProviders } from './feeds/service.js';
@@ -29,15 +29,15 @@ const uuid = /^[\da-f]{8}(-[\da-f]{4}){3}-[\da-f]{12}$/iu;
 /**
  * The only production entry point to Daily. Off, it returns nothing and touches nothing, so Jarvis keeps its
  * route table, tool catalogue and startup exactly. On, it composes the owner-bound nutrition slice over the
- * existing pool: reads, owner-approved food writes, owner-only Settings target routes and the budget-aware suggestion. It adds no
- * timer, job, import, provider/device connector, Frida lookup or Google/Gmail feed.
+ * existing pool: reads, owner-approved food writes, owner-only Settings target routes and the budget-aware suggestion.
+ * Frida lookup is lazy and owner-bound; it adds no timer, job, provider/device connector or Google/Gmail feed.
  */
 export function composeDaily(options: DailyCompositionOptions): BackendModule | undefined {
   if (options.enabled !== true) return undefined;
   if (!options.pool) throw new ConfigurationError('SQL is required for Daily');
   if (!uuid.test(options.ownerObjectId)) throw new ConfigurationError('The Daily owner must be a UUID');
   const { pool } = options;
-  const data = createDailyData(pool, options.ownerObjectId, Date.now, undefined,
+  const data = createDailyData(pool, options.ownerObjectId, Date.now, new FridaLookupAdapter(),
     options.feedsEnabled === true ? options.feeds ?? {} : undefined);
   // createDailyData applies this check to its own accessors; the two composed here get the same one.
   const owned = (request: FastifyRequest) => {
@@ -47,10 +47,6 @@ export function composeDaily(options: DailyCompositionOptions): BackendModule | 
     owned(request);
     return NutritionTargetsStore.forRequest(pool, request);
   };
-  const trainingTargets: TrainingTargetsAccess = (request) => {
-    owned(request);
-    return TrainingTargetsStore.forRequest(pool, request);
-  };
   const suggestions: NutritionSuggestionSources = {
     nutrition: data.nutrition,
     health: (request) => {
@@ -58,5 +54,5 @@ export function composeDaily(options: DailyCompositionOptions): BackendModule | 
       return DailyHealthReadModel.forRequest(pool, request);
     },
   };
-  return createDailyModules(true, data, undefined, data.nutrition, data.nutrition, targets, suggestions, trainingTargets)[0];
+  return createDailyModules(true, data, undefined, data.nutrition, data.nutrition, targets, suggestions, data.trainingTargets)[0];
 }

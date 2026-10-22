@@ -7,7 +7,7 @@ import { createMemoryProactiveStore, DEFAULT_NEWS_FEEDS } from './store.js';
 import { registerProactiveRoutes, type ProactiveRouteOptions } from './routes.js';
 import { registerProactive } from './composition.js';
 import type { ProactiveCompositionOptions } from './composition.js';
-import { sourceIds } from './types.js';
+import { findingCategories, sourceIds } from './types.js';
 
 const owner = 'd5b41c2f-33f4-4b4f-9a52-09346e50c8dd';
 const other = 'd5b41c2f-33f4-4b4f-9a52-09346e50c8df';
@@ -72,6 +72,8 @@ describe('proactive routes', () => {
       paused: false,
       monthlyBudgetDkk: 100,
       sources: sourceIds.map((id) => ({ id, enabled: id !== 'x' })),
+      categories: findingCategories.map((id) => ({ id, enabled: true })),
+      suggestionScope: 'all',
       newsFeeds: [...DEFAULT_NEWS_FEEDS],
       guidance: '',
     });
@@ -83,6 +85,8 @@ describe('proactive routes', () => {
         paused: true,
         monthlyBudgetDkk: 0,
         sources: [{ id: 'todos', enabled: false }],
+        categories: [{ id: 'travel', enabled: false }],
+        suggestionScope: 'personal',
         newsFeeds: ['https://example.test/feed.xml'],
         guidance: 'Prefer concise reminders.',
       },
@@ -91,6 +95,8 @@ describe('proactive routes', () => {
     expect(patched.json()).toMatchObject({
       paused: true,
       monthlyBudgetDkk: 0,
+      categories: findingCategories.map((id) => ({ id, enabled: id !== 'travel' })),
+      suggestionScope: 'personal',
       newsFeeds: ['https://example.test/feed.xml'],
       guidance: 'Prefer concise reminders.',
     });

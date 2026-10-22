@@ -102,6 +102,8 @@ describe('daily_show descriptor', () => {
     expect(tool.description.length).toBeLessThanOrEqual(4000);
     expect(tool.description).toContain('daily_query');
     expect(tool.description).toMatch(/chart is drawn for workout duration/iu);
+    expect(tool.description).toContain('filtering is applied before the bounded row limit');
+    expect(tool.description).not.toContain('from the page');
     expect(tool.description).toMatch(/adds no calculations/iu);
     expect(tool.description).toMatch(/never zero/iu);
   });
@@ -123,6 +125,7 @@ describe('daily_show descriptor', () => {
     expect(Object.keys(schema.properties).sort()).toEqual(['display', 'endDate', 'limit', 'metric', 'source', 'startDate', 'workoutId']);
     expect(schema.properties.display?.enum).toEqual(['table', 'chart']);
     expect(schema.properties.display?.description).toMatch(/workout duration/iu);
+    expect(schema.properties.metric?.description).toContain('before the bounded page');
   });
 });
 
@@ -239,6 +242,7 @@ describe('daily_show input', () => {
     ['a table of heart rate', { source: sources.heartRate, workoutId: 'workout-alpha' }, undefined],
     ['a chart of heart rate', { source: sources.heartRate, workoutId: 'workout-alpha', display: 'chart' }, maxShownRows],
     ['an explicit limit on a chart', { ...sleepWeek, display: 'chart', limit: 7 }, 7],
+    ['an explicit limit on one measurement', { source: sources.metrics, ...week, metric: 'step_count', limit: 17 }, 17],
     ['the most sleep rows a page shows', { ...sleepWeek, limit: maxShownRows }, maxShownRows],
     ['the most meals allowed', { source: sources.meals, ...week, limit: 100 }, 100],
     ['the most favourites allowed', { source: sources.favorites, limit: 100 }, 100],
@@ -250,7 +254,8 @@ describe('daily_show input', () => {
     const { query } = firstRead(f);
     if (expected === undefined) expect(query).not.toHaveProperty('limit');
     else expect(query).toHaveProperty('limit', expected);
-    expect(query).not.toHaveProperty('metric');
+    if (typeof input.metric === 'string') expect(query).toHaveProperty('metric', input.metric.trim());
+    else expect(query).not.toHaveProperty('metric');
     expect(query).not.toHaveProperty('display');
   });
 });
@@ -349,21 +354,62 @@ describe('daily_show publishing', () => {
     expect(table.viewId).toMatch(/^daily-heart-rate-table-[0-9a-f]{8}$/u);
   });
 
-  it('passes the workout id to the read and keeps the measurement name out of it', async () => {
+  it('passes the workout and metric selectors to the bounded heart-rate read', async () => {
     const f = fixture(answer(sources.heartRate, beats));
     await run(f, { source: sources.heartRate, workoutId: 'workout-alpha', metric: 'heart_rate' });
-    expect(firstRead(f).query).toEqual({ source: sources.heartRate, workoutId: 'workout-alpha', limit: maxShownRows });
+    expect(firstRead(f).query).toEqual({ source: sources.heartRate, workoutId: 'workout-alpha', metric: 'heart_rate', limit: maxShownRows });
   });
 
-  it('keeps just the named measurement on screen and the full read for the answer', async () => {
-    const rows = [steps('2026-10-16', 1234), mass('2026-10-16', 61.5), steps('2026-10-17', 2345)];
-    const f = fixture(answer(sources.metrics, rows));
-    const outcome = await run(f, { source: sources.metrics, ...week, metric: '  step_count  ' });
-    expect(firstRead(f).query).toEqual({ source: sources.metrics, ...week, limit: maxShownRows });
+  it('filters before the bounded read so a selected metric beyond unrelated rows is charted', async () => {
+    const unrelated = Array.from({ length: maxShownRows + 10 }, (_, index) =>
+      ({ ...mass('2026-10-16', index), metric_name: `a_unrelated_${String(index).padStart(3, '0')}` }));
+    const matching = [steps('2026-10-16', 1234), steps('2026-10-17', 2345)];
+    const f = fixture(answer(sources.metrics));
+    f.query.mockImplementation(async (raw) => {
+      const query = raw as Record<string, unknown>;
+      const filtered = query.metric === 'Step count'
+        ? [...unrelated, ...matching].filter((row) => row.metric_name === 'step_count')
+        : [...unrelated, ...matching];
+      const limit = Number(query.limit ?? 50);
+      return answer(sources.metrics, filtered.slice(0, limit), { hasMore: filtered.length > limit });
+    });
+    const outcome = await run(f, { source: sources.metrics, ...week, metric: '  Step count  ', display: 'chart' });
+    expect(firstRead(f).query).toEqual({ source: sources.metrics, ...week, metric: 'Step count', limit: maxShownRows });
+    expect(outcome.view.renderer).toBe('chart');
     expect(outcome.view.rowsShown).toBe(2);
-    expect(outcome.view.rowsReturned).toBe(3);
-    expect(outcome.view.viewId).toMatch(/^daily-metrics-table-step-count-[0-9a-f]{6}$/u);
-    expect(outcome.result.items).toEqual(rows);
+    expect(outcome.view.rowsReturned).toBe(2);
+    expect(outcome.view.viewId).toMatch(/^daily-metrics-chart-step-count-[0-9a-f]{6}$/u);
+    expect(outcome.view.partial).toBe(false);
+    expect(outcome.result.items).toEqual(matching);
+    expect(JSON.stringify(outcome.result)).not.toContain('a_unrelated_');
+  });
+
+  it('reports filtered coverage and a partial result for the selected metric page', async () => {
+    const matching = Array.from({ length: maxShownRows + 5 }, (_, index) => steps('2026-10-16', index));
+    const f = fixture(answer(sources.metrics));
+    f.query.mockImplementation(async (raw) => {
+      const query = raw as Record<string, unknown>;
+      const limit = Number(query.limit ?? 50);
+      return answer(sources.metrics, matching.slice(0, limit), { hasMore: matching.length > limit });
+    });
+    const outcome = await run(f, { source: sources.metrics, ...week, metric: 'step_count', limit: 7, display: 'chart' });
+    expect(firstRead(f).query).toMatchObject({ metric: 'step_count', limit: 7 });
+    expect(outcome.view).toMatchObject({ renderer: 'chart', rowsShown: 7, rowsReturned: 7, partial: true });
+    expect(outcome.view.notes.join(' ')).toContain('More records are available beyond this page.');
+    expect(outcome.result.coverage).toMatchObject({ returned: 7, hasMore: true });
+    expect(outcome.view.viewId).toMatch(/^daily-metrics-chart-step-count-/u);
+  });
+
+  it('keeps an empty filtered result specific to the selected measurement', async () => {
+    const f = fixture(answer(sources.metrics));
+    const outcome = await run(f, {
+      source: sources.metrics, ...week, metric: 'step_count',
+    });
+    expect(outcome.view.renderer).toBe('text');
+    expect(outcome.view.rowsReturned).toBe(0);
+    expect(outcome.view.viewId).toMatch(/^daily-metrics-table-step-count-/u);
+    expect(outcome.view.notes).toEqual([]);
+    expect(sent(f)[0]?.view?.title).toContain('Step count');
   });
 
   it('says when the page is partial and passes that to the view footnote', async () => {

@@ -1020,6 +1020,7 @@ export async function buildAgentSettingsPayload(
     capabilityInstructions: capabilityInstructions(
       settings.memory,
       app.jarvisTools.get('proactive_recent_items') !== undefined,
+      app.jarvisTools.get('proactive_preferences') !== undefined,
     ),
     timeouts: settings.timeouts,
     personality: settings.personality,

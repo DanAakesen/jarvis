@@ -466,6 +466,21 @@ async def test_chat_uses_capability_instructions_from_agent_settings() -> None:
     assert "Shared backend capability block." in transport.responses.request["instructions"]
 
 
+@pytest.mark.asyncio
+async def test_chat_advertises_every_loaded_tool_above_the_former_global_count_limit() -> None:
+    catalogue = [{**CREATE_TASK, "name": f"tool_{index}"} for index in range(129)]
+    model, transport = client([completed()], backend=FakeBackend(catalogue=catalogue))
+
+    _ = [chunk async for chunk in model.complete_chat(
+        [ModelMessage("user", "Use the available tools")], "en"
+    )]
+
+    assert [tool["name"] for tool in transport.responses.request["tools"]] == [
+        entry["name"] for entry in catalogue
+    ]
+    await model.close()
+
+
 @pytest.mark.parametrize("language", ["en", "da"])
 async def test_normal_chat_uses_supported_record_format_and_does_not_claim_a_visual_preview(
     language: str,

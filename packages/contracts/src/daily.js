@@ -20,8 +20,8 @@ const legacyQuerySources = Object.freeze({
   sync: 'daily.sync',
 });
 export const dailyQuerySourcesV1 = Object.freeze(Object.values(legacyQuerySources));
-export const dailyCapabilitiesVersion = 4;
-export const dailyCapabilitiesAccept = 'application/json;version=4, application/json;version=3, application/json;version=2, application/json';
+export const dailyCapabilitiesVersion = 5;
+export const dailyCapabilitiesAccept = 'application/json;version=5, application/json;version=4, application/json;version=3, application/json;version=2, application/json';
 export const dailyQuerySources = Object.freeze({
   ...legacyQuerySources,
   briefs: 'daily.briefs.history',
@@ -30,6 +30,7 @@ export const dailyQuerySources = Object.freeze({
   days: 'daily.nutrition.days',
   attention: 'daily.attention',
   calendar: 'daily.calendar',
+  trainingTargets: 'daily.health.training-targets',
 });
 export const dailyQuerySourcesV2 = Object.freeze([
   ...dailyQuerySourcesV1, dailyQuerySources.briefs, dailyQuerySources.brief,
@@ -37,7 +38,11 @@ export const dailyQuerySourcesV2 = Object.freeze([
 export const dailyQuerySourcesV3 = Object.freeze([
   ...dailyQuerySourcesV2, dailyQuerySources.metricCatalog, dailyQuerySources.days,
 ]);
-export const dailyQuerySourcesV4 = Object.freeze(Object.values(dailyQuerySources));
+export const dailyQuerySourcesV4 = Object.freeze([
+  ...dailyQuerySourcesV3, dailyQuerySources.attention, dailyQuerySources.calendar,
+]);
+export const dailyQuerySourcesV5 = Object.freeze([...dailyQuerySourcesV4, dailyQuerySources.trainingTargets]);
+export const dailyQuerySourcesV5WithoutFeeds = Object.freeze([...dailyQuerySourcesV3, dailyQuerySources.trainingTargets]);
 const record = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 const keys = (v, allowed) => Object.keys(v).every((key) => allowed.includes(key));
 const key = (v) => typeof v === 'string' && v.length > 0 && v.length <= 256 &&
@@ -54,7 +59,7 @@ const instant = (v) => typeof v === 'string' && v.length <= 64 &&
 export function isDailyQuery(v) {
   if (!record(v) || !Object.values(dailyQuerySources).includes(v.source)) return false;
   if (Object.values(v).some(value => value === undefined)) return false;
-  if (v.source === dailyQuerySources.sync) return keys(v, ['source']);
+  if (v.source === dailyQuerySources.sync || v.source === dailyQuerySources.trainingTargets) return keys(v, ['source']);
   if (v.source === dailyQuerySources.attention) return keys(v, ['source']);
   if (v.source === dailyQuerySources.calendar) {
     if (!keys(v, ['source', 'from', 'to']) || !instant(v.from) || !instant(v.to)) return false;
@@ -79,13 +84,13 @@ export function isDailyQuery(v) {
   const metricCatalog = v.source === dailyQuerySources.metricCatalog;
   const days = v.source === dailyQuerySources.days;
   const metric = v.source === dailyQuerySources.metrics;
-  const allowed = heartRate ? ['source', 'workoutId', 'limit', 'cursor']
+  const allowed = heartRate ? ['source', 'workoutId', 'metric', 'limit', 'cursor']
     : ['source', 'startDate', 'endDate', 'limit', 'cursor',
       ...(metric ? ['metric'] : [])];
   if (!keys(v, allowed)) return false;
   const maxLimit = meals ? 100 : metricCatalog ? 500 : days ? 400 : 500;
   if (v.limit !== undefined && (!Number.isInteger(v.limit) || v.limit < 1 || v.limit > maxLimit)) return false;
-  if (metric && v.metric !== undefined && !key(v.metric)) return false;
+  if ((metric || heartRate) && v.metric !== undefined && !key(v.metric)) return false;
   if (heartRate ? !key(v.workoutId) : !date(v.startDate) || !date(v.endDate) ||
       v.endDate < v.startDate || Date.parse(v.endDate) - Date.parse(v.startDate) > 366 * 86400000) return false;
   if (v.cursor === undefined) return true;
@@ -107,7 +112,7 @@ export const dailyQuerySchema = Object.freeze({
     endDate: { type: 'string', description: 'Inclusive calendar date; at most 366 days after startDate.' },
     from: { type: 'string', description: 'Inclusive ISO instant; only for daily.calendar. The range is at most 62 days.' },
     to: { type: 'string', description: 'Exclusive ISO instant; only for daily.calendar.' },
-    metric: { type: 'string', minLength: 1, maxLength: 256, description: 'Exact metric_name filter; only for daily.health.metrics.' },
+    metric: { type: 'string', minLength: 1, maxLength: 256, description: 'Metric_name key or its readable name; only for daily.health.metrics and daily.health.heart-rate. Applied before the row limit.' },
     workoutId: { type: 'string', maxLength: 256 },
     briefId: { type: 'string', minLength: 1, maxLength: 256, description: 'Exact returned legacy brief ID, without trimming; only for brief detail.' },
     limit: { type: 'integer', minimum: 1, maximum: 500, description: 'Meals and brief history allow at most 100; daily.nutrition.days at most 400; default 50 (metric catalogue defaults to 100).' },

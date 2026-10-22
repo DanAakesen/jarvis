@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import type { createGitHubVaultClient } from '../vault/github-client.js';
 import { MAX_VAULT_FILE_BYTES } from '../vault/github-client.js';
 import { localDateTimeInstant } from './time.js';
@@ -13,16 +14,20 @@ export interface ParsedTodo {
 }
 
 export interface ParsedVaultTodo extends ParsedTodo {
+  priorityLevel: 'high' | 'medium' | 'normal';
   dueDate: string | null;
   dueTime: string | null;
   path: string;
   line: number;
   heading: string | null;
+  /** Opaque SHA-256 of the exact raw line, so a write can prove the line is unchanged since it was read. */
+  version: string;
 }
 
 const dueMarkerPattern = /(?:📅\s*|\[due::\s*|\bdue:\s*)(\d{4}-\d{2}-\d{2})(?:(?:\s+|T)(\d{2}:\d{2}))?\]?/iu;
 const dueMarkersPattern = /(?:📅\s*|\[due::\s*|\bdue:\s*)(\d{4}-\d{2}-\d{2})(?:(?:\s+|T)(\d{2}:\d{2}))?\]?/giu;
-const highPriorityPattern = /(?:🔺|⏫|\[\s*priority\s*::\s*(?:highest|high)\s*\]|\(\s*priority\s*::\s*(?:highest|high)\s*\)|\bpriority\s*::?\s*P1\s*-\s*High\b)/iu;
+const highPriorityPattern = /(?:🔺|⏫|\[\s*priority\s*::\s*(?:highest|high)\s*\]|\(\s*priority\s*::\s*(?:highest|high)\s*\)|\bpriority\s*::?\s*P1\s*[-–—]\s*High\b)/iu;
+const mediumPriorityPattern = /(?:🔼|\bpriority\s*::?\s*(?:medium\b|P2\b))/iu;
 const priorityMarkersPattern = /\s*\[\s*priority\s*::?\s*[^\]]*\]|\s*\(\s*priority\s*::?\s*[^)]*\)|\s+\bpriority\s*::?.*$/giu;
 const timeMarkerPattern = /🕒\s*(\d{2}:\d{2})/u;
 export const taskMetadata = /[📅⏳🛫➕✅❌🔁🏁⏫🔼🔽⏬🔺🆔⛔🕒]/gu;
@@ -54,6 +59,10 @@ function dueDate(date: string, time: string | undefined): string | null {
   } catch {
     return null;
   }
+}
+
+export function taskLineVersion(rawLine: string): string {
+  return createHash('sha256').update(rawLine, 'utf8').digest('hex');
 }
 
 export function parseTodosWithContext(content: string, path: string): ParsedVaultTodo[] {
@@ -91,17 +100,20 @@ export function parseTodosWithContext(content: string, path: string): ParsedVaul
       .replace(/🏁\s*(?:delete|keep)\b/giu, ' ')
       .replace(priorityMarkersPattern, ' ')
       .replace(taskMetadata, ' '));
+    const highPriority = highPriorityPattern.test(rawText);
     todos.push({
       text,
       dueAt,
       dueHasTime: time !== undefined && dueAt !== null,
       done: task[1]!.toLowerCase() === 'x',
-      highPriority: highPriorityPattern.test(rawText),
+      highPriority,
+      priorityLevel: highPriority ? 'high' : mediumPriorityPattern.test(rawText) ? 'medium' : 'normal',
       dueDate: dueAt === null ? null : dueMarker?.[1] ?? null,
       dueTime: dueAt !== null && time !== undefined ? time : null,
       path,
       line: index + 1,
       heading,
+      version: taskLineVersion(line),
     });
   }
   return todos;

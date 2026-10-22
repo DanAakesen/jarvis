@@ -194,7 +194,7 @@ function safeFields(input: Record<string, unknown>): Record<string, unknown> {
       if (nonnegative(input[key])) fields[key] = input[key];
     }
     for (const key of ['rung', 'toolBudgetRung']) {
-      if (typeof input[key] === 'string' && /^R[0-4]$/u.test(input[key])) fields[key] = input[key];
+      if (typeof input[key] === 'string' && /^R[0-5]$/u.test(input[key])) fields[key] = input[key];
       else if (key === 'toolBudgetRung' && input[key] === null) fields[key] = null;
     }
     if (['ready', 'timeout', 'error', 'closed'].includes(String(input.outcome))) fields.outcome = input.outcome;

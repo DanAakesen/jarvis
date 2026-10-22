@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ProactiveSettings } from './ProactiveSettings';
@@ -17,6 +17,18 @@ const settings = {
     { id: 'travel', enabled: false },
     { id: 'x', enabled: true },
   ],
+  categories: [
+    { id: 'deadline', enabled: true },
+    { id: 'clash', enabled: true },
+    { id: 'travel', enabled: true },
+    { id: 'todo', enabled: true },
+    { id: 'prep', enabled: true },
+    { id: 'news', enabled: true },
+    { id: 'weather', enabled: true },
+    { id: 'status', enabled: true },
+    { id: 'suggestion', enabled: true },
+  ],
+  suggestionScope: 'all',
   newsFeeds: ['https://news.example.invalid/feed.xml'],
   guidance: 'Prefer concise summaries.',
 };
@@ -91,6 +103,21 @@ describe('Proactive settings', () => {
     await waitFor(() => expect(fetchMock.mock.calls.some(([, init]) => init?.method === 'PATCH')).toBe(true));
     const call = fetchMock.mock.calls.find(([, init]) => init?.method === 'PATCH');
     expect(JSON.parse(String(call?.[1]?.body))).toEqual({ paused: true });
+  });
+
+  it('saves category and scope changes without changing sources or pause', async () => {
+    renderSettings();
+    const user = await openSection();
+    await user.click(within(screen.getByRole('group', { name: 'Suggestion categories' }))
+      .getByRole('switch', { name: 'Travel' }));
+    await user.selectOptions(screen.getByLabelText('Suggestion scope'), 'personal');
+    await user.click(screen.getByRole('button', { name: 'Save proactive settings' }));
+    await waitFor(() => expect(fetchMock.mock.calls.some(([, init]) => init?.method === 'PATCH')).toBe(true));
+    const call = fetchMock.mock.calls.find(([, init]) => init?.method === 'PATCH');
+    expect(JSON.parse(String(call?.[1]?.body))).toEqual({
+      categories: [{ id: 'travel', enabled: false }],
+      suggestionScope: 'personal',
+    });
   });
 
   it('requires a whole-number budget from zero through one thousand', async () => {

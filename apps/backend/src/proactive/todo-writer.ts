@@ -18,6 +18,7 @@ import type { ProactiveStore } from './store.js';
 import type { ProactiveTodoReceiptStore, TodoReceiptInput, TodoReceiptSummary } from './todo-store.js';
 import { dayKey, isQuietHour } from './time.js';
 import { MAX_VAULT_FILE_BYTES } from './todo-file.js';
+import { classifySuggestionScope, findingAllowed } from './policy.js';
 
 type VaultWriter = Pick<ReturnType<typeof createGitHubVaultClient>, 'tree' | 'read' | 'write'>;
 type WriterLogger = {
@@ -48,8 +49,6 @@ const inboxes = {
 const rootTaskPath = /^(?:task|tasks)\.md$/iu;
 const projectPattern = /\b(?:software|engineering|code(?:base| review|ing)?|repository|repo|pull requests?|merge requests?|pr\b|ci\/cd|pipelines?|deployment|deployments?|commits?|branches|unit tests?|test suites?|release engineering|build checks?|software factory|factory tasks?|project(?:s)?)\b/iu;
 const projectBuildPattern = /\b(?:build|check|test|review|follow[- ]?up)\b.{0,36}\b(?:software|code|repo|branch|pipeline|ci|pull request|pr\b|deployment|engineering|project)\b|\b(?:software|code|repo|branch|pipeline|ci|pull request|pr\b|deployment|engineering|project)\b.{0,36}\b(?:build|check|test|review|follow[- ]?up)\b|\b(?:build|checks?)\b.{0,16}\b(?:failed|failing|failure|passed|passing|pending|blocked|running)\b/iu;
-const personalScopePattern = /\b(?:personal|home|household|family|doctor|dentist|groceries|grocery|shopping|school|kids|children|birthday|rent|utilities|medicine|cleaning|laundry)\b/iu;
-const workScopePattern = /\b(?:work|office|job|manager|colleague|coworker|client|customer|supplier|business|workplace|professional|invoice|agenda)\b/iu;
 
 function safeWarn(logger: WriterLogger | undefined, data: Parameters<WriterLogger['warn']>[0]): void {
   try { logger?.warn(data, 'proactive.todo_writer'); } catch { /* A logging failure cannot fail the run. */ }
@@ -103,18 +102,8 @@ function taskScope(
   text: string,
 ): 'personal' | 'work' | undefined {
   const cited = finding.evidenceRefs.flatMap((ref) => facts.filter((fact) => fact.ref === ref));
-  const explicit = new Set(cited.flatMap(({ taskScope: scope }) => scope ? [scope] : []));
-  if (explicit.size > 1) return undefined;
-  const context = `${text} ${cited.map(({ text: factText }) => factText).join(' ')}`;
-  const personal = personalScopePattern.test(context);
-  const work = workScopePattern.test(context);
-  const established = [...explicit][0];
-  if (personal && work) return undefined;
-  if (established !== undefined) {
-    return (personal && established !== 'personal') || (work && established !== 'work')
-      ? undefined : established;
-  }
-  return personal === work ? undefined : personal ? 'personal' : 'work';
+  const scope = classifySuggestionScope(text, cited);
+  return scope === 'unknown' ? undefined : scope;
 }
 
 function safeScopeText(value: string): string {
@@ -140,7 +129,7 @@ export function createProactiveTodoWriter(options: ProactiveTodoWriterOptions) {
 
   return async function onFindingsStored(context: FindingsStoredContext): Promise<void> {
     const startedAt = now();
-    const candidates = sortedCandidates(context);
+    let candidates = sortedCandidates(context);
     if (candidates.length === 0) return;
     if (context.signal.aborted) {
       log(context, 'run_aborted', candidates.map(({ itemId }) => itemId), 0, startedAt);
@@ -155,6 +144,13 @@ export function createProactiveTodoWriter(options: ProactiveTodoWriterOptions) {
       }
       if (!settings.sources.todos) {
         log(context, 'todos_disabled', candidates.map(({ itemId }) => itemId), 0, startedAt);
+        return;
+      }
+      candidates = candidates.filter((finding) => findingAllowed(
+        settings, finding.category, finding.suggestionScope, finding.relatedCategories,
+      ));
+      if (candidates.length === 0) {
+        log(context, 'preferences_disabled', [], 0, startedAt);
         return;
       }
       if (context.signal.aborted) {
@@ -329,6 +325,20 @@ export function createProactiveTodoWriter(options: ProactiveTodoWriterOptions) {
               add.map(({ itemId }) => itemId), 0, startedAt);
             return;
           }
+          const latestSettings = await options.store.settings.read();
+          if (context.signal.aborted) {
+            log(context, 'run_aborted', add.map(({ itemId }) => itemId), 0, startedAt);
+            return;
+          }
+          const allowedIds = new Set(candidates.filter((finding) => findingAllowed(
+            latestSettings, finding.category, finding.suggestionScope, finding.relatedCategories,
+          )).map(({ itemId }) => itemId));
+          const disallowed = add.filter(({ itemId }) => !allowedIds.has(itemId));
+          if (disallowed.length > 0) {
+            for (const todo of disallowed) add.splice(add.indexOf(todo), 1);
+            log(context, 'preferences_disabled', disallowed.map(({ itemId }) => itemId), disallowed.length, startedAt);
+          }
+          if (add.length === 0) return;
           if (dayKey(now()) !== currentDay) {
             currentDay = dayKey(now());
             stage = 'receipts';
