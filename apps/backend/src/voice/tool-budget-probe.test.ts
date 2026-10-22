@@ -72,7 +72,7 @@ function setup(enabled = true, now: () => number = () => performance.now()) {
 }
 
 describe('voice tool-budget background probes', () => {
-  it('probes in fixed order and stops at the first ready frame without changing memory', async () => {
+  it('probes in fixed order and promotes the first ready Health-capable frame', async () => {
     const f = setup();
     expect(f.probe.start(f.context)).toBe(true);
     expect(f.connect).not.toHaveBeenCalled();
@@ -95,7 +95,7 @@ describe('voice tool-budget background probes', () => {
     expect(f.records.filter((record) => record.msg === 'voice.tool_budget_probe').map((record) => [
       record.probe, record.outcome,
     ])).toEqual([['full', 'timeout'], ['no_proactive', 'ready']]);
-    expect(f.memory.get()).toBeUndefined();
+    expect(f.memory.get()).toBe(1);
     expect(f.connect).toHaveBeenCalledTimes(2);
     expect(f.maximumOpenSockets).toBe(1);
     expect(f.sockets.every((socket) => socket.sent.every((data) =>

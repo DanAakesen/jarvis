@@ -1,7 +1,9 @@
 import type { FastifyBaseLogger } from 'fastify';
 import WebSocket, { type RawData } from 'ws';
 import { parseVoiceEvent } from './realtime.js';
-import { TOOL_BUDGET_PROBE_NAMES, type ToolBudgetMemory, type ToolBudgetProbeName } from './tool-budget.js';
+import {
+  TOOL_BUDGET_HEALTH_RUNG, TOOL_BUDGET_PROBE_NAMES, type ToolBudgetMemory, type ToolBudgetProbeName,
+} from './tool-budget.js';
 import type { VoiceConnectionFactory } from './relay.js';
 
 export const TOOL_BUDGET_PROBE_INTERVAL_MS = 30 * 60_000;
@@ -163,7 +165,10 @@ export function createVoiceToolBudgetProbe(
         continue;
       }
       const outcome = await runProbe(probe, serialized, metrics, context);
-      if (probe === 'full' && outcome === 'ready') context.memory.set(0);
+      if (outcome === 'ready') {
+        if (probe === 'full') context.memory.set(0);
+        else if (probe === 'no_proactive') context.memory.set(TOOL_BUDGET_HEALTH_RUNG);
+      }
       if (outcome === 'ready' || disposed) return;
     }
   };
