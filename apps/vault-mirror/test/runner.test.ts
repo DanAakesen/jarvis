@@ -322,6 +322,33 @@ const taskNote = {
   ]),
 };
 
+// Every note that differs from the base by one hunk: any start, up to two removed lines and each listed insertion.
+const editedTexts = (base: readonly string[], inserts: readonly (readonly string[])[]): string[] => {
+  const texts = new Set<string>();
+  for (let start = 0; start <= base.length; start++) {
+    for (let remove = 0; remove <= 2 && start + remove <= base.length; remove++) {
+      for (const insert of inserts) {
+        const rows = [...base];
+        rows.splice(start, remove, ...insert);
+        texts.add(lineText(rows));
+      }
+    }
+  }
+  texts.delete(lineText(base));
+  return [...texts];
+};
+
+// A clean merge must be reproduced by retrying either side against it, so a run that starts from a stale base
+// can never apply an edit twice. Returns the merged text, or undefined when the merge was refused.
+const stableMerge = (baseText: string, ours: string, theirs: string): string | undefined => {
+  const merged = mergeThreeWay(baseText, ours, theirs);
+  expect(mergeThreeWay(baseText, theirs, ours)).toEqual(merged);
+  if (!merged.clean) return undefined;
+  expect(mergeThreeWay(baseText, ours, merged.text)).toEqual(merged);
+  expect(mergeThreeWay(baseText, merged.text, theirs)).toEqual(merged);
+  return merged.text;
+};
+
 describe('vault mirror runner', () => {
   it('reconciles changes in both directions through one GitHub commit and one Obsidian upload', async () => {
     const github = new FakeGitHub();
@@ -1049,41 +1076,48 @@ describe('Obsidian wrapper and merge', () => {
   it('never repeats, drops or re-applies a line for any pair of single edits', () => {
     const base = ['a', '', 'b', '', 'c', ''];
     const baseText = lineText(base);
-    const variants = (tag: string): string[] => {
-      const texts = new Set<string>();
-      for (let start = 0; start <= base.length; start++) {
-        for (let remove = 0; remove <= 2 && start + remove <= base.length; remove++) {
-          for (const insert of [[], [tag], ['', tag]]) {
-            if (remove === 0 && insert.length === 0) continue;
-            const rows = [...base];
-            rows.splice(start, remove, ...insert);
-            texts.add(lineText(rows));
-          }
-        }
-      }
-      return [...texts];
-    };
     const count = (text: string, tag: string): number => text.split('\n').filter(row => row === tag).length;
     let clean = 0;
     let refused = 0;
 
-    for (const ours of variants('ours')) {
-      for (const theirs of variants('theirs')) {
-        const merged = mergeThreeWay(baseText, ours, theirs);
-        expect(mergeThreeWay(baseText, theirs, ours)).toEqual(merged);
-        if (!merged.clean) {
+    for (const ours of editedTexts(base, [[], ['ours'], ['', 'ours']])) {
+      for (const theirs of editedTexts(base, [[], ['theirs'], ['', 'theirs']])) {
+        const merged = stableMerge(baseText, ours, theirs);
+        if (merged === undefined) {
           refused++;
           continue;
         }
         clean++;
-        expect(count(merged.text, 'ours')).toBe(count(ours, 'ours'));
-        expect(count(merged.text, 'theirs')).toBe(count(theirs, 'theirs'));
-        for (const retry of [
-          mergeThreeWay(baseText, ours, merged.text),
-          mergeThreeWay(baseText, merged.text, theirs),
-        ]) {
-          if (retry.clean) expect(retry.text).toBe(merged.text);
-        }
+        expect(count(merged, 'ours')).toBe(count(ours, 'ours'));
+        expect(count(merged, 'theirs')).toBe(count(theirs, 'theirs'));
+      }
+    }
+
+    expect(clean).toBeGreaterThan(0);
+    expect(refused).toBeGreaterThan(0);
+  });
+
+  it('refuses a merge when a retry would insert copied base lines a second time', () => {
+    // Ours inserts a copy of lines that already follow it, so the merged text can be diffed with a different
+    // alignment and a retry would insert the copy again.
+    expect(mergeThreeWay('a\n\nx\n', 'a\n\na\n\nx\n', 'b\n\nx\n')).toEqual({ clean: false });
+    expect(mergeThreeWay('a\n\nx\n', 'b\n\nx\n', 'a\n\na\n\nx\n')).toEqual({ clean: false });
+  });
+
+  it('keeps every merge stable when edits copy lines that repeat in the base', () => {
+    const base = ['a', '', 'x'];
+    const baseText = lineText(base);
+    const inserts = (tag: string): string[][] => {
+      const pool = [...base, tag];
+      return [[], ...pool.flatMap(first => [[first], ...pool.map(second => [first, second])])];
+    };
+    let clean = 0;
+    let refused = 0;
+
+    for (const ours of editedTexts(base, inserts('ours'))) {
+      for (const theirs of editedTexts(base, inserts('theirs'))) {
+        if (stableMerge(baseText, ours, theirs) === undefined) refused++;
+        else clean++;
       }
     }
 

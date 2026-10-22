@@ -64,17 +64,14 @@ function rebuilds(base: readonly string[], list: readonly Edit[], changed: reado
     output.every((line, position) => line === changed[position]);
 }
 
-export function mergeThreeWay(baseText: string, oursText: string, theirsText: string):
-  { clean: true; text: string } | { clean: false } {
-  const base = lines(baseText);
-  const oursLines = lines(oursText);
-  const theirsLines = lines(theirsText);
-  const ours = edits(base, oursLines);
-  const theirs = edits(base, theirsLines);
-  // An edit script that cannot rebuild its own side would repeat or drop lines, so refuse to merge it.
-  if (!rebuilds(base, ours, oursLines) || !rebuilds(base, theirs, theirsLines)) return { clean: false };
-  const combined: Edit[] = [...ours];
-  for (const right of theirs) {
+function scripts(base: readonly string[], changed: readonly string[]): Edit[] | undefined {
+  const list = edits(base, changed);
+  return rebuilds(base, list, changed) ? list : undefined;
+}
+
+function combine(base: readonly string[], first: readonly Edit[], second: readonly Edit[]): string | undefined {
+  const combined: Edit[] = [...first];
+  for (const right of second) {
     // Touching edits overlap: applied together they diff as one hunk, which a retry would apply again.
     const overlaps = combined.filter(left => left.start <= right.end && right.start <= left.end);
     if (overlaps.length === 0) {
@@ -86,9 +83,26 @@ export function mergeThreeWay(baseText: string, oursText: string, theirsText: st
       if (existing.start === right.start && existing.end === right.end &&
         existing.replacement.join('') === right.replacement.join('')) continue;
     }
-    return { clean: false };
+    return undefined;
   }
   combined.sort((left, right) => left.start - right.start || left.end - right.end);
-  const output = apply(base, combined);
-  return output === undefined ? { clean: false } : { clean: true, text: output.join('') };
+  return apply(base, combined)?.join('');
+}
+
+export function mergeThreeWay(baseText: string, oursText: string, theirsText: string):
+  { clean: true; text: string } | { clean: false } {
+  const base = lines(baseText);
+  // An edit script that cannot rebuild its own side would repeat or drop lines, so refuse to merge it.
+  const ours = scripts(base, lines(oursText));
+  const theirs = scripts(base, lines(theirsText));
+  if (ours === undefined || theirs === undefined) return { clean: false };
+  const text = combine(base, ours, theirs);
+  if (text === undefined) return { clean: false };
+  // Repeated lines can be aligned differently when the merged text is diffed again, so a retry against it could
+  // apply an edit a second time. Trust the merge only when retrying either side against its result reproduces it.
+  const merged = scripts(base, lines(text));
+  if (merged === undefined || combine(base, ours, merged) !== text || combine(base, merged, theirs) !== text) {
+    return { clean: false };
+  }
+  return { clean: true, text };
 }

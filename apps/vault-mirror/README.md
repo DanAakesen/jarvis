@@ -169,7 +169,10 @@ writes identical merged content to both sides. A conflict skips both.
 The runner's line merge combines only edits separated by at least one unchanged
 base line. Edits that overlap, touch or insert at the same place conflict,
 identical edits count once, and a retry against a partially applied merge
-returns the same text or a conflict, never a second copy of an edit.
+returns the same text or a conflict, never a second copy of an edit. A merge is
+reported clean only when retrying either side against its result reproduces it,
+because repeated lines can be aligned differently when the merged text is diffed
+again; otherwise it conflicts.
 
 Skipped conflicts carry a first-seen timestamp persisted in the state archive
 without advancing the common content base, including no-base conflicts via

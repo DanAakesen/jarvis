@@ -34,12 +34,25 @@ A union merge of same-place insertions was rejected because it is not idempotent
 while the base is stale, which is the case in `dry-run` and after a partially
 applied write-back.
 
-Evidence: the regression tests cover a task-shaped note, every pair of single
-edits over a repeated-structure note (symmetry, no repeated or dropped line, a
-retry never yields different text), and a runner test that runs `dry-run` three
-times and then write-back on. A 150,000-trial randomized replay of the real
-merge over repetitive notes found no repeated line, no lost line, no asymmetry
-and no growing `dry-run`.
+Review found a third case. When ours inserts a copy of lines that already sit
+beside the insertion point, diffing the merged text again can align the repeated
+lines differently, so a retry sees the copy as a new edit and applies it a second
+time. The merge now trusts a clean result only when retrying either side against
+it (ours with the merged text, and the merged text with theirs) reproduces the
+same text, and reports a conflict otherwise. The check costs one extra diff of
+the merged text. Some merges of notes with many repeated lines now conflict where
+they were previously combined, and the 24-hour rule resolves those in Obsidian's
+favour; that is safer than a merge that changes when it is repeated.
+
+Evidence: the regression tests cover a task-shaped note, the review's
+counterexample, every pair of single edits over a repeated-structure note and over
+a note whose edits copy repeated lines (symmetry, no repeated or dropped line,
+retries reproduce the merge exactly), and a runner test that runs `dry-run` three
+times and then write-back on. Randomized replays of the real merge over
+repetitive notes (150,000 pairs, and 400,000 pairs with copied-line insertions)
+found no repeated line, no lost line, no asymmetry and no retry that changed or
+refused a clean merge. Without the stability check, about 5% of retries over
+100,000 of the copied-line pairs changed or refused the merge.
 
 Still open: in `dry-run` a stable merged note is committed to GitHub again on
 every run with an identical tree. Skipping unchanged blobs is a follow-up.
