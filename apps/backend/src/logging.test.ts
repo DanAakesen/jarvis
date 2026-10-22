@@ -63,17 +63,20 @@ describe('structured log export', () => {
       providerResponse: 'Synthetic provider response.',
       err: new Error('Synthetic provider error.'),
     };
-    logger.warn(privateFields, 'voice.settings_refresh_failed');
+    logger.warn({ ...privateFields, kind: 'transport', statusCode: 503 }, 'voice.settings_refresh_failed');
     logger.warn(privateFields, 'voice.identity_settings_unavailable');
 
     expect(records.map((record) => JSON.parse(record))).toEqual([
-      { level: 40, time: expect.any(Number), service: 'jarvis-backend', msg: 'voice.settings_refresh_failed' },
+      {
+        level: 40, time: expect.any(Number), service: 'jarvis-backend', kind: 'transport', statusCode: 503,
+        msg: 'voice.settings_refresh_failed',
+      },
       { level: 40, time: expect.any(Number), service: 'jarvis-backend', msg: 'voice.identity_settings_unavailable' },
     ]);
     expect(sink.trackTrace.mock.calls.map(([trace]) => trace)).toEqual([
       {
         message: 'voice.settings_refresh_failed', severity: 'Warning',
-        properties: { service: 'jarvis-backend' },
+        properties: { service: 'jarvis-backend', kind: 'transport', statusCode: 503 },
       },
       {
         message: 'voice.identity_settings_unavailable', severity: 'Warning',
