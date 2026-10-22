@@ -1,5 +1,40 @@
 # Decisions
 
+## Vault mirror write-back switched on (22 October 2026; #1083)
+
+Refs DanAakesen/jarvis#1083, Refs DanAakesen/jarvis#1084.
+
+Both conditions of the entry below were met on the morning of 22 October: the
+fixed image from #1192 was running (first run on it at 06:30 UTC) and the
+affected note on GitHub had been restored. The runs at 06:30 and 06:40 UTC in
+`dry-run` were stable, with no growth and no guard trip, and the owner asked for
+two-way sync, so write-back was switched on at 06:45 UTC. The cap was set to
+three changed files for the first runs, so that one unexpected bulk change could
+not rewrite more than three Obsidian files; deletes stayed at three. The
+repository variables and the job's environment were set together, because the next
+Deploy re-applies the variables and resets the schedule, and both hold the same
+values.
+
+Evidence: the first run with write-back on (06:50 UTC) wrote one note to
+Obsidian, uploaded it and cleared its pending record, with no deletions. The next
+run (07:00 UTC) wrote nothing, so a written note does not echo back. At 07:04 UTC
+another writer committed a repair to the vault repository's default branch that
+removed a duplicated task fragment the old merge defect had left in the same note;
+the run at 07:10 UTC wrote that change to Obsidian once, and the run at 07:20 UTC
+wrote nothing. The cap went back to the default of 25 at 07:16 UTC. A written
+note is checked by hash in the working copy, but only a second device shows that
+an upload reached the Obsidian service.
+
+One other note, written by Jarvis, still has an edit conflict that began on
+21 October 16:40 UTC. While it exists each run ends `needs-attention`, the Status
+page says so and Azure lists those executions as failed. The existing 24-hour rule
+resolves it in Obsidian's favour at about 16:40 UTC on 22 October, replacing the
+GitHub version; earlier versions stay in the repository history.
+
+The owner unregistered the scheduled task on their computer on 21 October, before
+the three clean days planned in P14-31, so the mirror is the only vault sync route.
+#1083 and #1084 stay open until two-way sync has run clean for a full day.
+
 ## Vault mirror line merge repeated content and was not idempotent (22 October 2026; #1083)
 
 Refs DanAakesen/jarvis#1083, Refs DanAakesen/jarvis#1090.
@@ -57,7 +92,8 @@ refused a clean merge. Without the stability check, about 5% of retries over
 Still open: in `dry-run` a stable merged note is committed to GitHub again on
 every run with an identical tree. Skipping unchanged blobs is a follow-up.
 Write-back stays in `dry-run` until the fixed image is deployed and the
-affected note on GitHub is repaired.
+affected note on GitHub is repaired. Both conditions were met the same morning;
+see the entry above.
 
 ## Known-good English cold start and background probes (21 October 2026; #1188)
 
