@@ -1434,6 +1434,21 @@ included; broader conversational and actual client/device gates remain.
 Both internal food tools refuse phone calls before generic approval; an approval
 cannot make their unsupported phone context valid.
 
+Approved #1196 extends the same reviewed flow to food photos. Existing
+conversation attachments reach the existing image-capable model path; the model
+proposes generic components and estimated portions, while the existing pinned
+Frida adapter supplies nutrient references only. `lookup_components` is a
+read-only operation grouped into `daily_food_review`, so the tool catalogue
+does not grow. The user can correct component identity, preparation or grams;
+Jarvis must re-lookup changed inputs, and the server resolves Frida again and
+recalculates totals before showing the exact Now proposal. Missing quantities,
+unmatched foods and unknown nutrients remain explicit; unreadable/non-food
+images or provider failures ask for recovery. Photo provenance comes from
+validated persisted attachment references, not tool arguments. Only approval
+of the exact final proposal reaches the existing canonical meal writer.
+Daily remains default-off; no live provider, deployed client or physical-device
+acceptance is implied.
+
 An additional independently opt-in internal `daily_saved_food` tool provides
 owned saved-name/alias lookup and versioned preference reads without mutation.
 Favourite/alias saves from an owned intake or proposed definition, server-built

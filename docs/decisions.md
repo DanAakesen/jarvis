@@ -7644,6 +7644,30 @@ are saved definitions, not consumed meals. Logging and corrections remain in
 chat under the existing native approval boundary. The original Daily remains
 canonical; synthetic inspection does not establish live source parity.
 
+## Photo-backed food estimates use the existing review group (22 October 2026; #1196)
+
+Reuse conversation attachments and the existing image-capable model path for
+food identity and uncertain portion estimates; Frida remains a nutritional
+reference only. In default-off Daily composition, inject the existing Frida
+adapter through its owner-bound data callback and group `lookup_components`
+inside `daily_food_review`. Do not register another tool name: the catalogue
+has eight reserved slots and that headroom is not part of this feature.
+
+Lookup is read-only. The model presents its component proposal, asks for missing
+details, and repeats lookup after any user edit. For final review, accept generic
+component names, grams and preparation only; resolve them again server-side,
+derive nutrient totals from the returned values and preserve missing macros as
+null. Missing amounts, unmatched foods or unknown calories return useful
+uncertainty without staging a review. Bind photo capture to validated persisted
+attachment references and include those references in the existing source
+fingerprint; callers cannot supply capture, source identity or approval.
+
+Use the existing exact browser Now approval, canonical meal write, idempotency
+key and committed receipt. No new image service, meal store, confirmation
+system, credential, schema, tool name or phone authority is introduced. Tests
+use synthetic DTOs and attachment references only. Live Frida availability,
+production activation and physical-device acceptance remain unverified.
+
 ## P12-23 — Read-only Daily Workouts (18 October 2026)
 
 Use the merged Daily plug-in, pagination and UI contracts without backend or
