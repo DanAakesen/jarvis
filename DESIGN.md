@@ -880,8 +880,9 @@ single device-local greeting and **Sign in** action (accessible name
 **Sign in with Microsoft**) below the stage on desktop and in the lower third
 above the safe area on phones. The action reuses the shared luminous-glass
 surface, complete refracted rim, and semantic cool/warm tokens; it is not a
-filled primary pill. Do not add a card, supporting copy, idle status, or a
-second headline.
+filled primary pill. **Use a different account** is a secondary action after
+the sign-in action and is the only route that asks Microsoft to select an
+account. Do not add a card, supporting copy, idle status, or a second headline.
 
 When Jarvis is idle, the warm core breathes and drifts, separate ring layers
 turn at distinct speeds, and small warm lights travel along the existing stage
@@ -893,12 +894,15 @@ quality tier (0.7 backing scale, 256px reflection, 35% particle count) and only
 recover after sustained smooth frames; ambient rendering remains capped at 30 fps.
 
 Complete silent account restoration before showing the interactive screen. A
-failure adds one short inline message and changes the same action to **Retry**.
-Keep the existing 140 ms delayed loader, theme behavior, and reduced-motion
-support. Disable the action with an accessible explanation until the backend
-is configured. After `/me` verifies the session, show the returned name as the
-page headline. Do not expose account tokens, email addresses, or unverified
-identity claims in the interface.
+prior sign-in on this device shows **Signing you in** while silent SSO runs;
+recovery uses a guarded top-level redirect without account selection. A failure
+adds one short inline message and changes the same action to **Retry**. Keep the
+existing 140 ms delayed loader, theme behavior, and reduced-motion support.
+Disable sign-in actions with an accessible explanation until the backend is
+configured. After `/me` verifies the session, show the returned name as the
+page headline. Settings includes a clearly labelled **Account** section with a
+keyboard-accessible **Sign out** action. Do not expose account tokens, email
+addresses, or unverified identity claims in the interface.
 
 ## App shell (P1-07)
 

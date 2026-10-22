@@ -8,6 +8,25 @@ Work, Personal, General). Notes in the vault root or in system folders (`_agent-
 links, search matches or legend entries, with link counts and the Tasks count recomputed.
 The vault and the backend response are unchanged.
 
+## Persistent Microsoft browser sign-in (22 October 2026; #1214)
+
+The owner requested one sign-in per device rather than repeated sign-in in new
+tabs, browser restarts, the installed phone app and the fixed localhost dev
+origin. This supersedes the cache-in-session-storage part of P0-09: MSAL now
+uses `localStorage` to share its cache across tabs, with an identity-free
+device marker, silent SSO and a five-minute cooldown for one automatic
+top-level redirect. Account selection is reserved for the explicit
+**Use a different account** action; Settings provides **Sign out**, which
+clears the MSAL cache and marker.
+
+This does not create a Jarvis session or extend Microsoft tokens. SPA refresh
+tokens have a fixed 24-hour lifetime. Persistence across a full browser restart
+depends on the Microsoft session and its **Stay signed in** choice; since MSAL
+v4, the local cache's encryption key otherwise lives in a session cookie.
+Conditional Access can shorten the experience. The owner ticks **Stay signed
+in** once per device; live web, phone and localhost acceptance remains
+unverified until the owner checks it.
+
 ## Azure Speech partial-recognizer token configuration (22 October 2026; #1190)
 
 Construct the custom-endpoint `SpeechConfig` with `SpeechConfig.fromEndpoint(endpoint)`

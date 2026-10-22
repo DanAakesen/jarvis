@@ -1005,18 +1005,30 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   invalid identity fields or URLs stop startup. P0-11 must persist its
   `backendFqdn` as the public URL. Backend connectivity is unverified until then.
 - The home page uses a tenant-specific MSAL Browser client with the public web
-  client ID and API scope. MSAL stores its cache in session storage; sign-in
-  redirects the whole page to Entra (no popup, so embedded browsers and popup
-  blockers work) and returns to the registered site root, where
-  `handleRedirectPromise` completes it. A non-sensitive per-tab session-storage
-  marker, set just before `loginRedirect` and cleared when redirect handling
-  settles or launch fails, distinguishes returning `Signing you in` from
-  first-visit `Loading`; the outgoing button shows `Redirecting`. The marker
-  controls presentation only, never authentication or authorization.
-  It requests only the delegated API scope
-  and sends the access token to `/me`. Cached accounts use silent token
-  acquisition through the `/redirect.html` bridge. A missing backend URL disables
-  sign-in instead of presenting a false success state.
+  client ID and API scope. MSAL stores its cache in `localStorage`, sharing the
+  device's sign-in across tabs and relaunches. Since MSAL v4, cache entries are
+  encrypted with a key held in a session cookie unless the owner chose "Stay
+  signed in", so restart persistence depends on that Microsoft choice. A
+  separate identity-free device marker enables silent SSO only after a
+  successful prior sign-in. With no
+  cached account, Jarvis tries `ssoSilent` for at most five seconds; if that
+  fails, or silent token renewal reports an interaction-required error, it uses
+  one guarded top-level redirect per five-minute cooldown, without `prompt`.
+  The redirect returns to the registered site root, where `handleRedirectPromise`
+  completes it. A per-tab session-storage marker, set just before a redirect
+  and cleared when redirect handling settles or launch fails, distinguishes
+  returning `Signing you in` from first-visit `Loading`; the outgoing button
+  shows `Redirecting`. Validated same-origin return paths preserve the current
+  route across interactive recovery. The default sign-in does not select an
+  account; only **Use a different account** sets `prompt: select_account`.
+  Changes to MSAL account cache and the device marker update other tabs. Sign
+  out clears MSAL's cache and both persistent sign-in markers before
+  `logoutRedirect` returns to the site root. Tokens remain in MSAL and only the
+  delegated API scope is sent to `/me`. The marker controls recovery only,
+  never authentication or authorization. An SPA refresh token has a fixed
+  24-hour lifetime; tenant Conditional Access policy can require sign-in sooner.
+  Silent acquisition uses the `/redirect.html` bridge. A missing backend URL
+  disables sign-in instead of presenting a false success state.
 - P1-07 adds the app shell. `useSignIn` owns the MSAL session for the whole
   app, so navigation never repeats sign-in. Until `/me` succeeds, every shell
   route shows sign-in and the header hides navigation; unknown addresses still
