@@ -9,6 +9,11 @@ describe('retained Daily record presentation', () => {
     expect(dailyColumns('daily.calendar').map(column => column.label)).toEqual(['Event', 'Starts', 'Ends', 'Calendar', 'Location']);
   });
 
+  it('keeps the query-only training-target source out of collection presentation', () => {
+    expect(dailyColumns(sources.trainingTargets)).toEqual([]);
+    expect(dailySources.some(source => source.id === sources.trainingTargets)).toBe(false);
+  });
+
   it('shows a human Health label instead of internal source ids', () => {
     expect(healthSourceLabel('daily.metrics')).toBe('Health · metrics');
     expect(healthSourceLabel('daily-sql')).toBe('Health · data store');
