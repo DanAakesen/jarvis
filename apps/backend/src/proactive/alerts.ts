@@ -144,12 +144,25 @@ export function createProactiveAlertHook(options: ProactiveAlertHookOptions) {
         return;
       }
       const mostUrgent = active[0]!.candidate;
+      const details = await Promise.all(active.slice(0, 3).map(async ({ candidate }) => {
+        try {
+          const item = await options.store.items.get(candidate.itemId, false);
+          return item ? { title: item.title, dueAt: item.dueAt } : undefined;
+        } catch {
+          return undefined;
+        }
+      }));
+      if (context.signal.aborted) {
+        log('aborted', active.length);
+        return;
+      }
       const request: SystemPushRequest = {
         kind: 'alert',
         count: active.length,
         language: mostUrgent.language ?? 'en',
         itemId: mostUrgent.itemId,
         origin: 'proactive_alert',
+        details: details.filter((detail) => detail !== undefined),
       };
       const outcome = await options.send(request, context.signal);
       const classes = [...new Set(active.map(({ candidate }) => candidate.alertClass))].sort().join(',');

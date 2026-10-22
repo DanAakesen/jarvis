@@ -229,13 +229,13 @@ describe('authenticated push routes', () => {
     expect(send).not.toHaveBeenCalled();
   });
 
-  it('creates an exact generic payload and returns provider counts without exposing signing material', async () => {
+  it('creates an exact v2 test payload and returns provider counts without exposing signing material', async () => {
     const fixture = storeFixture([subscription()]);
     const send = vi.fn(async (_subscription, payload) => {
       expect(JSON.parse(payload.toString('utf8'))).toEqual({
-        v: 1,
-        title: 'Jarvis',
-        body: 'New item',
+        v: 2,
+        title: 'Test notification',
+        body: 'Push notifications are working on this device.',
         itemId,
       });
       return success;

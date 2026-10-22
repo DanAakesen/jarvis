@@ -109,12 +109,14 @@ What now happens, exactly:
 - Alerts: only a time-critical finding (a todo due within 24 hours, or a calendar
   clash starting within 48 hours) found by the scheduled 07:00 or 18:00 check, or
   its catch-up, can send a push. At most one push per check and 3 a day, never
-  between 22:00 and 07:00, and never for "Check now". The text is generic and
-  tapping it opens the item. Everything else waits on the Proactive page.
+  between 22:00 and 07:00, and never for "Check now". P13-21 includes bounded
+  stored titles in the encrypted payload; tapping it opens the item. Everything
+  else waits on the Proactive page.
 - Reminders: about one hour before a todo with an explicit time is due, Jarvis
   sends one push. A date-only todo is covered by the 24-hour deadline alert
-  instead. The push says only "Jarvis" and "New item"; tapping it opens a private
-  Proactive item with the todo title and its due time. At most 8 reminders per
+  instead. P13-21 pushes show a due-time headline and todo title, or a bundled
+  count headline with up to three time/title lines and an overflow count; tapping
+  opens a private Proactive item. At most 8 reminders per
   Copenhagen day. A reminder that falls in the quiet window is held until 07:00
   and shown as due soon or overdue. A todo added after the last check is covered
   from the next check on; "Check now" covers it immediately.
@@ -235,8 +237,9 @@ test on the installed Home Screen app (iOS 16.4 or newer), not by any check here
 value is exactly `true`; unset and all other values leave routes unregistered
 and avoid push-store/database/provider work. P13-01 itself set no deployment
 value; P13-03 (above) sets it in production. The VAPID private key stays in
-server-side SQL; routes expose only its public half, and test push content is
-generic. No Teams delivery path exists. The user-started test is not subject to
+server-side SQL; routes expose only its public half. The v2 test push says
+`Test notification` / `Push notifications are working on this device.`
+No Teams delivery path exists. The user-started test is not subject to
 quiet hours; any future system-started delivery must enforce 22:00–07:00
 Europe/Copenhagen without an emergency exception.
 
@@ -323,7 +326,13 @@ on and its push store/sender dependencies exist. It alerts only on scheduled or
 catch-up runs and only for new, time-critical deadline, clash or travel findings.
 The hash-only ledger retries one failed send, settles sent/twice-failed keys and
 counts daily pushes by distinct run bundle. The sender rechecks quiet hours;
-system payloads contain no private text. Since P13-15 only `infra/main.bicep` sets
+P13-21 system payloads include bounded stored titles and due times, encrypted
+end to end with `aes128gcm`. Details must never enter logs, metrics, errors or job
+output, and the payload must not be stored. Titles never repeat `Jarvis`: iOS
+adds `from Jarvis` itself, which the app cannot remove. The owner can hide
+lock-screen details with Settings → Notifications → Jarvis → Show Previews.
+Appearance remains unverified until the owner checks the deployed Test
+notification on the device. Since P13-15 only `infra/main.bicep` sets
 the alert switch, and `alerts-default-off.test.ts` pins that.
 
 Focused synthetic checks:
@@ -342,8 +351,13 @@ the top of this file) sets the alert flag in production. The
 planner runs for every trigger after the successful todo read. The ticker is
 constructed only when its vault, reminder store, alert ledger, push store and
 shared sender dependencies are available. It has no database, vault or push
-work while idle or during Copenhagen quiet hours. Reminder titles stay in
-private database rows; pushes and logs contain no todo text. Open tasks from safe
+work while idle or during Copenhagen quiet hours. P13-21 reminder details come
+from rows already in memory; alert details use read-only item lookups without
+marking items loaded or seen, and failed/missing detail reads still send the
+count headline. Details go only into the encrypted push payload, never logs or
+other telemetry. The worker clamps v2 text (60-code-point title, 240 body,
+80 per line), removes controls and preserves legacy generic headlines with empty
+bodies. Open tasks from safe
 Markdown notes under `Personal/` and `Work/` (excluding Archive and hidden paths)
 plus the root task dashboard are eligible when marked `⏫`,
 `priority:: P1 - High` or `priority: P1 - High`. `🔺` is not high.

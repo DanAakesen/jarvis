@@ -84,9 +84,9 @@ function createRoutes<Logger extends FastifyBaseLogger>(
       const keys = await vapidKeys();
       const item = await dependencies.store.createTestItem(owner);
       const payload = Buffer.from(JSON.stringify({
-        v: 1,
-        title: 'Jarvis',
-        body: 'New item',
+        v: 2,
+        title: 'Test notification',
+        body: 'Push notifications are working on this device.',
         itemId: item.id,
       }));
       const deliveries = await deliverToSubscriptions({
