@@ -87,6 +87,8 @@ describe('Daily SQL owner schema on real SQL Server', () => {
     rateValues.push("(@owner,@workout,N'2026-10-02T00:00:00.000Z',N'heart_rate',70,72,74,N'bpm',N'synthetic-ingestion',N'2026-10-02T00:00:00Z')");
     rateValues.push("(@owner,@workout,N'2026-10-03T00:00:00.000Z',N'Heart rate',80,82,84,N'bpm',N'synthetic-ingestion',N'2026-10-03T00:00:00Z')");
     await pool.request().input('owner', sql.UniqueIdentifier, filterOwner).input('workout', sql.NVarChar(256), workoutId).query(`
+      INSERT daily.health_workouts(owner_object_id,id,workout_type,workout_date,start_at,end_at,duration_seconds,ingestion_id,updated_at)
+      VALUES (@owner,@workout,N'Synthetic workout','2026-10-01',N'2026-10-01T00:00:00Z',N'2026-10-01T01:00:00Z',3600,N'synthetic-ingestion',N'2026-10-01T00:00:00Z');
       INSERT daily.health_workout_heart_rate_minute(owner_object_id,workout_id,sample_minute,metric_name,min_value,avg_value,max_value,unit,ingestion_id,updated_at)
       VALUES ${rateValues.join(',')};`);
 
