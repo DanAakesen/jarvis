@@ -299,6 +299,56 @@ async function initialized(
   return deps;
 }
 
+const lineText = (rows: readonly string[]): string => rows.map(row => `${row}\n`).join('');
+
+// Task-note shape that exposed the repeated-line merge defect: frontmatter, headings, and task items
+// separated by blank lines. Each side edits a different place, with unchanged lines in between.
+const taskRows = [
+  '---', 'title: Tasks', 'updated: first', '---', '',
+  '# Tasks', '',
+  '## Open', '',
+  '- [ ] Alpha task', '',
+  '- [ ] Bravo task', '',
+  '## Done', '',
+  '- [x] Delta task',
+];
+const taskNote = {
+  base: lineText(taskRows),
+  obsidian: lineText([...taskRows.slice(0, 9), '- [ ] Obsidian task', '', ...taskRows.slice(9)]),
+  github: lineText([...taskRows.slice(0, 2), 'updated: second', ...taskRows.slice(3), '', '- [ ] GitHub task']),
+  merged: lineText([
+    ...taskRows.slice(0, 2), 'updated: second', ...taskRows.slice(3, 9),
+    '- [ ] Obsidian task', '', ...taskRows.slice(9), '', '- [ ] GitHub task',
+  ]),
+};
+
+// Every note that differs from the base by one hunk: any start, up to two removed lines and each listed insertion.
+const editedTexts = (base: readonly string[], inserts: readonly (readonly string[])[]): string[] => {
+  const texts = new Set<string>();
+  for (let start = 0; start <= base.length; start++) {
+    for (let remove = 0; remove <= 2 && start + remove <= base.length; remove++) {
+      for (const insert of inserts) {
+        const rows = [...base];
+        rows.splice(start, remove, ...insert);
+        texts.add(lineText(rows));
+      }
+    }
+  }
+  texts.delete(lineText(base));
+  return [...texts];
+};
+
+// A clean merge must be reproduced by retrying either side against it, so a run that starts from a stale base
+// can never apply an edit twice. Returns the merged text, or undefined when the merge was refused.
+const stableMerge = (baseText: string, ours: string, theirs: string): string | undefined => {
+  const merged = mergeThreeWay(baseText, ours, theirs);
+  expect(mergeThreeWay(baseText, theirs, ours)).toEqual(merged);
+  if (!merged.clean) return undefined;
+  expect(mergeThreeWay(baseText, ours, merged.text)).toEqual(merged);
+  expect(mergeThreeWay(baseText, merged.text, theirs)).toEqual(merged);
+  return merged.text;
+};
+
 describe('vault mirror runner', () => {
   it('reconciles changes in both directions through one GitHub commit and one Obsidian upload', async () => {
     const github = new FakeGitHub();
@@ -596,6 +646,49 @@ describe('vault mirror runner', () => {
     assertPrivateOutput(result.status, logs, [
       'Notes/merge.md', 'Notes/conflict.md',
     ], ['a\nb\nc\n', 'A\nb\nC\n', 'one\nours\nthree\n', 'one\ntheirs\nthree\n']);
+  });
+
+  it('keeps a merged note stable through repeated dry-run runs, then converges once write-back is on', async () => {
+    const github = new FakeGitHub();
+    const obsidian = new FakeObsidian();
+    const storage = new FakeStorage();
+    const deps = await initialized(github, obsidian, storage, { 'Notes/tasks.md': taskNote.base });
+    obsidian.remote.set('Notes/tasks.md', taskNote.obsidian);
+    github.files.set('Notes/tasks.md', taskNote.github);
+
+    for (let round = 0; round < 3; round++) {
+      const dryRun = await runMirror(options(deps, 'dry-run'));
+
+      expect(dryRun.exitCode).toBe(0);
+      expect(dryRun.status.writtenBack).toBe(0);
+      expect(dryRun.status.pendingWriteBack).toBe(1);
+      expect(github.files.get('Notes/tasks.md')).toBe(taskNote.merged);
+      expect(obsidian.remote.get('Notes/tasks.md')).toBe(taskNote.obsidian);
+    }
+    expect(obsidian.uploadCalls).toBe(0);
+
+    const logs: Readonly<Record<string, string | number>>[] = [];
+    const live = await runMirror(options({
+      ...deps,
+      log: entry => { logs.push(entry); },
+    }));
+
+    expect(live.exitCode).toBe(0);
+    expect(live.status.writtenBack).toBe(1);
+    expect(live.status.pendingWriteBack).toBe(0);
+    expect(github.files.get('Notes/tasks.md')).toBe(taskNote.merged);
+    expect(obsidian.remote.get('Notes/tasks.md')).toBe(taskNote.merged);
+    assertPrivateOutput(live.status, logs, ['Notes/tasks.md'], [
+      taskNote.obsidian, taskNote.github, taskNote.merged,
+    ]);
+
+    const commits = github.commits;
+    const uploads = obsidian.uploadCalls;
+    const settled = await runMirror(options(deps));
+
+    expect(settled.status.outcome).toBe('ok-noop');
+    expect(github.commits).toBe(commits);
+    expect(obsidian.uploadCalls).toBe(uploads);
   });
 
   it('restores a write-back if the working-copy difference exceeds the plan', async () => {
@@ -938,6 +1031,98 @@ describe('Obsidian wrapper and merge', () => {
     expect(mergeThreeWay('a\nb\nc\n', 'A\nb\nc\n', 'a\nb\nC\n'))
       .toEqual({ clean: true, text: 'A\nb\nC\n' });
     expect(mergeThreeWay('a\nb\n', 'a\nours\n', 'a\ntheirs\n')).toEqual({ clean: false });
+  });
+
+  it('merges separated insertions without repeating any line, whichever side is ours', () => {
+    const base = 'one\ntwo\nthree\nfour\nfive\nsix\n';
+    const ours = 'one\ntwo\nours\nthree\nfour\nfive\nsix\n';
+    const theirs = 'one\ntwo\nthree\nfour\nfive\ntheirs\nsix\n';
+    const merged = { clean: true, text: 'one\ntwo\nours\nthree\nfour\nfive\ntheirs\nsix\n' };
+
+    expect(mergeThreeWay(base, ours, theirs)).toEqual(merged);
+    expect(mergeThreeWay(base, theirs, ours)).toEqual(merged);
+  });
+
+  it('merges a task note once and treats a retried merge as already applied', () => {
+    const merged = { clean: true, text: taskNote.merged };
+
+    expect(mergeThreeWay(taskNote.base, taskNote.obsidian, taskNote.github)).toEqual(merged);
+    expect(mergeThreeWay(taskNote.base, taskNote.github, taskNote.obsidian)).toEqual(merged);
+    expect(mergeThreeWay(taskNote.base, taskNote.obsidian, taskNote.merged)).toEqual(merged);
+    expect(mergeThreeWay(taskNote.base, taskNote.merged, taskNote.github)).toEqual(merged);
+  });
+
+  it('refuses edits that share or touch a place instead of guessing an order', () => {
+    const list = 'head\n\n- [ ] first\n\n- [ ] second\n';
+
+    expect(mergeThreeWay(
+      list,
+      'head\n\n- [ ] ours\n\n- [ ] first\n\n- [ ] second\n',
+      'head\n\n- [ ] theirs\n\n- [ ] first\n\n- [ ] second\n',
+    )).toEqual({ clean: false });
+    expect(mergeThreeWay('a\nb\nc\n', 'a\nb\nx\nc\n', 'a\nB\nc\n')).toEqual({ clean: false });
+    expect(mergeThreeWay('a\nb\nc\n', 'a\nx\nb\nc\n', 'a\nB\nc\n')).toEqual({ clean: false });
+    expect(mergeThreeWay('a\nb\nc\n', 'A\nb\nc\n', 'a\nB\nc\n')).toEqual({ clean: false });
+  });
+
+  it('keeps one copy when both sides made the same edit', () => {
+    expect(mergeThreeWay(
+      'one\ntwo\nthree\nfour\nfive\n',
+      'one\nshared\ntwo\nthree\nfour\nfive\n',
+      'one\nshared\ntwo\nthree\nfour\nFIVE\n',
+    )).toEqual({ clean: true, text: 'one\nshared\ntwo\nthree\nfour\nFIVE\n' });
+  });
+
+  it('never repeats, drops or re-applies a line for any pair of single edits', () => {
+    const base = ['a', '', 'b', '', 'c', ''];
+    const baseText = lineText(base);
+    const count = (text: string, tag: string): number => text.split('\n').filter(row => row === tag).length;
+    let clean = 0;
+    let refused = 0;
+
+    for (const ours of editedTexts(base, [[], ['ours'], ['', 'ours']])) {
+      for (const theirs of editedTexts(base, [[], ['theirs'], ['', 'theirs']])) {
+        const merged = stableMerge(baseText, ours, theirs);
+        if (merged === undefined) {
+          refused++;
+          continue;
+        }
+        clean++;
+        expect(count(merged, 'ours')).toBe(count(ours, 'ours'));
+        expect(count(merged, 'theirs')).toBe(count(theirs, 'theirs'));
+      }
+    }
+
+    expect(clean).toBeGreaterThan(0);
+    expect(refused).toBeGreaterThan(0);
+  });
+
+  it('refuses a merge when a retry would insert copied base lines a second time', () => {
+    // Ours inserts a copy of lines that already follow it, so the merged text can be diffed with a different
+    // alignment and a retry would insert the copy again.
+    expect(mergeThreeWay('a\n\nx\n', 'a\n\na\n\nx\n', 'b\n\nx\n')).toEqual({ clean: false });
+    expect(mergeThreeWay('a\n\nx\n', 'b\n\nx\n', 'a\n\na\n\nx\n')).toEqual({ clean: false });
+  });
+
+  it('keeps every merge stable when edits copy lines that repeat in the base', () => {
+    const base = ['a', '', 'x'];
+    const baseText = lineText(base);
+    const inserts = (tag: string): string[][] => {
+      const pool = [...base, tag];
+      return [[], ...pool.flatMap(first => [[first], ...pool.map(second => [first, second])])];
+    };
+    let clean = 0;
+    let refused = 0;
+
+    for (const ours of editedTexts(base, inserts('ours'))) {
+      for (const theirs of editedTexts(base, inserts('theirs'))) {
+        if (stableMerge(baseText, ours, theirs) === undefined) refused++;
+        else clean++;
+      }
+    }
+
+    expect(clean).toBeGreaterThan(0);
+    expect(refused).toBeGreaterThan(0);
   });
 
   it('retries an expired GitHub App installation token once', async () => {
