@@ -75,8 +75,9 @@ migration refuses to discard any such row.
 only. They reject agent, runner, connector and other identities, query strings
 and invalid or oversized patches. A clear is `null`; partial updates preserve
 the other values and commit transactionally. The assistant has no training
-target write tool because the production tool catalogue must retain at least
-eight free slots. A read-only query source may be added later.
+target write tool. The former eight-slot catalogue rationale is superseded by
+#1204; that issue does not approve this capability. A read-only query source
+may be added later.
 
 The web client validates the full target response and owns the Settings
 editor's load/save recovery states. `useTrainingTargets` provides a validated

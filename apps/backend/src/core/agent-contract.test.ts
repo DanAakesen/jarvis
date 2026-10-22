@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { modelRoles } from '@jarvis/contracts';
 import {
-  MAX_AGENT_TOOLS,
   MAX_CATALOGUE_BYTES,
   MAX_TOOL_DESCRIPTION_CHARACTERS,
 } from './tool-registry.js';
@@ -45,8 +44,12 @@ describe('agent contract smoke check', () => {
     await expect(checkAgentContract([tool()], async () => settings())).resolves.toEqual({ status: 'ok' });
   });
 
+  it('accepts a valid catalogue above the former tool-count limit', async () => {
+    const tools = Array.from({ length: 129 }, (_, index) => tool(`tool_${index}`));
+    await expect(checkAgentContract(tools, async () => settings())).resolves.toEqual({ status: 'ok' });
+  });
+
   it.each([
-    ['too many tools', Array.from({ length: MAX_AGENT_TOOLS + 1 }, (_, index) => tool(`tool_${index}`))],
     ['bad name', [tool('bad.name')]],
     ['duplicate name', [tool('duplicate'), tool('duplicate')]],
     ['empty description', [tool('empty_description', { description: '  ' })]],

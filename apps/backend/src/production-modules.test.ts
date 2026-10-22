@@ -30,12 +30,12 @@ import { checkAgentContract } from './core/agent-contract.js';
 import { composeDaily } from './daily/composition.js';
 import { createMemoryProactiveStore } from './proactive/store.js';
 import { createProactiveToolsModule } from './proactive/tools.js';
-import { toModelToolSchema } from './voice/realtime.js';
+import { createRealtimeSessionUpdate, toModelToolSchema } from './voice/realtime.js';
 import { createToolBudgetRungs, TOOL_BUDGET_ALWAYS_KEPT_TOOLS } from './voice/tool-budget.js';
 
 const limits = JSON.parse(readFileSync(
   new URL('../../../agents/jarvis/limits.json', import.meta.url), 'utf8',
-)) as { maxTools: number; maxToolDescriptionCharacters: number; maxCatalogueBytes: number };
+)) as { maxToolDescriptionCharacters: number; maxCatalogueBytes: number };
 
 const dailyToolNames = [
   'daily_query', 'daily_show', 'daily_food', 'daily_food_review', 'daily_saved_food', 'daily_nutrition_targets', 'daily_nutrition_suggest',
@@ -95,9 +95,6 @@ function buildCatalogue(modules: ReturnType<typeof modulesWithEveryFeature>) {
     const catalogueBytes = Buffer.byteLength(JSON.stringify(tools.map(({ name, description, inputSchema }) => ({
       name, description, inputSchema,
     }))));
-    expect(tools.length, diagnostic).toBeLessThanOrEqual(limits.maxTools);
-    expect(limits.maxTools - tools.length, `At least eight tools of headroom required. ${diagnostic}`)
-      .toBeGreaterThanOrEqual(8);
     for (const tool of tools) {
       expect(tool.description.length, `${diagnostic}; overlong description: ${tool.name}`)
         .toBeLessThanOrEqual(limits.maxToolDescriptionCharacters);
@@ -113,7 +110,7 @@ function buildCatalogue(modules: ReturnType<typeof modulesWithEveryFeature>) {
 }
 
 describe('production tool catalogue', () => {
-  it('builds every production module with all optional features enabled within the agent limits', () => {
+  it('builds every production module with all optional features enabled', () => {
     const modules = modulesWithEveryFeature();
     const registry = buildCatalogue(modules);
     expect(registry.list().length).toBeGreaterThan(0);
@@ -247,33 +244,27 @@ describe('production tool catalogue', () => {
     expect(result).toEqual({ status: 'ok' });
   });
 
-  it('reports each module tool count when the catalogue exceeds the agent limit', () => {
+  it('retains every tool when the production catalogue grows beyond the former global cap', () => {
     const modules = modulesWithEveryFeature();
-    const additions = Array.from({ length: limits.maxTools + 1 }, (_, index) => ({
-      name: `limit_probe_${index}`,
+    const existingCount = modules.reduce((count, module) => count + module.tools.length, 0);
+    const additions = Array.from({ length: Math.max(1, 129 - existingCount) }, (_, index) => ({
+      name: `catalogue_probe_${index}`,
       description: 'Limit probe tool.',
       inputSchema: { type: 'object' },
       execute: async () => ({}),
     }));
-    const overLimit = modules.map((module) => module.id === 'factory'
-      ? { ...module, tools: [...module.tools, ...additions] }
-      : module);
-    expect(() => buildCatalogue(overLimit)).toThrow(/Tool count per module:.*factory: \d+/u);
-  });
-
-  it('fails the headroom check when only seven catalogue slots remain', () => {
-    const modules = modulesWithEveryFeature();
-    const existingCount = modules.reduce((count, module) => count + module.tools.length, 0);
-    const additions = Array.from({ length: limits.maxTools - 7 - existingCount }, (_, index) => ({
-      name: `headroom_probe_${index}`,
-      description: 'Headroom probe tool.',
-      inputSchema: { type: 'object' },
-      execute: async () => ({}),
-    }));
-    expect(() => buildCatalogue([...modules, {
+    const registry = buildCatalogue([...modules, {
       id: 'headroom-probe',
       tools: additions,
       registerRoutes: async () => {},
-    }])).toThrow(/At least eight tools of headroom required/u);
+    }]);
+    const expectedNames = [
+      ...modules.flatMap(({ tools }) => tools.map(({ name }) => name)),
+      ...additions.map(({ name }) => name),
+    ];
+
+    expect(registry.list().length).toBeGreaterThan(128);
+    expect(registry.list().map(({ name }) => name)).toEqual(expectedNames);
+    expect(createRealtimeSessionUpdate(registry).session.tools.map(({ name }) => name)).toEqual(expectedNames);
   });
 });

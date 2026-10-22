@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { parseTodos, parseTodosWithContext, resolveTodoFile } from './todo-file.js';
+import { parseTodos, parseTodosWithContext, resolveTodoFile, taskLineVersion } from './todo-file.js';
 
 const signal = () => new AbortController().signal;
 const file = (path: string) => ({ path, sha: 'a'.repeat(40) });
@@ -106,13 +106,13 @@ describe('todo parser', () => {
     expect(parseTodosWithContext(content, 'Personal/Inbox.md')).toEqual([
       {
         text: 'Buy a mirror', dueAt: '2026-10-20T12:30:00.000Z', dueHasTime: true,
-        done: false, highPriority: false, dueDate: '2026-10-20', dueTime: '14:30',
-        path: 'Personal/Inbox.md', line: 3, heading: 'Inbox',
+        done: false, highPriority: false, priorityLevel: 'normal', dueDate: '2026-10-20', dueTime: '14:30',
+        path: 'Personal/Inbox.md', line: 3, heading: 'Inbox', version: taskLineVersion('- [ ] Buy a mirror 🕒 14:30 📅 2026-10-20'),
       },
       {
         text: 'Hang the frame', dueAt: '2026-10-21T21:59:00.000Z', dueHasTime: false,
-        done: true, highPriority: false, dueDate: '2026-10-21', dueTime: null,
-        path: 'Personal/Inbox.md', line: 5, heading: 'Home',
+        done: true, highPriority: false, priorityLevel: 'normal', dueDate: '2026-10-21', dueTime: null,
+        path: 'Personal/Inbox.md', line: 5, heading: 'Home', version: taskLineVersion('- [x] Hang the frame 📅 2026-10-21'),
       },
     ]);
     expect(Object.keys(parseTodos(content)[0]!).sort()).toEqual([
@@ -173,5 +173,18 @@ describe('todo parser', () => {
       { text: 'Done high', highPriority: true },
     ]);
     expect(todos.at(-1)?.done).toBe(true);
+  });
+
+  it('reads the P1 / P2 / P3 priority levels for the task list', () => {
+    const levels = parseTodosWithContext([
+      '- [ ] A [priority:: P1 - High]',
+      '- [ ] B [priority:: P1 — High]',
+      '- [ ] C [priority:: P2 - Medium]',
+      '- [ ] D [priority:: P2 — Medium]',
+      '- [ ] E 🔼',
+      '- [ ] F [priority:: P3 - Normal]',
+      '- [ ] G',
+    ].join('\n'), 'Personal/Inbox.md').map(({ text, priorityLevel }) => `${text}:${priorityLevel}`);
+    expect(levels).toEqual(['A:high', 'B:high', 'C:medium', 'D:medium', 'E:medium', 'F:normal', 'G:normal']);
   });
 });

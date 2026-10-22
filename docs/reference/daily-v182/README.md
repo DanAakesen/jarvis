@@ -23,7 +23,7 @@ Paths inside these six files refer to the pinned original source, not paths in J
 
 Tracking issue: [#1005](https://github.com/DanAakesen/jarvis/issues/1005). This section records the completed voice review on 18 October 2026 and is authoritative for the full source/API/schema/tool delivery in this PR; it supersedes any suggestion to port all 36 tools or split off a partial delivery.
 
-- **16 capabilities selected** for implementation as Jarvis native tools, with equivalent components reused when verified. The nine remaining operations are currently grouped into three registry tools to retain required catalogue headroom; the requested nine distinct tool names remain an explicit unresolved mismatch.
+- **16 capabilities selected** for implementation as Jarvis native tools, with equivalent components reused when verified. The nine remaining operations are currently grouped into three registry tools; the former catalogue-headroom rationale is superseded by #1204. The requested nine distinct tool names remain an explicit unresolved mismatch.
 - **5 source capabilities** will use Jarvis's ordinary search, item retrieval, tasks, calendar and consolidated status; their actual coverage must be checked, not assumed.
 - **15 source tools excluded** from this port. Full source documentation is retained even for excluded features.
 

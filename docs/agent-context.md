@@ -1042,7 +1042,10 @@ writes real data or probes a live service. `composition.test.ts` builds real
 Fastify applications, so it needs the pinned CI graph where those packages are
 unavailable locally. Check that Daily off leaves routes, tools, instructions and
 startup unchanged, that Daily on adds exactly the module's routes and seven tools,
-and that the tool count stays inside the 128-tool limit.
+and that all composed tools remain registered and advertised. There is no
+global tool-count ceiling or reserved-slot requirement; description and
+serialized-catalogue byte limits still apply (see
+[`docs/decisions.md`](decisions.md#catalogue-count-is-not-a-global-limit)).
 
 ## Internal Daily review checks (17 October 2026; P12-09)
 
@@ -3110,6 +3113,15 @@ Verified in Codex cloud for P0-02:
 | Focused P6-01 usage page and navigation tests | `npm test --workspace @jarvis/web -- --run src/usage/UsagePage.test.tsx src/App.test.tsx` |
 | Run web app | `npm run dev` in the repository root; open `http://localhost:5173` |
 | Watch web tests | `npm run test:watch --workspace @jarvis/web` |
+
+Web sign-in uses the fixed `http://localhost:5173` origin (`strictPort` in
+`apps/web/vite.config.ts`); both `http://localhost:5173/` and
+`http://localhost:5173/redirect.html` are registered in
+`infra/bootstrap.output.json`. Do not change the port or remove the redirect
+bridge URI without updating the Entra registration. On each device, tick
+Microsoft's **Stay signed in** option once when prompted. That keeps Microsoft's
+session across browser restarts; tenant sign-in-frequency policy and browser
+storage behavior can still require sign-in sooner.
 
 The Windows UI checkout can use its existing dependency junction and run from
 `apps\web`: `node ..\..\node_modules\typescript\bin\tsc --noEmit -p .`,

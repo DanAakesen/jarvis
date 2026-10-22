@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import sql from 'mssql';
 import { databaseReadRequest } from './wake-retry.js';
 import type { AlertNotifier, ActivityAlert } from '../alerts.js';
@@ -16,6 +17,11 @@ interface CredentialStatusRow {
   lastRenewedAt: Date | string | null;
   lastCheckedAt: Date | string | null;
   status: CredentialStatusValue;
+}
+
+interface GitHubAppMintStatusRow {
+  status: 'ok' | 'failed';
+  lastCheckedAt: Date | string;
 }
 
 function iso(value: Date | string | null): string | null {
@@ -62,28 +68,82 @@ export function createCredentialStatusStore(
       }));
     },
 
-    async updateGitHubAppStatus(status: 'ok' | 'failed', checkedAt: string): Promise<void> {
+    async updateGitHubAppStatus(status: 'ok' | 'failed', checkedAt: string, scopeKey: string): Promise<void> {
+      if (!/^[0-9a-f]{64}$/u.test(scopeKey)) throw new TypeError('Invalid GitHub App mint scope');
+      const checkedAtDate = new Date(checkedAt);
+      if (!Number.isFinite(checkedAtDate.getTime())) throw new TypeError('Invalid GitHub App mint timestamp');
       const transaction = new sql.Transaction(pool);
       await transaction.begin();
       const alert: ActivityAlert = {
         type: 'credential_expiry',
-        dedupeKey: `credential:github-app:failed:${checkedAt}`,
+        dedupeKey: `credential:github-app:failed:${scopeKey}:${randomUUID()}`,
         title: 'GitHub App token mint failed; check the App key and installation',
         link: null,
       };
       let inserted = false;
       try {
+        await new sql.Request(transaction).query(`SELECT name FROM dbo.credential_status WITH (UPDLOCK, HOLDLOCK)
+          WHERE name = N'github-app';`);
         const { recordset } = await new sql.Request(transaction)
-          .input('status', sql.NVarChar(16), status)
-          .input('checkedAt', sql.DateTime2(7), new Date(checkedAt))
-          .query<{ previousStatus: CredentialStatusValue }>(`UPDATE dbo.credential_status SET status = @status,
-            last_checked_at = @checkedAt,
-            last_renewed_at = CASE WHEN @status = N'ok' THEN @checkedAt ELSE last_renewed_at END
-            OUTPUT deleted.status AS previousStatus
-            WHERE name = N'github-app' AND (last_checked_at IS NULL OR last_checked_at <= @checkedAt);`);
-        if (status === 'failed' && recordset[0] && recordset[0].previousStatus !== 'failed') {
-          inserted = await insertActivityAlert(transaction, alert);
+          .input('scopeKey', sql.Char(64), scopeKey)
+          .query<GitHubAppMintStatusRow>(`SELECT status, last_checked_at AS lastCheckedAt
+            FROM dbo.github_app_mint_status WITH (UPDLOCK, HOLDLOCK) WHERE scope_key = @scopeKey;`);
+        const previous = recordset[0];
+        if (previous && new Date(previous.lastCheckedAt).getTime() > checkedAtDate.getTime()) {
+          await transaction.commit();
+          return;
         }
+        if (previous) {
+          await new sql.Request(transaction)
+            .input('scopeKey', sql.Char(64), scopeKey)
+            .input('status', sql.NVarChar(16), status)
+            .input('checkedAt', sql.DateTime2(7), checkedAtDate)
+            .query(`UPDATE dbo.github_app_mint_status SET status = @status, last_checked_at = @checkedAt
+              WHERE scope_key = @scopeKey;`);
+        } else {
+          await new sql.Request(transaction)
+            .input('scopeKey', sql.Char(64), scopeKey)
+            .input('status', sql.NVarChar(16), status)
+            .input('checkedAt', sql.DateTime2(7), checkedAtDate)
+            .query(`INSERT dbo.github_app_mint_status (scope_key, status, last_checked_at)
+              VALUES (@scopeKey, @status, @checkedAt);`);
+        }
+        if (status === 'ok') {
+          await new sql.Request(transaction)
+            .input('scopeKey', sql.Char(64), scopeKey)
+            .input('checkedAt', sql.DateTime2(7), checkedAtDate)
+            .query(`UPDATE dbo.activity SET recovered_at = @checkedAt
+              WHERE github_app_scope_key = @scopeKey AND recovered_at IS NULL
+                AND alert_key LIKE N'credential:github-app:failed:%';`);
+        } else if (previous?.status !== 'failed') {
+          inserted = await insertActivityAlert(transaction, alert);
+          if (inserted) {
+            await new sql.Request(transaction)
+              .input('scopeKey', sql.Char(64), scopeKey)
+              .input('dedupeKey', sql.NVarChar(200), alert.dedupeKey)
+              .query(`UPDATE dbo.activity SET github_app_scope_key = @scopeKey WHERE alert_key = @dedupeKey;`);
+          }
+        }
+        const aggregate = await new sql.Request(transaction)
+          .query<{ failedScopes: number; unresolvedLegacyFailures: number }>(`SELECT
+            (SELECT COUNT(*) FROM dbo.github_app_mint_status WHERE status = N'failed') AS failedScopes,
+            (SELECT COUNT(*) FROM dbo.activity
+              WHERE alert_key LIKE N'credential:github-app:failed:%'
+                AND github_app_scope_key IS NULL AND recovered_at IS NULL) AS unresolvedLegacyFailures;`);
+        const aggregateStatus = (aggregate.recordset[0]?.failedScopes ?? 0) > 0
+          ? 'failed'
+          : (aggregate.recordset[0]?.unresolvedLegacyFailures ?? 0) > 0 ? 'unknown' : 'ok';
+        await new sql.Request(transaction)
+          .input('status', sql.NVarChar(16), aggregateStatus)
+          .input('mintStatus', sql.NVarChar(16), status)
+          .input('checkedAt', sql.DateTime2(7), checkedAtDate)
+          .query(`UPDATE dbo.credential_status SET status = @status,
+            last_checked_at = CASE WHEN last_checked_at IS NULL OR last_checked_at <= @checkedAt
+              THEN @checkedAt ELSE last_checked_at END,
+            last_renewed_at = CASE WHEN @mintStatus = N'ok'
+                AND (last_renewed_at IS NULL OR last_renewed_at <= @checkedAt)
+              THEN @checkedAt ELSE last_renewed_at END
+            WHERE name = N'github-app';`);
         await transaction.commit();
       } catch (error) {
         await rollback(transaction);
