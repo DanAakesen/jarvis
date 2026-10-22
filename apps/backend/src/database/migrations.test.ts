@@ -53,6 +53,8 @@ describe('committed SQL manifest', () => {
     const migration = (await readMigrations()).find(({ name }) => name === '0062_github_app_mint_recovery.sql');
     expect(migration?.sql).toContain('github_app_scope_key char(64)');
     expect(migration?.sql).toContain('recovered_at datetime2(7)');
+    expect(migration?.sql).toContain("EXEC(N'ALTER TABLE dbo.activity ADD");
+    expect(migration?.sql).toContain("alert_key LIKE N''credential:github-app:failed:%''");
     expect(migration?.sql).toContain('CREATE TABLE dbo.github_app_mint_status');
     expect(migration?.sql).toContain("status = N'failed'");
     expect(migration?.sql).toContain('legacy-unscoped');

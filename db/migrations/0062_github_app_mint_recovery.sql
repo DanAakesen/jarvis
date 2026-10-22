@@ -2,19 +2,20 @@ ALTER TABLE dbo.activity ADD
   github_app_scope_key char(64) COLLATE Latin1_General_100_BIN2 NULL,
   recovered_at datetime2(7) NULL;
 
-ALTER TABLE dbo.activity ADD
+EXEC(N'ALTER TABLE dbo.activity ADD
   CONSTRAINT CK_activity_github_app_scope CHECK (
     github_app_scope_key IS NULL OR (
-      alert_key LIKE N'credential:github-app:failed:%' AND
-      github_app_scope_key NOT LIKE '%[^0-9a-f]%'
+      alert_key LIKE N''credential:github-app:failed:%'' AND
+      github_app_scope_key NOT LIKE ''%[^0-9a-f]%''
     )
   ),
   CONSTRAINT CK_activity_github_app_recovered CHECK (
     recovered_at IS NULL OR (
       github_app_scope_key IS NOT NULL AND
-      alert_key LIKE N'credential:github-app:failed:%'
+      alert_key LIKE N''credential:github-app:failed:%''
     )
   );
+');
 
 CREATE TABLE dbo.github_app_mint_status (
   scope_key char(64) COLLATE Latin1_General_100_BIN2 NOT NULL
