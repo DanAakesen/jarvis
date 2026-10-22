@@ -21,6 +21,15 @@ const savedRow = {
 const runningRow = {
   status: 'running', claim_generation: 1, lease_until: new Date(now.getTime() + 600_000),
 };
+const settingsRow = {
+  paused: false,
+  monthly_budget_dkk: 100,
+  sources_json: '{}',
+  categories_json: '{"deadline":true,"clash":true,"travel":true,"todo":true,"prep":true,"news":true,"weather":true,"status":true,"suggestion":true}',
+  suggestion_scope: 'all',
+  news_feeds_json: '[]',
+  guidance: '',
+};
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -28,7 +37,7 @@ function deferred<T>() {
   return { promise, resolve };
 }
 
-type Stage = 'lease' | 'lock' | 'existing' | 'write';
+type Stage = 'lease' | 'settings' | 'lock' | 'existing' | 'write';
 function fixture(options: {
   run?: (Omit<typeof runningRow, 'claim_generation'> & { claim_generation: number | string }) | null;
   hold?: Stage;
@@ -56,7 +65,8 @@ function fixture(options: {
       query: vi.fn(async (statement: string) => {
         statements.push(statement);
         request.stage = statement.includes('FROM dbo.proactive_runs') ? 'lease'
-          : statement.includes('sp_getapplock') ? 'lock'
+          : statement.includes('FROM dbo.proactive_settings') ? 'settings'
+            : statement.includes('sp_getapplock') ? 'lock'
             : statement.includes('SELECT TOP (1)') ? 'existing' : 'write';
         if (options.hold === request.stage) {
           started.resolve();
@@ -66,6 +76,7 @@ function fixture(options: {
         if (request.stage === 'lease') {
           return { recordset: options.run === null ? [] : [options.run ?? runningRow] };
         }
+        if (request.stage === 'settings') return { recordset: [settingsRow] };
         if (request.stage === 'lock') return { recordset: [{ result: 0 }] };
         if (request.stage === 'existing') return { recordset: [] };
         options.afterWrite?.();
@@ -95,7 +106,7 @@ describe('SQL guarded proactive finding writes', () => {
 
     expect(request.input).toHaveBeenCalledWith('owner', sql.UniqueIdentifier, owner);
     expect(request.input).toHaveBeenCalledWith('limit', sql.Int, 5);
-    const statement = statements[0]!;
+    const statement = statements.at(-1)!;
     if (state === 'new' || state === 'seen') {
       expect(request.input).toHaveBeenCalledWith('state', sql.NVarChar(16), state);
       expect(statement).toContain('AND state = @state');
@@ -192,7 +203,7 @@ describe('SQL guarded proactive finding writes', () => {
     quiet = true;
     release.resolve();
     await rejected;
-    expect(statements).toHaveLength(3);
+    expect(statements).toHaveLength(4);
     expect(transaction.rollback).toHaveBeenCalledOnce();
     expect(transaction.commit).not.toHaveBeenCalled();
   });

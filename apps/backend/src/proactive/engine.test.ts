@@ -811,6 +811,7 @@ describe('proactive background job mapping', () => {
       lease_lost: 'Another run took over',
       deadline_exceeded: 'Took too long',
       internal_error: 'Check could not be completed',
+      preferences_changed: 'Suggestion preferences changed',
     });
   });
 });

@@ -10,6 +10,7 @@ import { isQuietHour, monthKey } from './time.js';
 import type { Item, ProactiveSource, RunSummary, SourceFact, SourceId } from './types.js';
 import type { VaultMirrorStatusReader } from '../vault-mirror-status.js';
 import { vaultMirrorFinding } from './vault-mirror.js';
+import { classifySuggestionScope, findingAllowed, hasTravelEvidence } from './policy.js';
 
 export const RUN_DEADLINE_MS = 3 * 60_000;
 export const LEASE_HEARTBEAT_MS = 60_000;
@@ -25,6 +26,7 @@ export const jobReasons: Record<string, string> = {
   lease_lost: 'Another run took over',
   deadline_exceeded: 'Took too long',
   internal_error: 'Check could not be completed',
+  preferences_changed: 'Suggestion preferences changed',
 };
 
 export function proactiveJobLabel(run: RunSummary): string {
@@ -44,6 +46,8 @@ export interface FindingsStoredContext {
     dedupeKey: string;
     evidenceRefs: string[];
     category: NonNullable<Item['category']>;
+    suggestionScope: Item['suggestionScope'];
+    relatedCategories?: Item['relatedCategories'];
     urgency: Item['urgency'];
     dueAt: string | null;
     dueHasTime: boolean;
@@ -93,12 +97,17 @@ export function modelDedupeKey(category: string, facts: readonly ReadFact[]): st
 
 export function createProactiveEngine(options: ProactiveEngineOptions) {
   const { store, now } = options;
+  const activeRuns = new Set<AbortController>();
+  store.settings.subscribePreferencesChanged(() => {
+    for (const controller of activeRuns) controller.abort('preferences_changed');
+  });
   return async function runClaim(
     claim: { run: RunSummary; generation: number },
     externalSignal?: AbortSignal,
   ): Promise<void> {
     const { run, generation } = claim;
     const controller = new AbortController();
+    activeRuns.add(controller);
     let reason: string | null = null;
     let status: Exclude<RunSummary['status'], 'running'> = 'failed';
     let findingCount = 0;
@@ -208,23 +217,38 @@ export function createProactiveEngine(options: ProactiveEngineOptions) {
         if (!mirror) return;
       }
       // Refs are local to this bundle, never a persistent identity.
-      const facts: ReadFact[] = results.flatMap((result) => result.state === 'ok'
+      const allFacts: ReadFact[] = results.flatMap((result) => result.state === 'ok'
         ? result.facts.map((fact, index) => ({ ...fact, ref: `${result.source}:${index}`, source: result.source }))
         : []);
+      const facts: ReadFact[] = allFacts.filter((fact) =>
+        (settings.suggestionScope === 'all' ||
+          classifySuggestionScope(fact.text, [fact]) === settings.suggestionScope) &&
+        (settings.categories.travel || !hasTravelEvidence(fact.text, [fact])));
       const messages = options.conversationStore
         ? await abortable(options.conversationStore.readRecentUserMessages(8), controller.signal) : [];
       const language = detectLanguage(messages);
       const deterministic = detectFindings(facts, now(), language);
-      const pending: (FindingInput & { suggestedTodo?: string; evidenceRefs: string[] })[] = deterministic.map((finding) => ({
-        ...finding,
-        evidenceRefs: finding.evidence,
-        evidence: finding.evidence.map((ref) => {
-          const fact = facts.find((candidate) => candidate.ref === ref)!;
-          return { source: fact.source, label: fact.label, observedAt: fact.observedAt };
-        }),
-        language, runId: run.id,
-      }));
-      if (mirror) pending.push({ ...mirror, runId: run.id, evidenceRefs: [] });
+      const eligibleDeterministic = deterministic.flatMap((finding) => {
+        const cited = finding.evidence.map((ref) => facts.find((candidate) => candidate.ref === ref)!);
+        const suggestionScope = classifySuggestionScope(`${finding.title} ${finding.body}`, cited);
+        const relatedCategories = hasTravelEvidence(`${finding.title} ${finding.body}`, cited)
+          ? ['travel' as const] : [];
+        return findingAllowed(settings, finding.category, suggestionScope, relatedCategories)
+          ? [{ ...finding, suggestionScope, relatedCategories, cited }]
+          : [];
+      });
+      const pending: (FindingInput & { suggestedTodo?: string; evidenceRefs: string[] })[] =
+        eligibleDeterministic.map(({ cited, ...finding }) => ({
+          ...finding,
+          evidenceRefs: finding.evidence,
+          evidence: cited.map((fact) => ({
+            source: fact.source, label: fact.label, observedAt: fact.observedAt,
+          })),
+          language, runId: run.id,
+        }));
+      if (mirror && findingAllowed(settings, mirror.category, 'unknown')) {
+        pending.push({ ...mirror, suggestionScope: 'unknown', runId: run.id, evidenceRefs: [] });
+      }
       if (facts.length > 0) {
         check();
         // Re-check the calendar month immediately before incurring model spend.
@@ -234,7 +258,7 @@ export function createProactiveEngine(options: ProactiveEngineOptions) {
           return;
         }
         const modelWork = Promise.resolve().then(() => options.model.summarize({
-            now: now(), language, guidance: settings.guidance, deterministic, facts,
+            now: now(), language, guidance: settings.guidance, deterministic: eligibleDeterministic, facts,
           }, controller.signal)).catch(() => ({
             findings: [], reason: 'model_unavailable' as const,
           }));
@@ -255,8 +279,13 @@ export function createProactiveEngine(options: ProactiveEngineOptions) {
         reason = result.reason ?? null;
         for (const finding of result.findings) {
           const cited = finding.evidence.map((ref) => facts.find((fact) => fact.ref === ref)!);
+          const suggestionScope = classifySuggestionScope(`${finding.title} ${finding.body}`, cited);
+          const relatedCategories = hasTravelEvidence(`${finding.title} ${finding.body}`, cited) &&
+            finding.category !== 'travel' ? ['travel' as const] : [];
+          if (!findingAllowed(settings, finding.category, suggestionScope, relatedCategories)) continue;
           pending.push({
             title: finding.title, body: finding.body, category: finding.category,
+            suggestionScope, relatedCategories,
             urgency: finding.urgency, dueAt: finding.dueAt ?? null,
             dedupeKey: modelDedupeKey(finding.category, cited),
             evidenceRefs: finding.evidence,
@@ -286,6 +315,8 @@ export function createProactiveEngine(options: ProactiveEngineOptions) {
         findingCount++;
         stored.push({
           itemId: item.id, dedupeKey: finding.dedupeKey, evidenceRefs, category: finding.category,
+          suggestionScope: item.suggestionScope,
+          ...(item.relatedCategories === undefined ? {} : { relatedCategories: item.relatedCategories }),
           urgency: finding.urgency, dueAt: finding.dueAt,
           dueHasTime: facts.some((fact) =>
             evidenceRefs.includes(fact.ref) && fact.dueAt === finding.dueAt && fact.dueHasTime === true),
@@ -327,11 +358,13 @@ export function createProactiveEngine(options: ProactiveEngineOptions) {
     } catch {
       reason ??= 'internal_error';
     } finally {
+      activeRuns.delete(controller);
       clearTimeout(deadline);
       clearTimeout(heartbeatTimer);
       clearTimeout(quietTimer);
       externalSignal?.removeEventListener('abort', externalAbort);
-      if (controller.signal.aborted) status = reason === 'quiet_hours' ? 'cancelled' : 'failed';
+      if (controller.signal.aborted) status = reason === 'quiet_hours' || reason === 'preferences_changed'
+        ? 'cancelled' : 'failed';
       try {
         const accepted = await store.runs.finish(run.id, generation, status, reason, findingCount, now());
         if (!accepted) {

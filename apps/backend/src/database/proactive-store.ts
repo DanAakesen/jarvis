@@ -11,7 +11,11 @@ import {
   type ProactiveSettingsPatch,
   type ProactiveStore,
 } from '../proactive/store.js';
-import { type Item, type ProactiveSettings, type RunSummary, type SourceId, type SourceStatus } from '../proactive/types.js';
+import {
+  findingCategories, type FindingCategory, type Item, type ProactiveSettings, type RunSummary, type SourceId,
+  type SourceStatus, type SuggestionScope,
+} from '../proactive/types.js';
+import { findingAllowed, itemAllowed } from '../proactive/policy.js';
 
 interface ItemRow {
   id: string;
@@ -19,6 +23,7 @@ interface ItemRow {
   title: string;
   body: string;
   category: Item['category'];
+  suggestion_scope: SuggestionScope | null;
   urgency: Item['urgency'];
   due_at: Date | string | null;
   evidence_json: string | null;
@@ -48,6 +53,7 @@ interface InternalEvidence {
   evidence: Item['evidence'];
   eventStartAt?: string | null;
   eventEndAt?: string | null;
+  relatedCategories?: FindingCategory[];
 }
 
 function iso(value: Date | string | null): string | null {
@@ -68,6 +74,7 @@ function parseEvidence(value: string | null): InternalEvidence {
 }
 
 function mapItem(row: ItemRow): Item {
+  const parsedEvidence = parseEvidence(row.evidence_json);
   return {
     id: row.id.toLowerCase(),
     kind: row.kind,
@@ -76,7 +83,9 @@ function mapItem(row: ItemRow): Item {
     category: row.category,
     urgency: row.urgency,
     dueAt: iso(row.due_at),
-    evidence: parseEvidence(row.evidence_json).evidence,
+    evidence: parsedEvidence.evidence,
+    suggestionScope: row.suggestion_scope ?? 'unknown',
+    ...(parsedEvidence.relatedCategories === undefined ? {} : { relatedCategories: parsedEvidence.relatedCategories }),
     state: row.state,
     snoozedUntil: iso(row.snoozed_until),
     feedback: row.feedback,
@@ -105,8 +114,17 @@ function parseJson<T>(value: string | null, fallback: T): T {
   try { return JSON.parse(value) as T; } catch { return fallback; }
 }
 
+function parseCategories(value: string | null, defaults: ProactiveSettings['categories']): ProactiveSettings['categories'] {
+  const parsed = parseJson<unknown>(value, {});
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return { ...defaults };
+  const record = parsed as Record<string, unknown>;
+  return Object.fromEntries(findingCategories.map((category) => [
+    category, typeof record[category] === 'boolean' ? record[category] : defaults[category],
+  ])) as ProactiveSettings['categories'];
+}
+
 const itemColumns = [
-  'id', 'kind', 'title', 'body', 'category', 'urgency', 'due_at', 'evidence_json', 'state',
+  'id', 'kind', 'title', 'body', 'category', 'suggestion_scope', 'urgency', 'due_at', 'evidence_json', 'state',
   'snoozed_until', 'feedback', 'run_id', 'todo_added', 'language', 'created_at',
 ];
 function itemSelect(prefix = ''): string {
@@ -116,29 +134,68 @@ function itemSelect(prefix = ''): string {
 export function createProactiveStore(pool: sql.ConnectionPool, ownerObjectId: string): ProactiveStore {
   const owner = ownerObjectId.toLowerCase();
   const defaults = defaultProactiveSettings();
+  const preferenceListeners = new Set<() => void>();
+  const settingsFromRow = (row: {
+    paused: boolean;
+    monthly_budget_dkk: number;
+    sources_json: string;
+    categories_json: string | null;
+    suggestion_scope: ProactiveSettings['suggestionScope'] | null;
+    news_feeds_json: string;
+    guidance: string;
+  }): ProactiveSettings => ({
+    paused: row.paused,
+    monthlyBudgetDkk: row.monthly_budget_dkk,
+    sources: { ...defaults.sources, ...parseJson<Partial<ProactiveSettings['sources']>>(row.sources_json, {}) },
+    categories: parseCategories(row.categories_json, defaults.categories),
+    suggestionScope: row.suggestion_scope === 'personal' || row.suggestion_scope === 'work' || row.suggestion_scope === 'all'
+      ? row.suggestion_scope : defaults.suggestionScope,
+    newsFeeds: parseJson<string[]>(row.news_feeds_json, [...defaults.newsFeeds]),
+    guidance: row.guidance,
+  });
+  const readSettings = async (): Promise<ProactiveSettings> => {
+    const { recordset } = await databaseReadRequest(pool)
+      .input('owner', sql.UniqueIdentifier, owner)
+      .query<{
+        paused: boolean;
+        monthly_budget_dkk: number;
+        sources_json: string;
+        categories_json: string | null;
+        suggestion_scope: ProactiveSettings['suggestionScope'] | null;
+        news_feeds_json: string;
+        guidance: string;
+      }>(`SELECT paused, monthly_budget_dkk, sources_json, categories_json, suggestion_scope,
+          news_feeds_json, guidance
+        FROM dbo.proactive_settings WHERE owner_object_id = @owner;`);
+    return recordset[0] ? settingsFromRow(recordset[0]) : {
+      ...defaults,
+      sources: { ...defaults.sources },
+      categories: { ...defaults.categories },
+      newsFeeds: [...defaults.newsFeeds],
+    };
+  };
+  const applyItemPolicy = (request: sql.Request, settings: ProactiveSettings) => {
+    request
+      .input('categoryFlags', sql.NVarChar(sql.MAX), JSON.stringify(settings.categories))
+      .input('suggestionScope', sql.NVarChar(16), settings.suggestionScope)
+      .input('travelEnabled', sql.Bit, settings.categories.travel);
+    return `AND (kind <> N'finding' OR category IS NULL OR (
+      EXISTS (SELECT 1 FROM OPENJSON(@categoryFlags) AS category_flag
+        WHERE category_flag.[key] = category AND category_flag.[value] = N'true')
+      AND (@suggestionScope = N'all' OR suggestion_scope = @suggestionScope)
+      AND (@travelEnabled = 1 OR (
+        category <> N'travel' AND NOT EXISTS (
+          SELECT 1 FROM OPENJSON(
+            CASE WHEN ISJSON(evidence_json) = 1 THEN evidence_json ELSE N'{}' END, '$.relatedCategories'
+          ) AS related
+          WHERE related.[value] = N'travel'
+        )
+      ))
+    ))`;
+  };
   return {
     settings: {
-      async read() {
-        const { recordset } = await databaseReadRequest(pool)
-          .input('owner', sql.UniqueIdentifier, owner)
-          .query<{
-            paused: boolean;
-            monthly_budget_dkk: number;
-            sources_json: string;
-            news_feeds_json: string;
-            guidance: string;
-          }>(`SELECT paused, monthly_budget_dkk, sources_json, news_feeds_json, guidance
-            FROM dbo.proactive_settings WHERE owner_object_id = @owner;`);
-        const row = recordset[0];
-        if (!row) return defaults;
-        return {
-          paused: row.paused,
-          monthlyBudgetDkk: row.monthly_budget_dkk,
-          sources: { ...defaults.sources, ...parseJson<Partial<ProactiveSettings['sources']>>(row.sources_json, {}) },
-          newsFeeds: parseJson<string[]>(row.news_feeds_json, [...defaults.newsFeeds]),
-          guidance: row.guidance,
-        };
-      },
+      read: readSettings,
       async patch(patch: ProactiveSettingsPatch) {
         const transaction = new sql.Transaction(pool);
         await transaction.begin();
@@ -149,22 +206,20 @@ export function createProactiveStore(pool: sql.ConnectionPool, ownerObjectId: st
               paused: boolean;
               monthly_budget_dkk: number;
               sources_json: string;
+              categories_json: string | null;
+              suggestion_scope: ProactiveSettings['suggestionScope'] | null;
               news_feeds_json: string;
               guidance: string;
-            }>(`SELECT paused, monthly_budget_dkk, sources_json, news_feeds_json, guidance
+            }>(`SELECT paused, monthly_budget_dkk, sources_json, categories_json, suggestion_scope,
+                news_feeds_json, guidance
               FROM dbo.proactive_settings WITH (UPDLOCK, HOLDLOCK) WHERE owner_object_id = @owner;`);
           const row = read.recordset[0];
-          const current: ProactiveSettings = row ? {
-            paused: row.paused,
-            monthlyBudgetDkk: row.monthly_budget_dkk,
-            sources: { ...defaults.sources, ...parseJson<Partial<ProactiveSettings['sources']>>(row.sources_json, {}) },
-            newsFeeds: parseJson<string[]>(row.news_feeds_json, [...defaults.newsFeeds]),
-            guidance: row.guidance,
-          } : defaults;
+          const current: ProactiveSettings = row ? settingsFromRow(row) : defaults;
           const updated: ProactiveSettings = {
             ...current,
             ...patch,
             sources: { ...current.sources, ...patch.sources },
+            categories: { ...current.categories, ...patch.categories },
             newsFeeds: patch.newsFeeds === undefined ? current.newsFeeds : patch.newsFeeds,
           };
           await new sql.Request(transaction)
@@ -172,55 +227,77 @@ export function createProactiveStore(pool: sql.ConnectionPool, ownerObjectId: st
             .input('paused', sql.Bit, updated.paused)
             .input('budget', sql.Int, updated.monthlyBudgetDkk)
             .input('sources', sql.NVarChar(sql.MAX), JSON.stringify(updated.sources))
+            .input('categories', sql.NVarChar(sql.MAX), JSON.stringify(updated.categories))
+            .input('suggestionScope', sql.NVarChar(16), updated.suggestionScope)
             .input('feeds', sql.NVarChar(sql.MAX), JSON.stringify(updated.newsFeeds))
             .input('guidance', sql.NVarChar(1000), updated.guidance)
             .query(`MERGE dbo.proactive_settings WITH (HOLDLOCK) AS target
               USING (SELECT @owner AS owner_object_id) AS source
               ON target.owner_object_id = source.owner_object_id
               WHEN MATCHED THEN UPDATE SET paused = @paused, monthly_budget_dkk = @budget,
-                sources_json = @sources, news_feeds_json = @feeds, guidance = @guidance,
+                sources_json = @sources, categories_json = @categories, suggestion_scope = @suggestionScope,
+                news_feeds_json = @feeds, guidance = @guidance,
                 updated_at = SYSUTCDATETIME()
               WHEN NOT MATCHED THEN INSERT
-                (owner_object_id, paused, monthly_budget_dkk, sources_json, news_feeds_json, guidance)
-                VALUES (@owner, @paused, @budget, @sources, @feeds, @guidance);`);
+                (owner_object_id, paused, monthly_budget_dkk, sources_json, categories_json, suggestion_scope,
+                 news_feeds_json, guidance)
+                VALUES (@owner, @paused, @budget, @sources, @categories, @suggestionScope, @feeds, @guidance);`);
           await transaction.commit();
+          if (current.suggestionScope !== updated.suggestionScope ||
+              Object.keys(updated.categories).some((category) =>
+                current.categories[category as FindingCategory] !== updated.categories[category as FindingCategory])) {
+            for (const listener of preferenceListeners) {
+              try { listener(); } catch { /* The SQL preference update is already committed. */ }
+            }
+          }
           return updated;
         } catch (error) {
           try { await transaction.rollback(); } catch { /* Preserve the store failure. */ }
           throw error;
         }
       },
+      subscribePreferencesChanged(listener) {
+        preferenceListeners.add(listener);
+        return () => preferenceListeners.delete(listener);
+      },
     },
     items: {
       async list(state, limit, now) {
+        const settings = await readSettings();
         const request = databaseReadRequest(pool)
           .input('owner', sql.UniqueIdentifier, owner)
           .input('limit', sql.Int, limit)
           .input('now', sql.DateTime2, now);
+        const policy = applyItemPolicy(request, settings);
         const where = state === 'all' ? '' : state === 'open'
           ? `AND (state IN (N'new', N'seen') OR (state = N'snoozed' AND snoozed_until <= @now))`
           : 'AND state = @state';
         if (state === 'new' || state === 'seen') request.input('state', sql.NVarChar(16), state);
         const { recordset } = await request.query<ItemRow>(`SELECT TOP (@limit) ${itemSelect()}
-          FROM dbo.proactive_items WHERE owner_object_id = @owner ${where}
+          FROM dbo.proactive_items WHERE owner_object_id = @owner ${where} ${policy}
           ORDER BY created_at DESC, id DESC;`);
-        return recordset.map(mapItem);
+        return recordset.map(mapItem).filter((item) => itemAllowed(settings, item));
       },
       async get(id, markLoaded = false) {
+        const settings = await readSettings();
         const request = (markLoaded ? pool.request() : databaseReadRequest(pool))
           .input('owner', sql.UniqueIdentifier, owner)
           .input('id', sql.UniqueIdentifier, id);
+        const policy = applyItemPolicy(request, settings);
         const query = markLoaded
           ? `UPDATE dbo.proactive_items SET opened_at = COALESCE(opened_at, SYSUTCDATETIME())
-              OUTPUT ${itemSelect('inserted')} WHERE owner_object_id = @owner AND id = @id;`
-          : `SELECT ${itemSelect()} FROM dbo.proactive_items WHERE owner_object_id = @owner AND id = @id;`;
+              OUTPUT ${itemSelect('inserted')} WHERE owner_object_id = @owner AND id = @id ${policy};`
+          : `SELECT ${itemSelect()} FROM dbo.proactive_items WHERE owner_object_id = @owner AND id = @id ${policy};`;
         const { recordset } = await request.query<ItemRow>(query);
-        return recordset[0] ? mapItem(recordset[0]) : undefined;
+        const item = recordset[0] ? mapItem(recordset[0]) : undefined;
+        return item && itemAllowed(settings, item) ? item : undefined;
       },
       async getMany(ids) {
+        const settings = await readSettings();
         const uniqueIds = [...new Set(ids.map((id) => id.toLowerCase()))];
         if (uniqueIds.length === 0) return [];
         const request = databaseReadRequest(pool).input('owner', sql.UniqueIdentifier, owner);
+        const policy = applyItemPolicy(request, settings);
         const parameters = uniqueIds.map((id, index) => {
           const name = `item${index}`;
           request.input(name, sql.UniqueIdentifier, id);
@@ -228,13 +305,16 @@ export function createProactiveStore(pool: sql.ConnectionPool, ownerObjectId: st
         });
         const { recordset } = await request.query<{ id: string; state: Item['state'] }>(`
           SELECT id, state FROM dbo.proactive_items
-          WHERE owner_object_id = @owner AND id IN (${parameters.join(', ')});`);
+          WHERE owner_object_id = @owner AND id IN (${parameters.join(', ')}) ${policy};`);
         return recordset.map((row) => ({ id: row.id.toLowerCase(), state: row.state }));
       },
       async applyFeedback(id, action: FeedbackAction, snoozeUntil) {
-        const { recordset } = await pool.request()
+        const settings = await readSettings();
+        const request = pool.request()
           .input('owner', sql.UniqueIdentifier, owner)
-          .input('id', sql.UniqueIdentifier, id)
+          .input('id', sql.UniqueIdentifier, id);
+        const policy = applyItemPolicy(request, settings);
+        const { recordset } = await request
           .input('action', sql.NVarChar(16), action)
           .input('snoozeUntil', sql.DateTime2, snoozeUntil ? new Date(snoozeUntil) : null)
           .query<ItemRow>(`UPDATE dbo.proactive_items
@@ -246,8 +326,9 @@ export function createProactiveStore(pool: sql.ConnectionPool, ownerObjectId: st
                 snoozed_until = CASE WHEN @action = N'snooze' THEN @snoozeUntil ELSE snoozed_until END,
                 feedback = CASE WHEN @action IN (N'useful', N'wrong') THEN @action ELSE feedback END
             OUTPUT ${itemSelect('inserted')}
-            WHERE id = @id AND owner_object_id = @owner;`);
-        return recordset[0] ? mapItem(recordset[0]) : undefined;
+            WHERE id = @id AND owner_object_id = @owner ${policy};`);
+        const item = recordset[0] ? mapItem(recordset[0]) : undefined;
+        return item && itemAllowed(settings, item) ? item : undefined;
       },
       async upsertFinding(input: FindingInput, guard?: FindingWriteGuard) {
         const transaction = new sql.Transaction(pool);
@@ -286,6 +367,24 @@ export function createProactiveStore(pool: sql.ConnectionPool, ownerObjectId: st
             }
             leaseUntil = new Date(run.lease_until).getTime();
           }
+          const currentSettings = await query<{
+            paused: boolean;
+            monthly_budget_dkk: number;
+            sources_json: string;
+            categories_json: string | null;
+            suggestion_scope: ProactiveSettings['suggestionScope'] | null;
+            news_feeds_json: string;
+            guidance: string;
+          }>(new sql.Request(transaction)
+            .input('owner', sql.UniqueIdentifier, owner),
+          `SELECT paused, monthly_budget_dkk, sources_json, categories_json, suggestion_scope,
+              news_feeds_json, guidance
+            FROM dbo.proactive_settings WITH (UPDLOCK, HOLDLOCK) WHERE owner_object_id = @owner;`);
+          const latest = currentSettings.recordset[0]
+            ? settingsFromRow(currentSettings.recordset[0]) : defaults;
+          if (!findingAllowed(latest, input.category, input.suggestionScope ?? 'unknown', input.relatedCategories)) {
+            throw new Error('finding_not_allowed');
+          }
           const lockName = `jarvis.proactive.finding:${owner}:${input.dedupeKey}`;
           const lock = await query<{ result: number }>(new sql.Request(transaction)
             .input('resource', sql.NVarChar(255), lockName.slice(0, 255)),
@@ -313,6 +412,7 @@ export function createProactiveStore(pool: sql.ConnectionPool, ownerObjectId: st
             evidence: input.evidence,
             eventStartAt: input.eventStartAt ?? null,
             eventEndAt: input.eventEndAt ?? null,
+            ...(input.relatedCategories === undefined ? {} : { relatedCategories: [...input.relatedCategories] }),
           };
           const id = existing?.id ?? randomUUID();
           const state = existing
@@ -325,6 +425,7 @@ export function createProactiveStore(pool: sql.ConnectionPool, ownerObjectId: st
             .input('title', sql.NVarChar(200), input.title)
             .input('body', sql.NVarChar(500), input.body)
             .input('category', sql.NVarChar(32), input.category)
+            .input('suggestionScope', sql.NVarChar(16), input.suggestionScope ?? 'unknown')
             .input('urgency', sql.NVarChar(24), input.urgency)
             .input('dueAt', sql.DateTime2, input.dueAt ? new Date(input.dueAt) : null)
             .input('evidence', sql.NVarChar(sql.MAX), JSON.stringify(evidence))
@@ -333,16 +434,17 @@ export function createProactiveStore(pool: sql.ConnectionPool, ownerObjectId: st
             .input('language', sql.NVarChar(2), input.language);
           const saved = existing
             ? await query<ItemRow>(request, `UPDATE dbo.proactive_items SET
-                title = @title, body = @body, category = @category, urgency = @urgency,
+                title = @title, body = @body, category = @category, suggestion_scope = @suggestionScope,
+                urgency = @urgency,
                 due_at = @dueAt, evidence_json = @evidence, state = @state,
                 run_id = @runId, language = @language, dedupe_key = @key
               OUTPUT ${itemSelect('inserted')}
               WHERE id = @id AND owner_object_id = @owner;`)
             : await query<ItemRow>(request, `INSERT dbo.proactive_items
-                (id, owner_object_id, kind, title, body, delivery_state, category, urgency, due_at,
+                (id, owner_object_id, kind, title, body, delivery_state, category, suggestion_scope, urgency, due_at,
                  evidence_json, state, run_id, language, dedupe_key)
               OUTPUT inserted.${itemSelect().replaceAll(', ', ', inserted.').replaceAll('\n    ', '\n    inserted.')}
-              VALUES (@id, @owner, N'finding', @title, @body, N'queued', @category, @urgency, @dueAt,
+              VALUES (@id, @owner, N'finding', @title, @body, N'queued', @category, @suggestionScope, @urgency, @dueAt,
                 @evidence, @state, @runId, @language, @key);`);
           const row = saved.recordset[0];
           if (!row) throw new Error('Finding could not be saved');

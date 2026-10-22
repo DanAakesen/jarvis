@@ -1,5 +1,11 @@
 export const sourceIds = ['todos', 'calendar', 'mail', 'weather', 'factory', 'news', 'travel', 'x'] as const;
 export type SourceId = typeof sourceIds[number];
+export const findingCategories = [
+  'deadline', 'clash', 'travel', 'todo', 'prep', 'news', 'weather', 'status', 'suggestion',
+] as const;
+export type FindingCategory = typeof findingCategories[number];
+export type SuggestionScope = 'personal' | 'work' | 'unknown';
+export type SuggestionScopePreference = 'all' | 'personal' | 'work';
 
 export type RunSummary = {
   id: string;
@@ -27,6 +33,8 @@ export type Item = {
   title: string;
   body: string;
   category: 'deadline' | 'clash' | 'travel' | 'todo' | 'prep' | 'news' | 'weather' | 'status' | 'suggestion' | null;
+  suggestionScope: SuggestionScope;
+  relatedCategories?: FindingCategory[];
   urgency: 'time_critical' | 'normal' | 'fyi';
   dueAt: string | null;
   evidence: { source: SourceId; label: string; observedAt: string }[];
@@ -68,6 +76,8 @@ export interface ProactiveSettings {
   paused: boolean;
   monthlyBudgetDkk: number;
   sources: Record<SourceId, boolean>;
+  categories: Record<FindingCategory, boolean>;
+  suggestionScope: SuggestionScopePreference;
   newsFeeds: string[];
   guidance: string;
 }

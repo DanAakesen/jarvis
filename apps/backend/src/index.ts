@@ -1204,6 +1204,7 @@ try {
   });
   registerPushRoutes(app, config.pushEnabled, () => ({
     store: createPushStore(database!.pool),
+    ...(proactiveStore ? { proactiveItems: proactiveStore.items } : {}),
     publicOrigin: config.staticWebAppOrigin!,
   }));
   const alertPushStore = config.proactiveEnabled && config.proactiveAlertsEnabled && config.pushEnabled &&

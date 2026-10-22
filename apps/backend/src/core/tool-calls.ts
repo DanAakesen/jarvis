@@ -55,7 +55,8 @@ export function confirmToolCall(tool: string, outcome: ToolCallOutcome, result: 
         })) {
       return confirmation;
     }
-    if ((tool.startsWith('memory_') || tool.startsWith('vault_') || tool === 'renew_credential' || tool === 'daily_feed') && typeof confirmation === 'string' &&
+    if ((tool.startsWith('memory_') || tool.startsWith('vault_') || tool === 'renew_credential' ||
+      tool === 'daily_feed' || tool === 'proactive_preferences') && typeof confirmation === 'string' &&
         confirmation.length > 0 && confirmation.length <= 300 &&
         !Array.from(confirmation).some((character) => {
           const code = character.charCodeAt(0);

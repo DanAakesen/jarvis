@@ -1,6 +1,10 @@
 import { randomUUID } from 'node:crypto';
 import { copenhagenDayStart } from './time.js';
-import { sourceIds, type Item, type ProactiveSettings, type RunSummary, type SourceId, type SourceStatus } from './types.js';
+import {
+  findingCategories, sourceIds, type FindingCategory, type Item, type ProactiveSettings,
+  type RunSummary, type SourceId, type SourceStatus, type SuggestionScope, type SuggestionScopePreference,
+} from './types.js';
+import { findingAllowed, itemAllowed } from './policy.js';
 
 export const DEFAULT_NEWS_FEEDS = [
   'https://github.blog/changelog/feed/',
@@ -32,6 +36,8 @@ export function defaultProactiveSettings(): ProactiveSettings {
       travel: true,
       x: false,
     },
+    categories: Object.fromEntries(findingCategories.map((category) => [category, true])) as Record<FindingCategory, boolean>,
+    suggestionScope: 'all',
     newsFeeds: [...DEFAULT_NEWS_FEEDS],
     guidance: '',
   };
@@ -39,6 +45,8 @@ export function defaultProactiveSettings(): ProactiveSettings {
 
 export type ProactiveSettingsPatch = Partial<Pick<ProactiveSettings, 'paused' | 'monthlyBudgetDkk' | 'newsFeeds' | 'guidance'>> & {
   sources?: Partial<Record<SourceId, boolean>>;
+  categories?: Partial<Record<FindingCategory, boolean>>;
+  suggestionScope?: SuggestionScopePreference;
 };
 export type FeedbackAction = 'seen' | 'dismiss' | 'snooze' | 'useful' | 'wrong';
 export interface FindingInput {
@@ -46,6 +54,8 @@ export interface FindingInput {
   title: string;
   body: string;
   category: NonNullable<Item['category']>;
+  suggestionScope?: SuggestionScope;
+  relatedCategories?: FindingCategory[];
   urgency: Item['urgency'];
   dueAt: string | null;
   evidence: Item['evidence'];
@@ -66,6 +76,7 @@ export interface FindingWriteGuard {
 export interface ProactiveSettingsStore {
   read(): Promise<ProactiveSettings>;
   patch(patch: ProactiveSettingsPatch): Promise<ProactiveSettings>;
+  subscribePreferencesChanged(listener: () => void): () => void;
 }
 export interface ProactiveItemsStore {
   list(state: 'new' | 'seen' | 'open' | 'all', limit: number, now: Date): Promise<Item[]>;
@@ -102,7 +113,11 @@ export interface ProactiveStore {
 }
 
 function copyItem(item: Item): Item {
-  return { ...item, evidence: item.evidence.map((fact) => ({ ...fact })) };
+  return {
+    ...item,
+    evidence: item.evidence.map((fact) => ({ ...fact })),
+    ...(item.relatedCategories === undefined ? {} : { relatedCategories: [...item.relatedCategories] }),
+  };
 }
 
 function runSummary(run: RunSummary & { generation: number; leaseUntil: number }): RunSummary {
@@ -121,6 +136,7 @@ function runSummary(run: RunSummary & { generation: number; leaseUntil: number }
 export function createMemoryProactiveStore(ownerObjectId: string = randomUUID()): ProactiveStore {
   void ownerObjectId;
   let settings = defaultProactiveSettings();
+  const preferenceListeners = new Set<() => void>();
   const items = new Map<string, Item>();
   const findings = new Map<string, string>();
   const materials = new Map<string, string>();
@@ -131,21 +147,40 @@ export function createMemoryProactiveStore(ownerObjectId: string = randomUUID())
   return {
     settings: {
       async read() {
-        return { ...settings, sources: { ...settings.sources }, newsFeeds: [...settings.newsFeeds] };
+        return {
+          ...settings, sources: { ...settings.sources }, categories: { ...settings.categories },
+          newsFeeds: [...settings.newsFeeds],
+        };
       },
       async patch(patch) {
+        const previousCategories = { ...settings.categories };
+        const previousScope = settings.suggestionScope;
         settings = {
           ...settings,
           ...patch,
           sources: { ...settings.sources, ...patch.sources },
+          categories: { ...settings.categories, ...patch.categories },
           newsFeeds: patch.newsFeeds === undefined ? [...settings.newsFeeds] : [...patch.newsFeeds],
         };
-        return { ...settings, sources: { ...settings.sources }, newsFeeds: [...settings.newsFeeds] };
+        if (previousScope !== settings.suggestionScope ||
+            findingCategories.some((category) => previousCategories[category] !== settings.categories[category])) {
+          for (const listener of preferenceListeners) {
+            try { listener(); } catch { /* A committed preference change remains successful. */ }
+          }
+        }
+        return {
+          ...settings, sources: { ...settings.sources }, categories: { ...settings.categories },
+          newsFeeds: [...settings.newsFeeds],
+        };
+      },
+      subscribePreferencesChanged(listener) {
+        preferenceListeners.add(listener);
+        return () => preferenceListeners.delete(listener);
       },
     },
     items: {
       async list(state, limit, now) {
-        const visible = [...items.values()].filter((item) => {
+        const visible = [...items.values()].filter((item) => itemAllowed(settings, item)).filter((item) => {
           if (state === 'all') return true;
           if (state === 'new' || state === 'seen') return item.state === state;
           return item.state === 'new' || item.state === 'seen' ||
@@ -155,18 +190,18 @@ export function createMemoryProactiveStore(ownerObjectId: string = randomUUID())
       },
       async get(id) {
         const item = items.get(id.toLowerCase());
-        return item ? copyItem(item) : undefined;
+        return item && itemAllowed(settings, item) ? copyItem(item) : undefined;
       },
       async getMany(ids) {
         return ids.flatMap((id) => {
           const item = items.get(id.toLowerCase());
-          return item ? [{ id: item.id, state: item.state }] : [];
+          return item && itemAllowed(settings, item) ? [{ id: item.id, state: item.state }] : [];
         });
       },
       async applyFeedback(id, action, snoozeUntil) {
         const key = id.toLowerCase();
         const item = items.get(key);
-        if (!item) return undefined;
+        if (!item || !itemAllowed(settings, item)) return undefined;
         const state = action === 'dismiss' ? 'dismissed'
           : action === 'seen' && item.state === 'new' ? 'seen'
             : action === 'snooze' ? 'snoozed' : item.state;
@@ -182,6 +217,9 @@ export function createMemoryProactiveStore(ownerObjectId: string = randomUUID())
       },
       async upsertFinding(input, guard) {
         if (input.dedupeKey.length > 64) throw new RangeError('Dedupe key exceeds 64 characters');
+        if (!findingAllowed(settings, input.category, input.suggestionScope ?? 'unknown', input.relatedCategories)) {
+          throw new Error('finding_not_allowed');
+        }
         const existingId = findings.get(input.dedupeKey);
         const existing = existingId ? items.get(existingId) : undefined;
         const material = JSON.stringify([input.dueAt, input.eventStartAt ?? null, input.eventEndAt ?? null]);
@@ -193,6 +231,8 @@ export function createMemoryProactiveStore(ownerObjectId: string = randomUUID())
           title: input.title,
           body: input.body,
           category: input.category,
+          suggestionScope: input.suggestionScope ?? 'unknown',
+          ...(input.relatedCategories === undefined ? {} : { relatedCategories: [...input.relatedCategories] }),
           urgency: input.urgency,
           dueAt: input.dueAt,
           evidence: input.evidence.map((fact) => ({ ...fact })),

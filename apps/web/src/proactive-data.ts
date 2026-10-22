@@ -61,9 +61,29 @@ export interface ProactiveSettings {
   paused: boolean;
   monthlyBudgetDkk: number;
   sources: { id: SourceId; enabled: boolean }[];
+  categories: { id: FindingCategory; enabled: boolean }[];
+  suggestionScope: SuggestionScopePreference;
   newsFeeds: string[];
   guidance: string;
 }
+
+export const findingCategoryIds = [
+  'deadline', 'clash', 'travel', 'todo', 'prep', 'news', 'weather', 'status', 'suggestion',
+] as const;
+export type FindingCategory = typeof findingCategoryIds[number];
+export type SuggestionScopePreference = 'all' | 'personal' | 'work';
+
+export const findingCategoryLabels: Record<FindingCategory, string> = {
+  deadline: 'Deadlines',
+  clash: 'Calendar clashes',
+  travel: 'Travel',
+  todo: 'Tasks',
+  prep: 'Preparation',
+  news: 'News',
+  weather: 'Weather',
+  status: 'Status',
+  suggestion: 'Suggestions',
+};
 
 export class ProactiveRequestError extends Error {
   constructor(readonly status: number) {
@@ -147,6 +167,11 @@ export function isProactiveSettings(value: unknown): value is ProactiveSettings 
     Number(value.monthlyBudgetDkk) <= 1000 &&
     Array.isArray(value.sources) && value.sources.every((source) =>
       isRecord(source) && isSourceId(source.id) && typeof source.enabled === 'boolean') &&
+    Array.isArray(value.categories) && value.categories.length === findingCategoryIds.length &&
+    value.categories.every((category) => isRecord(category) &&
+      findingCategoryIds.includes(category.id as FindingCategory) && typeof category.enabled === 'boolean') &&
+    new Set(value.categories.map((category) => isRecord(category) ? category.id : null)).size === findingCategoryIds.length &&
+    (value.suggestionScope === 'all' || value.suggestionScope === 'personal' || value.suggestionScope === 'work') &&
     Array.isArray(value.newsFeeds) && value.newsFeeds.every((feed) => typeof feed === 'string' && feed.length <= 300) &&
     typeof value.guidance === 'string' && value.guidance.length <= 1000;
 }

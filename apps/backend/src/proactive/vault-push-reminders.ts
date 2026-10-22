@@ -3,6 +3,7 @@ import type { ProactiveStore } from './store.js';
 import type { ProactiveReminderStore } from './reminder-store.js';
 import { planTodoReminders } from './reminders.js';
 import { isQuietHour } from './time.js';
+import { classifySuggestionScope } from './policy.js';
 
 const passTimeoutMs = 60_000;
 const coalesceWindowMs = 10_000;
@@ -37,6 +38,9 @@ export function createVaultPushReminderPass(options: {
   let firstTriggerAt: number | undefined;
   let pendingAt: number | undefined;
   let lastStartedAt: number | undefined;
+  const unsubscribePreferences = options.store.settings.subscribePreferencesChanged(() => {
+    controller?.abort('preferences_changed');
+  });
 
   function log(level: 'info' | 'warn', reason: string, startedAt: number, count?: number) {
     try {
@@ -69,7 +73,7 @@ export function createVaultPushReminderPass(options: {
       log('info', 'vault_push_paused', startedAt);
       return;
     }
-    if (!settings.sources.todos) {
+    if (!settings.sources.todos || !settings.categories.todo) {
       log('info', 'vault_push_todos_disabled', startedAt);
       return;
     }
@@ -89,7 +93,8 @@ export function createVaultPushReminderPass(options: {
     }
     const planned = await abortable(planTodoReminders({
       reminders: options.reminders,
-      facts: result.facts,
+      facts: result.facts.filter((fact) => settings.suggestionScope === 'all' ||
+        classifySuggestionScope(fact.text, [fact]) === settings.suggestionScope),
       now: options.now(),
       plannedRunId: null,
       ...(options.onPlanned ? { onPlanned: options.onPlanned } : {}),
@@ -164,6 +169,7 @@ export function createVaultPushReminderPass(options: {
     trigger,
     async stop(): Promise<void> {
       stopped = true;
+      unsubscribePreferences();
       if (timer) clearTimeout(timer);
       timer = undefined;
       controller?.abort('shutdown');

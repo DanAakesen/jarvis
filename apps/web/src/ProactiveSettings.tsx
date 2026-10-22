@@ -3,8 +3,9 @@ import { CollapsibleSection } from './CollapsibleSection';
 import { StateMessage } from './StateMessage';
 import { saveSignInReturnPath } from './auth';
 import {
-  isProactiveSettings, isRecord, proactiveJson, proactiveRequest, ProactiveRequestError, sourceLabels,
-  type ProactiveSettings as SettingsValue, type SourceId,
+  findingCategoryIds, findingCategoryLabels, isProactiveSettings, isRecord, proactiveJson, proactiveRequest,
+  ProactiveRequestError, sourceLabels, type FindingCategory,
+  type ProactiveSettings as SettingsValue, type SourceId, type SuggestionScopePreference,
 } from './proactive-data';
 
 type View =
@@ -28,6 +29,10 @@ function normalizedSettings(value: SettingsValue): SettingsValue {
       id,
       enabled: id === 'x' ? false : value.sources.find((source) => source.id === id)?.enabled ?? false,
     })),
+    categories: findingCategoryIds.map((id) => ({
+      id,
+      enabled: value.categories.find((category) => category.id === id)?.enabled ?? true,
+    })),
   };
 }
 
@@ -35,8 +40,10 @@ function draftFrom(value: SettingsValue): Draft {
   return {
     monthlyBudgetDkk: String(value.monthlyBudgetDkk),
     sources: value.sources.map((source) => ({ ...source })),
+    categories: value.categories.map((category) => ({ ...category })),
     newsFeeds: [...value.newsFeeds],
     guidance: value.guidance,
+    suggestionScope: value.suggestionScope,
   };
 }
 
@@ -159,9 +166,27 @@ export function ProactiveSettings({ backendUrl, getAccessToken, signIn }: {
     setNotice('');
   };
 
+  const updateCategory = (id: FindingCategory, enabled: boolean) => {
+    setDraft((current) => current ? ({
+      ...current, categories: current.categories.map((category) =>
+        category.id === id ? { ...category, enabled } : category),
+    }) : current);
+    setFieldErrors({});
+    setNotice('');
+  };
+
+  const updateScope = (suggestionScope: SuggestionScopePreference) => {
+    setDraft((current) => current ? { ...current, suggestionScope } : current);
+    setFieldErrors({});
+    setNotice('');
+  };
+
   const dirty = Boolean(saved && draft && (
     saved.monthlyBudgetDkk !== Number(draft.monthlyBudgetDkk) ||
     saved.guidance !== draft.guidance ||
+    saved.suggestionScope !== draft.suggestionScope ||
+    findingCategoryIds.some((id) => saved.categories.find((category) => category.id === id)?.enabled !==
+      draft.categories.find((category) => category.id === id)?.enabled) ||
     JSON.stringify(saved.newsFeeds) !== JSON.stringify(draft.newsFeeds) ||
     saved.sources.some((source) => source.id !== 'x' &&
       draft.sources.find((next) => next.id === source.id)?.enabled !== source.enabled)
@@ -179,9 +204,13 @@ export function ProactiveSettings({ backendUrl, getAccessToken, signIn }: {
     if (!saved || !draft || !dirty || !saveValid || saving) return;
     const changedSources = draft.sources.filter((source) => source.id !== 'x' &&
       saved.sources.find((old) => old.id === source.id)?.enabled !== source.enabled);
+    const changedCategories = draft.categories.filter((category) =>
+      saved.categories.find((old) => old.id === category.id)?.enabled !== category.enabled);
     const patch = {
       ...(saved.monthlyBudgetDkk !== budgetValue ? { monthlyBudgetDkk: budgetValue } : {}),
       ...(changedSources.length > 0 ? { sources: changedSources } : {}),
+      ...(changedCategories.length > 0 ? { categories: changedCategories } : {}),
+      ...(saved.suggestionScope !== draft.suggestionScope ? { suggestionScope: draft.suggestionScope } : {}),
       ...(JSON.stringify(saved.newsFeeds) !== JSON.stringify(draft.newsFeeds) ? { newsFeeds: draft.newsFeeds } : {}),
       ...(saved.guidance !== draft.guidance ? { guidance: draft.guidance } : {}),
     };
@@ -207,6 +236,8 @@ export function ProactiveSettings({ backendUrl, getAccessToken, signIn }: {
       const errors: Record<string, string> = {};
       if ('monthlyBudgetDkk' in patch) errors.monthlyBudgetDkk = copy;
       if ('sources' in patch) errors.sources = copy;
+      if ('categories' in patch) errors.categories = copy;
+      if ('suggestionScope' in patch) errors.suggestionScope = copy;
       if ('newsFeeds' in patch) errors.newsFeeds = copy;
       if ('guidance' in patch) errors.guidance = copy;
       setFieldErrors(errors);
@@ -260,6 +291,32 @@ export function ProactiveSettings({ backendUrl, getAccessToken, signIn }: {
           </label>)}
           {fieldErrors.sources && <p className="settings-validation-error" role="alert">{fieldErrors.sources}</p>}
         </fieldset>
+
+        <fieldset className="proactive-source-settings">
+          <legend>Suggestion categories</legend>
+          {draft.categories.map(({ id, enabled }) => <label className="choice" key={id}>
+            <input type="checkbox" role="switch" checked={enabled} disabled={saving}
+              onChange={(event) => { updateCategory(id, event.target.checked); }} />
+            {findingCategoryLabels[id]}
+          </label>)}
+          {fieldErrors.categories && <p className="settings-validation-error" role="alert">{fieldErrors.categories}</p>}
+        </fieldset>
+
+        <div className="settings-field">
+          <label htmlFor="proactive-suggestion-scope">Suggestion scope</label>
+          <select id="proactive-suggestion-scope" value={draft.suggestionScope} disabled={saving}
+            onChange={(event) => { updateScope(event.target.value as SuggestionScopePreference); }}>
+            <option value="all">Personal and work</option>
+            <option value="personal">Personal only</option>
+            <option value="work">Work only</option>
+          </select>
+          <p className="settings-explanation">
+            Personal-only and work-only exclude suggestions with unknown or mixed scope.
+          </p>
+          {fieldErrors.suggestionScope && <p className="settings-validation-error" role="alert">
+            {fieldErrors.suggestionScope}
+          </p>}
+        </div>
 
         <fieldset className="settings-field proactive-feeds">
           <legend>News feeds</legend>
