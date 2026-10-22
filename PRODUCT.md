@@ -14,19 +14,21 @@ needs-attention, or for failed/stale status when success is over an hour old or
 has never occurred, at most once per Copenhagen day and reason, with no push
 notification. A recent transient failure stays quiet. Missing/unreadable status
 does not create a mirror finding. No new flag or change to default-off write-back is introduced.
-Azure/Obsidian operation is **not yet verified against the live service**.
+The mirror has reported live status since 20 October 2026.
 
-## Planned Azure vault mirror safety boundary (19 October 2026; P14-27)
+## Azure vault mirror safety boundary (19 October 2026; P14-27)
 
 The Azure mirror runner reconciles the owner's Obsidian vault with its private
-GitHub repository using Obsidian Headless Sync. This code is not deployed or
-connected to the live vault; the existing desktop task remains. Obsidian-to-GitHub
-sync is enabled from the first run. GitHub-to-Obsidian write-back defaults to
-`dry-run`; only the owner may explicitly set it to `on` after reviewing runs.
-Fresh state, conflicts, private policy and partial-pull/mass-deletion guards
-prevent unsafe writes. Unresolved conflicts resolve in Obsidian's favour after
-24 hours, never by overwriting Obsidian. Headless CLI behavior is **not yet
-verified against the live service**.
+GitHub repository using Obsidian Headless Sync. It has been connected to the live
+vault since 20 October 2026. The scheduled task on the owner's computer was
+unregistered on 21 October 2026, so the mirror is the only vault sync route.
+Obsidian-to-GitHub sync is enabled from the first run. GitHub-to-Obsidian
+write-back defaults to `dry-run`; only the owner may explicitly set it to `on`
+after reviewing runs, and it has been `on` since 22 October 2026. Fresh state,
+conflicts, private policy and partial-pull/mass-deletion guards prevent unsafe
+writes. Unresolved conflicts resolve in Obsidian's favour after 24 hours, never
+by overwriting Obsidian. Whether a change reached a second device is visible only
+on that device.
 
 ## Shared overlays (18 October 2026; P14-09)
 
@@ -1049,8 +1051,9 @@ The owner may opt into an Azure-hosted mirror that keeps the Obsidian vault and
 private GitHub vault repository synchronized in both directions. Reading the
 vault into GitHub is live on the first run; writing back to Obsidian remains
 `dry-run` until the owner reviews the initial runs and explicitly changes the
-repository setting. The existing scheduled task on the owner's computer stays
-in place. The infrastructure switch defaults off, and the owner stores all
+repository setting. The owner did so on 22 October 2026; the scheduled task on
+their computer had been unregistered at their request on 21 October. The
+infrastructure switch defaults off, and the owner stores all
 Obsidian credentials and sync policy directly in Key Vault.
 
 ### Selected shell refinement (6 October 2026; implemented in P8-37)

@@ -1,10 +1,13 @@
 # Vault mirror runner
 
 P14-27 adds a one-run runner around the pure P14-26 planner. It uses Obsidian
-Headless Sync, GitHub's Git Data API and Azure Key Vault/Blob Storage. The runner
-and image are **not deployed or connected to the live vault**; the existing
-desktop task remains. Obsidian Headless Sync behavior is **not yet verified
-against the live service**.
+Headless Sync, GitHub's Git Data API and Azure Key Vault/Blob Storage. In
+production it runs as a Container Apps job every ten minutes and has been
+connected to the live vault since 20 October 2026. Writing back to Obsidian has
+been `on` since 22 October 2026, and the scheduled task on the owner's computer
+was unregistered on 21 October 2026, so this runner is the only vault sync route.
+Whether an upload reached a second device is visible only on that device. The
+timeline, caps and recovery steps are in `docs/decisions.md`.
 
 ## Run the checks
 
@@ -113,8 +116,8 @@ docker run --rm \
 
 These tests use synthetic values and in-memory services; they do not contact
 Azure, GitHub or Obsidian. The pinned CLI's config filters and timeout recovery
-are verified from the `0.0.14` package source and tests, not yet verified against
-the live service.
+are verified from the `0.0.14` package source and tests. The production job runs
+the pull command on every run and the upload command whenever it writes back.
 
 ## Inputs and policy
 
@@ -240,8 +243,11 @@ spread a plan into it. Tests use synthetic fixtures only.
 The tools lock pins `obsidian-headless` 0.0.14, whose binary is `ob`. Source and
 README findings, including command names, environment authentication, global
 configuration location, and mode settings, are recorded in
-`docs/decisions.md`. Every interaction assumption remains **not yet verified
-against the live service**. The wrapper captures bounded output for internal
+`docs/decisions.md`. The production job has run these interactions against the
+live service since 20 October 2026 (environment authentication, setup, pull-only
+mode) and, since 22 October 2026, the upload with the bidirectional mode switch.
+Delivery of an upload to a second device and the timeout recovery path are not
+separately verified. The wrapper captures bounded output for internal
 classification but never logs it; `ob sync` output may contain local paths.
 The pinned README says a password is needed only for end-to-end encrypted vaults,
 but the inspected CLI source appears to reject `sync-setup --json` without one

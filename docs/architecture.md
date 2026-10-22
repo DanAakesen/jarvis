@@ -27,7 +27,8 @@ status stay quiet; findings are excluded from push delivery. Storing a mirror
 finding preserves `no_sources` when every source read fails, so the background
 job still reports the failed reads. Existing proactive
 scheduling/settings still apply; no new timer, flag, tool or migration is added.
-Azure/Obsidian behavior is **not yet verified against the live service**.
+Azure/Obsidian operation has run live since 20 October 2026; see the vault mirror
+entries in `decisions.md`.
 
 ## Azure vault mirror deployment (19 October 2026; P14-28)
 
@@ -58,8 +59,8 @@ per-run file/deletion caps. Its runtime SDK reads `obsidian-auth-token`,
 the backend's `github-app-private-key` from Key Vault. The owner provisions the
 Obsidian token, vault name, optional encryption password and policy personally.
 `dry-run`, 25 changed files and 3 deletions are the defaults. The scheduled task
-on the owner's computer stayed in place until the owner unregistered it on
-21 October 2026; the mirror is now the only vault sync route.
+on the owner's computer stayed in place until it was unregistered at the owner's
+request on 21 October 2026; the mirror is now the only vault sync route.
 
 The repository variable is the operational switch. An explicit false value
 followed by a manual Deploy removes the scheduled job, dedicated identity and
@@ -103,10 +104,10 @@ Since P14-28, the mirror image is built by the infrastructure deployment when
 are infrastructure fingerprint inputs, so changing them selects infrastructure
 and re-applies all four deploy components under the existing receipt model.
 Markdown and documentation-only changes select no deployment. With the switch
-off, the workflow still skips the image build and mirror resources. Headless CLI
-behavior and upload confirmation assumptions, including filtering, checkpoint
-recovery and configuration updates, are **not yet verified against the live
-service**. See
+off, the workflow still skips the image build and mirror resources. The production
+job runs the pull command on every run and the upload command whenever it writes
+back. Delivery of an upload to a second device and checkpoint recovery after a
+timeout are not separately verified. See
 [`apps/vault-mirror/README.md`](../apps/vault-mirror/README.md).
 
 ## Shared web date-time formatting (19 October 2026; P14-23)

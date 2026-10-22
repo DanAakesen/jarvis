@@ -31,9 +31,26 @@ page says so and Azure lists those executions as failed. The existing 24-hour ru
 resolves it in Obsidian's favour at about 16:40 UTC on 22 October, replacing the
 GitHub version; earlier versions stay in the repository history.
 
-The owner unregistered the scheduled task on their computer on 21 October, before
-the three clean days planned in P14-31, so the mirror is the only vault sync route.
-#1083 and #1084 stay open until two-way sync has run clean for a full day.
+Two plan conditions were not met as written. P14-30 keeps the caution cap until
+one clean day has passed and expects a first dry-run with zero conflicts. The cap
+went back to 25 after three runs because exceeding a cap aborts the whole run: at
+three, an ordinary burst of phone edits would stall sync in both directions, while
+a trip never writes, and earlier versions of every mirrored note stay in the vault
+repository history. Across the 280 runs that logged a summary since 20 October the
+largest push was four files (once) and no run wrote more than one file back, so a
+cap of three would have aborted that one ordinary run. The zero-conflict condition
+failed because of the one edit conflict above, which predates write-back and is an
+ordinary overlap of edits. The cap can be lowered again by changing the repository
+variable and the job's environment together, then dispatching Deploy.
+
+The scheduled task on the owner's computer was unregistered at the owner's request
+on 21 October, before the three clean days planned in P14-31 and instead of the
+planned disable-first step, so the mirror is the only vault sync route. If the
+mirror misbehaves, set write-back to `dry-run` in both places (uploads to GitHub
+continue and Obsidian is no longer written) or pause the job's schedule in Azure to
+stop every run. Re-registering the desktop task, if ever wanted, is a manual step
+on the owner's computer. #1083 and #1084 stay open until two-way sync has run clean
+for a full day.
 
 ## Vault mirror line merge repeated content and was not idempotent (22 October 2026; #1083)
 
