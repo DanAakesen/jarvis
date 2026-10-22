@@ -25,7 +25,6 @@ const fetchMock = vi.fn();
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
-  vi.useRealTimers();
   clearSignInMarkers();
   localStorage.clear();
   sessionStorage.clear();
@@ -50,7 +49,9 @@ function client(overrides: Partial<PublicClientApplication> = {}) {
 
 describe('web authentication', () => {
   it('uses MSAL localStorage for its shared browser cache', () => {
-    expect(createAuthClient(config).getConfiguration().cache.cacheLocation).toBe(BrowserCacheLocation.LocalStorage);
+    const msal = createAuthClient(config);
+    expect(msal.getConfiguration().cache.cacheLocation).toBe(BrowserCacheLocation.LocalStorage);
+    expect(msal.getConfiguration().system.iframeBridgeTimeout).toBe(5_000);
   });
 
   it('does not force account selection on the default sign-in path', async () => {
@@ -178,18 +179,6 @@ describe('web authentication', () => {
     expect(isSignInRedirectPending()).toBe(true);
 
     await expect(restoreProfile(msal, config)).rejects.toThrow('Microsoft sign-in did not complete (login_required).');
-    expect(msal.loginRedirect).toHaveBeenCalledTimes(1);
-  });
-
-  it('bounds silent SSO before falling back to the top-level redirect', async () => {
-    localStorage.setItem('jarvis.sign-in-device', 'previous');
-    vi.useFakeTimers();
-    const msal = client({ ssoSilent: vi.fn(() => new Promise<never>(() => {})) });
-    const restoring = restoreProfile(msal, config);
-
-    await vi.advanceTimersByTimeAsync(5_000);
-    await expect(restoring).resolves.toBeNull();
-
     expect(msal.loginRedirect).toHaveBeenCalledTimes(1);
   });
 

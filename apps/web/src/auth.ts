@@ -119,6 +119,7 @@ export function createAuthClient(config: PublicConfig): PublicClientApplication 
       postLogoutRedirectUri: `${window.location.origin}/redirect.html`,
     },
     cache: { cacheLocation: BrowserCacheLocation.LocalStorage },
+    system: { iframeBridgeTimeout: silentSsoTimeout },
   });
 }
 
@@ -227,22 +228,6 @@ async function verifiedProfile(config: PublicConfig, accessToken: string): Promi
   return profile;
 }
 
-async function ssoSilentWithTimeout(client: PublicClientApplication, config: PublicConfig) {
-  let timeout: ReturnType<typeof setTimeout> | undefined;
-  try {
-    return await Promise.race([
-      client.ssoSilent({ scopes: [config.apiScope] }),
-      new Promise<never>((_, reject) => {
-        timeout = setTimeout(() => reject(Object.assign(new Error('Silent sign-in timed out.'), {
-          errorCode: 'monitor_window_timeout',
-        })), silentSsoTimeout);
-      }),
-    ]);
-  } finally {
-    if (timeout !== undefined) clearTimeout(timeout);
-  }
-}
-
 export async function restoreProfile(client: PublicClientApplication, config: PublicConfig): Promise<UserProfile | null> {
   let redirected;
   try {
@@ -261,7 +246,7 @@ export async function restoreProfile(client: PublicClientApplication, config: Pu
   if (!account && hasSignedInDeviceBefore()) {
     let silentResult;
     try {
-      silentResult = await ssoSilentWithTimeout(client, config);
+      silentResult = await client.ssoSilent({ scopes: [config.apiScope] });
     } catch (error) {
       if (await tryAutomaticSignInRedirect(client, config, error)) return null;
       throw new MicrosoftSignInError(signInFailureMessage(error), { cause: error });
