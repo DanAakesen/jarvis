@@ -8,51 +8,127 @@
 .tasks-panel.luminous-glass::before { content: none; }
 .tasks-panel:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
 .tasks-panel > * { flex: 0 0 auto; }
-.tasks-panel-bar { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: var(--space-1) var(--space-2); }
+.tasks-panel-bar { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-2); }
 .tasks-panel-search { display: flex; min-width: 0; min-height: 44px; align-items: center; gap: var(--space-2); padding: 0 var(--space-3); border-radius: var(--radius-control); background: var(--surface-muted); color: var(--text-muted); }
 .tasks-panel-search svg { width: 18px; height: 18px; flex: 0 0 auto; }
 .tasks-panel-search input { flex: 1 1 auto; min-width: 0; height: 36px; padding: 0; border: 0; background: transparent; color: var(--text); font: inherit; font-size: var(--type-small); }
 .tasks-panel-search input:focus-visible { outline: none; }
 .tasks-panel-search:has(input:focus-visible) { box-shadow: 0 0 0 1px var(--field-focus-rule), var(--field-focus-glow); }
-/* The refresh action is a bare icon: no fill, border or shadow in any state. Hover tints it and turns it a quarter; while a refresh runs it spins. */
-.tasks-panel-refresh {
-  display: grid; place-items: center; width: var(--control-size); height: var(--control-size); padding: 0; border: 0; border-radius: var(--radius-control);
-  background: none; box-shadow: none; color: var(--text); cursor: pointer; transition: color var(--motion-press) var(--ease-standard);
-}
-.tasks-panel-refresh svg { width: 20px; height: 20px; transition: rotate var(--motion-state) var(--ease-enter), scale var(--motion-press) var(--ease-standard); }
-.tasks-panel-refresh:hover:not(:disabled) { color: var(--focus); }
-.tasks-panel-refresh:hover:not(:disabled) svg { rotate: 90deg; }
-.tasks-panel-refresh:active:not(:disabled) svg { rotate: 180deg; scale: .9; }
-.tasks-panel-refresh:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
-.tasks-panel-refresh:disabled { color: var(--disabled-text); cursor: progress; }
-.tasks-panel-refresh[aria-busy="true"] svg { animation: tasks-panel-spin 900ms linear infinite; }
+/* The All / Personal / Work switch shares the row width equally, so it is one easy thumb target on a phone. Selected is a tint plus heavier text. */
+.tasks-panel-scope { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-1); }
 .tasks-panel-toggle {
-  justify-self: start; min-height: var(--pill-size); padding: 0 var(--space-3); border: 0; border-radius: var(--radius-pill); background: transparent; color: var(--text-muted);
-  font: inherit; font-size: var(--type-caption); font-weight: 650; cursor: pointer;
+  min-height: var(--control-size); padding: 0 var(--space-3); border: 0; border-radius: var(--radius-pill); background: transparent; color: var(--text-muted);
+  font: inherit; font-size: var(--type-small); font-weight: 600; cursor: pointer;
   transition: background-color var(--motion-press) var(--ease-standard), color var(--motion-press) var(--ease-standard);
 }
 .tasks-panel-toggle:hover { background: var(--glass-hover); color: var(--text); }
 .tasks-panel-toggle:active { background: var(--glass-pressed); }
-.tasks-panel-toggle[aria-pressed="true"] { background: var(--state-selected-bg); color: var(--state-selected-fg); }
+.tasks-panel-toggle[aria-pressed="true"] { background: var(--state-selected-bg); color: var(--state-selected-fg); font-weight: 750; }
 .tasks-panel-toggle[aria-pressed="true"]:hover { background: var(--state-selected-hover); }
 .tasks-panel-toggle[aria-pressed="true"]:active { background: var(--state-selected-pressed); }
 .tasks-panel-toggle:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
-.tasks-panel-read { justify-self: end; padding-inline: var(--space-2); color: var(--text-muted); font-size: var(--type-caption); font-variant-numeric: tabular-nums; }
 .tasks-panel-groups { display: grid; gap: var(--space-4); }
 .tasks-panel-group { min-width: 0; }
-.tasks-panel-group h2 { margin: 0 0 var(--space-1); color: var(--text-muted); font-size: var(--type-caption); font-weight: 650; }
-.tasks-panel-group ul { padding: 0; margin: 0; list-style: none; }
-.tasks-panel-row { display: grid; min-width: 0; grid-template-columns: auto minmax(0, 1fr) auto; align-items: start; gap: var(--space-3); padding: var(--space-2) 0; }
-.tasks-panel-state, .tasks-panel-priority { display: inline-flex; height: calc(var(--type-small) * var(--line-body)); align-items: center; }
-.tasks-panel-state svg, .tasks-panel-priority svg { width: 18px; height: 18px; }
-.tasks-panel-state { color: var(--text-muted); }
-.tasks-panel-priority { color: var(--text); }
+.tasks-panel-group h2 { margin: 0 0 var(--space-2); color: var(--text-muted); font-size: var(--type-caption); font-weight: 650; }
+.tasks-panel-group ul { display: grid; gap: var(--space-2); padding: 0; margin: 0; list-style: none; }
+.tasks-panel-row {
+  display: grid; min-width: 0; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: var(--space-3);
+  padding: var(--space-2) var(--space-3); border-radius: var(--radius-control); background: var(--surface-muted);
+}
+/* The tick is a full-size button around an 18px box: the negative margin pulls the glyph back to the row's padding edge so the hit area costs no layout. */
+.tasks-panel-check {
+  display: inline-flex; width: var(--control-size); height: var(--control-size); align-items: center; justify-content: center; padding: 0; border: 0;
+  border-radius: var(--radius-control); background: transparent; color: var(--text-muted); cursor: pointer;
+  --tasks-glyph: 18px;
+  margin: calc((var(--tasks-glyph) - var(--control-size)) / 2);
+  transition: background-color var(--motion-press) var(--ease-standard), color var(--motion-press) var(--ease-standard);
+}
+.tasks-panel-check svg { width: var(--tasks-glyph); height: var(--tasks-glyph); }
+.tasks-panel-check rect { transition: fill var(--motion-state) var(--ease-standard); }
+.tasks-panel-check[aria-checked="true"] { color: var(--state-selected-fg); }
+.tasks-panel-check[aria-checked="true"] rect { fill: color-mix(in srgb, currentColor 18%, transparent); }
+.tasks-panel-check:hover { background: var(--glass-hover); color: var(--text); }
+.tasks-panel-check:active { background: var(--glass-pressed); }
+.tasks-panel-check:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.tasks-panel-check:disabled { cursor: progress; opacity: 0.6; }
+.tasks-panel-row { transition: opacity var(--motion-state) var(--ease-standard), translate var(--motion-state) var(--ease-standard), background-color var(--motion-state) var(--ease-standard); }
+.tasks-panel-row { border: 1px solid var(--glass-hover); }
+.tasks-panel-row:hover { background: var(--glass-hover); border-color: var(--glass-pressed); }
+.tasks-panel-row[data-priority] { border-color: color-mix(in srgb, var(--warning) 55%, transparent); }
+.tasks-panel-row[data-priority]:hover { border-color: var(--warning); }
+.tasks-panel-row[data-priority="high"] { border-color: color-mix(in srgb, var(--error) 60%, transparent); }
+.tasks-panel-row[data-priority="high"]:hover { border-color: var(--error); }
+.tasks-panel-row[data-priority="high"] .tasks-panel-check:not([aria-checked="true"]) { color: var(--error); }
+.tasks-panel-row[data-priority="high"] .tasks-panel-priority { background: color-mix(in srgb, var(--error) 18%, transparent); color: var(--error); }
+.tasks-panel-row[data-priority] .tasks-panel-check:not([aria-checked="true"]) { color: var(--warning); }
+.tasks-panel-row[data-done] { opacity: 0.7; }
+.tasks-panel-row[data-phase="leaving"] { opacity: 0; translate: 12px 0; }
+.tasks-panel-row[data-fresh] { background: var(--state-selected-bg); }
+.tasks-panel-undo {
+  align-self: center; min-height: calc(var(--type-small) * var(--line-body)); padding: 0 var(--space-3); border: 0; border-radius: var(--radius-pill);
+  background: var(--glass-hover); color: var(--text); font: inherit; font-size: var(--type-caption); font-weight: 650; cursor: pointer;
+}
+.tasks-panel-undo:hover { background: var(--glass-pressed); }
+.tasks-panel-undo:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.tasks-panel-undo:disabled { cursor: progress; opacity: 0.6; }
+.tasks-panel-find { display: flex; min-width: 0; align-items: center; gap: var(--space-2); }
+.tasks-panel-find .tasks-panel-search { flex: 1 1 auto; }
+.tasks-panel-add-toggle {
+  display: inline-flex; width: var(--control-size); height: var(--control-size); flex: 0 0 auto; align-items: center; justify-content: center; padding: 0; border: 0;
+  border-radius: var(--radius-pill); background: transparent; color: var(--text-muted); cursor: pointer;
+  transition: background-color var(--motion-press) var(--ease-standard), color var(--motion-press) var(--ease-standard);
+}
+.tasks-panel-add-toggle svg { width: 20px; height: 20px; transition: rotate var(--motion-state) var(--ease-standard); }
+.tasks-panel-add-toggle:hover { background: var(--glass-hover); color: var(--text); }
+.tasks-panel-add-toggle:active { background: var(--glass-pressed); }
+.tasks-panel-add-toggle[aria-expanded="true"] { background: var(--state-selected-bg); color: var(--state-selected-fg); }
+.tasks-panel-add-toggle[aria-expanded="true"] svg { rotate: 45deg; }
+.tasks-panel-add-toggle:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.tasks-panel-add { display: grid; gap: var(--space-3); padding: var(--space-3); border: 1px solid var(--control-rule); border-radius: var(--radius-control); }
+.tasks-panel-draft { display: flex; min-height: var(--control-size); align-items: center; gap: var(--space-2); padding: 0 var(--space-1) 0 var(--space-3); border-radius: var(--radius-control); background: var(--surface-muted); }
+.tasks-panel-draft-field { display: flex; flex: 1 1 auto; min-width: 0; }
+.tasks-panel-draft input { flex: 1 1 auto; min-width: 0; height: 36px; padding: 0; border: 0; background: transparent; color: var(--text); font: inherit; font-size: var(--type-small); }
+.tasks-panel-draft input:focus-visible { outline: none; }
+.tasks-panel-draft:has(input:focus-visible) { box-shadow: 0 0 0 1px var(--field-focus-rule), var(--field-focus-glow); }
+.tasks-panel-add-options { display: grid; gap: var(--space-2); }
+.tasks-panel-choice { display: flex; gap: var(--space-1); }
+.tasks-panel-choice .tasks-panel-toggle { flex: 1 1 0; padding: 0 var(--space-3); }
+.tasks-panel-when { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: var(--space-2); }
+.tasks-panel-when-field { display: flex; min-width: 0; min-height: var(--control-size); align-items: center; padding: 0 var(--space-3); border-radius: var(--radius-control); background: var(--surface-muted); }
+.tasks-panel-when-field input { flex: 1 1 auto; min-width: 0; height: 36px; padding: 0; border: 0; background: transparent; color: var(--text); font: inherit; font-size: var(--type-small); }
+.tasks-panel-when-field input:focus-visible { outline: none; }
+.tasks-panel-when-field:has(input:focus-visible) { box-shadow: 0 0 0 1px var(--field-focus-rule), var(--field-focus-glow); }
+.tasks-panel-save {
+  min-height: 36px; padding: 0 var(--space-3); border: 0; border-radius: var(--radius-pill); background: var(--state-selected-bg);
+  color: var(--state-selected-fg); font: inherit; font-size: var(--type-small); font-weight: 750; cursor: pointer;
+  transition: background-color var(--motion-press) var(--ease-standard);
+}
+.tasks-panel-save:hover { background: var(--state-selected-hover); }
+.tasks-panel-save:active { background: var(--state-selected-pressed); }
+.tasks-panel-save:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.tasks-panel-save:disabled { cursor: not-allowed; opacity: 0.5; }
+.tasks-panel-toggle:disabled { cursor: not-allowed; opacity: 0.6; }
+.tasks-panel-notice { margin: 0; color: var(--error); font-size: var(--type-caption); overflow-wrap: anywhere; }
+/* The priority pill carries the word as well as the tint, so it never relies on colour alone. */
+.tasks-panel-priority {
+  align-self: center; display: inline-flex; align-items: center; min-height: calc(var(--type-small) * var(--line-body)); padding: 0 var(--space-2);
+  border-radius: var(--radius-pill); background: color-mix(in srgb, var(--warning) 20%, transparent);
+  color: var(--warning); font-size: var(--type-caption); font-weight: 700; line-height: var(--line-tight);
+}
 .tasks-panel-task { min-width: 0; }
 .tasks-panel-task p { margin: 0; font-size: var(--type-small); overflow-wrap: anywhere; }
 .tasks-panel-row[data-done] .tasks-panel-task p { color: var(--text-muted); text-decoration: line-through; }
-.tasks-panel-meta { display: flex; min-width: 0; flex-wrap: wrap; gap: 0 var(--space-3); color: var(--text-muted); font-size: var(--type-caption); }
-.tasks-panel-meta a { min-width: 0; color: inherit; overflow-wrap: anywhere; text-decoration-thickness: 1px; text-underline-offset: 2px; }
-.tasks-panel-meta a:hover { color: var(--text); }
+.tasks-panel-meta { display: flex; min-width: 0; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-2); margin-top: var(--space-1); color: var(--text-muted); font-size: var(--type-caption); }
+.tasks-panel-due { display: inline-flex; align-items: center; gap: var(--space-1); padding: 0 var(--space-2); border-radius: var(--radius-pill); background: var(--glass-hover); color: var(--text); white-space: nowrap; }
+.tasks-panel-due svg { width: 1em; height: 1em; flex: 0 0 auto; }
+.tasks-panel-group[data-group="overdue"] .tasks-panel-due { background: color-mix(in srgb, var(--error) 16%, transparent); color: var(--error); }
+.tasks-panel-meta a {
+  display: inline-flex; min-width: 0; align-items: center; gap: var(--space-1); padding: 0 var(--space-2); border-radius: var(--radius-pill);
+  background: var(--glass-hover); color: inherit; text-decoration: none; overflow-wrap: anywhere;
+}
+.tasks-panel-meta a:hover { background: var(--glass-pressed); color: var(--text); }
+.tasks-panel-dot { flex: 0 0 auto; width: var(--space-2); height: var(--space-2); border-radius: var(--radius-pill); background: var(--success); }
+.tasks-panel-row[data-scope="work"] .tasks-panel-dot { background: var(--state-selected-fg); }
 .tasks-panel-meta a:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; border-radius: var(--radius-control); }
 .tasks-panel-note, .tasks-panel-empty { margin: 0; color: var(--text-muted); font-size: var(--type-caption); }
 .tasks-panel-error { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); color: var(--error); font-size: var(--type-small); }
@@ -61,11 +137,10 @@
 .tasks-panel-retry:hover { background: var(--glass-pressed); }
 .tasks-panel-retry:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 @keyframes tasks-panel-in { from { opacity: 0; translate: -8px 0; } }
-@keyframes tasks-panel-spin { to { rotate: 360deg; } }
 @media (pointer: coarse) {
-  .tasks-panel-refresh { width: 44px; height: 44px; }
-  .tasks-panel-toggle, .tasks-panel-retry { min-height: 44px; }
-  .tasks-panel-meta a { display: inline-flex; min-height: 44px; align-items: center; }
+  .tasks-panel-toggle, .tasks-panel-retry, .tasks-panel-undo, .tasks-panel-save { min-height: 44px; }
+  .tasks-panel-meta a { position: relative; }
+  .tasks-panel-meta a::after { content: ""; position: absolute; left: 0; right: 0; top: 50%; height: var(--control-size); translate: 0 -50%; }
 }
 @media (max-width: 700px), (max-height: 500px) and (pointer: coarse) {
   .tasks-panel {
@@ -75,11 +150,9 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .tasks-panel { animation: none; }
-  .tasks-panel-refresh, .tasks-panel-refresh svg, .tasks-panel-toggle { transition: none; }
-  .tasks-panel-refresh:is(:hover, :active):not(:disabled) svg { rotate: none; scale: none; }
-  .tasks-panel-refresh[aria-busy="true"] svg { animation: none; }
+  .tasks-panel-toggle, .tasks-panel-check, .tasks-panel-check rect, .tasks-panel-row, .tasks-panel-add-toggle, .tasks-panel-add-toggle svg, .tasks-panel-save { transition: none; }
 }
 :root[data-motion="reduced"] .tasks-panel { animation: none; }
-:root[data-motion="reduced"] :is(.tasks-panel-refresh, .tasks-panel-refresh svg, .tasks-panel-toggle) { transition: none; }
-:root[data-motion="reduced"] .tasks-panel-refresh:is(:hover, :active):not(:disabled) svg { rotate: none; scale: none; }
-:root[data-motion="reduced"] .tasks-panel-refresh[aria-busy="true"] svg { animation: none; }
+:root[data-motion="reduced"] .tasks-panel-toggle, :root[data-motion="reduced"] .tasks-panel-check, :root[data-motion="reduced"] .tasks-panel-check rect,
+:root[data-motion="reduced"] .tasks-panel-row, :root[data-motion="reduced"] .tasks-panel-add-toggle, :root[data-motion="reduced"] .tasks-panel-add-toggle svg,
+:root[data-motion="reduced"] .tasks-panel-save { transition: none; }

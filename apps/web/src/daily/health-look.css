@@ -7,6 +7,8 @@
   --type-health-figure: 28px;
   --type-health-ring: 20px;
   --type-health-micro: 12px;
+  --type-health-nano: 11px;
+  --health-pill-edge: transparent;
   --health-page: #eef2fc;
   --health-glow:
     radial-gradient(ellipse 55% 45% at 0% 0%, rgb(37 99 235 / 14%), transparent),
@@ -74,6 +76,7 @@
   .daily-shell, :root[data-theme="dark"] .daily-shell {
     --health-edge: var(--text);
     --health-tile-edge: var(--text);
+    --health-pill-edge: var(--text);
     --health-track: var(--text-muted);
     --health-tile: var(--surface);
     --health-glow: none;
@@ -85,22 +88,32 @@
 
 /* The page. */
 .daily-page.daily-shell {
+  padding-block-start: var(--space-3);
   border-color: var(--health-edge);
   border-radius: var(--radius-window);
   background: var(--health-glow), var(--health-page);
 }
-.daily-shell > .daily-heading { align-items: center; gap: var(--space-3); margin-bottom: var(--space-3); }
+.daily-shell > .daily-heading { display: grid; grid-template-columns: minmax(0, 1fr); align-items: stretch; justify-content: normal; gap: 0; }
 .daily-shell .daily-heading h1 { font-size: var(--type-title); font-weight: 800; letter-spacing: -.02em; line-height: var(--line-tight); }
 
-/* The freshness pill, with a dot that says whether the data is recent. It is a quiet status line, so it stays small. */
-.daily-page.daily-shell .daily-freshness-trigger { min-height: 0; gap: var(--space-2); padding: var(--space-1) var(--space-3); border-color: var(--health-edge); background: var(--health-tile); font-size: var(--type-health-micro); }
-.daily-page.daily-shell .daily-freshness-trigger:hover { background: var(--glass-hover); }
+/* The status line sits directly above the title at the right edge. The title row is as tall as the title and the control in it
+   is centred on it; a control arriving never moves the page. */
+.daily-heading-status { position: relative; display: flex; justify-content: flex-end; }
+.daily-heading-status .daily-freshness-pill { display: flex; }
+.daily-heading-row { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); min-height: var(--control-size); }
+.daily-heading-control { display: flex; flex: none; align-self: center; }
+
+/* The freshness pill, with a dot that says whether the data is recent. It is a quiet status line: small muted text with no
+   outline until it is hovered, focused or open, and a target that still reaches the minimum pointer size. */
+.daily-page.daily-shell .daily-freshness-trigger { min-height: 1.5rem; gap: var(--space-1); padding: 0 var(--space-2); border-color: var(--health-pill-edge); background: transparent; color: var(--text-muted); font-size: var(--type-health-nano); line-height: var(--line-tight); }
+.daily-heading-status .daily-freshness-pill { margin-inline-end: calc(var(--space-2) * -1); }
+.daily-page.daily-shell .daily-freshness-trigger:hover { background: var(--glass-hover); color: var(--text); }
 .daily-page.daily-shell .daily-freshness-trigger[aria-expanded="true"] { background: var(--health-selected-bg); color: var(--health-selected-fg); }
-.daily-freshness-dot { flex: none; width: .4rem; height: .4rem; border-radius: 50%; background: var(--health-pending); }
+.daily-freshness-dot { flex: none; width: .35rem; height: .35rem; border-radius: 50%; background: var(--health-pending); }
 .daily-freshness-trigger[data-freshness="recent"] .daily-freshness-dot { background: var(--health-ok); }
 .daily-freshness-trigger[data-freshness="behind"] .daily-freshness-dot { background: var(--health-amber); }
 .daily-freshness-info { display: inline-grid; flex: none; place-items: center; color: var(--text-muted); }
-.app-shell .daily-freshness-info svg { width: .9rem; height: .9rem; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.app-shell .daily-freshness-info svg { width: .75rem; height: .75rem; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .daily-page.daily-shell .daily-freshness-panel { border-color: var(--health-edge); border-radius: var(--radius-panel); background: var(--health-popover); box-shadow: var(--health-card-shadow); }
 .daily-freshness-title { font-size: var(--type-lead); font-weight: 700; }
 .daily-sync-table { width: 100%; border-collapse: collapse; font-size: var(--type-small); }
@@ -122,10 +135,10 @@
 }
 .daily-shell .daily-section-tab[aria-selected="true"]:hover, .daily-shell .daily-view-switch .daily-section-tab[aria-pressed="true"]:hover { background: var(--health-selected-bg-hover); }
 
-/* The Overview period is a dropdown at the end of the Training card header; the title keeps its arrow beside it. */
-.daily-shell .daily-top-card[data-card="training"] h3 { flex: 0 1 auto; }
-.daily-shell .daily-top-card[data-card="training"] h3 > a { width: auto; }
-.daily-shell .daily-top-period { flex: none; min-width: 8rem; margin-inline-start: auto; border-color: var(--health-edge); background-color: var(--health-tile); }
+/* The Overview period is a dropdown at the end of the page title row (see heading-slot.tsx). It is a compact field: the shared
+   field height, small text and a fixed width, so it does not resize with the choice and stays well below the title in weight.
+   The shared field rule sets the whole font shorthand from --type-body, so the size is changed through that token. */
+.app-shell .daily-shell .daily-top-period { --type-body: var(--type-small); flex: none; width: 7rem; border-color: var(--health-edge); background-color: var(--health-tile); }
 
 /* Icon chips: a tinted round chip behind a stroke icon. The tone follows the icon, and the icon always has a word beside it. */
 .daily-icon-chip { --chip-tone: var(--text); display: inline-grid; flex: none; place-items: center; width: 1.75rem; height: 1.75rem; border-radius: 50%; background: color-mix(in srgb, var(--chip-tone) 16%, transparent); color: var(--chip-tone); }

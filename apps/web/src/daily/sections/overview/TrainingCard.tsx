@@ -1,4 +1,3 @@
-import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { Loader } from '../../../Loader';
 import { DailyUnavailable } from '../../ui/DailyUnavailable';
@@ -66,7 +65,7 @@ function MealStrip({ pages, state }: { pages: DailyPages; state: BlockState }) {
   </div>;
 }
 
-export function TrainingCard({ title, to, state, stale, onRetry, period, states, data, nutrition, targets, periodControl }: {
+export function TrainingCard({ title, to, state, stale, onRetry, period, states, data, nutrition, targets }: {
   title: string;
   to: string;
   state: BlockState;
@@ -77,12 +76,11 @@ export function TrainingCard({ title, to, state, stale, onRetry, period, states,
   data: { workouts: DailyPages; steps: DailyPages; meals: DailyPages };
   nutrition: NutritionView;
   targets: TrainingTargetsView;
-  periodControl: ReactNode;
 }) {
   const counts = trainingCounts(data.workouts.items as Workout[], { startDate: period.sessionStart, endDate: period.endDate });
   const steps = stepsForWindow(data.steps.items, period);
   const scope = sessionScope(period);
-  return <TopCard title={title} icon="gym" to={to} state={state} onRetry={onRetry} stale={stale} action={periodControl}>
+  return <TopCard title={title} icon="gym" to={to} state={state} onRetry={onRetry} stale={stale}>
     <div className="daily-top-rings">
       <Gauge label="Gym" state={states.workouts} value={counts.strength} unit={`sessions, ${scope}`} singular={`session, ${scope}`}
         tone="gym" icon="gym" target={readTarget(targets, 'gymSessionsPerWeek')} periods={period.sessionWeeks} />

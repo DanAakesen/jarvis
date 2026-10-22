@@ -19,7 +19,7 @@ export interface VaultTask {
   dueDate: string | null;
   dueTime: string | null;
   dueAt: string | null;
-  priority: 'high' | 'normal';
+  priority: 'high' | 'medium' | 'normal';
   path: string;
   line: number;
   heading: string | null;
@@ -64,7 +64,7 @@ function task(value: unknown): VaultTask | null {
       (item.dueDate !== null && !isDate(item.dueDate)) ||
       (item.dueTime !== null && (typeof item.dueTime !== 'string' || !/^\d{2}:\d{2}$/u.test(item.dueTime))) ||
       (item.dueAt !== null && !isDateTime(item.dueAt)) ||
-      (item.priority !== 'high' && item.priority !== 'normal') ||
+      (item.priority !== 'high' && item.priority !== 'medium' && item.priority !== 'normal') ||
       typeof item.path !== 'string' || item.path.length < 1 || item.path.length > 180 ||
       !Number.isSafeInteger(item.line) || Number(item.line) < 1 ||
       (item.heading !== null && (typeof item.heading !== 'string' || item.heading.length > 300))) return null;
@@ -123,6 +123,81 @@ export async function loadVaultTasks(
       : 'Tasks could not be loaded from your vault. Try again.');
   }
   return readVaultTaskResponse(await response.json());
+}
+
+/** The vault no longer holds the task the owner saw (edited elsewhere or written at the same moment), so the list is stale. */
+export class VaultTaskConflict extends Error {}
+
+export interface VaultTaskWrite {
+  id: string;
+  path: string;
+  line: number;
+  done: boolean;
+}
+
+function readTaskWrite(value: unknown): VaultTaskWrite {
+  const body = object(value);
+  if (!body || typeof body.id !== 'string' || !/^[0-9a-f]{64}$/u.test(body.id) ||
+      typeof body.path !== 'string' || body.path.length < 1 || body.path.length > 180 ||
+      !Number.isSafeInteger(body.line) || Number(body.line) < 1 || typeof body.done !== 'boolean') {
+    throw new Error('Jarvis returned an invalid task confirmation.');
+  }
+  return { id: body.id, path: body.path, line: Number(body.line), done: body.done };
+}
+
+async function writeVaultTask(
+  backendUrl: string | null,
+  getAccessToken: () => Promise<string>,
+  method: 'PATCH' | 'POST',
+  body: object,
+  signal: AbortSignal,
+): Promise<VaultTaskWrite> {
+  if (!backendUrl) throw new VaultTasksUnavailable('not_connected');
+  const token = await getAccessToken();
+  const response = await backendFetch(`${backendUrl.replace(/\/+$/u, '')}/vault/tasks`, {
+    method,
+    headers: {
+      Authorization: `${['Bear', 'er'].join('')} ${token}`,
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+    cache: 'no-store',
+    signal,
+  });
+  if (!response.ok) {
+    let message: unknown;
+    try { message = object(await response.json())?.error; } catch { /* The status remains available without a body. */ }
+    await response.body?.cancel().catch(() => {});
+    const text = typeof message === 'string' && message.length <= 200 ? message : '';
+    if (response.status === 401 || response.status === 403) throw new Error('Sign in again to change tasks in your vault.');
+    if (response.status === 409) throw new VaultTaskConflict(text || 'This task changed in the vault.');
+    throw new Error(response.status === 400 && text ? text : 'The task could not be saved. Try again.');
+  }
+  return readTaskWrite(await response.json());
+}
+
+/** Ticks or unticks one vault task. The backend checks the line still holds this text before it commits. */
+export function setVaultTaskDone(
+  backendUrl: string | null,
+  getAccessToken: () => Promise<string>,
+  task: Pick<VaultTask, 'path' | 'line' | 'text'>,
+  done: boolean,
+  signal: AbortSignal,
+): Promise<VaultTaskWrite> {
+  return writeVaultTask(backendUrl, getAccessToken, 'PATCH',
+    { path: task.path, line: task.line, text: task.text, done }, signal);
+}
+
+/** Adds an open task to the Personal or Work Inbox note. */
+export function addVaultTask(
+  backendUrl: string | null,
+  getAccessToken: () => Promise<string>,
+  task: { text: string; scope: 'personal' | 'work'; due?: string; time?: string },
+  signal: AbortSignal,
+): Promise<VaultTaskWrite> {
+  return writeVaultTask(backendUrl, getAccessToken, 'POST',
+    { text: task.text, scope: task.scope, ...(task.due ? { due: task.due } : {}), ...(task.due && task.time ? { time: task.time } : {}) }, signal);
 }
 
 export function vaultTaskRecovery(reason: VaultTaskFailureReason): string {

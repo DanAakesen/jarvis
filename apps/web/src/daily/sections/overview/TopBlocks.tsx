@@ -20,7 +20,7 @@ export function Figure({ value, unit }: { value: string; unit?: string | undefin
  * One card. The heading opens what is behind it: a link to a section, or a button that expands a panel on this page.
  * The body is laid out by the caller and keeps its size.
  */
-export function TopCard({ title, icon, to, panel, state, onRetry, stale = false, action, children }: {
+export function TopCard({ title, icon, to, panel, state, onRetry, stale = false, children }: {
   title: string;
   icon: HealthIconName;
   to?: string;
@@ -29,8 +29,6 @@ export function TopCard({ title, icon, to, panel, state, onRetry, stale = false,
   onRetry?: () => void;
   /** A read failed but the values it had already returned are still shown. */
   stale?: boolean;
-  /** A control that belongs to the card, shown at the end of its header. */
-  action?: ReactNode;
   children: ReactNode;
 }) {
   const failed = state === 'error' || stale;
@@ -40,7 +38,6 @@ export function TopCard({ title, icon, to, panel, state, onRetry, stale = false,
         ? <button className="daily-top-card-toggle" type="button" aria-expanded={panel.expanded} aria-controls={panel.controls}
           onClick={panel.onToggle}><IconChip name={icon} />{title}<Chevron /></button>
         : <Link to={to ?? '.'}><IconChip name={icon} />{title}<Chevron /></Link>}</h3>
-      {action}
       {failed && onRetry && <div className="daily-top-card-recovery">
         {stale && state !== 'error' && <span role="status">Could not refresh</span>}
         <button className="ghost-button" type="button" onClick={onRetry}>Retry</button>
