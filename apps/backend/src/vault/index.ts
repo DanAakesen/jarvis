@@ -462,7 +462,7 @@ function appendVaultTask(existing: string | null, taskLine: string): { content: 
 function newTaskText(value: string): string {
   return Array.from(value
     .replace(/[\p{Cc}\p{Cf}]/gu, ' ')
-    .replace(/<!--|-->/gu, ' ')
+    .replace(/<!--|--!?>/gu, ' ')
     .replace(taskMetadata, ' ')
     .replace(/\s+/gu, ' ')
     .trim()).slice(0, 200).join('');
