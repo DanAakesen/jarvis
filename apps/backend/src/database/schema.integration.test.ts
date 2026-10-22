@@ -466,7 +466,7 @@ describe('committed domain schema (groups 1-8)', () => {
 
   it('defaults pre-existing proactive settings rows to all categories and scope during migration', () => withRollbackDatabase(async (rollbackPool, committed) => {
     const preferenceMigration = committed.find(({ name }) =>
-      name === '0062_proactive_suggestion_preferences.sql')!;
+      name === '0063_proactive_suggestion_preferences.sql')!;
     const reverted = await revertNewerThan(rollbackPool, committed, '0061_daily_training_targets.sql');
     expect(reverted.map(({ name }) => name)).toContain(preferenceMigration.name);
     const owner = randomUUID();

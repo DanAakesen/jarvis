@@ -69,12 +69,12 @@ describe('committed SQL manifest', () => {
   });
   it('adds durable category and personal/work preferences with safe defaults and guarded rollback', async () => {
     const migration = (await readMigrations()).find(({ name }) =>
-      name === '0062_proactive_suggestion_preferences.sql');
+      name === '0063_proactive_suggestion_preferences.sql');
     expect(migration?.sql).toContain('"deadline":true');
     expect(migration?.sql).toContain('"travel":true');
     expect(migration?.sql).toContain("DEFAULT N'all'");
     expect(migration?.sql).toContain("DEFAULT N'unknown'");
-    const down = await readDownMigration('0062_proactive_suggestion_preferences.sql');
+    const down = await readDownMigration('0063_proactive_suggestion_preferences.sql');
     expect(down.sql).toContain('OPENJSON(CASE WHEN ISJSON(categories_json) = 1 THEN categories_json ELSE N\'{}\' END)');
     expect(down.sql).toContain('suggestion_scope <> N\'all\'');
     expect(down.sql).toContain("suggestion_scope <> N'unknown'");
@@ -199,6 +199,16 @@ describe('committed SQL manifest', () => {
     await writeFile(join(path, '0001_first.sql'), 'SELECT 3;');
     expect((await readMigrations(path))[0]?.checksum).not.toBe(migrations[0]?.checksum);
   });
+  it('accepts the reserved 0062 allocation alongside proactive migration 0063', async () => {
+    const path = await directory();
+    await writeFile(join(path, '0062_github_app_mint_recovery.sql'), 'SELECT 1;');
+    await writeFile(join(path, '0063_proactive_suggestion_preferences.sql'), 'SELECT 2;');
+
+    expect((await readMigrations(path)).map(({ name }) => name)).toEqual([
+      '0062_github_app_mint_recovery.sql',
+      '0063_proactive_suggestion_preferences.sql',
+    ]);
+  });
   it.each(['SELECT 1;\nGO\nSELECT 2;', '', 'GO 2 -- repeat'])('rejects unsupported empty or GO batches %#', async (contents) => {
     const path = await directory();
     await writeFile(join(path, '0001_first.sql'), contents);
@@ -261,7 +271,7 @@ describe('committed SQL manifest', () => {
       '0059_proactive_reminders.sql',
       '0060_daily_health_processing_state.sql',
       '0061_daily_training_targets.sql',
-      '0062_proactive_suggestion_preferences.sql',
+      '0063_proactive_suggestion_preferences.sql',
     ]);
     for (const migration of migrations) await expect(readDownMigration(migration.name)).resolves.toMatchObject({ name: migration.name });
   });
