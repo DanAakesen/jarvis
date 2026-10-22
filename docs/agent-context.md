@@ -17,10 +17,15 @@ From the repository root, the following local checks passed:
 
 No SQL fixture is configured in this sandbox; no live/private records, device
 completeness, model/provider acceptance, merge or deployment were exercised.
-The aggregate CI skips draft PRs. PR #1203's initial run `39806847667` was
-skipped, not passed; its title gate separately failed because the generated
-title lacked the required task-ID/`fix-main:`/`docs:` format. Fresh exact-head
-qualification remains required after the PR metadata/ready gate permits it.
+The aggregate CI skips draft PRs. PR #1203's code commit `4809a9e` triggered
+run `39809082829`, which was skipped, not passed; its title gate separately
+failed because the generated title lacked the required
+task-ID/`fix-main:`/`docs:` format. Fresh exact-head qualification remains
+required after the PR metadata/ready gate permits it. Read-only review found
+no remaining significant issues after correcting legacy meal-ID replay.
+Secret scanning passed. The mandatory parallel validation was attempted, but
+its review binary was unavailable and its CodeQL analysis skipped for database
+size; neither is a clean automated-review/security qualification.
 
 ## Vault mirror freshness checks (19 October 2026; P14-29)
 

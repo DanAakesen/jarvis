@@ -8,9 +8,14 @@ Nutrition preserves creation-time ordering across its unchanged date filter.
 Contracts distinguish current-page/window coverage from the requested range
 and unknown source completeness, including interrupted/tool-budget-limited
 reads. Synthetic public-schema traversal and failure/bounds tests are in place.
-Next: complete backend/contracts/agent validation, automated review and
-exact-head CI inspection. No live-data, device-completeness, merge or deployment
-acceptance is claimed.
+Local validation passed: 1,093 relevant backend tests, 173 contracts tests and
+898 agent tests, plus relevant builds/lints. Read-only review found no remaining
+significant issues after correcting exact legacy meal-ID replay. Secret scanning
+passed. Automated validation was attempted, but its review binary was unavailable
+and its CodeQL analysis skipped for database size. Exact-code-head CI run
+`39809082829` was skipped for the draft PR; the title-format gate also failed.
+Next: metadata/ready-gated exact-head qualification and live acceptance.
+No live-data, device-completeness, merge or deployment acceptance is claimed.
 
 Integration checkpoint: #883 merged on 17 October at
 `705af7c7c02c3154a646dda66d79790d71af8f54`, with its actual tree matching
