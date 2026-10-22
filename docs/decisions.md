@@ -7397,6 +7397,22 @@ query as the Proactive page. It is composed only behind the existing
 untrusted data, and cannot change item state or authorize actions. Reusing the
 page's query keeps both views consistent and avoids creating a second read model.
 
+## Conversational proactive suggestion preferences (#1207)
+
+Use the existing owner-scoped Proactive settings record and API for category and
+personal/work preferences; Settings, chat and voice must observe one durable
+state. Defaults preserve existing behavior: every category enabled and scope
+`all`. A direct owner request may patch only one preference at a time, and the
+tool verifies that request rather than treating findings, source text or
+per-item feedback as authorization.
+
+Preferences govern unsolicited proactive output only. They do not disable source
+providers or affect requested tasks. A restricted personal/work scope excludes
+unknown and mixed findings. Category re-enable changes no pause, source, budget
+or other preference. Successful changes cancel in-flight work, and current
+settings are checked again at persisted/delivery boundaries; old findings,
+todos and reminders are not deleted as a side effect.
+
 ## P14-08 — One form-control system (18 October 2026; #991)
 
 Keep field geometry and state styling in the existing shared web stylesheet,

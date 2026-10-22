@@ -13,7 +13,10 @@ const testDailyLimit = 30;
 
 export interface PushRouteDependencies {
   readonly store: PushStore;
-  readonly proactiveItems?: Pick<ProactiveItemsStore, 'get'>;
+  readonly proactiveItems?: {
+    readonly ownerObjectId: string;
+    readonly store: Pick<ProactiveItemsStore, 'get'>;
+  };
   readonly publicOrigin: string;
   readonly now?: () => number;
   readonly transport?: WebPushTransport;
@@ -119,8 +122,9 @@ function createRoutes<Logger extends FastifyBaseLogger>(
       const owner = request.principal?.objectId;
       if (!owner) return reply.code(401).send({ error: 'Unauthorized' });
       if (!uuidPattern.test(request.params.id)) return reply.code(404).send({ error: 'not_found' });
-      const item: ProactiveItem | undefined = dependencies.proactiveItems
-        ? await dependencies.proactiveItems.get(request.params.id, true)
+      const item: ProactiveItem | undefined = dependencies.proactiveItems &&
+          owner.toLowerCase() === dependencies.proactiveItems.ownerObjectId.toLowerCase()
+        ? await dependencies.proactiveItems.store.get(request.params.id, true)
         : await dependencies.store.readItem(owner, request.params.id);
       if (!item) return reply.code(404).send({ error: 'not_found' });
       return item;

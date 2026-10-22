@@ -3,10 +3,12 @@ IF EXISTS (
   FROM dbo.proactive_settings AS settings
   WHERE suggestion_scope <> N'all'
      OR ISJSON(categories_json) <> 1
-     OR (SELECT COUNT(*) FROM OPENJSON(categories_json)) <> 9
+     OR (SELECT COUNT(*) FROM OPENJSON(
+       CASE WHEN ISJSON(categories_json) = 1 THEN categories_json ELSE N'{}' END
+     )) <> 9
      OR EXISTS (
        SELECT 1
-       FROM OPENJSON(categories_json)
+       FROM OPENJSON(CASE WHEN ISJSON(categories_json) = 1 THEN categories_json ELSE N'{}' END)
        WHERE [key] NOT IN (N'deadline', N'clash', N'travel', N'todo', N'prep', N'news', N'weather', N'status', N'suggestion')
           OR [value] <> N'true'
      )

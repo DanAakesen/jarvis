@@ -1,7 +1,7 @@
 import type { FindingCategory, ProactiveSettings, SuggestionScope, SourceFact } from './types.js';
 
-const personalScopePattern = /\b(?:personal|home|household|family|doctor|dentist|groceries|grocery|shopping|school|kids|children|birthday|rent|utilities|medicine|cleaning|laundry)\b/iu;
-const workScopePattern = /\b(?:work|office|job|manager|colleague|coworker|client|customer|supplier|business|workplace|professional|invoice|agenda)\b/iu;
+const personalScopePattern = /\b(?:personal|private|home|household|family|doctor|dentist|groceries|grocery|shopping|school|kids|children|birthday|rent|utilities|medicine|cleaning|laundry|privat|hjem(?:met)?|familie(?:n)?|læge(?:aftale|besøg)?|tandlæge|indkøb|dagligvarer|børn|fødselsdag|husleje|regninger|medicin|rengøring|vasketøj)\b/iu;
+const workScopePattern = /\b(?:work|office|job|manager|colleague|coworker|client|customer|supplier|business|workplace|professional|invoice|agenda|arbejde|kontor|leder|kollega|klient|kunde|leverandør|virksomhed|faktura|dagsorden|professionel)\b/iu;
 const travelPattern = /\b(?:travel|trip|flight|airline|airport|hotel|booking|reservation|itinerary|vacation|holiday|rejse|rejser|fly|flyrejse|lufthavn|hotellet|ferie|reservation|rejseplan)\b/iu;
 
 export function classifySuggestionScope(

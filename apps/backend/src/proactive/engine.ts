@@ -356,7 +356,7 @@ export function createProactiveEngine(options: ProactiveEngineOptions) {
       }
       status = 'done';
     } catch {
-      reason ??= 'internal_error';
+      reason ??= controller.signal.reason === 'preferences_changed' ? 'preferences_changed' : 'internal_error';
     } finally {
       activeRuns.delete(controller);
       clearTimeout(deadline);

@@ -67,6 +67,19 @@ describe('committed SQL manifest', () => {
     expect(down.sql).toContain("WHERE kind = N'proactive'");
     expect(down.sql).toContain('THROW 51000');
   });
+  it('adds durable category and personal/work preferences with safe defaults and guarded rollback', async () => {
+    const migration = (await readMigrations()).find(({ name }) =>
+      name === '0062_proactive_suggestion_preferences.sql');
+    expect(migration?.sql).toContain('"deadline":true');
+    expect(migration?.sql).toContain('"travel":true');
+    expect(migration?.sql).toContain("DEFAULT N'all'");
+    expect(migration?.sql).toContain("DEFAULT N'unknown'");
+    const down = await readDownMigration('0062_proactive_suggestion_preferences.sql');
+    expect(down.sql).toContain('OPENJSON(categories_json)');
+    expect(down.sql).toContain('suggestion_scope <> N\'all\'');
+    expect(down.sql).toContain("suggestion_scope <> N'unknown'");
+    expect(down.sql).toContain('THROW 51000');
+  });
   it('adds durable suggested-todo receipts with add-once and daily-cap indexes', async () => {
     const migration = (await readMigrations()).find(({ name }) => name === '0058_proactive_todo_receipts.sql');
     expect(migration?.sql).toContain('CREATE TABLE dbo.proactive_todo_receipts');

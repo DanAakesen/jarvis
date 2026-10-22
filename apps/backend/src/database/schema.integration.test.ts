@@ -428,6 +428,67 @@ describe('committed domain schema (groups 1-8)', () => {
     expect(await store.spend.monthTotal('2026-11')).toBe(0);
   }));
 
+  it('persists preference updates across store instances and reverses them without deleting findings', () => withRollbackDatabase(async (rollbackPool) => {
+    const owner = randomUUID();
+    const first = createProactiveStore(rollbackPool, owner);
+    const now = new Date('2026-10-20T05:00:00.000Z');
+    const finding = await first.items.upsertFinding({
+      dedupeKey: 'integration:travel-preference',
+      title: 'Synthetic trip detail',
+      body: 'Synthetic travel evidence.',
+      category: 'travel',
+      suggestionScope: 'personal',
+      urgency: 'normal',
+      dueAt: null,
+      evidence: [],
+      runId: null,
+      language: 'en',
+    });
+    await first.items.markTodoAdded([finding.id]);
+    const concurrent = createProactiveStore(rollbackPool, owner);
+    await Promise.all([
+      first.settings.patch({ categories: { travel: false } }),
+      concurrent.settings.patch({ suggestionScope: 'personal' }),
+    ]);
+
+    const restarted = createProactiveStore(rollbackPool, owner);
+    expect(await restarted.settings.read()).toMatchObject({
+      paused: false, monthlyBudgetDkk: 100, sources: { travel: true },
+      categories: { travel: false }, suggestionScope: 'personal',
+    });
+    expect(await restarted.items.list('all', 20, now)).toEqual([]);
+    expect(await restarted.items.get(finding.id)).toBeUndefined();
+    expect(await restarted.items.applyFeedback(finding.id, 'dismiss')).toBeUndefined();
+
+    await restarted.settings.patch({ categories: { travel: true }, suggestionScope: 'all' });
+    expect(await first.items.get(finding.id)).toMatchObject({ id: finding.id, todoAdded: true });
+  }));
+
+  it('defaults pre-existing proactive settings rows to all categories and scope during migration', () => withRollbackDatabase(async (rollbackPool, committed) => {
+    const preferenceMigration = committed.find(({ name }) =>
+      name === '0062_proactive_suggestion_preferences.sql')!;
+    const reverted = await revertNewerThan(rollbackPool, committed, '0061_daily_training_targets.sql');
+    expect(reverted.map(({ name }) => name)).toContain(preferenceMigration.name);
+    const owner = randomUUID();
+    await rollbackPool.request()
+      .input('owner', sql.UniqueIdentifier, owner)
+      .query(`INSERT dbo.proactive_settings
+        (owner_object_id, paused, monthly_budget_dkk, sources_json, news_feeds_json, guidance)
+        VALUES (@owner, 1, 42, N'{"calendar":false}', N'[]', N'Existing synthetic settings');`);
+    await applyMigrations(rollbackPool, committed);
+
+    const settings = await createProactiveStore(rollbackPool, owner).settings.read();
+    expect(settings).toMatchObject({
+      paused: true,
+      monthlyBudgetDkk: 42,
+      sources: { calendar: false },
+      categories: defaultProactiveSettings().categories,
+      suggestionScope: 'all',
+      newsFeeds: [],
+      guidance: 'Existing synthetic settings',
+    });
+  }));
+
   it('persists add-only todo receipts, enforces the unique added key, and preserves todo-added findings', () => withRollbackDatabase(async (rollbackPool) => {
     const owner = randomUUID();
     const store = createProactiveStore(rollbackPool, owner);

@@ -6579,6 +6579,33 @@ in generic tool-call audit records. Raw JSON validation runs before Fastify's
 AJV coercion; failures remain explicit tool refusals/errors. The module exposes
 no item mutation or approval capability.
 
+## Conversational proactive suggestion preferences (#1207)
+
+The existing `ProactiveStore.settings` is the single source of truth for the
+Settings UI and the sensitive `proactive_preferences` tool. Migration 0062 adds
+owner-scoped category flags and a `suggestion_scope` preference; existing
+settings rows default to every category enabled and scope `all`. Proactive items
+persist a classified scope, defaulting to `unknown` for existing rows. Rollback
+refuses to discard non-default preferences or any classified item data.
+
+The tool reads the effective category/scope values or patches exactly one
+category or scope. A write must match the latest direct owner message; findings,
+source text, and per-item feedback cannot authorize it. Chat and voice guidance
+mentions the capability only when it is present in the active advertised tool
+set. The preference does not turn off providers or constrain ordinary owner
+requests.
+
+The engine excludes disabled travel evidence across all enabled sources and
+filters both deterministic and model-generated findings by category and
+conservative scope classification. Only exact personal/work evidence passes a
+restricted scope; unknown and mixed evidence do not. A successful preference
+change cancels in-flight engine/reminder work, and SQL item writes re-check the
+current policy in their transaction. Item queries, push item detail, alerts,
+todo writing and reminder planning/delivery apply the current policy. Existing
+items are retained and reappear if re-enabled; preference changes do not delete
+owner tasks or reminders. Enabling a category changes no pause, source, budget
+or safety setting.
+
 ## Web Daily presentation kit and Workouts (18 October 2026; P12-30)
 
 P12-34 applies the kit to the shared `DailyPage` record browser without changing
