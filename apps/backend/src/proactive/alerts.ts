@@ -5,6 +5,7 @@ import type { FindingsStoredContext } from './engine.js';
 import type { AlertClass, AlertLedgerStore } from './alert-ledger.js';
 import { dayKey, isQuietHour } from './time.js';
 import type { SystemPushOutcome, SystemPushRequest } from './push-delivery.js';
+import { findingAllowed } from './policy.js';
 
 const findingClass: Partial<Record<string, AlertClass>> = {
   deadline: 'deadline_24h',
@@ -92,7 +93,9 @@ export function createProactiveAlertHook(options: ProactiveAlertHookOptions) {
         log('quiet_hours');
         return;
       }
-      const candidates: AlertCandidate[] = context.findings.flatMap((finding) => {
+      const candidates: AlertCandidate[] = context.findings.filter((finding) => findingAllowed(
+        settings, finding.category, finding.suggestionScope, finding.relatedCategories,
+      )).flatMap((finding) => {
         const alertClass = findingClass[finding.category];
         return finding.urgency === 'time_critical' && alertClass
           ? [{
@@ -138,11 +141,20 @@ export function createProactiveAlertHook(options: ProactiveAlertHookOptions) {
       }
       const states = await options.store.items.getMany(unsettled.map(({ candidate }) => candidate.itemId));
       const newIds = new Set(states.filter(({ state }) => state === 'new').map(({ id }) => id.toLowerCase()));
-      const active = unsettled.filter(({ candidate }) => newIds.has(candidate.itemId.toLowerCase()));
+      let active = unsettled.filter(({ candidate }) => newIds.has(candidate.itemId.toLowerCase()));
       if (active.length === 0 || context.signal.aborted) {
         if (context.signal.aborted) log('aborted', unsettled.length);
         return;
       }
+      const latestSettings = await options.store.settings.read();
+      if (context.signal.aborted || latestSettings.paused) return;
+      active = active.filter(({ candidate }) => {
+        const finding = context.findings.find(({ itemId }) => itemId === candidate.itemId);
+        return finding !== undefined && findingAllowed(
+          latestSettings, finding.category, finding.suggestionScope, finding.relatedCategories,
+        );
+      });
+      if (active.length === 0) return;
       const mostUrgent = active[0]!.candidate;
       const details = await Promise.all(active.slice(0, 3).map(async ({ candidate }) => {
         try {

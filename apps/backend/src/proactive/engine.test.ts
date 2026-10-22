@@ -139,6 +139,109 @@ afterEach(() => {
 });
 
 describe('proactive engine pipeline', () => {
+  it('does not generate travel findings from mail/calendar evidence after travel is disabled', async () => {
+    const mail = source('mail', [fact({ kind: 'mail', text: 'Flight and hotel reservation details' })]);
+    const fixture = setup({ sources: [mail] });
+    await fixture.store.settings.patch({ categories: { travel: false } });
+
+    expect(await fixture.run()).toMatchObject({ status: 'done', findingCount: 0 });
+    expect(fixture.model.summarize).not.toHaveBeenCalled();
+    expect(await fixture.store.items.list('all', 20, new Date())).toEqual([]);
+  });
+
+  it('filters model-generated cross-category suggestions even when cited facts are otherwise allowed', async () => {
+    const fixture = setup({ sources: [source('todos', [fact({ dueAt: '2026-10-25T11:00:00.000Z' })])] });
+    await fixture.store.settings.patch({ categories: { travel: false } });
+    fixture.model.summarize.mockImplementation(async (input) => ({
+      findings: [{
+        title: 'Review hotel options',
+        body: 'Compare the travel booking.',
+        category: 'prep',
+        urgency: 'normal',
+        evidence: [input.facts[0]!.ref],
+      }],
+      usage,
+    }));
+
+    expect(await fixture.run()).toMatchObject({ status: 'done', findingCount: 0 });
+    expect(await fixture.store.items.list('all', 20, new Date())).toEqual([]);
+  });
+
+  it('keeps only exactly personal findings under personal-only scope', async () => {
+    const todos = source('todos', [
+      fact({ ref: 'personal', text: 'Family appointment', taskScope: 'personal', dueAt: '2026-10-25T11:00:00.000Z' }),
+      fact({ ref: 'work', text: 'Client agenda', taskScope: 'work', dueAt: '2026-10-25T11:00:00.000Z' }),
+      fact({ ref: 'unknown', text: 'Prepare meeting notes', dueAt: '2026-10-25T11:00:00.000Z' }),
+      fact({ ref: 'mixed', text: 'Family work trip', taskScope: 'personal', dueAt: '2026-10-25T11:00:00.000Z' }),
+    ]);
+    const fixture = setup({ sources: [todos] });
+    await fixture.store.settings.patch({ suggestionScope: 'personal' });
+    fixture.model.summarize.mockImplementation(async (input) => ({
+      findings: input.facts.map((item) => ({
+        title: `Prepare ${item.text}`,
+        body: item.text,
+        category: 'prep',
+        urgency: 'normal',
+        evidence: [item.ref],
+      })),
+      usage,
+    }));
+
+    expect(await fixture.run()).toMatchObject({ status: 'done', findingCount: 1 });
+    expect(fixture.model.summarize.mock.calls[0]![0].facts).toHaveLength(1);
+    expect(await fixture.store.items.list('all', 20, new Date())).toMatchObject([
+      { suggestionScope: 'personal', body: 'Family appointment' },
+    ]);
+  });
+
+  it('filters deterministic findings by personal-only scope', async () => {
+    const todos = source('todos', [
+      fact({ text: 'Family appointment', taskScope: 'personal' }),
+      fact({ text: 'Client agenda', taskScope: 'work' }),
+      fact({ text: 'Prepare meeting notes' }),
+      fact({ text: 'Family work trip', taskScope: 'personal' }),
+    ]);
+    const fixture = setup({ sources: [todos] });
+    await fixture.store.settings.patch({ suggestionScope: 'personal' });
+    fixture.model.summarize.mockResolvedValue({ findings: [], usage });
+
+    expect(await fixture.run()).toMatchObject({ status: 'done', findingCount: 1 });
+    expect(fixture.model.summarize.mock.calls[0]![0].facts.map(({ text }) => text)).toEqual(['Family appointment']);
+    expect(await fixture.store.items.list('all', 20, new Date())).toMatchObject([
+      { category: 'deadline', suggestionScope: 'personal' },
+    ]);
+  });
+
+  it('cancels in-flight work on preference changes without deleting prior findings', async () => {
+    const sourceStarted = deferred<void>();
+    const pendingRead = deferred<SourceResult>();
+    const todos = source();
+    todos.read.mockImplementation(async () => {
+      sourceStarted.resolve();
+      return pendingRead.promise;
+    });
+    const fixture = setup({ sources: [todos] });
+    const previous = await fixture.store.items.upsertFinding({
+      dedupeKey: 'previous:travel', title: 'Previous travel item', body: 'Synthetic.',
+      category: 'travel', suggestionScope: 'personal', urgency: 'normal', dueAt: null,
+      evidence: [], runId: null, language: 'en',
+    });
+    const claimed = await fixture.claim();
+    const running = fixture.engine(claimed);
+    await sourceStarted.promise;
+    await fixture.store.settings.patch({ categories: { travel: false } });
+    await running;
+    pendingRead.resolve({
+      source: 'todos', state: 'ok', reason: null, facts: [fact({ text: 'Flight to Copenhagen' })], observedAt: NOW,
+    });
+
+    expect(await fixture.store.runs.latest()).toMatchObject({ status: 'cancelled', reason: 'preferences_changed' });
+    expect(await fixture.store.items.get(previous.id)).toBeUndefined();
+    await fixture.store.settings.patch({ categories: { travel: true } });
+    expect(await fixture.store.items.get(previous.id)).toMatchObject({ id: previous.id });
+    expect(await fixture.store.items.list('all', 20, new Date())).toHaveLength(1);
+  });
+
   it('deduplicates unchanged undated-task digests per Copenhagen day and adds one for a changed set', async () => {
     const fixture = setup();
     let undated = [
@@ -811,6 +914,7 @@ describe('proactive background job mapping', () => {
       lease_lost: 'Another run took over',
       deadline_exceeded: 'Took too long',
       internal_error: 'Check could not be completed',
+      preferences_changed: 'Suggestion preferences changed',
     });
   });
 });

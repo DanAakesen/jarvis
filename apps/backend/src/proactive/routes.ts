@@ -5,7 +5,9 @@ import type {
 import type { IncomingMessage, Server, ServerResponse } from 'node:http';
 import { budgetState, canRunWithinBudget, estimateCost } from './budget.js';
 import { copenhagenDayStart, monthKey, nextSlotAfter, isQuietHour } from './time.js';
-import { sourceIds, type Item, type RunSummary, type SourceId, type SourceStatus } from './types.js';
+import {
+  findingCategories, sourceIds, type Item, type RunSummary, type SourceId, type SourceStatus,
+} from './types.js';
 import {
   sourceLabels,
   type ProactiveSettingsPatch,
@@ -39,7 +41,8 @@ function validUrl(value: unknown): value is string {
 function parseSettingsPatch(value: unknown): ProactiveSettingsPatch | undefined {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return undefined;
   const body = value as Record<string, unknown>;
-  if (Object.keys(body).some((key) => !['paused', 'monthlyBudgetDkk', 'sources', 'newsFeeds', 'guidance'].includes(key))) {
+  if (Object.keys(body).some((key) =>
+    !['paused', 'monthlyBudgetDkk', 'sources', 'categories', 'suggestionScope', 'newsFeeds', 'guidance'].includes(key))) {
     return undefined;
   }
   const patch: ProactiveSettingsPatch = {};
@@ -66,6 +69,27 @@ function parseSettingsPatch(value: unknown): ProactiveSettingsPatch | undefined 
       selected[id] = source.enabled;
     }
     patch.sources = selected;
+  }
+  if (Object.hasOwn(body, 'categories')) {
+    if (!Array.isArray(body.categories)) return undefined;
+    const selected: Partial<ProactiveSettingsPatch['categories']> = {};
+    for (const entry of body.categories) {
+      if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) return undefined;
+      const category = entry as Record<string, unknown>;
+      if (Object.keys(category).length !== 2 ||
+          Object.keys(category).some((key) => !['id', 'enabled'].includes(key)) ||
+          typeof category.id !== 'string' || typeof category.enabled !== 'boolean') return undefined;
+      const id = findingCategories.find((candidate) => candidate === category.id);
+      if (id === undefined || Object.hasOwn(selected, id)) return undefined;
+      selected[id] = category.enabled;
+    }
+    patch.categories = selected;
+  }
+  if (Object.hasOwn(body, 'suggestionScope')) {
+    if (body.suggestionScope !== 'all' && body.suggestionScope !== 'personal' && body.suggestionScope !== 'work') {
+      return undefined;
+    }
+    patch.suggestionScope = body.suggestionScope;
   }
   if (Object.hasOwn(body, 'newsFeeds')) {
     if (!Array.isArray(body.newsFeeds) || body.newsFeeds.length > 10 || !body.newsFeeds.every(validUrl)) return undefined;
@@ -105,6 +129,8 @@ function responseSettings(settings: Awaited<ReturnType<ProactiveStore['settings'
     paused: settings.paused,
     monthlyBudgetDkk: settings.monthlyBudgetDkk,
     sources: sourceIds.map((id) => ({ id, enabled: settings.sources[id] })),
+    categories: findingCategories.map((id) => ({ id, enabled: settings.categories[id] })),
+    suggestionScope: settings.suggestionScope,
     newsFeeds: settings.newsFeeds,
     guidance: settings.guidance,
   };

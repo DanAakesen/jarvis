@@ -54,10 +54,11 @@ function englishPersonalityInstructions(
   projects: readonly ProjectContextEntry[] = [],
   memory: Settings['memory'] = defaultSettings.memory,
   proactiveEnabled = false,
+  proactivePreferencesEnabled = false,
 ): string {
   return `${ENGLISH_REALTIME_INSTRUCTIONS}
 
-${additionalRealtimeInstructions(personality, presence, projects, memory, proactiveEnabled)}
+${additionalRealtimeInstructions(personality, presence, projects, memory, proactiveEnabled, proactivePreferencesEnabled)}
 `;
 }
 
@@ -67,8 +68,9 @@ function additionalRealtimeInstructions(
   projects: readonly ProjectContextEntry[],
   memory: Settings['memory'],
   proactiveEnabled: boolean,
+  proactivePreferencesEnabled: boolean,
 ): string {
-  return `${capabilityInstructions(memory, proactiveEnabled)}
+  return `${capabilityInstructions(memory, proactiveEnabled, proactivePreferencesEnabled)}
 
 ${projectAwarenessInstructions(projects)}
 
@@ -99,8 +101,11 @@ function danishInstructions(
   projects: readonly ProjectContextEntry[] = [],
   memory: Settings['memory'] = defaultSettings.memory,
   proactiveEnabled = false,
+  proactivePreferencesEnabled = false,
 ): string {
-  const rules = additionalRealtimeInstructions(personality, presence, projects, memory, proactiveEnabled)
+  const rules = additionalRealtimeInstructions(
+    personality, presence, projects, memory, proactiveEnabled, proactivePreferencesEnabled,
+  )
     .replace('Preserve English as the selected language', 'Preserve Danish as the selected language');
   return `Jeg er Jarvis, Dans personlige AI-butler, og jeg driver hans softwarefabrik.
 Tal som dig selv i første person: "jeg", "mig" og "min/mit"; omtale aldrig dig selv som "Jarvis"
@@ -247,9 +252,12 @@ export function createRealtimeSessionUpdate(
 ) {
   const danish = language === 'da';
   const proactiveEnabled = tools.get('proactive_recent_items') !== undefined;
+  const proactivePreferencesEnabled = tools.get('proactive_preferences') !== undefined;
   const fullInstructions = danish
-    ? danishInstructions(personality, presence, projects, memory, proactiveEnabled)
-    : englishPersonalityInstructions(personality, presence, projects, memory, proactiveEnabled);
+    ? danishInstructions(personality, presence, projects, memory, proactiveEnabled, proactivePreferencesEnabled)
+    : englishPersonalityInstructions(
+      personality, presence, projects, memory, proactiveEnabled, proactivePreferencesEnabled,
+    );
   return {
     type: 'session.update',
     session: {

@@ -654,6 +654,12 @@ target and links back to open items.
 
 Settings adds one separately saved Proactive section for pause, the monthly DKK
 limit, source switches, HTTPS news feeds and low-priority writing guidance.
+It also edits suggestion categories and personal/work scope in that same saved
+settings record. All categories and both scopes are enabled by default, including
+for existing accounts. Personal-only and work-only exclude findings whose scope
+is unknown or mixed. Disabling a category does not disable its sources or affect
+Dan's explicit requests; enabling a category does not unpause checks or change
+other limits.
 Changed fields only are sent. Feed URLs and guidance remain in component state
 and are never written to browser storage, URLs, titles, analytics or logs.
 `VITE_PROACTIVE_ENABLED` is exact-string `true`, defaults off in code, and grants no
@@ -1604,13 +1610,23 @@ a presentation-only consistency pass: routes, data, and product behavior stay
 unchanged. The requested project-policy success announcement is “Saved.”; its
 standing applicability hint remains alongside the control.
 
-## Chat and voice recall of proactive findings (18 October 2026; P13-16)
+## Chat and voice controls for proactive suggestions (#1207)
 
-When proactive checks are enabled, chat and voice can read the current findings
-through the same owner-bound store query as the Proactive page. The tool is
-read-only, returns bounded untrusted finding text, and does not change item state
-or grant action authority. It remains absent when
-`JARVIS_PROACTIVE_ENABLED` is off.
+When proactive checks are enabled, chat and voice can read current findings and
+the effective category/scope preferences. The findings tool remains read-only;
+the preference tool changes one category or the personal/work scope only after a
+matching direct owner request, using the same saved settings as Settings.
+Findings, source text and per-item feedback cannot authorize a lasting change.
+Capabilities are advertised only when their tools are active.
+
+Category and scope choices constrain proactive generation and delivery across
+enabled sources, not the owner's own prompts or requested work. Travel evidence
+is excluded even when inferred from mail or calendar; personal-only and
+work-only exclude unknown or mixed findings. In-flight checks stop after a
+successful change, and queued findings are filtered without deleting the
+underlying findings, tasks or reminders. Re-enable is explicit and does not
+change pause, sources, budget or other preferences. These controls remain absent
+when `JARVIS_PROACTIVE_ENABLED` is off.
 
 ## Daily Body & sleep (18 October 2026; P12-25)
 

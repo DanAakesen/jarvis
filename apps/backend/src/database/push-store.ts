@@ -30,6 +30,7 @@ interface ItemRow {
   title: string;
   body: string;
   category: Item['category'];
+  suggestion_scope: Item['suggestionScope'];
   urgency: Item['urgency'];
   due_at: Date | string | null;
   evidence_json: string | null;
@@ -43,7 +44,7 @@ interface ItemRow {
 }
 
 const itemColumns = [
-  'id', 'kind', 'title', 'body', 'category', 'urgency', 'due_at', 'evidence_json', 'state',
+  'id', 'kind', 'title', 'body', 'category', 'suggestion_scope', 'urgency', 'due_at', 'evidence_json', 'state',
   'snoozed_until', 'feedback', 'run_id', 'todo_added', 'language', 'created_at',
 ];
 
@@ -62,6 +63,7 @@ function mapItem(row: ItemRow): ProactiveItem {
     title: row.title,
     body: row.body,
     category: row.category,
+    suggestionScope: row.suggestion_scope,
     urgency: row.urgency,
     dueAt: row.due_at === null ? null : row.due_at instanceof Date ? row.due_at.toISOString() : new Date(row.due_at).toISOString(),
     evidence,

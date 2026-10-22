@@ -1,6 +1,7 @@
 import type { IncomingMessage, Server, ServerResponse } from 'node:http';
 import type { FastifyBaseLogger, FastifyInstance, FastifyPluginAsync, FastifyTypeProviderDefault } from 'fastify';
 import type { PushStore, ProactiveItem, StoredPushSubscription } from '../database/push-store.js';
+import type { ProactiveItemsStore } from '../proactive/store.js';
 import { generateVapidKeyPair, sendWebPush, type PushSendOrigin, type VapidKeyPair, type WebPushResult, type WebPushTransport } from './webpush.js';
 import { createVapidKeyLoader, deliverToSubscriptions } from '../proactive/push-delivery.js';
 import { validatePushEndpoint, validatePushSubscription } from './validation.js';
@@ -12,6 +13,10 @@ const testDailyLimit = 30;
 
 export interface PushRouteDependencies {
   readonly store: PushStore;
+  readonly proactiveItems?: {
+    readonly ownerObjectId: string;
+    readonly store: Pick<ProactiveItemsStore, 'get'>;
+  };
   readonly publicOrigin: string;
   readonly now?: () => number;
   readonly transport?: WebPushTransport;
@@ -117,7 +122,10 @@ function createRoutes<Logger extends FastifyBaseLogger>(
       const owner = request.principal?.objectId;
       if (!owner) return reply.code(401).send({ error: 'Unauthorized' });
       if (!uuidPattern.test(request.params.id)) return reply.code(404).send({ error: 'not_found' });
-      const item: ProactiveItem | undefined = await dependencies.store.readItem(owner, request.params.id);
+      const item: ProactiveItem | undefined = dependencies.proactiveItems &&
+          owner.toLowerCase() === dependencies.proactiveItems.ownerObjectId.toLowerCase()
+        ? await dependencies.proactiveItems.store.get(request.params.id, true)
+        : await dependencies.store.readItem(owner, request.params.id);
       if (!item) return reply.code(404).send({ error: 'not_found' });
       return item;
     });

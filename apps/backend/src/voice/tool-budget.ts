@@ -3,6 +3,7 @@ import { toModelToolSchema, type RealtimeInstructionMode } from './realtime.js';
 
 /** Tools every reduced rung that keeps any tools must offer; R3 adds the smallest others up to half of R0's bytes. */
 export const TOOL_BUDGET_ALWAYS_KEPT_TOOLS = ['set_presence_mode', 'set_away_mode'] as const;
+const proactiveTools = new Set(['proactive_recent_items', 'proactive_preferences']);
 
 export type ToolBudgetRungName = 'R0' | 'R1' | 'R2' | 'R3' | 'R4' | 'R5';
 export const TOOL_BUDGET_HEALTH_RUNG = 1;
@@ -56,9 +57,9 @@ function halfBytesSubset(tools: readonly RegisteredTool[]): RegisteredTool[] {
 /** The deterministic English fallback ladder; only tools and instruction text differ between rungs. */
 export function createToolBudgetRungs(registry: ToolRegistry): readonly ToolBudgetRung[] {
   const all = registry.list();
-  const withoutProactive = all.filter(({ name }) => name !== 'proactive_recent_items');
+  const withoutProactive = all.filter(({ name }) => !proactiveTools.has(name));
   const knownGood = all.filter(({ name }) =>
-    !name.startsWith('daily_') && name !== 'proactive_recent_items');
+    !name.startsWith('daily_') && !proactiveTools.has(name));
   const rung = (
     name: ToolBudgetRungName, tools: ToolRegistry, instructions: RealtimeInstructionMode,
   ): ToolBudgetRung => ({
@@ -83,14 +84,14 @@ export function createToolBudgetProbeTools(
   const all = registry.list();
   if (probe === 'full') return registry;
   if (probe === 'no_proactive') {
-    return registryOf(all.filter(({ name }) => name !== 'proactive_recent_items'));
+    return registryOf(all.filter(({ name }) => !proactiveTools.has(name)));
   }
   if (probe === 'no_daily') {
     return registryOf(all.filter(({ name }) => !name.startsWith('daily_')));
   }
 
   const rungOne = all.filter(({ name }) =>
-    !name.startsWith('daily_') && name !== 'proactive_recent_items');
+    !name.startsWith('daily_') && !proactiveTools.has(name));
   const copyCount = Math.max(0, all.length - rungOne.length);
   const targetBytes = all.reduce((sum, tool) => sum + definitionBytes(tool), 0);
   const baseBytes = rungOne.reduce((sum, tool) => sum + definitionBytes(tool), 0);

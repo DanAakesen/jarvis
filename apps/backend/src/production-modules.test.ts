@@ -41,7 +41,7 @@ const dailyToolNames = [
   'daily_query', 'daily_show', 'daily_food', 'daily_food_review', 'daily_saved_food', 'daily_nutrition_targets', 'daily_nutrition_suggest',
   'daily_health_summary', 'daily_nutrition_history', 'daily_coach_status',
 ];
-const proactiveToolNames = ['proactive_recent_items'];
+const proactiveToolNames = ['proactive_recent_items', 'proactive_preferences'];
 const proactiveOwner = '11111111-1111-4111-8111-111111111111';
 
 // Daily is composed by default here so the size gates below always cover the largest catalogue the server can run.
@@ -180,10 +180,10 @@ describe('production tool catalogue', () => {
     const [r0, r1, r2, r3, r4, r5] = rungs.map(({ tools }) => tools.list());
     expect(r0).toEqual(registry.list());
     expect(r1!.map(({ name }) => name)).toEqual(registry.list().map(({ name }) => name)
-      .filter((name) => name !== 'proactive_recent_items'));
+      .filter((name) => !proactiveToolNames.includes(name)));
     expect(r1!.some(({ name }) => name.startsWith('daily_'))).toBe(true);
     expect(r2!.map(({ name }) => name)).toEqual(registry.list().map(({ name }) => name)
-      .filter((name) => !name.startsWith('daily_') && name !== 'proactive_recent_items'));
+      .filter((name) => !name.startsWith('daily_') && !proactiveToolNames.includes(name)));
     expect(r3!.map(({ name }) => name)).toEqual(expect.arrayContaining([...TOOL_BUDGET_ALWAYS_KEPT_TOOLS]));
     expect(bytes(r3!)).toBeLessThanOrEqual(bytes(r0!) / 2);
     expect(bytes(r3!)).toBeGreaterThan(bytes(r0!) * 0.45);
@@ -196,14 +196,14 @@ describe('production tool catalogue', () => {
     expect(r5).toEqual([]);
   });
 
-  it('keeps the catalogue unchanged with proactive off and adds exactly one tool when enabled', () => {
+  it('keeps the catalogue unchanged with proactive off and adds both proactive tools when enabled', () => {
     const on = modulesWithEveryFeature();
     const off = modulesWithEveryFeature({ proactive: false });
     const onNames = createToolRegistry(on).list().map(({ name }) => name);
     const offNames = createToolRegistry(off).list().map(({ name }) => name);
 
     expect(offNames).toHaveLength(119);
-    expect(onNames).toHaveLength(120);
+    expect(onNames).toHaveLength(121);
     expect(onNames.filter((name) => !proactiveToolNames.includes(name))).toEqual(offNames);
     expect(on.find(({ id }) => id === 'proactive')!.tools.map(({ name }) => name)).toEqual(proactiveToolNames);
     expect(off.some(({ id }) => id === 'proactive')).toBe(false);

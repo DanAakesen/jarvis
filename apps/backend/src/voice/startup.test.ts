@@ -372,7 +372,8 @@ describe('voice startup without network', () => {
 
 const catalogue = () => [
   probeTool('set_presence_mode', 500), probeTool('set_away_mode', 500), probeTool('daily_show', 6_000),
-  probeTool('proactive_recent_items', 1_000), probeTool('github_write', 3_000),
+  probeTool('proactive_recent_items', 1_000), probeTool('proactive_preferences', 1_200),
+  probeTool('github_write', 3_000),
   probeTool('workspace_command', 12_000), probeTool('tiny_tool', 100),
 ];
 const names = (socket: FakeSocket) => toolNames(socket).sort();
@@ -447,6 +448,7 @@ describe('English voice tool-budget fallback', () => {
     await f.start(browser);
     expect(names(f.sockets[2]!)).toContain('daily_show');
     expect(names(f.sockets[2]!)).toContain('proactive_recent_items');
+    expect(names(f.sockets[2]!)).toContain('proactive_preferences');
     expect(f.attempts().at(-1)).toEqual(expect.objectContaining({ rung: 'R0', outcome: 'ready' }));
   });
 
@@ -497,6 +499,7 @@ describe('English voice tool-budget fallback', () => {
     expect(f.selected().at(-1)).toEqual(expect.objectContaining({ rung: 'R1' }));
     expect(toolNames(ready)).toContain('daily_health_summary');
     expect(toolNames(ready)).not.toContain('proactive_recent_items');
+    expect(toolNames(ready)).not.toContain('proactive_preferences');
     expect(frameOf(ready).session.instructions).toContain(TOOLS_UNAVAILABLE_NOTICE);
 
     f.app.nowEventHub.publish({
@@ -509,6 +512,9 @@ describe('English voice tool-budget fallback', () => {
     ]));
     expect(update.tools).not.toEqual(expect.arrayContaining([
       expect.objectContaining({ name: 'proactive_recent_items' }),
+    ]));
+    expect(update.tools).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: 'proactive_preferences' }),
     ]));
     expect(update.instructions).toContain(TOOLS_UNAVAILABLE_NOTICE);
 
@@ -567,6 +573,7 @@ describe('English voice tool-budget fallback', () => {
     if (rung === 'R2') {
       expect(names(ready)).not.toContain('daily_show');
       expect(names(ready)).not.toContain('proactive_recent_items');
+      expect(names(ready)).not.toContain('proactive_preferences');
     }
     if (rung === 'R3') {
       expect(names(ready)).toEqual(expect.arrayContaining(['set_presence_mode', 'set_away_mode']));

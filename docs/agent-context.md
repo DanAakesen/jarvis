@@ -302,6 +302,27 @@ Engine checks:
 `npm run build --workspace @jarvis/backend`, and
 `npm run lint --workspace @jarvis/backend`.
 
+## Conversational proactive suggestion preferences (#1207)
+
+Chat, voice and the Proactive Settings section share owner-scoped category and
+personal/work preferences through `ProactiveStore.settings`. Migration 0062
+defaults all categories to enabled and scope to `all`, including for existing
+accounts. Restricted scopes exclude unknown/mixed findings. The tool requires a
+matching direct owner request and patches one category or scope; findings and
+source text cannot authorize it. These preferences constrain unsolicited
+proactive generation/delivery only, not explicit owner tasks. Re-enabling does
+not alter pause, sources, budget or unrelated settings. Existing findings,
+todos and reminders are not deleted.
+
+Focused local checks:
+`npm test --workspace @jarvis/backend -- --run src/proactive/tools.test.ts src/proactive/policy.test.ts src/proactive/engine.test.ts src/proactive/store.test.ts src/proactive/routes.test.ts src/proactive/todo-writer.test.ts src/proactive/alerts.test.ts src/proactive/reminder-ticker.test.ts src/proactive/vault-push-reminders.test.ts src/database/proactive-store.test.ts src/database/migrations.test.ts src/voice/realtime.test.ts src/voice/startup.test.ts src/core/settings.test.ts src/production-modules.test.ts`,
+`npm test --workspace @jarvis/web -- --run src/ProactiveSettings.test.tsx`,
+backend/web builds and lint. SQL persistence, existing-row migration defaults and
+rollback protection are covered by
+`npm run test:database --workspace @jarvis/backend -- src/database/schema.integration.test.ts`;
+it requires the isolated loopback SQL Server configuration. Local voice tests
+cover registration/dispatch inputs, not a live voice-provider session.
+
 ## P14-09 overlay verification (18 October 2026)
 
 Local web checks passed: `npm test --workspace @jarvis/web` (1,623 tests,

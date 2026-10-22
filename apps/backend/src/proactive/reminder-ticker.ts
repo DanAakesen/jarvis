@@ -1,7 +1,7 @@
 import type { ConversationStore } from '../core/conversation-store.js';
 import type { PushStore } from '../database/push-store.js';
 import type { createGitHubVaultClient } from '../vault/github-client.js';
-import { readVaultTodos } from './todo-discovery.js';
+import { readVaultTasks } from './todo-discovery.js';
 import { detectLanguage } from './language.js';
 import { reminderDedupeKey, reminderKey } from './reminders.js';
 import type { AlertLedgerStore } from './alert-ledger.js';
@@ -10,6 +10,8 @@ import type { ProactiveReminderStore, ReminderRow } from './reminder-store.js';
 import type { ProactiveStore } from './store.js';
 import { dayKey, isQuietHour, localTimeLabel } from './time.js';
 import type { FindingInput } from './store.js';
+import type { SuggestionScope } from './types.js';
+import { findingAllowed } from './policy.js';
 
 const tickIntervalMs = 30_000;
 const retryDelayMs = 5 * 60_000;
@@ -35,7 +37,7 @@ function abortable<T>(work: Promise<T>, signal: AbortSignal): Promise<T> {
 async function readTodos(vault: VaultReader, signal: AbortSignal) {
   const timeout = AbortSignal.timeout(verifyTimeoutMs);
   const boundedSignal = AbortSignal.any([signal, timeout]);
-  return abortable(readVaultTodos(vault, boundedSignal), boundedSignal);
+  return abortable(readVaultTasks(vault, boundedSignal), boundedSignal);
 }
 
 function itemBody(row: ReminderRow, now: Date, language: 'da' | 'en'): string {
@@ -50,12 +52,13 @@ function itemBody(row: ReminderRow, now: Date, language: 'da' | 'en'): string {
   return language === 'da' ? `Forfaldt kl. ${time}` : `Was due at ${time}`;
 }
 
-function findingFor(row: ReminderRow, now: Date, language: 'da' | 'en'): FindingInput {
+function findingFor(row: ReminderRow, now: Date, language: 'da' | 'en', suggestionScope: SuggestionScope): FindingInput {
   return {
     dedupeKey: reminderDedupeKey(row.reminderKey),
     title: row.title,
     body: itemBody(row, now, language),
     category: 'todo',
+    suggestionScope,
     urgency: 'time_critical',
     dueAt: row.dueAt.toISOString(),
     evidence: [{ source: 'todos', label: 'Todo list', observedAt: now.toISOString() }],
@@ -82,6 +85,11 @@ export function createReminderTicker(options: {
   let ticking: Promise<void> | undefined;
   let nextWakeAt: Date | null = null;
   const controller = new AbortController();
+  let preferenceController = new AbortController();
+  const unsubscribePreferences = options.store.settings.subscribePreferencesChanged(() => {
+    preferenceController.abort('preferences_changed');
+    preferenceController = new AbortController();
+  });
 
   const log = (level: 'info' | 'warn', reason: string, startedAt: number, count?: number) => {
     try {
@@ -111,7 +119,7 @@ export function createReminderTicker(options: {
     await options.reminders.updatePending(row.id, values);
   }
 
-  async function processDue(now: Date): Promise<void> {
+  async function processDue(now: Date, signal: AbortSignal): Promise<void> {
     const due = await options.reminders.listDue(now, maxDueRows);
     if (due.length === 0) return;
 
@@ -128,6 +136,7 @@ export function createReminderTicker(options: {
       await Promise.all(remaining.map((row) => update(row, { state: 'suppressed', reason: 'paused' })));
       return;
     }
+    if (!settings.categories.todo) return;
 
     const subscriptions = await options.pushStore.listSubscriptions(options.ownerObjectId);
     if (subscriptions.length === 0) {
@@ -135,16 +144,17 @@ export function createReminderTicker(options: {
         update(row, { state: 'suppressed', reason: 'no_subscription' })));
       return;
     }
-    if (controller.signal.aborted) return;
+    if (signal.aborted) return;
 
-    let verifiedKeys: Set<string> | undefined;
+    let verifiedKeys: Map<string, SuggestionScope> | undefined;
     try {
-      const todos = await readTodos(options.vault, controller.signal);
-      verifiedKeys = new Set(todos.filter((todo) => !todo.done && todo.highPriority && todo.dueHasTime &&
+      const todos = await readTodos(options.vault, signal);
+      verifiedKeys = new Map(todos.filter((todo) => !todo.done && todo.highPriority && todo.dueHasTime &&
         typeof todo.dueAt === 'string' && Number.isFinite(Date.parse(todo.dueAt)))
-        .map((todo) => reminderKey(todo.text, new Date(todo.dueAt!).toISOString())));
+        .map((todo) => [reminderKey(todo.text, new Date(todo.dueAt!).toISOString()),
+          todo.path.startsWith('Personal/') ? 'personal' : todo.path.startsWith('Work/') ? 'work' : 'unknown']));
     } catch {
-      if (controller.signal.aborted) return;
+      if (signal.aborted) return;
       const verifiedAt = options.now();
       for (const row of remaining) {
         const verifyAttempts = Math.min(255, row.verifyAttempts + 1);
@@ -160,14 +170,19 @@ export function createReminderTicker(options: {
     }
 
     const sendable: ReminderRow[] = [];
+    const verifiedScopes = new Map<string, SuggestionScope>();
     if (verifiedKeys) {
       for (const row of remaining) {
-        if (!verifiedKeys.has(row.reminderKey)) {
+        const scope = verifiedKeys.get(row.reminderKey);
+        if (scope === undefined) {
           await update(row, { state: 'cancelled', reason: 'todo_changed' });
-        } else sendable.push(row);
+        } else if (settings.suggestionScope === 'all' || scope === settings.suggestionScope) {
+          sendable.push(row);
+          verifiedScopes.set(row.reminderKey, scope);
+        }
       }
     }
-    if (sendable.length === 0 || controller.signal.aborted) return;
+    if (sendable.length === 0 || signal.aborted) return;
 
     const eligible: ReminderRow[] = [];
     for (const row of sendable) {
@@ -181,7 +196,7 @@ export function createReminderTicker(options: {
       }
       eligible.push(row);
     }
-    if (eligible.length === 0 || controller.signal.aborted) return;
+    if (eligible.length === 0 || signal.aborted) return;
 
     const today = dayKey(now);
     const alreadySent = await options.reminders.countSent(today);
@@ -189,7 +204,7 @@ export function createReminderTicker(options: {
     const capped = eligible.slice(allowance);
     await Promise.all(capped.map((row) => update(row, { state: 'suppressed', reason: 'daily_cap' })));
     const allowed = eligible.slice(0, allowance);
-    if (allowed.length === 0 || controller.signal.aborted) return;
+    if (allowed.length === 0 || signal.aborted) return;
 
     let language: 'da' | 'en' = 'en';
     try {
@@ -199,13 +214,20 @@ export function createReminderTicker(options: {
 
     const items = [];
     for (const candidate of allowed) {
-      if (controller.signal.aborted) return;
+      if (signal.aborted) return;
       items.push({
         row: candidate,
-        item: await options.store.items.upsertFinding(findingFor(candidate, now, language)),
+        item: await options.store.items.upsertFinding(findingFor(
+          candidate, now, language, verifiedScopes.get(candidate.reminderKey) ?? 'unknown',
+        )),
       });
     }
-    if (items.length === 0 || controller.signal.aborted) return;
+    if (items.length === 0 || signal.aborted) return;
+
+    const latestSettings = await options.store.settings.read();
+    if (signal.aborted || !items.every(({ item }) => findingAllowed(
+      latestSettings, 'todo', item.suggestionScope,
+    ))) return;
 
     const dueTimes = items.map(({ row }) => row.dueAt.getTime());
     const kind: SystemPushRequest['kind'] = dueTimes.every((value) => value > now.getTime())
@@ -219,7 +241,7 @@ export function createReminderTicker(options: {
       origin: 'proactive_reminder',
       details: [...items].sort((left, right) => left.row.dueAt.getTime() - right.row.dueAt.getTime())
         .slice(0, 3).map(({ row }) => ({ title: row.title, dueAt: row.dueAt.toISOString() })),
-    }, controller.signal);
+    }, signal);
 
     if (outcome.status === 'sent') {
       const sentDayKey = dayKey(options.now());
@@ -251,17 +273,18 @@ export function createReminderTicker(options: {
 
   async function runTick(): Promise<void> {
     if (stopped || controller.signal.aborted) return;
+    const signal = AbortSignal.any([controller.signal, preferenceController.signal]);
     let startedAt = Date.now();
     try {
       const now = options.now();
       startedAt = now.getTime();
       if (isQuietHour(now) || nextWakeAt === null || nextWakeAt.getTime() > now.getTime()) return;
-      await processDue(now);
+      await processDue(now, signal);
       if (!stopped && !controller.signal.aborted) {
         nextWakeAt = await options.reminders.earliestPendingFireAt();
       }
     } catch {
-      backoff('internal_error', startedAt);
+      if (!signal.aborted) backoff('internal_error', startedAt);
     }
   }
 
@@ -298,6 +321,8 @@ export function createReminderTicker(options: {
       stopped = true;
       if (timer) clearTimeout(timer);
       controller.abort('shutdown');
+      preferenceController.abort('shutdown');
+      unsubscribePreferences();
       await startup?.catch(() => {});
       await ticking?.catch(() => {});
     },

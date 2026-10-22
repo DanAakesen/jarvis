@@ -4,6 +4,7 @@ import { deterministicDedupeKey, normaliseFactText, todosDueWithin } from './det
 import { proactiveAlertKey } from './alerts.js';
 import type { PlannedReminder, ProactiveReminderStore } from './reminder-store.js';
 import type { ProactiveStore } from './store.js';
+import { classifySuggestionScope } from './policy.js';
 
 export interface ReminderPlannerLogger {
   info?: (data: { runId: string; count?: number; durationMs?: number; reason: string }, message: string) => void;
@@ -99,7 +100,7 @@ export function createTodoReminderPlanner(options: {
         return;
       }
       const settings = await options.store.settings.read();
-      if (settings.paused) {
+      if (settings.paused || !settings.categories.todo) {
         log('info', context, 'paused', startedAt);
         return;
       }
@@ -118,7 +119,8 @@ export function createTodoReminderPlanner(options: {
       }
       const result = await planTodoReminders({
         reminders: options.reminders,
-        facts: context.facts,
+        facts: context.facts.filter((fact) => settings.suggestionScope === 'all' ||
+          classifySuggestionScope(fact.text, [fact]) === settings.suggestionScope),
         now,
         plannedRunId: context.runId,
         ...(options.onPlanned ? { onPlanned: options.onPlanned } : {}),
