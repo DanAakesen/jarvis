@@ -52,7 +52,7 @@ const core = '0001_core_tables.sql';
 const tablesInSchema = [
   'activity', 'artifacts', 'background_job_dismissals', 'background_job_steps', 'background_jobs', 'conversation_attachments',
   'conversation_summaries', 'credential_status', 'deployment_failure_receipts', 'deployments', 'factory_task_submissions',
-  'github_app_mint_status', 'folio_items', 'jarvis_sessions',
+  'folio_items', 'github_app_mint_status', 'jarvis_sessions',
   'memories', 'memory_deletions', 'memory_history', 'messages', 'phone_sessions', 'proactive_alerts', 'proactive_items',
   'proactive_reminders', 'proactive_runs', 'proactive_settings', 'proactive_source_status', 'proactive_spend', 'proactive_todo_receipts', 'projects',
   'pull_requests', 'push_subscriptions', 'push_vapid_keys', 'releases',
@@ -1580,8 +1580,12 @@ describe('committed domain schema (groups 1-8)', () => {
     } finally {
       await pool.request().input('alertKey', sql.NVarChar(200), legacyKey)
         .query('DELETE dbo.activity WHERE alert_key = @alertKey;');
-      await credentials.updateGitHubAppStatus('ok', '2041-01-01T04:00:00.000Z', scopeA);
-      await credentials.updateGitHubAppStatus('ok', '2041-01-01T04:00:00.000Z', scopeB);
+      await pool.request()
+        .input('scopeA', sql.Char(64), scopeA)
+        .input('scopeB', sql.Char(64), scopeB)
+        .query(`DELETE dbo.github_app_mint_status WHERE scope_key IN (@scopeA, @scopeB);
+          UPDATE dbo.credential_status SET status = N'unknown', last_checked_at = NULL, last_renewed_at = NULL
+          WHERE name = N'github-app';`);
     }
   });
 
