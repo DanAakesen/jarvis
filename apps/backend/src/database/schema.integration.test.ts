@@ -492,6 +492,7 @@ describe('committed domain schema (groups 1-8)', () => {
       guidance: 'Existing synthetic settings',
     });
     await createProactiveStore(rollbackPool, owner).settings.patch({ categories: { travel: false } });
+    await revertNewerThan(rollbackPool, committed, preferenceMigration.name);
     await expect(revertMigration(
       rollbackPool, committed, await readDownMigration(preferenceMigration.name),
     )).rejects.toThrow('retain them before rollback');
