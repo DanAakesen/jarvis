@@ -6182,8 +6182,9 @@ runners, connectors, other identities and query selectors. A patch is strict,
 partial and transactional; `null` clears a field and removing the last set
 value deletes the row. Read-back occurs before commit. The assistant has no
 training-target write tool because the production tool catalogue must retain at
-least eight free slots; a read-only query source may be added later. Daily-off
-composition registers no target routes.
+least eight free slots. A read-only source is now available through the existing
+`daily_query` tool in capability version 5 (see the read-coverage section below).
+Daily-off composition registers no target routes or read tool.
 
 The web Settings editor loads and saves only validated server responses. Its
 `useTrainingTargets` hook documents the shared loading/settled/error/retry
@@ -6392,13 +6393,15 @@ Fingerprint serialization uses the bounded read DTO, not nutrition's per-write
 node/depth budget; supported full pages and retained nested JSON stay readable.
 The response byte budget includes the final 64-byte revision before hashing.
 
-Capability negotiation preserves the exact v1 nine-source, v2 eleven-source
-and v3 thirteen-source advertisements. Version 2 remains opt-in for established
-brief history/detail; version 3 adds `daily.health.metric-catalog` and
-`daily.nutrition.days`. Version 4 conditionally adds `daily.attention` and
-`daily.calendar`; when feeds are not composed, v4 returns the v3 source list.
-Unversioned/unknown clients still receive v1. The web client prefers v4 and
-validates each response against its version's source allowlist.
+Capability negotiation preserves the exact v1 nine-source, v2 eleven-source,
+v3 thirteen-source and v4 feed-source advertisements. Version 2 remains opt-in
+for established brief history/detail; version 3 adds
+`daily.health.metric-catalog` and `daily.nutrition.days`. Version 4 conditionally
+adds `daily.attention` and `daily.calendar`; when feeds are not composed, v4
+returns the v3 source list. Version 5 adds `daily.health.training-targets` only
+when the existing target reader is composed; feed sources remain restricted to
+the authenticated owner browser. Unversioned/unknown clients still receive v1.
+The web client prefers v5 and validates against that version's source allowlist.
 
 `daily.health.metrics` accepts an optional exact `metric` name while preserving
 its date/name keyset order. The owner-scoped metric catalogue groups retained
@@ -6415,6 +6418,34 @@ days (default 50). Both additions use parameterized, owner-filtered
 identifies totals as derived from retained meals; completeness and freshness
 remain unknown. The generated-view tool may display either source, while the
 Daily Overview's collection rows and visible page layout remain unchanged.
+
+### Meaningful Health tool read coverage (22 October 2026; #1197)
+
+The existing `daily_query` entry now reads the owner-set Gym, Run and daily-step
+targets through the same `TrainingTargetsStore` used by `/daily/training-targets`;
+`daily_health_summary` reads that store too. Missing targets remain null and are
+listed as missing, zero remains a configured value, update time is retained, and
+no write tool or second target source is introduced. The query source is
+advertised in capability version 5 only when configured; versions 1–4 retain
+their exact source lists.
+
+Health metrics project the existing `fields_json` into aggregation, at most five
+source labels, and typed latest-sample timestamp/value/source-unit/source/device
+and conversion metadata. Sleep and minute heart-rate rows project at most five
+source labels and report truncation. The SQL reads extract only those allowlisted
+JSON paths; the new result fields do not return raw `fields_json` or
+`source_json`. Existing units, offsets, nulls, lineage and record timestamps are
+unchanged.
+
+Workout detail keeps its existing `detail_json` result and reads at most 100
+normalized `health_workout_metrics` rows. `additionalMetrics` omits metrics whose
+normalized numeric summary is already represented in detail. When the additional
+list exceeds the cap, `metricsTruncated` and `coverage.detailMetricsTruncated`
+make the query result partial; there is no new cursor or claim of complete
+detail. The response still observes the shared 768 KiB bound. No table,
+migration, catalogue entry, feature activation or access change is added.
+The source-linked [coverage matrix](daily-health-read-coverage.md) distinguishes
+these tool paths from the separate pinned-schema and source-parity inventory.
 
 ### Default-off Gmail attention and calendar feeds (P14-51; 20 October 2026)
 

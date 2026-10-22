@@ -57,7 +57,7 @@ These tests cover the existing Jarvis tool/service request and response shape us
 
 | Daily capability | Existing Jarvis coverage | Difference or remaining limit |
 | --- | --- | --- |
-| `get_health_summary` | [source tool test](../../../apps/backend/src/daily/tools/source-tools.test.ts), [SQL processing integration](../../../apps/backend/src/database/health-processing.integration.test.ts) | Jarvis returns retained facts with unknown completeness and `targets: null`; the source response is not contract-tested through a Jarvis alias. |
+| `get_health_summary` | [source tool test](../../../apps/backend/src/daily/tools/source-tools.test.ts), [SQL processing integration](../../../apps/backend/src/database/health-processing.integration.test.ts) | The 19 October snapshot returned retained facts with unknown completeness and `targets: null`. Since 22 October (#1197), the current Jarvis summary reads the existing owner target store; this does not test a source HTTP alias or resolve source parity. |
 | `get_health_history` | [source tool test](../../../apps/backend/src/daily/tools/source-tools.test.ts) | Jarvis uses bounded per-category pages and explicitly reports unknown completeness; no source HTTP response parity is claimed. |
 | `get_nutrition_history` | [source tool test](../../../apps/backend/src/daily/tools/source-tools.test.ts) | Jarvis reads canonical named meals, not numeric Health nutrition observations; source-path response parity is unverified. |
 | `analyze_nutrition` | [source tool test](../../../apps/backend/src/daily/tools/source-tools.test.ts) | Jarvis returns bounded known/partial nutrient totals and excludes recovery dates; this is not a source-output contract test. |
