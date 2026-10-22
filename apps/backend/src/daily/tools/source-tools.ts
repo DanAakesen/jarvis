@@ -8,6 +8,7 @@ import type { DailyCoachStore } from '../coach-store.js';
 import type { DailyData } from '../query.js';
 import { profilePatch } from '../coach-store.js';
 import { resolveDailyOwner } from '../owner.js';
+import { presentTrainingTargets } from '../training/targets.js';
 
 type Input = Record<string, unknown>;
 type CoachAccess = (request: FastifyRequest) => DailyCoachStore;
@@ -67,7 +68,9 @@ async function healthSummary(data: DailyData, request: FastifyRequest, signal: A
     today: { date: today, metrics: metricRows, sleep: sleepRows, workouts: workoutRows },
     rolling7: { startDate: weekStart, endDate: today, workouts: weeklyRows, workoutCount: weeklyWorkouts.truncated ? null : weeklyRows.length },
     sync: { feeds: sync.feeds, heartbeat: sync.heartbeat, inbox: sync.inbox },
-    targets: null,
+    targets: data.trainingTargets
+      ? presentTrainingTargets(await data.trainingTargets(request).read(signal))
+      : { status: 'unavailable' },
     coverage: {
       sourceCompleteness: 'unknown',
       limited: metrics.truncated || sleep.truncated || workouts.truncated || weeklyWorkouts.truncated,
@@ -87,7 +90,7 @@ export function dailySourceTools(data: DailyData, nutrition: NutritionAccess, co
     },
   });
   const healthSummaryTool = readTool('daily_health_summary',
-    'Read today’s retained Health metrics, sleep, workouts and upload freshness, plus seven-day workout rows. Unknown or absent data stays empty/unknown; freshness is processing evidence, not proof of source completeness. No fixed renderer, estimate, or live-device claim.',
+    'Read today’s retained Health metrics, sleep, workouts and upload freshness, plus seven-day workout rows and the owner’s configured training targets. Unset targets remain null and are listed as missing; no defaults are inferred. Unknown or absent data stays explicit; freshness is processing evidence, not proof of source completeness. No fixed renderer, estimate, or live-device claim.',
     schema(), async (_input, request, signal) => healthSummary(data, request, signal, now()));
   const healthHistoryTool = readTool('daily_health_history',
     'Read up to 93 inclusive Europe/Copenhagen dates of retained health metrics, sleep and workouts. Returns bounded per-category pages, exact next cursors, retained source units and unknown completeness. Defaults to the latest 30 days; future dates and wider ranges are refused.',

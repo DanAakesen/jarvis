@@ -15,6 +15,9 @@ import { dailySourceTools } from '../daily/tools/source-tools.js';
 import type { NutritionStore } from '../daily/nutrition/store.js';
 import type { DailyCoachStore } from '../daily/coach-store.js';
 import { healthUploadLimit } from '../daily/health-upload/contracts.js';
+import { createDailyData } from '../daily/query.js';
+import { createDailyModules } from '../daily/index.js';
+import { dailyQuerySources } from '@jarvis/contracts';
 
 const configuration = loadDatabaseConfig();
 if (!configuration || process.env.NODE_ENV !== 'test' || configuration.server !== '127.0.0.1') throw new Error('Health tests require isolated loopback SQL Server');
@@ -307,6 +310,58 @@ describe('inactive processor on real isolated SQL Server, synthetic records only
     ]));
     expect(await readModel().workoutDetail('declared', signal())).toMatchObject({ detail: { avgHeartRate: { qty: 110, units: 'count/min' } } });
     expect((await inbox())[0]).toMatchObject({ raw_bytes: bytes, checksum: sha256(bytes), processing_status: 'processed' });
+  });
+  it('projects retained metric, sleep and workout metadata safely through SQL and daily_query', async () => {
+    const device = await provision();
+    const value = {
+      data: {
+        metrics: [
+          { name: 'step_count', units: 'count', data: [
+            { date: '2026-10-13T08:00:00+02:00', qty: 10, units: 'count', source: 'Synthetic Tracker A', device: 'Synthetic Device A' },
+            { date: '2026-10-13T08:30:00+02:00', qty: 12, units: 'count', source: 'Synthetic Tracker B', device: 'Synthetic Device B' },
+          ] },
+          { name: 'sleep_analysis', units: 'hr', data: [
+            { date: '2026-10-13', totalSleep: 7.25, source: 'Synthetic Sleep Source' },
+          ] },
+        ],
+        workouts: [{
+          ...workout('synthetic-projection-workout'),
+          runningPower: { qty: 250, units: 'W', source: 'Synthetic Power Source' },
+          heartRateData: [
+            { date: '2026-10-13T08:00:10Z', qty: 90, units: 'bpm', source: 'Synthetic HR Source' },
+            { date: '2026-10-13T08:00:50Z', qty: 100, units: 'bpm', source: 'Synthetic HR Source' },
+          ],
+        }],
+      },
+    };
+    await accept(device, value);
+    expect(await processor().processNext(signal())).toMatchObject({ state: 'processed' });
+
+    const read = readModel();
+    const metrics = await read.history('metrics', { startDate: '2026-10-13', endDate: '2026-10-13' }, signal());
+    expect(metrics.items.find(row => row.metric_name === 'step_count')?.fields).toEqual({
+      aggregation: 'sum',
+      sources: ['Synthetic Tracker A', 'Synthetic Tracker B'],
+      sourcesTruncated: false,
+      latestSample: {
+        observedAt: '2026-10-13T08:30:00+02:00', value: 12, sourceUnit: 'count',
+        source: 'Synthetic Tracker B', device: 'Synthetic Device B',
+        conversionFactor: 1, valueIsSourceUnits: true,
+      },
+    });
+    const sleep = await read.history('sleep', { startDate: '2026-10-13', endDate: '2026-10-13' }, signal());
+    expect(sleep.items[0]).toMatchObject({ total_sleep_hours: 7.25, sources: ['Synthetic Sleep Source'], sourcesTruncated: false });
+    const heartRate = await read.heartRate('synthetic-projection-workout', {}, signal());
+    expect(heartRate.items[0]).toMatchObject({ avg_value: 95, unit: 'bpm', sources: ['Synthetic HR Source'], sourcesTruncated: false });
+
+    const module = createDailyModules(true, createDailyData(pool, owner, now))[0]!;
+    const queryTool = module.tools.find(tool => tool.name === 'daily_query')!;
+    const workoutDetail = await queryTool.execute({ source: dailyQuerySources.workout, workoutId: 'synthetic-projection-workout' }, {
+      server: { ownerObjectId: owner }, principal: { objectId: owner },
+    } as unknown as FastifyRequest, signal()) as { items: { additionalMetrics: { metric_name: string }[]; detail: Record<string, unknown> }[] };
+    expect(workoutDetail.items[0]?.detail.heartRateData).toMatchObject({ samples: 2, unit: 'bpm', avg_value: 95 });
+    expect(workoutDetail.items[0]?.additionalMetrics.map(metric => metric.metric_name)).toContain('running_power');
+    expect(workoutDetail.items[0]?.additionalMetrics.map(metric => metric.metric_name)).not.toContain('heart_rate_data');
   });
   it('quarantines unsupported heart-rate units without domain writes or false processed freshness and retains raw evidence', async () => {
     const device = await provision(); await accept(device); await processor().processNext(signal());

@@ -222,7 +222,8 @@ describe('Daily SQL owner schema on real SQL Server', () => {
         const model = DailyHealthReadModel.forRequest(pool, request);
         return {
           history: model.history.bind(model), metricCatalog: model.metricCatalog.bind(model),
-          workoutDetail: model.workoutDetail.bind(model), heartRate: model.heartRate.bind(model),
+          workoutDetail: model.workoutDetail.bind(model), workoutMetrics: model.workoutMetrics.bind(model),
+          heartRate: model.heartRate.bind(model),
           sync: async () => ({ feeds: [], heartbeat: null, inbox: {} }) as unknown as Awaited<ReturnType<DailyHealthReadModel['sync']>>,
         };
       };

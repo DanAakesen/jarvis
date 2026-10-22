@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { dailyCapabilitiesAccept, dailyCapabilitiesVersion, dailyQuerySources as sources, dailyQuerySourcesV1, dailyQuerySourcesV2, dailyQuerySourcesV3, dailyQuerySourcesV4, type DailyQuery } from '@jarvis/contracts';
+import { dailyCapabilitiesAccept, dailyCapabilitiesVersion, dailyQuerySources as sources, dailyQuerySourcesV1, dailyQuerySourcesV2, dailyQuerySourcesV3, dailyQuerySourcesV4, dailyQuerySourcesV5, dailyQuerySourcesV5WithoutFeeds, type DailyQuery } from '@jarvis/contracts';
 import { DailyReadError, isDailyResult, loadDailySources, queryDaily } from './client';
 import { dailyFixture, jsonResponse } from './test-support';
 
@@ -81,6 +81,15 @@ describe('owner-authenticated Daily query client', () => {
     expect(isDailyResult(dailyFixture(history, [{ id: ' padded ' }], { startedAt: 'raw', id: ' padded ' }), history)).toBe(true);
     expect(isDailyResult(dailyFixture(history, [{ id: ' padded ' }], { id: 'wrong-family' }), history)).toBe(false);
   });
+  it('accepts a bounded workout-detail metric truncation only when it is marked partial', () => {
+    const detail: DailyQuery = { source: sources.workout, workoutId: 'synthetic-workout' };
+    const partial = dailyFixture(detail, [{ id: 'synthetic-workout', detail: {}, additionalMetrics: [], metricsTruncated: true }]);
+    partial.status = 'partial';
+    partial.coverage.detailMetricsTruncated = true;
+    expect(isDailyResult(partial, detail)).toBe(true);
+    expect(isDailyResult({ ...partial, status: 'available' }, detail)).toBe(false);
+    expect(isDailyResult({ ...partial, coverage: { ...partial.coverage, detailMetricsTruncated: false } }, detail)).toBe(false);
+  });
   it.each([401, 403, 404, 503])('surfaces HTTP %s without parsing or displaying provider diagnostics', async status => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ private_detail: 'must-not-escape' }, status)));
     try { await queryDaily('http://localhost:3999', query, token, signal()); throw new Error('Expected failure'); }
@@ -101,7 +110,7 @@ describe('owner-authenticated Daily query client', () => {
     await expect(loadDailySources('http://localhost:3999', token, signal())).rejects.toThrow('not available');
     await expect(queryDaily(null, query, token, signal())).rejects.toMatchObject({ kind: 'disabled' });
   });
-  it('requests v4 first and accepts each earlier version only with its own unchanged source list', async () => {
+  it('requests v5 first and accepts each earlier version only with its own unchanged source list', async () => {
     const fetch = vi.fn()
       .mockResolvedValueOnce(jsonResponse({ module: 'daily', version: 1, sources: dailyQuerySourcesV1 }))
       .mockResolvedValueOnce(jsonResponse({ module: 'daily', version: 2, sources: dailyQuerySourcesV2 }))
@@ -109,7 +118,9 @@ describe('owner-authenticated Daily query client', () => {
       .mockResolvedValueOnce(jsonResponse({ module: 'daily', version: 3, sources: dailyQuerySourcesV3 }))
       .mockResolvedValueOnce(jsonResponse({ module: 'daily', version: 3, sources: dailyQuerySourcesV4 }))
       .mockResolvedValueOnce(jsonResponse({ module: 'daily', version: 4, sources: dailyQuerySourcesV3 }))
-      .mockResolvedValueOnce(jsonResponse({ module: 'daily', version: 4, sources: dailyQuerySourcesV4 }));
+      .mockResolvedValueOnce(jsonResponse({ module: 'daily', version: 4, sources: dailyQuerySourcesV4 }))
+      .mockResolvedValueOnce(jsonResponse({ module: 'daily', version: 5, sources: dailyQuerySourcesV5WithoutFeeds }))
+      .mockResolvedValueOnce(jsonResponse({ module: 'daily', version: 5, sources: dailyQuerySourcesV5 }));
     vi.stubGlobal('fetch', fetch);
     expect(await loadDailySources('http://localhost:3999', token, signal())).toEqual(dailyQuerySourcesV1);
     expect(fetch.mock.calls[0]?.[1]).toMatchObject({ headers: { Accept: dailyCapabilitiesAccept } });
@@ -120,7 +131,9 @@ describe('owner-authenticated Daily query client', () => {
     // A v4 answer without the feed sources is what the backend sends while the feeds are off.
     expect(await loadDailySources('http://localhost:3999', token, signal())).toEqual(dailyQuerySourcesV3);
     expect(await loadDailySources('http://localhost:3999', token, signal())).toEqual(dailyQuerySourcesV4);
-    expect(fetch).toHaveBeenCalledTimes(7);
+    expect(await loadDailySources('http://localhost:3999', token, signal())).toEqual(dailyQuerySourcesV5WithoutFeeds);
+    expect(await loadDailySources('http://localhost:3999', token, signal())).toEqual(dailyQuerySourcesV5);
+    expect(fetch).toHaveBeenCalledTimes(9);
   });
   it('does not claim success for oversized or mismatched responses', async () => {
     const fetch = vi.fn()
