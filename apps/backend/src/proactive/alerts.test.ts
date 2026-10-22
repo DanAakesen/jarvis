@@ -171,6 +171,7 @@ describe('proactive alert hook', () => {
     expect(fixture.send).toHaveBeenCalledOnce();
     expect(fixture.send).toHaveBeenCalledWith({
       kind: 'alert', count: 3, language: 'da', itemId: tiedFirstKey.id, origin: 'proactive_alert',
+      details: [tiedFirstKey, tiedLaterKey, noDue].map(({ title, dueAt }) => ({ title, dueAt })),
     }, expect.any(AbortSignal));
     expect(await fixture.ledger.get(proactiveAlertKey('deadline_24h', 'a'))).toMatchObject({ status: 'sent' });
     expect(await fixture.ledger.get(proactiveAlertKey('calendar_clash', 'b'))).toMatchObject({ status: 'sent' });
@@ -263,7 +264,7 @@ describe('proactive alert hook', () => {
     expect(fixture.send).toHaveBeenCalledOnce();
   });
 
-  it('does not send or log canary item or source text and catches store failures', async () => {
+  it('sends only the stored title, not source/body/evidence, and keeps content out of logs and ledger', async () => {
     const canary = 'SYNTHETIC_PRIVATE_CANARY_7f31';
     const fixture = setup();
     const payloads: Buffer[] = [];
@@ -300,7 +301,12 @@ describe('proactive alert hook', () => {
     });
     await hook(context);
     expect(payloads).toHaveLength(1);
-    expect(payloads[0]!.toString()).not.toContain(canary);
+    expect(JSON.parse(payloads[0]!.toString()).body).toBe(`${canary} title`);
+    for (const suffix of ['body', 'evidence', 'todo text', 'suggested todo']) {
+      expect(payloads[0]!.toString()).not.toContain(`${canary} ${suffix}`);
+    }
+    expect(JSON.stringify(vi.mocked(fixture.ledger.upsert).mock.calls)).not.toContain(canary);
+    expect(JSON.stringify(fixture.pushStore.updateItemDelivery.mock.calls)).not.toContain(canary);
     expect(JSON.stringify(fixture.logger.info.mock.calls)).not.toContain(canary);
     expect(JSON.stringify(fixture.logger.warn.mock.calls)).not.toContain(canary);
     expect(fixture.send).not.toHaveBeenCalled();
@@ -311,5 +317,45 @@ describe('proactive alert hook', () => {
     await expect(throwing.hook(contextFor([throwingItem]))).resolves.toBeUndefined();
     expect(throwing.send).not.toHaveBeenCalled();
     expect(JSON.stringify(throwing.logger.warn.mock.calls)).not.toContain(canary);
+  });
+
+  it('reads no more than three stored details without marking loaded or seen', async () => {
+    const fixture = setup();
+    const items = await Promise.all(Array.from({ length: 5 }, (_, index) =>
+      saveFinding(fixture.store, `detail-${index}`, 'deadline', {
+        title: `Synthetic stored title ${index}`, dueAt: `2026-10-20T${10 + index}:00:00Z`,
+      })));
+    const get = vi.spyOn(fixture.store.items, 'get');
+    const feedback = vi.spyOn(fixture.store.items, 'applyFeedback');
+    await fixture.hook(contextFor([...items].reverse()));
+    expect(get.mock.calls).toEqual(items.slice(0, 3).map(({ id }) => [id, false]));
+    expect(feedback).not.toHaveBeenCalled();
+    expect(fixture.send).toHaveBeenCalledWith(expect.objectContaining({
+      count: 5, details: items.slice(0, 3).map(({ title, dueAt }) => ({ title, dueAt })),
+    }), expect.any(AbortSignal));
+    expect((await fixture.store.items.list('all', 10, NOW)).every(({ state }) => state === 'new')).toBe(true);
+  });
+
+  it.each(['missing', 'throw'] as const)('still sends a headline when detail lookup is %s', async (failure) => {
+    const fixture = setup();
+    const item = await saveFinding(fixture.store, 'detail-unavailable');
+    const get = vi.spyOn(fixture.store.items, 'get');
+    if (failure === 'missing') get.mockResolvedValue(undefined);
+    else get.mockRejectedValue(new Error('SYNTHETIC_PRIVATE_DETAIL_ERROR'));
+    await fixture.hook(contextFor([item]));
+    expect(fixture.send).toHaveBeenCalledWith(expect.objectContaining({ count: 1, details: [] }), expect.any(AbortSignal));
+    expect(await fixture.ledger.get(proactiveAlertKey('deadline_24h', 'detail-unavailable'))).toMatchObject({ status: 'sent' });
+    expect(JSON.stringify([fixture.logger.info.mock.calls, fixture.logger.warn.mock.calls, vi.mocked(fixture.ledger.upsert).mock.calls]))
+      .not.toContain('SYNTHETIC_PRIVATE_DETAIL_ERROR');
+  });
+
+  it('never persists or logs a thrown sender error containing push details', async () => {
+    const canary = 'SYNTHETIC_PRIVATE_SEND_ERROR';
+    const fixture = setup({ send: async (request) => { throw new Error(request.details![0]!.title); } });
+    const item = await saveFinding(fixture.store, 'send-error', 'deadline', { title: canary });
+    await expect(fixture.hook(contextFor([item]))).resolves.toBeUndefined();
+    expect(fixture.ledger.upsert).not.toHaveBeenCalled();
+    expect(fixture.pushStore.updateItemDelivery).not.toHaveBeenCalled();
+    expect(JSON.stringify([fixture.logger.info.mock.calls, fixture.logger.warn.mock.calls])).not.toContain(canary);
   });
 });

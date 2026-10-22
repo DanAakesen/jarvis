@@ -19,7 +19,7 @@ provider accepting a notification is not proof that an iPhone displayed it.
   scope or an unavailable destination means no task write; existing tasks and
   `Suggested by Jarvis` sections remain untouched ([decision](decisions.md)).
 - Push alerts cover only a deadline within 24 hours, a calendar clash or a travel disruption, plus a reminder about an hour before a todo is due; quiet-hour reminders wait until 07:00, with one bundled push per run and daily caps ([decision](decisions.md)).
-- P13-12 sends only scheduled/catch-up time-critical alerts for new items, in one generic bundle with a cap of three bundles per Copenhagen day; it remains behind the alert, proactive and push switches.
+- P13-12 sends only scheduled/catch-up time-critical alerts for new items, in one bundle with bounded stored titles (P13-21) and a cap of three bundles per Copenhagen day; it remains behind the alert, proactive and push switches.
 - Every scheduled or manual run appears in the header Background work popover as running, then done or failed ([decision](decisions.md)).
 - Each milestone has its own exact-`true`, default-off switch; enable push, then checks, then todo writes and alerts/reminders, only after the prior deployment is accepted ([decision](decisions.md)).
 
@@ -234,8 +234,16 @@ The in-process ticker reads the earliest pending time once at startup, remains
 silent while idle, and does no reminder work from 22:00 to 07:00 Copenhagen
 time. At send time it re-reads and parses the todo file; changed, completed or
 deleted todos are cancelled. It creates one private Proactive item per reminder
-and sends one generic bundled push. The daily cap is eight. Titles remain in
-the private reminder/item database rows, never in push payloads or logs.
+and sends one bundled push. The daily cap is eight. P13-21 includes bounded todo
+titles and Copenhagen due times in the encrypted v2 push payload, which is never
+stored. Details never enter logs, metrics, errors or job output. Single reminders
+show due-time headlines; bundles show up to three soonest-first time/title lines
+and an overflow count. Alert details come from read-only stored-item lookups;
+missing or failed detail reads still send the count headline. The worker clamps
+v2 text and uses generic headlines with empty bodies for older payloads.
+Notification titles never repeat `Jarvis`: iOS adds `from Jarvis` itself.
+Lock-screen details can be hidden with iOS Settings → Notifications → Jarvis →
+Show Previews. Device appearance remains unverified until the owner checks it.
 
 Default-branch pushes during quiet hours are not queued; the 07:00 check plans
 eligible tasks. Other pushes do not start the pass.
@@ -338,7 +346,8 @@ Todo content remains canonical in the verified vault file; SQL references are
 derived. Vault also retains long-term knowledge and Blob existing artifact types.
 Do not create a second canonical copy of mail, calendar or future Banking data.
 Retention and deletion of operational evidence need a bounded policy before
-implementation; avoid copying private bodies into logs or push payloads.
+implementation; never copy private bodies into logs. Only the bounded titles
+and due times approved in P13-21 belong in encrypted push payloads.
 
 Each system run needs server-resolved owner scope, trigger, run ID, policy
 version and allowed read/preparation capabilities, plus narrowly scoped todo
@@ -525,9 +534,10 @@ prove delivery on Dan's phone.
   Design renewal/replacement, unsubscribe, reinstall and invalid-endpoint
   cleanup. Keep signing material server-side and subscription data private;
   no credential or permission changes are part of this document.
-- Send minimal lock-screen text, such as a generic new Jarvis item, plus an
-  opaque item reference. Keep mail, financial details and access tokens out of
-  notification text and URLs. Deep links are same-origin navigation, not bearer
+- P13-21 supersedes the original generic lock-screen text proposal: send bounded
+  todo/finding titles and due times in the encrypted payload plus an opaque item
+  reference, never access tokens or source bodies. Keep private text out of
+  URLs. Deep links are same-origin navigation, not bearer
   authorization: check the session and owner before loading the item, and return
   to the intended item/conversation after sign-in if the session expired.
 - Bound retry, backoff and expiry; retire revoked/invalid subscriptions and

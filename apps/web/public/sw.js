@@ -22,12 +22,34 @@ const messages = {
 const validKinds = new Set(['alert', 'due_soon', 'overdue', 'mixed']);
 const validLanguages = new Set(['da', 'en']);
 
-function notificationBody(payload) {
+function truncate(value, limit) {
+  const points = Array.from(value);
+  return points.length > limit ? `${points.slice(0, limit - 1).join('')}…` : value;
+}
+
+function sanitizeLine(value) {
+  return value.replace(/\s/gu, ' ').replace(/[\p{Cc}\p{Cf}]/gu, '').replace(/ +/gu, ' ').trim();
+}
+
+function notificationText(payload) {
+  if (payload?.version === 2 && typeof payload.title === 'string' && typeof payload.body === 'string') {
+    const title = sanitizeLine(payload.title);
+    if (title && title.toLowerCase() !== 'jarvis') {
+      const body = payload.body.split(/\r\n?|\n|\u2028|\u2029/u)
+        .map(sanitizeLine)
+        .filter(Boolean)
+        .slice(0, 4)
+        .map((line) => truncate(line, 80))
+        .join('\n');
+      return { title: truncate(title, 60), body: truncate(body, 240) };
+    }
+  }
+
   const { kind, lang, count } = payload ?? {};
   if (!validKinds.has(kind) || !validLanguages.has(lang) ||
       !Number.isInteger(count) || count < 1 || count > 99 ||
-      (kind === 'mixed' && count < 2)) return 'New item';
-  return messages[kind][lang](count);
+      (kind === 'mixed' && count < 2)) return { title: 'New item', body: '' };
+  return { title: messages[kind][lang](count), body: '' };
 }
 
 self.addEventListener('install', (event) => {
@@ -40,19 +62,19 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('push', (event) => {
   let itemId;
-  let body = 'New item';
+  let text = { title: 'New item', body: '' };
   try {
     const payload = event.data?.json();
     if (typeof payload?.itemId === 'string' && itemIdPattern.test(payload.itemId)) {
       itemId = payload.itemId;
     }
-    body = notificationBody(payload);
+    text = notificationText(payload);
   } catch {
     // Malformed push data still requires a visible notification on Safari.
   }
 
-  event.waitUntil(self.registration.showNotification('Jarvis', {
-    body,
+  event.waitUntil(self.registration.showNotification(text.title, {
+    body: text.body,
     tag: itemId ?? 'jarvis',
     data: itemId ? { itemId } : {},
   }));

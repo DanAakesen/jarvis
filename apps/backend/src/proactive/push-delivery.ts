@@ -1,6 +1,6 @@
 import { generateVapidKeyPair, sendWebPush, type PushSendOrigin, type VapidKeyPair, type WebPushResult, type WebPushTransport } from '../push/webpush.js';
 import type { PushStore, StoredPushSubscription } from '../database/push-store.js';
-import { isQuietHour } from './time.js';
+import { dayKey, isQuietHour, localTimeLabel } from './time.js';
 
 export type SystemPushKind = 'alert' | 'due_soon' | 'overdue' | 'mixed';
 
@@ -10,6 +10,7 @@ export interface SystemPushRequest {
   language: 'da' | 'en';
   itemId: string;
   origin: 'proactive_alert' | 'proactive_reminder';
+  details?: readonly { title: string; dueAt: string | null }[];
 }
 
 export interface SystemPushOutcome {
@@ -36,11 +37,80 @@ type PushSend = (
   signal?: AbortSignal,
 ) => Promise<WebPushResult>;
 
-export function buildPushPayload(request: SystemPushRequest): Buffer {
+function shorten(value: string, limit: number): string {
+  const points = Array.from(value);
+  return points.length <= limit ? value : `${points.slice(0, limit - 1).join('')}…`;
+}
+
+function singleLine(value: string): string {
+  return value.replace(/\s/gu, ' ').replace(/[\p{Cc}\p{Cf}\p{Cs}]/gu, '').replace(/ +/gu, ' ').trim();
+}
+
+function countHeadline(request: SystemPushRequest): string {
+  const { kind, count, language } = request;
+  const da = language === 'da';
+  switch (kind) {
+    case 'alert': return da ? `${count} tidskritiske ting kræver din opmærksomhed` : `${count} time-critical items need you`;
+    case 'due_soon': return da
+      ? count === 1 ? 'En todo forfalder inden for en time' : `${count} todos forfalder inden for en time`
+      : count === 1 ? 'A todo is due within the hour' : `${count} todos are due within the hour`;
+    case 'overdue': return da
+      ? count === 1 ? 'En todo er forfalden' : `${count} todos er forfaldne`
+      : count === 1 ? 'A todo is overdue' : `${count} todos are overdue`;
+    case 'mixed': return da ? `${count} todos kræver din opmærksomhed` : `${count} todos need your attention`;
+  }
+}
+
+export function buildPushPayload(request: SystemPushRequest, now = new Date()): Buffer {
+  const da = request.language === 'da';
+  const details = (request.details ?? []).map((detail) => ({
+    title: singleLine(detail.title),
+    due: detail.dueAt === null ? null : new Date(detail.dueAt),
+  })).map((detail) => ({
+    ...detail,
+    due: detail.due && Number.isFinite(detail.due.getTime()) ? detail.due : null,
+  }));
+  if (request.kind !== 'alert') {
+    details.sort((left, right) =>
+      (left.due?.getTime() ?? Infinity) - (right.due?.getTime() ?? Infinity));
+  }
+  const visible = details.filter(({ title }) => title.length > 0).slice(0, Math.min(3, request.count));
+  let title = countHeadline(request);
+  let body: string;
+  if (request.count === 1) {
+    const detail = visible[0];
+    if (request.kind === 'alert') {
+      title = da ? 'Tidskritisk' : 'Time-critical';
+    } else if (detail?.due) {
+      const time = localTimeLabel(detail.due);
+      if (detail.due.getTime() > now.getTime()) {
+        title = da ? `Todo forfalder kl. ${time}` : `Todo due at ${time}`;
+      } else if (dayKey(detail.due) === dayKey(now)) {
+        title = da ? `Todo forfaldt kl. ${time}` : `Todo was due at ${time}`;
+      } else {
+        title = da ? `Todo forfaldt i går kl. ${time}` : `Todo was due yesterday at ${time}`;
+      }
+    }
+    const suffix = request.kind === 'alert' && detail?.due ? ` · ${localTimeLabel(detail.due)}` : '';
+    body = detail ? `${shorten(detail.title, 80 - Array.from(suffix).length)}${suffix}` : '';
+  } else {
+    const lines = visible.map((detail) => shorten(
+      `${request.kind !== 'alert' && detail.due ? `${localTimeLabel(detail.due)} ` : ''}${detail.title}`, 80,
+    ));
+    const remaining = request.count - visible.length;
+    const overflow = remaining > 0 ? `+${remaining} ${da ? 'flere' : 'more'}` : '';
+    // Reserve the overflow line before fitting detail lines to the total body budget.
+    let budget = 240 - (overflow ? Array.from(overflow).length + lines.length : Math.max(0, lines.length - 1));
+    body = [...lines.map((line, index) => {
+      const fitted = shorten(line, Math.min(80, budget - (lines.length - index - 1)));
+      budget -= Array.from(fitted).length;
+      return fitted;
+    }), ...(overflow ? [overflow] : [])].join('\n');
+  }
   return Buffer.from(JSON.stringify({
-    v: 1,
-    title: 'Jarvis',
-    body: 'New item',
+    v: 2,
+    title: shorten(singleLine(title), 60),
+    body,
     itemId: request.itemId,
     kind: request.kind,
     count: request.count,
@@ -142,7 +212,7 @@ export function createSystemPushSender(dependencies: {
       const deliveries = await deliverToSubscriptions({
         store: dependencies.store,
         subscriptions,
-        payload: buildPushPayload(request),
+        payload: buildPushPayload(request, now()),
         keys,
         publicOrigin: dependencies.publicOrigin,
         origin: request.origin,

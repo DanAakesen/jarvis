@@ -440,7 +440,7 @@ describe('todo reminder ticker', () => {
     expect(unsubscribed.vault.tree).not.toHaveBeenCalled();
   });
 
-  it('verifies open todos and creates a private idempotent item with a generic push', async () => {
+  it('verifies open todos and creates a private idempotent item with push details', async () => {
     const current = fixture({
       conversation: async () => ['I have a synthetic task'],
     });
@@ -468,6 +468,7 @@ describe('todo reminder ticker', () => {
     expect(reminderDedupeKey(row.reminderKey)).toMatch(/^[\da-f]{32}$/u);
     expect(current.send).toHaveBeenCalledWith({
       kind: 'due_soon', count: 1, language: 'en', itemId: item!.id, origin: 'proactive_reminder',
+      details: [{ title: row.title, dueAt: dueAt.toISOString() }],
     }, expect.any(AbortSignal));
     expect(current.pushStore.updateItemDelivery).toHaveBeenCalledWith(item!.id, 'accepted', 202);
     await current.store.items.upsertFinding({
@@ -675,17 +676,19 @@ describe('todo reminder ticker', () => {
     expect(skipped.pushStore.updateItemDelivery).not.toHaveBeenCalled();
   });
 
-  it('keeps canary todo text out of push requests and logs', async () => {
+  it('includes only title/due details in the push and keeps canary todo text out of logs and delivery writes', async () => {
     const canary = 'SYNTHETIC_PRIVATE_CANARY_89d2';
     const current = fixture();
     const row = planned(canary, new Date(NOW.getTime() + 30 * 60_000));
     current.setContent(todoText(canary, row.dueAt));
     await startWith(current, [row]);
     await current.ticker.tick();
-    expect(JSON.stringify(current.send.mock.calls)).not.toContain(canary);
-    expect(buildPushPayload(current.send.mock.calls[0]![0]).toString()).not.toContain(canary);
+    expect(current.send.mock.calls[0]![0].details).toEqual([{ title: canary, dueAt: row.dueAt.toISOString() }]);
+    expect(JSON.parse(buildPushPayload(current.send.mock.calls[0]![0], NOW).toString()).body).toBe(canary);
     expect(JSON.stringify(current.logger.info.mock.calls)).not.toContain(canary);
     expect(JSON.stringify(current.logger.warn.mock.calls)).not.toContain(canary);
+    expect(JSON.stringify(current.pushStore.updateItemDelivery.mock.calls)).not.toContain(canary);
+    expect(JSON.stringify(vi.mocked(current.reminders.updatePending).mock.calls)).not.toContain(canary);
     expect(current.reminders.snapshot()[0]?.title).toBe(canary);
     expect((await current.store.items.list('all', 10, NOW))[0]?.title).toBe(canary);
   });

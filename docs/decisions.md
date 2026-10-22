@@ -1,5 +1,34 @@
 # Decisions
 
+## Push notifications carry bounded details (22 October 2026; P13-21 / #1194)
+
+The owner confirmed that proactive todo reminders and alerts should say what
+they concern. This supersedes the generic-push/no-todo-or-finding-text rules in
+P13-01, P13-02, P13-12, P13-13 and the P13-15 rollout below. Delivery policy,
+quiet hours, caps, deduplication, the alert ledger and retries are unchanged.
+
+The backend composes final Danish/English v2 headlines and bodies from up to
+three todo or stored-item titles and Copenhagen due times, plus an overflow
+count. Titles are capped at 60 code points, bodies at 240 and each line at 80;
+controls are removed and truncation uses an ellipsis on a code-point boundary.
+Alert detail reads must not mark an item loaded or seen; unavailable details
+fall back to the count headline without dropping the alert. The worker clamps
+v2 text defensively and uses generic headlines with empty bodies for legacy
+payloads, preserving existing notification tags, data and click behavior.
+
+Our notification title must never be `Jarvis`. iOS adds `from Jarvis` from the
+Home Screen app name; a web app cannot remove or change that line. Payloads are
+already encrypted end to end to the device with `aes128gcm`, so the push service
+cannot read them. Details will be visible on the lock screen unless the owner
+hides previews in iOS Settings → Notifications → Jarvis → Show Previews.
+Todo and finding text must still never enter logs, metrics, errors or job
+output, and the payload must not be stored.
+
+The test push uses fixed, content-free text: `Test notification` /
+`Push notifications are working on this device.` Real-device appearance is
+unverified until the owner uses the existing Settings button after deployment.
+CI cannot establish iOS lock-screen appearance.
+
 ## Vault mirror write-back switched on (22 October 2026; #1083)
 
 Refs DanAakesen/jarvis#1083, Refs DanAakesen/jarvis#1084.
@@ -2130,7 +2159,7 @@ What Jarvis may now do, and the limits that stay:
   or a calendar clash starting within 48 hours) found by the 07:00 or 18:00 check or
   its catch-up; at most one push per check, at most 3 a day, never between 22:00 and
   07:00, never for "Check now". Everything else waits on the Proactive page.
-- Reminders: one generic push about an hour before a todo with an explicit time is
+- Reminders (generic copy superseded by P13-21/#1194): one push about an hour before a todo with an explicit time is
   due, at most 8 a day; the todo title and due time sit in the private Proactive
   item it opens. A reminder due in the quiet window is held until 07:00 and shown as
   due soon or overdue.
@@ -2358,8 +2387,9 @@ storage, signing keys or providers.
 The backend generates and stores its VAPID key pair on first use, serving only
 the public key. Keep RFC 8030 delivery, RFC 8291 `aes128gcm` encryption and
 RFC 8292 VAPID in a small `node:crypto` module without a new dependency. Store
-subscriptions and durable items separately from Now/activity. Push text stays
-generic; provider acceptance is not delivery evidence, and `opened_at` means
+subscriptions and durable items separately from Now/activity. The original
+generic-only push-text rule is superseded by P13-21/#1194; bounded titles and
+due times now belong in the encrypted payload only. Provider acceptance is not delivery evidence, and `opened_at` means
 loaded, not read. Dan decided no Teams messages are ever sent; push is the only
 delivery path, keeping notification and alert delivery on one route.
 
@@ -2425,8 +2455,9 @@ not evidence for plan-time cancellation.
 At send time the ticker re-reads the todo file, observes pause and subscription
 state, suppresses recently alerted deadlines, and enforces eight reminders per
 Copenhagen day. Quiet-window work remains pending until 07:00. Each reminder
-gets an idempotent private finding, while the shared push payload stays generic
-and logs contain only IDs, counts, durations and reason codes. Verification
+gets an idempotent private finding. The original generic-payload rule is
+superseded by P13-21/#1194: encrypted pushes carry bounded titles and due times,
+while logs still contain only IDs, counts, durations and reason codes. Verification
 failures retry twice at five-minute intervals; a third failure sends as
 unverified. Delivery is at-least-once: a process crash between push acceptance
 and state persistence, or a short overlap of deployment revisions, can produce
@@ -2509,7 +2540,9 @@ logged.
 
 Implement the web half of the delivery proof behind the exact-string
 `VITE_PUSH_ENABLED === "true"` gate; the build default remains off. The service
-worker shows fixed generic text even for malformed pushes and retains only a
+worker's original fixed-copy rule is superseded by P13-21/#1194: it validates
+v2 title/body text and uses generic headlines for legacy or malformed pushes.
+It retains only a
 validated UUID for a same-origin item path. It never trusts a payload URL, and
 the item page remains behind the normal sign-in and owner-protected API.
 

@@ -217,6 +217,8 @@ export function createReminderTicker(options: {
       language,
       itemId: items[0]!.item.id,
       origin: 'proactive_reminder',
+      details: [...items].sort((left, right) => left.row.dueAt.getTime() - right.row.dueAt.getTime())
+        .slice(0, 3).map(({ row }) => ({ title: row.title, dueAt: row.dueAt.toISOString() })),
     }, controller.signal);
 
     if (outcome.status === 'sent') {

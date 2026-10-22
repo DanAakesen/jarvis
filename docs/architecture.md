@@ -2166,8 +2166,9 @@ RFC 8291 `aes128gcm` encryption with `node:crypto`; no dependency is added. The
 private VAPID key is generated on first use, stored only in SQL and never
 returned. Subscription endpoints are checked against the provider-host allowlist
 before any server-side request. Provider acceptance is recorded as acceptance,
-not display or reading; encrypted push content contains only the version, generic
-title/body and item UUID. Retries are limited to transient provider responses and
+not display or reading. P13-21 encrypted v2 payloads contain bounded final
+title/body text and an item UUID; system pushes also retain kind, count and
+language for older workers. The payload is not stored. Retries are limited to transient provider responses and
 bounded by per-request/overall timeouts.
 
 P13-01 sends only a direct user-requested test. It adds no scheduler or quiet-hour
@@ -2363,13 +2364,21 @@ several finding rows consumes one slot. The additive 0057 migration has a
 data-preserving down script.
 
 `proactive/push-delivery.ts` is shared by the user test route and system sender
-for lazy VAPID key loading and subscription delivery/removal. System payloads keep
-the generic M1 title/body and add only the most urgent item UUID, kind, count and
-language. Alert pushes use one-hour TTL/high urgency; reminders use 30-minute
+for lazy VAPID key loading and subscription delivery/removal. P13-21 system
+payloads use v2 server-composed Danish/English headlines and bodies, keeping the
+most urgent item UUID, kind, count and language for rollout compatibility.
+Reminder details come from rows already in memory; alert details come from
+stored-item reads that do not mark items loaded or seen. Missing or failed
+detail reads still send the count headline. Up to three entries and an overflow
+line fit within the 240-code-point body limit; titles are capped at 60 and each
+line at 80. Sanitization strips controls, collapses whitespace and truncates on
+code-point boundaries with an ellipsis. Alert pushes use one-hour TTL/high urgency; reminders use 30-minute
 TTL/high urgency; user tests retain the original five-minute/normal headers.
 System sends are rejected inside quiet hours at the sender boundary. The worker
-selects only fixed templates for validated kinds, languages and counts, ignoring
-payload-supplied title/body text. Provider acceptance is recorded per item and
+validates and clamps v2 title/body text; legacy payloads use fixed count
+headlines with empty bodies. Unknown or malformed payloads show `New item`.
+Todo/finding details go only into the encrypted payload, never logs, metrics,
+errors or job output. Provider acceptance is recorded per item and
 remains distinct from device display.
 
 ## Proactive todo reminders (P13-13; default off in code, on in production since P13-15)
@@ -2416,7 +2425,7 @@ deadline alerts sent within two hours and enforces eight sent reminders per
 Copenhagen day.
 
 Each remaining row upserts an idempotent, private `todo` finding with a fixed
-Danish/English body. One generic `proactive_reminder` push is bundled per tick
+Danish/English body. One detailed `proactive_reminder` push is bundled per tick
 through the shared system sender. Push delivery and reminder state are separate
 writes, so a process crash between acceptance and state update can send again;
 a brief overlap of revisions during deployment can also duplicate a reminder
@@ -2431,11 +2440,13 @@ Notifications Settings section prefetches authenticated `GET /push/config` and
 registers the plain `public/sw.js` worker at `/` with worker updates uncached.
 Static Web Apps excludes `/sw.js` from its SPA fallback and sends
 `Cache-Control: no-cache`. The worker does not cache content or provide offline
-behavior; pushes display fixed Jarvis text, retaining a validated UUID solely as
-notification data/tag. P13-12 and later proactive reminders select closed,
-localized templates from validated `kind`, `lang` and `count`; every other
-payload displays the existing generic text and untrusted title/body fields are
-ignored.
+behavior. P13-21 pushes display validated, bounded v2 title/body text, retaining a
+validated UUID solely as notification data/tag. Legacy payloads select closed,
+localized headlines from validated `kind`, `lang` and `count` with an empty body;
+unknown or malformed data shows `New item` with an empty body. No title repeats
+the product name. iOS adds `from Jarvis`, which the app cannot remove; the owner
+can hide lock-screen details with Settings → Notifications → Jarvis → Show
+Previews. Real-device appearance awaits owner verification.
 
 The web client calls authenticated `PUT /push/subscription`,
 `DELETE /push/subscription`, and `POST /push/test` through `backendFetch`.
@@ -2574,10 +2585,10 @@ show what these hooks produce, so `deploy.yml` and the web build are unchanged.
 
 At runtime, after each check the writer may append new lines to the corresponding
 existing Personal or Work inbox: add-only, never creating, editing or deleting,
-at most three per run and five per Copenhagen day. A scheduled or catch-up run may send one generic alert push for a
+at most three per run and five per Copenhagen day. A scheduled or catch-up run may send one detailed alert push for a
 new, time-critical deadline or clash finding: at most one per check and three per
 Copenhagen day, and never in the 22:00 to 07:00 quiet window, which is enforced in
-the hook and again at the sender. Reminders send one generic push about an hour
+the hook and again at the sender. Reminders send one detailed push about an hour
 before a todo with an explicit time is due (at most eight per Copenhagen day), and
 a reminder due in the quiet window is held until 07:00. The pause switch and the
 Todo list source switch are read before any vault call. Pause also suppresses

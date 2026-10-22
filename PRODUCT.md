@@ -619,8 +619,9 @@ unavailable, including after backend restart.
 Jarvis writes bounded text notifications to the Now activity feed. Gated actions appear as browser approval requests with Approve and Reject controls and normally expire after five minutes. Internal food-review cards explicitly expire after two minutes to keep the whole operation inside the hosting request limit; the visible expiry matches persistence and cancellation. Unknown, replayed, rejected, cancelled, expired, or unverified responses never run the action. A pending approval is announced to an active browser voice session; the authenticated Now feed remains the approval channel.
 
 P13-02 adds an optional web push opt-in, on in production since P13-03, for a
-visible generic alert that links to a durable owner-protected item.
-Notifications never approve an action or carry sensitive item text. Opening an
+visible alert that links to a durable owner-protected item. P13-21 includes
+bounded todo/finding titles and due times only in the encrypted payload, never
+telemetry. Notifications never approve an action. Opening an
 item requires the usual authenticated session; after sign-in, Jarvis returns to
 that same-origin item path. Provider acceptance is not proof that a phone
 displayed the notification.
@@ -1134,9 +1135,11 @@ Dan decided that GitHub issues are the single backlog. When Dan asks Jarvis to c
 - Push only for deadlines within 24 hours, calendar clashes, travel disruptions
   and reminders about an hour before a todo is due. Hold a quiet-hour reminder
   until 07:00 and show it as due soon or overdue. Bundle at most one push per
-  run and enforce daily caps. Pushes are generic alerts for durable,
-  owner-protected items; they carry no private details and never approve an
-  action. A user-triggered test is not proactive delivery. Teams is not used.
+  run and enforce daily caps. Pushes carry bounded todo or finding titles and
+  due times for durable, owner-protected items in an encrypted payload; they
+  never approve an action. Details never enter logs, metrics, errors or job
+  output, and the payload is not stored. A user-triggered test is not proactive
+  delivery. Teams is not used.
 - Cap estimated spend at 100 DKK per Copenhagen month, warn at 80%, and label
   spend as an estimate.
 - Show every scheduled, catch-up or manual run in the header Background work
@@ -1147,9 +1150,12 @@ Dan decided that GitHub issues are the single backlog. When Dan asks Jarvis to c
 - Real-device iPhone delivery remains unverified until observed in the
   installed Home Screen app.
 
-Web Push is an opt-in visible alert for a durable, owner-protected item; it
-carries no private details, performs no silent work and never approves an
-action. The backend defaults off and registers no push routes unless
+Web Push is an opt-in visible alert for a durable, owner-protected item. Its
+encrypted payload carries notification details, performs no silent work and
+never approves an action. Notification headlines never repeat the product name:
+iOS adds `from Jarvis` itself. Details are visible on the lock screen unless the
+owner hides them in Settings → Notifications → Jarvis → Show Previews. The
+backend defaults off and registers no push routes unless
 `JARVIS_PUSH_ENABLED` is exactly `true`; production has set it since P13-03
 (18 October 2026), so milestone 1 is live: Notifications in Settings can turn on
 push and send a test. The user-triggered test is not proactive delivery. Teams is
@@ -1251,17 +1257,20 @@ scope and leave the server entry point unchanged.
 
 Only scheduled and catch-up checks can notify for a new, time-critical deadline
 within 24 hours or calendar clash; travel disruption keeps a typed category for a
-future provider. Eligible items share one generic push, capped at three accepted
+future provider. Eligible items share one detailed push, capped at three accepted
 bundles per Copenhagen day. Manual checks, paused settings, quiet hours, cancelled
 runs, missing subscriptions, and findings already seen, snoozed or dismissed do
-not alert. Push payloads contain no finding text; notification wording comes from
-a closed Danish/English template table in the worker. The alert switch defaults off
+not alert. The server composes bounded Danish/English v2 headlines and bodies
+from stored item titles, with a due time for a single item when available.
+Bundles show up to three titles and an overflow count. Failed detail reads still
+send the count headline. The worker validates and clamps v2 text; older payloads
+use generic headlines with empty bodies. The alert switch defaults off
 in code, like the proactive and push switches, and production sets it since P13-15; per-class controls are not
 part of this slice.
 
 ## Proactive todo reminders (18 October 2026; P13-13)
 
-An explicit-time P1 - High todo gets one generic reminder push about an hour
+An explicit-time P1 - High todo gets one detailed reminder push about an hour
 before it is due when a proactive check has seen it or a verified push to the
 vault's default branch triggers a todos-only planning pass. Other priorities and tasks
 without an explicit priority do not generate task notifications. Date-only
@@ -1269,7 +1278,13 @@ P1 - High todos remain covered by the 24-hour deadline alert. Reminders wait
 through the 22:00–07:00 Copenhagen quiet window and are presented as due soon or
 overdue after 07:00. The ticker verifies the current priority before sending and
 suppresses a reminder when vault verification fails. Each reminder has a private
-Proactive item; todo text is not included in its push or logs. The shared
+Proactive item. A single push headline gives its Copenhagen due time, including
+earlier-today or yesterday wording, with the todo title in the body. Bundles
+use the existing count headline and up to three soonest-first time/title lines,
+then an overflow count. Titles are capped at 60 code points, bodies at 240 and
+each line at 80, with control characters removed and ellipsis truncation.
+Todo text goes only into the encrypted payload, never logs or other telemetry.
+The shared
 proactive, push and alert switches default off in code, are on in production since
 P13-15, and add no new setting or web control.
 
