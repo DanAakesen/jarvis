@@ -28,11 +28,11 @@ function truncate(value, limit) {
 }
 
 function sanitizeLine(value) {
-  return value.replace(/\s/gu, ' ').replace(/[\p{Cc}\p{Cf}]/gu, '').replace(/ +/gu, ' ').trim();
+  return value.replace(/\s/gu, ' ').replace(/[\p{Cc}\p{Cf}\p{Cs}]/gu, '').replace(/ +/gu, ' ').trim();
 }
 
 function notificationText(payload) {
-  if (payload?.version === 2 && typeof payload.title === 'string' && typeof payload.body === 'string') {
+  if (payload?.v === 2 && typeof payload.title === 'string' && typeof payload.body === 'string') {
     const title = sanitizeLine(payload.title);
     if (title && title.toLowerCase() !== 'jarvis') {
       const body = payload.body.split(/\r\n?|\n|\u2028|\u2029/u)

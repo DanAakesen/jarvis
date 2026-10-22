@@ -4,7 +4,7 @@ import type { FindingsStoredContext } from './engine.js';
 import { createProactiveAlertHook, proactiveAlertKey } from './alerts.js';
 import { createMemoryAlertLedgerStore } from './alert-ledger.js';
 import { createMemoryProactiveStore } from './store.js';
-import { createSystemPushSender, type SystemPushOutcome, type SystemPushRequest } from './push-delivery.js';
+import { buildPushPayload, createSystemPushSender, type SystemPushOutcome, type SystemPushRequest } from './push-delivery.js';
 import type { Item } from './types.js';
 import type { PushStore } from '../database/push-store.js';
 
@@ -336,14 +336,20 @@ describe('proactive alert hook', () => {
     expect((await fixture.store.items.list('all', 10, NOW)).every(({ state }) => state === 'new')).toBe(true);
   });
 
-  it.each(['missing', 'throw'] as const)('still sends a headline when detail lookup is %s', async (failure) => {
+  it.each([
+    ['missing', 'en'], ['missing', 'da'], ['throw', 'en'], ['throw', 'da'],
+  ] as const)('still sends a count headline when detail lookup is %s in %s', async (failure, language) => {
     const fixture = setup();
-    const item = await saveFinding(fixture.store, 'detail-unavailable');
+    const item = await saveFinding(fixture.store, 'detail-unavailable', 'deadline', { language });
     const get = vi.spyOn(fixture.store.items, 'get');
     if (failure === 'missing') get.mockResolvedValue(undefined);
     else get.mockRejectedValue(new Error('SYNTHETIC_PRIVATE_DETAIL_ERROR'));
     await fixture.hook(contextFor([item]));
     expect(fixture.send).toHaveBeenCalledWith(expect.objectContaining({ count: 1, details: [] }), expect.any(AbortSignal));
+    expect(JSON.parse(buildPushPayload(fixture.send.mock.calls[0]![0], NOW).toString())).toMatchObject({
+      title: language === 'da' ? '1 tidskritisk ting kræver din opmærksomhed' : '1 time-critical item needs you',
+      body: '',
+    });
     expect(await fixture.ledger.get(proactiveAlertKey('deadline_24h', 'detail-unavailable'))).toMatchObject({ status: 'sent' });
     expect(JSON.stringify([fixture.logger.info.mock.calls, fixture.logger.warn.mock.calls, vi.mocked(fixture.ledger.upsert).mock.calls]))
       .not.toContain('SYNTHETIC_PRIVATE_DETAIL_ERROR');

@@ -38,7 +38,7 @@ const request = {
 describe('shared proactive push delivery', () => {
   it('builds the v2 final payload while preserving routing metadata', () => {
     expect(buildPushPayload(request).toString()).toBe(
-      `{"v":2,"title":"2 time-critical items need you","body":"+2 more","itemId":"${itemId}","kind":"alert","count":2,"lang":"en"}`,
+      `{"v":2,"title":"2 time-critical items need you","body":"","itemId":"${itemId}","kind":"alert","count":2,"lang":"en"}`,
     );
   });
 
@@ -51,6 +51,8 @@ describe('shared proactive push delivery', () => {
     ['da', '2026-10-20T08:00:00Z', '2026-10-20T08:00:00Z', 'Todo forfaldt kl. 10:00'],
     ['en', '2026-10-19T19:30:00Z', '2026-10-20T05:00:00Z', 'Todo was due yesterday at 21:30'],
     ['da', '2026-10-19T19:30:00Z', '2026-10-20T05:00:00Z', 'Todo forfaldt i går kl. 21:30'],
+    ['en', '2026-10-18T19:30:00Z', '2026-10-20T05:00:00Z', 'Todo was due at 21:30'],
+    ['da', '2026-10-18T19:30:00Z', '2026-10-20T05:00:00Z', 'Todo forfaldt kl. 21:30'],
     ['en', '2026-01-20T08:30:00Z', '2026-01-20T08:00:00Z', 'Todo due at 09:30'],
     ['da', '2026-01-20T08:30:00Z', '2026-01-20T08:00:00Z', 'Todo forfalder kl. 09:30'],
     ['en', '2026-10-19T22:30:00Z', '2026-10-20T05:00:00Z', 'Todo was due at 00:30'],
@@ -162,6 +164,29 @@ describe('shared proactive push delivery', () => {
         body: '',
       });
     }
+  });
+
+  it.each([
+    ['en', 1, '1 time-critical item needs you'],
+    ['da', 1, '1 tidskritisk ting kræver din opmærksomhed'],
+    ['en', 5, '5 time-critical items need you'],
+    ['da', 5, '5 tidskritiske ting kræver din opmærksomhed'],
+  ] as const)('keeps the %s %s-item count headline and empty body without usable alert details', (language, count, title) => {
+    for (const details of [undefined, [], [{ title: '\u0000\n ', dueAt: null }]]) {
+      expect(JSON.parse(buildPushPayload({ ...request, count, language, details }).toString()))
+        .toMatchObject({ title, body: '' });
+    }
+  });
+
+  it('never maps details beyond the three-item internal bound', () => {
+    const unused = { get title(): string { throw new Error('Synthetic unbounded detail'); }, dueAt: null };
+    const payload = buildPushPayload({
+      ...request, count: 4,
+      details: [...Array.from({ length: 3 }, () => ({ title: 'Synthetic bounded detail', dueAt: null })), unused],
+    });
+    expect(JSON.parse(payload.toString()).body).toBe([
+      'Synthetic bounded detail', 'Synthetic bounded detail', 'Synthetic bounded detail', '+1 more',
+    ].join('\n'));
   });
 
   it('uses the injected sender clock for composition, not wall-clock time', async () => {

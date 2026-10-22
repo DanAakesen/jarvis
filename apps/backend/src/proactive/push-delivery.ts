@@ -1,6 +1,6 @@
 import { generateVapidKeyPair, sendWebPush, type PushSendOrigin, type VapidKeyPair, type WebPushResult, type WebPushTransport } from '../push/webpush.js';
 import type { PushStore, StoredPushSubscription } from '../database/push-store.js';
-import { dayKey, isQuietHour, localTimeLabel } from './time.js';
+import { copenhagenDayStart, dayKey, isQuietHour, localTimeLabel } from './time.js';
 
 export type SystemPushKind = 'alert' | 'due_soon' | 'overdue' | 'mixed';
 
@@ -50,7 +50,9 @@ function countHeadline(request: SystemPushRequest): string {
   const { kind, count, language } = request;
   const da = language === 'da';
   switch (kind) {
-    case 'alert': return da ? `${count} tidskritiske ting kræver din opmærksomhed` : `${count} time-critical items need you`;
+    case 'alert': return da
+      ? count === 1 ? '1 tidskritisk ting kræver din opmærksomhed' : `${count} tidskritiske ting kræver din opmærksomhed`
+      : count === 1 ? '1 time-critical item needs you' : `${count} time-critical items need you`;
     case 'due_soon': return da
       ? count === 1 ? 'En todo forfalder inden for en time' : `${count} todos forfalder inden for en time`
       : count === 1 ? 'A todo is due within the hour' : `${count} todos are due within the hour`;
@@ -63,7 +65,7 @@ function countHeadline(request: SystemPushRequest): string {
 
 export function buildPushPayload(request: SystemPushRequest, now = new Date()): Buffer {
   const da = request.language === 'da';
-  const details = (request.details ?? []).map((detail) => ({
+  const details = (request.details ?? []).slice(0, 3).map((detail) => ({
     title: singleLine(detail.title),
     due: detail.dueAt === null ? null : new Date(detail.dueAt),
   })).map((detail) => ({
@@ -79,16 +81,16 @@ export function buildPushPayload(request: SystemPushRequest, now = new Date()): 
   let body: string;
   if (request.count === 1) {
     const detail = visible[0];
-    if (request.kind === 'alert') {
+    if (request.kind === 'alert' && detail) {
       title = da ? 'Tidskritisk' : 'Time-critical';
     } else if (detail?.due) {
       const time = localTimeLabel(detail.due);
       if (detail.due.getTime() > now.getTime()) {
         title = da ? `Todo forfalder kl. ${time}` : `Todo due at ${time}`;
-      } else if (dayKey(detail.due) === dayKey(now)) {
-        title = da ? `Todo forfaldt kl. ${time}` : `Todo was due at ${time}`;
-      } else {
+      } else if (dayKey(detail.due) === dayKey(new Date(copenhagenDayStart(now).getTime() - 1))) {
         title = da ? `Todo forfaldt i går kl. ${time}` : `Todo was due yesterday at ${time}`;
+      } else {
+        title = da ? `Todo forfaldt kl. ${time}` : `Todo was due at ${time}`;
       }
     }
     const suffix = request.kind === 'alert' && detail?.due ? ` · ${localTimeLabel(detail.due)}` : '';
@@ -98,7 +100,7 @@ export function buildPushPayload(request: SystemPushRequest, now = new Date()): 
       `${request.kind !== 'alert' && detail.due ? `${localTimeLabel(detail.due)} ` : ''}${detail.title}`, 80,
     ));
     const remaining = request.count - visible.length;
-    const overflow = remaining > 0 ? `+${remaining} ${da ? 'flere' : 'more'}` : '';
+    const overflow = visible.length > 0 && remaining > 0 ? `+${remaining} ${da ? 'flere' : 'more'}` : '';
     // Reserve the overflow line before fitting detail lines to the total body budget.
     let budget = 240 - (overflow ? Array.from(overflow).length + lines.length : Math.max(0, lines.length - 1));
     body = [...lines.map((line, index) => {

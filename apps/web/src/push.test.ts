@@ -76,7 +76,7 @@ describe('push service worker', () => {
     ['mixed', 'en', 2, '2 todos need your attention'],
   ] as const)('uses a fixed %s/%s title for count %i', async (kind, lang, count, title) => {
     const { showNotification, dispatch, settle } = createWorker();
-    dispatch('push', { data: { json: () => ({ itemId, kind, lang, count, body: 'Synthetic secret text' }) } });
+    dispatch('push', { data: { json: () => ({ v: 1, itemId, kind, lang, count, body: 'Synthetic secret text' }) } });
     await settle();
     expect(showNotification).toHaveBeenCalledWith(title, {
       body: '', tag: itemId, data: { itemId },
@@ -105,9 +105,10 @@ describe('push service worker', () => {
   it.each([
     ['En todo er forfalden', 'Send regningen\nRing til tandlægen\nBestil tid\n+2 mere'],
     ['A todo is overdue', 'Send the invoice\nCall the dentist\nBook a visit\n+2 more'],
+    ['Test notification', 'Push notifications are working on this device.'],
   ])('uses server-composed v2 text without legacy metadata: %s', async (title, body) => {
     const { showNotification, dispatch, settle } = createWorker();
-    dispatch('push', { data: { json: () => ({ version: 2, itemId, title, body }) } });
+    dispatch('push', { data: { json: () => ({ v: 2, itemId, title, body }) } });
     await settle();
     expect(showNotification).toHaveBeenCalledWith(title, { body, tag: itemId, data: { itemId } });
   });
@@ -115,7 +116,7 @@ describe('push service worker', () => {
   it('prefers v2 text to compatibility metadata and accepts an empty body', async () => {
     const { showNotification, dispatch, settle } = createWorker();
     dispatch('push', { data: { json: () => ({
-      version: 2, title: 'Meeting in ten minutes', body: '', kind: 'alert', lang: 'en', count: 1,
+      v: 2, title: 'Meeting in ten minutes', body: '', kind: 'alert', lang: 'en', count: 1,
     }) } });
     await settle();
     expect(showNotification).toHaveBeenCalledWith('Meeting in ten minutes', { body: '', tag: 'jarvis', data: {} });
@@ -124,9 +125,9 @@ describe('push service worker', () => {
   it('strips controls, collapses whitespace and preserves only nonempty body line breaks', async () => {
     const { showNotification, dispatch, settle } = createWorker();
     dispatch('push', { data: { json: () => ({
-      version: 2,
-      title: ' \u0000A \u202E  todo\tis\n due\u007F\u009F ',
-      body: '\r\n First \t task\u0000 \r\n\r\n Second \u202E task \rThird\u009F task\u2028 +2\u200B  more \u2029ignored',
+      v: 2,
+      title: ' \u0000A \u202E  todo\tis\n due\u007F\u009F\uD800 ',
+      body: '\r\n First \t task\u0000 \r\n\r\n Second \u202E task \rThird\u009F task\uDC00\u2028 +2\u200B  more \u2029ignored',
     }) } });
     await settle();
     expect(showNotification).toHaveBeenCalledWith('A todo is due', {
@@ -137,7 +138,7 @@ describe('push service worker', () => {
   it('truncates title and individual lines by code point without splitting emoji', async () => {
     const { showNotification, dispatch, settle } = createWorker();
     dispatch('push', { data: { json: () => ({
-      version: 2, title: '😀'.repeat(80), body: `${'🦊'.repeat(100)}\nShort line`,
+      v: 2, title: '😀'.repeat(80), body: `${'🦊'.repeat(100)}\nShort line`,
     }) } });
     await settle();
     expect(showNotification).toHaveBeenCalledWith(`${'😀'.repeat(59)}…`, {
@@ -148,7 +149,7 @@ describe('push service worker', () => {
   it('caps the entire Unicode body at 240 code points including newlines and ellipsis', async () => {
     const { showNotification, dispatch, settle } = createWorker();
     dispatch('push', { data: { json: () => ({
-      version: 2, title: 'Tasks', body: Array(4).fill('😀'.repeat(100)).join('\n'),
+      v: 2, title: 'Tasks', body: Array(4).fill('😀'.repeat(100)).join('\n'),
     }) } });
     await settle();
     const body = showNotification.mock.calls[0]?.[1]?.body ?? '';
@@ -162,7 +163,7 @@ describe('push service worker', () => {
     const title = '😀'.repeat(60);
     const body = `${'🦊'.repeat(80)}\n${'x'.repeat(80)}\n${'y'.repeat(78)}`;
     const { showNotification, dispatch, settle } = createWorker();
-    dispatch('push', { data: { json: () => ({ version: 2, title, body }) } });
+    dispatch('push', { data: { json: () => ({ v: 2, title, body }) } });
     await settle();
     expect(showNotification).toHaveBeenCalledWith(title, { body, tag: 'jarvis', data: {} });
   });
@@ -170,6 +171,7 @@ describe('push service worker', () => {
   it.each([
     { title: '', body: 'Task' },
     { title: ' \u0000\u202E\n ', body: 'Task' },
+    { title: '\uD800', body: 'Task' },
     { title: 'Jarvis', body: 'Task' },
     { title: ' \u0000jArViS\u202E ', body: 'Task' },
     { title: null, body: 'Task' },
@@ -181,15 +183,15 @@ describe('push service worker', () => {
     { title: 'Tasks' },
   ])('falls back to legacy titles for malformed v2 text %#, never Jarvis', async (invalid) => {
     const { showNotification, dispatch, settle } = createWorker();
-    dispatch('push', { data: { json: () => ({ version: 2, itemId, kind: 'overdue', lang: 'en', count: 1, ...invalid }) } });
-    dispatch('push', { data: { json: () => ({ version: 2, ...invalid }) } });
+    dispatch('push', { data: { json: () => ({ v: 2, itemId, kind: 'overdue', lang: 'en', count: 1, ...invalid }) } });
+    dispatch('push', { data: { json: () => ({ v: 2, ...invalid }) } });
     await settle();
     expect(showNotification).toHaveBeenNthCalledWith(1, 'A todo is overdue', { body: '', tag: itemId, data: { itemId } });
     expect(showNotification).toHaveBeenNthCalledWith(2, 'New item', { body: '', tag: 'jarvis', data: {} });
     expect(showNotification.mock.calls.every(([title]) => title.toLowerCase() !== 'jarvis')).toBe(true);
   });
 
-  it.each([null, [], 'unknown', 2, { version: 3, title: 'Private text', body: 'Private body' }])(
+  it.each([null, [], 'unknown', 2, { v: 3, title: 'Private text', body: 'Private body' }])(
     'uses a generic title for unknown payload %#', async (payload) => {
       const { showNotification, dispatch, settle } = createWorker();
       dispatch('push', { data: { json: () => payload } });
@@ -201,7 +203,7 @@ describe('push service worker', () => {
   it.each(['https://example.invalid/path', '../settings', null, 123])(
     'preserves safe tags and data for invalid v2 item ids %#', async (invalidId) => {
       const { showNotification, dispatch, settle } = createWorker();
-      dispatch('push', { data: { json: () => ({ version: 2, title: 'Tasks', body: 'Task', itemId: invalidId }) } });
+      dispatch('push', { data: { json: () => ({ v: 2, title: 'Tasks', body: 'Task', itemId: invalidId }) } });
       await settle();
       expect(showNotification).toHaveBeenCalledWith('Tasks', { body: 'Task', tag: 'jarvis', data: {} });
     },
