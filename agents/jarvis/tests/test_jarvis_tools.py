@@ -17,7 +17,6 @@ from jarvis_tools import (
     INSTRUCTIONS,
     MAX_DESCRIPTION_CHARACTERS,
     MAX_RESPONSE_BYTES,
-    MAX_TOOLS,
     REPOSITORY_INSTRUCTIONS,
     BackendToolClient,
     BackendUnavailable,
@@ -184,6 +183,19 @@ async def test_lists_backend_tools_with_the_agent_token_and_maps_them_for_the_mo
             "strict": False,
         }
     ]
+    await client.close()
+
+
+async def test_loads_and_maps_every_tool_above_the_former_global_count_limit() -> None:
+    catalogue = [{**CREATE_TASK, "name": f"tool_{index}"} for index in range(129)]
+    backend = Backend(catalogue=catalogue)
+    client = make_client(backend)
+
+    loaded = await client.tools()
+    mapped = model_tools(loaded)
+
+    assert [tool.name for tool in loaded] == [entry["name"] for entry in catalogue]
+    assert [tool["name"] for tool in mapped] == [entry["name"] for entry in catalogue]
     await client.close()
 
 
@@ -415,7 +427,6 @@ async def test_other_settings_failures_get_distinct_safe_codes(settings: Any, co
         [{**CREATE_TASK, "description": " "}],
         [{**CREATE_TASK, "inputSchema": {"type": "array"}}],
         [CREATE_TASK, CREATE_TASK],
-        [{**CREATE_TASK, "name": f"tool_{index}"} for index in range(MAX_TOOLS + 1)],
     ],
 )
 async def test_an_unusable_catalogue_fails_the_turn_visibly(catalogue: Any) -> None:
@@ -802,6 +813,6 @@ async def test_identity_client_requests_the_api_scope() -> None:
 def test_tool_catalogue_limits_come_from_the_shared_limits_file() -> None:
     limits = json.loads((Path(__file__).parents[1] / "limits.json").read_text(encoding="utf-8"))
 
-    assert MAX_TOOLS == limits["maxTools"] == 128
+    assert "maxTools" not in limits
     assert MAX_DESCRIPTION_CHARACTERS == limits["maxToolDescriptionCharacters"]
     assert limits["maxCatalogueBytes"] <= MAX_RESPONSE_BYTES
