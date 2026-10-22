@@ -4385,19 +4385,35 @@ Key Vault response, or runner result is returned.
   status and log only a fixed diagnostic. The authenticated check is the sole
   owner of Copilot health: Codex renewal no longer copies runner expiry metadata
   into health, which could overwrite an authentication failure with `ok`.
-- GitHub App: all repository-scoped and catalog installation-token mint
-  paths record `ok` or `failed` and `lastCheckedAt`; successful mints also
-  update `lastRenewedAt`. `expiresAt` remains null because an installation
-  token's one-hour lifetime is not the App key's expiry. An older observation
-  cannot replace newer health. On transition to failed, status and a
-  `credential_expiry` activity alert commit together, then refresh Now and
-  notify the existing telemetry/email path. Repeated failures do not create
-  additional alerts until a successful mint resets health. Status-persistence
-  errors are logged without disrupting a valid mint.
-- Migration `0023_github_app_credential_health.sql` adds the health row and
-  check timestamp, with a matching reverse batch. `0022` is left available
-  for #432; recheck the sequence before merge. The legacy `github-app-key`
-  name remains permitted in SQL but is not part of the Settings list.
+- GitHub App mint observations use a versioned SHA-256 scope key over the
+  canonical operation kind, lower-cased repository or catalog owner, and
+  sorted requested permission map. The repository token path includes the
+  repository and its requested grants; catalog/tech-detection mints use the
+  installation-wide catalog owner and `contents:read`. Only the digest is
+  persisted. `github_app_mint_status` serializes observations and ignores an
+  older timestamp for that same scope. A transition into failed creates one
+  `credential_expiry` activity alert; repeated failures stay in that incident.
+  A successful mint recovers only undismissed or dismissed alert history for
+  its exact scope, and a later failure creates a new alert row. Recovered rows
+  remain in activity history while Now excludes them from active attention.
+  Manual dismissal remains row-specific.
+- Aggregate GitHub App health is `failed` while any known scope is failing,
+  `unknown` while only legacy unscoped failures remain unresolved, and `ok`
+  otherwise. A scoped success never recovers an old unscoped alert: those
+  alerts remain visible unless manually dismissed, and keep health unknown
+  because their originating repository/permissions cannot be established.
+  If a migration finds a failed legacy health row without any matching alert,
+  it creates one conservative unscoped history row. `lastRenewedAt` records
+  the latest successful mint across scopes; `expiresAt` remains null because
+  an installation token's one-hour lifetime is not the App key's expiry.
+  Status-persistence errors are logged without disrupting a valid mint.
+- Migration `0062_github_app_mint_recovery.sql` adds the per-scope status and
+  activity recovery metadata. Its reverse batch retains activity and restores
+  scoped alerts to unresolved legacy visibility rather than deleting history.
+  The earlier `0023_github_app_credential_health.sql` adds the shared health
+  row; the legacy `github-app-key` name remains permitted in SQL but is not
+  part of the Settings list. This source-level lifecycle does not establish
+  whether a production mint failure has recovered or what caused it.
 
 #### UI repair contract
 
