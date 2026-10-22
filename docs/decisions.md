@@ -1,5 +1,24 @@
 # Decisions
 
+## One owner identity across chat and voice (22 October 2026; #1210)
+
+Use one versioned identity contract and owner-editable `identity.description`
+across hosted chat, Danish and English realtime voice, hosted voice and reduced
+English voice. Keep identity and role separate from tone and response style.
+Composition precedence is the fixed truthfulness/security kernel, shared Jarvis
+product identity, owner description, style, current mode, then
+situational/project context; mode and owner text cannot grant permissions,
+override backend policy or manufacture capabilities.
+
+Persist the new description through the existing owner-bound settings store.
+Missing values use a broad personal-assistant default and do not rewrite legacy
+personality or mode preferences. Carry the contract version and a composition
+revision through agent settings. Active voice updates wait for the in-flight
+response and provider acknowledgement; stale refresh reads are ignored, and a
+failed update or timeout closes the relay for reconnect. “Saved” is persistence
+feedback, not provider/device acceptance. Synthetic tests and builds do not
+establish live chat, voice-provider or real-device acceptance; keep the issue
+open for that separately authorized acceptance.
 ## Health tool read coverage (22 October 2026; #1197)
 
 Extend the existing sensitive `daily_query` tool rather than add catalogue

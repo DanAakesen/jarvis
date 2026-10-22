@@ -11,6 +11,7 @@
 !agents/
 !agents/jarvis/
 !agents/jarvis/presence-instructions.json
+!agents/jarvis/identity-contract.json
 !apps/
 !apps/backend/
 !apps/backend/package.json

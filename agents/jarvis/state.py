@@ -112,6 +112,9 @@ class ModelSettings:
     backend_http_timeout_seconds: int = 10
     research_timeout_seconds: int = 305
     capability_instructions: str = ""
+    identity_description: str = ""
+    identity_contract_version: int = 1
+    composition_revision: str = ""
 
     @property
     def away_mode(self) -> bool:

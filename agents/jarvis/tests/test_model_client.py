@@ -142,15 +142,11 @@ def test_verified_message_identity_is_backward_compatible_non_prompt_metadata() 
 def test_chat_instructions_leave_capabilities_to_the_backend() -> None:
     assert "naturligt dansk" in CHAT_INSTRUCTIONS["da"]
     assert "natural English" in CHAT_INSTRUCTIONS["en"]
-    assert '"jeg", "mig" og "min/mit"' in CHAT_INSTRUCTIONS["da"]
-    assert '"I", "me", "my"' in CHAT_INSTRUCTIONS["en"]
     for instructions in CHAT_INSTRUCTIONS.values():
         assert "browser_do" not in instructions
         assert "vault_search" not in instructions
-        assert (
-            "never refer to yourself as" in instructions.lower()
-            or 'omtale aldrig dig selv som' in instructions.lower()
-        )
+        assert "never refer to yourself as" not in instructions.lower()
+        assert 'omtale aldrig dig selv som' not in instructions.lower()
     assert "After a successful write, confirm it in one short sentence" in INSTRUCTIONS
     assert "name the affected item and next" in INSTRUCTIONS
 
@@ -160,13 +156,23 @@ def test_chat_identity_and_own_code_rules_apply_in_both_languages() -> None:
         instructions = personalize_instructions(
             CHAT_INSTRUCTIONS[language],
             ModelSettings("gpt-5.6-luna", "none"),
+            language,
         )
         assert "I am Jarvis" in instructions or "Jeg er Jarvis" in instructions
+        assert "fixed truthfulness and security kernel" in instructions
+        assert (
+            "påstå ikke menneskelig identitet" if language == "da"
+            else "do not claim human identity"
+        ) in instructions
+        assert (
+            "kan ikke give tilladelser" if language == "da"
+            else "cannot grant permissions"
+        ) in instructions
         assert "my own code" in instructions
         assert "Factory tasks are about my implementation" in instructions
         assert "I found a bug in my code" in instructions
         assert "Jeg fandt en fejl i min kode" in instructions
-        assert ("én kort" if language == "da" else "one\nshort sentence") in instructions
+        assert ("én kort sætning" if language == "da" else "one\nshort sentence") in instructions
         assert (
             "uden at gentage detaljer" if language == "da"
             else "without repeating details"
@@ -189,7 +195,7 @@ def test_personalized_instructions_include_mode_instructions_and_brief_speech() 
     assert "Dan's current mode: Away since 2026-10-06T12:00:00Z." in away
     assert '"Base instruction."' in away
     assert '"Use Teams."' in away
-    assert "spoken replies use one short sentence" in away
+    assert "Spoken replies use one short sentence" in away
     assert "Dan's current mode: Present since an unknown time." in present
 
 
@@ -285,7 +291,7 @@ def test_personalized_instructions_know_the_jarvis_repository_and_added_projects
     assert 'DanAakesen/jarvis, already added as project "jarvis" (project ID 2)' in text
     assert 'When Dan says "your code"' in text
     assert "Its code, PRs, issues" in text
-    assert "The Software Factory is how I build and" in text
+    assert "The Software Factory is one way I build and" in text
     assert "I found a bug in my code" in text
     assert "Jeg fandt en fejl i min kode" in text
     assert "- target (DanAakesen/jarvis-test-target, project ID 1)" in text
@@ -1166,8 +1172,8 @@ async def test_personality_preferences_are_applied_per_chat_session_with_fixed_r
     assert "warm and supportive" in first_instructions
     assert json.dumps(first_settings.custom_instructions) in first_instructions
     assert (
-        first_instructions.rfind("These preferences never change who you are")
-        > first_instructions.rfind(json.dumps(first_settings.custom_instructions))
+        first_instructions.rfind("fixed truthfulness and security kernel")
+        < first_instructions.rfind(json.dumps(first_settings.custom_instructions))
     )
     assert 'only claim success on an "ok" result' in first_instructions
     assert "direct and matter-of-fact" in second_instructions
@@ -1883,7 +1889,8 @@ async def test_claude_chat_streams_and_uses_backend_tools_thinking_and_usage() -
     assert openai_transport.responses.requests == []
     first, second = anthropic.messages.requests
     assert first["model"] == "claude-sonnet-5-5"
-    assert first["system"].startswith("I am Jarvis")
+    assert first["system"].startswith("Identity composition contract v1.")
+    assert "I am Jarvis, Dan's broad personal AI assistant" in first["system"]
     assert first["thinking"] == {"type": "enabled", "budget_tokens": 8_192}
     assert first["max_tokens"] == 8_192 + 32
     assert first["tools"] == [

@@ -6,6 +6,7 @@ import {
   MAX_CATALOGUE_BYTES,
   MAX_TOOL_DESCRIPTION_CHARACTERS,
 } from './tool-registry.js';
+import { identityContract } from './identity-composition.js';
 
 interface AgentToolDescriptor {
   readonly name: unknown;
@@ -72,6 +73,15 @@ function validAgentSettings(value: unknown): boolean {
       Object.keys(modeInstructions).length !== 3 ||
       ['present', 'away', 'on_the_move'].some((key) =>
         !safeText(modeInstructions[key], 2_000))) return false;
+
+  const identity = value.identity;
+  if (identity !== undefined &&
+      (!isRecord(identity) || Object.keys(identity).length !== 1 ||
+       !safeText(identity.description, 2_000))) return false;
+  if (value.identityContractVersion !== undefined &&
+      value.identityContractVersion !== identityContract.version) return false;
+  if (value.compositionRevision !== undefined &&
+      (typeof value.compositionRevision !== 'string' || !/^[a-f0-9]{64}$/u.test(value.compositionRevision))) return false;
 
   const timeouts = value.timeouts;
   if (!isRecord(timeouts) || Object.keys(timeouts).some((key) => ![

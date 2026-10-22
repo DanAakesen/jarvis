@@ -1352,11 +1352,24 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   visible-view callback reserves content space above the phone voice dock and
   returns the orb to the centre when no visible content remains. No backend,
   persistence, public command contract or generated-view delivery is added.
-- P7-16 extends the same authenticated, validated `dbo.settings` key/value store
-  with bounded personality preferences. Hosted chat and Danish voice read them
-  for each new agent invocation/session; the backend snapshots them when it
-  configures each new English voice relay. Active voice connections keep their
-  original snapshot.
+- The owner-only Settings API stores the bounded `identity.description` alongside
+  existing personality and mode keys; missing identity reads as the broad
+  personal-assistant default, so no migration rewrites or clears legacy
+  preferences. `agents/jarvis/identity-contract.json` is the versioned source of
+  truthfulness/security kernel, shared product identity, and precedence. Backend
+  TypeScript and Python hosted chat/voice load the same contract. Composition
+  order is fixed kernel, shared product identity, owner description, style,
+  current mode, then situational/project context. Owner text is quoted data, not
+  policy; backend authorization, confirmations, tools and route capabilities
+  remain authoritative.
+- `/agent/settings` carries identity, contract version and a revision hash over
+  identity, personality and mode. Python refreshes settings during chat turns.
+  Voice relays refresh on settings and mode events, queue turn creation until a
+  provider acknowledges the composed session update, and ignore stale concurrent
+  refresh reads. A failed update or five-second acknowledgement timeout closes
+  the relay for the client's reconnect path. Special `response.create`
+  instructions are appended to, never substituted for, the composed identity.
+  Reduced English voice retains the shared kernel and owner identity.
 - P1-10 passes the backend URL and MSAL token provider into the Software Factory
   area. The projects list and settings page call the authenticated project CRUD
   routes; running counts are derived from `GET /factory/tasks?state=Running`

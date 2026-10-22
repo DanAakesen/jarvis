@@ -744,6 +744,73 @@ describe('settings API', () => {
     });
   });
 
+  it('persists owner identity without resetting legacy preferences and isolates it to the owner', async () => {
+    const { store, values } = createStore();
+    values['personality.tone'] = '"direct"';
+    values['personality.response_style'] = '"balanced"';
+    values['personality.custom_instructions'] = JSON.stringify('Existing style preference.');
+    values['personality.modeInstructions.away'] = JSON.stringify('Use Teams.');
+    const owner = fixture(store);
+    const agent = fixture(store, async () => ({
+      kind: 'jarvis-agent',
+      objectId: '00000000-0000-0000-0000-000000000001',
+      tenantId: config.auth.tenantId,
+    }));
+    const initialSettings = await owner.inject({ url: '/settings', headers: authorization });
+    const initialAgentSettings = await agent.inject({ url: '/agent/settings', headers: authorization });
+    expect(initialSettings.json().settings.identity).toEqual({ description: '' });
+    expect(initialAgentSettings.json()).toMatchObject({
+      identity: { description: '' },
+      identityContractVersion: 1,
+      compositionRevision: expect.stringMatching(/^[a-f0-9]{64}$/u),
+      personality: {
+        tone: 'direct',
+        responseStyle: 'balanced',
+        customInstructions: 'Existing style preference.',
+        modeInstructions: { away: 'Use Teams.' },
+      },
+    });
+
+    const changes: { type: string }[] = [];
+    owner.nowEventHub.subscribe((event) => changes.push(event));
+    const saved = await owner.inject({
+      method: 'PATCH', url: '/settings', headers: authorization,
+      payload: { settings: { identity: { description: 'Synthetic owner identity.' } } },
+    });
+    const updatedAgentSettings = await agent.inject({ url: '/agent/settings', headers: authorization });
+
+    expect(saved.statusCode).toBe(200);
+    expect(saved.json().settings.identity).toEqual({ description: 'Synthetic owner identity.' });
+    expect(values).toMatchObject({
+      'identity.description': '"Synthetic owner identity."',
+      'personality.tone': '"direct"',
+      'personality.response_style': '"balanced"',
+      'personality.custom_instructions': '"Existing style preference."',
+      'personality.modeInstructions.away': '"Use Teams."',
+    });
+    expect(changes).toContainEqual({ type: 'settings_changed' });
+    expect(updatedAgentSettings.json()).toMatchObject({
+      identity: { description: 'Synthetic owner identity.' },
+      identityContractVersion: 1,
+      compositionRevision: expect.stringMatching(/^[a-f0-9]{64}$/u),
+    });
+    expect(updatedAgentSettings.json().compositionRevision).not.toBe(initialAgentSettings.json().compositionRevision);
+
+    const otherUser = fixture(store, async () => ({
+      objectId: '00000000-0000-0000-0000-000000000002',
+      tenantId: config.auth.tenantId,
+      displayName: 'Other user',
+    }));
+    const deniedRead = await otherUser.inject({ url: '/settings', headers: authorization });
+    const deniedWrite = await otherUser.inject({
+      method: 'PATCH', url: '/settings', headers: authorization,
+      payload: { settings: { identity: { description: 'Must not be stored.' } } },
+    });
+    expect(deniedRead.statusCode).toBe(403);
+    expect(deniedWrite.statusCode).toBe(403);
+    expect(values['identity.description']).toBe('"Synthetic owner identity."');
+  });
+
   it('accepts custom instructions at the configured limit', async () => {
     const app = fixture(createStore().store);
     const response = await app.inject({
@@ -943,6 +1010,9 @@ describe('settings API', () => {
         codex: { model: 'default', reasoningEffort: 'none' },
         copilot: { model: 'default', reasoningEffort: 'none' },
       },
+      identity: { description: '' },
+      identityContractVersion: 1,
+      compositionRevision: expect.stringMatching(/^[a-f0-9]{64}$/u),
       memory: {
         similarityThreshold: 0.35,
         searchTopK: 5,
@@ -1020,6 +1090,8 @@ describe('settings API', () => {
     { settings: { personality: { responseStyle: 'unbounded' } } },
     { settings: { personality: { customInstructions: 'x'.repeat(2_001) } } },
     { settings: { personality: { customInstructions: '\u0000' } } },
+    { settings: { identity: { description: 'x'.repeat(2_001) } } },
+    { settings: { identity: { description: '\u0000' } } },
     { settings: { global: { maxParallelTasks: 101 } } },
     { settings: { global: { maxCheckAttempts: 11 } } },
     { settings: { global: { maxCheckAttempts: -1 } } },

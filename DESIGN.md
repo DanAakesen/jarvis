@@ -1006,6 +1006,14 @@ new visual direction or palette is introduced. Checked in Chromium at
 least 44 px high, and save/disabled states visible. Live backend behavior remains
 unverified.
 
+For #1210, Settings adds **Identitet og rolle** as a separate collapsible section
+before **Jarvis Personality**. It reuses the existing textarea, character counter,
+shared Save settings action and page-level pending/success/error feedback. Help
+copy distinguishes perspective from tone and response style and states that
+identity text cannot grant permissions or capabilities. Reset personality leaves
+the shared identity untouched; no separate save control or new visual treatment
+is introduced.
+
 P8-13 keeps the existing neutral visual foundation and adds light/dark palettes
 through semantic CSS variables in `apps/web/src/styles.css`. The Appearance
 section saves the selected mode immediately and applies only the accepted

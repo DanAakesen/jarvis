@@ -11,6 +11,7 @@ import { ThemePreferenceContext, type ThemeMode, type ThemePreference } from './
 import { CollapsibleSection } from './CollapsibleSection';
 
 const settings = {
+  identity: { description: '' },
   appearance: { theme: 'light' as ThemeMode },
   jarvis: { model: 'gpt-5.6-luna', reasoning: 'none' },
   personality: {
@@ -286,6 +287,40 @@ describe('SettingsPage', () => {
     const [, request] = fetchMock.mock.calls[1]!;
     expect(request).toMatchObject({ method: 'PATCH' });
     expect(JSON.parse(String(request?.body))).toEqual({ settings: { personality: updated.personality } });
+  });
+
+  it('saves the shared identity separately from personality preferences', async () => {
+    const user = userEvent.setup();
+    const updated = { ...settings, identity: { description: 'I am a broad personal assistant.' } };
+    fetchMock.mockResolvedValueOnce(response(settingsResponse()))
+      .mockResolvedValueOnce(response(settingsResponse(updated)));
+    renderSettingsPage();
+
+    expect(await screen.findByRole('heading', { name: 'Identitet og rolle', level: 2 })).not.toBeNull();
+    const description = screen.getByRole('textbox', { name: 'Identity and role description' });
+    expect(description).toHaveProperty('maxLength', 2_000);
+    expect(description.getAttribute('aria-describedby')).toBe('identity-description-help');
+    expect(screen.getByText(/Identity and role guide perspective; Tone and Response style below guide how replies sound/)).not.toBeNull();
+
+    await user.type(description, updated.identity.description);
+    await user.click(screen.getByRole('button', { name: 'Save settings' }));
+
+    expect(await screen.findByText('Saved')).not.toBeNull();
+    const [, request] = fetchMock.mock.calls[1]!;
+    expect(request).toMatchObject({ method: 'PATCH' });
+    expect(JSON.parse(String(request?.body))).toEqual({ settings: { identity: updated.identity } });
+  });
+
+  it('shows an error when saving the shared identity fails', async () => {
+    const user = userEvent.setup();
+    fetchMock.mockResolvedValueOnce(response(settingsResponse()))
+      .mockResolvedValueOnce(response({ error: 'failed' }, 500));
+    renderSettingsPage();
+
+    await user.type(await screen.findByRole('textbox', { name: 'Identity and role description' }), 'Synthetic identity');
+    await user.click(screen.getByRole('button', { name: 'Save settings' }));
+
+    expect((await screen.findByRole('alert')).textContent).toBe('Jarvis could not save settings (HTTP 500).');
   });
 
   it('shows pending feedback and prevents duplicate saves', async () => {

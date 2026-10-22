@@ -52,6 +52,40 @@ describe('structured log export', () => {
     expect(records.join('') + JSON.stringify(sink.trackTrace.mock.calls)).not.toContain('private');
   });
 
+  it('registers settings refresh failures without exporting settings or provider payloads', () => {
+    const records: string[] = [];
+    const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
+    const sink = { ...sdk, trackTrace: vi.fn() };
+    const logger = createLogger({ logLevel: 'info' }, sink, output);
+    const privateFields = {
+      identity: 'Synthetic private identity.',
+      settings: { description: 'Synthetic private settings.' },
+      providerResponse: 'Synthetic provider response.',
+      err: new Error('Synthetic provider error.'),
+    };
+    logger.warn({ ...privateFields, kind: 'transport', statusCode: 503 }, 'voice.settings_refresh_failed');
+    logger.warn(privateFields, 'voice.identity_settings_unavailable');
+
+    expect(records.map((record) => JSON.parse(record))).toEqual([
+      {
+        level: 40, time: expect.any(Number), service: 'jarvis-backend', kind: 'transport', statusCode: 503,
+        msg: 'voice.settings_refresh_failed',
+      },
+      { level: 40, time: expect.any(Number), service: 'jarvis-backend', msg: 'voice.identity_settings_unavailable' },
+    ]);
+    expect(sink.trackTrace.mock.calls.map(([trace]) => trace)).toEqual([
+      {
+        message: 'voice.settings_refresh_failed', severity: 'Warning',
+        properties: { service: 'jarvis-backend', kind: 'transport', statusCode: 503 },
+      },
+      {
+        message: 'voice.identity_settings_unavailable', severity: 'Warning',
+        properties: { service: 'jarvis-backend' },
+      },
+    ]);
+    expect(records.join('') + JSON.stringify(sink.trackTrace.mock.calls)).not.toContain('Synthetic');
+  });
+
   it('exports only rung names, outcomes, counts, sizes and timings for the voice tool budget', () => {
     const records: string[] = [];
     const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });

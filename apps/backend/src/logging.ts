@@ -40,6 +40,7 @@ const failureEvents = new Set([
   'conversation_summary.read_failed', 'conversation_summary.save_failed',
   'credentials.codex_renewal_failed', 'credentials.copilot_check_failed', 'credentials.github_app_status_failed',
   'factory.board_project_lookup_failed', 'factory.board_read_failed', 'factory.board_task_event_failed',
+  'voice.settings_refresh_failed', 'voice.identity_settings_unavailable',
   'factory.board_webhook_update_failed', 'factory.issue_backfill_failed', 'factory.issue_create_failed',
   'factory.issue_executor_handoff_failed', 'factory.release_data_read_failed', 'factory.release_graph_read_failed',
   'factory.task_submission_claim_failed', 'factory.linked_task_create_failed', 'factory.task_submission_result_failed',

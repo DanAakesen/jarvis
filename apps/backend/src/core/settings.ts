@@ -16,6 +16,7 @@ import {
   defaultRoleModels, fallbackModelCatalogue, isRoleModelSupported, modelsForRole, reasoningForModel,
 } from './model-catalog.js';
 import { decisionProviders, defaultDecisionProvider, type DecisionProviderId } from './decision-provider.js';
+import { identityCompositionRevision, identityContract } from './identity-composition.js';
 
 export interface RoleModelSettings {
   model: string;
@@ -23,6 +24,9 @@ export interface RoleModelSettings {
 }
 
 export interface Settings {
+  identity: {
+    description: string;
+  };
   presentation: {
     showWork: boolean;
   };
@@ -112,7 +116,12 @@ export interface SettingsStore {
   write(settings: SettingsPatch): Promise<void>;
 }
 
+export function publishSettingsChanged(app: Pick<FastifyInstance, 'nowEventHub'>): void {
+  app.nowEventHub.publish({ type: 'settings_changed' });
+}
+
 export const defaultSettings: Settings = {
+  identity: { description: '' },
   presentation: { showWork: true },
   decisions: { provider: defaultDecisionProvider },
   appearance: { theme: 'light' },
@@ -196,6 +205,7 @@ export const settingsOptions = {
 } as const;
 
 const settingKeys = {
+  identity: { description: 'identity.description' },
   presentation: { showWork: 'presentation.show_work' },
   decisions: { provider: 'decisions.provider' },
   appearance: {
@@ -301,6 +311,7 @@ function validSetting(
   value: unknown,
   catalogue: ModelCatalogue = fallbackModelCatalogue(),
 ): boolean {
+  if (area === 'identity') return key === 'description' && validInstruction(value);
   if (area === 'presentation') return key === 'showWork' && typeof value === 'boolean';
   if (area === 'decisions') return key === 'provider' && isOption(value, settingsOptions.decisionProviders);
   if (area === 'appearance') {
@@ -467,6 +478,10 @@ const settingsPatchSchema = {
       minProperties: 1,
       additionalProperties: true,
       properties: {
+        identity: {
+          type: 'object', minProperties: 1, additionalProperties: true,
+          properties: { description: { type: 'string', maxLength: 2_000 } },
+        },
         presentation: {
           type: 'object', minProperties: 1, additionalProperties: true,
           properties: { showWork: { type: 'boolean' } },
@@ -997,6 +1012,9 @@ export async function buildAgentSettingsPayload(
     model: settings.jarvis.model,
     reasoningEffort: settings.jarvis.reasoning,
     roles: settings.roles,
+    identity: settings.identity,
+    identityContractVersion: identityContract.version,
+    compositionRevision: identityCompositionRevision(settings.identity, settings.personality, presence),
     memory: settings.memory,
     research: { timeoutSeconds: settings.research.timeoutSeconds },
     capabilityInstructions: capabilityInstructions(
@@ -1055,7 +1073,10 @@ export async function registerSettingsRoutes(app: import('fastify').FastifyInsta
     return catalogue;
   });
 
-  app.get('/settings', async (_request, reply) => {
+  app.get('/settings', async (request, reply) => {
+    if (request.principal?.objectId.toLowerCase() !== app.ownerObjectId.toLowerCase()) {
+      return reply.code(403).send({ error: 'Forbidden' });
+    }
     if (!app.settingsStore) return reply.code(503).send({ error: 'Settings unavailable' });
     const catalogue = await app.modelCatalogue.read();
     const credentials = await app.credentialStatusStore?.list() ?? [];
@@ -1089,6 +1110,14 @@ export async function registerSettingsRoutes(app: import('fastify').FastifyInsta
               required: [...modelRoles],
               additionalProperties: false,
             },
+            identity: {
+              type: 'object',
+              properties: { description: { type: 'string', maxLength: 2_000 } },
+              required: ['description'],
+              additionalProperties: false,
+            },
+            identityContractVersion: { type: 'integer', enum: [identityContract.version] },
+            compositionRevision: { type: 'string', pattern: '^[a-f0-9]{64}$' },
             memory: {
               ...memorySettingsSchema,
               required: Object.keys(defaultSettings.memory),
@@ -1142,7 +1171,8 @@ export async function registerSettingsRoutes(app: import('fastify').FastifyInsta
             },
           },
           required: [
-            'model', 'reasoningEffort', 'roles', 'memory', 'research', 'timeouts',
+            'model', 'reasoningEffort', 'roles', 'identity', 'identityContractVersion',
+            'compositionRevision', 'memory', 'research', 'timeouts',
             'personality', 'awayMode', 'mode', 'changedAt', 'capabilityInstructions',
           ],
           additionalProperties: false,
@@ -1229,6 +1259,9 @@ export async function registerSettingsRoutes(app: import('fastify').FastifyInsta
       }
     },
   }, async (request, reply) => {
+    if (request.principal?.objectId.toLowerCase() !== app.ownerObjectId.toLowerCase()) {
+      return reply.code(403).send({ error: 'Forbidden' });
+    }
     if (!app.settingsStore) return reply.code(503).send({ error: 'Settings unavailable' });
     const body = request.body as { settings: unknown };
     const catalogue = await app.modelCatalogue.read();
@@ -1238,6 +1271,7 @@ export async function registerSettingsRoutes(app: import('fastify').FastifyInsta
     const embeddingModelChanged = patch.roles?.embedding?.model !== undefined &&
       patch.roles.embedding.model !== current.roles.embedding.model;
     await app.settingsStore.write(patch);
+    publishSettingsChanged(app);
     if (embeddingModelChanged) await app.onEmbeddingModelChanged?.(app.backgroundJobs);
     const credentials = await app.credentialStatusStore?.list() ?? [];
     return {
