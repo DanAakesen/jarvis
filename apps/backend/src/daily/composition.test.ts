@@ -14,6 +14,7 @@ import type { JarvisTool } from '../core/tool-registry.js';
 import { WorkspaceCommandBroker } from '../core/workspace-commands.js';
 import type { BackendModule } from '../modules.js';
 import { createRealtimeSessionUpdate } from '../voice/realtime.js';
+import { FridaLookupAdapter, fridaReference, type FridaLookup } from './nutrition/frida.js';
 import { composeDaily } from './composition.js';
 
 const config = { ...loadConfig({}), logLevel: 'silent' as const };
@@ -170,6 +171,8 @@ describe('Daily composition', () => {
     expect(Object.keys(module).sort()).toEqual(['id', 'registerRoutes', 'tools']);
     expect(module.id).toBe('daily');
     expect(module.tools.map(({ name }) => name)).toEqual(dailyToolNames);
+    expect(module.tools.map(({ name }) => name)).not.toContain('daily_food_lookup');
+    expect(module.tools.find(({ name }) => name === 'daily_food_review')?.description).toContain('lookup_components');
 
     const baseline = fixture();
     const on = fixture(module);
@@ -192,6 +195,34 @@ describe('Daily composition', () => {
     expect(createRealtimeSessionUpdate(on.jarvisTools).session.tools.map(({ name }) => name)).toEqual(names);
     expect(await on.backgroundJobs.list()).toEqual([]);
     expect(touched).toEqual([]);
+  });
+
+  it('injects Frida lazily into the existing review tool without registering another catalogue name', async () => {
+    const { module } = composed();
+    const review = module.tools.find(({ name }) => name === 'daily_food_review')!;
+    const lookup = vi.spyOn(FridaLookupAdapter.prototype, 'lookup').mockResolvedValue({
+      status: 'complete', confirmationRequired: true, reference: fridaReference, components: [],
+      totals: { energyKcal: null, proteinGrams: null, carbohydratesGrams: null, fatGrams: null, fiberGrams: null },
+      matchedSubtotals: { energyKcal: null, proteinGrams: null, carbohydratesGrams: null, fatGrams: null, fiberGrams: null },
+      unknowns: [],
+    } satisfies FridaLookup);
+    const session = { id: 'synthetic-session', channel: 'chat', language: 'en', startedAt: new Date(), endedAt: null };
+    const source = { id: '42', sessionId: session.id, role: 'dan', text: 'Look up synthetic food', at: new Date(), model: null };
+    const request = {
+      server: { ownerObjectId: owner, conversationStore: { getSession: vi.fn(async () => session) } },
+      principal: { objectId: owner }, headers: {}, jarvisConversationMessage: source,
+    } as unknown as FastifyRequest;
+    try {
+      const result = await review.execute({ change: { operation: 'lookup_components',
+        components: [{ name: 'Synthetic food', grams: 100, preparationMethod: null }] } }, request, new AbortController().signal);
+      expect(result).toMatchObject({ status: 'complete', intakeLogged: false });
+      expect(lookup).toHaveBeenCalledOnce();
+      const other = { ...request, principal: { objectId: '22222222-2222-4222-8222-222222222222' } } as FastifyRequest;
+      await expect(review.execute({ change: { operation: 'lookup_components',
+        components: [{ name: 'Synthetic food', grams: 100, preparationMethod: null }] } }, other, new AbortController().signal)).rejects.toThrow();
+      expect(lookup).toHaveBeenCalledOnce();
+      expect(module.tools.map(({ name }) => name)).not.toContain('daily_food_lookup');
+    } finally { lookup.mockRestore(); }
   });
 
   it('fails closed before any SQL for unauthenticated, non-owner, runner and connector callers', async () => {

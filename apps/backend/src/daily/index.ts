@@ -1,4 +1,4 @@
-import { dailyContractVersion, dailyCapabilitiesVersion, dailyModuleId, dailyViewIds, dailyQuerySourcesV1, dailyQuerySourcesV2, dailyQuerySourcesV3, dailyQuerySourcesV4 } from '@jarvis/contracts';
+import { dailyContractVersion, dailyCapabilitiesVersion, dailyModuleId, dailyViewIds, dailyQuerySourcesV1, dailyQuerySourcesV2, dailyQuerySourcesV3, dailyQuerySourcesV4, dailyQuerySourcesV5, dailyQuerySourcesV5WithoutFeeds } from '@jarvis/contracts';
 import type { BackendModule } from '../modules.js';
 import { resolveDailyOwner } from './owner.js';
 import type { DailyData } from './query.js';
@@ -16,7 +16,6 @@ import { trainingTargetsRoutes } from './routes/training-targets.js';
 import type { NutritionSuggestionSources } from './nutrition/suggestion-adapter.js';
 import type { NutritionTargetsAccess } from './nutrition/targets-store.js';
 import type { TrainingTargetsAccess } from './training/targets-store.js';
-import { dailyFoodLookupTool } from './tools/food-lookup.js';
 import { dailyFeedTool } from './tools/feed.js';
 import { dailySourceTools } from './tools/source-tools.js';
 import { dailyFeedRoutes } from './feeds/routes.js';
@@ -32,9 +31,8 @@ export function createDailyModules(enabled = false, data?: DailyData, connector?
   if (trainingTargets && !data) throw new TypeError('Daily training targets require shared Daily data');
   if (nutritionSuggestions && !nutritionTargets) throw new TypeError('Daily nutrition suggestions require nutrition targets');
   const tools = data ? [dailyQueryTool(data.query), dailyShowTool(data.query),
-    ...(data.foodLookup ? [dailyFoodLookupTool(data.foodLookup)] : []),
     ...(data.feeds ? [dailyFeedTool(data.feeds)] : []),
-    ...(internalNutrition ? [dailyFoodTool(internalNutrition), dailyFoodReviewTool(internalNutrition)] : []),
+    ...(internalNutrition ? [dailyFoodTool(internalNutrition), dailyFoodReviewTool(internalNutrition, Date.now, data.foodLookup)] : []),
     ...(savedNutrition ? [dailySavedFoodTool(savedNutrition)] : []),
     ...(nutritionTargets ? [dailyNutritionTargetsTool(nutritionTargets)] : []),
     ...(nutritionTargets && nutritionSuggestions ? [dailyNutritionSuggestTool(nutritionTargets, nutritionSuggestions)] : []),
@@ -75,7 +73,7 @@ export function createDailyModules(enabled = false, data?: DailyData, connector?
         const hasVersion = (version: number) => accepted.includes(`application/json;version=${version}`) ||
           accepted.includes(`application/json;version="${version}"`);
         const version = hasVersion(dailyCapabilitiesVersion) ? dailyCapabilitiesVersion
-          : hasVersion(3) ? 3 : hasVersion(2) ? 2 : dailyContractVersion;
+          : hasVersion(4) ? 4 : hasVersion(3) ? 3 : hasVersion(2) ? 2 : dailyContractVersion;
         const vary = reply.getHeader('Vary');
         reply.header('Vary', [...(Array.isArray(vary) ? vary : vary ? [String(vary)] : []), 'Accept'].join(', '));
         reply.type(version > dailyContractVersion ? `application/json;version=${version}` : 'application/json');
@@ -91,8 +89,14 @@ export function createDailyModules(enabled = false, data?: DailyData, connector?
           ...(data ? {
             sources: version === 1 ? dailyQuerySourcesV1 : version === 2 ? dailyQuerySourcesV2
               : version === 3 ? dailyQuerySourcesV3
-                : data.feeds && request.principal && !request.agentPrincipal && !request.dailyConnectorPrincipal
-                  ? dailyQuerySourcesV4 : dailyQuerySourcesV3,
+                : version === 4
+                  ? data.feeds && request.principal && !request.agentPrincipal && !request.dailyConnectorPrincipal
+                    ? dailyQuerySourcesV4 : dailyQuerySourcesV3
+                  : data.trainingTargets
+                    ? data.feeds && request.principal && !request.agentPrincipal && !request.dailyConnectorPrincipal
+                      ? dailyQuerySourcesV5 : dailyQuerySourcesV5WithoutFeeds
+                    : data.feeds && request.principal && !request.agentPrincipal && !request.dailyConnectorPrincipal
+                      ? dailyQuerySourcesV4 : dailyQuerySourcesV3,
             refresh: { event: 'now', refetchOn: ['connect', 'reconnect', 'refocus'], revision: 'query-content-sha256' },
           } : {}),
         };

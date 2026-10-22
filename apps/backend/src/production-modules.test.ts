@@ -30,7 +30,7 @@ import { checkAgentContract } from './core/agent-contract.js';
 import { composeDaily } from './daily/composition.js';
 import { createMemoryProactiveStore } from './proactive/store.js';
 import { createProactiveToolsModule } from './proactive/tools.js';
-import { toModelToolSchema } from './voice/realtime.js';
+import { createRealtimeSessionUpdate, toModelToolSchema } from './voice/realtime.js';
 import { createToolBudgetRungs, TOOL_BUDGET_ALWAYS_KEPT_TOOLS } from './voice/tool-budget.js';
 
 const limits = JSON.parse(readFileSync(
@@ -110,7 +110,7 @@ function buildCatalogue(modules: ReturnType<typeof modulesWithEveryFeature>) {
 }
 
 describe('production tool catalogue', () => {
-  it('builds every production module with all optional features enabled within the agent limits', () => {
+  it('builds every production module with all optional features enabled', () => {
     const modules = modulesWithEveryFeature();
     const registry = buildCatalogue(modules);
     expect(registry.list().length).toBeGreaterThan(0);
@@ -170,23 +170,34 @@ describe('production tool catalogue', () => {
         type: 'function', name, description, parameters: toModelToolSchema(inputSchema),
       }))));
     const rungs = createToolBudgetRungs(registry);
-    expect(rungs.map(({ name }) => name)).toEqual(['R0', 'R1', 'R2', 'R3', 'R4']);
-    expect(rungs.map(({ deadlineMs }) => deadlineMs)).toEqual([8_000, 6_000, 6_000, 6_000, 6_000]);
-    expect(rungs.map(({ instructions }) => instructions)).toEqual(['full', 'notice', 'notice', 'notice', 'compact']);
-    const [r0, r1, r2, r3, r4] = rungs.map(({ tools }) => tools.list());
+    expect(rungs.map(({ name }) => name)).toEqual(['R0', 'R1', 'R2', 'R3', 'R4', 'R5']);
+    expect(rungs.map(({ deadlineMs }) => deadlineMs)).toEqual([8_000, 6_000, 6_000, 6_000, 6_000, 6_000]);
+    expect(rungs.map(({ instructions }) => instructions))
+      .toEqual(['full', 'notice', 'notice', 'notice', 'notice', 'compact']);
+    const [r0, r1, r2, r3, r4, r5] = rungs.map(({ tools }) => tools.list());
     expect(r0).toEqual(registry.list());
     expect(r1!.map(({ name }) => name)).toEqual(registry.list().map(({ name }) => name)
+<<<<<<< HEAD
       .filter((name) => !name.startsWith('daily_') && !proactiveToolNames.includes(name)));
     expect(r2!.map(({ name }) => name)).toEqual(expect.arrayContaining([...TOOL_BUDGET_ALWAYS_KEPT_TOOLS]));
     expect(bytes(r2!)).toBeLessThanOrEqual(bytes(r0!) / 2);
     expect(bytes(r2!)).toBeGreaterThan(bytes(r0!) * 0.45);
+=======
+      .filter((name) => name !== 'proactive_recent_items'));
+    expect(r1!.some(({ name }) => name.startsWith('daily_'))).toBe(true);
+    expect(r2!.map(({ name }) => name)).toEqual(registry.list().map(({ name }) => name)
+      .filter((name) => !name.startsWith('daily_') && name !== 'proactive_recent_items'));
+    expect(r3!.map(({ name }) => name)).toEqual(expect.arrayContaining([...TOOL_BUDGET_ALWAYS_KEPT_TOOLS]));
+    expect(bytes(r3!)).toBeLessThanOrEqual(bytes(r0!) / 2);
+    expect(bytes(r3!)).toBeGreaterThan(bytes(r0!) * 0.45);
+>>>>>>> origin/main
     // Everything kept is smaller than everything dropped, apart from the always-kept tools.
-    const kept = new Set(r2!.map(({ name }) => name));
-    const largestKept = Math.max(...r2!.filter(({ name }) => !(TOOL_BUDGET_ALWAYS_KEPT_TOOLS as readonly string[]).includes(name))
+    const kept = new Set(r3!.map(({ name }) => name));
+    const largestKept = Math.max(...r3!.filter(({ name }) => !(TOOL_BUDGET_ALWAYS_KEPT_TOOLS as readonly string[]).includes(name))
       .map((tool) => bytes([tool])));
     for (const tool of r0!.filter(({ name }) => !kept.has(name))) expect(bytes([tool])).toBeGreaterThanOrEqual(largestKept);
-    expect(r3).toEqual([]);
     expect(r4).toEqual([]);
+    expect(r5).toEqual([]);
   });
 
   it('keeps the catalogue unchanged with proactive off and adds both proactive tools when enabled', () => {
@@ -240,4 +251,30 @@ describe('production tool catalogue', () => {
     expect(result).toEqual({ status: 'ok' });
   });
 
+<<<<<<< HEAD
+=======
+  it('retains every tool when the production catalogue grows beyond the former global cap', () => {
+    const modules = modulesWithEveryFeature();
+    const existingCount = modules.reduce((count, module) => count + module.tools.length, 0);
+    const additions = Array.from({ length: Math.max(1, 129 - existingCount) }, (_, index) => ({
+      name: `catalogue_probe_${index}`,
+      description: 'Limit probe tool.',
+      inputSchema: { type: 'object' },
+      execute: async () => ({}),
+    }));
+    const registry = buildCatalogue([...modules, {
+      id: 'headroom-probe',
+      tools: additions,
+      registerRoutes: async () => {},
+    }]);
+    const expectedNames = [
+      ...modules.flatMap(({ tools }) => tools.map(({ name }) => name)),
+      ...additions.map(({ name }) => name),
+    ];
+
+    expect(registry.list().length).toBeGreaterThan(128);
+    expect(registry.list().map(({ name }) => name)).toEqual(expectedNames);
+    expect(createRealtimeSessionUpdate(registry).session.tools.map(({ name }) => name)).toEqual(expectedNames);
+  });
+>>>>>>> origin/main
 });

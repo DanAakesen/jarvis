@@ -128,10 +128,10 @@ unverified. See the [delivery status report](delivery-status.md).
 These are the exact 16 owner-selected capabilities. Native tools use the
 existing Jarvis registry, health/nutrition services, owner authorization and
 confirmation flow; they do not create another MCP server. The nine new source
-operations are grouped into three registry tools to preserve the existing
-128-tool limit and eight-tool headroom invariant; this is an explicit name-level
-deviation from the latest PR comment, not a claim that nine distinct tools were
-registered.
+operations were grouped into three registry tools under the former 128-tool
+limit and eight-slot reserve; #1204 supersedes that count-based rationale. This
+is an explicit name-level deviation from the latest PR comment, not a claim
+that nine distinct tools were registered.
 
 | Source capability | Native Jarvis tool | Service | State |
 | --- | --- | --- | --- |

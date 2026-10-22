@@ -125,7 +125,8 @@ describe('GitHub App installation tokens', () => {
 
     await expect(issuer.issue('DanAakesen/jarvis-test-target')).resolves.toBe('ghs_test-installation-token');
     expect(getPrivateKey).toHaveBeenCalledOnce();
-    expect(onTokenMint).toHaveBeenCalledWith('ok', new Date(now).toISOString());
+    expect(onTokenMint).toHaveBeenCalledWith('ok', new Date(now).toISOString(), expect.stringMatching(/^[0-9a-f]{64}$/u));
+    expect(JSON.stringify(onTokenMint.mock.calls)).not.toContain('DanAakesen');
     expect(fetchImpl).toHaveBeenCalledTimes(2);
     const [installationUrl, installationOptions] = fetchImpl.mock.calls[0]!;
     expect(installationUrl).toBe('https://api.github.com/repos/DanAakesen/jarvis-test-target/installation');
@@ -145,11 +146,47 @@ describe('GitHub App installation tokens', () => {
     expect(tokenOptions?.redirect).toBe('error');
   });
 
+  it('uses stable, permission-specific hashes for repository mint scopes', async () => {
+    const now = Date.parse('2026-10-04T09:00:00.000Z');
+    const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
+    const mintResponse = () => new Response(JSON.stringify({
+      token: 'ghs_test-installation-token',
+      expires_at: new Date(now + 60 * 60 * 1000).toISOString(),
+    }), { status: 201 });
+    const fetchImpl = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(Response.json({ id: 123 }))
+      .mockResolvedValueOnce(mintResponse())
+      .mockResolvedValueOnce(Response.json({ id: 123 }))
+      .mockResolvedValueOnce(mintResponse())
+      .mockResolvedValueOnce(Response.json({ id: 123 }))
+      .mockResolvedValueOnce(mintResponse());
+    const onTokenMint = vi.fn(async () => {});
+    const issuer = createGitHubAppTokenIssuer({
+      appId: '123',
+      getPrivateKey: async () => privateKey.export({ type: 'pkcs8', format: 'pem' }).toString(),
+      fetch: fetchImpl,
+      now: () => now,
+      onTokenMint,
+    });
+
+    await issuer.issue('DanAakesen/jarvis-test-target');
+    await issuer.issue('danaakesen/JARVIS-TEST-TARGET');
+    await issuer.issueForContents('DanAakesen/jarvis-test-target');
+
+    const scopes = onTokenMint.mock.calls.map((call) => call[2]);
+    expect(scopes[0]).toMatch(/^[0-9a-f]{64}$/u);
+    expect(scopes[0]).toBe(scopes[1]);
+    expect(scopes[2]).not.toBe(scopes[0]);
+    expect(JSON.stringify(scopes)).not.toContain('jarvis-test-target');
+  });
+
   it.each(['key', 'installation', 'mint', 'invalid-token'] as const)(
     'reports failed health when %s fails without exposing credentials', async (failure) => {
       const now = Date.parse('2026-10-06T00:00:00.000Z');
       const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
-      const onTokenMint = vi.fn(async () => {});
+      const onTokenMint = vi.fn<(status: 'ok' | 'failed', checkedAt: string, scopeKey: string) => Promise<void>>(
+        async () => {},
+      );
       const fetchImpl = vi.fn<typeof fetch>()
         .mockResolvedValueOnce(new Response(JSON.stringify({ id: 123 }), { status: failure === 'installation' ? 401 : 200 }))
         .mockResolvedValueOnce(new Response(JSON.stringify({ token: 'private-token' }), { status: failure === 'mint' ? 403 : 201 }));
@@ -161,7 +198,9 @@ describe('GitHub App installation tokens', () => {
         },
       });
       await expect(issuer.issueForContents('DanAakesen/jarvis')).rejects.toThrow();
-      expect(onTokenMint).toHaveBeenCalledExactlyOnceWith('failed', new Date(now).toISOString());
+      expect(onTokenMint).toHaveBeenCalledExactlyOnceWith(
+        'failed', new Date(now).toISOString(), expect.stringMatching(/^[0-9a-f]{64}$/u),
+      );
       expect(JSON.stringify(onTokenMint.mock.calls)).not.toContain('private');
     },
   );
@@ -217,7 +256,9 @@ describe('GitHub App installation tokens', () => {
         .mockResolvedValueOnce(new Response(JSON.stringify({ total_count: 2, repositories: repositories.slice(1) }), { status: 200 }));
     };
     queueList();
-    const onTokenMint = vi.fn(async () => {});
+    const onTokenMint = vi.fn<(status: 'ok' | 'failed', checkedAt: string, scopeKey: string) => Promise<void>>(
+      async () => {},
+    );
     const catalog = createGitHubAppRepositoryCatalog({
       appId: '123456',
       getPrivateKey: async () => privateKey.export({ type: 'pkcs8', format: 'pem' }).toString(),
@@ -227,7 +268,9 @@ describe('GitHub App installation tokens', () => {
     });
 
     const first = await catalog.list('DanAakesen');
-    expect(onTokenMint).toHaveBeenCalledWith('ok', new Date(now).toISOString());
+    expect(onTokenMint).toHaveBeenCalledWith(
+      'ok', new Date(now).toISOString(), expect.stringMatching(/^[0-9a-f]{64}$/u),
+    );
     expect(first).toEqual({
       repositories: [
         {
@@ -260,6 +303,7 @@ describe('GitHub App installation tokens', () => {
     queueList();
     await catalog.list('DanAakesen', true);
     expect(fetchImpl).toHaveBeenCalledTimes(8);
+    expect(onTokenMint.mock.calls[0]?.[2]).toBe(onTokenMint.mock.calls[1]?.[2]);
     expect(repositoryCacheTtlMs).toBe(5 * 60 * 1000);
   });
 

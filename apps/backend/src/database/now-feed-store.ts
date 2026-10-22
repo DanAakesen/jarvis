@@ -49,6 +49,7 @@ export function createNowFeedStore(pool: sql.ConnectionPool, onNotificationCreat
           SELECT id, N'alert' AS category, title, link, at
           FROM dbo.activity
           WHERE dismissed_at IS NULL AND alert_key IS NOT NULL
+            AND (alert_key NOT LIKE N'credential:github-app:failed:%' OR recovered_at IS NULL)
         )
         SELECT TOP (100) CAST(id AS varchar(19)) AS id, category, title, link, at
         FROM visible ORDER BY visible.at DESC, visible.id DESC;`);

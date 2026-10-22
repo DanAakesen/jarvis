@@ -1,26 +1,74 @@
 import { createHash } from 'node:crypto';
 import type { FastifyRequest } from 'fastify';
-import type { ConversationMessage } from '../../core/conversation-store.js';
+import type { ConversationAttachmentReference, ConversationMessage } from '../../core/conversation-store.js';
 import { ToolFailure, ToolRefusal, type JarvisTool } from '../../core/tool-registry.js';
 import { exactLabelIntent, favoriteIntent } from '../nutrition/intent.js';
 import { canonicalJson, prepareMeal, type FoodDefinition } from '../nutrition/model.js';
 import type { NutritionStore } from '../nutrition/store.js';
 import { resolveDailyOwner } from '../owner.js';
 import { favoriteFingerprint, projectNutritionRecord } from '../records.js';
-import { activeDailySession as activeFoodSession, currentDailyMessage as foodSourceMessage } from './context.js';
-export { activeDailySession as activeFoodSession, currentDailyMessage as foodSourceMessage, requireDailyReviewPresence as requireFoodReviewPresence } from './context.js';
+import { activeDailySession as activeFoodSession, currentDailyMessage } from './context.js';
+export { activeDailySession as activeFoodSession, requireDailyReviewPresence as requireFoodReviewPresence } from './context.js';
 
 type DirectNutrition = (request: FastifyRequest) => Pick<NutritionStore, 'intake' | 'lookupSaved' | 'log'>;
 export type InternalNutrition = (request: FastifyRequest) => Pick<NutritionStore, 'intake' | 'lookupSaved' | 'log' | 'correct' | 'remove'>;
+type FoodSourceMessage = ConversationMessage & { readonly attachments?: readonly ConversationAttachmentReference[] };
+
+export async function foodSourceMessage(request: FastifyRequest, signal: AbortSignal): Promise<FoodSourceMessage> {
+  const source = await currentDailyMessage(request, signal) as FoodSourceMessage;
+  if (request.agentPrincipal) return source;
+  const store = request.server.conversationStore;
+  const page = store?.getHistory ? await store.getHistory({ limit: 1 }) : undefined;
+  signal.throwIfAborted();
+  const persisted = page?.messages[0];
+  if (persisted && persisted.id === source.id && persisted.sessionId === source.sessionId &&
+      persisted.role === 'dan' && persisted.text === source.text && persisted.at instanceof Date &&
+      persisted.at.getTime() === source.at.getTime()) return persisted;
+  if (!Object.hasOwn(source, 'attachments')) return source;
+  return { id: source.id, sessionId: source.sessionId, role: source.role, text: source.text, model: source.model,
+    at: source.at, ...(source.metadata ? { metadata: source.metadata } : {}) };
+}
+
+function validSourceAttachment(attachment: ConversationAttachmentReference): boolean {
+  if (!attachment || typeof attachment !== 'object' || Array.isArray(attachment) ||
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(attachment.id) ||
+      typeof attachment.name !== 'string' || !attachment.name.length || attachment.name.length > 255 ||
+      typeof attachment.contentType !== 'string' || !/^[\w.+-]+\/[\w.+-]+$/u.test(attachment.contentType) ||
+      !Number.isSafeInteger(attachment.size) || attachment.size < 1 ||
+      attachment.size > (attachment.contentType.startsWith('image/') ? 10 : 20) * 1024 * 1024 ||
+      attachment.contentType.startsWith('image/') && !['image/png', 'image/jpeg', 'image/webp', 'image/gif'].includes(attachment.contentType)) return false;
+  for (const character of attachment.name) {
+    if (character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127) return false;
+  }
+  return true;
+}
+
+function sourceAttachments(source: FoodSourceMessage): { fingerprint: { id: string; contentType: string; size: number }[]; hasPhoto: boolean } {
+  const attachments = source.attachments;
+  if (attachments === undefined) return { fingerprint: [], hasPhoto: false };
+  if (!Array.isArray(attachments) || attachments.length > 5) throw new ToolRefusal('The persisted food-photo source is invalid.');
+  const ids = new Set<string>();
+  const images = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif']);
+  const fingerprint = attachments.map((attachment) => {
+    if (!validSourceAttachment(attachment) || ids.has(attachment.id)) {
+      throw new ToolRefusal('The persisted food-photo source is invalid.');
+    }
+    ids.add(attachment.id);
+    return { id: attachment.id, contentType: attachment.contentType, size: attachment.size };
+  });
+  return { fingerprint, hasPhoto: fingerprint.some(attachment => images.has(attachment.contentType)) };
+}
 
 export function foodMessageIdentity(owner: string, source: ConversationMessage) {
   if (!/^[1-9]\d{0,18}$/u.test(source.id) || BigInt(source.id) > 9223372036854775807n ||
       !source.sessionId || !(source.at instanceof Date) || !Number.isFinite(source.at.getTime())) {
     throw new ToolRefusal('The persisted food-log source is invalid.');
   }
+  const { fingerprint, hasPhoto } = sourceAttachments(source as FoodSourceMessage);
   const id = createHash('sha256').update(`${owner.toLowerCase()}:${source.sessionId}:${source.id}:daily-intake`).digest('hex');
   return { id, key: `jarvis-message:${id}`,
-    sourceFingerprint: createHash('sha256').update(canonicalJson({ text: source.text, at: source.at.toISOString() })).digest('hex') };
+    sourceFingerprint: createHash('sha256').update(canonicalJson({ text: source.text, at: source.at.toISOString(),
+      ...(fingerprint.length ? { attachments: fingerprint } : {}) })).digest('hex'), hasPhoto };
 }
 
 export function foodReceipt(row: Record<string, unknown>, key: string, sourceFingerprint: string, operation: string, proposalFingerprint?: string) {
@@ -58,7 +106,7 @@ export function dailyFoodTool(nutrition: DirectNutrition, now: () => number = Da
       if (Object.keys(input).some(key => key !== 'operation') ||
           typeof input.operation !== 'string' || !['log_exact', 'log_favorite'].includes(input.operation)) throw new ToolRefusal('Choose an exact label or saved favourite without extra authority or quantities.');
       const source = await foodSourceMessage(request, signal);
-      const { id: digest, key, sourceFingerprint } = foodMessageIdentity(owner, source);
+      const { id: digest, key, sourceFingerprint, hasPhoto } = foodMessageIdentity(owner, source);
       const name = input.operation === 'log_favorite' ? favoriteIntent(source.text) : null;
       const exact = input.operation === 'log_exact' ? exactLabelIntent(source.text) : null;
       const store = nutrition(request);
@@ -83,7 +131,8 @@ export function dailyFoodTool(nutrition: DirectNutrition, now: () => number = Da
         favorite = { id: row.id, fingerprint: favoriteFingerprint(row) };
       }
       const intake = prepareMeal({
-        ...definition, id: digest, idempotencyKey: key, captureMethod: session.channel === 'voice' ? 'voice' : 'text',
+        ...definition, id: digest, idempotencyKey: key,
+        captureMethod: hasPhoto ? session.channel === 'voice' ? 'mixed' : 'photo' : session.channel === 'voice' ? 'voice' : 'text',
         provenance: { ...definition.provenance, jarvisIntake: { sourceMessageId: source.id, sourceFingerprint, operation: input.operation, ...(favorite ? { favoriteId: favorite.id } : {}) } },
       }, source.at.toISOString());
       let committed: Record<string, unknown>;

@@ -6,6 +6,7 @@ import type { AreaProps } from '../areas';
 import { Loader } from '../Loader';
 import { DailyFreshnessPill } from './DailyFreshnessPill';
 import { DailyPeriodControl } from './DailyPeriodControl';
+import { DailyHeadingSlotContext } from './heading-slot-context';
 import { initialDailyPeriodForShell } from './period';
 import { DailyRefreshContext } from './refresh';
 import { DailySectionNavigationContext } from './section-navigation';
@@ -30,6 +31,7 @@ export function DailyHome({ backendUrl, getAccessToken }: AreaProps) {
   const [initialSource, setInitialSource] = useState<DailySourceId>();
   const [periodSlotHeight, setPeriodSlotHeight] = useState(70);
   const periodSlot = useRef<HTMLDivElement>(null);
+  const [headingSlot, setHeadingSlot] = useState<HTMLElement | null>(null);
   const [sectionLoadAttempt, setSectionLoadAttempt] = useState(0);
   const [loadedSections, setLoadedSections] = useState<{
     attempt: number;
@@ -106,29 +108,36 @@ export function DailyHome({ backendUrl, getAccessToken }: AreaProps) {
 
   return <section className="daily-page daily-shell" aria-label="Health">
     <header className="daily-heading">
-      <h1 id="daily-heading" tabIndex={-1}>{activeSection?.label ?? 'Health'}</h1>
-      <DailyFreshnessPill backendUrl={backendUrl} getAccessToken={getAccessToken} refreshVersion={refreshVersion}
-        enabled={sources.includes(dailyQuerySources.sync)} />
+      <div className="daily-heading-status">
+        <DailyFreshnessPill backendUrl={backendUrl} getAccessToken={getAccessToken} refreshVersion={refreshVersion}
+          enabled={sources.includes(dailyQuerySources.sync)} />
+      </div>
+      <div className="daily-heading-row">
+        <h1 id="daily-heading" tabIndex={-1}>{activeSection?.label ?? 'Health'}</h1>
+        <div className="daily-heading-control" ref={setHeadingSlot} />
+      </div>
     </header>
     {activeSection?.id !== 'body-sleep' && activeSection?.usesPeriod && <div ref={periodSlot} className="daily-period-slot" style={{ minHeight: periodSlotHeight }}>
       <DailyPeriodControl period={period} onPeriodChange={setPeriod} />
     </div>}
     <DailySectionNavigationContext.Provider value={navigation}>
-      <TrainingTargetsProvider backendUrl={backendUrl} getAccessToken={getAccessToken}>
-        <div className="daily-section-panel" key={activeSection?.id}>
-          {!activeSection && sectionLoadError && <div className="daily-notice" role="alert">
-            <p>Sections unavailable.</p>
-            <button className="secondary-button" type="button" onClick={() => setSectionLoadAttempt(attempt => attempt + 1)}>Retry sections</button>
-          </div>}
-          {!activeSection && !sectionLoadError && <Loader
-            label={navigation.availabilityPending ? 'Checking Health availability' : 'Loading Health sections'} variant="rows" />}
-          {activeSection && navigation.availabilityPending && <Loader label="Checking Health availability" variant="rows" />}
-          {activeSection && !navigation.availabilityPending && <Suspense fallback={<Loader label={`Loading ${activeSection.label}`} variant="rows" />}>
-            <activeSection.Component backendUrl={backendUrl} getAccessToken={getAccessToken} sources={sources}
-              period={period} onPeriodChange={setPeriod} refreshVersion={refreshVersion} />
-          </Suspense>}
-        </div>
-      </TrainingTargetsProvider>
+      <DailyHeadingSlotContext.Provider value={headingSlot}>
+        <TrainingTargetsProvider backendUrl={backendUrl} getAccessToken={getAccessToken}>
+          <div className="daily-section-panel" key={activeSection?.id}>
+            {!activeSection && sectionLoadError && <div className="daily-notice" role="alert">
+              <p>Sections unavailable.</p>
+              <button className="secondary-button" type="button" onClick={() => setSectionLoadAttempt(attempt => attempt + 1)}>Retry sections</button>
+            </div>}
+            {!activeSection && !sectionLoadError && <Loader
+              label={navigation.availabilityPending ? 'Checking Health availability' : 'Loading Health sections'} variant="rows" />}
+            {activeSection && navigation.availabilityPending && <Loader label="Checking Health availability" variant="rows" />}
+            {activeSection && !navigation.availabilityPending && <Suspense fallback={<Loader label={`Loading ${activeSection.label}`} variant="rows" />}>
+              <activeSection.Component backendUrl={backendUrl} getAccessToken={getAccessToken} sources={sources}
+                period={period} onPeriodChange={setPeriod} refreshVersion={refreshVersion} />
+            </Suspense>}
+          </div>
+        </TrainingTargetsProvider>
+      </DailyHeadingSlotContext.Provider>
     </DailySectionNavigationContext.Provider>
   </section>;
 }

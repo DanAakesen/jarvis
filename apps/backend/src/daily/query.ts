@@ -19,12 +19,17 @@ import { DailyBriefReadModel, briefDetailFields, briefMetadataFields } from './b
 import { createDailyFeeds, type DailyFeedProviders, type DailyFeedService } from './feeds/service.js';
 import { SqlDailyCoachStore } from './coach-store.js';
 import type { DailyCoachStore } from './coach-store.js';
+import { TrainingTargetsStore } from './training/targets-store.js';
+import type { TrainingTargetsAccess } from './training/targets-store.js';
+import { presentTrainingTargets } from './training/targets.js';
+import { name as healthName } from './health/value.js';
 export { projectNutritionRecord, dailyResultByteLimit } from './records.js';
 
 export interface DailyReaders {
-  health(request: FastifyRequest): Pick<DailyHealthReadModel, 'history' | 'metricCatalog' | 'workoutDetail' | 'heartRate' | 'sync'>;
+  health(request: FastifyRequest): Pick<DailyHealthReadModel, 'history' | 'metricCatalog' | 'workoutDetail' | 'workoutMetrics' | 'heartRate' | 'sync'>;
   nutrition(request: FastifyRequest): Pick<NutritionStore, 'history' | 'days' | 'favorites' | 'plans'>;
   briefs(request: FastifyRequest): Pick<DailyBriefReadModel, 'history' | 'detail'>;
+  trainingTargets?(request: FastifyRequest): Pick<TrainingTargetsStore, 'read'>;
 }
 const feedFields = ['feed_kind', 'accepted_evidence_at', 'processed_committed_at', 'metric_rows', 'sleep_rows', 'workout_rows', 'heart_rate_minutes'];
 const inboxFields = ['retained', 'retained_bytes', 'byte_limit', 'row_limit', 'pending', 'processing', 'quarantined', 'last_accepted_at', 'last_processed_upload_at'];
@@ -65,9 +70,16 @@ export class DailyQueryService {
     let feedSources: DailyQueryResult['feedSources'];
     let calendarRange: DailyQueryResult['calendarRange'];
     let rangeCovered: boolean | undefined;
+    let detailMetricsTruncated = false;
     let units: Record<string, string>;
     const brief = input.source === sources.briefs || input.source === sources.brief;
-    if (input.source === sources.attention) {
+    if (input.source === sources.trainingTargets) {
+      const targets = this.readers.trainingTargets?.(request);
+      if (!targets) throw new ToolFailure('Training targets are unavailable.');
+      const result = presentTrainingTargets(await targets.read(signal));
+      items = [result as unknown as Record<string, DailyJson>];
+      units = { gymSessionsPerWeek: 'sessions/week', runSessionsPerWeek: 'sessions/week', dailySteps: 'steps/day' };
+    } else if (input.source === sources.attention) {
       if (!this.feeds) throw new ToolFailure('Health attention source is not configured. No empty result is available.');
       const result = await this.feeds.queryAttention(request, signal);
       items = result.items as Record<string, DailyJson>[];
@@ -131,12 +143,33 @@ export class DailyQueryService {
       } else {
         if (input.source === sources.workout) {
           const row = await health.workoutDetail(input.workoutId, signal);
-          if (row) items = [{ id: row.id, detail: json(row.detail) }];
+          if (row) {
+            const metrics = await health.workoutMetrics(input.workoutId, signal);
+            const metricRows = metrics.items as Record<string, unknown>[];
+            const detail = row.detail && typeof row.detail === 'object' && !Array.isArray(row.detail)
+              ? row.detail as Record<string, unknown> : {};
+            const additionalMetrics = metricRows.filter(metric => {
+              const metricName = String(metric.metric_name ?? '');
+              const field = Object.entries(detail).find(([fieldName]) => healthName(fieldName) === metricName)?.[1];
+              if (!field || typeof field !== 'object' || Array.isArray(field)) return true;
+              const summary = field as Record<string, unknown>;
+              return summary.samples !== Number(metric.sample_count) || summary.unit !== metric.unit ||
+                summary.value !== metric.value || summary.min_value !== metric.min_value ||
+                summary.avg_value !== metric.avg_value || summary.max_value !== metric.max_value;
+            }).map(metric => project(metric, [
+              'metric_name', 'unit', 'value', 'min_value', 'avg_value', 'max_value', 'sample_count',
+              'fields', 'ingestion_id', 'updated_at',
+            ]));
+            detailMetricsTruncated = metrics.truncated;
+            items = [{ id: row.id, detail: json(row.detail), additionalMetrics, metricsTruncated: metrics.truncated }];
+          }
         } else if (input.source === sources.heartRate) {
           const page = await health.heartRate(input.workoutId, {
             limit: input.limit ?? 50, ...(input.cursor ? { after: input.cursor } : {}),
           }, signal);
-          items = page.items.map(row => project(row, ['sample_minute', 'metric_name', 'min_value', 'avg_value', 'max_value', 'unit', 'sample_count']));
+          items = page.items.map(row => project(row, [
+            'sample_minute', 'metric_name', 'min_value', 'avg_value', 'max_value', 'unit', 'sample_count', 'sources', 'sourcesTruncated',
+          ]));
           next = page.next;
         } else if (input.source === sources.metricCatalog) {
           const page = await health.metricCatalog({
@@ -155,7 +188,9 @@ export class DailyQueryService {
             ...(input.cursor ? { after: input.cursor } : {}),
           }, signal);
           items = page.items.map(row => project(row, [
-            ...Object.keys(healthDefinitions[kind].fields).filter(field => !field.endsWith('_json')), 'ingestion_id', 'updated_at',
+            ...Object.keys(healthDefinitions[kind].fields).filter(field => !field.endsWith('_json')),
+            ...(kind === 'metrics' ? ['fields'] : kind === 'sleep' ? ['sources', 'sourcesTruncated'] : []),
+            'ingestion_id', 'updated_at',
           ]));
           next = page.next;
         }
@@ -175,15 +210,16 @@ export class DailyQueryService {
       ...(feedSources ? { feedSources } : {}),
       ...(rangeCovered === undefined ? {} : { rangeCovered }),
       items,
-      status: next || feedSources?.some(source => source.status !== 'Current') || rangeCovered === false
+      status: next || detailMetricsTruncated || feedSources?.some(source => source.status !== 'Current') || rangeCovered === false
         ? 'partial' : items.length ? 'available' : 'empty',
       units,
       provenance: { store: 'daily-sql', detail: 'retained-record',
         calculations: input.source === sources.days ? 'derived-from-retained-meals' : 'existing-read-model',
         consistency: 'independent-committed-reads' },
       freshness: { observedAt: new Date(this.now()).toISOString(), sourceProcessedCommittedAt,
-        latestReturnedRecordUpdatedAt: brief ? null : latest(items.map(row => row.updated_at ?? row.latest_updated_at)), staleness: 'unknown' },
-      coverage: { returned: items.length, hasMore: next !== null, next, sourceCompleteness: 'unknown' },
+        latestReturnedRecordUpdatedAt: brief ? null : latest(items.map(row => row.updated_at ?? row.latest_updated_at ?? row.updatedAt)), staleness: 'unknown' },
+      coverage: { returned: items.length, hasMore: next !== null, next, sourceCompleteness: 'unknown',
+        ...(detailMetricsTruncated ? { detailMetricsTruncated: true } : {}) },
       revision: '0'.repeat(64), // Reserve the final fingerprint bytes in the response budget.
     };
     if (Buffer.byteLength(JSON.stringify(result)) > dailyResultByteLimit) throw new ToolRefusal('Health result exceeds the shared response limit. Request a smaller page; oversized single detail remains unavailable.');
@@ -210,17 +246,22 @@ export function createDailyData(pool: sql.ConnectionPool, owner: string, now: ()
     checkOwner(request);
     return NutritionStore.forRequest(pool, request, () => new Date(now()).toISOString(), changes);
   };
+  const trainingTargets: TrainingTargetsAccess = request => {
+    checkOwner(request);
+    return TrainingTargetsStore.forRequest(pool, request);
+  };
   const readers: DailyReaders = {
     health: request => { checkOwner(request); return DailyHealthReadModel.forRequest(pool, request); },
     nutrition,
     briefs: request => { checkOwner(request); return DailyBriefReadModel.forRequest(pool, request); },
+    trainingTargets,
   };
   const foodLookup: DailyFoodLookup | undefined = frida
     ? async (input, request, signal) => { checkOwner(request); return frida.lookup(input, signal); }
     : undefined;
   const feedService = feeds ? createDailyFeeds(pool, owner, changes, feeds, now) : undefined;
   return {
-    query: new DailyQueryService(readers, now, feedService), changes,
+    query: new DailyQueryService(readers, now, feedService), changes, trainingTargets,
     health: (request: FastifyRequest) => { checkOwner(request); return readers.health(request); },
     nutrition,
     coach: (request: FastifyRequest) => { checkOwner(request); return SqlDailyCoachStore.forRequest(pool, request); },
@@ -232,6 +273,7 @@ export function createDailyData(pool: sql.ConnectionPool, owner: string, now: ()
 export interface DailyData {
   query: Pick<DailyQueryService, 'query'>;
   changes: DailyChanges;
+  trainingTargets?: TrainingTargetsAccess;
   health?: (request: FastifyRequest) => Pick<DailyHealthReadModel, 'history' | 'sync'>;
   nutrition?: (request: FastifyRequest) => Pick<NutritionStore, 'history' | 'days' | 'feedback' | 'preferences'>;
   coach?: (request: FastifyRequest) => DailyCoachStore;

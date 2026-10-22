@@ -55,9 +55,15 @@ migration, estimate approval system or Health export is added.
 ## Inactive internal reviewed changes
 
 `daily_food_review` accepts a strict `change` object with one operation:
-`log_estimate` and a proposed `food`, `correct` and an exact owned
+`lookup_components` and 1-25 generic Frida component inputs, `log_estimate` and a proposed `food`, `correct` and an exact owned
 `idempotencyKey`/`expectedRevision` plus `changes`, or `delete` and that exact
-key/revision. Models cannot supply confirmation, owner, capture, confidence or
+key/revision. `lookup_components` is read-only and returns the existing Frida
+attribution, retrieval time, candidates, unknowns and partial totals. For a
+reference-backed `log_estimate`, pass `food.referenceComponents` with a known
+positive gram quantity; do not supply totals, stored components or nutrient
+provenance. The server resolves those components again, derives calories and
+available macros, and freezes the resulting estimate in the existing Now
+proposal. Models cannot supply confirmation, owner, capture, confidence or
 provenance fields. For example:
 
 ```json
@@ -65,7 +71,13 @@ provenance fields. For example:
 ```
 
 The current verified Dan message and active chat/voice session supply source
-identity and capture. New logging defaults occurrence to the message instant;
+identity and capture. Persisted attachment references are validated and included
+in the source fingerprint; they set `photo`/`mixed` capture provenance without
+accepting an attachment ID or capture claim from model input. When an estimate
+has unresolved food identity, amount or calories, the tool returns explicit
+uncertainty and does not stage a review. Unknown macros remain null. User edits
+to identity, preparation or grams require a fresh lookup; only the recomputed
+final proposal can be approved. New logging defaults occurrence to the message instant;
 a proposed explicit occurrence is displayed and validated, with Copenhagen
 date derived server-side. Every new reviewed write requires present-mode
 browser approval in Now; a plain spoken "yes" is not that approval.
@@ -166,10 +178,12 @@ there is no production caller yet. Tests use synthetic values only.
 
 ## Pinned provider contract and evidence limits
 
-An explicit optional Frida argument to `createDailyData(pool, owner, now, frida)`
-adds owner-bound `foodLookup`; `createDailyModules(true, data)` then registers
-read-only `daily_food_lookup` in the existing dispatcher. No adapter means no
-new tool or network request. Existing module/write/MCP arguments stay unchanged.
+An explicit Frida argument to `createDailyData(pool, owner, now, frida)` adds
+owner-bound `foodLookup`. Internal composition supplies it as the read-only
+`lookup_components` operation of the existing `daily_food_review` tool; it does
+not register a separate `daily_food_lookup` name or consume catalogue headroom.
+Without an adapter, no provider request occurs. Existing module/write/MCP
+arguments stay unchanged.
 Input contains only1-25 generic components with name, positive grams or null,
 and preparationMethod or null. Shared schemas preserve the external MCP form;
 the HTTP shape cannot coerce unknown grams into zero. Caller endpoints,

@@ -46,18 +46,22 @@ the five largest tool definitions (server-owned names and UTF-8 bytes).
 It survives browser-first closure and cancellation. No transcripts, instructions,
 tool arguments, payloads or close-reason text belong in these new diagnostics.
 
-English tool-budget fallback. A new process starts at **R1**, the known-good
-frame measured on 21 October (R0 stalled at 8,001 ms; R1 became ready in
-1,341 ms). Each foreground attempt uses a fresh socket and logs
-`voice.tool_budget_attempt` with `rung` (R0-R4), `toolCount`, `toolBytes`,
+English tool-budget fallback. A new process starts at **R2**, which is the
+known-good frame measured on 21 October under its previous name, R1 (R0 stalled
+at 8,001 ms; the reduced frame became ready in 1,341 ms). **R1** is now a
+Daily-capable candidate that omits only `proactive_recent_items`. The backend
+uses R1 for later sessions only after its independent `no_proactive` probe
+receives `session.updated`; otherwise the known-good R2 start and fallbacks
+remain. Each foreground attempt uses a fresh socket and logs
+`voice.tool_budget_attempt` with `rung` (R0-R5), `toolCount`, `toolBytes`,
 `instructionsBytes`, `frameBytes`, `outcome` (`ready`, `timeout`, `error` or
-`closed`) and `elapsedMs` since connect (8 s at R0, 6 s at R1-R4).
+`closed`) and `elapsedMs` since connect (8 s at R0, 6 s at R1-R5).
 `voice.tool_budget_selected` names the rung that reached `session.updated`;
 `remembered: true` means that rung had already succeeded in this process.
 The summary carries `toolBudgetRung` and `toolBudgetAttempts`. A failed R1
-still steps down to R2; a full-ready background probe promotes later sessions
-to R0. `voice.tool_budget_exhausted` (close 4010, `toolBudgetRung: null`) means
-all foreground rungs failed; check Azure Monitor and Voice Live status.
+steps down to the known-good R2. `voice.tool_budget_exhausted` (close 4010,
+`toolBudgetRung: null`) means all foreground rungs failed; check Azure Monitor
+and Voice Live status.
 
 After a non-R0 session is ready, the backend may run one independent probe
 sequence per 30 minutes per process. Each `voice.tool_budget_probe` record
@@ -67,17 +71,16 @@ count, outcome and elapsed milliseconds. Probes use separate sockets and do
 not send audio or affect the live session. The sequence stops at the first
 ready probe:
 
-- **`full` ready** means the full set works again; the backend remembers R0.
-- While `full` stalls, **`reduced_plus_copies` stalling** means the limit is
-  tool count, tool bytes or context, rather than the content of the dropped
-  tools. Compare the `no_proactive` and `no_daily` measurements to see how
-  much headroom each excluded group buys.
-- **`reduced_plus_copies` ready** means the content of the dropped tools is the
-  cause. `no_proactive` ready alone points to `proactive_recent_items`;
-  `no_daily` ready alone points to the `daily_*` tools.
+- **`full` ready** selects R0 for later sessions.
+- **`no_proactive` ready** selects R1 for later sessions. That exact frame
+  includes `daily_*` tools and excludes `proactive_recent_items`.
+- `no_daily` and `reduced_plus_copies` are diagnostic measurements only; they
+  do not change the selected rung.
 
-Only `full` changes remembered state. Other probes are measurements; they do
-not reshape the fallback ladder. Set
+Readiness proves only that the measured frame received `session.updated` during
+that probe. It does not identify a tool-count, byte-size, context, or
+tool-content limit. The prior R0/R1 timings show a startup difference, not its
+cause. Set
 `JARVIS_VOICE_TOOL_BUDGET_PROBE_ENABLED=false` to disable probes. No
 instructions, tool names, payloads or arguments appear in probe logs.
 
@@ -92,6 +95,33 @@ expects `session.updated`. No applicable numeric tool/schema/instruction or
 combined-context limit was verified for the deployed API version in this change.
 The harmless `connection.upgrade_failed` duplicate-registration noise is tracked
 separately and is not a voice-stage failure.
+
+## Live partial-transcription diagnosis
+
+For the separately authorized live acceptance, speak once with the microphone
+active, end the session, and inspect that session's `voice.partials_unavailable`
+and `voice.reflex_metrics` records. Do not record transcript content or tokens.
+
+`voice.partials_unavailable` means the optional Azure Speech recognizer could not
+start or reported a cancellation; inspect its sanitized `failure` and `language`
+fields. It does not mean the Voice Live session failed: completed Voice Live
+transcripts continue through the final-reflex path.
+
+`voice.reflex_metrics.speechRecognitionHypotheses` counts nonblank Azure Speech
+`recognizing` events delivered to the relay. With the microphone active during
+speech, a value above zero confirms hypotheses reached the relay; zero means
+none reached it in that session. It does not by itself distinguish an SDK,
+provider, microphone, or audio-delivery problem. The metric contains a count,
+not speech text. `partialTranscriptionDeltas` is the separate Voice Live delta
+count; neither it nor a green build proves live Speech acceptance.
+
+The existing partial-action guards are unchanged: the relay classifies only
+stable clauses, and execution still requires an addressed, high-confidence
+(at least 0.9), complete action without a confirmation requirement, a
+partial-safe target, the authenticated owner and available audit storage.
+Duplicate actions are suppressed. The Voice Live final remains authoritative
+and reconciles or attempts supported undo for an earlier partial action. A
+successful local SDK/event test is not live microphone/provider acceptance.
 
 ## Enable Health Gmail attention and calendar reads
 
