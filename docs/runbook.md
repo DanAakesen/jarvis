@@ -93,6 +93,33 @@ combined-context limit was verified for the deployed API version in this change.
 The harmless `connection.upgrade_failed` duplicate-registration noise is tracked
 separately and is not a voice-stage failure.
 
+## Live partial-transcription diagnosis
+
+For the separately authorized live acceptance, speak once with the microphone
+active, end the session, and inspect that session's `voice.partials_unavailable`
+and `voice.reflex_metrics` records. Do not record transcript content or tokens.
+
+`voice.partials_unavailable` means the optional Azure Speech recognizer could not
+start or reported a cancellation; inspect its sanitized `failure` and `language`
+fields. It does not mean the Voice Live session failed: completed Voice Live
+transcripts continue through the final-reflex path.
+
+`voice.reflex_metrics.speechRecognitionHypotheses` counts nonblank Azure Speech
+`recognizing` events delivered to the relay. With the microphone active during
+speech, a value above zero confirms hypotheses reached the relay; zero means
+none reached it in that session. It does not by itself distinguish an SDK,
+provider, microphone, or audio-delivery problem. The metric contains a count,
+not speech text. `partialTranscriptionDeltas` is the separate Voice Live delta
+count; neither it nor a green build proves live Speech acceptance.
+
+The existing partial-action guards are unchanged: the relay classifies only
+stable clauses, and execution still requires an addressed, high-confidence
+(at least 0.9), complete action without a confirmation requirement, a
+partial-safe target, the authenticated owner and available audit storage.
+Duplicate actions are suppressed. The Voice Live final remains authoritative
+and reconciles or attempts supported undo for an earlier partial action. A
+successful local SDK/event test is not live microphone/provider acceptance.
+
 ## Enable Health Gmail attention and calendar reads
 
 These feeds are off by default and this procedure does not claim they are
