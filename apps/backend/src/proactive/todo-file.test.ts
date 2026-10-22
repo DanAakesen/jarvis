@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { parseTodos, parseTodosWithContext, resolveTodoFile } from './todo-file.js';
+import { parseTodos, parseTodosWithContext, resolveTodoFile, taskLineVersion } from './todo-file.js';
 
 const signal = () => new AbortController().signal;
 const file = (path: string) => ({ path, sha: 'a'.repeat(40) });
@@ -107,12 +107,12 @@ describe('todo parser', () => {
       {
         text: 'Buy a mirror', dueAt: '2026-10-20T12:30:00.000Z', dueHasTime: true,
         done: false, highPriority: false, priorityLevel: 'normal', dueDate: '2026-10-20', dueTime: '14:30',
-        path: 'Personal/Inbox.md', line: 3, heading: 'Inbox',
+        path: 'Personal/Inbox.md', line: 3, heading: 'Inbox', version: taskLineVersion('- [ ] Buy a mirror 🕒 14:30 📅 2026-10-20'),
       },
       {
         text: 'Hang the frame', dueAt: '2026-10-21T21:59:00.000Z', dueHasTime: false,
         done: true, highPriority: false, priorityLevel: 'normal', dueDate: '2026-10-21', dueTime: null,
-        path: 'Personal/Inbox.md', line: 5, heading: 'Home',
+        path: 'Personal/Inbox.md', line: 5, heading: 'Home', version: taskLineVersion('- [x] Hang the frame 📅 2026-10-21'),
       },
     ]);
     expect(Object.keys(parseTodos(content)[0]!).sort()).toEqual([

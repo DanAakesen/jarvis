@@ -1,5 +1,16 @@
 # Decisions
 
+## Ticking a task proves the line is unchanged (22 October 2026; #1085, #1216)
+
+`PATCH /vault/tasks` compared only the visible text of the line, so a reordered file or a
+line whose date or priority changed between read and write could tick the wrong task
+without a conflict. Each task now carries an opaque `version` (SHA-256 of the exact raw
+line). The write requires it and answers 409, before anything is written, when the line
+no longer hashes to it; a missing or malformed version is a 400. Responses return the
+line's new version, which the web client reuses for Undo. Separately, the All task view
+names Personal or Work in words on each row, since two Inbox notes read the same and
+colour alone must not carry scope.
+
 ## Notes map shows note categories only (22 October 2026; #1085)
 
 On the owner's request the Notes map lists and draws only the note categories (People,

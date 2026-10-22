@@ -3776,13 +3776,18 @@ completed tasks are searchable but never listed otherwise), and applies its
 All / Personal / Work switch in the browser: Work means a `Work/` path or a root
 task-file heading starting with Work.
 
-Two owner-only write routes sit beside it. `PATCH /vault/tasks` takes
-`{path, line, text, done}`: the path must be in the task scope and pass the vault
-write-path check, the current line must still hold that task text (compared after
-redaction), and only the `[ ]`/`[x]` character is flipped, preserving line endings.
-An already-matching state returns `commit: null` without writing. The write carries
-the file SHA and retries once; a changed or conflicting line returns 409, a refused
-path or scope 400. `POST /vault/tasks` takes `{text, scope: personal|work, due?, time?}`
+Two owner-only write routes sit beside it. Each GET item carries an opaque `version`
+(the SHA-256 of the exact raw line, so text, dates, priority and checkbox state all
+count). `PATCH /vault/tasks` takes `{path, line, text, version, done}`: the path must
+be in the task scope and pass the vault write-path check, and the current line must
+still hold that task text (compared after redaction) and hash to `version`; a
+mismatch (reordered, edited or moved line) returns 409 before anything is written, a
+missing or malformed `version` 400. Only the `[ ]`/`[x]` character is flipped,
+preserving line endings. An already-matching state returns `commit: null` without
+writing. Both PATCH and POST return the line's new `version` (a tick changes the line,
+so Undo sends the returned one). The write carries the file SHA and retries once; a
+changed or conflicting line returns 409, a refused path or scope 400.
+`POST /vault/tasks` takes `{text, scope: personal|work, due?, time?}`
 (`time` is `HH:MM` and needs `due`),
 strips control characters, comments and metadata emoji, caps text at 200 characters,
 refuses secret-looking text, and appends `- [ ] text` (with `📅 date`, plus ` HH:MM` when

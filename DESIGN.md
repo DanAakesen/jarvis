@@ -516,7 +516,7 @@ a Personal / Work choice (defaulting to the current tab), optional date and time
 fields and an **Add** button, all inside one bordered block (a time alone means today);
 Enter adds, Escape closes only the form. Each task row is a soft rounded card with the
 tick vertically centred, the due date and time as a small chip with a calendar icon
-(tinted when overdue), and the source note as a small pill with a dot (teal for Personal, blue for Work); a hairline outline that brightens on hover (red for High, amber for Medium, neutral for Normal), and the tick ring turns red on High tasks (the pill keeps the word). A new task
+(tinted when overdue), and the source note as a small pill with a dot (teal for Personal, blue for Work). In the All view the pill also says **Personal ·** or **Work ·** before the note name, because Personal/Inbox and Work/Inbox both read "Inbox" and colour alone must not carry scope; the cue is dropped once a filter already says it. A hairline outline that brightens on hover (red for High, amber for Medium, neutral for Normal), and the tick ring turns red on High tasks (the pill keeps the word). A new task
 lands in that side's Inbox note, appears in the list tinted for a few seconds and
 scrolls into view. Motion honours reduced motion. A source link
 opens the note in place; Escape

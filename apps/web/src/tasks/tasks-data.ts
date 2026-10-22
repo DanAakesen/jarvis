@@ -23,6 +23,8 @@ export interface VaultTask {
   path: string;
   line: number;
   heading: string | null;
+  /** Opaque fingerprint of the exact vault line; a write sends it back so a changed line is refused. */
+  version: string;
 }
 
 export interface VaultTaskRead {
@@ -67,7 +69,8 @@ function task(value: unknown): VaultTask | null {
       (item.priority !== 'high' && item.priority !== 'medium' && item.priority !== 'normal') ||
       typeof item.path !== 'string' || item.path.length < 1 || item.path.length > 180 ||
       !Number.isSafeInteger(item.line) || Number(item.line) < 1 ||
-      (item.heading !== null && (typeof item.heading !== 'string' || item.heading.length > 300))) return null;
+      (item.heading !== null && (typeof item.heading !== 'string' || item.heading.length > 300)) ||
+      typeof item.version !== 'string' || !/^[0-9a-f]{64}$/u.test(item.version)) return null;
   return {
     id: item.id,
     text: item.text,
@@ -79,6 +82,7 @@ function task(value: unknown): VaultTask | null {
     path: item.path,
     line: Number(item.line),
     heading: item.heading as string | null,
+    version: item.version,
   };
 }
 
@@ -133,16 +137,19 @@ export interface VaultTaskWrite {
   path: string;
   line: number;
   done: boolean;
+  /** Fingerprint of the line as written, for the next change to the same task. */
+  version: string;
 }
 
 function readTaskWrite(value: unknown): VaultTaskWrite {
   const body = object(value);
   if (!body || typeof body.id !== 'string' || !/^[0-9a-f]{64}$/u.test(body.id) ||
       typeof body.path !== 'string' || body.path.length < 1 || body.path.length > 180 ||
-      !Number.isSafeInteger(body.line) || Number(body.line) < 1 || typeof body.done !== 'boolean') {
+      !Number.isSafeInteger(body.line) || Number(body.line) < 1 || typeof body.done !== 'boolean' ||
+      typeof body.version !== 'string' || !/^[0-9a-f]{64}$/u.test(body.version)) {
     throw new Error('Jarvis returned an invalid task confirmation.');
   }
-  return { id: body.id, path: body.path, line: Number(body.line), done: body.done };
+  return { id: body.id, path: body.path, line: Number(body.line), done: body.done, version: body.version };
 }
 
 async function writeVaultTask(
@@ -177,16 +184,16 @@ async function writeVaultTask(
   return readTaskWrite(await response.json());
 }
 
-/** Ticks or unticks one vault task. The backend checks the line still holds this text before it commits. */
+/** Ticks or unticks one vault task. The backend checks the line is still exactly the one that was read (text and version) before it commits. */
 export function setVaultTaskDone(
   backendUrl: string | null,
   getAccessToken: () => Promise<string>,
-  task: Pick<VaultTask, 'path' | 'line' | 'text'>,
+  task: Pick<VaultTask, 'path' | 'line' | 'text' | 'version'>,
   done: boolean,
   signal: AbortSignal,
 ): Promise<VaultTaskWrite> {
   return writeVaultTask(backendUrl, getAccessToken, 'PATCH',
-    { path: task.path, line: task.line, text: task.text, done }, signal);
+    { path: task.path, line: task.line, text: task.text, version: task.version, done }, signal);
 }
 
 /** Adds an open task to the Personal or Work Inbox note. */

@@ -716,8 +716,8 @@ completed tasks are hidden but searchable. Search filters task text, and each ta
 opens its source note in place. The owner can complete or reopen a task from its tick
 button (with a four-second Undo) and add one with **+**: Personal or Work, optionally
 with an optional due date and time, saved to that side's `Inbox.md` note. Each change is a commit
-to the owner's vault, made only for the owner, refused if the line has changed since the
-list was read, and shown as an error with the tick rolled back when it fails. Jarvis
+to the owner's vault, made only for the owner, refused if the line (its text, date, priority or position) has changed since the
+list was read, and shown as an error with the tick rolled back when it fails. In the All view each row says Personal or Work in words, not only by colour. Jarvis
 never reorders, edits the text of or deletes these tasks, and the chat and voice
 `vault_search` tool stays read-only. Agent work remains on the Software Factory
 board.

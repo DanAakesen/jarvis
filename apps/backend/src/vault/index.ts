@@ -37,7 +37,7 @@ import {
 } from '../proactive/todo-discovery.js';
 import { dayKey } from '../proactive/time.js';
 import { isTodoFileWritable } from '../proactive/todo-lines.js';
-import { parseTodosWithContext, sanitizeFactText, taskMetadata } from '../proactive/todo-file.js';
+import { parseTodosWithContext, sanitizeFactText, taskLineVersion, taskMetadata } from '../proactive/todo-file.js';
 
 const folderNames = new Set(['People', 'Work', 'Personal', 'General']);
 const skippedFolders = new Set(['.git', '.obsidian', '.github', '.codex', '.vscode']);
@@ -433,21 +433,24 @@ function vaultTaskItem(todo: Awaited<ReturnType<typeof readVaultTasks>>[number])
     path: todo.path,
     line: todo.line,
     heading: todo.heading,
+    version: todo.version,
   };
 }
 
-/** Ticks or unticks one checkbox line, but only when the line still holds the task the owner saw. */
-function setTaskDone(content: string, path: string, line: number, text: string, done: boolean):
-  { status: 'mismatch' } | { status: 'unchanged' } | { status: 'changed'; content: string } {
+/** Ticks or unticks one checkbox line, but only when the line is byte-for-byte the one the owner saw. */
+function setTaskDone(content: string, path: string, line: number, text: string, version: string, done: boolean):
+  { status: 'mismatch' } | { status: 'unchanged'; version: string } | { status: 'changed'; content: string; version: string } {
   const todo = parseTodosWithContext(content, path).find((candidate) => candidate.line === line);
-  if (!todo || (shouldRedact(todo.text) ? '[redacted]' : todo.text) !== text) return { status: 'mismatch' };
-  if (todo.done === done) return { status: 'unchanged' };
+  if (!todo || todo.version !== version || (shouldRedact(todo.text) ? '[redacted]' : todo.text) !== text) {
+    return { status: 'mismatch' };
+  }
+  if (todo.done === done) return { status: 'unchanged', version: todo.version };
   const parts = content.split(/(\r?\n)/u);
   const current = parts[(line - 1) * 2];
   const next = current?.replace(/^(\uFEFF?\s*[-*]\s+\[)[ xX](\])/u, `$1${done ? 'x' : ' '}$2`);
   if (current === undefined || next === undefined || next === current) return { status: 'mismatch' };
   parts[(line - 1) * 2] = next;
-  return { status: 'changed', content: parts.join('') };
+  return { status: 'changed', content: parts.join(''), version: taskLineVersion(next.replace(/^\uFEFF/u, '')) };
 }
 
 /** Appends one checkbox line to a task note; a missing note starts as an Inbox. Null when the note ends inside a code fence. */
@@ -1663,8 +1666,9 @@ export function createVaultModule(options: {
                 path: { type: 'string', minLength: 1, maxLength: maxPathLength },
                 line: { type: 'integer', minimum: 1 },
                 heading: { type: ['string', 'null'], maxLength: 300 },
+                version: { type: 'string', pattern: '^[0-9a-f]{64}$' },
               },
-              required: ['id', 'text', 'done', 'dueDate', 'dueTime', 'dueAt', 'priority', 'path', 'line', 'heading'],
+              required: ['id', 'text', 'done', 'dueDate', 'dueTime', 'dueAt', 'priority', 'path', 'line', 'heading', 'version'],
               additionalProperties: false,
             },
           },
@@ -1878,12 +1882,13 @@ export function createVaultModule(options: {
           line: { type: 'integer', minimum: 1 },
           done: { type: 'boolean' },
           commit: { type: ['string', 'null'], pattern: '^[\\da-f]{40}$' },
+          version: { type: 'string', pattern: '^[0-9a-f]{64}$' },
         },
-        required: ['id', 'path', 'line', 'done', 'commit'],
+        required: ['id', 'path', 'line', 'done', 'commit', 'version'],
         additionalProperties: false,
       };
 
-      app.patch<{ Body: { path: string; line: number; text: string; done: boolean } }>('/vault/tasks', {
+      app.patch<{ Body: { path: string; line: number; text: string; version: string; done: boolean } }>('/vault/tasks', {
         schema: {
           body: {
             type: 'object',
@@ -1891,9 +1896,10 @@ export function createVaultModule(options: {
               path: { type: 'string', minLength: 1, maxLength: maxPathLength },
               line: { type: 'integer', minimum: 1, maximum: 1_000_000 },
               text: { type: 'string', minLength: 1, maxLength: 300 },
+              version: { type: 'string', pattern: '^[0-9a-f]{64}$' },
               done: { type: 'boolean' },
             },
-            required: ['path', 'line', 'text', 'done'],
+            required: ['path', 'line', 'text', 'version', 'done'],
             additionalProperties: false,
           },
           response: { 200: taskWriteResponseSchema, 400: taskWriteErrorSchema, 403: apiError, 409: taskWriteErrorSchema, 503: taskWriteErrorSchema },
@@ -1901,7 +1907,7 @@ export function createVaultModule(options: {
       }, async (request, reply) => {
         if (!ownerOnly(request, reply)) return;
         const signal = AbortSignal.timeout(30_000);
-        const { line, text, done } = request.body;
+        const { line, text, version, done } = request.body;
         let folder = 'other';
         const logWrite = (outcome: VaultLogFields['outcome']) => log('vault.write', { outcome, folder });
         try {
@@ -1912,18 +1918,18 @@ export function createVaultModule(options: {
           for (let attempt = 0; attempt < 2; attempt += 1) {
             const current = await options.client.read(path, signal);
             if (!current) return reply.code(409).send({ error: 'The task note no longer exists. Refresh the list.' });
-            const change = setTaskDone(current.content, path, line, text, done);
+            const change = setTaskDone(current.content, path, line, text, version, done);
             if (change.status === 'mismatch') {
               return reply.code(409).send({ error: 'This task changed in the vault. Refresh the list.' });
             }
-            if (change.status === 'unchanged') return { id, path, line, done, commit: null };
+            if (change.status === 'unchanged') return { id, path, line, done, commit: null, version: change.version };
             try {
               const commit = await options.client.write(
                 path, change.content, `jarvis: ${done ? 'complete' : 'reopen'} a task\n\nCo-authored-by: Jarvis`, current.sha, signal,
               );
               indexAfterNoteWrite();
               logWrite('ok');
-              return { id, path, line, done, commit };
+              return { id, path, line, done, commit, version: change.version };
             } catch (error) {
               if (!(error instanceof VaultWriteConflictError) || attempt === 1) throw error;
             }
@@ -1979,7 +1985,7 @@ export function createVaultModule(options: {
               );
               indexAfterNoteWrite();
               logWrite('ok');
-              return { id: vaultTaskId(path, next.line), path, line: next.line, done: false, commit };
+              return { id: vaultTaskId(path, next.line), path, line: next.line, done: false, commit, version: taskLineVersion(taskLine) };
             } catch (error) {
               if (!(error instanceof VaultWriteConflictError) || attempt === 1) throw error;
             }

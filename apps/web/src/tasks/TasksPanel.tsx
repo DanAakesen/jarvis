@@ -59,8 +59,8 @@ interface RowActions {
 }
 interface RowState { done: Map<string, boolean>; lingering: Map<string, Phase>; pending: ReadonlySet<string>; fresh: string | null }
 
-function TaskRow({ task, done, phase, pending, fresh, onToggle, onOpenNote }: RowActions & {
-  task: VaultTask; done: boolean; phase: Phase | undefined; pending: boolean; fresh: boolean;
+function TaskRow({ task, done, phase, pending, fresh, showScope, onToggle, onOpenNote }: RowActions & {
+  task: VaultTask; done: boolean; phase: Phase | undefined; pending: boolean; fresh: boolean; showScope: boolean;
 }) {
   const due = dueLabel(task);
   const row = useRef<HTMLLIElement>(null);
@@ -85,7 +85,7 @@ function TaskRow({ task, done, phase, pending, fresh, onToggle, onOpenNote }: Ro
             if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
             event.preventDefault();
             onOpenNote(task.path);
-          }}><span className="tasks-panel-dot" aria-hidden="true" />{sourceName(task.path)}</a>
+          }}><span className="tasks-panel-dot" aria-hidden="true" />{showScope && <span className="tasks-panel-scope">{isWork(task) ? 'Work' : 'Personal'} ·</span>}{sourceName(task.path)}</a>
       </div>
     </div>
     {phase ? <button className="tasks-panel-undo" type="button" disabled={pending} onClick={() => onToggle(task, false)}>Undo</button>
@@ -93,14 +93,14 @@ function TaskRow({ task, done, phase, pending, fresh, onToggle, onOpenNote }: Ro
   </li>;
 }
 
-function TaskGroup({ title, tasks, rows, onToggle, onOpenNote }: RowActions & {
-  title: string; tasks: readonly VaultTask[]; rows: RowState;
+function TaskGroup({ title, tasks, rows, showScope, onToggle, onOpenNote }: RowActions & {
+  title: string; tasks: readonly VaultTask[]; rows: RowState; showScope: boolean;
 }) {
   if (!tasks.length) return null;
   return <div className="tasks-panel-group" data-group={title === 'Overdue' ? 'overdue' : undefined}>
     <h2>{title}</h2>
     <ul>{tasks.map((task) => <TaskRow key={task.id} task={task} done={rows.done.get(task.id) ?? task.done}
-      phase={rows.lingering.get(task.id)} pending={rows.pending.has(task.id)} fresh={rows.fresh === task.id}
+      phase={rows.lingering.get(task.id)} pending={rows.pending.has(task.id)} fresh={rows.fresh === task.id} showScope={showScope}
       onToggle={onToggle} onOpenNote={onOpenNote} />)}</ul>
   </div>;
 }
@@ -138,6 +138,7 @@ export function TasksPanel({ id, backendUrl, getAccessToken, initialQuery = '', 
   const [draftTime, setDraftTime] = useState('');
   const [addError, setAddError] = useState('');
   const pendingRef = useRef(new Set<string>());
+  const versions = useRef(new Map<string, string>());
   const timers = useRef(new Map<string, number[]>());
   const quietReload = useRef(false);
   const writes = useRef(new AbortController());
@@ -182,6 +183,7 @@ export function TasksPanel({ id, backendUrl, getAccessToken, initialQuery = '', 
         .then((value) => {
           if (!controller.signal.aborted) {
             setResult(value);
+            versions.current.clear();
             setState('loaded');
             // A fresh read is the truth again, except for writes still in flight.
             setDoneOverride((current) => new Map([...current].filter(([key]) => pendingRef.current.has(key))));
@@ -242,7 +244,10 @@ export function TasksPanel({ id, backendUrl, getAccessToken, initialQuery = '', 
     setDoneOverride((current) => new Map(current).set(task.id, done));
     if (done) startLinger(task.id); else stopLinger(task.id);
     const { signal } = writes.current;
-    void setVaultTaskDone(backendUrl, getAccessToken, task, done, signal)
+    // After our own write the line changed, so the next change (Undo) must carry the version that write returned.
+    const current = { ...task, version: versions.current.get(task.id) ?? task.version };
+    void setVaultTaskDone(backendUrl, getAccessToken, current, done, signal)
+      .then((write) => { versions.current.set(task.id, write.version); })
       .catch((cause: unknown) => {
         if (signal.aborted) return;
         setDoneOverride((current) => {
@@ -301,7 +306,7 @@ export function TasksPanel({ id, backendUrl, getAccessToken, initialQuery = '', 
   };
 
   const rows: RowState = { done: doneOverride, lingering, pending, fresh };
-  const actions = { onToggle: toggle, onOpenNote };
+  const actions = { onToggle: toggle, onOpenNote, showScope: scope === 'all' };
 
   return <section ref={panel} id={id} className="tasks-panel luminous-glass" aria-label="Task list" aria-busy={state === 'loading'} tabIndex={-1}
     onKeyDown={(event) => { if (event.key === 'Escape') { event.preventDefault(); onClose(); } }}>

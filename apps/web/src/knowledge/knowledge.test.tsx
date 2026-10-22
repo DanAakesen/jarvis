@@ -323,6 +323,7 @@ describe('knowledge graph view', () => {
           id: 'c'.repeat(64), text: 'Buy a mirror', done: false,
           dueDate: '2031-04-09', dueTime: '14:30', dueAt: '2031-04-09T12:30:00.000Z',
           priority: 'normal', path: 'Personal/Inbox.md', line: 4, heading: 'Home',
+          version: 'a'.repeat(64),
         }],
         readAt: '2031-04-09T12:00:00.000Z', today: '2031-04-09', total: 3, truncated: false,
       });

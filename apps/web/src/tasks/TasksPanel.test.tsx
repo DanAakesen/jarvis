@@ -10,7 +10,7 @@ const task = (id: string, text: string, dueDate: string | null, done = false, pr
   path = 'Personal/Inbox.md'): VaultTask => ({
   id: id.padStart(64, '0'), text, done, dueDate, dueTime: null,
   dueAt: dueDate ? `${dueDate}T20:28:00.000Z` : null, priority,
-  path, line: Number(id), heading: 'Inbox',
+  path, line: Number(id), heading: 'Inbox', version: id.padStart(64, 'c'),
 });
 const allTasks = [
   task('1', 'Overdue fixture', '2031-04-08'),
@@ -37,7 +37,7 @@ beforeEach(() => {
       const body = JSON.parse(String(init.body)) as { path?: string; line?: number; done?: boolean };
       return json({
         id: '9'.padStart(64, '0'), path: body.path ?? 'Personal/Inbox.md', line: body.line ?? 9, done: body.done ?? false,
-        commit: 'a'.repeat(40),
+        commit: 'a'.repeat(40), version: 'd'.repeat(64),
       });
     }
     const url = new URL(String(input));
@@ -79,7 +79,7 @@ describe('Tasks panel', () => {
     expect(screen.getByText('Medium')).not.toBeNull();
     const link = screen.getByRole('link', { name: 'Open source note Personal/Mirror & Frame.md, line 2' });
     expect(link.getAttribute('href')).toBe('/notes?note=Personal%2FMirror+%26+Frame.md');
-    expect(link.textContent).toBe('Mirror & Frame');
+    expect(link.textContent).toBe('Personal ·Mirror & Frame');
     expect(screen.getAllByRole('button').map((button) => button.getAttribute('aria-label') ?? button.textContent))
       .toEqual(['Add a task', 'All', 'Personal', 'Work']);
   });
@@ -95,7 +95,7 @@ describe('Tasks panel', () => {
     expect(writeCalls()[0]?.[0]).toBe('https://api.example.com/vault/tasks');
     expect(writeCalls()[0]?.[1]).toMatchObject({ method: 'PATCH' });
     expect(JSON.parse(String(writeCalls()[0]?.[1]?.body))).toEqual({
-      path: 'Personal/Inbox.md', line: 4, text: 'No date fixture', done: true,
+      path: 'Personal/Inbox.md', line: 4, text: 'No date fixture', version: '4'.padStart(64, 'c'), done: true,
     });
     await act(async () => { vi.advanceTimersByTime(4200); });
     expect(screen.queryByText('No date fixture')).toBeNull();
@@ -109,7 +109,7 @@ describe('Tasks panel', () => {
     await waitFor(() => expect((undo as HTMLButtonElement).disabled).toBe(false));
     fireEvent.click(undo);
     await waitFor(() => expect(writeCalls()).toHaveLength(2));
-    expect(JSON.parse(String(writeCalls()[1]?.[1]?.body))).toMatchObject({ line: 4, done: false });
+    expect(JSON.parse(String(writeCalls()[1]?.[1]?.body))).toMatchObject({ line: 4, done: false, version: 'd'.repeat(64) });
     expect(screen.getByRole('checkbox', { name: 'No date fixture' }).getAttribute('aria-checked')).toBe('false');
     expect(screen.queryByRole('button', { name: 'Undo' })).toBeNull();
   });
@@ -212,6 +212,17 @@ describe('Tasks panel', () => {
     expect(screen.queryByText('Work fixture')).toBeNull();
     expect(screen.getByText('Buy a mirror')).not.toBeNull();
     expect(fetchMock).toHaveBeenCalledTimes(calls);
+  });
+
+  it('names Personal or Work in words in the All view, and drops the cue once a filter says it', async () => {
+    mount();
+    await screen.findByText('Work fixture');
+    const label = (name: string) => screen.getByRole('link', { name: new RegExp(`^Open source note ${name}`, 'u') }).textContent;
+    expect(label('Personal/Inbox.md, line 1')).toBe('Personal ·Inbox');
+    expect(label('Work/Projects.md')).toBe('Work ·Projects');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Work' }));
+    expect(label('Work/Projects.md')).toBe('Projects');
   });
 
   it('files root-file tasks under Work when their heading says so', async () => {

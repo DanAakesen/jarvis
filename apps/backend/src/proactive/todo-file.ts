@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import type { createGitHubVaultClient } from '../vault/github-client.js';
 import { MAX_VAULT_FILE_BYTES } from '../vault/github-client.js';
 import { localDateTimeInstant } from './time.js';
@@ -19,6 +20,8 @@ export interface ParsedVaultTodo extends ParsedTodo {
   path: string;
   line: number;
   heading: string | null;
+  /** Opaque SHA-256 of the exact raw line, so a write can prove the line is unchanged since it was read. */
+  version: string;
 }
 
 const dueMarkerPattern = /(?:📅\s*|\[due::\s*|\bdue:\s*)(\d{4}-\d{2}-\d{2})(?:(?:\s+|T)(\d{2}:\d{2}))?\]?/iu;
@@ -56,6 +59,10 @@ function dueDate(date: string, time: string | undefined): string | null {
   } catch {
     return null;
   }
+}
+
+export function taskLineVersion(rawLine: string): string {
+  return createHash('sha256').update(rawLine, 'utf8').digest('hex');
 }
 
 export function parseTodosWithContext(content: string, path: string): ParsedVaultTodo[] {
@@ -106,6 +113,7 @@ export function parseTodosWithContext(content: string, path: string): ParsedVaul
       path,
       line: index + 1,
       heading,
+      version: taskLineVersion(line),
     });
   }
   return todos;

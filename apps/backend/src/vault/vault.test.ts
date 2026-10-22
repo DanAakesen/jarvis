@@ -503,39 +503,94 @@ describe('GitHub vault', () => {
       method: 'PATCH', url: '/vault/tasks', headers: apiAuthorization, payload,
     });
 
-    const ticked = await patch({ path, line: 2, text: 'Buy a mirror', done: true });
+    const ver = (line: string) => createHash('sha256').update(line, 'utf8').digest('hex');
+    const mirrorOpen = ver('- [ ] Buy a mirror 📅 2031-04-09');
+    const mirrorDone = ver('- [x] Buy a mirror 📅 2031-04-09');
+    const listed = await app.inject({ url: '/vault/tasks', headers: apiAuthorization });
+    expect(listed.json().items).toEqual([expect.objectContaining({ line: 2, version: mirrorOpen })]);
+
+    const ticked = await patch({ path, line: 2, text: 'Buy a mirror', version: mirrorOpen, done: true });
     expect(ticked.statusCode).toBe(200);
-    expect(ticked.json()).toMatchObject({ path, line: 2, done: true, commit: sha('f') });
+    expect(ticked.json()).toMatchObject({ path, line: 2, done: true, commit: sha('f'), version: mirrorDone });
     expect(github.files.get(path)?.content)
       .toBe('# Home\r\n- [x] Buy a mirror 📅 2031-04-09\r\n- [x] Finished task\r\n');
     const writes = github.calls.filter(({ method }) => method === 'PUT');
     expect(writes).toHaveLength(1);
     expect(writes[0]?.body).toMatchObject({ sha: sha('a'), message: expect.stringContaining('jarvis: complete a task') });
 
-    const again = await patch({ path, line: 2, text: 'Buy a mirror', done: true });
-    expect(again.json()).toMatchObject({ done: true, commit: null });
+    const again = await patch({ path, line: 2, text: 'Buy a mirror', version: mirrorDone, done: true });
+    expect(again.json()).toMatchObject({ done: true, commit: null, version: mirrorDone });
     expect(github.calls.filter(({ method }) => method === 'PUT')).toHaveLength(1);
 
-    const reopened = await patch({ path, line: 3, text: 'Finished task', done: false });
+    const undone = await patch({ path, line: 2, text: 'Buy a mirror', version: mirrorDone, done: false });
+    expect(undone.json()).toMatchObject({ done: false, version: mirrorOpen });
+    await patch({ path, line: 2, text: 'Buy a mirror', version: mirrorOpen, done: true });
+
+    const reopened = await patch({ path, line: 3, text: 'Finished task', version: ver('- [x] Finished task'), done: false });
     expect(reopened.statusCode).toBe(200);
     expect(github.files.get(path)?.content)
       .toBe('# Home\r\n- [x] Buy a mirror 📅 2031-04-09\r\n- [ ] Finished task\r\n');
 
-    expect((await patch({ path, line: 2, text: 'Something else', done: false })).statusCode).toBe(409);
-    expect((await patch({ path, line: 1, text: 'Home', done: true })).statusCode).toBe(409);
-    expect((await patch({ path: 'Personal/Missing.md', line: 1, text: 'x', done: true })).statusCode).toBe(409);
-    expect((await patch({ path: 'General/Notes.md', line: 1, text: 'Not in the task scope', done: true })).statusCode)
+    const version = ver('- [x] Buy a mirror 📅 2031-04-09');
+    expect((await patch({ path, line: 2, text: 'Something else', version, done: false })).statusCode).toBe(409);
+    expect((await patch({ path, line: 1, text: 'Home', version: ver('# Home'), done: true })).statusCode).toBe(409);
+    expect((await patch({ path: 'Personal/Missing.md', line: 1, text: 'x', version, done: true })).statusCode).toBe(409);
+    expect((await patch({ path: 'General/Notes.md', line: 1, text: 'Not in the task scope', version, done: true })).statusCode)
       .toBe(400);
-    expect((await patch({ path: '.github/tasks.md', line: 1, text: 'x', done: true })).statusCode).toBe(400);
-    expect((await patch({ path, line: 0, text: 'x', done: true })).statusCode).toBe(400);
+    expect((await patch({ path: '.github/tasks.md', line: 1, text: 'x', version, done: true })).statusCode).toBe(400);
+    expect((await patch({ path, line: 0, text: 'x', version, done: true })).statusCode).toBe(400);
     expect((await app.inject({ method: 'PATCH', url: '/vault/tasks', payload: {} })).statusCode).toBe(401);
     const nonOwner = memoryApiApp(module, { auth: async () => ({
       objectId: 'not-dan', tenantId: apiConfig.auth.tenantId, displayName: 'Other',
     }) });
     expect((await nonOwner.inject({
       method: 'PATCH', url: '/vault/tasks', headers: apiAuthorization,
-      payload: { path, line: 2, text: 'Buy a mirror', done: false },
+      payload: { path, line: 2, text: 'Buy a mirror', version, done: false },
     })).statusCode).toBe(403);
+  });
+
+  it('refuses a tick whose line moved or changed since it was read, and writes nothing', async () => {
+    const path = 'Personal/Inbox.md';
+    const ver = (line: string) => createHash('sha256').update(line, 'utf8').digest('hex');
+    const readAs = ver('- [ ] Call the bank 📅 2031-04-09');
+    const { github, module } = moduleFor({
+      remote: { [path]: {
+        sha: sha('a'),
+        content: '- [ ] Call the bank 📅 2031-04-12\n- [ ] Call the bank 📅 2031-04-09\n',
+      } },
+    });
+    const app = memoryApiApp(module);
+    const patch = (payload: object) => app.inject({
+      method: 'PATCH', url: '/vault/tasks', headers: apiAuthorization, payload,
+    });
+    const reordered = await patch({ path, line: 1, text: 'Call the bank', version: readAs, done: true });
+    expect(reordered.statusCode).toBe(409);
+    expect(reordered.json()).toMatchObject({ error: expect.stringContaining('changed') });
+    const edited = await patch({
+      path, line: 2, text: 'Call the bank', version: ver('- [ ] Call the bank 📅 2031-04-08'), done: true,
+    });
+    expect(edited.statusCode).toBe(409);
+    const priority = await patch({
+      path, line: 2, text: 'Call the bank', version: ver('- [ ] Call the bank ⏫ 📅 2031-04-09'), done: true,
+    });
+    expect(priority.statusCode).toBe(409);
+    expect(github.calls.some(({ method }) => method === 'PUT')).toBe(false);
+
+    const good = ver('- [ ] Call the bank 📅 2031-04-09');
+    expect((await patch({ path, line: 2, text: 'Call the bank', version: good, done: true })).statusCode).toBe(200);
+    expect(github.files.get(path)?.content).toBe('- [ ] Call the bank 📅 2031-04-12\n- [x] Call the bank 📅 2031-04-09\n');
+  });
+
+  it('requires a well-formed version to tick a task', async () => {
+    const path = 'Personal/Inbox.md';
+    const { github, module } = moduleFor({ remote: { [path]: { sha: sha('a'), content: '- [ ] Plan a garden\n' } } });
+    const patch = (payload: object) => memoryApiApp(module).inject({
+      method: 'PATCH', url: '/vault/tasks', headers: apiAuthorization, payload,
+    });
+    expect((await patch({ path, line: 1, text: 'Plan a garden', done: true })).statusCode).toBe(400);
+    expect((await patch({ path, line: 1, text: 'Plan a garden', version: 'abc', done: true })).statusCode).toBe(400);
+    expect((await patch({ path, line: 1, text: 'Plan a garden', version: 'G'.repeat(64), done: true })).statusCode).toBe(400);
+    expect(github.calls.some(({ method }) => method === 'PUT')).toBe(false);
   });
 
   it('refuses a tick when the note changes under it', async () => {
@@ -546,7 +601,10 @@ describe('GitHub vault', () => {
     });
     const response = await memoryApiApp(module).inject({
       method: 'PATCH', url: '/vault/tasks', headers: apiAuthorization,
-      payload: { path, line: 1, text: 'Plan a garden', done: true },
+      payload: {
+        path, line: 1, text: 'Plan a garden', done: true,
+        version: createHash('sha256').update('- [ ] Plan a garden', 'utf8').digest('hex'),
+      },
     });
     expect(response.statusCode).toBe(409);
     expect(response.json()).toMatchObject({ error: expect.stringContaining('changed') });
@@ -563,7 +621,10 @@ describe('GitHub vault', () => {
 
     const work = await post({ text: '  Call the bank 📅  about the ✅ loan ', scope: 'work', due: '2031-04-09' });
     expect(work.statusCode).toBe(200);
-    expect(work.json()).toMatchObject({ path: 'Work/Inbox.md', line: 4, done: false, commit: sha('f') });
+    expect(work.json()).toMatchObject({
+      path: 'Work/Inbox.md', line: 4, done: false, commit: sha('f'),
+      version: createHash('sha256').update('- [ ] Call the bank about the loan 📅 2031-04-09', 'utf8').digest('hex'),
+    });
     expect(github.files.get('Work/Inbox.md')?.content)
       .toBe('# Inbox\n\n- [ ] Existing task\n- [ ] Call the bank about the loan 📅 2031-04-09\n');
 
