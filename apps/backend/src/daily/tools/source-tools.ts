@@ -11,6 +11,7 @@ import type { DailyCoachStore } from '../coach-store.js';
 import type { DailyData } from '../query.js';
 import { profilePatch } from '../coach-store.js';
 import { resolveDailyOwner } from '../owner.js';
+import { presentTrainingTargets } from '../training/targets.js';
 
 type Input = Record<string, unknown>;
 type CoachAccess = (request: FastifyRequest) => DailyCoachStore;
@@ -143,7 +144,9 @@ async function healthSummary(data: DailyData, request: FastifyRequest, signal: A
     today: { date: today, metrics: metricRows, sleep: sleepRows, workouts: workoutRows },
     rolling7: { startDate: weekStart, endDate: today, workouts: weeklyRows, workoutCount: weeklyWorkouts.truncated ? null : weeklyRows.length },
     sync: { feeds: sync.feeds, heartbeat: sync.heartbeat, inbox: sync.inbox },
-    targets: null,
+    targets: data.trainingTargets
+      ? presentTrainingTargets(await data.trainingTargets(request).read(signal))
+      : { status: 'unavailable' },
     coverage: {
       sourceCompleteness: 'unknown',
       limited: metrics.truncated || sleep.truncated || workouts.truncated || weeklyWorkouts.truncated,
@@ -167,7 +170,7 @@ export function dailySourceTools(data: DailyData, nutrition: NutritionAccess, co
     },
   });
   const healthSummaryTool = readTool('daily_health_summary',
-    'Read today’s retained Health metrics, sleep, workouts and upload freshness, plus seven-day workout rows. Unknown or absent data stays empty/unknown; freshness is processing evidence, not proof of source completeness. No fixed renderer, estimate, or live-device claim.',
+    'Read today’s retained Health metrics, sleep, workouts and upload freshness, plus seven-day workout rows and the owner’s configured training targets. Unset targets remain null and are listed as missing; no defaults are inferred. Unknown or absent data stays explicit; freshness is processing evidence, not proof of source completeness. No fixed renderer, estimate, or live-device claim.',
     schema(), async (_input, request, signal) => healthSummary(data, request, signal, now()));
   const healthHistoryTool = readTool('daily_health_history',
     'Read retained health metrics, sleep and workouts in at most one 93-date Europe/Copenhagen window per call. Replay coverage.continuation with the same explicit requested dates; exhausted categories are not replayed. Defaults to the latest 30 days. Future dates are refused.',

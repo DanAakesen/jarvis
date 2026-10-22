@@ -44,9 +44,17 @@ function fixture() {
     recovery: vi.fn(async () => [{ recovery_date: new Date('2026-10-17T00:00:00Z'), context_text: null }]),
     setRecovery: vi.fn(async (_start: string, _end: string, state: 'sick' | 'clear') => ({ affectedDays: 1, state })),
   } as unknown as DailyCoachStore;
+  const trainingTargets = () => ({
+    read: vi.fn(async () => ({
+      targets: { gymSessionsPerWeek: null, runSessionsPerWeek: null, dailySteps: null },
+      updatedAt: null,
+    })),
+    write: vi.fn(),
+  });
   const data: DailyData = {
     query: { query: vi.fn() }, changes: {} as never,
     health: () => health as never,
+    trainingTargets,
     nutrition: () => nutritionStore,
     coach: () => coach,
   };
@@ -69,7 +77,9 @@ describe('source-selected Daily tool capabilities', () => {
     const f = fixture();
     const healthTool = f.tools[0]!;
     const summary = await healthTool.execute({ operation: 'get_health_summary' }, f.request(), signal()) as Record<string, unknown>;
-    expect(summary).toMatchObject({ timeZone: 'Europe/Copenhagen', today: { date: '2026-10-18' }, targets: null });
+    expect(summary).toMatchObject({ timeZone: 'Europe/Copenhagen', today: { date: '2026-10-18' },
+      targets: { targets: { gymSessionsPerWeek: null, runSessionsPerWeek: null, dailySteps: null },
+        missing: ['gymSessionsPerWeek', 'runSessionsPerWeek', 'dailySteps'], updatedAt: null } });
     expect(f.health.sync).toHaveBeenCalledOnce();
     const history = await healthTool.execute({ operation: 'get_health_history', startDate: '2026-10-01', endDate: '2026-10-18', limit: 10 }, f.request(), signal()) as Record<string, unknown>;
     expect(history).toMatchObject({ period: { startDate: '2026-10-01', endDate: '2026-10-18' }, sourceCompleteness: 'unknown' });

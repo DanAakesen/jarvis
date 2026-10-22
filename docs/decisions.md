@@ -1,5 +1,27 @@
 # Decisions
 
+## Health tool read coverage (22 October 2026; #1197)
+
+Extend the existing sensitive `daily_query` tool rather than add catalogue
+entries. Capability version 5 exposes the existing owner-scoped training-target
+store only when its reader is composed; version 1–4 source lists stay stable.
+`daily_health_summary` uses that same store. Unset values stay null and listed
+as missing; zero is configured, and the stored update timestamp is not Health
+feed freshness. No target write tool or alternate store is added.
+
+Project retained metric `fields_json`, sleep `source_json`, and minute
+heart-rate provenance into allowlisted typed values and at most five source
+labels, rather than return those JSON columns. Reuse workout detail summaries
+and expose only normalized workout metrics not already represented there. Cap
+that additional list at 100 and mark the result partial on truncation; do not
+expand the separate pagination work with a new detail cursor.
+
+The source-linked [read coverage matrix](daily-health-read-coverage.md)
+distinguishes storage/schema correspondence from actual tool reachability.
+Unresolved pinned-source parity and excluded source operations remain ruled by
+the existing matrix and owner decisions. Synthetic tests do not establish live
+records, production availability, or English-voice tool registration.
+
 ## Bounded retained-history continuation (22 October 2026; #1201)
 
 Keep the existing keyset readers and source-specific cursor validation.

@@ -1527,6 +1527,13 @@ recorded duration in seconds by date, keeping repeated-date workouts distinct;
 unknown durations are omitted. Checked with synthetic data
 only; acceptance with real data and a physical phone stays open.
 
+The existing `daily_query` also reads the owner's Gym, Run and daily-step targets
+from the same target store used by Health Settings. Unset targets remain null and
+are listed as missing; no default or target write is available to the assistant.
+Historical metric and sleep provenance is exposed as bounded typed fields, and
+workout detail adds normalized metrics not already summarized there. A capped
+workout-metric detail is explicitly partial rather than described as complete.
+
 When an existing Frida adapter is explicitly supplied, owner-authenticated
 `daily_food_lookup` exposes only its public-reference component lookup.
 Keep generic food names, requested grams or explicit unknowns, preparation,
