@@ -102,6 +102,8 @@ describe('daily_show descriptor', () => {
     expect(tool.description.length).toBeLessThanOrEqual(4000);
     expect(tool.description).toContain('daily_query');
     expect(tool.description).toMatch(/chart is drawn for workout duration/iu);
+    expect(tool.description).toContain('filtering is applied before the bounded row limit');
+    expect(tool.description).not.toContain('from the page');
     expect(tool.description).toMatch(/adds no calculations/iu);
     expect(tool.description).toMatch(/never zero/iu);
   });
@@ -123,6 +125,7 @@ describe('daily_show descriptor', () => {
     expect(Object.keys(schema.properties).sort()).toEqual(['display', 'endDate', 'limit', 'metric', 'source', 'startDate', 'workoutId']);
     expect(schema.properties.display?.enum).toEqual(['table', 'chart']);
     expect(schema.properties.display?.description).toMatch(/workout duration/iu);
+    expect(schema.properties.metric?.description).toContain('before the bounded page');
   });
 });
 

@@ -1839,6 +1839,43 @@ describe('Workspace', () => {
     act(() => { expect(dispatch({ commandId: 'close-view', operation: 'close', viewId: 'research' })).toBe(true); });
     expect(screen.queryByRole('article', { name: 'Updated research' })).toBeNull();
   });
+
+  it('renders a Health chart through create, refresh, show and close with one stable view identity', () => {
+    let workspace: WorkspaceController | null = null;
+    render(<Workspace ref={(controller) => { workspace = controller; }} views={[]} />);
+    const viewId = 'daily-metrics-chart-step-count-a1b2c3';
+    const chart = (value: number): GeneratedView => ({
+      version: 1,
+      title: 'Step count (count), 11 Oct 2026 to 17 Oct 2026',
+      renderer: 'chart',
+      source: { id: 'now', status: 'complete', updatedAt: '2026-10-17T19:26:00.000Z' },
+      data: { kind: 'bar', series: [{
+        name: 'Step count (count)',
+        points: [{ x: '16 Oct', y: value }, { x: '17 Oct', y: 2345 }],
+      }] },
+    });
+    const dispatch: WorkspaceController['dispatch'] = (command) => workspace!.dispatch(command);
+    act(() => {
+      expect(dispatch({ commandId: 'health-create', operation: 'create', viewId, view: chart(1234) })).toBe(true);
+    });
+    let article = screen.getByRole('article', { name: 'Step count (count), 11 Oct 2026 to 17 Oct 2026' });
+    expect(within(article).getByRole('img', { name: /Step count \(count\).*bar chart/u })).not.toBeNull();
+    expect(article.querySelectorAll('.chart-bars rect')).toHaveLength(2);
+    expect(within(article).getByRole('table', { name: /Step count.*values/u, hidden: true }).textContent).toContain('1234');
+
+    act(() => {
+      expect(dispatch({ commandId: 'health-refresh', operation: 'update', viewId, view: chart(1300) })).toBe(true);
+    });
+    article = screen.getByRole('article', { name: 'Step count (count), 11 Oct 2026 to 17 Oct 2026' });
+    expect(article.querySelectorAll('.chart-bars rect')).toHaveLength(2);
+    expect(within(article).getByRole('table', { name: /Step count.*values/u, hidden: true }).textContent).toContain('1300');
+
+    act(() => { expect(dispatch({ commandId: 'health-minimise', operation: 'minimise', viewId })).toBe(true); });
+    act(() => { expect(dispatch({ commandId: 'health-show', operation: 'show', viewId })).toBe(true); });
+    expect(screen.getByRole('article', { name: 'Step count (count), 11 Oct 2026 to 17 Oct 2026' })).not.toBeNull();
+    act(() => { expect(dispatch({ commandId: 'health-close', operation: 'close', viewId })).toBe(true); });
+    expect(screen.queryByRole('article', { name: 'Step count (count), 11 Oct 2026 to 17 Oct 2026' })).toBeNull();
+  });
 });
 
 
