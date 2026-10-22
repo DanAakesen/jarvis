@@ -223,6 +223,26 @@ rung that produces `session.updated` after deployment is the first real measurem
 the owner makes one English voice attempt and reads it from the logs
 ([runbook](runbook.md#voice-startup-diagnosis)).
 
+## Readiness-gated Health access in English voice (22 October 2026; #1188)
+
+Refs DanAakesen/jarvis#1184, DanAakesen/jarvis#1177.
+
+Post-deployment `voice.tool_budget_probe` records were not available to this
+agent, so this change does not claim a cause for the earlier R0/R1 startup
+difference. Keep the previously measured reduced frame as the cold-start rung
+(now named R2). Add R1 as the exact `no_proactive` candidate: it contains the
+configured `daily_*` tools, excludes `proactive_recent_items`, and uses the
+reduced-rung instructions. Promote subsequent sessions to R1 only when that
+independent frame receives `session.updated`; a ready full frame still promotes
+to R0. A failed or inconclusive probe leaves the known-good cold start in
+place, and foreground fallback continues down the bounded ladder.
+
+The probe is evidence that its exact frame became ready at that time, not proof
+of a provider limit or of a specific tool, count, or size as the cause. Health
+access is therefore conditional on Voice Live accepting the Health-capable frame
+in that process; verify a real English voice Health request after deployment
+before closing #1188.
+
 ## Bound voice startup and summarize every session (21 October 2026; #1177)
 
 Refs DanAakesen/jarvis#1153. Accepted upstream WebSockets were followed by no

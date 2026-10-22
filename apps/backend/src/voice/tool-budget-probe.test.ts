@@ -132,6 +132,21 @@ describe('voice tool-budget background probes', () => {
     expect(vi.getTimerCount()).toBe(0);
   });
 
+  it('does not promote a ready no-daily frame that cannot provide Health tools', async () => {
+    const f = setup();
+    f.probe.start(f.context);
+    await vi.advanceTimersByTimeAsync(16_000);
+    expect(f.connect).toHaveBeenCalledTimes(3);
+    f.sockets[2]!.open();
+    f.sockets[2]!.event('session.updated');
+    await vi.advanceTimersByTimeAsync(0);
+    expect(f.records).toContainEqual(expect.objectContaining({
+      msg: 'voice.tool_budget_probe', probe: 'no_daily', outcome: 'ready',
+    }));
+    expect(f.memory.get()).toBeUndefined();
+    await f.probe.close();
+  });
+
   it('honours the process cooldown and starts no overlapping probe socket', async () => {
     let clock = 0;
     const f = setup(true, () => clock);
