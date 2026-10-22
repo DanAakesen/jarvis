@@ -11,7 +11,7 @@ export interface CredentialStatus {
 
 export interface CredentialStatusStore {
   list(): Promise<CredentialStatus[]>;
-  updateGitHubAppStatus(status: 'ok' | 'failed', checkedAt: string): Promise<void>;
+  updateGitHubAppStatus(status: 'ok' | 'failed', checkedAt: string, scopeKey: string): Promise<void>;
   acquireCodexRenewalLease(owner: string, leaseSeconds: number): Promise<boolean>;
   refreshCodexRenewalLease(owner: string, leaseSeconds: number): Promise<boolean>;
   updateCopilotStatus(

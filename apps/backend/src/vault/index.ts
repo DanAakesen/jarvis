@@ -32,9 +32,12 @@ import {
   createGitHubVaultClient,
   type VaultFile,
 } from './github-client.js';
-import { readVaultTasks, filterVaultTasks, TodoDiscoveryError, type VaultTaskState } from '../proactive/todo-discovery.js';
+import {
+  readVaultTasks, filterVaultTasks, inScope as inTaskScope, TodoDiscoveryError, type VaultTaskState,
+} from '../proactive/todo-discovery.js';
 import { dayKey } from '../proactive/time.js';
-import { sanitizeFactText } from '../proactive/todo-file.js';
+import { isTodoFileWritable } from '../proactive/todo-lines.js';
+import { parseTodosWithContext, sanitizeFactText, taskLineVersion, taskMetadata } from '../proactive/todo-file.js';
 
 const folderNames = new Set(['People', 'Work', 'Personal', 'General']);
 const skippedFolders = new Set(['.git', '.obsidian', '.github', '.codex', '.vscode']);
@@ -426,11 +429,46 @@ function vaultTaskItem(todo: Awaited<ReturnType<typeof readVaultTasks>>[number])
     dueDate: todo.dueDate,
     dueTime: todo.dueTime,
     dueAt: todo.dueAt,
-    priority: todo.highPriority ? 'high' as const : 'normal' as const,
+    priority: todo.priorityLevel,
     path: todo.path,
     line: todo.line,
     heading: todo.heading,
+    version: todo.version,
   };
+}
+
+/** Ticks or unticks one checkbox line, but only when the line is byte-for-byte the one the owner saw. */
+function setTaskDone(content: string, path: string, line: number, text: string, version: string, done: boolean):
+  { status: 'mismatch' } | { status: 'unchanged'; version: string } | { status: 'changed'; content: string; version: string } {
+  const todo = parseTodosWithContext(content, path).find((candidate) => candidate.line === line);
+  if (!todo || todo.version !== version || (shouldRedact(todo.text) ? '[redacted]' : todo.text) !== text) {
+    return { status: 'mismatch' };
+  }
+  if (todo.done === done) return { status: 'unchanged', version: todo.version };
+  const parts = content.split(/(\r?\n)/u);
+  const current = parts[(line - 1) * 2];
+  const next = current?.replace(/^(\uFEFF?\s*[-*]\s+\[)[ xX](\])/u, `$1${done ? 'x' : ' '}$2`);
+  if (current === undefined || next === undefined || next === current) return { status: 'mismatch' };
+  parts[(line - 1) * 2] = next;
+  return { status: 'changed', content: parts.join(''), version: taskLineVersion(next.replace(/^\uFEFF/u, '')) };
+}
+
+/** Appends one checkbox line to a task note; a missing note starts as an Inbox. Null when the note ends inside a code fence. */
+function appendVaultTask(existing: string | null, taskLine: string): { content: string; line: number } | null {
+  if (existing === null) return { content: `# Inbox\n\n${taskLine}\n`, line: 3 };
+  if (!isTodoFileWritable(existing)) return null;
+  const ending = existing.includes('\r\n') ? '\r\n' : '\n';
+  const base = existing && !existing.endsWith('\n') ? `${existing}${ending}` : existing;
+  return { content: `${base}${taskLine}${ending}`, line: base.split(/\r?\n/u).length };
+}
+
+function newTaskText(value: string): string {
+  return Array.from(value
+    .replace(/[\p{Cc}\p{Cf}]/gu, ' ')
+    .replace(/<!--|--!?>/gu, ' ')
+    .replace(taskMetadata, ' ')
+    .replace(/\s+/gu, ' ')
+    .trim()).slice(0, 200).join('');
 }
 
 function queryTerms(value: string): string[] {
@@ -1624,12 +1662,13 @@ export function createVaultModule(options: {
                 dueDate: { type: ['string', 'null'], format: 'date' },
                 dueTime: { type: ['string', 'null'], pattern: '^\\d{2}:\\d{2}$' },
                 dueAt: { type: ['string', 'null'], format: 'date-time' },
-                priority: { type: 'string', enum: ['high', 'normal'] },
+                priority: { type: 'string', enum: ['high', 'medium', 'normal'] },
                 path: { type: 'string', minLength: 1, maxLength: maxPathLength },
                 line: { type: 'integer', minimum: 1 },
                 heading: { type: ['string', 'null'], maxLength: 300 },
+                version: { type: 'string', pattern: '^[0-9a-f]{64}$' },
               },
-              required: ['id', 'text', 'done', 'dueDate', 'dueTime', 'dueAt', 'priority', 'path', 'line', 'heading'],
+              required: ['id', 'text', 'done', 'dueDate', 'dueTime', 'dueAt', 'priority', 'path', 'line', 'heading', 'version'],
               additionalProperties: false,
             },
           },
@@ -1826,6 +1865,139 @@ export function createVaultModule(options: {
         } catch (error) {
           const reason = vaultTaskFailureReason(error, signal);
           return reply.code(503).send({ error: vaultTaskFailureMessage(reason), reason });
+        }
+      });
+
+      const taskWriteErrorSchema = {
+        type: 'object',
+        properties: { error: { type: 'string' } },
+        required: ['error'],
+        additionalProperties: false,
+      };
+      const taskWriteResponseSchema = {
+        type: 'object',
+        properties: {
+          id: { type: 'string', pattern: '^[0-9a-f]{64}$' },
+          path: { type: 'string', minLength: 1, maxLength: maxPathLength },
+          line: { type: 'integer', minimum: 1 },
+          done: { type: 'boolean' },
+          commit: { type: ['string', 'null'], pattern: '^[\\da-f]{40}$' },
+          version: { type: 'string', pattern: '^[0-9a-f]{64}$' },
+        },
+        required: ['id', 'path', 'line', 'done', 'commit', 'version'],
+        additionalProperties: false,
+      };
+
+      app.patch<{ Body: { path: string; line: number; text: string; version: string; done: boolean } }>('/vault/tasks', {
+        schema: {
+          body: {
+            type: 'object',
+            properties: {
+              path: { type: 'string', minLength: 1, maxLength: maxPathLength },
+              line: { type: 'integer', minimum: 1, maximum: 1_000_000 },
+              text: { type: 'string', minLength: 1, maxLength: 300 },
+              version: { type: 'string', pattern: '^[0-9a-f]{64}$' },
+              done: { type: 'boolean' },
+            },
+            required: ['path', 'line', 'text', 'version', 'done'],
+            additionalProperties: false,
+          },
+          response: { 200: taskWriteResponseSchema, 400: taskWriteErrorSchema, 403: apiError, 409: taskWriteErrorSchema, 503: taskWriteErrorSchema },
+        },
+      }, async (request, reply) => {
+        if (!ownerOnly(request, reply)) return;
+        const signal = AbortSignal.timeout(30_000);
+        const { line, text, version, done } = request.body;
+        let folder = 'other';
+        const logWrite = (outcome: VaultLogFields['outcome']) => log('vault.write', { outcome, folder });
+        try {
+          const path = validateWritePath(request.body.path);
+          folder = loggedFolder(path);
+          if (!inTaskScope(path)) throw new ToolRefusal('That note does not hold vault tasks.');
+          const id = vaultTaskId(path, line);
+          for (let attempt = 0; attempt < 2; attempt += 1) {
+            const current = await options.client.read(path, signal);
+            if (!current) return reply.code(409).send({ error: 'The task note no longer exists. Refresh the list.' });
+            const change = setTaskDone(current.content, path, line, text, version, done);
+            if (change.status === 'mismatch') {
+              return reply.code(409).send({ error: 'This task changed in the vault. Refresh the list.' });
+            }
+            if (change.status === 'unchanged') return { id, path, line, done, commit: null, version: change.version };
+            try {
+              const commit = await options.client.write(
+                path, change.content, `jarvis: ${done ? 'complete' : 'reopen'} a task\n\nCo-authored-by: Jarvis`, current.sha, signal,
+              );
+              indexAfterNoteWrite();
+              logWrite('ok');
+              return { id, path, line, done, commit, version: change.version };
+            } catch (error) {
+              if (!(error instanceof VaultWriteConflictError) || attempt === 1) throw error;
+            }
+          }
+          throw new Error('Task write did not complete');
+        } catch (error) {
+          logWrite(error instanceof ToolRefusal ? 'refused' : 'error');
+          if (error instanceof ToolRefusal) return reply.code(400).send({ error: error.message });
+          if (error instanceof VaultWriteConflictError) {
+            return reply.code(409).send({ error: 'This task changed in the vault. Refresh the list.' });
+          }
+          return reply.code(503).send({ error: 'The task could not be saved. Try again.' });
+        }
+      });
+
+      app.post<{ Body: { text: string; scope: 'personal' | 'work'; due?: string; time?: string } }>('/vault/tasks', {
+        schema: {
+          body: {
+            type: 'object',
+            properties: {
+              text: { type: 'string', minLength: 1, maxLength: 400 },
+              scope: { type: 'string', enum: ['personal', 'work'] },
+              due: { type: 'string', format: 'date' },
+              time: { type: 'string', pattern: '^([01]\\d|2[0-3]):[0-5]\\d$' },
+            },
+            required: ['text', 'scope'],
+            additionalProperties: false,
+          },
+          response: { 200: taskWriteResponseSchema, 400: taskWriteErrorSchema, 403: apiError, 409: taskWriteErrorSchema, 503: taskWriteErrorSchema },
+        },
+      }, async (request, reply) => {
+        if (!ownerOnly(request, reply)) return;
+        const signal = AbortSignal.timeout(30_000);
+        const folder = request.body.scope === 'work' ? 'Work' : 'Personal';
+        const logWrite = (outcome: VaultLogFields['outcome']) => log('vault.write', { outcome, folder });
+        try {
+          const text = newTaskText(request.body.text);
+          if (Array.from(text).length < 2) throw new ToolRefusal('Write a few words for the task.');
+          if (shouldRedact(text)) throw new ToolRefusal('Secrets and credentials can never be saved to the vault.');
+          const path = `${folder}/Inbox.md`;
+          if (request.body.time && !request.body.due) throw new ToolRefusal('Pick a day for the time.');
+          const taskLine = `- [ ] ${text}${request.body.due ? ` 📅 ${request.body.due}${request.body.time ? ` ${request.body.time}` : ''}` : ''}`;
+          for (let attempt = 0; attempt < 2; attempt += 1) {
+            const current = await options.client.read(path, signal);
+            const next = appendVaultTask(current?.content ?? null, taskLine);
+            if (!next) throw new ToolRefusal('The Inbox note ends inside a code block, so nothing was added.');
+            if (Buffer.byteLength(next.content, 'utf8') > MAX_VAULT_FILE_BYTES) {
+              throw new ToolRefusal('The Inbox note is full. Nothing was added.');
+            }
+            try {
+              const commit = await options.client.write(
+                path, next.content, 'jarvis: add a task\n\nCo-authored-by: Jarvis', current?.sha, signal,
+              );
+              indexAfterNoteWrite();
+              logWrite('ok');
+              return { id: vaultTaskId(path, next.line), path, line: next.line, done: false, commit, version: taskLineVersion(taskLine) };
+            } catch (error) {
+              if (!(error instanceof VaultWriteConflictError) || attempt === 1) throw error;
+            }
+          }
+          throw new Error('Task write did not complete');
+        } catch (error) {
+          logWrite(error instanceof ToolRefusal ? 'refused' : 'error');
+          if (error instanceof ToolRefusal) return reply.code(400).send({ error: error.message });
+          if (error instanceof VaultWriteConflictError) {
+            return reply.code(409).send({ error: 'The Inbox note changed at the same moment. Try again.' });
+          }
+          return reply.code(503).send({ error: 'The task could not be saved. Try again.' });
         }
       });
 

@@ -1,8 +1,11 @@
 import type { FastifyRequest } from 'fastify';
+import { dailyQuerySources, isDailyQuery } from '@jarvis/contracts';
+import type { HealthCursor } from '../health/read-model.js';
 import { ToolFailure, ToolRefusal, type JarvisTool } from '../../core/tool-registry.js';
 import { dateOnly } from '../health/value.js';
 import { activeEnergyMetric } from '../nutrition/budget.js';
 import type { NutritionStore } from '../nutrition/store.js';
+import { instant as nutritionInstant, text as nutritionText } from '../nutrition/model.js';
 import { projectNutritionRecord, dailyResultByteLimit } from '../query.js';
 import type { DailyCoachStore } from '../coach-store.js';
 import type { DailyData } from '../query.js';
@@ -19,6 +22,79 @@ const schema = (properties: Record<string, unknown> = {}, required: string[] = [
 });
 const dateSchema = { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$' };
 const rangeProperties = { startDate: dateSchema, endDate: dateSchema };
+const historyKinds = ['metrics', 'sleep', 'workouts'] as const;
+type HistoryKind = typeof historyKinds[number];
+type HistoryContinuation = {
+  source: 'health' | 'nutrition'; startDate: string; endDate: string; windowStartDate: string;
+  cursors: Record<string, unknown> | null;
+};
+const continuationSchema = {
+  ...schema({
+    source: { type: 'string', enum: ['health', 'nutrition'] },
+    ...rangeProperties, windowStartDate: dateSchema,
+    cursors: { type: ['object', 'null'], additionalProperties: true },
+  }, ['source', 'startDate', 'endDate', 'windowStartDate', 'cursors']),
+  description: 'Replay the exact returned continuation with the same explicit startDate/endDate. Null category cursors are exhausted, not restart instructions.',
+};
+const shiftDate = (date: string, days: number) => new Date(Date.parse(date) + days * 86_400_000).toISOString().slice(0, 10);
+function historyScope(input: Input, now: number, source: HistoryContinuation['source']) {
+  const requestedPeriod = range(input, now, 3_652_059);
+  let continuation: HistoryContinuation | undefined;
+  if (input.continuation !== undefined) {
+    const value = toolInput(input.continuation, ['source', 'startDate', 'endDate', 'windowStartDate', 'cursors']);
+    if (input.startDate === undefined || input.endDate === undefined || value.source !== source ||
+        value.startDate !== requestedPeriod.startDate || value.endDate !== requestedPeriod.endDate ||
+        typeof value.windowStartDate !== 'string' || inputDate(value.windowStartDate) < requestedPeriod.startDate ||
+        value.windowStartDate > requestedPeriod.endDate ||
+        source === 'nutrition' && value.windowStartDate !== requestedPeriod.startDate ||
+        (Date.parse(value.windowStartDate) - Date.parse(requestedPeriod.startDate)) % (93 * 86_400_000) !== 0 ||
+        value.cursors !== null && (!value.cursors || typeof value.cursors !== 'object' || Array.isArray(value.cursors))) {
+      throw new ToolRefusal('Replay the exact history continuation with its original source and explicit date range.');
+    }
+    continuation = value as HistoryContinuation;
+  }
+  const startDate = continuation?.windowStartDate ?? requestedPeriod.startDate;
+  const endDate = source === 'nutrition' ? Date.parse(requestedPeriod.endDate)
+    : Math.min(Date.parse(requestedPeriod.endDate), Date.parse(startDate) + 92 * 86_400_000);
+  const period = { ...requestedPeriod, startDate, endDate: new Date(endDate).toISOString().slice(0, 10) };
+  const cursors = continuation?.cursors ?? null;
+  const kinds = source === 'health' ? historyKinds : ['meals'] as const;
+  if (cursors !== null && (Object.keys(cursors).length !== kinds.length ||
+      kinds.some(kind => !Object.hasOwn(cursors, kind)) || kinds.every(kind => cursors[kind] === null))) {
+    throw new ToolRefusal('Replay all returned category cursors, including null exhausted categories.');
+  }
+  for (const kind of kinds) {
+    const cursor = cursors?.[kind];
+    if (!cursors || cursor === null) continue;
+    if (kind === 'meals') {
+      const mealCursor = toolInput(cursor, ['createdAt', 'id']);
+      try {
+        nutritionInstant(mealCursor.createdAt);
+        nutritionText(mealCursor.id);
+      } catch { throw new ToolRefusal('Use the exact meal creation-time/ID cursor.'); }
+    } else if (!isDailyQuery({
+      source: dailyQuerySources[kind], startDate: period.startDate, endDate: period.endDate, cursor,
+    })) throw new ToolRefusal('Use the exact source-specific history cursor within its original window.');
+  }
+  return { requestedPeriod, period, cursors };
+}
+function historyCoverage(source: HistoryContinuation['source'], requestedPeriod: ReturnType<typeof range>,
+  period: ReturnType<typeof range>, cursors: Record<string, unknown>, returned: number) {
+  const hasMoreInWindow = Object.values(cursors).some(cursor => cursor !== null);
+  const hasMore = hasMoreInWindow || period.endDate < requestedPeriod.endDate;
+  const continuation: HistoryContinuation | null = !hasMore ? null : {
+    source, startDate: requestedPeriod.startDate, endDate: requestedPeriod.endDate,
+    windowStartDate: hasMoreInWindow ? period.startDate : shiftDate(period.endDate, 1),
+    cursors: hasMoreInWindow ? cursors : null,
+  };
+  return {
+    returned, hasMore, retainedWindowExhausted: !hasMoreInWindow, sourceCompleteness: 'unknown',
+    consistency: 'independent-committed-reads', continuation,
+    nextStep: hasMore
+      ? 'Fetch the next continuation if the answer requires the requested retained history; otherwise disclose the loaded windows/records and remaining pages. Never call one page the full history/year. Stop at the assistant tool/time budget and label interrupted, failed or budget-limited traversal partial.'
+      : 'This window is exhausted in retained storage, not proof of complete device/source ingestion. Only a traversal of every preceding page/window establishes requested retained-range exhaustion.',
+  };
+}
 const toolInput = (input: unknown, allowed: readonly string[]): Input => {
   if (!input || typeof input !== 'object' || Array.isArray(input) ||
       Object.keys(input).some(key => !allowed.includes(key))) throw new ToolRefusal('Use only the documented fields for this Health operation.');
@@ -86,30 +162,37 @@ export function dailySourceTools(data: DailyData, nutrition: NutritionAccess, co
     execute: async (input, request, signal) => {
       resolveDailyOwner(request);
       if (request.dailyConnectorPrincipal) throw new ToolRefusal('Use the separate nutrition connector boundary for external clients.');
-      return bound(await execute(input, request, AbortSignal.any([signal, AbortSignal.timeout(30_000)])));
+      const bounded = AbortSignal.any([signal, AbortSignal.timeout(30_000)]);
+      bounded.throwIfAborted();
+      const result = await execute(input, request, bounded);
+      bounded.throwIfAborted();
+      return bound(result);
     },
   });
   const healthSummaryTool = readTool('daily_health_summary',
     'Read today’s retained Health metrics, sleep, workouts and upload freshness, plus seven-day workout rows and the owner’s configured training targets. Unset targets remain null and are listed as missing; no defaults are inferred. Unknown or absent data stays explicit; freshness is processing evidence, not proof of source completeness. No fixed renderer, estimate, or live-device claim.',
     schema(), async (_input, request, signal) => healthSummary(data, request, signal, now()));
   const healthHistoryTool = readTool('daily_health_history',
-    'Read up to 93 inclusive Europe/Copenhagen dates of retained health metrics, sleep and workouts. Returns bounded per-category pages, exact next cursors, retained source units and unknown completeness. Defaults to the latest 30 days; future dates and wider ranges are refused.',
-    schema({ ...rangeProperties, limit: { type: 'integer', minimum: 1, maximum: 100 } }), async (raw, request, signal) => {
-      const input = toolInput(raw, ['startDate', 'endDate', 'limit']);
-      const period = range(input, now(), 93);
-      const limit = input.limit === undefined ? 50 : Number(input.limit);
-      if (!Number.isInteger(limit) || limit < 1 || limit > 100) throw new ToolRefusal('Limit must be from 1 to 100 per category.');
+    'Read retained health metrics, sleep and workouts in at most one 93-date Europe/Copenhagen window per call. Replay coverage.continuation with the same explicit requested dates; exhausted categories are not replayed. Defaults to the latest 30 days. Future dates are refused.',
+    schema({ ...rangeProperties, limit: { type: 'integer', minimum: 1, maximum: 100 }, continuation: continuationSchema }), async (raw, request, signal) => {
+      const input = toolInput(raw, ['startDate', 'endDate', 'limit', 'continuation']);
+      const { requestedPeriod, period, cursors } = historyScope(input, now(), 'health');
+      const limit = input.limit === undefined ? 50 : input.limit;
+      if (typeof limit !== 'number' || !Number.isInteger(limit) || limit < 1 || limit > 100) throw new ToolRefusal('Limit must be from 1 to 100 per category.');
       const health = data.health?.(request);
       if (!health) throw new ToolFailure('Health reads are unavailable.');
+      const page = (kind: HistoryKind) => cursors && cursors[kind] === null
+        ? Promise.resolve({ items: [], next: null, truncated: false })
+        : health.history(kind, { ...period, limit, ...(cursors ? { after: cursors[kind] as HealthCursor } : {}) }, signal);
       const [metrics, sleep, workouts, sync] = await Promise.all([
-        health.history('metrics', { ...period, limit }, signal),
-        health.history('sleep', { ...period, limit }, signal),
-        health.history('workouts', { ...period, limit }, signal),
+        page('metrics'), page('sleep'), page('workouts'),
         health.sync(signal),
       ]);
+      const coverage = historyCoverage('health', requestedPeriod, period,
+        { metrics: metrics.next, sleep: sleep.next, workouts: workouts.next }, metrics.items.length + sleep.items.length + workouts.items.length);
       return {
-        status: metrics.items.length || sleep.items.length || workouts.items.length ? 'available' : 'empty',
-        period, timezone: period.timeZone,
+        status: coverage.hasMore ? 'partial' : coverage.returned ? 'available' : 'empty',
+        period, requestedPeriod, timezone: period.timeZone, coverage,
         metrics: { items: metrics.items, next: metrics.next, hasMore: metrics.truncated, units: 'retained per-record unit' },
         sleep: { items: sleep.items, next: sleep.next, hasMore: sleep.truncated, units: 'hours as retained by the source processor' },
         workouts: { items: workouts.items, next: workouts.next, hasMore: workouts.truncated, units: 'retained per-record unit' },
@@ -118,19 +201,21 @@ export function dailySourceTools(data: DailyData, nutrition: NutritionAccess, co
       };
     });
   const nutritionHistoryTool = readTool('daily_nutrition_history',
-    'Read canonical named meals, exact occurrence/date, nutrients, provenance, revision and deletion state from the owner-scoped nutrition store. Supports any valid non-future date range with bounded keyset pages. Health nutrient observations are not named meals.',
-    schema({ ...rangeProperties, limit: { type: 'integer', minimum: 1, maximum: 100 } }), async (raw, request, signal) => {
-      const input = toolInput(raw, ['startDate', 'endDate', 'limit']);
-      const period = range(input, now(), 3_652_059);
-      const limit = input.limit === undefined ? 50 : Number(input.limit);
-      if (!Number.isInteger(limit) || limit < 1 || limit > 100) throw new ToolRefusal('Limit must be from 1 to 100 meals.');
-      const page = await nutrition(request).history({ from: period.startDate, to: period.endDate, limit }, signal);
+    'Read canonical named meals, exact occurrence/date, nutrients, provenance, revision and deletion state from the owner-scoped nutrition store. Traverse any valid non-future range in bounded keyset pages using coverage.continuation and the same explicit dates. Meal creation order and date filters remain unchanged. Health nutrient observations are not named meals.',
+    schema({ ...rangeProperties, limit: { type: 'integer', minimum: 1, maximum: 100 }, continuation: continuationSchema }), async (raw, request, signal) => {
+      const input = toolInput(raw, ['startDate', 'endDate', 'limit', 'continuation']);
+      const { requestedPeriod, period, cursors } = historyScope(input, now(), 'nutrition');
+      const limit = input.limit === undefined ? 50 : input.limit;
+      if (typeof limit !== 'number' || !Number.isInteger(limit) || limit < 1 || limit > 100) throw new ToolRefusal('Limit must be from 1 to 100 meals.');
+      const page = await nutrition(request).history({ from: period.startDate, to: period.endDate, limit,
+        ...(cursors ? { after: cursors.meals as { createdAt: string; id: string } } : {}) }, signal);
+      const coverage = historyCoverage('nutrition', requestedPeriod, period, { meals: page.next }, page.rows.length);
       return {
-        status: page.rows.length ? 'available' : 'empty', period, timeZone: period.timeZone,
+        status: coverage.hasMore ? 'partial' : page.rows.length ? 'available' : 'empty', period, requestedPeriod, timeZone: period.timeZone, coverage,
         source: 'daily.nutrition_meals', meals: page.rows.map(row => projectNutritionRecord(row, 'history')),
         next: page.next, hasMore: page.next !== null,
         units: { energy_kcal: 'kcal', '*_grams': 'g', meal_date: 'Europe/Copenhagen calendar date' },
-        sourceCompleteness: page.next === null ? 'not-established' : 'partial',
+        sourceCompleteness: 'unknown',
       };
     });
   const nutritionAnalyzeTool = readTool('daily_nutrition_analyze',
@@ -371,11 +456,11 @@ export function dailySourceTools(data: DailyData, nutrition: NutritionAccess, co
   };
   return [
     grouped('daily_health_summary',
-      'Read source-compatible health summary or historical health. Set operation to get_health_summary or get_health_history. History is bounded to 93 days/100 rows per category; units, period and incomplete coverage remain explicit.',
+      'Read source-compatible health summary or historical health. Set operation to get_health_summary or get_health_history. Each history call reads one window of at most 93 dates/100 rows per category. For wider periods or more rows, replay coverage.continuation with the original explicit startDate/endDate until exhausted or the assistant tool/time budget is reached. Null category cursors mean exhausted, not restart. Fetch subsequent pages when the answer requires them; otherwise disclose actual loaded windows/records and remaining limits. A first page is not the full year/history; failed, interrupted or budget-limited traversal is partial. Source completeness stays unknown even after retained exhaustion.',
       [{ operation: 'get_health_summary', tool: healthSummaryTool },
         { operation: 'get_health_history', tool: healthHistoryTool }]),
     grouped('daily_nutrition_history',
-      'Read canonical named-meal history, analyze nutrition totals/trends, calculate known calorie balance, or set one meal preference. Use operation get_nutrition_history, analyze_nutrition, get_calorie_balance, or set_meal_preference. Writes require exact browser Now approval. Health nutrient observations are not named meals; unknown values remain null.',
+      'Read canonical named-meal history, analyze nutrition totals/trends, calculate known calorie balance, or set one meal preference. Use operation get_nutrition_history, analyze_nutrition, get_calorie_balance, or set_meal_preference. History reads one bounded window/page per call; replay coverage.continuation with the original explicit startDate/endDate when the requested answer needs more. Never call a first page the full year/history. Disclose actual loaded windows/records and remaining limits; stop at the assistant tool/time budget and label failed, interrupted or budget-limited traversal partial. Retained exhaustion is not source completeness, which stays unknown. Writes require exact browser Now approval. Health nutrient observations are not named meals; unknown values remain null.',
       [{ operation: 'get_nutrition_history', tool: nutritionHistoryTool },
         { operation: 'analyze_nutrition', tool: nutritionAnalyzeTool },
         { operation: 'get_calorie_balance', tool: calorieBalanceTool },

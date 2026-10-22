@@ -73,7 +73,7 @@ describe('source-selected Daily tool capabilities', () => {
     expect(tools.every(tool => tool.sensitive && tool.denyOnPhone)).toBe(true);
   });
 
-  it('reads summary/history and enforces the original history range bound', async () => {
+  it('reads summary/history and traverses wider requests without raising the per-read range bound', async () => {
     const f = fixture();
     const healthTool = f.tools[0]!;
     const summary = await healthTool.execute({ operation: 'get_health_summary' }, f.request(), signal()) as Record<string, unknown>;
@@ -83,7 +83,12 @@ describe('source-selected Daily tool capabilities', () => {
     expect(f.health.sync).toHaveBeenCalledOnce();
     const history = await healthTool.execute({ operation: 'get_health_history', startDate: '2026-10-01', endDate: '2026-10-18', limit: 10 }, f.request(), signal()) as Record<string, unknown>;
     expect(history).toMatchObject({ period: { startDate: '2026-10-01', endDate: '2026-10-18' }, sourceCompleteness: 'unknown' });
-    await expect(healthTool.execute({ operation: 'get_health_history', startDate: '2026-07-01', endDate: '2026-10-18' }, f.request(), signal())).rejects.toThrow('93 days');
+    const wider = await healthTool.execute({ operation: 'get_health_history', startDate: '2026-07-01', endDate: '2026-10-18' }, f.request(), signal());
+    expect(wider).toMatchObject({
+      status: 'partial', period: { startDate: '2026-07-01', endDate: '2026-10-01' },
+      requestedPeriod: { startDate: '2026-07-01', endDate: '2026-10-18' },
+      coverage: { hasMore: true, continuation: { windowStartDate: '2026-10-02', cursors: null } },
+    });
     await expect(healthTool.execute({ operation: 'get_health_summary', startDate: '2026-10-18' }, f.request(), signal())).rejects.toThrow();
   });
 
