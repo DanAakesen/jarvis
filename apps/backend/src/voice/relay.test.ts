@@ -4,6 +4,7 @@ import type { Socket } from 'node:net';
 import type { AddressInfo } from 'node:net';
 import { Writable } from 'node:stream';
 import sharp from 'sharp';
+import * as SpeechSDK from 'microsoft-cognitiveservices-speech-sdk';
 import { FrameStore } from '../vision/frame-store.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import WebSocket, { WebSocketServer } from 'ws';
@@ -21,7 +22,10 @@ import type { ToolCallStore } from '../core/tool-calls.js';
 import { ToolRefusal } from '../core/tool-registry.js';
 import type { ReflexClassifier } from '../core/reflex.js';
 import type { WorkspaceCommand } from '@jarvis/contracts';
-import type { PartialSpeechRecognizerFactory } from './speech-recognizer.js';
+import {
+  createAzureSpeechPartialRecognizerFactory,
+  type PartialSpeechRecognizerFactory,
+} from './speech-recognizer.js';
 import type { TaskController, TaskRecord, TaskStore } from '../factory/task-store.js';
 import { factoryModule } from '../factory/index.js';
 import type { BackendModule } from '../modules.js';
@@ -47,6 +51,7 @@ const appSockets: Socket[] = [];
 
 afterEach(async () => {
   vi.useRealTimers();
+  vi.restoreAllMocks();
   for (const browser of browsers.splice(0)) browser.terminate();
   for (const socket of appSockets.splice(0)) socket.destroy();
   await Promise.all(apps.splice(0).map((app) => app.close()));
@@ -1365,6 +1370,88 @@ describe('backend-relayed Voice Live WebSocket', () => {
       browser.once('close', () => resolve());
       browser.close();
     });
+  });
+
+  it('relays an installed SDK recognizing event into the partial reflex path', async () => {
+    vi.spyOn(SpeechSDK.SpeechRecognizer.prototype, 'startContinuousRecognitionAsync')
+      .mockImplementation(function (this: SpeechSDK.SpeechRecognizer, started) {
+        const result = new SpeechSDK.SpeechRecognitionResult(
+          'synthetic-result',
+          SpeechSDK.ResultReason.RecognizingSpeech,
+          'Jarvis, pause task 12.',
+        );
+        this.recognizing(this, new SpeechSDK.SpeechRecognitionEventArgs(result));
+        started?.();
+      });
+    vi.spyOn(SpeechSDK.SpeechRecognizer.prototype, 'stopContinuousRecognitionAsync')
+      .mockImplementation((stopped) => stopped?.());
+
+    const records: string[] = [];
+    const received: Record<string, unknown>[] = [];
+    const services = taskReflexServices();
+    const classifier: ReflexClassifier = {
+      classify: vi.fn(async (_text, _language, targets, _signal, context) => ({
+        addressed: true,
+        intent: 'action' as const,
+        confidence: 0.99,
+        needsConfirmation: false,
+        completeCommand: true,
+        ...(context?.final ? { contradictedAction: null } : {}),
+        target: targets.find(({ tool }) => tool.name === 'pause_task') ?? null,
+      })),
+    };
+    const upstreamUrl = await echoServer((socket) => {
+      socket.on('message', (data) => {
+        const event = JSON.parse(data.toString()) as Record<string, unknown>;
+        received.push(event);
+        if (event.type === 'session.update') socket.send(JSON.stringify({ type: 'session.updated' }));
+      });
+    });
+    const connector = (token: string, signal: AbortSignal) => new WebSocket(upstreamUrl, {
+      headers: { Authorization: ['Bearer', token].join(' ') }, signal,
+    });
+    const { app, conversationStore } = appFor(
+      connector,
+      undefined,
+      records,
+      [],
+      undefined,
+      undefined,
+      undefined,
+      classifier,
+      services,
+      'info',
+      createAzureSpeechPartialRecognizerFactory(
+        'https://jarvis-resource.cognitiveservices.azure.com/api/projects/jarvis',
+        async () => 'fake-speech-token',
+      ),
+    );
+    await app.listen({ host: '127.0.0.1', port: 0 });
+    const address = app.server.address() as AddressInfo;
+    const browser = await openBrowser(`ws://127.0.0.1:${address.port}/voice`);
+    await vi.waitFor(() => expect(received.some((event) => event.type === 'session.update')).toBe(true));
+
+    browser.send(JSON.stringify({ type: 'jarvis.microphone.active' }));
+    await vi.waitFor(() => expect(services.taskController.control).toHaveBeenCalledWith(
+      '12', { action: 'pause' },
+    ));
+    expect(classifier.classify).toHaveBeenCalledWith(
+      'Jarvis, pause task 12.',
+      'en',
+      expect.any(Array),
+      expect.any(AbortSignal),
+      expect.objectContaining({ partial: true }),
+    );
+    expect(conversationStore.addMessage).toHaveBeenCalledWith(expect.objectContaining({
+      text: 'Jarvis, pause task 12.',
+    }));
+
+    browser.close();
+    await vi.waitFor(() => expect(records.join('')).toContain('voice.reflex_metrics'));
+    const metric = records.map((line) => {
+      try { return JSON.parse(line) as Record<string, unknown>; } catch { return undefined; }
+    }).find((record) => record?.msg === 'voice.reflex_metrics');
+    expect(metric?.speechRecognitionHypotheses).toBe(1);
   });
 
   it('does not run Azure Speech reflexes for shared-tab intent before final screen context', async () => {

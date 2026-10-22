@@ -50,6 +50,17 @@ export function createAzureSpeechEndpoint(runtimeEndpoint: string): URL {
   return new URL(`wss://${resource.hostname}/stt/speech/universal/v2`);
 }
 
+export function createAzureSpeechConfig(
+  endpoint: URL,
+  token: string,
+  language: 'da' | 'en',
+): SpeechSDK.SpeechConfig {
+  const speechConfig = SpeechSDK.SpeechConfig.fromEndpoint(endpoint);
+  speechConfig.authorizationToken = token;
+  speechConfig.speechRecognitionLanguage = language === 'da' ? 'da-DK' : 'en-GB';
+  return speechConfig;
+}
+
 function safePhraseHints(phrases: readonly string[]): string[] {
   const unique = new Set<string>();
   for (const phrase of phrases) {
@@ -88,7 +99,6 @@ function startRecognizer(recognizer: SpeechSDK.SpeechRecognizer, signal: AbortSi
       settled = true;
       cleanup();
       void stopRecognizer(recognizer).finally(() => {
-        recognizer.close();
         reject(signal.reason ?? new Error('Speech recognition stopped'));
       });
     };
@@ -113,9 +123,7 @@ export function createAzureSpeechPartialRecognizerFactory(
     }
     if (signal.aborted) throw signal.reason;
 
-    const speechConfig = SpeechSDK.SpeechConfig.fromEndpoint(endpoint, '');
-    speechConfig.authorizationToken = token;
-    speechConfig.speechRecognitionLanguage = language === 'da' ? 'da-DK' : 'en-GB';
+    const speechConfig = createAzureSpeechConfig(endpoint, token, language);
     const streamFormat = SpeechSDK.AudioStreamFormat.getWaveFormatPCM(24_000, 16, 1);
     const inputStream = SpeechSDK.AudioInputStream.createPushStream(streamFormat);
     const audioConfig = SpeechSDK.AudioConfig.fromStreamInput(inputStream);
