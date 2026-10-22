@@ -18,42 +18,65 @@ function edits(base: readonly string[], changed: readonly string[]): Edit[] {
   let start: number | undefined;
   let end = 0;
   let replacement: string[] = [];
+  const open = (): void => {
+    if (start !== undefined) return;
+    start = index;
+    end = index;
+  };
   const flush = (): void => {
     if (start !== undefined) result.push({ start, end, replacement });
     start = undefined;
-    end = index;
     replacement = [];
   };
   for (const part of diffArrays([...base], [...changed])) {
+    const count = part.count ?? part.value?.length ?? 0;
     if (part.added) {
-      start ??= index;
+      open();
       replacement.push(...(part.value ?? []));
     } else if (part.removed) {
-      start ??= index;
-      index += part.count ?? part.value?.length ?? 0;
+      open();
+      index += count;
       end = index;
     } else {
       flush();
-      index += part.count ?? part.value?.length ?? 0;
+      index += count;
     }
   }
   flush();
   return result;
 }
 
+function apply(base: readonly string[], list: readonly Edit[]): string[] | undefined {
+  const output: string[] = [];
+  let cursor = 0;
+  for (const edit of list) {
+    if (edit.end < edit.start || edit.start < cursor || edit.end > base.length) return undefined;
+    output.push(...base.slice(cursor, edit.start), ...edit.replacement);
+    cursor = edit.end;
+  }
+  output.push(...base.slice(cursor));
+  return output;
+}
+
+function rebuilds(base: readonly string[], list: readonly Edit[], changed: readonly string[]): boolean {
+  const output = apply(base, list);
+  return output !== undefined && output.length === changed.length &&
+    output.every((line, position) => line === changed[position]);
+}
+
 export function mergeThreeWay(baseText: string, oursText: string, theirsText: string):
   { clean: true; text: string } | { clean: false } {
   const base = lines(baseText);
-  const ours = edits(base, lines(oursText));
-  const theirs = edits(base, lines(theirsText));
+  const oursLines = lines(oursText);
+  const theirsLines = lines(theirsText);
+  const ours = edits(base, oursLines);
+  const theirs = edits(base, theirsLines);
+  // An edit script that cannot rebuild its own side would repeat or drop lines, so refuse to merge it.
+  if (!rebuilds(base, ours, oursLines) || !rebuilds(base, theirs, theirsLines)) return { clean: false };
   const combined: Edit[] = [...ours];
   for (const right of theirs) {
-    const overlaps = combined.filter(left =>
-      left.start === right.start && left.end === right.end ||
-      left.start < right.end && right.start < left.end ||
-      left.start === left.end && right.start === right.end && left.start === right.start ||
-      left.start === right.start && left.start === left.end ||
-      right.start === left.start && right.start === right.end);
+    // Touching edits overlap: applied together they diff as one hunk, which a retry would apply again.
+    const overlaps = combined.filter(left => left.start <= right.end && right.start <= left.end);
     if (overlaps.length === 0) {
       combined.push(right);
       continue;
@@ -66,13 +89,6 @@ export function mergeThreeWay(baseText: string, oursText: string, theirsText: st
     return { clean: false };
   }
   combined.sort((left, right) => left.start - right.start || left.end - right.end);
-  const output: string[] = [];
-  let cursor = 0;
-  for (const edit of combined) {
-    if (edit.start < cursor || edit.end > base.length) return { clean: false };
-    output.push(...base.slice(cursor, edit.start), ...edit.replacement);
-    cursor = edit.end;
-  }
-  output.push(...base.slice(cursor));
-  return { clean: true, text: output.join('') };
+  const output = apply(base, combined);
+  return output === undefined ? { clean: false } : { clean: true, text: output.join('') };
 }

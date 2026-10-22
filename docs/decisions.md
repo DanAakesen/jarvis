@@ -1,5 +1,51 @@
 # Decisions
 
+## Vault mirror line merge repeated content and was not idempotent (22 October 2026; #1083)
+
+Refs DanAakesen/jarvis#1083, Refs DanAakesen/jarvis#1090.
+
+With write-back in `dry-run`, the mirror still uploads clean merges to GitHub
+but never advances the base or writes Obsidian, so the same three-way merge is
+recomputed every ten minutes from an unchanged base. One private note that had
+been edited on both sides grew by 38 lines on every run from 21 October 17:10
+UTC until the job was paused on 22 October 05:24 UTC, repeating its frontmatter,
+headings and tasks about 140 times. Replaying the six consecutive bot commits
+through the previous merge reproduced their sizes exactly.
+
+Two defects in `src/runner/merge.ts` caused it. First, the edit script gave a
+pure insertion that followed unchanged lines a stale end position before its
+start, so the output cursor moved backwards and earlier base lines were emitted
+again. The existing unit test only used replacement edits and could not see it.
+The stale end also hid overlap, so two insertions at the same place were merged
+as independent and both were duplicated. Second, an insertion touching the end
+of the other side's replacement counted as independent while one touching its
+start conflicted. After the first merge such a pair re-diffs as a single hunk,
+so a retry applied the insertion again, which broke the README contract that a
+retried merge is idempotent.
+
+The merge now records an explicit start and end for every edit, refuses to merge
+when either side's edit script cannot rebuild that side exactly, and treats
+edits that overlap or touch as a conflict. Edits separated by at least one
+unchanged base line still merge, identical edits count once, and the result is
+the same whichever side is ours. Two insertions at the same place, for example
+two tasks added at the top of one list, now conflict instead of being ordered
+arbitrarily, and the existing 24-hour rule resolves them in Obsidian's favour.
+A union merge of same-place insertions was rejected because it is not idempotent
+while the base is stale, which is the case in `dry-run` and after a partially
+applied write-back.
+
+Evidence: the regression tests cover a task-shaped note, every pair of single
+edits over a repeated-structure note (symmetry, no repeated or dropped line, a
+retry never yields different text), and a runner test that runs `dry-run` three
+times and then write-back on. A 150,000-trial randomized replay of the real
+merge over repetitive notes found no repeated line, no lost line, no asymmetry
+and no growing `dry-run`.
+
+Still open: in `dry-run` a stable merged note is committed to GitHub again on
+every run with an identical tree. Skipping unchanged blobs is a follow-up.
+Write-back stays in `dry-run` until the fixed image is deployed and the
+affected note on GitHub is repaired.
+
 ## Known-good English cold start and background probes (21 October 2026; #1188)
 
 Refs DanAakesen/jarvis#1184, Refs DanAakesen/jarvis#1177.
