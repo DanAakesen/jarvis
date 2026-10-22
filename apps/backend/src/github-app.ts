@@ -1,4 +1,4 @@
-import { createPrivateKey } from 'node:crypto';
+import { createHash, createPrivateKey } from 'node:crypto';
 import { SignJWT } from 'jose';
 
 export interface GitHubAppTokenIssuer {
@@ -41,7 +41,7 @@ interface GitHubAppTokenIssuerOptions {
   getPrivateKey: () => Promise<string>;
   fetch?: typeof fetch;
   now?: () => number;
-  onTokenMint?: (status: 'ok' | 'failed', checkedAt: string) => Promise<void>;
+  onTokenMint?: (status: 'ok' | 'failed', checkedAt: string, scopeKey: string) => Promise<void>;
 }
 
 const githubApi = 'https://api.github.com';
@@ -194,16 +194,29 @@ async function trackTokenMint(
   mint: () => Promise<string>,
   now: () => number,
   onTokenMint: GitHubAppTokenIssuerOptions['onTokenMint'],
+  scopeKey: string,
 ): Promise<string> {
   let token: string;
   try {
     token = await mint();
   } catch (error) {
-    await onTokenMint?.('failed', new Date(now()).toISOString()).catch(() => undefined);
+    await onTokenMint?.('failed', new Date(now()).toISOString(), scopeKey).catch(() => undefined);
     throw error;
   }
-  await onTokenMint?.('ok', new Date(now()).toISOString()).catch(() => undefined);
+  await onTokenMint?.('ok', new Date(now()).toISOString(), scopeKey).catch(() => undefined);
   return token;
+}
+
+function mintScopeKey(
+  kind: 'repository' | 'catalog',
+  target: string,
+  permissions: Readonly<Record<string, 'read' | 'write'>>,
+): string {
+  const canonicalPermissions = Object.fromEntries(Object.entries(permissions)
+    .sort(([left], [right]) => left < right ? -1 : left > right ? 1 : 0));
+  return createHash('sha256')
+    .update(JSON.stringify({ version: 1, kind, target: target.toLowerCase(), permissions: canonicalPermissions }))
+    .digest('hex');
 }
 
 async function createInstallationToken(
@@ -214,6 +227,7 @@ async function createInstallationToken(
   now: () => number,
   onTokenMint: GitHubAppTokenIssuerOptions['onTokenMint'],
 ): Promise<string> {
+  const scopeKey = mintScopeKey('catalog', owner, { contents: 'read' });
   return trackTokenMint(async () => {
     const appToken = await createAppJwt(appId, await getPrivateKey(), now);
     const installation = await findInstallation(fetchImpl, appToken, owner);
@@ -224,7 +238,7 @@ async function createInstallationToken(
       { permissions: { contents: 'read' } },
     );
     return validInstallationToken(value, now);
-  }, now, onTokenMint);
+  }, now, onTokenMint, scopeKey);
 }
 
 function parseRepository(value: unknown, owner: string): GitHubRepository {
@@ -300,6 +314,7 @@ export function createGitHubAppTokenIssuer({
     }
     const [owner, name] = repository.split('/');
     if (!owner || !name) throw new Error('GitHub repository is invalid');
+    const scopeKey = mintScopeKey('repository', repository, permissions);
 
     return trackTokenMint(async () => {
       const appToken = await createAppJwt(appId, await getPrivateKey(), now);
@@ -340,7 +355,7 @@ export function createGitHubAppTokenIssuer({
         }
       }
       return validInstallationToken(token, now);
-    }, now, onTokenMint);
+    }, now, onTokenMint, scopeKey);
   };
 
   const permissionCache = new Map<string, {

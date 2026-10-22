@@ -1005,18 +1005,30 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   invalid identity fields or URLs stop startup. P0-11 must persist its
   `backendFqdn` as the public URL. Backend connectivity is unverified until then.
 - The home page uses a tenant-specific MSAL Browser client with the public web
-  client ID and API scope. MSAL stores its cache in session storage; sign-in
-  redirects the whole page to Entra (no popup, so embedded browsers and popup
-  blockers work) and returns to the registered site root, where
-  `handleRedirectPromise` completes it. A non-sensitive per-tab session-storage
-  marker, set just before `loginRedirect` and cleared when redirect handling
-  settles or launch fails, distinguishes returning `Signing you in` from
-  first-visit `Loading`; the outgoing button shows `Redirecting`. The marker
-  controls presentation only, never authentication or authorization.
-  It requests only the delegated API scope
-  and sends the access token to `/me`. Cached accounts use silent token
-  acquisition through the `/redirect.html` bridge. A missing backend URL disables
-  sign-in instead of presenting a false success state.
+  client ID and API scope. MSAL stores its cache in `localStorage`, sharing the
+  device's sign-in across tabs and relaunches. Since MSAL v4, cache entries are
+  encrypted with a key held in a session cookie unless the owner chose "Stay
+  signed in", so restart persistence depends on that Microsoft choice. A
+  separate identity-free device marker enables silent SSO only after a
+  successful prior sign-in. With no
+  cached account, Jarvis tries `ssoSilent` for at most five seconds; if that
+  fails, or silent token renewal reports an interaction-required error, it uses
+  one guarded top-level redirect per five-minute cooldown, without `prompt`.
+  The redirect returns to the registered site root, where `handleRedirectPromise`
+  completes it. A per-tab session-storage marker, set just before a redirect
+  and cleared when redirect handling settles or launch fails, distinguishes
+  returning `Signing you in` from first-visit `Loading`; the outgoing button
+  shows `Redirecting`. Validated same-origin return paths preserve the current
+  route across interactive recovery. The default sign-in does not select an
+  account; only **Use a different account** sets `prompt: select_account`.
+  Changes to MSAL account cache and the device marker update other tabs. Sign
+  out clears MSAL's cache and both persistent sign-in markers before
+  `logoutRedirect` returns to the site root. Tokens remain in MSAL and only the
+  delegated API scope is sent to `/me`. The marker controls recovery only,
+  never authentication or authorization. An SPA refresh token has a fixed
+  24-hour lifetime; tenant Conditional Access policy can require sign-in sooner.
+  Silent acquisition uses the `/redirect.html` bridge. A missing backend URL
+  disables sign-in instead of presenting a false success state.
 - P1-07 adds the app shell. `useSignIn` owns the MSAL session for the whole
   app, so navigation never repeats sign-in. Until `/me` succeeds, every shell
   route shows sign-in and the header hides navigation; unknown addresses still
@@ -3745,7 +3757,8 @@ paths and Archive segments remain excluded.
 
 The route accepts `q` (up to 200 characters) and `state` (`open`, default;
 `done`; or `all`), and returns at most 500 matching task rows with source path,
-line, nearest heading, completion, due fields, priority, owner-local `today`,
+line, nearest heading, completion, due fields, priority (`high` for P1, `medium` for P2 or `🔼`,
+otherwise `normal`), owner-local `today`,
 `readAt`, total and truncation state. Scans retain the shared 256-file, 4-MiB
 total-content, 256-KiB-per-file, four-concurrent-read and 20-second limits.
 Task text is sanitized and secret-redacted before filtering or returning, and
@@ -3763,6 +3776,32 @@ this existing read path. Task requests route to
 `vault_read`. The Notes page retains search snippets and fetches
 matching open tasks separately; the count on its task group calls
 `KnowledgeGraphView`'s `onShowTasks`, which opens the Tasks panel with that query.
+The panel requests `state=open`, or `state=all` only while a query is typed (so
+completed tasks are searchable but never listed otherwise), and applies its
+All / Personal / Work switch in the browser: Work means a `Work/` path or a root
+task-file heading starting with Work.
+
+Two owner-only write routes sit beside it. Each GET item carries an opaque `version`
+(the SHA-256 of the exact raw line, so text, dates, priority and checkbox state all
+count). `PATCH /vault/tasks` takes `{path, line, text, version, done}`: the path must
+be in the task scope and pass the vault write-path check, and the current line must
+still hold that task text (compared after redaction) and hash to `version`; a
+mismatch (reordered, edited or moved line) returns 409 before anything is written, a
+missing or malformed `version` 400. Only the `[ ]`/`[x]` character is flipped,
+preserving line endings. An already-matching state returns `commit: null` without
+writing. Both PATCH and POST return the line's new `version` (a tick changes the line,
+so Undo sends the returned one). The write carries the file SHA and retries once; a
+changed or conflicting line returns 409, a refused path or scope 400.
+`POST /vault/tasks` takes `{text, scope: personal|work, due?, time?}`
+(`time` is `HH:MM` and needs `due`),
+strips control characters, comments and metadata emoji, caps text at 200 characters,
+refuses secret-looking text, and appends `- [ ] text` (with `📅 date`, plus ` HH:MM` when
+timed) to
+`Personal/Inbox.md` or `Work/Inbox.md`, creating the note when missing and refusing
+an open code fence or an oversized file. Both commit as Jarvis (`jarvis: complete a
+task`, `reopen a task` or `add a task`), refresh the notes index and log
+`vault.write`. Non-owners get 403. The web client (`tasks-data.ts`) maps 409 to
+`VaultTaskConflict`.
 
 Since 19 October 2026 there is no Tasks page. `NotesArea` owns the panel
 (`tasks/TasksPanel.tsx`, opened by the Show tasks button or by
@@ -3774,7 +3813,10 @@ the panel, changing the search or closing replaces it, and `TasksPanel` is keyed
 The unsaved-draft blocker ignores changes to those two parameters. The area registry
 and phone menu no longer list Tasks. A task's source link opens the note in place
 through the Notes read flow and its unsaved-draft guard, and on a narrow screen the
-panel closes first. Neither screen nor tool writes or changes task state.
+panel closes first. The panel ticks tasks optimistically through an override map
+keyed by task id (a lingering row for four seconds, rollback with a notice on failure,
+a list reload on conflict) and adds tasks through a small form that then reloads
+quietly; the chat and voice tool does not write or change task state.
 
 `knowledge/knowledge-scene.ts` frames the map: `measureFit` takes the mean of the
 visible notes and their 98th-percentile reach, and sets the camera to centre them
@@ -4348,19 +4390,35 @@ Key Vault response, or runner result is returned.
   status and log only a fixed diagnostic. The authenticated check is the sole
   owner of Copilot health: Codex renewal no longer copies runner expiry metadata
   into health, which could overwrite an authentication failure with `ok`.
-- GitHub App: all repository-scoped and catalog installation-token mint
-  paths record `ok` or `failed` and `lastCheckedAt`; successful mints also
-  update `lastRenewedAt`. `expiresAt` remains null because an installation
-  token's one-hour lifetime is not the App key's expiry. An older observation
-  cannot replace newer health. On transition to failed, status and a
-  `credential_expiry` activity alert commit together, then refresh Now and
-  notify the existing telemetry/email path. Repeated failures do not create
-  additional alerts until a successful mint resets health. Status-persistence
-  errors are logged without disrupting a valid mint.
-- Migration `0023_github_app_credential_health.sql` adds the health row and
-  check timestamp, with a matching reverse batch. `0022` is left available
-  for #432; recheck the sequence before merge. The legacy `github-app-key`
-  name remains permitted in SQL but is not part of the Settings list.
+- GitHub App mint observations use a versioned SHA-256 scope key over the
+  canonical operation kind, lower-cased repository or catalog owner, and
+  sorted requested permission map. The repository token path includes the
+  repository and its requested grants; catalog/tech-detection mints use the
+  installation-wide catalog owner and `contents:read`. Only the digest is
+  persisted. `github_app_mint_status` serializes observations and ignores an
+  older timestamp for that same scope. A transition into failed creates one
+  `credential_expiry` activity alert; repeated failures stay in that incident.
+  A successful mint recovers only undismissed or dismissed alert history for
+  its exact scope, and a later failure creates a new alert row. Recovered rows
+  remain in activity history while Now excludes them from active attention.
+  Manual dismissal remains row-specific.
+- Aggregate GitHub App health is `failed` while any known scope is failing,
+  `unknown` while only legacy unscoped failures remain unresolved, and `ok`
+  otherwise. A scoped success never recovers an old unscoped alert: those
+  alerts remain visible unless manually dismissed, and keep health unknown
+  because their originating repository/permissions cannot be established.
+  If a migration finds a failed legacy health row without any matching alert,
+  it creates one conservative unscoped history row. `lastRenewedAt` records
+  the latest successful mint across scopes; `expiresAt` remains null because
+  an installation token's one-hour lifetime is not the App key's expiry.
+  Status-persistence errors are logged without disrupting a valid mint.
+- Migration `0062_github_app_mint_recovery.sql` adds the per-scope status and
+  activity recovery metadata. Its reverse batch retains activity and restores
+  scoped alerts to unresolved legacy visibility rather than deleting history.
+  The earlier `0023_github_app_credential_health.sql` adds the shared health
+  row; the legacy `github-app-key` name remains permitted in SQL but is not
+  part of the Settings list. This source-level lifecycle does not establish
+  whether a production mint failure has recovered or what caused it.
 
 #### UI repair contract
 
@@ -5083,8 +5141,8 @@ without executing it. Danish does not use the ladder or probes.
 | Danish path | Production (L103): Browser → authenticated backend `/voice/da` WebSocket → the same configured Voice Live realtime model as English (`gpt-realtime-2.1` by default) → backend tools. This is not a transcribe → chat → TTS pipeline. | Both routes use the realtime connector and backend-owned session configuration, with Danish server VAD, MAI transcription and the native male voice Jeppe (`da-DK-JeppeNeural`). Parallel `da-DK` Azure Speech hypotheses feed the reflex ledger; the Voice Live final transcript remains authoritative. P9-83 uses the same budget-gated image acknowledgement and single-response hold for both languages. Only when the realtime connector is absent does `/voice/da` use the provisioned hosted voice-agent bridge; that wrapper owns session configuration, uses `invocations_ws` and remains caption-only. Offline tests cover realtime DA image acceptance, rejection, timeout and budget denial; deployed image acceptance remains unverified. |
 | Realtime sessions | At session start, the backend reads the `voice` role and places the selected deployment (`gpt-realtime-2.1` or `gpt-realtime-2.1-mini`) in the Voice Live URL; it reads the `transcription` role for `input_audio_transcription.model`. English uses Ryan HD (`en-GB-Ryan:DragonHDLatestNeural`) and British butler defaults; Danish uses Jeppe (`da-DK-JeppeNeural`). Both use PCM audio and composed tool schemas. Model-facing root `oneOf`/`anyOf` alternatives with typed object branches are flattened into plain object schemas; `const` values become enums with operation-specific hints. The registered schemas remain unchanged and validate tool calls on the server. The production-schema guard checks every configured tool, including optional Daily tools. New relays snapshot saved personality and voice settings; `createRealtimeSessionUpdate` applies barge-in and maximum spoken tokens and bounded server-VAD settings. English keeps `azure_semantic_vad_en` at threshold 0.6, 300 ms prefix padding and 500 ms silence. Only the hosted Danish fallback owns a separate provisioned configuration. The browser cannot replace session configuration or submit tool results. | Local mock tests verify role selection, server-owned session settings, saved voice tuning, all configured model-facing tool schemas and client event handling; real browser audio and live image acceptance remain unverified. |
 | Reflex (P7-04) | Chat turns and completed English Voice Live transcripts pass through the backend Jev client (`POST https://api.typesafe.ai/v1/systemone`, `jev-latest`) before the main responder. The client has a 1.2 s timeout, one 429 retry only when `Retry-After` is at most 500 ms, and a 256 KiB response cap. Calibrated Choice confidence gates actions at 0.9; address and complete-command Noul values also use 0.9, while confirmation-required uses 0.5. The minimum of intent and route Choice confidence is the action confidence; there is no self-rated Score question. Billing (402), auth (401/403), rate-limit (429), timeout, other HTTP status, invalid-answer, and network failures are typed and logged in `reflex.decision`; logs never contain the key or transcript. The backend reads `jev-api-key` from Key Vault using its managed identity. A direct call requires Dan's authenticated request, an addressed high-confidence action, no confirmation flag, a registered `reflexSafe` tool, validated arguments, and available audit storage. Safe tool results become trusted handoff instructions so the main model acknowledges but does not repeat the action. | Fake-provider backend tests cover classification, confidence gating, typed failures, safe target filtering, fallback, retry, handoff, and final-transcript sequencing. Live Jev/Key Vault, Danish voice routing, and Azure Voice Live remain unverified. |
-| Streaming clause reflex (P7-20/P7-24) | Voice Live deltas and parallel Azure Speech full interim hypotheses (Foundry AIServices custom subdomain; Entra managed identity; 24 kHz mono PCM) enter the same bounded stable-clause and per-turn Jev path (up to eight requests per turn), with prior executions attached. Speech recognition runs only while the mic is active and unmuted; `da-DK`/`en-GB` use fixed phrase hints plus up to 20 running-project names. Only high-confidence, complete partial actions (currently pause, allow-listed Edge launch, and HTTP(S) open/navigation) execute early. Unsafe and confirmation-requiring actions wait for the Voice Live final. That final remains the source of truth: it replaces an early message, reconciles the in-memory ledger and attempts supported undo on contradiction. No audio or interim hypotheses are stored; Speech failure logs `voice.partials_unavailable` and leaves final-transcript reflexes working. Browser launch/navigation uses the existing PC bridge `pc_open` executor pending P7-17. | Fake-recognizer and fake-stream tests cover action-before-final, duplicate suppression, confirmation gating, contradiction undo, final message replacement, Speech failure fallback and mute stop. `voice.reflex_metrics` records Voice Live delta count, Speech hypothesis count, stable-clause count, first-action latency, speech-stopped-to-first-transcript-word, and speech-stopped-to-first-output-audio. `voice.turn_timing` logs one content-free event per turn with speech-stopped-relative transcript, Jev, tool, first-audio and response-done timings. These are offline fake timings, not live acoustic measurements. Live account RBAC, Speech delivery, Jev latency, first spoken-word timing and Danish/English PC action timing remain coordinator acceptance. |
-| Live partial Speech STT (P7-24) | Azure Speech continuous recognition reuses the Foundry AIServices account's custom subdomain and backend managed identity. Voice phrases are Jarvis, Google, København, Chrome, GitHub, Copilot, Codex and Teams, plus bounded running-project names. Recognition ends on mute, voice end or disconnect; no key or audio is stored. | Fake recognizer lifecycle tests and local backend/web checks pass. Azure retail price API reference dated 5 October 2026: Azure Speech-to-text S1 is $1.00 per audio hour; this is a list-price reference, not a verified account meter. Live Danish/English recognition and managed-identity authorization remain unverified. |
+| Streaming clause reflex (P7-20/P7-24) | Voice Live deltas and parallel Azure Speech full interim hypotheses (Foundry AIServices custom subdomain; Entra managed identity; 24 kHz mono PCM) enter the same bounded stable-clause and per-turn Jev path (up to eight requests per turn), with prior executions attached. Speech recognition runs only while the mic is active and unmuted; `da-DK`/`en-GB` use fixed phrase hints plus up to 20 running-project names. A partial action must be an addressed, high-confidence (at least 0.9), complete command with no confirmation requirement and a partial-safe target; duplicate actions are suppressed. Unsafe and confirmation-requiring actions wait for the Voice Live final. That final remains the source of truth: it replaces an early message, reconciles the in-memory ledger and attempts supported undo on contradiction. No audio or interim hypotheses are stored; Speech failure logs `voice.partials_unavailable` and leaves final-transcript reflexes working. Browser launch/navigation uses the existing PC bridge `pc_open` executor pending P7-17. | Fake-recognizer and fake-stream tests cover action-before-final, duplicate suppression, confirmation gating, contradiction undo, final message replacement, Speech failure fallback and mute stop. `voice.reflex_metrics.speechRecognitionHypotheses` counts nonblank Azure Speech recognizing events received by the relay; a zero count means no such hypothesis reached it in that session, not that the Voice Live final path failed. `voice.reflex_metrics` also records Voice Live delta count, stable-clause count, first-action latency, speech-stopped-to-first-transcript-word, and speech-stopped-to-first-output-audio. `voice.turn_timing` logs one content-free event per turn with speech-stopped-relative transcript, Jev, tool, first-audio and response-done timings. These are offline fake timings, not live acoustic measurements. Live account RBAC, Speech delivery, Jev latency, first spoken-word timing and Danish/English PC action timing remain coordinator acceptance. |
+| Live partial Speech STT (P7-24) | Azure Speech continuous recognition reuses the Foundry AIServices account's custom subdomain and backend managed identity. Build its SDK configuration with `SpeechConfig.fromEndpoint(endpoint)` and then set the authorization token and `da-DK`/`en-GB` language; an empty second argument is rejected by the installed SDK. Voice phrases are Jarvis, Google, København, Chrome, GitHub, Copilot, Codex and Teams, plus bounded running-project names. Recognition ends on mute, voice end or disconnect; no key or audio is stored. A `voice.partials_unavailable` warning includes sanitized `failure` and `language`; it describes the optional partial recognizer, while final-transcript reflexes remain usable. | Real-SDK configuration and event-contract tests plus synthetic relay tests cover the installed SDK path without network access. They do not establish live microphone or Azure acceptance. Azure retail price API reference dated 5 October 2026: Azure Speech-to-text S1 is $1.00 per audio hour; this is a list-price reference, not a verified account meter. Live Danish/English recognition and managed-identity authorization remain unverified. |
 | English end-of-turn detection (P7-04) | Voice Live uses `azure_semantic_vad_en`, threshold `0.6`, 300 ms prefix padding, 500 ms silence duration, and `create_response: false`; after the final transcription, the relay reconciles the turn ledger and explicitly requests the voice response. The server-VAD settings in `/settings` do not alter this English semantic detector. | Relay tests verify semantic VAD settings and response ordering. Live Voice Live support/latency remains unverified. |
 | English tools | The backend intercepts realtime function-call events, validates arguments against the registered tool schema, executes the tool, returns its result and P4-05 confirmation to Voice Live, and requests the spoken continuation. | Local mock round-trip verifies execution and result delivery. Completed voice transcripts are persisted as messages; voice tool calls are not stored as `tool_calls`. |
 | Runtime activity (P8-16, P9-18) | Shared contracts define the `mode`, `now`, `voice-wake`, `job`, `jarvis-activity`, `workspace-ready`, `workspace-command`, and `workspace-cancel` payloads on owner-authenticated `/now/events`. The typed backend SSE helper emits those frames; `sseHeaders` carries Fastify/CORS headers across the hijacked stream. The voice orb, top bar and workspace consume the same stream. | Contract guards and authenticated SSE tests cover event payloads and framing. Existing activity transitions, cancellation/disconnect behavior and payload privacy remain unchanged; live Entra/Foundry and physical audio remain unverified. |
@@ -5920,9 +5978,12 @@ and Today cards) publishes the chain once, after its last page, and keeps the
 previous records visible while a refresh runs (20 October 2026; P14-44).
 
 **Overview top cards (20 October 2026; P14-46).** `sections/overview/TopCards.tsx`
-owns the period and passes it to the Training card as a dropdown in its header (the
-optional `action` slot of `TopCard` in `TopBlocks.tsx`, since P14-58; it was a row of pills
-above the cards), then calls `useTopCardData`, which makes one
+owns the period and offers it to the page as a dropdown in the title row: `DailyHome` renders an empty
+`daily-heading-control` element in the title row and publishes it through `DailyHeadingSlotContext`
+(`daily/heading-slot-context.ts`), and `DailyHeadingControl` (`daily/heading-slot.tsx`) portals the
+select into it, or renders it in place when a section is mounted without a title row (the earlier
+Training-card `action` slot of `TopCard` was removed; before P14-58 the control was a row of pills
+above the cards). The period state stays in `TopCards`, so the page knows nothing about Overview internals. It then calls `useTopCardData`, which makes one
 `useDailyPages` read per source with `settle`: workouts, steps, nutrition days,
 meals (single-day presets only), sleep, the metric catalogue and up to four body
 measurement metrics over a fixed 90 days, the last only for names the catalogue
@@ -5942,7 +6003,7 @@ markup is small: `daily/ui/icons.tsx` (`HealthIcon`, `IconChip`, decorative and
 `aria-hidden`), an optional `tone` and `icon` on `ui/Ring.tsx`, `Figure`, `icon` and
 `meter` in `overview/TopBlocks.tsx`, and titled chart and trend panels in the cards.
 The page headline is the current section's label: `DailyHome` renders it as the `h1`
-(the `aria-labelledby` target and the focus target, "Health" while the list loads) beside the freshness pill. The earlier
+(the `aria-labelledby` target and the focus target, "Health" while the list loads) on its own row, under a status row that holds the freshness pill. The earlier
 `daily/greeting.ts` and the `AreaProps.profileName` that fed it were removed in P14-58, so
 the profile name is not passed to any area. `DailyFreshnessPill`
 reads the same sync status as before and now derives a status dot (`data-freshness`

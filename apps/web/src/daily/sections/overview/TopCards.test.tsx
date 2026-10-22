@@ -81,7 +81,7 @@ function article(title: string) {
 }
 const card = (title: string) => within(article(title));
 const tile = (title: string, label: string) => card(title).getByRole('group', { name: label });
-const periodSelect = () => card('Training').getByRole('combobox', { name: 'Overview period' }) as HTMLSelectElement;
+const periodSelect = () => screen.getByRole('combobox', { name: 'Overview period' }) as HTMLSelectElement;
 const choosePeriod = (id: string) => fireEvent.change(periodSelect(), { target: { value: id } });
 async function settled() {
   await waitFor(() => expect(tile('Training', 'Protein').textContent).toContain('80 g'));
@@ -101,7 +101,9 @@ describe('Overview cards', () => {
     await settled();
     expect(periodSelect().value).toBe('today');
     expect(Array.from(periodSelect().options).map(option => option.textContent)).toEqual(['Today', 'Yesterday', '1 week', '2 weeks', '1 month']);
-    expect(screen.queryByRole('group', { name: 'Overview period' })).toBeNull();    expect(screen.getByRole('link', { name: 'Training' }).getAttribute('href')).toMatch(/\?section=workouts$/u);
+    expect(screen.queryByRole('group', { name: 'Overview period' })).toBeNull();
+    expect(card('Training').queryByRole('combobox')).toBeNull();
+    expect(screen.getByRole('link', { name: 'Training' }).getAttribute('href')).toMatch(/\?section=workouts$/u);
     expect(screen.getByRole('link', { name: 'Body' }).getAttribute('href')).toMatch(/\?section=body-sleep$/u);
     expect(screen.queryByRole('link', { name: 'Health' })).toBeNull();
     const toggle = screen.getByRole('button', { name: 'Health' });
@@ -290,7 +292,7 @@ describe('Overview cards', () => {
     expect(tile('Body', 'Calories').textContent).toContain('200 kcal');
     expect(tile('Body', 'Duration').textContent).toMatch(/30\s*min/u);
     await waitFor(() => expect(tile('Body', 'Weight').textContent).toContain('80.4 kg'));
-    for (const label of ['Fat %', 'Lean mass']) expect(tile('Body', label).textContent).toContain('Not recorded');
+    for (const label of ['Fat %', 'Muscle mass']) expect(tile('Body', label).textContent).toContain('Not recorded');
   });
 
   it('notes a lower bound only on the Body tile whose figure is incomplete', async () => {

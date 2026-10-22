@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanSnippet, matchTitles, readKnowledgeGraph, sampleKnowledgeGraph, vaultMemoryId } from './knowledge-data';
+import { categoryGraph, cleanSnippet, matchTitles, readKnowledgeGraph, sampleKnowledgeGraph, vaultMemoryId } from './knowledge-data';
 import { GeneratedViewRenderer } from '../GeneratedViewRenderer';
 import { KnowledgeBackendContext } from './knowledge-context';
 import { createKnowledgeLayout } from './knowledge-layout';
@@ -96,34 +96,36 @@ describe('knowledge graph data', () => {
 });
 
 describe('knowledge graph view', () => {
-  it('filters actual folders including vault root instead of relabelling them General', async () => {
+  it('leaves the vault root and system folders off the map entirely, with their links', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => json({ nodes: [
       { id: 'root', path: 'AGENTS.md', title: 'Root fixture', folder: '' },
-      { id: 'customer', path: 'Customers/Review.md', title: 'Customer fixture', folder: 'Customers' },
-    ], edges: [] })));
+      { id: 'log', path: '_agent-log/Run.md', title: 'Log fixture', folder: '_agent-log' },
+      { id: 'template', path: 'Templates/Note.md', title: 'Template fixture', folder: 'Templates' },
+      { id: 'work', path: 'Work/Review.md', title: 'Work fixture', folder: 'Work', degree: 2 },
+      { id: 'home', path: 'Personal/Plan.md', title: 'Personal fixture', folder: 'Personal', degree: 1 },
+    ], edges: [
+      { source: 'work', target: 'home', type: 'link' },
+      { source: 'work', target: 'log', type: 'link' },
+    ] })));
     render(<KnowledgeGraphView backendUrl="https://api.example.com" getAccessToken={getAccessToken} />);
-    expect(screen.queryByRole('button', { name: /^Tasks/u })).toBeNull();
-    const rootFilter = await screen.findByRole('button', { name: 'Vault root1' });
-    expect(rootFilter.getAttribute('title')).toBe('Show only Vault root');
-    fireEvent.click(rootFilter);
-    expect(screen.queryByText(/^\d+ notes?$/u)).toBeNull();
-    const rootNote = within(screen.getByRole('list', { name: 'Vault root notes' })).getByRole('button', { name: 'Root fixture' });
-    expect(rootNote).not.toBeNull();
-    fireEvent.click(rootNote);
-    expect(await screen.findByText('Vault root · AGENTS.md')).not.toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Customers1' }));
-    expect(within(screen.getByRole('list', { name: 'Customers notes' })).getByRole('button', { name: 'Customer fixture' })).not.toBeNull();
-    expect(screen.queryByRole('button', { name: 'General0' })).toBeNull();
+    await waitFor(() => expect(document.querySelector('.knowledge')?.getAttribute('data-nodes')).toBe('2'));
+    expect(document.querySelector('.knowledge')?.getAttribute('data-edges')).toBe('1');
+    expect(within(screen.getByRole('list', { name: 'Map legend' })).getAllByRole('button').map((button) => button.textContent))
+      .toEqual(['Work1', 'Personal1']);
   });
-  it('uses the readable root label and muted star colour for root and unknown folders', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => json({ nodes: [
-      { id: 'root', path: 'AGENTS.md', title: 'Root fixture', folder: '' },
-      { id: 'archive', path: 'Archive/Old.md', title: 'Archived fixture', folder: 'Archive' },
-    ], edges: [] })));
-    render(<KnowledgeGraphView backendUrl="https://api.example.com" getAccessToken={getAccessToken} />);
-
-    expect(await screen.findByRole('button', { name: 'Vault root1' })).not.toBeNull();
-    expect(screen.getByRole('button', { name: 'Archive1' })).not.toBeNull();
+  it('recounts note degrees and open-task notes after dropping hidden folders', () => {
+    const node = (id: string, folder: string, degree: number, openTaskCount: number) =>
+      ({ id, path: `${folder}/${id}.md`, title: id, folder, directory: folder, updatedAt: null, degree, openTaskCount });
+    const graph = categoryGraph({
+      nodes: [node('a', 'Work', 2, 1), node('b', 'Templates', 1, 3), node('c', 'Personal', 1, 0)],
+      edges: [{ source: 'a', target: 'b', type: 'link' }, { source: 'a', target: 'c', type: 'link' }],
+      openTaskNoteCount: 2,
+    });
+    expect(graph.nodes.map((entry) => [entry.id, entry.degree])).toEqual([['a', 1], ['c', 1]]);
+    expect(graph.edges).toHaveLength(1);
+    expect(graph.openTaskNoteCount).toBe(1);
+  });
+  it('uses the muted star colour for root and unknown folders', () => {
     const colours = folderColours(document.createElement('div'));
     const fallback = colours.get('')!;
     expect(resolveFolderColour(colours, '')).toBe(fallback);
@@ -321,6 +323,7 @@ describe('knowledge graph view', () => {
           id: 'c'.repeat(64), text: 'Buy a mirror', done: false,
           dueDate: '2031-04-09', dueTime: '14:30', dueAt: '2031-04-09T12:30:00.000Z',
           priority: 'normal', path: 'Personal/Inbox.md', line: 4, heading: 'Home',
+          version: 'a'.repeat(64),
         }],
         readAt: '2031-04-09T12:00:00.000Z', today: '2031-04-09', total: 3, truncated: false,
       });
