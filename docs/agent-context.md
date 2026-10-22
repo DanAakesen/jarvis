@@ -1042,7 +1042,10 @@ writes real data or probes a live service. `composition.test.ts` builds real
 Fastify applications, so it needs the pinned CI graph where those packages are
 unavailable locally. Check that Daily off leaves routes, tools, instructions and
 startup unchanged, that Daily on adds exactly the module's routes and seven tools,
-and that the tool count stays inside the 128-tool limit.
+and that all composed tools remain registered and advertised. There is no
+global tool-count ceiling or reserved-slot requirement; description and
+serialized-catalogue byte limits still apply (see
+[`docs/decisions.md`](decisions.md#catalogue-count-is-not-a-global-limit)).
 
 ## Internal Daily review checks (17 October 2026; P12-09)
 

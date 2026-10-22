@@ -2727,7 +2727,12 @@ The authenticated SSE endpoint, heartbeat and replay are P1-06. Factory also own
 projects and task APIs. The catalogue rejects duplicate
 module/tool identities, snapshots frozen schemas and exposes read-only descriptors
 with ownership and handlers. Authenticated `GET /tools` exposes every descriptor's
-name, description and input schema. The registry refuses catalogues beyond the shared 128-tool, 4,000-character description and 1 MiB limits in `agents/jarvis/limits.json`, so the backend fails its health gate rather than deploy an incompatible catalogue; backend CI builds the production module list with all optional modules enabled, checks eight tools of headroom, and reports per-module tool counts on failure. Related tools are merged into one tool with an operation parameter. The core registers a schema-validated
+name, description and input schema. There is no global tool-count ceiling or
+reserved-slot requirement. The registry retains the shared 4,000-character
+description and 1 MiB serialized-catalogue limits in `agents/jarvis/limits.json`;
+backend CI builds every production module with optional features enabled and
+checks that no valid tool is omitted. These count-independent bounds do not
+authorize execution: the core registers a schema-validated
 `POST /tools/{name}` for every tool at composition time, passes the request and
 cancellation signal to its handler, then writes the arguments, result and outcome
 to `tool_calls` using the process-owned SQL pool. A tool may provide a bounded safe
@@ -2845,9 +2850,10 @@ migration is added.
 `GET /status/smoke` forces fresh read-only Google, GitHub App, vault repository
 tree-metadata, embedding, and PC-bridge checks, adds a bounded research dry run,
 checks the agent contract, and makes a real chat turn through the existing hosted
-agent client. The contract check validates the live tool registry against the
-hosted agent's catalogue limits and builds the same `/agent/settings` payload
-used by the route, then verifies the shape accepted by the agent. The cached
+agent client. The contract check validates the complete live tool registry's
+names, schemas, descriptions and serialized size, and builds the same
+`/agent/settings` payload used by the route, then verifies the shape accepted by
+the agent. It imposes no catalogue-count ceiling. The cached
 `chat_canary` suite uses the backend's agent identity and runs seven fixed
 acceptance prompts under the existing `smoke` usage role. It has one 55-second
 suite deadline, a 25-second per-prompt deadline and a 60-second result cache.
@@ -2857,7 +2863,7 @@ two rounds, one tool call and 256 output tokens. The agent receives only
 `get_system_health`, `github_read` for issue 700, `list_jobs` and
 `workspace_command` for Settings navigation; the backend enforces the same
 allowlist. `list_capabilities` and the confirmation test are operations on the
-existing health tool, so the 128-tool catalogue does not grow. Smoke job results
+existing health tool; the smoke allowlist remains unchanged. Smoke job results
 are counts only, GitHub results are reduced to the issue number/title, and
 workspace navigation always returns the fixed no-tab refusal without contacting
 a connected browser. The confirmation test is an in-memory no-op: the backend
@@ -3751,9 +3757,8 @@ The read-only sensitive `vault_search` chat/voice tool serves both reads through
 flat `kind` argument: `notes` (the default) searches the knowledge index, and
 `tasks` uses the same model and scope as the route, with query, state and
 optional bounded due window, returning at most 40 items. The schema has no
-combinators, so voice schemas stay valid, and no catalogue entry is added: the
-all-features production catalogue is held at 120 tools, leaving the required
-eight-tool headroom below the 128-tool platform limit. Task requests route to
+combinators, so voice schemas stay valid, and no catalogue entry is added for
+this existing read path. Task requests route to
 `kind` tasks; note requests continue through `vault_search` (notes) and
 `vault_read`. The Notes page retains search snippets and fetches
 matching open tasks separately; the count on its task group calls
@@ -4872,7 +4877,13 @@ P9-88 adds the shared GitHub App tool surface to `factory/github-app-tools.ts`. 
 | `github_read` | `issue_get`, `issue_comments`, `issue_search`, `labels_list`, `milestones_list` (Issues read); `pr_search`, `pr_list`, `pr_comments` (Pull requests read); `workflow_runs` (Actions read); `repo_branches`, `repo_commits`, `repo_compare` (Contents read) | Live grant for the operation, read |
 | `github_write` | `issue_update`, `label_create` (Issues write); `pr_create`, `pr_update`, `pr_comment`, `pr_review`, `pr_ready` (Pull requests write); `pr_merge` (Pull requests write plus Checks and Statuses read); `branch_create`, `file_write` (Contents write); `workflow_dispatch`, `workflow_rerun` (Actions write) | Live grant for the operation, write |
 
-The catalogue is limited to 128 tools (`agents/jarvis/limits.json`; the registry and a test enforce it), so GitHub capability is three tools with an `operation` parameter instead of one tool per operation. Each root schema stays a plain object (no `oneOf`/`anyOf`): `operation` plus the union of the operation properties, `additionalProperties: false`, with shared fields merged to their loosest form. The handler then applies the chosen operation's own required fields, types, enums, bounds and unknown-field rules and refuses invalid input. `issue_comment` remains a Factory tool.
+The GitHub surface currently exposes three grouped tools with an `operation`
+parameter; this API shape is not a global catalogue-count restriction. Each root
+schema stays a plain object (no `oneOf`/`anyOf`): `operation` plus the union of
+the operation properties, `additionalProperties: false`, with shared fields
+merged to their loosest form. The handler then applies the chosen operation's
+own required fields, types, enums, bounds and unknown-field rules and refuses
+invalid input. `issue_comment` remains a Factory tool.
 
 GitHub reads return labelled untrusted content, bound page sizes and output fields; each HTTP request has a ten-second timeout and one-megabyte response cap. Comments and issue bodies are byte-bounded. Outgoing text is secret-scanned. Ordinary writes execute when Dan requests them; issue/PR closure, PR merge, file writes to the default branch and public-repository file publication require a later Dan message, from the same session, that clearly approves the staged action (the shared approval interpreter decides the meaning). `pr_merge` verifies the expected head SHA and refuses failing check runs or commit statuses unless Dan explicitly says to proceed. Public image publication retains its visible warning and simple approval. No `apps/web`, persistence, migration or dependency changes.
 
@@ -5425,7 +5436,10 @@ done (the request never left the agent), or whether a timeout or broken
 connection after sending means the action may have happened. They cover unknown tools, invalid JSON,
 rejected arguments, refused identity, unavailable persistence and an unreachable
 backend. An unavailable catalogue fails the turn before the model is called.
-Responses are capped at 1 MiB, catalogues at 128 tools.
+The agent's `/tools` response is bounded to 1 MiB; tool descriptions and the
+serialized catalogue retain their existing limits. No global tool-count limit
+is applied. Provider-specific per-request limits remain route-dependent and
+unverified; see the [route inventory](decisions.md#catalogue-count-is-not-a-global-limit).
 `JARVIS_BACKEND_URL` must be an HTTPS origin, or HTTP only for localhost.
 The backend catalogue includes read-only repository tools and `list_capabilities`;
 the agent uses `repo_overview` before `repo_search` or `repo_read`, treats returned
@@ -6181,9 +6195,8 @@ and composes only with Daily and shared Daily data. The signed-in-owner
 runners, connectors, other identities and query selectors. A patch is strict,
 partial and transactional; `null` clears a field and removing the last set
 value deletes the row. Read-back occurs before commit. The assistant has no
-training-target write tool because the production tool catalogue must retain at
-least eight free slots; a read-only query source may be added later. Daily-off
-composition registers no target routes.
+training-target write tool; this catalogue-count decision does not authorize
+adding that capability. Daily-off composition registers no target routes.
 
 The web Settings editor loads and saves only validated server responses. Its
 `useTrainingTargets` hook documents the shared loading/settled/error/retry
@@ -6288,8 +6301,9 @@ startup fails), builds `createDailyData(pool, owner)` and returns the module of
 `createDailyModules` for the nutrition rehearsal: `GET /daily/capabilities`,
 `POST /daily/query`, `GET`/`PATCH /daily/nutrition-targets` and seven tools
 (`daily_query`, `daily_show`, `daily_food`, `daily_food_review`, `daily_saved_food`,
-`daily_nutrition_targets`, `daily_nutrition_suggest`), which stay inside the
-catalogue's 128-tool limit (CI checks the headroom). The connector, Frida lookup, feeds and health-upload
+`daily_nutrition_targets`, `daily_nutrition_suggest`). Catalogue composition
+has no count-based ceiling; CI continues to check tool schemas, descriptions
+and serialized size. The connector, Frida lookup, feeds and health-upload
 arguments are left out, so the module has no MCP route, provider call, Google or
 Gmail read, job or timer. The targets and health accessors also compare the
 resolved owner with the composed owner and refuse a mismatch, on top of the check
@@ -6520,9 +6534,10 @@ SQL pool, Daily stores, owner authorization and native tool confirmation flow.
 The selected set includes conversational Status/profile/preference/recovery
 reads and writes, but not coach commitments, orders, experiments, meal plans,
 fixed renderers or Apple Health meal write-back. The nine remaining source
-operations are currently grouped into three registered tools to retain the
-catalogue's required eight-tool headroom; this does not satisfy the requested
-distinct tool names and is a recorded mismatch. Local tool/read-model and
+operations were grouped into three registered tools under the former
+eight-slot-reserve decision; #1204 supersedes that count-based rationale. This
+does not satisfy the requested distinct tool names and remains a recorded
+mismatch. Local tool/read-model and
 isolated-SQL tests do not prove exact source HTTP-path parity, all 31-table
 field parity, deployed acceptance, physical-phone use or owner handoff. The
 historical exporter limits are 8 MiB ingress; normalized output capped at 10,000

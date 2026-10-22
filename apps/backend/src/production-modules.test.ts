@@ -255,7 +255,7 @@ describe('production tool catalogue', () => {
       registerRoutes: async () => {},
     }]);
     const expectedNames = [
-      ...createToolRegistry(modules).list().map(({ name }) => name),
+      ...modules.flatMap(({ tools }) => tools.map(({ name }) => name)),
       ...additions.map(({ name }) => name),
     ];
 
