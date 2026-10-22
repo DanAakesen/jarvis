@@ -3111,6 +3111,15 @@ Verified in Codex cloud for P0-02:
 | Run web app | `npm run dev` in the repository root; open `http://localhost:5173` |
 | Watch web tests | `npm run test:watch --workspace @jarvis/web` |
 
+Web sign-in uses the fixed `http://localhost:5173` origin (`strictPort` in
+`apps/web/vite.config.ts`); both `http://localhost:5173/` and
+`http://localhost:5173/redirect.html` are registered in
+`infra/bootstrap.output.json`. Do not change the port or remove the redirect
+bridge URI without updating the Entra registration. On each device, tick
+Microsoft's **Stay signed in** option once when prompted. That keeps Microsoft's
+session across browser restarts; tenant sign-in-frequency policy and browser
+storage behavior can still require sign-in sooner.
+
 The Windows UI checkout can use its existing dependency junction and run from
 `apps\web`: `node ..\..\node_modules\typescript\bin\tsc --noEmit -p .`,
 `node ..\..\node_modules\vitest\vitest.mjs run --maxWorkers=1 --silent` and

@@ -1,5 +1,48 @@
 # Decisions
 
+## Persistent Microsoft browser sign-in (22 October 2026; #1214)
+
+The owner requested one sign-in per device rather than repeated sign-in in new
+tabs, browser restarts, the installed phone app and the fixed localhost dev
+origin. This supersedes the cache-in-session-storage part of P0-09: MSAL now
+uses `localStorage` to share its cache across tabs, with an identity-free
+device marker, silent SSO and a five-minute cooldown for one automatic
+top-level redirect. Account selection is reserved for the explicit
+**Use a different account** action; Settings provides **Sign out**, which
+clears the MSAL cache and marker.
+
+This does not create a Jarvis session or extend Microsoft tokens. SPA refresh
+tokens have a fixed 24-hour lifetime. Persistence across a full browser restart
+depends on the Microsoft session and its **Stay signed in** choice; since MSAL
+v4, the local cache's encryption key otherwise lives in a session cookie.
+Conditional Access can shorten the experience. The owner ticks **Stay signed
+in** once per device; live web, phone and localhost acceptance remains
+unverified until the owner checks it.
+
+## Azure Speech partial-recognizer token configuration (22 October 2026; #1190)
+
+Construct the custom-endpoint `SpeechConfig` with `SpeechConfig.fromEndpoint(endpoint)`
+without an auth argument, then set `authorizationToken` and the selected `da-DK` or
+`en-GB` recognition language. The installed SDK rejects an empty-string auth
+argument even though its typings describe that usage. Keep Azure Speech optional:
+startup or cancellation failure remains visible as `voice.partials_unavailable`
+and does not disable Voice Live final-transcript handling. Existing reflex
+confidence, completion, confirmation, target, authorization, audit, duplicate and
+final-reconciliation checks remain unchanged.
+
+`npm test --workspace @jarvis/backend -- --run src/voice/speech-recognizer.test.ts src/voice/relay.test.ts`
+passed all 194 tests (11 recognizer and 183 relay). The recognizer tests exercise
+the installed SDK's Danish/English config, recognizing and canceled event
+objects, blank hypotheses, startup failure and abort cleanup. The relay test
+`relays an installed SDK recognizing event into the partial reflex path` proves
+the callback reaches the existing partial action and increments its metric.
+Backend build and lint also passed. The network start/stop callbacks were
+simulated; these checks do not prove acceptance of a live microphone or Azure
+provider session. The spoken-session acceptance in the runbook remains pending
+a separately authorized deployment.
+
+Refs DanAakesen/jarvis#1190.
+
 ## Push notifications carry bounded details (22 October 2026; P13-21 / #1194)
 
 The owner confirmed that proactive todo reminders and alerts should say what
