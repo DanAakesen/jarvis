@@ -498,7 +498,9 @@ describe('English voice tool-budget fallback', () => {
     const ready = f.sockets.at(-1)!;
     expect(f.selected().at(-1)).toEqual(expect.objectContaining({ rung: 'R1' }));
     expect(toolNames(ready)).toContain('daily_health_summary');
-    expect(toolNames(ready)).not.toContain('proactive_recent_items');
+    expect(toolNames(ready)).not.toEqual(expect.arrayContaining([
+      'proactive_recent_items', 'proactive_preferences',
+    ]));
     expect(frameOf(ready).session.instructions).toContain(TOOLS_UNAVAILABLE_NOTICE);
 
     f.app.nowEventHub.publish({
@@ -511,6 +513,7 @@ describe('English voice tool-budget fallback', () => {
     ]));
     expect(update.tools).not.toEqual(expect.arrayContaining([
       expect.objectContaining({ name: 'proactive_recent_items' }),
+      expect.objectContaining({ name: 'proactive_preferences' }),
     ]));
     expect(update.instructions).toContain(TOOLS_UNAVAILABLE_NOTICE);
 
@@ -566,16 +569,11 @@ describe('English voice tool-budget fallback', () => {
     ]);
     expect(g.selected()).toEqual([expect.objectContaining({ rung, remembered: false })]);
     const ready = g.sockets[index]!;
-<<<<<<< HEAD
-    if (rung === 'R1') expect(names(ready)).not.toContain('daily_show');
-    if (rung === 'R1') expect(names(ready)).not.toEqual(expect.arrayContaining([
-      'proactive_recent_items', 'proactive_preferences',
-    ]));
-=======
->>>>>>> origin/main
     if (rung === 'R2') {
       expect(names(ready)).not.toContain('daily_show');
-      expect(names(ready)).not.toContain('proactive_recent_items');
+      expect(names(ready)).not.toEqual(expect.arrayContaining([
+        'proactive_recent_items', 'proactive_preferences',
+      ]));
     }
     if (rung === 'R3') {
       expect(names(ready)).toEqual(expect.arrayContaining(['set_presence_mode', 'set_away_mode']));

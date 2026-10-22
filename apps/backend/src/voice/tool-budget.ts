@@ -57,9 +57,9 @@ function halfBytesSubset(tools: readonly RegisteredTool[]): RegisteredTool[] {
 /** The deterministic English fallback ladder; only tools and instruction text differ between rungs. */
 export function createToolBudgetRungs(registry: ToolRegistry): readonly ToolBudgetRung[] {
   const all = registry.list();
-  const withoutProactive = all.filter(({ name }) => name !== 'proactive_recent_items');
+  const withoutProactive = all.filter(({ name }) => !proactiveTools.has(name));
   const knownGood = all.filter(({ name }) =>
-    !name.startsWith('daily_') && name !== 'proactive_recent_items');
+    !name.startsWith('daily_') && !proactiveTools.has(name));
   const rung = (
     name: ToolBudgetRungName, tools: ToolRegistry, instructions: RealtimeInstructionMode,
   ): ToolBudgetRung => ({
@@ -69,19 +69,11 @@ export function createToolBudgetRungs(registry: ToolRegistry): readonly ToolBudg
   const none = registryOf([]);
   return Object.freeze([
     rung('R0', registry, 'full'),
-<<<<<<< HEAD
-    rung('R1', registryOf(all.filter(({ name }) =>
-      !name.startsWith('daily_') && !proactiveTools.has(name))), 'notice'),
-    rung('R2', registryOf(halfBytesSubset(all)), 'notice'),
-    rung('R3', none, 'notice'),
-    rung('R4', none, 'compact'),
-=======
     rung('R1', registryOf(withoutProactive), 'notice'),
     rung('R2', registryOf(knownGood), 'notice'),
     rung('R3', registryOf(halfBytesSubset(all)), 'notice'),
     rung('R4', none, 'notice'),
     rung('R5', none, 'compact'),
->>>>>>> origin/main
   ]);
 }
 

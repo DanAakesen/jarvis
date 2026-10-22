@@ -177,20 +177,13 @@ describe('production tool catalogue', () => {
     const [r0, r1, r2, r3, r4, r5] = rungs.map(({ tools }) => tools.list());
     expect(r0).toEqual(registry.list());
     expect(r1!.map(({ name }) => name)).toEqual(registry.list().map(({ name }) => name)
-<<<<<<< HEAD
-      .filter((name) => !name.startsWith('daily_') && !proactiveToolNames.includes(name)));
-    expect(r2!.map(({ name }) => name)).toEqual(expect.arrayContaining([...TOOL_BUDGET_ALWAYS_KEPT_TOOLS]));
-    expect(bytes(r2!)).toBeLessThanOrEqual(bytes(r0!) / 2);
-    expect(bytes(r2!)).toBeGreaterThan(bytes(r0!) * 0.45);
-=======
-      .filter((name) => name !== 'proactive_recent_items'));
+      .filter((name) => !proactiveToolNames.includes(name)));
     expect(r1!.some(({ name }) => name.startsWith('daily_'))).toBe(true);
     expect(r2!.map(({ name }) => name)).toEqual(registry.list().map(({ name }) => name)
-      .filter((name) => !name.startsWith('daily_') && name !== 'proactive_recent_items'));
+      .filter((name) => !name.startsWith('daily_') && !proactiveToolNames.includes(name)));
     expect(r3!.map(({ name }) => name)).toEqual(expect.arrayContaining([...TOOL_BUDGET_ALWAYS_KEPT_TOOLS]));
     expect(bytes(r3!)).toBeLessThanOrEqual(bytes(r0!) / 2);
     expect(bytes(r3!)).toBeGreaterThan(bytes(r0!) * 0.45);
->>>>>>> origin/main
     // Everything kept is smaller than everything dropped, apart from the always-kept tools.
     const kept = new Set(r3!.map(({ name }) => name));
     const largestKept = Math.max(...r3!.filter(({ name }) => !(TOOL_BUDGET_ALWAYS_KEPT_TOOLS as readonly string[]).includes(name))
@@ -251,8 +244,6 @@ describe('production tool catalogue', () => {
     expect(result).toEqual({ status: 'ok' });
   });
 
-<<<<<<< HEAD
-=======
   it('retains every tool when the production catalogue grows beyond the former global cap', () => {
     const modules = modulesWithEveryFeature();
     const existingCount = modules.reduce((count, module) => count + module.tools.length, 0);
@@ -276,5 +267,4 @@ describe('production tool catalogue', () => {
     expect(registry.list().map(({ name }) => name)).toEqual(expectedNames);
     expect(createRealtimeSessionUpdate(registry).session.tools.map(({ name }) => name)).toEqual(expectedNames);
   });
->>>>>>> origin/main
 });

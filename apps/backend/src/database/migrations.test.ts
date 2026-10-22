@@ -284,11 +284,8 @@ describe('committed SQL manifest', () => {
       '0059_proactive_reminders.sql',
       '0060_daily_health_processing_state.sql',
       '0061_daily_training_targets.sql',
-<<<<<<< HEAD
-      '0063_proactive_suggestion_preferences.sql',
-=======
       '0062_github_app_mint_recovery.sql',
->>>>>>> origin/main
+      '0063_proactive_suggestion_preferences.sql',
     ]);
     for (const migration of migrations) await expect(readDownMigration(migration.name)).resolves.toMatchObject({ name: migration.name });
   });
