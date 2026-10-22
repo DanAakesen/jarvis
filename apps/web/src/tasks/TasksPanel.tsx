@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { Loader } from '../Loader';
+import { copenhagenDate } from '../daily/period';
 import { formatDateOnly, formatTimeOnly } from '../format/date-time';
 import {
   addVaultTask, loadVaultTasks, setVaultTaskDone, VaultTaskConflict, VaultTasksUnavailable, vaultTaskRecovery,
@@ -274,7 +275,7 @@ export function TasksPanel({ id, backendUrl, getAccessToken, initialQuery = '', 
     event.preventDefault();
     const text = draft.trim();
     if (text.length < 2 || saving) return;
-    const due = draftDate || (draftTime ? (result?.today ?? new Date().toLocaleDateString('en-CA')) : '');
+    const due = draftDate || (draftTime ? (result?.today ?? copenhagenDate()) : '');
     const { signal } = writes.current;
     setSaving(true);
     setAddError('');
