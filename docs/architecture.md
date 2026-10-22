@@ -3751,7 +3751,8 @@ paths and Archive segments remain excluded.
 
 The route accepts `q` (up to 200 characters) and `state` (`open`, default;
 `done`; or `all`), and returns at most 500 matching task rows with source path,
-line, nearest heading, completion, due fields, priority, owner-local `today`,
+line, nearest heading, completion, due fields, priority (`high` for P1, `medium` for P2 or `🔼`,
+otherwise `normal`), owner-local `today`,
 `readAt`, total and truncation state. Scans retain the shared 256-file, 4-MiB
 total-content, 256-KiB-per-file, four-concurrent-read and 20-second limits.
 Task text is sanitized and secret-redacted before filtering or returning, and
@@ -3770,6 +3771,32 @@ eight-tool headroom below the 128-tool platform limit. Task requests route to
 `vault_read`. The Notes page retains search snippets and fetches
 matching open tasks separately; the count on its task group calls
 `KnowledgeGraphView`'s `onShowTasks`, which opens the Tasks panel with that query.
+The panel requests `state=open`, or `state=all` only while a query is typed (so
+completed tasks are searchable but never listed otherwise), and applies its
+All / Personal / Work switch in the browser: Work means a `Work/` path or a root
+task-file heading starting with Work.
+
+Two owner-only write routes sit beside it. Each GET item carries an opaque `version`
+(the SHA-256 of the exact raw line, so text, dates, priority and checkbox state all
+count). `PATCH /vault/tasks` takes `{path, line, text, version, done}`: the path must
+be in the task scope and pass the vault write-path check, and the current line must
+still hold that task text (compared after redaction) and hash to `version`; a
+mismatch (reordered, edited or moved line) returns 409 before anything is written, a
+missing or malformed `version` 400. Only the `[ ]`/`[x]` character is flipped,
+preserving line endings. An already-matching state returns `commit: null` without
+writing. Both PATCH and POST return the line's new `version` (a tick changes the line,
+so Undo sends the returned one). The write carries the file SHA and retries once; a
+changed or conflicting line returns 409, a refused path or scope 400.
+`POST /vault/tasks` takes `{text, scope: personal|work, due?, time?}`
+(`time` is `HH:MM` and needs `due`),
+strips control characters, comments and metadata emoji, caps text at 200 characters,
+refuses secret-looking text, and appends `- [ ] text` (with `📅 date`, plus ` HH:MM` when
+timed) to
+`Personal/Inbox.md` or `Work/Inbox.md`, creating the note when missing and refusing
+an open code fence or an oversized file. Both commit as Jarvis (`jarvis: complete a
+task`, `reopen a task` or `add a task`), refresh the notes index and log
+`vault.write`. Non-owners get 403. The web client (`tasks-data.ts`) maps 409 to
+`VaultTaskConflict`.
 
 Since 19 October 2026 there is no Tasks page. `NotesArea` owns the panel
 (`tasks/TasksPanel.tsx`, opened by the Show tasks button or by
@@ -3781,7 +3808,10 @@ the panel, changing the search or closing replaces it, and `TasksPanel` is keyed
 The unsaved-draft blocker ignores changes to those two parameters. The area registry
 and phone menu no longer list Tasks. A task's source link opens the note in place
 through the Notes read flow and its unsaved-draft guard, and on a narrow screen the
-panel closes first. Neither screen nor tool writes or changes task state.
+panel closes first. The panel ticks tasks optimistically through an override map
+keyed by task id (a lingering row for four seconds, rollback with a notice on failure,
+a list reload on conflict) and adds tasks through a small form that then reloads
+quietly; the chat and voice tool does not write or change task state.
 
 `knowledge/knowledge-scene.ts` frames the map: `measureFit` takes the mean of the
 visible notes and their 98th-percentile reach, and sets the camera to centre them
@@ -5934,9 +5964,12 @@ and Today cards) publishes the chain once, after its last page, and keeps the
 previous records visible while a refresh runs (20 October 2026; P14-44).
 
 **Overview top cards (20 October 2026; P14-46).** `sections/overview/TopCards.tsx`
-owns the period and passes it to the Training card as a dropdown in its header (the
-optional `action` slot of `TopCard` in `TopBlocks.tsx`, since P14-58; it was a row of pills
-above the cards), then calls `useTopCardData`, which makes one
+owns the period and offers it to the page as a dropdown in the title row: `DailyHome` renders an empty
+`daily-heading-control` element in the title row and publishes it through `DailyHeadingSlotContext`
+(`daily/heading-slot-context.ts`), and `DailyHeadingControl` (`daily/heading-slot.tsx`) portals the
+select into it, or renders it in place when a section is mounted without a title row (the earlier
+Training-card `action` slot of `TopCard` was removed; before P14-58 the control was a row of pills
+above the cards). The period state stays in `TopCards`, so the page knows nothing about Overview internals. It then calls `useTopCardData`, which makes one
 `useDailyPages` read per source with `settle`: workouts, steps, nutrition days,
 meals (single-day presets only), sleep, the metric catalogue and up to four body
 measurement metrics over a fixed 90 days, the last only for names the catalogue
@@ -5956,7 +5989,7 @@ markup is small: `daily/ui/icons.tsx` (`HealthIcon`, `IconChip`, decorative and
 `aria-hidden`), an optional `tone` and `icon` on `ui/Ring.tsx`, `Figure`, `icon` and
 `meter` in `overview/TopBlocks.tsx`, and titled chart and trend panels in the cards.
 The page headline is the current section's label: `DailyHome` renders it as the `h1`
-(the `aria-labelledby` target and the focus target, "Health" while the list loads) beside the freshness pill. The earlier
+(the `aria-labelledby` target and the focus target, "Health" while the list loads) on its own row, under a status row that holds the freshness pill. The earlier
 `daily/greeting.ts` and the `AreaProps.profileName` that fed it were removed in P14-58, so
 the profile name is not passed to any area. `DailyFreshnessPill`
 reads the same sync status as before and now derives a status dot (`data-freshness`

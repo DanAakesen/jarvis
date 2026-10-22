@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { MarkdownContent } from '../MarkdownContent';
 import {
-  connectedNotes, KnowledgeUnavailable, knowledgeFolders, loadKnowledgeGraph, loadKnowledgeNote, matchTitles,
+  connectedNotes, categoryGraph, KnowledgeUnavailable, knowledgeFolders, loadKnowledgeGraph, loadKnowledgeNote, matchTitles,
   searchKnowledge, type KnowledgeGraph, type KnowledgeNode, type KnowledgeNote,
 } from './knowledge-data';
 import type { KnowledgeScene } from './knowledge-scene';
@@ -159,7 +159,7 @@ export function KnowledgeGraphView({ backendUrl, getAccessToken, initialQuery = 
       return () => { active = false; };
     }
     void loadKnowledgeGraph(backendUrl, getAccessToken, controller.signal).then((value) => {
-      if (active) setLoad({ status: 'ready', graph: value });
+      if (active) setLoad({ status: 'ready', graph: categoryGraph(value) });
     }).catch((reason: unknown) => {
       if (!active) return;
       setLoad(reason instanceof KnowledgeUnavailable ? { status: 'unavailable' }
@@ -268,13 +268,7 @@ export function KnowledgeGraphView({ backendUrl, getAccessToken, initialQuery = 
     for (const node of graph?.nodes ?? []) result.set(node.folder, (result.get(node.folder) ?? 0) + 1);
     return result;
   }, [graph]);
-  const folders = [...counts.keys()].sort((left, right) => {
-    const rank = (name: string) => {
-      const index = knowledgeFolders.findIndex(folder => folder === name);
-      return index === -1 ? knowledgeFolders.length : index;
-    };
-    return rank(left) - rank(right) || left.localeCompare(right);
-  });
+  const folders = knowledgeFolders.filter((name) => counts.has(name));
   const hasTaskCounts = !!graph && (typeof graph.openTaskNoteCount === 'number' ||
     graph.taskCountsPartial === true || graph.nodes.some((node) => node.openTaskCount !== undefined));
   const hasKnownTaskCount = !!graph && (typeof graph.openTaskNoteCount === 'number' ||

@@ -337,7 +337,7 @@ standalone control or bar, `--control-size-inset` (36px) for a control nested in
 the Notes search bar and "Show tasks" are both 44px, the notes-tree button beside it
 is a 44px square, with the "+" and "Reset view"
 at 36px inside the bar, the top-bar icon buttons and Settings link are 44px, and the
-Tasks panel refresh and retry controls are 44px. Inset controls keep a 44px hit area
+Tasks panel scope switch, tick, add and retry controls are 44px. Inset controls keep a 44px hit area
 through an invisible extension. The Notes legend items are 28px pills.
 
 Keep compact desktop controls where useful and at least 44px touch targets.
@@ -494,12 +494,32 @@ bar, and opens a task panel beside the map. The Notes search bar is compact (380
 at most, centred) and holds the search field, Reset view and Create; it shows no
 note total, only a match count while searching. On a phone the button shrinks to
 its icon (still a 44px target) and the bar sits to its right. The panel is a
-focused, read-only list, not another board or note editor: a search field, an
-icon-only Refresh and a Completed toggle sit above the list, with no headline or
-explanatory copy. Open rows group under Overdue, Today, Upcoming and No date; Done
-appears only when completed tasks are requested. Every row pairs its Open/Done
-glyph with text, shows due date/time and a linked source note, and pairs the
-high-priority icon with its label. A source link opens the note in place; Escape
+focused list, not another board or note editor: a search field with a round **+**
+beside it (named **Add a task**; it turns into a close mark while the form is open)
+and an All / Personal / Work switch sit above the list, with no headline, no refresh
+icon, no read time and no explanatory copy. The switch is three equal segments (full width
+on a phone, 44px targets); the selected one is tinted and heavier, and All is the
+default so no task is silently hidden. Open rows group by due date under Overdue,
+Today, Upcoming and No date. Completed tasks never appear in the list: they show,
+under Done, only when a search is typed. A task counts as Work when its note is
+under Work/ (or, in the root task file, under a heading that starts with Work);
+everything else is Personal. Every row starts with a round tick button (an 18px ring
+inside a 44px target; it is a checkbox named by the task) next to the task text, shows
+due date/time and a linked source note, and shows priority as a small tinted pill with the
+word (red **High** for P1, amber **Medium** for P2; no star; Normal, P3, has no pill). Ticking fills the
+ring, strikes the text through and keeps the row in place for about four seconds
+with an **Undo** pill where the priority pill sat, then the row fades and slides
+away; there is no confirmation dialog. Un-ticking a completed task found by search
+reopens it. A failed write rolls the tick back and says so in one line of error text
+under the controls. **+** opens one add row under the search: a text field (focused),
+a Personal / Work choice (defaulting to the current tab), optional date and time
+fields and an **Add** button, all inside one bordered block (a time alone means today);
+Enter adds, Escape closes only the form. Each task row is a soft rounded card with the
+tick vertically centred, the due date and time as a small chip with a calendar icon
+(tinted when overdue), and the source note as a small pill with a dot (teal for Personal, blue for Work). In the All view the pill also says **Personal ·** or **Work ·** before the note name, because Personal/Inbox and Work/Inbox both read "Inbox" and colour alone must not carry scope; the cue is dropped once a filter already says it. A hairline outline that brightens on hover (red for High, amber for Medium, neutral for Normal), and the tick ring turns red on High tasks (the pill keeps the word). A new task
+lands in that side's Inbox note, appears in the list tinted for a few seconds and
+scrolls into view. Motion honours reduced motion. A source link
+opens the note in place; Escape
 closes the panel and returns focus to the button, and on a narrow screen the panel
 gives way to the note it opens. Keep rows scannable, text readable at narrow
 widths, and use existing control tokens and button/field systems.
@@ -537,7 +557,10 @@ text-free constellation with no card or box; it holds still under reduced
 motion. The full one-page layout is design-led (#1085) and follows once a design
 exists.
 
-The map legend includes a default-on **Tasks** toggle and the number of notes with
+The map shows only the note categories (People, Work, Personal, General). Notes in
+the vault root or in system folders such as `_agent-log` and `Templates` are left
+off the map altogether (stars, links, search matches and legend), so no grey stars
+remain. The legend lists the same categories. It includes a default-on **Tasks** toggle and the number of notes with
 open tasks on the map. Its accessible name gives that count as notes with open
 tasks. It changes marked stars to `--graph-tasks` and enlarges them; it never hides
 notes, and the folder filters continue to operate independently. Hover labels
@@ -1844,7 +1867,7 @@ new day. The P14-46 top cards below replace this block and keep its sources, dat
 rules and lower-bound wording. The older Overview blocks described further down in
 this file (the "What Daily holds today" collection list, its "About this data" notes
 and Refresh button, and the summary tiles) are removed; the Overview is now the
-period control and the three cards only (the period is the dropdown in the Training card header since P14-58).
+period control and the three cards only (the period is the dropdown at the end of the page title row since P14-58).
 
 20 October 2026 (P14-44 stable tiles): the Overview summary tiles and the Today
 cards keep their size from skeleton to values, so nothing below them moves while
@@ -1868,8 +1891,9 @@ reserve more height because their content wraps.
 
 20 October 2026 (P14-46 top cards): the Overview opens with three cards, in
 the composition of the original: Training, Health and Body, and the period (Today,
-Yesterday, 1 week, 2 weeks, 1 month; Today by default) is a dropdown in the Training card
-header that sets all three (changed in P14-58 from a row of pills above the cards). Nothing
+Yesterday, 1 week, 2 weeks, 1 month; Today by default) is a dropdown at the end of the page
+title row that sets all three (a row of pills above the cards until P14-58, then in the Training
+card header until the P14-58 follow-up moved it to the title row). Nothing
 else is on the
 page but the page name and the freshness pill: no collection list, no notes disclosure, no Refresh
 button and no summary tiles, so there is no text list on it. A card that has nothing
@@ -1882,7 +1906,7 @@ strip (time, name, kcal). Health holds Sleep, Protein and a cumulative protein
 line across the day with a dashed target line when a target is set; its title is a
 button with a turning chevron that opens the Health panel below the cards (the
 Training and Body titles stay links to their sections). Body holds Sessions,
-Calories and Duration, then Weight, Fat % and Lean mass as small
+Calories and Duration, then Weight, Fat % and Muscle mass as small
 sparklines over the last 90 days. A ring or tile has the same size in every state.
 Wording separates the cases: "Not recorded" means the source is served and holds
 nothing for the period and is shown as a quiet dash, as in the original, with the
@@ -1906,16 +1930,23 @@ for the Health area): Health follows the look of the original app, from the
 Health-scoped tokens in `daily/health-look.css` (declared on the Health shell, swapped
 for dark; the full list is in the P14-56 entry of docs/decisions.md). Page: a deep navy
 surface with a faint blue glow top left and a violet glow top right in dark, a pale
-tinted wash in light; the glow is a background only and never carries text. Header: the page's own name as the headline ("Overview", "Workouts" and so on; P14-58, at the owner's request, replacing the greeting), in the shared title size, with a small
-freshness pill, 12px text, aligned to the right, with a status dot (green when the newest
+tinted wash in light; the glow is a background only and never carries text. Header: the page's own name as the headline ("Overview", "Workouts" and so on; P14-58, at the owner's request, replacing the greeting), in the shared title size, on a row of its own. Above it, a status row holds the
+freshness pill, aligned to the right, as small muted 11px text with no outline until it is
+hovered, focused or open (a 1.5rem target, so it stays easy to press; the outline returns
+in high-contrast mode), with a status dot (green when the newest
 accepted upload is within 36 hours, amber when it is older, a failed read or there is
 none, grey while loading; the label always states the time or the problem) and an info
 button that opens a "Last sync" table with one row per source and "Not received" for a
 source without a time, above the existing upload facts. The pages of the area are not
 in the header: from P14-58 they are listed in the shell's navigation panel. The Overview
-period is a dropdown at the end of the Training card header (a native select named
+period is a dropdown at the end of the title row, level with the page name (a native select named
 "Overview period"), not a row of pills; it still drives all three cards, and it takes the
-`--health-edge` and `--health-tile` surface of the other Health fields. Health tabs and the
+`--health-edge` and `--health-tile` surface of the other Health fields. The title row keeps
+the height of a control, so the dropdown arriving never moves the page; the dropdown is a compact
+field (the shared 38px field height, 14px text, a fixed 7rem width so it does not resize with the
+choice) centred on the title row. The header is tight: the page's top padding is `--space-3`, the
+status row is only as tall as the pill, and the pill's icon lines up with the dropdown's right
+edge. Health tabs and the
 other period choices stay pills; the selected pill is filled,
 tinted and outlined, so selection never rests on colour alone. This is a deliberate
 Health-only exception to the shared control contract (`--radius-control` geometry and

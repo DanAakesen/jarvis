@@ -1,5 +1,24 @@
 # Decisions
 
+## Ticking a task proves the line is unchanged (22 October 2026; #1085, #1216)
+
+`PATCH /vault/tasks` compared only the visible text of the line, so a reordered file or a
+line whose date or priority changed between read and write could tick the wrong task
+without a conflict. Each task now carries an opaque `version` (SHA-256 of the exact raw
+line). The write requires it and answers 409, before anything is written, when the line
+no longer hashes to it; a missing or malformed version is a 400. Responses return the
+line's new version, which the web client reuses for Undo. Separately, the All task view
+names Personal or Work in words on each row, since two Inbox notes read the same and
+colour alone must not carry scope.
+
+## Notes map shows note categories only (22 October 2026; #1085)
+
+On the owner's request the Notes map lists and draws only the note categories (People,
+Work, Personal, General). Notes in the vault root or in system folders (`_agent-log`,
+`Templates`, anything else) are dropped in the browser when the graph loads: no stars,
+links, search matches or legend entries, with link counts and the Tasks count recomputed.
+The vault and the backend response are unchanged.
+
 ## Persistent Microsoft browser sign-in (22 October 2026; #1214)
 
 The owner requested one sign-in per device rather than repeated sign-in in new
@@ -266,6 +285,31 @@ rung that produces `session.updated` after deployment is the first real measurem
 the owner makes one English voice attempt and reads it from the logs
 ([runbook](runbook.md#voice-startup-diagnosis)).
 
+## Notes Tasks panel: tick to complete with Undo, quick add to Inbox (22 October 2026; #1085)
+
+On the owner's request the Tasks panel can complete tasks and add them. Ticking is
+optimistic: the row stays for about four seconds with an Undo pill, so there is no
+confirmation dialog, and a failed write rolls the tick back with a visible message. **+**
+opens one bordered add block (text, Personal / Work, optional date and time pickers; a time
+alone means today). New tasks go to
+`Personal/Inbox.md` or `Work/Inbox.md` instead of guessing a note. The backend gains
+owner-only `PATCH` and `POST /vault/tasks`; each write is SHA-checked, refuses a line that
+changed since it was read, and is one vault commit. This supersedes the read-only wording in
+the entry below and in earlier P13-19 notes for the panel; the chat and voice `vault_search`
+tool stays read-only. Shipping needs a backend deploy as well as a web deploy.
+
+## Notes Tasks panel: due-date list, Personal / Work switch, no refresh (22 October 2026; #1085)
+
+On the owner's request the Tasks panel on the Notes page lists open tasks by due date only.
+Completed tasks are not listed; they appear (under Done) only while a search is typed, so the
+panel asks for `state=open` and switches to `state=all` for a non-empty query. A three-way
+All / Personal / Work switch replaces the Completed toggle; All is the default so nothing is
+hidden without a choice, and the switch is full width with 44px targets on a phone. The split is
+made in the browser: Work is a `Work/` path, or, for the root task file, a heading starting with
+Work; everything else is Personal. The refresh icon, the read time and the priority star are
+removed; high priority is a small tinted "High" pill (word plus tint). Retry stays on the error
+state. No backend change.
+
 ## Bound voice startup and summarize every session (21 October 2026; #1177)
 
 Refs DanAakesen/jarvis#1153. Accepted upstream WebSockets were followed by no
@@ -328,6 +372,26 @@ cards: it is a dropdown (a native select named "Overview period") at the end of 
 card header. It is still one shared choice that drives the Training, Health and Body cards,
 so the Overview shows one period, and the Overview section still has no period control of its
 own above the cards.
+
+Second follow-up, 22 October 2026, on the owner's request: the Overview period dropdown moves
+from the Training card header to the end of the page title row, level with the page name, and
+the freshness pill moves to a status row above the title, aligned to the right, and gets much
+smaller (11px muted text, no outline until it is hovered, focused or open, a 1.5rem target,
+smaller dot and icon; the outline returns under `prefers-contrast: more`). The page owns an
+empty slot in the title row and publishes it through a React context; `TopCards` keeps the
+period state and portals its select into the slot, so the page stays ignorant of Overview
+internals, and a section mounted without a title row renders the select in place. The title
+row keeps the height of a control, so the dropdown arriving never moves the page. The
+Overview tile "Lean mass" is renamed "Muscle mass" (the internal key is unchanged); the
+Body & sleep metric label "Lean body mass" is left as it is until the owner asks for it.
+Same day, after review: the first pass left too much space above the status and title and the
+dropdown did not match the title row, and a second pass made the dropdown too big. The page's top
+padding is now `--space-3`, the status row is as tall as the pill (the wrapper is a flex box, so no
+extra line box), and the dropdown is a compact field: the shared 38px field height, 14px text
+(set through `--type-body` on the select, because the shared field rule sets the whole font
+shorthand with a specificity a class rule cannot beat) and a fixed 7rem `width` (the same rule also
+forces `min-width: 0`), centred on the title row. The pill's right margin is slightly negative so
+its icon, not its padding, lines up with the dropdown's edge.
 
 ## P14-55 — Training targets have one shared read (20 October 2026; #1116, #1155)
 

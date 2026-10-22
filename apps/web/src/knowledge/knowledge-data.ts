@@ -23,6 +23,27 @@ export interface KnowledgeGraph {
 export interface KnowledgeNote { id: string; title: string; folder: string; content: string; updatedAt: string | null; githubUrl: string | null }
 
 export const knowledgeFolders: readonly KnowledgeFolder[] = ['People', 'Work', 'Personal', 'General'];
+
+/** The Notes map shows only the note categories: the vault root, `_agent-log`, `Templates` and any other folder are left out, with their links. */
+export function categoryGraph(graph: KnowledgeGraph): KnowledgeGraph {
+  const kept = new Set(graph.nodes.filter((node) => knowledgeFolders.includes(node.folder)).map((node) => node.id));
+  if (kept.size === graph.nodes.length) return graph;
+  const edges = graph.edges.filter((edge) => kept.has(edge.source) && kept.has(edge.target));
+  const lost = new Map<string, number>();
+  for (const edge of graph.edges) {
+    if (kept.has(edge.source) && kept.has(edge.target)) continue;
+    for (const id of [edge.source, edge.target]) if (kept.has(id)) lost.set(id, (lost.get(id) ?? 0) + 1);
+  }
+  const nodes = graph.nodes.filter((node) => kept.has(node.id))
+    .map((node) => ({ ...node, degree: Math.max(0, node.degree - (lost.get(node.id) ?? 0)) }));
+  const exactCounts = graph.nodes.every((node) => node.openTaskCount !== undefined);
+  const { openTaskNoteCount: total, ...rest } = graph;
+  return {
+    ...rest, nodes, edges,
+    ...(exactCounts ? { openTaskNoteCount: nodes.filter((node) => (node.openTaskCount ?? 0) > 0).length }
+      : total === undefined ? {} : { taskCountsPartial: true }),
+  };
+}
 export function connectedNotes(graph: KnowledgeGraph | null, id: string | null): KnowledgeNode[] {
   if (!graph || !id) return [];
   const nodes = new Map(graph.nodes.map(node => [node.id, node]));

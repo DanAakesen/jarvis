@@ -10,7 +10,7 @@ import type { OverviewWindow } from './overview-window';
 const trends: readonly { key: BodyMetricKey; label: string }[] = [
   { key: 'weight', label: 'Weight' },
   { key: 'fatPercent', label: 'Fat %' },
-  { key: 'leanMass', label: 'Lean mass' },
+  { key: 'leanMass', label: 'Muscle mass' },
 ];
 
 /** A measurement trend. A name the catalogue does not serve is not queried and reads as not recorded. */
