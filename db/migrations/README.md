@@ -79,3 +79,13 @@ as `processing`, with the existing attempt deadline serving as a restart-safe
 claim lease. The down batch refuses to run while any claimed row remains in that
 state; disable the worker and let each claim complete or expire before rollback.
 Pending/quarantined evidence and processed records remain intact.
+
+`0064_owner_sessions.sql` adds `dbo.owner_sessions` for the optional 10-day owner
+session (#1217). Rows hold a SHA-256 hash of the session secret, never the
+secret, and the owner's object id, display name, optional device label and the
+creation, last-use, idle-expiry, absolute-expiry and revoked-at times. The table
+is read and written only when `JARVIS_OWNER_SESSION_ENABLED` is exactly `true`;
+with the switch off it stays empty and unused. Its down batch drops the table.
+Sessions are revocable credentials, not evidence, so dropping them is the same
+as revoking every session: the owner signs in again. Deploy the migration before
+the backend revision that reads or writes the table.

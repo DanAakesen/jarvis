@@ -5,9 +5,11 @@ import multipart from '@fastify/multipart';
 import type { Logger } from 'pino';
 import type { SystemSmokeCheckId } from '@jarvis/contracts';
 import type { BackgroundJobEvent, JarvisActivityEvent, JarvisVoiceWakeEvent } from '@jarvis/contracts';
-import { localWebOrigin, type BackendConfig } from './config.js';
+import { ConfigurationError, localWebOrigin, type BackendConfig } from './config.js';
 import { createLogger, safeErrorFields } from './logging.js';
 import { installAuthentication } from './auth/hook.js';
+import { registerOwnerSessionRoutes } from './auth/session/routes.js';
+import type { OwnerSessionService } from './auth/session/service.js';
 import type { TokenVerifier } from './auth/verify.js';
 import { coreModule } from './core/index.js';
 import { createEventHub } from './core/event-hub.js';
@@ -70,6 +72,8 @@ export interface BuildAppOptions {
   readonly nutritionExportAuth?: import('./daily/nutrition-export/auth.js').NutritionExportCredentialVerifier;
   /** Default-off health upload composition; production supplies it only behind JARVIS_HEALTH_UPLOAD_ENABLED. */
   readonly healthUpload?: HealthUploadOptions;
+  /** Owner session service; production supplies it only behind JARVIS_OWNER_SESSION_ENABLED. Ignored while the switch is off. */
+  readonly ownerSessions?: OwnerSessionService;
   readonly healthProcessor?: Pick<SqlHealthProcessor, 'processNext'>;
   readonly healthCapabilities?: SqlHealthCapabilities;
   readonly modules?: readonly BackendModule[];
@@ -230,7 +234,11 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
   });
   // Authenticate before CORS can finish OPTIONS requests in its onRequest hook.
   if (options.healthUpload?.buffer && options.healthUpload.buffer.owner !== ownerId(config.auth.ownerObjectId)) throw new Error('Health upload owner mismatch');
-  installAuthentication(app, config, options.auth, options.nutritionExportAuth, options.healthUpload?.enabled === true);
+  if (config.ownerSessionEnabled && !options.ownerSessions) {
+    throw new ConfigurationError('JARVIS_OWNER_SESSION_ENABLED requires the owner session service');
+  }
+  const ownerSessions = config.ownerSessionEnabled ? options.ownerSessions : undefined;
+  installAuthentication(app, config, options.auth, options.nutritionExportAuth, options.healthUpload?.enabled === true, ownerSessions);
   app.decorate('ownerObjectId', config.auth.ownerObjectId);
   app.decorate('awayModeStore', options.awayModeStore ?? null);
   app.register(cors, {
@@ -433,6 +441,8 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
     ]),wakeProcessing: () => worker?.wake() });
     if (options.healthCapabilities) app.register(registerHealthCapabilityRoutes,options.healthCapabilities);
   }
+  // With the switch off these routes are not registered at all, so the paths answer 404.
+  if (ownerSessions) app.register(registerOwnerSessionRoutes, { service: ownerSessions });
   registerModules(app, options.modules ?? [
     coreModule,
     conversationModule,

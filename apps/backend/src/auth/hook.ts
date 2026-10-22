@@ -11,6 +11,10 @@ import {
   type AgentPrincipal, type DeployPrincipal, type PcBridgePrincipal, type PhoneEventGridPrincipal, type RunnerPrincipal,
   type TokenVerifier, type UserPrincipal,
 } from './verify.js';
+import { auditOwnerSessionRefreshFailed, auditOwnerSessionRejected } from './session/audit.js';
+import { ownerSessionPolicy } from './session/config.js';
+import { OwnerSessionUnavailable, type OwnerSessionContext, type OwnerSessionVerifier } from './session/service.js';
+import { ownerSessionTokenPrefix } from './session/token.js';
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -21,6 +25,8 @@ declare module 'fastify' {
     phoneEventGridPrincipal: PhoneEventGridPrincipal | null;
     deployPrincipal: DeployPrincipal | null;
     dailyConnectorPrincipal: DailyConnectorPrincipal | null;
+    // Set only when the request authenticated with an owner session token instead of an Entra token.
+    ownerSession: OwnerSessionContext | null;
   }
   // Service identities may call only the routes that explicitly opt in.
   interface FastifyContextConfig {
@@ -57,7 +63,7 @@ function voiceWebsocketToken(request: FastifyRequest): string | undefined {
   return token && /^[\w-]+\.[\w-]+\.[\w-]+$/u.test(token) ? token : undefined;
 }
 
-export function installAuthentication<Logger extends FastifyBaseLogger>(app: FastifyInstance<Server, IncomingMessage, ServerResponse, Logger>, config: BackendConfig, verify: TokenVerifier = createTokenVerifier(config.auth), exportDeviceVerifier?: NutritionExportCredentialVerifier, healthUploadEnabled = false) {
+export function installAuthentication<Logger extends FastifyBaseLogger>(app: FastifyInstance<Server, IncomingMessage, ServerResponse, Logger>, config: BackendConfig, verify: TokenVerifier = createTokenVerifier(config.auth), exportDeviceVerifier?: NutritionExportCredentialVerifier, healthUploadEnabled = false, ownerSessions?: OwnerSessionVerifier) {
   app.decorateRequest('principal', null);
   app.decorateRequest('agentPrincipal', null);
   app.decorateRequest('runnerPrincipal', null);
@@ -66,6 +72,23 @@ export function installAuthentication<Logger extends FastifyBaseLogger>(app: Fas
   app.decorateRequest('deployPrincipal', null);
   app.decorateRequest('dailyConnectorPrincipal', null);
   app.decorateRequest('nutritionExportPrincipal', null);
+  app.decorateRequest('ownerSession', null);
+  // Owner session tokens carry the `js.` prefix, which no Entra or service token has. With the feature switch
+  // off no verifier is installed, so such a token is refused like any other invalid one.
+  const verifyOwnerSession = async (request: FastifyRequest, token: string): Promise<UserPrincipal> => {
+    if (!ownerSessions) {
+      auditOwnerSessionRejected(request, 'disabled', { statusCode: 401 });
+      throw new AuthenticationDenied(401);
+    }
+    const verdict = await ownerSessions.verify(token);
+    if (!verdict.ok) {
+      auditOwnerSessionRejected(request, verdict.reason, { statusCode: 401, sessionPrefix: verdict.prefix });
+      throw new AuthenticationDenied(401);
+    }
+    if (verdict.refresh === 'failed') auditOwnerSessionRefreshFailed(request, verdict.session.prefix);
+    request.ownerSession = verdict.session;
+    return verdict.principal;
+  };
   app.addHook('onRequest', async (request, reply) => {
     if (request.routeOptions.url === '/health' && ['GET', 'HEAD'].includes(request.method)) return;
     if (request.routeOptions.config?.jarvisDailyMcpMetadata === true &&
@@ -103,7 +126,7 @@ export function installAuthentication<Logger extends FastifyBaseLogger>(app: Fas
       if (duplicate) reason = 'duplicate_authorization';
       else if (!token) reason = header === undefined ? 'missing_token' : 'malformed_authorization';
       if (duplicate || !token) throw new AuthenticationDenied(401);
-      const principal = await verify(token);
+      const principal = token.startsWith(ownerSessionTokenPrefix) ? await verifyOwnerSession(request, token) : await verify(token);
       reason = 'principal_not_allowed_on_route';
       if (isDailyConnectorPrincipal(principal)) {
         if (request.routeOptions.config?.jarvisDailyMcp !== true || request.routeOptions.url !== dailyMcpPath ||
@@ -134,12 +157,16 @@ export function installAuthentication<Logger extends FastifyBaseLogger>(app: Fas
         if (request.routeOptions.config?.jarvisRunner === true ||
             request.routeOptions.config?.jarvisPcBridge === true ||
             request.routeOptions.config?.jarvisPhoneEvents === true) throw new AuthenticationDenied(403);
+        // The deploy smoke route exists for the deployment identity. An owner session never satisfies it.
+        if (request.ownerSession !== null && request.routeOptions.config?.jarvisDeploySmoke === true) throw new AuthenticationDenied(403);
         request.principal = principal;
       }
     } catch (error) {
-      const statusCode = error instanceof AuthenticationDenied ? error.statusCode : 401;
+      const unavailable = error instanceof OwnerSessionUnavailable;
+      const statusCode = unavailable ? 503 : error instanceof AuthenticationDenied ? error.statusCode : 401;
       const path = (request.raw.url ?? '').split('?')[0]?.slice(0, 200);
-      request.log.warn({ statusCode, reason, method: request.method, route: path }, 'request.auth_denied');
+      if (unavailable) auditOwnerSessionRejected(request, 'store_unavailable', { statusCode });
+      else request.log.warn({ statusCode, reason, method: request.method, route: path }, 'request.auth_denied');
       // Denials precede the CORS hook; let the approved browser read 401/403.
       if (origin === localWebOrigin || (config.staticWebAppOrigin !== undefined && origin === config.staticWebAppOrigin)) {
         reply.header('Access-Control-Allow-Origin', origin).header('Vary', 'Origin');
@@ -148,6 +175,11 @@ export function installAuthentication<Logger extends FastifyBaseLogger>(app: Fas
         const metadata = request.routeOptions.config?.jarvisDailyMcp === true && request.routeOptions.url === dailyMcpPath
           ? request.routeOptions.config.jarvisDailyMcpMetadataUrl : undefined;
         reply.header('WWW-Authenticate', metadata ? `Bearer resource_metadata="${metadata}"` : 'Bearer');
+      }
+      if (unavailable) {
+        // The session store could not be read. Tell the client to retry instead of treating it as a sign-out.
+        reply.header('Retry-After', String(ownerSessionPolicy.unavailableRetryAfterSeconds));
+        return reply.code(503).send({ error: 'Service unavailable' });
       }
       return reply.code(statusCode).send({ error: statusCode === 401 ? 'Unauthorized' : 'Forbidden' });
     }

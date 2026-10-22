@@ -1,5 +1,73 @@
 # Decisions
 
+## Opaque owner session for a 10-day sign-in (22 October 2026; #1217)
+
+The owner asked to stop signing in many times a day on web, phone and localhost.
+Microsoft caps refresh tokens for a browser app at 24 hours (#1214 keeps what it
+allows), so the backend can now exchange one Entra sign-in for its own revocable
+session. This is the backend half. It ships behind `JARVIS_OWNER_SESSION_ENABLED`,
+default off, which also works as a kill switch; the web half is a separate change.
+
+Decided:
+
+- **An opaque server-side token in the `Authorization` header, not a cookie and
+  not a JWT.** The static web app and the API are cross-site origins, so
+  third-party cookie blocking (Safari and iOS today, Chrome later) would break a
+  cookie, and CORS allows only two origins. A self-contained signed JWT could not
+  be revoked. The token is `js.`, a 128-bit session id and a 256-bit secret,
+  base64url encoded; the server stores only the SHA-256 of the secret. The three
+  dot-separated segments let the voice WebSocket subprotocol parser accept it
+  unchanged, and the prefix cannot be mistaken for an Entra token, which starts
+  with `eyJ`.
+- **Lifetimes.** 10 days idle, extended on use at most once an hour so a request
+  does not write every time; a 30-day absolute cap, so a forgotten or stolen
+  session cannot live for ever; at most 10 active sessions per owner, where one
+  more revokes the least recently used. A session cannot create sessions, or the
+  cap would mean nothing.
+- **Owner only, never a service identity.** A session yields the same plain owner
+  principal as an Entra owner token and never satisfies a service route. It is
+  also refused on `GET /status/smoke`: that route exists for the deployment
+  identity, the web app does not call it, and an Entra owner token is still
+  accepted there. To allow sessions there later, remove the one line in
+  `auth/hook.ts` that refuses them.
+- **No positive cache.** Every request with a session token reads one row, so a
+  revocation applies from the next request and there is no lag to document. If
+  measured load ever needs a cache, cap it at 60 seconds and invalidate it on
+  revoke in the same process.
+- **Fail closed, without signing the owner out.** Every rejection is the same 401
+  with no reason in the response; the log carries a reason category and the first
+  eight characters of the token. A store outage is a 503 with `Retry-After`, so a
+  client keeps a good session and retries, and it is never an allow. With the
+  switch off the hook has no verifier, so even a row still in the table is a 401.
+- **Contract and limiter.** The response shape stays in the backend; nothing is
+  added to `packages/contracts` until the web half consumes it. The creation
+  limit (5 per minute, 30 per hour) is in process, so it is per replica; it
+  guards against a runaway client and is not the security boundary.
+- **Rollback.** The down script drops `dbo.owner_sessions`. That is the same as
+  revoking every session, so it is safe: the owner signs in again.
+
+Tradeoffs accepted:
+
+- The web client will keep the token in `localStorage`, where script can read it
+  if XSS ever happens. The existing Content Security Policy, the owner-only scope,
+  the 30-day cap and revocation (one session or all) limit that.
+- A disabled Microsoft account keeps working until its session expires or is
+  revoked, because verification does not call Microsoft. The switch and
+  revoke-all are the controls.
+- iOS Safari can purge script-writable storage after 7 days without interaction,
+  while an installed Home Screen app is counted separately. A purged device
+  simply signs in again.
+- The session secret is forwarded to the hosted chat agent as the delegated
+  authorization, as an Entra token is, so the agent can verify the owner through
+  `/me` and the stored conversation. It is as sensitive as an Entra token for the
+  same period and stays out of logs and errors.
+- Browser code cannot read `Retry-After` from a 429 or 503 because CORS does not
+  expose it; the web half should back off on its own. Exposing the header would
+  be a CORS change, which this slice excludes.
+
+Not verified here: live sign-in, the web client, real devices and production
+enablement. The SQL Server integration tests run in CI.
+
 ## One owner identity across chat and voice (22 October 2026; #1210)
 
 Use one versioned identity contract and owner-editable `identity.description`

@@ -78,9 +78,14 @@ export function safeErrorFields(error: unknown): { kind: string; statusCode?: nu
   };
 }
 
+const ownerSessionEvents = new Set([
+  'owner_session.created', 'owner_session.revoked', 'owner_session.rejected', 'owner_session.refresh_failed',
+]);
+
 const events = new Set([
   ...failureEvents,
   'request.started', 'request.completed', 'request.origin_denied', 'request.auth_denied',
+  ...ownerSessionEvents,
   'server.listening', 'server.stopping', 'server.stopped', 'server.failed',
   'database.ready', 'database.not_configured',
   'telemetry.stdout_only', 'telemetry.export_failed',
@@ -111,6 +116,11 @@ export function isRegisteredLogEvent(event: string): boolean {
 // Headers, bodies, URLs, query strings, arbitrary messages and errors are discarded.
 const authDenialReasons = new Set([
   'missing_token', 'malformed_authorization', 'duplicate_authorization', 'invalid_token', 'principal_not_allowed_on_route',
+]);
+// Why an owner session request was refused; mirrors ownerSessionAuditReasons in auth/session/audit.ts.
+const ownerSessionReasons = new Set([
+  'disabled', 'malformed', 'unknown_session', 'secret_mismatch', 'revoked', 'idle_expired', 'absolute_expired',
+  'owner_mismatch', 'store_unavailable', 'rate_limited', 'forbidden',
 ]);
 const heartbeatDecisions = new Set([
   'queued', 'running', 'completed', 'crashed', 'idle_expired', 'needs_attention',
@@ -402,6 +412,27 @@ function safeFields(input: Record<string, unknown>): Record<string, unknown> {
     }
     if (typeof input.durationMs === 'number' && Number.isFinite(input.durationMs) &&
         input.durationMs >= 0 && input.durationMs <= 180_000) fields.durationMs = input.durationMs;
+    return fields;
+  }
+  if (typeof input.msg === 'string' && ownerSessionEvents.has(input.msg)) {
+    // Audit events carry a reason category and an 8-character session id prefix, never a token, secret or hash.
+    const fields: Record<string, unknown> = {};
+    const smallCount = (value: unknown): value is number =>
+      typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= 100;
+    if (safeRequestId(input.reqId)) fields.reqId = input.reqId;
+    if (typeof input.method === 'string' && /^(GET|HEAD|POST|PUT|PATCH|DELETE|OPTIONS)$/u.test(input.method)) {
+      fields.method = input.method;
+    }
+    if (typeof input.route === 'string' && /^\/[\w/:-]{0,100}$/u.test(input.route)) fields.route = input.route;
+    if (typeof input.reason === 'string' && ownerSessionReasons.has(input.reason)) fields.reason = input.reason;
+    if (typeof input.sessionPrefix === 'string' && /^[\w-]{8}$/u.test(input.sessionPrefix)) {
+      fields.sessionPrefix = input.sessionPrefix;
+    }
+    if (input.scope === 'current' || input.scope === 'all') fields.scope = input.scope;
+    if (smallCount(input.count)) fields.count = input.count;
+    if (smallCount(input.evicted)) fields.evicted = input.evicted;
+    if (typeof input.statusCode === 'number' && Number.isInteger(input.statusCode) &&
+        input.statusCode >= 100 && input.statusCode <= 599) fields.statusCode = input.statusCode;
     return fields;
   }
   if (typeof input.msg === 'string' && failureEvents.has(input.msg)) {

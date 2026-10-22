@@ -39,6 +39,9 @@ import { createProjectPolicyEvaluator } from '../github/project-policy.js';
 import type { GitHubAppTokenIssuer } from '../github-app.js';
 import { createProjectPolicyStore } from './project-policy-store.js';
 import { createPcBridgeStatusStore } from './pc-bridge-status-store.js';
+import { createOwnerSessionStore } from './owner-session-store.js';
+import type { OwnerSessionRecord } from '../auth/session/store.js';
+import { generateOwnerSessionCredential } from '../auth/session/token.js';
 
 const configuration = loadDatabaseConfig();
 if (!configuration || process.env.NODE_ENV !== 'test' || configuration.server !== '127.0.0.1') {
@@ -53,7 +56,7 @@ const tablesInSchema = [
   'activity', 'artifacts', 'background_job_dismissals', 'background_job_steps', 'background_jobs', 'conversation_attachments',
   'conversation_summaries', 'credential_status', 'deployment_failure_receipts', 'deployments', 'factory_task_submissions',
   'folio_items', 'github_app_mint_status', 'jarvis_sessions',
-  'memories', 'memory_deletions', 'memory_history', 'messages', 'phone_sessions', 'proactive_alerts', 'proactive_items',
+  'memories', 'memory_deletions', 'memory_history', 'messages', 'owner_sessions', 'phone_sessions', 'proactive_alerts', 'proactive_items',
   'proactive_reminders', 'proactive_runs', 'proactive_settings', 'proactive_source_status', 'proactive_spend', 'proactive_todo_receipts', 'projects',
   'pull_requests', 'push_subscriptions', 'push_vapid_keys', 'releases',
   'sandbox_sessions', 'sandbox_turns', 'settings', 'task_event_archives', 'task_events', 'task_status_notifications',
@@ -2590,6 +2593,121 @@ describe('committed domain schema (groups 1-8)', () => {
     expect(dropped.recordset[0]?.id).toBeNull();
     expect(await applyMigrations(rollbackPool, committed)).toEqual([down.name, ...newer.map((migration) => migration.name)]);
     const restored = await rollbackPool.request().query<{ count: number }>('SELECT COUNT(*) AS count FROM dbo.conversation_summaries');
+    expect(restored.recordset[0]?.count).toBe(0);
+  }));
+
+  it('stores owner sessions, enforces the active limit under concurrency, purges only dead rows of one owner, and reverts the table (0064)', () => withRollbackDatabase(async (rollbackPool, committed) => {
+    const store = createOwnerSessionStore(rollbackPool);
+    const owner = randomUUID();
+    const otherOwner = randomUUID();
+    const racer = randomUUID();
+    const purgeOwner = randomUUID();
+    const bystander = randomUUID();
+    const base = Date.parse('2026-10-22T12:00:00.000Z');
+    const minute = 60_000;
+    const day = 24 * 60 * minute;
+    const at = (offset: number) => new Date(base + offset);
+    const session = (overrides: Partial<OwnerSessionRecord> = {}): OwnerSessionRecord => {
+      const credential = generateOwnerSessionCredential();
+      return {
+        sessionId: credential.sessionId, secretHash: credential.secretHash, ownerObjectId: owner, displayName: 'Test Owner',
+        deviceLabel: null, createdAt: at(0), lastUsedAt: at(0), idleExpiresAt: at(10 * day), absoluteExpiresAt: at(30 * day),
+        revokedAt: null, ...overrides,
+      };
+    };
+    const create = (record: OwnerSessionRecord, maxActive = 10, purgeBefore = new Date(record.createdAt.getTime() - 30 * day)) =>
+      store.create({ record, maxActive, purgeBefore });
+    const unrevoked = async (ownerObjectId: string) => {
+      const { recordset } = await rollbackPool.request().input('owner', sql.UniqueIdentifier, ownerObjectId)
+        .query<{ count: number }>('SELECT COUNT(*) AS count FROM dbo.owner_sessions WHERE owner_object_id = @owner AND revoked_at IS NULL');
+      return recordset[0]?.count;
+    };
+    const revokedAt = async (record: OwnerSessionRecord) => (await store.find(record.sessionId))?.revokedAt;
+    const touch = (record: OwnerSessionRecord, now: number, staleBefore = now) =>
+      store.touch({ sessionId: record.sessionId, now: at(now), idleExpiresAt: at(now + 10 * day), staleBefore: at(staleBefore) });
+
+    // A row round-trips with its binary values, Unicode text and a lower-case owner id.
+    const first = session({ deviceLabel: 'Café laptop' });
+    await expect(create(first)).resolves.toEqual({ evicted: 0 });
+    await expect(store.find(first.sessionId)).resolves.toEqual(first);
+    await expect(store.find(session().sessionId)).resolves.toBeNull();
+
+    await expect(create(session({ displayName: '' }))).rejects.toThrow('CK_owner_sessions_display_name');
+    await expect(create(session({ deviceLabel: '' }))).rejects.toThrow('CK_owner_sessions_device_label');
+    await expect(create(session({ idleExpiresAt: at(31 * day) }))).rejects.toThrow('CK_owner_sessions_lifetime');
+    await expect(create(session({ idleExpiresAt: at(0), absoluteExpiresAt: at(0) }))).rejects.toThrow('CK_owner_sessions_lifetime');
+    await expect(create(first)).rejects.toThrow('PK_owner_sessions');
+    expect(await unrevoked(owner)).toBe(1);
+
+    // A session past its idle expiry is never extended.
+    const lapsed = session({ idleExpiresAt: at(10 * minute) });
+    await create(lapsed);
+    await expect(touch(lapsed, 11 * minute)).resolves.toBe(false);
+    expect((await store.find(lapsed.sessionId))?.idleExpiresAt).toEqual(at(10 * minute));
+
+    // The least recently used session is revoked once the limit is reached.
+    const other = (minutes: number) => session({ ownerObjectId: otherOwner, createdAt: at(minutes * minute), lastUsedAt: at(minutes * minute) });
+    const [b1, b2, b3, b4] = [other(1), other(2), other(3), other(5)];
+    await expect(create(b1, 3)).resolves.toEqual({ evicted: 0 });
+    await expect(create(b2, 3)).resolves.toEqual({ evicted: 0 });
+    // A create that fails on insert must roll back the eviction that ran before it.
+    await expect(create({ ...other(4), sessionId: b1.sessionId }, 2)).rejects.toThrow('PK_owner_sessions');
+    expect(await revokedAt(b1)).toBeNull();
+    await expect(create(b3, 3)).resolves.toEqual({ evicted: 0 });
+    await expect(touch(b1, 4 * minute)).resolves.toBe(true);
+    await expect(create(b4, 3)).resolves.toEqual({ evicted: 1 });
+    expect(await revokedAt(b2)).toEqual(at(5 * minute));
+    for (const kept of [b1, b3, b4]) expect(await revokedAt(kept)).toBeNull();
+    expect(await revokedAt(first)).toBeNull();
+
+    // A refresh is written once, and never revives a revoked session.
+    await expect(touch(b3, 6 * minute, minute)).resolves.toBe(false);
+    await expect(touch(b2, 6 * minute)).resolves.toBe(false);
+    expect(await store.find(b2.sessionId)).toMatchObject({ revokedAt: at(5 * minute), lastUsedAt: at(2 * minute) });
+
+    // Revocation is scoped to the owner, applies once, and revoke-all counts only active sessions.
+    await expect(store.revoke(otherOwner, first.sessionId, at(7 * minute))).resolves.toBe(false);
+    expect(await revokedAt(first)).toBeNull();
+    await expect(store.revoke(otherOwner, b3.sessionId, at(7 * minute))).resolves.toBe(true);
+    await expect(store.revoke(otherOwner, b3.sessionId, at(8 * minute))).resolves.toBe(false);
+    await expect(store.revokeAll(otherOwner, at(9 * minute))).resolves.toBe(2);
+    expect(await revokedAt(b2)).toEqual(at(5 * minute));
+    expect(await revokedAt(b3)).toEqual(at(7 * minute));
+    expect(await revokedAt(b1)).toEqual(at(9 * minute));
+    await expect(store.revokeAll(otherOwner, at(10 * minute))).resolves.toBe(0);
+    await expect(store.revokeAll(owner, at(11 * minute))).resolves.toBe(1);
+
+    // Concurrent creates are serialised, so the active count never exceeds the limit.
+    const results = await Promise.all(Array.from({ length: 6 }, () => create(session({ ownerObjectId: racer }), 3)));
+    expect(results.reduce((sum, result) => sum + result.evicted, 0)).toBe(3);
+    expect(await unrevoked(racer)).toBe(3);
+
+    // A create purges only dead rows of its own owner.
+    const gone = (overrides: Partial<OwnerSessionRecord>) => session({
+      createdAt: at(-60 * day), lastUsedAt: at(-60 * day), idleExpiresAt: at(-50 * day), absoluteExpiresAt: at(-30 * day), ...overrides,
+    });
+    const dead = gone({ ownerObjectId: purgeOwner });
+    const foreign = gone({ ownerObjectId: bystander });
+    const revokedLongAgo = session({
+      ownerObjectId: purgeOwner, createdAt: at(-40 * day), lastUsedAt: at(-40 * day), idleExpiresAt: at(5 * day), absoluteExpiresAt: at(20 * day),
+    });
+    const recentlyRevoked = session({ ownerObjectId: purgeOwner, createdAt: at(-5 * day), lastUsedAt: at(-5 * day) });
+    for (const record of [dead, foreign, revokedLongAgo, recentlyRevoked]) await create(record, 10, at(-1000 * day));
+    await expect(store.revoke(purgeOwner, revokedLongAgo.sessionId, at(-35 * day))).resolves.toBe(true);
+    await expect(store.revoke(purgeOwner, recentlyRevoked.sessionId, at(-1 * day))).resolves.toBe(true);
+    await create(session({ ownerObjectId: purgeOwner }));
+    await expect(store.find(dead.sessionId)).resolves.toBeNull();
+    await expect(store.find(revokedLongAgo.sessionId)).resolves.toBeNull();
+    await expect(store.find(recentlyRevoked.sessionId)).resolves.not.toBeNull();
+    await expect(store.find(foreign.sessionId)).resolves.not.toBeNull();
+
+    const down = await readDownMigration('0064_owner_sessions.sql');
+    const newer = await revertNewerThan(rollbackPool, committed, down.name);
+    expect(await revertMigration(rollbackPool, committed, down)).toBe(down.name);
+    const dropped = await rollbackPool.request().query<{ id: number | null }>("SELECT OBJECT_ID(N'dbo.owner_sessions', N'U') AS id");
+    expect(dropped.recordset[0]?.id).toBeNull();
+    expect(await applyMigrations(rollbackPool, committed)).toEqual([down.name, ...newer.map((migration) => migration.name)]);
+    const restored = await rollbackPool.request().query<{ count: number }>('SELECT COUNT(*) AS count FROM dbo.owner_sessions');
     expect(restored.recordset[0]?.count).toBe(0);
   }));
 

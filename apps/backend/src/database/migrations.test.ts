@@ -62,6 +62,23 @@ describe('committed SQL manifest', () => {
     expect(down.sql).toContain('SET github_app_scope_key = NULL, recovered_at = NULL');
     expect(down.sql).not.toMatch(/\bDELETE\b/iu);
   });
+  it('stores owner sessions as hashed credentials with bounded text and consistent lifetimes', async () => {
+    const migration = (await readMigrations()).find(({ name }) => name === '0064_owner_sessions.sql');
+    expect(migration?.sql).toContain('CREATE TABLE dbo.owner_sessions');
+    expect(migration?.sql).toContain('session_id binary(16) NOT NULL');
+    expect(migration?.sql).toContain('CONSTRAINT PK_owner_sessions PRIMARY KEY');
+    expect(migration?.sql).toContain('secret_hash binary(32) NOT NULL');
+    expect(migration?.sql).toContain('owner_object_id uniqueidentifier NOT NULL');
+    expect(migration?.sql).toContain('revoked_at datetime2(3) NULL');
+    expect(migration?.sql).toContain('CK_owner_sessions_display_name CHECK (LEN(display_name) BETWEEN 1 AND 200)');
+    expect(migration?.sql).toContain('CK_owner_sessions_device_label CHECK (device_label IS NULL OR LEN(device_label) BETWEEN 1 AND 40)');
+    expect(migration?.sql).toContain('idle_expires_at <= absolute_expires_at');
+    expect(migration?.sql).toContain('IX_owner_sessions_owner_last_used');
+    expect(migration?.sql).not.toMatch(/\bsecret\b/iu);
+    expect(migration?.sql).not.toMatch(/\b(?:INSERT|UPDATE|DELETE)\b/u);
+    const down = await readDownMigration('0064_owner_sessions.sql');
+    expect(down.sql.trim()).toBe('DROP TABLE dbo.owner_sessions;');
+  });
   it('adds the proactive operational schema and a reversible proactive job kind', async () => {
     const foundation = (await readMigrations()).find(({ name }) => name === '0055_proactive_foundation.sql');
     expect(foundation?.sql).toContain("CHECK (kind IN (N'test', N'finding'))");
@@ -286,6 +303,7 @@ describe('committed SQL manifest', () => {
       '0061_daily_training_targets.sql',
       '0062_github_app_mint_recovery.sql',
       '0063_proactive_suggestion_preferences.sql',
+      '0064_owner_sessions.sql',
     ]);
     for (const migration of migrations) await expect(readDownMigration(migration.name)).resolves.toMatchObject({ name: migration.name });
   });

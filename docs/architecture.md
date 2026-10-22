@@ -2139,6 +2139,77 @@ socket duplicate headers, `/me` authorization and stalled-provider tests
 establish this offline boundary. No deployed Entra token was obtained; live
 browser sign-in and deployment verification remain #11.
 
+#### Owner session (#1217; optional, default off)
+
+After one Entra sign-in the owner can exchange the Entra access token for a
+revocable Jarvis session, so a device stays signed in for 10 days of normal use
+without depending on Microsoft token lifetimes. This is the backend half; the
+browser half is a separate change. `JARVIS_OWNER_SESSION_ENABLED` (exactly
+`true` or `false`, default `false`; any other value stops startup) controls it
+and doubles as a kill switch. Session verification reads SQL, so the switch on
+without SQL settings also stops startup instead of silently refusing sessions.
+
+- **Token.** `js.` plus a 128-bit session id and a 256-bit secret, both random
+  and base64url encoded (22 and 43 characters). The three dot-separated
+  segments keep it acceptable to the voice WebSocket subprotocol parser, and an
+  Entra token always starts with `eyJ`, so the prefix selects the verification
+  path without ambiguity. It is an opaque server-side token rather than a cookie
+  (the static web app and API origins are cross-site, so third-party cookie
+  blocking would break it, and CORS allows only two origins) or a signed JWT
+  (it could not be revoked).
+- **Storage.** `dbo.owner_sessions` (migration 0064; see the
+  [data model](data-model.md)) holds the session id, the SHA-256 of the secret
+  (never the secret), the owner's object id and display name, an optional
+  device label, and the created, last-used, idle-expiry, absolute-expiry and
+  revoked-at times. `database/owner-session-store.ts` uses parameterised
+  statements only. Creating a session takes a per-owner application lock, so
+  concurrent creates cannot exceed the active limit.
+- **Lifetimes.** `auth/session/config.ts` holds every number: 10 days idle,
+  extended on use at most once an hour so a request does not write every time;
+  a 30-day absolute cap that use never extends; at most 10 active sessions per
+  owner, where creating one more revokes the least recently used. Revoked and
+  expired rows stay 30 days for diagnosis and are purged by that owner's next
+  create. An injected clock drives every expiry decision.
+- **Verification** runs in `installAuthentication`, in the same request path as
+  Entra tokens: one `Authorization` header with the same 16 KiB limit, no token
+  from a query string or cookie, and the voice WebSocket `jarvis.auth`
+  subprotocol checked before the upgrade. A `js.` token is looked up by session
+  id (a dummy comparison runs for an unknown id), its secret hash is compared
+  with `timingSafeEqual`, and then the session must not be revoked, past the
+  absolute cap or past the idle expiry, and the stored owner must be the
+  configured owner. Every failure is the same 401 as an invalid Entra token,
+  with the reason category only in the log. A store failure during verification
+  is a 503 with `Retry-After`: never a 401, which would make a client drop a
+  good session, and never an allow. There is no positive cache, so a revocation
+  applies from the next request. With the switch off the hook has no verifier
+  and answers every `js.` token with 401, even for a row still in the table.
+- **Principal.** A session yields the same plain owner principal as a verified
+  Entra owner token: the configured owner object id and tenant, and the display
+  name copied from the Entra principal at creation, so `/me` answers the same.
+  It never satisfies a service route (agent-only, runner, PC bridge, phone
+  events, Health connector, nutrition export device), and it is refused on
+  `GET /status/smoke`, which exists for the deployment identity; an Entra owner
+  token is still accepted there. Like an Entra token, the secret is forwarded to
+  the hosted chat agent as the delegated authorization for the owner's turns.
+- **Routes** exist only while the switch is on (off answers 404), and every
+  response carries `Cache-Control: no-store`.
+  - `POST /auth/session` accepts only a verified Entra owner token; a session
+    token, a service principal and a non-owner user get 403. An optional strict
+    body `{"deviceLabel": "..."}` is trimmed to 1 to 40 printable characters,
+    otherwise 400. It answers 201 with the session id, the token (shown only
+    here) and the idle and absolute expiry times. An in-process limiter allows
+    5 per minute and 30 per hour per owner, per replica, and answers 429 with
+    `Retry-After` before the body is read.
+  - `DELETE /auth/session` revokes the calling session and needs a session
+    token (204).
+  - `DELETE /auth/sessions` revokes every active session of the owner, for a
+    lost phone, with a session token or an Entra owner token (200 with the
+    count).
+- **Logging.** `owner_session.created`, `owner_session.revoked`,
+  `owner_session.rejected` and `owner_session.refresh_failed` carry a fixed
+  reason category and the first eight characters of the token only, never a
+  token, secret, hash or header.
+
 ## Web notifications and confirmations (P6-22, P10-10)
 
 Away mode remains manual and Graph presence is not read. P10-10 removes the
@@ -2725,6 +2796,13 @@ data-model groups 1–3. Each forward migration has a reviewed reverse script in
 same lock and transaction, only for the latest applied migration, and removes its
 ledger row. CI proves up, down and re-up against SQL Server. This includes the
 `tool_calls` table that the tool dispatcher (P4-02) writes.
+
+Migration `0064_owner_sessions.sql` (#1217) adds `dbo.owner_sessions` for the
+optional owner session described under Backend authentication. Every deployment
+gets the table, but it is read and written only while
+`JARVIS_OWNER_SESSION_ENABLED` is `true`, through the same process-owned pool.
+Its reverse script drops the table, which is the same as revoking every session:
+the owner signs in again. Deploy the migration before the revision that uses it.
 
 Real managed-identity token exchange and migrations in a deployed Azure revision
 remain issue #11. See the [database guide](../apps/backend/src/database/README.md)
@@ -5545,6 +5623,7 @@ call linkage remain the post-merge P4-09 acceptance check.
 ## Identity and security
 
 - Dan signs in with Entra ID through `jarvis-web`. `jarvis-api` requires user assignment, and only Dan is assigned; the backend also checks Dan's object ID. The hosted Jarvis agent is assigned the application role `Jarvis.Tools` and may call only the tool routes.
+- When `JARVIS_OWNER_SESSION_ENABLED` is `true`, the owner can exchange one Entra sign-in for an opaque, revocable `js.` session token (10 days idle, 30-day cap, SHA-256 of the secret stored in `dbo.owner_sessions`). It resolves to the same owner principal as an Entra owner token, never satisfies a service route, and is revoked per session or all at once; see Owner session under Backend authentication. The switch is off by default and is also the kill switch.
 - Google Calendar and Gmail tools are registered only in the backend and use the official Google APIs over HTTPS. The backend reads `google-oauth-client-id`, `google-oauth-client-secret`, and `google-refresh-token` only from Key Vault, exchanges the refresh token for a short-lived access token, and caches only that access token in memory. The single OAuth grant is for `danaakesen@gmail.com` and uses `gmail.readonly`, `gmail.compose`, `gmail.send`, `gmail.modify`, `calendar.events`, and `calendar.calendarlist.readonly` (read-only calendar list for the Daily all-calendars feed; Daily reuses this single grant); `gmail.modify` is the least-privilege scope for Gmail message labels and draft update/deletion. No Google credential or token is a deployment variable or client-bundle value. An `invalid_grant` records a deduplicated `credential_expiry` activity alert; tool calls return a visible reconnect message. Dan must add `gmail.modify` to Google Auth Platform's Data Access scopes and rerun `infra/setup-google.ps1` to re-consent and replace the Key Vault refresh token before using the new mail tools.
 - Calendar range reads interpret date-only `start`/`end` in `JARVIS_GOOGLE_TIME_ZONE` (inclusive dates and an exclusive next-midnight API boundary); timezone-aware date-times are queried as instants. `calendar_list_events` pages up to 100 events across no more than 62 days and maps optional `query` to Google's `q`; `calendar_next_event` searches up to 60 days and skips events where Dan's attendee response is declined. All-day start/end values remain date-only, including multi-day events, while timed events remain instants. Calendar agenda, range, and next-event reads are reflex-safe and sensitive results remain redacted from the durable tool-call audit.
 - Gmail search and draft listing share the bounded MIME reader introduced on #837 / task 12. It reads nested plain/HTML alternatives and API-externalized text parts, returning `bodySource`, `bodyTruncated`, `contentWarnings` and differing `alternateBody`/`alternateBodyTruncated`. Static parse5 extraction skips scripts, styles, hidden attributes and inline hidden styles, strips invisible email padding before the 6000-character text limit, and never executes HTML or fetches remote resources. File attachments, unsupported charsets, missing bodies and traversal limits remain explicit; snippets cannot establish absent reservation details.

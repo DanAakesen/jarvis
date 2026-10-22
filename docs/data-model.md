@@ -124,7 +124,7 @@ metadata.
 
 ## Overview
 
-Eleven groups. Arrows show the main references between groups.
+Twelve groups. Arrows show the main references between groups.
 
 ```mermaid
 flowchart LR
@@ -179,6 +179,9 @@ flowchart LR
         workspace_artifacts
         workspace_pins
     end
+    subgraph OWNERSESSION["12 · Owner sign-in sessions"]
+        owner_sessions
+    end
     tool_calls --> tasks
     tasks --> projects
     sandbox_sessions --> tasks
@@ -206,6 +209,7 @@ flowchart LR
 | 9 | Legacy SQL memory | Historical source-linked memory rows, retained for compatibility but superseded as the durable knowledge source | `memories`, `memory_history`, `memory_deletions` |
 | 10 | Workspace artifacts | Owner-scoped image metadata and explicitly pinned workspace views; image bytes are private Blob objects | `workspace_artifacts`, `workspace_pins` |
 | 11 | GitHub vault index | Derived heading chunks and optional vectors keyed by vault path and blob SHA; vault content remains authoritative in GitHub | `vault_chunks` |
+| 12 | Owner sign-in sessions | The optional, revocable 10-day owner session (`JARVIS_OWNER_SESSION_ENABLED`, default off); unrelated to the conversation `jarvis_sessions` | `owner_sessions` |
 
 Repository task statuses and their GitHub issues are workflow metadata managed from `PLAN.md`; they are not stored in the Jarvis SQL model.
 
@@ -774,6 +778,36 @@ and bounded note chunk, plus an optional `vector(1536)` embedding when supported
 Startup and verified `master` push syncs replace changed note chunks and delete
 removed paths. The table contains only the searchable derived index; note content
 and durable facts remain authoritative in `DanAakesen/vault`.
+
+## Owner session schema (group 12)
+
+`0064_owner_sessions.sql` (#1217) adds `dbo.owner_sessions`, the server-side
+record behind the optional 10-day owner session. It stores sign-in credentials,
+not conversations, and has no relationship to `jarvis_sessions`. Every deployment
+gets the table, but it stays empty and unused while `JARVIS_OWNER_SESSION_ENABLED`
+is not exactly `true`.
+
+| Column | Contract |
+| --- | --- |
+| `session_id` | `binary(16)` primary key; the 128-bit random id inside the token |
+| `secret_hash` | `binary(32)`; SHA-256 of the 256-bit token secret. The secret itself is never stored or logged |
+| `owner_object_id` | `uniqueidentifier`; the Entra object ID the session was created for, compared with the configured owner on every use |
+| `display_name` | `nvarchar(200)`, 1 to 200 characters; copied from the Entra principal at creation so `/me` answers the same |
+| `device_label` | `nvarchar(40)`, null or 1 to 40 characters; the optional label the owner gave the device |
+| `created_at`, `last_used_at` | `datetime2(3)` UTC |
+| `idle_expires_at` | `datetime2(3)` UTC; 10 days after the last use, extended at most once an hour, never beyond the absolute cap |
+| `absolute_expires_at` | `datetime2(3)` UTC; 30 days after creation, never extended |
+| `revoked_at` | `datetime2(3)` UTC, null while active; set by a revoke, a revoke-all or the eviction of the least recently used session |
+
+Check constraints keep `idle_expires_at` at or before `absolute_expires_at`,
+`created_at` before `absolute_expires_at`, and the two text columns within their
+lengths; both use a binary collation. `IX_owner_sessions_owner_last_used` on
+`(owner_object_id, last_used_at DESC)` serves the 10-active-session limit. A
+revoked or expired row is kept for diagnosis: creating a session for the same
+owner deletes only that owner's rows whose revocation or idle expiry is more
+than 30 days old. The down script drops the table, which revokes every session
+because the backend then finds no row; the owner signs in again. See the owner
+session design in [architecture.md](architecture.md).
 
 ## Conventions
 
