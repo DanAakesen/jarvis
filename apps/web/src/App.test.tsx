@@ -12,9 +12,15 @@ import { expectNoDailyInRenderedContent } from './test/visible-copy';
 
 const {
   createAuthClient,
+  hasSignedInDeviceBefore,
   isSignInRedirectPending,
+  isSignInStorageEvent,
+  needsSignInInteraction,
   restoreProfile,
   signIn,
+  signInFailureMessage,
+  signOut,
+  tryAutomaticSignInRedirect,
   saveSignInReturnPath,
   takeSignInReturnPath,
   loadConversationHistory,
@@ -32,9 +38,15 @@ const {
   });
   return {
     createAuthClient: vi.fn(makeAuthClient),
+    hasSignedInDeviceBefore: vi.fn(() => false),
     isSignInRedirectPending: vi.fn(() => false),
+    isSignInStorageEvent: vi.fn(() => false),
+    needsSignInInteraction: vi.fn(() => false),
     restoreProfile: vi.fn().mockResolvedValue(null),
     signIn: vi.fn(),
+    signInFailureMessage: vi.fn(() => 'Microsoft sign-in did not complete. Try again.'),
+    signOut: vi.fn().mockResolvedValue(undefined),
+    tryAutomaticSignInRedirect: vi.fn().mockResolvedValue(false),
     saveSignInReturnPath: vi.fn(),
     takeSignInReturnPath: vi.fn<() => string | null>(() => null),
     loadConversationHistory: vi.fn().mockResolvedValue({ messages: [], nextCursor: null }),
@@ -52,7 +64,9 @@ const {
   };
 });
 vi.mock('./auth', () => ({
-  createAuthClient, isSignInRedirectPending, restoreProfile, signIn, saveSignInReturnPath, takeSignInReturnPath,
+  createAuthClient, hasSignedInDeviceBefore, isSignInRedirectPending, isSignInStorageEvent,
+  needsSignInInteraction, restoreProfile, signIn, signInFailureMessage, signOut, tryAutomaticSignInRedirect,
+  saveSignInReturnPath, takeSignInReturnPath,
 }));
 vi.mock('./conversation-history', () => ({
   loadConversationHistory,
@@ -230,7 +244,7 @@ describe('Jarvis routes', () => {
     expect(document.documentElement.dataset.documentVisibility).toBeUndefined();
   });
 
-  it('keeps the signed-out screen text to a personal greeting and one Microsoft sign-in action', async () => {
+  it('keeps the signed-out screen text to a personal greeting and a single default Microsoft sign-in action', async () => {
     render(<MemoryRouter><App config={config} /></MemoryRouter>);
     const greeting = await screen.findByRole('heading', { level: 1 });
     const button = await screen.findByRole('button', { name: 'Sign in with Microsoft' });
@@ -242,6 +256,27 @@ describe('Jarvis routes', () => {
     expect(screen.queryByRole('alert')).toBeNull();
     expect(screen.queryByText('Not signed in.')).toBeNull();
     expect(screen.queryByText(/Your personal AI platform/)).toBeNull();
+  });
+
+  it('uses account selection only from the explicit different-account action', async () => {
+    const user = userEvent.setup();
+    render(<MemoryRouter><App config={config} /></MemoryRouter>);
+
+    await user.click(await screen.findByRole('button', { name: 'Use a different Microsoft account' }));
+
+    expect(signIn).toHaveBeenCalledWith(expect.anything(), config, true);
+  });
+
+  it('exposes sign-out in Settings and returns to the sign-in screen', async () => {
+    const user = userEvent.setup();
+    restoreProfile.mockResolvedValue({ name: 'Dan Aakesen' });
+    render(<MemoryRouter initialEntries={['/settings']}><App config={config} /></MemoryRouter>);
+    await screen.findByRole('heading', { name: 'Account' });
+
+    await user.click(screen.getByRole('button', { name: 'Sign out' }));
+
+    expect(signOut).toHaveBeenCalledWith(expect.anything());
+    expect(await screen.findByRole('button', { name: 'Sign in with Microsoft' })).not.toBeNull();
   });
 
   it('does not flash the sign-in screen while silent account restoration is pending', async () => {
