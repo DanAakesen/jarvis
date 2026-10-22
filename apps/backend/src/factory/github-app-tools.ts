@@ -1206,7 +1206,7 @@ const capabilitiesTool: JarvisTool = {
   },
 };
 
-/** At most three tools (L120/L121: the hosted agent caps the whole catalogue at 128 tools). */
+/** These grouped tool surfaces expose the operations validated by their own handlers. */
 export const githubAppTools: readonly JarvisTool[] = [
   capabilitiesTool,
   makeOperationTool(

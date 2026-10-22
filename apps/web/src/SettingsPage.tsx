@@ -285,7 +285,7 @@ function SelectField({
   );
 }
 
-export function SettingsPage({ backendUrl, getAccessToken, presence, notifications, projects, renderProjects, nutrition, trainingTargets, healthUpload, proactive, memory, onBack }: {
+export function SettingsPage({ backendUrl, getAccessToken, presence, notifications, projects, renderProjects, nutrition, trainingTargets, healthUpload, proactive, memory, account, onBack }: {
   backendUrl: string | null;
   getAccessToken: () => Promise<string>;
   /** Presence mode and instructions per mode, shown before the saved settings. */
@@ -305,6 +305,8 @@ export function SettingsPage({ backendUrl, getAccessToken, presence, notificatio
   proactive?: ReactNode;
   /** What Jarvis remembers: browse, correct and forget. */
   memory?: ReactNode;
+  /** Local authentication controls for the signed-in owner. */
+  account?: ReactNode;
   /** Leaves Settings for the previous page (or Jarvis when Settings was opened directly). */
   onBack?: () => void;
 }) {
@@ -834,6 +836,12 @@ export function SettingsPage({ backendUrl, getAccessToken, presence, notificatio
       {proactive}
       {state !== 'ready' && memory && <CollapsibleSection storageKey="settings.memory" id="memory" headingId="memory-settings-heading" title="Memory">{memory}</CollapsibleSection>}
       {backendUrl && <TaskRecipesSettings key={backendUrl} backendUrl={backendUrl} getAccessToken={getAccessToken} />}
+      {account && (
+        <section className="settings-section" aria-labelledby="account-settings-heading">
+          <h2 id="account-settings-heading">Account</h2>
+          {account}
+        </section>
+      )}
       {state === 'ready' && settings && options && (
       <div className="settings-save">
         <p className="settings-feedback" role={error ? 'alert' : 'status'} aria-live="polite">

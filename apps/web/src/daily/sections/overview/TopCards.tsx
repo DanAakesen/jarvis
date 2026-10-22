@@ -3,6 +3,7 @@ import { dailyQuerySources as sources, type DailySourceId } from '@jarvis/contra
 import type { DailyPages } from '../../ui/useDailyPages';
 import { targetBaseline } from '../nutrition/totals';
 import { BodyCard } from './BodyCard';
+import { DailyHeadingControl } from '../../heading-slot';
 import { combineStates, pagesStale, pagesState, type BlockState } from './block-state';
 import { HealthCard } from './HealthCard';
 import type { NutritionView } from './NutritionTiles';
@@ -113,13 +114,15 @@ export function TopCards({ backendUrl, getAccessToken, refreshVersion, available
   const [training, health, bodyCard] = cards;
 
   return <section className="daily-top" aria-label="Overview cards">
+    <DailyHeadingControl>
+      <select className="daily-top-period" aria-label="Overview period" value={preset}
+        onChange={event => setPreset(event.target.value as OverviewPresetId)}>
+        {overviewPresets.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}
+      </select>
+    </DailyHeadingControl>
     <CardCarousel titles={cards.map(card => card.title)}>
       <TrainingCard {...training} state={cardState.training} stale={stale.training} onRetry={retry.training} period={period} states={states}
-        data={data} nutrition={nutrition} targets={trainingTargets.view} periodControl={
-          <select className="daily-top-period" aria-label="Overview period" value={preset}
-            onChange={event => setPreset(event.target.value as OverviewPresetId)}>
-            {overviewPresets.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}
-          </select>} />
+        data={data} nutrition={nutrition} targets={trainingTargets.view} />
       <HealthCard {...health} state={cardState.health} stale={stale.health} onRetry={retry.health} period={period} today={today} hour={hour}
         states={states} data={data} nutrition={nutrition} />
       <BodyCard {...bodyCard} state={cardState.body} stale={stale.body} onRetry={retry.body} period={period} workoutsState={states.workouts}

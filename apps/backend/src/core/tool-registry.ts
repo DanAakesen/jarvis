@@ -66,12 +66,7 @@ function freezeSchema(value: unknown): void {
   }
 }
 
-/**
- * The agent rejects the whole catalogue (and therefore every chat turn) when it exceeds these limits,
- * and the model API caps tools per request. agents/jarvis/limits.json is the single source; a test
- * fails if these constants drift from it.
- */
-export const MAX_AGENT_TOOLS = 128;
+/** agents/jarvis/limits.json is the single source; a test fails if these limits drift from it. */
 export const MAX_TOOL_DESCRIPTION_CHARACTERS = 4_000;
 export const MAX_CATALOGUE_BYTES = 1024 * 1024;
 
@@ -93,12 +88,6 @@ export function createToolRegistry(modules: readonly { id: string; tools: readon
       freezeSchema(inputSchema);
       tools.set(tool.name, Object.freeze({ ...tool, execute: guardGmailAccess(tool), inputSchema, moduleId: module.id }));
     }
-  }
-  if (tools.size > MAX_AGENT_TOOLS) {
-    throw new Error(
-      `Jarvis tool catalogue has ${tools.size} tools; the agent and model accept at most ${MAX_AGENT_TOOLS}. ` +
-      'Merge related tools into one tool with an operation parameter instead of adding more.',
-    );
   }
   const catalogueBytes = Buffer.byteLength(JSON.stringify([...tools.values()].map(({ name, description, inputSchema }) => ({
     name, description, inputSchema,
