@@ -35,6 +35,7 @@ describe('Now feed activity query', () => {
 
     const activityQuery = query.mock.calls[1]?.[0];
     expect(activityQuery).toContain("N'attention' AS category");
+    expect(activityQuery).toContain("alert_key NOT LIKE N'credential:github-app:failed:%' OR recovered_at IS NULL");
     expect(activityQuery).not.toContain("N'mode' AS category");
     expect(activityQuery).not.toContain("kind = N'away_mode'");
   });
