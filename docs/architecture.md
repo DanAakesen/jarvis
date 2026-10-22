@@ -6392,6 +6392,31 @@ Fingerprint serialization uses the bounded read DTO, not nutrition's per-write
 node/depth budget; supported full pages and retained nested JSON stay readable.
 The response byte budget includes the final 64-byte revision before hashing.
 
+The grouped `daily_health_summary/get_health_history` and
+`daily_nutrition_history/get_nutrition_history` operations also expose
+`coverage.continuation`. Replay it with the original explicit `startDate` and
+`endDate` (and the desired bounded `limit`). The envelope binds the operation,
+requested dates, active window and exact source-specific keyset cursors.
+Health validation reuses `isDailyQuery`; meal cursors use the nutrition store's
+instant/text validators with exact fields, preserving valid legacy IDs without
+trimming or rewriting them. Readers receive the unchanged returned keys.
+Health reads one window of at most 93 inclusive Copenhagen dates per call,
+with at most 100 rows per live category (default 50) and one sync read. Null
+category cursors skip exhausted categories; only after all categories exhaust
+does the next call advance to the adjacent window. Nutrition retains its full
+meal-date filter and creation-time/ID ordering, including backdated meals and
+tombstones; its window is never split by meal date. No server-side paging loop
+or new persistence mechanism is introduced. Each call retains the 30-second
+deadline, cancellation and 768 KiB response bound. `period` is the current
+read window, `requestedPeriod` is the original requested range, and
+`coverage.hasMore` includes remaining Health windows. Final/empty pages only
+establish current-window retained exhaustion, not that prior pages were read
+or that all source records were ingested. Assistant contracts require further
+reads when needed or disclosure of loaded records/windows and remaining limits;
+the existing finite agent tool-round budget is unchanged, and failed,
+interrupted or budget-limited traversal remains partial. `daily_query` and its
+existing paging contract are unchanged.
+
 Capability negotiation preserves the exact v1 nine-source, v2 eleven-source
 and v3 thirteen-source advertisements. Version 2 remains opt-in for established
 brief history/detail; version 3 adds `daily.health.metric-catalog` and

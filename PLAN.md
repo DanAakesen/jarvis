@@ -1,5 +1,17 @@
 # Project plan
 
+## Bounded Health and nutrition history (22 October 2026; #1201)
+
+Implemented grouped-operation continuation using the existing keyset readers,
+independent Health-category exhaustion and explicit 93-date window traversal.
+Nutrition preserves creation-time ordering across its unchanged date filter.
+Contracts distinguish current-page/window coverage from the requested range
+and unknown source completeness, including interrupted/tool-budget-limited
+reads. Synthetic public-schema traversal and failure/bounds tests are in place.
+Next: complete backend/contracts/agent validation, automated review and
+exact-head CI inspection. No live-data, device-completeness, merge or deployment
+acceptance is claimed.
+
 Integration checkpoint: #883 merged on 17 October at
 `705af7c7c02c3154a646dda66d79790d71af8f54`, with its actual tree matching
 the qualified pipeline correction. This release candidate combines the

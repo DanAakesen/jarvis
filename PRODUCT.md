@@ -1321,6 +1321,16 @@ equivalent action rather than creating one tool per button. Missing tool
 coverage remains unfinished. This does not restore excluded features or waive
 private-data, provider, credential, device, approval or activation gates.
 
+Health and nutrition history (#1201) must be traversable beyond the first
+page. Each Health call reads at most 93 inclusive Copenhagen dates and 100
+records per category; wider requested periods advance through explicit windows.
+Categories continue independently without replaying exhausted results. Nutrition
+keeps the requested meal-date filter and creation-time keyset order across pages.
+Jarvis must fetch further pages when needed for the answer or disclose the
+actual loaded windows/records and remaining limits. Failed, interrupted or
+budget-limited traversal is partial. Exhausting retained results never proves
+complete device/source ingestion.
+
 An independently opt-in `daily_feed` workflow shares the retained Gmail/calendar
 snapshot, attention, suppression and manual-refresh services. Reads preserve
 Missing/Stale/Current, successful capture versus latest attempt, exact source
