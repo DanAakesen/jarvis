@@ -39,7 +39,8 @@ export function SignInPage({ session }: { session: SignInSession }) {
           : state === 'error' ? 'Retry' : 'Sign in'}
       </button>
       <button className="secondary-button" type="button" onClick={switchAccount}
-        disabled={pending || unavailable} aria-label="Use a different Microsoft account" aria-busy={pending}>
+        disabled={pending || unavailable} aria-label="Use a different Microsoft account" aria-busy={pending}
+        aria-describedby={unavailable ? 'signin-unavailable' : undefined}>
         Use a different account
       </button>
       {unavailable && (

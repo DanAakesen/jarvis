@@ -6,6 +6,7 @@ import {
   hasSignedInDeviceBefore,
   isSignInRedirectPending,
   isSignInStorageEvent,
+  MicrosoftSignInError,
   needsSignInInteraction,
   restoreProfile,
   signIn,
@@ -42,28 +43,31 @@ export function useSignIn(config: PublicConfig): SignInSession {
     if (!config.backendUrl) return;
 
     let active = true;
+    let restoreVersion = 0;
     let accountState = '';
     const readAccountState = () => JSON.stringify([
       client.getActiveAccount()?.homeAccountId ?? null,
       ...client.getAllAccounts().map(({ homeAccountId }) => homeAccountId).sort(),
     ]);
     const restore = async (initialized = false) => {
+      const version = ++restoreVersion;
       try {
         if (!initialized) await client.initialize();
         const restored = await restoreProfile(client, config);
-        if (!active) return;
+        if (!active || version !== restoreVersion) return;
         setProfile(restored);
         setState(restored ? 'signed-in' : isSignInRedirectPending() ? 'signing-in' : 'signed-out');
         setMessage('');
       } catch (error) {
-        if (!active) return;
-        setMessage(error instanceof Error ? error.message : 'Sign-in needs attention.');
+        if (!active || version !== restoreVersion) return;
+        setMessage(error instanceof MicrosoftSignInError ? error.message : 'Sign-in needs attention.');
         setState('error');
       }
     };
     const onStorage = (event: StorageEvent) => {
       if (!isSignInStorageEvent(event)) return;
       if (event.key === 'jarvis.sign-in-device' && event.newValue === null) {
+        restoreVersion++;
         setProfile(null);
         setMessage('');
         setState('signed-out');
@@ -98,7 +102,7 @@ export function useSignIn(config: PublicConfig): SignInSession {
     try {
       await signIn(client, config, switchAccount); // The page now navigates to Microsoft sign-in.
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'Sign-in failed.');
+      setMessage(error instanceof MicrosoftSignInError ? error.message : 'Sign-in failed.');
       setState('error');
     }
   }, [client, config]);
@@ -114,7 +118,7 @@ export function useSignIn(config: PublicConfig): SignInSession {
       setProfile(null);
       setState('signed-out');
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'Sign-out failed.');
+      setMessage(error instanceof MicrosoftSignInError ? error.message : 'Sign-out failed.');
       setState('error');
     }
   }, [client]);
@@ -130,24 +134,22 @@ export function useSignIn(config: PublicConfig): SignInSession {
       if (result.accessToken) return result.accessToken;
     } catch (error) {
       if (needsSignInInteraction(error)) {
-        try {
-          if (await tryAutomaticSignInRedirect(client, config, error)) {
-            setProfile(null);
-            setState('signing-in');
-            throw new Error('Sign-in is redirecting.');
-          }
-        } catch (redirectError) {
-          if (redirectError instanceof Error && redirectError.message === 'Sign-in is redirecting.') throw redirectError;
+        const redirected = await tryAutomaticSignInRedirect(client, config, error).catch((redirectError: unknown) => {
           setProfile(null);
-          setMessage(redirectError instanceof Error ? redirectError.message : signInFailureMessage(error));
+          setMessage(redirectError instanceof MicrosoftSignInError ? redirectError.message : signInFailureMessage(error));
           setState('error');
           throw redirectError;
+        });
+        if (redirected) {
+          setProfile(null);
+          setState('signing-in');
+          throw new Error('Sign-in is redirecting.', { cause: error });
         }
         setProfile(null);
         setMessage(signInFailureMessage(error));
         setState('error');
       }
-      throw new Error('Your Microsoft sign-in needs attention. Sign in again.');
+      throw new Error('Your Microsoft sign-in needs attention. Sign in again.', { cause: error });
     }
     throw new Error('Microsoft sign-in did not return an API token.');
   }, [client, config]);

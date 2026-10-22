@@ -8,6 +8,13 @@ export interface UserProfile {
   name: string;
 }
 
+export class MicrosoftSignInError extends Error {
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, options);
+    this.name = 'MicrosoftSignInError';
+  }
+}
+
 const redirectMarker = 'jarvis.sign-in-redirect';
 const signInReturnPathMarker = 'jarvis.sign-in-return-path';
 const signedInDeviceMarker = 'jarvis.sign-in-device';
@@ -43,6 +50,10 @@ export function clearSignInMarkers(): void {
   try {
     localStorage.removeItem(signedInDeviceMarker);
     localStorage.removeItem(automaticRedirectMarker);
+  } catch {
+    // Storage restrictions must not prevent Microsoft sign-in.
+  }
+  try {
     sessionStorage.removeItem(redirectMarker);
     sessionStorage.removeItem(signInReturnPathMarker);
   } catch {
@@ -150,9 +161,12 @@ export async function tryAutomaticSignInRedirect(
 ): Promise<boolean> {
   if (!hasSignedInDeviceBefore()) return false;
   const now = Date.now();
-  const previousAttempt = Number(readStorage(automaticRedirectMarker));
-  if (Number.isFinite(previousAttempt) && now >= previousAttempt &&
-      now - previousAttempt < automaticRedirectCooldown) return false;
+  const previousAttemptValue = readStorage(automaticRedirectMarker);
+  if (previousAttemptValue !== null) {
+    const previousAttempt = Number(previousAttemptValue);
+    if (Number.isFinite(previousAttempt) && now >= previousAttempt &&
+        now - previousAttempt < automaticRedirectCooldown) return false;
+  }
   try {
     localStorage.setItem(automaticRedirectMarker, String(now));
   } catch {
@@ -169,7 +183,7 @@ export async function tryAutomaticSignInRedirect(
     return true;
   } catch (redirectError) {
     markSignInRedirect(false);
-    throw new Error(signInFailureMessage(redirectError ?? error), { cause: redirectError });
+    throw new MicrosoftSignInError(signInFailureMessage(redirectError ?? error), { cause: redirectError });
   }
 }
 
@@ -187,7 +201,7 @@ export async function signIn(client: PublicClientApplication, config: PublicConf
     });
   } catch (error) {
     markSignInRedirect(false);
-    throw new Error(signInFailureMessage(error), { cause: error });
+    throw new MicrosoftSignInError(signInFailureMessage(error), { cause: error });
   }
 }
 
@@ -202,9 +216,9 @@ export async function signOut(client: PublicClientApplication): Promise<void> {
   try {
     await client.logoutRedirect({ postLogoutRedirectUri: `${window.location.origin}/` });
   } catch (error) {
-    throw new Error(signInFailureMessage(error), { cause: error });
+    throw new MicrosoftSignInError(signInFailureMessage(error), { cause: error });
   }
-  if (cacheError) throw new Error(signInFailureMessage(cacheError), { cause: cacheError });
+  if (cacheError) throw new MicrosoftSignInError(signInFailureMessage(cacheError), { cause: cacheError });
 }
 
 async function verifiedProfile(config: PublicConfig, accessToken: string): Promise<UserProfile> {
@@ -234,7 +248,7 @@ export async function restoreProfile(client: PublicClientApplication, config: Pu
   try {
     redirected = await client.handleRedirectPromise();
   } catch (error) {
-    throw new Error(signInFailureMessage(error), { cause: error });
+    throw new MicrosoftSignInError(signInFailureMessage(error), { cause: error });
   } finally {
     markSignInRedirect(false);
   }
@@ -250,7 +264,7 @@ export async function restoreProfile(client: PublicClientApplication, config: Pu
       silentResult = await ssoSilentWithTimeout(client, config);
     } catch (error) {
       if (await tryAutomaticSignInRedirect(client, config, error)) return null;
-      throw new Error(signInFailureMessage(error), { cause: error });
+      throw new MicrosoftSignInError(signInFailureMessage(error), { cause: error });
     }
     if (silentResult.account) {
       client.setActiveAccount(silentResult.account);
@@ -265,9 +279,9 @@ export async function restoreProfile(client: PublicClientApplication, config: Pu
   } catch (error) {
     if (needsSignInInteraction(error)) {
       if (await tryAutomaticSignInRedirect(client, config, error)) return null;
-      throw new Error(signInFailureMessage(error), { cause: error });
+      throw new MicrosoftSignInError(signInFailureMessage(error), { cause: error });
     }
-    throw new Error('Your Microsoft sign-in needs attention. Sign in again.');
+    throw new Error('Your Microsoft sign-in needs attention. Sign in again.', { cause: error });
   }
   if (!result.accessToken) throw new Error('Microsoft sign-in did not return an API token.');
   client.setActiveAccount(account);

@@ -1,8 +1,10 @@
 import type { PublicClientApplication } from '@azure/msal-browser';
+import { BrowserCacheLocation } from '@azure/msal-browser';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { PublicConfig } from '../config/public-config';
 import {
   clearSignInMarkers,
+  createAuthClient,
   hasSignedInDeviceBefore,
   isSignInRedirectPending,
   restoreProfile,
@@ -23,6 +25,7 @@ const fetchMock = vi.fn();
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
+  vi.useRealTimers();
   clearSignInMarkers();
   localStorage.clear();
   sessionStorage.clear();
@@ -46,6 +49,10 @@ function client(overrides: Partial<PublicClientApplication> = {}) {
 }
 
 describe('web authentication', () => {
+  it('uses MSAL localStorage for its shared browser cache', () => {
+    expect(createAuthClient(config).getConfiguration().cache.cacheLocation).toBe(BrowserCacheLocation.LocalStorage);
+  });
+
   it('does not force account selection on the default sign-in path', async () => {
     expect(isSignInRedirectPending()).toBe(false);
     const msal = client({ loginRedirect: vi.fn(async () => {
@@ -174,6 +181,18 @@ describe('web authentication', () => {
     expect(msal.loginRedirect).toHaveBeenCalledTimes(1);
   });
 
+  it('bounds silent SSO before falling back to the top-level redirect', async () => {
+    localStorage.setItem('jarvis.sign-in-device', 'previous');
+    vi.useFakeTimers();
+    const msal = client({ ssoSilent: vi.fn(() => new Promise<never>(() => {})) });
+    const restoring = restoreProfile(msal, config);
+
+    await vi.advanceTimersByTimeAsync(5_000);
+    await expect(restoring).resolves.toBeNull();
+
+    expect(msal.loginRedirect).toHaveBeenCalledTimes(1);
+  });
+
   it('does not attempt automatic SSO or redirect on a device without the marker', async () => {
     const msal = client();
 
@@ -210,6 +229,9 @@ describe('web authentication', () => {
       postLogoutRedirectUri: `${window.location.origin}/`,
     });
     expect(hasSignedInDeviceBefore()).toBe(false);
+    await expect(restoreProfile(msal, config)).resolves.toBeNull();
+    expect(msal.ssoSilent).not.toHaveBeenCalled();
+    expect(msal.loginRedirect).not.toHaveBeenCalled();
   });
 
   it('keeps the existing renewal message for failures that do not need interaction', async () => {

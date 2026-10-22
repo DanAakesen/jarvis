@@ -15,6 +15,7 @@ const {
   hasSignedInDeviceBefore,
   isSignInRedirectPending,
   isSignInStorageEvent,
+  MicrosoftSignInError,
   needsSignInInteraction,
   restoreProfile,
   signIn,
@@ -41,6 +42,7 @@ const {
     hasSignedInDeviceBefore: vi.fn(() => false),
     isSignInRedirectPending: vi.fn(() => false),
     isSignInStorageEvent: vi.fn(() => false),
+    MicrosoftSignInError: class extends Error {},
     needsSignInInteraction: vi.fn(() => false),
     restoreProfile: vi.fn().mockResolvedValue(null),
     signIn: vi.fn(),
@@ -65,7 +67,8 @@ const {
 });
 vi.mock('./auth', () => ({
   createAuthClient, hasSignedInDeviceBefore, isSignInRedirectPending, isSignInStorageEvent,
-  needsSignInInteraction, restoreProfile, signIn, signInFailureMessage, signOut, tryAutomaticSignInRedirect,
+  MicrosoftSignInError, needsSignInInteraction, restoreProfile, signIn, signInFailureMessage, signOut,
+  tryAutomaticSignInRedirect,
   saveSignInReturnPath, takeSignInReturnPath,
 }));
 vi.mock('./conversation-history', () => ({
@@ -112,6 +115,7 @@ beforeEach(() => {
   activityStream = null;
   localStorage.clear();
   createAuthClient.mockReturnValue(makeAuthClient());
+  hasSignedInDeviceBefore.mockReturnValue(false);
   restoreProfile.mockResolvedValue(null);
   isSignInRedirectPending.mockReturnValue(false);
   takeSignInReturnPath.mockReturnValue(null);
@@ -212,6 +216,9 @@ describe('Jarvis routes', () => {
     render(<MemoryRouter><App config={{ ...__JARVIS_CONFIG__, backendUrl: null }} /></MemoryRouter>);
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(getSignInGreeting());
     expect(screen.getByRole('button', { name: 'Sign in with Microsoft' })).toHaveProperty('disabled', true);
+    expect(screen.getByRole('button', { name: 'Use a different Microsoft account' })).toHaveProperty('disabled', true);
+    expect(screen.getByRole('button', { name: 'Use a different Microsoft account' }).getAttribute('aria-describedby'))
+      .toBe('signin-unavailable');
     expect(screen.getByText('Sign-in is unavailable until the backend is configured.')).not.toBeNull();
   });
 
@@ -296,7 +303,18 @@ describe('Jarvis routes', () => {
     expect(screen.queryByRole('button', { name: 'Sign in with Microsoft' })).toBeNull();
   });
 
-  it('shows Signing you in only when returning from the Microsoft redirect', async () => {
+  it('shows Signing you in while resuming a prior device session', async () => {
+    hasSignedInDeviceBefore.mockReturnValue(true);
+    let restore!: (profile: { name: string } | null) => void;
+    restoreProfile.mockReturnValue(new Promise((resolve) => { restore = resolve; }));
+    render(<MemoryRouter><App config={config} /></MemoryRouter>);
+
+    expect(screen.getByRole('status').textContent).toBe('Signing you in');
+    await act(async () => { restore(null); });
+    expect(await screen.findByRole('button', { name: 'Sign in with Microsoft' })).not.toBeNull();
+  });
+
+  it('shows Signing you in while returning from the Microsoft redirect', async () => {
     isSignInRedirectPending.mockReturnValue(true);
     let restore!: (profile: null) => void;
     restoreProfile.mockReturnValue(new Promise(resolve => { restore = resolve; }));
@@ -305,6 +323,7 @@ describe('Jarvis routes', () => {
     expect(screen.getByRole('status').textContent).toBe('Signing you in');
     expect(screen.getByText('Signing you in', { selector: '[aria-hidden="true"]' }).textContent).toBe('Signing you in...');
     expect(document.querySelector('.loader-core')).toBeNull();
+    isSignInRedirectPending.mockReturnValue(false);
     await act(async () => { restore(null); });
     expect(await screen.findByRole('button', { name: 'Sign in with Microsoft' })).not.toBeNull();
   });
@@ -337,7 +356,7 @@ describe('Jarvis routes', () => {
     const button = await screen.findByRole('button', { name: 'Sign in with Microsoft' });
     await user.click(button);
 
-    expect(signIn).toHaveBeenCalledWith(expect.anything(), config);
+    expect(signIn).toHaveBeenCalledWith(expect.anything(), config, false);
     expect(button.hasAttribute('disabled')).toBe(true);
     expect(button.textContent).toContain('Redirecting');
     expect(button.getAttribute('aria-label')).toBe('Redirecting');
