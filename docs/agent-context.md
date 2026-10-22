@@ -1,5 +1,32 @@
 # Agent context
 
+## Bounded history continuation checks (22 October 2026; #1201)
+
+From the repository root, the following local checks passed:
+
+- `npm test --workspace @jarvis/backend -- src/daily src/core/agent-contract.test.ts src/core/tool-registry.test.ts`
+  — 1,093 tests across 62 files. This includes synthetic grouped-schema year
+  traversal for meals, metrics, sleep and workouts, independent exhaustion,
+  equal ordering keys, scope/cursor refusals, backdated/deleted meals, later-page
+  failures, cancellation, deadline/byte limits and assistant contract assertions.
+- `npm run build --workspace @jarvis/backend` and
+  `npm run lint --workspace @jarvis/backend`.
+- `npm test --workspace @jarvis/contracts` — 173 tests; contracts build and lint.
+- From `agents/jarvis`: `.venv/bin/python -m pytest -q` — 898 tests, and
+  `.venv/bin/python -m ruff check .`.
+
+No SQL fixture is configured in this sandbox; no live/private records, device
+completeness, model/provider acceptance, merge or deployment were exercised.
+The aggregate CI skips draft PRs. PR #1203's code commit `4809a9e` triggered
+run `39809082829`, which was skipped, not passed; its title gate separately
+failed because the generated title lacked the required
+task-ID/`fix-main:`/`docs:` format. Fresh exact-head qualification remains
+required after the PR metadata/ready gate permits it. Read-only review found
+no remaining significant issues after correcting legacy meal-ID replay.
+Secret scanning passed. The mandatory parallel validation was attempted, but
+its review binary was unavailable and its CodeQL analysis skipped for database
+size; neither is a clean automated-review/security qualification.
+
 ## Vault mirror freshness checks (19 October 2026; P14-29)
 
 Review corrections: `npm test --workspace @jarvis/backend -- src/proactive`

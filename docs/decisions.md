@@ -1,5 +1,19 @@
 # Decisions
 
+## Bounded retained-history continuation (22 October 2026; #1201)
+
+Keep the existing keyset readers and source-specific cursor validation.
+Grouped history tools return a scope-bound continuation, not a fetch-all
+operation. Health advances one at-most-93-date window/page per call and skips
+independently exhausted categories. Nutrition keeps its whole requested
+meal-date filter because splitting it into date windows would change the
+creation-time order of backdated meals. Page sizes, owner/connector boundaries,
+units, byte/deadline limits and the finite agent tool budget remain unchanged.
+Retained exhaustion is not evidence of source ingestion completeness; partial
+or interrupted reads must be disclosed. Verification uses synthetic records
+only; live ingestion/device completeness, merge and deployment are outside
+this correction.
+
 ## Catalogue count is not a global limit (22 October 2026; #1204)
 
 There is no fixed global tool-count ceiling or reserved-slot requirement.
