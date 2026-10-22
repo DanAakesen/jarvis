@@ -6,7 +6,7 @@ import { coreModule } from './index.js';
 import { runModelToolCall } from './tool-origin.js';
 import { MAX_TOOL_DESCRIPTION_CHARACTERS, ToolFailure, ToolRefusal } from './tool-registry.js';
 import { isWorkspaceReflexOperation, WorkspaceCommandBroker, workspaceCommandTool } from './workspace-commands.js';
-import { workspaceNavigationPages, type WorkspaceCommand } from '@jarvis/contracts';
+import { dailyQuerySources, workspaceNavigationPages, type DailyQueryResult, type WorkspaceCommand } from '@jarvis/contracts';
 import { executeReflexAction, reflexTargets, registerChatReflex, undoPartialReflexAction } from './reflex.js';
 import { toModelToolSchema, executeRealtimeToolCall } from '../voice/realtime.js';
 import type { BackendModule } from '../modules.js';
@@ -31,11 +31,11 @@ afterEach(async () => {
   await Promise.all(apps.splice(0).map((app) => app.close()));
 });
 
-function fixture(dailyEnabled = false, extraModules: readonly BackendModule[] = []) {
+function fixture(dailyEnabled = false, extraModules: readonly BackendModule[] = [], dailyQuery = vi.fn()) {
   const broker = new WorkspaceCommandBroker();
   const records: unknown[] = [];
   const app = buildApp(config, undefined, {
-    modules: [coreModule, ...createDailyModules(dailyEnabled, { query: { query: vi.fn() }, changes: createDailyChanges() }), ...extraModules],
+    modules: [coreModule, ...createDailyModules(dailyEnabled, { query: { query: dailyQuery }, changes: createDailyChanges() }), ...extraModules],
     auth: async (token) => token === 'header.user.signature'
       ? { objectId: ownerId, tenantId: config.auth.tenantId, displayName: 'Dan' }
       : { kind: 'jarvis-agent', objectId: 'b331004a-777a-4e53-b7b0-40bf9ab3b9ef', tenantId: config.auth.tenantId },
@@ -43,7 +43,7 @@ function fixture(dailyEnabled = false, extraModules: readonly BackendModule[] = 
     workspaceCommands: broker,
   });
   apps.push(app);
-  return { app, broker, records };
+  return { app, broker, records, dailyQuery };
 }
 
 describe('workspace command delivery', () => {
@@ -925,6 +925,88 @@ describe('workspace command delivery', () => {
     expect(duplicate.json()).toEqual(first.json());
     expect(records).toHaveLength(2);
     expect(records.every((record) => JSON.stringify(record).includes('"redacted":true'))).toBe(true);
+    connection.close();
+  });
+
+  it('creates, refreshes and closes an acknowledged Health chart across chat and voice requests', async () => {
+    const result: DailyQueryResult = {
+      source: dailyQuerySources.metrics,
+      period: { startDate: '2026-10-11', endDate: '2026-10-17', timeZone: 'Europe/Copenhagen' },
+      items: [
+        { metric_date: '2026-10-16', metric_name: 'step_count', value: 1234, avg_value: null, unit: 'count' },
+        { metric_date: '2026-10-17', metric_name: 'step_count', value: 2345, avg_value: null, unit: 'count' },
+      ],
+      status: 'available',
+      units: { unit: 'retained per-record unit' },
+      provenance: { store: 'daily-sql', detail: 'retained-record', calculations: 'existing-read-model', consistency: 'independent-committed-reads' },
+      freshness: { observedAt: '2026-10-17T19:26:00.000Z', sourceProcessedCommittedAt: null,
+        latestReturnedRecordUpdatedAt: null, staleness: 'unknown' },
+      coverage: { returned: 2, hasMore: false, next: null, sourceCompleteness: 'unknown' },
+      revision: '0'.repeat(64),
+    };
+    const dailyQuery = vi.fn().mockResolvedValue(result);
+    const { app, broker } = fixture(true, [], dailyQuery);
+    const delivered: WorkspaceCommand[] = [];
+    const connection = broker.connect(ownerId, (event, data) => {
+      if (event === 'workspace-command') delivered.push(data.command);
+      return true;
+    });
+    const acknowledge = async (index: number, operation: string, applied: boolean, reason?: string) => {
+      await vi.waitFor(() => expect(delivered).toHaveLength(index + 1));
+      const command = delivered[index]!;
+      expect(command.operation).toBe(operation);
+      const ack = await app.inject({
+        method: 'POST', url: `/now/workspace/commands/${command.commandId}/ack`, headers: userHeaders,
+        payload: { sessionId: connection.sessionId, applied, ...(reason ? { reason } : {}) },
+      });
+      expect(ack.statusCode).toBe(204);
+      return command;
+    };
+    const input = {
+      source: dailyQuerySources.metrics, startDate: '2026-10-11', endDate: '2026-10-17',
+      metric: 'step_count', display: 'chart',
+    };
+
+    const creating = app.inject({ method: 'POST', url: '/tools/daily_show', headers: agentHeaders, payload: input });
+    const update = await acknowledge(0, 'update', false, 'That view is not open.');
+    const create = await acknowledge(1, 'create', true);
+    expect(create.viewId).toBe(update.viewId);
+    expect(create.view?.renderer).toBe('chart');
+    expect(create.view?.data).toMatchObject({
+      kind: 'bar',
+      series: [{ name: 'Step count (count)', points: [{ x: '16 Oct', y: 1234 }, { x: '17 Oct', y: 2345 }] }],
+    });
+    expect((await creating).json()).toMatchObject({
+      outcome: 'ok', result: { view: { operation: 'created', viewId: create.viewId, renderer: 'chart', rowsShown: 2 } },
+    });
+
+    const refreshing = app.inject({
+      method: 'POST', url: '/tools/daily_show',
+      headers: { ...agentHeaders, 'x-jarvis-message-id': '102', 'x-jarvis-voice-item-id': 'voice-102' },
+      payload: input,
+    });
+    const refreshed = await acknowledge(2, 'update', true);
+    const refreshedForeground = await acknowledge(3, 'show', true);
+    expect(refreshed.viewId).toBe(create.viewId);
+    expect(refreshedForeground.viewId).toBe(create.viewId);
+    expect((await refreshing).json()).toMatchObject({
+      outcome: 'ok', result: { view: { operation: 'refreshed', viewId: create.viewId, renderer: 'chart', rowsShown: 2 } },
+    });
+    expect(dailyQuery).toHaveBeenCalledTimes(2);
+    expect(dailyQuery.mock.calls.map(([query]) => query)).toEqual([
+      { source: dailyQuerySources.metrics, startDate: input.startDate, endDate: input.endDate, metric: 'step_count', limit: 200 },
+      { source: dailyQuerySources.metrics, startDate: input.startDate, endDate: input.endDate, metric: 'step_count', limit: 200 },
+    ]);
+
+    const closing = app.inject({
+      method: 'POST', url: '/tools/workspace_command', headers: { ...agentHeaders, 'x-jarvis-message-id': '103' },
+      payload: { commandId: 'close-health-chart', operation: 'close', viewId: create.viewId },
+    });
+    const close = await acknowledge(4, 'close', true);
+    expect(close.viewId).toBe(create.viewId);
+    expect((await closing).json()).toMatchObject({
+      outcome: 'ok', result: { applied: true, commandId: 'close-health-chart', operation: 'close' },
+    });
     connection.close();
   });
 

@@ -273,6 +273,21 @@ describe('daily show view builder: measurement filter', () => {
     expect(build.view.source.status).toBe('complete');
   });
 
+  it('keeps an empty filtered result specific to the selected measurement', () => {
+    const build = show(read(sources.metrics, []), { display: 'chart', metric: 'step_count' });
+    expect(build.view.renderer).toBe('text');
+    expect(build.view.title).toBe('Step count, 11 Oct 2026 to 17 Oct 2026');
+    expect(body<{ content: string }>(build).content).toContain('No Step count measurement rows were returned');
+    expect(build.receipt).toEqual({ renderer: 'text', rowsShown: 0, rowsReturned: 0, partial: false, notes: [] });
+  });
+
+  it('marks an empty selected page partial only when the filtered query has more rows', () => {
+    const build = show(read(sources.metrics, [], { hasMore: true }), { display: 'chart', metric: 'step_count' });
+    expect(build.view.source.status).toBe('partial');
+    expect(build.receipt).toMatchObject({ rowsReturned: 0, partial: true, notes: ['More records are available beyond this page.'] });
+    expect(reason(build)).toContain('More records are available beyond this page.');
+  });
+
   it('carries the read time and the disclosure in the text itself, because a text view prints no footnote', () => {
     const build = show(read(sources.metrics, mixed, { observed: '2026-10-17T07:05:00.000Z' }), { display: 'table', metric: 'distance' });
     const { content } = body<{ content: string }>(build);

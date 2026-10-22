@@ -30,7 +30,13 @@ clients that do not request a supported version receive version 1.
   browser request; they accept no confirmation flag. The refresh retains the
   existing 30-second cooldown.
 
-- `daily.health.metrics` optionally filters by the exact `metric_name`.
+- `daily.health.metrics` and heart-rate reads optionally filter by one exact
+  `metric_name` or its readable name. Exact names take precedence; the filter is
+  applied in the read model before the bounded row limit.
+- `daily_show` keeps a measurement selection in the bounded read rather than
+  trimming an unrelated page afterward. Its `rowsReturned`, `hasMore` and
+  partial disclosures describe the filtered result; it does not fetch further
+  pages or claim that a bounded page covers the full requested period.
 - Health metric rows include typed aggregation, bounded source labels and latest
   sample metadata. Sleep and minute heart-rate rows include up to five source
   labels and say when the list was capped; raw `fields_json` and `source_json`

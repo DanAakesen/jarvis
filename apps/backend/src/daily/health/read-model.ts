@@ -11,6 +11,9 @@ type HistoryKind = 'metrics' | 'sleep' | 'workouts';
 export interface HealthCursor { date: string; key: string }
 const dimensions = { metrics: ['metric_date', 'metric_name'], sleep: ['sleep_date', 'sleep_date'], workouts: ['workout_date', 'id'] } as const;
 const dateKey = (value: unknown) => value instanceof Date ? value.toISOString().slice(0, 10) : String(value);
+const metricAlias = (value: string | undefined) => value?.includes(' ')
+  ? `${value.charAt(0).toLowerCase()}${value.slice(1).replaceAll(' ', '_')}`
+  : null;
 function pageLimit(value: number): number { if (!Number.isInteger(value) || value < 1 || value > 500) throw new TypeError('Invalid health page limit'); return value; }
 const sourceColumns = (column: string, path: string) => Array.from({ length: 6 }, (_, index) =>
   `JSON_VALUE(${column}, N'${path}[${index}]') AS read_source_${index + 1}`).join(',');
@@ -131,16 +134,22 @@ export class DailyHealthReadModel {
     const after = range.after;
     if (after) { dateOnly(after.date); key(after.key); if (after.date < start || after.date > end) throw new TypeError('Invalid health cursor'); }
     const definition = healthDefinitions[kind]; const [dateColumn, keyColumn] = dimensions[kind];
+    const alias = metricAlias(range.metric);
     return healthSqlTransaction(this.pool, this.owner, signal, async (tx, bounded) => {
       const request = new sql.Request(tx).input('owner', sql.UniqueIdentifier, this.owner).input('start', sql.Date, new Date(start)).input('end', sql.Date, new Date(end)).input('limit', sql.Int, limit + 1)
         .input('afterDate', sql.Date, after ? new Date(after.date) : null).input('afterKey', sql.NVarChar(256), after?.key ?? null)
-        .input('metric', sql.NVarChar(256), range.metric ?? null);
+        .input('metric', sql.NVarChar(256), range.metric ?? null)
+        .input('metricAlias', sql.NVarChar(256), alias);
       // Lists omit unbounded JSON detail; exact workout detail has a separate bounded read below.
       const metadata = kind === 'metrics' ? `,${metricFieldsSql}`
         : kind === 'sleep' ? `,${sourceColumns('source_json', '$')}` : '';
       const rows = (await healthSqlQuery(request, `SELECT TOP(@limit) ${Object.keys(definition.fields).filter(k => !k.endsWith('_json')).map(k => `[${k}]`).join(',')},ingestion_id,updated_at${metadata} FROM daily.[${definition.table}]
         WHERE owner_object_id=@owner AND [${dateColumn}] BETWEEN @start AND @end
-          AND ${kind === 'metrics' ? '(@metric IS NULL OR [metric_name]=@metric)' : '@metric IS NULL'}
+          AND ${kind === 'metrics' ? `(@metric IS NULL OR [metric_name] COLLATE Latin1_General_100_BIN2=@metric COLLATE Latin1_General_100_BIN2
+            OR (@metricAlias IS NOT NULL AND [metric_name] COLLATE Latin1_General_100_BIN2=@metricAlias COLLATE Latin1_General_100_BIN2
+              AND NOT EXISTS (SELECT 1 FROM daily.[${definition.table}] AS exact
+                WHERE exact.owner_object_id=@owner AND exact.[${dateColumn}] BETWEEN @start AND @end
+                  AND exact.metric_name COLLATE Latin1_General_100_BIN2=@metric COLLATE Latin1_General_100_BIN2)))` : '@metric IS NULL'}
           AND (@afterDate IS NULL OR [${dateColumn}]>@afterDate${kind === 'sleep' ? '' : ` OR ([${dateColumn}]=@afterDate AND [${keyColumn}]>@afterKey)`})
         ORDER BY [${dateColumn}]${kind === 'sleep' ? '' : `,[${keyColumn}]`};`, bounded)).recordset;
       const truncated = rows.length > limit;
@@ -181,16 +190,26 @@ export class DailyHealthReadModel {
       return { id: String(row.id), detail: JSON.parse(row.detail_json) as unknown };
     });
   }
-  async heartRate(workoutId: string, options: { limit?: number; after?: { minute: string; metric: string } }, signal: AbortSignal) {
+  async heartRate(workoutId: string, options: { limit?: number; after?: { minute: string; metric: string }; metric?: string }, signal: AbortSignal) {
     key(workoutId); const limit = pageLimit(options.limit ?? 200);
     if (options.after) { instant(options.after.minute); key(options.after.metric); }
+    if (options.metric !== undefined) key(options.metric);
+    const alias = metricAlias(options.metric);
     return healthSqlTransaction(this.pool, this.owner, signal, async (tx, bounded) => {
       const rows = (await healthSqlQuery(new sql.Request(tx).input('owner', sql.UniqueIdentifier, this.owner).input('workout', sql.NVarChar(256), workoutId).input('limit', sql.Int, limit + 1)
-        .input('minute', sql.NVarChar(64), options.after ? instant(options.after.minute) : null).input('metric', sql.NVarChar(256), options.after?.metric ?? null),
+        .input('minute', sql.NVarChar(64), options.after ? instant(options.after.minute) : null)
+        .input('cursorMetric', sql.NVarChar(256), options.after?.metric ?? null)
+        .input('metric', sql.NVarChar(256), options.metric ?? null).input('metricAlias', sql.NVarChar(256), alias),
       `SELECT TOP(@limit) sample_minute,metric_name,min_value,avg_value,max_value,unit,sample_count,${sourceColumns('source_json', '$')}
        FROM daily.health_workout_heart_rate_minute
        WHERE owner_object_id=@owner AND workout_id=@workout AND DATALENGTH(workout_id)=DATALENGTH(@workout)
-         AND (@minute IS NULL OR sample_minute>@minute OR (sample_minute=@minute AND metric_name>@metric)) ORDER BY sample_minute,metric_name;`, bounded)).recordset;
+         AND (@metric IS NULL OR metric_name COLLATE Latin1_General_100_BIN2=@metric COLLATE Latin1_General_100_BIN2
+           OR (@metricAlias IS NOT NULL AND metric_name COLLATE Latin1_General_100_BIN2=@metricAlias COLLATE Latin1_General_100_BIN2
+             AND NOT EXISTS (SELECT 1 FROM daily.health_workout_heart_rate_minute AS exact
+               WHERE exact.owner_object_id=@owner AND exact.workout_id=@workout AND DATALENGTH(exact.workout_id)=DATALENGTH(@workout)
+                 AND exact.metric_name COLLATE Latin1_General_100_BIN2=@metric COLLATE Latin1_General_100_BIN2)))
+         AND (@minute IS NULL OR sample_minute>@minute OR (sample_minute=@minute AND metric_name>@cursorMetric))
+       ORDER BY sample_minute,metric_name;`, bounded)).recordset;
       const truncated = rows.length > limit;
       const items: Record<string, unknown>[] = rows.slice(0, limit).map(row => ({ ...withoutReadColumns(row), ...sourceNames(row) }));
       const last = items.at(-1);

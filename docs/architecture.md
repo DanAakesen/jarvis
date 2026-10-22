@@ -6043,11 +6043,17 @@ its refusals use static wording and never echo input, and a cursor, brief histor
 or single-record read is refused toward `daily_query`. The tool refuses before
 reading when `workspaceCommands.isConnected(owner)` is false. One
 `service.query` page then runs over the read model behind `POST /daily/query`
-(at most 366 days and 200 rows, 100 for meals, favourites and plans). The pure
+(at most 366 days and 200 rows, 100 for meals, favourites and plans). A selected
+measurement is filtered by the shared read model before that row limit; exact
+keys take precedence over their readable labels. Its coverage and partial
+disclosures therefore describe the filtered page, not the full requested
+period. The pure
 `buildDailyView` (`apps/backend/src/daily/show/views.ts`) turns it into a view, and
 the tool publishes it through the workspace view lifecycle: `update` first, `create`
 when the view does not exist yet, and for a refresh a best-effort foreground `show`.
-The receipt says whether the view was created or refreshed.
+The receipt says whether the view was created or refreshed. Refresh success
+depends on an applied broker acknowledgement; the following foreground `show`
+is best-effort and cannot turn a successful refresh into a failure.
 
 `buildDailyView` maps stored rows onto the existing `table`, `chart`, `detail` and
 `text` generated-view contracts and calculates nothing: values and units pass

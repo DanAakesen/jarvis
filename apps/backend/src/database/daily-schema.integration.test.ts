@@ -67,6 +67,49 @@ describe('Daily SQL owner schema on real SQL Server', () => {
     await expect(store.read('recovery_days', { recovery_date: '2026-01-01', owner_object_id: other }, signal())).rejects.toThrow('Invalid Daily key');
   });
 
+  it('filters metric names before the bounded Health history pages', async () => {
+    const filterOwner = randomUUID();
+    const workoutId = 'synthetic-filter-workout';
+    const unrelated = Array.from({ length: 205 }, (_, index) => `a_unrelated_${String(index).padStart(3, '0')}`);
+    const metricValues = [
+      ...unrelated.map((name) => `(@owner,N'${name}','2026-10-01',N'count',1,N'synthetic-ingestion',N'2026-10-01T00:00:00Z')`),
+      "(@owner,N'step_count','2026-10-01',N'count',42,N'synthetic-ingestion',N'2026-10-01T00:00:00Z')",
+      "(@owner,N'Step count','2026-10-01',N'count',99,N'synthetic-ingestion',N'2026-10-01T00:00:00Z')",
+    ];
+    await pool.request().input('owner', sql.UniqueIdentifier, filterOwner).query(`
+      INSERT daily.health_daily_metrics(owner_object_id,metric_name,metric_date,unit,value,ingestion_id,updated_at)
+      VALUES ${metricValues.join(',')};`);
+
+    const rateValues = unrelated.map((name, index) => {
+      const minute = new Date(Date.parse('2026-10-01T00:00:00Z') + index * 60_000).toISOString();
+      return `(@owner,@workout,N'${minute}',N'${name}',1,1,1,N'bpm',N'synthetic-ingestion',N'2026-10-01T00:00:00Z')`;
+    });
+    rateValues.push("(@owner,@workout,N'2026-10-02T00:00:00.000Z',N'heart_rate',70,72,74,N'bpm',N'synthetic-ingestion',N'2026-10-02T00:00:00Z')");
+    rateValues.push("(@owner,@workout,N'2026-10-03T00:00:00.000Z',N'Heart rate',80,82,84,N'bpm',N'synthetic-ingestion',N'2026-10-03T00:00:00Z')");
+    await pool.request().input('owner', sql.UniqueIdentifier, filterOwner).input('workout', sql.NVarChar(256), workoutId).query(`
+      INSERT daily.health_workouts(owner_object_id,id,workout_type,workout_date,start_at,end_at,duration_seconds,ingestion_id,updated_at)
+      VALUES (@owner,@workout,N'Synthetic workout','2026-10-01',N'2026-10-01T00:00:00Z',N'2026-10-01T01:00:00Z',3600,N'synthetic-ingestion',N'2026-10-01T00:00:00Z');
+      INSERT daily.health_workout_heart_rate_minute(owner_object_id,workout_id,sample_minute,metric_name,min_value,avg_value,max_value,unit,ingestion_id,updated_at)
+      VALUES ${rateValues.join(',')};`);
+
+    const model = DailyHealthReadModel.forRequest(pool, requestFor(filterOwner));
+    const metrics = await model.history('metrics', {
+      startDate: '2026-10-01', endDate: '2026-10-01', metric: 'step count', limit: 200,
+    }, signal());
+    expect(metrics.items.map((row) => row.metric_name)).toEqual(['step_count']);
+    expect(metrics.next).toBeNull();
+    const exactMetric = await model.history('metrics', {
+      startDate: '2026-10-01', endDate: '2026-10-01', metric: 'Step count', limit: 200,
+    }, signal());
+    expect(exactMetric.items.map((row) => row.metric_name)).toEqual(['Step count']);
+
+    const heartRate = await model.heartRate(workoutId, { metric: 'heart rate', limit: 200 }, signal());
+    expect(heartRate.items.map((row) => row.metric_name)).toEqual(['heart_rate']);
+    expect(heartRate.next).toBeNull();
+    const exactHeartRate = await model.heartRate(workoutId, { metric: 'Heart rate', limit: 200 }, signal());
+    expect(exactHeartRate.items.map((row) => row.metric_name)).toEqual(['Heart rate']);
+  });
+
   it('reads and revision-updates the owner profile and marks/clears recovery without changing measurements', async () => {
     const coachOwner = '33333333-3333-4333-8333-333333333333';
     const store = SqlDailyCoachStore.forRequest(pool, requestFor(coachOwner));

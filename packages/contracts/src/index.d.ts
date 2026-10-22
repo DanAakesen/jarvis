@@ -64,7 +64,7 @@ export type DailyQuery =
   | { source: 'daily.health.metrics'; startDate: string; endDate: string; metric?: string; limit?: number; cursor?: { date: string; key: string } }
   | { source: 'daily.health.metric-catalog'; startDate: string; endDate: string; limit?: number; cursor?: { key: string } }
   | { source: 'daily.health.sleep' | 'daily.health.workouts'; startDate: string; endDate: string; limit?: number; cursor?: { date: string; key: string } }
-  | { source: 'daily.health.heart-rate'; workoutId: string; limit?: number; cursor?: { minute: string; metric: string } }
+  | { source: 'daily.health.heart-rate'; workoutId: string; metric?: string; limit?: number; cursor?: { minute: string; metric: string } }
   | { source: 'daily.health.workout'; workoutId: string }
   | { source: 'daily.nutrition.meals'; startDate: string; endDate: string; limit?: number; cursor?: { createdAt: string; id: string } }
   | { source: 'daily.nutrition.days'; startDate: string; endDate: string; limit?: number; cursor?: { date: string } }
