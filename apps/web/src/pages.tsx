@@ -8,8 +8,8 @@ import { saveSignInReturnPath } from './auth';
 export function SignInPage({ session }: { session: SignInSession }) {
   const location = useLocation();
   const { state, message } = session;
-  if (state === 'checking' || state === 'signing-in') {
-    const text = state === 'signing-in' ? 'Signing you in' : 'Loading';
+  if (state === 'checking' || state === 'signing-in' || state === 'signing-out') {
+    const text = state === 'signing-in' ? 'Signing you in' : state === 'signing-out' ? 'Signing you out' : 'Loading';
     return (
       <section className="signin signin-loading" aria-busy="true">
         <Loader variant="text" size="inline" text={text} label={text} />
@@ -23,6 +23,10 @@ export function SignInPage({ session }: { session: SignInSession }) {
     saveSignInReturnPath(`${location.pathname}${location.search}${location.hash}`);
     void session.signIn();
   };
+  const switchAccount = () => {
+    saveSignInReturnPath(`${location.pathname}${location.search}${location.hash}`);
+    void session.switchAccount();
+  };
   return (
     <section className="signin" aria-labelledby="welcome-heading">
       <h1 id="welcome-heading">{getSignInGreeting()}</h1>
@@ -33,6 +37,11 @@ export function SignInPage({ session }: { session: SignInSession }) {
         {pending
           ? <Loader variant="text" size="inline" announce={false} text="Redirecting" label="Redirecting" />
           : state === 'error' ? 'Retry' : 'Sign in'}
+      </button>
+      <button className="secondary-button" type="button" onClick={switchAccount}
+        disabled={pending || unavailable} aria-label="Use a different Microsoft account" aria-busy={pending}
+        aria-describedby={unavailable ? 'signin-unavailable' : undefined}>
+        Use a different account
       </button>
       {unavailable && (
         <span className="visually-hidden" id="signin-unavailable">Sign-in is unavailable until the backend is configured.</span>
