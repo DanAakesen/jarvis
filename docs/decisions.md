@@ -7503,3 +7503,16 @@ unknown and partial semantics, owner-only access and original Daily as
 canonical. The integration audit corrected raw chart-series labels, repeated
 coverage copy, narrow Nutrition navigation and workout-detail spacing; no
 backend, contract, navigation or write-path changes are included.
+
+## GitHub App mint recovery alerts (#1212; 22 October 2026)
+
+Derive a versioned SHA-256 scope from the mint kind, normalized repository or
+catalog owner, and canonical requested permissions; persist only the digest.
+Serialize observations and reject stale timestamps per scope. Track the current
+status for each scope so a success resolves only that scope's active alert
+history, repeated failures do not spam, and a new failure after recovery gets a
+new activity row. Keep recovered activity and manual dismissal history intact.
+Aggregate health is `failed` for any failing scope and `unknown` when only
+unscoped legacy alerts remain, because their source scope cannot be proven.
+Do not infer the cause of a failed mint or production recovery from offline
+tests; no production state or credentials were inspected.
