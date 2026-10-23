@@ -505,6 +505,27 @@ coverage in `src/database/conversation-store.integration.test.ts`; run them only
 loopback SQL Server fixture via `npm run test:database --workspace @jarvis/backend -- src/database/schema.integration.test.ts`.
 Do not report SQL integration coverage unless that service ran.
 
+## Azure operations budget warning period (#1238; 23 October 2026)
+
+Azure's Consumption budget `timeGrain: Monthly` recurs by calendar month. Its
+`timePeriod.startDate` is the original activation date, not the current period.
+The backend validates that the budget is monthly and derives the activity key
+`budget-80:YYYY-MM` from the current UTC date. The original October 2026 key stays
+unchanged, preserving existing history; the November key is distinct. The unique
+SQL `activity.alert_key` index makes repeats idempotent across polling, restart and
+concurrent checks. Dismissal only sets `dismissed_at`, so it does not re-enable
+that month's warning. Invalid, unsupported or future period data fails the check.
+No Azure budget setting, infrastructure, permission or threshold changes.
+
+Focused checks:
+`npm test --workspace @jarvis/backend -- --run src/operations/budget-alert.test.ts`,
+backend build/typecheck and lint. SQL deduplication, restart, concurrent recording
+and dismissal coverage is in `src/database/schema.integration.test.ts`; run with
+`npm run test:database --workspace @jarvis/backend -- src/database/schema.integration.test.ts`
+only using the isolated loopback SQL Server fixture. Azure's [budget tutorial](https://learn.microsoft.com/en-us/azure/cost-management-billing/costs/tutorial-acm-create-budgets)
+describes recurring monthly budgets. Unit/integration checks do not establish live
+Azure polling or production behavior in a future month.
+
 ## P13-12 proactive run alerts (18 October 2026; default off in code, on in production since P13-15)
 
 The alert hook is composed only when the proactive, push and alert flags are all
