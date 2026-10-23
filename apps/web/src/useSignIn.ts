@@ -32,6 +32,7 @@ export interface SignInSession {
   signOutAllDevices: () => Promise<void>;
   hasOwnerSession: boolean;
   getAccessToken: () => Promise<string>;
+  getEntraAccessToken: (beforeInteractiveSignIn?: () => void | Promise<void>) => Promise<string>;
   client: PublicClientApplication;
 }
 

@@ -88,7 +88,9 @@ describe('Health upload settings', () => {
       ? new Response(JSON.stringify({ error: 'Microsoft sign-in required' }), { status: 403 })
       : new Response(JSON.stringify({ state: 'empty', expiresAt: null })));
     vi.stubGlobal('fetch', fetch);
-    const getEntraAccessToken = vi.fn(async (beforeInteractiveSignIn?: () => void | Promise<void>) => {
+    const getEntraAccessToken = vi.fn<
+      (beforeInteractiveSignIn?: () => void | Promise<void>) => Promise<string>
+    >(async (beforeInteractiveSignIn) => {
       await beforeInteractiveSignIn?.();
       throw new Error('Sign-in is redirecting.');
     });
