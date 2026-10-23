@@ -1348,7 +1348,7 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
 .activity-list > li + li { border-top: 1px solid var(--rule); }
 .activity-item { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-3); }
 .activity-item > div { min-width: 0; }
-.confirmation-summary { overflow-wrap: anywhere; }
+.confirmation-summary { overflow-wrap: anywhere; white-space: pre-line; }
 .activity-title { font-weight: 600; overflow-wrap: anywhere; }
 .activity-meta { display: grid; grid-template-columns: auto 1fr; gap: var(--space-1) var(--space-3); margin: var(--space-2) 0 0; font-size: var(--type-small); }
 .activity-meta dt { color: var(--text); }
