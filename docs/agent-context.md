@@ -1,11 +1,11 @@
 # Agent context
 
-## Owner session switch, revocation and checks (22 October 2026; #1217)
+## Owner session switch, revocation and checks (22 October 2026; #1217; default off in code, on in production since 23 October 2026)
 
 The backend can give the owner a revocable 10-day session after one Entra
-sign-in. The web client supports it, but the backend switch is still off by
-default and remains the rollout kill switch; do not turn it on as part of web
-work.
+sign-in. The web client supports it. The backend switch is off by default in
+code and on in production: `infra/main.bicep` pins it to `true` since 23 October
+2026, with the owner's explicit approval, and it remains the rollout kill switch.
 
 | Setting | Values | Default | Read |
 | --- | --- | --- | --- |
@@ -24,8 +24,10 @@ Entra-only behavior is unchanged.
 **Turn on.** Deploy migration 0064 and the backend revision first. To enable,
 change the `infra/main.bicep` pin and this session's pin test together to the
 exact string `true` in one reviewed change, with the owner's explicit approval,
-then deploy. After a 404, the web client waits up to six hours before its next
-mint attempt; a device may need a reload or time before it starts using sessions.
+then deploy; production has been enabled this way since 23 October 2026. After
+a 404, the web client waits up to six hours before its next mint attempt; a
+device may need a reload or time before it starts using sessions, and an
+explicit Sign in clears the wait at once.
 Locally, set the variable in the backend's environment together with the SQL
 settings; the offline skeleton cannot run sessions.
 

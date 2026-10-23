@@ -20,8 +20,8 @@ function* configurationFiles(directory: string): Generator<string> {
   }
 }
 
-describe('owner sessions stay disabled in the reviewed backend setting', () => {
-  it('pins one exact false value in the backend container and nowhere else in configuration', () => {
+describe('owner sessions are enabled only by the reviewed backend setting', () => {
+  it('pins one exact true value in the backend container and nowhere else in configuration', () => {
     const files = [
       ...readdirSync(root, { withFileTypes: true })
         .filter(entry => entry.isFile() && configName.test(entry.name) && !ignored.test(entry.name))
@@ -36,6 +36,6 @@ describe('owner sessions stay disabled in the reviewed backend setting', () => {
 
     const backendApp = readFileSync(join(root, 'infra/main.bicep'), 'utf8')
       .split(/^resource /mu).find(block => block.startsWith('backendApp '));
-    expect(backendApp).toMatch(/name: 'JARVIS_OWNER_SESSION_ENABLED'\s+value: 'false'\s+\}/u);
+    expect(backendApp).toMatch(/name: 'JARVIS_OWNER_SESSION_ENABLED'\s+value: 'true'\s+\}/u);
   });
 });

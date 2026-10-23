@@ -937,9 +937,9 @@ resource backendApp 'Microsoft.App/containerApps@2024-03-01' = if (deployBackend
               value: 'true'
             }
             {
-              // Enabling requires the owner's explicit approval and a matching change to the pin test in the same reviewed change.
+              // Enabled on 23 October 2026 with the owner's explicit approval. To disable, set this to 'false' and update the pin test in the same reviewed change; the next backend start then attempts to revoke every stored session.
               name: 'JARVIS_OWNER_SESSION_ENABLED'
-              value: 'false'
+              value: 'true'
             }
             {
               // English voice route; without it /voice is never registered (L102).
