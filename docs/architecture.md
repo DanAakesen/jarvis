@@ -2146,10 +2146,11 @@ revocable Jarvis session, so a device stays signed in for 10 days of normal use
 without depending on Microsoft token lifetimes. `JARVIS_OWNER_SESSION_ENABLED` (exactly
 `true` or `false`, default `false`; any other value stops startup) controls it
 and doubles as a kill switch. With the switch off, verification stops on the
-next request and session routes return 404. Each process that starts with it off
-attempts one background `revokeAll` after database initialization; this is
-best-effort, bounded to about a minute, and never delays or fails startup. It
-does not retry. That startup SQL call can wake a paused serverless database.
+next request and session routes return 404. With SQL and the owner id configured,
+each off-mode process start attempts one background `revokeAll` after database
+initialization; without SQL there is no boot revoke. This is best-effort, bounded
+to about a minute, and never delays or fails startup. It does not retry.
+That startup SQL call can wake a paused serverless database.
 An off revision starting during an on/off deployment overlap can revoke sessions
 minted by the on revision; the owner signs in again.
 
@@ -2881,10 +2882,11 @@ Migration `0064_owner_sessions.sql` (#1217) adds `dbo.owner_sessions` for the
 optional owner session described under Backend authentication. Every deployment
 gets the table. With `JARVIS_OWNER_SESSION_ENABLED` on, session requests read and
 write it through the process-owned pool. With the switch off, verification stops
-immediately and each process start attempts one background revoke of active
-sessions. That attempt can wake a paused serverless database. Its reverse script
-drops the table, which is the same as revoking every session: the owner signs in
-again. Deploy the migration before the revision that uses it.
+immediately and each process start with SQL configured attempts one background
+revoke of active sessions. Without SQL there is no boot revoke. That attempt can
+wake a paused serverless database. Its reverse script drops the table, which is
+the same as revoking every session: the owner signs in again. Deploy the migration
+before the revision that uses it.
 
 Real managed-identity token exchange and migrations in a deployed Azure revision
 remain issue #11. See the [database guide](../apps/backend/src/database/README.md)

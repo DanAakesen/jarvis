@@ -86,8 +86,8 @@ secret, and the owner's object id, display name, optional device label and the
 creation, last-use, idle-expiry, absolute-expiry and revoked-at times. The table
 is read and written for session requests only when `JARVIS_OWNER_SESSION_ENABLED`
 is exactly `true`. With the switch off, verification stops immediately and each
-process start attempts one background revoke of active sessions; this may wake a
-paused serverless database. Its down batch drops the table. Sessions are revocable
-credentials, not evidence, so dropping them is the same as revoking every session:
-the owner signs in again. Deploy the migration before the backend revision that
-uses the table.
+process start with SQL configured attempts one background revoke of active
+sessions; without SQL there is no boot revoke. This may wake a paused serverless
+database. Its down batch drops the table. Sessions are revocable credentials, not
+evidence, so dropping them is the same as revoking every session: the owner signs
+in again. Deploy the migration before the backend revision that uses the table.

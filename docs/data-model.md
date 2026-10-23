@@ -785,8 +785,9 @@ and durable facts remain authoritative in `DanAakesen/vault`.
 record behind the optional 10-day owner session. It stores sign-in credentials,
 not conversations, and has no relationship to `jarvis_sessions`. Every deployment
 gets the table. With `JARVIS_OWNER_SESSION_ENABLED` off, request verification stops
-immediately and each process start attempts one background revoke of active
-sessions. The attempt is best-effort and can wake a paused serverless database.
+immediately and each process start with SQL configured attempts one background
+revoke of active sessions; without SQL there is no boot revoke. The attempt is
+best-effort and can wake a paused serverless database.
 
 | Column | Contract |
 | --- | --- |

@@ -73,7 +73,9 @@ Operating notes:
   secret: a revocation applies from the next request, and an id refused for any
   reason leaves the set. The set is in memory, so a restart empties it. The limit
   is keyed on the session id, never on the client address, which the backend does
-  not trust. With the switch off none of this runs. The numbers are in
+  not trust. With the switch off no token lookup or admission logic runs; a
+  separate off-mode process start with SQL configured attempts the boot revoke
+  described above. The numbers are in
   `lookupAdmission` in `config.ts`.
 - Reading `throttled` lines: a burst with no owner complaint is a flood of random
   tokens being shed as designed. The budget bounds database work but not wake-up,

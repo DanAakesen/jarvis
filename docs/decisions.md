@@ -3,9 +3,10 @@
 ## Revoke owner sessions on off-mode startup (23 October 2026; #1224)
 
 Turning the owner-session switch off stops verification from the next request.
-Each process start with the switch off makes one background, best-effort call to
-the existing `revokeAll` store method after SQL initialization, bounded to about
-a minute and never allowed to delay or fail startup. This may wake a paused
+With SQL and the owner id configured, each off-mode process start makes one
+background, best-effort call to the existing `revokeAll` store method after SQL
+initialization; without SQL, there is no boot revoke. It is bounded to about a
+minute and never allowed to delay or fail startup. This may wake a paused
 serverless database; it does not poll or retry. A deployment overlap can let an
 off revision revoke sessions minted by an on revision, in which case the owner
 signs in again. Infrastructure pins the switch to `false`; enabling requires the

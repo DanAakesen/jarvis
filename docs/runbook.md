@@ -40,9 +40,9 @@ before it starts using sessions.
 
 Change the pin and its test back to `false` together, then deploy. Verification
 stops on the next request served by the off revision, and the session routes
-answer 404. The next process start attempts one background revoke of active
-sessions; this can wake a paused serverless database, but does not delay or fail
-startup and is not retried.
+answer 404. The next process start with SQL configured attempts one background
+revoke of active sessions; without SQL there is no boot revoke. This can wake a
+paused serverless database, but does not delay or fail startup and is not retried.
 
 ### Incident
 
