@@ -784,8 +784,9 @@ and durable facts remain authoritative in `DanAakesen/vault`.
 `0064_owner_sessions.sql` (#1217) adds `dbo.owner_sessions`, the server-side
 record behind the optional 10-day owner session. It stores sign-in credentials,
 not conversations, and has no relationship to `jarvis_sessions`. Every deployment
-gets the table, but it stays empty and unused while `JARVIS_OWNER_SESSION_ENABLED`
-is not exactly `true`.
+gets the table. With `JARVIS_OWNER_SESSION_ENABLED` off, request verification stops
+immediately and each process start attempts one background revoke of active
+sessions. The attempt is best-effort and can wake a paused serverless database.
 
 | Column | Contract |
 | --- | --- |

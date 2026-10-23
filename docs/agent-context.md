@@ -14,19 +14,25 @@ work.
 Any other value, or `true` with no SQL settings, stops startup with a
 configuration error.
 
-**Turn on.** Deploy migration 0064 and the backend revision first; startup
-applies the migration and the table stays unused. Then set the value to the
-exact string `true` as a backend container app `env` entry in `infra/main.bicep`,
-as the other switches are, and deploy. Locally, set the variable in the backend's
-environment together with the SQL settings; the offline skeleton cannot run
-sessions.
+**Turn on.** Deploy migration 0064 and the backend revision first. To enable,
+change the `infra/main.bicep` pin and this session's pin test together to the
+exact string `true` in one reviewed change, with the owner's explicit approval,
+then deploy. After a 404, the web client waits up to six hours before its next
+mint attempt; a device may need a reload or time before it starts using sessions.
+Locally, set the variable in the backend's environment together with the SQL
+settings; the offline skeleton cannot run sessions.
 
 **Turn off (kill switch).** Set the value to `false` or remove the entry, then
-deploy or restart. From the next request every `js.` token is a 401, and
+deploy or restart. From the next request, verification stops: every `js.` token
+is a 401, and
 `POST /auth/session`, `DELETE /auth/session` and `DELETE /auth/sessions` answer
-404, although the rows stay in `dbo.owner_sessions`. Turning the switch on again
-revives any row still inside its lifetime, so revoke all sessions first when that
-is not wanted.
+404. The next process start attempts one background, best-effort revoke of all
+active rows in `dbo.owner_sessions`, with a one-minute timeout and no retry. This
+touches SQL at startup and can wake a paused serverless database; the revoke does
+not delay or fail startup. A missing table or other database failure is logged
+without secrets. No SQL means no boot revoke. If an off revision starts while an
+on revision is overlapping, it may revoke sessions that revision just minted;
+the owner signs in again.
 
 **Revoke all sessions** (a lost phone or a suspected leak):
 
@@ -35,10 +41,10 @@ is not wanted.
   on its next request because nothing is cached.
 - To end only the calling device, call `DELETE /auth/session` with that device's
   session token (204).
-- With no usable token, turn the switch off for the immediate stop, then revoke
-  the rows in SQL after the owner approves:
-  `UPDATE dbo.owner_sessions SET revoked_at = SYSUTCDATETIME() WHERE revoked_at IS NULL;`.
-  Rolling back migration 0064 drops the table and ends every session too.
+- With a usable session or Entra owner token, call `DELETE /auth/sessions` first,
+  then turn the switch off if needed. With no usable token, turn the switch off;
+  the next process start attempts the revoke, so a manual SQL update is no longer
+  needed. Rolling back migration 0064 drops the table and ends every session too.
 
 Operating notes:
 

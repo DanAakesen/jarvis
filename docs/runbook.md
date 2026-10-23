@@ -21,6 +21,45 @@ from the `jarvis-infra` deployment outputs instead of guessing them.
 4. Confirm the relevant Deploy or Runner deploy jobs and smoke checks succeeded.
    A successful build alone is not production acceptance.
 
+## Owner session switch
+
+The backend switch is pinned to `false` in `infra/main.bicep`; do not change it
+through a portal override. Keep ingress header logging off because the voice
+session token is carried in the `Sec-WebSocket-Protocol` header.
+
+### Enable
+
+Deploy migration 0064 and the backend revision with the switch still off first.
+Enabling requires the owner's explicit approval: change the `infra/main.bicep`
+pin and `apps/backend/src/auth/session/enabled-switch.test.ts` together to
+`true` in one reviewed change, then deploy. After a 404, the web client waits up
+to six hours before its next mint attempt, so a device may need a reload or time
+before it starts using sessions.
+
+### Disable
+
+Change the pin and its test back to `false` together, then deploy. Verification
+stops on the next request served by the off revision, and the session routes
+answer 404. The next process start attempts one background revoke of active
+sessions; this can wake a paused serverless database, but does not delay or fail
+startup and is not retried.
+
+### Incident
+
+Call `DELETE /auth/sessions` with a session token or Entra owner access token
+first; confirm its 200 response and revoked count, then turn the switch off if
+needed. If no usable token is available, turn the switch off; the next process
+start attempts to revoke stored sessions. A manual SQL fallback is no longer
+needed. An off revision that starts during an on/off deployment overlap may
+revoke sessions minted by the on revision; the owner signs in again.
+
+### Verify after enabling
+
+Sign in once with Entra; confirm mint answers 201, revoke-all answers 200 with a
+count, and expected `owner_session.*` events appear, including
+`owner_session.boot_revoke` when an off-mode process starts. Logs contain no
+session tokens or hashes.
+
 ## Voice startup diagnosis
 
 After deployment, the owner should make one voice attempt, end it, and find its

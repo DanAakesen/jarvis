@@ -1,5 +1,16 @@
 # Decisions
 
+## Revoke owner sessions on off-mode startup (23 October 2026; #1224)
+
+Turning the owner-session switch off stops verification from the next request.
+Each process start with the switch off makes one background, best-effort call to
+the existing `revokeAll` store method after SQL initialization, bounded to about
+a minute and never allowed to delay or fail startup. This may wake a paused
+serverless database; it does not poll or retry. A deployment overlap can let an
+off revision revoke sessions minted by an on revision, in which case the owner
+signs in again. Infrastructure pins the switch to `false`; enabling requires the
+owner's explicit approval and a matching pin-test change.
+
 ## Web owner-session client (#1220; 23 October 2026)
 
 The backend owner session is now consumed by the web client while
@@ -140,7 +151,8 @@ The owner asked to stop signing in many times a day on web, phone and localhost.
 Microsoft caps refresh tokens for a browser app at 24 hours (#1214 keeps what it
 allows), so the backend can now exchange one Entra sign-in for its own revocable
 session. This is the backend half. It ships behind `JARVIS_OWNER_SESSION_ENABLED`,
-default off, which also works as a kill switch; the web half is a separate change.
+default off, which stops verification at once and triggers a background revoke
+at the next process start; the web half is a separate change.
 
 Decided:
 
@@ -172,7 +184,8 @@ Decided:
   with no reason in the response; the log carries a reason category and the first
   eight characters of the token. A store outage is a 503 with `Retry-After`, so a
   client keeps a good session and retries, and it is never an allow. With the
-  switch off the hook has no verifier, so even a row still in the table is a 401.
+  switch off the hook has no verifier, so even a row still in the table is a 401;
+  the next off-mode process start attempts to revoke active rows.
 - **Contract and limiter.** The response shape stays in the backend; nothing is
   added to `packages/contracts` until the web half consumes it. The creation
   limit (5 per minute, 30 per hour) is in process, so it is per replica; it
