@@ -340,7 +340,7 @@ function planChart(source: TabularSource, rows: readonly Row[], metric?: string)
     const usable = rows.filter((row) => finite(row[nutrient.key]));
     if (!usable.length) return { fallback: `No ${nutrient.label.toLowerCase()} totals have a value to draw, so a table is shown.` };
     const labels = uniqueLabels(usable.map((row) => shortDate(row.meal_date)));
-    const partialDays = rows.filter((row) =>
+    const partialDays = rows.filter((row) => finite(row[nutrient.key]) &&
       Array.isArray(row.partial_nutrients) && row.partial_nutrients.includes(nutrient.key)).length;
     const omitted = rows.length - usable.length;
     return {

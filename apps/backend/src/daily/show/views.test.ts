@@ -134,7 +134,7 @@ describe('daily show view builder: measurements', () => {
   it('charts one selected nutrition nutrient, omits unknowns and marks partial totals as lower bounds', () => {
     const result = read(sources.days, [
       { meal_date: '2026-10-15', meal_count: 2, protein_grams: 58.5, partial_nutrients: [], unknown_nutrients: [] },
-      { meal_date: '2026-10-16', meal_count: 1, protein_grams: null, partial_nutrients: ['protein_grams'], unknown_nutrients: ['protein_grams'] },
+      { meal_date: '2026-10-16', meal_count: 1, protein_grams: null, partial_nutrients: [], unknown_nutrients: ['protein_grams'] },
       { meal_date: '2026-10-17', meal_count: 3, protein_grams: 46, partial_nutrients: ['protein_grams'], unknown_nutrients: [] },
     ], { hasMore: true });
     result.provenance.calculations = 'derived-from-retained-meals';
@@ -151,7 +151,7 @@ describe('daily show view builder: measurements', () => {
     }]);
     expect(build.receipt).toMatchObject({ renderer: 'chart', rowsShown: 2, rowsReturned: 3, partial: true });
     expect(build.receipt.notes).toContain('1 day without a recorded protein total left out of the chart.');
-    expect(build.receipt.notes).toContain('2 days have partial protein totals, which are lower bounds.');
+    expect(build.receipt.notes).toContain('1 day has a partial protein total, which is a lower bound.');
     expect(build.receipt.notes).toContain('More records are available beyond this page.');
     expect(reason(build)).toContain('lower bounds');
   });
