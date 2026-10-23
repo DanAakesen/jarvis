@@ -675,6 +675,16 @@ is not recorded. Remove the retry wave in `runSuite` to revert it. #816's
 coordination client is never opened for smoke turns; the agent test
 `test_smoke_invocations_open_no_coordination_connection` pins that.
 
+Several `chat_*` checks failing together with `agent_error_code_unlisted` while the
+backend tool callbacks return 200 is not automatically a flake. Before rerunning,
+query the Foundry Responses API `invoke_agent` dependency spans in Application
+Insights (`AppDependencies`, `error.type` in the span properties) for
+`rate_limit_exceeded`. The acceptance run sends about 15 Chat model calls and 57K
+to 66K input tokens in one minute, which exceeded the 50,000 tokens per minute of
+the `gpt-6-astra` deployment until its capacity was raised to 150 on 23 October
+(#1232). Raise the capacity of the model the Chat setting selects before pacing
+the checks.
+
 Targeted commands:
 `npm test --workspace @jarvis/backend -- src/core/chat-agent.test.ts src/core/chat-canary.test.ts src/system-status.test.ts`,
 `$env:PYTHONPATH='.github\scripts'; python -m unittest discover -s .github\scripts\tests -p "test_smoke_reasons.py" -v`

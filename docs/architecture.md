@@ -1479,7 +1479,10 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   options. The Codex list mirrors Codex's own catalogue (`gpt-6.1-sol`,
   `gpt-6-astra`, `gpt-6-sol`, `gpt-6-luna`, `gpt-5.6-sol/terra/luna`);
   Chat and Research options are the live Foundry deployments, now including
-  `gpt-6-astra` and `gpt-6.1-sol` (Bicep). Factory task starts prefer per-task model/reasoning overrides to the
+  `gpt-6-astra` and `gpt-6.1-sol` (Bicep). `gpt-6-astra` has capacity 150 (rate limit
+  150K tokens per minute, Global Standard bills per token) since 23 October, because the
+  live acceptance run sends over 50K input tokens a minute to the Chat model (#1232).
+  Factory task starts prefer per-task model/reasoning overrides to the
   corresponding role settings, then pass the effective choices to the runner.
   Codex applies both through ACP config options; Copilot receives its model and
   reasoning effort as CLI arguments. `default` omits the setting; Codex's
