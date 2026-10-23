@@ -2,6 +2,8 @@ import { randomBytes } from 'node:crypto';
 import { Writable } from 'node:stream';
 import { afterEach,describe,expect,it,vi } from 'vitest';
 import { buildApp } from '../../app.js';
+import { InMemoryOwnerSessionStore } from '../../auth/session/memory-store.js';
+import { OwnerSessionService } from '../../auth/session/service.js';
 import { loadConfig } from '../../config.js';
 import { createLogger } from '../../logging.js';
 import { HealthConflict,HealthUnavailable,healthUploadLimit,sha256,type HealthBuffer,type HealthCapability,type HealthReceipt } from './contracts.js';
@@ -153,9 +155,23 @@ describe('inactive SQL health composition in the existing backend',() => {
       objectId: value === 'header.foreign.signature' ? '22222222-2222-4222-8222-222222222222' : config.auth.ownerObjectId,
       tenantId: config.auth.tenantId,displayName: 'Synthetic owner',
     }));
+    const sessions = new OwnerSessionService({
+      store: new InMemoryOwnerSessionStore(),
+      ownerObjectId: config.auth.ownerObjectId,
+      tenantId: config.auth.tenantId,
+    });
+    const session = await sessions.create({
+      ownerObjectId: config.auth.ownerObjectId,
+      displayName: 'Synthetic owner',
+      deviceLabel: 'Synthetic device',
+    });
+    const sessionHeaders = { authorization: ['Bearer',session.token].join(' ') };
     const logs: string[] = [];
     const output = new Writable({ write(chunk: Buffer,_encoding,done) { logs.push(chunk.toString()); done(); } });
-    const app = buildApp(config,createLogger(config,undefined,output),{ auth,healthCapabilities: capabilities,healthUpload: { enabled: true } });
+    const sessionConfig = { ...config,ownerSessionEnabled: true };
+    const app = buildApp(sessionConfig,createLogger(sessionConfig,undefined,output),{
+      auth,ownerSessions: sessions,healthCapabilities: capabilities,healthUpload: { enabled: true },
+    });
     apps.push(app);
 
     const anonymous = await app.inject('/api/health/upload-credential');
@@ -166,6 +182,22 @@ describe('inactive SQL health composition in the existing backend',() => {
     expect(status.statusCode).toBe(200);
     expect(status.headers['cache-control']).toBe('no-store');
     expect(status.json()).toEqual({ state: 'empty',expiresAt: null });
+
+    const sessionStatus = await app.inject({ url: '/api/health/upload-credential',headers: sessionHeaders });
+    expect(sessionStatus.statusCode).toBe(200);
+    expect(sessionStatus.json()).toEqual({ state: 'empty',expiresAt: null });
+    expect(getStatus).toHaveBeenCalledTimes(2);
+    for (const action of ['create','rotate','revoke'] as const) {
+      const response = await app.inject({
+        method: 'POST',url: '/api/health/upload-credential',headers: sessionHeaders,payload: { action },
+      });
+      expect(response.statusCode).toBe(403);
+      expect(response.json()).toEqual({ error: 'Microsoft sign-in required' });
+    }
+    expect(prepare).not.toHaveBeenCalled();
+    expect(create).not.toHaveBeenCalled();
+    expect(rotateCurrent).not.toHaveBeenCalled();
+    expect(revokeCurrent).not.toHaveBeenCalled();
 
     const issued = await app.inject({ method: 'POST',url: '/api/health/upload-credential',headers,payload: { action: 'create' } });
     expect(issued.statusCode).toBe(200);

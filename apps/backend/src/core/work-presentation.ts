@@ -25,7 +25,7 @@ export function redactWorkContent(value: string): string {
       (match) => match.replace(/[^\r\n]+/gu, '[REDACTED PRIVATE KEY]'))
     .replace(/(["']?\b(?:(?:[a-z0-9]+[_-])*(?:password|passwd|pwd|token|key|secret)|access[_ -]?token|refresh[_ -]?token|api[_ -]?key|access[_ -]?key|private[_ -]?key|client[_ -]?secret|accountkey|connectionstring|authorization)\b["']?\s*[:=]\s*)(?:"[^"]*"|'[^']*'|`[^`]*`|[^\s,;&]+)/giu,
       (match, prefix: string) => prefix + match.slice(prefix.length).replace(/[^\r\n]+/gu, '[REDACTED]'))
-    .replace(/\b(?:sk-(?:proj-)?[A-Za-z0-9_-]{16,}|gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|AKIA[A-Z0-9]{16}|eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,})\b/gu, '[REDACTED]')
+    .replace(/\b(?:sk-(?:proj-)?[A-Za-z0-9_-]{16,}|gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|AKIA[A-Z0-9]{16}|eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}|js\.[A-Za-z0-9_-]{22}\.[A-Za-z0-9_-]{43})\b/gu, '[REDACTED]')
     .replace(/(https?:\/\/)[^/\s@]+:[^/\s@]+@/giu, '$1[REDACTED]@');
 }
 

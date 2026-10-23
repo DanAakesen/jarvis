@@ -134,6 +134,7 @@ export class OwnerSessionService implements OwnerSessionVerifier {
       maxActive: this.policy.maxActiveSessions,
       purgeBefore: new Date(now.getTime() - this.policy.retentionAfterDeathMs),
     }));
+    this.admission.verified(credential.sessionId);
     return {
       sessionId: credential.sessionId,
       prefix: ownerSessionPrefix(credential.sessionId),

@@ -30,6 +30,9 @@ describe('window readback', () => {
     const bounded = boundText('é'.repeat(10_000), 8 * 1024);
     expect(new TextEncoder().encode(bounded).byteLength).toBeLessThanOrEqual(8 * 1024);
     expect(redactSecrets('ghp_abcdefghijklmnopqrstuvwx')).toBe('[redacted]');
+    expect(redactSecrets(`js.${'A'.repeat(22)}.${'B'.repeat(43)}`)).toBe('[redacted]');
+    expect(redactSecrets('Version 1.2.3, example.com, and report.final.csv.'))
+      .toBe('Version 1.2.3, example.com, and report.final.csv.');
     expect(isWorkspaceSnapshot({ windows: [{ viewId: 'a', title: 'A', content: bounded }], contextPanelOpen: false })).toBe(true);
   });
 

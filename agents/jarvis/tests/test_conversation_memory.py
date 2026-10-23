@@ -1359,6 +1359,7 @@ def test_scrub_text_removes_credentials_and_keeps_ordinary_text() -> None:
     key_begin = "-----BEGIN " + "PRIVATE KEY-----"
     key_end = "-----END " + "PRIVATE KEY-----"
     jwt = ".".join(("eyJ" + "a" * 12, "b" * 12, "c" * 12))
+    owner_session = f"js.{'A' * 22}.{'B' * 43}"
     exact = {
         f"Authorization: {bearer} abc123": "Authorization: [REDACTED]",
         f"call it with {bearer} abc.def.ghi now": "call it with [REDACTED] now",
@@ -1373,7 +1374,7 @@ def test_scrub_text_removes_credentials_and_keeps_ordinary_text() -> None:
 
     tokens = [
         "sk-" + "a" * 24, "gh" + "p_" + "B" * 30, "github_pat_" + "C" * 30,
-        "AKIA" + "ABCDEFGHIJKLMNOP", jwt,
+        "AKIA" + "ABCDEFGHIJKLMNOP", jwt, owner_session,
     ]
     for token in tokens:
         assert scrub_text(f"use {token} here") == "use [REDACTED] here"
@@ -1385,6 +1386,7 @@ def test_scrub_text_removes_credentials_and_keeps_ordinary_text() -> None:
     for plain in (
         "Decision: the Aarhus pilot launches on 14 November, not earlier.",
         "The monkey on the keyboard: a note about turkey.",
+        "Version 1.2.3, example.com, and report.final.csv remain ordinary dotted text.",
     ):
         assert scrub_text(plain) == plain
 

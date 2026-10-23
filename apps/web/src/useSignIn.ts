@@ -32,6 +32,7 @@ export interface SignInSession {
   signOutAllDevices: () => Promise<void>;
   hasOwnerSession: boolean;
   getAccessToken: () => Promise<string>;
+  getEntraAccessToken: (beforeInteractiveSignIn?: () => void | Promise<void>) => Promise<string>;
   client: PublicClientApplication;
 }
 
@@ -135,7 +136,7 @@ export function useSignIn(config: PublicConfig): SignInSession {
     }
   }, [client, config]);
 
-  const getEntraAccessToken = useCallback(async () => {
+  const getEntraAccessToken = useCallback(async (beforeInteractiveSignIn?: () => void | Promise<void>) => {
     const account = client.getActiveAccount() ?? client.getAllAccounts()[0];
     const interactionError = account
       ? null
@@ -149,6 +150,7 @@ export function useSignIn(config: PublicConfig): SignInSession {
       }
     } catch (error) {
       if (needsSignInInteraction(error)) {
+        await beforeInteractiveSignIn?.();
         const redirected = await tryAutomaticSignInRedirect(client, config, error).catch((redirectError: unknown) => {
           setProfile(null);
           setMessage(redirectError instanceof MicrosoftSignInError ? redirectError.message : signInFailureMessage(error));
@@ -228,6 +230,7 @@ export function useSignIn(config: PublicConfig): SignInSession {
     signOutAllDevices: handleSignOutAllDevices,
     hasOwnerSession,
     getAccessToken,
+    getEntraAccessToken,
     client,
   };
 }

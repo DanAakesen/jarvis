@@ -18,9 +18,14 @@ describe('Health upload settings', () => {
       return new Response(JSON.stringify({ state: 'empty', expiresAt: null }));
     });
     vi.stubGlobal('fetch', fetch);
-    render(<HealthUploadSettings backendUrl="https://jarvis.example.test/" getAccessToken={async () => 'synthetic-owner-token'} />);
+    const getAccessToken = vi.fn(async () => 'synthetic-session-token');
+    const getEntraAccessToken = vi.fn(async () => 'synthetic-entra-token');
+    render(<HealthUploadSettings backendUrl="https://jarvis.example.test/" getAccessToken={getAccessToken}
+      getEntraAccessToken={getEntraAccessToken} />);
 
     await screen.findByText('Credential: empty');
+    expect((fetch.mock.calls[0]?.[1]?.headers as Record<string, string>).Authorization)
+      .toBe(`${['Bear', 'er'].join('')} synthetic-session-token`);
     expect(screen.getByText('https://jarvis.example.test/api/health/ingest')).toBeTruthy();
     expect(screen.getByText(/POST/u)).toBeTruthy();
     expect(screen.getByText(`Authorization: ${['Bear', 'er'].join('')} <token>`)).toBeTruthy();
@@ -37,8 +42,12 @@ describe('Health upload settings', () => {
     expect(fetch.mock.calls.at(-1)?.[1]).toMatchObject({
       method: 'POST',
       body: JSON.stringify({ action: 'create' }),
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        Authorization: `${['Bear', 'er'].join('')} synthetic-entra-token`,
+        'Content-Type': 'application/json',
+      },
     });
+    expect(getEntraAccessToken).toHaveBeenCalledOnce();
     expect(screen.getByLabelText('One-time bearer token')).toHaveProperty('value', token);
 
     fireEvent.click(screen.getByRole('button', { name: 'Rotate credential' }));
@@ -50,19 +59,53 @@ describe('Health upload settings', () => {
     expect(screen.queryByLabelText('One-time bearer token')).toBeNull();
     expect(JSON.parse(String(fetch.mock.calls.at(-1)?.[1]?.body))).toEqual({ action: 'revoke' });
     expect(screen.getAllByRole('status')[0]?.textContent).toContain('revoked');
+    expect(getEntraAccessToken).toHaveBeenCalledTimes(3);
+    expect(fetch.mock.calls.filter(([, init]) => init?.method === 'POST')
+      .every(([, init]) => (init?.headers as Record<string, string>).Authorization ===
+        `${['Bear', 'er'].join('')} synthetic-entra-token`))
+      .toBe(true);
   });
 
   it('explains unavailable configuration and surfaces status failures with a retry', async () => {
     const fetch = vi.fn(async () => new Response(JSON.stringify({ error: 'synthetic' }), { status: 503 }));
     vi.stubGlobal('fetch', fetch);
-    render(<HealthUploadSettings backendUrl={null} getAccessToken={async () => 'synthetic-owner-token'} />);
+    const getAccessToken = async () => 'synthetic-session-token';
+    const getEntraAccessToken = async () => 'synthetic-entra-token';
+    render(<HealthUploadSettings backendUrl={null} getAccessToken={getAccessToken} getEntraAccessToken={getEntraAccessToken} />);
     expect(screen.getByText('API URL not configured')).toBeTruthy();
     expect((screen.getByRole('button', { name: 'Retry status' }) as HTMLButtonElement).disabled).toBe(true);
 
     cleanup();
-    render(<HealthUploadSettings backendUrl="https://jarvis.example.test" getAccessToken={async () => 'synthetic-owner-token'} />);
+    render(<HealthUploadSettings backendUrl="https://jarvis.example.test" getAccessToken={getAccessToken}
+      getEntraAccessToken={getEntraAccessToken} />);
     await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('Health upload settings could not be loaded.'));
     fireEvent.click(screen.getByRole('button', { name: 'Retry status' }));
     await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
+  });
+
+  it('announces an interactive sign-in before redirecting and shows the required sign-in error', async () => {
+    const fetch = vi.fn(async (_url: string | URL, init?: RequestInit) => init?.method === 'POST'
+      ? new Response(JSON.stringify({ error: 'Microsoft sign-in required' }), { status: 403 })
+      : new Response(JSON.stringify({ state: 'empty', expiresAt: null })));
+    vi.stubGlobal('fetch', fetch);
+    const getEntraAccessToken = vi.fn<
+      (beforeInteractiveSignIn?: () => void | Promise<void>) => Promise<string>
+    >(async (beforeInteractiveSignIn) => {
+      await beforeInteractiveSignIn?.();
+      throw new Error('Sign-in is redirecting.');
+    });
+    render(<HealthUploadSettings backendUrl="https://jarvis.example.test" getAccessToken={async () => 'session'}
+      getEntraAccessToken={getEntraAccessToken} />);
+    await screen.findByText('Credential: empty');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Create credential' }));
+
+    expect(await screen.findByText('Changing this credential needs a fresh Microsoft sign-in.')).toBeTruthy();
+    expect(fetch).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect((screen.getByRole('button', { name: 'Create credential' }) as HTMLButtonElement).disabled).toBe(false));
+
+    getEntraAccessToken.mockImplementationOnce(async () => 'entra');
+    fireEvent.click(screen.getByRole('button', { name: 'Create credential' }));
+    expect(await screen.findByText('Microsoft sign-in required.')).toBeTruthy();
   });
 });

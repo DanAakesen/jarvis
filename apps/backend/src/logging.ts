@@ -80,6 +80,7 @@ export function safeErrorFields(error: unknown): { kind: string; statusCode?: nu
 
 const ownerSessionEvents = new Set([
   'owner_session.created', 'owner_session.revoked', 'owner_session.rejected', 'owner_session.refresh_failed',
+  'owner_session.boot_revoke',
 ]);
 
 const events = new Set([
@@ -415,6 +416,16 @@ function safeFields(input: Record<string, unknown>): Record<string, unknown> {
     return fields;
   }
   if (typeof input.msg === 'string' && ownerSessionEvents.has(input.msg)) {
+    if (input.msg === 'owner_session.boot_revoke') {
+      const fields: Record<string, unknown> = {};
+      if (['revoked', 'table_missing', 'skipped', 'failed'].includes(String(input.outcome))) {
+        fields.outcome = input.outcome;
+      }
+      if (typeof input.count === 'number' && Number.isSafeInteger(input.count) && input.count >= 0) {
+        fields.count = input.count;
+      }
+      return fields;
+    }
     // Audit events carry a reason category and an 8-character session id prefix, never a token, secret or hash.
     const fields: Record<string, unknown> = {};
     const smallCount = (value: unknown): value is number =>
