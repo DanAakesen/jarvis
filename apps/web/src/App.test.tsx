@@ -21,6 +21,7 @@ const {
   signIn,
   signInFailureMessage,
   signOut,
+  revokeAllOwnerSessions,
   tryAutomaticSignInRedirect,
   saveSignInReturnPath,
   takeSignInReturnPath,
@@ -49,6 +50,7 @@ const {
     signIn: vi.fn(),
     signInFailureMessage: vi.fn(() => 'Microsoft sign-in did not complete. Try again.'),
     signOut: vi.fn().mockResolvedValue(undefined),
+    revokeAllOwnerSessions: vi.fn().mockResolvedValue(undefined),
     tryAutomaticSignInRedirect: vi.fn().mockResolvedValue(false),
     saveSignInReturnPath: vi.fn(),
     takeSignInReturnPath: vi.fn<() => string | null>(() => null),
@@ -69,6 +71,7 @@ const {
 vi.mock('./auth', () => ({
   createAuthClient, hasSignedInDeviceBefore, isSignInRedirectPending, isSignInStorageEvent,
   MicrosoftSignInError, needsSignInInteraction, restoreProfile, signIn, signInFailureMessage, signOut,
+  revokeAllOwnerSessions,
   tryAutomaticSignInRedirect,
   saveSignInReturnPath, takeSignInReturnPath,
 }));
@@ -118,6 +121,7 @@ beforeEach(() => {
   createAuthClient.mockReturnValue(makeAuthClient());
   hasSignedInDeviceBefore.mockReturnValue(false);
   restoreProfile.mockResolvedValue(null);
+  revokeAllOwnerSessions.mockResolvedValue(undefined);
   isSignInRedirectPending.mockReturnValue(false);
   takeSignInReturnPath.mockReturnValue(null);
   loadConversationHistory.mockResolvedValue({ messages: [], nextCursor: null });
@@ -285,6 +289,39 @@ describe('Jarvis routes', () => {
 
     expect(signOut).toHaveBeenCalledWith(expect.anything(), config);
     expect(await screen.findByRole('button', { name: 'Sign in with Microsoft' })).not.toBeNull();
+  });
+
+  it('keeps Settings available after failed all-device revocation and allows retry', async () => {
+    const user = userEvent.setup();
+    const token = `js.${'a'.repeat(22)}.${'b'.repeat(43)}`;
+    localStorage.setItem('jarvis.owner-session', JSON.stringify({
+      version: 1,
+      backendOrigin: 'https://api.example.com',
+      sessionId: 'a'.repeat(22),
+      token,
+      idleExpiresAt: new Date(Date.now() + 10 * 24 * 60 * 60_000).toISOString(),
+      absoluteExpiresAt: new Date(Date.now() + 30 * 24 * 60 * 60_000).toISOString(),
+    }));
+    restoreProfile.mockResolvedValue({ name: 'Dan Aakesen' });
+    revokeAllOwnerSessions
+      .mockRejectedValueOnce(new Error('temporary backend failure'))
+      .mockResolvedValueOnce(undefined);
+    render(<MemoryRouter initialEntries={['/settings']}><App config={config} /></MemoryRouter>);
+    await screen.findByRole('heading', { name: 'Account' });
+
+    await user.click(screen.getByRole('button', { name: 'Sign out on all devices' }));
+    await user.click(screen.getByRole('button', { name: 'Confirm sign out on all devices' }));
+
+    const revokeError = await screen.findByText(
+      'Could not sign out other devices. This device is still signed in.',
+    );
+    expect(revokeError.closest('[role="alert"]')).not.toBeNull();
+    expect(screen.getByRole('heading', { name: 'Account' })).toBeTruthy();
+    expect(screen.getByRole('group', { name: 'Confirm sign out on all devices' })).toBeTruthy();
+
+    await user.click(screen.getByRole('button', { name: 'Confirm sign out on all devices' }));
+    expect(revokeAllOwnerSessions).toHaveBeenCalledTimes(2);
+    expect(await screen.findByRole('button', { name: 'Sign in with Microsoft' })).toBeTruthy();
   });
 
   it('does not flash the sign-in screen while silent account restoration is pending', async () => {

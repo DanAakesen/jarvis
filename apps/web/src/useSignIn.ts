@@ -203,17 +203,18 @@ export function useSignIn(config: PublicConfig): SignInSession {
   }, [config]);
 
   const handleSignOutAllDevices = useCallback(async () => {
+    const token = await getAccessToken();
+    await revokeAllOwnerSessions(config, token);
+
     setState('signing-out');
     setMessage('');
     try {
-      const token = await getAccessToken();
-      await revokeAllOwnerSessions(config, token);
       await clearSignIn(client);
       setProfile(null);
       setState('signed-out');
     } catch (error) {
-      setMessage(error instanceof MicrosoftSignInError ? error.message : 'Could not sign out other devices. Try again.');
-      throw error;
+      setMessage(error instanceof MicrosoftSignInError ? error.message : 'Sign-out failed.');
+      setState('error');
     }
   }, [client, config, getAccessToken]);
 

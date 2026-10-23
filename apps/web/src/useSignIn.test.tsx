@@ -55,11 +55,28 @@ const config: PublicConfig = {
   backendUrl: 'https://api.example.com',
 };
 
+function storeOwnerSession() {
+  const token = `js.${'a'.repeat(22)}.${'b'.repeat(43)}`;
+  const record = {
+    version: 1,
+    backendOrigin: 'https://api.example.com',
+    sessionId: 'a'.repeat(22),
+    token,
+    idleExpiresAt: new Date(Date.now() + 10 * 24 * 60 * 60_000).toISOString(),
+    absoluteExpiresAt: new Date(Date.now() + 30 * 24 * 60 * 60_000).toISOString(),
+  };
+  localStorage.setItem('jarvis.owner-session', JSON.stringify(record));
+  return record;
+}
+
 beforeEach(() => {
+  localStorage.clear();
   auth.accounts.length = 0;
   auth.client.getActiveAccount.mockReturnValue(null);
   auth.client.getAllAccounts.mockImplementation(() => auth.accounts);
   auth.client.acquireTokenSilent.mockResolvedValue({ accessToken: 'fixture-token' });
+  auth.revokeAllOwnerSessions.mockResolvedValue(undefined);
+  auth.signOut.mockResolvedValue(undefined);
   auth.restoreProfile.mockImplementation(async () => auth.accounts.length ? { name: 'Owner' } : null);
   auth.needsSignInInteraction.mockReturnValue(false);
   auth.tryAutomaticSignInRedirect.mockResolvedValue(false);
@@ -180,5 +197,77 @@ describe('useSignIn cross-tab synchronization', () => {
     await waitFor(() => expect(result.current.hasOwnerSession).toBe(false));
     expect(auth.restoreProfile).toHaveBeenCalledTimes(2);
     unmount();
+  });
+
+  it('keeps the signed-in session intact when all-device revocation fails', async () => {
+    auth.accounts.push({ homeAccountId: 'owner' });
+    const session = storeOwnerSession();
+    auth.restoreProfile.mockResolvedValue({ name: 'Owner' });
+    auth.revokeAllOwnerSessions.mockRejectedValue(new Error('temporary failure'));
+    const { result } = renderHook(() => useSignIn(config));
+    await waitFor(() => expect(result.current.state).toBe('signed-in'));
+
+    await act(async () => {
+      await expect(result.current.signOutAllDevices()).rejects.toThrow('temporary failure');
+    });
+
+    expect(result.current.state).toBe('signed-in');
+    expect(result.current.profile).toEqual({ name: 'Owner' });
+    expect(JSON.parse(localStorage.getItem('jarvis.owner-session')!)).toEqual(session);
+    expect(auth.signOut).not.toHaveBeenCalled();
+  });
+
+  it('keeps the signed-in state when token acquisition for all-device revocation fails', async () => {
+    auth.accounts.push({ homeAccountId: 'owner' });
+    auth.restoreProfile.mockResolvedValue({ name: 'Owner' });
+    auth.client.acquireTokenSilent.mockRejectedValue(new Error('token unavailable'));
+    const { result } = renderHook(() => useSignIn(config));
+    await waitFor(() => expect(result.current.state).toBe('signed-in'));
+
+    await act(async () => {
+      await expect(result.current.signOutAllDevices()).rejects.toThrow('Your Microsoft sign-in needs attention. Sign in again.');
+    });
+
+    expect(result.current.state).toBe('signed-in');
+    expect(result.current.profile).toEqual({ name: 'Owner' });
+    expect(auth.revokeAllOwnerSessions).not.toHaveBeenCalled();
+    expect(auth.signOut).not.toHaveBeenCalled();
+  });
+
+  it('clears local sign-in only after all-device revocation succeeds', async () => {
+    auth.accounts.push({ homeAccountId: 'owner' });
+    storeOwnerSession();
+    auth.restoreProfile.mockResolvedValue({ name: 'Owner' });
+    let finishRevocation!: () => void;
+    let revoked = false;
+    auth.revokeAllOwnerSessions.mockImplementation(() => new Promise<void>((resolve) => {
+      finishRevocation = () => {
+        revoked = true;
+        resolve();
+      };
+    }));
+    auth.signOut.mockImplementation(async () => {
+      expect(revoked).toBe(true);
+      localStorage.removeItem('jarvis.owner-session');
+    });
+    const { result } = renderHook(() => useSignIn(config));
+    await waitFor(() => expect(result.current.state).toBe('signed-in'));
+
+    let operation!: Promise<void>;
+    act(() => { operation = result.current.signOutAllDevices(); });
+    await waitFor(() => expect(auth.revokeAllOwnerSessions).toHaveBeenCalledOnce());
+    expect(result.current.state).toBe('signed-in');
+    expect(auth.signOut).not.toHaveBeenCalled();
+    expect(localStorage.getItem('jarvis.owner-session')).not.toBeNull();
+
+    await act(async () => {
+      finishRevocation();
+      await operation;
+    });
+
+    expect(auth.signOut).toHaveBeenCalledOnce();
+    expect(result.current.state).toBe('signed-out');
+    expect(result.current.profile).toBeNull();
+    expect(localStorage.getItem('jarvis.owner-session')).toBeNull();
   });
 });

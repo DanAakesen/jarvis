@@ -2168,14 +2168,19 @@ stored token. A 429, 503 or network error keeps the session and retries with
 backoff. Requests centrally retry only safe methods for transient failures, plus
 any method on admission-control 429. The client confirms session 401s for API
 and voice failures too. Each request with a session token still performs a
-database read by design, so the client adds no polling.
+database read by design, so the session logic adds no polling. The existing
+`GET /database/status` wake probe also authenticates with the selected token and
+runs about once a second while backend requests are pending; with a session
+token, each probe therefore costs another database read before its route runs.
 
 Sign out best-effort revokes the current session before clearing local state.
 Settings offers **Sign out on all devices** only while this device has a session;
 after confirmation it revokes all owner sessions, clears the local record and
-signs out. With the backend switch off, mint returns 404 and session requests
-return 401; the client observes its mint wait and falls back to the existing
-Entra-only flow. No CORS or backend behavior is changed by the web client.
+signs out. A failed all-device revoke keeps the owner signed in and the
+confirmation available for retry. With the backend switch off, mint returns
+404 and session requests return 401; the client observes its mint wait and falls
+back to the existing Entra-only flow. No CORS or backend behavior is changed by
+the web client.
 
 - **Token.** `js.` plus a 128-bit session id and a 256-bit secret, both random
   and base64url encoded (22 and 43 characters). The three dot-separated
