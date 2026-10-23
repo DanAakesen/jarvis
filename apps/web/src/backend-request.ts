@@ -1,9 +1,33 @@
-import { isOwnerSessionToken } from './owner-session';
+import { isOwnerSessionToken, preferOwnerSession } from './owner-session';
 
 const pending = new Map<symbol, string>();
 const pendingListeners = new Set<() => void>();
 const statusListeners = new Set<() => void>();
 let waking = false;
+let databaseWaking = false;
+const slowSessionVerifications = new Set<symbol>();
+
+function publishStatus() {
+  const value = databaseWaking || slowSessionVerifications.size > 0;
+  if (waking === value) return;
+  waking = value;
+  statusListeners.forEach((listener) => listener());
+}
+
+export function beginOwnerSessionVerification(): () => void {
+  const id = Symbol();
+  let active = true;
+  const timer = setTimeout(() => {
+    if (!active) return;
+    slowSessionVerifications.add(id);
+    publishStatus();
+  }, 3_000);
+  return () => {
+    active = false;
+    clearTimeout(timer);
+    if (slowSessionVerifications.delete(id)) publishStatus();
+  };
+}
 
 export interface OwnerSessionRequestAuth {
   backendOrigin: string;
@@ -69,9 +93,8 @@ export async function awaitWithSignal<T>(operation: () => Promise<T>, signal: Ab
 }
 
 function publishWaking(value: boolean) {
-  if (waking === value) return;
-  waking = value;
-  statusListeners.forEach((listener) => listener());
+  databaseWaking = value;
+  publishStatus();
 }
 
 export function subscribeDatabaseStatus(listener: () => void) {
@@ -144,6 +167,7 @@ export async function backendFetch(url: string | URL, init: RequestInit = {}): P
         await waitForBackendRetry(attempt++, signal);
         continue;
       }
+      if (sessionToken && response.ok) preferOwnerSession({ backendUrl: requestAuth?.backendOrigin ?? '' });
       if (sessionToken && requestAuth && response.status === 401) {
         const recovery = await recoverOwnerSession(sessionToken);
         const verdict = recovery.verdict;
@@ -186,14 +210,17 @@ export function watchDatabaseStatus(backendUrl: string, getAccessToken: () => Pr
     publishWaking(false);
   };
   const poll = async (current: AbortController) => {
+    let finishVerification = () => {};
     try {
       const token = await getAccessToken();
       if (current.signal.aborted) return;
+      if (isOwnerSessionToken(token)) finishVerification = beginOwnerSessionVerification();
       const response = await fetch(`${base}/database/status`, {
         headers: { Authorization: `${['Bear', 'er'].join('')} ${token}`, Accept: 'application/json' },
         signal: AbortSignal.any([current.signal, AbortSignal.timeout(10_000)]),
         cache: 'no-store',
       });
+      if (isOwnerSessionToken(token) && response.ok) preferOwnerSession({ backendUrl });
       if (response.status === 401 && isOwnerSessionToken(token)) {
         await ownerSessionRequestAuth?.confirmUnauthorized(token);
         return;
@@ -207,6 +234,7 @@ export function watchDatabaseStatus(backendUrl: string, getAccessToken: () => Pr
     } catch {
       // A failed probe does not establish a database state.
     } finally {
+      finishVerification();
       if (!current.signal.aborted && !stopped && hasPending()) {
         timer = setTimeout(() => { void poll(current); }, 1_000);
       }

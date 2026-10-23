@@ -2,6 +2,7 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PublicConfig } from '../config/public-config';
 import { useSignIn } from './useSignIn';
+import { preferEntraOwnerSession, preferOwnerSession } from './owner-session';
 
 const auth = vi.hoisted(() => {
   const accounts: Array<{ homeAccountId: string }> = [];
@@ -71,6 +72,7 @@ function storeOwnerSession() {
 
 beforeEach(() => {
   localStorage.clear();
+  preferOwnerSession(config);
   auth.accounts.length = 0;
   auth.client.getActiveAccount.mockReturnValue(null);
   auth.client.getAllAccounts.mockImplementation(() => auth.accounts);
@@ -85,6 +87,7 @@ beforeEach(() => {
 afterEach(() => {
   vi.clearAllMocks();
   auth.accounts.length = 0;
+  preferOwnerSession(config);
 });
 
 describe('useSignIn cross-tab synchronization', () => {
@@ -172,6 +175,30 @@ describe('useSignIn cross-tab synchronization', () => {
     await expect(result.current.getAccessToken()).resolves.toBe(token);
     expect(result.current.hasOwnerSession).toBe(true);
     expect(auth.client.acquireTokenSilent).not.toHaveBeenCalled();
+    unmount();
+  });
+
+  it('prefers Entra after a slow session restore until a session request succeeds', async () => {
+    const token = `js.${'a'.repeat(22)}.${'b'.repeat(43)}`;
+    localStorage.setItem('jarvis.owner-session', JSON.stringify({
+      version: 1,
+      backendOrigin: 'https://api.example.com',
+      sessionId: 'a'.repeat(22),
+      token,
+      idleExpiresAt: new Date(Date.now() + 10 * 24 * 60 * 60_000).toISOString(),
+      absoluteExpiresAt: new Date(Date.now() + 30 * 24 * 60 * 60_000).toISOString(),
+    }));
+    const account = { homeAccountId: 'shared-account' };
+    auth.accounts.push(account);
+    auth.client.getActiveAccount.mockReturnValue(account);
+    preferEntraOwnerSession(config);
+    const { result, unmount } = renderHook(() => useSignIn(config));
+    await waitFor(() => expect(result.current.state).toBe('signed-in'));
+
+    await expect(result.current.getAccessToken()).resolves.toBe('fixture-token');
+    expect(auth.client.acquireTokenSilent).toHaveBeenCalledOnce();
+    preferOwnerSession(config);
+    await expect(result.current.getAccessToken()).resolves.toBe(token);
     unmount();
   });
 

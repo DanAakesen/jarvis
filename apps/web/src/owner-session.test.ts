@@ -3,8 +3,11 @@ import type { PublicConfig } from '../config/public-config';
 import {
   clearOwnerSession,
   clearOwnerSessionMintWait,
+  isEntraPreferred,
   mintOwnerSession,
   ownerSessionStorageKey,
+  preferEntraOwnerSession,
+  preferOwnerSession,
   readOwnerSession,
   validateOwnerSessionRecord,
 } from './owner-session';
@@ -26,6 +29,7 @@ beforeEach(() => {
   vi.setSystemTime(new Date('2026-10-23T00:00:00.000Z'));
   localStorage.clear();
   clearOwnerSessionMintWait(config.backendUrl);
+  preferOwnerSession(config);
 });
 
 afterEach(() => {
@@ -34,6 +38,7 @@ afterEach(() => {
   vi.restoreAllMocks();
   localStorage.clear();
   clearOwnerSessionMintWait(config.backendUrl);
+  preferOwnerSession(config);
 });
 
 describe('owner session storage and minting', () => {
@@ -183,6 +188,44 @@ describe('owner session storage and minting', () => {
 
     expect(lockRequest).toHaveBeenCalledWith('jarvis.owner-session:https://api.example.com', expect.any(Function));
     expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('skips the cross-tab Web Lock while the mint cooldown is active', async () => {
+    localStorage.setItem('jarvis.owner-session-mint-wait', JSON.stringify({
+      version: 1,
+      backendOrigin: 'https://api.example.com',
+      retryAt: Date.now() + 60_000,
+      failures: 0,
+    }));
+    const lockRequest = vi.fn();
+    vi.stubGlobal('navigator', { locks: { request: lockRequest } });
+    const fetch = vi.fn();
+    vi.stubGlobal('fetch', fetch);
+
+    await mintOwnerSession(config, 'entra-token');
+
+    expect(lockRequest).not.toHaveBeenCalled();
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('revokes a newly minted session if localStorage cannot store it', async () => {
+    const fetch = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) =>
+      init?.method === 'DELETE' ? new Response(null, { status: 204 }) : response());
+    vi.stubGlobal('fetch', fetch);
+    const setItem = Storage.prototype.setItem;
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(function (key, value) {
+      if (key === ownerSessionStorageKey) throw new Error('storage unavailable');
+      setItem.call(this, key, value);
+    });
+
+    await mintOwnerSession(config, 'entra-token');
+
+    expect(fetch).toHaveBeenNthCalledWith(2, 'https://api.example.com/auth/session', expect.objectContaining({
+      method: 'DELETE',
+      headers: { Authorization: `${['Bear', 'er'].join('')} ${token}` },
+    }));
+    expect(localStorage.getItem(ownerSessionStorageKey)).toBeNull();
+    expect(isEntraPreferred(config)).toBe(false);
   });
 
   it('backs off transient failures and rejects malformed 201 responses', async () => {

@@ -3,12 +3,15 @@ import {
   PublicClientApplication,
 } from '@azure/msal-browser';
 import type { PublicConfig } from '../config/public-config';
+import { beginOwnerSessionVerification } from './backend-request';
 import {
   clearOwnerSession,
   clearOwnerSessionMintWait,
   isOwnerSessionToken,
   mintOwnerSession,
   ownerSessionStorageKey,
+  preferEntraOwnerSession,
+  preferOwnerSession,
   readOwnerSession,
 } from './owner-session';
 
@@ -29,6 +32,8 @@ const signedInDeviceMarker = 'jarvis.sign-in-device';
 const automaticRedirectMarker = 'jarvis.sign-in-automatic-redirect';
 const automaticRedirectCooldown = 5 * 60_000;
 const silentSsoTimeout = 5_000;
+const profileRequestTimeout = 10_000;
+const ownerSessionRestoreTimeout = 25_000;
 
 function readStorage(key: string): string | null {
   try {
@@ -279,33 +284,54 @@ function waitForRetry(milliseconds: number, signal?: AbortSignal): Promise<void>
 async function restoreOwnerSessionProfile(
   config: PublicConfig,
   signal?: AbortSignal,
+  hasMicrosoftAccount: () => boolean = () => false,
 ): Promise<UserProfile | null> {
   let session = readOwnerSession(config);
+  if (!session) return null;
+  const finishVerification = beginOwnerSessionVerification();
+  const fallbackAt = hasMicrosoftAccount() ? Date.now() + ownerSessionRestoreTimeout : null;
   let attempt = 0;
-  while (session) {
-    signal?.throwIfAborted();
-    try {
-      const profile = await loadProfile(config, session.token, signal);
-      rememberSignedInDevice();
-      return profile;
-    } catch (error) {
-      const current = readOwnerSession(config);
-      if (error instanceof ProfileRequestError && error.status === 401) {
-        if (current?.token === session.token) clearOwnerSession();
-        session = readOwnerSession(config);
-        if (!session) return null;
-        continue;
+  try {
+    while (session) {
+      signal?.throwIfAborted();
+      if (fallbackAt !== null && Date.now() >= fallbackAt) {
+        preferEntraOwnerSession(config);
+        return null;
       }
-      if (!(error instanceof ProfileRequestError) ||
-          ![0, 429, 503].includes(error.status)) throw error;
-      if (!current) return null;
-      session = current;
-      const delay = Math.min(30_000, 1_000 * 2 ** Math.min(attempt, 5));
-      attempt += 1;
-      await waitForRetry(delay * (0.75 + Math.random() * 0.5), signal);
+      const timeout = fallbackAt === null
+        ? profileRequestTimeout
+        : Math.max(1, Math.min(profileRequestTimeout, fallbackAt - Date.now()));
+      try {
+        const profile = await loadProfile(config, session.token, signal, timeout);
+        preferOwnerSession(config);
+        rememberSignedInDevice();
+        return profile;
+      } catch (error) {
+        const current = readOwnerSession(config);
+        if (error instanceof ProfileRequestError && error.status === 401) {
+          if (current?.token === session.token) clearOwnerSession();
+          session = readOwnerSession(config);
+          if (!session) return null;
+          continue;
+        }
+        if (!(error instanceof ProfileRequestError) ||
+            ![0, 429, 503].includes(error.status)) throw error;
+        if (!current) return null;
+        session = current;
+        if (fallbackAt !== null && Date.now() >= fallbackAt) {
+          preferEntraOwnerSession(config);
+          return null;
+        }
+        const delay = Math.min(30_000, 1_000 * 2 ** Math.min(attempt, 5));
+        attempt += 1;
+        const retryDelay = delay * (0.75 + Math.random() * 0.5);
+        await waitForRetry(fallbackAt === null ? retryDelay : Math.min(retryDelay, fallbackAt - Date.now()), signal);
+      }
     }
+    return null;
+  } finally {
+    finishVerification();
   }
-  return null;
 }
 
 export async function restoreProfile(
@@ -326,7 +352,11 @@ export async function restoreProfile(
     if (redirected.accessToken) return verifiedProfile(config, redirected.accessToken, true);
   }
 
-  const sessionProfile = await restoreOwnerSessionProfile(config, signal);
+  const sessionProfile = await restoreOwnerSessionProfile(
+    config,
+    signal,
+    () => Boolean(client.getActiveAccount() || client.getAllAccounts()[0] || hasSignedInDeviceBefore()),
+  );
   if (sessionProfile) return sessionProfile;
 
   let account = client.getActiveAccount() ?? client.getAllAccounts()[0];
@@ -360,7 +390,12 @@ export async function restoreProfile(
   return verifiedProfile(config, result.accessToken, true);
 }
 
-export async function loadProfile(config: Pick<PublicConfig, 'backendUrl'>, accessToken: string, signal?: AbortSignal): Promise<UserProfile> {
+export async function loadProfile(
+  config: Pick<PublicConfig, 'backendUrl'>,
+  accessToken: string,
+  signal?: AbortSignal,
+  timeout = profileRequestTimeout,
+): Promise<UserProfile> {
   if (!config.backendUrl) throw new ProfileRequestError('Sign-in is unavailable until the backend is deployed.', 0);
 
   let response: Response;
@@ -368,7 +403,7 @@ export async function loadProfile(config: Pick<PublicConfig, 'backendUrl'>, acce
     const bearerScheme = ['Bear', 'er'].join('');
     response = await fetch(`${config.backendUrl.replace(/\/+$/u, '')}/me`, {
       headers: { Authorization: `${bearerScheme} ${accessToken}` },
-      signal: AbortSignal.any([AbortSignal.timeout(10_000), ...(signal ? [signal] : [])]),
+      signal: AbortSignal.any([AbortSignal.timeout(timeout), ...(signal ? [signal] : [])]),
     });
   } catch {
     throw new ProfileRequestError('Jarvis could not reach the backend. Try again.', 0);
@@ -395,25 +430,37 @@ export async function loadProfile(config: Pick<PublicConfig, 'backendUrl'>, acce
   return { name: body.name.trim() };
 }
 
-export async function confirmOwnerSession(config: Pick<PublicConfig, 'backendUrl'>, token: string): Promise<
+const confirmationFlights = new Map<string, Promise<'expired' | 'changed' | 'valid' | 'temporary'>>();
+
+export function confirmOwnerSession(config: Pick<PublicConfig, 'backendUrl'>, token: string): Promise<
   'expired' | 'changed' | 'valid' | 'temporary'
 > {
-  if (!isOwnerSessionToken(token) || !config.backendUrl) return 'temporary';
-  let response: Response;
-  try {
-    response = await fetch(`${config.backendUrl.replace(/\/+$/u, '')}/me`, {
-      headers: { Authorization: `${['Bear', 'er'].join('')} ${token}` },
-      signal: AbortSignal.timeout(10_000),
-      cache: 'no-store',
-    });
-  } catch {
-    return 'temporary';
-  }
-  if (response.status !== 401) return response.ok ? 'valid' : 'temporary';
-  const current = readOwnerSession(config);
-  if (current?.token !== token) return 'changed';
-  clearOwnerSession();
-  return 'expired';
+  if (!isOwnerSessionToken(token) || !config.backendUrl) return Promise.resolve('temporary');
+  const key = `${config.backendUrl.replace(/\/+$/u, '')}\u0000${token}`;
+  const existing = confirmationFlights.get(key);
+  if (existing) return existing;
+  let flight: Promise<'expired' | 'changed' | 'valid' | 'temporary'>;
+  flight = (async () => {
+    let response: Response;
+    try {
+      response = await fetch(`${config.backendUrl!.replace(/\/+$/u, '')}/me`, {
+        headers: { Authorization: `${['Bear', 'er'].join('')} ${token}` },
+        signal: AbortSignal.timeout(profileRequestTimeout),
+        cache: 'no-store',
+      });
+    } catch {
+      return 'temporary';
+    }
+    if (response.status !== 401) return response.ok ? 'valid' : 'temporary';
+    const current = readOwnerSession(config);
+    if (current?.token !== token) return 'changed';
+    clearOwnerSession();
+    return 'expired';
+  })().finally(() => {
+    if (confirmationFlights.get(key) === flight) confirmationFlights.delete(key);
+  });
+  confirmationFlights.set(key, flight);
+  return flight;
 }
 
 export async function revokeAllOwnerSessions(

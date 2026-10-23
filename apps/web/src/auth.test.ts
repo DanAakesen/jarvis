@@ -15,6 +15,8 @@ import {
   takeSignInReturnPath,
 } from './auth';
 import { clearOwnerSessionMintWait } from './owner-session';
+import { isEntraPreferred, preferOwnerSession } from './owner-session';
+import { getDatabaseWaking } from './backend-request';
 
 const config: PublicConfig = {
   tenantId: '11111111-1111-4111-8111-111111111111',
@@ -30,6 +32,7 @@ afterEach(() => {
   vi.restoreAllMocks();
   clearSignInMarkers();
   clearOwnerSessionMintWait(config.backendUrl);
+  preferOwnerSession(config);
   localStorage.clear();
   sessionStorage.clear();
   window.history.replaceState({}, '', '/');
@@ -155,6 +158,102 @@ describe('web authentication', () => {
     expect(localStorage.getItem('jarvis.owner-session')).not.toBeNull();
   });
 
+  it('shows the shared wake cue only after a session restore has remained pending for three seconds', async () => {
+    const token = `js.${'a'.repeat(22)}.${'b'.repeat(43)}`;
+    localStorage.setItem('jarvis.owner-session', JSON.stringify({
+      version: 1,
+      backendOrigin: 'https://api.example.com',
+      sessionId: 'a'.repeat(22),
+      token,
+      idleExpiresAt: new Date(Date.now() + 10 * 24 * 60 * 60_000).toISOString(),
+      absoluteExpiresAt: new Date(Date.now() + 30 * 24 * 60 * 60_000).toISOString(),
+    }));
+    let finish!: (response: Response) => void;
+    fetchMock.mockImplementation(() => new Promise<Response>((resolve) => { finish = resolve; }));
+    vi.stubGlobal('fetch', fetchMock);
+    vi.useFakeTimers();
+
+    const restored = restoreProfile(client(), config);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(getDatabaseWaking()).toBe(false);
+    await vi.advanceTimersByTimeAsync(2_999);
+    expect(getDatabaseWaking()).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(getDatabaseWaking()).toBe(true);
+
+    finish(new Response(JSON.stringify({ name: 'Dan Aakesen' }), { status: 200 }));
+    await expect(restored).resolves.toEqual({ name: 'Dan Aakesen' });
+    expect(getDatabaseWaking()).toBe(false);
+  });
+
+  it('falls back to silent Entra after 25 seconds and retains the session while preferring Entra', async () => {
+    const token = `js.${'a'.repeat(22)}.${'b'.repeat(43)}`;
+    localStorage.setItem('jarvis.owner-session', JSON.stringify({
+      version: 1,
+      backendOrigin: 'https://api.example.com',
+      sessionId: 'a'.repeat(22),
+      token,
+      idleExpiresAt: new Date(Date.now() + 10 * 24 * 60 * 60_000).toISOString(),
+      absoluteExpiresAt: new Date(Date.now() + 30 * 24 * 60 * 60_000).toISOString(),
+    }));
+    fetchMock.mockImplementation(async (_url: RequestInfo | URL, init?: RequestInit) =>
+      new Headers(init?.headers).get('authorization')?.endsWith(token)
+        ? new Response(null, { status: 503 })
+        : new Response(JSON.stringify({ name: 'Dan Aakesen' }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    vi.spyOn(Math, 'random').mockReturnValue(0.5);
+    vi.useFakeTimers();
+    const msal = client({ getActiveAccount: vi.fn().mockReturnValue(account) });
+
+    const restored = restoreProfile(msal, config);
+    await Promise.resolve();
+    await Promise.resolve();
+    await vi.advanceTimersByTimeAsync(24_999);
+    expect(msal.acquireTokenSilent).not.toHaveBeenCalled();
+    expect(localStorage.getItem('jarvis.owner-session')).not.toBeNull();
+    await vi.advanceTimersByTimeAsync(1);
+
+    await expect(restored).resolves.toEqual({ name: 'Dan Aakesen' });
+    expect(msal.acquireTokenSilent).toHaveBeenCalledWith({ scopes: [config.apiScope], account });
+    expect(isEntraPreferred(config)).toBe(true);
+    const profileCalls = fetchMock.mock.calls.filter(([url]) => String(url).endsWith('/me'));
+    expect(profileCalls.some(([, init]) =>
+      new Headers(init?.headers).get('authorization')?.endsWith(token))).toBe(true);
+    expect(new Headers(profileCalls.at(-1)?.[1]?.headers).get('authorization'))
+      .toBe(`${['Bear', 'er'].join('')} cached-access-token`);
+    expect(localStorage.getItem('jarvis.owner-session')).not.toBeNull();
+  });
+
+  it('keeps retrying a session indefinitely when no Microsoft account is known', async () => {
+    const token = `js.${'a'.repeat(22)}.${'b'.repeat(43)}`;
+    localStorage.setItem('jarvis.owner-session', JSON.stringify({
+      version: 1,
+      backendOrigin: 'https://api.example.com',
+      sessionId: 'a'.repeat(22),
+      token,
+      idleExpiresAt: new Date(Date.now() + 10 * 24 * 60 * 60_000).toISOString(),
+      absoluteExpiresAt: new Date(Date.now() + 30 * 24 * 60 * 60_000).toISOString(),
+    }));
+    fetchMock.mockResolvedValue(new Response(null, { status: 503 }));
+    vi.stubGlobal('fetch', fetchMock);
+    vi.spyOn(Math, 'random').mockReturnValue(0.5);
+    vi.useFakeTimers();
+    const controller = new AbortController();
+    const msal = client();
+    const restored = restoreProfile(msal, config, controller.signal);
+    const aborted = expect(restored).rejects.toBeDefined();
+    await Promise.resolve();
+    await Promise.resolve();
+    await vi.advanceTimersByTimeAsync(25_000);
+
+    expect(msal.acquireTokenSilent).not.toHaveBeenCalled();
+    expect(msal.ssoSilent).not.toHaveBeenCalled();
+    expect(localStorage.getItem('jarvis.owner-session')).not.toBeNull();
+    controller.abort();
+    await aborted;
+  });
+
   it('falls back to Entra and starts minting again after a confirmed session 401', async () => {
     const token = `js.${'a'.repeat(22)}.${'b'.repeat(43)}`;
     localStorage.setItem('jarvis.owner-session', JSON.stringify({
@@ -225,6 +324,22 @@ describe('web authentication', () => {
 
     await expect(confirmation).resolves.toBe('changed');
     expect(JSON.parse(localStorage.getItem('jarvis.owner-session')!).token).toBe(nextToken);
+  });
+
+  it('single-flights concurrent session confirmation requests for the same token', async () => {
+    const token = `js.${'a'.repeat(22)}.${'b'.repeat(43)}`;
+    let finish!: (response: Response) => void;
+    fetchMock.mockImplementation(() => new Promise<Response>((resolve) => { finish = resolve; }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const first = confirmOwnerSession(config, token);
+    const second = confirmOwnerSession(config, token);
+    await Promise.resolve();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    finish(new Response(null, { status: 200 }));
+
+    await expect(Promise.all([first, second])).resolves.toEqual(['valid', 'valid']);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it('shows the backend denial without exposing its response body', async () => {

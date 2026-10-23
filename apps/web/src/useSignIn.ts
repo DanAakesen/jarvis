@@ -17,7 +17,12 @@ import {
   tryAutomaticSignInRedirect,
   type UserProfile,
 } from './auth';
-import { mintOwnerSession, readOwnerSession, subscribeOwnerSession } from './owner-session';
+import {
+  isEntraPreferred,
+  mintOwnerSession,
+  readOwnerSession,
+  subscribeOwnerSession,
+} from './owner-session';
 import { setOwnerSessionRequestAuth } from './backend-request';
 
 export type SignInState = 'checking' | 'signed-out' | 'redirecting' | 'signing-in' | 'signing-out' | 'signed-in' | 'error' | 'unavailable';
@@ -171,7 +176,7 @@ export function useSignIn(config: PublicConfig): SignInSession {
 
   const getAccessToken = useCallback(async () => {
     const session = readOwnerSession(config);
-    if (session) return session.token;
+    if (session && !isEntraPreferred(config)) return session.token;
     return getEntraAccessToken();
   }, [config, getEntraAccessToken]);
 

@@ -18,6 +18,7 @@ const mintFlights = new Map<string, Promise<void>>();
 const mintWaits = new Map<string, { retryAt: number; failures: number }>();
 const mintWaitStorageFailures = new Set<string>();
 const sessionListeners = new Set<() => void>();
+const entraPreferredOrigins = new Set<string>();
 const dayMs = 24 * 60 * 60_000;
 
 function backendOrigin(config: Pick<PublicConfig, 'backendUrl'>): string | null {
@@ -95,6 +96,21 @@ export function readOwnerSession(config: Pick<PublicConfig, 'backendUrl'>, now =
 
 export function clearOwnerSession(): void {
   removeStoredSession();
+}
+
+export function preferEntraOwnerSession(config: Pick<PublicConfig, 'backendUrl'>): void {
+  const origin = backendOrigin(config);
+  if (origin) entraPreferredOrigins.add(origin);
+}
+
+export function preferOwnerSession(config: Pick<PublicConfig, 'backendUrl'>): void {
+  const origin = backendOrigin(config);
+  if (origin) entraPreferredOrigins.delete(origin);
+}
+
+export function isEntraPreferred(config: Pick<PublicConfig, 'backendUrl'>): boolean {
+  const origin = backendOrigin(config);
+  return origin !== null && entraPreferredOrigins.has(origin);
 }
 
 export function clearOwnerSessionMintWait(backendUrl: string | null): void {
@@ -254,11 +270,21 @@ async function mintOwnerSessionLocked(
   }
   try {
     localStorage.setItem(ownerSessionStorageKey, JSON.stringify(record));
-    sessionListeners.forEach((listener) => listener());
   } catch {
-    // The current Entra token continues to work when browser storage is unavailable.
+    try {
+      await fetch(`${config.backendUrl!.replace(/\/+$/u, '')}/auth/session`, {
+        method: 'DELETE',
+        headers: { Authorization: `${['Bear', 'er'].join('')} ${record.token}` },
+        signal: AbortSignal.timeout(3_000),
+        cache: 'no-store',
+      });
+    } catch {
+      // The current Entra token remains usable if storage or revocation is unavailable.
+    }
     recordMintFailure(origin);
+    return;
   }
+  sessionListeners.forEach((listener) => listener());
   if (readOwnerSession(config)) clearOwnerSessionMintWait(config.backendUrl);
 }
 
@@ -273,6 +299,8 @@ export function mintOwnerSession(config: Pick<PublicConfig, 'backendUrl'>, entra
   if (!origin || !config.backendUrl || !entraToken || readOwnerSession(config)) return Promise.resolve();
   const existing = mintFlights.get(origin);
   if (existing) return existing;
+  const wait = readMintWait(origin);
+  if (wait && Date.now() < wait.retryAt) return Promise.resolve();
   const flight = (async () => {
     const run = () => mintOwnerSessionLocked(config, entraToken, origin);
     const locks = typeof navigator === 'undefined' ? undefined : navigator.locks;

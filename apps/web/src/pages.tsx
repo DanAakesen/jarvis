@@ -1,18 +1,24 @@
 import type { ReactNode } from 'react';
+import { useSyncExternalStore } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import type { SignInSession } from './useSignIn';
 import { Loader } from './Loader';
 import { getSignInGreeting } from './sign-in-greeting';
 import { saveSignInReturnPath } from './auth';
+import { DatabaseWakeCue } from './DatabaseWakeStatus';
+import { getDatabaseWaking, subscribeDatabaseStatus } from './backend-request';
 
 export function SignInPage({ session }: { session: SignInSession }) {
   const location = useLocation();
   const { state, message } = session;
+  const waking = useSyncExternalStore(subscribeDatabaseStatus, getDatabaseWaking);
   if (state === 'checking' || state === 'signing-in' || state === 'signing-out') {
     const text = state === 'signing-in' ? 'Signing you in' : state === 'signing-out' ? 'Signing you out' : 'Loading';
     return (
       <section className="signin signin-loading" aria-busy="true">
-        <Loader variant="text" size="inline" text={text} label={text} />
+        {state !== 'signing-out' && session.hasOwnerSession && waking
+          ? <DatabaseWakeCue />
+          : <Loader variant="text" size="inline" text={text} label={text} />}
       </section>
     );
   }
