@@ -1623,6 +1623,12 @@ the preference tool changes one category or the personal/work scope only after a
 matching direct owner request, using the same saved settings as Settings.
 Findings, source text and per-item feedback cannot authorize a lasting change.
 Capabilities are advertised only when their tools are active.
+Common direct English and Danish requests are understood across polite wording,
+word order and speech punctuation, including “I do not want travel suggestions
+anymore” and “Jeg vil kun have personlige forslag.” A negative preference is an
+explicit disable request; an ambiguous request, quoted or third-party text,
+hypothetical wording, or a disclaimer against changing preferences does not
+authorize a save. Requests for suggestions now remain ordinary requests.
 
 Category and scope choices constrain proactive generation and delivery across
 enabled sources, not the owner's own prompts or requested work. Travel evidence

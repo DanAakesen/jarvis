@@ -6957,6 +6957,15 @@ mentions the capability only when it is present in the active advertised tool
 set. The preference does not turn off providers or constrain ordinary owner
 requests.
 
+The update gate recognizes bounded English and Danish direct-request patterns,
+including first-person positive/negative preferences, polite commands, and
+Danish turn-on/turn-off word order. Negative preferences such as “I do not want
+travel suggestions anymore” mean disable; a plain request to show or receive
+suggestions now is not a preference change. Quoted text, source/third-party
+instructions, hypothetical wording and a disclaimer against changing settings
+are refused. Unsupported or ambiguous wording asks for clarification rather
+than letting model-supplied tool arguments authorize a write.
+
 The engine excludes disabled travel evidence across all enabled sources and
 filters both deterministic and model-generated findings by category and
 conservative scope classification. Only exact personal/work evidence passes a

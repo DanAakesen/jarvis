@@ -111,29 +111,101 @@ function fitResult(items: RecallItem[], truncated: boolean): {
 type PreferenceIntent = { category: FindingCategory; enabled: boolean } |
   { suggestionScope: SuggestionScopePreference };
 
-function explicitPreferenceIntent(text: string): PreferenceIntent | undefined {
-  const normalized = text.normalize('NFC').trim().replace(/\s+/gu, ' ');
-  const scope = /^(?:(?:please|i want|i only want|i'd like)\s+)?(?:(?:show|keep|give me)\s+(?:me\s+)?(?:only\s+)?|only\s+)(?<scope>personal|work|all)(?:\s+(?:proactive\s+)?suggestions)?[.!?]?$/iu.exec(normalized) ??
-    /^(?:(?:vis(?: mig)?|giv mig|hold dig til)\s+(?:kun\s+)?|kun\s+)(?<scope>personlige?|arbejde|arbejdsrelaterede|alle|al)(?:\s+(?:proaktive\s+)?forslag)?[.!?]?$/iu.exec(normalized);
-  if (scope?.groups?.scope) {
-    const value = scope.groups.scope.toLowerCase();
-    return { suggestionScope: value === 'personal' || value.startsWith('personlig') ? 'personal'
-      : value === 'work' || value === 'arbejde' || value === 'arbejdsrelaterede' ? 'work' : 'all' };
-  }
+const preferenceCategory =
+  '(?:(?:proactive|proaktive?)\\s+)?(?<category>deadlines?|frists?|frister?|calendar clashes?|clashes?|konflikter?|kalenderkonflikter?|travel|trips?|rejser?|rejseforslag|todos?|tasks?|opgaver?|prep|preparation|forberedelser?|news|nyheder?|weather|vejr|vejrforslag|status|suggestion|general|other)(?:\\s+(?:(?:proactive\\s+)?suggestions?|(?:proaktive?\\s+)?forslag))?';
 
-  const categoryPattern = /^(?:(?:please|can you|could you|vil du|kan du)\s+)?(?<verb>stop|disable|turn off|hide|mute|don't show|do not show|enable|re-enable|turn on|show|start showing|hold op med|deaktiver|deaktivér|slå fra|skjul|vis ikke|aktiver|aktivér|slå til|vis)\s+(?:(?:showing|med|at)\s+)?(?:the\s+|de\s+)?(?<category>deadlines?|frists?|calendar clashes?|clashes?|konflikter?|kalenderkonflikter?|travel|trips?|rejser?|todos?|tasks?|opgaver?|prep|preparation|forberedelser?|news|nyheder?|weather|vejr|status)(?:\s+(?:proactive\s+)?suggestions?|\s+forslag|forslag)(?:\s+again|\s+igen)?[.!?]?$/iu.exec(normalized);
-  const value = categoryPattern?.groups?.category?.toLowerCase();
-  const matchedVerb = categoryPattern?.groups?.verb?.toLowerCase();
-  if (!value || !matchedVerb) return undefined;
-  const category: FindingCategory = /^(?:deadline|deadlines|frist|frists)$/u.test(value) ? 'deadline'
-    : /^(?:calendar clashes?|clashes?|konflikter?|kalenderkonflikter?)$/u.test(value) ? 'clash'
-      : /^(?:travel|trips?|rejser?)$/u.test(value) ? 'travel'
-        : /^(?:todos?|tasks?|opgaver?)$/u.test(value) ? 'todo'
-          : /^(?:prep|preparation|forberedelser?)$/u.test(value) ? 'prep'
-            : /^(?:news|nyheder?)$/u.test(value) ? 'news'
-              : /^(?:weather|vejr)$/u.test(value) ? 'weather' : 'status';
-  const enabled = /^(?:enable|re-enable|turn on|show|start showing|aktiver|aktivér|slå til|vis)$/u.test(matchedVerb);
-  return { category, enabled };
+function preferenceCategoryId(value: string): FindingCategory | undefined {
+  if (/^(?:deadline|deadlines|frist|frists|frister)$/u.test(value)) return 'deadline';
+  if (/^(?:calendar clashes?|clashes?|konflikter?|kalenderkonflikter?)$/u.test(value)) return 'clash';
+  if (/^(?:travel|trips?|rejser?|rejseforslag)$/u.test(value)) return 'travel';
+  if (/^(?:todos?|tasks?|opgaver?)$/u.test(value)) return 'todo';
+  if (/^(?:prep|preparation|forberedelser?)$/u.test(value)) return 'prep';
+  if (/^(?:news|nyheder?)$/u.test(value)) return 'news';
+  if (/^(?:weather|vejr|vejrforslag)$/u.test(value)) return 'weather';
+  if (/^(?:suggestion|general|other)$/u.test(value)) return 'suggestion';
+  if (value === 'status') return 'status';
+  return undefined;
+}
+
+function parseSuggestionScope(text: string): SuggestionScopePreference | undefined {
+  const scope = '(?<scope>personal|work(?:-related)?|all|personlige?|arbejde|arbejdsrelaterede|alle|al)';
+  const ending = '(?:\\s+(?:proactive\\s+)?suggestions?|\\s+(?:proaktive?\\s+)?forslag(?:ene)?)?';
+  const patterns = [
+    new RegExp(`^(?:(?:please\\s+)?(?:show|keep|give(?:\\s+me)?)\\s+(?:me\\s+)?(?:(?:only)\\s+)?|(?:only)\\s+)?${scope}${ending}(?:\\s+only)?(?:\\s+please)?$`, 'iu'),
+    new RegExp(`^(?:i\\s+(?:(?:only|just)\\s+)?(?:want|would like|would like to have|want to see|would like to see)|i'd\\s+(?:(?:only)\\s+)?(?:like|like to see)|i would\\s+(?:(?:only)\\s+)?(?:like|like to see))\\s+(?:(?:only)\\s+)?${scope}${ending}(?:\\s+only)?(?:\\s+please)?$`, 'iu'),
+    new RegExp(`^(?:jeg\\s+(?:vil|ønsker)(?:\\s+gerne)?|vis(?:\\s+mig)?|giv\\s+mig|hold\\s+dig\\s+til)\\s+(?:(?:kun\\s+)?(?:have\\s+)?)?${scope}${ending}(?:\\s+kun)?(?:\\s+please|\\s+tak)?$`, 'iu'),
+    new RegExp(`^(?:(?:only|kun)\\s+)?${scope}${ending}(?:\\s+(?:only|kun))?(?:\\s+please|\\s+tak)?$`, 'iu'),
+  ];
+  for (const pattern of patterns) {
+    const match = pattern.exec(text);
+    const value = match?.groups?.scope?.toLowerCase();
+    if (!value) continue;
+    const resolved = value === 'personal' || value.startsWith('personlig') ? 'personal'
+      : value === 'work' || value === 'work-related' || value === 'arbejde' || value === 'arbejdsrelaterede'
+        ? 'work' : 'all';
+    if (resolved !== 'all' && !/\b(?:only|kun)\b/iu.test(text) &&
+        !/^(?:hold\s+dig\s+til|keep|stick\s+to)\b/iu.test(text)) return undefined;
+    return resolved;
+  }
+  return undefined;
+}
+
+function explicitPreferenceIntent(text: string): PreferenceIntent | undefined {
+  const normalized = text.normalize('NFC').replace(/[’‘]/gu, "'").trim()
+    .replace(/\s+/gu, ' ').replace(/,\s+(?=(?:please|thanks|tak)\b)/giu, ' ')
+    .replace(/[.!?,;:…]+$/u, '').trim();
+  if (!normalized || /["“”„‟«»‹›]/u.test(normalized) ||
+      /(^|[\s([{])'[^'\r\n]{1,500}'(?=$|[\s.,!?;:)}\]])/u.test(normalized)) return undefined;
+
+  const suggestionScope = parseSuggestionScope(normalized);
+  if (suggestionScope) return { suggestionScope };
+
+  const category = `(?:the\\s+|de\\s+)?${preferenceCategory}`;
+  const direct = new RegExp(
+    `^(?:(?:please\\s*,?\\s*)?(?:(?:can|could|would)\\s+you\\s+|(?:vil|kan)\\s+du\\s+)?)(?<verb>stop|disable|turn off|switch off|hide|mute|don't show|do not show|enable|re-enable|turn on|switch on|show|start showing|hold op med|deaktiver|deaktivér|skjul|vis ikke|aktiver|aktivér|vis)\\s+(?:(?:showing|me|to me|med|at)\\s+)*${category}(?:\\s+(?<renewal>again|igen))?(?:\\s+please)?$`,
+    'iu',
+  ).exec(normalized);
+  const reverse = new RegExp(
+    `^(?:(?:please\\s+)?(?<verb>turn|switch|slå)\\s+${category}\\s+(?<direction>off|on|fra|til))(?:\\s+please)?$`,
+    'iu',
+  ).exec(normalized);
+  const englishNegative = new RegExp(
+    `^(?:i\\s+)?(?:do not|don't|would rather not|would prefer not to|prefer not to)\\s+(?:want\\s+)?(?:(?:to\\s+)?(?:have|see|get|receive)\\s+)?(?:any\\s+)?(?:more\\s+)?${category}(?:\\s+(?:anymore|any more|longer|please))?$`,
+    'iu',
+  ).exec(normalized);
+  const englishPositive = new RegExp(
+    `^(?:i\\s+(?:(?:really|just)\\s+)?want|i'd\\s+like|i\\s+would\\s+like)\\s+(?:(?:to\\s+)?(?:have|see|get|receive)\\s+)?${category}\\s+(?:again|from\\s+now\\s+on|going\\s+forward)$`,
+    'iu',
+  ).exec(normalized);
+  const danishNegative = new RegExp(
+    `^jeg\\s+(?:vil|ønsker)\\s+(?:helst\\s+)?ikke\\s+(?:længere\\s+)?(?:(?:have|se|modtage)\\s+)?${category}(?:\\s+(?:længere|mere|tak))?$`,
+    'iu',
+  ).exec(normalized);
+  const danishPositive = new RegExp(
+    `^jeg\\s+(?:vil(?:\\s+gerne)?|ønsker(?:\\s+gerne)?)\\s+(?:(?:have|se|modtage|få)\\s+)?${category}\\s+(?:igen|fremover)$`,
+    'iu',
+  ).exec(normalized);
+  const noLonger = new RegExp(
+    `^(?:no\\s+more|not\\s+any\\s+more)\\s+${category}(?:\\s+please)?$`,
+    'iu',
+  ).exec(normalized);
+  const match = direct ?? reverse ?? englishNegative ?? englishPositive ?? danishNegative ?? danishPositive ?? noLonger;
+  if (direct === match && /^(?:show|vis)$/u.test(direct?.groups?.verb?.toLowerCase() ?? '') &&
+      !direct?.groups?.renewal) return undefined;
+  const reverseVerb = reverse?.groups?.verb?.toLowerCase();
+  const direction = reverse?.groups?.direction?.toLowerCase();
+  if (reverse === match && (reverseVerb === 'slå'
+    ? !/^(?:fra|til)$/u.test(direction ?? '')
+    : !/^(?:off|on)$/u.test(direction ?? ''))) return undefined;
+  const value = match?.groups?.category?.toLowerCase();
+  const resolvedCategory = value ? preferenceCategoryId(value) : undefined;
+  if (!resolvedCategory || !match) return undefined;
+  const matchedVerb = direct?.groups?.verb?.toLowerCase();
+  const enabled = englishPositive === match || danishPositive === match ||
+    (direct === match && (/^(?:enable|re-enable|turn on|switch on|start showing|aktiver|aktivér)$/u.test(matchedVerb ?? '') ||
+      (/^(?:show|vis)$/u.test(matchedVerb ?? '') && Boolean(direct?.groups?.renewal)))) ||
+    (reverse === match && (reverseVerb === 'slå' ? direction === 'til' : direction === 'on'));
+  return { category: resolvedCategory, enabled };
 }
 
 function parsePreferenceInput(value: unknown):

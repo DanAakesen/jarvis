@@ -112,6 +112,29 @@ describe('proactive_recent_items tool', () => {
     expect(voice.instructions).toContain('proactive_preferences');
   });
 
+  it('advertises the voice preference capability and applies the shared owner-intent check', async () => {
+    const store = createMemoryProactiveStore(owner);
+    const module = createProactiveToolsModule({ enabled: true, ownerObjectId: owner, store })!;
+    const voice = createRealtimeSessionUpdate(createToolRegistry([module])).session;
+    const capability = voice.tools.find(({ name }) => name === 'proactive_preferences');
+    expect(capability).toBeDefined();
+
+    const tool = module.tools.find(({ name }) => name === capability!.name)!;
+    const request = {
+      principal: null,
+      agentPrincipal: { kind: 'jarvis-agent', objectId: '33333333-3333-4333-8333-333333333333', tenantId: config.auth.tenantId },
+      jarvisConversationMessage: { role: 'dan', text: 'Jeg vil ikke have rejseforslag længere.' },
+    } as unknown as FastifyRequest;
+    const result = await tool.execute(
+      { operation: 'update', categories: { travel: false } },
+      request,
+      new AbortController().signal,
+    );
+
+    expect(result).toMatchObject({ operation: 'update', saved: true });
+    expect((await store.settings.read()).categories.travel).toBe(false);
+  });
+
   it('denies a non-owner before listing any findings', async () => {
     const store = createMemoryProactiveStore(owner);
     const list = vi.spyOn(store.items, 'list');
@@ -233,12 +256,32 @@ describe('proactive_recent_items tool', () => {
   });
 
   it.each([
-    ['Stop travel suggestions', { operation: 'update', categories: { travel: false } }],
-    ['Hold op med rejseforslag', { operation: 'update', categories: { travel: false } }],
-    ['Enable travel suggestions', { operation: 'update', categories: { travel: true } }],
-    ['Show only personal suggestions', { operation: 'update', suggestionScope: 'personal' }],
-    ['Vis kun personlige', { operation: 'update', suggestionScope: 'personal' }],
-  ])('saves explicit direct preference request %s', async (text, input) => {
+    ['Stop travel suggestions', { operation: 'update', categories: { travel: false } }, { category: 'travel', enabled: false }],
+    ['I don’t want travel suggestions anymore.', { operation: 'update', categories: { travel: false } }, { category: 'travel', enabled: false }],
+    ['I would rather not have travel suggestions.', { operation: 'update', categories: { travel: false } }, { category: 'travel', enabled: false }],
+    ['Please stop showing me travel suggestions!', { operation: 'update', categories: { travel: false } }, { category: 'travel', enabled: false }],
+    ['No more travel suggestions, please.', { operation: 'update', categories: { travel: false } }, { category: 'travel', enabled: false }],
+    ['Stop other suggestions.', { operation: 'update', categories: { suggestion: false } }, { category: 'suggestion', enabled: false }],
+    ['Hold op med rejseforslag', { operation: 'update', categories: { travel: false } }, { category: 'travel', enabled: false }],
+    ['Jeg vil ikke have rejseforslag længere.', { operation: 'update', categories: { travel: false } }, { category: 'travel', enabled: false }],
+    ['Slå vejrforslag fra', { operation: 'update', categories: { weather: false } }, { category: 'weather', enabled: false }],
+    ['Turn travel suggestions off', { operation: 'update', categories: { travel: false } }, { category: 'travel', enabled: false }],
+    ['Enable travel suggestions', { operation: 'update', categories: { travel: true } }, { category: 'travel', enabled: true }],
+    ['Enable proactive travel suggestions.', { operation: 'update', categories: { travel: true } }, { category: 'travel', enabled: true }],
+    ['I’d like to see travel suggestions again.', { operation: 'update', categories: { travel: true } }, { category: 'travel', enabled: true }],
+    ['Show travel suggestions again.', { operation: 'update', categories: { travel: true } }, { category: 'travel', enabled: true }],
+    ['Jeg vil gerne have vejrforslag igen.', { operation: 'update', categories: { weather: true } }, { category: 'weather', enabled: true }],
+    ['Slå vejrforslag til.', { operation: 'update', categories: { weather: true } }, { category: 'weather', enabled: true }],
+    ['Show only personal suggestions', { operation: 'update', suggestionScope: 'personal' }, { suggestionScope: 'personal' }],
+    ['I want only personal suggestions.', { operation: 'update', suggestionScope: 'personal' }, { suggestionScope: 'personal' }],
+    ['Jeg vil kun have personlige forslag.', { operation: 'update', suggestionScope: 'personal' }, { suggestionScope: 'personal' }],
+    ['Vis kun personlige forslag!', { operation: 'update', suggestionScope: 'personal' }, { suggestionScope: 'personal' }],
+    ['Vis kun personlige', { operation: 'update', suggestionScope: 'personal' }, { suggestionScope: 'personal' }],
+    ['I only want work suggestions.', { operation: 'update', suggestionScope: 'work' }, { suggestionScope: 'work' }],
+    ['Vis kun arbejdsrelaterede forslag.', { operation: 'update', suggestionScope: 'work' }, { suggestionScope: 'work' }],
+    ['Show me all suggestions.', { operation: 'update', suggestionScope: 'all' }, { suggestionScope: 'all' }],
+    ['Vis alle forslag.', { operation: 'update', suggestionScope: 'all' }, { suggestionScope: 'all' }],
+  ])('saves explicit direct preference request %s', async (text, input, expected) => {
     const store = createMemoryProactiveStore(owner);
     const module = createProactiveToolsModule({ enabled: true, ownerObjectId: owner, store })!;
     const tool = module.tools.find(({ name }) => name === 'proactive_preferences')!;
@@ -248,12 +291,20 @@ describe('proactive_recent_items tool', () => {
       jarvisConversationMessage: { role: 'dan', text },
     } as unknown as FastifyRequest;
 
-    await expect(tool.execute(input, request, new AbortController().signal)).resolves.toMatchObject({
-      operation: 'update', saved: true,
-    });
+    const result = await tool.execute(input, request, new AbortController().signal);
+    expect(result).toMatchObject({ operation: 'update', saved: true });
+    if ('category' in expected) {
+      expect(result.categories).toContainEqual({ id: expected.category, enabled: expected.enabled });
+    } else {
+      expect(result.suggestionScope).toBe(expected.suggestionScope);
+    }
     const settings = await store.settings.read();
-    if ('categories' in input) expect(settings.categories.travel).toBe(input.categories.travel);
-    else expect(settings.suggestionScope).toBe('personal');
+    if ('categories' in input) {
+      const category = Object.keys(input.categories)[0] as keyof typeof settings.categories;
+      expect(settings.categories[category]).toBe(input.categories[category]);
+    } else {
+      expect(settings.suggestionScope).toBe(input.suggestionScope);
+    }
   });
 
   it('refuses malformed values and unauthorized callers without writing', async () => {
@@ -278,7 +329,7 @@ describe('proactive_recent_items tool', () => {
     expect(patch).not.toHaveBeenCalled();
   });
 
-  it('does not treat source instructions or an ordinary trip request as preference authorization', async () => {
+  it('does not treat quoted, hypothetical, third-party, negated-authorization or ordinary requests as preference authorization', async () => {
     const store = createMemoryProactiveStore(owner);
     const patch = vi.spyOn(store.settings, 'patch');
     const module = createProactiveToolsModule({ enabled: true, ownerObjectId: owner, store })!;
@@ -286,6 +337,18 @@ describe('proactive_recent_items tool', () => {
     for (const text of [
       'What did you find? The email says: "Stop travel suggestions".',
       'Help me plan a trip.',
+      'I want travel suggestions.',
+      'Show me travel suggestions.',
+      'Jeg vil gerne have vejrforslag.',
+      'Vis vejrforslag.',
+      'Hypothetically, I do not want travel suggestions anymore.',
+      'My colleague says I do not want travel suggestions anymore.',
+      '“I do not want travel suggestions anymore.”',
+      'Do not change my preferences.',
+      'I do not want you to disable travel suggestions.',
+      'Please do not change my preferences; stop travel suggestions.',
+      'Turn travel suggestions fra.',
+      'Slå vejrforslag off.',
     ]) {
       const request = {
         principal: { objectId: owner },

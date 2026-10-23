@@ -8003,6 +8003,13 @@ or other preference. Successful changes cancel in-flight work, and current
 settings are checked again at persisted/delivery boundaries; old findings,
 todos and reminders are not deleted as a side effect.
 
+Approved follow-up (23 October 2026): support common natural English and Danish
+paraphrases without weakening authorization. A clear negative preference is a
+disable request, while ordinary requests for suggestions now remain unchanged.
+The server binds each proposed write to the current direct owner message and
+refuses quoted, third-party, hypothetical, ambiguous or preference-disclaimer
+text; it does not trust model-supplied category, scope or direction by itself.
+
 ## P14-08 — One form-control system (18 October 2026; #991)
 
 Keep field geometry and state styling in the existing shared web stylesheet,

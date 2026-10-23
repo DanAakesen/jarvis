@@ -451,6 +451,11 @@ source text cannot authorize it. These preferences constrain unsolicited
 proactive generation/delivery only, not explicit owner tasks. Re-enabling does
 not alter pause, sources, budget or unrelated settings. Existing findings,
 todos and reminders are not deleted.
+Common English/Danish paraphrases, including explicit negative preferences,
+polite commands, varied word order and transcript punctuation, are supported.
+Quoted/source/third-party, hypothetical, ambiguous and “do not change my
+preferences” wording cannot authorize a write; a plain request for suggestions
+now is not treated as a preference change.
 
 Focused local checks:
 `npm test --workspace @jarvis/backend -- --run src/proactive/tools.test.ts src/proactive/policy.test.ts src/proactive/engine.test.ts src/proactive/store.test.ts src/proactive/routes.test.ts src/proactive/todo-writer.test.ts src/proactive/alerts.test.ts src/proactive/reminder-ticker.test.ts src/proactive/vault-push-reminders.test.ts src/database/proactive-store.test.ts src/database/migrations.test.ts src/voice/realtime.test.ts src/voice/startup.test.ts src/core/settings.test.ts src/production-modules.test.ts`,
