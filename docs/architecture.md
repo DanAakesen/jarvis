@@ -2171,13 +2171,20 @@ Redirect handling stays first on load. Otherwise a stored session is checked by
 `GET /me` before panels mount. A 401 is confirmed with the same token before
 clearing it and resuming the Entra path; the clear is guarded against a newer
 stored token. A 429, 503 or network error keeps the session and retries with
-backoff. Requests centrally retry only safe methods for transient failures, plus
-any method on admission-control 429. The client confirms session 401s for API
-and voice failures too. Each request with a session token still performs a
-database read by design, so the session logic adds no polling. The existing
-`GET /database/status` wake probe also authenticates with the selected token and
-runs about once a second while backend requests are pending; with a session
-token, each probe therefore costs another database read before its route runs.
+backoff. If a Microsoft account or prior-device marker is known, an unsuccessful
+restore gives up after about 25 seconds and continues the existing silent Entra
+restore without deleting the session. The web client prefers Entra for the rest
+of that page load until a session-authenticated request succeeds. With no known
+account it keeps retrying the session. Requests centrally retry only safe
+methods for transient failures, plus any method on admission-control 429. The
+client confirms session 401s for API and voice failures too, sharing one
+in-flight confirmation per token. Each request with a session token still
+performs a database read by design. The existing `GET /database/status` wake
+probe also authenticates with the selected token and runs about once a second
+while backend requests are pending; with a session token, each probe therefore
+costs another database read before its route runs. A pending session profile
+restore or session-authenticated status probe shows the existing **Waking
+Jarvis…** cue after about three seconds, clearing when that operation settles.
 
 **Health upload credential.** An owner session may read `GET /api/health/upload-credential`,
 which returns only state and expiry, but cannot

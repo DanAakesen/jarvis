@@ -1,6 +1,6 @@
 import { act, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { backendFetch } from './backend-request';
+import { backendFetch, beginBackendRequest } from './backend-request';
 import { DatabaseWakeStatus } from './DatabaseWakeStatus';
 import { streamTaskEvents } from './task-events';
 
@@ -35,6 +35,36 @@ afterEach(() => {
 });
 
 describe('shared database wake status', () => {
+  it('shows and clears the cue for a slow session-authenticated status probe', async () => {
+    const probe = deferred<Response>();
+    const sessionToken = `js.${'a'.repeat(22)}.${'b'.repeat(43)}`;
+    fetchMock.mockImplementation(async () => probe.promise);
+    render(<DatabaseWakeStatus backendUrl={base} getAccessToken={async () => sessionToken} />);
+    const finishRequest = beginBackendRequest(`${base}/settings`);
+    await flush();
+    expect(screen.queryByText('Waking Jarvis…')).toBeNull();
+    await act(async () => { await vi.advanceTimersByTimeAsync(2_999); });
+    expect(screen.queryByText('Waking Jarvis…')).toBeNull();
+    await act(async () => { await vi.advanceTimersByTimeAsync(1); });
+    expect(screen.getByRole('status').textContent).toBe('Waking Jarvis…');
+
+    await act(async () => { probe.resolve(status(false)); await vi.advanceTimersByTimeAsync(0); });
+    expect(screen.queryByRole('status')).toBeNull();
+    finishRequest();
+  });
+
+  it('does not show a delayed cue for a slow probe authenticated by an Entra token', async () => {
+    const probe = deferred<Response>();
+    fetchMock.mockImplementation(async () => probe.promise);
+    render(<DatabaseWakeStatus backendUrl={base} getAccessToken={token} />);
+    const finishRequest = beginBackendRequest(`${base}/settings`);
+    await flush();
+    await act(async () => { await vi.advanceTimersByTimeAsync(5_000); });
+    expect(screen.queryByText('Waking Jarvis…')).toBeNull();
+    await act(async () => { probe.resolve(status(false)); await vi.advanceTimersByTimeAsync(0); });
+    finishRequest();
+  });
+
   it('never polls while idle or invents waking for a slow request', async () => {
     const data = deferred<Response>();
     fetchMock.mockImplementation(async (url) => String(url).endsWith('/database/status') ? status(false) : data.promise);
@@ -183,6 +213,27 @@ describe('shared database wake status', () => {
     const calls = fetchMock.mock.calls.length;
     await act(async () => { await vi.advanceTimersByTimeAsync(5_000); });
     expect(fetchMock).toHaveBeenCalledTimes(calls);
+    await act(async () => { controller.abort(); bodyController.close(); await streaming; });
+  });
+
+  it('does not count a long chat event stream as waking after its fast status probe settles', async () => {
+    let bodyController!: ReadableStreamDefaultController<Uint8Array>;
+    const body = new ReadableStream<Uint8Array>({ start(controller) { bodyController = controller; } });
+    const sessionToken = `js.${'a'.repeat(22)}.${'b'.repeat(43)}`;
+    fetchMock.mockImplementation(async (url) => String(url).endsWith('/database/status')
+      ? status(false)
+      : new Response(body, { headers: { 'Content-Type': 'text/event-stream' } }));
+    render(<DatabaseWakeStatus backendUrl={base} getAccessToken={async () => sessionToken} />);
+    const controller = new AbortController();
+    const streaming = streamTaskEvents({
+      backendUrl: base, taskId: '42', getAccessToken: async () => sessionToken,
+      onEvent: () => {}, signal: controller.signal,
+    });
+    await flush();
+    await act(async () => { bodyController.enqueue(new TextEncoder().encode('event: ready\ndata: {}\n\n')); });
+    expect(screen.queryByText('Waking Jarvis…')).toBeNull();
+    await act(async () => { await vi.advanceTimersByTimeAsync(30_000); });
+    expect(screen.queryByText('Waking Jarvis…')).toBeNull();
     await act(async () => { controller.abort(); bodyController.close(); await streaming; });
   });
 
