@@ -141,6 +141,8 @@ import { createProactiveToolsModule } from './proactive/tools.js';
 import { createSqlHealthUpload } from './daily/health-upload/sql-composition.js';
 import { SqlHealthProcessor } from './daily/health/processor.js';
 import { SqlHealthCapabilities } from './daily/health-upload/sql-capabilities.js';
+import { OwnerSessionService } from './auth/session/service.js';
+import { createOwnerSessionStore } from './database/owner-session-store.js';
 
 try {
   const config = loadConfig();
@@ -168,6 +170,16 @@ try {
     : undefined;
   const healthCapabilities = config.healthUploadEnabled && database
     ? new SqlHealthCapabilities(database.pool, config.auth.ownerObjectId)
+    : undefined;
+  if (config.ownerSessionEnabled && !database) {
+    throw new ConfigurationError('JARVIS_OWNER_SESSION_ENABLED requires the existing SQL pool');
+  }
+  const ownerSessions = config.ownerSessionEnabled && database
+    ? new OwnerSessionService({
+      store: createOwnerSessionStore(database.pool),
+      ownerObjectId: config.auth.ownerObjectId,
+      tenantId: config.auth.tenantId,
+    })
     : undefined;
   const conversationStore = database ? createConversationStore(database.pool) : undefined;
   const conversationSummaryStore = database ? createConversationSummaryStore(database.pool) : undefined;
@@ -1117,6 +1129,7 @@ try {
   }, deployedCommit && /^[\da-f]{7,64}$/iu.test(deployedCommit) ? deployedCommit.toLowerCase() : undefined);
   const app = buildApp(config, logger, {
     ...(healthUpload && healthProcessor && healthCapabilities ? { healthUpload, healthProcessor, healthCapabilities } : {}),
+    ...(ownerSessions ? { ownerSessions } : {}),
     ...(workspaceHtmlArtifactStore ? { workspaceHtmlArtifacts: workspaceHtmlArtifactStore } : {}),
     ...(conversationAttachments ? { conversationAttachments } : {}),
     ...(attachmentVision ? { attachmentVision } : {}),

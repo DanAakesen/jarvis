@@ -1,5 +1,159 @@
 # Decisions
 
+## Admission control for session lookups (23 October 2026; #1217)
+
+Review of the owner session found a way for a caller with no credentials to
+start database work. With the switch on, any well-formed `js.` token for an
+unknown session id reaches the store, whereas a garbage Entra token is rejected
+by its signature with no SQL. Each lookup is a database read that also retries
+while a serverless database resumes, for up to 90 seconds. A flood of random
+tokens could therefore keep the database awake (cost is a stated product
+requirement), use up the connection pool and pile up pending requests. The
+creation limiter guards only authenticated creation. The repository rule is to
+bound external work before authorization, as the Health upload path does.
+
+Decided:
+
+- **Admit before the SQL read, in process, per replica.** The check runs in the
+  verifier before the store is touched. Like the creation limiter it counts per
+  replica. A shared counter would cost a SQL round trip, which is the work being
+  limited, or a new service, for a bound that only has to be roughly right.
+- **A budget for ids the replica has not recently verified.** 30 lookups per
+  minute, a sliding window, spent last, so a request that a cap refuses uses none.
+  A malformed token never reaches it or the store.
+- **Caps on lookups in flight.** 8 for unfamiliar ids and 64 for all, so a known
+  id cannot queue without limit either, and known sessions keep at least 56 slots
+  while a flood fills the unfamiliar lane.
+- **A small recently verified set.** At most 32 ids, least recently verified
+  dropped first, each kept 30 minutes after its last successful verification. Such
+  an id skips the budget and the unfamiliar cap, so chat, Now polling, event
+  streams and voice never throttle themselves. An id enters only by verifying
+  with its valid secret, so a caller cannot put one there. It leaves on any
+  refusal (revoked, expired, wrong secret, another owner or unknown) and then
+  falls back to the budget.
+- **Still no verdict cache.** The set decides admission only. A recently verified
+  id gets the full store read and the constant-time secret comparison on every
+  request, so a revocation applies from the next request, as the opaque owner
+  session entry below requires. After a revoke, the next request with that token
+  is the definite 401 with the reason `revoked`. The revoke path does not edit
+  the set: dropping the id at that moment would turn that request into a 429
+  during a flood and tell the client nothing.
+- **Not keyed on the client address.** `buildApp` sets no trusted proxy, so the
+  address is the ingress, and a forwarded header is chosen by the caller. The key
+  that cannot be forged is the one the replica verified itself.
+- **A throttled request is a 429, never a 401.** A 401 would make a client drop a
+  good session. The answer carries `Retry-After` (the time the budget needs, 1 to
+  60 seconds, or 5 for a cap), the body `{"error":"Too many requests"}` and no
+  reason, in the same family as the 503 for a store outage. The audit reason is
+  `throttled`, with no session prefix because no lookup ran.
+- **The database wake retry is bounded by the caps, not by a shorter deadline.**
+  At most 8 unfamiliar reads per replica can wait in the retry, and the budget
+  limits how fast new ones start. A shorter deadline for unfamiliar ids would fail
+  the owner's own first request after a restart or a database pause, and the retry
+  is shared database code that this change leaves alone.
+
+Alternatives not taken:
+
+- A per-client limit: the address cannot be trusted here, as above.
+- A verdict cache with a short lifetime: a revocation would lag.
+- A fail-fast read for unfamiliar ids: see the last decision above.
+- A token that carries a server-keyed MAC, so the backend could reject a forged
+  token with no SQL. It needs a server-held key and a rotation plan that this
+  change does not add. Revisit it if the residual risk below matters in practice.
+
+Residual risk, accepted:
+
+- A flood from many places can still use up a replica's budget. A session that
+  replica has not verified yet then gets a 429 with `Retry-After` until the window
+  slides, up to a minute. Sessions it already knows keep working, and the owner
+  can sign in with Entra again, whose tokens never reach the session lookup.
+- The budget bounds the load, not the wake-up: a steady stream just under 30 per
+  minute per replica can still keep a paused serverless database awake.
+- A replica that has just started throttles a burst of more than 8 parallel first
+  requests, which succeed on retry. A new session is not pre-marked as verified,
+  so its first request spends one unit of budget.
+- A token revoked elsewhere and replayed while this replica still holds its id as
+  recently verified can start at most 64 concurrent lookups, once, before the
+  first revoked verdict removes the id.
+- A caller who knows a full session id can evict it from the set with a wrong
+  secret, and it then waits for budget like a new session. The id is 128-bit random
+  and only its first eight characters are ever logged.
+- A 429 against a 401 shows only the state of the budget, not whether a token is
+  valid.
+- The numbers are per replica, so the totals grow with the replica count.
+
+Not verified here: the tests use an injected clock and an in-memory store, so a
+flood against a deployed replica, a paused database and several replicas are not
+exercised. The SQL Server integration tests in CI are unchanged.
+
+## Opaque owner session for a 10-day sign-in (22 October 2026; #1217)
+
+The owner asked to stop signing in many times a day on web, phone and localhost.
+Microsoft caps refresh tokens for a browser app at 24 hours (#1214 keeps what it
+allows), so the backend can now exchange one Entra sign-in for its own revocable
+session. This is the backend half. It ships behind `JARVIS_OWNER_SESSION_ENABLED`,
+default off, which also works as a kill switch; the web half is a separate change.
+
+Decided:
+
+- **An opaque server-side token in the `Authorization` header, not a cookie and
+  not a JWT.** The static web app and the API are cross-site origins, so
+  third-party cookie blocking (Safari and iOS today, Chrome later) would break a
+  cookie, and CORS allows only two origins. A self-contained signed JWT could not
+  be revoked. The token is `js.`, a 128-bit session id and a 256-bit secret,
+  base64url encoded; the server stores only the SHA-256 of the secret. The three
+  dot-separated segments let the voice WebSocket subprotocol parser accept it
+  unchanged, and the prefix cannot be mistaken for an Entra token, which starts
+  with `eyJ`.
+- **Lifetimes.** 10 days idle, extended on use at most once an hour so a request
+  does not write every time; a 30-day absolute cap, so a forgotten or stolen
+  session cannot live for ever; at most 10 active sessions per owner, where one
+  more revokes the least recently used. A session cannot create sessions, or the
+  cap would mean nothing.
+- **Owner only, never a service identity.** A session yields the same plain owner
+  principal as an Entra owner token and never satisfies a service route. It is
+  also refused on `GET /status/smoke`: that route exists for the deployment
+  identity, the web app does not call it, and an Entra owner token is still
+  accepted there. To allow sessions there later, remove the one line in
+  `auth/hook.ts` that refuses them.
+- **No positive cache.** Every request with a session token reads one row, so a
+  revocation applies from the next request and there is no lag to document. If
+  measured load ever needs a cache, cap it at 60 seconds and invalidate it on
+  revoke in the same process.
+- **Fail closed, without signing the owner out.** Every rejection is the same 401
+  with no reason in the response; the log carries a reason category and the first
+  eight characters of the token. A store outage is a 503 with `Retry-After`, so a
+  client keeps a good session and retries, and it is never an allow. With the
+  switch off the hook has no verifier, so even a row still in the table is a 401.
+- **Contract and limiter.** The response shape stays in the backend; nothing is
+  added to `packages/contracts` until the web half consumes it. The creation
+  limit (5 per minute, 30 per hour) is in process, so it is per replica; it
+  guards against a runaway client and is not the security boundary.
+- **Rollback.** The down script drops `dbo.owner_sessions`. That is the same as
+  revoking every session, so it is safe: the owner signs in again.
+
+Tradeoffs accepted:
+
+- The web client will keep the token in `localStorage`, where script can read it
+  if XSS ever happens. The existing Content Security Policy, the owner-only scope,
+  the 30-day cap and revocation (one session or all) limit that.
+- A disabled Microsoft account keeps working until its session expires or is
+  revoked, because verification does not call Microsoft. The switch and
+  revoke-all are the controls.
+- iOS Safari can purge script-writable storage after 7 days without interaction,
+  while an installed Home Screen app is counted separately. A purged device
+  simply signs in again.
+- The session secret is forwarded to the hosted chat agent as the delegated
+  authorization, as an Entra token is, so the agent can verify the owner through
+  `/me` and the stored conversation. It is as sensitive as an Entra token for the
+  same period and stays out of logs and errors.
+- Browser code cannot read `Retry-After` from a 429 or 503 because CORS does not
+  expose it; the web half should back off on its own. Exposing the header would
+  be a CORS change, which this slice excludes.
+
+Not verified here: live sign-in, the web client, real devices and production
+enablement. The SQL Server integration tests run in CI.
+
 ## One owner identity across chat and voice (22 October 2026; #1210)
 
 Use one versioned identity contract and owner-editable `identity.description`

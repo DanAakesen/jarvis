@@ -57,7 +57,10 @@ store use the group-one schema in `0001_core_tables.sql` (#15);
 `0005_task_event_archives.sql` indexes committed task-event blobs. Real Azure
 identity connectivity and new-revision/restart acceptance remain issue #11.
 `schema.integration.test.ts` checks the schema's constraints, and reverts and
-reapplies every committed migration in its own database.
+reapplies every committed migration in its own database. It also exercises
+`owner-session-store.ts` (the optional owner session, #1217; table in
+`0064_owner_sessions.sql`): the active-session limit under concurrency, eviction,
+revocation and owner-scoped purge.
 `conversation-store.integration.test.ts` exercises conversation writes, history
 pagination, tool-call/task references and session closure against that isolated
 SQL Server.

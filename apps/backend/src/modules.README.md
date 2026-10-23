@@ -19,6 +19,9 @@ publishes committed events through the core hub. The authenticated SSE endpoint
 and replay are P1-06. Root bearer authentication is implemented in issue #8 and inherited by every area route;
 only core health GET/HEAD and generated CORS preflights are public. Service
 identities and browser sign-in require their separate policies and integration.
+The optional owner session (`auth/session/`, #1217, default off) is verified in
+the same root hook and registers its own `/auth/session` routes in `buildApp`,
+outside this module list.
 
 To add an area, implement a module and include it in the composition. No code in
 `core/` needs to change:

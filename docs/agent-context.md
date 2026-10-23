@@ -1,5 +1,100 @@
 # Agent context
 
+## Owner session switch, revocation and checks (22 October 2026; #1217)
+
+The backend can give the owner a revocable 10-day session after one Entra
+sign-in. It ships dark: the code default is off and `apps/web` does not use it
+yet.
+
+| Setting | Values | Default | Read |
+| --- | --- | --- | --- |
+| `JARVIS_OWNER_SESSION_ENABLED` | exactly `true` or `false` | `false` | At startup |
+
+Any other value, or `true` with no SQL settings, stops startup with a
+configuration error.
+
+**Turn on.** Deploy migration 0064 and the backend revision first; startup
+applies the migration and the table stays unused. Then set the value to the
+exact string `true` as a backend container app `env` entry in `infra/main.bicep`,
+as the other switches are, and deploy. Locally, set the variable in the backend's
+environment together with the SQL settings; the offline skeleton cannot run
+sessions.
+
+**Turn off (kill switch).** Set the value to `false` or remove the entry, then
+deploy or restart. From the next request every `js.` token is a 401, and
+`POST /auth/session`, `DELETE /auth/session` and `DELETE /auth/sessions` answer
+404, although the rows stay in `dbo.owner_sessions`. Turning the switch on again
+revives any row still inside its lifetime, so revoke all sessions first when that
+is not wanted.
+
+**Revoke all sessions** (a lost phone or a suspected leak):
+
+- Call `DELETE /auth/sessions` with a session token or an Entra owner access
+  token. It answers 200 with the number revoked, and each session stops working
+  on its next request because nothing is cached.
+- To end only the calling device, call `DELETE /auth/session` with that device's
+  session token (204).
+- With no usable token, turn the switch off for the immediate stop, then revoke
+  the rows in SQL after the owner approves:
+  `UPDATE dbo.owner_sessions SET revoked_at = SYSUTCDATETIME() WHERE revoked_at IS NULL;`.
+  Rolling back migration 0064 drops the table and ends every session too.
+
+Operating notes:
+
+- The numbers live in `apps/backend/src/auth/session/config.ts`: 10 days idle,
+  extended at most once an hour; a 30-day cap; at most 10 active sessions per
+  owner (creating one more revokes the least recently used); 5 creations per
+  minute and 30 per hour; dead rows purged 30 days after revocation or expiry.
+  The creation limit and the lookup admission below are in process, so they
+  apply per replica.
+- A client sees only a plain 401 for any rejected session. The log has
+  `owner_session.rejected` with a reason (`malformed`, `unknown_session`,
+  `secret_mismatch`, `revoked`, `absolute_expired`, `idle_expired`,
+  `owner_mismatch`, `disabled`, `store_unavailable`, `throttled`, `rate_limited`
+  or `forbidden`) and, when a lookup judged the token, the first eight characters
+  of the token. A session past both the cap and its idle expiry is logged as
+  `absolute_expired`.
+- Lookup admission keeps callers without a session away from SQL. A well-formed
+  `js.` token for a session id this replica has not recently verified spends a
+  budget of 30 lookups per minute, at most 8 such lookups run at once, and at
+  most 64 lookups of any kind. Over a limit the answer is a 429 with
+  `Retry-After` (1 to 60 seconds for the budget, 5 for a cap), the body
+  `{"error":"Too many requests"}` and the log reason `throttled`. It is never a
+  401, so a client keeps its session and retries. Up to 32 ids that verified in
+  the last 30 minutes skip the budget, so the owner's own traffic does not
+  throttle itself, but each request still reads the store and compares the
+  secret: a revocation applies from the next request, and an id refused for any
+  reason leaves the set. The set is in memory, so a restart empties it. The limit
+  is keyed on the session id, never on the client address, which the backend does
+  not trust. With the switch off none of this runs. The numbers are in
+  `lookupAdmission` in `config.ts`.
+- Reading `throttled` lines: a burst with no owner complaint is a flood of random
+  tokens being shed as designed. The budget bounds database work but not wake-up,
+  so a steady stream just under it can still keep a paused serverless database
+  awake. A replica that has just started also throttles a burst of more than 8
+  parallel first requests, which succeed on retry. While a flood lasts, a session
+  that replica has not verified yet can wait up to a minute; the owner can sign in
+  with Entra again, which never reaches the session lookup.
+- A session-store outage is a 503 with `Retry-After`, never a 401, so a client
+  keeps its session and retries. Browsers cannot read `Retry-After` from this API
+  because CORS does not expose it; the same holds for the throttled 429.
+- `POST /auth/session` takes no body or a JSON object `{"deviceLabel": "..."}`.
+  A client must send `{}` or nothing: an empty body with a JSON content type is a
+  400.
+- A session token is refused on `GET /status/smoke` (403); deployment
+  verification keeps its own identity. Like an Entra token, the secret is
+  forwarded to the hosted chat agent for the owner's turns.
+
+Checks, from `apps/backend`:
+`npx vitest run src/auth src/config.test.ts src/logging.test.ts src/database/owner-session-store.test.ts src/database/migrations.test.ts`
+(run `src/logging-source.test.ts` alone, it is slow under load),
+`npx tsc --project tsconfig.json --noEmit` and `npm run lint`. The SQL Server
+checks, `npm run test:database`, run only in CI. The node `mssql` driver cannot
+reach a Windows LocalDB instance, so a local check of the migration and the store
+statements needs a different client, for example ADO.NET over the instance's
+named pipe. Live sign-in, the web client, real devices and production
+configuration are not exercised by any of these.
+
 ## Bounded history continuation checks (22 October 2026; #1201)
 
 From the repository root, the following local checks passed:

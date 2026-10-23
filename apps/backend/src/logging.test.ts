@@ -1,5 +1,6 @@
 import { Writable } from 'node:stream';
 import { describe, expect, it, vi } from 'vitest';
+import { ownerSessionAuditReasons } from './auth/session/audit.js';
 import { createLogger, createTelemetry, safeErrorFields } from './logging.js';
 
 const sdk = vi.hoisted(() => ({
@@ -785,6 +786,92 @@ describe('structured log export', () => {
     expect(records.join('')).not.toContain('secret');
     expect(JSON.stringify(sdk.trackTrace.mock.calls)).not.toContain('secret');
     expect(sdk.trackTrace).toHaveBeenCalledWith(expect.objectContaining({ message: 'request.completed', severity: 'Verbose' }));
+  });
+  it('exports only an allowlisted reason, route, status and session prefix for owner session audit events', () => {
+    const records: string[] = [];
+    const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
+    const sink = { ...sdk, trackTrace: vi.fn() };
+    const logger = createLogger({ logLevel: 'info' }, sink, output);
+    const reqId = '11111111-2222-4333-8444-555555555555';
+    const secrets = {
+      token: 'js.token-leak', secret: 'value-leak', authorization: 'authorization-leak',
+      hash: 'hash-leak', cause: new Error('cause-leak'), err: new Error('error-leak'),
+      deviceLabel: 'label-leak', ownerObjectId: 'owner-leak',
+    };
+    for (const reason of ownerSessionAuditReasons) {
+      logger.child({ reqId }).warn({
+        reason, method: 'GET', route: '/me', statusCode: 401, sessionPrefix: 'AbCd-_09', ...secrets,
+      }, 'owner_session.rejected');
+    }
+    expect(records).toHaveLength(ownerSessionAuditReasons.length);
+    ownerSessionAuditReasons.forEach((reason, index) => {
+      expect(JSON.parse(records[index]!)).toEqual({
+        level: 40, time: expect.any(Number), service: 'jarvis-backend', msg: 'owner_session.rejected',
+        reqId, reason, method: 'GET', route: '/me', statusCode: 401, sessionPrefix: 'AbCd-_09',
+      });
+    });
+    expect(sink.trackTrace).toHaveBeenCalledTimes(ownerSessionAuditReasons.length);
+    expect(sink.trackTrace).toHaveBeenCalledWith(expect.objectContaining({
+      message: 'owner_session.rejected',
+      properties: {
+        service: 'jarvis-backend', reqId, reason: 'forbidden', method: 'GET', route: '/me', statusCode: 401,
+        sessionPrefix: 'AbCd-_09',
+      },
+    }));
+
+    logger.info({ sessionPrefix: 'AbCd-_09', evicted: 1, ...secrets }, 'owner_session.created');
+    logger.info({ scope: 'current', sessionPrefix: 'AbCd-_09', ...secrets }, 'owner_session.revoked');
+    logger.info({ scope: 'all', count: 3, ...secrets }, 'owner_session.revoked');
+    logger.warn({ sessionPrefix: 'AbCd-_09', ...secrets }, 'owner_session.refresh_failed');
+    const tail = records.slice(ownerSessionAuditReasons.length).map((record) => JSON.parse(record) as unknown);
+    expect(tail).toEqual([
+      expect.objectContaining({ msg: 'owner_session.created', sessionPrefix: 'AbCd-_09', evicted: 1 }),
+      expect.objectContaining({ msg: 'owner_session.revoked', scope: 'current', sessionPrefix: 'AbCd-_09' }),
+      expect.objectContaining({ msg: 'owner_session.revoked', scope: 'all', count: 3 }),
+      expect.objectContaining({ msg: 'owner_session.refresh_failed', sessionPrefix: 'AbCd-_09' }),
+    ]);
+    expect(records.join('') + JSON.stringify(sink.trackTrace.mock.calls)).not.toContain('leak');
+  });
+  it('exports the throttled reason with its 429 status, no session identifier and nothing else', () => {
+    const records: string[] = [];
+    const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
+    const sink = { ...sdk, trackTrace: vi.fn() };
+    const logger = createLogger({ logLevel: 'info' }, sink, output);
+    const token = `js.${'A'.repeat(22)}.${'B'.repeat(43)}`;
+    expect(ownerSessionAuditReasons).toContain('throttled');
+    logger.warn({
+      reason: 'throttled', method: 'GET', route: '/me', statusCode: 429, retryAfter: 17, body: 'body-leak',
+      token, sessionId: `A${'B'.repeat(21)}`, err: new Error('error-leak'),
+    }, 'owner_session.rejected');
+    expect(records.map((record) => JSON.parse(record) as unknown)).toEqual([{
+      level: 40, time: expect.any(Number), service: 'jarvis-backend', msg: 'owner_session.rejected',
+      reason: 'throttled', method: 'GET', route: '/me', statusCode: 429,
+    }]);
+    expect(sink.trackTrace).toHaveBeenCalledWith(expect.objectContaining({
+      message: 'owner_session.rejected',
+      properties: { service: 'jarvis-backend', reason: 'throttled', method: 'GET', route: '/me', statusCode: 429 },
+    }));
+    const exported = records.join('') + JSON.stringify(sink.trackTrace.mock.calls);
+    expect(exported).not.toContain('leak');
+    expect(exported).not.toContain(token);
+    expect(exported).not.toContain('retryAfter');
+  });
+  it('drops unknown reasons and malformed identifiers from owner session audit events', () => {
+    const records: string[] = [];
+    const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
+    const logger = createLogger({ logLevel: 'info' }, undefined, output);
+    const token = `js.${'A'.repeat(22)}.${'B'.repeat(43)}`;
+    logger.warn({
+      reason: 'token-reason-leak', method: 'TRACE', route: `/me?token=${token}`, statusCode: 99,
+      sessionPrefix: token, scope: 'everything', count: 101, evicted: -1,
+    }, 'owner_session.rejected');
+    logger.info({ sessionPrefix: 'short', count: 1.5, evicted: Number.NaN }, 'owner_session.created');
+    expect(records.map((record) => JSON.parse(record) as unknown)).toEqual([
+      { level: 40, time: expect.any(Number), service: 'jarvis-backend', msg: 'owner_session.rejected' },
+      { level: 30, time: expect.any(Number), service: 'jarvis-backend', msg: 'owner_session.created' },
+    ]);
+    expect(records.join('')).not.toContain('leak');
+    expect(records.join('')).not.toContain(token);
   });
   it('keeps serving and reports export failure to stdout without recursion', () => {
     const records: string[] = [];

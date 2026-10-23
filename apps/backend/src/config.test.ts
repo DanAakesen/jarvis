@@ -32,6 +32,7 @@ describe('backend configuration', () => {
       proactiveTodoWritesEnabled: false,
       proactiveAlertsEnabled: false,
       healthUploadEnabled: false,
+      ownerSessionEnabled: false,
       voiceToolBudgetProbeEnabled: true,
       auth: loadAuthConfig({}),
     });
@@ -61,6 +62,14 @@ describe('backend configuration', () => {
     expect(loadConfig({ JARVIS_HEALTH_UPLOAD_ENABLED: 'false' }).healthUploadEnabled).toBe(false);
     expect(loadConfig({ JARVIS_HEALTH_UPLOAD_ENABLED: 'true' }).healthUploadEnabled).toBe(true);
     expect(() => loadConfig({ JARVIS_HEALTH_UPLOAD_ENABLED: 'TRUE' })).toThrow('JARVIS_HEALTH_UPLOAD_ENABLED must be true or false');
+  });
+  it('keeps owner sessions default-off and accepts only an explicit boolean flag', () => {
+    expect(loadConfig({}).ownerSessionEnabled).toBe(false);
+    expect(loadConfig({ JARVIS_OWNER_SESSION_ENABLED: 'false' }).ownerSessionEnabled).toBe(false);
+    expect(loadConfig({ JARVIS_OWNER_SESSION_ENABLED: 'true' }).ownerSessionEnabled).toBe(true);
+    for (const value of ['TRUE', ' true', '1', '']) {
+      expect(() => loadConfig({ JARVIS_OWNER_SESSION_ENABLED: value })).toThrow('JARVIS_OWNER_SESSION_ENABLED must be true or false');
+    }
   });
   it('enables the voice tool-budget probe by default and accepts only an explicit boolean flag', () => {
     expect(loadConfig({}).voiceToolBudgetProbeEnabled).toBe(true);
@@ -105,6 +114,7 @@ describe('backend configuration', () => {
       proactiveTodoWritesEnabled: false,
       proactiveAlertsEnabled: false,
       healthUploadEnabled: false,
+      ownerSessionEnabled: false,
       voiceToolBudgetProbeEnabled: true,
     });
   });
