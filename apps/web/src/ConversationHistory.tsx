@@ -312,12 +312,31 @@ export function ConversationHistory({
 
   useLayoutEffect(() => {
     const element = transcript.current;
-    if (!element || typeof ResizeObserver !== 'function') return;
-    const observer = new ResizeObserver(() => {
+    if (!element) return;
+    const follow = () => {
       if (followLatest.current) element.scrollTop = element.scrollHeight;
-    });
-    observer.observe(element);
-    return () => observer.disconnect();
+    };
+    const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(follow) : null;
+    // The transcript box keeps its size while a reply grows inside it, so watch the messages too.
+    const watched = new Set<Element>();
+    const watchChildren = () => {
+      if (!observer) return;
+      for (const child of Array.from(element.children)) {
+        if (watched.has(child)) continue;
+        watched.add(child);
+        observer.observe(child);
+      }
+    };
+    observer?.observe(element);
+    watchChildren();
+    const mutations = typeof MutationObserver === 'function'
+      ? new MutationObserver(() => { watchChildren(); follow(); })
+      : null;
+    mutations?.observe(element, { childList: true, subtree: true, characterData: true });
+    return () => {
+      observer?.disconnect();
+      mutations?.disconnect();
+    };
   }, [conversationWindow?.element, voiceActive]);
 
   function updateFollow() {
@@ -667,11 +686,14 @@ export function ConversationHistory({
     if (pending.length && pendingFrom) unanswered.set(pendingFrom, pending);
     return { reply, unanswered };
   })();
+  // Once a reply is delivered the tool chips go away (Dan, 22 October); only what the reply leaves behind stays:
+  // a link to a task it created and an image it generated.
+  const keptToolCalls = (calls: ConversationHistoryToolCall[] | undefined) =>
+    (calls ?? []).filter((call) => validTaskId(call.taskId) || (call.tool === 'image_generation' && call.outcome === 'ok' && !!call.artifactId));
   const renderToolCalls = (calls: ConversationHistoryToolCall[]) => (
-    <ul className="message-tools" aria-label="Tool calls">
-      {calls.map((call) => (
+    <ul className="message-tools" aria-label="Tool results">
+      {keptToolCalls(calls).map((call) => (
         <li key={call.id}>
-          <ToolCallChip tool={call.tool} state={call.outcome === 'ok' || call.outcome === 'refused' ? call.outcome : 'error'} />
           {validTaskId(call.taskId) && (
             <TaskWindowLink className="task-reference" taskId={call.taskId}>
               Task #{call.taskId}
@@ -817,10 +839,10 @@ export function ConversationHistory({
                       </time>
                       {voiceUsageText && <span className="visually-hidden">{`Voice${voiceUsageText}`}</span>}
                     </div>
-                    {message.role === 'jarvis' && toolPlacement.reply.get(message.id) && renderToolCalls(toolPlacement.reply.get(message.id)!)}
+                    {message.role === 'jarvis' && keptToolCalls(toolPlacement.reply.get(message.id)).length > 0 && renderToolCalls(toolPlacement.reply.get(message.id)!)}
                     {failedTurns.filter((turn) => turn.messageId === message.id).map(failedTurnFeedback)}
                   </li>
-                  {toolPlacement.unanswered.get(message.id) && (
+                  {keptToolCalls(toolPlacement.unanswered.get(message.id)).length > 0 && (
                     <li className="conversation-message conversation-tools-only" data-speaker="jarvis">
                       <strong className="message-author visually-hidden">Jarvis</strong>
                       {renderToolCalls(toolPlacement.unanswered.get(message.id)!)}
@@ -855,7 +877,8 @@ export function ConversationHistory({
               <p className="live-turn-status">
                 <WorkingCore />
                 <LivePhrase key={liveTools.some((tool) => tool.state === 'running') ? 'working' : liveTools.length ? 'composing' : 'thinking'}
-                  phase={liveTools.some((tool) => tool.state === 'running') ? 'working' : liveTools.length ? 'composing' : 'thinking'} text={workText} />
+                  phase={liveTools.some((tool) => tool.state === 'running') ? 'working' : liveTools.length ? 'composing' : 'thinking'}
+                  tool={[...liveTools].reverse().find((tool) => tool.state === 'running')?.tool ?? null} text={workText} />
                 <span className="visually-hidden" role="status" aria-live="polite">Jarvis is thinking…</span>
               </p>
             )}

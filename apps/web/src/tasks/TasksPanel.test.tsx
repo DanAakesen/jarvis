@@ -33,7 +33,7 @@ beforeEach(() => {
   onOpenNote.mockReset();
   onClose.mockReset();
   fetchMock.mockReset().mockImplementation(async (input, init) => {
-    if (init?.method === 'PATCH' || init?.method === 'POST') {
+    if (init?.method === 'PATCH' || init?.method === 'POST' || init?.method === 'PUT') {
       const body = JSON.parse(String(init.body)) as { path?: string; line?: number; done?: boolean };
       return json({
         id: '9'.padStart(64, '0'), path: body.path ?? 'Personal/Inbox.md', line: body.line ?? 9, done: body.done ?? false,
@@ -62,7 +62,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-const writeCalls = () => fetchMock.mock.calls.filter(([, init]) => init?.method === 'PATCH' || init?.method === 'POST');
+const writeCalls = () => fetchMock.mock.calls.filter(([, init]) => init?.method === 'PATCH' || init?.method === 'POST' || init?.method === 'PUT');
 
 describe('Tasks panel', () => {
   it('groups open tasks by the owner date and shows an unticked box with a source-note link', async () => {
@@ -80,8 +80,10 @@ describe('Tasks panel', () => {
     const link = screen.getByRole('link', { name: 'Open source note Personal/Mirror & Frame.md, line 2' });
     expect(link.getAttribute('href')).toBe('/notes?note=Personal%2FMirror+%26+Frame.md');
     expect(link.textContent).toBe('Personal ·Mirror & Frame');
-    expect(screen.getAllByRole('button').map((button) => button.getAttribute('aria-label') ?? button.textContent))
+    expect(screen.getAllByRole('button').map((button) => button.getAttribute('aria-label') ?? button.textContent)
+      .filter((name) => !name.startsWith('Edit task: ')))
       .toEqual(['Add a task', 'All', 'Personal', 'Work']);
+    expect(screen.getAllByRole('button', { name: /^Edit task: / })).toHaveLength(5);
   });
 
   it('completes a task at once, offers Undo, and lets it leave the list after a moment', async () => {
@@ -174,6 +176,129 @@ describe('Tasks panel', () => {
     fireEvent.keyDown(screen.getByRole('textbox', { name: 'New task' }), { key: 'Escape' });
     expect(screen.queryByRole('textbox', { name: 'New task' })).toBeNull();
     expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('edits a task in place: Enter saves only the words with the version that was read, then reloads', async () => {
+    mount();
+    await screen.findByRole('heading', { name: 'Overdue' });
+    fireEvent.click(screen.getByRole('button', { name: 'Edit task: No date fixture' }));
+    const input = screen.getByRole('textbox', { name: 'Task text' }) as HTMLTextAreaElement;
+    expect(document.activeElement).toBe(input);
+    expect(input.value).toBe('No date fixture');
+    expect(screen.getAllByRole('button', { name: /^Edit task: / }).every((button) => (button as HTMLButtonElement).disabled)).toBe(true);
+    fireEvent.change(input, { target: { value: '  Reworded   fixture ' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    await waitFor(() => expect(writeCalls()).toHaveLength(1));
+    expect(writeCalls()[0]?.[1]).toMatchObject({ method: 'PUT' });
+    expect(JSON.parse(String(writeCalls()[0]?.[1]?.body))).toEqual({
+      path: 'Personal/Inbox.md', line: 4, text: 'No date fixture', version: '4'.padStart(64, 'c'), newText: 'Reworded fixture',
+      due: null, time: null, priority: 'normal',
+    });
+    await waitFor(() => expect(screen.queryByRole('textbox', { name: 'Task text' })).toBeNull());
+    await waitFor(() => expect(fetchMock.mock.calls.filter(([url]) => String(url).includes('?state=open'))).toHaveLength(2));
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Edit task: No date fixture' }));
+  });
+
+  it('edits the date, time and priority beside the words, and clears a date with its time', async () => {
+    mount();
+    await screen.findByRole('heading', { name: 'Overdue' });
+    fireEvent.click(screen.getByRole('button', { name: 'Edit task: Buy a mirror' }));
+    expect((screen.getByLabelText('Due date') as HTMLInputElement).value).toBe('2031-04-09');
+    expect(screen.getByRole('button', { name: 'High' }).getAttribute('aria-pressed')).toBe('true');
+    fireEvent.change(screen.getByLabelText('Due date'), { target: { value: '2031-04-12' } });
+    fireEvent.change(screen.getByLabelText('Due time'), { target: { value: '14:15' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Normal' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save task' }));
+    await waitFor(() => expect(writeCalls()).toHaveLength(1));
+    expect(JSON.parse(String(writeCalls()[0]?.[1]?.body))).toEqual({
+      path: 'Personal/Mirror & Frame.md', line: 2, text: 'Buy a mirror', version: '2'.padStart(64, 'c'), newText: 'Buy a mirror',
+      due: '2031-04-12', time: '14:15', priority: 'normal',
+    });
+    await waitFor(() => expect(screen.queryByRole('textbox', { name: 'Task text' })).toBeNull());
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit task: Upcoming fixture' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Clear due date' }));
+    expect((screen.getByLabelText('Due date') as HTMLInputElement).value).toBe('');
+    fireEvent.click(screen.getByRole('button', { name: 'Save task' }));
+    await waitFor(() => expect(writeCalls()).toHaveLength(2));
+    expect(JSON.parse(String(writeCalls()[1]?.[1]?.body))).toMatchObject({ due: null, time: null, priority: 'medium', newText: 'Upcoming fixture' });
+    await waitFor(() => expect(screen.queryByRole('textbox', { name: 'Task text' })).toBeNull());
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit task: No date fixture' }));
+    fireEvent.change(screen.getByLabelText('Due time'), { target: { value: '09:30' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save task' }));
+    await waitFor(() => expect(writeCalls()).toHaveLength(3));
+    expect(JSON.parse(String(writeCalls()[2]?.[1]?.body))).toMatchObject({ due: '2031-04-09', time: '09:30' });
+  });
+
+  it('cancels an edit with Escape without closing the panel or writing, and skips an unchanged save', async () => {
+    mount();
+    await screen.findByRole('heading', { name: 'Overdue' });
+    fireEvent.click(screen.getByRole('button', { name: 'Edit task: No date fixture' }));
+    const input = screen.getByRole('textbox', { name: 'Task text' });
+    fireEvent.change(input, { target: { value: 'Something else' } });
+    fireEvent.keyDown(input, { key: 'Escape' });
+    expect(screen.queryByRole('textbox', { name: 'Task text' })).toBeNull();
+    expect(screen.getByText('No date fixture')).not.toBeNull();
+    expect(onClose).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Edit task: No date fixture' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save task' }));
+    expect(screen.queryByRole('textbox', { name: 'Task text' })).toBeNull();
+    expect(writeCalls()).toHaveLength(0);
+  });
+
+  it('keeps the edit open and explains when the save is refused, and refreshes when the line changed', async () => {
+    mount();
+    await screen.findByRole('heading', { name: 'Overdue' });
+    fireEvent.click(screen.getByRole('button', { name: 'Edit task: No date fixture' }));
+    fireEvent.change(screen.getByRole('textbox', { name: 'Task text' }), { target: { value: 'Reworded fixture' } });
+    fetchMock.mockImplementationOnce(async () => json({ error: 'That wording cannot be saved on this task line.' }, 400));
+    fireEvent.click(screen.getByRole('button', { name: 'Save task' }));
+    expect(await screen.findByText('That wording cannot be saved on this task line.')).not.toBeNull();
+    expect((screen.getByRole('textbox', { name: 'Task text' }) as HTMLTextAreaElement).value).toBe('Reworded fixture');
+    await waitFor(() => expect((screen.getByRole('button', { name: 'Save task' }) as HTMLButtonElement).disabled).toBe(false));
+    fetchMock.mockImplementationOnce(async () => json({ error: 'This task changed in the vault. Refresh the list.' }, 409));
+    fireEvent.click(screen.getByRole('button', { name: 'Save task' }));
+    expect(await screen.findByText(/changed in your vault/)).not.toBeNull();
+    expect(screen.queryByRole('textbox', { name: 'Task text' })).toBeNull();
+    await waitFor(() => expect(fetchMock.mock.calls.filter(([url]) => String(url).includes('?state=open'))).toHaveLength(2));
+  });
+
+  it('cancels only the edit on Escape from any control in the editor, and ignores an IME Escape', async () => {
+    mount();
+    await screen.findByRole('heading', { name: 'Overdue' });
+    fireEvent.click(screen.getByRole('button', { name: 'Edit task: No date fixture' }));
+    fireEvent.keyDown(screen.getByRole('textbox', { name: 'Task text' }), { key: 'Escape', isComposing: true });
+    expect(screen.getByRole('textbox', { name: 'Task text' })).not.toBeNull();
+    expect(onClose).not.toHaveBeenCalled();
+    const controls = [() => screen.getByLabelText('Due date'), () => screen.getByRole('button', { name: 'High' }), () => screen.getByRole('button', { name: 'Save task' })];
+    for (const control of controls) {
+      fireEvent.keyDown(control(), { key: 'Escape' });
+      expect(screen.queryByRole('textbox', { name: 'Task text' })).toBeNull();
+      expect(onClose).not.toHaveBeenCalled();
+      fireEvent.click(screen.getByRole('button', { name: 'Edit task: No date fixture' }));
+    }
+    expect(writeCalls()).toHaveLength(0);
+  });
+
+  it('drops an open edit when the scope switch hides its task, so the visible pencils stay usable', async () => {
+    mount();
+    await screen.findByRole('heading', { name: 'Overdue' });
+    fireEvent.click(screen.getByRole('button', { name: 'Edit task: No date fixture' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Work' }));
+    expect(screen.queryByRole('textbox', { name: 'Task text' })).toBeNull();
+    expect((screen.getByRole('button', { name: 'Edit task: Work fixture' }) as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.click(screen.getByRole('button', { name: 'All' }));
+    expect(screen.queryByRole('textbox', { name: 'Task text' })).toBeNull();
+    expect((screen.getByRole('button', { name: 'Edit task: No date fixture' }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it('offers no edit on completed tasks', async () => {
+    mount();
+    await screen.findByRole('heading', { name: 'Overdue' });
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Search tasks' }), { target: { value: 'completed' } });
+    await screen.findByRole('checkbox', { name: 'Completed fixture' });
+    expect(screen.queryByRole('button', { name: /^Edit task: / })).toBeNull();
   });
 
   it('opens the source note in place instead of navigating away', async () => {

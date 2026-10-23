@@ -116,6 +116,31 @@
   color: var(--warning); font-size: var(--type-caption); font-weight: 700; line-height: var(--line-tight);
 }
 .tasks-panel-task { min-width: 0; }
+/* Top right of the card: the edit pencil first, the priority pill or Undo beneath it. */
+.tasks-panel-side { display: flex; flex-direction: column; align-items: flex-end; align-self: stretch; justify-content: space-between; gap: var(--space-1); }
+.tasks-panel-side:not(:has(.tasks-panel-icon)) { justify-content: center; }
+.tasks-panel-edit-actions { display: flex; justify-content: flex-end; gap: var(--space-1); }
+.tasks-panel-side > .tasks-panel-priority, .tasks-panel-side > .tasks-panel-undo { align-self: flex-end; }
+.tasks-panel-icon {
+  display: inline-flex; width: 28px; height: 28px; flex: 0 0 auto; align-items: center; justify-content: center; padding: 0; border: 0;
+  border-radius: var(--radius-control); background: transparent; color: var(--text-muted); cursor: pointer;
+  transition: background-color var(--motion-press) var(--ease-standard), color var(--motion-press) var(--ease-standard);
+}
+.tasks-panel-icon svg { width: 16px; height: 16px; }
+.tasks-panel-icon:hover { background: var(--glass-hover); color: var(--text); }
+.tasks-panel-icon:active { background: var(--glass-pressed); }
+.tasks-panel-icon:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.tasks-panel-icon:disabled { cursor: not-allowed; opacity: 0.5; }
+.tasks-panel-row[data-editing] { display: block; }
+.tasks-panel-editor { display: grid; min-width: 0; gap: var(--space-2); }
+.tasks-panel-editor .tasks-panel-when-field { gap: var(--space-1); padding-right: var(--space-1); }
+.tasks-panel-edit-input {
+  box-sizing: border-box; display: block; width: 100%; min-width: 0; min-height: 5.5em; max-height: 16em; padding: var(--space-2) var(--space-3); border: 0; border-radius: var(--radius-control);
+  background: var(--surface-muted); color: var(--text); font: inherit; font-size: var(--type-small); line-height: var(--line-body); resize: none; overflow-y: auto;
+}
+.tasks-panel-edit-input:focus-visible { outline: none; box-shadow: 0 0 0 1px var(--field-focus-rule), var(--field-focus-glow); }
+.tasks-panel-edit-input:disabled { opacity: 0.6; }
+.tasks-panel-task p.tasks-panel-edit-error, .tasks-panel-editor .tasks-panel-edit-error { margin: 0; color: var(--error); font-size: var(--type-caption); }
 .tasks-panel-task p { margin: 0; font-size: var(--type-small); overflow-wrap: anywhere; }
 .tasks-panel-row[data-done] .tasks-panel-task p { color: var(--text-muted); text-decoration: line-through; }
 .tasks-panel-meta { display: flex; min-width: 0; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-2); margin-top: var(--space-1); color: var(--text-muted); font-size: var(--type-caption); }
@@ -140,6 +165,8 @@
 @keyframes tasks-panel-in { from { opacity: 0; translate: -8px 0; } }
 @media (pointer: coarse) {
   .tasks-panel-toggle, .tasks-panel-retry, .tasks-panel-undo, .tasks-panel-save { min-height: 44px; }
+  .tasks-panel-icon { position: relative; }
+  .tasks-panel-icon::after { content: ""; position: absolute; inset: -8px; }
   .tasks-panel-meta a { position: relative; }
   .tasks-panel-meta a::after { content: ""; position: absolute; left: 0; right: 0; top: 50%; height: var(--control-size); translate: 0 -50%; }
 }
@@ -151,9 +178,9 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .tasks-panel { animation: none; }
-  .tasks-panel-toggle, .tasks-panel-check, .tasks-panel-check rect, .tasks-panel-row, .tasks-panel-add-toggle, .tasks-panel-add-toggle svg, .tasks-panel-save { transition: none; }
+  .tasks-panel-toggle, .tasks-panel-check, .tasks-panel-check rect, .tasks-panel-row, .tasks-panel-add-toggle, .tasks-panel-add-toggle svg, .tasks-panel-save, .tasks-panel-icon { transition: none; }
 }
 :root[data-motion="reduced"] .tasks-panel { animation: none; }
 :root[data-motion="reduced"] .tasks-panel-toggle, :root[data-motion="reduced"] .tasks-panel-check, :root[data-motion="reduced"] .tasks-panel-check rect,
 :root[data-motion="reduced"] .tasks-panel-row, :root[data-motion="reduced"] .tasks-panel-add-toggle, :root[data-motion="reduced"] .tasks-panel-add-toggle svg,
-:root[data-motion="reduced"] .tasks-panel-save { transition: none; }
+:root[data-motion="reduced"] .tasks-panel-save, :root[data-motion="reduced"] .tasks-panel-icon { transition: none; }

@@ -228,7 +228,7 @@ describe('ConversationHistory', () => {
     }
   });
 
-  it('shows persisted tool outcomes and task links', async () => {
+  it('shows task links but no tool chips once a reply is delivered', async () => {
     loadConversationHistory.mockResolvedValue({
       messages: [message, { ...message, id: '43', role: 'dan', text: 'Sure.', toolCalls: [] }],
       nextCursor: null,
@@ -240,7 +240,7 @@ describe('ConversationHistory', () => {
     expect(screen.getByText('Voice · 2.5 voice minutes')).not.toBeNull();
     expect(screen.queryByText(/Chat · English/)).toBeNull();
     expect(screen.getAllByText(/voice minutes/u)).toHaveLength(1);
-    expect(screen.getByTitle('factory_create_task · done').textContent).toContain('Factory create task');
+    expect(screen.queryByTitle('factory_create_task · done')).toBeNull();
     expect(screen.getByRole('link', { name: 'Task #77' }).getAttribute('href')).toBe('/factory/tasks/77');
   });
 
@@ -1402,6 +1402,19 @@ describe('ConversationHistory', () => {
     { ...message, id: '43', role: 'dan' as const, text: 'Hello Jarvis', toolCalls: [] },
     { ...message, id: '44', channel: 'chat' as const, text: 'I am ready.', toolCalls: [] },
   ];
+
+  it('stays pinned to the end when a reply grows inside the transcript after it was added', async () => {
+    loadConversationHistory.mockResolvedValue({ messages: historyPair, nextCursor: null });
+    renderConversation();
+    await screen.findByText('I am ready.');
+    const transcript = screen.getByLabelText('Conversation history');
+    Object.defineProperty(transcript, 'scrollHeight', { configurable: true, value: 1200 });
+    Object.defineProperty(transcript, 'clientHeight', { configurable: true, value: 300 });
+    Object.defineProperty(transcript, 'scrollHeight', { configurable: true, value: 1500 });
+    const bubble = screen.getByText('I am ready.');
+    await act(async () => { bubble.textContent = 'I am ready. Here is a much longer answer.'; await Promise.resolve(); });
+    await waitFor(() => expect(transcript.scrollTop).toBe(1500));
+  });
 
   it('keeps Dan’s reading position until he returns to the latest message', async () => {
     loadConversationHistory.mockResolvedValue({ messages: historyPair, nextCursor: null });
