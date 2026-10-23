@@ -452,6 +452,17 @@ proactive generation/delivery only, not explicit owner tasks. Re-enabling does
 not alter pause, sources, budget or unrelated settings. Existing findings,
 todos and reminders are not deleted.
 
+The 23 October follow-up uses the existing bounded approval model for natural
+Danish/English preference instructions, with its own exact-change verification
+prompt and no approval-word shortcut. Without a configured model, canonical
+requests still work; other wording refuses with a focused clarification.
+Cancellation and current-message provenance are checked again before saving.
+No new configuration, migration or tool-budget change is needed. Reverting the
+follow-up preserves saved settings and restores canonical-only wording.
+Add `src/core/approval-interpreter.test.ts` to the focused checks below.
+Synthetic model-port tests verify dispatch and safeguards, not live language
+accuracy; live chat/voice acceptance remains owner verification.
+
 Focused local checks:
 `npm test --workspace @jarvis/backend -- --run src/proactive/tools.test.ts src/proactive/policy.test.ts src/proactive/engine.test.ts src/proactive/store.test.ts src/proactive/routes.test.ts src/proactive/todo-writer.test.ts src/proactive/alerts.test.ts src/proactive/reminder-ticker.test.ts src/proactive/vault-push-reminders.test.ts src/database/proactive-store.test.ts src/database/migrations.test.ts src/voice/realtime.test.ts src/voice/startup.test.ts src/core/settings.test.ts src/production-modules.test.ts`,
 `npm test --workspace @jarvis/web -- --run src/ProactiveSettings.test.tsx`,
