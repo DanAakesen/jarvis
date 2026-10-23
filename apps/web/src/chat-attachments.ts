@@ -1,7 +1,7 @@
-import type { PublicClientApplication } from '@azure/msal-browser';
 import type { PublicConfig } from '../config/public-config';
 import { accessToken } from './conversation-history';
-import { beginBackendRequest, backendFetch } from './backend-request';
+import { backendFetch, beginBackendRequest, recoverOwnerSession, waitForBackendRetry } from './backend-request';
+import { isOwnerSessionToken } from './owner-session';
 
 export const MAX_ATTACHMENTS = 5;
 export const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
@@ -125,23 +125,24 @@ function failureMessage(status: number, body: unknown): string {
 
 /** Uploads through XMLHttpRequest because fetch cannot report upload progress. */
 export async function uploadAttachment(
-  client: PublicClientApplication,
+  getAccessToken: () => Promise<string>,
   config: PublicConfig,
   file: File,
   options: { signal: AbortSignal; onProgress: (fraction: number) => void },
 ): Promise<UploadedAttachment> {
   const url = endpoint(config, '/conversation/attachments');
-  const token = await accessToken(client, config);
+  const token = await accessToken(getAccessToken);
   options.signal.throwIfAborted();
-  const form = new FormData();
-  form.append('file', file, file.name);
-  const finish = beginBackendRequest(url, options.signal);
-  try {
-    return await new Promise<UploadedAttachment>((resolve, reject) => {
+  const signal = AbortSignal.any([options.signal, AbortSignal.timeout(120_000)]);
+  const finish = beginBackendRequest(url, signal);
+  const send = async (attempt: number): Promise<UploadedAttachment> => {
+    const form = new FormData();
+    form.append('file', file, file.name);
+    return new Promise<UploadedAttachment>((resolve, reject) => {
       const request = new XMLHttpRequest();
       const abort = () => request.abort();
-      options.signal.addEventListener('abort', abort, { once: true });
-      const settle = () => options.signal.removeEventListener('abort', abort);
+      signal.addEventListener('abort', abort, { once: true });
+      const settle = () => signal.removeEventListener('abort', abort);
       request.open('POST', url);
       request.setRequestHeader('Authorization', `${['Bear', 'er'].join('')} ${token}`);
       request.setRequestHeader('Accept', 'application/json');
@@ -153,7 +154,14 @@ export async function uploadAttachment(
         settle();
         let body: unknown;
         try { body = JSON.parse(request.responseText); } catch { body = undefined; }
-        if (request.status !== 201) return reject(new Error(failureMessage(request.status, body)));
+        if (request.status === 429 && isOwnerSessionToken(token) && attempt < 3) {
+          void waitForBackendRetry(attempt, signal).then(() => send(attempt + 1)).then(resolve, reject);
+          return;
+        }
+        if (request.status !== 201) {
+          if (request.status === 401 && isOwnerSessionToken(token)) void recoverOwnerSession(token);
+          return reject(new Error(failureMessage(request.status, body)));
+        }
         const value = body as Partial<UploadedAttachment> | undefined;
         if (!value || typeof value.id !== 'string' || !idPattern.test(value.id) || typeof value.name !== 'string' ||
             typeof value.contentType !== 'string' || typeof value.size !== 'number' ||
@@ -164,17 +172,20 @@ export async function uploadAttachment(
       };
       request.onerror = () => { settle(); reject(new Error('The upload was interrupted. Check your connection and try again.')); };
       request.ontimeout = () => { settle(); reject(new Error('The upload took too long. Try again.')); };
-      request.onabort = () => { settle(); reject(options.signal.reason ?? new DOMException('Aborted', 'AbortError')); };
+      request.onabort = () => { settle(); reject(signal.reason ?? new DOMException('Aborted', 'AbortError')); };
       request.send(form);
     });
+  };
+  try {
+    return await send(0);
   } finally {
     finish();
   }
 }
 
-export async function deleteAttachment(client: PublicClientApplication, config: PublicConfig, id: string): Promise<void> {
+export async function deleteAttachment(getAccessToken: () => Promise<string>, config: PublicConfig, id: string): Promise<void> {
   if (!idPattern.test(id)) return;
-  const token = await accessToken(client, config);
+  const token = await accessToken(getAccessToken);
   await backendFetch(endpoint(config, `/conversation/attachments/${id}`), {
     method: 'DELETE',
     headers: { Authorization: `${['Bear', 'er'].join('')} ${token}` },
@@ -183,13 +194,13 @@ export async function deleteAttachment(client: PublicClientApplication, config: 
 
 /** Fetches a short-lived signed read URL. A 404 means the file expired or was removed. */
 export async function loadAttachmentUrl(
-  client: PublicClientApplication,
+  getAccessToken: () => Promise<string>,
   config: PublicConfig,
   id: string,
   signal?: AbortSignal,
 ): Promise<string> {
   if (!idPattern.test(id)) throw new Error('Jarvis returned an invalid attachment reference.');
-  const token = await accessToken(client, config);
+  const token = await accessToken(getAccessToken);
   let response: Response;
   try {
     response = await backendFetch(endpoint(config, `/conversation/attachments/${id}/url`), {

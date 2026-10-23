@@ -18,9 +18,12 @@ const auth = vi.hoisted(() => {
     isSignInRedirectPending: vi.fn(() => false),
     hasSignedInDeviceBefore: vi.fn(() => false),
     isSignInStorageEvent: vi.fn((event: StorageEvent) =>
-      event.key === 'jarvis.sign-in-device' || event.key?.startsWith('msal.') === true),
+      event.key === 'jarvis.sign-in-device' || event.key === 'jarvis.owner-session' ||
+      event.key?.startsWith('msal.') === true),
     MicrosoftSignInError: class extends Error {},
     restoreProfile: vi.fn(async () => accounts.length ? { name: 'Owner' } : null),
+    confirmOwnerSession: vi.fn().mockResolvedValue('temporary'),
+    revokeAllOwnerSessions: vi.fn().mockResolvedValue(undefined),
     signIn: vi.fn().mockResolvedValue(undefined),
     signOut: vi.fn().mockResolvedValue(undefined),
     needsSignInInteraction: vi.fn(() => false),
@@ -40,6 +43,8 @@ vi.mock('./auth', () => ({
   signIn: auth.signIn,
   signInFailureMessage: auth.signInFailureMessage,
   signOut: auth.signOut,
+  confirmOwnerSession: auth.confirmOwnerSession,
+  revokeAllOwnerSessions: auth.revokeAllOwnerSessions,
   tryAutomaticSignInRedirect: auth.tryAutomaticSignInRedirect,
 }));
 
@@ -132,5 +137,48 @@ describe('useSignIn cross-tab synchronization', () => {
       expect.objectContaining({ errorCode: 'interaction_required' }),
     );
     expect(result.current.state).toBe('signing-in');
+  });
+
+  it('uses the stored session token before MSAL for the configured backend', async () => {
+    const token = `js.${'a'.repeat(22)}.${'b'.repeat(43)}`;
+    localStorage.setItem('jarvis.owner-session', JSON.stringify({
+      version: 1,
+      backendOrigin: 'https://api.example.com',
+      sessionId: 'a'.repeat(22),
+      token,
+      idleExpiresAt: new Date(Date.now() + 10 * 24 * 60 * 60_000).toISOString(),
+      absoluteExpiresAt: new Date(Date.now() + 30 * 24 * 60 * 60_000).toISOString(),
+    }));
+    const { result, unmount } = renderHook(() => useSignIn(config));
+    await waitFor(() => expect(result.current.state).toBe('signed-out'));
+
+    await expect(result.current.getAccessToken()).resolves.toBe(token);
+    expect(result.current.hasOwnerSession).toBe(true);
+    expect(auth.client.acquireTokenSilent).not.toHaveBeenCalled();
+    unmount();
+  });
+
+  it('updates session availability when another tab removes the session key', async () => {
+    const token = `js.${'a'.repeat(22)}.${'b'.repeat(43)}`;
+    localStorage.setItem('jarvis.owner-session', JSON.stringify({
+      version: 1,
+      backendOrigin: 'https://api.example.com',
+      sessionId: 'a'.repeat(22),
+      token,
+      idleExpiresAt: new Date(Date.now() + 10 * 24 * 60 * 60_000).toISOString(),
+      absoluteExpiresAt: new Date(Date.now() + 30 * 24 * 60 * 60_000).toISOString(),
+    }));
+    const { result, unmount } = renderHook(() => useSignIn(config));
+    await waitFor(() => expect(result.current.hasOwnerSession).toBe(true));
+    localStorage.removeItem('jarvis.owner-session');
+    act(() => {
+      window.dispatchEvent(new StorageEvent('storage', {
+        key: 'jarvis.owner-session', oldValue: 'record', newValue: null,
+      }));
+    });
+
+    await waitFor(() => expect(result.current.hasOwnerSession).toBe(false));
+    expect(auth.restoreProfile).toHaveBeenCalledTimes(2);
+    unmount();
   });
 });

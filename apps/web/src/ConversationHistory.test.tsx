@@ -39,6 +39,7 @@ vi.mock('./voice-client', () => ({
 
 const config = { ...__JARVIS_CONFIG__, backendUrl: 'https://api.example.com' };
 const client = {} as never;
+const getAccessToken = vi.fn(async () => 'test-token');
 const message = {
   id: '42',
   sessionId: '41',
@@ -67,6 +68,7 @@ function renderConversation(historyRefresh = 0, camera?: CameraController, onVoi
         <VoiceWorkspaceContext.Provider value={{ onVoiceActiveChange }}>
           <ConversationHistory
             client={client}
+            getAccessToken={getAccessToken}
             config={config}
             historyRefresh={historyRefresh}
             {...(camera ? { camera } : {})}
@@ -173,7 +175,7 @@ describe('ConversationHistory', () => {
         <JarvisActivityProvider>
           <MemoryRouter>
             <VoiceWorkspaceContext.Provider value={{ onVoiceActiveChange: vi.fn() }}>
-              <ConversationHistory client={client} config={config} />
+              <ConversationHistory client={client} getAccessToken={getAccessToken} config={config} />
               <FactoryConversationActions />
             </VoiceWorkspaceContext.Provider>
           </MemoryRouter>
@@ -270,7 +272,7 @@ describe('ConversationHistory', () => {
 
     const image = await screen.findByRole('img', { name: 'Generated image' });
     expect(image.getAttribute('src')).toContain('blob.core.windows.net/artifacts/workspace-images/image.png');
-    expect(loadImageArtifactUrl).toHaveBeenCalledWith(client, config, artifactId, expect.any(AbortSignal));
+    expect(loadImageArtifactUrl).toHaveBeenCalledWith(getAccessToken, config, artifactId, expect.any(AbortSignal));
   });
 
   it('renders safe Markdown only for Jarvis history', async () => {
@@ -382,7 +384,7 @@ describe('ConversationHistory', () => {
       return (
         <JarvisActivityProvider><MemoryRouter>
           <VoiceWorkspaceContext.Provider value={{ onVoiceActiveChange: vi.fn() }}>
-            <ConversationHistory client={client} config={config} />
+            <ConversationHistory client={client} getAccessToken={getAccessToken} config={config} />
           </VoiceWorkspaceContext.Provider>
         </MemoryRouter></JarvisActivityProvider>
       );
@@ -455,7 +457,7 @@ describe('ConversationHistory', () => {
     render(
       <ConversationWindowContext.Provider value={{ element: host, setAvailable, open: true, setOpen: vi.fn() }}>
         <JarvisActivityProvider><MemoryRouter><VoiceWorkspaceContext.Provider value={{ onVoiceActiveChange: vi.fn() }}>
-          <ConversationHistory client={client} config={config} />
+          <ConversationHistory client={client} getAccessToken={getAccessToken} config={config} />
         </VoiceWorkspaceContext.Provider></MemoryRouter></JarvisActivityProvider>
       </ConversationWindowContext.Provider>,
     );
@@ -508,14 +510,14 @@ describe('ConversationHistory', () => {
     const renderedMessages = list.querySelectorAll(':scope > li');
     expect(renderedMessages[0]?.textContent).toContain('An earlier message.');
     expect(renderedMessages[1]?.textContent).toContain('I started the task.');
-    expect(loadConversationHistory).toHaveBeenLastCalledWith(client, config, '40');
+    expect(loadConversationHistory).toHaveBeenLastCalledWith(getAccessToken, config, '40');
   });
 
   it.each([null, '40'])('retries failed visual metadata refresh rather than older history with cursor %s', async nextCursor => {
     const content = (historyRefresh: number) => (
       <JarvisActivityProvider>
         <MemoryRouter>
-          <ConversationHistory client={client} config={config} historyRefresh={historyRefresh} />
+          <ConversationHistory client={client} getAccessToken={getAccessToken} config={config} historyRefresh={historyRefresh} />
         </MemoryRouter>
       </JarvisActivityProvider>
     );
@@ -529,7 +531,7 @@ describe('ConversationHistory', () => {
     expect(screen.getByText(message.text)).not.toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
     await waitFor(() => expect(loadConversationHistory).toHaveBeenCalledTimes(3));
-    expect(loadConversationHistory).toHaveBeenLastCalledWith(client, config);
+    expect(loadConversationHistory).toHaveBeenLastCalledWith(getAccessToken, config);
     expect(screen.queryByRole('alert')).toBeNull();
   });
 
@@ -543,7 +545,7 @@ describe('ConversationHistory', () => {
     await screen.findByRole('alert');
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
     await screen.findByText('Earlier turn.');
-    expect(loadConversationHistory).toHaveBeenLastCalledWith(client, config, '40');
+    expect(loadConversationHistory).toHaveBeenLastCalledWith(getAccessToken, config, '40');
   });
 
   it('reloads persisted history after a voice session ends', async () => {
@@ -554,7 +556,7 @@ describe('ConversationHistory', () => {
     view.rerender(
       <JarvisActivityProvider>
         <MemoryRouter>
-          <ConversationHistory client={client} config={config} historyRefresh={1} />
+          <ConversationHistory client={client} getAccessToken={getAccessToken} config={config} historyRefresh={1} />
         </MemoryRouter>
       </JarvisActivityProvider>,
     );
@@ -594,9 +596,9 @@ describe('ConversationHistory', () => {
     finish?.(assistantMessage);
 
     expect(await screen.findByText('I am ready.')).not.toBeNull();
-    expect(createChatSession).toHaveBeenCalledWith(client, config, 'en', expect.any(AbortSignal));
+    expect(createChatSession).toHaveBeenCalledWith(getAccessToken, config, 'en', expect.any(AbortSignal));
     expect(sendChatTurn).toHaveBeenCalledWith(
-      client,
+      getAccessToken,
       config,
       session,
       'Hello Jarvis',
@@ -779,7 +781,7 @@ describe('ConversationHistory', () => {
     fireEvent.keyDown(input, { key: 'Enter' });
 
     await waitFor(() => expect(steerChatTurn).toHaveBeenCalledWith(
-      client, config, session, steeringMessage.text, 'en',
+      getAccessToken, config, session, steeringMessage.text, 'en',
     ));
     expect(screen.getByText('Steering…')).not.toBeNull();
     expect(screen.queryByRole('button', { name: 'Stop reply' })).toBeNull();
@@ -867,7 +869,7 @@ describe('ConversationHistory', () => {
       .mockResolvedValueOnce({ messages: [message], nextCursor: null });
     const content = (historyRefresh: number) => (
       <JarvisActivityProvider><MemoryRouter>
-        <ConversationHistory client={client} config={config} historyRefresh={historyRefresh} />
+        <ConversationHistory client={client} getAccessToken={getAccessToken} config={config} historyRefresh={historyRefresh} />
       </MemoryRouter></JarvisActivityProvider>
     );
     const view = render(content(0));
@@ -880,7 +882,7 @@ describe('ConversationHistory', () => {
       .map((item) => item.querySelector(':scope > p')?.textContent)).toEqual(['Older', 'Newer']);
     fireEvent.click(screen.getByRole('button', { name: 'Load older history' }));
     await screen.findByText(message.text);
-    expect(loadConversationHistory).toHaveBeenLastCalledWith(client, config, '40');
+    expect(loadConversationHistory).toHaveBeenLastCalledWith(getAccessToken, config, '40');
   });
 
   it('resets the camera idle timer on unrelated chat turns without uploading an unsolicited frame', async () => {
@@ -966,7 +968,7 @@ describe('ConversationHistory', () => {
     expect(camera.recordActivity).toHaveBeenCalledOnce();
     expect(camera.inspect).toHaveBeenCalledWith(session.id, 'caller', expect.any(AbortSignal));
     expect(sendChatTurn).toHaveBeenCalledWith(
-      client,
+      getAccessToken,
       config,
       session,
       'What am I holding?',
@@ -998,7 +1000,7 @@ describe('ConversationHistory', () => {
     render(
       <JarvisActivityProvider>
         <MemoryRouter>
-          <ConversationHistory client={client} config={config} screenShare={screenShare} />
+          <ConversationHistory client={client} getAccessToken={getAccessToken} config={config} screenShare={screenShare} />
         </MemoryRouter>
       </JarvisActivityProvider>,
     );
@@ -1116,7 +1118,7 @@ describe('ConversationHistory', () => {
       <JarvisActivityProvider>
         <MemoryRouter>
           <ActivityProbe />
-          {showConversation && <ConversationHistory client={client} config={config} />}
+          {showConversation && <ConversationHistory client={client} getAccessToken={getAccessToken} config={config} />}
         </MemoryRouter>
       </JarvisActivityProvider>
     );
@@ -1320,7 +1322,7 @@ describe('ConversationHistory', () => {
     await user.click(input);
     await user.type(input, 'Hello');
     await user.keyboard('{Enter}');
-    await waitFor(() => expect(createChatSession).toHaveBeenCalledWith(client, config, 'da', expect.any(AbortSignal)));
+    await waitFor(() => expect(createChatSession).toHaveBeenCalledWith(getAccessToken, config, 'da', expect.any(AbortSignal)));
   });
 
   it('closes the voice More menu with Escape before Escape ends voice', async () => {

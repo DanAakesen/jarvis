@@ -19,12 +19,16 @@ import { onVoiceWake, reportWakeOutcome } from './wake-store';import './VoiceCon
 import { awaitWithSignal } from './backend-request';
 import { CameraObservationToast } from './CameraPreview';
 import { visualResultText } from './visual-context';
+import { confirmOwnerSession } from './auth';
 
 const initialMessage = 'Start voice with the input orb. Your browser asks for microphone access when voice starts; Jarvis only hears you after the voice session is connected.';
 const cameraGuidance = 'Camera is off. Turn it on in More.';
 const screenGuidance = 'Screen sharing is off. Turn it on in More.';
 const sessionPendingGuidance = 'Voice is connecting.';
 const wakeNeedsClick = 'Heard “Wake up Jarvis”. Click the orb to start voice.';
+const missingAccessToken = async (): Promise<string> => {
+  throw new Error('Your sign-in needs attention. Try again.');
+};
 /** How long a wake waits for the bridge to bring the Jarvis tab forward. */
 const wakeVisibleWait = 4_000;
 function MenuGlyph({ name }: { name: 'microphone' | 'microphone-off' | 'screen' | 'camera' }) {
@@ -41,20 +45,8 @@ function MenuGlyph({ name }: { name: 'microphone' | 'microphone-off' | 'screen' 
   }
 }
 
-async function accessToken(client: PublicClientApplication, config: PublicConfig): Promise<string> {
-  const account = client.getActiveAccount() ?? client.getAllAccounts()[0];
-  if (!account) throw new Error('Your Microsoft sign-in needs attention. Sign in again.');
-  try {
-    const result = await client.acquireTokenSilent({ scopes: [config.apiScope], account });
-    if (result.accessToken) return result.accessToken;
-  } catch {
-    throw new Error('Your Microsoft sign-in needs attention. Sign in again.');
-  }
-  throw new Error('Microsoft sign-in did not return an API token.');
-}
-
 export function VoiceControls({
-  client: authClient,
+  getAccessToken,
   config,
   language = 'da',
   onLanguageChange,
@@ -65,6 +57,7 @@ export function VoiceControls({
   camera,
 }: {
   client: PublicClientApplication;
+  getAccessToken?: () => Promise<string>;
   config: PublicConfig;
   language?: VoiceLanguage;
   onLanguageChange?: (language: VoiceLanguage) => void;
@@ -74,6 +67,7 @@ export function VoiceControls({
   screenShare?: ScreenShareController;
   camera?: CameraController;
 }) {
+  const tokenProvider = getAccessToken ?? missingAccessToken;
   const { voiceActivity } = useJarvisActivity();
   const stage = useContext(VoiceStageContext);
   const client = useRef<BrowserVoiceClient | null>(null);
@@ -109,7 +103,7 @@ export function VoiceControls({
     setNotification({ message, error, id: performance.now() });
   }, []);
   const dismissNotification = useCallback(() => setNotification(null), []);
-  const watchToken = useCallback(() => accessToken(authClient, config), [authClient, config]);
+  const watchToken = useCallback(() => tokenProvider(), [tokenProvider]);
   const watchStopped = useCallback((message: string) => notify(message, true), [notify]);
   const screenWatch = useVisionWatch(config, watchToken, screenShare, 'screen', screenSessionId, watchStopped);
   const cameraWatch = useVisionWatch(config, watchToken, camera, 'camera', screenSessionId, watchStopped);
@@ -214,7 +208,8 @@ export function VoiceControls({
     setMicrophone('off');
     const voice = new BrowserVoiceClient({
       backendUrl: config.backendUrl,
-      getAccessToken: () => accessToken(authClient, config),
+      getAccessToken: tokenProvider,
+      confirmSession: (token) => confirmOwnerSession(config, token),
       language: selectedLanguage,
       ...(onSessionEnded ? { onSessionEnded } : {}),
       onSessionReady: (sessionId) => {

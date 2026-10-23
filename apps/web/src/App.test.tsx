@@ -33,6 +33,7 @@ const {
   const account = { homeAccountId: 'dan' };
   const makeAuthClient = () => ({
     initialize: vi.fn().mockResolvedValue(undefined),
+    loginRedirect: vi.fn().mockResolvedValue(undefined),
     getActiveAccount: vi.fn(() => account),
     getAllAccounts: vi.fn(() => [account]),
     acquireTokenSilent: vi.fn().mockResolvedValue({ accessToken: 'fixture-token' }),
@@ -282,7 +283,7 @@ describe('Jarvis routes', () => {
 
     await user.click(screen.getByRole('button', { name: 'Sign out' }));
 
-    expect(signOut).toHaveBeenCalledWith(expect.anything());
+    expect(signOut).toHaveBeenCalledWith(expect.anything(), config);
     expect(await screen.findByRole('button', { name: 'Sign in with Microsoft' })).not.toBeNull();
   });
 
@@ -405,7 +406,32 @@ describe('Jarvis routes', () => {
 
     expect(await screen.findByRole('heading', { name: 'Welcome, Dan Aakesen' })).not.toBeNull();
     expect(await screen.findByRole('textbox', { name: 'Message Jarvis' })).not.toBeNull();
-    expect(restoreProfile).toHaveBeenCalledWith(expect.anything(), config);
+    expect(restoreProfile).toHaveBeenCalledWith(expect.anything(), config, expect.any(AbortSignal));
+  });
+
+  it('loads the signed-in shell from a stored session without asking MSAL to renew', async () => {
+    const token = `js.${'a'.repeat(22)}.${'b'.repeat(43)}`;
+    localStorage.setItem('jarvis.owner-session', JSON.stringify({
+      version: 1,
+      backendOrigin: 'https://api.example.com',
+      sessionId: 'a'.repeat(22),
+      token,
+      idleExpiresAt: new Date(Date.now() + 10 * 24 * 60 * 60_000).toISOString(),
+      absoluteExpiresAt: new Date(Date.now() + 30 * 24 * 60 * 60_000).toISOString(),
+    }));
+    const authClient = makeAuthClient();
+    authClient.acquireTokenSilent.mockRejectedValue(Object.assign(new Error('silent renewal blocked'), {
+      errorCode: 'interaction_required',
+    }));
+    createAuthClient.mockReturnValue(authClient);
+    restoreProfile.mockResolvedValue({ name: 'Dan Aakesen' });
+
+    render(<MemoryRouter><App config={config} /></MemoryRouter>);
+
+    expect(await screen.findByRole('navigation', { name: 'Areas' })).not.toBeNull();
+    expect(screen.queryByRole('button', { name: 'Sign in with Microsoft' })).toBeNull();
+    expect(authClient.acquireTokenSilent).not.toHaveBeenCalled();
+    expect(authClient.loginRedirect).not.toHaveBeenCalled();
   });
 
   it('shows saved conversation messages on the signed-in home page', async () => {
@@ -2268,7 +2294,8 @@ describe('App shell', () => {
     expect(((await screen.findByLabelText('Resting energy burn (kcal)')) as HTMLInputElement).value).toBe('1750');
     const read = fetchMock.mock.calls.find(([url]) => new URL(String(url)).pathname === '/daily/nutrition-targets');
     expect(read?.[0]).toBe('https://api.example.com/daily/nutrition-targets');
-    expect(read?.[1]).toMatchObject({ method: 'GET', headers: { Authorization: expect.any(String) } });
+    expect(read?.[1]?.method).toBe('GET');
+    expect(new Headers(read?.[1]?.headers).get('Authorization')).toEqual(expect.any(String));
   });
 
   it('shows feed attention in the header without mounting the old Now panel', async () => {
@@ -2303,10 +2330,8 @@ describe('App shell', () => {
     expect(document.querySelector('script')).toBeNull();
     expect(screen.queryByText('Running tests')).toBeNull();
     expect(screen.queryByRole('heading', { level: 2, name: 'Now' })).toBeNull();
-    expect(fetchMock).toHaveBeenCalledWith(
-      'https://api.example.com/now',
-      expect.objectContaining({ headers: expect.objectContaining({ Authorization: expect.any(String) }) }),
-    );
+    const nowRequest = fetchMock.mock.calls.find(([url]) => new URL(String(url)).pathname === '/now');
+    expect(new Headers(nowRequest?.[1]?.headers).get('Authorization')).toEqual(expect.any(String));
   });
 
   it('keeps the session while moving between areas, settings and the main page', async () => {

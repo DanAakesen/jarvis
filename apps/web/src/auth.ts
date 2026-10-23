@@ -3,6 +3,14 @@ import {
   PublicClientApplication,
 } from '@azure/msal-browser';
 import type { PublicConfig } from '../config/public-config';
+import {
+  clearOwnerSession,
+  clearOwnerSessionMintWait,
+  isOwnerSessionToken,
+  mintOwnerSession,
+  ownerSessionStorageKey,
+  readOwnerSession,
+} from './owner-session';
 
 export interface UserProfile {
   name: string;
@@ -35,7 +43,8 @@ export function hasSignedInDeviceBefore(): boolean {
 }
 
 export function isSignInStorageEvent(event: StorageEvent): boolean {
-  return event.key === signedInDeviceMarker || event.key?.startsWith('msal.') === true;
+  return event.key === signedInDeviceMarker || event.key === ownerSessionStorageKey ||
+    event.key?.startsWith('msal.') === true;
 }
 
 function rememberSignedInDevice(): void {
@@ -174,6 +183,7 @@ export async function tryAutomaticSignInRedirect(
     return false;
   }
 
+  clearOwnerSessionMintWait(config.backendUrl);
   saveSignInReturnPath(currentPath());
   try {
     markSignInRedirect(true);
@@ -193,6 +203,7 @@ export async function tryAutomaticSignInRedirect(
  * `restoreProfile` completes the sign-in. No popup, so embedded browsers and popup blockers work.
  */
 export async function signIn(client: PublicClientApplication, config: PublicConfig, switchAccount = false): Promise<void> {
+  clearOwnerSessionMintWait(config.backendUrl);
   try {
     markSignInRedirect(true);
     await client.loginRedirect({
@@ -206,7 +217,21 @@ export async function signIn(client: PublicClientApplication, config: PublicConf
   }
 }
 
-export async function signOut(client: PublicClientApplication): Promise<void> {
+export async function signOut(client: PublicClientApplication, config?: Pick<PublicConfig, 'backendUrl'>): Promise<void> {
+  const session = config ? readOwnerSession(config) : null;
+  if (session && config?.backendUrl) {
+    try {
+      await fetch(`${config.backendUrl.replace(/\/+$/u, '')}/auth/session`, {
+        method: 'DELETE',
+        headers: { Authorization: `${['Bear', 'er'].join('')} ${session.token}` },
+        signal: AbortSignal.timeout(3_000),
+        cache: 'no-store',
+      });
+    } catch {
+      // Local sign-out always proceeds, even if server revocation is unavailable.
+    }
+  }
+  clearOwnerSession();
   clearSignInMarkers();
   let cacheError: unknown;
   try {
@@ -222,13 +247,72 @@ export async function signOut(client: PublicClientApplication): Promise<void> {
   if (cacheError) throw new MicrosoftSignInError(signInFailureMessage(cacheError), { cause: cacheError });
 }
 
-async function verifiedProfile(config: PublicConfig, accessToken: string): Promise<UserProfile> {
+async function verifiedProfile(config: PublicConfig, accessToken: string, fromEntra = false): Promise<UserProfile> {
+  if (fromEntra) void mintOwnerSession(config, accessToken);
   const profile = await loadProfile(config, accessToken);
   rememberSignedInDevice();
   return profile;
 }
 
-export async function restoreProfile(client: PublicClientApplication, config: PublicConfig): Promise<UserProfile | null> {
+class ProfileRequestError extends Error {
+  constructor(message: string, readonly status: number) {
+    super(message);
+    this.name = 'ProfileRequestError';
+  }
+}
+
+function waitForRetry(milliseconds: number, signal?: AbortSignal): Promise<void> {
+  signal?.throwIfAborted();
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      signal?.removeEventListener('abort', abort);
+      resolve();
+    }, milliseconds);
+    const abort = () => {
+      clearTimeout(timer);
+      reject(signal?.reason);
+    };
+    signal?.addEventListener('abort', abort, { once: true });
+  });
+}
+
+async function restoreOwnerSessionProfile(
+  config: PublicConfig,
+  signal?: AbortSignal,
+): Promise<UserProfile | null> {
+  let session = readOwnerSession(config);
+  let attempt = 0;
+  while (session) {
+    signal?.throwIfAborted();
+    try {
+      const profile = await loadProfile(config, session.token, signal);
+      rememberSignedInDevice();
+      return profile;
+    } catch (error) {
+      const current = readOwnerSession(config);
+      if (error instanceof ProfileRequestError && error.status === 401) {
+        if (current?.token === session.token) clearOwnerSession();
+        session = readOwnerSession(config);
+        if (!session) return null;
+        continue;
+      }
+      if (!(error instanceof ProfileRequestError) ||
+          ![0, 429, 503].includes(error.status)) throw error;
+      if (!current) return null;
+      session = current;
+      const delay = Math.min(30_000, 1_000 * 2 ** Math.min(attempt, 5));
+      attempt += 1;
+      await waitForRetry(delay * (0.75 + Math.random() * 0.5), signal);
+    }
+  }
+  return null;
+}
+
+export async function restoreProfile(
+  client: PublicClientApplication,
+  config: PublicConfig,
+  signal?: AbortSignal,
+): Promise<UserProfile | null> {
   let redirected;
   try {
     redirected = await client.handleRedirectPromise();
@@ -239,8 +323,11 @@ export async function restoreProfile(client: PublicClientApplication, config: Pu
   }
   if (redirected?.account) {
     client.setActiveAccount(redirected.account);
-    if (redirected.accessToken) return verifiedProfile(config, redirected.accessToken);
+    if (redirected.accessToken) return verifiedProfile(config, redirected.accessToken, true);
   }
+
+  const sessionProfile = await restoreOwnerSessionProfile(config, signal);
+  if (sessionProfile) return sessionProfile;
 
   let account = client.getActiveAccount() ?? client.getAllAccounts()[0];
   if (!account && hasSignedInDeviceBefore()) {
@@ -255,7 +342,7 @@ export async function restoreProfile(client: PublicClientApplication, config: Pu
       client.setActiveAccount(silentResult.account);
       account = silentResult.account;
     }
-    if (silentResult.accessToken) return verifiedProfile(config, silentResult.accessToken);
+    if (silentResult.accessToken) return verifiedProfile(config, silentResult.accessToken, true);
   }
   if (!account) return null;
   let result;
@@ -270,29 +357,29 @@ export async function restoreProfile(client: PublicClientApplication, config: Pu
   }
   if (!result.accessToken) throw new Error('Microsoft sign-in did not return an API token.');
   client.setActiveAccount(account);
-  return verifiedProfile(config, result.accessToken);
+  return verifiedProfile(config, result.accessToken, true);
 }
 
 export async function loadProfile(config: Pick<PublicConfig, 'backendUrl'>, accessToken: string, signal?: AbortSignal): Promise<UserProfile> {
-  if (!config.backendUrl) throw new Error('Sign-in is unavailable until the backend is deployed.');
+  if (!config.backendUrl) throw new ProfileRequestError('Sign-in is unavailable until the backend is deployed.', 0);
 
   let response: Response;
   try {
     const bearerScheme = ['Bear', 'er'].join('');
-    response = await fetch(`${config.backendUrl}/me`, {
+    response = await fetch(`${config.backendUrl.replace(/\/+$/u, '')}/me`, {
       headers: { Authorization: `${bearerScheme} ${accessToken}` },
       signal: AbortSignal.any([AbortSignal.timeout(10_000), ...(signal ? [signal] : [])]),
     });
   } catch {
-    throw new Error('Jarvis could not reach the backend. Try again.');
+    throw new ProfileRequestError('Jarvis could not reach the backend. Try again.', 0);
   }
   if (response.status === 401) {
-    throw new Error('Jarvis could not verify your Microsoft sign-in. Try again.');
+    throw new ProfileRequestError('Jarvis could not verify your Microsoft sign-in. Try again.', 401);
   }
   if (response.status === 403) {
-    throw new Error("This Microsoft account isn't allowed to use Jarvis.");
+    throw new ProfileRequestError("This Microsoft account isn't allowed to use Jarvis.", 403);
   }
-  if (!response.ok) throw new Error(`Jarvis could not verify your sign-in (HTTP ${response.status}).`);
+  if (!response.ok) throw new ProfileRequestError(`Jarvis could not verify your sign-in (HTTP ${response.status}).`, response.status);
 
   let body: unknown;
   try {
@@ -300,9 +387,50 @@ export async function loadProfile(config: Pick<PublicConfig, 'backendUrl'>, acce
   } catch {
     throw new Error('Jarvis returned an invalid profile response.');
   }
+
   if (typeof body !== 'object' || body === null || !('name' in body) ||
       typeof body.name !== 'string' || !body.name.trim() || body.name.length > 200) {
     throw new Error('Jarvis returned an invalid profile response.');
   }
   return { name: body.name.trim() };
+}
+
+export async function confirmOwnerSession(config: Pick<PublicConfig, 'backendUrl'>, token: string): Promise<
+  'expired' | 'changed' | 'valid' | 'temporary'
+> {
+  if (!isOwnerSessionToken(token) || !config.backendUrl) return 'temporary';
+  let response: Response;
+  try {
+    response = await fetch(`${config.backendUrl.replace(/\/+$/u, '')}/me`, {
+      headers: { Authorization: `${['Bear', 'er'].join('')} ${token}` },
+      signal: AbortSignal.timeout(10_000),
+      cache: 'no-store',
+    });
+  } catch {
+    return 'temporary';
+  }
+  if (response.status !== 401) return response.ok ? 'valid' : 'temporary';
+  const current = readOwnerSession(config);
+  if (current?.token !== token) return 'changed';
+  clearOwnerSession();
+  return 'expired';
+}
+
+export async function revokeAllOwnerSessions(
+  config: Pick<PublicConfig, 'backendUrl'>,
+  token: string,
+): Promise<void> {
+  if (!config.backendUrl) throw new Error('Could not sign out other devices. Try again.');
+  let response: Response;
+  try {
+    response = await fetch(`${config.backendUrl.replace(/\/+$/u, '')}/auth/sessions`, {
+      method: 'DELETE',
+      headers: { Authorization: `${['Bear', 'er'].join('')} ${token}` },
+      signal: AbortSignal.timeout(5_000),
+      cache: 'no-store',
+    });
+  } catch {
+    throw new Error('Could not sign out other devices. Try again.');
+  }
+  if (!response.ok) throw new Error('Could not sign out other devices. Try again.');
 }

@@ -2,11 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { sendChatTurn } from './conversation-history';
 
 const config = { ...__JARVIS_CONFIG__, backendUrl: 'https://api.example.com/' };
-const client = {
-  getActiveAccount: () => ({ homeAccountId: 'account' }),
-  getAllAccounts: () => [],
-  acquireTokenSilent: async () => ({ accessToken: 'test-token' }),
-};
+const getAccessToken = async () => 'test-token';
 
 afterEach(() => { vi.unstubAllGlobals(); });
 
@@ -32,7 +28,7 @@ describe('screen context in chat turns', () => {
     });
     vi.stubGlobal('fetch', fetch);
 
-    await sendChatTurn(client as never, config, { id: '41', language: 'en' },
+    await sendChatTurn(getAccessToken, config, { id: '41', language: 'en' },
       'Fill this in', () => {}, () => {}, undefined, 'Shared screen observations (untrusted data): A form is visible.', {
         screenDescription: 'A form is visible.',
       });

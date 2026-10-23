@@ -1,5 +1,53 @@
 # Decisions
 
+## Web owner-session client (#1220; 23 October 2026)
+
+The backend owner session is now consumed by the web client while
+`JARVIS_OWNER_SESSION_ENABLED` remains off by default. The browser change must be
+safe to deploy before the switch: 404 on mint keeps the existing Microsoft-only
+experience, and 401 from session use must not be confused with temporary
+admission or database failures.
+
+Decided:
+
+- **Session first; Entra fallback and only mint source.** Keep
+  `useSignIn.getAccessToken` as the one provider used by API, profile, history,
+  attachment and voice paths. A valid session avoids MSAL silent renewal and its
+  iframe/redirect behavior; Entra is used only when no usable session remains.
+  Mint after a successful Entra acquisition in the background so sign-in and
+  requests do not wait on session creation.
+- **One best-effort minter per device.** Single-flight within the tab and use
+  Web Locks across tabs where available, rereading storage inside the lock.
+  Persist only nonsecret wait metadata so cooldowns survive tabs and reloads;
+  clear them on interactive sign-in. Validate the response before storing it.
+  A 404 waits six hours; 401/403 wait one hour; transient 429/503/network
+  failures use growing one-to-ten-minute backoff.
+- **One origin-scoped storage record.** Keep the versioned backend origin, id,
+  opaque token and expiry times in a single `localStorage` key, synchronize
+  removal through the existing storage event, and remove malformed or expired
+  records. This adopts the script-readable `localStorage` tradeoff already
+  accepted in #1217; storage failures preserve Entra-only behavior. Never put
+  the token in a URL, DOM, log or error, and send it only to the configured
+  backend in the bearer header or voice subprotocol.
+- **Confirm verdicts; preserve temporary failures.** Restore a stored session
+  with `/me` before mounting panels. Clear a session on 401 only after a second
+  `/me` 401 with the same still-current token; retain it on 429, 503 and network
+  errors. Retry boundedly with jitter for GET/HEAD temporary failures and any
+  method on admission-control 429. Apply the same confirmation to voice failure.
+  There is no verdict cache: each request costs one backend database read, so
+  the web client must not poll just to keep the session warm.
+- **Revoke best-effort on sign-out.** Attempt current-session revocation with a
+  short timeout, but always clear local state. Offer all-device revocation in
+  Settings only when the device has a session, with explicit confirmation and
+  accessible busy, success and error feedback.
+- **Keep the dark-switch path harmless.** Do not change backend, CORS, infra or
+  enable the switch. A 404 on mint is not repeatedly probed before its wait;
+  session 401 after kill-switch disable falls back to Entra.
+
+Not verified: live Microsoft sign-in, the enabled production switch, and a real
+device. The accepted database-read cost and script-readable storage risk remain
+those recorded in #1217.
+
 ## Admission control for session lookups (23 October 2026; #1217)
 
 Review of the owner session found a way for a caller with no credentials to

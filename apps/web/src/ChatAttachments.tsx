@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react';
-import type { PublicClientApplication } from '@azure/msal-browser';
 import type { PublicConfig } from '../config/public-config';
 import { StateMessage } from './StateMessage';
 import {
@@ -80,7 +79,11 @@ export function ComposerAttachments({
 
 type OpenState = { phase: 'idle' } | { phase: 'opening' } | { phase: 'expired' } | { phase: 'error'; message: string } | { phase: 'link'; url: string };
 
-function AttachmentLink({ client, config, attachment }: { client: PublicClientApplication; config: PublicConfig; attachment: ChatAttachment }) {
+function AttachmentLink({ getAccessToken, config, attachment }: {
+  getAccessToken: () => Promise<string>;
+  config: PublicConfig;
+  attachment: ChatAttachment;
+}) {
   const [state, setState] = useState<OpenState>({ phase: 'idle' });
   const controller = useRef<AbortController | null>(null);
   useEffect(() => () => controller.current?.abort(), []);
@@ -95,7 +98,7 @@ function AttachmentLink({ client, config, attachment }: { client: PublicClientAp
     controller.current = request;
     setState({ phase: 'opening' });
     try {
-      const url = await loadAttachmentUrl(client, config, attachment.id, request.signal);
+      const url = await loadAttachmentUrl(getAccessToken, config, attachment.id, request.signal);
       if (tab) { tab.location.href = url; setState({ phase: 'idle' }); } else setState({ phase: 'link', url });
     } catch (reason) {
       tab?.close();
@@ -126,21 +129,21 @@ function AttachmentLink({ client, config, attachment }: { client: PublicClientAp
 }
 
 /** The files sent with a message; each opens through a short-lived signed URL requested on demand. */
-export function MessageAttachments({ client, config, attachments }: {
-  client: PublicClientApplication;
+export function MessageAttachments({ getAccessToken, config, attachments }: {
+  getAccessToken: () => Promise<string>;
   config: PublicConfig;
   attachments: readonly ChatAttachment[];
 }) {
   return (
     <ul className="message-attachments" aria-label="Attached files">
-      {attachments.map((attachment) => <AttachmentLink key={attachment.id} client={client} config={config} attachment={attachment} />)}
+      {attachments.map((attachment) => <AttachmentLink key={attachment.id} getAccessToken={getAccessToken} config={config} attachment={attachment} />)}
     </ul>
   );
 }
 
 /** Shown next to Jarvis's question before a screenshot is committed to a public repository. */
-export function PublicImageConfirmation({ client, config, attachment }: {
-  client: PublicClientApplication;
+export function PublicImageConfirmation({ getAccessToken, config, attachment }: {
+  getAccessToken: () => Promise<string>;
   config: PublicConfig;
   attachment: ChatAttachment;
 }) {
@@ -148,11 +151,11 @@ export function PublicImageConfirmation({ client, config, attachment }: {
   const [unavailable, setUnavailable] = useState(false);
   useEffect(() => {
     const controller = new AbortController();
-    void loadAttachmentUrl(client, config, attachment.id, controller.signal)
+    void loadAttachmentUrl(getAccessToken, config, attachment.id, controller.signal)
       .then(setUrl)
       .catch(() => { if (!controller.signal.aborted) setUnavailable(true); });
     return () => controller.abort();
-  }, [attachment.id, client, config]);
+  }, [attachment.id, getAccessToken, config]);
 
   return (
     <figure className="public-image-confirmation">

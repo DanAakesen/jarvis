@@ -2143,11 +2143,39 @@ browser sign-in and deployment verification remain #11.
 
 After one Entra sign-in the owner can exchange the Entra access token for a
 revocable Jarvis session, so a device stays signed in for 10 days of normal use
-without depending on Microsoft token lifetimes. This is the backend half; the
-browser half is a separate change. `JARVIS_OWNER_SESSION_ENABLED` (exactly
+without depending on Microsoft token lifetimes. `JARVIS_OWNER_SESSION_ENABLED` (exactly
 `true` or `false`, default `false`; any other value stops startup) controls it
 and doubles as a kill switch. Session verification reads SQL, so the switch on
 without SQL settings also stops startup instead of silently refusing sessions.
+
+##### Browser flow (#1220)
+
+`apps/web/src/useSignIn.ts` is the sole token provider. It returns a valid
+origin-scoped session token before considering MSAL; only Entra access tokens can
+mint sessions. A successful Entra acquisition starts a non-blocking mint with no
+request body. Minting is single-flight in a tab and uses Web Locks across tabs
+when supported. The versioned record (backend origin, id, token and expiry times)
+is in one `localStorage` key, as accepted in the #1217 storage tradeoff; a
+separate nonsecret marker shares mint backoff across tabs and reloads. Storage
+failure leaves the web client on Entra. The token is sent only to the configured
+backend in `Authorization: Bearer` or the voice WebSocket `jarvis.auth`
+subprotocol, never in a cookie or URL.
+
+Redirect handling stays first on load. Otherwise a stored session is checked by
+`GET /me` before panels mount. A 401 is confirmed with the same token before
+clearing it and resuming the Entra path; the clear is guarded against a newer
+stored token. A 429, 503 or network error keeps the session and retries with
+backoff. Requests centrally retry only safe methods for transient failures, plus
+any method on admission-control 429. The client confirms session 401s for API
+and voice failures too. Each request with a session token still performs a
+database read by design, so the client adds no polling.
+
+Sign out best-effort revokes the current session before clearing local state.
+Settings offers **Sign out on all devices** only while this device has a session;
+after confirmation it revokes all owner sessions, clears the local record and
+signs out. With the backend switch off, mint returns 404 and session requests
+return 401; the client observes its mint wait and falls back to the existing
+Entra-only flow. No CORS or backend behavior is changed by the web client.
 
 - **Token.** `js.` plus a 128-bit session id and a 256-bit secret, both random
   and base64url encoded (22 and 43 characters). The three dot-separated

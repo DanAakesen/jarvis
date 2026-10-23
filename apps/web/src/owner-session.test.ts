@@ -56,7 +56,7 @@ describe('owner session storage and minting', () => {
     }, record.backendOrigin)).toBeNull();
   });
 
-  it('removes malformed, expired, and wrong-origin records, but falls back if storage throws', () => {
+  it('removes malformed and expired records, ignores wrong-origin records, and tolerates storage errors', () => {
     localStorage.setItem(ownerSessionStorageKey, '{');
     expect(readOwnerSession(config)).toBeNull();
     expect(localStorage.getItem(ownerSessionStorageKey)).toBeNull();
@@ -68,6 +68,17 @@ describe('owner session storage and minting', () => {
       token,
       idleExpiresAt: new Date(Date.now() + 1_000).toISOString(),
       absoluteExpiresAt: new Date(Date.now() + 10_000).toISOString(),
+    }));
+    expect(readOwnerSession(config)).toBeNull();
+    expect(localStorage.getItem(ownerSessionStorageKey)).not.toBeNull();
+
+    localStorage.setItem(ownerSessionStorageKey, JSON.stringify({
+      version: 1,
+      backendOrigin: 'https://api.example.com',
+      sessionId: 'a'.repeat(22),
+      token,
+      idleExpiresAt: new Date(Date.now() + 1_000).toISOString(),
+      absoluteExpiresAt: new Date(Date.now() - 1).toISOString(),
     }));
     expect(readOwnerSession(config)).toBeNull();
     expect(localStorage.getItem(ownerSessionStorageKey)).toBeNull();
@@ -103,12 +114,75 @@ describe('owner session storage and minting', () => {
     await Promise.all([mintOwnerSession(config, 'entra-token'), mintOwnerSession(config, 'entra-token')]);
     await mintOwnerSession(config, 'entra-token');
     expect(fetch).toHaveBeenCalledTimes(1);
+    const wait = JSON.parse(localStorage.getItem('jarvis.owner-session-mint-wait')!);
+    expect(wait).toMatchObject({ version: 1, backendOrigin: 'https://api.example.com', failures: 0 });
+    expect(wait).not.toHaveProperty('token');
     await vi.advanceTimersByTimeAsync(6 * 60 * 60_000 - 1);
     await mintOwnerSession(config, 'entra-token');
     expect(fetch).toHaveBeenCalledTimes(1);
     await vi.advanceTimersByTimeAsync(1);
     await mintOwnerSession(config, 'entra-token');
     expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('honors one-hour 401 and 403 mint waits', async () => {
+    for (const status of [401, 403]) {
+      clearOwnerSessionMintWait(config.backendUrl);
+      const fetch = vi.fn(async () => response(status));
+      vi.stubGlobal('fetch', fetch);
+      await mintOwnerSession(config, 'entra-token');
+      await vi.advanceTimersByTimeAsync(60 * 60_000 - 1);
+      await mintOwnerSession(config, 'entra-token');
+      expect(fetch).toHaveBeenCalledTimes(1);
+      await vi.advanceTimersByTimeAsync(1);
+      await mintOwnerSession(config, 'entra-token');
+      expect(fetch).toHaveBeenCalledTimes(2);
+    }
+  });
+
+  it('grows the transient wait from one to two minutes after repeated 429 and 503 responses', async () => {
+    const fetch = vi.fn()
+      .mockResolvedValueOnce(response(429))
+      .mockResolvedValueOnce(response(503))
+      .mockResolvedValueOnce(response());
+    vi.stubGlobal('fetch', fetch);
+
+    await mintOwnerSession(config, 'entra-token');
+    await vi.advanceTimersByTimeAsync(60_000 - 1);
+    await mintOwnerSession(config, 'entra-token');
+    expect(fetch).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(1);
+    await mintOwnerSession(config, 'entra-token');
+    expect(fetch).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(2 * 60_000 - 1);
+    await mintOwnerSession(config, 'entra-token');
+    expect(fetch).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(1);
+    await mintOwnerSession(config, 'entra-token');
+    expect(fetch).toHaveBeenCalledTimes(3);
+    expect(readOwnerSession(config)?.token).toBe(token);
+  });
+
+  it('re-reads the session after acquiring the cross-tab Web Lock', async () => {
+    const lockRequest = vi.fn(async (_name: string, operation: () => Promise<void>) => {
+      localStorage.setItem(ownerSessionStorageKey, JSON.stringify({
+        version: 1,
+        backendOrigin: 'https://api.example.com',
+        sessionId: 'a'.repeat(22),
+        token,
+        idleExpiresAt: new Date(Date.now() + 10 * 24 * 60 * 60_000).toISOString(),
+        absoluteExpiresAt: new Date(Date.now() + 30 * 24 * 60 * 60_000).toISOString(),
+      }));
+      await operation();
+    });
+    vi.stubGlobal('navigator', { locks: { request: lockRequest } });
+    const fetch = vi.fn();
+    vi.stubGlobal('fetch', fetch);
+
+    await mintOwnerSession(config, 'entra-token');
+
+    expect(lockRequest).toHaveBeenCalledWith('jarvis.owner-session:https://api.example.com', expect.any(Function));
+    expect(fetch).not.toHaveBeenCalled();
   });
 
   it('backs off transient failures and rejects malformed 201 responses', async () => {

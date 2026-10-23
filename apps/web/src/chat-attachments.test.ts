@@ -55,12 +55,13 @@ describe('formatBytes', () => {
 
 describe('loadAttachmentUrl', () => {
   it('returns trusted signed URLs and reports expiry', async () => {
+    const getAccessToken = async () => 'fixture-token';
     backendFetch.mockResolvedValueOnce(new Response(JSON.stringify({ url: 'https://acct.blob.core.windows.net/a/b?sig=x' })));
-    await expect(loadAttachmentUrl({} as never, config, id)).resolves.toBe('https://acct.blob.core.windows.net/a/b?sig=x');
+    await expect(loadAttachmentUrl(getAccessToken, config, id)).resolves.toBe('https://acct.blob.core.windows.net/a/b?sig=x');
     backendFetch.mockResolvedValueOnce(new Response('{}', { status: 404 }));
-    await expect(loadAttachmentUrl({} as never, config, id)).rejects.toBeInstanceOf(AttachmentExpiredError);
+    await expect(loadAttachmentUrl(getAccessToken, config, id)).rejects.toBeInstanceOf(AttachmentExpiredError);
     backendFetch.mockResolvedValueOnce(new Response(JSON.stringify({ url: 'https://evil.example.com/x' })));
-    await expect(loadAttachmentUrl({} as never, config, id)).rejects.toThrow('untrusted');
+    await expect(loadAttachmentUrl(getAccessToken, config, id)).rejects.toThrow('untrusted');
   });
 });
 

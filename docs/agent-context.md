@@ -3,8 +3,9 @@
 ## Owner session switch, revocation and checks (22 October 2026; #1217)
 
 The backend can give the owner a revocable 10-day session after one Entra
-sign-in. It ships dark: the code default is off and `apps/web` does not use it
-yet.
+sign-in. The web client supports it, but the backend switch is still off by
+default and remains the rollout kill switch; do not turn it on as part of web
+work.
 
 | Setting | Values | Default | Read |
 | --- | --- | --- | --- |
@@ -94,6 +95,22 @@ reach a Windows LocalDB instance, so a local check of the migration and the stor
 statements needs a different client, for example ADO.NET over the instance's
 named pipe. Live sign-in, the web client, real devices and production
 configuration are not exercised by any of these.
+
+Web client checks from the repository root:
+
+```sh
+npm test --workspace @jarvis/web -- --run src/owner-session.test.ts src/backend-request-owner-session.test.ts src/auth.test.ts src/useSignIn.test.tsx src/AccountSettings.test.tsx src/App.test.tsx
+npm run lint --workspace @jarvis/web
+npm run build --workspace @jarvis/web
+```
+
+Web tests use mocked auth and backend responses; they do not verify a live
+Microsoft sign-in or real device. To verify the safe rollout path locally, keep
+`JARVIS_OWNER_SESSION_ENABLED=false`: `POST /auth/session` returns 404, the
+client waits six hours before another mint attempt, and sign-in continues with
+Entra. A session request returning 401 after the switch is disabled clears the
+session only after confirmation and resumes the ordinary Entra flow. Do not
+enable the backend switch or change CORS for this client change.
 
 ## Bounded history continuation checks (22 October 2026; #1201)
 
