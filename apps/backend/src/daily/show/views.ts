@@ -261,8 +261,9 @@ function viewIdFor(source: DailyShowSource, shown: 'table' | 'chart', options: D
     return `daily-${slug}-${shown}-${hash(`${options.workoutId ?? ''}\u0000${options.metric ?? ''}`, 8)}`;
   }
   if ((source === sources.metrics || source === sources.days) && options.metric) {
-    const readableSlug = options.metric.toLowerCase().replaceAll(/[^a-z0-9]+/gu, '-').replaceAll(/^-+|-+$/gu, '').slice(0, 20).replace(/-+$/u, '');
-    return `daily-${slug}-${shown}-${readableSlug || 'x'}-${hash(options.metric, 6)}`;
+    const name = source === sources.days ? selectedNutritionNutrient(options.metric)?.key ?? options.metric : options.metric;
+    const readableSlug = name.toLowerCase().replaceAll(/[^a-z0-9]+/gu, '-').replaceAll(/^-+|-+$/gu, '').slice(0, 20).replace(/-+$/u, '');
+    return `daily-${slug}-${shown}-${readableSlug || 'x'}-${hash(name, 6)}`;
   }
   return `daily-${slug}-${shown}`;
 }

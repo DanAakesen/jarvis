@@ -1068,9 +1068,12 @@ the authority, and no live record, physical phone or Daily activation is proved.
 ## Daily view tool checks (18 October 2026; P12-16)
 
 `daily_show` (`apps/backend/src/daily/tools/show.ts`) and its pure builder
-(`daily/show/views.ts`) show queried Daily data as a table, chart or detail in the
-workspace. From `apps/backend`, run
-`npx vitest run src/daily/show/views.test.ts src/daily/tools/show.test.ts`.
+(`daily/show/views.ts`) show queried Daily data as a table, chart, detail or text
+in the workspace. Nutrition trends can chart one selected nutrient from bounded
+per-day results; unknown and lower-bound values remain disclosed. The shared
+query/show descriptions guide intent selection, while backend source, period,
+selector and coverage validation stays deterministic. From `apps/backend`, run
+`npx vitest run src/daily/show/views.test.ts src/daily/tools/show.test.ts src/daily/query.test.ts`.
 `composition.test.ts`, `index.test.ts`, `production-modules.test.ts` and
 `routes/query.test.ts` build real Fastify applications or the whole module list, so
 they need the pinned CI graph where those packages are unavailable locally. From
@@ -1079,6 +1082,8 @@ then `npx tsc --noEmit` and `npx eslint <changed files> --max-warnings 0`. Run o
 heavy command at a time. Every check uses synthetic records and a fake workspace;
 none reads real data, calls a provider or probes a live service. The tool takes no
 new environment variable and its tests need no secret.
+The synthetic tests do not verify a live model/provider's English/Danish
+interpretation, real Health records or a physical device.
 
 Browser inspection follows the harness rules of the overview page section: a
 temporary page under `apps/web` mounts the real `Workspace` window with the real

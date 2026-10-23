@@ -144,6 +144,7 @@ describe('daily show view builder: measurements', () => {
     expect(build.view.renderer).toBe('chart');
     expect(build.view.title).toBe('Protein (g), 11 Oct 2026 to 17 Oct 2026');
     expect(build.viewId).toMatch(/^daily-nutrition-days-chart-protein-grams-[0-9a-f]{6}$/u);
+    expect(show(result, { display: 'chart', metric: 'protein' }).viewId).toBe(build.viewId);
     expect(body<Plot>(build).series).toEqual([{
       name: 'Protein (g; includes lower bounds)',
       points: [{ x: '15 Oct', y: 58.5 }, { x: '17 Oct', y: 46 }],
