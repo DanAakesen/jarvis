@@ -196,6 +196,8 @@ describe('authenticated PC bridge protocol', () => {
       'key=demo-key-value',
       ['Bearer', 'demo-token-value'].join(' '),
       'sk-proj-12345678901234567890',
+      `js.${'A'.repeat(22)}.${'B'.repeat(43)}`,
+      'Version 1.2.3, example.com, and report.final.csv.',
       'ordinary clipboard text',
     ].join('\n');
     bridge.on('message', (data) => {
@@ -222,6 +224,8 @@ describe('authenticated PC bridge protocol', () => {
           'key=[REDACTED]',
           '[REDACTED]',
           '[REDACTED]',
+          '[REDACTED]',
+          'Version 1.2.3, example.com, and report.final.csv.',
           'ordinary clipboard text',
         ].join('\n'),
       },
