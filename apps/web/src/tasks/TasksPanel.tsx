@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import { useJarvisActivity } from '../activity-context';
 import { Loader } from '../Loader';
 import { copenhagenDate } from '../daily/period';
 import { formatDateOnly, formatTimeOnly } from '../format/date-time';
@@ -243,6 +244,18 @@ export function TasksPanel({ id, backendUrl, getAccessToken, initialQuery = '', 
   const writes = useRef(new AbortController());
   const addButton = useRef<HTMLButtonElement>(null);
   const draftInput = useRef<HTMLInputElement>(null);
+  const { latestActivity } = useJarvisActivity();
+  const taskWriteActivity = latestActivity?.type === 'tool-call-finished' &&
+    latestActivity.outcome === 'ok' &&
+    ['vault_task_create', 'vault_task_complete', 'vault_task_edit'].includes(latestActivity.toolName)
+    ? latestActivity.activityId : null;
+  const lastTaskWrite = useRef(taskWriteActivity);
+  useEffect(() => {
+    if (!taskWriteActivity || lastTaskWrite.current === taskWriteActivity) return;
+    lastTaskWrite.current = taskWriteActivity;
+    quietReload.current = true;
+    setRevision((value) => value + 1);
+  }, [taskWriteActivity]);
 
   useEffect(() => { panel.current?.focus({ preventScroll: true }); }, []);
   useEffect(() => {

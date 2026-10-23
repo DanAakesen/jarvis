@@ -488,6 +488,10 @@ navigation, Settings slot and Background work Open link.
 
 ## Vault tasks on the Notes page (P13-19; one page since 19 October 2026)
 
+Successful chat/voice task writes quietly refresh an open panel through existing
+tool activity (#1236). This adds no control, layout or styling; failures do not
+pretend the list was changed. Existing edit/version conflicts remain visible.
+
 There is no Tasks page. A **Show tasks** button (task icon and text; **Hide tasks**
 while open) is its own glass button at the top left of the map, outside the search
 bar, and opens a task panel beside the map. The Notes search bar is compact (380px

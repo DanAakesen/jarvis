@@ -1,5 +1,13 @@
 # Project plan
 
+## Safe conversational task writes (#1236; 23 October 2026)
+
+- Implemented shared Tasks API/chat/voice create, complete/reopen and edit writes,
+  exact task identity/version checks, and version-required full-note replacement.
+- Local synthetic dispatch, concurrency and regression checks are in progress.
+- Next: review exact-head validation; real iOS/Obsidian sync and live speech
+  acceptance remain owner-run and are not claimed by synthetic tests.
+
 Integration checkpoint: #883 merged on 17 October at
 `705af7c7c02c3154a646dda66d79790d71af8f54`, with its actual tree matching
 the qualified pipeline correction. This release candidate combines the

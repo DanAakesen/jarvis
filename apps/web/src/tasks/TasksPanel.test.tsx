@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TasksPanel } from './TasksPanel';
 import type { VaultTask } from './tasks-data';
+import { JarvisActivityContext, type JarvisActivity } from '../activity-context';
 
 const getAccessToken = vi.fn(async () => 'fixture-token');
 const json = (value: unknown, status = 200) =>
@@ -65,6 +66,30 @@ afterEach(() => {
 const writeCalls = () => fetchMock.mock.calls.filter(([, init]) => init?.method === 'PATCH' || init?.method === 'POST' || init?.method === 'PUT');
 
 describe('Tasks panel', () => {
+  it('quietly reloads after a successful conversational task write, not a refusal', async () => {
+    const activity: JarvisActivity = {
+      working: false, workText: null, latestActivity: null, voiceActivity: null,
+      applyRuntimeActivity: () => {}, clearRuntimeActivities: () => {},
+    };
+    const panel = <TasksPanel id="tasks-panel" backendUrl="https://api.example.com"
+      getAccessToken={getAccessToken} onOpenNote={onOpenNote} onClose={onClose} />;
+    const view = render(<JarvisActivityContext value={activity}>{panel}</JarvisActivityContext>);
+    await screen.findByRole('checkbox', { name: 'No date fixture' });
+    const reads = fetchMock.mock.calls.length;
+    const finished = {
+      type: 'tool-call-finished' as const, source: 'chat' as const,
+      activityId: '11111111-1111-4111-8111-111111111111',
+      turnId: '42', toolName: 'vault_task_create', outcome: 'refused' as const,
+    };
+    view.rerender(<JarvisActivityContext value={{ ...activity, latestActivity: finished }}>{panel}</JarvisActivityContext>);
+    expect(fetchMock.mock.calls).toHaveLength(reads);
+    view.rerender(<JarvisActivityContext value={{ ...activity,
+      latestActivity: { ...finished, outcome: 'ok' } }}>{panel}</JarvisActivityContext>);
+    await waitFor(() => expect(fetchMock.mock.calls).toHaveLength(reads + 1));
+    expect(screen.getByRole('checkbox', { name: 'No date fixture' })).not.toBeNull();
+    expect(writeCalls()).toHaveLength(0);
+  });
+
   it('groups open tasks by the owner date and shows an unticked box with a source-note link', async () => {
     mount();
     expect(await screen.findByRole('heading', { name: 'Overdue' })).not.toBeNull();

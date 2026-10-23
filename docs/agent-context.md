@@ -1,5 +1,14 @@
 # Agent context
 
+## Conversational task write checks (#1236; 23 October 2026)
+
+Use synthetic vaults only; no live settings, grants, credentials or deployment.
+Focused backend checks: `npm test --workspace @jarvis/backend -- src/vault
+src/core/capability-instructions.test.ts src/voice/realtime.test.ts`.
+Panel refresh: `npm test --workspace @jarvis/web -- src/tasks/TasksPanel.test.tsx`.
+Run existing backend/web builds and lint for their changed boundaries.
+Physical iOS/Obsidian synchronization and real speech acceptance remain separate.
+
 ## Owner session switch, revocation and checks (22 October 2026; #1217; default off in code, on in production since 23 October 2026)
 
 The backend can give the owner a revocable 10-day session after one Entra

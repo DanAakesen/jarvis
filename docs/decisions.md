@@ -1,5 +1,21 @@
 # Decisions
 
+## Shared conversational task writes and versioned note replacement (23 October 2026; #1236)
+
+Use the existing vault task parser and marker-preserving edits in one service
+for the Tasks API and chat/voice tools, not a second task store. Existing task
+writes require path, line, text and version; ambiguous names must be clarified.
+Explicit owner tasks stay in Personal/Work and do not use proactive generation
+or Factory rules. Refresh the index after commit and the open panel after a
+successful task-tool activity.
+
+Require the blob SHA returned by `vault_read` for replacing an existing note
+through `vault_write`. A replacement conflict stops without retry; unversioned
+content is create-only. Only append and task line operations can rebase once on
+a confirmed conflict. Unknown outcomes instruct a reread rather than a blind
+retry. Synthetic checks cover these boundaries; physical iOS/Obsidian sync and
+live speech acceptance remain separate owner checks.
+
 ## Chat model rate limit raised for live acceptance (#1232; 23 October 2026)
 
 Decided as a reversible rate-limit change that follows the 5 October capacity
