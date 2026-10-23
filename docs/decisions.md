@@ -12,6 +12,30 @@ off revision revoke sessions minted by an on revision, in which case the owner
 signs in again. Infrastructure pins the switch to `false`; enabling requires the
 owner's explicit approval and a matching pin-test change.
 
+## Health credential and owner-session hardening (#1222; 23 October 2026)
+
+An owner session is revocable and shorter-lived than the 365-day Health upload
+credential. Allowing that session to create, rotate or revoke the credential
+would let a stolen session outlive its own revocation boundary. The status read
+does not reveal a secret and remains available to keep Settings useful.
+
+Decided:
+
+- Only an Entra owner token may create, rotate or revoke the Health upload
+  credential. Owner sessions may read its state and expiry; the backend rejects
+  their three POST actions before touching the capability store.
+- Settings keeps the existing session-first token for status, and obtains an
+  Entra token for mutations. If Microsoft requires interaction, the UI displays
+  that a fresh sign-in is needed before starting the redirect.
+- Treat the exact `js.<22 base64url>.<43 base64url>` owner-session token as a
+  secret in every existing content scrubber. Newly created session ids enter the
+  verified admission set only after the store write succeeds.
+- Keep `JARVIS_OWNER_SESSION_ENABLED` default-off and preserve the Entra-only
+  flow when no session is held.
+
+Not verified: live Microsoft sign-in and the enabled production switch remain
+owner acceptance gates.
+
 ## Web owner-session client (#1220; 23 October 2026)
 
 The backend owner session is now consumed by the web client while

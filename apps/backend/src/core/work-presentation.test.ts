@@ -681,7 +681,11 @@ describe('best-effort work presentation', () => {
 
   it('redacts credentials before truncation, including multiline keys and JSON values', () => {
     const url = ['https://', 'user', ':', 'pass', '@host/'].join('');
+    const ownerSession = `js.${'A'.repeat(22)}.${'B'.repeat(43)}`;
     expect(redactWorkContent(`"api_key": "private-value"\n${['Bearer', 'private-token'].join(' ')}\n${url}`)).not.toMatch(/private-value|private-token|user:pass/u);
+    expect(redactWorkContent(`session ${ownerSession}`)).toBe('session [REDACTED]');
+    expect(redactWorkContent('Version 1.2.3, example.com, and report.final.csv.'))
+      .toBe('Version 1.2.3, example.com, and report.final.csv.');
     expect(redactWorkContent('-----BEGIN PRIVATE KEY-----\nprivate-value\n-----END PRIVATE KEY-----'))
       .toBe(Array(3).fill('[REDACTED PRIVATE KEY]').join('\n'));
     expect(redactWorkContent('api_key = `private-value\nmore-private-value`\nconst safe = true;'))

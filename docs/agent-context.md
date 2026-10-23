@@ -14,6 +14,13 @@ work.
 Any other value, or `true` with no SQL settings, stops startup with a
 configuration error.
 
+With the switch enabled, an owner session may read Health upload credential
+status but cannot create, rotate or revoke that long-lived credential; those
+POSTs require an Entra owner token. Settings continues to load status with its
+session-first token and uses a fresh Entra token for changes, explaining when
+Microsoft requires an interactive sign-in. With no owner session, the existing
+Entra-only behavior is unchanged.
+
 **Turn on.** Deploy migration 0064 and the backend revision first. To enable,
 change the `infra/main.bicep` pin and this session's pin test together to the
 exact string `true` in one reviewed change, with the owner's explicit approval,

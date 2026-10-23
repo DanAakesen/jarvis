@@ -2179,6 +2179,14 @@ database read by design, so the session logic adds no polling. The existing
 runs about once a second while backend requests are pending; with a session
 token, each probe therefore costs another database read before its route runs.
 
+**Health upload credential.** An owner session may read `GET /api/health/upload-credential`,
+which returns only state and expiry, but cannot
+create, rotate or revoke the long-lived credential: all three POST actions return
+403 with `Microsoft sign-in required` before the capability store is touched.
+Settings continues to use the session-first token for status and obtains an Entra
+token for each mutation, showing a fresh-sign-in notice before an interactive
+redirect. Entra owner tokens retain the existing behavior.
+
 Sign out best-effort revokes the current session before clearing local state.
 Settings offers **Sign out on all devices** only while this device has a session;
 after confirmation it revokes all owner sessions, clears the local record and

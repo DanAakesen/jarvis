@@ -24,6 +24,7 @@ export async function registerHealthCapabilityRoutes(app: FastifyInstance,capabi
     schema: { body: { type: 'object',properties: { action: { type: 'string',enum: ['create','rotate','revoke'] } },required: ['action'],additionalProperties: false } },
   },async (request,reply) => {
     reply.header('Cache-Control','no-store');
+    if (request.ownerSession) return reply.code(403).send({ error: 'Microsoft sign-in required' });
     if (denied(request,app.ownerObjectId)) return reply.code(403).send({ error: 'Owner access required' });
     const action = (request.body as { action: 'create' | 'rotate' | 'revoke' }).action;
     const signal = AbortSignal.timeout(30000);

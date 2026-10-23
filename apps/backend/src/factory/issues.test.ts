@@ -5,6 +5,7 @@ import type { GitHubIssue, GitHubIssueClient } from '../github/issues.js';
 import {
   allocateP11TaskCode,
   backfillFactoryTaskIssues,
+  containsLikelySecret,
   createJarvisIssue,
   createLinkedTaskFromPrompt,
   IssueCreationPartialError,
@@ -181,10 +182,13 @@ describe('Factory issue tasks', () => {
 
   it('refuses likely secrets and changed confirmation codes without creating issues', async () => {
     const { projects, github } = fixture();
+    const ownerSession = `js.${'A'.repeat(22)}.${'B'.repeat(43)}`;
+    expect(containsLikelySecret(ownerSession)).toBe(true);
+    expect(containsLikelySecret('Version 1.2.3, example.com, and report.final.csv.')).toBe(false);
     await expect(createJarvisIssue({
       project: '7',
       title: 'Fix auth',
-      body: 'api_key = "super-secret-value"',
+      body: `api_key = "super-secret-value"\n${ownerSession}`,
       projects,
       github,
     })).rejects.toThrow('contains a secret');
