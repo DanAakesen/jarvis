@@ -175,6 +175,35 @@ describe('useSignIn cross-tab synchronization', () => {
     unmount();
   });
 
+  it('exposes an Entra-only token getter and announces interaction before its redirect', async () => {
+    const session = storeOwnerSession();
+    const account = { homeAccountId: 'shared-account' };
+    auth.accounts.push(account);
+    auth.client.getActiveAccount.mockReturnValue(account);
+    auth.restoreProfile.mockResolvedValue({ name: 'Owner' });
+    auth.client.acquireTokenSilent.mockRejectedValue(Object.assign(new Error('renewal required'), {
+      errorCode: 'interaction_required',
+    }));
+    auth.needsSignInInteraction.mockReturnValue(true);
+    const order: string[] = [];
+    auth.tryAutomaticSignInRedirect.mockImplementation(async () => {
+      order.push('redirect');
+      return true;
+    });
+    const { result } = renderHook(() => useSignIn(config));
+    await waitFor(() => expect(result.current.state).toBe('signed-in'));
+
+    await expect(result.current.getAccessToken()).resolves.toBe(session.token);
+    const announce = vi.fn(() => { order.push('notice'); });
+    await act(async () => {
+      await expect(result.current.getEntraAccessToken(announce)).rejects.toThrow('Sign-in is redirecting.');
+    });
+
+    expect(auth.client.acquireTokenSilent).toHaveBeenCalledOnce();
+    expect(announce).toHaveBeenCalledOnce();
+    expect(order).toEqual(['notice', 'redirect']);
+  });
+
   it('updates session availability when another tab removes the session key', async () => {
     const token = `js.${'a'.repeat(22)}.${'b'.repeat(43)}`;
     localStorage.setItem('jarvis.owner-session', JSON.stringify({

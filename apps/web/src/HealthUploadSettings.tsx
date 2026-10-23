@@ -13,9 +13,10 @@ async function authorizationHeaders(getAccessToken: () => Promise<string>) {
   return { Authorization: `${['Bear', 'er'].join('')} ${await getAccessToken()}` };
 }
 
-export function HealthUploadSettings({ backendUrl, getAccessToken }: {
+export function HealthUploadSettings({ backendUrl, getAccessToken, getEntraAccessToken }: {
   backendUrl: string | null;
   getAccessToken: () => Promise<string>;
+  getEntraAccessToken: (beforeInteractiveSignIn?: () => void | Promise<void>) => Promise<string>;
 }) {
   const [credential, setCredential] = useState<CredentialStatus>({ state: backendUrl ? 'loading' : 'error' });
   const [token, setToken] = useState<string | null>(null);
@@ -65,12 +66,20 @@ export function HealthUploadSettings({ backendUrl, getAccessToken }: {
     setMessage('');
     setToken(null);
     try {
+      const authHeaders = await authorizationHeaders(() => getEntraAccessToken(async () => {
+        setMessage('Changing this credential needs a fresh Microsoft sign-in.');
+        await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
+      }));
       const response = await backendFetch(`${backendUrl.replace(/\/+$/u, '')}/api/health/upload-credential`, {
         method: 'POST',
-        headers: { ...await authorizationHeaders(getAccessToken),'Content-Type': 'application/json' },
+        headers: { ...authHeaders,'Content-Type': 'application/json' },
         body: JSON.stringify({ action }),
       });
       const value: unknown = await response.json().catch(() => null);
+      if (response.status === 403 && record(value) && value.error === 'Microsoft sign-in required') {
+        setError('Microsoft sign-in required.');
+        return;
+      }
       if (!response.ok || !record(value) || typeof value.state !== 'string') throw new Error();
       if ((action === 'create' || action === 'rotate') &&
           (typeof value.token !== 'string' || !/^[A-Za-z0-9_-]{43,256}$/u.test(value.token))) throw new Error();
@@ -80,7 +89,8 @@ export function HealthUploadSettings({ backendUrl, getAccessToken }: {
       });
       if (action !== 'revoke') setToken(value.token as string);
       setMessage(action === 'revoke' ? 'Revoked' : 'Shown once. Copy it now.');
-    } catch {
+    } catch (cause) {
+      if (cause instanceof Error && cause.message === 'Sign-in is redirecting.') return;
       setError(`The ${action} request did not complete. Refresh status before retrying.`);
     } finally {
       setBusyAction(null);

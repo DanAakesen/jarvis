@@ -190,7 +190,8 @@ _SECRET_ASSIGNMENT = re.compile(
 _KNOWN_TOKEN = re.compile(
     r"\b(?:sk-(?:proj-)?[A-Za-z0-9_-]{16,}|gh[pousr]_[A-Za-z0-9]{20,}"
     r"|github_pat_[A-Za-z0-9_]{20,}|AKIA[A-Z0-9]{16}"
-    r"|eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,})\b"
+    r"|eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}"
+    r"|js\.[A-Za-z0-9_-]{22}\.[A-Za-z0-9_-]{43})\b"
 )
 _URL_CREDENTIALS = re.compile(r"(https?://)[^/\s@]+:[^/\s@]+@", re.IGNORECASE)
 _LINE_RUN = re.compile(r"[^\r\n]+")
