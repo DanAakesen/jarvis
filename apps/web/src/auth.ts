@@ -307,15 +307,22 @@ async function restoreOwnerSessionProfile(
         rememberSignedInDevice();
         return profile;
       } catch (error) {
-        const current = readOwnerSession(config);
+        let retryable = error instanceof ProfileRequestError &&
+          [0, 429, 503].includes(error.status);
         if (error instanceof ProfileRequestError && error.status === 401) {
-          if (current?.token === session.token) clearOwnerSession();
-          session = readOwnerSession(config);
-          if (!session) return null;
-          continue;
+          const verdict = await confirmOwnerSession(config, session.token);
+          const current = readOwnerSession(config);
+          if (verdict === 'expired' || verdict === 'changed') {
+            session = current;
+            if (!session) return null;
+            continue;
+          }
+          if (!current) return null;
+          session = current;
+          retryable = true;
         }
-        if (!(error instanceof ProfileRequestError) ||
-            ![0, 429, 503].includes(error.status)) throw error;
+        if (!retryable) throw error;
+        const current = readOwnerSession(config);
         if (!current) return null;
         session = current;
         if (fallbackAt !== null && Date.now() >= fallbackAt) {
@@ -439,8 +446,7 @@ export function confirmOwnerSession(config: Pick<PublicConfig, 'backendUrl'>, to
   const key = `${config.backendUrl.replace(/\/+$/u, '')}\u0000${token}`;
   const existing = confirmationFlights.get(key);
   if (existing) return existing;
-  let flight: Promise<'expired' | 'changed' | 'valid' | 'temporary'>;
-  flight = (async () => {
+  const flight = (async () => {
     let response: Response;
     try {
       response = await fetch(`${config.backendUrl!.replace(/\/+$/u, '')}/me`, {
@@ -451,7 +457,10 @@ export function confirmOwnerSession(config: Pick<PublicConfig, 'backendUrl'>, to
     } catch {
       return 'temporary';
     }
-    if (response.status !== 401) return response.ok ? 'valid' : 'temporary';
+    if (response.status !== 401) {
+      if (response.ok) preferOwnerSession(config);
+      return response.ok ? 'valid' : 'temporary';
+    }
     const current = readOwnerSession(config);
     if (current?.token !== token) return 'changed';
     clearOwnerSession();

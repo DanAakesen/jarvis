@@ -15,7 +15,7 @@ import {
   takeSignInReturnPath,
 } from './auth';
 import { clearOwnerSessionMintWait } from './owner-session';
-import { isEntraPreferred, preferOwnerSession } from './owner-session';
+import { isEntraPreferred, preferEntraOwnerSession, preferOwnerSession } from './owner-session';
 import { getDatabaseWaking } from './backend-request';
 
 const config: PublicConfig = {
@@ -187,7 +187,11 @@ describe('web authentication', () => {
     expect(getDatabaseWaking()).toBe(false);
   });
 
-  it('falls back to silent Entra after 25 seconds and retains the session while preferring Entra', async () => {
+  it.each([
+    { description: 'network failures', status: 0 },
+    { description: '429 responses', status: 429 },
+    { description: '503 responses', status: 503 },
+  ])('falls back to Entra after 25 seconds of $description', async ({ status }) => {
     const token = `js.${'a'.repeat(22)}.${'b'.repeat(43)}`;
     localStorage.setItem('jarvis.owner-session', JSON.stringify({
       version: 1,
@@ -197,10 +201,13 @@ describe('web authentication', () => {
       idleExpiresAt: new Date(Date.now() + 10 * 24 * 60 * 60_000).toISOString(),
       absoluteExpiresAt: new Date(Date.now() + 30 * 24 * 60 * 60_000).toISOString(),
     }));
-    fetchMock.mockImplementation(async (_url: RequestInfo | URL, init?: RequestInit) =>
-      new Headers(init?.headers).get('authorization')?.endsWith(token)
-        ? new Response(null, { status: 503 })
-        : new Response(JSON.stringify({ name: 'Dan Aakesen' }), { status: 200 }));
+    fetchMock.mockImplementation(async (_url: RequestInfo | URL, init?: RequestInit) => {
+      if (new Headers(init?.headers).get('authorization')?.endsWith(token)) {
+        if (status === 0) throw new Error('Synthetic network failure.');
+        return new Response(null, { status });
+      }
+      return new Response(JSON.stringify({ name: 'Dan Aakesen' }), { status: 200 });
+    });
     vi.stubGlobal('fetch', fetchMock);
     vi.spyOn(Math, 'random').mockReturnValue(0.5);
     vi.useFakeTimers();
@@ -222,6 +229,53 @@ describe('web authentication', () => {
       new Headers(init?.headers).get('authorization')?.endsWith(token))).toBe(true);
     expect(new Headers(profileCalls.at(-1)?.[1]?.headers).get('authorization'))
       .toBe(`${['Bear', 'er'].join('')} cached-access-token`);
+    expect(localStorage.getItem('jarvis.owner-session')).not.toBeNull();
+  });
+
+  it('falls back after 25 seconds when a session profile request times out', async () => {
+    const token = `js.${'a'.repeat(22)}.${'b'.repeat(43)}`;
+    localStorage.setItem('jarvis.owner-session', JSON.stringify({
+      version: 1,
+      backendOrigin: 'https://api.example.com',
+      sessionId: 'a'.repeat(22),
+      token,
+      idleExpiresAt: new Date(Date.now() + 10 * 24 * 60 * 60_000).toISOString(),
+      absoluteExpiresAt: new Date(Date.now() + 30 * 24 * 60 * 60_000).toISOString(),
+    }));
+    let sessionRequests = 0;
+    fetchMock.mockImplementation(async (_url: RequestInfo | URL, init?: RequestInit) => {
+      if (new Headers(init?.headers).get('authorization')?.endsWith(token)) {
+        sessionRequests += 1;
+        if (sessionRequests === 1) {
+          return new Promise<Response>((_resolve, reject) => {
+            init?.signal?.addEventListener('abort', () => reject(new Error('Synthetic timeout.')), { once: true });
+          });
+        }
+        return new Response(null, { status: 503 });
+      }
+      return new Response(JSON.stringify({ name: 'Dan Aakesen' }), { status: 200 });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    vi.spyOn(Math, 'random').mockReturnValue(0.5);
+    vi.useFakeTimers();
+    vi.spyOn(AbortSignal, 'timeout').mockImplementation((milliseconds) => {
+      const controller = new AbortController();
+      setTimeout(() => controller.abort(new DOMException('The operation timed out.', 'TimeoutError')), milliseconds);
+      return controller.signal;
+    });
+    const msal = client({ getActiveAccount: vi.fn().mockReturnValue(account) });
+
+    const restored = restoreProfile(msal, config);
+    await Promise.resolve();
+    await Promise.resolve();
+    await vi.advanceTimersByTimeAsync(24_999);
+    expect(msal.acquireTokenSilent).not.toHaveBeenCalled();
+    expect(localStorage.getItem('jarvis.owner-session')).not.toBeNull();
+    await vi.advanceTimersByTimeAsync(1);
+
+    await expect(restored).resolves.toEqual({ name: 'Dan Aakesen' });
+    expect(sessionRequests).toBe(4);
+    expect(isEntraPreferred(config)).toBe(true);
     expect(localStorage.getItem('jarvis.owner-session')).not.toBeNull();
   });
 
@@ -278,9 +332,47 @@ describe('web authentication', () => {
 
     expect(localStorage.getItem('jarvis.owner-session')).toBeNull();
     expect(msal.acquireTokenSilent).toHaveBeenCalledWith({ scopes: [config.apiScope], account });
+    expect(fetchMock.mock.calls.filter(([url]) => String(url).endsWith('/me'))).toHaveLength(3);
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
       'https://api.example.com/auth/session', expect.anything(),
     ));
+  });
+
+  it('keeps a session after an unconfirmed restore 401 and retries it', async () => {
+    const token = `js.${'a'.repeat(22)}.${'b'.repeat(43)}`;
+    localStorage.setItem('jarvis.owner-session', JSON.stringify({
+      version: 1,
+      backendOrigin: 'https://api.example.com',
+      sessionId: 'a'.repeat(22),
+      token,
+      idleExpiresAt: new Date(Date.now() + 10 * 24 * 60 * 60_000).toISOString(),
+      absoluteExpiresAt: new Date(Date.now() + 30 * 24 * 60 * 60_000).toISOString(),
+    }));
+    let sessionChecks = 0;
+    fetchMock.mockImplementation(async (_url: RequestInfo | URL, init?: RequestInit) => {
+      const authorization = new Headers(init?.headers).get('authorization');
+      if (authorization?.endsWith(token)) {
+        sessionChecks += 1;
+        return sessionChecks === 1
+          ? new Response(null, { status: 401 })
+          : sessionChecks === 2
+            ? new Response(null, { status: 503 })
+            : new Response(JSON.stringify({ name: 'Dan Aakesen' }), { status: 200 });
+      }
+      return new Response(null, { status: 404 });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    vi.spyOn(Math, 'random').mockReturnValue(0.5);
+    vi.useFakeTimers();
+
+    const restored = restoreProfile(client(), config);
+    await Promise.resolve();
+    await Promise.resolve();
+    await vi.advanceTimersByTimeAsync(1_000);
+
+    await expect(restored).resolves.toEqual({ name: 'Dan Aakesen' });
+    expect(sessionChecks).toBe(3);
+    expect(localStorage.getItem('jarvis.owner-session')).not.toBeNull();
   });
 
   it('does not bypass a switch-off mint wait during silent profile restoration', async () => {
@@ -331,6 +423,7 @@ describe('web authentication', () => {
     let finish!: (response: Response) => void;
     fetchMock.mockImplementation(() => new Promise<Response>((resolve) => { finish = resolve; }));
     vi.stubGlobal('fetch', fetchMock);
+    preferEntraOwnerSession(config);
 
     const first = confirmOwnerSession(config, token);
     const second = confirmOwnerSession(config, token);
@@ -340,6 +433,7 @@ describe('web authentication', () => {
 
     await expect(Promise.all([first, second])).resolves.toEqual(['valid', 'valid']);
     expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(isEntraPreferred(config)).toBe(false);
   });
 
   it('shows the backend denial without exposing its response body', async () => {

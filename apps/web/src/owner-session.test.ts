@@ -6,7 +6,6 @@ import {
   isEntraPreferred,
   mintOwnerSession,
   ownerSessionStorageKey,
-  preferEntraOwnerSession,
   preferOwnerSession,
   readOwnerSession,
   validateOwnerSessionRecord,
@@ -213,7 +212,7 @@ describe('owner session storage and minting', () => {
       init?.method === 'DELETE' ? new Response(null, { status: 204 }) : response());
     vi.stubGlobal('fetch', fetch);
     const setItem = Storage.prototype.setItem;
-    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(function (key, value) {
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(function (this: Storage, key: string, value: string) {
       if (key === ownerSessionStorageKey) throw new Error('storage unavailable');
       setItem.call(this, key, value);
     });

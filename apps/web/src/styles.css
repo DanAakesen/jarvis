@@ -1917,6 +1917,8 @@ a.task-card-title { text-decoration: none; }
   .topbar-icon-button, .settings-link { width: 44px; min-width: 44px; }
   .topbar-status { width: 32px; min-width: 32px; justify-content: center; padding: 0; }
   .topbar-status-text { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .signin-loading .topbar-status { width: auto; min-width: 0; }
+  .signin-loading .topbar-status-text { position: static; width: auto; height: auto; overflow: visible; clip-path: none; }
   .workspace[data-phone="true"] { display: flex; height: 100%; min-height: 0; flex-direction: column; gap: var(--space-2); padding: var(--space-3); }
   .workspace[data-phone="true"] .workspace-heading { flex: 0 0 auto; }
   .workspace[data-phone="true"] .workspace-heading h2 { margin: 0; font-size: var(--type-subheading); }

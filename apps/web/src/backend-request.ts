@@ -201,12 +201,15 @@ export function watchDatabaseStatus(backendUrl: string, getAccessToken: () => Pr
   let controller: AbortController | null = null;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let stopped = false;
+  let finishProbeVerification = () => {};
   const hasPending = () => document.visibilityState !== 'hidden' &&
     [...pending.values()].some((url) => url.startsWith(`${base}/`));
   const cancel = () => {
     controller?.abort();
     controller = null;
     clearTimeout(timer);
+    finishProbeVerification();
+    finishProbeVerification = () => {};
     publishWaking(false);
   };
   const poll = async (current: AbortController) => {
@@ -214,7 +217,10 @@ export function watchDatabaseStatus(backendUrl: string, getAccessToken: () => Pr
     try {
       const token = await getAccessToken();
       if (current.signal.aborted) return;
-      if (isOwnerSessionToken(token)) finishVerification = beginOwnerSessionVerification();
+      if (isOwnerSessionToken(token)) {
+        finishVerification = beginOwnerSessionVerification();
+        finishProbeVerification = finishVerification;
+      }
       const response = await fetch(`${base}/database/status`, {
         headers: { Authorization: `${['Bear', 'er'].join('')} ${token}`, Accept: 'application/json' },
         signal: AbortSignal.any([current.signal, AbortSignal.timeout(10_000)]),
@@ -235,6 +241,7 @@ export function watchDatabaseStatus(backendUrl: string, getAccessToken: () => Pr
       // A failed probe does not establish a database state.
     } finally {
       finishVerification();
+      if (finishProbeVerification === finishVerification) finishProbeVerification = () => {};
       if (!current.signal.aborted && !stopped && hasPending()) {
         timer = setTimeout(() => { void poll(current); }, 1_000);
       }

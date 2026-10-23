@@ -898,6 +898,8 @@ prior sign-in on this device shows **Signing you in** while silent SSO runs;
 recovery uses a guarded top-level redirect without account selection. A failure
 adds one short inline message and changes the same action to **Retry**. Keep the
 existing 140 ms delayed loader, theme behavior, and reduced-motion support.
+After three seconds of a pending owner-session restore, reuse the existing
+**Waking Jarvis…** status and keep its wording visible at phone widths.
 Disable sign-in actions with an accessible explanation until the backend is
 configured. After `/me` verifies the session, show the returned name as the
 page headline. Settings includes a clearly labelled **Account** section with a

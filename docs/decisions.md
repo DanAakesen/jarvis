@@ -1,5 +1,33 @@
 # Decisions
 
+## Web owner-session wake and fallback (#1225; 23 October 2026)
+
+Decided:
+
+- **Cue the work that actually depends on session verification.** Reuse the
+  authenticated `GET /database/status` probe and the cold `/me` session restore
+  as wake signals after three seconds pending. Do not infer waking from a long
+  chat or other API request; keep the existing cue markup and styling.
+- **Keep the session-authenticated probe.** Do not acquire an Entra token just
+  to poll status. The server verifies the session against SQL before the probe
+  can return, so delayed probe and restore are both observable using one shared
+  cue state.
+- **Bound only when Entra recovery is available.** After about 25 seconds of
+  transient session-restore failures, use the existing silent Entra path when an
+  MSAL account or prior-device marker is present. Preserve the stored session
+  and prefer Entra for the rest of the page load until a session-authenticated
+  request succeeds. Without a known account, retain the existing retry loop.
+- **Keep revocation confirmation authoritative.** A revoke-all timeout may leave
+  the local token stored; the next API 401 still clears it only after a second
+  `/me` 401 with that same token. Share concurrent confirmations, and best-effort
+  revoke a newly minted session if browser storage cannot save it.
+- **Do not lock during an active mint cooldown.** The cooldown already prevents
+  a mint, so taking the cross-tab lock first adds no coordination value.
+
+The backend, infrastructure and switch default remain unchanged. Browser tests
+use synthetic responses; live Microsoft sign-in and the enabled production
+switch remain unverified.
+
 ## Web owner-session client (#1220; 23 October 2026)
 
 The backend owner session is now consumed by the web client while

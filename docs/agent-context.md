@@ -99,13 +99,15 @@ configuration are not exercised by any of these.
 Web client checks from the repository root:
 
 ```sh
-npm test --workspace @jarvis/web -- --run src/owner-session.test.ts src/backend-request-owner-session.test.ts src/auth.test.ts src/useSignIn.test.tsx src/AccountSettings.test.tsx src/App.test.tsx
+npm test --workspace @jarvis/web -- --run src/owner-session.test.ts src/backend-request-owner-session.test.ts src/auth.test.ts src/useSignIn.test.tsx src/pages.test.tsx src/DatabaseWakeStatus.test.tsx src/AccountSettings.test.tsx src/App.test.tsx
 npm run lint --workspace @jarvis/web
 npm run build --workspace @jarvis/web
 ```
 
 Web tests use mocked auth and backend responses; they do not verify a live
-Microsoft sign-in or real device. To verify the safe rollout path locally, keep
+Microsoft sign-in or real device. Owner-session checks also cover the delayed
+wake cue, bounded Entra fallback, mint-storage revocation and confirmation
+single-flight. To verify the safe rollout path locally, keep
 `JARVIS_OWNER_SESSION_ENABLED=false`: `POST /auth/session` returns 404, the
 client waits six hours before another mint attempt, and sign-in continues with
 Entra. A session request returning 401 after the switch is disabled clears the
