@@ -832,6 +832,30 @@ describe('structured log export', () => {
     ]);
     expect(records.join('') + JSON.stringify(sink.trackTrace.mock.calls)).not.toContain('leak');
   });
+  it('exports the throttled reason with its 429 status, no session identifier and nothing else', () => {
+    const records: string[] = [];
+    const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
+    const sink = { ...sdk, trackTrace: vi.fn() };
+    const logger = createLogger({ logLevel: 'info' }, sink, output);
+    const token = `js.${'A'.repeat(22)}.${'B'.repeat(43)}`;
+    expect(ownerSessionAuditReasons).toContain('throttled');
+    logger.warn({
+      reason: 'throttled', method: 'GET', route: '/me', statusCode: 429, retryAfter: 17, body: 'body-leak',
+      token, sessionId: `A${'B'.repeat(21)}`, err: new Error('error-leak'),
+    }, 'owner_session.rejected');
+    expect(records.map((record) => JSON.parse(record) as unknown)).toEqual([{
+      level: 40, time: expect.any(Number), service: 'jarvis-backend', msg: 'owner_session.rejected',
+      reason: 'throttled', method: 'GET', route: '/me', statusCode: 429,
+    }]);
+    expect(sink.trackTrace).toHaveBeenCalledWith(expect.objectContaining({
+      message: 'owner_session.rejected',
+      properties: { service: 'jarvis-backend', reason: 'throttled', method: 'GET', route: '/me', statusCode: 429 },
+    }));
+    const exported = records.join('') + JSON.stringify(sink.trackTrace.mock.calls);
+    expect(exported).not.toContain('leak');
+    expect(exported).not.toContain(token);
+    expect(exported).not.toContain('retryAfter');
+  });
   it('drops unknown reasons and malformed identifiers from owner session audit events', () => {
     const records: string[] = [];
     const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });

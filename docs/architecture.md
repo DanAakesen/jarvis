@@ -2180,9 +2180,51 @@ without SQL settings also stops startup instead of silently refusing sessions.
   configured owner. Every failure is the same 401 as an invalid Entra token,
   with the reason category only in the log. A store failure during verification
   is a 503 with `Retry-After`: never a 401, which would make a client drop a
-  good session, and never an allow. There is no positive cache, so a revocation
+  good session, and never an allow. There is no verdict cache, so a revocation
   applies from the next request. With the switch off the hook has no verifier
-  and answers every `js.` token with 401, even for a row still in the table.
+  and answers every `js.` token with 401, even for a row still in the table; it
+  neither reads the store nor throttles.
+- **Lookup admission** bounds the SQL work that a caller without a valid session
+  can start. A well-formed random `js.` token would otherwise reach the store,
+  which is a new unauthenticated path to SQL (a garbage Entra token is rejected
+  by its signature with no SQL). Each lookup is a database read that retries
+  while a serverless database resumes, for up to 90 seconds, so a flood could
+  keep the database awake, use up the connection pool and pile up pending
+  requests. The check runs in the verifier before the store is read, in process
+  and per replica like the creation limiter, and every number is in
+  `auth/session/config.ts`:
+  - A sliding budget of 30 lookups per minute covers session ids this replica
+    has not recently verified successfully. Over it, the request is throttled.
+  - At most 8 of those lookups run at once, and at most 64 lookups of any kind,
+    so a burst of known ids cannot queue without limit either. A request that a
+    cap refuses does not spend budget. The caps are what bounds the database
+    wake retry for ids not yet known: at most 8 such reads per replica can wait
+    in it, and the budget limits how fast new ones start. A shorter deadline for
+    unknown ids was not chosen: after a restart, the owner's first request with
+    a session the replica has not seen must still be able to wait for a paused
+    database to resume, and the retry is shared database code.
+  - A set of at most 32 recently verified session ids (least recently verified
+    dropped first), each kept 30 minutes after its last successful verification,
+    skips the budget and the unverified cap, so chat, Now polling, event streams
+    and voice never throttle themselves. These ids still get the full store read
+    and the constant-time secret comparison on every request: the set decides
+    admission only and is not a verdict cache. An id leaves it on any refusal
+    (revoked, expired, wrong secret, another owner or unknown) and then falls
+    back to the budget. Only a successful verification adds an id, so a caller
+    cannot get an id into the set without a valid secret.
+  - Nothing is keyed on the client address. `buildApp` sets no trusted proxy, so
+    the address is the ingress, and a forwarded header is chosen by the caller.
+  - A throttled request answers 429 with `Retry-After` (the time the budget
+    needs, 1 to 60 seconds, or 5 for a cap) and the body
+    `{"error":"Too many requests"}`, in the same family as the 503 for a store
+    outage. It is never a 401, which would make a client drop a good session.
+    The audit reason is `throttled`, with no session prefix because no lookup
+    ran. A malformed token is still refused without admission or a store read.
+  - Each replica counts on its own, so the totals grow with the replica count. A
+    flood from many places can still use up a replica's budget. A session that
+    replica has not verified yet then gets the 429 until the window slides,
+    sessions it already knows keep working, and the owner can sign in again with
+    Entra, whose tokens never reach the session lookup.
 - **Principal.** A session yields the same plain owner principal as a verified
   Entra owner token: the configured owner object id and tenant, and the display
   name copied from the Entra principal at creation, so `/me` answers the same.
@@ -2207,8 +2249,8 @@ without SQL settings also stops startup instead of silently refusing sessions.
     count).
 - **Logging.** `owner_session.created`, `owner_session.revoked`,
   `owner_session.rejected` and `owner_session.refresh_failed` carry a fixed
-  reason category and the first eight characters of the token only, never a
-  token, secret, hash or header.
+  reason category and, when a lookup judged the token, the first eight
+  characters of it, never a token, secret, hash or header.
 
 ## Web notifications and confirmations (P6-22, P10-10)
 
@@ -5623,7 +5665,7 @@ call linkage remain the post-merge P4-09 acceptance check.
 ## Identity and security
 
 - Dan signs in with Entra ID through `jarvis-web`. `jarvis-api` requires user assignment, and only Dan is assigned; the backend also checks Dan's object ID. The hosted Jarvis agent is assigned the application role `Jarvis.Tools` and may call only the tool routes.
-- When `JARVIS_OWNER_SESSION_ENABLED` is `true`, the owner can exchange one Entra sign-in for an opaque, revocable `js.` session token (10 days idle, 30-day cap, SHA-256 of the secret stored in `dbo.owner_sessions`). It resolves to the same owner principal as an Entra owner token, never satisfies a service route, and is revoked per session or all at once; see Owner session under Backend authentication. The switch is off by default and is also the kill switch.
+- When `JARVIS_OWNER_SESSION_ENABLED` is `true`, the owner can exchange one Entra sign-in for an opaque, revocable `js.` session token (10 days idle, 30-day cap, SHA-256 of the secret stored in `dbo.owner_sessions`). It resolves to the same owner principal as an Entra owner token, never satisfies a service route, and is revoked per session or all at once. Lookups for tokens the replica has not recently verified are throttled in process before SQL is read (a 429, never a 401); see Owner session under Backend authentication. The switch is off by default and is also the kill switch.
 - Google Calendar and Gmail tools are registered only in the backend and use the official Google APIs over HTTPS. The backend reads `google-oauth-client-id`, `google-oauth-client-secret`, and `google-refresh-token` only from Key Vault, exchanges the refresh token for a short-lived access token, and caches only that access token in memory. The single OAuth grant is for `danaakesen@gmail.com` and uses `gmail.readonly`, `gmail.compose`, `gmail.send`, `gmail.modify`, `calendar.events`, and `calendar.calendarlist.readonly` (read-only calendar list for the Daily all-calendars feed; Daily reuses this single grant); `gmail.modify` is the least-privilege scope for Gmail message labels and draft update/deletion. No Google credential or token is a deployment variable or client-bundle value. An `invalid_grant` records a deduplicated `credential_expiry` activity alert; tool calls return a visible reconnect message. Dan must add `gmail.modify` to Google Auth Platform's Data Access scopes and rerun `infra/setup-google.ps1` to re-consent and replace the Key Vault refresh token before using the new mail tools.
 - Calendar range reads interpret date-only `start`/`end` in `JARVIS_GOOGLE_TIME_ZONE` (inclusive dates and an exclusive next-midnight API boundary); timezone-aware date-times are queried as instants. `calendar_list_events` pages up to 100 events across no more than 62 days and maps optional `query` to Google's `q`; `calendar_next_event` searches up to 60 days and skips events where Dan's attendee response is declined. All-day start/end values remain date-only, including multi-day events, while timed events remain instants. Calendar agenda, range, and next-event reads are reflex-safe and sensitive results remain redacted from the durable tool-call audit.
 - Gmail search and draft listing share the bounded MIME reader introduced on #837 / task 12. It reads nested plain/HTML alternatives and API-externalized text parts, returning `bodySource`, `bodyTruncated`, `contentWarnings` and differing `alternateBody`/`alternateBodyTruncated`. Static parse5 extraction skips scripts, styles, hidden attributes and inline hidden styles, strips invisible email padding before the 6000-character text limit, and never executes HTML or fetches remote resources. File attachments, unsupported charsets, missing bodies and traversal limits remain explicit; snippets cannot establish absent reservation details.

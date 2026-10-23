@@ -3,7 +3,7 @@ import type { FastifyRequest } from 'fastify';
 /** Why an owner-session request was refused. For the audit log only; a client always sees the same 401. */
 export const ownerSessionAuditReasons = [
   'disabled', 'malformed', 'unknown_session', 'secret_mismatch', 'revoked', 'idle_expired', 'absolute_expired',
-  'owner_mismatch', 'store_unavailable', 'rate_limited', 'forbidden',
+  'owner_mismatch', 'store_unavailable', 'throttled', 'rate_limited', 'forbidden',
 ] as const;
 export type OwnerSessionAuditReason = (typeof ownerSessionAuditReasons)[number];
 

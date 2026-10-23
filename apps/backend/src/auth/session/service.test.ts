@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 import { ownerSessionPolicy } from './config.js';
 import { InMemoryOwnerSessionStore } from './memory-store.js';
-import { OwnerSessionService, OwnerSessionUnavailable, type OwnerSessionServiceOptions } from './service.js';
+import {
+  OwnerSessionService, OwnerSessionThrottled, OwnerSessionUnavailable, type CreatedOwnerSession,
+  type OwnerSessionServiceOptions,
+} from './service.js';
 import type { OwnerSessionStore } from './store.js';
 import { generateOwnerSessionCredential, hashOwnerSessionSecret, parseOwnerSessionToken } from './token.js';
 
@@ -280,6 +283,215 @@ describe('owner session service', () => {
       expect(service.isOwner(owner)).toBe(true);
       expect(service.isOwner(owner.toUpperCase())).toBe(true);
       expect(service.isOwner(otherOwner)).toBe(false);
+    });
+  });
+
+  describe('admission before the store is read', () => {
+    const { unverifiedBudget, maxConcurrentUnverified, throttledRetryAfterSeconds } = ownerSessionPolicy.lookupAdmission;
+    const budget = unverifiedBudget.max;
+    type World = ReturnType<typeof setup>;
+
+    const stranger = () => generateOwnerSessionCredential().token;
+    const outcome = (service: OwnerSessionService, token: string) =>
+      service.verify(token).then((verdict) => verdict, (error: unknown) => error);
+
+    // Sends a well-formed token of an id nobody holds each time, as an unauthenticated caller can.
+    async function flood(service: OwnerSessionService, attempts: number) {
+      const results: unknown[] = [];
+      for (let attempt = 0; attempt < attempts; attempt += 1) results.push(await outcome(service, stranger()));
+      return {
+        judged: results.filter((result) => !(result instanceof OwnerSessionThrottled)),
+        throttled: results.filter((result) => result instanceof OwnerSessionThrottled),
+      };
+    }
+
+    it('lets only the budget of well-formed random tokens reach the store', async () => {
+      const { service, store } = setup();
+      const find = vi.spyOn(store, 'find');
+      const { judged, throttled } = await flood(service, 500);
+      expect(find).toHaveBeenCalledTimes(budget);
+      expect(judged).toHaveLength(budget);
+      for (const verdict of judged) expect(verdict).toMatchObject({ ok: false, reason: 'unknown_session' });
+      expect(throttled).toHaveLength(500 - budget);
+    });
+
+    it('counts a repeated unfamiliar token every time, so repeating one cannot get past the budget', async () => {
+      const { service, store } = setup();
+      const find = vi.spyOn(store, 'find');
+      const token = stranger();
+      for (let attempt = 0; attempt < 500; attempt += 1) await outcome(service, token);
+      expect(find).toHaveBeenCalledTimes(budget);
+    });
+
+    it('admits unfamiliar ids again as the window slides', async () => {
+      const { service, store, advance } = setup();
+      const find = vi.spyOn(store, 'find');
+      await flood(service, 2 * budget);
+      expect(find).toHaveBeenCalledTimes(budget);
+      advance(unverifiedBudget.windowMs);
+      await flood(service, 2 * budget);
+      expect(find).toHaveBeenCalledTimes(2 * budget);
+    });
+
+    it('does not charge a malformed token to the budget', async () => {
+      const { service, store } = setup();
+      const find = vi.spyOn(store, 'find');
+      for (let attempt = 0; attempt < 500; attempt += 1) {
+        expect(await service.verify('js.nope')).toEqual({ ok: false, reason: 'malformed', prefix: null });
+      }
+      expect(find).not.toHaveBeenCalled();
+      expect((await flood(service, 2 * budget)).judged).toHaveLength(budget);
+    });
+
+    it('runs at most the configured number of unfamiliar lookups at once and spends no budget on the rest', async () => {
+      const { service, store } = setup();
+      let open!: () => void;
+      const gate = new Promise<void>((resolve) => { open = resolve; });
+      const find = vi.spyOn(store, 'find').mockImplementation(async () => {
+        await gate;
+        return null;
+      });
+      const pending = Array.from({ length: 100 }, () => outcome(service, stranger()));
+      expect(find).toHaveBeenCalledTimes(maxConcurrentUnverified);
+
+      open();
+      const results = await Promise.all(pending);
+      const throttled = results.filter((result) => result instanceof OwnerSessionThrottled);
+      const judged = results.filter((result) => !(result instanceof OwnerSessionThrottled));
+      expect(judged).toHaveLength(maxConcurrentUnverified);
+      for (const verdict of judged) expect(verdict).toMatchObject({ ok: false, reason: 'unknown_session' });
+      expect(throttled).toHaveLength(100 - maxConcurrentUnverified);
+      for (const failure of throttled) {
+        expect((failure as OwnerSessionThrottled).retryAfterSeconds).toBe(throttledRetryAfterSeconds);
+      }
+      expect(find).toHaveBeenCalledTimes(maxConcurrentUnverified);
+
+      // Only the lookups that ran used budget, so the rest of it is still there.
+      expect((await flood(service, 3 * budget)).judged).toHaveLength(budget - maxConcurrentUnverified);
+    });
+
+    it('keeps verifying a recently verified session during a flood and still reads the store for every request', async () => {
+      const { service, store, open } = setup();
+      const created = await open();
+      expect(await service.verify(created.token)).toMatchObject({ ok: true });
+      const find = vi.spyOn(store, 'find');
+      const { judged, throttled } = await flood(service, 200);
+      // The session's own first verification used one unit of the budget.
+      expect(judged).toHaveLength(budget - 1);
+      expect(throttled.length).toBeGreaterThan(0);
+      find.mockClear();
+      for (let attempt = 0; attempt < 100; attempt += 1) {
+        expect(await service.verify(created.token)).toMatchObject({ ok: true });
+      }
+      expect(find).toHaveBeenCalledTimes(100);
+    });
+
+    it('keeps a recently verified session running while a slow flood holds every unfamiliar slot', async () => {
+      const { service, store, open } = setup();
+      const created = await open();
+      expect(await service.verify(created.token)).toMatchObject({ ok: true });
+      const real = store.find.bind(store);
+      let release!: () => void;
+      const gate = new Promise<void>((resolve) => { release = resolve; });
+      vi.spyOn(store, 'find').mockImplementation(async (sessionId) => {
+        if (sessionId !== created.sessionId) await gate;
+        return real(sessionId);
+      });
+      const held = Array.from({ length: maxConcurrentUnverified }, () => outcome(service, stranger()));
+      expect(await outcome(service, stranger())).toBeInstanceOf(OwnerSessionThrottled);
+      expect(await service.verify(created.token)).toMatchObject({ ok: true });
+      release();
+      await Promise.all(held);
+    });
+
+    it('refuses a session that was revoked elsewhere from the very next request, during a flood too', async () => {
+      const { service, store, open } = setup();
+      const created = await open();
+      expect(await service.verify(created.token)).toMatchObject({ ok: true });
+      await flood(service, 2 * budget);
+      expect(await service.verify(created.token)).toMatchObject({ ok: true });
+      // Another replica revokes through the shared store; this one holds no state that could say otherwise.
+      await store.revoke(owner, created.sessionId, new Date(start));
+      expect(await service.verify(created.token)).toEqual({ ok: false, reason: 'revoked', prefix: created.prefix });
+    });
+
+    // The clock stays inside the time to live of the exemption, so only the verdict can end it.
+    const endings: [string, Partial<OwnerSessionServiceOptions>, (world: World, created: CreatedOwnerSession) => Promise<string>][] = [
+      ['revoked', {}, async ({ store }, created) => {
+        await store.revoke(owner, created.sessionId, new Date(start));
+        return created.token;
+      }],
+      ['secret_mismatch', {}, async (_world, created) => `js.${created.sessionId}.${generateOwnerSessionCredential().secret}`],
+      ['idle_expired', { policy: { ...ownerSessionPolicy, idleLifetimeMs: 10 * minute } }, async ({ advance }, created) => {
+        advance(11 * minute);
+        return created.token;
+      }],
+      ['absolute_expired', { policy: { ...ownerSessionPolicy, absoluteLifetimeMs: 10 * minute } }, async ({ advance }, created) => {
+        advance(11 * minute);
+        return created.token;
+      }],
+      ['owner_mismatch', {}, async ({ store }, created) => {
+        const record = (await store.find(created.sessionId))!;
+        vi.spyOn(store, 'find').mockResolvedValueOnce({ ...record, ownerObjectId: otherOwner });
+        return created.token;
+      }],
+      ['unknown_session', {}, async ({ store }, created) => {
+        vi.spyOn(store, 'find').mockResolvedValueOnce(null);
+        return created.token;
+      }],
+    ];
+
+    it.each(endings)('puts a session back under the budget once it verifies as %s', async (reason, options, end) => {
+      const world = setup(options);
+      const created = await world.open();
+      expect(await world.service.verify(created.token)).toMatchObject({ ok: true });
+      const token = await end(world, created);
+      expect(await world.service.verify(token)).toMatchObject({ ok: false, reason });
+      await flood(world.service, 2 * budget);
+      expect(await outcome(world.service, created.token)).toBeInstanceOf(OwnerSessionThrottled);
+    });
+
+    it.each<[string, (service: OwnerSessionService, created: CreatedOwnerSession) => Promise<unknown>]>([
+      ['revokeCurrent', (service, created) => service.revokeCurrent(owner, created.sessionId)],
+      ['revokeAll', (service) => service.revokeAll(owner)],
+    ])('answers a session revoked through %s with its verdict, not a throttle, even while the budget is spent', async (_name, revoke) => {
+      const { service, open } = setup();
+      const created = await open();
+      expect(await service.verify(created.token)).toMatchObject({ ok: true });
+      await flood(service, 2 * budget);
+      await revoke(service, created);
+      expect(await service.verify(created.token)).toEqual({ ok: false, reason: 'revoked', prefix: created.prefix });
+      expect(await outcome(service, created.token)).toBeInstanceOf(OwnerSessionThrottled);
+    });
+
+    it('frees the slot when the store fails and leaves the recently verified sessions alone', async () => {
+      const { service, store, open } = setup();
+      const created = await open();
+      expect(await service.verify(created.token)).toMatchObject({ ok: true });
+      const find = vi.spyOn(store, 'find').mockRejectedValue(new Error('connection reset'));
+      for (let attempt = 0; attempt < 2 * maxConcurrentUnverified; attempt += 1) {
+        expect(await outcome(service, stranger())).toBeInstanceOf(OwnerSessionUnavailable);
+      }
+      expect(await outcome(service, created.token)).toBeInstanceOf(OwnerSessionUnavailable);
+      find.mockRestore();
+      await flood(service, 2 * budget);
+      expect(await service.verify(created.token)).toMatchObject({ ok: true });
+    });
+
+    it('tells a throttled caller when to retry and names nothing about the token', async () => {
+      const { service, advance } = setup();
+      await flood(service, 2 * budget);
+      advance(20_000);
+      const token = stranger();
+      const failure = await outcome(service, token);
+      expect(failure).toBeInstanceOf(OwnerSessionThrottled);
+      const { retryAfterSeconds, message } = failure as OwnerSessionThrottled;
+      expect(retryAfterSeconds).toBe(unverifiedBudget.windowMs / 1000 - 20);
+      const { sessionId, secret } = parseOwnerSessionToken(token)!;
+      for (const text of [message, String(failure), JSON.stringify(failure)]) {
+        expect(text).not.toContain(sessionId);
+        expect(text).not.toContain(secret);
+      }
     });
   });
 

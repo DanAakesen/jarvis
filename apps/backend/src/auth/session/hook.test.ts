@@ -15,6 +15,7 @@ import { registerNutritionExportRoutes } from '../../daily/nutrition-export/rout
 import { createLogger } from '../../logging.js';
 import type { BackendModule } from '../../modules.js';
 import { AuthenticationDenied, dailyNutritionScopes, type TokenVerifier } from '../verify.js';
+import { ownerSessionPolicy } from './config.js';
 import { InMemoryOwnerSessionStore } from './memory-store.js';
 import { OwnerSessionService } from './service.js';
 import type { OwnerSessionRecord } from './store.js';
@@ -151,7 +152,7 @@ type VoiceOutcome =
   | { readonly opened: false; readonly statusCode: number; readonly retryAfter: string | undefined };
 
 async function connectVoice(f: Fixture, token: string): Promise<VoiceOutcome> {
-  await f.app.listen({ host: '127.0.0.1', port: 0 });
+  if (!f.app.server.listening) await f.app.listen({ host: '127.0.0.1', port: 0 });
   const { port } = f.app.server.address() as AddressInfo;
   const socket = new WebSocket(`ws://127.0.0.1:${port}/voice`, ['jarvis.voice.v1', `jarvis.auth.${token}`], { headers: { origin } });
   sockets.push(socket);
@@ -402,7 +403,160 @@ describe('owner session tokens in the authentication hook', () => {
     });
   });
 
+  describe('lookup admission', () => {
+    const { unverifiedBudget, maxConcurrentUnverified, throttledRetryAfterSeconds } = ownerSessionPolicy.lookupAdmission;
+    const budget = unverifiedBudget.max;
+    const stranger = () => generateOwnerSessionCredential().token;
+    const probe = (f: Fixture, token: string, headers: Record<string, string> = {}) =>
+      f.app.inject({ url: '/probe', headers: { ...auth(token), ...headers } });
+
+    // Well-formed tokens of ids nobody holds, as an unauthenticated caller can send them.
+    async function flood(f: Fixture, attempts: number) {
+      const statuses: number[] = [];
+      for (let attempt = 0; attempt < attempts; attempt += 1) statuses.push((await probe(f, stranger())).statusCode);
+      return statuses;
+    }
+
+    it('reads the store for the budget of random well-formed tokens only and answers the rest with 429', async () => {
+      const f = fixture();
+      const find = vi.spyOn(f.store, 'find');
+      const statuses = await flood(f, 200);
+      expect(find).toHaveBeenCalledTimes(budget);
+      expect(statuses.slice(0, budget)).toEqual(Array.from({ length: budget }, () => 401));
+      expect(statuses.slice(budget)).toEqual(Array.from({ length: 200 - budget }, () => 429));
+      expect(f.executed).not.toHaveBeenCalled();
+      expect(f.verifyEntra).not.toHaveBeenCalled();
+    });
+
+    it('answers a throttled request with 429 and Retry-After, never 401, and says nothing about the token', async () => {
+      const f = fixture();
+      await flood(f, budget);
+      const token = stranger();
+      const response = await probe(f, token, { origin });
+      expect(response.statusCode).toBe(429);
+      expect(response.json()).toEqual({ error: 'Too many requests' });
+      const wait = Number(response.headers['retry-after']);
+      expect(Number.isInteger(wait)).toBe(true);
+      expect(wait).toBeGreaterThanOrEqual(1);
+      expect(wait).toBeLessThanOrEqual(unverifiedBudget.windowMs / 1000);
+      expect(response.headers['www-authenticate']).toBeUndefined();
+      expect(response.headers['access-control-allow-origin']).toBe(origin);
+      expect(response.headers.vary).toBe('Origin');
+      expect(f.executed).not.toHaveBeenCalled();
+
+      const credential = parseOwnerSessionToken(token);
+      if (!credential) throw new Error('The random token must be well formed');
+      const surface = `${response.body}${JSON.stringify(response.headers)}${f.logText()}`;
+      for (const secret of [token, credential.sessionId, credential.secret]) expect(surface).not.toContain(secret);
+      const throttled = entries(f, 'owner_session.rejected').filter((record) => record.reason === 'throttled');
+      expect(throttled).toEqual([expect.objectContaining({
+        level: 40, msg: 'owner_session.rejected', reason: 'throttled', method: 'GET', route: '/probe', statusCode: 429,
+      })]);
+      expect(throttled[0]).not.toHaveProperty('sessionPrefix');
+    });
+
+    it('admits unfamiliar tokens again once the window has slid', async () => {
+      const f = fixture();
+      await flood(f, 2 * budget);
+      expect((await probe(f, stranger())).statusCode).toBe(429);
+      f.advance(unverifiedBudget.windowMs);
+      expect((await probe(f, stranger())).statusCode).toBe(401);
+    });
+
+    it('keeps serving a recently verified session during a flood and refuses it from the next request once revoked', async () => {
+      const f = fixture();
+      const token = await mint(f);
+      expect((await probe(f, token)).statusCode).toBe(200);
+      await flood(f, 2 * budget);
+      expect((await probe(f, stranger())).statusCode).toBe(429);
+      for (let attempt = 0; attempt < 20; attempt += 1) expect((await probe(f, token)).statusCode).toBe(200);
+
+      expect((await revokeCurrent(f, token)).statusCode).toBe(204);
+      const refused = await probe(f, token);
+      expect(refused.statusCode).toBe(401);
+      expect(refused.json()).toEqual({ error: 'Unauthorized' });
+      expect(refused.headers['www-authenticate']).toBe('Bearer');
+      expect(f.records()).toContainEqual(expect.objectContaining({
+        msg: 'owner_session.rejected', reason: 'revoked', statusCode: 401, sessionPrefix: prefixOf(token),
+      }));
+      // A dead token is back under the budget, so it no longer reaches the store while the flood lasts.
+      expect((await probe(f, token)).statusCode).toBe(429);
+    });
+
+    it('reads the store for every request of a recently verified session, so nothing is cached', async () => {
+      const f = fixture();
+      const token = await mint(f);
+      expect((await probe(f, token)).statusCode).toBe(200);
+      await flood(f, 2 * budget);
+      const find = vi.spyOn(f.store, 'find');
+      for (let attempt = 0; attempt < 10; attempt += 1) expect((await probe(f, token)).statusCode).toBe(200);
+      expect(find).toHaveBeenCalledTimes(10);
+    });
+
+    it('keeps serving an Entra token during a flood, which never reaches the session lookup', async () => {
+      const f = fixture();
+      await flood(f, 2 * budget);
+      const response = await probe(f, entraOwner);
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toMatchObject({ principal: ownerPrincipal, ownerSession: null });
+      expect((await probe(f, 'eyJ.entra.unknown')).statusCode).toBe(401);
+    });
+
+    it('runs at most the configured number of unfamiliar lookups at once and answers the rest with 429', async () => {
+      const f = fixture();
+      let release!: () => void;
+      const gate = new Promise<void>((resolve) => { release = resolve; });
+      const find = vi.spyOn(f.store, 'find').mockImplementation(async () => {
+        await gate;
+        return null;
+      });
+      const total = 20;
+      const early: number[] = [];
+      const pending = Array.from({ length: total }, () => probe(f, stranger()).then((response) => {
+        early.push(response.statusCode);
+        return response;
+      }));
+      // The lookups that were admitted wait at the gate, so the first answers come from the refused requests.
+      await vi.waitFor(() => expect(early).toHaveLength(total - maxConcurrentUnverified), { timeout: 5_000 });
+      expect(find).toHaveBeenCalledTimes(maxConcurrentUnverified);
+
+      release();
+      const responses = await Promise.all(pending);
+      const refused = responses.filter((response) => response.statusCode === 429);
+      expect(responses.filter((response) => response.statusCode === 401)).toHaveLength(maxConcurrentUnverified);
+      expect(refused).toHaveLength(total - maxConcurrentUnverified);
+      for (const response of refused) {
+        expect(response.json()).toEqual({ error: 'Too many requests' });
+        expect(response.headers['retry-after']).toBe(String(throttledRetryAfterSeconds));
+        expect(response.headers['www-authenticate']).toBeUndefined();
+      }
+      expect(find).toHaveBeenCalledTimes(maxConcurrentUnverified);
+      expect(f.executed).not.toHaveBeenCalled();
+    });
+
+    it('does not throttle a malformed credential, which never reaches the store, and does not charge it to the budget', async () => {
+      const f = fixture();
+      const find = vi.spyOn(f.store, 'find');
+      for (let attempt = 0; attempt < 2 * budget; attempt += 1) expectUnauthorized(f, await probe(f, 'js.short.short'));
+      expect(find).not.toHaveBeenCalled();
+      expect((await flood(f, 2 * budget)).filter((status) => status === 401)).toHaveLength(budget);
+    });
+  });
+
   describe('with the feature switch off', () => {
+    it('never throttles and never reads the store, however many session tokens arrive', async () => {
+      const f = fixture({ enabled: false });
+      const find = vi.spyOn(f.store, 'find');
+      for (let attempt = 0; attempt < 3 * ownerSessionPolicy.lookupAdmission.unverifiedBudget.max; attempt += 1) {
+        const response = await f.app.inject({ url: '/probe', headers: auth(generateOwnerSessionCredential().token) });
+        expect(response.statusCode).toBe(401);
+        expect(response.headers['retry-after']).toBeUndefined();
+      }
+      expect(find).not.toHaveBeenCalled();
+      expect(f.executed).not.toHaveBeenCalled();
+      expect(entries(f, 'owner_session.rejected').every((record) => record.reason === 'disabled')).toBe(true);
+    });
+
     it('refuse every session token, even one that exists, without reading the store', async () => {
       const f = fixture({ enabled: false });
       const find = vi.spyOn(f.store, 'find');
@@ -580,6 +734,22 @@ describe('owner session tokens in the authentication hook', () => {
       vi.spyOn(f.store, 'find').mockRejectedValue(new Error(leakMarker));
       expect(await connectVoice(f, token)).toEqual({ opened: false, statusCode: 503, retryAfter: '5' });
       expect(f.logText()).not.toContain(leakMarker);
+    });
+
+    it('answers 429 with Retry-After once a flood has used up the budget, and still opens for a recently verified session', async () => {
+      const f = fixture({ modules: [coreModule, voice] });
+      const token = await mint(f);
+      expect(await connectVoice(f, token)).toMatchObject({ opened: true });
+      for (let attempt = 0; attempt < ownerSessionPolicy.lookupAdmission.unverifiedBudget.max; attempt += 1) {
+        await f.app.inject({ url: '/probe', headers: auth(generateOwnerSessionCredential().token) });
+      }
+      expect(await connectVoice(f, generateOwnerSessionCredential().token)).toEqual({
+        opened: false, statusCode: 429, retryAfter: expect.stringMatching(/^[1-9]\d*$/),
+      });
+      expect(f.records()).toContainEqual(expect.objectContaining({
+        msg: 'owner_session.rejected', reason: 'throttled', route: '/voice', statusCode: 429,
+      }));
+      expect(await connectVoice(f, token)).toMatchObject({ opened: true });
     });
   });
 

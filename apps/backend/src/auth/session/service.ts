@@ -1,4 +1,5 @@
 import type { UserPrincipal } from '../verify.js';
+import { SessionLookupAdmission } from './admission.js';
 import { ownerSessionPolicy, type OwnerSessionPolicy } from './config.js';
 import { SlidingWindowRateLimiter, type RateDecision } from './rate-limit.js';
 import type { OwnerSessionRecord, OwnerSessionStore } from './store.js';
@@ -12,6 +13,17 @@ export class OwnerSessionUnavailable extends Error {
   constructor(options?: { cause?: unknown }) {
     super('Owner session store unavailable', options);
     this.name = 'OwnerSessionUnavailable';
+  }
+}
+
+/**
+ * A lookup was refused before the store was read, because too many lookups of unfamiliar ids are running or
+ * were run. Callers answer 429, never 401: the token was not judged, so the client must keep it.
+ */
+export class OwnerSessionThrottled extends Error {
+  constructor(readonly retryAfterSeconds: number) {
+    super('Owner session lookup throttled');
+    this.name = 'OwnerSessionThrottled';
   }
 }
 
@@ -38,6 +50,7 @@ export type OwnerSessionVerdict =
   | { readonly ok: false; readonly reason: OwnerSessionRejection; readonly prefix: string | null };
 
 export interface OwnerSessionVerifier {
+  /** Rejects with OwnerSessionThrottled when admission refuses the lookup and with OwnerSessionUnavailable when the store fails. */
   verify(token: string): Promise<OwnerSessionVerdict>;
 }
 
@@ -76,6 +89,7 @@ export class OwnerSessionService implements OwnerSessionVerifier {
   private readonly now: () => Date;
   private readonly random: ((size: number) => Buffer) | undefined;
   private readonly createLimiter: SlidingWindowRateLimiter;
+  private readonly admission: SessionLookupAdmission;
 
   constructor(options: OwnerSessionServiceOptions) {
     this.policy = options.policy ?? ownerSessionPolicy;
@@ -85,6 +99,7 @@ export class OwnerSessionService implements OwnerSessionVerifier {
     this.now = options.now ?? (() => new Date());
     this.random = options.random;
     this.createLimiter = new SlidingWindowRateLimiter(this.policy.createLimits, this.now);
+    this.admission = new SessionLookupAdmission(this.policy.lookupAdmission, this.now);
   }
 
   /** True when the object id belongs to the single configured owner. */
@@ -133,6 +148,21 @@ export class OwnerSessionService implements OwnerSessionVerifier {
     const credential = parseOwnerSessionToken(token);
     if (!credential) return { ok: false, reason: 'malformed', prefix: null };
     const { sessionId, secret } = credential;
+    // Admission comes before any store access, so a caller without a valid session cannot cause database work.
+    const admission = this.admission.admit(sessionId);
+    if (!admission.admitted) throw new OwnerSessionThrottled(admission.retryAfterSeconds);
+    try {
+      const verdict = await this.lookup(sessionId, secret);
+      if (verdict.ok) this.admission.verified(sessionId);
+      else this.admission.forget(sessionId);
+      return verdict;
+    } finally {
+      admission.release();
+    }
+  }
+
+  // Reads the store and judges the credential. A store failure propagates and leaves the admission state alone.
+  private async lookup(sessionId: string, secret: string): Promise<OwnerSessionVerdict> {
     const prefix = ownerSessionPrefix(sessionId);
     const record = await this.guarded(() => this.store.find(sessionId));
     if (!record) {

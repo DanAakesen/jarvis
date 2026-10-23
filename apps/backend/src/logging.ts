@@ -120,7 +120,7 @@ const authDenialReasons = new Set([
 // Why an owner session request was refused; mirrors ownerSessionAuditReasons in auth/session/audit.ts.
 const ownerSessionReasons = new Set([
   'disabled', 'malformed', 'unknown_session', 'secret_mismatch', 'revoked', 'idle_expired', 'absolute_expired',
-  'owner_mismatch', 'store_unavailable', 'rate_limited', 'forbidden',
+  'owner_mismatch', 'store_unavailable', 'throttled', 'rate_limited', 'forbidden',
 ]);
 const heartbeatDecisions = new Set([
   'queued', 'running', 'completed', 'crashed', 'idle_expired', 'needs_attention',

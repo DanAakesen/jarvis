@@ -45,16 +45,39 @@ Operating notes:
   extended at most once an hour; a 30-day cap; at most 10 active sessions per
   owner (creating one more revokes the least recently used); 5 creations per
   minute and 30 per hour; dead rows purged 30 days after revocation or expiry.
-  The creation limit is in process, so it applies per replica.
+  The creation limit and the lookup admission below are in process, so they
+  apply per replica.
 - A client sees only a plain 401 for any rejected session. The log has
   `owner_session.rejected` with a reason (`malformed`, `unknown_session`,
   `secret_mismatch`, `revoked`, `absolute_expired`, `idle_expired`,
-  `owner_mismatch`, `disabled`, `store_unavailable`, `rate_limited` or
-  `forbidden`) and the first eight characters of the token. A session past both
-  the cap and its idle expiry is logged as `absolute_expired`.
+  `owner_mismatch`, `disabled`, `store_unavailable`, `throttled`, `rate_limited`
+  or `forbidden`) and, when a lookup judged the token, the first eight characters
+  of the token. A session past both the cap and its idle expiry is logged as
+  `absolute_expired`.
+- Lookup admission keeps callers without a session away from SQL. A well-formed
+  `js.` token for a session id this replica has not recently verified spends a
+  budget of 30 lookups per minute, at most 8 such lookups run at once, and at
+  most 64 lookups of any kind. Over a limit the answer is a 429 with
+  `Retry-After` (1 to 60 seconds for the budget, 5 for a cap), the body
+  `{"error":"Too many requests"}` and the log reason `throttled`. It is never a
+  401, so a client keeps its session and retries. Up to 32 ids that verified in
+  the last 30 minutes skip the budget, so the owner's own traffic does not
+  throttle itself, but each request still reads the store and compares the
+  secret: a revocation applies from the next request, and an id refused for any
+  reason leaves the set. The set is in memory, so a restart empties it. The limit
+  is keyed on the session id, never on the client address, which the backend does
+  not trust. With the switch off none of this runs. The numbers are in
+  `lookupAdmission` in `config.ts`.
+- Reading `throttled` lines: a burst with no owner complaint is a flood of random
+  tokens being shed as designed. The budget bounds database work but not wake-up,
+  so a steady stream just under it can still keep a paused serverless database
+  awake. A replica that has just started also throttles a burst of more than 8
+  parallel first requests, which succeed on retry. While a flood lasts, a session
+  that replica has not verified yet can wait up to a minute; the owner can sign in
+  with Entra again, which never reaches the session lookup.
 - A session-store outage is a 503 with `Retry-After`, never a 401, so a client
   keeps its session and retries. Browsers cannot read `Retry-After` from this API
-  because CORS does not expose it.
+  because CORS does not expose it; the same holds for the throttled 429.
 - `POST /auth/session` takes no body or a JSON object `{"deviceLabel": "..."}`.
   A client must send `{}` or nothing: an empty body with a JSON content type is a
   400.

@@ -13,7 +13,7 @@ import {
 } from './verify.js';
 import { auditOwnerSessionRefreshFailed, auditOwnerSessionRejected } from './session/audit.js';
 import { ownerSessionPolicy } from './session/config.js';
-import { OwnerSessionUnavailable, type OwnerSessionContext, type OwnerSessionVerifier } from './session/service.js';
+import { OwnerSessionThrottled, OwnerSessionUnavailable, type OwnerSessionContext, type OwnerSessionVerifier } from './session/service.js';
 import { ownerSessionTokenPrefix } from './session/token.js';
 
 declare module 'fastify' {
@@ -162,10 +162,12 @@ export function installAuthentication<Logger extends FastifyBaseLogger>(app: Fas
         request.principal = principal;
       }
     } catch (error) {
+      const throttled = error instanceof OwnerSessionThrottled;
       const unavailable = error instanceof OwnerSessionUnavailable;
-      const statusCode = unavailable ? 503 : error instanceof AuthenticationDenied ? error.statusCode : 401;
+      const statusCode = throttled ? 429 : unavailable ? 503 : error instanceof AuthenticationDenied ? error.statusCode : 401;
       const path = (request.raw.url ?? '').split('?')[0]?.slice(0, 200);
-      if (unavailable) auditOwnerSessionRejected(request, 'store_unavailable', { statusCode });
+      if (throttled) auditOwnerSessionRejected(request, 'throttled', { statusCode });
+      else if (unavailable) auditOwnerSessionRejected(request, 'store_unavailable', { statusCode });
       else request.log.warn({ statusCode, reason, method: request.method, route: path }, 'request.auth_denied');
       // Denials precede the CORS hook; let the approved browser read 401/403.
       if (origin === localWebOrigin || (config.staticWebAppOrigin !== undefined && origin === config.staticWebAppOrigin)) {
@@ -175,6 +177,11 @@ export function installAuthentication<Logger extends FastifyBaseLogger>(app: Fas
         const metadata = request.routeOptions.config?.jarvisDailyMcp === true && request.routeOptions.url === dailyMcpPath
           ? request.routeOptions.config.jarvisDailyMcpMetadataUrl : undefined;
         reply.header('WWW-Authenticate', metadata ? `Bearer resource_metadata="${metadata}"` : 'Bearer');
+      }
+      if (error instanceof OwnerSessionThrottled) {
+        // The token was not judged: this replica is shedding lookups of ids it does not know. Retry, never sign out.
+        reply.header('Retry-After', String(error.retryAfterSeconds));
+        return reply.code(429).send({ error: 'Too many requests' });
       }
       if (unavailable) {
         // The session store could not be read. Tell the client to retry instead of treating it as a sign-out.
