@@ -233,7 +233,24 @@ describe('committed domain schema (groups 1-8)', () => {
       expect(await store.hasTaskReminderNear(candidate.taskIdentity, fireAt, 5 * 60_000)).toBe(true);
 
       const proactive = createProactiveStore(rollbackPool, owner);
+      const ordinaryItem = await proactive.items.upsertFinding({
+        dedupeKey: 'integration:ordinary-finding',
+        title: 'Synthetic ordinary finding',
+        body: 'Ordinary proactive finding.',
+        category: 'todo',
+        suggestionScope: 'personal',
+        urgency: 'normal',
+        dueAt: null,
+        evidence: [],
+        runId: null,
+        language: 'en',
+      });
+      expect(ordinaryItem.ownerRequested).toBeUndefined();
+      expect(ordinaryItem.dueAt).toBeNull();
+      expect(await proactive.items.get(ordinaryItem.id)).toMatchObject({ id: ordinaryItem.id, dueAt: null });
+
       await proactive.settings.patch({ categories: { todo: false }, suggestionScope: 'work' });
+      expect(await proactive.items.get(ordinaryItem.id)).toBeUndefined();
       const item = await proactive.items.upsertFinding({
         dedupeKey: 'integration:owner-reminder',
         title: 'Synthetic task',
@@ -249,6 +266,21 @@ describe('committed domain schema (groups 1-8)', () => {
       });
       expect(await proactive.items.get(item.id)).toMatchObject({ ownerRequested: true });
       expect(await createProactiveStore(rollbackPool, otherOwner).items.get(item.id)).toBeUndefined();
+      const updated = await proactive.items.upsertFinding({
+        dedupeKey: 'integration:owner-reminder',
+        title: 'Synthetic task',
+        body: 'Updated owner-requested reminder.',
+        category: 'todo',
+        suggestionScope: 'personal',
+        ownerRequested: true,
+        urgency: 'normal',
+        dueAt: null,
+        evidence: [],
+        runId: null,
+        language: 'en',
+      });
+      expect(updated).toMatchObject({ id: item.id, ownerRequested: true, dueAt: null });
+      expect(await proactive.items.get(updated.id)).toMatchObject({ id: item.id, ownerRequested: true, dueAt: null });
 
       const down = await readDownMigration('0065_owner_reminder_schedules.sql');
       const newer = await revertNewerThan(rollbackPool, committed, down.name);

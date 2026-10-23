@@ -450,7 +450,8 @@ export function createProactiveStore(pool: sql.ConnectionPool, ownerObjectId: st
                 (id, owner_object_id, kind, title, body, delivery_state, category, suggestion_scope, urgency, due_at,
                  owner_requested, evidence_json, state, run_id, language, dedupe_key)
               OUTPUT inserted.${itemSelect().replaceAll(', ', ', inserted.').replaceAll('\n    ', '\n    inserted.')}
-              VALUES (@id, @owner, N'finding', @title, @body, N'queued', @category, @ownerRequested, @suggestionScope, @urgency, @dueAt,
+              VALUES (@id, @owner, N'finding', @title, @body, N'queued', @category, @suggestionScope, @urgency, @dueAt,
+                @ownerRequested,
                 @evidence, @state, @runId, @language, @key);`);
           const row = saved.recordset[0];
           if (!row) throw new Error('Finding could not be saved');
