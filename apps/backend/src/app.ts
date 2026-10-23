@@ -10,6 +10,7 @@ import { createLogger, safeErrorFields } from './logging.js';
 import { installAuthentication } from './auth/hook.js';
 import { registerOwnerSessionRoutes } from './auth/session/routes.js';
 import type { OwnerSessionService } from './auth/session/service.js';
+import { OwnerSessionConnectionRegistry } from './auth/session/connections.js';
 import type { TokenVerifier } from './auth/verify.js';
 import { coreModule } from './core/index.js';
 import { createEventHub } from './core/event-hub.js';
@@ -133,6 +134,7 @@ declare module 'fastify' {
   }
   interface FastifyInstance {
     ownerObjectId: string;
+    ownerSessionConnections: OwnerSessionConnectionRegistry | null;
     databaseStatus: () => boolean;
     projectStore: ProjectStore | null;
     projectPolicyChanged: (projectId: string) => Promise<void>;
@@ -203,6 +205,7 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
   app.decorate('isStopping', false);
   app.addHook('preClose', async () => {
     app.isStopping = true;
+    app.ownerSessionConnections?.close();
     // Stop accepting connections before draining streams; onClose runs only after HTTP drains.
     if (app.server.listening) app.server.close();
     const results = await Promise.allSettled([...app.shutdownConnections].map(async (close) => close()));
@@ -238,6 +241,9 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
     throw new ConfigurationError('JARVIS_OWNER_SESSION_ENABLED requires the owner session service');
   }
   const ownerSessions = config.ownerSessionEnabled ? options.ownerSessions : undefined;
+  app.decorate('ownerSessionConnections', ownerSessions
+    ? new OwnerSessionConnectionRegistry({ verifier: ownerSessions })
+    : null);
   installAuthentication(app, config, options.auth, options.nutritionExportAuth, options.healthUpload?.enabled === true, ownerSessions);
   app.decorate('ownerObjectId', config.auth.ownerObjectId);
   app.decorate('awayModeStore', options.awayModeStore ?? null);

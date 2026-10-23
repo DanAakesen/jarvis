@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildApp } from '../app.js';
 import { loadConfig } from '../config.js';
 import { AuthenticationDenied, type TokenVerifier } from '../auth/verify.js';
+import { InMemoryOwnerSessionStore } from '../auth/session/memory-store.js';
+import { OwnerSessionService } from '../auth/session/service.js';
 import { createEventHub } from '../core/event-hub.js';
 import type {
   RunningTaskContextSnapshot, TaskController, TaskDetail, TaskEventMessage, TaskRecord, TaskStore,
@@ -78,6 +80,7 @@ function fixture(
   }),
   taskController?: TaskController,
   githubAppTokenIssuer?: GitHubAppTokenIssuer,
+  ownerSessions?: OwnerSessionService,
 ) {
   const eventHub = createEventHub<TaskEventMessage>();
   const submissions = new Map<string, { fingerprint: string; statusCode: number | null; response: unknown }>();
@@ -125,7 +128,7 @@ function fixture(
     readComments: vi.fn(async () => []),
     readAgentRules: vi.fn(async () => ''),
   } as unknown as GitHubIssueClient;
-  const app = buildApp(config, undefined, {
+  const app = buildApp(ownerSessions ? { ...config, ownerSessionEnabled: true } : config, undefined, {
     taskStore: store,
     githubIssueClient: github,
     projectStore: { list: vi.fn(async () => [{
@@ -140,6 +143,7 @@ function fixture(
     factoryBoardReader: { read: vi.fn(), searchIssues: vi.fn(async () => ({ numbers: [], incomplete: false })) },
     eventHub,
     auth,
+    ...(ownerSessions ? { ownerSessions } : {}),
   });
   apps.push(app);
   return { app, store, github, eventHub };
@@ -599,6 +603,64 @@ describe('factory tasks API', () => {
       url: '/factory/tasks/9223372036854775808/events', headers,
     })).statusCode).toBe(400);
     expect(store.getEventsAfter).not.toHaveBeenCalled();
+  });
+
+  it('closes session-authenticated Factory streams on revoke-all without closing Entra streams', async () => {
+    const sessions = new OwnerSessionService({
+      store: new InMemoryOwnerSessionStore(),
+      ownerObjectId: config.auth.ownerObjectId,
+      tenantId: config.auth.tenantId,
+    });
+    const session = await sessions.create({
+      ownerObjectId: config.auth.ownerObjectId, displayName: 'Dan', deviceLabel: null,
+    });
+    const { app, eventHub } = fixture({}, undefined, undefined, undefined, sessions);
+    const address = await app.listen({ port: 0, host: '127.0.0.1' });
+    const controller = new AbortController();
+    const sessionHeaders = { authorization: ['Bearer', session.token].join(' ') };
+    const [sessionResponse, entraResponse] = await Promise.all([
+      fetch(`${address}/factory/tasks/42/events`, { headers: sessionHeaders, signal: controller.signal }),
+      fetch(`${address}/factory/tasks/42/events`, { headers, signal: controller.signal }),
+    ]);
+    const sessionReader = sessionResponse.body!.getReader();
+    const entraReader = entraResponse.body!.getReader();
+    const readUntilReady = async (reader: ReadableStreamDefaultReader<Uint8Array>) => {
+      let text = '';
+      while (!text.includes('event: ready')) {
+        const chunk = await reader.read();
+        if (chunk.done) throw new Error('Factory event stream ended before replay completed');
+        text += new TextDecoder().decode(chunk.value);
+      }
+    };
+
+    try {
+      await Promise.all([readUntilReady(sessionReader), readUntilReady(entraReader)]);
+      const revoked = await app.inject({ method: 'DELETE', url: '/auth/sessions', headers: sessionHeaders });
+      expect(revoked.statusCode).toBe(200);
+      expect((await sessionReader.read()).done).toBe(true);
+
+      eventHub.publish({
+        id: '20',
+        taskId: '42',
+        type: 'progress',
+        summary: 'Still connected',
+        payload: null,
+        payloadTruncated: false,
+        source: 'runner',
+        at: '2026-10-23T00:00:00.000Z',
+      });
+      let entraFrame = '';
+      while (!entraFrame.includes('id: 20')) {
+        const chunk = await entraReader.read();
+        if (chunk.done) throw new Error('Entra event stream ended after session revoke');
+        entraFrame += new TextDecoder().decode(chunk.value);
+      }
+      expect(entraFrame).toContain('Still connected');
+    } finally {
+      controller.abort();
+      await Promise.all([sessionReader.cancel().catch(() => {}), entraReader.cancel().catch(() => {})]);
+      await app.close();
+    }
   });
 
   it('replays after Last-Event-ID without duplicating a concurrently published event and sends heartbeats', async () => {
