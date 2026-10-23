@@ -1,5 +1,34 @@
 # Decisions
 
+## Owner session switch enabled in production (#1217; 23 October 2026)
+
+Decided, on the owner's explicit approval on 23 October 2026:
+
+- **Enable `JARVIS_OWNER_SESSION_ENABLED` in production.** The `infra/main.bicep`
+  pin and its pin test change from `false` to `true` in one reviewed change. The
+  code default stays `false`, so local runs, tests and other environments are
+  unchanged. Migration 0064, the backend (#1217), the web client (#1220) and the
+  four follow-up fixes (#1222 to #1225) were deployed with the switch off first.
+- **Accept the documented residual risks.** The session secret is forwarded to the
+  hosted chat agent as its delegated authorization, exactly as an Entra token is.
+  Because it lasts days rather than an hour, Foundry retention of the invocation
+  body is the main residual risk and cannot be verified from code; a derived
+  short-lived delegation token remains the follow-up option. There is no
+  Content-Security-Policy by design, so a script-readable token in `localStorage`
+  would be exposed to script injection (a report-only policy is a later item). A
+  leaked Entra access token can mint a session without a further sign-in step. A
+  push endpoint registered with a session survives that session's revocation.
+  Limits are per replica.
+- **Rollout and rollback.** A device that last tried to mint a session while the
+  switch was off waits up to six hours before its next attempt; an explicit Sign
+  in clears the wait. Roll back by setting the pin and its test to `false`: from
+  the next request every session token is refused, and the next backend start
+  attempts to revoke every stored session. Settings and `DELETE /auth/sessions`
+  revoke sessions at once without a deployment.
+
+Not verified: minting, restore and revocation on a real device with the switch
+on, and Foundry payload retention, remain owner acceptance gates (#1217).
+
 ## Web owner-session wake and fallback (#1225; 23 October 2026)
 
 Decided:
