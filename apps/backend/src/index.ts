@@ -143,6 +143,7 @@ import { SqlHealthProcessor } from './daily/health/processor.js';
 import { SqlHealthCapabilities } from './daily/health-upload/sql-capabilities.js';
 import { OwnerSessionService } from './auth/session/service.js';
 import { createOwnerSessionStore } from './database/owner-session-store.js';
+import { ownerSessionBootRevokeTimeoutMs, startOwnerSessionBootRevoke } from './auth/session/boot-revoke.js';
 
 try {
   const config = loadConfig();
@@ -174,6 +175,9 @@ try {
   if (config.ownerSessionEnabled && !database) {
     throw new ConfigurationError('JARVIS_OWNER_SESSION_ENABLED requires the existing SQL pool');
   }
+  const ownerSessionBootRevokeStore = database && !config.ownerSessionEnabled
+    ? createOwnerSessionStore(database.pool, { revokeAllTimeoutMs: ownerSessionBootRevokeTimeoutMs })
+    : undefined;
   const ownerSessions = config.ownerSessionEnabled && database
     ? new OwnerSessionService({
       store: createOwnerSessionStore(database.pool),
@@ -1342,6 +1346,20 @@ try {
   try {
     if (database) {
       await database.initialize();
+      if (!config.ownerSessionEnabled) {
+        startOwnerSessionBootRevoke({
+          enabled: config.ownerSessionEnabled,
+          ...(ownerSessionBootRevokeStore ? { store: ownerSessionBootRevokeStore } : {}),
+          ownerObjectId: config.auth.ownerObjectId,
+          log: (fields) => {
+            if (fields.outcome === 'failed' || fields.outcome === 'table_missing') {
+              logger.warn(fields, 'owner_session.boot_revoke');
+            } else {
+              logger.info(fields, 'owner_session.boot_revoke');
+            }
+          },
+        });
+      }
       await memoryStore?.initialize();
       await conversationStore?.initialize?.();
       await vaultIndexStore?.initialize();

@@ -937,6 +937,11 @@ resource backendApp 'Microsoft.App/containerApps@2024-03-01' = if (deployBackend
               value: 'true'
             }
             {
+              // Enabling requires the owner's explicit approval and a matching change to the pin test in the same reviewed change.
+              name: 'JARVIS_OWNER_SESSION_ENABLED'
+              value: 'false'
+            }
+            {
               // English voice route; without it /voice is never registered (L102).
               name: 'VOICE_LIVE_ENDPOINT'
               value: 'wss://${foundryAccount.name}.services.ai.azure.com/voice-live/realtime?api-version=2026-07-15'

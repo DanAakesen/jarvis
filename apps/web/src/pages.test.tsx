@@ -16,6 +16,7 @@ function signInSession(state: 'checking' | 'signing-in', hasOwnerSession: boolea
     signOutAllDevices: async () => {},
     hasOwnerSession,
     getAccessToken: async () => 'fixture-token',
+    getEntraAccessToken: async () => 'fixture-token',
     client: {} as SignInSession['client'],
   };
 }

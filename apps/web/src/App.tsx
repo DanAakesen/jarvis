@@ -931,7 +931,8 @@ function SettingsRoute({ config, session, nutritionKey, pushEnabled, proactiveEn
       )}
       {...(nutritionKey ? { nutrition: <NutritionTargetsSettings key={nutritionKey} backendUrl={config.backendUrl} getAccessToken={session.getAccessToken} /> } : {})}
       {...(nutritionKey ? { trainingTargets: <TrainingTargetsSettings key={nutritionKey} backendUrl={config.backendUrl} getAccessToken={session.getAccessToken} /> } : {})}
-      {...(nutritionKey ? { healthUpload: <HealthUploadSettings backendUrl={config.backendUrl} getAccessToken={session.getAccessToken} /> } : {})}
+      {...(nutritionKey ? { healthUpload: <HealthUploadSettings backendUrl={config.backendUrl}
+        getAccessToken={session.getAccessToken} getEntraAccessToken={session.getEntraAccessToken} /> } : {})}
       {...(proactiveEnabled ? { proactive: <ProactiveSettings backendUrl={config.backendUrl}
         getAccessToken={session.getAccessToken} signIn={session.signIn} /> } : {})}
       memory={<MemorySettings backendUrl={config.backendUrl} getAccessToken={session.getAccessToken} />}

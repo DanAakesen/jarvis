@@ -28,6 +28,68 @@ The backend, infrastructure and switch default remain unchanged. Browser tests
 use synthetic responses; live Microsoft sign-in and the enabled production
 switch remain unverified.
 
+## Close owner-session connections on revoke (23 October 2026; #1223)
+
+The owner-session backend now enforces revocation for already-open privileged
+connections, not only the next HTTP request.
+
+Decided:
+
+- Track only session-authenticated `/voice`, `/voice/da`, `/now/events` and
+  `/factory/tasks/:id/events` connections in a replica-local registry keyed by
+  session id. Each entry holds only the session id and close callback, never a
+  token, secret or hash.
+- Close matching connections after a successful local revoke; close all tracked
+  session connections after revoke-all. Voice uses WebSocket close code 1008 with
+  a generic reason; SSE responses end cleanly. Entra connections are not tracked.
+- Recheck each distinct open session about every five minutes with jitter through
+  a read-only store lookup that does not extend idle expiry or use lookup
+  admission. Close only when the session is definitely revoked, expired or
+  missing; store errors retain connections until the next check.
+- Clear the unref'd timer and registrations during server shutdown. When the
+  switch is off, the registry is not composed.
+
+Revocation takes effect on open connections within seconds on the replica that
+handles it and within about five minutes elsewhere. Voice and stream route tests,
+registry tests with a controlled clock/store, and web voice expiry tests cover the
+change; live multi-replica timing remains unverified.
+
+## Revoke owner sessions on off-mode startup (23 October 2026; #1224)
+
+Turning the owner-session switch off stops verification from the next request.
+With SQL and the owner id configured, each off-mode process start makes one
+background, best-effort call to the existing `revokeAll` store method after SQL
+initialization; without SQL, there is no boot revoke. It is bounded to about a
+minute and never allowed to delay or fail startup. This may wake a paused
+serverless database; it does not poll or retry. A deployment overlap can let an
+off revision revoke sessions minted by an on revision, in which case the owner
+signs in again. Infrastructure pins the switch to `false`; enabling requires the
+owner's explicit approval and a matching pin-test change.
+
+## Health credential and owner-session hardening (#1222; 23 October 2026)
+
+An owner session is revocable and shorter-lived than the 365-day Health upload
+credential. Allowing that session to create, rotate or revoke the credential
+would let a stolen session outlive its own revocation boundary. The status read
+does not reveal a secret and remains available to keep Settings useful.
+
+Decided:
+
+- Only an Entra owner token may create, rotate or revoke the Health upload
+  credential. Owner sessions may read its state and expiry; the backend rejects
+  their three POST actions before touching the capability store.
+- Settings keeps the existing session-first token for status, and obtains an
+  Entra token for mutations. If Microsoft requires interaction, the UI displays
+  that a fresh sign-in is needed before starting the redirect.
+- Treat the exact `js.<22 base64url>.<43 base64url>` owner-session token as a
+  secret in every existing content scrubber. Newly created session ids enter the
+  verified admission set only after the store write succeeds.
+- Keep `JARVIS_OWNER_SESSION_ENABLED` default-off and preserve the Entra-only
+  flow when no session is held.
+
+Not verified: live Microsoft sign-in and the enabled production switch remain
+owner acceptance gates.
+
 ## Web owner-session client (#1220; 23 October 2026)
 
 The backend owner session is now consumed by the web client while
@@ -168,7 +230,8 @@ The owner asked to stop signing in many times a day on web, phone and localhost.
 Microsoft caps refresh tokens for a browser app at 24 hours (#1214 keeps what it
 allows), so the backend can now exchange one Entra sign-in for its own revocable
 session. This is the backend half. It ships behind `JARVIS_OWNER_SESSION_ENABLED`,
-default off, which also works as a kill switch; the web half is a separate change.
+default off, which stops verification at once and triggers a background revoke
+at the next process start; the web half is a separate change.
 
 Decided:
 
@@ -200,7 +263,8 @@ Decided:
   with no reason in the response; the log carries a reason category and the first
   eight characters of the token. A store outage is a 503 with `Retry-After`, so a
   client keeps a good session and retries, and it is never an allow. With the
-  switch off the hook has no verifier, so even a row still in the table is a 401.
+  switch off the hook has no verifier, so even a row still in the table is a 401;
+  the next off-mode process start attempts to revoke active rows.
 - **Contract and limiter.** The response shape stays in the backend; nothing is
   added to `packages/contracts` until the web half consumes it. The creation
   limit (5 per minute, 30 per hour) is in process, so it is per replica; it

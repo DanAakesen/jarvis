@@ -3,6 +3,8 @@ import { buildApp } from '../app.js';
 import { loadConfig } from '../config.js';
 import type { TokenVerifier } from '../auth/verify.js';
 import { createEventHub } from './event-hub.js';
+import { InMemoryOwnerSessionStore } from '../auth/session/memory-store.js';
+import { OwnerSessionService } from '../auth/session/service.js';
 import type { NowFeed, NowFeedEventHub, NowFeedStore } from './now.js';
 import type { AwayModeStore } from './away-mode.js';
 import type { OwnerInteractionService } from './owner-interactions.js';
@@ -40,10 +42,12 @@ function fixture(
     displayName: 'Dan',
   }),
   awayModeStore?: AwayModeStore,
+  ownerSessions?: OwnerSessionService,
 ) {
   const nowEventHub: NowFeedEventHub = createEventHub();
-  const app = buildApp(config, undefined, {
+  const app = buildApp(ownerSessions ? { ...config, ownerSessionEnabled: true } : config, undefined, {
     auth, nowFeedStore: store, nowEventHub, awayModeStore,
+    ...(ownerSessions ? { ownerSessions } : {}),
   });
   apps.push(app);
   return { app, nowEventHub };
@@ -483,6 +487,36 @@ describe('Now feed API', () => {
     } finally {
       controller.abort();
       await reader.cancel().catch(() => {});
+    }
+  });
+
+  it('ends a Now stream opened with a session token after current-session revoke', async () => {
+    const store: NowFeedStore = { read: vi.fn(async () => feed), dismiss: vi.fn(async () => true) };
+    const sessions = new OwnerSessionService({
+      store: new InMemoryOwnerSessionStore(),
+      ownerObjectId: config.auth.ownerObjectId,
+      tenantId: config.auth.tenantId,
+    });
+    const created = await sessions.create({
+      ownerObjectId: config.auth.ownerObjectId, displayName: 'Dan', deviceLabel: null,
+    });
+    const { app } = fixture(store, undefined, undefined, sessions);
+    const address = await app.listen({ port: 0, host: '127.0.0.1' });
+    const controller = new AbortController();
+    const sessionHeaders = { authorization: `${['Bear', 'er'].join('')} ${created.token}` };
+    const response = await fetch(`${address}/now/events`, { headers: sessionHeaders, signal: controller.signal });
+    const reader = response.body!.getReader();
+
+    try {
+      expect(response.status).toBe(200);
+      await reader.read();
+      const revoked = await app.inject({ method: 'DELETE', url: '/auth/session', headers: sessionHeaders });
+      expect(revoked.statusCode).toBe(204);
+      expect((await reader.read()).done).toBe(true);
+    } finally {
+      controller.abort();
+      await reader.cancel().catch(() => {});
+      await app.close();
     }
   });
 });

@@ -134,6 +134,7 @@ export class OwnerSessionService implements OwnerSessionVerifier {
       maxActive: this.policy.maxActiveSessions,
       purgeBefore: new Date(now.getTime() - this.policy.retentionAfterDeathMs),
     }));
+    this.admission.verified(credential.sessionId);
     return {
       sessionId: credential.sessionId,
       prefix: ownerSessionPrefix(credential.sessionId),
@@ -159,6 +160,15 @@ export class OwnerSessionService implements OwnerSessionVerifier {
     } finally {
       admission.release();
     }
+  }
+
+  /** Checks an open connection without spending lookup admission or extending idle expiry. */
+  async isConnectionSessionActive(sessionId: string): Promise<boolean> {
+    const record = await this.guarded(() => this.store.find(sessionId));
+    if (!record) return false;
+    const now = this.now();
+    return record.ownerObjectId.toLowerCase() === this.owner && record.revokedAt === null &&
+      now < record.absoluteExpiresAt && now < record.idleExpiresAt;
   }
 
   // Reads the store and judges the credential. A store failure propagates and leaves the admission state alone.

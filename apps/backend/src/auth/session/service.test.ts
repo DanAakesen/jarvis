@@ -110,6 +110,20 @@ describe('owner session service', () => {
   });
 
   describe('verifying a token', () => {
+    it('checks connection liveness without touching idle expiry or lookup admission', async () => {
+      const policy = {
+        ...ownerSessionPolicy,
+        lookupAdmission: { ...ownerSessionPolicy.lookupAdmission, unverifiedBudget: { windowMs: minute, max: 0 } },
+      };
+      const { open, service, store } = setup({ policy });
+      const created = await open();
+      const touch = vi.spyOn(store, 'touch');
+
+      expect(await service.isConnectionSessionActive(created.sessionId)).toBe(true);
+      expect(await service.isConnectionSessionActive(generateOwnerSessionCredential().sessionId)).toBe(false);
+      expect(touch).not.toHaveBeenCalled();
+    });
+
     it('yields the owner principal of a verified Entra token and no service identity', async () => {
       const { open, service } = setup();
       const created = await open();
@@ -315,6 +329,16 @@ describe('owner session service', () => {
       expect(throttled).toHaveLength(500 - budget);
     });
 
+    it('admits a newly created session after the unverified budget is exhausted', async () => {
+      const { service, store, open } = setup();
+      expect((await flood(service, 2 * budget)).throttled.length).toBeGreaterThan(0);
+      const created = await open();
+      const find = vi.spyOn(store, 'find');
+
+      expect(await service.verify(created.token)).toMatchObject({ ok: true });
+      expect(find).toHaveBeenCalledOnce();
+    });
+
     it('counts a repeated unfamiliar token every time, so repeating one cannot get past the budget', async () => {
       const { service, store } = setup();
       const find = vi.spyOn(store, 'find');
@@ -376,8 +400,8 @@ describe('owner session service', () => {
       expect(await service.verify(created.token)).toMatchObject({ ok: true });
       const find = vi.spyOn(store, 'find');
       const { judged, throttled } = await flood(service, 200);
-      // The session's own first verification used one unit of the budget.
-      expect(judged).toHaveLength(budget - 1);
+      // Creation marks the session verified without spending an unverified lookup.
+      expect(judged).toHaveLength(budget);
       expect(throttled.length).toBeGreaterThan(0);
       find.mockClear();
       for (let attempt = 0; attempt < 100; attempt += 1) {

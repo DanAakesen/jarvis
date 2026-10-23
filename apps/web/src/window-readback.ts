@@ -17,7 +17,7 @@ const skippedTags = new Set(['SCRIPT', 'STYLE', 'TEMPLATE', 'NOSCRIPT', 'INPUT',
 const editable = 'input, textarea, select, [contenteditable=""], [contenteditable="true"]';
 const secretPatterns = [
   /\bBearer\s+[A-Za-z0-9._~+/=-]{8,}/giu,
-  /\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{4,}/gu,
+  /(?:\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{4,}|\bjs\.[A-Za-z0-9_-]{22}\.[A-Za-z0-9_-]{43}\b)/gu,
   /\b(?:gh[pousr]_|github_pat_|sk-)[A-Za-z0-9_-]{16,}/gu,
   /\b(password|passwd|secret|token|api[-_ ]?key|client[-_ ]?secret)(\s*[:=]\s*)\S+/giu,
 ];

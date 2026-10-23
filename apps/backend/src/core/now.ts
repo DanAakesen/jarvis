@@ -190,6 +190,7 @@ export function registerNowRoutes(app: FastifyInstance) {
     let unsubscribe: () => void = () => {};
     let unsubscribeActivity: () => void = () => {};
     let closeWorkspace = () => {};
+    let unregisterSessionConnection = () => {};
     const cleanup = () => {
       if (closed) return;
       closed = true;
@@ -197,6 +198,7 @@ export function registerNowRoutes(app: FastifyInstance) {
       unsubscribe();
       unsubscribeActivity();
       closeWorkspace();
+      unregisterSessionConnection();
     };
     const end = () => {
       cleanup();
@@ -222,6 +224,9 @@ export function registerNowRoutes(app: FastifyInstance) {
       if (!writeSseEvent(response, frame)) end();
     });
     reply.hijack();
+    if (request.ownerSession) {
+      unregisterSessionConnection = app.ownerSessionConnections?.register(request.ownerSession.id, end) ?? (() => {});
+    }
     const heartbeat = setInterval(() => {
       if (!response.write(': heartbeat\n\n')) end();
     }, 25_000);
