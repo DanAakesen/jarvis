@@ -491,6 +491,8 @@ navigation, Settings slot and Background work Open link.
 Successful chat/voice task writes quietly refresh an open panel through existing
 tool activity (#1236). This adds no control, layout or styling; failures do not
 pretend the list was changed. Existing edit/version conflicts remain visible.
+An open edit retains its original task version through a refresh; saving a stale
+draft follows the existing conflict-and-reload flow rather than rebasing it.
 
 There is no Tasks page. A **Show tasks** button (task icon and text; **Hide tasks**
 while open) is its own glass button at the top left of the map, outside the search

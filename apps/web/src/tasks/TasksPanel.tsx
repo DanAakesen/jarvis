@@ -237,6 +237,7 @@ export function TasksPanel({ id, backendUrl, getAccessToken, initialQuery = '', 
   const [editDraft, setEditDraft] = useState<EditDraft>({ text: '', date: '', time: '', priority: 'normal' });
   const [editSaving, setEditSaving] = useState(false);
   const [editError, setEditError] = useState('');
+  const editSource = useRef<VaultTask | null>(null);
   const pendingRef = useRef(new Set<string>());
   const versions = useRef(new Map<string, string>());
   const timers = useRef(new Map<string, number[]>());
@@ -385,6 +386,7 @@ export function TasksPanel({ id, backendUrl, getAccessToken, initialQuery = '', 
     if (pendingRef.current.has(task.id)) return;
     setNotice('');
     setEditError('');
+    editSource.current = { ...task, version: versions.current.get(task.id) ?? task.version };
     setEditDraft({ text: task.text, date: task.dueDate ?? '', time: task.dueTime ?? '', priority: task.priority });
     setEditId(task.id);
   };
@@ -394,17 +396,19 @@ export function TasksPanel({ id, backendUrl, getAccessToken, initialQuery = '', 
   };
   const saveEdit = (task: VaultTask) => {
     if (editSaving || pendingRef.current.has(task.id)) return;
+    const source = editSource.current;
+    if (!source || source.id !== task.id) return;
     const text = editDraft.text.replace(/\s+/gu, ' ').trim();
     // A time without a date means today, as when adding a task.
     const due = editDraft.date || (editDraft.time ? (result?.today ?? copenhagenDate()) : '');
     const change = { text, due: due || null, time: due && editDraft.time ? editDraft.time : null, priority: editDraft.priority };
-    if (text === task.text && change.due === task.dueDate && change.time === task.dueTime && change.priority === task.priority) {
+    if (text === source.text && change.due === source.dueDate && change.time === source.dueTime && change.priority === source.priority) {
       cancelEdit();
       return;
     }
     if (Array.from(text).length < 2) { setEditError('Write a few words for the task.'); return; }
     const { signal } = writes.current;
-    const current = { ...task, version: versions.current.get(task.id) ?? task.version };
+    const current = source;
     setEditSaving(true);
     setEditError('');
     markPending(task.id, true);
