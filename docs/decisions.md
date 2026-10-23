@@ -1,5 +1,31 @@
 # Decisions
 
+## Close owner-session connections on revoke (23 October 2026; #1223)
+
+The owner-session backend now enforces revocation for already-open privileged
+connections, not only the next HTTP request.
+
+Decided:
+
+- Track only session-authenticated `/voice`, `/voice/da`, `/now/events` and
+  `/factory/tasks/:id/events` connections in a replica-local registry keyed by
+  session id. Each entry holds only the session id and close callback, never a
+  token, secret or hash.
+- Close matching connections after a successful local revoke; close all tracked
+  session connections after revoke-all. Voice uses WebSocket close code 1008 with
+  a generic reason; SSE responses end cleanly. Entra connections are not tracked.
+- Recheck each distinct open session about every five minutes with jitter through
+  a read-only store lookup that does not extend idle expiry or use lookup
+  admission. Close only when the session is definitely revoked, expired or
+  missing; store errors retain connections until the next check.
+- Clear the unref'd timer and registrations during server shutdown. When the
+  switch is off, the registry is not composed.
+
+Revocation takes effect on open connections within seconds on the replica that
+handles it and within about five minutes elsewhere. Voice and stream route tests,
+registry tests with a controlled clock/store, and web voice expiry tests cover the
+change; live multi-replica timing remains unverified.
+
 ## Web owner-session client (#1220; 23 October 2026)
 
 The backend owner session is now consumed by the web client while

@@ -61,6 +61,7 @@ const MAX_RECONNECTS = 8;
 const STOP_TIMEOUT_MS = 15_000;
 
 class VoiceReadinessError extends Error {}
+class VoiceAuthenticationError extends Error {}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -189,9 +190,12 @@ function waitForVoiceEvent(
     };
     const onClose = (event: Event) => {
       cleanup();
-      reject((event as CloseEvent).code === 4010
+      const code = (event as CloseEvent).code;
+      reject(code === 4010
         ? new VoiceReadinessError()
-        : new Error('Voice connection ended.'));
+        : code === 1008
+          ? new VoiceAuthenticationError()
+          : new Error('Voice connection ended.'));
     };
     const onAbort = () => {
       cleanup();
@@ -209,14 +213,15 @@ function waitForVoiceEvent(
 }
 
 function waitForClose(socket: VoiceSocket, signal: AbortSignal): Promise<void> {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     const cleanup = () => {
       socket.removeEventListener('close', onClose);
       signal.removeEventListener('abort', onAbort);
     };
-    const onClose = () => {
+    const onClose = (event: Event) => {
       cleanup();
-      resolve();
+      if ((event as CloseEvent).code === 1008) reject(new VoiceAuthenticationError());
+      else resolve();
     };
     const onAbort = () => {
       cleanup();

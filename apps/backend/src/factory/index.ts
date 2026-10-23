@@ -505,12 +505,14 @@ export const factoryModule: BackendModule = {
       let replaying = true;
       let pending: TaskEventMessage[] = [];
       let eventDelivery = Promise.resolve();
+      let unregisterSessionConnection = () => {};
       const replayedIds = new Set<string>();
       const cleanup = () => {
         if (closed) return;
         closed = true;
         clearInterval(heartbeat);
         unsubscribe();
+        unregisterSessionConnection();
       };
       const end = () => {
         cleanup();
@@ -546,6 +548,9 @@ export const factoryModule: BackendModule = {
         });
       });
       reply.hijack();
+      if (request.ownerSession) {
+        unregisterSessionConnection = app.ownerSessionConnections?.register(request.ownerSession.id, end) ?? (() => {});
+      }
       const heartbeat = setInterval(() => {
         if (!response.write(': heartbeat\n\n')) end();
       }, 25_000);

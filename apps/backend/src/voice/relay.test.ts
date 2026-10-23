@@ -10,6 +10,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import WebSocket, { WebSocketServer } from 'ws';
 import type { FastifyRequest } from 'fastify';
 import { AuthenticationDenied } from '../auth/verify.js';
+import { InMemoryOwnerSessionStore } from '../auth/session/memory-store.js';
+import { OwnerSessionService } from '../auth/session/service.js';
 import { buildApp, type BuildAppOptions } from '../app.js';
 import { loadConfig } from '../config.js';
 import { createLogger } from '../logging.js';
@@ -120,7 +122,7 @@ function appFor(
   } satisfies ConversationStore,
   settingsStore?: SettingsStore,
   reflexClassifier?: ReflexClassifier,
-  services: Pick<BuildAppOptions, 'taskStore' | 'taskController' | 'toolCallStore' | 'awayModeStore' | 'projectStore' | 'factoryBoardReader' | 'githubAppTokenIssuer'> = {},
+  services: Pick<BuildAppOptions, 'taskStore' | 'taskController' | 'toolCallStore' | 'awayModeStore' | 'projectStore' | 'factoryBoardReader' | 'githubAppTokenIssuer' | 'ownerSessions'> = {},
   logLevel: 'info' | 'silent' = 'silent',
   createPartialRecognizer?: PartialSpeechRecognizerFactory,
   visionWatch?: VoiceRelayOptions['visionWatch'],
@@ -131,7 +133,7 @@ function appFor(
 ) {
   const frameStore = new FrameStore();
   const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
-  const appConfig = { ...config, logLevel };
+  const appConfig = { ...config, logLevel, ...(services.ownerSessions ? { ownerSessionEnabled: true } : {}) };
   const app = buildApp(appConfig, createLogger(appConfig, undefined, output), {
     modules: [
       coreModule,
@@ -342,6 +344,40 @@ describe('backend-relayed Voice Live WebSocket', () => {
     expect((await upstreamClosed)[0]).toBe(1012);
     expect(conversationStore.endSession).toHaveBeenCalledExactlyOnceWith('41');
     expect(records.map((record) => JSON.parse(record)).filter((record) => record.level >= 40)).toEqual([]);
+  });
+
+  it('closes a live voice socket opened with a session token after current-session revoke', async () => {
+    const upstreamUrl = await echoServer(() => {});
+    const connector = (token: string, signal: AbortSignal) => new WebSocket(upstreamUrl, {
+      headers: { Authorization: ['Bearer', token].join(' ') }, signal,
+    });
+    const sessions = new OwnerSessionService({
+      store: new InMemoryOwnerSessionStore(),
+      ownerObjectId: config.auth.ownerObjectId,
+      tenantId: config.auth.tenantId,
+    });
+    const created = await sessions.create({
+      ownerObjectId: config.auth.ownerObjectId, displayName: 'Dan', deviceLabel: null,
+    });
+    const { app } = appFor(
+      connector, undefined, [], [], undefined, undefined, undefined, undefined, { ownerSessions: sessions },
+    );
+    const address = await app.listen({ host: '127.0.0.1', port: 0 });
+    const browser = await openBrowser(`ws://127.0.0.1:${(app.server.address() as AddressInfo).port}/voice`, [
+      VOICE_SUBPROTOCOL, `jarvis.auth.${created.token}`,
+    ]);
+    const closed = once(browser, 'close');
+
+    const revoked = await app.inject({
+      method: 'DELETE',
+      url: '/auth/session',
+      headers: { authorization: ['Bearer', created.token].join(' ') },
+    });
+    expect(revoked.statusCode).toBe(204);
+    const [code, reason] = await closed as [number, Buffer];
+    expect(code).toBe(1008);
+    expect(reason.toString()).toBe('Session ended');
+    expect(address).toContain('127.0.0.1');
   });
 
   it.each(['/voice', '/voice/da'])('refreshes workspace reference context before each response on %s, including disconnects', async (path) => {

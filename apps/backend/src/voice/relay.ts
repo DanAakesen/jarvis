@@ -378,6 +378,10 @@ function registerVoiceRoute(
       browser.close(1011, 'Conversation storage unavailable');
       return;
     }
+    const unregisterSessionConnection = request.ownerSession
+      ? app.ownerSessionConnections?.register(request.ownerSession.id, () => browser.close(1008, 'Session ended'))
+        ?? (() => {})
+      : () => {};
     let upstream: WebSocket | undefined;
     // Only the English route probes for a working tool budget; Danish keeps its single full session update.
     const toolBudgetRungs = language === 'en' && toolBudgetMemory ? createToolBudgetRungs(app.jarvisTools) : undefined;
@@ -1361,7 +1365,10 @@ function registerVoiceRoute(
       await finalizeSession();
     };
     app.shutdownConnections.add(shutdownSession);
-    browser.once('close', () => { app.shutdownConnections.delete(shutdownSession); });
+    browser.once('close', () => {
+      app.shutdownConnections.delete(shutdownSession);
+      unregisterSessionConnection();
+    });
 
     const sendUpstream = (message: unknown, sent?: () => void, startupAttempt = false) => {
       const isSessionUpdate = (message as { type?: unknown })?.type === 'session.update';
@@ -2164,6 +2171,7 @@ function registerVoiceRoute(
       void finalizeSession().catch(() => request.log.warn('voice.session_persistence_failed'));
     });
     browser.once('error', () => {
+      unregisterSessionConnection();
       diagnostics.summary('browser', 1011);
       finishTurnTiming();
       finishActiveToolActivities();

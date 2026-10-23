@@ -31,10 +31,11 @@ is not wanted.
 **Revoke all sessions** (a lost phone or a suspected leak):
 
 - Call `DELETE /auth/sessions` with a session token or an Entra owner access
-  token. It answers 200 with the number revoked, and each session stops working
-  on its next request because nothing is cached.
+  token. It answers 200 with the number revoked. Requests fail immediately after
+  revocation; open voice and Now/Factory event streams close on the replica that
+  handles it, and other replicas recheck them within about five minutes.
 - To end only the calling device, call `DELETE /auth/session` with that device's
-  session token (204).
+  session token (204); its tracked voice and event-stream connections close too.
 - With no usable token, turn the switch off for the immediate stop, then revoke
   the rows in SQL after the owner approves:
   `UPDATE dbo.owner_sessions SET revoked_at = SYSUTCDATETIME() WHERE revoked_at IS NULL;`.
@@ -64,7 +65,9 @@ Operating notes:
   401, so a client keeps its session and retries. Up to 32 ids that verified in
   the last 30 minutes skip the budget, so the owner's own traffic does not
   throttle itself, but each request still reads the store and compares the
-  secret: a revocation applies from the next request, and an id refused for any
+  secret: a revocation applies to the next request. Open session-authenticated
+  voice and event-stream connections are also closed locally on revoke and
+  periodically rechecked without extending idle expiry. An id refused for any
   reason leaves the set. The set is in memory, so a restart empties it. The limit
   is keyed on the session id, never on the client address, which the backend does
   not trust. With the switch off none of this runs. The numbers are in
@@ -88,7 +91,9 @@ Operating notes:
 
 Checks, from `apps/backend`:
 `npx vitest run src/auth src/config.test.ts src/logging.test.ts src/database/owner-session-store.test.ts src/database/migrations.test.ts`
-(run `src/logging-source.test.ts` alone, it is slow under load),
+(run `src/logging-source.test.ts` alone, it is slow under load), and
+`npx vitest run src/voice/relay.test.ts src/core/now.test.ts src/factory/tasks.test.ts`
+(long-lived connection close behavior),
 `npx tsc --project tsconfig.json --noEmit` and `npm run lint`. The SQL Server
 checks, `npm run test:database`, run only in CI. The node `mssql` driver cannot
 reach a Windows LocalDB instance, so a local check of the migration and the store

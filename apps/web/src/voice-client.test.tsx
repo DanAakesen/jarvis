@@ -123,6 +123,7 @@ describe('BrowserVoiceClient', () => {
       onStatus: () => {}, onVisionLimit, createAudio: () => audioAdapter(),
       createSocket: (url, protocols) => { const socket = new MockSocket(url, protocols); sockets.push(socket); return socket; },
     });
+
     clients.push(client);
     client.setCameraState(true);
     client.start();
@@ -144,6 +145,42 @@ describe('BrowserVoiceClient', () => {
     socket.receive({ type: 'jarvis.screen.context.unavailable', itemId: 'current_item', reason });
     expect(onVisionLimit).toHaveBeenCalledOnce();
     expect(socket.readyState).toBe(1);
+  });
+
+  it('confirms an expired-session 1008 and reconnects using the Microsoft token with backoff', async () => {
+    vi.useFakeTimers();
+    const sockets: MockSocket[] = [];
+    const getAccessToken = vi.fn()
+      .mockResolvedValueOnce(`js.${'A'.repeat(22)}.${'A'.repeat(43)}`)
+      .mockResolvedValue('microsoft-token');
+    const confirmSession = vi.fn(async () => 'expired' as const);
+    const client = new BrowserVoiceClient({
+      backendUrl: 'https://api.example.com',
+      getAccessToken,
+      confirmSession,
+      onStatus: () => {},
+      createAudio: () => audioAdapter(),
+      createSocket: (url, protocols) => {
+        const socket = new MockSocket(url, protocols);
+        sockets.push(socket);
+        return socket;
+      },
+    });
+    clients.push(client);
+    client.start();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(sockets).toHaveLength(1);
+
+    sockets[0]!.close(1008, 'Session ended');
+    await vi.advanceTimersByTimeAsync(0);
+    expect(confirmSession).toHaveBeenCalledOnce();
+    expect(sockets).toHaveLength(1);
+
+    await vi.advanceTimersByTimeAsync(1_000);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(sockets).toHaveLength(2);
+    expect(sockets[1]!.protocols).toContain('jarvis.auth.microsoft-token');
+    client.stop();
   });
 
   it.each(['en', 'da'] as const)('prepares correlated camera turns and resends camera state after %s reconnect', async (language) => {

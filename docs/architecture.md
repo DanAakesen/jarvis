@@ -2213,8 +2213,8 @@ the web client.
   configured owner. Every failure is the same 401 as an invalid Entra token,
   with the reason category only in the log. A store failure during verification
   is a 503 with `Retry-After`: never a 401, which would make a client drop a
-  good session, and never an allow. There is no verdict cache, so a revocation
-  applies from the next request. With the switch off the hook has no verifier
+  good session, and never an allow. There is no verdict cache, so each ordinary
+  request checks the store. With the switch off the hook has no verifier
   and answers every `js.` token with 401, even for a row still in the table; it
   neither reads the store nor throttles.
 - **Lookup admission** bounds the SQL work that a caller without a valid session
@@ -2280,6 +2280,16 @@ the web client.
   - `DELETE /auth/sessions` revokes every active session of the owner, for a
     lost phone, with a session token or an Entra owner token (200 with the
     count).
+- **Open connections.** The voice relay (`/voice`, `/voice/da`), Now SSE
+  (`/now/events`) and Factory task SSE (`/factory/tasks/:id/events`) register
+  session-authenticated connections per replica, keyed only by session id. A
+  successful local revoke closes the matching connections immediately (voice
+  with WebSocket 1008; streams end cleanly). Each replica rechecks distinct open
+  sessions about every five minutes with jitter using a read-only store lookup;
+  this neither extends idle expiry nor spends unknown-token admission. A store
+  failure keeps the connection for the next check. Thus revocation takes effect
+  on open connections within seconds on the replica handling it and within about
+  five minutes elsewhere. Entra-authenticated connections are not tracked.
 - **Logging.** `owner_session.created`, `owner_session.revoked`,
   `owner_session.rejected` and `owner_session.refresh_failed` carry a fixed
   reason category and, when a lookup judged the token, the first eight

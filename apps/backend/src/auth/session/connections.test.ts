@@ -1,4 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { buildApp } from '../../app.js';
+import { loadConfig } from '../../config.js';
 import { InMemoryOwnerSessionStore } from './memory-store.js';
 import { OwnerSessionConnectionRegistry } from './connections.js';
 import { OwnerSessionService } from './service.js';
@@ -39,25 +41,27 @@ describe('owner session connection registry', () => {
     const first = await open();
     const second = await open();
     const closeFirst = vi.fn();
+    const closeFirstAgain = vi.fn();
     const closeSecond = vi.fn();
     registry.register(first.sessionId, closeFirst);
+    registry.register(first.sessionId, closeFirstAgain);
     registry.register(second.sessionId, closeSecond);
 
     registry.closeSession(first.sessionId);
 
     expect(closeFirst).toHaveBeenCalledOnce();
+    expect(closeFirstAgain).toHaveBeenCalledOnce();
     expect(closeSecond).not.toHaveBeenCalled();
     registry.close();
   });
 
-  it('closes every registered session connection and no unregistered connection', async () => {
+  it('closes every registered session connection', async () => {
     vi.useFakeTimers();
     const { registry, open } = setup();
     const first = await open();
     const second = await open();
     const closeFirst = vi.fn();
     const closeSecond = vi.fn();
-    const entraConnection = vi.fn();
     registry.register(first.sessionId, closeFirst);
     registry.register(second.sessionId, closeSecond);
 
@@ -65,7 +69,6 @@ describe('owner session connection registry', () => {
 
     expect(closeFirst).toHaveBeenCalledOnce();
     expect(closeSecond).toHaveBeenCalledOnce();
-    expect(entraConnection).not.toHaveBeenCalled();
     registry.close();
   });
 
@@ -118,6 +121,24 @@ describe('owner session connection registry', () => {
     expect(vi.getTimerCount()).toBe(1);
 
     registry.close();
+
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('clears the registry timer when the server closes', async () => {
+    vi.useFakeTimers();
+    const { service, open } = setup();
+    const app = buildApp(
+      { ...loadConfig({ JARVIS_OWNER_SESSION_ENABLED: 'true' }), logLevel: 'silent' },
+      undefined,
+      { ownerSessions: service },
+    );
+    await app.ready();
+    const session = await open();
+    app.ownerSessionConnections!.register(session.sessionId, vi.fn());
+    expect(vi.getTimerCount()).toBe(1);
+
+    await app.close();
 
     expect(vi.getTimerCount()).toBe(0);
   });
