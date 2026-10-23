@@ -49,9 +49,11 @@ paused serverless database, but does not delay or fail startup and is not retrie
 Call `DELETE /auth/sessions` with a session token or Entra owner access token
 first; confirm its 200 response and revoked count, then turn the switch off if
 needed. If no usable token is available, turn the switch off; the next process
-start attempts to revoke stored sessions. A manual SQL fallback is no longer
-needed. An off revision that starts during an on/off deployment overlap may
-revoke sessions minted by the on revision; the owner signs in again.
+start attempts to revoke stored sessions once, with no retry. Before turning the
+switch back on, confirm the off revision logged `owner_session.boot_revoke` with
+outcome `revoked`; after `failed`, restart it so the attempt runs again. An off
+revision that starts during an on/off deployment overlap may revoke sessions
+minted by the on revision; the owner signs in again.
 
 ### Verify after enabling
 

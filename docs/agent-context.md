@@ -50,8 +50,10 @@ the owner signs in again.
   session token (204).
 - With a usable session or Entra owner token, call `DELETE /auth/sessions` first,
   then turn the switch off if needed. With no usable token, turn the switch off;
-  the next process start attempts the revoke, so a manual SQL update is no longer
-  needed. Rolling back migration 0064 drops the table and ends every session too.
+  the next process start attempts the revoke once. Before turning the switch back
+  on, confirm that start logged `owner_session.boot_revoke` with outcome
+  `revoked`, and restart the off revision after `failed`. Rolling back migration
+  0064 drops the table and ends every session too.
 
 Operating notes:
 
