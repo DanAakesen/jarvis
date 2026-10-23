@@ -1,5 +1,14 @@
 # Project plan
 
+## Per-finding chat and voice feedback (#1240)
+
+Implemented the shared `proactive_item_feedback` capability, UI/tool feedback
+validation reuse, owner-message grounding, bounded contextual references,
+local-time/DST validation, replay protection and conditional feedback writes.
+Synthetic chat/voice dispatcher, store and existing delivery tests pass locally.
+No live feedback, preference changes, migration or deployment was performed.
+Next: PR review and CI; live owner acceptance remains unverified.
+
 Integration checkpoint: #883 merged on 17 October at
 `705af7c7c02c3154a646dda66d79790d71af8f54`, with its actual tree matching
 the qualified pipeline correction. This release candidate combines the

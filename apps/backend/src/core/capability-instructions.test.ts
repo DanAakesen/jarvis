@@ -51,9 +51,11 @@ describe('shared navigation capability instructions', () => {
 
   it('guides proactive recall only when its tool is composed', () => {
     expect(capabilityInstructions({ automaticCapture: false })).not.toContain('proactive_recent_items');
+    expect(capabilityInstructions({ automaticCapture: false })).not.toContain('proactive_item_feedback');
     const enabled = capabilityInstructions({ automaticCapture: false }, true);
     expect(enabled).toContain('For questions about what I noticed, found, flagged or reminded, use proactive_recent_items');
     expect(enabled).toContain("answer in Dan's language");
+    expect(enabled).toContain('Use proactive_item_feedback for per-item actions');
   });
 
   it('maps window requests to snapshot-backed intents and reports pin outcomes honestly', () => {

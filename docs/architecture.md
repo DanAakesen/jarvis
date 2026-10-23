@@ -6929,7 +6929,7 @@ variants and remaining component-specific layouts are listed in
 `index.ts` builds the `proactive` tool module only when the existing
 `JARVIS_PROACTIVE_ENABLED` flag is true. It shares the exact `ProactiveStore`
 instance with `registerProactive`; disabled composition adds no store or tool.
-The single `proactive_recent_items` tool reads through `items.list`, the same
+The `proactive_recent_items` tool reads through `items.list`, the same
 bounded query used by the Proactive page, with exact `new`, `seen` or `all`
 filters. SQL state filters are parameterized; the store remains owner-scoped.
 Shared chat/voice guidance mentions the tool only when it is in that catalogue.
@@ -6938,8 +6938,34 @@ The result projects only the nine requested item fields, truncates title/body on
 code-point boundaries, caps the serialized result at 8 KiB and marks it
 `untrusted: true`. The tool is sensitive so private item text is not persisted
 in generic tool-call audit records. Raw JSON validation runs before Fastify's
-AJV coercion; failures remain explicit tool refusals/errors. The module exposes
-no item mutation or approval capability.
+AJV coercion; failures remain explicit tool refusals/errors.
+
+### Per-finding conversational feedback (#1240)
+
+The sensitive `proactive_item_feedback` tool shares `feedback.ts` validation and
+`items.applyFeedback` with the UI. It verifies the latest stored owner message
+in an active chat/voice session (not phone), matches one direct English/Danish
+action and resolves its target server-side. Explicit IDs or unique recent
+titles/categories are supported; pronouns and ordinals require an earlier
+session-bound recall. A same-turn model-selected recall cannot authorize a
+pronoun. Source bodies, quoted instructions and model-supplied IDs do not
+authorize writes.
+
+Recall snapshots expire after 15 minutes, retain at most ten reads of twenty
+items per session and at most 100 sessions. Restart loses contextual references
+and requires another recall or explicit owner reference. Material changes
+invalidate contextual references. Requests older than 15 minutes are refused;
+completed request IDs are bounded to 1,000 in memory for that lifetime, and
+duplicate requests report current state without writing again.
+
+Snooze parses explicit ISO local dates or today/tomorrow with a 24-hour time in
+Europe/Copenhagen. Nonexistent DST times are rejected; repeated times require
+CET/CEST. The existing future-only seven-day limit is unchanged. Confirmations
+come from the saved state, including local date, time, offset and timezone.
+Conversational writes pass an optional state/content guard to the atomic SQL
+or memory update; an intervening change refuses the write. UI calls retain
+their existing contract. There are no new schedules, task writes, preferences,
+credentials or migrations; existing delivery paths read the shared item state.
 
 ## Conversational proactive suggestion preferences (#1207)
 

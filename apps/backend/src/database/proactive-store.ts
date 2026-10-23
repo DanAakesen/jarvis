@@ -309,12 +309,21 @@ export function createProactiveStore(pool: sql.ConnectionPool, ownerObjectId: st
           WHERE owner_object_id = @owner AND id IN (${parameters.join(', ')}) ${policy};`);
         return recordset.map((row) => ({ id: row.id.toLowerCase(), state: row.state }));
       },
-      async applyFeedback(id, action: FeedbackAction, snoozeUntil) {
+      async applyFeedback(id, action: FeedbackAction, snoozeUntil, expected) {
         const settings = await readSettings();
         const request = pool.request()
           .input('owner', sql.UniqueIdentifier, owner)
           .input('id', sql.UniqueIdentifier, id);
         const policy = applyItemPolicy(request, settings);
+        if (expected) {
+          request.input('expectedState', sql.NVarChar(16), expected.state)
+            .input('expectedSnooze', sql.DateTime2, expected.snoozedUntil ? new Date(expected.snoozedUntil) : null)
+            .input('expectedFeedback', sql.NVarChar(16), expected.feedback)
+            .input('expectedTitle', sql.NVarChar(200), expected.title)
+            .input('expectedBody', sql.NVarChar(sql.MAX), expected.body)
+            .input('expectedDue', sql.DateTime2, expected.dueAt ? new Date(expected.dueAt) : null)
+            .input('expectedUrgency', sql.NVarChar(24), expected.urgency);
+        }
         const { recordset } = await request
           .input('action', sql.NVarChar(16), action)
           .input('snoozeUntil', sql.DateTime2, snoozeUntil ? new Date(snoozeUntil) : null)
@@ -327,7 +336,12 @@ export function createProactiveStore(pool: sql.ConnectionPool, ownerObjectId: st
                 snoozed_until = CASE WHEN @action = N'snooze' THEN @snoozeUntil ELSE snoozed_until END,
                 feedback = CASE WHEN @action IN (N'useful', N'wrong') THEN @action ELSE feedback END
             OUTPUT ${itemSelect('inserted')}
-            WHERE id = @id AND owner_object_id = @owner ${policy};`);
+            WHERE id = @id AND owner_object_id = @owner ${policy}
+            ${expected ? `AND state = @expectedState
+              AND (snoozed_until = @expectedSnooze OR (snoozed_until IS NULL AND @expectedSnooze IS NULL))
+              AND (feedback = @expectedFeedback OR (feedback IS NULL AND @expectedFeedback IS NULL))
+              AND title = @expectedTitle AND body = @expectedBody AND urgency = @expectedUrgency
+              AND (due_at = @expectedDue OR (due_at IS NULL AND @expectedDue IS NULL))` : ''};`);
         const item = recordset[0] ? mapItem(recordset[0]) : undefined;
         return item && itemAllowed(settings, item) ? item : undefined;
       },

@@ -49,6 +49,7 @@ export type ProactiveSettingsPatch = Partial<Pick<ProactiveSettings, 'paused' | 
   suggestionScope?: SuggestionScopePreference;
 };
 export type FeedbackAction = 'seen' | 'dismiss' | 'snooze' | 'useful' | 'wrong';
+export type FeedbackGuard = Pick<Item, 'state' | 'snoozedUntil' | 'feedback' | 'title' | 'body' | 'dueAt' | 'urgency'>;
 export interface FindingInput {
   dedupeKey: string;
   title: string;
@@ -82,7 +83,7 @@ export interface ProactiveItemsStore {
   list(state: 'new' | 'seen' | 'open' | 'all', limit: number, now: Date): Promise<Item[]>;
   get(id: string, markLoaded?: boolean): Promise<Item | undefined>;
   getMany(ids: readonly string[]): Promise<Pick<Item, 'id' | 'state'>[]>;
-  applyFeedback(id: string, action: FeedbackAction, snoozeUntil?: string): Promise<Item | undefined>;
+  applyFeedback(id: string, action: FeedbackAction, snoozeUntil?: string, expected?: FeedbackGuard): Promise<Item | undefined>;
   upsertFinding(input: FindingInput, guard?: FindingWriteGuard): Promise<Item>;
   markTodoAdded(itemIds: readonly string[]): Promise<void>;
 }
@@ -198,10 +199,12 @@ export function createMemoryProactiveStore(ownerObjectId: string = randomUUID())
           return item && itemAllowed(settings, item) ? [{ id: item.id, state: item.state }] : [];
         });
       },
-      async applyFeedback(id, action, snoozeUntil) {
+      async applyFeedback(id, action, snoozeUntil, expected) {
         const key = id.toLowerCase();
         const item = items.get(key);
         if (!item || !itemAllowed(settings, item)) return undefined;
+        if (expected && (Object.keys(expected) as (keyof FeedbackGuard)[])
+          .some((key) => item[key] !== expected[key])) return undefined;
         const state = action === 'dismiss' ? 'dismissed'
           : action === 'seen' && item.state === 'new' ? 'seen'
             : action === 'snooze' ? 'snoozed' : item.state;

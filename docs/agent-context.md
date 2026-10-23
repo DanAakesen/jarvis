@@ -1,5 +1,13 @@
 # Agent context
 
+## Per-finding feedback checks (#1240)
+
+From the repository root, use `npm run build --workspace @jarvis/backend` and
+`npm test --workspace @jarvis/backend -- src/proactive/feedback-tool.test.ts src/proactive/tools.test.ts src/proactive/routes.test.ts src/proactive/store.test.ts src/database/proactive-store.test.ts src/proactive/alerts.test.ts src/proactive/reminders.test.ts src/proactive/reminder-ticker.test.ts`.
+These synthetic checks exercise the actual chat dispatcher and realtime voice
+executor; they do not contact live providers or write real feedback/preferences.
+SQL query-shape checks are offline, not a live SQL Server concurrency check.
+
 ## Owner session switch, revocation and checks (22 October 2026; #1217; default off in code, on in production since 23 October 2026)
 
 The backend can give the owner a revocable 10-day session after one Entra

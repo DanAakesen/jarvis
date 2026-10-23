@@ -14,6 +14,22 @@ const finding = {
 };
 
 describe('in-memory proactive stores', () => {
+  it('atomically rejects stale feedback guards and preserves concurrent state and ratings', async () => {
+    const store = createMemoryProactiveStore();
+    const first = await store.items.upsertFinding(finding);
+    const { state, snoozedUntil, feedback, title, body, dueAt, urgency } = first;
+    const guard = { state, snoozedUntil, feedback, title, body, dueAt, urgency };
+    const results = await Promise.all([
+      store.items.applyFeedback(first.id, 'dismiss', undefined, guard),
+      store.items.applyFeedback(first.id, 'snooze', '2026-10-24T07:00:00.000Z', guard),
+    ]);
+    expect(results.filter(Boolean)).toHaveLength(1);
+    expect(await store.items.get(first.id)).toMatchObject({ state: 'dismissed' });
+    await store.items.applyFeedback(first.id, 'wrong');
+    expect(await store.items.applyFeedback(first.id, 'seen', undefined, guard)).toBeUndefined();
+    expect(await store.items.get(first.id)).toMatchObject({ state: 'dismissed', feedback: 'wrong' });
+  });
+
   it('lists findings by exact state as well as the Proactive page open/all filters', async () => {
     const store = createMemoryProactiveStore();
     const now = new Date('2026-10-20T05:00:00.000Z');

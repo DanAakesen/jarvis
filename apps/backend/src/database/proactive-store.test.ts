@@ -91,6 +91,32 @@ function fixture(options: {
 }
 
 describe('SQL guarded proactive finding writes', () => {
+  it('uses an atomic, owner-scoped conditional feedback update without changing the UI contract', async () => {
+    const request = {
+      input: vi.fn().mockReturnThis(),
+      query: vi.fn(async (statement: string) => ({
+        recordset: statement.includes('UPDATE dbo.proactive_items') ? [savedRow] : [settingsRow],
+      })),
+    };
+    const store = createProactiveStore({ request: () => request } as unknown as sql.ConnectionPool, owner);
+    const expected = {
+      state: 'new' as const, snoozedUntil: null, feedback: null,
+      title: finding.title, body: finding.body, dueAt: null, urgency: finding.urgency,
+    };
+    await store.items.applyFeedback(savedRow.id, 'dismiss', undefined, expected);
+    expect(request.input).toHaveBeenCalledWith('expectedState', sql.NVarChar(16), 'new');
+    expect(request.input).toHaveBeenCalledWith('expectedFeedback', sql.NVarChar(16), null);
+    expect(request.input).toHaveBeenCalledWith('expectedTitle', sql.NVarChar(200), finding.title);
+    const guarded = request.query.mock.calls.at(-1)![0];
+    expect(guarded).toContain('WHERE id = @id AND owner_object_id = @owner');
+    expect(guarded).toContain('AND state = @expectedState');
+    expect(guarded).toContain('feedback IS NULL AND @expectedFeedback IS NULL');
+    expect(guarded).toContain('due_at IS NULL AND @expectedDue IS NULL');
+    expect(guarded).toContain('title = @expectedTitle AND body = @expectedBody');
+    await store.items.applyFeedback(savedRow.id, 'seen');
+    expect(request.query.mock.calls.at(-1)![0]).not.toContain('AND state = @expectedState');
+  });
+
   it.each(['new', 'seen', 'open', 'all'] as const)('parameterizes item list state %s', async (state) => {
     const statements: string[] = [];
     const request = {
