@@ -91,6 +91,7 @@ export async function registerOwnerSessionRoutes(app: FastifyInstance, { service
     const session = request.ownerSession;
     if (!principal || !session) return refuse(request, reply, 'forbidden');
     await service.revokeCurrent(principal.objectId, session.id);
+    request.server.ownerSessionConnections?.closeSession(session.id);
     auditOwnerSessionRevoked(request, { scope: 'current', sessionPrefix: session.prefix });
     return reply.code(204).send();
   }));
@@ -99,6 +100,7 @@ export async function registerOwnerSessionRoutes(app: FastifyInstance, { service
     const principal = ownerPrincipal(request);
     if (!principal) return refuse(request, reply, 'forbidden');
     const revoked = await service.revokeAll(principal.objectId);
+    request.server.ownerSessionConnections?.closeAll();
     auditOwnerSessionRevoked(request, { scope: 'all', count: revoked });
     return reply.code(200).send({ revoked });
   }));

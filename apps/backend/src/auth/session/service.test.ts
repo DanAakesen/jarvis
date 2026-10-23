@@ -110,6 +110,20 @@ describe('owner session service', () => {
   });
 
   describe('verifying a token', () => {
+    it('checks connection liveness without touching idle expiry or lookup admission', async () => {
+      const policy = {
+        ...ownerSessionPolicy,
+        lookupAdmission: { ...ownerSessionPolicy.lookupAdmission, unverifiedBudget: { windowMs: minute, max: 0 } },
+      };
+      const { open, service, store } = setup({ policy });
+      const created = await open();
+      const touch = vi.spyOn(store, 'touch');
+
+      expect(await service.isConnectionSessionActive(created.sessionId)).toBe(true);
+      expect(await service.isConnectionSessionActive(generateOwnerSessionCredential().sessionId)).toBe(false);
+      expect(touch).not.toHaveBeenCalled();
+    });
+
     it('yields the owner principal of a verified Entra token and no service identity', async () => {
       const { open, service } = setup();
       const created = await open();
