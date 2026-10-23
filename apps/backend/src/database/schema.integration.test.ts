@@ -40,6 +40,7 @@ import type { GitHubAppTokenIssuer } from '../github-app.js';
 import { createProjectPolicyStore } from './project-policy-store.js';
 import { createPcBridgeStatusStore } from './pc-bridge-status-store.js';
 import { createOwnerSessionStore } from './owner-session-store.js';
+import { createOwnerReminderStore } from './owner-reminder-store.js';
 import type { OwnerSessionRecord } from '../auth/session/store.js';
 import { generateOwnerSessionCredential } from '../auth/session/token.js';
 
@@ -56,7 +57,8 @@ const tablesInSchema = [
   'activity', 'artifacts', 'background_job_dismissals', 'background_job_steps', 'background_jobs', 'conversation_attachments',
   'conversation_summaries', 'credential_status', 'deployment_failure_receipts', 'deployments', 'factory_task_submissions',
   'folio_items', 'github_app_mint_status', 'jarvis_sessions',
-  'memories', 'memory_deletions', 'memory_history', 'messages', 'owner_sessions', 'phone_sessions', 'proactive_alerts', 'proactive_items',
+  'memories', 'memory_deletions', 'memory_history', 'messages', 'owner_reminder_schedules', 'owner_sessions', 'phone_sessions',
+  'proactive_alerts', 'proactive_items',
   'proactive_reminders', 'proactive_runs', 'proactive_settings', 'proactive_source_status', 'proactive_spend', 'proactive_todo_receipts', 'projects',
   'pull_requests', 'push_subscriptions', 'push_vapid_keys', 'releases',
   'sandbox_sessions', 'sandbox_turns', 'settings', 'task_event_archives', 'task_events', 'task_status_notifications',
@@ -190,6 +192,79 @@ describe('committed domain schema (groups 1-8)', () => {
       'UX_activity_alert_key', 'UX_proactive_alerts_owner_alert_key', 'UX_proactive_reminders_owner_key',
     ]);
   });
+
+  it('persists owner reminder schedules, filters explicit items by owner, and protects rollback (0065)', () =>
+    withRollbackDatabase(async (rollbackPool, committed) => {
+      const owner = randomUUID();
+      const otherOwner = randomUUID();
+      const store = createOwnerReminderStore(rollbackPool, owner);
+      const fireAt = new Date('2026-10-23T08:00:00.000Z');
+      const candidate = {
+        idempotencyKey: 'a'.repeat(64),
+        taskIdentity: 'b'.repeat(64),
+        taskTitle: 'Synthetic task',
+        fireAt,
+        localTime: '10:00',
+        anchorDate: '2026-10-23',
+        cadence: 'daily' as const,
+        untilTaskDone: true,
+      };
+
+      const first = await store.create(candidate, new Date('2026-10-23T07:00:00.000Z'));
+      const duplicate = await store.create({ ...candidate, taskTitle: 'Changed duplicate' }, fireAt);
+      expect(first.created).toBe(true);
+      expect(duplicate).toMatchObject({
+        created: false,
+        schedule: { id: first.schedule.id, taskTitle: 'Synthetic task' },
+      });
+      expect(await createOwnerReminderStore(rollbackPool, otherOwner).get(first.schedule.id)).toBeNull();
+
+      const [claim] = await store.claimDue(fireAt, 20, 60_000);
+      expect(claim).toMatchObject({ state: 'sending', id: first.schedule.id });
+      const nextFireAt = new Date('2026-10-24T08:00:00.000Z');
+      expect(await store.finishClaim(first.schedule.id, claim!.claimToken!, {
+        state: 'scheduled',
+        fireAt: nextFireAt,
+        lastFireAt: fireAt,
+        lastDelivery: 'provider_accepted',
+      })).toBe(true);
+      const recovered = await createOwnerReminderStore(rollbackPool, owner).get(first.schedule.id);
+      expect(recovered).toMatchObject({ state: 'scheduled', lastFireAt: fireAt, fireAt: nextFireAt });
+      expect(await store.hasTaskReminderNear(candidate.taskIdentity, fireAt, 5 * 60_000)).toBe(true);
+
+      const proactive = createProactiveStore(rollbackPool, owner);
+      await proactive.settings.patch({ categories: { todo: false }, suggestionScope: 'work' });
+      const item = await proactive.items.upsertFinding({
+        dedupeKey: 'integration:owner-reminder',
+        title: 'Synthetic task',
+        body: 'Owner-requested reminder.',
+        category: 'todo',
+        suggestionScope: 'personal',
+        ownerRequested: true,
+        urgency: 'normal',
+        dueAt: fireAt.toISOString(),
+        evidence: [],
+        runId: null,
+        language: 'en',
+      });
+      expect(await proactive.items.get(item.id)).toMatchObject({ ownerRequested: true });
+      expect(await createProactiveStore(rollbackPool, otherOwner).items.get(item.id)).toBeUndefined();
+
+      const down = await readDownMigration('0065_owner_reminder_schedules.sql');
+      const newer = await revertNewerThan(rollbackPool, committed, down.name);
+      await expect(revertMigration(rollbackPool, committed, down))
+        .rejects.toThrow('Owner reminder schedules must be retained');
+      await rollbackPool.request()
+        .input('owner', sql.UniqueIdentifier, owner)
+        .query('DELETE FROM dbo.owner_reminder_schedules WHERE owner_object_id = @owner;');
+      await expect(revertMigration(rollbackPool, committed, down))
+        .rejects.toThrow('Owner-requested reminder items must be retained');
+      await rollbackPool.request()
+        .input('owner', sql.UniqueIdentifier, owner)
+        .query('DELETE FROM dbo.proactive_items WHERE owner_object_id = @owner AND owner_requested = 1;');
+      expect(await revertMigration(rollbackPool, committed, down)).toBe(down.name);
+      expect(await applyMigrations(rollbackPool, committed)).toEqual([down.name, ...newer.map(({ name }) => name)]);
+    }));
 
   it('stores owner-scoped push subscriptions idempotently, caps them, and opens durable items once', async () => {
     const store = createPushStore(pool);

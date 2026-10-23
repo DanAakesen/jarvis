@@ -55,6 +55,7 @@ export interface FindingInput {
   body: string;
   category: NonNullable<Item['category']>;
   suggestionScope?: SuggestionScope;
+  ownerRequested?: boolean;
   relatedCategories?: FindingCategory[];
   urgency: Item['urgency'];
   dueAt: string | null;
@@ -217,7 +218,8 @@ export function createMemoryProactiveStore(ownerObjectId: string = randomUUID())
       },
       async upsertFinding(input, guard) {
         if (input.dedupeKey.length > 64) throw new RangeError('Dedupe key exceeds 64 characters');
-        if (!findingAllowed(settings, input.category, input.suggestionScope ?? 'unknown', input.relatedCategories)) {
+        if (input.ownerRequested !== true &&
+            !findingAllowed(settings, input.category, input.suggestionScope ?? 'unknown', input.relatedCategories)) {
           throw new Error('finding_not_allowed');
         }
         const existingId = findings.get(input.dedupeKey);
@@ -232,6 +234,7 @@ export function createMemoryProactiveStore(ownerObjectId: string = randomUUID())
           body: input.body,
           category: input.category,
           suggestionScope: input.suggestionScope ?? 'unknown',
+          ...(input.ownerRequested === true ? { ownerRequested: true } : {}),
           ...(input.relatedCategories === undefined ? {} : { relatedCategories: [...input.relatedCategories] }),
           urgency: input.urgency,
           dueAt: input.dueAt,

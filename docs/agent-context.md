@@ -452,6 +452,22 @@ proactive generation/delivery only, not explicit owner tasks. Re-enabling does
 not alter pause, sources, budget or unrelated settings. Existing findings,
 todos and reminders are not deleted.
 
+## Owner-requested reminders (#1239)
+
+Explicit reminders are runtime-only owner requests, separate from automatic
+priority-based due reminders. Do not seed schedules, alter task deadlines,
+change proactive preferences, or claim device acknowledgement from provider
+acceptance. Chat and voice share the owner-bound tool; phone-channel calls are
+not accepted. The ticker revalidates stable task identity and stops on
+completion, deletion or ambiguity. Quiet-hour times are refused; automatic
+reminders for the same task within five minutes of an explicit occurrence are
+suppressed.
+
+Focused synthetic checks:
+`npm -w apps/backend exec -- vitest run src/proactive/owner-reminder-store.test.ts src/proactive/owner-reminder-tools.test.ts src/proactive/owner-reminder-ticker.test.ts src/proactive/tools.test.ts src/proactive/todo-file.test.ts src/proactive/policy.test.ts src/database/migrations.test.ts`
+and `npm -w apps/backend run build`. SQL persistence has not been exercised
+against a live database here, and real-device push delivery remains unverified.
+
 Focused local checks:
 `npm test --workspace @jarvis/backend -- --run src/proactive/tools.test.ts src/proactive/policy.test.ts src/proactive/engine.test.ts src/proactive/store.test.ts src/proactive/routes.test.ts src/proactive/todo-writer.test.ts src/proactive/alerts.test.ts src/proactive/reminder-ticker.test.ts src/proactive/vault-push-reminders.test.ts src/database/proactive-store.test.ts src/database/migrations.test.ts src/voice/realtime.test.ts src/voice/startup.test.ts src/core/settings.test.ts src/production-modules.test.ts`,
 `npm test --workspace @jarvis/web -- --run src/ProactiveSettings.test.tsx`,

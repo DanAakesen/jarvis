@@ -1,5 +1,30 @@
 # Decisions
 
+## Owner-requested reminders reuse proactive delivery (#1239; 23 October 2026)
+
+Accepted for the direct owner request in #1239:
+
+- **Keep explicit schedules separate from automatic due reminders.** Persist
+  owner-requested schedules with their own time, cadence, repeat-until-done
+  choice, state, idempotency key and delivery lease. Never derive or modify the
+  task deadline from a requested reminder time.
+- **Reuse the existing ticker, Proactive item, push subscriptions and encrypted
+  Web Push sender.** A small `owner_requested` item marker bypasses only
+  automatic finding category/scope filters. It does not alter proactive
+  settings. Suppress an automatic reminder only for the same stable task
+  identity within five minutes of an explicit occurrence.
+- **Verify task identity conservatively.** Prefer an Obsidian task ID so wording
+  and path changes survive sync; otherwise use normalized task text and stop
+  when identity is missing or ambiguous. Completion cancels future occurrences;
+  dismissing a notification never completes the task.
+- **Preserve quiet hours.** Refuse a direct request for a quiet-window time
+  instead of moving it without consent. Report provider acceptance separately
+  from actual device display or acknowledgement.
+- **No activation or default schedule.** Migration 0065 adds durable structures
+  only. Schedule creation requires a verified runtime owner request; no
+  production settings, owner tasks or schedules are changed by implementation.
+  Rollback refuses to discard schedule or explicit-reminder item data.
+
 ## Chat model rate limit raised for live acceptance (#1232; 23 October 2026)
 
 Decided as a reversible rate-limit change that follows the 5 October capacity
