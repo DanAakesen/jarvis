@@ -60,7 +60,10 @@ INSERT dbo.owner_sessions
 COMMIT TRANSACTION;
 SELECT @evicted AS evicted;`;
 
-export function createOwnerSessionStore(pool: sql.ConnectionPool): OwnerSessionStore {
+export function createOwnerSessionStore(
+  pool: sql.ConnectionPool,
+  options: { readonly revokeAllTimeoutMs?: number } = {},
+): OwnerSessionStore {
   return {
     async create({ record, maxActive, purgeBefore }: CreateOwnerSessionInput) {
       const { recordset } = await pool.request()
@@ -114,12 +117,20 @@ export function createOwnerSessionStore(pool: sql.ConnectionPool): OwnerSessionS
     },
 
     async revokeAll(ownerObjectId: string, at: Date) {
-      const result = await pool.request()
-        .input('owner', sql.UniqueIdentifier, ownerObjectId.toLowerCase())
-        .input('at', sql.DateTime2(3), at)
-        .query(`UPDATE dbo.owner_sessions SET revoked_at = @at
-          WHERE owner_object_id = @owner AND revoked_at IS NULL AND idle_expires_at > @at AND absolute_expires_at > @at;`);
-      return result.rowsAffected[0] ?? 0;
+      const request = pool.request();
+      const timeout = options.revokeAllTimeoutMs === undefined
+        ? undefined
+        : setTimeout(() => request.cancel(), options.revokeAllTimeoutMs);
+      try {
+        const result = await request
+          .input('owner', sql.UniqueIdentifier, ownerObjectId.toLowerCase())
+          .input('at', sql.DateTime2(3), at)
+          .query(`UPDATE dbo.owner_sessions SET revoked_at = @at
+            WHERE owner_object_id = @owner AND revoked_at IS NULL AND idle_expires_at > @at AND absolute_expires_at > @at;`);
+        return result.rowsAffected[0] ?? 0;
+      } finally {
+        if (timeout !== undefined) clearTimeout(timeout);
+      }
     },
   };
 }

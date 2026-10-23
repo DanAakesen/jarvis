@@ -2145,8 +2145,14 @@ After one Entra sign-in the owner can exchange the Entra access token for a
 revocable Jarvis session, so a device stays signed in for 10 days of normal use
 without depending on Microsoft token lifetimes. `JARVIS_OWNER_SESSION_ENABLED` (exactly
 `true` or `false`, default `false`; any other value stops startup) controls it
-and doubles as a kill switch. Session verification reads SQL, so the switch on
-without SQL settings also stops startup instead of silently refusing sessions.
+and doubles as a kill switch. With the switch off, verification stops on the
+next request and session routes return 404. With SQL and the owner id configured,
+each off-mode process start attempts one background `revokeAll` after database
+initialization; without SQL there is no boot revoke. This is best-effort, bounded
+to about a minute, and never delays or fails startup. It does not retry.
+That startup SQL call can wake a paused serverless database.
+An off revision starting during an on/off deployment overlap can revoke sessions
+minted by the on revision; the owner signs in again.
 
 ##### Browser flow (#1220)
 
@@ -2882,10 +2888,13 @@ ledger row. CI proves up, down and re-up against SQL Server. This includes the
 
 Migration `0064_owner_sessions.sql` (#1217) adds `dbo.owner_sessions` for the
 optional owner session described under Backend authentication. Every deployment
-gets the table, but it is read and written only while
-`JARVIS_OWNER_SESSION_ENABLED` is `true`, through the same process-owned pool.
-Its reverse script drops the table, which is the same as revoking every session:
-the owner signs in again. Deploy the migration before the revision that uses it.
+gets the table. With `JARVIS_OWNER_SESSION_ENABLED` on, session requests read and
+write it through the process-owned pool. With the switch off, verification stops
+immediately and each process start with SQL configured attempts one background
+revoke of active sessions. Without SQL there is no boot revoke. That attempt can
+wake a paused serverless database. Its reverse script drops the table, which is
+the same as revoking every session: the owner signs in again. Deploy the migration
+before the revision that uses it.
 
 Real managed-identity token exchange and migrations in a deployed Azure revision
 remain issue #11. See the [database guide](../apps/backend/src/database/README.md)
@@ -5706,7 +5715,7 @@ call linkage remain the post-merge P4-09 acceptance check.
 ## Identity and security
 
 - Dan signs in with Entra ID through `jarvis-web`. `jarvis-api` requires user assignment, and only Dan is assigned; the backend also checks Dan's object ID. The hosted Jarvis agent is assigned the application role `Jarvis.Tools` and may call only the tool routes.
-- When `JARVIS_OWNER_SESSION_ENABLED` is `true`, the owner can exchange one Entra sign-in for an opaque, revocable `js.` session token (10 days idle, 30-day cap, SHA-256 of the secret stored in `dbo.owner_sessions`). It resolves to the same owner principal as an Entra owner token, never satisfies a service route, and is revoked per session or all at once. Lookups for tokens the replica has not recently verified are throttled in process before SQL is read (a 429, never a 401); see Owner session under Backend authentication. The switch is off by default and is also the kill switch.
+- When `JARVIS_OWNER_SESSION_ENABLED` is `true`, the owner can exchange one Entra sign-in for an opaque, revocable `js.` session token (10 days idle, 30-day cap, SHA-256 of the secret stored in `dbo.owner_sessions`). It resolves to the same owner principal as an Entra owner token, never satisfies a service route, and is revoked per session or all at once. Lookups for tokens the replica has not recently verified are throttled in process before SQL is read (a 429, never a 401); see Owner session under Backend authentication. The switch is off by default; off stops verification at once and the next process start attempts to revoke active sessions in the background, which may wake a paused database.
 - Google Calendar and Gmail tools are registered only in the backend and use the official Google APIs over HTTPS. The backend reads `google-oauth-client-id`, `google-oauth-client-secret`, and `google-refresh-token` only from Key Vault, exchanges the refresh token for a short-lived access token, and caches only that access token in memory. The single OAuth grant is for `danaakesen@gmail.com` and uses `gmail.readonly`, `gmail.compose`, `gmail.send`, `gmail.modify`, `calendar.events`, and `calendar.calendarlist.readonly` (read-only calendar list for the Daily all-calendars feed; Daily reuses this single grant); `gmail.modify` is the least-privilege scope for Gmail message labels and draft update/deletion. No Google credential or token is a deployment variable or client-bundle value. An `invalid_grant` records a deduplicated `credential_expiry` activity alert; tool calls return a visible reconnect message. Dan must add `gmail.modify` to Google Auth Platform's Data Access scopes and rerun `infra/setup-google.ps1` to re-consent and replace the Key Vault refresh token before using the new mail tools.
 - Calendar range reads interpret date-only `start`/`end` in `JARVIS_GOOGLE_TIME_ZONE` (inclusive dates and an exclusive next-midnight API boundary); timezone-aware date-times are queried as instants. `calendar_list_events` pages up to 100 events across no more than 62 days and maps optional `query` to Google's `q`; `calendar_next_event` searches up to 60 days and skips events where Dan's attendee response is declined. All-day start/end values remain date-only, including multi-day events, while timed events remain instants. Calendar agenda, range, and next-event reads are reflex-safe and sensitive results remain redacted from the durable tool-call audit.
 - Gmail search and draft listing share the bounded MIME reader introduced on #837 / task 12. It reads nested plain/HTML alternatives and API-externalized text parts, returning `bodySource`, `bodyTruncated`, `contentWarnings` and differing `alternateBody`/`alternateBodyTruncated`. Static parse5 extraction skips scripts, styles, hidden attributes and inline hidden styles, strips invisible email padding before the 6000-character text limit, and never executes HTML or fetches remote resources. File attachments, unsupported charsets, missing bodies and traversal limits remain explicit; snippets cannot establish absent reservation details.

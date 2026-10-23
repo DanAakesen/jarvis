@@ -823,12 +823,14 @@ describe('structured log export', () => {
     logger.info({ scope: 'current', sessionPrefix: 'AbCd-_09', ...secrets }, 'owner_session.revoked');
     logger.info({ scope: 'all', count: 3, ...secrets }, 'owner_session.revoked');
     logger.warn({ sessionPrefix: 'AbCd-_09', ...secrets }, 'owner_session.refresh_failed');
+    logger.warn({ outcome: 'table_missing', count: 4, ...secrets }, 'owner_session.boot_revoke');
     const tail = records.slice(ownerSessionAuditReasons.length).map((record) => JSON.parse(record) as unknown);
     expect(tail).toEqual([
       expect.objectContaining({ msg: 'owner_session.created', sessionPrefix: 'AbCd-_09', evicted: 1 }),
       expect.objectContaining({ msg: 'owner_session.revoked', scope: 'current', sessionPrefix: 'AbCd-_09' }),
       expect.objectContaining({ msg: 'owner_session.revoked', scope: 'all', count: 3 }),
       expect.objectContaining({ msg: 'owner_session.refresh_failed', sessionPrefix: 'AbCd-_09' }),
+      expect.objectContaining({ msg: 'owner_session.boot_revoke', outcome: 'table_missing', count: 4 }),
     ]);
     expect(records.join('') + JSON.stringify(sink.trackTrace.mock.calls)).not.toContain('leak');
   });
