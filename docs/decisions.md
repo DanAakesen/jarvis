@@ -1,5 +1,31 @@
 # Decisions
 
+## Chat model rate limit raised for live acceptance (#1232; 23 October 2026)
+
+Decided as a reversible rate-limit change that follows the 5 October capacity
+decision:
+
+- **`gpt-6-astra` capacity goes from 50 to 150 (Global Standard) in
+  `infra/main.bicep`.** Global Standard bills per token, so capacity is only the
+  rate limit and adds no standing cost. The subscription quota for this model in
+  the account region is 250 units, with 50 in use before the change.
+- **Reason.** The live conversation acceptance run sends about 15 Chat model calls
+  in one minute, with 57,625 to 66,460 input tokens in the busiest minute, against
+  a limit of 50,000 tokens per minute. Foundry Responses API spans for the failed
+  checks carried `error.type` `rate_limit_exceeded` (4, 1, 2 and 2 spans in four
+  attempts of one release), backend tool callbacks all returned 200, and no other
+  model traffic ran in those minutes. Each attempt failed a different pair of
+  `chat_*` checks, and earlier releases showed the same pattern with the owner
+  session switch off. The run was throttling itself: these were not flaky agent
+  checks and not an authentication problem.
+- **Not decided here.** Pacing the acceptance chat checks, or backing off once on a
+  rate limit, stays a follow-up if the next release still fails. The other
+  50-capacity deployments (`gpt-6-luna`, `gpt-6.1-sol`) are unchanged; raise them
+  the same way if the Chat model setting moves to one of them.
+- **Verify.** The next release applies the new capacity in its infrastructure
+  stage before live acceptance, so it should pass on the first attempt with no
+  `rate_limit_exceeded` spans. To roll back, set the capacity back to 50.
+
 ## Owner session switch enabled in production (#1217; 23 October 2026)
 
 Decided, on the owner's explicit approval on 23 October 2026:

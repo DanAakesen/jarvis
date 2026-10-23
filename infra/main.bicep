@@ -583,7 +583,10 @@ resource gpt6LunaVisionDeployment 'Microsoft.CognitiveServices/accounts/deployme
 }
 
 // Dan's choice, 10 October: stronger models for research, Danish voice chat and Codex. Deployed one at a
-// time like the others (Foundry allows one operation per account); capacity matches gpt-6-luna.
+// time like the others (Foundry allows one operation per account). Capacity was 50 like gpt-6-luna and is
+// 150 since 23 October (#1232): the live acceptance run sends over 50K input tokens in one minute to the
+// Chat model and throttled itself with rate_limit_exceeded. Global Standard bills per token, so capacity is
+// only the rate limit.
 resource gpt6AstraDeployment 'Microsoft.CognitiveServices/accounts/deployments@2024-10-01' = {
   parent: foundryAccount
   name: 'gpt-6-astra'
@@ -592,7 +595,7 @@ resource gpt6AstraDeployment 'Microsoft.CognitiveServices/accounts/deployments@2
   ]
   sku: {
     name: 'GlobalStandard'
-    capacity: 50
+    capacity: 150
   }
   properties: {
     model: {
