@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   MAX_APPROVAL_REPLY_CHARS, MAX_APPROVAL_SUMMARY_CHARS, approvalDeciderFor, approvalSystemPrompt, buildApprovalPrompt,
   createApprovalInterpreter, fastApprovalDecider, parseApprovalVerdict, safeDecision,
-  type ApprovalDecider, type ApprovalModelPort, type ApprovalQuestion,
+  preferenceIntentSystemPrompt, type ApprovalDecider, type ApprovalModelPort, type ApprovalQuestion,
 } from './approval-interpreter.js';
 
 const summary = 'Create 2 events in Google Calendar: "Synthetic Hotel Alpha" on 14 June 2027 and "Synthetic Hotel Beta" on 9 December 2027.';
@@ -50,6 +50,23 @@ describe('parseApprovalVerdict', () => {
 });
 
 describe('createApprovalInterpreter', () => {
+  it('uses instruction meaning, not bare approval fast paths, for proactive preferences', async () => {
+    const model = modelReturning(verdictJson('approve'));
+    const interpret = createApprovalInterpreter({ model });
+    await expect(interpret(question('ja tak', {
+      family: 'proactive_preferences', summary: '{"category":"travel","enabled":false}',
+    }))).resolves.toEqual({ verdict: 'neither', path: 'fast' });
+    expect(model).not.toHaveBeenCalled();
+    await expect(interpret(question('Jeg vil ikke have rejseforslag længere', {
+      family: 'proactive_preferences', summary: '{"category":"travel","enabled":false}',
+    }))).resolves.toEqual({ verdict: 'approve', path: 'model' });
+    expect(model.mock.calls[0]![0].system).toBe(preferenceIntentSystemPrompt);
+    expect(model.mock.calls[0]![0].user).toContain('{"category":"travel","enabled":false}');
+    await expect(createApprovalInterpreter()(question('yes', {
+      family: 'proactive_preferences',
+    }))).resolves.toEqual({ verdict: 'neither', path: 'fast' });
+  });
+
   it.each([
     ['yes', 'approve'], ['Yes please', 'approve'], ['ja tak', 'approve'], ['go ahead', 'approve'],
     ['no', 'decline'], ['nej tak', 'decline'], ['cancel', 'decline'],

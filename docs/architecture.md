@@ -6957,6 +6957,19 @@ mentions the capability only when it is present in the active advertised tool
 set. The preference does not turn off providers or constrain ordinary owner
 requests.
 
+The 23 October 2026 follow-up retains canonical intent matching and uses the
+existing server-side approval interpreter for other natural Danish/English
+instructions. Its `proactive_preferences` family has a separate instruction
+prompt: independently interpret the verified owner message and compare it with
+the exact server-generated candidate category/direction or scope. Bare approval
+replies cannot authorize a preference write. The tools-free model call shares
+the existing five-second timeout, confidence threshold, bounded cache,
+concurrency/rate limits and usage accounting; no tool budget is increased.
+Missing model configuration, malformed/uncertain verdicts and interpreter
+failures refuse without a write. The tool rechecks current-message provenance
+and cancellation before patching. Only verdict/path metadata is logged.
+No settings schema, migration, generation policy or delivery rule changes.
+
 The engine excludes disabled travel evidence across all enabled sources and
 filters both deterministic and model-generated findings by category and
 conservative scope classification. Only exact personal/work evidence passes a

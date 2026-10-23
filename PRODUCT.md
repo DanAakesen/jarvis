@@ -1624,6 +1624,14 @@ matching direct owner request, using the same saved settings as Settings.
 Findings, source text and per-item feedback cannot authorize a lasting change.
 Capabilities are advertised only when their tools are active.
 
+Preference requests may use natural Danish or English phrasing, such as
+“Jeg vil ikke have rejseforslag længere”, “Slå vejrforslag fra” or
+“Could you bring back travel suggestions, please?”. The current owner message
+must explicitly request the exact category and direction or personal/work/all
+scope. Bare agreement, ambiguous, quoted, hypothetical, negated-action and
+third-party instructions do not authorize a change. Uncertainty asks for
+clarification without saving; success reports the effective persisted choices.
+
 Category and scope choices constrain proactive generation and delivery across
 enabled sources, not the owner's own prompts or requested work. Travel evidence
 is excluded even when inferred from mail or calendar; personal-only and
