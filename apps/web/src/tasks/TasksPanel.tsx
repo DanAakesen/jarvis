@@ -108,14 +108,21 @@ function TaskRow({ task, done, phase, pending, fresh, showScope, onToggle, onOpe
     const { draft } = edit;
     const priority = draft.priority === 'normal' ? undefined : draft.priority;
     return <li ref={row} className="tasks-panel-row" data-scope={isWork(task) ? 'work' : 'personal'} data-priority={priority} data-editing>
-      <form className="tasks-panel-editor" onSubmit={(event) => { event.preventDefault(); edit.onSave(task); }}>
+      <form className="tasks-panel-editor" onSubmit={(event) => { event.preventDefault(); edit.onSave(task); }}
+        onKeyDown={(event) => {
+          // Escape anywhere in the editor cancels only the edit, never the panel; an IME Escape belongs to the IME and cancels nothing.
+          if (event.key !== 'Escape') return;
+          event.stopPropagation();
+          if (event.nativeEvent.isComposing) return;
+          event.preventDefault();
+          edit.onCancel();
+        }}>
         <textarea ref={field} className="tasks-panel-edit-input" rows={3} value={draft.text} maxLength={200} autoComplete="off"
           aria-label="Task text" aria-invalid={edit.error ? true : undefined} disabled={edit.saving}
           onChange={(event) => edit.onChange({ text: event.target.value })}
           onKeyDown={(event) => {
             if (event.nativeEvent.isComposing) return;
             if (event.key === 'Enter') { event.preventDefault(); edit.onSave(task); }
-            if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); edit.onCancel(); }
           }} />
         <div className="tasks-panel-when">
           <label className="tasks-panel-when-field">
@@ -261,8 +268,9 @@ export function TasksPanel({ id, backendUrl, getAccessToken, initialQuery = '', 
   useEffect(() => { if (adding) draftInput.current?.focus(); }, [adding]);
 
   const searching = query.trim() !== '';
-  // An edit whose task left the list (search, refresh) is simply no longer open.
-  const activeEditId = editId !== null && result?.items.some((task) => task.id === editId) ? editId : null;
+  // An edit whose task left the visible list (search, refresh, another scope) is simply no longer open.
+  const activeEditId = editId !== null && result?.items.some((task) =>
+    task.id === editId && (scope === 'all' || isWork(task) === (scope === 'work'))) ? editId : null;
   useEffect(() => {
     const controller = new AbortController();
     const quiet = quietReload.current;
@@ -512,7 +520,7 @@ export function TasksPanel({ id, backendUrl, getAccessToken, initialQuery = '', 
       </form>}
       <div className="tasks-panel-scope" role="group" aria-label="Show tasks from">
         {scopes.map(({ id: key, label }) => <button key={key} className="tasks-panel-toggle" type="button" aria-pressed={scope === key}
-          onClick={() => setScope(key)}>{label}</button>)}
+          onClick={() => { if (!editSaving) cancelEdit(); setScope(key); }}>{label}</button>)}
       </div>
     </div>
     {notice && <p className="tasks-panel-notice" role="alert">{notice}</p>}

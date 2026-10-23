@@ -264,6 +264,35 @@ describe('Tasks panel', () => {
     await waitFor(() => expect(fetchMock.mock.calls.filter(([url]) => String(url).includes('?state=open'))).toHaveLength(2));
   });
 
+  it('cancels only the edit on Escape from any control in the editor, and ignores an IME Escape', async () => {
+    mount();
+    await screen.findByRole('heading', { name: 'Overdue' });
+    fireEvent.click(screen.getByRole('button', { name: 'Edit task: No date fixture' }));
+    fireEvent.keyDown(screen.getByRole('textbox', { name: 'Task text' }), { key: 'Escape', isComposing: true });
+    expect(screen.getByRole('textbox', { name: 'Task text' })).not.toBeNull();
+    expect(onClose).not.toHaveBeenCalled();
+    const controls = [() => screen.getByLabelText('Due date'), () => screen.getByRole('button', { name: 'High' }), () => screen.getByRole('button', { name: 'Save task' })];
+    for (const control of controls) {
+      fireEvent.keyDown(control(), { key: 'Escape' });
+      expect(screen.queryByRole('textbox', { name: 'Task text' })).toBeNull();
+      expect(onClose).not.toHaveBeenCalled();
+      fireEvent.click(screen.getByRole('button', { name: 'Edit task: No date fixture' }));
+    }
+    expect(writeCalls()).toHaveLength(0);
+  });
+
+  it('drops an open edit when the scope switch hides its task, so the visible pencils stay usable', async () => {
+    mount();
+    await screen.findByRole('heading', { name: 'Overdue' });
+    fireEvent.click(screen.getByRole('button', { name: 'Edit task: No date fixture' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Work' }));
+    expect(screen.queryByRole('textbox', { name: 'Task text' })).toBeNull();
+    expect((screen.getByRole('button', { name: 'Edit task: Work fixture' }) as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.click(screen.getByRole('button', { name: 'All' }));
+    expect(screen.queryByRole('textbox', { name: 'Task text' })).toBeNull();
+    expect((screen.getByRole('button', { name: 'Edit task: No date fixture' }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
   it('offers no edit on completed tasks', async () => {
     mount();
     await screen.findByRole('heading', { name: 'Overdue' });
