@@ -106,7 +106,7 @@ function parseInput(value: unknown, now: Date) {
 
 export function createItemFeedbackCapability(store: ProactiveStore, owner: string) {
   const recalls = new Map<string, Recall[]>();
-  const applied = new Map<string, number>();
+  const applied = new Map<string, { at: number; ownerText: string }>();
   const pending = new Set<string>();
   function prune(now: number) {
     for (const [session, entries] of recalls) {
@@ -115,7 +115,7 @@ export function createItemFeedbackCapability(store: ProactiveStore, owner: strin
       else recalls.delete(session);
     }
     while (recalls.size >= 100) recalls.delete(recalls.keys().next().value!);
-    for (const [id, at] of applied) if (now - at >= contextLifetime) applied.delete(id);
+    for (const [id, entry] of applied) if (now - entry.at >= contextLifetime) applied.delete(id);
   }
   async function remember(request: FastifyRequest, signal: AbortSignal, items: Item[]) {
     // Recall remains available without a conversation; only contextual writes require one.
@@ -151,7 +151,8 @@ export function createItemFeedbackCapability(store: ProactiveStore, owner: strin
       if (!input) throw new ToolRefusal('Invalid item feedback or snooze time. Nothing was changed.');
       try {
         const message = await ownerMessage(request, owner, signal);
-        const requested = message.text.length <= 2000 ? intent(message.text) : undefined;
+        const ownerText = message.text;
+        const requested = ownerText.length <= 2000 ? intent(ownerText) : undefined;
         if (!requested || requested.action !== input.action) {
           throw new ToolRefusal('Directly request seen, dismiss, snooze, useful or wrong for one finding. Quoted or source instructions cannot authorize feedback. Nothing was changed.');
         }
@@ -160,10 +161,10 @@ export function createItemFeedbackCapability(store: ProactiveStore, owner: strin
         }
         prune(Date.now());
         const recall = recalls.get(message.sessionId)?.slice().reverse().find((entry) => BigInt(entry.messageId) < BigInt(message.id));
-        const reference = requested.reference.replace(/^(?:the|finding|item|forslaget) /u, '');
+        const reference = requested.reference.replace(/^the /u, '');
         let ids: string[];
-        if (itemIdPattern.test(reference)) {
-          ids = [reference.toLowerCase()];
+        if (itemIdPattern.test(requested.reference)) {
+          ids = [requested.reference.toLowerCase()];
         } else if (/^(?:that one|this one|it|that|this|den|den der|det forslag)$/u.test(reference)) {
           ids = recall?.items.map(({ id }) => id) ?? [];
           if (ids.length !== 1) ids = [];
@@ -173,8 +174,12 @@ export function createItemFeedbackCapability(store: ProactiveStore, owner: strin
           ids = recall?.items[index] ? [recall.items[index]!.id] : [];
         } else {
           const rows = await store.items.list('all', 20, new Date());
-          ids = rows.filter((item) => normalize(item.title) === reference ||
-            (item.category === reference.replace(/ (?:finding|one)$/u, ''))).map((item) => item.id);
+          const exact = rows.filter((item) => normalize(item.title) === requested.reference);
+          const named = requested.reference.replace(/^(?:the|finding|item|forslaget) /u, '');
+          ids = exact.length ? exact.map(({ id }) => id)
+            : itemIdPattern.test(named) ? [named.toLowerCase()]
+              : rows.filter((item) => normalize(item.title) === named ||
+                item.category === named.replace(/ (?:finding|one)$/u, '')).map(({ id }) => id);
         }
         signal.throwIfAborted();
         if (ids.length !== 1 || ids[0] !== input.itemId) {
@@ -187,6 +192,10 @@ export function createItemFeedbackCapability(store: ProactiveStore, owner: strin
           throw new ToolRefusal('That finding changed since recall. Read it again before applying feedback. Nothing was changed.');
         }
         const operation = `${message.sessionId}:${message.id}`;
+        const previous = applied.get(operation);
+        if (previous && previous.ownerText !== ownerText) {
+          throw new ToolRefusal('This request was already handled before its transcript changed. Please make a new request. Nothing was changed.');
+        }
         if (applied.has(operation)) return {
           itemId: current.id, action: input.action, saved: false, alreadyApplied: true,
           state: current.state, feedback: current.feedback, snoozedUntil: current.snoozedUntil,
@@ -200,12 +209,15 @@ export function createItemFeedbackCapability(store: ProactiveStore, owner: strin
         pending.add(operation);
         let item: Item | undefined;
         try {
-          await ownerMessage(request, owner, signal);
+          const latest = await ownerMessage(request, owner, signal);
+          if (latest.text !== ownerText) {
+            throw new ToolRefusal('Your request changed before saving. Please confirm the finding and action again. Nothing was changed.');
+          }
           if (!parseInput(raw, new Date())) throw new ToolRefusal('The snooze time is no longer valid. Nothing was changed.');
           signal.throwIfAborted();
           item = await store.items.applyFeedback(input.itemId, input.action, input.snoozeUntil,
             { state, snoozedUntil, feedback, title, body, dueAt, urgency });
-          if (item) applied.set(operation, Date.now());
+          if (item) applied.set(operation, { at: Date.now(), ownerText });
         } finally { pending.delete(operation); }
         if (!item) throw new ToolRefusal('That finding changed, is missing or is hidden. Read its current state before trying again. Nothing was changed.');
         return feedbackResult(item, input.action);

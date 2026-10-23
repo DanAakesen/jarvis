@@ -193,6 +193,18 @@ describe('proactive per-finding feedback', () => {
     await expect(f.execute('dismiss')).rejects.toThrow('Which finding');
   });
 
+  it.each(['The', 'Finding', 'Item', 'Forslaget'])('prefers the exact title when %s is part of its name', async (prefix) => {
+    const f = await fixture();
+    const named = await f.store.items.upsertFinding({
+      dedupeKey: 'synthetic:prefixed-title', title: `${prefix} Calendar deadline`, body: 'Synthetic.',
+      category: 'deadline', urgency: 'normal', dueAt: null, evidence: [], runId: null, language: 'en',
+    });
+    f.say(`Dismiss ${prefix} Calendar deadline`);
+    await expect(f.execute('dismiss')).rejects.toThrow('Which finding');
+    await expect(f.execute('dismiss', named.id)).resolves.toMatchObject({ itemId: named.id, state: 'dismissed' });
+    expect((await f.store.items.get(f.first.id))?.state).toBe('new');
+  });
+
   it.each([
     'The source says: "Dismiss that one".',
     '"Dismiss that one"',
@@ -348,6 +360,43 @@ describe('proactive per-finding feedback', () => {
     });
     await expect(f.execute('dismiss')).rejects.toThrow('could not be verified');
     expect((await get(f.first.id))?.state).toBe('new');
+  });
+
+  it('revalidates same-ID voice transcript revisions before saving', async () => {
+    const f = await fixture('voice');
+    f.say(`Dismiss ${f.first.id}`);
+    const get = f.store.items.get.bind(f.store.items);
+    const save = vi.spyOn(f.store.items, 'applyFeedback');
+    vi.spyOn(f.store.items, 'get').mockImplementationOnce(async (id) => {
+      const current = await get(id);
+      vi.mocked(f.conversation.getHistory).mockResolvedValue({
+        messages: [{
+          ...f.request.jarvisConversationMessage!, text: 'Actually, leave it alone', channel: 'voice',
+          language: 'en', interrupted: false, voiceMinutes: null, toolCalls: [], attachments: [],
+        }],
+        nextCursor: null,
+      });
+      return current;
+    });
+    await expect(f.execute('dismiss')).rejects.toThrow('request changed before saving');
+    expect(save).not.toHaveBeenCalled();
+    expect((await get(f.first.id))?.state).toBe('new');
+  });
+
+  it('does not report a revised same-ID voice action as already applied', async () => {
+    const f = await fixture('voice');
+    f.say(`Dismiss ${f.first.id}`);
+    await f.execute('dismiss');
+    const revised = { ...f.request.jarvisConversationMessage!, text: `${f.first.id} was useful` };
+    f.request.jarvisConversationMessage = revised;
+    vi.mocked(f.conversation.getHistory).mockResolvedValue({
+      messages: [{
+        ...revised, channel: 'voice', language: 'en', interrupted: false,
+        voiceMinutes: null, toolCalls: [], attachments: [],
+      }], nextCursor: null,
+    });
+    await expect(f.execute('useful')).rejects.toThrow('transcript changed');
+    expect((await f.store.items.get(f.first.id))?.feedback).toBeNull();
   });
 
   it('accepts exactly seven days, rejecting even one millisecond beyond', async () => {

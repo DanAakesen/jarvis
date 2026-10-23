@@ -6949,7 +6949,9 @@ action and resolves its target server-side. Explicit IDs or unique recent
 titles/categories are supported; pronouns and ordinals require an earlier
 session-bound recall. A same-turn model-selected recall cannot authorize a
 pronoun. Source bodies, quoted instructions and model-supplied IDs do not
-authorize writes.
+authorize writes. Exact title matches take precedence over optional reference
+prefixes. The owner text is rechecked before saving, including voice transcript
+revisions that retain the same message ID.
 
 Recall snapshots expire after 15 minutes, retain at most ten reads of twenty
 items per session and at most 100 sessions. Restart loses contextual references
