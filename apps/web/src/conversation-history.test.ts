@@ -8,7 +8,6 @@ import {
 } from './conversation-history';
 
 const config = { ...__JARVIS_CONFIG__, backendUrl: 'https://api.example.com/' };
-const account = { homeAccountId: 'account' };
 const history = {
   messages: [{
     id: '42',
@@ -25,13 +24,8 @@ const history = {
   nextCursor: null,
 };
 
-function createClient(overrides: Record<string, unknown> = {}) {
-  return {
-    getActiveAccount: vi.fn(() => account),
-    getAllAccounts: vi.fn(() => [account]),
-    acquireTokenSilent: vi.fn(async () => ({ accessToken: 'test-token' })),
-    ...overrides,
-  };
+function createClient(getAccessToken: () => Promise<string> = async () => 'test-token') {
+  return vi.fn(getAccessToken);
 }
 
 afterEach(() => { vi.unstubAllGlobals(); });
@@ -66,9 +60,9 @@ describe('loadConversationHistory', () => {
     const url = new URL(String(request?.input));
     expect(url.searchParams.get('limit')).toBe('50');
     expect(url.searchParams.get('before')).toBe('42');
-    const authorization = (request?.init?.headers as Record<string, string>).Authorization;
+    const authorization = new Headers(request?.init?.headers).get('authorization');
     expect(authorization?.startsWith(['Bear', 'er'].join(''))).toBe(true);
-    expect(client.acquireTokenSilent).toHaveBeenCalledWith({ scopes: [config.apiScope], account });
+    expect(client).toHaveBeenCalledOnce();
   });
 
   it('rejects malformed persisted visual evidence rather than claiming image access', async () => {
@@ -174,7 +168,7 @@ describe('loadConversationHistory', () => {
           { source: 'camera', capturedAt: '2026-10-11T20:06:00.000Z', description: 'Three.', ...overrides },
         )).rejects.toThrow();
         expect(fetch).not.toHaveBeenCalled();
-        expect(client.acquireTokenSilent).not.toHaveBeenCalled();
+        expect(client).not.toHaveBeenCalled();
       });
 
       it('rejects simultaneous legacy and structured visual context before sending', async () => {
@@ -321,7 +315,7 @@ describe('loadImageArtifactUrl', () => {
     expect(String(fetch.mock.calls[0]?.[0])).toContain(
       '/factory/workspace-artifacts/images/7b96c6a9-9f80-4a8b-8a73-51517fe37512',
     );
-    expect((fetch.mock.calls[0]?.[1]?.headers as Record<string, string>).Authorization)
+    expect(new Headers(fetch.mock.calls[0]?.[1]?.headers).get('authorization'))
       .toBe(`${['Bear', 'er'].join('')} test-token`);
     const requestSignal = fetch.mock.calls[0]?.[1]?.signal;
     expect(requestSignal?.aborted).toBe(false);
@@ -342,7 +336,9 @@ describe('loadImageArtifactUrl', () => {
 
 describe('loadConversationHistory errors', () => {
   it('fails closed if no sign-in account is available', async () => {
-    const client = createClient({ getActiveAccount: vi.fn(() => null), getAllAccounts: vi.fn(() => []) });
+    const client = createClient(async () => {
+      throw new Error('Your Microsoft sign-in needs attention. Sign in again.');
+    });
     const fetch = vi.fn();
     vi.stubGlobal('fetch', fetch);
 
@@ -392,8 +388,8 @@ describe('chat steering API', () => {
       text: message.text,
       language: 'da',
     });
-    expect(fetch.mock.calls[0]?.[1]?.headers).toHaveProperty('Authorization');
-    expect(client.acquireTokenSilent).toHaveBeenCalledWith({ scopes: [config.apiScope], account });
+    expect(new Headers(fetch.mock.calls[0]?.[1]?.headers).has('authorization')).toBe(true);
+    expect(client).toHaveBeenCalledOnce();
   });
 
   it('parses interrupted partial replies before the steered continuation', async () => {

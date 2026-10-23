@@ -10,6 +10,7 @@ import './ConversationHistory.css';
 
 export function JarvisPage({
   client,
+  getAccessToken,
   config,
   camera,
   screenShare,
@@ -21,6 +22,7 @@ export function JarvisPage({
   /** Escape tucks a popped-out chat bar back into the rail. */
   onDismiss?: () => void;
   client: PublicClientApplication;
+  getAccessToken: () => Promise<string>;
   config: PublicConfig;
   camera: CameraController;
   screenShare: ScreenShareController;
@@ -50,6 +52,7 @@ export function JarvisPage({
       )}
       <ConversationHistory
         client={client}
+        getAccessToken={getAccessToken}
         config={config}
         screenShare={screenShare}
         camera={camera}

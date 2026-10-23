@@ -1,4 +1,3 @@
-import type { PublicClientApplication } from '@azure/msal-browser';
 import type { PublicConfig } from '../config/public-config';
 import { backendFetch, awaitWithSignal as waitForChatSetup } from './backend-request';
 import type { ChatAttachment } from './chat-attachments';
@@ -84,21 +83,12 @@ export interface SteeringMessage extends ChatMessage {
 
 export { awaitWithSignal as waitForChatSetup } from './backend-request';
 
-export async function accessToken(client: PublicClientApplication, config: PublicConfig): Promise<string> {
-  const account = client.getActiveAccount() ?? client.getAllAccounts()[0];
-  if (!account) throw new Error('Your Microsoft sign-in needs attention. Sign in again.');
-
-  try {
-    const result = await client.acquireTokenSilent({ scopes: [config.apiScope], account });
-    if (result.accessToken) return result.accessToken;
-  } catch {
-    throw new Error('Your Microsoft sign-in needs attention. Sign in again.');
-  }
-  throw new Error('Microsoft sign-in did not return an API token.');
+export async function accessToken(getAccessToken: () => Promise<string>): Promise<string> {
+  return getAccessToken();
 }
 
 async function chatResponse(
-  client: PublicClientApplication,
+  getAccessToken: () => Promise<string>,
   config: PublicConfig,
   path: string,
   body?: unknown,
@@ -108,8 +98,8 @@ async function chatResponse(
 ): Promise<Response> {
   if (!config.backendUrl) throw new Error('Chat unavailable. Try again.');
   const token = signal
-    ? await waitForChatSetup(() => accessToken(client, config), signal)
-    : await accessToken(client, config);
+    ? await waitForChatSetup(getAccessToken, signal)
+    : await accessToken(getAccessToken);
   signal?.throwIfAborted();
   let response: Response;
   try {
@@ -142,12 +132,12 @@ async function chatResponse(
 }
 
 export async function createChatSession(
-  client: PublicClientApplication,
+  getAccessToken: () => Promise<string>,
   config: PublicConfig,
   language: 'da' | 'en',
   signal?: AbortSignal,
 ): Promise<ChatSession> {
-  const response = await chatResponse(client, config, '/conversation/sessions', {
+  const response = await chatResponse(getAccessToken, config, '/conversation/sessions', {
     channel: 'chat',
     language,
   }, 'application/json', undefined, signal);
@@ -189,7 +179,7 @@ function chatMessageResult(message: ChatMessage): ChatMessage {
 }
 
 export async function sendChatTurn(
-  client: PublicClientApplication,
+  getAccessToken: () => Promise<string>,
   config: PublicConfig,
   session: ChatSession,
   text: string,
@@ -208,7 +198,7 @@ export async function sendChatTurn(
   }
   const visual = visualContext === undefined ? undefined : parseVisualTurnContext(visualContext);
   const response = await chatResponse(
-    client,
+    getAccessToken,
     config,
     `/conversation/sessions/${session.id}/turns`,
     {
@@ -288,7 +278,7 @@ export async function sendChatTurn(
 }
 
 export async function steerChatTurn(
-  client: PublicClientApplication,
+  getAccessToken: () => Promise<string>,
   config: PublicConfig,
   session: ChatSession,
   text: string,
@@ -296,7 +286,7 @@ export async function steerChatTurn(
   signal?: AbortSignal,
 ): Promise<SteeringMessage> {
   const response = await chatResponse(
-    client,
+    getAccessToken,
     config,
     `/conversation/sessions/${session.id}/steer`,
     { text, language },
@@ -316,11 +306,11 @@ export async function steerChatTurn(
 }
 
 export async function loadConversationHistory(
-  client: PublicClientApplication,
+  getAccessToken: () => Promise<string>,
   config: PublicConfig,
   before?: string,
 ): Promise<ConversationHistoryPage> {
-  const token = await accessToken(client, config);
+  const token = await accessToken(getAccessToken);
   if (!config.backendUrl) throw new Error('Conversation history unavailable. Try again.');
 
   const url = new URL(`${config.backendUrl.replace(/\/+$/, '')}/conversation/history`);
@@ -365,7 +355,7 @@ export async function loadConversationHistory(
 }
 
 export async function loadImageArtifactUrl(
-  client: PublicClientApplication,
+  getAccessToken: () => Promise<string>,
   config: PublicConfig,
   artifactId: string,
   signal: AbortSignal,
@@ -374,7 +364,7 @@ export async function loadImageArtifactUrl(
     throw new Error('Jarvis returned an invalid image artifact reference.');
   }
   if (!config.backendUrl) throw new Error('Image artifacts unavailable. Try again.');
-  const token = await accessToken(client, config);
+  const token = await accessToken(getAccessToken);
   let response: Response;
   try {
     const bearerScheme = ['Bear', 'er'].join('');

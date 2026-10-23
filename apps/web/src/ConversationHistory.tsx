@@ -29,7 +29,6 @@ import { Loader } from './Loader';
 import { StateMessage } from './StateMessage';
 import { formatDateTime } from './format/date-time';
 import {
-  accessToken,
   createChatSession,
   loadImageArtifactUrl,
   loadConversationHistory,
@@ -43,6 +42,9 @@ import {
 } from './conversation-history';
 
 const maxTaskId = 9_223_372_036_854_775_807n;
+const missingAccessToken = async (): Promise<string> => {
+  throw new Error('Your sign-in needs attention. Try again.');
+};
 
 type QueuedMessage = { id: number; text: string; language: 'da' | 'en'; attachments?: ChatAttachment[] };
 const followThreshold = 32;
@@ -113,11 +115,11 @@ function validTaskId(value: string | null): value is string {
 }
 
 function ConversationImageArtifact({
-  client,
+  getAccessToken,
   config,
   artifactId,
 }: {
-  client: PublicClientApplication;
+  getAccessToken: () => Promise<string>;
   config: PublicConfig;
   artifactId: string;
 }) {
@@ -127,7 +129,7 @@ function ConversationImageArtifact({
   useEffect(() => {
     const controller = new AbortController();
     let active = true;
-    void loadImageArtifactUrl(client, config, artifactId, controller.signal)
+    void loadImageArtifactUrl(getAccessToken, config, artifactId, controller.signal)
       .then((imageUrl) => {
         if (active) setUrl(imageUrl);
       })
@@ -138,7 +140,7 @@ function ConversationImageArtifact({
       active = false;
       controller.abort();
     };
-  }, [artifactId, client, config]);
+  }, [artifactId, getAccessToken, config]);
 
   if (unavailable) return <span role="status">Generated image is unavailable.</span>;
   if (!url) return <StateMessage variant="loading" loaderVariant="image" message="Loading generated image" />;
@@ -157,6 +159,7 @@ function isSharedBrowserRequest(text: string) {
 
 export function ConversationHistory({
   client,
+  getAccessToken,
   config,
   historyRefresh = 0,
   children,
@@ -164,12 +167,14 @@ export function ConversationHistory({
   camera,
 }: {
   client: PublicClientApplication;
+  getAccessToken?: () => Promise<string>;
   config: PublicConfig;
   historyRefresh?: number;
   children?: ReactNode;
   screenShare?: ScreenShareController;
   camera?: CameraController;
 }) {
+  const tokenProvider = getAccessToken ?? missingAccessToken;
   const { onVoiceActiveChange } = useVoiceWorkspace();
   const conversationIntents = useConversationIntents();
   const [messages, setMessages] = useState<ConversationHistoryMessage[]>([]);
@@ -208,7 +213,7 @@ export function ConversationHistory({
   const [failedTurns, setFailedTurns] = useState<FailedTurn[]>([]);
   const [streamedText, setStreamedText] = useState('');
   const [turnError, setTurnError] = useState('');
-  const watchToken = useCallback(() => accessToken(client, config), [client, config]);
+  const watchToken = useCallback(() => tokenProvider(), [tokenProvider]);
   const screenWatch = useVisionWatch(config, watchToken, screenShare, 'screen', session?.id ?? null, setTurnError);
   const cameraWatch = useVisionWatch(config, watchToken, camera, 'camera', session?.id ?? null, setTurnError);
   const [steering, setSteering] = useState(false);
@@ -228,7 +233,7 @@ export function ConversationHistory({
   const fileInput = useRef<HTMLInputElement>(null);
   const dragDepth = useRef(0);
   const [fileDrag, setFileDrag] = useState(false);
-  const attachments = useChatAttachments(client, config);
+  const attachments = useChatAttachments(tokenProvider, config);
   const { ready: readyFiles, uploading: uploadingFiles, take: takeFiles, restore: restoreFiles, discard: discardFiles, add: addFiles } = attachments;
   const transcript = useRef<HTMLDivElement>(null);
   const followedTranscript = useRef<HTMLDivElement | null>(null);
@@ -397,7 +402,7 @@ export function ConversationHistory({
 
   useEffect(() => {
     let active = true;
-    void loadConversationHistory(client, config).then((page) => {
+    void loadConversationHistory(tokenProvider, config).then((page) => {
       if (!active) return;
       setHistoryError('');
       setMessages((current) => mergeMessages(current, page.messages));
@@ -411,7 +416,7 @@ export function ConversationHistory({
       if (active) setLoading(false);
     });
     return () => { active = false; };
-  }, [client, config, historyRefresh, voiceRefresh, reload]);
+  }, [tokenProvider, config, historyRefresh, voiceRefresh, reload]);
 
   function retry() {
     setLoading(true);
@@ -424,7 +429,7 @@ export function ConversationHistory({
     setLoadingOlder(true);
     setHistoryError('');
     try {
-      const page = await loadConversationHistory(client, config, nextCursor);
+      const page = await loadConversationHistory(tokenProvider, config, nextCursor);
       hasLoadedOlder.current = true;
       setMessages((current) => mergeMessages(current, page.messages));
       setNextCursor(page.nextCursor);
@@ -465,7 +470,7 @@ export function ConversationHistory({
     const visualRequest = cameraRequest || isScreenRequest(text) || (screenShare?.sharing && isSharedBrowserRequest(text));
     if (sending && !queueOnly && activeSession && files.length === 0 && !visualRequest) {
       setSteering(true);
-      void steerChatTurn(client, config, activeSession, text, language).then((message) => {
+      void steerChatTurn(tokenProvider, config, activeSession, text, language).then((message) => {
         setMessages((current) => mergeMessages(current, [asHistoryMessage(message, message.language)]));
       }).catch((reason: unknown) => {
         setSteering(false);
@@ -483,7 +488,7 @@ export function ConversationHistory({
       return;
     }
     setQueue((current) => [...current, queued]);
-  }, [camera, client, config, language, readyFiles, revealHistory, screenShare?.sharing, sending, takeFiles, uploadingFiles, voiceActive]);
+  }, [camera, config, language, readyFiles, revealHistory, screenShare?.sharing, sending, takeFiles, tokenProvider, uploadingFiles, voiceActive]);
 
   useEffect(() => {
     const intent = conversationIntents.pending[0];
@@ -527,7 +532,7 @@ export function ConversationHistory({
       }
       const activeSession = session?.language === language
         ? session
-        : await waitForChatSetup(() => createChatSession(client, config, language, controller.signal), controller.signal);
+        : await waitForChatSetup(() => createChatSession(tokenProvider, config, language, controller.signal), controller.signal);
       controller.signal.throwIfAborted();
       setSession(activeSession);
       turnSession.current = activeSession;
@@ -553,7 +558,7 @@ export function ConversationHistory({
         ? [queuedFiles.length ? queuedFiles.map((file) => file.id) : undefined, visualForTurn]
         : queuedFiles.length ? [queuedFiles.map((file) => file.id)] : [];
       const assistant = await sendChatTurn(
-        client,
+        tokenProvider,
         config,
         activeSession,
         text,
@@ -616,7 +621,7 @@ export function ConversationHistory({
       turnInFlight.current = false;
       setSending(false);
     }
-  }, [session, client, config, camera, screenShare, restoreFiles]);
+  }, [session, config, camera, screenShare, restoreFiles, tokenProvider]);
 
   useEffect(() => {
     if (sending || voiceActive || turnInFlight.current || queue.length === 0) return;
@@ -673,7 +678,7 @@ export function ConversationHistory({
             </TaskWindowLink>
           )}
           {call.tool === 'image_generation' && call.outcome === 'ok' && call.artifactId && (
-            <ConversationImageArtifact client={client} config={config} artifactId={call.artifactId} />
+            <ConversationImageArtifact getAccessToken={tokenProvider} config={config} artifactId={call.artifactId} />
           )}
         </li>
       ))}
@@ -800,10 +805,10 @@ export function ConversationHistory({
                     {message.interrupted && <p className="interrupted-label">Interrupted</p>}
                     {message.role === 'dan' && message.visualResult &&
                       <p className="message-visual-status">{visualResultText(message.visualResult)}</p>}
-                    {message.attachments?.length ? <MessageAttachments client={client} config={config} attachments={message.attachments} /> : null}
+                    {message.attachments?.length ? <MessageAttachments getAccessToken={tokenProvider} config={config} attachments={message.attachments} /> : null}
                     {message.role === 'jarvis' && (() => {
                       const image = publicPublicationImage(message.text, messages.slice(0, index));
-                      return image ? <PublicImageConfirmation client={client} config={config} attachment={image} /> : null;
+                      return image ? <PublicImageConfirmation getAccessToken={tokenProvider} config={config} attachment={image} /> : null;
                     })()}
                     {/* Only the time, tucked onto the bubble's top-right edge and shown on hover; voice usage is read out to screen readers. */}
                     <div className="message-metadata">
@@ -838,7 +843,7 @@ export function ConversationHistory({
         {activeMessage && <div className="conversation-message" data-speaker="dan">
           <strong className="message-author visually-hidden">Dan</strong>
           <p>{activeMessage.text}</p>
-          {activeMessage.attachments?.length ? <MessageAttachments client={client} config={config} attachments={activeMessage.attachments} /> : null}
+          {activeMessage.attachments?.length ? <MessageAttachments getAccessToken={tokenProvider} config={config} attachments={activeMessage.attachments} /> : null}
           <p className="queued-state">Sending · {activeMessage.language === 'da' ? 'Danish' : 'English'}</p>
         </div>}
         {sending && (
@@ -938,6 +943,7 @@ export function ConversationHistory({
       <div className="conversation-actions">
       <VoiceControls
         client={client}
+        getAccessToken={tokenProvider}
         config={config}
         {...(screenShare ? { screenShare } : {})}
         {...(camera ? { camera } : {})}

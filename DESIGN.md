@@ -901,8 +901,11 @@ existing 140 ms delayed loader, theme behavior, and reduced-motion support.
 Disable sign-in actions with an accessible explanation until the backend is
 configured. After `/me` verifies the session, show the returned name as the
 page headline. Settings includes a clearly labelled **Account** section with a
-keyboard-accessible **Sign out** action. Do not expose account tokens, email
-addresses, or unverified identity claims in the interface.
+keyboard-accessible **Sign out** action. When this device holds an owner session,
+also offer **Sign out on all devices** with an explicit confirmation, pending,
+success and error feedback; keep the confirmation and recovery actions keyboard
+and screen-reader accessible. Do not expose account tokens, email addresses, or
+unverified identity claims in the interface.
 
 ## App shell (P1-07)
 

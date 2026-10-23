@@ -25,6 +25,7 @@ import { useThemePreference } from './theme-preference-context';
 import { NotFoundPage, SignInPage } from './pages';
 import { NowFeedPanel } from './NowFeedPanel';
 import { SettingsPage } from './SettingsPage';
+import { AccountSettings } from './AccountSettings';
 import { ProjectsPage } from './factory/ProjectsPage';
 import { ThemePreferenceProvider } from './theme-preference';
 import { useSignIn, type SignInSession } from './useSignIn';
@@ -834,6 +835,7 @@ function ShellLayout({ signedIn, config, session, camera, screenShare, dailyEnab
               {signedIn && session.profile && (
                 <JarvisPage
                   client={session.client}
+                  getAccessToken={getAccessToken}
                   config={config}
                   camera={camera}
                   screenShare={screenShare}
@@ -919,10 +921,9 @@ function SettingsRoute({ config, session, nutritionKey, pushEnabled, proactiveEn
   }, [key, navigate]);
   return (
     <SettingsPage backendUrl={config.backendUrl} getAccessToken={session.getAccessToken} onBack={back}
-       account={<button className="secondary-button" type="button" onClick={() => { void session.signOut(); }}
-         disabled={session.state === 'signing-out'} aria-busy={session.state === 'signing-out' || undefined}>
-         {session.state === 'signing-out' ? 'Signing out…' : 'Sign out'}
-       </button>}
+       account={<AccountSettings hasOwnerSession={session.hasOwnerSession}
+         signingOut={session.state === 'signing-out'} onSignOut={session.signOut}
+         onSignOutAllDevices={session.signOutAllDevices} />}
       presence={<PresenceSettings backendUrl={config.backendUrl} getAccessToken={session.getAccessToken} />}
       {...(pushEnabled ? { notifications: <PushNotifications backendUrl={config.backendUrl} getAccessToken={session.getAccessToken} /> } : {})}
       renderProjects={(projectDefaults) => (

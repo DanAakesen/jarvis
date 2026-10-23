@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { PublicConfig } from '../config/public-config';
 import {
   clearSignInMarkers,
+  confirmOwnerSession,
   createAuthClient,
   hasSignedInDeviceBefore,
   isSignInRedirectPending,
@@ -13,6 +14,7 @@ import {
   signOut,
   takeSignInReturnPath,
 } from './auth';
+import { clearOwnerSessionMintWait } from './owner-session';
 
 const config: PublicConfig = {
   tenantId: '11111111-1111-4111-8111-111111111111',
@@ -23,9 +25,11 @@ const config: PublicConfig = {
 const account = { homeAccountId: 'account-id' } as never;
 const fetchMock = vi.fn();
 afterEach(() => {
+  vi.useRealTimers();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
   clearSignInMarkers();
+  clearOwnerSessionMintWait(config.backendUrl);
   localStorage.clear();
   sessionStorage.clear();
   window.history.replaceState({}, '', '/');
@@ -100,6 +104,127 @@ describe('web authentication', () => {
     expect(fetchMock).toHaveBeenCalledWith('https://api.example.com/me', expect.objectContaining({
       headers: { Authorization: `${['Bear', 'er'].join('')} access-token` },
     }));
+  });
+
+  it('restores a valid owner session before attempting any MSAL token flow', async () => {
+    const token = `js.${'a'.repeat(22)}.${'b'.repeat(43)}`;
+    localStorage.setItem('jarvis.owner-session', JSON.stringify({
+      version: 1,
+      backendOrigin: 'https://api.example.com',
+      sessionId: 'a'.repeat(22),
+      token,
+      idleExpiresAt: new Date(Date.now() + 10 * 24 * 60 * 60_000).toISOString(),
+      absoluteExpiresAt: new Date(Date.now() + 30 * 24 * 60 * 60_000).toISOString(),
+    }));
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ name: 'Dan Aakesen' }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const msal = client({ getActiveAccount: vi.fn().mockReturnValue(account) });
+
+    await expect(restoreProfile(msal, config)).resolves.toEqual({ name: 'Dan Aakesen' });
+
+    expect(fetchMock).toHaveBeenCalledWith('https://api.example.com/me', expect.objectContaining({
+      headers: { Authorization: `${['Bear', 'er'].join('')} ${token}` },
+    }));
+    expect(msal.ssoSilent).not.toHaveBeenCalled();
+    expect(msal.acquireTokenSilent).not.toHaveBeenCalled();
+  });
+
+  it('keeps a session through 503 and retries its profile with backoff', async () => {
+    const token = `js.${'a'.repeat(22)}.${'b'.repeat(43)}`;
+    localStorage.setItem('jarvis.owner-session', JSON.stringify({
+      version: 1,
+      backendOrigin: 'https://api.example.com',
+      sessionId: 'a'.repeat(22),
+      token,
+      idleExpiresAt: new Date(Date.now() + 10 * 24 * 60 * 60_000).toISOString(),
+      absoluteExpiresAt: new Date(Date.now() + 30 * 24 * 60 * 60_000).toISOString(),
+    }));
+    fetchMock
+      .mockResolvedValueOnce(new Response(null, { status: 503 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ name: 'Dan Aakesen' }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    vi.spyOn(Math, 'random').mockReturnValue(0.5);
+    vi.useFakeTimers();
+
+    const restored = restoreProfile(client(), config);
+    await Promise.resolve();
+    await Promise.resolve();
+    await vi.advanceTimersByTimeAsync(1_000);
+    await expect(restored).resolves.toEqual({ name: 'Dan Aakesen' });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(localStorage.getItem('jarvis.owner-session')).not.toBeNull();
+  });
+
+  it('falls back to Entra and starts minting again after a confirmed session 401', async () => {
+    const token = `js.${'a'.repeat(22)}.${'b'.repeat(43)}`;
+    localStorage.setItem('jarvis.owner-session', JSON.stringify({
+      version: 1,
+      backendOrigin: 'https://api.example.com',
+      sessionId: 'a'.repeat(22),
+      token,
+      idleExpiresAt: new Date(Date.now() + 10 * 24 * 60 * 60_000).toISOString(),
+      absoluteExpiresAt: new Date(Date.now() + 30 * 24 * 60 * 60_000).toISOString(),
+    }));
+    fetchMock.mockImplementation(async (url: RequestInfo | URL, init?: RequestInit) => {
+      if (String(url).endsWith('/auth/session')) return new Response(null, { status: 404 });
+      const authorization = new Headers(init?.headers).get('authorization');
+      return authorization?.endsWith(token)
+        ? new Response(null, { status: 401 })
+        : new Response(JSON.stringify({ name: 'Dan Aakesen' }), { status: 200 });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const msal = client({ getActiveAccount: vi.fn().mockReturnValue(account) });
+
+    await expect(restoreProfile(msal, config)).resolves.toEqual({ name: 'Dan Aakesen' });
+
+    expect(localStorage.getItem('jarvis.owner-session')).toBeNull();
+    expect(msal.acquireTokenSilent).toHaveBeenCalledWith({ scopes: [config.apiScope], account });
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
+      'https://api.example.com/auth/session', expect.anything(),
+    ));
+  });
+
+  it('does not bypass a switch-off mint wait during silent profile restoration', async () => {
+    fetchMock
+      .mockImplementation(async (url: RequestInfo | URL) => String(url).endsWith('/auth/session')
+        ? new Response(null, { status: 404 })
+        : new Response(JSON.stringify({ name: 'Dan Aakesen' }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const msal = client({ getActiveAccount: vi.fn().mockReturnValue(account) });
+
+    await expect(restoreProfile(msal, config)).resolves.toEqual({ name: 'Dan Aakesen' });
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    await expect(restoreProfile(msal, config)).resolves.toEqual({ name: 'Dan Aakesen' });
+    await Promise.resolve();
+
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(fetchMock.mock.calls.filter(([url]) => String(url).endsWith('/auth/session'))).toHaveLength(1);
+  });
+
+  it('only clears the session that was confirmed invalid, not a newer cross-tab record', async () => {
+    const token = `js.${'a'.repeat(22)}.${'b'.repeat(43)}`;
+    const nextToken = `js.${'c'.repeat(22)}.${'d'.repeat(43)}`;
+    const record = (sessionId: string, value: string) => ({
+      version: 1,
+      backendOrigin: 'https://api.example.com',
+      sessionId,
+      token: value,
+      idleExpiresAt: new Date(Date.now() + 10 * 24 * 60 * 60_000).toISOString(),
+      absoluteExpiresAt: new Date(Date.now() + 30 * 24 * 60 * 60_000).toISOString(),
+    });
+    localStorage.setItem('jarvis.owner-session', JSON.stringify(record('a'.repeat(22), token)));
+    let finish!: (response: Response) => void;
+    fetchMock.mockImplementation(() => new Promise<Response>((resolve) => { finish = resolve; }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const confirmation = confirmOwnerSession(config, token);
+    await Promise.resolve();
+    await Promise.resolve();
+    localStorage.setItem('jarvis.owner-session', JSON.stringify(record('c'.repeat(22), nextToken)));
+    finish(new Response(null, { status: 401 }));
+
+    await expect(confirmation).resolves.toBe('changed');
+    expect(JSON.parse(localStorage.getItem('jarvis.owner-session')!).token).toBe(nextToken);
   });
 
   it('shows the backend denial without exposing its response body', async () => {
@@ -217,10 +342,33 @@ describe('web authentication', () => {
     expect(msal.logoutRedirect).toHaveBeenCalledWith({
       postLogoutRedirectUri: `${window.location.origin}/`,
     });
+
     expect(hasSignedInDeviceBefore()).toBe(false);
     await expect(restoreProfile(msal, config)).resolves.toBeNull();
     expect(msal.ssoSilent).not.toHaveBeenCalled();
     expect(msal.loginRedirect).not.toHaveBeenCalled();
+  });
+
+  it('attempts session revocation but still clears locally when the network fails', async () => {
+    const token = `js.${'a'.repeat(22)}.${'b'.repeat(43)}`;
+    localStorage.setItem('jarvis.owner-session', JSON.stringify({
+      version: 1,
+      backendOrigin: 'https://api.example.com',
+      sessionId: 'a'.repeat(22),
+      token,
+      idleExpiresAt: new Date(Date.now() + 10 * 24 * 60 * 60_000).toISOString(),
+      absoluteExpiresAt: new Date(Date.now() + 30 * 24 * 60 * 60_000).toISOString(),
+    }));
+    fetchMock.mockRejectedValue(new Error('offline'));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await signOut(client(), config);
+
+    expect(fetchMock).toHaveBeenCalledWith('https://api.example.com/auth/session', expect.objectContaining({
+      method: 'DELETE',
+      headers: { Authorization: `${['Bear', 'er'].join('')} ${token}` },
+    }));
+    expect(localStorage.getItem('jarvis.owner-session')).toBeNull();
   });
 
   it('keeps the existing renewal message for failures that do not need interaction', async () => {

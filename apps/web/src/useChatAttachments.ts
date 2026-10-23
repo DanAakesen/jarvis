@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { PublicClientApplication } from '@azure/msal-browser';
 import type { PublicConfig } from '../config/public-config';
 import {
   MAX_ATTACHMENTS,
@@ -39,7 +38,7 @@ function revoke(item: PendingAttachment) {
 }
 
 /** Pending files in the composer: validated, uploaded privately one request each, removable until sent. */
-export function useChatAttachments(client: PublicClientApplication, config: PublicConfig) {
+export function useChatAttachments(getAccessToken: () => Promise<string>, config: PublicConfig) {
   const [items, setItems] = useState<PendingAttachment[]>([]);
   const [problems, setProblems] = useState<string[]>([]);
   const itemsRef = useRef<PendingAttachment[]>([]);
@@ -83,7 +82,7 @@ export function useChatAttachments(client: PublicClientApplication, config: Publ
         key, name: file.name, contentType: file.type, size: file.size, status: 'uploading', progress: 0,
         ...(previewUrl ? { previewUrl } : {}),
       }]);
-      void uploadAttachment(client, config, file, {
+      void uploadAttachment(getAccessToken, config, file, {
         signal: controller.signal,
         onProgress: (progress) => patch(key, { progress }),
       }).then((uploaded) => {
@@ -99,7 +98,7 @@ export function useChatAttachments(client: PublicClientApplication, config: Publ
       });
     }
     setProblems(messages);
-  }, [client, commit, config, patch]);
+  }, [commit, config, getAccessToken, patch]);
 
   const remove = useCallback((key: number) => {
     const item = itemsRef.current.find((candidate) => candidate.key === key);
@@ -109,13 +108,13 @@ export function useChatAttachments(client: PublicClientApplication, config: Publ
     revoke(item);
     commit((current) => current.filter((candidate) => candidate.key !== key));
     setProblems([]);
-    if (item.id) void deleteAttachment(client, config, item.id).catch(() => {});
-  }, [client, commit, config]);
+    if (item.id) void deleteAttachment(getAccessToken, config, item.id).catch(() => {});
+  }, [commit, config, getAccessToken]);
 
   /** Deletes private uploads that will not be sent (best effort; unsent files also expire after 24 hours). */
   const discard = useCallback((ids: readonly string[]) => {
-    for (const id of ids) void deleteAttachment(client, config, id).catch(() => {});
-  }, [client, config]);
+    for (const id of ids) void deleteAttachment(getAccessToken, config, id).catch(() => {});
+  }, [getAccessToken, config]);
 
   /** Moves the ready uploads out of the composer for sending. Failed uploads are dropped. */
   const take = useCallback((): ChatAttachment[] => {

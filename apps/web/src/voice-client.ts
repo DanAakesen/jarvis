@@ -1,5 +1,6 @@
 import { isCameraRequest, isScreenRequest } from './vision-request';
 import { parseVisualResult, parseVisualTurnContext, type VisualResult, type VisualTurnContext } from './visual-context';
+import { isOwnerSessionToken } from './owner-session';
 
 export type VoiceLanguage = 'da' | 'en';
 export type VoiceStatus = 'stopped' | 'connecting' | 'ready' | 'stopping' | 'listening' | 'thinking' | 'speaking' | 'reconnecting' | 'error';
@@ -37,6 +38,7 @@ export interface VoiceAudio {
 export interface VoiceClientOptions {
   backendUrl: string | null;
   getAccessToken: () => Promise<string>;
+  confirmSession?: (token: string) => Promise<'expired' | 'changed' | 'valid' | 'temporary'>;
   language?: VoiceLanguage;
   onStatus: (status: VoiceStatus, message: string) => void;
   onMicrophoneState?: (state: MicrophoneState) => void;
@@ -717,9 +719,9 @@ export class BrowserVoiceClient {
       }
       while (this.running && !signal.aborted) {
         let socket: VoiceSocket | undefined;
+        let token: string | null = null;
         let reconnectMessage = 'Voice connection ended. Reconnecting…';
         try {
-          let token: string;
           try {
             token = await this.options.getAccessToken();
           } catch {
@@ -756,6 +758,9 @@ export class BrowserVoiceClient {
         } catch (error) {
           if (!this.running || signal.aborted) break;
           if (error instanceof DOMException && error.name === 'AbortError') break;
+          if (token && isOwnerSessionToken(token)) {
+            await this.options.confirmSession?.(token).catch(() => 'temporary');
+          }
           if (error instanceof VoiceReadinessError) {
             reconnectMessage = 'Voice service did not become ready. Retrying…';
           }
