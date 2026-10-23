@@ -463,6 +463,16 @@ Add `src/core/approval-interpreter.test.ts` to the focused checks below.
 Synthetic model-port tests verify dispatch and safeguards, not live language
 accuracy; live chat/voice acceptance remains owner verification.
 
+23 October follow-up local results:
+`npm test --workspace @jarvis/backend -- --run src/proactive/tools.test.ts src/core/approval-interpreter.test.ts`
+passed 199 tests. `npm test --workspaces` passed: contracts 174, web 2,262,
+backend 6,272 (one skipped), vault-mirror 237. Backend build and lint passed.
+The isolated SQL command below stopped before running tests because no loopback
+SQL Server test configuration was available. Secret scanning found no secrets;
+independent review found no blocking issues. Automated review was unavailable
+(missing binary), and CodeQL skipped analysis because its database was too large.
+No live preferences, provider sessions or deployments were exercised.
+
 Focused local checks:
 `npm test --workspace @jarvis/backend -- --run src/proactive/tools.test.ts src/proactive/policy.test.ts src/proactive/engine.test.ts src/proactive/store.test.ts src/proactive/routes.test.ts src/proactive/todo-writer.test.ts src/proactive/alerts.test.ts src/proactive/reminder-ticker.test.ts src/proactive/vault-push-reminders.test.ts src/database/proactive-store.test.ts src/database/migrations.test.ts src/voice/realtime.test.ts src/voice/startup.test.ts src/core/settings.test.ts src/production-modules.test.ts`,
 `npm test --workspace @jarvis/web -- --run src/ProactiveSettings.test.tsx`,
