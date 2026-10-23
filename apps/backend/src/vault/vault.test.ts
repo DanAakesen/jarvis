@@ -593,6 +593,129 @@ describe('GitHub vault', () => {
     expect(github.calls.some(({ method }) => method === 'PUT')).toBe(false);
   });
 
+  it('edits only the words of a task line, keeping its checkbox, dates, priority and line ending', async () => {
+    const path = 'Personal/Inbox.md';
+    const ver = (line: string) => createHash('sha256').update(line, 'utf8').digest('hex');
+    const original = '- [ ] Buy a mirror 📅 2031-04-09 🕒 08:30 ⏫';
+    const { github, module } = moduleFor({
+      remote: { [path]: { sha: sha('a'), content: `# Home\r\n${original}\r\n- [x] Dataview task [due:: 2031-05-01] [priority:: high]\r\n` } },
+    });
+    const app = memoryApiApp(module);
+    const put = (payload: object) => app.inject({ method: 'PUT', url: '/vault/tasks', headers: apiAuthorization, payload });
+
+    const edited = await put({ path, line: 2, text: 'Buy a mirror', version: ver(original), newText: '  Buy a round   mirror 📅 ' });
+    expect(edited.statusCode).toBe(200);
+    const rewritten = '- [ ] Buy a round mirror 📅 2031-04-09 🕒 08:30 ⏫';
+    expect(github.files.get(path)?.content)
+      .toBe(`# Home\r\n${rewritten}\r\n- [x] Dataview task [due:: 2031-05-01] [priority:: high]\r\n`);
+    expect(edited.json()).toMatchObject({ path, line: 2, done: false, commit: sha('f'), version: ver(rewritten) });
+    expect(github.calls.filter(({ method }) => method === 'PUT')[0]?.body)
+      .toMatchObject({ message: expect.stringContaining('jarvis: edit a task') });
+
+    const dataview = await put({
+      path, line: 3, text: 'Dataview task', version: ver('- [x] Dataview task [due:: 2031-05-01] [priority:: high]'), newText: 'Renamed task',
+    });
+    expect(dataview.statusCode).toBe(200);
+    expect(dataview.json()).toMatchObject({ done: true });
+    expect(github.files.get(path)?.content).toContain('- [x] Renamed task [due:: 2031-05-01] [priority:: high]\r\n');
+
+    const unchanged = await put({ path, line: 2, text: 'Buy a round mirror', version: ver(rewritten), newText: 'Buy a round mirror' });
+    expect(unchanged.json()).toMatchObject({ commit: null, version: ver(rewritten) });
+  });
+
+  it('refuses a text edit on a stale, malformed, unsafe or out-of-scope request and writes nothing', async () => {
+    const path = 'Personal/Inbox.md';
+    const ver = (line: string) => createHash('sha256').update(line, 'utf8').digest('hex');
+    const { github, module } = moduleFor({
+      remote: {
+        [path]: { sha: sha('a'), content: '- [ ] Call the bank 📅 2031-04-12\n- [ ] Call the bank 📅 2031-04-09\n' },
+        'General/Notes.md': { sha: sha('b'), content: '- [ ] Not in scope' },
+      },
+    });
+    const app = memoryApiApp(module);
+    const put = (payload: object) => app.inject({ method: 'PUT', url: '/vault/tasks', headers: apiAuthorization, payload });
+    const readAs = ver('- [ ] Call the bank 📅 2031-04-09');
+    const base = { path, line: 2, text: 'Call the bank', version: readAs };
+
+    expect((await put({ ...base, line: 1, newText: 'Phone the bank' })).statusCode).toBe(409);
+    expect((await put({ ...base, version: ver('- [ ] Call the bank 📅 2031-04-08'), newText: 'Phone the bank' })).statusCode).toBe(409);
+    expect((await put({ ...base, text: 'Something else', newText: 'Phone the bank' })).statusCode).toBe(409);
+    expect((await put({ ...base, path: 'Personal/Missing.md', newText: 'Phone the bank' })).statusCode).toBe(409);
+    expect((await put({ path, line: 2, text: 'Call the bank', newText: 'Phone the bank' })).statusCode).toBe(400);
+    expect((await put({ ...base, version: 'abc', newText: 'Phone the bank' })).statusCode).toBe(400);
+    expect((await put({ ...base, newText: 'x' })).statusCode).toBe(400);
+    expect((await put({ ...base, newText: '📅 ✅' })).statusCode).toBe(400);
+    expect((await put({ ...base, newText: 'password: hunter2hunter2' })).statusCode).toBe(400);
+    expect((await put({ ...base, path: 'General/Notes.md', newText: 'Phone the bank' })).statusCode).toBe(400);
+    expect((await app.inject({ method: 'PUT', url: '/vault/tasks', payload: {} })).statusCode).toBe(401);
+    const nonOwner = memoryApiApp(module, { auth: async () => ({
+      objectId: 'not-dan', tenantId: apiConfig.auth.tenantId, displayName: 'Other',
+    }) });
+    expect((await nonOwner.inject({
+      method: 'PUT', url: '/vault/tasks', headers: apiAuthorization, payload: { ...base, newText: 'Phone the bank' },
+    })).statusCode).toBe(403);
+    expect(github.calls.some(({ method }) => method === 'PUT')).toBe(false);
+  });
+
+  it('changes a task\'s date, time and priority, and clears them, without touching other markers', async () => {
+    const path = 'Personal/Inbox.md';
+    const ver = (line: string) => createHash('sha256').update(line, 'utf8').digest('hex');
+    const first = '- [ ] Call the bank 📅 2031-04-09 🕒 08:30 ⏫ 🔁 every week';
+    const second = '- [ ] Plain task';
+    const third = '- [x] Dataview task [due:: 2031-05-01] [priority:: high]';
+    const { github, module } = moduleFor({ remote: { [path]: { sha: sha('a'), content: `${first}\n${second}\n${third}\n` } } });
+    const app = memoryApiApp(module);
+    const put = (payload: object) => app.inject({ method: 'PUT', url: '/vault/tasks', headers: apiAuthorization, payload });
+    const body = () => github.files.get(path)?.content;
+
+    const moved = await put({
+      path, line: 1, text: 'Call the bank', version: ver(first), newText: 'Call the bank', due: '2031-04-20', time: '14:15', priority: 'medium',
+    });
+    expect(moved.statusCode).toBe(200);
+    const movedLine = '- [ ] Call the bank 📅 2031-04-20 14:15 🔼 🔁 every week';
+    expect(body()).toBe(`${movedLine}\n${second}\n${third}\n`);
+    expect(moved.json()).toMatchObject({ version: ver(movedLine) });
+
+    const added = await put({
+      path, line: 2, text: 'Plain task', version: ver(second), newText: 'Plain task, longer wording', due: '2031-06-01', priority: 'high',
+    });
+    expect(added.statusCode).toBe(200);
+    expect(body()).toContain('\n- [ ] Plain task, longer wording 📅 2031-06-01 ⏫\n');
+
+    const cleared = await put({
+      path, line: 3, text: 'Dataview task', version: ver(third), newText: 'Dataview task', due: null, priority: 'normal',
+    });
+    expect(cleared.statusCode).toBe(200);
+    expect(body()?.endsWith('\n- [x] Dataview task\n')).toBe(true);
+
+    const timeOnly = await put({
+      path, line: 1, text: 'Call the bank', version: ver(movedLine), newText: 'Call the bank', time: null,
+    });
+    expect(timeOnly.statusCode).toBe(200);
+    expect(body()?.startsWith('- [ ] Call the bank 📅 2031-04-20 🔼 🔁 every week\n')).toBe(true);
+
+    const same = await put({ path, line: 1, text: 'Call the bank', version: ver('- [ ] Call the bank 📅 2031-04-20 🔼 🔁 every week'), newText: 'Call the bank', due: '2031-04-20', priority: 'medium' });
+    expect(same.json()).toMatchObject({ commit: null });
+  });
+
+  it('refuses a date or time edit that cannot be written, and writes nothing', async () => {
+    const path = 'Personal/Inbox.md';
+    const ver = (line: string) => createHash('sha256').update(line, 'utf8').digest('hex');
+    const line = '- [ ] Plain task';
+    const { github, module } = moduleFor({ remote: { [path]: { sha: sha('a'), content: `${line}\n` } } });
+    const app = memoryApiApp(module);
+    const put = (payload: object) => app.inject({ method: 'PUT', url: '/vault/tasks', headers: apiAuthorization, payload });
+    const base = { path, line: 1, text: 'Plain task', version: ver(line), newText: 'Plain task' };
+
+    expect((await put({ ...base, time: '09:00' })).statusCode).toBe(400);
+    expect((await put({ ...base, due: null, time: '09:00' })).statusCode).toBe(400);
+    expect((await put({ ...base, due: '2031-02-31' })).statusCode).toBe(400);
+    expect((await put({ ...base, due: '2031-4-9' })).statusCode).toBe(400);
+    expect((await put({ ...base, due: '2031-04-09', time: '25:00' })).statusCode).toBe(400);
+    expect((await put({ ...base, priority: 'urgent' })).statusCode).toBe(400);
+    expect(github.calls.some(({ method }) => method === 'PUT')).toBe(false);
+  });
+
   it('refuses a tick when the note changes under it', async () => {
     const path = 'Work/Projects.md';
     const { module } = moduleFor({

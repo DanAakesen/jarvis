@@ -726,8 +726,9 @@ opens its source note in place. The owner can complete or reopen a task from its
 button (with a four-second Undo) and add one with **+**: Personal or Work, optionally
 with an optional due date and time, saved to that side's `Inbox.md` note. Each change is a commit
 to the owner's vault, made only for the owner, refused if the line (its text, date, priority or position) has changed since the
-list was read, and shown as an error with the tick rolled back when it fails. In the All view each row says Personal or Work in words, not only by colour. Jarvis
-never reorders, edits the text of or deletes these tasks, and the chat and voice
+list was read, and shown as an error with the tick rolled back when it fails. In the All view each row says Personal or Work in words, not only by colour. A pencil at the top
+right of each open task edits it in place in a multi-line field with its date, time and priority (Enter saves, Escape cancels); the tick state stays as written. Jarvis
+never reorders or deletes these tasks, never edits one except on the owner's own request, and the chat and voice
 `vault_search` tool stays read-only. Agent work remains on the Software Factory
 board.
 

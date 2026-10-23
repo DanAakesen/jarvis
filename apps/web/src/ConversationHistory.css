@@ -377,6 +377,8 @@
 .conversation-message[data-speaker="dan"] + .conversation-message[data-speaker="dan"],
 .conversation-message[data-speaker="jarvis"] + .conversation-message[data-speaker="jarvis"] { margin-top: var(--space-1); }
 .conversation-message .markdown-content p { margin: var(--space-2) 0; }
+.conversation-message .markdown-content > :first-child { margin-top: 0; }
+.conversation-message .markdown-content > :last-child { margin-bottom: 0; }
 .message-metadata { gap: var(--space-2); margin-top: var(--space-1); font-size: var(--type-caption); }
 
 /* Tool calls: compact glass chips led by the assembling J. Running chips glow cyan and their J reassembles. */
@@ -489,8 +491,7 @@
   100% { transform: scaleX(1); }
 }
 .tool-chip-mark { width: 15px; height: 15px; flex: 0 0 auto; }
-.tool-chip-mark circle { fill: color-mix(in srgb, var(--tone) 18%, transparent); stroke: color-mix(in srgb, var(--tone) 70%, transparent); stroke-width: 1.2; }
-.tool-chip-mark path { fill: none; stroke: var(--tone); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.tool-chip-mark path { fill: none; stroke: var(--tone); stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
 .tool-chip-mark[data-state="ok"] { --tone: var(--success); }
 .tool-chip-mark:is([data-state="error"], [data-state="refused"]) { --tone: var(--error); }
 .tool-chip:has(.tool-chip-mark) { padding-left: var(--space-2); }

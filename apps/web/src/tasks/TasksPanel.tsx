@@ -3,7 +3,7 @@ import { Loader } from '../Loader';
 import { copenhagenDate } from '../daily/period';
 import { formatDateOnly, formatTimeOnly } from '../format/date-time';
 import {
-  addVaultTask, loadVaultTasks, setVaultTaskDone, VaultTaskConflict, VaultTasksUnavailable, vaultTaskRecovery,
+  addVaultTask, editVaultTask, loadVaultTasks, setVaultTaskDone, VaultTaskConflict, VaultTasksUnavailable, vaultTaskRecovery,
   type VaultTask, type VaultTaskRead,
 } from './tasks-data';
 import './TasksPanel.css';
@@ -53,18 +53,100 @@ function isWork(task: VaultTask): boolean {
 }
 
 type Phase = 'shown' | 'leaving';
+interface EditDraft { text: string; date: string; time: string; priority: VaultTask['priority'] }
+interface EditState {
+  id: string | null;
+  draft: EditDraft;
+  saving: boolean;
+  error: string;
+  onStart: (task: VaultTask) => void;
+  onChange: (patch: Partial<EditDraft>) => void;
+  onSave: (task: VaultTask) => void;
+  onCancel: () => void;
+}
+const priorityChoices: ReadonlyArray<{ id: VaultTask['priority']; label: string }> = [
+  { id: 'normal', label: 'Normal' },
+  { id: 'medium', label: 'Medium' },
+  { id: 'high', label: 'High' },
+];
 interface RowActions {
   onToggle: (task: VaultTask, done: boolean) => void;
   onOpenNote: (path: string) => void;
+  edit: EditState;
 }
 interface RowState { done: Map<string, boolean>; lingering: Map<string, Phase>; pending: ReadonlySet<string>; fresh: string | null }
 
-function TaskRow({ task, done, phase, pending, fresh, showScope, onToggle, onOpenNote }: RowActions & {
+function TaskRow({ task, done, phase, pending, fresh, showScope, onToggle, onOpenNote, edit }: RowActions & {
   task: VaultTask; done: boolean; phase: Phase | undefined; pending: boolean; fresh: boolean; showScope: boolean;
 }) {
   const due = dueLabel(task);
   const row = useRef<HTMLLIElement>(null);
+  const field = useRef<HTMLTextAreaElement>(null);
+  const pencil = useRef<HTMLButtonElement>(null);
+  const wasEditing = useRef(false);
+  const editing = edit.id === task.id;
   useEffect(() => { if (fresh) row.current?.scrollIntoView?.({ block: 'nearest' }); }, [fresh]);
+  useEffect(() => {
+    if (editing) {
+      field.current?.focus();
+      field.current?.select();
+    } else if (wasEditing.current) {
+      pencil.current?.focus();
+    }
+    wasEditing.current = editing;
+  }, [editing]);
+  // The field grows with its words, so a long task is read and edited whole instead of scrolling through one line.
+  const draftText = editing ? edit.draft.text : '';
+  useEffect(() => {
+    const element = field.current;
+    if (!element) return;
+    element.style.height = 'auto';
+    if (element.scrollHeight > 0) element.style.height = `${element.scrollHeight}px`;
+  }, [editing, draftText]);
+  const editable = !done && !phase && task.text !== '[redacted]';
+  if (editing) {
+    const { draft } = edit;
+    const priority = draft.priority === 'normal' ? undefined : draft.priority;
+    return <li ref={row} className="tasks-panel-row" data-scope={isWork(task) ? 'work' : 'personal'} data-priority={priority} data-editing>
+      <form className="tasks-panel-editor" onSubmit={(event) => { event.preventDefault(); edit.onSave(task); }}>
+        <textarea ref={field} className="tasks-panel-edit-input" rows={3} value={draft.text} maxLength={200} autoComplete="off"
+          aria-label="Task text" aria-invalid={edit.error ? true : undefined} disabled={edit.saving}
+          onChange={(event) => edit.onChange({ text: event.target.value })}
+          onKeyDown={(event) => {
+            if (event.nativeEvent.isComposing) return;
+            if (event.key === 'Enter') { event.preventDefault(); edit.onSave(task); }
+            if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); edit.onCancel(); }
+          }} />
+        <div className="tasks-panel-when">
+          <label className="tasks-panel-when-field">
+            <span className="visually-hidden">Due date</span>
+            <input type="date" value={draft.date} disabled={edit.saving} onChange={(event) => edit.onChange({ date: event.target.value })} />
+            {draft.date && <button className="tasks-panel-icon" type="button" aria-label="Clear due date" disabled={edit.saving}
+              onClick={() => edit.onChange({ date: '', time: '' })}>
+              <svg {...glyph} viewBox="0 0 20 20" strokeWidth="1.8"><path d="m5.5 5.5 9 9m0-9-9 9" /></svg>
+            </button>}
+          </label>
+          <label className="tasks-panel-when-field">
+            <span className="visually-hidden">Due time</span>
+            <input type="time" value={draft.time} disabled={edit.saving} onChange={(event) => edit.onChange({ time: event.target.value })} />
+          </label>
+        </div>
+        <div className="tasks-panel-choice" role="group" aria-label="Priority">
+          {priorityChoices.map(({ id: key, label }) => <button key={key} className="tasks-panel-toggle" type="button" disabled={edit.saving}
+            aria-pressed={draft.priority === key} onClick={() => edit.onChange({ priority: key })}>{label}</button>)}
+        </div>
+        {edit.error && <p className="tasks-panel-edit-error" role="alert">{edit.error}</p>}
+        <div className="tasks-panel-edit-actions">
+          <button className="tasks-panel-icon" type="button" aria-label="Cancel editing" disabled={edit.saving} onClick={edit.onCancel}>
+            <svg {...glyph} viewBox="0 0 20 20" strokeWidth="1.8"><path d="m5.5 5.5 9 9m0-9-9 9" /></svg>
+          </button>
+          <button className="tasks-panel-icon" type="submit" aria-label="Save task" disabled={edit.saving}>
+            <svg {...glyph} viewBox="0 0 20 20" strokeWidth="1.8"><path d="m4.5 10.5 3.5 3.5 7.5-8" /></svg>
+          </button>
+        </div>
+      </form>
+    </li>;
+  }
   return <li ref={row} className="tasks-panel-row" data-scope={isWork(task) ? 'work' : 'personal'} data-priority={task.priority === 'normal' ? undefined : task.priority} data-done={done || undefined} data-phase={phase} data-fresh={fresh || undefined}>
     <button className="tasks-panel-check" type="button" role="checkbox" aria-checked={done} aria-label={task.text} disabled={pending}
       onClick={() => onToggle(task, !done)}>
@@ -88,12 +170,18 @@ function TaskRow({ task, done, phase, pending, fresh, showScope, onToggle, onOpe
           }}><span className="tasks-panel-dot" aria-hidden="true" />{showScope && <span className="tasks-panel-scope-cue">{isWork(task) ? 'Work' : 'Personal'} ·</span>}{sourceName(task.path)}</a>
       </div>
     </div>
-    {phase ? <button className="tasks-panel-undo" type="button" disabled={pending} onClick={() => onToggle(task, false)}>Undo</button>
-      : task.priority !== 'normal' && <span className="tasks-panel-priority">{task.priority === 'high' ? 'High' : 'Medium'}<span className="visually-hidden"> priority</span></span>}
+    <div className="tasks-panel-side">
+      {editable && <button ref={pencil} className="tasks-panel-icon" type="button" aria-label={`Edit task: ${task.text}`} disabled={pending || edit.id !== null}
+        onClick={() => edit.onStart(task)}>
+        <svg {...glyph} viewBox="0 0 20 20" strokeWidth="1.7"><path d="M12.5 4.5l3 3L7.5 15.5l-3.5.5.5-3.5z" /><path d="m11 6 3 3" /></svg>
+      </button>}
+      {phase ? <button className="tasks-panel-undo" type="button" disabled={pending} onClick={() => onToggle(task, false)}>Undo</button>
+        : task.priority !== 'normal' && <span className="tasks-panel-priority">{task.priority === 'high' ? 'High' : 'Medium'}<span className="visually-hidden"> priority</span></span>}
+    </div>
   </li>;
 }
 
-function TaskGroup({ title, tasks, rows, showScope, onToggle, onOpenNote }: RowActions & {
+function TaskGroup({ title, tasks, rows, showScope, onToggle, onOpenNote, edit }: RowActions & {
   title: string; tasks: readonly VaultTask[]; rows: RowState; showScope: boolean;
 }) {
   if (!tasks.length) return null;
@@ -101,7 +189,7 @@ function TaskGroup({ title, tasks, rows, showScope, onToggle, onOpenNote }: RowA
     <h2>{title}</h2>
     <ul>{tasks.map((task) => <TaskRow key={task.id} task={task} done={rows.done.get(task.id) ?? task.done}
       phase={rows.lingering.get(task.id)} pending={rows.pending.has(task.id)} fresh={rows.fresh === task.id} showScope={showScope}
-      onToggle={onToggle} onOpenNote={onOpenNote} />)}</ul>
+      onToggle={onToggle} onOpenNote={onOpenNote} edit={edit} />)}</ul>
   </div>;
 }
 
@@ -137,6 +225,10 @@ export function TasksPanel({ id, backendUrl, getAccessToken, initialQuery = '', 
   const [draftDate, setDraftDate] = useState('');
   const [draftTime, setDraftTime] = useState('');
   const [addError, setAddError] = useState('');
+  const [editId, setEditId] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState<EditDraft>({ text: '', date: '', time: '', priority: 'normal' });
+  const [editSaving, setEditSaving] = useState(false);
+  const [editError, setEditError] = useState('');
   const pendingRef = useRef(new Set<string>());
   const versions = useRef(new Map<string, string>());
   const timers = useRef(new Map<string, number[]>());
@@ -169,6 +261,8 @@ export function TasksPanel({ id, backendUrl, getAccessToken, initialQuery = '', 
   useEffect(() => { if (adding) draftInput.current?.focus(); }, [adding]);
 
   const searching = query.trim() !== '';
+  // An edit whose task left the list (search, refresh) is simply no longer open.
+  const activeEditId = editId !== null && result?.items.some((task) => task.id === editId) ? editId : null;
   useEffect(() => {
     const controller = new AbortController();
     const quiet = quietReload.current;
@@ -266,6 +360,64 @@ export function TasksPanel({ id, backendUrl, getAccessToken, initialQuery = '', 
       .finally(() => { if (!signal.aborted) markPending(task.id, false); });
   };
 
+  const startEdit = (task: VaultTask) => {
+    if (pendingRef.current.has(task.id)) return;
+    setNotice('');
+    setEditError('');
+    setEditDraft({ text: task.text, date: task.dueDate ?? '', time: task.dueTime ?? '', priority: task.priority });
+    setEditId(task.id);
+  };
+  const cancelEdit = () => {
+    setEditId(null);
+    setEditError('');
+  };
+  const saveEdit = (task: VaultTask) => {
+    if (editSaving || pendingRef.current.has(task.id)) return;
+    const text = editDraft.text.replace(/\s+/gu, ' ').trim();
+    // A time without a date means today, as when adding a task.
+    const due = editDraft.date || (editDraft.time ? (result?.today ?? copenhagenDate()) : '');
+    const change = { text, due: due || null, time: due && editDraft.time ? editDraft.time : null, priority: editDraft.priority };
+    if (text === task.text && change.due === task.dueDate && change.time === task.dueTime && change.priority === task.priority) {
+      cancelEdit();
+      return;
+    }
+    if (Array.from(text).length < 2) { setEditError('Write a few words for the task.'); return; }
+    const { signal } = writes.current;
+    const current = { ...task, version: versions.current.get(task.id) ?? task.version };
+    setEditSaving(true);
+    setEditError('');
+    markPending(task.id, true);
+    void editVaultTask(backendUrl, getAccessToken, current, change, signal)
+      .then((write) => {
+        if (signal.aborted) return;
+        versions.current.set(task.id, write.version);
+        setResult((value) => value && {
+          ...value,
+          items: value.items.map((item) => item.id === task.id
+            ? { ...item, text, dueDate: change.due, dueTime: change.time, dueAt: null, priority: change.priority, version: write.version }
+            : item),
+        });
+        setEditId(null);
+        quietReload.current = true;
+        retry();
+      })
+      .catch((cause: unknown) => {
+        if (signal.aborted) return;
+        if (cause instanceof VaultTaskConflict) {
+          setEditId(null);
+          setNotice('That task changed in your vault, so the list was refreshed. Nothing was saved.');
+          retry();
+        } else {
+          setEditError(failureMessage(cause));
+        }
+      })
+      .finally(() => {
+        if (signal.aborted) return;
+        setEditSaving(false);
+        markPending(task.id, false);
+      });
+  };
+
   const openAdd = () => {
     setDraftScope(scope === 'work' ? 'work' : 'personal');
     setAddError('');
@@ -306,7 +458,13 @@ export function TasksPanel({ id, backendUrl, getAccessToken, initialQuery = '', 
   };
 
   const rows: RowState = { done: doneOverride, lingering, pending, fresh };
-  const actions = { onToggle: toggle, onOpenNote, showScope: scope === 'all' };
+  const actions: RowActions & { showScope: boolean } = {
+    onToggle: toggle, onOpenNote, showScope: scope === 'all',
+    edit: {
+      id: activeEditId, draft: editDraft, saving: editSaving, error: editError,
+      onStart: startEdit, onChange: (patch) => setEditDraft((value) => ({ ...value, ...patch })), onSave: saveEdit, onCancel: cancelEdit,
+    },
+  };
 
   return <section ref={panel} id={id} className="tasks-panel luminous-glass" aria-label="Task list" aria-busy={state === 'loading'} tabIndex={-1}
     onKeyDown={(event) => { if (event.key === 'Escape') { event.preventDefault(); onClose(); } }}>

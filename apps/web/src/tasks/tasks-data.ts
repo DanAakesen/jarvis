@@ -155,7 +155,7 @@ function readTaskWrite(value: unknown): VaultTaskWrite {
 async function writeVaultTask(
   backendUrl: string | null,
   getAccessToken: () => Promise<string>,
-  method: 'PATCH' | 'POST',
+  method: 'PATCH' | 'POST' | 'PUT',
   body: object,
   signal: AbortSignal,
 ): Promise<VaultTaskWrite> {
@@ -194,6 +194,27 @@ export function setVaultTaskDone(
 ): Promise<VaultTaskWrite> {
   return writeVaultTask(backendUrl, getAccessToken, 'PATCH',
     { path: task.path, line: task.line, text: task.text, version: task.version, done }, signal);
+}
+
+export interface VaultTaskChange {
+  text: string;
+  due: string | null;
+  time: string | null;
+  priority: VaultTask['priority'];
+}
+
+/** Rewrites one vault task's words, due date, time and priority. The backend keeps its checkbox and other markers, and refuses when the line is no longer the one that was read. */
+export function editVaultTask(
+  backendUrl: string | null,
+  getAccessToken: () => Promise<string>,
+  task: Pick<VaultTask, 'path' | 'line' | 'text' | 'version'>,
+  change: VaultTaskChange,
+  signal: AbortSignal,
+): Promise<VaultTaskWrite> {
+  return writeVaultTask(backendUrl, getAccessToken, 'PUT', {
+    path: task.path, line: task.line, text: task.text, version: task.version,
+    newText: change.text, due: change.due, time: change.time, priority: change.priority,
+  }, signal);
 }
 
 /** Adds an open task to the Personal or Work Inbox note. */

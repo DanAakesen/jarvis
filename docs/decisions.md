@@ -390,6 +390,20 @@ This decision does not approve new tool capabilities such as assistant writes
 to Daily training targets, and it does not relax the safety or
 bounded-execution rules.
 
+## Tasks are edited in place: words, date, time and priority (23 October 2026; #1085)
+
+The owner asked for an edit pencil at the top right of a task row with inline editing,
+then said a one-line field is unusable and that date and priority must be editable too.
+The row now opens a wrapping, auto-growing text area with a date, a time and a
+Normal/Medium/High choice, saved with Enter or the Save icon. Edits go through a new
+`PUT /vault/tasks` so that `PATCH /vault/tasks` stays tick-only. The route uses the same
+version check as a tick (409 before any write) and changes only what was sent: the words,
+the due date and time markers, and the priority marker; other Dataview markers and the
+checkbox stay as written. Clearing the date clears the time; a time without a date means
+today. The result is re-parsed and refused unless text, tick state, date, time and
+priority read back as intended. Completed rows have no pencil. The backend must deploy
+before the web client, which would otherwise call a route that does not exist yet.
+
 ## Ticking a task proves the line is unchanged (22 October 2026; #1085, #1216)
 
 `PATCH /vault/tasks` compared only the visible text of the line, so a reordered file or a
@@ -8034,3 +8048,7 @@ Aggregate health is `failed` for any failing scope and `unknown` when only
 unscoped legacy alerts remain, because their source scope cannot be proven.
 Do not infer the cause of a failed mint or production recovery from offline
 tests; no production state or credentials were inspected.
+
+## Chat tool chips hide after delivery (23 October 2026; #1085)
+
+Tool chips appear only while Jarvis is working. Once a reply is delivered the transcript keeps just the task link and any generated image, so a finished turn reads as plain conversation. While working, the status line names the actual activity (derived from the running tool) instead of rotating random phrases, and finished steps use a bare thin tick or cross. The transcript also stays pinned to the end while a reply grows after it was added (it watches the messages, not only the transcript box), without pulling back a reader who scrolled up. No backend or contract change.

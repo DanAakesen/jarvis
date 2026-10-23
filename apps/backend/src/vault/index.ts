@@ -453,6 +453,102 @@ function setTaskDone(content: string, path: string, line: number, text: string, 
   return { status: 'changed', content: parts.join(''), version: taskLineVersion(next.replace(/^\uFEFF/u, '')) };
 }
 
+/** Every Tasks-plugin or Dataview marker the parser strips from a task's visible text, so an edit can keep them verbatim. */
+const taskMarkerPattern = new RegExp([
+  String.raw`(?:📅\s*|\[due::\s*|\bdue:\s*)\d{4}-\d{2}-\d{2}(?:(?:\s+|T)\d{2}:\d{2})?\]?`,
+  String.raw`🕒\s*\d{2}:\d{2}`,
+  String.raw`[⏳🛫➕✅❌]\s*\d{4}-\d{2}-\d{2}`,
+  String.raw`🔁\s*[^📅⏳🛫➕✅❌🔁🏁⏫🔼🔽⏬🔺🆔⛔🕒[]*`,
+  String.raw`[🆔⛔]\s*[a-z\d]+(?:\s*,\s*[a-z\d]+)*`,
+  String.raw`🏁\s*(?:delete|keep)\b`,
+  String.raw`\[\s*priority\s*::?\s*[^\]]*\]|\(\s*priority\s*::?\s*[^)]*\)|\bpriority\s*::?.*$`,
+  String.raw`[📅⏳🛫➕✅❌🔁🏁⏫🔼🔽⏬🔺🆔⛔🕒]`,
+].join('|'), 'giu');
+
+interface TaskEdit {
+  newText: string;
+  /** Omitted keeps the date, null clears it (and the time with it). */
+  due?: string | null | undefined;
+  /** Omitted keeps the time, null clears it. A time needs a date. */
+  time?: string | null | undefined;
+  /** Omitted keeps the priority. */
+  priority?: 'high' | 'medium' | 'normal' | undefined;
+}
+
+function taskMarkerKind(marker: string): 'due' | 'time' | 'priority' | 'other' {
+  if (/^(?:📅|\[due::|due:)/iu.test(marker)) return 'due';
+  if (marker.startsWith('🕒')) return 'time';
+  if (/^(?:[🔺⏫🔼🔽⏬]|[[(]?\s*priority)/iu.test(marker)) return 'priority';
+  return 'other';
+}
+
+/**
+ * Rewrites one task line's words, due date, time and priority, keeping its checkbox and every other marker as written.
+ * Refused when the line is not the one the owner saw, and when the result would not read back as exactly the requested task.
+ */
+function setTaskText(content: string, path: string, line: number, text: string, version: string, edit: TaskEdit):
+  { status: 'mismatch' } | { status: 'refused' } | { status: 'unchanged'; version: string; done: boolean } | { status: 'changed'; content: string; version: string; done: boolean } {
+  const todo = parseTodosWithContext(content, path).find((candidate) => candidate.line === line);
+  if (!todo || todo.version !== version || (shouldRedact(todo.text) ? '[redacted]' : todo.text) !== text) {
+    return { status: 'mismatch' };
+  }
+  const { newText } = edit;
+  const wantDue = edit.due === undefined ? todo.dueDate : edit.due;
+  if (edit.time && wantDue === null) return { status: 'refused' };
+  const wantTime = wantDue === null ? null : edit.time === undefined ? todo.dueTime : edit.time;
+  const wantPriority = edit.priority ?? todo.priorityLevel;
+  const textChanged = todo.text !== sanitizeFactText(newText);
+  const dueChanged = wantDue !== todo.dueDate || wantTime !== todo.dueTime;
+  const priorityChanged = wantPriority !== todo.priorityLevel;
+  if (!textChanged && !dueChanged && !priorityChanged) return { status: 'unchanged', version: todo.version, done: todo.done };
+  const parts = content.split(/(\r?\n)/u);
+  const current = parts[(line - 1) * 2];
+  const match = current === undefined ? null : /^(\uFEFF?\s*[-*]\s+\[[ xX]\]\s*)(.*)$/u.exec(current);
+  if (!match) return { status: 'mismatch' };
+  const rawText = match[2] ?? '';
+  const pieces: string[] = [];
+  let placed = false;
+  let dueDone = !dueChanged;
+  let priorityDone = !priorityChanged;
+  let position = 0;
+  const placeText = (gap: string) => {
+    const words = gap.trim();
+    if (!words) return;
+    if (!textChanged) pieces.push(words);
+    else if (!placed) { pieces.push(newText); placed = true; }
+  };
+  const placeDue = () => {
+    if (dueDone) return;
+    dueDone = true;
+    if (wantDue !== null) pieces.push(`📅 ${wantDue}${wantTime ? ` ${wantTime}` : ''}`);
+  };
+  const placePriority = () => {
+    if (priorityDone) return;
+    priorityDone = true;
+    if (wantPriority !== 'normal') pieces.push(wantPriority === 'high' ? '⏫' : '🔼');
+  };
+  for (const marker of rawText.matchAll(taskMarkerPattern)) {
+    placeText(rawText.slice(position, marker.index));
+    const kind = taskMarkerKind(marker[0].trim());
+    if (dueChanged && (kind === 'due' || kind === 'time')) placeDue();
+    else if (priorityChanged && kind === 'priority') placePriority();
+    else pieces.push(marker[0].trim());
+    position = marker.index + marker[0].length;
+  }
+  placeText(rawText.slice(position));
+  if (textChanged && !placed) pieces.unshift(newText);
+  placeDue();
+  placePriority();
+  const next = `${match[1] ?? ''}${pieces.join(' ')}`;
+  const reread = parseTodosWithContext(next.replace(/^\uFEFF/u, ''), path)[0];
+  if (!reread || reread.text !== (textChanged ? sanitizeFactText(newText) : todo.text) || reread.done !== todo.done ||
+      reread.dueDate !== wantDue || reread.dueTime !== wantTime || reread.priorityLevel !== wantPriority) {
+    return { status: 'refused' };
+  }
+  parts[(line - 1) * 2] = next;
+  return { status: 'changed', content: parts.join(''), version: reread.version, done: todo.done };
+}
+
 /** Appends one checkbox line to a task note; a missing note starts as an Inbox. Null when the note ends inside a code fence. */
 function appendVaultTask(existing: string | null, taskLine: string): { content: string; line: number } | null {
   if (existing === null) return { content: `# Inbox\n\n${taskLine}\n`, line: 3 };
@@ -1930,6 +2026,72 @@ export function createVaultModule(options: {
               indexAfterNoteWrite();
               logWrite('ok');
               return { id, path, line, done, commit, version: change.version };
+            } catch (error) {
+              if (!(error instanceof VaultWriteConflictError) || attempt === 1) throw error;
+            }
+          }
+          throw new Error('Task write did not complete');
+        } catch (error) {
+          logWrite(error instanceof ToolRefusal ? 'refused' : 'error');
+          if (error instanceof ToolRefusal) return reply.code(400).send({ error: error.message });
+          if (error instanceof VaultWriteConflictError) {
+            return reply.code(409).send({ error: 'This task changed in the vault. Refresh the list.' });
+          }
+          return reply.code(503).send({ error: 'The task could not be saved. Try again.' });
+        }
+      });
+
+      app.put<{ Body: { path: string; line: number; text: string; version: string; newText: string; due?: string | null; time?: string | null; priority?: 'high' | 'medium' | 'normal' } }>('/vault/tasks', {
+        schema: {
+          body: {
+            type: 'object',
+            properties: {
+              path: { type: 'string', minLength: 1, maxLength: maxPathLength },
+              line: { type: 'integer', minimum: 1, maximum: 1_000_000 },
+              text: { type: 'string', minLength: 1, maxLength: 300 },
+              version: { type: 'string', pattern: '^[0-9a-f]{64}$' },
+              newText: { type: 'string', minLength: 1, maxLength: 400 },
+              due: { type: ['string', 'null'], format: 'date' },
+              time: { type: ['string', 'null'], pattern: '^([01]\\d|2[0-3]):[0-5]\\d$' },
+              priority: { type: 'string', enum: ['high', 'medium', 'normal'] },
+            },
+            required: ['path', 'line', 'text', 'version', 'newText'],
+            additionalProperties: false,
+          },
+          response: { 200: taskWriteResponseSchema, 400: taskWriteErrorSchema, 403: apiError, 409: taskWriteErrorSchema, 503: taskWriteErrorSchema },
+        },
+      }, async (request, reply) => {
+        if (!ownerOnly(request, reply)) return;
+        const signal = AbortSignal.timeout(30_000);
+        const { line, text, version } = request.body;
+        let folder = 'other';
+        const logWrite = (outcome: VaultLogFields['outcome']) => log('vault.write', { outcome, folder });
+        try {
+          const path = validateWritePath(request.body.path);
+          folder = loggedFolder(path);
+          if (!inTaskScope(path)) throw new ToolRefusal('That note does not hold vault tasks.');
+          const newText = newTaskText(request.body.newText);
+          if (Array.from(newText).length < 2) throw new ToolRefusal('Write a few words for the task.');
+          if (shouldRedact(newText)) throw new ToolRefusal('Secrets and credentials can never be saved to the vault.');
+          const id = vaultTaskId(path, line);
+          for (let attempt = 0; attempt < 2; attempt += 1) {
+            const current = await options.client.read(path, signal);
+            if (!current) return reply.code(409).send({ error: 'The task note no longer exists. Refresh the list.' });
+            const change = setTaskText(current.content, path, line, text, version, {
+              newText, due: request.body.due, time: request.body.time, priority: request.body.priority,
+            });
+            if (change.status === 'mismatch') {
+              return reply.code(409).send({ error: 'This task changed in the vault. Refresh the list.' });
+            }
+            if (change.status === 'refused') throw new ToolRefusal('That wording cannot be saved on this task line.');
+            if (change.status === 'unchanged') return { id, path, line, done: change.done, commit: null, version: change.version };
+            try {
+              const commit = await options.client.write(
+                path, change.content, 'jarvis: edit a task\n\nCo-authored-by: Jarvis', current.sha, signal,
+              );
+              indexAfterNoteWrite();
+              logWrite('ok');
+              return { id, path, line, done: change.done, commit, version: change.version };
             } catch (error) {
               if (!(error instanceof VaultWriteConflictError) || attempt === 1) throw error;
             }
