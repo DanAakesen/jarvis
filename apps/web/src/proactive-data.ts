@@ -65,6 +65,12 @@ export interface ProactiveSettings {
   suggestionScope: SuggestionScopePreference;
   newsFeeds: string[];
   guidance: string;
+  revision: string;
+  preferences: string[];
+  capabilities: {
+    title: { en: string; da: string };
+    examples: { en: string; da: string }[];
+  };
 }
 
 export const findingCategoryIds = [
@@ -173,7 +179,15 @@ export function isProactiveSettings(value: unknown): value is ProactiveSettings 
     new Set(value.categories.map((category) => isRecord(category) ? category.id : null)).size === findingCategoryIds.length &&
     (value.suggestionScope === 'all' || value.suggestionScope === 'personal' || value.suggestionScope === 'work') &&
     Array.isArray(value.newsFeeds) && value.newsFeeds.every((feed) => typeof feed === 'string' && feed.length <= 300) &&
-    typeof value.guidance === 'string' && value.guidance.length <= 1000;
+    typeof value.guidance === 'string' && value.guidance.length <= 1000 &&
+    typeof value.revision === 'string' && /^[a-f0-9]{64}$/u.test(value.revision) &&
+    Array.isArray(value.preferences) && value.preferences.length <= 12 &&
+    value.preferences.every((preference) => typeof preference === 'string' && preference.length <= 300) &&
+    isRecord(value.capabilities) && isRecord(value.capabilities.title) &&
+    typeof value.capabilities.title.en === 'string' && typeof value.capabilities.title.da === 'string' &&
+    Array.isArray(value.capabilities.examples) && value.capabilities.examples.length <= 12 &&
+    value.capabilities.examples.every((example) => isRecord(example) &&
+      typeof example.en === 'string' && typeof example.da === 'string');
 }
 
 export async function proactiveRequest(

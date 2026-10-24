@@ -339,6 +339,31 @@ describe('proactive todo writer', () => {
     expect(await state.receipts.list([key(11)])).toEqual([]);
   });
 
+  it.each([
+    ['pause', { paused: true }],
+    ['Todo source disable', { sources: { todos: false } }],
+  ] as const)('does not write after %s changes during vault verification', async (_label, patch) => {
+    const state = await fixture();
+    const read = state.vault.read.getMockImplementation()!;
+    let changed = false;
+    state.vault.read.mockImplementation(async (path) => {
+      const file = await read(path);
+      if (!changed) {
+        changed = true;
+        await state.store.settings.patch(patch);
+      }
+      return file;
+    });
+
+    await state.writer(await context(state.store, [{ key: 9, text: 'Synthetic task after verification' }]));
+
+    expect(state.vault.write).not.toHaveBeenCalled();
+    expect(state.logger.warn).toHaveBeenCalledWith(
+      expect.objectContaining({ reason: 'paused' in patch && patch.paused ? 'paused' : 'todos_disabled' }),
+      'proactive.todo_writer',
+    );
+  });
+
   it('allows manual writes during quiet hours', async () => {
     const state = await fixture({}, new Date('2026-10-18T01:00:00.000Z'));
     const run = await context(state.store, [{ key: 12, text: 'Manual synthetic task' }]);

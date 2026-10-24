@@ -197,12 +197,12 @@ export function ProactiveArea({ backendUrl, getAccessToken, signIn, now: injecte
     }
   }, [backendUrl, getAccessToken]);
 
-  const loadItems = useCallback(async (state: 'open' | 'all' = 'open') => {
+  const loadItems = useCallback(async (state: 'open' | 'all' = 'open', background = false) => {
     const controller = new AbortController();
     if (state === 'open') {
       itemsRequest.current?.abort();
       itemsRequest.current = controller;
-      setItems(pending());
+      if (!background) setItems(pending());
     }
     if (state === 'all') setEarlier(pending());
     try {
@@ -264,6 +264,24 @@ export function ProactiveArea({ backendUrl, getAccessToken, signIn, now: injecte
       activePoll.current?.abort();
     };
   }, [loadItems, loadRuns, loadStatus]);
+
+  useEffect(() => {
+    const refresh = () => {
+      if (document.hidden) return;
+      void loadStatus(undefined, true);
+      void loadItems('open', true);
+    };
+    const timer = window.setInterval(refresh, 10_000);
+    window.addEventListener('focus', refresh);
+    window.addEventListener('online', refresh);
+    document.addEventListener('visibilitychange', refresh);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener('focus', refresh);
+      window.removeEventListener('online', refresh);
+      document.removeEventListener('visibilitychange', refresh);
+    };
+  }, [loadItems, loadStatus]);
 
   useEffect(() => {
     if (!rowFocusPending.current) return;

@@ -256,6 +256,10 @@ describe('proactive_recent_items tool', () => {
 
   it.each([
     ['Stop travel suggestions', { operation: 'update', categories: { travel: false } }],
+    ['Pause proactive suggestions.', { operation: 'update', paused: true }],
+    ['Resume proactive suggestions.', { operation: 'update', paused: false }],
+    ['Sæt proaktive forslag på pause.', { operation: 'update', paused: true }],
+    ['Genoptag proaktive forslag.', { operation: 'update', paused: false }],
     ['Hold op med rejseforslag', { operation: 'update', categories: { travel: false } }],
     ['Enable travel suggestions', { operation: 'update', categories: { travel: true } }],
     ['Show only personal suggestions', { operation: 'update', suggestionScope: 'personal' }],
@@ -275,7 +279,8 @@ describe('proactive_recent_items tool', () => {
     });
     const settings = await store.settings.read();
     if ('categories' in input) expect(settings.categories.travel).toBe(input.categories.travel);
-    else expect(settings.suggestionScope).toBe('personal');
+    else if ('suggestionScope' in input) expect(settings.suggestionScope).toBe('personal');
+    else expect(settings.paused).toBe(input.paused);
   });
 
   it('refuses malformed values and unauthorized callers without writing', async () => {
@@ -350,6 +355,26 @@ describe('proactive_recent_items tool', () => {
     expect(settings.monthlyBudgetDkk).toBe(100);
   });
 
+  it('answers proactive capability help from the same source used by Settings', async () => {
+    const module = createProactiveToolsModule({
+      enabled: true, ownerObjectId: owner, store: createMemoryProactiveStore(owner),
+    })!;
+    const tool = module.tools.find(({ name }) => name === 'proactive_preferences')!;
+    const result = await tool.execute({ operation: 'help' }, {
+      principal: { objectId: owner }, agentPrincipal: null,
+    } as unknown as FastifyRequest, new AbortController().signal);
+    expect(result).toMatchObject({
+      operation: 'help',
+      capabilities: {
+        title: { en: 'What can I ask?', da: 'Hvad kan jeg bede om?' },
+        examples: expect.arrayContaining([
+          { en: 'Pause proactive suggestions.', da: 'Sæt proaktive forslag på pause.' },
+          { en: 'Stop travel suggestions.', da: 'Hold op med rejseforslag.' },
+        ]),
+      },
+    });
+  });
+
   it('does not claim success when the durable settings update fails', async () => {
     const store = createMemoryProactiveStore(owner);
     vi.spyOn(store.settings, 'patch').mockRejectedValue(new Error('synthetic private database detail'));
@@ -375,6 +400,10 @@ describe('proactive_recent_items tool', () => {
       ['Kan du slå vejrforslagene til igen, tak?', { category: 'weather', enabled: true }],
       ['Kun arbejdsrelaterede forslag vil jeg gerne have.', { suggestionScope: 'work' }],
       ['Jeg vil gerne se alle proaktive forslag igen.', { suggestionScope: 'all' }],
+      ['Pause proactive suggestions.', { paused: true }],
+      ['Resume proactive suggestions.', { paused: false }],
+      ['Sæt proaktive forslag på pause.', { paused: true }],
+      ['Genoptag proaktive forslag.', { paused: false }],
       ["I don't want any more travel suggestions, please.", { category: 'travel', enabled: false }],
       ['Could you stop suggesting trips for me, please?', { category: 'travel', enabled: false }],
       ['Please bring back travel suggestions!', { category: 'travel', enabled: true }],
@@ -470,7 +499,11 @@ describe('proactive_recent_items tool', () => {
         expect(await dispatch(text, input)).toMatchObject({ outcome: 'ok', result: { saved: true } });
       }
       const settings = await store.settings.read();
-      expect(settings).toMatchObject({ paused: true, sources: { travel: false }, monthlyBudgetDkk: 42 });
+      expect(settings).toMatchObject({
+        paused: 'paused' in intent ? intent.paused : true,
+        sources: { travel: false },
+        monthlyBudgetDkk: 42,
+      });
       const read = await dispatch('What are my proactive preferences?', { operation: 'read' });
       expect(read).toMatchObject({ outcome: 'ok', result: {
         suggestionScope: settings.suggestionScope,
@@ -478,6 +511,7 @@ describe('proactive_recent_items tool', () => {
           ? [{ id: intent.category, enabled: intent.enabled }] : []),
       } });
       if ('suggestionScope' in intent) expect(settings.suggestionScope).toBe(intent.suggestionScope);
+      if ('paused' in intent) expect(settings.paused).toBe(intent.paused);
       expect(patch).toHaveBeenCalledTimes(2);
     });
 

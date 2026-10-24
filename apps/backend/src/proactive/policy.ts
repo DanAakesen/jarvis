@@ -1,4 +1,4 @@
-import type { FindingCategory, ProactiveSettings, SuggestionScope, SourceFact } from './types.js';
+import type { FindingCategory, ProactiveSettings, SourceFact, SourceId, SuggestionScope } from './types.js';
 
 const personalScopePattern = /\b(?:personal|private|home|household|family|doctor|dentist|groceries|grocery|shopping|school|kids|children|birthday|rent|utilities|medicine|cleaning|laundry|privat|hjem(?:met)?|familie(?:n)?|læge(?:aftale|besøg)?|tandlæge|indkøb|dagligvarer|børn|fødselsdag|husleje|regninger|medicin|rengøring|vasketøj)\b/iu;
 const workScopePattern = /\b(?:work|office|job|manager|colleague|coworker|client|customer|supplier|business|workplace|professional|invoice|agenda|arbejde|kontor|leder|kollega|klient|kunde|leverandør|virksomhed|faktura|dagsorden|professionel)\b/iu;
@@ -38,6 +38,21 @@ export function findingAllowed(
   return settings.categories[category] &&
     relatedCategories.every((related) => settings.categories[related]) &&
     (settings.suggestionScope === 'all' || suggestionScope === settings.suggestionScope);
+}
+
+export function automaticProactiveWorkAllowed(settings: ProactiveSettings): boolean {
+  return !settings.paused && Object.values(settings.sources).some(Boolean);
+}
+
+export function proactiveSourceAllowed(settings: ProactiveSettings, source: SourceId): boolean {
+  return automaticProactiveWorkAllowed(settings) && settings.sources[source];
+}
+
+export function proactiveEvidenceSourcesAllowed(
+  settings: ProactiveSettings,
+  sources: readonly SourceId[],
+): boolean {
+  return automaticProactiveWorkAllowed(settings) && sources.every((source) => settings.sources[source]);
 }
 
 export function itemAllowed(settings: ProactiveSettings, item: {

@@ -12,10 +12,11 @@ import {
   type ProactiveStore,
 } from '../proactive/store.js';
 import {
-  findingCategories, type FindingCategory, type Item, type ProactiveSettings, type RunSummary, type SourceId,
+  findingCategories, sourceIds, type FindingCategory, type Item, type ProactiveSettings, type RunSummary, type SourceId,
   type SourceStatus, type SuggestionScope,
 } from '../proactive/types.js';
 import { findingAllowed, itemAllowed } from '../proactive/policy.js';
+import { proactiveSettingsRevision, ProactiveSettingsConflictError } from '../proactive/preferences.js';
 
 interface ItemRow {
   id: string;
@@ -199,7 +200,7 @@ export function createProactiveStore(pool: sql.ConnectionPool, ownerObjectId: st
   return {
     settings: {
       read: readSettings,
-      async patch(patch: ProactiveSettingsPatch) {
+      async patch(patch: ProactiveSettingsPatch, expectedRevision?: string) {
         const transaction = new sql.Transaction(pool);
         await transaction.begin();
         try {
@@ -218,6 +219,9 @@ export function createProactiveStore(pool: sql.ConnectionPool, ownerObjectId: st
               FROM dbo.proactive_settings WITH (UPDLOCK, HOLDLOCK) WHERE owner_object_id = @owner;`);
           const row = read.recordset[0];
           const current: ProactiveSettings = row ? settingsFromRow(row) : defaults;
+          if (expectedRevision !== undefined && proactiveSettingsRevision(current) !== expectedRevision) {
+            throw new ProactiveSettingsConflictError();
+          }
           const updated: ProactiveSettings = {
             ...current,
             ...patch,
@@ -246,7 +250,9 @@ export function createProactiveStore(pool: sql.ConnectionPool, ownerObjectId: st
                  news_feeds_json, guidance)
                 VALUES (@owner, @paused, @budget, @sources, @categories, @suggestionScope, @feeds, @guidance);`);
           await transaction.commit();
-          if (current.suggestionScope !== updated.suggestionScope ||
+          if (current.paused !== updated.paused ||
+              sourceIds.some((source) => current.sources[source] !== updated.sources[source]) ||
+              current.suggestionScope !== updated.suggestionScope ||
               Object.keys(updated.categories).some((category) =>
                 current.categories[category as FindingCategory] !== updated.categories[category as FindingCategory])) {
             for (const listener of preferenceListeners) {

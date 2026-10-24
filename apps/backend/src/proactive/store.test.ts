@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import { proactiveSettingsRevision, ProactiveSettingsConflictError } from './preferences.js';
 import { createMemoryProactiveStore } from './store.js';
 
 const finding = {
@@ -14,6 +15,24 @@ const finding = {
 };
 
 describe('in-memory proactive stores', () => {
+  it('rejects stale settings revisions and notifies work cancellation for pause/source changes', async () => {
+    const store = createMemoryProactiveStore();
+    const changed = vi.fn();
+    store.settings.subscribePreferencesChanged(changed);
+    const original = await store.settings.read();
+    const revision = proactiveSettingsRevision(original);
+
+    await store.settings.patch({ paused: true }, revision);
+    await expect(store.settings.patch({ sources: { todos: false } }, revision))
+      .rejects.toBeInstanceOf(ProactiveSettingsConflictError);
+    expect(changed).toHaveBeenCalledOnce();
+    expect(await store.settings.read()).toMatchObject({ paused: true, sources: { todos: true } });
+
+    const latest = await store.settings.read();
+    await store.settings.patch({ sources: { todos: false } }, proactiveSettingsRevision(latest));
+    expect(changed).toHaveBeenCalledTimes(2);
+  });
+
   it('atomically rejects stale feedback guards and preserves concurrent state and ratings', async () => {
     const store = createMemoryProactiveStore();
     const first = await store.items.upsertFinding(finding);

@@ -11,7 +11,7 @@ const now = new Date('2026-10-20T08:00:00Z');
 const owner = '11111111-1111-4111-8111-111111111111';
 const stoppers: (() => Promise<void>)[] = [];
 
-async function setup(language: 'en' | 'da', throws = false) {
+async function setup(language: 'en' | 'da', throws = false, onVaultRead?: () => Promise<void>) {
   const store = createMemoryProactiveStore(owner);
   const reminders = createMemoryProactiveReminderStore(owner);
   const rows = [50, 10, 40, 20, 30].map((minutes) => {
@@ -42,7 +42,10 @@ async function setup(language: 'en' | 'da', throws = false) {
     store, reminders, pushStore, ownerObjectId: owner,
     vault: {
       tree: async () => [{ path: 'tasks.md', sha: 'synthetic' }],
-      read: async () => ({ path: 'tasks.md', sha: 'synthetic', content }),
+      read: async () => {
+        await onVaultRead?.();
+        return { path: 'tasks.md', sha: 'synthetic', content };
+      },
     },
     ledger: createMemoryAlertLedgerStore(),
     conversationStore: { readRecentUserMessages: async () => language === 'da' ? ['Jeg har en opgave i morgen'] : ['I have a task tomorrow'] },
@@ -90,6 +93,24 @@ describe('reminder ticker push details', () => {
     expect(JSON.stringify([fixture.logger.info.mock.calls, fixture.logger.warn.mock.calls])).not.toContain('Synthetic private task');
     expect(fixture.update).not.toHaveBeenCalled();
     expect(fixture.pushStore.updateItemDelivery).not.toHaveBeenCalled();
+    expect(fixture.reminders.snapshot().every(({ state }) => state === 'pending')).toBe(true);
+  });
+
+  it.each([
+    ['pause', { paused: true }],
+    ['Todo source disable', { sources: { todos: false } }],
+  ] as const)('does not deliver automatic reminders after %s changes during source verification', async (_label, patch) => {
+    let fixture: Awaited<ReturnType<typeof setup>>;
+    let changed = false;
+    fixture = await setup('en', false, async () => {
+      if (changed) return;
+      changed = true;
+      await fixture.store.settings.patch(patch);
+    });
+
+    await fixture.ticker.tick();
+
+    expect(fixture.send).not.toHaveBeenCalled();
     expect(fixture.reminders.snapshot().every(({ state }) => state === 'pending')).toBe(true);
   });
 });

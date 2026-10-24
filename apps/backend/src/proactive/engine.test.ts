@@ -446,6 +446,26 @@ describe('proactive engine pipeline', () => {
     expect(await fixture.run()).toMatchObject({ status: 'done', findingCount: 2 });
     expect(fixture.model.summarize).toHaveBeenCalledTimes(1);
   });
+
+  it.each([
+    ['pause', { paused: true }],
+    ['Todo source disable', { sources: { todos: false } }],
+  ] as const)('cancels scheduled work when %s changes during a source read', async (_label, patch) => {
+    const fixture = setup();
+    const read = fixture.todoSource.read.getMockImplementation()!;
+    fixture.todoSource.read.mockImplementation(async (context) => {
+      await fixture.store.settings.patch(patch);
+      return read(context);
+    });
+
+    await fixture.engine(await fixture.claim('scheduled'));
+
+    expect(fixture.model.summarize).not.toHaveBeenCalled();
+    expect(await fixture.store.items.list('all', 10, new Date())).toEqual([]);
+    expect(await fixture.store.runs.latest()).toMatchObject({
+      status: 'cancelled', reason: 'preferences_changed', findingCount: 0,
+    });
+  });
 });
 
 describe('proactive source failures', () => {

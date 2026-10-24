@@ -7,6 +7,7 @@ import { createMemoryProactiveStore, DEFAULT_NEWS_FEEDS } from './store.js';
 import { registerProactiveRoutes, type ProactiveRouteOptions } from './routes.js';
 import { registerProactive } from './composition.js';
 import type { ProactiveCompositionOptions } from './composition.js';
+import { createProactiveToolsModule } from './tools.js';
 import { findingCategories, sourceIds } from './types.js';
 
 const owner = 'd5b41c2f-33f4-4b4f-9a52-09346e50c8dd';
@@ -68,7 +69,7 @@ describe('proactive routes', () => {
     const { app } = await appFixture();
     const response = await app.inject({ method: 'GET', url: '/proactive/settings', headers: { authorization } });
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual({
+    expect(response.json()).toMatchObject({
       paused: false,
       monthlyBudgetDkk: 100,
       sources: sourceIds.map((id) => ({ id, enabled: id !== 'x' })),
@@ -76,6 +77,14 @@ describe('proactive routes', () => {
       suggestionScope: 'all',
       newsFeeds: [...DEFAULT_NEWS_FEEDS],
       guidance: '',
+      preferences: [
+        'Automatic proactive suggestions are on.',
+        'The current scope is all personal and work suggestions.',
+      ],
+    });
+    expect(response.json().revision).toMatch(/^[a-f0-9]{64}$/u);
+    expect(response.json().capabilities.examples).toContainEqual({
+      en: 'Stop travel suggestions.', da: 'Hold op med rejseforslag.',
     });
     const patched = await app.inject({
       method: 'PATCH',
@@ -128,6 +137,53 @@ describe('proactive routes', () => {
       expect(response.statusCode, JSON.stringify(payload)).toBe(400);
       expect(response.json()).toEqual({ error: 'invalid_request' });
     }
+  });
+
+  it('shares ordinary-language edits with chat reads and rejects stale or unsupported edits', async () => {
+    const { app, store } = await appFixture();
+    const initial = await app.inject({ method: 'GET', url: '/proactive/settings', headers: { authorization } });
+    const revision = initial.json().revision as string;
+    const changed = await app.inject({
+      method: 'PATCH',
+      url: '/proactive/settings',
+      headers: { authorization },
+      payload: { instruction: 'Show only personal suggestions.', expectedRevision: revision },
+    });
+    expect(changed.statusCode).toBe(200);
+    expect(changed.json()).toMatchObject({
+      suggestionScope: 'personal',
+      monthlyBudgetDkk: 100,
+      newsFeeds: [...DEFAULT_NEWS_FEEDS],
+      guidance: '',
+    });
+    const tool = createProactiveToolsModule({ enabled: true, ownerObjectId: owner, store })!
+      .tools.find(({ name }) => name === 'proactive_preferences')!;
+    await expect(tool.execute({ operation: 'read' }, {
+      principal: { objectId: owner }, agentPrincipal: null,
+    } as never, new AbortController().signal)).resolves.toMatchObject({
+      operation: 'read',
+      suggestionScope: 'personal',
+      preferences: expect.arrayContaining(['The current scope is personal suggestions only.']),
+    });
+
+    const stale = await app.inject({
+      method: 'PATCH',
+      url: '/proactive/settings',
+      headers: { authorization },
+      payload: { instruction: 'Stop travel suggestions.', expectedRevision: revision },
+    });
+    expect(stale.statusCode).toBe(409);
+    expect(stale.json()).toEqual({ error: 'settings_changed' });
+    expect((await store.settings.read()).categories.travel).toBe(true);
+
+    const unsupported = await app.inject({
+      method: 'PATCH',
+      url: '/proactive/settings',
+      headers: { authorization },
+      payload: { instruction: 'Give me more suggestions.', expectedRevision: changed.json().revision },
+    });
+    expect(unsupported.statusCode).toBe(422);
+    expect(unsupported.json()).toEqual({ error: 'unsupported_preference' });
   });
 
   it('returns status with no runs and reports sources in contract order', async () => {
