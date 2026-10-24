@@ -8082,6 +8082,18 @@ system, credential, schema, tool name or phone authority is introduced. Tests
 use synthetic DTOs and attachment references only. Live Frida availability,
 production activation and physical-device acceptance remain unverified.
 
+## Keep food correction reviews compact without weakening approval (#1234; 23 October 2026; #1196, #1200)
+
+Keep the existing browser-only Now confirmation and its 4,000-character limit.
+Render corrections as changed field transitions plus meal identity, revision,
+portion/nutrient context, source and uncertainty; render estimates and deletions
+as complete compact projections. Never truncate details or change the canonical
+proposal for display. If the full review cannot fit, refuse before staging and
+offer a recovery that allows renaming an existing meal without splitting it.
+Synthetic tool-path tests cover photo-meal renames, accepted and oversized
+summaries, approval/rejection/expiry and replay; no live health data or device
+acceptance is implied.
+
 ## P12-23 — Read-only Daily Workouts (18 October 2026)
 
 Use the merged Daily plug-in, pagination and UI contracts without backend or

@@ -1443,8 +1443,11 @@ this is not complete internal food workflow or #724 acceptance.
 The inactive internal composition includes `daily_food_review` for portion
 estimates, revisioned corrections and soft deletion. It uses the existing
 owner-bound one-time approval in Now, not model confirmation flags or a new
-proposal dispatcher. Review shows the exact before/after food, units, unknown
-macros, occurrence/Copenhagen date and target revision. Model proposals remain
+proposal dispatcher. Review shows the exact operation and changed before/after
+values, with meal identity, portions, nutrients, source, uncertainty,
+occurrence/Copenhagen date and target revision. Unchanged details are summarized
+instead of repeated. The existing 4,000-character Now bound refuses a review
+that cannot be shown completely and gives a rename-safe recovery. Model proposals remain
 estimates; approval does not make them independently verified. Direct supported
 exact labels and actual saved favourites are routed back to the one-step tool.
 This initial reviewed path requires a present chat/voice session and a browser
