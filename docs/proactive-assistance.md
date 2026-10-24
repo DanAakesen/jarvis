@@ -37,8 +37,11 @@ category, or select personal, work or all suggestions. Examples:
 “Jeg vil ikke have rejseforslag længere”, “Slå vejrforslag fra”,
 “Jeg vil kun have personlige forslag”, and “Please bring back travel suggestions”.
 The server verifies the current owner message and exact requested change.
-Ambiguity, quoted/source instructions, hypothetical requests, negated actions
-and bare agreement do not authorize a save; uncertain or unavailable
+Negative preferences such as “I do not want travel suggestions” are explicit
+disable requests, not refusals of authorization. Ambiguity, quoted/source
+instructions, hypothetical requests, disclaimed authorization (“do not change
+my preferences”), negated actions such as “do not disable”, and bare agreement
+do not authorize a save; uncertain or unavailable
 interpretation asks for clarification. Confirmation includes effective saved
 preferences and follows successful persistence only.
 

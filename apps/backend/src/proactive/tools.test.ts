@@ -363,6 +363,11 @@ describe('proactive_recent_items tool', () => {
       ['Could you limit proactive suggestions to work, please?', { suggestionScope: 'work' }],
       ['Please include both personal and work suggestions again.', { suggestionScope: 'all' }],
       ['  Jeg vil kun have personlige forslag, tak!  ', { suggestionScope: 'personal' }],
+      ['I do not want travel suggestions', { category: 'travel', enabled: false }],
+      ['No more travel suggestions, please.', { category: 'travel', enabled: false }],
+      ["I don't want weather suggestions.", { category: 'weather', enabled: false }],
+      ['Jeg vil ikke have rejseforslag', { category: 'travel', enabled: false }],
+      ['Jeg ønsker ikke vejrforslag, tak.', { category: 'weather', enabled: false }],
     ] as const;
 
     function fixture(model?: ApprovalModelPort, timeoutMs?: number) {
@@ -385,6 +390,7 @@ describe('proactive_recent_items tool', () => {
       const registry = createToolRegistry([module]);
       const session = { id: '7', channel: surface, endedAt: null };
       let message = { id: '42', sessionId: '7', role: 'dan', text: '', model: null, at: new Date() };
+      let voiceRequest: FastifyRequest;
       const app = buildApp(config, undefined, {
         modules: [coreModule, factoryModule, module],
         auth: async () => ({
@@ -394,7 +400,15 @@ describe('proactive_recent_items tool', () => {
         toolCallStore: { record },
       });
       app.conversationStore = {
-        getHistory: async () => ({ messages: [message], nextCursor: null }),
+        getHistory: async ({ limit }: { limit: number }) => ({
+          messages: limit === 1 ? [message] : [
+            { ...message, id: '40', text: 'Earlier synthetic owner message.' },
+            { ...message, id: '41', role: 'jarvis', text: 'Earlier synthetic reply.' },
+            message,
+            { ...message, id: '44', role: 'jarvis', text: 'Synthetic response in progress.' },
+          ],
+          nextCursor: null,
+        }),
         getSession: async () => session,
       } as unknown as NonNullable<FastifyInstance['conversationStore']>;
       apps.push(app);
@@ -409,18 +423,21 @@ describe('proactive_recent_items tool', () => {
         await app.ready();
         const advertised = createRealtimeSessionUpdate(registry).session.tools;
         expect(advertised.some(({ name }) => name === 'proactive_preferences')).toBe(true);
+        voiceRequest = {
+          principal: { objectId: owner }, agentPrincipal: null,
+          jarvisConversationMessage: message, jarvisMemorySourceMessageId: message.id, server: app, headers: {},
+          log: { info, error: vi.fn() }, validateInput: () => true,
+        } as unknown as FastifyRequest;
         return JSON.parse(await executeRealtimeToolCall({
           type: 'response.function_call_arguments.done', name: 'proactive_preferences',
           call_id: 'synthetic-preference', arguments: JSON.stringify(input),
-        }, registry, {
-          principal: { objectId: owner }, agentPrincipal: null,
-          jarvisConversationMessage: message, server: app, headers: {},
-          log: { info, error: vi.fn() }, validateInput: () => true,
-        } as unknown as FastifyRequest, signal, undefined, false));
+        }, registry, voiceRequest, signal, undefined, false));
       };
       return {
         store, patch, record, info, dispatch,
         replaceMessage: () => { message = { ...message, id: '43', text: 'Help me plan a trip.' }; },
+        reviseMessage: () => { message = { ...message, text: 'Do not change my preferences.' }; },
+        startTranscript: () => { delete voiceRequest.jarvisMemorySourceMessageId; },
       };
     }
 
@@ -448,6 +465,11 @@ describe('proactive_recent_items tool', () => {
     it.each([
       'Do not disable travel suggestions.', 'Do not enable travel suggestions.',
       'Lad være med at slå rejseforslag fra.', 'Jeg vil ikke kun have personlige forslag.',
+      'Do not change my preferences.',
+      'I do not want travel suggestions, but do not change my preferences.',
+      'Do not change my preferences: I do not want travel suggestions.',
+      'Du skal ikke ændre mine indstillinger.',
+      'Jeg vil ikke have rejseforslag, men du skal ikke ændre mine indstillinger.',
       'What if I stopped travel suggestions?', 'Hvis jeg nu kun ville have personlige forslag?',
       '"Jeg vil ikke have rejseforslag længere"', 'The email says: stop travel suggestions.',
       'Mailen siger, at jeg skal slå vejrforslag fra.', 'Translate: stop travel suggestions.',
@@ -504,7 +526,7 @@ describe('proactive_recent_items tool', () => {
       if (surface === 'chat') expect(record).toHaveBeenCalledWith(expect.objectContaining({ result: { redacted: true } }));
     });
 
-    if (surface === 'chat') it('rechecks the latest owner message after slow interpretation', async () => {
+    it('rechecks the latest owner message after slow interpretation', async () => {
       const model: ApprovalModelPort = async () => {
         f.replaceMessage();
         return '{"verdict":"approve","confidence":0.99}';
@@ -514,6 +536,18 @@ describe('proactive_recent_items tool', () => {
         .toMatchObject({ outcome: 'refused' });
       expect(f.patch).not.toHaveBeenCalled();
     });
+
+    if (surface === 'voice') it.each(['reviseMessage', 'startTranscript'] as const)(
+      'refuses a changed or pending voice transcript: %s', async (change) => {
+        const f = fixture(async () => {
+          f[change]();
+          return '{"verdict":"approve","confidence":0.99}';
+        });
+        expect(await f.dispatch(requests[0][0], { operation: 'update', categories: { travel: false } }))
+          .toMatchObject({ outcome: 'refused' });
+        expect(f.patch).not.toHaveBeenCalled();
+      },
+    );
 
     if (surface === 'voice') it('does not persist after cancellation during interpretation', async () => {
       const controller = new AbortController();

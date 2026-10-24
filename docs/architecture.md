@@ -6979,12 +6979,17 @@ existing server-side approval interpreter for other natural Danish/English
 instructions. Its `proactive_preferences` family has a separate instruction
 prompt: independently interpret the verified owner message and compare it with
 the exact server-generated candidate category/direction or scope. Bare approval
-replies cannot authorize a preference write. The tools-free model call shares
+replies cannot authorize a preference write. Negative preferences explicitly
+request disabling their category; disclaimed authorization takes precedence even
+when accompanied by a preference. The tools-free model call shares
 the existing five-second timeout, confidence threshold, bounded cache,
 concurrency/rate limits and usage accounting; no tool budget is increased.
 Missing model configuration, malformed/uncertain verdicts and interpreter
 failures refuse without a write. The tool rechecks current-message provenance
-and cancellation before patching. Only verdict/path metadata is logged.
+and cancellation before patching. For persisted direct voice messages it checks
+the live transcript source marker, bounded latest-owner history and active
+session, so a pending transcript, same-ID revision or superseding message cannot
+authorize a write using the old snapshot. Only verdict/path metadata is logged.
 No settings schema, migration, generation policy or delivery rule changes.
 
 The engine excludes disabled travel evidence across all enabled sources and

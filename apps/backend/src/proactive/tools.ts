@@ -167,6 +167,22 @@ async function currentOwnerMessage(request: FastifyRequest, ownerObjectId: strin
   const direct = request.jarvisConversationMessage;
   if (direct?.role === 'dan' &&
       (request.principal?.objectId.toLowerCase() === ownerObjectId.toLowerCase() || request.agentPrincipal)) {
+    if (direct.id) {
+      const store = request.server.conversationStore;
+      if (request.jarvisMemorySourceMessageId !== direct.id || !store) {
+        throw new ToolRefusal('The current owner request could not be verified. Nothing was changed.');
+      }
+      const page = await store.getHistory({ limit: 20 });
+      signal.throwIfAborted();
+      const latest = page.messages.filter((message) => message.role === 'dan').at(-1);
+      const session = await store.getSession(direct.sessionId);
+      signal.throwIfAborted();
+      if (!latest || latest.id !== direct.id || latest.sessionId !== direct.sessionId ||
+          latest.text !== direct.text || request.jarvisMemorySourceMessageId !== direct.id ||
+          !session || session.endedAt !== null || session.channel === 'phone') {
+        throw new ToolRefusal('The current owner request changed. Nothing was changed.');
+      }
+    }
     return { text: direct.text, id: direct.id, sessionId: direct.sessionId };
   }
   const id = request.jarvisMemorySourceMessageId ?? request.headers['x-jarvis-message-id'];

@@ -1642,7 +1642,9 @@ Preference requests may use natural Danish or English phrasing, such as
 “Jeg vil ikke have rejseforslag længere”, “Slå vejrforslag fra” or
 “Could you bring back travel suggestions, please?”. The current owner message
 must explicitly request the exact category and direction or personal/work/all
-scope. Bare agreement, ambiguous, quoted, hypothetical, negated-action and
+scope. Negative preferences such as “I do not want travel suggestions” explicitly
+request disabling that category. Bare agreement, ambiguity, quotations,
+hypotheticals, disclaimed authorization (“do not change my preferences”) and
 third-party instructions do not authorize a change. Uncertainty asks for
 clarification without saving; success reports the effective persisted choices.
 

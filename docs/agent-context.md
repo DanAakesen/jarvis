@@ -486,6 +486,31 @@ independent review found no blocking issues. Automated review was unavailable
 (missing binary), and CodeQL skipped analysis because its database was too large.
 No live preferences, provider sessions or deployments were exercised.
 
+24 October same-branch integration (Refs #1207): merged main `33f0ab9` with
+both task/stale-write protections (#1244) and food-review behavior (#1235)
+unchanged, preserving their documentation. Negative preferences such as
+“I do not want travel suggestions” explicitly disable that category;
+“do not change my preferences” disclaims authorization even alongside a preference.
+Voice preference writes also verify the live transcript source marker and
+persisted owner text/session; superseding, revised or pending transcripts refuse
+rather than relying on the original tool-call snapshot.
+Focused integrated backend checks passed 485 tests. All workspace builds and
+lint passed. With the existing CI SQL Server image in a disposable loopback-only
+container, `npm run test:database --workspace @jarvis/backend` passed all 278
+tests; the container was removed afterward.
+The first aggregate web run had one unchanged contrast-audit timeout (15 seconds);
+its isolated rerun passed all seven tests without changing its timeout or source.
+The same contended run also reported a Health upload admission test failure.
+Final aggregate reruns and exact-head CI must be reported separately from the
+23 October results above; they are not implied by those earlier green checks.
+
+Coordination: #1246/#1247 remain separate, unmerged capabilities. This follow-up
+adds no feedback/reminder tool, SQL schema/store edit, catalogue member or cap.
+Their later integrations must preserve the preference guard, feedback grounding,
+conditional SQL writes, optional reminder registration and combined advertised
+tool set, then qualify their own new heads. No #1249 or #1241 work is imported.
+Live speech/model comprehension and owner acceptance remain unverified.
+
 Focused local checks:
 `npm test --workspace @jarvis/backend -- --run src/proactive/tools.test.ts src/proactive/policy.test.ts src/proactive/engine.test.ts src/proactive/store.test.ts src/proactive/routes.test.ts src/proactive/todo-writer.test.ts src/proactive/alerts.test.ts src/proactive/reminder-ticker.test.ts src/proactive/vault-push-reminders.test.ts src/database/proactive-store.test.ts src/database/migrations.test.ts src/voice/realtime.test.ts src/voice/startup.test.ts src/core/settings.test.ts src/production-modules.test.ts`,
 `npm test --workspace @jarvis/web -- --run src/ProactiveSettings.test.tsx`,

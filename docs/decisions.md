@@ -8011,10 +8011,17 @@ Reuse the bounded, tools-free approval meaning interpreter with a distinct
 preference-instruction family rather than expanding command regexes indefinitely.
 Keep canonical requests deterministic; interpret other Danish/English owner
 instructions independently against the exact candidate category/direction or
-scope. Bare agreement is not an instruction. Quoted/source text, hypothetical,
-conditional, negated-action or ambiguous wording must not authorize writes.
+scope. Bare agreement is not an instruction. Negative preferences, including
+“I do not want travel suggestions” without “anymore”, explicitly request a
+disable. Disclaimed authorization such as “do not change my preferences” takes
+precedence, including alongside a preference. Quoted/source text, hypothetical,
+conditional or ambiguous wording must not authorize writes. Negating an action
+such as “do not disable” requests neither a disable nor an enable.
 Recheck the current owner message after interpretation and fail closed on
 uncertainty, cancellation or unavailable model service.
+For voice, re-read persisted owner text and active session and verify the live
+source marker instead of comparing only the original request snapshot; a pending,
+revised or superseding transcript invalidates the write.
 
 Persistence, enforcement, defaults and reversal remain unchanged. Rolling back
 this follow-up restores canonical-only conversation wording without changing

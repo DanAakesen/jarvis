@@ -61,6 +61,8 @@ describe('createApprovalInterpreter', () => {
       family: 'proactive_preferences', summary: '{"category":"travel","enabled":false}',
     }))).resolves.toEqual({ verdict: 'approve', path: 'model' });
     expect(model.mock.calls[0]![0].system).toBe(preferenceIntentSystemPrompt);
+    expect(preferenceIntentSystemPrompt).toContain('Negative preferences ARE explicit disable requests');
+    expect(preferenceIntentSystemPrompt).toContain('Disclaimed authorization takes precedence');
     expect(model.mock.calls[0]![0].user).toContain('{"category":"travel","enabled":false}');
     await expect(createApprovalInterpreter()(question('yes', {
       family: 'proactive_preferences',
