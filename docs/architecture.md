@@ -6275,15 +6275,23 @@ reading when `workspaceCommands.isConnected(owner)` is false. One
 `service.query` page then runs over the read model behind `POST /daily/query`
 (at most 366 days and 200 rows, 100 for meals, favourites and plans). A selected
 measurement is filtered by the shared read model before that row limit; exact
-keys take precedence over their readable labels. Its coverage and partial
-disclosures therefore describe the filtered page, not the full requested
-period. The pure
+keys take precedence over their readable labels. For nutrition days, `metric`
+selects one allowlisted nutrient for a chart but does not filter the returned
+daily rows. Its coverage and partial disclosures therefore describe the bounded
+page, not the full requested period. The pure
 `buildDailyView` (`apps/backend/src/daily/show/views.ts`) turns it into a view, and
 the tool publishes it through the workspace view lifecycle: `update` first, `create`
 when the view does not exist yet, and for a refresh a best-effort foreground `show`.
 The receipt says whether the view was created or refreshed. Refresh success
 depends on an applied broker acknowledgement; the following foreground `show`
 is best-effort and cannot turn a successful refresh into a failure.
+
+The shared query/show tool descriptions guide the existing model used for chat and
+supported browser voice: it interprets English or Danish intent, period, metric,
+format and follow-up context, and chooses a read or presentation. Tool arguments
+are still parsed and allowlisted by the backend; `daily_query` validates against
+`isDailyQuery`, and the generated view is checked by `isWorkspaceCommand` before
+publication. The model does not supply rendered records or bypass those guards.
 
 `buildDailyView` maps stored rows onto the existing `table`, `chart`, `detail` and
 `text` generated-view contracts and calculates nothing: values and units pass
@@ -6295,8 +6303,11 @@ one, and "Completeness and freshness are not established." View IDs are
 `daily-<source>-<table|chart>` or `daily-sync`. A measurement view filtered to one
 metric adds the form and a short digest of the metric name; a heart-rate view is
 keyed by its rendered form and workout, not by its date window, so asking again
-refreshes the same view. Only sleep hours, one measurement or heart rate can be
-drawn as a chart, and any other chart request becomes a table with a note. An empty
+refreshes the same view. A chart is drawn for workout duration, sleep hours, one
+measurement, one selected per-day nutrition nutrient, or heart rate. Nutrition
+charts plot the existing daily totals without summing or filling gaps; unknown
+values stay out, and partial totals are labelled and disclosed as lower bounds.
+Unselected or incomparable chart requests become a table with a note. An empty
 read becomes a `text` view carrying its own read time.
 
 The tool answers within 25 seconds overall, under the agent's 30-second default

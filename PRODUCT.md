@@ -1548,12 +1548,23 @@ separate navigation destinations, widget, coaching/recovery/recomp or TickTick.
 On-demand Health views (P12-16 / #731) let Dan ask Jarvis in chat or voice to show
 what Health holds, and the answer appears as a table, chart or detail in the existing
 workspace window instead of a fixed native screen. The `daily_show` tool covers
-measurements, sleep, workouts, one workout's heart rate, food history, saved
-favourites, meal plans and sync status. It reads through the same
+measurements, sleep, workouts, one workout's heart rate, food history, per-day
+nutrition totals, saved favourites, meal plans and sync status. Jarvis understands
+the request and follow-ups in Danish or English: factual questions and explanations
+are answered in words, while a visual is used when requested or helpful for a clear
+trend/comparison. An explicit table or chart preference is honored when supported;
+nutrition is not tied to tables, nor are measurements automatically charted.
+Nutrition charts show one selected nutrient from the existing per-day totals.
+Unknown values are omitted, partial totals are identified as lower bounds, and
+bounded or partial history is disclosed. For a saved-target comparison, Jarvis reads
+the actual owner target and relevant measurements through `daily_query`; an unset
+target stays unset and is never replaced by a default.
+It reads through the same
 owner-authorised read model as the Daily page and `daily_query`: one bounded page
 per request (at most 366 days and 200 rows, 100 for meals, favourites and plans;
-no paging), and it calculates nothing, so every number is a stored value with its
-unit and date. A footnote under the data names the source, the period, the read
+no paging), and `daily_show` adds no calculations: per-day nutrition totals are
+already derived by the shared query read model from retained meals. Values keep their
+units and dates. A footnote under the data names the source, the period, the read
 time and that completeness and freshness are not established. A missing value reads
 as unknown, never zero, and an empty read says so with its own read time. Asking
 for the same view again refreshes it in place rather than opening another. It works

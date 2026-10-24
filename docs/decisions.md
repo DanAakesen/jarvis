@@ -2748,6 +2748,35 @@ appears on screen the way other generated views do.
   fixed. It is not live data, a physical phone, keyboard or reduced-motion coverage,
   provider acceptance or Daily acceptance. Rolling back means reverting this change.
 
+## Intent-led Health answers in chat and supported voice (23 October 2026; #1243)
+
+Owner-approved follow-on to #731 and the shared read/target coverage delivered in
+#1197/#1198. “nummer 6 skal være med sprogforståelsen og ikke være båndet til tabel
+eller chart” means Health assistance should understand the question before choosing
+its answer, rather than hardwire nutrition to tables or measurements to charts.
+
+- The existing model interprets Danish or English requests and conversational
+  follow-ups, choosing a source, period, metric and response form from intent.
+  Straightforward facts and explanations stay in the conversation; explicit table
+  or chart requests are honored where supported, and a useful trend may use a
+  visual. The shared tool descriptions keep this behavior consistent across chat
+  and supported browser voice.
+- The model's choice is not an authorization or a renderer contract. Existing
+  `daily_query` schema validation, `daily_show` source/date/selector/page checks,
+  owner and channel guards, generated-view validation and Workspace acknowledgments
+  remain authoritative. Missing target, unknown values, partial pages and
+  lower-bound nutrition totals stay explicit; the model cannot infer a cause from
+  differences alone.
+- Reuse `daily_query` for actual saved step targets and requested-period history.
+  Reuse existing per-day nutrition totals for a chart of one selected nutrient;
+  the chart does not sum values, fill missing dates or imply full-period coverage.
+  No new model pipeline, read tool, store, renderer, target write or Workspace
+  lifecycle is introduced.
+- Verification uses synthetic records, including selected nutrient charts,
+  unknown/partial values, explicit table preference, and configured/unset targets.
+  It does not establish live provider behavior, real Health data or physical-device
+  acceptance; preserve unsupported phone restrictions.
+
 ## Switch proactive todo additions, alerts and reminders (milestones 3 and 4) on in production (18 October 2026; P13-15 / #936)
 
 Dan said "Ship all proactive if possible, you can take decisions as I would, as

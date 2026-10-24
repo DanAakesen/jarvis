@@ -35,7 +35,7 @@ export const maxShownRows = 200;
 
 export interface DailyViewOptions {
   readonly display: DailyShowDisplay;
-  /** Exact `metric_name` to keep from the rows that were returned (measurements and heart rate only). */
+  /** Exact measurement name, heart-rate metric, or one per-day nutrient to chart. */
   readonly metric?: string | undefined;
   /** The workout a heart-rate read belongs to; the result does not repeat it. */
   readonly workoutId?: string | undefined;
@@ -260,9 +260,10 @@ function viewIdFor(source: DailyShowSource, shown: 'table' | 'chart', options: D
   if (source === sources.heartRate) {
     return `daily-${slug}-${shown}-${hash(`${options.workoutId ?? ''}\u0000${options.metric ?? ''}`, 8)}`;
   }
-  if (source === sources.metrics && options.metric) {
-    const readableSlug = options.metric.toLowerCase().replaceAll(/[^a-z0-9]+/gu, '-').replaceAll(/^-+|-+$/gu, '').slice(0, 20).replace(/-+$/u, '');
-    return `daily-${slug}-${shown}-${readableSlug || 'x'}-${hash(options.metric, 6)}`;
+  if ((source === sources.metrics || source === sources.days) && options.metric) {
+    const name = source === sources.days ? selectedNutritionNutrient(options.metric)?.key ?? options.metric : options.metric;
+    const readableSlug = name.toLowerCase().replaceAll(/[^a-z0-9]+/gu, '-').replaceAll(/^-+|-+$/gu, '').slice(0, 20).replace(/-+$/u, '');
+    return `daily-${slug}-${shown}-${readableSlug || 'x'}-${hash(name, 6)}`;
   }
   return `daily-${slug}-${shown}`;
 }
@@ -283,14 +284,30 @@ interface ChartPlan {
   readonly plotted: number;
   readonly considered: number;
   readonly notes: readonly string[];
+  readonly partial?: boolean;
 }
 type ChartDecision = { readonly plan: ChartPlan } | { readonly fallback: string };
+
+const nutritionNutrients = [
+  { key: 'energy_kcal', label: 'Energy', unit: 'kcal', aliases: ['energy', 'kcal'] },
+  { key: 'protein_grams', label: 'Protein', unit: 'g', aliases: ['protein'] },
+  { key: 'carbohydrates_grams', label: 'Carbohydrates', unit: 'g', aliases: ['carbohydrates', 'carbohydrate', 'carbs'] },
+  { key: 'fat_grams', label: 'Fat', unit: 'g', aliases: ['fat'] },
+  { key: 'fiber_grams', label: 'Fiber', unit: 'g', aliases: ['fiber', 'fibre'] },
+] as const;
+
+function selectedNutritionNutrient(metric: string | undefined) {
+  if (!metric) return undefined;
+  const requested = metric.toLowerCase().trim().replaceAll(/[\s-]+/gu, '_');
+  return nutritionNutrients.find(({ key, label, aliases }) =>
+    requested === key || requested === label.toLowerCase() || (aliases as readonly string[]).includes(requested));
+}
 
 /**
  * A chart is drawn only when everything on it shares one unit and one measurement, and only from rows that have
  * a real value; otherwise the honest answer is a table. Every series covers the same rows, in row order.
  */
-function planChart(source: TabularSource, rows: readonly Row[]): ChartDecision {
+function planChart(source: TabularSource, rows: readonly Row[], metric?: string): ChartDecision {
   if (source === sources.workouts) {
     const usable = rows.filter((row) => finite(row.duration_seconds));
     if (!usable.length) return { fallback: 'No row has a workout duration to draw, so a table is shown.' };
@@ -314,6 +331,34 @@ function planChart(source: TabularSource, rows: readonly Row[]): ChartDecision {
         title: 'Sleep (h)',
         series: drawn.map(([name, key]) => ({ name, points: usable.map((row, index) => ({ x: labels[index] ?? '', y: Number(row[key]) })) })),
         plotted: usable.length, considered: rows.length, notes: [],
+      },
+    };
+  }
+  if (source === sources.days) {
+    const nutrient = selectedNutritionNutrient(metric);
+    if (!nutrient) return { fallback: 'A nutrition chart needs one named nutrient, so a table is shown.' };
+    const usable = rows.filter((row) => finite(row[nutrient.key]));
+    if (!usable.length) return { fallback: `No ${nutrient.label.toLowerCase()} totals have a value to draw, so a table is shown.` };
+    const labels = uniqueLabels(usable.map((row) => shortDate(row.meal_date)));
+    const partialDays = rows.filter((row) => finite(row[nutrient.key]) &&
+      Array.isArray(row.partial_nutrients) && row.partial_nutrients.includes(nutrient.key)).length;
+    const omitted = rows.length - usable.length;
+    return {
+      plan: {
+        title: `${nutrient.label} (${nutrient.unit})`,
+        series: [{
+          name: partialDays ? `${nutrient.label} (${nutrient.unit}; includes lower bounds)` : `${nutrient.label} (${nutrient.unit})`,
+          points: usable.map((row, index) => ({ x: labels[index] ?? '', y: Number(row[nutrient.key]) })),
+        }],
+        plotted: usable.length,
+        considered: rows.length,
+        partial: partialDays > 0,
+        notes: [
+          ...(omitted ? [`${count(omitted, 'day')} without a recorded ${nutrient.label.toLowerCase()} total left out of the chart.`] : []),
+          ...(partialDays ? [partialDays === 1
+            ? `1 day has a partial ${nutrient.label.toLowerCase()} total, which is a lower bound.`
+            : `${count(partialDays, 'day')} have partial ${nutrient.label.toLowerCase()} totals, which are lower bounds.`] : []),
+        ],
       },
     };
   }
@@ -471,7 +516,7 @@ export function buildDailyView(result: DailyQueryResult, options: DailyViewOptio
   const capped = shown.length < matching.length;
   const cappedNote = (verb: 'shown' | 'drawn') => capped ? [`Only the first ${count(maxShownRows, 'row')} of this page are ${verb}.`] : [];
 
-  const decision = options.display === 'chart' ? planChart(sourceId, shown) : null;
+  const decision = options.display === 'chart' ? planChart(sourceId, shown, options.metric) : null;
   if (decision && 'plan' in decision) {
     const { plan } = decision;
     const skipped = plan.considered - plan.plotted;
@@ -480,7 +525,7 @@ export function buildDailyView(result: DailyQueryResult, options: DailyViewOptio
       ...(skipped > 0 ? [`${count(skipped, 'row')} without a value or unit left out of the chart.`] : []),
       ...plan.notes,
     ];
-    const partial = hasMore || capped || skipped > 0;
+    const partial = hasMore || capped || skipped > 0 || plan.partial === true;
     const period = periodPhrase(result.period);
     return {
       viewId: viewIdFor(sourceId, 'chart', keyed),
