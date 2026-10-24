@@ -1,5 +1,18 @@
 # Agent context
 
+## Conversational task write checks (#1236; 23 October 2026)
+
+Use synthetic vaults only; no live settings, grants, credentials or deployment.
+Focused backend checks: `npm test --workspace @jarvis/backend -- src/vault
+src/core/capability-instructions.test.ts src/voice/realtime.test.ts`.
+Panel refresh: `npm test --workspace @jarvis/web -- src/tasks/TasksPanel.test.tsx`.
+Run existing backend/web builds and lint for their changed boundaries.
+Physical iOS/Obsidian synchronization and real speech acceptance remain separate.
+Local results: 172 backend tests, 26 panel tests and 107 hosted-agent tests passed;
+backend/web builds and scoped ESLint/Ruff passed. No real-browser inspection or
+live speech/sync check was performed. Python CodeQL found no alerts; JavaScript
+analysis was skipped for database size and the automated review binary was absent.
+
 ## Owner session switch, revocation and checks (22 October 2026; #1217; default off in code, on in production since 23 October 2026)
 
 The backend can give the owner a revocable 10-day session after one Entra
@@ -1156,6 +1169,13 @@ tests (74 tests), web conversation attachment tests (19 tests), and the existing
 agent image-input tests (`agents/jarvis/.venv/bin/python -m pytest -q
 agents/jarvis/tests/test_image_context.py`, 68 tests). Do not interpret local
 synthetic tests as live provider, deployment, or device acceptance.
+
+Food review confirmations keep the existing 4,000-character Now cap. Corrections
+summarize only changed fields and relevant unchanged context; estimates and
+deletions show compact complete details. Oversized reviews refuse without
+truncation, with a recovery that does not require splitting an existing meal to
+rename it. Run the focused summary, tool-path and expiry regressions with:
+`npm test --workspace @jarvis/backend -- --run src/daily/nutrition/review.test.ts src/daily/tools/food-review.test.ts src/core/owner-interactions.test.ts`.
 
 ## Internal Daily saved-food checks (17 October 2026; P12-09)
 

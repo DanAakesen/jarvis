@@ -3951,6 +3951,23 @@ the browser renderer; its UI implementation is a separate session.
 
 ### Read-only vault tasks and Notes search (P13-19; 18 October 2026)
 
+Task write integrity (#1236, 23 October 2026): `vault/task-writes.ts` now owns
+the shared create/complete/reopen/edit service used by `/vault/tasks` and the
+`vault_task_create`, `vault_task_complete`, `vault_task_edit` registry tools.
+The existing parser and line-edit helpers preserve task markers and unrelated
+lines. Tools require owner/delegated-agent authorization and a stored owner
+message, reject raw malformed input, and are denied on phone calls. They identify
+existing tasks by path/line/text/version, not name. Results include the committed
+task's identity, version, text, schedule, priority and commit (null for no change).
+Only confirmed SHA conflicts permit one rebase/revalidation; unknown results
+are not retried. Committed writes retain index refresh; the open Tasks panel
+also reloads on successful task-tool activity.
+
+`vault_read` returns the note blob SHA. `vault_write` replacement requires that
+`expectedSha` against the first reread and never refreshes it on conflict.
+Unversioned content can only create a missing note. Append alone may reread and
+rebase after one confirmed conflict. No network/unknown-outcome write is replayed.
+
 `GET /vault/tasks` is owner-only and sets `Cache-Control: no-store`. It reads the
 current vault tree and task-note blobs through the existing GitHub vault client,
 not the potentially stale knowledge index. It shares `inScope`, the contextual

@@ -119,11 +119,122 @@ function display(input: MealInput) {
     } } : {}),
   };
 }
+function shown(value: unknown, missing = 'not set'): string {
+  if (value === null || value === undefined) return missing;
+  return typeof value === 'string' ? JSON.stringify(value) : JSON.stringify(value) ?? String(value);
+}
+function nutritionSummary(input: MealInput): string {
+  return [
+    `energy ${shown(input.energyKcal, 'unknown (not zero)')} kcal`,
+    `protein ${shown(input.proteinGrams, 'unknown (not zero)')} g`,
+    `carbohydrates ${shown(input.carbohydratesGrams, 'unknown (not zero)')} g`,
+    `fat ${shown(input.fatGrams, 'unknown (not zero)')} g`,
+    `fiber ${shown(input.fiberGrams, 'unknown (not zero)')} g`,
+  ].join('; ');
+}
+function referenceSummary(input: MealInput): string {
+  const reference = display(input).nutrientReference;
+  if (!reference) return '';
+  const provider = [reference.provider, reference.version].filter(Boolean).join(' ');
+  return [provider, reference.attribution, reference.basis].filter(Boolean).map(String).join('; ');
+}
+function uncertaintySummary(input: MealInput): string {
+  const unknowns = new Set<string>();
+  const add = (value: unknown) => {
+    if (Array.isArray(value)) for (const item of value) unknowns.add(String(item));
+  };
+  add(input.provenance.unknowns);
+  for (const [index, component] of input.components.entries()) {
+    if (!component || typeof component !== 'object' || Array.isArray(component)) continue;
+    const componentUnknowns = (component as Record<string, unknown>).unknowns;
+    if (Array.isArray(componentUnknowns)) {
+      for (const item of componentUnknowns) unknowns.add(`component ${index + 1}: ${String(item)}`);
+    }
+    const values = (component as Record<string, unknown>).reference;
+    if (values && typeof values === 'object' && !Array.isArray(values)) {
+      const nutrients = (values as Record<string, unknown>).values;
+      if (nutrients && typeof nutrients === 'object' && !Array.isArray(nutrients)) {
+        for (const [key, value] of Object.entries(nutrients)) if (value === null) unknowns.add(`component ${index + 1}: ${key} unknown`);
+      }
+    }
+  }
+  return unknowns.size ? [...unknowns].map(value => JSON.stringify(value)).join(', ') : 'none reported';
+}
+function componentSummary(value: unknown): string {
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    const component = { ...value as Record<string, unknown> };
+    delete component.unknowns;
+    return JSON.stringify(component) ?? String(component);
+  }
+  return JSON.stringify(value) ?? String(value);
+}
+function snapshot(input: MealInput): string[] {
+  const shownMeal = display(input);
+  const components = shownMeal.components as unknown[];
+  const reference = referenceSummary(input);
+  return [
+    `Meal: ${shown(input.mealName)}`,
+    `Type: ${shown(input.mealType)}`,
+    `When: ${input.occurredAt} (${shownMeal.mealDate}, ${shownMeal.timeZone})`,
+    `Capture: ${shown(input.captureMethod)}; confidence: ${shown(input.confidence)}`,
+    `Components (${components.length}):`,
+    ...components.map((component, index) => `${index + 1}. ${componentSummary(component)}`),
+    `Nutrition: ${nutritionSummary(input)}`,
+    `Source: ${shown(input.provenance.source)}${reference ? `; ${reference}` : ''}`,
+    `Independently verified: ${shown(input.provenance.independentlyVerified)}`,
+    `Uncertainty: ${uncertaintySummary(input)}`,
+  ];
+}
+function correctionDetails(before: MealInput, after: MealInput): string[] {
+  const beforeShown = display(before);
+  const afterShown = display(after);
+  const componentsChanged = canonicalJson(before.components) !== canonicalJson(after.components);
+  const nutrients = [
+    ['energy', 'energyKcal', 'kcal'],
+    ['protein', 'proteinGrams', 'g'],
+    ['carbohydrates', 'carbohydratesGrams', 'g'],
+    ['fat', 'fatGrams', 'g'],
+    ['fiber', 'fiberGrams', 'g'],
+  ] as const;
+  const changedNutrients = nutrients.filter(([, key]) => before[key] !== after[key]);
+  const nutritionChanges = nutrients.map(([name, key, unit]) => before[key] === after[key]
+    ? `${name} ${shown(after[key], 'unknown (not zero)')} ${unit} (unchanged)`
+    : `${name} ${shown(before[key], 'unknown (not zero)')} → ${shown(after[key], 'unknown (not zero)')} ${unit}`);
+  const beforeUncertainty = uncertaintySummary(before);
+  const afterUncertainty = uncertaintySummary(after);
+  const lines = [
+    `Meal: ${before.mealName === after.mealName ? shown(after.mealName) : `${shown(before.mealName)} → ${shown(after.mealName)}`}`,
+    `Type: ${before.mealType === after.mealType ? shown(after.mealType) : `${shown(before.mealType)} → ${shown(after.mealType)}`}`,
+    `When: ${before.occurredAt === after.occurredAt
+      ? `${after.occurredAt} (${shown(afterShown.mealDate)}, ${shown(afterShown.timeZone)})`
+      : `${before.occurredAt} (${shown(beforeShown.mealDate)}) → ${after.occurredAt} (${shown(afterShown.mealDate)}, ${shown(afterShown.timeZone)})`}`,
+    `Capture: ${shown(after.captureMethod)}; confidence: ${before.confidence === after.confidence
+      ? shown(after.confidence) : `${shown(before.confidence)} → ${shown(after.confidence)}`}`,
+    componentsChanged
+      ? `Components before (${before.components.length}):\n${beforeShown.components.map((component, index) => `${index + 1}. ${componentSummary(component)}`).join('\n')}\nComponents after (${after.components.length}):\n${afterShown.components.map((component, index) => `${index + 1}. ${componentSummary(component)}`).join('\n')}`
+      : `Portion: ${after.components.length} components unchanged`,
+    ...(changedNutrients.length
+      ? [`Nutrition: ${nutritionChanges.join('; ')}`]
+      : [`Nutrition unchanged: ${nutritionSummary(after)}`]),
+    `Source: ${shown(before.provenance.source)} → ${shown(after.provenance.source)}${referenceSummary(after) ? `; ${referenceSummary(after)}` : ''}`,
+    `Independently verified: ${shown(after.provenance.independentlyVerified)}`,
+    `Uncertainty: ${beforeUncertainty === afterUncertainty ? afterUncertainty : `${beforeUncertainty} → ${afterUncertainty}`}`,
+  ];
+  return lines;
+}
 export function foodReviewSummary(operation: FoodReviewChange['operation'], before: MealInput | null, after: MealInput | null, expectedRevision?: string): string {
-  const details = { operation, ...(before ? { idempotencyKey: before.idempotencyKey, expectedRevision, before: display(before) } : {}),
-    ...(after ? { after: display(after) } : {}) };
-  const summary = `Review this exact food ${operation === 'delete' ? 'soft deletion' : operation === 'correct' ? 'correction' : 'estimate for logging'} in Now. Nothing has changed. Approve only if this is eaten food and the details are right. Estimates are not independently verified. No Apple Health write or deletion.\n${JSON.stringify(details, null, 2)}`;
-  if (summary.length > 4000) throw new ToolRefusal('This food proposal is too large to review safely. Use a smaller entry.');
+  const lines = [
+    `Review this exact food ${operation === 'delete' ? 'deletion' : operation === 'correct' ? 'correction' : 'estimate for logging'} in Now. Nothing has changed. Approve only if this is eaten food and the details are right. Estimates are not independently verified. No Apple Health write or deletion.`,
+  ];
+  if (operation === 'correct' && before && after) {
+    lines.push(`Record revision: ${expectedRevision ?? 'unavailable'}`, ...correctionDetails(before, after));
+  } else if (operation === 'delete' && before) {
+    lines.push(`Record revision: ${expectedRevision ?? 'unavailable'}`, ...snapshot(before));
+  } else if (operation === 'log_estimate' && after) lines.push(...snapshot(after));
+  const summary = lines.join('\n');
+  if (summary.length > 4000) {
+    throw new ToolRefusal('The complete food details exceed Now’s 4,000-character review limit, so nothing was changed. Shorten the changed labels or uncertainty details and retry. For a name-only correction, change only the meal name; you do not need to split an existing meal.');
+  }
   return summary;
 }
 export function foodRecordRevision(row: Record<string, unknown>): bigint {

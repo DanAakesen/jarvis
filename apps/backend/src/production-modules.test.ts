@@ -196,16 +196,25 @@ describe('production tool catalogue', () => {
     expect(r5).toEqual([]);
   });
 
-  it('keeps the catalogue unchanged with proactive off and adds both proactive tools when enabled', () => {
+  it('preserves the catalogue with proactive off and registers every proactive capability when enabled', () => {
     const on = modulesWithEveryFeature();
     const off = modulesWithEveryFeature({ proactive: false });
-    const onNames = createToolRegistry(on).list().map(({ name }) => name);
-    const offNames = createToolRegistry(off).list().map(({ name }) => name);
+    const onTools = buildCatalogue(on).list();
+    const offTools = buildCatalogue(off).list();
+    const onNames = onTools.map(({ name }) => name);
+    const offNames = offTools.map(({ name }) => name);
+    const registeredProactiveNames = on.find(({ id }) => id === 'proactive')!.tools.map(({ name }) => name);
 
-    expect(offNames).toHaveLength(119);
-    expect(onNames).toHaveLength(121);
-    expect(onNames.filter((name) => !proactiveToolNames.includes(name))).toEqual(offNames);
-    expect(on.find(({ id }) => id === 'proactive')!.tools.map(({ name }) => name)).toEqual(proactiveToolNames);
+    for (const tools of [offTools, onTools]) {
+      expect(tools.filter(({ moduleId }) => moduleId === 'vault').map(({ name }) => name)).toEqual([
+        'vault_task_create', 'vault_task_complete', 'vault_task_edit',
+        'vault_search', 'show_knowledge', 'vault_read', 'vault_write', 'vault_delete',
+      ]);
+    }
+    expect(offNames.filter((name) => proactiveToolNames.includes(name))).toEqual([]);
+    expect(registeredProactiveNames).toEqual(expect.arrayContaining(proactiveToolNames));
+    expect(onNames.filter((name) => !offNames.includes(name))).toEqual(registeredProactiveNames);
+    expect(onNames.filter((name) => registeredProactiveNames.includes(name))).toEqual(registeredProactiveNames);
     expect(off.some(({ id }) => id === 'proactive')).toBe(false);
   });
 
