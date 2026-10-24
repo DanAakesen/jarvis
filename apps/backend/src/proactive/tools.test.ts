@@ -10,6 +10,7 @@ import { createMemoryProactiveStore } from './store.js';
 import { createProactiveToolsModule } from './tools.js';
 import type { ProactiveStore } from './store.js';
 import type { Item } from './types.js';
+import { createMemoryOwnerReminderStore } from './owner-reminder-store.js';
 
 const config = { ...loadConfig({}), logLevel: 'silent' as const };
 const owner = config.auth.ownerObjectId;
@@ -110,6 +111,21 @@ describe('proactive_recent_items tool', () => {
     const voice = createRealtimeSessionUpdate(createToolRegistry([module])).session;
     expect(voice.tools.map(({ name }) => name)).toEqual(['proactive_recent_items', 'proactive_preferences']);
     expect(voice.instructions).toContain('proactive_preferences');
+  });
+
+  it('registers owner reminder lifecycle once in the shared chat and voice tool set', () => {
+    const module = createProactiveToolsModule({
+      enabled: true,
+      ownerObjectId: owner,
+      store: createMemoryProactiveStore(owner),
+      ownerReminders: createMemoryOwnerReminderStore(),
+      vault: { tree: async () => [], read: async () => null },
+    })!;
+    const reminder = module.tools.find(({ name }) => name === 'owner_reminders');
+    expect(reminder).toMatchObject({ sensitive: true });
+    const voice = createRealtimeSessionUpdate(createToolRegistry([module])).session;
+    expect(voice.tools.map(({ name }) => name)).toContain('owner_reminders');
+    expect(voice.instructions).toContain('owner_reminders');
   });
 
   it('denies a non-owner before listing any findings', async () => {

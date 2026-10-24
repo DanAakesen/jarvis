@@ -3,6 +3,9 @@ import type { BackendModule } from '../modules.js';
 import { ToolFailure, ToolRefusal, type JarvisTool } from '../core/tool-registry.js';
 import type { ProactiveStore } from './store.js';
 import { findingCategories, type FindingCategory, type Item, type SuggestionScopePreference } from './types.js';
+import type { createGitHubVaultClient } from '../vault/github-client.js';
+import type { OwnerReminderStore } from './owner-reminder-store.js';
+import { createOwnerReminderTool } from './owner-reminder-tools.js';
 
 const MAX_RESULT_BYTES = 8 * 1024;
 const titleLimit = 200;
@@ -277,15 +280,27 @@ export function createProactiveToolsModule(options: {
   enabled: boolean;
   ownerObjectId: string;
   store?: ProactiveStore;
+  ownerReminders?: OwnerReminderStore;
+  vault?: Pick<ReturnType<typeof createGitHubVaultClient>, 'tree' | 'read'>;
+  now?: () => Date;
+  onReminderScheduled?: (fireAt: Date) => void;
 }): BackendModule | undefined {
   if (options.enabled !== true) return undefined;
   if (!options.store) throw new Error('Proactive findings store is unavailable.');
+  const tools: JarvisTool[] = [
+    recentItemsTool(options.store, options.ownerObjectId),
+    preferencesTool(options.store, options.ownerObjectId),
+    ...(options.ownerReminders && options.vault ? [createOwnerReminderTool({
+      ownerObjectId: options.ownerObjectId,
+      store: options.ownerReminders,
+      vault: options.vault,
+      now: options.now ?? (() => new Date()),
+      ...(options.onReminderScheduled ? { onScheduled: options.onReminderScheduled } : {}),
+    })] : []),
+  ];
   return {
     id: 'proactive',
-    tools: [
-      recentItemsTool(options.store, options.ownerObjectId),
-      preferencesTool(options.store, options.ownerObjectId),
-    ],
+    tools,
     registerRoutes: async () => {},
   };
 }

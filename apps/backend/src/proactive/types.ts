@@ -34,6 +34,7 @@ export type Item = {
   body: string;
   category: 'deadline' | 'clash' | 'travel' | 'todo' | 'prep' | 'news' | 'weather' | 'status' | 'suggestion' | null;
   suggestionScope: SuggestionScope;
+  ownerRequested?: boolean;
   relatedCategories?: FindingCategory[];
   urgency: 'time_critical' | 'normal' | 'fyi';
   dueAt: string | null;

@@ -6,6 +6,10 @@ const messages = {
     da: (count) => count === 1 ? '1 tidskritisk ting kræver din opmærksomhed' : `${count} tidskritiske ting kræver din opmærksomhed`,
     en: (count) => count === 1 ? '1 time-critical item needs you' : `${count} time-critical items need you`,
   },
+  owner_reminder: {
+    da: () => 'Påmindelse',
+    en: () => 'Reminder',
+  },
   due_soon: {
     da: (count) => count === 1 ? 'En todo forfalder inden for en time' : `${count} todos forfalder inden for en time`,
     en: (count) => count === 1 ? 'A todo is due within the hour' : `${count} todos are due within the hour`,
@@ -19,7 +23,7 @@ const messages = {
     en: (count) => `${count} todos need your attention`,
   },
 };
-const validKinds = new Set(['alert', 'due_soon', 'overdue', 'mixed']);
+const validKinds = new Set(['alert', 'due_soon', 'overdue', 'mixed', 'owner_reminder']);
 const validLanguages = new Set(['da', 'en']);
 
 function truncate(value, limit) {

@@ -116,7 +116,7 @@ describe('shared task writer', () => {
   });
 
   it('edits through the existing marker-preserving helper and returns actual metadata', async () => {
-    const content = '# Inbox\r\n- [ ] Review release 📅 2026-10-25 🕒 09:30 ⏫ 🔁 every week 🆔 abc ⛔ def 🏁 keep\r\n';
+    const content = '# Inbox\r\n- [ ] Review release 📅 2026-10-25 🕒 09:30 ⏫ 🔁 every week 🆔 release-123 ⛔ dependency-456 🏁 keep\r\n';
     const state = fixture(content);
     const identity = taskIdentity(state.input());
     const result = await state.writer.edit({ ...identity, newText: 'Review revised release' });
@@ -129,8 +129,20 @@ describe('shared task writer', () => {
       newText: result.text, due: null, priority: 'normal',
     });
     expect(next).toMatchObject({ dueDate: null, dueTime: null, dueAt: null, priority: 'normal' });
-    expect(state.file()!.content).toContain('🔁 every week 🆔 abc ⛔ def 🏁 keep');
+    expect(state.file()!.content).toContain('🔁 every week 🆔 release-123 ⛔ dependency-456 🏁 keep');
     expect(state.file()!.content).toContain('\r\n');
+  });
+
+  it('preserves hyphenated task IDs during metadata-only edits', async () => {
+    const content = '- [ ] Review release 📅 2026-10-25 🆔 report-123\n';
+    const state = fixture(content);
+    const task = state.input();
+    const result = await state.writer.edit({ ...taskIdentity(task), newText: task.text, due: '2026-10-26' });
+    const saved = parseTodosWithContext(state.file()!.content, path)[0]!;
+
+    expect(state.file()!.content).toBe('- [ ] Review release 📅 2026-10-26 🆔 report-123\n');
+    expect(saved.taskIdentity).toBe(parseTodosWithContext(content, path)[0]!.taskIdentity);
+    expect(result).toMatchObject({ text: task.text, dueDate: '2026-10-26' });
   });
 
   it('returns no-op data without writing or scheduling an index refresh', async () => {

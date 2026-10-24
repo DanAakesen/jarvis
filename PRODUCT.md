@@ -1295,6 +1295,30 @@ use generic headlines with empty bodies. The alert switch defaults off
 in code, like the proactive and push switches, and production sets it since P13-15; per-class controls are not
 part of this slice.
 
+## Owner-requested task reminders (#1239)
+
+In chat and voice, a direct owner request can schedule a one-time reminder or a
+daily/weekly recurrence for an existing open task. Repeating until the task is
+completed is explicit; the requested reminder time is independent of the task's
+due date and time, which are never changed. The owner can read, update, snooze
+or cancel schedules. Missing, ambiguous, quiet-hour or unsupported times are
+clarified or refused rather than guessed; confirmations state the Copenhagen
+time and recurrence.
+
+These explicit schedules use the existing reminder ticker and Web Push delivery.
+They are not subject to automatic high-priority, category or scope suggestion
+filters, and do not change those preferences. An explicit time in the existing
+22:00–07:00 Copenhagen quiet window is refused. A task is re-read before
+delivery; a completed, deleted or ambiguous task stops the schedule, while a
+stable Obsidian task ID preserves it through a rename or move. Dismissing a
+notification does not complete the task.
+
+The database migration creates no reminder schedules and enables no new
+notifications. Only a verified direct owner request creates a schedule.
+Scheduled, suppressed and provider-accepted states are distinct; provider
+acceptance is not confirmation that a device displayed or acknowledged a push.
+Physical-device delivery remains unverified.
+
 ## Proactive todo reminders (18 October 2026; P13-13)
 
 An explicit-time P1 - High todo gets one detailed reminder push about an hour

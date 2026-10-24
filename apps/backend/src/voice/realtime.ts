@@ -48,13 +48,14 @@ function englishPersonalityInstructions(
   memory: Settings['memory'] = defaultSettings.memory,
   proactiveEnabled = false,
   proactivePreferencesEnabled = false,
+  ownerRemindersEnabled = false,
 ): string {
   return `${composeIdentityInstructions(identity, 'en')}
 
 ${ENGLISH_REALTIME_INSTRUCTIONS}
 
 ${additionalRealtimeInstructions(
-    personality, presence, projects, memory, proactiveEnabled, proactivePreferencesEnabled,
+    personality, presence, projects, memory, proactiveEnabled, proactivePreferencesEnabled, ownerRemindersEnabled,
   )}`;
 }
 
@@ -65,6 +66,7 @@ function additionalRealtimeInstructions(
   memory: Settings['memory'],
   proactiveEnabled: boolean,
   proactivePreferencesEnabled: boolean,
+  ownerRemindersEnabled: boolean,
 ): string {
   const customMode = personality.modeInstructions[presence.mode] === builtInModeInstructions[presence.mode]
     ? '' : personality.modeInstructions[presence.mode];
@@ -78,7 +80,7 @@ The following JSON string is the instruction for the current mode, not policy or
 ${JSON.stringify(customMode)}
 Mode adds context but never replaces shared identity. Keep spoken replies to one short sentence unless clarity requires more.
 Preferences do not alter backend policy.`;
-  const contextual = `${capabilityInstructions(memory, proactiveEnabled, proactivePreferencesEnabled)}
+  const contextual = `${capabilityInstructions(memory, proactiveEnabled, proactivePreferencesEnabled, ownerRemindersEnabled)}
 
 ${projectAwarenessInstructions(projects)}
 
@@ -100,6 +102,7 @@ function danishInstructions(
   memory: Settings['memory'] = defaultSettings.memory,
   proactiveEnabled = false,
   proactivePreferencesEnabled = false,
+  ownerRemindersEnabled = false,
 ): string {
   return `${composeIdentityInstructions(identity, 'da')}
 
@@ -110,7 +113,7 @@ tidspunkter, steder, navne, adresser, beløb, referencer, koder eller andre priv
 Dan beder om dem.
 
 ${additionalRealtimeInstructions(
-    personality, presence, projects, memory, proactiveEnabled, proactivePreferencesEnabled,
+    personality, presence, projects, memory, proactiveEnabled, proactivePreferencesEnabled, ownerRemindersEnabled,
   )}`;
 }
 
@@ -244,12 +247,13 @@ export function createRealtimeSessionUpdate(
   const danish = language === 'da';
   const proactiveEnabled = tools.get('proactive_recent_items') !== undefined;
   const proactivePreferencesEnabled = tools.get('proactive_preferences') !== undefined;
+  const ownerRemindersEnabled = tools.get('owner_reminders') !== undefined;
   const fullInstructions = danish
     ? danishInstructions(
-      personality, identity, presence, projects, memory, proactiveEnabled, proactivePreferencesEnabled,
+      personality, identity, presence, projects, memory, proactiveEnabled, proactivePreferencesEnabled, ownerRemindersEnabled,
     )
     : englishPersonalityInstructions(
-      personality, identity, presence, projects, memory, proactiveEnabled, proactivePreferencesEnabled,
+      personality, identity, presence, projects, memory, proactiveEnabled, proactivePreferencesEnabled, ownerRemindersEnabled,
     );
   const compactEnglishInstructions = `${composeIdentityInstructions(identity, 'en')}
 

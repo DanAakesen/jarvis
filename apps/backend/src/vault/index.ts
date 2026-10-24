@@ -464,7 +464,7 @@ const taskMarkerPattern = new RegExp([
   String.raw`🕒\s*\d{2}:\d{2}`,
   String.raw`[⏳🛫➕✅❌]\s*\d{4}-\d{2}-\d{2}`,
   String.raw`🔁\s*[^📅⏳🛫➕✅❌🔁🏁⏫🔼🔽⏬🔺🆔⛔🕒[]*`,
-  String.raw`[🆔⛔]\s*[a-z\d]+(?:\s*,\s*[a-z\d]+)*`,
+  String.raw`[🆔⛔]\s*[a-z\d-]+(?:\s*,\s*[a-z\d-]+)*`,
   String.raw`🏁\s*(?:delete|keep)\b`,
   String.raw`\[\s*priority\s*::?\s*[^\]]*\]|\(\s*priority\s*::?\s*[^)]*\)|\bpriority\s*::?.*$`,
   String.raw`[📅⏳🛫➕✅❌🔁🏁⏫🔼🔽⏬🔺🆔⛔🕒]`,

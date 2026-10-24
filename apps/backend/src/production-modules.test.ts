@@ -196,13 +196,14 @@ describe('production tool catalogue', () => {
     expect(r5).toEqual([]);
   });
 
-  it('keeps the catalogue unchanged with proactive off and adds both proactive tools when enabled', () => {
+  it('preserves the catalogue with proactive off and registers every proactive capability when enabled', () => {
     const on = modulesWithEveryFeature();
     const off = modulesWithEveryFeature({ proactive: false });
     const onTools = buildCatalogue(on).list();
     const offTools = buildCatalogue(off).list();
     const onNames = onTools.map(({ name }) => name);
     const offNames = offTools.map(({ name }) => name);
+    const registeredProactiveNames = on.find(({ id }) => id === 'proactive')!.tools.map(({ name }) => name);
 
     for (const tools of [offTools, onTools]) {
       expect(tools.filter(({ moduleId }) => moduleId === 'vault').map(({ name }) => name)).toEqual([
@@ -211,9 +212,9 @@ describe('production tool catalogue', () => {
       ]);
     }
     expect(offNames.filter((name) => proactiveToolNames.includes(name))).toEqual([]);
-    expect(onNames.filter((name) => !offNames.includes(name))).toEqual(proactiveToolNames);
-    expect(onNames.filter((name) => !proactiveToolNames.includes(name))).toEqual(offNames);
-    expect(on.find(({ id }) => id === 'proactive')!.tools.map(({ name }) => name)).toEqual(proactiveToolNames);
+    expect(registeredProactiveNames).toEqual(expect.arrayContaining(proactiveToolNames));
+    expect(onNames.filter((name) => !offNames.includes(name))).toEqual(registeredProactiveNames);
+    expect(onNames.filter((name) => registeredProactiveNames.includes(name))).toEqual(registeredProactiveNames);
     expect(off.some(({ id }) => id === 'proactive')).toBe(false);
   });
 

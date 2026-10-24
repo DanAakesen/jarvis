@@ -6996,6 +6996,36 @@ items are retained and reappear if re-enabled; preference changes do not delete
 owner tasks or reminders. Enabling a category changes no pause, source, budget
 or safety setting.
 
+## Owner-requested task reminders (#1239)
+
+The shared owner-reminder tool is added to the active chat and voice tool
+catalogue only when proactive composition is enabled. A direct owner message
+authorizes create, update, snooze or cancel; read remains owner-scoped. Creation
+requires an exact open-task match and derives an identity from an Obsidian `🆔`
+marker when present, otherwise from normalized task text. The independent
+`owner_reminder_schedules` table stores requested Copenhagen time, recurrence,
+idempotency key, delivery/verification state and a lease. Migration 0065 creates
+no schedules. Its companion `owner_requested` item marker lets an explicit
+reminder bypass automatic finding category/scope filters without changing those
+preferences.
+
+The existing in-process reminder ticker claims these schedules with expiring
+leases, re-reads vault tasks before sending, and stops on a missing, ambiguous or
+completed task. Obsidian-ID matches survive task wording and path changes.
+Sends reuse the existing push subscription store, encrypted Web Push sender and
+Proactive item delivery record. The schedule distinguishes scheduled,
+suppressed, provider-accepted and failed outcomes; no device acknowledgement is
+inferred. A task's automatic due reminder is suppressed only when it matches the
+explicit task identity and falls within five minutes of that explicit
+occurrence. Quiet-hour requests are refused rather than silently shifted.
+
+The SQL store serializes creation per owner, deduplicates by source message,
+limits active schedules, and atomically claims due rows; expired leases permit
+restart recovery. Cancellation clears the claim so a stale worker cannot finish
+the cancelled row. The rollback refuses to drop schedule or owner-requested
+item data. No deployment setting, task, subscription or schedule is changed by
+this feature.
+
 ## Web Daily presentation kit and Workouts (18 October 2026; P12-30)
 
 P12-34 applies the kit to the shared `DailyPage` record browser without changing
