@@ -131,6 +131,41 @@ describe('daily show view builder: measurements', () => {
     expect(reason(days)).toContain('lower bounds');
   });
 
+  it('charts one selected nutrition nutrient, omits unknowns and marks partial totals as lower bounds', () => {
+    const result = read(sources.days, [
+      { meal_date: '2026-10-15', meal_count: 2, protein_grams: 58.5, partial_nutrients: [], unknown_nutrients: [] },
+      { meal_date: '2026-10-16', meal_count: 1, protein_grams: null, partial_nutrients: [], unknown_nutrients: ['protein_grams'] },
+      { meal_date: '2026-10-17', meal_count: 3, protein_grams: 46, partial_nutrients: ['protein_grams'], unknown_nutrients: [] },
+    ], { hasMore: true });
+    result.provenance.calculations = 'derived-from-retained-meals';
+
+    const build = show(result, { display: 'chart', metric: 'protein_grams' });
+
+    expect(build.view.renderer).toBe('chart');
+    expect(build.view.title).toBe('Protein (g), 11 Oct 2026 to 17 Oct 2026');
+    expect(build.viewId).toMatch(/^daily-nutrition-days-chart-protein-grams-[0-9a-f]{6}$/u);
+    expect(show(result, { display: 'chart', metric: 'protein' }).viewId).toBe(build.viewId);
+    expect(body<Plot>(build).series).toEqual([{
+      name: 'Protein (g; includes lower bounds)',
+      points: [{ x: '15 Oct', y: 58.5 }, { x: '17 Oct', y: 46 }],
+    }]);
+    expect(build.receipt).toMatchObject({ renderer: 'chart', rowsShown: 2, rowsReturned: 3, partial: true });
+    expect(build.receipt.notes).toContain('1 day without a recorded protein total left out of the chart.');
+    expect(build.receipt.notes).toContain('1 day has a partial protein total, which is a lower bound.');
+    expect(build.receipt.notes).toContain('More records are available beyond this page.');
+    expect(reason(build)).toContain('lower bounds');
+  });
+
+  it('does not choose a nutrient or chart units together when the request does not identify one', () => {
+    const result = read(sources.days, [
+      { meal_date: '2026-10-16', protein_grams: 20, energy_kcal: 300 },
+    ]);
+    const build = show(result, chart);
+
+    expect(build.view.renderer).toBe('table');
+    expect(build.receipt.notes).toContain('A nutrition chart needs one named nutrient, so a table is shown.');
+  });
+
   it('keeps a missing value unknown, a recorded zero as zero, and every duplicate-date row', () => {
     const missing: Row = { metric_date: '2026-10-17', metric_name: 'step_count', unit: 'count' };
     const build = show(read(sources.metrics, [steps('2026-10-17', null, { avg_value: 0 }), missing, steps('2026-10-17', 3)]), table);

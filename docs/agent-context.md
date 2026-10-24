@@ -534,6 +534,27 @@ coverage in `src/database/conversation-store.integration.test.ts`; run them only
 loopback SQL Server fixture via `npm run test:database --workspace @jarvis/backend -- src/database/schema.integration.test.ts`.
 Do not report SQL integration coverage unless that service ran.
 
+## Azure operations budget warning period (#1238; 23 October 2026)
+
+Azure's Consumption budget `timeGrain: Monthly` recurs by calendar month. Its
+`timePeriod.startDate` is the original activation date, not the current period.
+The backend validates that the budget is monthly and derives the activity key
+`budget-80:YYYY-MM` from the current UTC date. The original October 2026 key stays
+unchanged, preserving existing history; the November key is distinct. The unique
+SQL `activity.alert_key` index makes repeats idempotent across polling, restart and
+concurrent checks. Dismissal only sets `dismissed_at`, so it does not re-enable
+that month's warning. Invalid, unsupported or future period data fails the check.
+No Azure budget setting, infrastructure, permission or threshold changes.
+
+Focused checks:
+`npm test --workspace @jarvis/backend -- --run src/operations/budget-alert.test.ts`,
+backend build/typecheck and lint. SQL deduplication, restart, concurrent recording
+and dismissal coverage is in `src/database/schema.integration.test.ts`; run with
+`npm run test:database --workspace @jarvis/backend -- src/database/schema.integration.test.ts`
+only using the isolated loopback SQL Server fixture. Azure's [budget tutorial](https://learn.microsoft.com/en-us/azure/cost-management-billing/costs/tutorial-acm-create-budgets)
+describes recurring monthly budgets. Unit/integration checks do not establish live
+Azure polling or production behavior in a future month.
+
 ## P13-12 proactive run alerts (18 October 2026; default off in code, on in production since P13-15)
 
 The alert hook is composed only when the proactive, push and alert flags are all
@@ -1097,9 +1118,12 @@ the authority, and no live record, physical phone or Daily activation is proved.
 ## Daily view tool checks (18 October 2026; P12-16)
 
 `daily_show` (`apps/backend/src/daily/tools/show.ts`) and its pure builder
-(`daily/show/views.ts`) show queried Daily data as a table, chart or detail in the
-workspace. From `apps/backend`, run
-`npx vitest run src/daily/show/views.test.ts src/daily/tools/show.test.ts`.
+(`daily/show/views.ts`) show queried Daily data as a table, chart, detail or text
+in the workspace. Nutrition trends can chart one selected nutrient from bounded
+per-day results; unknown and lower-bound values remain disclosed. The shared
+query/show descriptions guide intent selection, while backend source, period,
+selector and coverage validation stays deterministic. From `apps/backend`, run
+`npx vitest run src/daily/show/views.test.ts src/daily/tools/show.test.ts src/daily/query.test.ts`.
 `composition.test.ts`, `index.test.ts`, `production-modules.test.ts` and
 `routes/query.test.ts` build real Fastify applications or the whole module list, so
 they need the pinned CI graph where those packages are unavailable locally. From
@@ -1108,6 +1132,8 @@ then `npx tsc --noEmit` and `npx eslint <changed files> --max-warnings 0`. Run o
 heavy command at a time. Every check uses synthetic records and a fake workspace;
 none reads real data, calls a provider or probes a live service. The tool takes no
 new environment variable and its tests need no secret.
+The synthetic tests do not verify a live model/provider's English/Danish
+interpretation, real Health records or a physical device.
 
 Browser inspection follows the harness rules of the overview page section: a
 temporary page under `apps/web` mounts the real `Workspace` window with the real
