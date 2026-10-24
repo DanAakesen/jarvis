@@ -1,5 +1,21 @@
 # Decisions
 
+## Shared conversational task writes and versioned note replacement (23 October 2026; #1236)
+
+Use the existing vault task parser and marker-preserving edits in one service
+for the Tasks API and chat/voice tools, not a second task store. Existing task
+writes require path, line, text and version; ambiguous names must be clarified.
+Explicit owner tasks stay in Personal/Work and do not use proactive generation
+or Factory rules. Refresh the index after commit and the open panel after a
+successful task-tool activity.
+
+Require the blob SHA returned by `vault_read` for replacing an existing note
+through `vault_write`. A replacement conflict stops without retry; unversioned
+content is create-only. Only append and task line operations can rebase once on
+a confirmed conflict. Unknown outcomes instruct a reread rather than a blind
+retry. Synthetic checks cover these boundaries; physical iOS/Obsidian sync and
+live speech acceptance remain separate owner checks.
+
 ## Chat model rate limit raised for live acceptance (#1232; 23 October 2026)
 
 Decided as a reversible rate-limit change that follows the 5 October capacity
@@ -8082,6 +8098,18 @@ key and committed receipt. No new image service, meal store, confirmation
 system, credential, schema, tool name or phone authority is introduced. Tests
 use synthetic DTOs and attachment references only. Live Frida availability,
 production activation and physical-device acceptance remain unverified.
+
+## Keep food correction reviews compact without weakening approval (#1234; 23 October 2026; #1196, #1200)
+
+Keep the existing browser-only Now confirmation and its 4,000-character limit.
+Render corrections as changed field transitions plus meal identity, revision,
+portion/nutrient context, source and uncertainty; render estimates and deletions
+as complete compact projections. Never truncate details or change the canonical
+proposal for display. If the full review cannot fit, refuse before staging and
+offer a recovery that allows renaming an existing meal without splitting it.
+Synthetic tool-path tests cover photo-meal renames, accepted and oversized
+summaries, approval/rejection/expiry and replay; no live health data or device
+acceptance is implied.
 
 ## P12-23 — Read-only Daily Workouts (18 October 2026)
 

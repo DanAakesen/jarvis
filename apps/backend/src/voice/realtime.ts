@@ -435,6 +435,9 @@ export async function executeRealtimeToolCall(
     }
     const unexpected = unexpectedToolArgument(input, tool.inputSchema);
     if (unexpected) return toolOutput(call.name, 'refused', toolArgumentRefusal(tool, unexpected, request.log));
+    if (tool.validateInput && !tool.validateInput(input)) {
+      throw new ToolRefusal('The tool arguments are invalid. Nothing was written.');
+    }
     if (!request.validateInput(input, tool.inputSchema, 'body')) {
       const errors = request.getValidationFunction(tool.inputSchema)?.errors ?? undefined;
       return toolOutput(call.name, 'refused', toolArgumentRefusal(tool, errors, request.log, { input, app: request.server }));

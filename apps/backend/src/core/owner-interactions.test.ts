@@ -104,6 +104,27 @@ describe('owner interactions', () => {
     expect(store.consumeApproval).not.toHaveBeenCalled();
   });
 
+  it('does not run an action after its browser confirmation expires', async () => {
+    vi.useFakeTimers();
+    try {
+      const { service, store } = fixture();
+      const action = vi.fn(async () => 'done');
+      const operation = service.runConfirmed('other', 'Review this food correction.', action, undefined,
+        { channel: 'browser', lifetimeSeconds: 1 });
+      const expired = expect(operation).rejects.toThrow('expired');
+      await vi.advanceTimersByTimeAsync(0);
+      expect(service.pendingBrowserConfirmations()).toHaveLength(1);
+
+      await vi.advanceTimersByTimeAsync(1000);
+      await expired;
+      expect(store.expireConfirmation).toHaveBeenCalledOnce();
+      expect(action).not.toHaveBeenCalled();
+      expect(service.pendingBrowserConfirmations()).toEqual([]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('preserves phone-session approval association while waiting in the browser', async () => {
     const { service, store } = fixture();
     const operation = withPhoneConfirmationSession('42', () =>

@@ -107,11 +107,11 @@ function fixture() {
   const nutrition = vi.fn(() => store);
   const lookup = vi.fn<DailyFoodLookup>(async components => syntheticLookup(components));
   const tool = dailyFoodReviewTool(nutrition, () => at.getTime(), lookup);
-  const seed = () => {
+  const seed = (overrides: Partial<MealInput> = {}) => {
     const saved = row({ id: 'old', idempotencyKey: 'retained-key', mealName: 'Old meal', mealType: null, components: [],
       energyKcal: 100, proteinGrams: null, carbohydratesGrams: null, fatGrams: null, fiberGrams: null,
       occurredAt: '2026-01-01T23:30:00Z', mealDate: '2026-01-02', expiresAt: '9999-12-31T23:59:59Z',
-      confidence: 'accurate', captureMethod: 'mixed', provenance: { energyKcal: { source: 'user-exact' } } });
+      confidence: 'accurate', captureMethod: 'mixed', provenance: { energyKcal: { source: 'user-exact' } }, ...overrides });
     rows.set('retained-key', saved); return saved;
   };
   return { tool, request, store, nutrition, rows, runConfirmed, staged: staged.promise,
@@ -146,7 +146,7 @@ describe('inactive internal food proposal review', () => {
     await f.staged;
     expect(f.store.log).not.toHaveBeenCalled();
     expect(f.runConfirmed.mock.calls[0]![4]).toEqual({ channel: 'browser', lifetimeSeconds: 120 });
-    expect(f.runConfirmed.mock.calls[0]![1]).toContain('"energyKcal": 200');
+    expect(f.runConfirmed.mock.calls[0]![1]).toContain('energy 200 kcal');
     input.change.food.energyKcal = 999;
     f.approve();
     expect(await result).toMatchObject({ status: 'committed', record: { energy_kcal: 200, protein_grams: null, confidence: 'estimate', capture_method: 'voice' } });
@@ -170,10 +170,10 @@ describe('inactive internal food proposal review', () => {
     const pending = f.tool.execute(input, f.request, signal());
     await f.staged;
     expect(f.lookup).toHaveBeenLastCalledWith(changed, f.request, expect.any(AbortSignal));
-    expect(f.runConfirmed.mock.calls[0]![1]).toContain('"energyKcal": 150');
-    expect(f.runConfirmed.mock.calls[0]![1]).toContain('"referenceFood": "Frida Synthetic lentils"');
+    expect(f.runConfirmed.mock.calls[0]![1]).toContain('energy 150 kcal');
+    expect(f.runConfirmed.mock.calls[0]![1]).toContain('"referenceFood":"Frida Synthetic lentils"');
     expect(f.runConfirmed.mock.calls[0]![1]).toContain('DTU National Food Institute');
-    expect(f.runConfirmed.mock.calls[0]![1]).toContain('"captureMethod": "photo"');
+    expect(f.runConfirmed.mock.calls[0]![1]).toContain('Capture: "photo"');
     expect(f.store.log).not.toHaveBeenCalled();
     input.change.food.referenceComponents[0]!.grams = 999;
     f.approve();
@@ -221,7 +221,7 @@ describe('inactive internal food proposal review', () => {
     const pending = f.tool.execute({ change: { operation: 'log_estimate', food: { mealName: 'Synthetic meal',
       referenceComponents: [{ name: 'Synthetic unknown macro', grams: 100, preparationMethod: null }] } } }, f.request, signal());
     await f.staged;
-    expect(f.runConfirmed.mock.calls[0]![1]).toContain('"proteinGrams": null');
+    expect(f.runConfirmed.mock.calls[0]![1]).toContain('protein unknown (not zero) g');
     expect(f.runConfirmed.mock.calls[0]![1]).toContain('nutrient_missing:proteinGrams');
     f.approve();
     expect(await pending).toMatchObject({ status: 'committed', record: { energy_kcal: 200, protein_grams: null } });
@@ -232,7 +232,7 @@ describe('inactive internal food proposal review', () => {
     f.request.jarvisConversationMessage = { ...f.request.jarvisConversationMessage!, attachments: [photo] } as never;
     const pending = f.tool.execute(estimate(), f.request, signal());
     await f.staged;
-    expect(f.runConfirmed.mock.calls[0]![1]).toContain('"captureMethod": "voice"');
+    expect(f.runConfirmed.mock.calls[0]![1]).toContain('Capture: "voice"');
     f.approve(); await pending;
 
     const other = fixture(); other.request.principal = { objectId: '22222222-2222-4222-8222-222222222222' };
@@ -329,13 +329,57 @@ describe('inactive internal food proposal review', () => {
       changes: { energyKcal: 222, occurredAt: '2026-01-02T23:30:00Z' } } };
     const pending = f.tool.execute(input, f.request, signal());
     await f.staged;
-    expect(f.runConfirmed.mock.calls[0]![1]).toContain('"energyKcal": 100');
-    expect(f.runConfirmed.mock.calls[0]![1]).toContain('"energyKcal": 222');
+    expect(f.runConfirmed.mock.calls[0]![1]).toContain('energy 100 → 222 kcal');
     expect(f.store.correct).not.toHaveBeenCalled();
     f.approve();
     expect(await pending).toMatchObject({ status: 'committed', record: { energy_kcal: 222, meal_date: '2026-01-03', revision: '2', confidence: 'estimate', capture_method: 'mixed' } });
     expect(await f.tool.execute(input, f.request, signal())).toMatchObject({ status: 'committed', record: { revision: '2' } });
     expect(f.runConfirmed).toHaveBeenCalledOnce(); expect(f.store.correct).toHaveBeenCalledOnce();
+  });
+  it('keeps a four-component photo meal name correction reviewable through the actual tool path', async () => {
+    const f = fixture();
+    const lookup = syntheticLookup([
+      { name: 'Synthetic lentils', grams: 75, preparationMethod: 'boiled' },
+      { name: 'Synthetic rice', grams: 120, preparationMethod: 'steamed' },
+      { name: 'Synthetic spinach', grams: 40, preparationMethod: 'raw' },
+      { name: 'Synthetic sauce', grams: 25, preparationMethod: null },
+    ]);
+    f.seed({
+      mealName: 'Four component synthetic photo meal', components: lookup.components.map(({ input, match, unknowns }) => ({
+        name: input.name, grams: input.grams, preparationMethod: input.preparationMethod,
+        reference: match ? { foodId: match.foodId, name: match.name, values: match.values,
+          provenance: match.provenance, retrievedAt: match.retrievedAt } : null,
+        unknowns,
+      })),
+      energyKcal: lookup.totals.energyKcal ?? lookup.matchedSubtotals.energyKcal ?? 0,
+      proteinGrams: lookup.totals.proteinGrams, carbohydratesGrams: lookup.totals.carbohydratesGrams,
+      fatGrams: lookup.totals.fatGrams, fiberGrams: lookup.totals.fiberGrams,
+      confidence: 'estimate', captureMethod: 'photo',
+      provenance: { source: 'frida-estimate', independentlyVerified: false, reference: lookup.reference,
+        matchedSubtotals: lookup.matchedSubtotals, unknowns: lookup.unknowns },
+    });
+    const input = { change: { operation: 'correct', idempotencyKey: 'retained-key', expectedRevision: '1',
+      changes: { mealName: 'Renamed synthetic photo meal' } } };
+    const pending = f.tool.execute(input, f.request, signal());
+    await f.staged;
+    const summary = f.runConfirmed.mock.calls[0]![1];
+    expect(summary.length).toBeLessThanOrEqual(4000);
+    expect(summary).toContain('"Four component synthetic photo meal" → "Renamed synthetic photo meal"');
+    expect(summary).toContain('Record revision: 1');
+    expect(summary).toContain('4 components unchanged');
+    expect(summary).toContain('confidence: "estimate"');
+    expect(summary).not.toContain('"before":');
+    expect(summary).not.toContain('"after":');
+    expect(f.store.correct).not.toHaveBeenCalled();
+    f.approve();
+    expect(await pending).toMatchObject({ status: 'committed', record: {
+      meal_name: 'Renamed synthetic photo meal', energy_kcal: lookup.totals.energyKcal,
+      revision: '2', confidence: 'estimate', capture_method: 'photo',
+    } });
+    expect(f.store.correct).toHaveBeenCalledWith(expect.objectContaining({
+      components: expect.arrayContaining([expect.objectContaining({ name: 'Synthetic lentils', grams: 75 })]),
+      provenance: expect.objectContaining({ source: 'frida-estimate', independentlyVerified: false }),
+    }), 1n, expect.any(AbortSignal));
   });
   it('refuses changes made while a correction was awaiting approval', async () => {
     const f = fixture(); const saved = f.seed();

@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TasksPanel } from './TasksPanel';
 import type { VaultTask } from './tasks-data';
+import { JarvisActivityContext, type JarvisActivity } from '../activity-context';
 
 const getAccessToken = vi.fn(async () => 'fixture-token');
 const json = (value: unknown, status = 200) =>
@@ -65,6 +66,62 @@ afterEach(() => {
 const writeCalls = () => fetchMock.mock.calls.filter(([, init]) => init?.method === 'PATCH' || init?.method === 'POST' || init?.method === 'PUT');
 
 describe('Tasks panel', () => {
+  it('quietly reloads after a successful conversational task write, not a refusal', async () => {
+    const activity: JarvisActivity = {
+      working: false, workText: null, latestActivity: null, voiceActivity: null,
+      applyRuntimeActivity: () => {}, clearRuntimeActivities: () => {},
+    };
+    const panel = <TasksPanel id="tasks-panel" backendUrl="https://api.example.com"
+      getAccessToken={getAccessToken} onOpenNote={onOpenNote} onClose={onClose} />;
+    const view = render(<JarvisActivityContext value={activity}>{panel}</JarvisActivityContext>);
+    await screen.findByRole('checkbox', { name: 'No date fixture' });
+    const reads = fetchMock.mock.calls.length;
+    const finished = {
+      type: 'tool-call-finished' as const, source: 'chat' as const,
+      activityId: '11111111-1111-4111-8111-111111111111',
+      toolName: 'vault_task_create', outcome: 'refused' as const,
+    };
+    view.rerender(<JarvisActivityContext value={{ ...activity, latestActivity: finished }}>{panel}</JarvisActivityContext>);
+    expect(fetchMock.mock.calls).toHaveLength(reads);
+    view.rerender(<JarvisActivityContext value={{ ...activity,
+      latestActivity: { ...finished, outcome: 'ok' } }}>{panel}</JarvisActivityContext>);
+    await waitFor(() => expect(fetchMock.mock.calls).toHaveLength(reads + 1));
+    expect(screen.getByRole('checkbox', { name: 'No date fixture' })).not.toBeNull();
+    expect(writeCalls()).toHaveLength(0);
+  });
+
+  it('keeps an open draft on its original version after a conversational refresh', async () => {
+    const activity: JarvisActivity = {
+      working: false, workText: null, latestActivity: null, voiceActivity: null,
+      applyRuntimeActivity: () => {}, clearRuntimeActivities: () => {},
+    };
+    const panel = <TasksPanel id="tasks-panel" backendUrl="https://api.example.com"
+      getAccessToken={getAccessToken} onOpenNote={onOpenNote} onClose={onClose} />;
+    const view = render(<JarvisActivityContext value={activity}>{panel}</JarvisActivityContext>);
+    await screen.findByRole('checkbox', { name: 'No date fixture' });
+    fireEvent.click(screen.getByRole('button', { name: 'Edit task: No date fixture' }));
+    fireEvent.change(screen.getByRole('textbox', { name: 'Task text' }), { target: { value: 'My draft wording' } });
+    const reads = fetchMock.mock.calls.length;
+    const changed = allTasks.map((item) => item.text === 'No date fixture'
+      ? { ...item, dueDate: '2031-04-10', version: 'e'.repeat(64) } : item);
+    fetchMock.mockImplementation(async (_input, init) => init?.method === 'PUT'
+      ? json({ error: 'This task changed in the vault. Refresh the list.' }, 409)
+      : json({ items: changed, readAt: '2031-04-09T20:28:00.000Z', today: '2031-04-09', total: changed.length, truncated: false }));
+    view.rerender(<JarvisActivityContext value={{ ...activity, latestActivity: {
+      type: 'tool-call-finished', source: 'voice', toolName: 'vault_task_edit', outcome: 'ok',
+      activityId: '22222222-2222-4222-8222-222222222222',
+    } }}>{panel}</JarvisActivityContext>);
+    await waitFor(() => expect(fetchMock.mock.calls).toHaveLength(reads + 1));
+    await waitFor(() => expect(screen.getByRole('textbox', { name: 'Task text' })
+      .closest('.tasks-panel-group')?.querySelector('h2')?.textContent).toBe('Upcoming'));
+    fireEvent.click(screen.getByRole('button', { name: 'Save task' }));
+    await waitFor(() => expect(writeCalls()).toHaveLength(1));
+    expect(JSON.parse(String(writeCalls()[0]?.[1]?.body))).toMatchObject({
+      text: 'No date fixture', version: '4'.padStart(64, 'c'), newText: 'My draft wording',
+    });
+    await screen.findByText('That task changed in your vault, so the list was refreshed. Nothing was saved.');
+  });
+
   it('groups open tasks by the owner date and shows an unticked box with a source-note link', async () => {
     mount();
     expect(await screen.findByRole('heading', { name: 'Overdue' })).not.toBeNull();
