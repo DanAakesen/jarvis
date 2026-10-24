@@ -77,11 +77,13 @@ export function explicitProactivePreferenceIntent(text: string): ProactivePrefer
   const paused = pauseIntent(normalized);
   if (paused) return paused;
 
-  const scope = /^(?:(?:please|i want|i only want|i'd like)\s+)?(?:(?:show|keep|give me)\s+(?:me\s+)?(?:only\s+)?|only\s+)(?<scope>personal|work|all)(?:\s+(?:proactive\s+)?suggestions)?[.!?]?$/iu.exec(normalized) ??
-    /^(?:(?:vis(?: mig)?|giv mig|hold dig til)\s+(?:kun\s+)?|kun\s+)(?<scope>personlige?|arbejde|arbejdsrelaterede|alle|al)(?:\s+(?:proaktive\s+)?forslag)?[.!?]?$/iu.exec(normalized);
+  const scope = /^(?:(?:please|i want|i only want|i'd like)\s+)?(?:(?:show|keep|give me)\s+(?:me\s+)?(?:only\s+)?|only\s+)(?<scope>personal|private|work|all)(?:\s+(?:proactive\s+)?suggestions)?[.!?]?$/iu.exec(normalized) ??
+    /^(?:(?:i would like(?: for you)?|i'd like(?: for you)?)\s+)?(?:you\s+to\s+)?(?:only\s+)?(?:suggest|show|give me)\s+(?:only\s+)?(?<scope>personal|private|work)\s+(?:things|suggestions)(?:\s+(?:going forward|from now on))?[.!?]?$/iu.exec(normalized) ??
+    /^(?:jeg vil gerne have, at du kun foreslår|jeg vil gerne have, at du kun viser|jeg vil gerne have, at du kun giver mig)\s+(?<scope>personlige?|private|arbejdsrelaterede|arbejde)\s+(?:ting|forslag)(?:\s+fremover)?[.!?]?$/iu.exec(normalized) ??
+    /^(?:(?:vis(?: mig)?|giv mig|hold dig til)\s+(?:kun\s+)?|kun\s+)(?<scope>personlige?|private|arbejde|arbejdsrelaterede|alle|al)(?:\s+(?:proaktive?\s+)?forslag)?[.!?]?$/iu.exec(normalized);
   if (scope?.groups?.scope) {
     const value = scope.groups.scope.toLowerCase();
-    return { suggestionScope: value === 'personal' || value.startsWith('personlig') ? 'personal'
+    return { suggestionScope: value === 'personal' || value === 'private' || value.startsWith('personlig') ? 'personal'
       : value === 'work' || value === 'arbejde' || value === 'arbejdsrelaterede' ? 'work' : 'all' };
   }
 

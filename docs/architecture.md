@@ -7025,7 +7025,9 @@ supported behavior are refused rather than saved as enforceable settings.
 
 The 23 October 2026 follow-up retains canonical intent matching and uses the
 existing server-side approval interpreter for other natural Danish/English
-instructions. Its `proactive_preferences` family has a separate instruction
+instructions. Settings and chat/voice share the same bounded explicit intent
+parser, including supported private/personal-scope paraphrases. Its
+`proactive_preferences` family has a separate instruction
 prompt: independently interpret the verified owner message and compare it with
 the exact server-generated candidate category/direction or scope. Bare approval
 replies cannot authorize a preference write. Negative preferences explicitly
@@ -7034,16 +7036,19 @@ when accompanied by a preference. The tools-free model call shares
 the existing five-second timeout, confidence threshold, bounded cache,
 concurrency/rate limits and usage accounting; no tool budget is increased.
 Missing model configuration, malformed/uncertain verdicts and interpreter
-failures refuse without a write. The tool rechecks current-message provenance
-and cancellation before patching, then reads back the saved state before
-confirming. Settings PATCHes use the same full-record revision check inside the
+failures refuse without a write. After the settings snapshot read, the tool
+rechecks cancellation and current-message provenance immediately before patching,
+then reads back the saved state before confirming. Settings PATCHes use the same full-record revision check inside the
 SQL transaction; concurrent or stale edits return a conflict. This preserves
 existing budgets, cadence, quiet hours, source/feed configuration and guidance
 when the simplified UI changes one preference. For persisted direct voice messages it checks
 the live transcript source marker, bounded latest-owner history and active
 session, so a pending transcript, same-ID revision or superseding message cannot
-authorize a write using the old snapshot. Only verdict/path metadata is logged.
-No settings schema or migration is added.
+authorize a write using the old snapshot. The web surfaces also listen for the
+existing successful chat/voice tool-completion activity and immediately refresh
+their relevant settings/status/items reads; focus/reconnect recovery remains, and
+dirty Settings text is retained with a conflict notice. Only verdict/path
+metadata is logged. No settings schema or migration is added.
 
 The engine excludes disabled travel evidence across all enabled sources and
 filters both deterministic and model-generated findings by category and

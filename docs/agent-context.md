@@ -558,6 +558,18 @@ What Dan tests:
 - Edit a preference in Settings and ask chat to read it back.
 - Turn automatic suggestions off and verify automatic behavior stops without changing requested reminders.
 
+24 October review-gap follow-up local checks:
+`npm test --workspace @jarvis/backend -- --run src/proactive/tools.test.ts src/proactive/routes.test.ts -t 'persists and reads back|settings read|ordinary-language edits'`
+passed 56 tests (125 unrelated tests skipped by the filter).
+`npm test --workspace @jarvis/web -- --run src/ProactiveSettings.test.tsx src/ProactiveArea.test.tsx`
+passed 37 tests. Backend and web lint, and both workspace builds, passed; the
+web build reported its existing large-chunk advisory. The aggregate workflow
+dispatch run 40127998102 failed on lint at the prior head 14b6595; its logs
+identified web hook-rule violations and two backend lint findings, which are
+fixed and locally rechecked here. Full aggregate CI and SQL integration have
+not been rerun on the corrected head. Device/live-provider acceptance remains
+unverified.
+
 ## Owner-requested reminders (#1239)
 
 Explicit reminders are runtime-only owner requests, separate from automatic

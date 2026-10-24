@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useJarvisActivity } from './activity-context';
 import { CollapsibleSection } from './CollapsibleSection';
 import { StateMessage } from './StateMessage';
 import { saveSignInReturnPath } from './auth';
@@ -52,8 +53,12 @@ export function ProactiveSettings({ backendUrl, getAccessToken, signIn }: {
   const [signInRequired, setSignInRequired] = useState(false);
   const savedRef = useRef(saved);
   const instructionRef = useRef(instruction);
-  savedRef.current = saved;
-  instructionRef.current = instruction;
+  const { latestActivity } = useJarvisActivity();
+
+  useEffect(() => {
+    savedRef.current = saved;
+    instructionRef.current = instruction;
+  }, [instruction, saved]);
 
   const load = useCallback(async ({ silent = false, replaceDraft = false }: LoadOptions = {}) => {
     if (!backendUrl) {
@@ -110,7 +115,7 @@ export function ProactiveSettings({ backendUrl, getAccessToken, signIn }: {
   }, [backendUrl, getAccessToken]);
 
   useEffect(() => {
-    void load();
+    void Promise.resolve().then(() => load());
     const refresh = () => {
       if (!document.hidden) void load({ silent: true });
     };
@@ -126,6 +131,13 @@ export function ProactiveSettings({ backendUrl, getAccessToken, signIn }: {
       requestRef.current?.abort();
     };
   }, [load]);
+
+  useEffect(() => {
+    if (latestActivity?.type === 'tool-call-finished' && latestActivity.outcome === 'ok' &&
+        ['chat', 'voice'].includes(latestActivity.source) && latestActivity.toolName === 'proactive_preferences') {
+      void Promise.resolve().then(() => load({ silent: true }));
+    }
+  }, [latestActivity, load]);
 
   const patchSettings = async (patch: Record<string, unknown>) => {
     const response = await proactiveRequest(backendUrl, getAccessToken, '/proactive/settings', {
@@ -152,7 +164,7 @@ export function ProactiveSettings({ backendUrl, getAccessToken, signIn }: {
       if (error instanceof ProactiveRequestError && error.status === 409) setConflict(true);
       setNotice(error instanceof ProactiveRequestError && error.status === 409
         ? 'Preferences changed elsewhere. Reload the current values before changing them.'
-        : 'Could not save this setting. Nothing was changed.');
+        : 'Could not confirm whether this setting was saved. Refresh the current preferences before trying again.');
     } finally {
       setPauseSaving(false);
     }
@@ -174,7 +186,7 @@ export function ProactiveSettings({ backendUrl, getAccessToken, signIn }: {
         ? 'Jarvis cannot enforce that preference yet. Choose one of the supported examples below.'
         : error instanceof ProactiveRequestError && error.status === 409
           ? 'Preferences changed elsewhere. Reload the current values before changing them.'
-          : 'Could not save this preference. Nothing was confirmed.');
+          : 'Could not confirm whether this preference was saved. Refresh the current preferences before trying again.');
     } finally {
       setSaving(false);
     }

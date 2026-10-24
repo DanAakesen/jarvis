@@ -256,13 +256,19 @@ function preferencesTool(store: ProactiveStore, ownerObjectId: string): JarvisTo
         throw new ToolRefusal('The update must match your direct request to pause or resume suggestions. Nothing was changed.');
       }
       signal.throwIfAborted();
+      let currentSettings;
+      try {
+        currentSettings = await store.settings.read();
+      } catch {
+        throw new ToolFailure('Proactive preferences could not be saved. Nothing was confirmed.');
+      }
+      if (signal.aborted) throw new ToolRefusal('The request was cancelled. Nothing was changed.');
       const current = await currentOwnerMessage(request, ownerObjectId, signal);
       if (current.text !== message.text || current.id !== message.id || current.sessionId !== message.sessionId) {
         throw new ToolRefusal('The current owner request changed. Nothing was changed.');
       }
       signal.throwIfAborted();
       try {
-        const currentSettings = await store.settings.read();
         await store.settings.patch(
           patchForProactivePreference(intent),
           proactiveSettingsRevision(currentSettings),

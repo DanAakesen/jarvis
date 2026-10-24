@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ProactiveSettings } from './ProactiveSettings';
+import { JarvisActivityContext, type JarvisActivity } from './activity-context';
 
 const backendUrl = 'https://api.example.com';
 const settings = {
@@ -38,8 +39,15 @@ const response = (body: unknown, status = 200) =>
 let fetchMock: ReturnType<typeof vi.fn<typeof fetch>>;
 let serverSettings: typeof settings;
 
-function renderSettings() {
-  return render(<ProactiveSettings backendUrl={backendUrl} getAccessToken={async () => 'fixture-token'} />);
+function renderSettings(latestActivity: JarvisActivity['latestActivity'] = null) {
+  const renderTree = (activity: JarvisActivity['latestActivity']) =>
+    <JarvisActivityContext.Provider value={{
+      working: false, workText: null, voiceActivity: null, latestActivity: activity,
+      applyRuntimeActivity: vi.fn(), clearRuntimeActivities: vi.fn(),
+    }}>
+      <ProactiveSettings backendUrl={backendUrl} getAccessToken={async () => 'fixture-token'} />
+    </JarvisActivityContext.Provider>;
+  return { ...render(renderTree(latestActivity)), renderTree };
 }
 
 function mountFetch() {
@@ -157,8 +165,19 @@ describe('Proactive settings', () => {
       target: { value: 'Stop travel suggestions.' },
     });
     await user.click(screen.getByRole('button', { name: 'Save preference' }));
-    expect(await screen.findByText('Could not save this preference. Nothing was confirmed.')).not.toBeNull();
+    expect(await screen.findByText(/Could not confirm whether this preference was saved/)).not.toBeNull();
     expect(screen.queryByText('DO NOT SHOW THIS')).toBeNull();
+  });
+
+  it('does not claim a failed pause request left the setting unchanged', async () => {
+    renderSettings();
+    const user = await openSection();
+    fetchMock.mockImplementation(async (_input: RequestInfo | URL, init?: RequestInit) =>
+      init?.method === 'PATCH' ? Promise.reject(new TypeError('connection lost')) : response(serverSettings));
+
+    await user.click(screen.getByRole('switch', { name: 'Automatic proactive suggestions' }));
+
+    expect(await screen.findByText(/Could not confirm whether this setting was saved/)).not.toBeNull();
   });
 
   it('refreshes an open view on focus but keeps unsaved edits until explicitly reloaded', async () => {
@@ -183,6 +202,51 @@ describe('Proactive settings', () => {
     await user.click(screen.getByRole('button', { name: 'Reload current preferences' }));
     await waitFor(() => expect(screen.getByLabelText('Change a preference in your own words')).toHaveProperty('value', ''));
     expect(screen.getByRole('switch', { name: 'Automatic proactive suggestions' })).toHaveProperty('checked', true);
+  });
+
+  it('refreshes after a successful voice preference change without waiting for polling', async () => {
+    const view = renderSettings();
+    await openSection();
+    const settingsReads = () => fetchMock.mock.calls.filter(([input, init]) =>
+      new URL(String(input)).pathname === '/proactive/settings' && init?.method !== 'PATCH').length;
+    const before = settingsReads();
+    serverSettings = {
+      ...serverSettings,
+      paused: true,
+      preferences: ['Automatic proactive suggestions are paused.', 'The current scope is all personal and work suggestions.'],
+      revision: 'f'.repeat(64),
+    };
+
+    view.rerender(view.renderTree({
+      type: 'tool-call-finished', activityId: '44444444-4444-4444-8444-444444444444',
+      source: 'voice', toolName: 'proactive_preferences', outcome: 'ok',
+    }));
+
+    await waitFor(() => {
+      expect(settingsReads()).toBeGreaterThan(before);
+      expect(screen.getByRole('switch', { name: 'Automatic proactive suggestions' })).toHaveProperty('checked', false);
+    });
+  });
+
+  it('preserves an unsaved draft and reports the conflict on an immediate tool refresh', async () => {
+    const view = renderSettings();
+    const user = await openSection();
+    const field = screen.getByLabelText('Change a preference in your own words');
+    await user.type(field, 'Stop travel suggestions.');
+    serverSettings = {
+      ...serverSettings,
+      paused: true,
+      preferences: ['Automatic proactive suggestions are paused.', 'The current scope is all personal and work suggestions.'],
+      revision: 'g'.repeat(64),
+    };
+
+    view.rerender(view.renderTree({
+      type: 'tool-call-finished', activityId: '55555555-5555-4555-8555-555555555555',
+      source: 'chat', toolName: 'proactive_preferences', outcome: 'ok',
+    }));
+
+    expect(await screen.findByRole('alert')).not.toBeNull();
+    expect(field).toHaveProperty('value', 'Stop travel suggestions.');
   });
 
   it('shows a non-retryable backend-off state for settings 404', async () => {

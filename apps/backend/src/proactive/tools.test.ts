@@ -395,6 +395,8 @@ describe('proactive_recent_items tool', () => {
       ['Jeg vil ikke have rejseforslag længere', { category: 'travel', enabled: false }],
       ['Slå vejrforslag fra', { category: 'weather', enabled: false }],
       ['Jeg vil kun have personlige forslag', { suggestionScope: 'personal' }],
+      ['Jeg vil gerne have, at du kun foreslår private ting fremover.', { suggestionScope: 'personal' }],
+      ['I would like you to only suggest personal things going forward.', { suggestionScope: 'personal' }],
       ['Vil du være sød at holde op med at foreslå rejser?', { category: 'travel', enabled: false }],
       ['Rejseforslag vil jeg gerne have igen, tak.', { category: 'travel', enabled: true }],
       ['Kan du slå vejrforslagene til igen, tak?', { category: 'weather', enabled: true }],
@@ -611,6 +613,56 @@ describe('proactive_recent_items tool', () => {
       expect(await dispatch(requests[0][0], { operation: 'update', categories: { travel: false } }, controller.signal))
         .toMatchObject({ outcome: 'refused' });
       expect(patch).not.toHaveBeenCalled();
+    });
+
+    if (surface === 'voice') it('does not persist after cancellation during the settings read', async () => {
+      const f = fixture();
+      let enteredRead!: () => void;
+      let releaseRead!: () => void;
+      const reading = new Promise<void>((resolve) => { enteredRead = resolve; });
+      const gate = new Promise<void>((resolve) => { releaseRead = resolve; });
+      const read = vi.spyOn(f.store.settings, 'read').mockImplementation(async () => {
+        enteredRead();
+        await gate;
+        return createMemoryProactiveStore(owner).settings.read();
+      });
+      const controller = new AbortController();
+      const result = f.dispatch(
+        requests[0]![0],
+        { operation: 'update', categories: { travel: false } },
+        controller.signal,
+      );
+      await reading;
+      controller.abort();
+      releaseRead();
+      await expect(result).resolves.toMatchObject({ outcome: 'refused' });
+      expect(f.patch).not.toHaveBeenCalled();
+      read.mockRestore();
+    });
+
+    it('does not persist when the owner request is replaced during the settings read', async () => {
+      const f = fixture();
+      let enteredRead!: () => void;
+      let releaseRead!: () => void;
+      const reading = new Promise<void>((resolve) => { enteredRead = resolve; });
+      const gate = new Promise<void>((resolve) => { releaseRead = resolve; });
+      const read = vi.spyOn(f.store.settings, 'read').mockImplementation(async () => {
+        enteredRead();
+        await gate;
+        return createMemoryProactiveStore(owner).settings.read();
+      });
+      const controller = new AbortController();
+      const result = f.dispatch(
+        requests[0]![0],
+        { operation: 'update', categories: { travel: false } },
+        controller.signal,
+      );
+      await reading;
+      f.replaceMessage();
+      releaseRead();
+      await expect(result).resolves.toMatchObject({ outcome: 'refused' });
+      expect(f.patch).not.toHaveBeenCalled();
+      read.mockRestore();
     });
   });
 

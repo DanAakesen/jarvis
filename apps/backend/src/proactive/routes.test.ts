@@ -143,19 +143,27 @@ describe('proactive routes', () => {
     const { app, store } = await appFixture();
     const initial = await app.inject({ method: 'GET', url: '/proactive/settings', headers: { authorization } });
     const revision = initial.json().revision as string;
-    const changed = await app.inject({
-      method: 'PATCH',
-      url: '/proactive/settings',
-      headers: { authorization },
-      payload: { instruction: 'Show only personal suggestions.', expectedRevision: revision },
-    });
-    expect(changed.statusCode).toBe(200);
-    expect(changed.json()).toMatchObject({
-      suggestionScope: 'personal',
-      monthlyBudgetDkk: 100,
-      newsFeeds: [...DEFAULT_NEWS_FEEDS],
-      guidance: '',
-    });
+    let currentRevision = revision;
+    for (const instruction of [
+      'Show only personal suggestions.',
+      'Jeg vil gerne have, at du kun foreslår private ting fremover.',
+      'I would like you to only suggest personal things going forward.',
+    ]) {
+      const changed = await app.inject({
+        method: 'PATCH',
+        url: '/proactive/settings',
+        headers: { authorization },
+        payload: { instruction, expectedRevision: currentRevision },
+      });
+      expect(changed.statusCode).toBe(200);
+      expect(changed.json()).toMatchObject({
+        suggestionScope: 'personal',
+        monthlyBudgetDkk: 100,
+        newsFeeds: [...DEFAULT_NEWS_FEEDS],
+        guidance: '',
+      });
+      currentRevision = changed.json().revision as string;
+    }
     const tool = createProactiveToolsModule({ enabled: true, ownerObjectId: owner, store })!
       .tools.find(({ name }) => name === 'proactive_preferences')!;
     await expect(tool.execute({ operation: 'read' }, {
@@ -180,7 +188,7 @@ describe('proactive routes', () => {
       method: 'PATCH',
       url: '/proactive/settings',
       headers: { authorization },
-      payload: { instruction: 'Give me more suggestions.', expectedRevision: changed.json().revision },
+      payload: { instruction: 'Give me more suggestions.', expectedRevision: currentRevision },
     });
     expect(unsupported.statusCode).toBe(422);
     expect(unsupported.json()).toEqual({ error: 'unsupported_preference' });

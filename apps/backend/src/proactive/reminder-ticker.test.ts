@@ -100,13 +100,14 @@ describe('reminder ticker push details', () => {
     ['pause', { paused: true }],
     ['Todo source disable', { sources: { todos: false } }],
   ] as const)('does not deliver automatic reminders after %s changes during source verification', async (_label, patch) => {
-    let fixture: Awaited<ReturnType<typeof setup>>;
+    const fixtureRef: { current?: Awaited<ReturnType<typeof setup>> } = {};
     let changed = false;
-    fixture = await setup('en', false, async () => {
+    const fixture = await setup('en', false, async () => {
       if (changed) return;
       changed = true;
-      await fixture.store.settings.patch(patch);
+      await fixtureRef.current!.store.settings.patch(patch);
     });
+    fixtureRef.current = fixture;
 
     await fixture.ticker.tick();
 

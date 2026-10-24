@@ -193,7 +193,7 @@ export function createProactiveAlertHook(options: ProactiveAlertHookOptions) {
         origin: 'proactive_alert',
         details: details.filter((detail): detail is NonNullable<typeof detail> => detail !== undefined &&
           active.some(({ candidate }) => candidate.itemId === detail.itemId))
-          .map(({ itemId: _itemId, ...detail }) => detail),
+          .map(({ title, dueAt }) => ({ title, dueAt })),
       };
       const outcome = await options.send(request, context.signal);
       const classes = [...new Set(active.map(({ candidate }) => candidate.alertClass))].sort().join(',');

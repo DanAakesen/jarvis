@@ -18,9 +18,11 @@
   and source policy are rechecked before automatic task writes and push delivery.
   Do not cancel or rewrite explicitly requested reminders. Per-item “Wrong” and
   “Useful” feedback remains per-item feedback, not a lasting learning policy.
-- Refresh open Settings and Proactive views after focus/reconnect and while
-  visible. Do not add Health sources, arbitrary preference learning, migrations
-  or production setting changes.
+- Refresh open Settings and Proactive views immediately after successful
+  chat/voice preference-tool completion, and retain focus/reconnect recovery.
+  Dirty Settings text is preserved and surfaced as a revision conflict rather
+  than silently overwritten. Do not add Health sources, arbitrary preference
+  learning, migrations or production setting changes.
 - **Verification:** synthetic backend/UI tests cover shared help/state, stale
   writes, UI draft retention/reload, failure handling and pause/source
   cancellation. Database integration, full aggregate checks, browser/device
