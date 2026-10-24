@@ -200,11 +200,11 @@ function preferencesTool(store: ProactiveStore, ownerObjectId: string): JarvisTo
     inputSchema: preferenceInputSchema,
     sensitive: true,
     validateInput: (input) => parsePreferenceInput(input) !== undefined,
-    explainInvalidInput: () => 'Use operation read, or update one category boolean or suggestionScope all, personal or work.',
+    explainInvalidInput: () => 'Use operation help or read, or update one paused boolean, category boolean, or suggestionScope all, personal or work.',
     async execute(raw, request, signal) {
       if (!authorized(request, ownerObjectId)) throw new ToolRefusal('Proactive preferences are not authorized.');
       const input = parsePreferenceInput(raw);
-      if (!input) throw new ToolRefusal('Choose read, or update one category or scope using a valid value.');
+      if (!input) throw new ToolRefusal('Choose help, read, or update one pause, category or scope using a valid value.');
       if (input.operation === 'help') {
         return {
           operation: 'help',

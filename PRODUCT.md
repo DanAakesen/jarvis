@@ -665,14 +665,17 @@ evidence labels, arrival time and state markers; users can open, dismiss, snooze
 or rate them. Earlier items are read-only. The item detail remains the push tap
 target and links back to open items.
 
-Settings adds one separately saved Proactive section for pause, the monthly DKK
-limit, source switches, HTTPS news feeds and low-priority writing guidance.
-It also edits suggestion categories and personal/work scope in that same saved
-settings record. All categories and both scopes are enabled by default, including
-for existing accounts. Personal-only and work-only exclude findings whose scope
-is unknown or mixed. Disabling a category does not disable its sources or affect
-Dan's explicit requests; enabling a category does not unpause checks or change
-other limits.
+Settings exposes one immediate switch for automatic proactive suggestions and a
+compact ordinary-language view of the preferences Jarvis actually enforces.
+Dan can edit supported preferences in his own words and see a few contextual
+examples backed by the same capability source used in chat and voice. The view
+refreshes an open page without silently replacing an unsaved edit; stale changes
+are reported and can be explicitly reloaded. The existing budget, quiet hours,
+cadence, source policy, feed configuration, guidance, category settings and other
+advanced values remain stored and unchanged when a preference is edited or the
+simple view is used. Disabling automatic suggestions does not change separately
+requested reminders or ordinary owner requests. Per-item “Wrong” and “Useful”
+feedback remains item-specific and does not become a lasting preference.
 Changed fields only are sent. Feed URLs and guidance remain in component state
 and are never written to browser storage, URLs, titles, analytics or logs.
 `VITE_PROACTIVE_ENABLED` is exact-string `true`, defaults off in code, and grants no

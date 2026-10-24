@@ -481,10 +481,17 @@ itself sits on the shared translucent panel (P14-14), and the Snooze menu stays
 inside the viewport. From 701 px every option fits on one line; on phones the
 long Tomorrow option wraps inside its own button and the time never breaks.
 
-The settings slot is a single collapsed Proactive section with its own Save;
-the Pause switch commits immediately. Private feed and guidance values are not
-persisted with disclosure state. The exact-string web flag controls its route,
-navigation, Settings slot and Background work Open link.
+The Settings slot is one collapsed Proactive section with a single immediate
+switch, a readable summary of enforced preferences, one ordinary-language
+editor, and a small native-disclosure help list. Help examples come from the
+backend capability source shared with chat and voice; the editor does not expose
+the advanced source/category matrix. Preference saves show pending, unchanged,
+success, failure and stale-revision states. Focus/reconnect refreshes keep a
+dirty draft; only explicit reload discards it. Advanced feed and guidance values
+remain in the existing settings record and are not reset by this compact view.
+Private feed and guidance values are not persisted with disclosure state. The
+exact-string web flag controls its route, navigation, Settings slot and
+Background work Open link.
 
 ## Vault tasks on the Notes page (P13-19; one page since 19 October 2026)
 

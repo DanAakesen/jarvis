@@ -191,7 +191,7 @@ export function createProactiveAlertHook(options: ProactiveAlertHookOptions) {
         language: mostUrgent.language ?? 'en',
         itemId: mostUrgent.itemId,
         origin: 'proactive_alert',
-        details: details.filter((detail) => detail !== undefined &&
+        details: details.filter((detail): detail is NonNullable<typeof detail> => detail !== undefined &&
           active.some(({ candidate }) => candidate.itemId === detail.itemId))
           .map(({ itemId: _itemId, ...detail }) => detail),
       };
