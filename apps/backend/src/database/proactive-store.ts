@@ -23,6 +23,7 @@ interface ItemRow {
   title: string;
   body: string;
   category: Item['category'];
+  owner_requested: boolean;
   suggestion_scope: SuggestionScope | null;
   urgency: Item['urgency'];
   due_at: Date | string | null;
@@ -81,6 +82,7 @@ function mapItem(row: ItemRow): Item {
     title: row.title,
     body: row.body,
     category: row.category,
+    ...(row.owner_requested ? { ownerRequested: true } : {}),
     urgency: row.urgency,
     dueAt: iso(row.due_at),
     evidence: parsedEvidence.evidence,
@@ -124,7 +126,7 @@ function parseCategories(value: string | null, defaults: ProactiveSettings['cate
 }
 
 const itemColumns = [
-  'id', 'kind', 'title', 'body', 'category', 'suggestion_scope', 'urgency', 'due_at', 'evidence_json', 'state',
+  'id', 'kind', 'title', 'body', 'category', 'owner_requested', 'suggestion_scope', 'urgency', 'due_at', 'evidence_json', 'state',
   'snoozed_until', 'feedback', 'run_id', 'todo_added', 'language', 'created_at',
 ];
 function itemSelect(prefix = ''): string {
@@ -179,7 +181,7 @@ export function createProactiveStore(pool: sql.ConnectionPool, ownerObjectId: st
       .input('categoryFlags', sql.NVarChar(sql.MAX), JSON.stringify(settings.categories))
       .input('suggestionScope', sql.NVarChar(16), settings.suggestionScope)
       .input('travelEnabled', sql.Bit, settings.categories.travel);
-    return `AND (kind <> N'finding' OR category IS NULL OR (
+    return `AND (kind <> N'finding' OR category IS NULL OR owner_requested = 1 OR (
       EXISTS (SELECT 1 FROM OPENJSON(@categoryFlags) AS category_flag
         WHERE category_flag.[key] COLLATE Latin1_General_100_BIN2 = category
           AND category_flag.[value] = N'true')
@@ -397,7 +399,8 @@ export function createProactiveStore(pool: sql.ConnectionPool, ownerObjectId: st
             FROM dbo.proactive_settings WITH (UPDLOCK, HOLDLOCK) WHERE owner_object_id = @owner;`);
           const latest = currentSettings.recordset[0]
             ? settingsFromRow(currentSettings.recordset[0]) : defaults;
-          if (!findingAllowed(latest, input.category, input.suggestionScope ?? 'unknown', input.relatedCategories)) {
+          if (input.ownerRequested !== true &&
+              !findingAllowed(latest, input.category, input.suggestionScope ?? 'unknown', input.relatedCategories)) {
             throw new Error('finding_not_allowed');
           }
           const lockName = `jarvis.proactive.finding:${owner}:${input.dedupeKey}`;
@@ -440,6 +443,7 @@ export function createProactiveStore(pool: sql.ConnectionPool, ownerObjectId: st
             .input('title', sql.NVarChar(200), input.title)
             .input('body', sql.NVarChar(500), input.body)
             .input('category', sql.NVarChar(32), input.category)
+            .input('ownerRequested', sql.Bit, input.ownerRequested === true)
             .input('suggestionScope', sql.NVarChar(16), input.suggestionScope ?? 'unknown')
             .input('urgency', sql.NVarChar(24), input.urgency)
             .input('dueAt', sql.DateTime2, input.dueAt ? new Date(input.dueAt) : null)
@@ -450,6 +454,7 @@ export function createProactiveStore(pool: sql.ConnectionPool, ownerObjectId: st
           const saved = existing
             ? await query<ItemRow>(request, `UPDATE dbo.proactive_items SET
                 title = @title, body = @body, category = @category, suggestion_scope = @suggestionScope,
+                  owner_requested = @ownerRequested,
                 urgency = @urgency,
                 due_at = @dueAt, evidence_json = @evidence, state = @state,
                 run_id = @runId, language = @language, dedupe_key = @key
@@ -457,9 +462,10 @@ export function createProactiveStore(pool: sql.ConnectionPool, ownerObjectId: st
               WHERE id = @id AND owner_object_id = @owner;`)
             : await query<ItemRow>(request, `INSERT dbo.proactive_items
                 (id, owner_object_id, kind, title, body, delivery_state, category, suggestion_scope, urgency, due_at,
-                 evidence_json, state, run_id, language, dedupe_key)
+                 owner_requested, evidence_json, state, run_id, language, dedupe_key)
               OUTPUT inserted.${itemSelect().replaceAll(', ', ', inserted.').replaceAll('\n    ', '\n    inserted.')}
               VALUES (@id, @owner, N'finding', @title, @body, N'queued', @category, @suggestionScope, @urgency, @dueAt,
+                @ownerRequested,
                 @evidence, @state, @runId, @language, @key);`);
           const row = saved.recordset[0];
           if (!row) throw new Error('Finding could not be saved');

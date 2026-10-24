@@ -687,7 +687,7 @@ board/plan maintenance. Cancelled runs are not failures. Repeated failures for
 the same project workflow collapse into one activity item within a rolling hour;
 dismissed items still suppress repeats during that hour.
 
-Presence, running tasks, releases/deployments and away-mode changes remain in the feed for their existing consumers but are not shown in the attention popover. Each alert condition is stored once and can be dismissed per item. Failed deployments, confirmed sandbox crashes and expiring credentials remain email-only alerts; the monthly Azure budget uses its existing bounded spend read and email action group. Authenticated server-sent events continue refreshing the snapshot; the shell feed remains mounted while Settings is closed.
+Presence, running tasks, releases/deployments and away-mode changes remain in the feed for their existing consumers but are not shown in the attention popover. Each alert condition is stored once and can be dismissed per item. Failed deployments, confirmed sandbox crashes and expiring credentials remain email-only alerts; the monthly Azure budget uses its existing bounded spend read and email action group, with one 80% activity warning per recurring UTC calendar month. Dismissing a warning does not allow another warning for that month. Authenticated server-sent events continue refreshing the snapshot; the shell feed remains mounted while Settings is closed.
 
 The Jarvis typing/voice page keeps a subdued transparent cyan exterior and visible open amber core; explicit voice entry brightens the same orb in place, and exit returns it to dormancy. Real transient runtime activity and decoded playback audio drive its awake response. Dormancy is only a presentation state: it does not indicate backend sleep, enable the microphone, or change voice readiness. The stable living 3D room, centred stage and real mirror floor carry across modes; light appearance re-lights the same room. Voice mode hides shell/history/composer immediately without taking a document-wide snapshot. In the 3D stage, workspace visibility moves/scales only the orb through its existing spring, leaving room, camera and platform fixed; the responsive temporary-window layout remains unchanged. The room and large orb do not appear on Factory, Settings or other routes. Shared smoky glass surfaces are the selected treatment across existing pages. If WebGL is unavailable or lost, show a readable lower-cost stage while preserving HTML chat, voice and workspace controls; restore the same renderer when the browser restores its context, and keep rendering errors separate from voice status. P8-28 (#375), P8-31 (#376), and P8-32 (#387) are merged; P8-29's runtime/audio wiring is implemented offline in draft PR #377, and P8-30's local fixture implementation is in PR #386. P8-33's adaptive rendering/recovery implementation is in draft PR #391; its software-WebGL measurements and remaining hardware limits are in [the accepted UI evidence](ui.md#accepted-centred-3d-stage--5-october-2026). The reported flicker is attributed to the full-document View Transition snapshot, which included the live WebGL stage/mirror and delayed the committed layout; normal-hardware flicker acceptance remains unverified because the available SwiftShader browser rendered at very low frame cadence. The previous shell, windows/tabs, phone single-view/dock, theme persistence and explicit microphone/readiness rules remain. The approved prototype remains reference-only. See [accepted UI requirements](ui.md#accepted-centred-3d-stage--5-october-2026).
 
@@ -1305,6 +1305,30 @@ use generic headlines with empty bodies. The alert switch defaults off
 in code, like the proactive and push switches, and production sets it since P13-15; per-class controls are not
 part of this slice.
 
+## Owner-requested task reminders (#1239)
+
+In chat and voice, a direct owner request can schedule a one-time reminder or a
+daily/weekly recurrence for an existing open task. Repeating until the task is
+completed is explicit; the requested reminder time is independent of the task's
+due date and time, which are never changed. The owner can read, update, snooze
+or cancel schedules. Missing, ambiguous, quiet-hour or unsupported times are
+clarified or refused rather than guessed; confirmations state the Copenhagen
+time and recurrence.
+
+These explicit schedules use the existing reminder ticker and Web Push delivery.
+They are not subject to automatic high-priority, category or scope suggestion
+filters, and do not change those preferences. An explicit time in the existing
+22:00–07:00 Copenhagen quiet window is refused. A task is re-read before
+delivery; a completed, deleted or ambiguous task stops the schedule, while a
+stable Obsidian task ID preserves it through a rename or move. Dismissing a
+notification does not complete the task.
+
+The database migration creates no reminder schedules and enables no new
+notifications. Only a verified direct owner request creates a schedule.
+Scheduled, suppressed and provider-accepted states are distinct; provider
+acceptance is not confirmation that a device displayed or acknowledged a push.
+Physical-device delivery remains unverified.
+
 ## Proactive todo reminders (18 October 2026; P13-13)
 
 An explicit-time P1 - High todo gets one detailed reminder push about an hour
@@ -1558,12 +1582,23 @@ separate navigation destinations, widget, coaching/recovery/recomp or TickTick.
 On-demand Health views (P12-16 / #731) let Dan ask Jarvis in chat or voice to show
 what Health holds, and the answer appears as a table, chart or detail in the existing
 workspace window instead of a fixed native screen. The `daily_show` tool covers
-measurements, sleep, workouts, one workout's heart rate, food history, saved
-favourites, meal plans and sync status. It reads through the same
+measurements, sleep, workouts, one workout's heart rate, food history, per-day
+nutrition totals, saved favourites, meal plans and sync status. Jarvis understands
+the request and follow-ups in Danish or English: factual questions and explanations
+are answered in words, while a visual is used when requested or helpful for a clear
+trend/comparison. An explicit table or chart preference is honored when supported;
+nutrition is not tied to tables, nor are measurements automatically charted.
+Nutrition charts show one selected nutrient from the existing per-day totals.
+Unknown values are omitted, partial totals are identified as lower bounds, and
+bounded or partial history is disclosed. For a saved-target comparison, Jarvis reads
+the actual owner target and relevant measurements through `daily_query`; an unset
+target stays unset and is never replaced by a default.
+It reads through the same
 owner-authorised read model as the Daily page and `daily_query`: one bounded page
 per request (at most 366 days and 200 rows, 100 for meals, favourites and plans;
-no paging), and it calculates nothing, so every number is a stored value with its
-unit and date. A footnote under the data names the source, the period, the read
+no paging), and `daily_show` adds no calculations: per-day nutrition totals are
+already derived by the shared query read model from retained meals. Values keep their
+units and dates. A footnote under the data names the source, the period, the read
 time and that completeness and freshness are not established. A missing value reads
 as unknown, never zero, and an empty read says so with its own read time. Asking
 for the same view again refreshes it in place rather than opening another. It works

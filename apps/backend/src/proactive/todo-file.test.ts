@@ -107,17 +107,29 @@ describe('todo parser', () => {
       {
         text: 'Buy a mirror', dueAt: '2026-10-20T12:30:00.000Z', dueHasTime: true,
         done: false, highPriority: false, priorityLevel: 'normal', dueDate: '2026-10-20', dueTime: '14:30',
-        path: 'Personal/Inbox.md', line: 3, heading: 'Inbox', version: taskLineVersion('- [ ] Buy a mirror 🕒 14:30 📅 2026-10-20'),
+        path: 'Personal/Inbox.md', line: 3, heading: 'Inbox',
+        taskIdentity: expect.any(String),
+        version: taskLineVersion('- [ ] Buy a mirror 🕒 14:30 📅 2026-10-20'),
       },
       {
         text: 'Hang the frame', dueAt: '2026-10-21T21:59:00.000Z', dueHasTime: false,
         done: true, highPriority: false, priorityLevel: 'normal', dueDate: '2026-10-21', dueTime: null,
-        path: 'Personal/Inbox.md', line: 5, heading: 'Home', version: taskLineVersion('- [x] Hang the frame 📅 2026-10-21'),
+        path: 'Personal/Inbox.md', line: 5, heading: 'Home',
+        taskIdentity: expect.any(String),
+        version: taskLineVersion('- [x] Hang the frame 📅 2026-10-21'),
       },
     ]);
     expect(Object.keys(parseTodos(content)[0]!).sort()).toEqual([
       'done', 'dueAt', 'dueHasTime', 'highPriority', 'text',
     ]);
+  });
+
+  it('keeps task identity stable across task metadata edits and moves, and uses explicit Obsidian IDs for renamed tasks', () => {
+    const parsed = (content: string, path: string) => parseTodosWithContext(content, path)[0]!.taskIdentity;
+    const original = parsed('- [ ] Synthetic recurring task 📅 2031-04-09 🔺', 'Personal/Inbox.md');
+    expect(parsed('- [ ] Synthetic recurring task 📅 2031-04-10 ⏫', 'Work/Other.md')).toBe(original);
+    expect(parsed('- [ ] Renamed task 🆔 Task-123', 'Personal/Inbox.md'))
+      .toBe(parsed('- [ ] Another title 🆔 task-123', 'Work/Other.md'));
   });
 
   it('sanitizes markdown, HTML, control characters and long task text once, while keeping instructions as plain text', () => {

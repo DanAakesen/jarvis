@@ -1021,6 +1021,7 @@ export async function buildAgentSettingsPayload(
       settings.memory,
       app.jarvisTools.get('proactive_recent_items') !== undefined,
       app.jarvisTools.get('proactive_preferences') !== undefined,
+      app.jarvisTools.get('owner_reminders') !== undefined,
     ),
     timeouts: settings.timeouts,
     personality: settings.personality,

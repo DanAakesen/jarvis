@@ -15,6 +15,7 @@ import { createProactiveStore } from '../database/proactive-store.js';
 import { createProactiveAlertStore } from '../database/proactive-alert-store.js';
 import { createProactiveTodoReceiptStore } from '../database/proactive-todo-store.js';
 import { createProactiveReminderStore } from '../database/proactive-reminder-store.js';
+import type { OwnerReminderStore } from './owner-reminder-store.js';
 import { createMemoryProactiveStore } from './store.js';
 import type { ProactiveStore } from './store.js';
 import { createProactiveTodoWriter } from './todo-writer.js';
@@ -55,6 +56,8 @@ export interface ProactiveCompositionOptions {
   pushStore?: PushStore;
   alertLedgerStore?: AlertLedgerStore;
   reminderStore?: ProactiveReminderStore;
+  ownerReminderStore?: OwnerReminderStore;
+  registerReminderWakeHandler?: (handler: (fireAt: Date) => void) => void;
   systemPushSender?: (request: SystemPushRequest, signal: AbortSignal) => Promise<SystemPushOutcome>;
   pushEnabled?: boolean;
   todoWritesEnabled?: boolean;
@@ -108,6 +111,8 @@ export function registerProactive<Logger extends FastifyBaseLogger>(
   const alertsReady = options.alertsEnabled === true && options.pushEnabled === true &&
     options.pushStore !== undefined && options.systemPushSender !== undefined;
   const reminderReady = alertsReady && options.vaultClient !== undefined;
+  const ownerReminderReady = options.ownerReminderStore !== undefined && options.pushEnabled === true &&
+    options.vaultClient !== undefined && options.pushStore !== undefined && options.systemPushSender !== undefined;
   const alertLedger = alertsReady
     ? options.alertLedgerStore ?? (options.pool
       ? createProactiveAlertStore(options.pool, options.ownerObjectId)
@@ -129,13 +134,15 @@ export function registerProactive<Logger extends FastifyBaseLogger>(
       ? createProactiveReminderStore(options.pool, options.ownerObjectId)
       : createMemoryProactiveReminderStore(options.ownerObjectId))
     : undefined;
-  const reminderTicker = reminderReady && reminderStore && alertLedger && options.pushStore && options.systemPushSender
+  const reminderTicker = (reminderReady || ownerReminderReady) && options.vaultClient &&
+    options.pushStore && options.systemPushSender
     ? createReminderTicker({
       store,
-      reminders: reminderStore,
-      vault: options.vaultClient!,
+      reminders: reminderStore ?? createMemoryProactiveReminderStore(options.ownerObjectId),
+      ...(ownerReminderReady ? { ownerReminders: options.ownerReminderStore } : {}),
+      vault: options.vaultClient,
       pushStore: options.pushStore,
-      ledger: alertLedger,
+      ...(alertLedger ? { ledger: alertLedger } : {}),
       ownerObjectId: options.ownerObjectId,
       send: options.systemPushSender,
       ...(options.conversationStore ? { conversationStore: options.conversationStore } : {}),
@@ -143,6 +150,7 @@ export function registerProactive<Logger extends FastifyBaseLogger>(
       ...(options.logger ? { logger: options.logger } : {}),
     })
     : undefined;
+  options.registerReminderWakeHandler?.(reminderTicker?.considerFireAt ?? (() => {}));
   const reminderPlanner = reminderTicker && reminderStore && alertLedger
     ? createTodoReminderPlanner({
       store,

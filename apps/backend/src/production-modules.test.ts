@@ -28,6 +28,7 @@ import { createProductionModules } from './production-modules.js';
 import { createToolRegistry } from './core/tool-registry.js';
 import { checkAgentContract } from './core/agent-contract.js';
 import { composeDaily } from './daily/composition.js';
+import { createMemoryOwnerReminderStore } from './proactive/owner-reminder-store.js';
 import { createMemoryProactiveStore } from './proactive/store.js';
 import { createProactiveToolsModule } from './proactive/tools.js';
 import { createRealtimeSessionUpdate, toModelToolSchema } from './voice/realtime.js';
@@ -41,7 +42,7 @@ const dailyToolNames = [
   'daily_query', 'daily_show', 'daily_food', 'daily_food_review', 'daily_saved_food', 'daily_nutrition_targets', 'daily_nutrition_suggest',
   'daily_health_summary', 'daily_nutrition_history', 'daily_coach_status',
 ];
-const proactiveToolNames = ['proactive_recent_items', 'proactive_preferences', 'proactive_item_feedback'];
+const proactiveToolNames = ['proactive_recent_items', 'proactive_preferences', 'proactive_item_feedback', 'owner_reminders'];
 const proactiveOwner = '11111111-1111-4111-8111-111111111111';
 
 // Daily is composed by default here so the size gates below always cover the largest catalogue the server can run.
@@ -78,7 +79,11 @@ function modulesWithEveryFeature(options: { daily?: boolean; proactive?: boolean
     proactive: createProactiveToolsModule({
       enabled: options.proactive !== false,
       ownerObjectId: proactiveOwner,
-      ...(options.proactive === false ? {} : { store: createMemoryProactiveStore(proactiveOwner) }),
+      ...(options.proactive === false ? {} : {
+        store: createMemoryProactiveStore(proactiveOwner),
+        ownerReminders: createMemoryOwnerReminderStore(),
+        vault: { tree: async () => [], read: async () => null },
+      }),
     }),
   });
 }
@@ -206,6 +211,7 @@ describe('production tool catalogue', () => {
     const offTools = buildCatalogue(off).list();
     const onNames = onTools.map(({ name }) => name);
     const offNames = offTools.map(({ name }) => name);
+    const registeredProactiveNames = on.find(({ id }) => id === 'proactive')!.tools.map(({ name }) => name);
 
     expect(offNames).toEqual(off.flatMap(({ tools }) => tools.map(({ name }) => name)));
     expect(onNames).toEqual(on.flatMap(({ tools }) => tools.map(({ name }) => name)));
@@ -219,7 +225,7 @@ describe('production tool catalogue', () => {
       ]);
     }
     expect(onNames.filter((name) => !proactiveToolNames.includes(name))).toEqual(offNames);
-    expect(on.find(({ id }) => id === 'proactive')!.tools.map(({ name }) => name)).toEqual(proactiveToolNames);
+    expect(registeredProactiveNames).toEqual(proactiveToolNames);
     expect(off.some(({ id }) => id === 'proactive')).toBe(false);
   });
 

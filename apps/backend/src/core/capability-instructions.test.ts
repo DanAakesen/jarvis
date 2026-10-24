@@ -162,8 +162,10 @@ describe('shared capability instruction budget', () => {
   it.each([true, false])('stays within the headroom budget with automatic capture %s', (automaticCapture) => {
     for (const proactive of [false, true]) {
       for (const preferences of [false, true]) {
-        expect(codePoints(capabilityInstructions({ automaticCapture }, proactive, preferences)))
-          .toBeLessThanOrEqual(limits.capabilityInstructionsBudgetCodePoints);
+        for (const reminders of [false, true]) {
+          expect(codePoints(capabilityInstructions({ automaticCapture }, proactive, preferences, reminders)))
+            .toBeLessThanOrEqual(limits.capabilityInstructionsBudgetCodePoints);
+        }
       }
     }
   });
@@ -172,8 +174,10 @@ describe('shared capability instruction budget', () => {
     for (const instructions of Object.values(builtInModeInstructions)) {
       for (const proactive of [false, true]) {
         for (const preferences of [false, true]) {
-          expect(codePoints(capabilityInstructions({ automaticCapture }, proactive, preferences) + instructions))
-            .toBeLessThanOrEqual(limits.capabilityInstructionsBudgetCodePoints);
+          for (const reminders of [false, true]) {
+            expect(codePoints(capabilityInstructions({ automaticCapture }, proactive, preferences, reminders) + instructions))
+              .toBeLessThanOrEqual(limits.capabilityInstructionsBudgetCodePoints);
+          }
         }
       }
       expect(instructions.length).toBeLessThanOrEqual(2_000);
