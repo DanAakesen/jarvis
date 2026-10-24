@@ -11,6 +11,7 @@ export interface BudgetSnapshot {
   amount: number;
   currentSpend: number;
   periodStart: string;
+  timeGrain: string;
 }
 
 export interface BudgetReader {
@@ -90,12 +91,15 @@ export function createArmBudgetReader({
       const properties = result.properties;
       const period = object(properties.timePeriod) ? properties.timePeriod.startDate : undefined;
       const spend = object(properties.currentSpend) ? properties.currentSpend.amount : undefined;
+      if (properties.timeGrain !== 'Monthly') {
+        throw new Error('Azure budget period was unsupported');
+      }
       if (typeof properties.amount !== 'number' || !Number.isFinite(properties.amount) || properties.amount <= 0 ||
         typeof spend !== 'number' || !Number.isFinite(spend) || spend < 0 ||
         typeof period !== 'string' || !Number.isFinite(Date.parse(period))) {
         throw new Error('Azure budget response was incomplete');
       }
-      return { amount: properties.amount, currentSpend: spend, periodStart: period };
+      return { amount: properties.amount, currentSpend: spend, periodStart: period, timeGrain: properties.timeGrain };
     },
   };
 }
@@ -104,12 +108,17 @@ export async function recordBudgetThresholdIfReached(
   reader: BudgetReader,
   alerts: AlertActivityStore,
   signal: AbortSignal,
+  now: () => Date = () => new Date(),
 ): Promise<boolean> {
   const budget = await reader.read(signal);
+  if (budget.timeGrain !== 'Monthly') throw new Error('Azure budget period was unsupported');
   if (budget.currentSpend / budget.amount < 0.8) return false;
   const start = new Date(budget.periodStart);
-  if (!Number.isFinite(start.getTime())) throw new Error('Azure budget period was invalid');
-  const period = start.toISOString().slice(0, 7);
+  const current = now();
+  if (!Number.isFinite(start.getTime()) || !Number.isFinite(current.getTime()) || start > current) {
+    throw new Error('Azure budget period was invalid');
+  }
+  const period = current.toISOString().slice(0, 7);
   const alert: ActivityAlert = {
     type: 'budget_threshold',
     dedupeKey: `budget-80:${period}`,

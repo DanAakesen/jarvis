@@ -1,5 +1,22 @@
 # Decisions
 
+## Azure budget warning deduplication follows recurring months (#1238; 23 October 2026)
+
+- The ARM budget's `timeGrain: Monthly` defines recurring calendar-month periods;
+  `timePeriod.startDate` remains its activation date and is not reused as each
+  month's warning key. Use the current UTC `YYYY-MM` for the 80% activity key.
+- Keep the existing `budget-80:YYYY-MM` format so an October 2026 warning written
+  with the old logic remains the October warning; November and later months create
+  distinct rows without rewriting alert history. SQL's unique alert-key index keeps
+  polling, restarts, concurrent checks and dismissal from creating another row for
+  the same month.
+- Reject unsupported budget grains and invalid or future activation dates instead
+  of reporting a successful threshold check. The budget amount, resource, threshold,
+  polling, ARM permissions and infrastructure are unchanged.
+- **Evidence:** Azure [budget tutorial](https://learn.microsoft.com/en-us/azure/cost-management-billing/costs/tutorial-acm-create-budgets);
+  deterministic unit tests and isolated SQL integration coverage. Live Azure
+  polling and a future-month production warning have not been verified.
+
 ## Shared conversational task writes and versioned note replacement (23 October 2026; #1236)
 
 Use the existing vault task parser and marker-preserving edits in one service
