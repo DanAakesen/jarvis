@@ -22,6 +22,7 @@ import type { OwnerInteractionService } from '../core/owner-interactions.js';
 import { WorkspaceCommandBroker } from '../core/workspace-commands.js';
 import type { Settings } from '../core/settings.js';
 import type { WorkspaceCommand } from '@jarvis/contracts';
+import { executeRealtimeToolCall } from '../voice/realtime.js';
 
 const sha = (character: string) => character.repeat(40);
 const signal = () => new AbortController().signal;
@@ -371,8 +372,98 @@ describe('GitHub vault', () => {
     expect(indexStore.entry('General/old.md')).toBeUndefined();
     expect(indexStore.entry('General/new.md')).toBeDefined();
     expect(module.tools.map(({ name }) => name)).toEqual([
+      'vault_task_create', 'vault_task_complete', 'vault_task_edit',
       'vault_search', 'show_knowledge', 'vault_read', 'vault_write', 'vault_delete',
     ]);
+  });
+
+  it.each(['chat', 'voice'] as const)('dispatches safe task writes through the shared %s registry', async (channel) => {
+    const path = 'Personal/Inbox.md';
+    const original = '# Tasks\r\n\r\n- [ ] Read a book 🔁 every week 🆔 abc\r\nKeep this line.\r\n';
+    const { module, github } = moduleFor({
+      source: 'Add a task, complete it, reopen it, and reschedule my task.',
+      remote: { [path]: { sha: sha('a'), content: original } },
+    });
+    const app = buildApp(apiConfig, undefined, {
+      modules: [coreModule, module],
+      auth: async () => ({
+        objectId: apiConfig.auth.ownerObjectId, tenantId: apiConfig.auth.tenantId, displayName: 'Dan',
+      }),
+      toolCallStore: { record: async () => {} },
+    });
+    apiApps.push(app);
+    app.post<{ Body: { name: string; input: unknown } }>('/test/task-voice', async (req) => {
+      req.jarvisMemorySourceMessageId = '42';
+      return JSON.parse(await executeRealtimeToolCall({
+        type: 'response.function_call_arguments.done', name: req.body.name,
+        call_id: 'synthetic-task-call', arguments: JSON.stringify(req.body.input),
+      }, app.jarvisTools, req, signal(), undefined, false)) as unknown;
+    });
+    const dispatch = async (name: string, input: unknown) => {
+      const result = await app.inject({
+        method: 'POST', url: channel === 'chat' ? `/tools/${name}` : '/test/task-voice',
+        headers: { ...apiAuthorization, ...(channel === 'chat' ? { 'x-jarvis-message-id': '42' } : {}) },
+        payload: channel === 'chat' ? input : { name, input },
+      });
+      expect(result.statusCode, result.body).toBe(200);
+      return result.json() as { outcome: string; result: Record<string, unknown> };
+    };
+    const identity = (result: Record<string, unknown>) => ({
+      path: result.path, line: result.line, text: result.text, version: result.version,
+    });
+    for (const scope of ['personal', 'work']) {
+      const added = await dispatch('vault_task_create', {
+        text: 'Buy a book', scope, due: '2026-10-25', time: '10:30',
+      });
+      expect(added.outcome).toBe('ok');
+      expect(added.result).toMatchObject({
+        path: `${scope === 'work' ? 'Work' : 'Personal'}/Inbox.md`,
+        text: 'Buy a book', done: false, dueDate: '2026-10-25', dueTime: '10:30',
+        commit: expect.stringMatching(/^[a-f0-9]{40}$/u), version: expect.stringMatching(/^[a-f0-9]{64}$/u),
+      });
+      const completed = await dispatch('vault_task_complete', { ...identity(added.result), done: true });
+      expect(completed).toMatchObject({ outcome: 'ok', result: { done: true } });
+      const stale = await dispatch('vault_task_complete', { ...identity(added.result), done: false });
+      expect(stale.outcome).toBe('refused');
+      const reopened = await dispatch('vault_task_complete', { ...identity(completed.result), done: false });
+      expect(reopened).toMatchObject({ outcome: 'ok', result: { done: false } });
+      const edited = await dispatch('vault_task_edit', {
+        ...identity(reopened.result), newText: 'Buy two books', due: '2026-10-26', time: '11:45', priority: 'high',
+      });
+      expect(edited).toMatchObject({
+        outcome: 'ok', result: { text: 'Buy two books', dueDate: '2026-10-26', dueTime: '11:45', priority: 'high' },
+      });
+    }
+    expect(github.files.get(path)?.content.startsWith(original)).toBe(true);
+    expect([...github.files.keys()].some((entry) => entry.startsWith('Factory/'))).toBe(false);
+    for (const [name, input] of [
+      ['vault_task_complete', { text: 'Buy a book', done: true }],
+      ['vault_task_create', { text: 'Read a book', scope: 'factory' }],
+      ['vault_task_create', { text: 'Read a book', scope: 'personal', time: '12:00' }],
+      ['vault_task_create', { text: 'Read a book', scope: 'personal', due: '2026-02-30' }],
+      ['vault_task_create', { text: 'Read a book', scope: 'personal', extra: true }],
+      ['vault_task_complete', { path, line: '3', text: 'Read a book', version: 'a'.repeat(64), done: true }],
+      ['vault_task_complete', { path: 'Factory/tasks.md', line: 1, text: 'Read a book', version: 'a'.repeat(64), done: true }],
+    ] as const) {
+      const writes = github.calls.filter(({ method }) => method === 'PUT').length;
+      expect((await dispatch(name, input)).outcome).toBe('refused');
+      expect(github.calls.filter(({ method }) => method === 'PUT')).toHaveLength(writes);
+    }
+  });
+
+  it('requires owner authorization and a stored source for task tools', async () => {
+    const { module, github } = moduleFor();
+    const create = tool(module, 'vault_task_create');
+    const input = { text: 'Read a book', scope: 'personal' };
+    const server = { ownerObjectId: 'dan' };
+    await expect(create.execute(input, { principal: null, agentPrincipal: null, server } as unknown as FastifyRequest, signal()))
+      .rejects.toThrow('owner-only');
+    await expect(create.execute(input, { ...request, principal: { objectId: 'someone-else' }, server } as unknown as FastifyRequest, signal()))
+      .rejects.toThrow('owner-only');
+    await expect(create.execute(input, { ...request, headers: {}, server } as unknown as FastifyRequest, signal()))
+      .rejects.toThrow('stored Dan message');
+    expect(github.calls.some(({ method }) => method === 'PUT')).toBe(false);
+    expect(create.denyOnPhone).toBe(true);
   });
 
   it('returns bounded, redacted vault tasks through the sensitive read-only tasks kind of vault_search', async () => {
@@ -1758,7 +1849,7 @@ describe('GitHub vault', () => {
     )).resolves.toMatchObject({ path: '.github/agent-state/routing.md' });
   });
 
-  it('retries one Contents SHA conflict and reports the committed link', async () => {
+  it('rebases an append once after a confirmed Contents SHA conflict', async () => {
     const remote = {
       'AGENTS.md': { sha: sha('a'), content: '# Routing\nPeople/ Work/ Personal/ General/' },
       '.github/agent-state/routing.md': { sha: sha('b'), content: 'Route notes to People/, Work/, Personal/ or General/.' },
@@ -1770,7 +1861,7 @@ describe('GitHub vault', () => {
     const { github, module, tokenIssuer } = moduleFor({ remote, conflicts: 1 });
     const result = await tool(module, 'vault_write').execute({
       path: 'General/decision.md',
-      content: '# Decision\n\nUse TypeScript.',
+      append: 'Use TypeScript.',
       reason: 'capture confirmed decision',
       automaticCapture: true,
     }, request, signal()) as { path: string; commit: string; confirmation: string };
@@ -1783,7 +1874,7 @@ describe('GitHub vault', () => {
       branch: 'master',
       message: 'jarvis: capture confirmed decision\n\nCo-authored-by: Jarvis',
     });
-    expect(Buffer.from(String(writes[1]?.body?.content), 'base64').toString()).toBe('# Decision\n\nUse TypeScript.');
+    expect(Buffer.from(String(writes[1]?.body?.content), 'base64').toString()).toBe('The note changed concurrently.\nUse TypeScript.');
     expect(result).toEqual({
       path: 'General/decision.md',
       commit: sha('f'),
@@ -1791,8 +1882,64 @@ describe('GitHub vault', () => {
       confirmation: `Saved to vault: General/decision.md — https://github.com/DanAakesen/vault/commit/${sha('f')}`,
     });
     expect(tokenIssuer.issueForContentsWrite).toHaveBeenCalledOnce();
-    expect(github.calls.filter(({ url }) => new URL(url).pathname === `/repos/${VAULT_REPOSITORY}/git/trees/${VAULT_BRANCH}`))
-      .toHaveLength(0);
+  });
+
+  it('requires the version read before replacing an existing note, even before the first write', async () => {
+    const path = 'General/decision.md';
+    const { github, module } = moduleFor({
+      remote: { [path]: { sha: sha('a'), content: 'Original.' } },
+    });
+    const read = await tool(module, 'vault_read').execute({ path }, request, signal()) as { sha: string };
+    expect(read.sha).toBe(sha('a'));
+    const input = { path, content: 'Use TypeScript.', reason: 'requested edit', automaticCapture: false };
+    await expect(tool(module, 'vault_write').execute(input, request, signal()))
+      .rejects.toThrow('Reread with vault_read');
+    github.set(path, { sha: sha('b'), content: 'Obsidian edit.' });
+    await expect(tool(module, 'vault_write').execute({ ...input, expectedSha: read.sha }, request, signal()))
+      .rejects.toThrow('Reread with vault_read');
+    expect(github.calls.filter(({ method }) => method === 'PUT')).toHaveLength(0);
+    expect(github.files.get(path)?.content).toBe('Obsidian edit.');
+    await expect(tool(module, 'vault_write').execute({ ...input, expectedSha: sha('b') }, request, signal()))
+      .resolves.toMatchObject({ path, commit: sha('f') });
+  });
+
+  it('never refreshes the SHA and retries a replacement after a concurrent edit', async () => {
+    const path = 'General/decision.md';
+    const { github, module } = moduleFor({
+      remote: { [path]: { sha: sha('a'), content: 'Original.' } }, conflicts: 1,
+    });
+    await expect(tool(module, 'vault_write').execute({
+      path, content: 'Use TypeScript.', expectedSha: sha('a'),
+      reason: 'requested edit', automaticCapture: false,
+    }, request, signal())).rejects.toThrow('Reread with vault_read');
+    expect(github.calls.filter(({ method }) => method === 'PUT')).toHaveLength(1);
+    expect(github.files.get(path)?.content).toBe('The note changed concurrently.');
+  });
+
+  it('does not turn a raced creation into replacement of another writer’s note', async () => {
+    const path = 'General/decision.md';
+    const { github, module } = moduleFor({ conflicts: 1 });
+    await expect(tool(module, 'vault_write').execute({
+      path, content: 'Use TypeScript.', reason: 'requested creation', automaticCapture: false,
+    }, request, signal())).rejects.toThrow('Reread with vault_read');
+    expect(github.calls.filter(({ method }) => method === 'PUT')).toHaveLength(1);
+    expect(github.files.get(path)?.content).toBe('The note changed concurrently.');
+  });
+
+  it.each(['content', 'append'] as const)('never retries an uncertain %s commit', async (mode) => {
+    const { github, module } = moduleFor();
+    const fetcher = github.fetcher.getMockImplementation()!;
+    github.fetcher.mockImplementation(async (input, init) => {
+      const result = await fetcher(input, init);
+      if (init?.method === 'PUT') throw new Error('Connection lost after commit');
+      return result;
+    });
+    await expect(tool(module, 'vault_write').execute({
+      path: 'General/decision.md', [mode]: 'Use TypeScript.',
+      reason: 'requested write', automaticCapture: false,
+    }, request, signal())).rejects.toThrow('Reread the note before reapplying');
+    expect(github.calls.filter(({ method }) => method === 'PUT')).toHaveLength(1);
+    expect(github.files.get('General/decision.md')?.content).toBe('Use TypeScript.');
   });
 
   it('deletes a vault note only after Now approval and removes it from the index and graph', async () => {

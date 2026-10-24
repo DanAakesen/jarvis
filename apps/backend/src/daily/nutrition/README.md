@@ -86,9 +86,21 @@ its exact callback; explicit browser-only routing prevents Teams delivery even
 if presence flips. Rejection, expiry, cancellation and changed presence refuse.
 No new proposal dispatcher, generic approval callback or model authority.
 
-The summary freezes exact before/after values, units, unknowns, dates and
-revision within 4000 characters. Concurrent pending reviews for a target
-refuse. Food cards expire after two minutes in SQL, the visible card and its
+The Now summary is field-oriented: corrections show changed before/after values
+with meal identity and relevant unchanged totals/portion context; estimates and
+deletions show the complete review projection, including components, units,
+source attribution and uncertainty. Unknown nutrients are labelled unknown,
+not zero. Unchanged component provenance is not repeated for a name-only
+correction. The complete summary must fit the existing 4000-character Now
+limit; it is never truncated. An oversized review refuses before staging or
+writing and asks for shorter changed labels/uncertainties. A name-only
+correction can be retried with just the replacement meal name; the existing
+meal need not be split.
+
+This display is not the proposal: the exact canonical write, source/proposal
+fingerprints, owner/session binding, expected revision, one-time browser
+approval, expiry, cancellation, idempotency and commit receipt remain bound to
+the existing flow. Concurrent pending reviews for a target refuse. Food cards expire after two minutes in SQL, the visible card and its
 timer; the whole operation is bounded to three minutes from execution entry.
 The hosted agent allows 210 seconds for this tool's response only, below the
 240-second ingress ceiling. Existing approvals retain their default five
