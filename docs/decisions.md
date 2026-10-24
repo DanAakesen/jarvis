@@ -10,6 +10,11 @@
   the owner-bound `ProactiveStore.settings`; only persisted, read-back values
   may be confirmed. Unsupported or ambiguous wishes are not stored as enforceable
   preferences.
+- Settings and chat/voice share the explicit-first preference resolver. For
+  non-canonical wording, only a single target among existing capabilities can be
+  proposed to the bounded preference interpreter; the interpreter must approve
+  the exact candidate change. This keeps natural phrasing flexible without
+  allowing source/budget edits, unsupported topics or multiple changes.
 - Guard Settings writes with a revision of the full existing settings record.
   Preserve budget, cadence, quiet hours, sources, feeds, guidance, authorization
   and other advanced values when changing a preference; a stale write reports a

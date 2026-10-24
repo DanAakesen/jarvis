@@ -7016,8 +7016,13 @@ The shared preference capability source supplies supported examples and plain
 language descriptions to both Settings and the `proactive_preferences` tool.
 The tool can return that help, read current enforced preferences, or update a
 supported pause, category or scope preference. Settings and chat/voice use the
-same intent mapping and owner-scoped `ProactiveStore.settings`; examples are not
-advertised unless the corresponding behavior is implemented. A write must match
+same `resolveProactivePreferenceIntent` resolver and owner-scoped
+`ProactiveStore.settings`. For non-canonical Settings wording, a bounded target
+candidate is derived only from existing supported scope/category/pause terms;
+the existing preference-specific interpreter must then approve that exact
+candidate and direction. Multiple candidate targets, uncertain wording and
+unsupported topics fail closed without a write. Examples are not advertised
+unless the corresponding behavior is implemented. A write must match
 the latest direct owner message; findings, source text, and per-item feedback
 cannot authorize it. Chat and voice guidance mentions the capability only when
 it is present in the active advertised tool set. Free-text wishes outside the
@@ -7026,7 +7031,7 @@ supported behavior are refused rather than saved as enforceable settings.
 The 23 October 2026 follow-up retains canonical intent matching and uses the
 existing server-side approval interpreter for other natural Danish/English
 instructions. Settings and chat/voice share the same bounded explicit intent
-parser, including supported private/personal-scope paraphrases. Its
+resolver and semantic verifier, not separate phrase-level acceptance rules. Its
 `proactive_preferences` family has a separate instruction
 prompt: independently interpret the verified owner message and compare it with
 the exact server-generated candidate category/direction or scope. Bare approval

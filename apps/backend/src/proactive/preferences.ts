@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { safeDecision, type ApprovalDecider } from '../core/approval-interpreter.js';
 import {
   findingCategories, sourceIds, type FindingCategory, type ProactiveSettings, type SuggestionScopePreference,
 } from './types.js';
@@ -100,6 +101,77 @@ export function explicitProactivePreferenceIntent(text: string): ProactivePrefer
               : /^(?:weather|vejr)$/u.test(value) ? 'weather' : 'status';
   const enabled = /^(?:enable|re-enable|turn on|show|start showing|aktiver|aktivér|slå til|vis)$/u.test(matchedVerb);
   return { category, enabled };
+}
+
+function words(text: string): Set<string> {
+  return new Set(text.normalize('NFC').toLocaleLowerCase().match(/[\p{L}\p{N}]+/gu) ?? []);
+}
+
+/** Returns bounded candidate changes for semantic verification, never an inferred change by itself. */
+export function proactivePreferenceCandidates(text: string): ProactivePreferenceIntent[] {
+  const tokens = words(text);
+  const groups: ProactivePreferenceIntent[][] = [];
+  const personal = ['personal', 'private', 'personlig', 'personlige', 'privat', 'privatliv']
+    .some((token) => tokens.has(token));
+  const work = ['work', 'arbejde', 'arbejdsrelateret', 'arbejdsrelaterede']
+    .some((token) => tokens.has(token));
+  const all = /\b(?:all|both|alle|begge)\b(?:\s+\w+){0,3}\s+\b(?:suggestions?|forslag)\b/iu.test(text);
+  if (Number(personal) + Number(work) + Number(all) === 1) {
+    groups.push([{ suggestionScope: personal ? 'personal' : work ? 'work' : 'all' }]);
+  }
+
+  const categoryTerms: readonly [FindingCategory, readonly string[]][] = [
+    ['deadline', ['deadline', 'deadlines', 'frist', 'frister']],
+    ['clash', ['clash', 'clashes', 'conflict', 'conflicts', 'kalenderkonflikt', 'kalenderkonflikter']],
+    ['travel', ['travel', 'trip', 'trips', 'journey', 'rejse', 'rejser', 'rejseforslag']],
+    ['todo', ['todo', 'task', 'tasks', 'opgave', 'opgaver']],
+    ['prep', ['preparation', 'prep', 'forberedelse', 'forberedelser']],
+    ['news', ['news', 'nyhed', 'nyheder']],
+    ['weather', ['weather', 'vejr', 'vejret']],
+    ['status', ['status']],
+  ];
+  for (const [category, terms] of categoryTerms) {
+    if (terms.some((term) => tokens.has(term))) {
+      groups.push([{ category, enabled: false }, { category, enabled: true }]);
+    }
+  }
+
+  const proactiveContext = ['proactive', 'proactivity', 'automatic', 'automatically', 'suggestion',
+    'suggestions', 'nudge', 'nudges', 'forslag', 'proaktiv', 'proaktive', 'automatisk', 'automatiske']
+    .some((token) => tokens.has(token));
+  const pauseLanguage = ['pause', 'stop', 'disable', 'turn', 'off', 'resume', 'enable', 'hold',
+    'pause', 'slå', 'fra', 'til', 'genoptag', 'sæt', 'stoppe', 'forslag']
+    .some((token) => tokens.has(token));
+  if (groups.length === 0 && proactiveContext && pauseLanguage) {
+    groups.push([{ paused: true }, { paused: false }]);
+  }
+
+  return groups.length === 1 ? groups[0]! : [];
+}
+
+export async function resolveProactivePreferenceIntent(
+  text: string,
+  candidates: readonly ProactivePreferenceIntent[],
+  decide: ApprovalDecider,
+  context: { messageId: string; sessionId?: string },
+  signal: AbortSignal,
+): Promise<ProactivePreferenceIntent | undefined> {
+  const explicit = explicitProactivePreferenceIntent(text);
+  if (explicit) {
+    return candidates.some((candidate) => JSON.stringify(candidate) === JSON.stringify(explicit)) ? explicit : undefined;
+  }
+  for (const intent of candidates) {
+    if (signal.aborted) return undefined;
+    const verdict = await safeDecision(decide, {
+      family: 'proactive_preferences',
+      ...context,
+      reply: text,
+      summary: JSON.stringify(intent),
+    }, signal);
+    if (signal.aborted) return undefined;
+    if (verdict === 'approve') return intent;
+  }
+  return undefined;
 }
 
 export function patchForProactivePreference(intent: ProactivePreferenceIntent): ProactiveSettingsPatch {

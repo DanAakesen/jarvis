@@ -397,6 +397,9 @@ describe('proactive_recent_items tool', () => {
       ['Jeg vil kun have personlige forslag', { suggestionScope: 'personal' }],
       ['Jeg vil gerne have, at du kun foreslår private ting fremover.', { suggestionScope: 'personal' }],
       ['I would like you to only suggest personal things going forward.', { suggestionScope: 'personal' }],
+      ['Det ville være rart at holde forslagene til det personlige fremover.', { suggestionScope: 'personal' }],
+      ['Could we put my proactive nudges on hold for a while?', { paused: true }],
+      ['I would rather not receive more travel alerts after all.', { category: 'travel', enabled: false }],
       ['Vil du være sød at holde op med at foreslå rejser?', { category: 'travel', enabled: false }],
       ['Rejseforslag vil jeg gerne have igen, tak.', { category: 'travel', enabled: true }],
       ['Kan du slå vejrforslagene til igen, tak?', { category: 'weather', enabled: true }],
@@ -515,6 +518,28 @@ describe('proactive_recent_items tool', () => {
       if ('suggestionScope' in intent) expect(settings.suggestionScope).toBe(intent.suggestionScope);
       if ('paused' in intent) expect(settings.paused).toBe(intent.paused);
       expect(patch).toHaveBeenCalledTimes(2);
+    });
+
+    it.each([
+      ['Det ville være rart at holde forslagene til det personlige fremover.', { suggestionScope: 'personal' }],
+      ['Could we put my proactive nudges on hold for a while?', { paused: true }],
+      ['I would rather not receive more travel alerts after all.', { category: 'travel', enabled: false }],
+    ] as const)('uses semantic interpretation for an ordinary-language request: %s', async (text, intent) => {
+      const model: ApprovalModelPort = vi.fn(async (prompt) => {
+        const reply = /\nREPLY-([0-9a-f]{16}) \(Dan's own words\)\n([\s\S]*?)\nEND-REPLY-\1$/u.exec(prompt.user)?.[2];
+        const entry = requests.find(([candidate]) => reply === candidate);
+        const expected = entry?.[1];
+        const matches = expected && prompt.user.includes(`\n${JSON.stringify(expected)}\n`);
+        return JSON.stringify({ verdict: matches ? 'approve' : 'neither', confidence: 0.99 });
+      });
+      const { dispatch } = fixture(model);
+      const input = { operation: 'update', ...('category' in intent
+        ? { categories: { [intent.category]: intent.enabled } } : intent) };
+
+      await expect(dispatch(text, input)).resolves.toMatchObject({
+        outcome: 'ok', result: { saved: true },
+      });
+      expect(model).toHaveBeenCalled();
     });
 
     it.each([

@@ -1,6 +1,6 @@
 import type { FastifyRequest } from 'fastify';
 import type { BackendModule } from '../modules.js';
-import { approvalDeciderFor, safeDecision } from '../core/approval-interpreter.js';
+import { approvalDeciderFor } from '../core/approval-interpreter.js';
 import { ToolFailure, ToolRefusal, type JarvisTool } from '../core/tool-registry.js';
 import type { ProactiveStore } from './store.js';
 import { createItemFeedbackCapability } from './feedback-tool.js';
@@ -8,8 +8,8 @@ import { findingCategories, type Item } from './types.js';
 import type { createGitHubVaultClient } from '../vault/github-client.js';
 import type { OwnerReminderStore } from './owner-reminder-store.js';
 import {
-  explicitProactivePreferenceIntent, patchForProactivePreference, proactivePreferenceHelp,
-  understoodProactivePreferences, ProactiveSettingsConflictError,
+  patchForProactivePreference, proactivePreferenceHelp,
+  resolveProactivePreferenceIntent, understoodProactivePreferences, ProactiveSettingsConflictError,
   type ProactivePreferenceIntent,
 } from './preferences.js';
 import { proactiveSettingsRevision } from './preferences.js';
@@ -230,17 +230,13 @@ function preferencesTool(store: ProactiveStore, ownerObjectId: string): JarvisTo
       }
 
       const message = await currentOwnerMessage(request, ownerObjectId, signal);
-      let intent = explicitProactivePreferenceIntent(message.text);
-      if (!intent) {
-        const verdict = await safeDecision(approvalDeciderFor(request), {
-          family: 'proactive_preferences',
-          messageId: message.id ?? '',
-          ...(message.sessionId ? { sessionId: message.sessionId } : {}),
-          reply: message.text,
-          summary: JSON.stringify(input.intent),
-        }, signal);
-        if (verdict === 'approve') intent = input.intent;
-      }
+      const intent = await resolveProactivePreferenceIntent(
+        message.text,
+        [input.intent],
+        approvalDeciderFor(request),
+        { messageId: message.id ?? '', ...(message.sessionId ? { sessionId: message.sessionId } : {}) },
+        signal,
+      );
       if (!intent) {
         throw new ToolRefusal('Which proactive suggestion category or scope should I change, or should I pause or resume suggestions? Nothing was changed.');
       }

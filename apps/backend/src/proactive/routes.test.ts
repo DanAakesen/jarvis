@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { installAuthentication } from '../auth/hook.js';
 import { loadConfig } from '../config.js';
 import type { TokenVerifier, UserPrincipal } from '../auth/verify.js';
+import type { ApprovalInterpreter } from '../core/approval-interpreter.js';
 import { createMemoryProactiveStore, DEFAULT_NEWS_FEEDS } from './store.js';
 import { registerProactiveRoutes, type ProactiveRouteOptions } from './routes.js';
 import { registerProactive } from './composition.js';
@@ -24,12 +25,14 @@ const apps: ReturnType<typeof Fastify>[] = [];
 
 async function appFixture(
   clock: () => Date = () => new Date('2026-10-20T05:00:00.000Z'),
-  callbacks: Pick<ProactiveRouteOptions, 'run' | 'worstCaseDkk'> = {},
+  callbacks: Pick<ProactiveRouteOptions, 'run' | 'worstCaseDkk'> & { approvalInterpreter?: ApprovalInterpreter } = {},
 ) {
+  const { approvalInterpreter, ...routeCallbacks } = callbacks;
   const store = createMemoryProactiveStore(owner);
   const app = Fastify({ logger: false });
   apps.push(app);
   installAuthentication(app, loadConfig({ ENTRA_OWNER_OBJECT_ID: owner }), tokenVerifier);
+  if (approvalInterpreter) app.decorate('approvalInterpreter', approvalInterpreter);
   registerProactiveRoutes(app, {
     store,
     ownerObjectId: owner,
@@ -39,7 +42,7 @@ async function appFixture(
     databaseAvailable: true,
     registerItemDetail: true,
     now: () => new Date(clock()),
-    ...callbacks,
+    ...routeCallbacks,
   });
   await app.ready();
   return { app, store };
@@ -155,6 +158,7 @@ describe('proactive routes', () => {
         headers: { authorization },
         payload: { instruction, expectedRevision: currentRevision },
       });
+
       expect(changed.statusCode).toBe(200);
       expect(changed.json()).toMatchObject({
         suggestionScope: 'personal',
@@ -192,6 +196,94 @@ describe('proactive routes', () => {
     });
     expect(unsupported.statusCode).toBe(422);
     expect(unsupported.json()).toEqual({ error: 'unsupported_preference' });
+  });
+
+  it('uses bounded semantic preference verification for varied EN/DA Settings instructions', async () => {
+    const questions: { reply: string; summary: string }[] = [];
+    const interpreter: ApprovalInterpreter = async (question) => {
+      questions.push({ reply: question.reply, summary: question.summary });
+      const accepted = question.summary === JSON.stringify({ suggestionScope: 'personal' }) &&
+        question.reply === 'Det ville være rart at holde forslagene til det personlige fremover.' ||
+        question.summary === JSON.stringify({ paused: true }) &&
+        question.reply === 'Could we put my proactive nudges on hold for a while?' ||
+        question.summary === JSON.stringify({ category: 'travel', enabled: false }) &&
+        question.reply === 'I would rather not receive more travel alerts after all.';
+      return { verdict: accepted ? 'approve' : 'neither', path: 'model' };
+    };
+    const { app, store } = await appFixture(undefined, { approvalInterpreter: interpreter });
+    const patch = vi.spyOn(store.settings, 'patch');
+    let expectedRevision = (await app.inject({
+      method: 'GET', url: '/proactive/settings', headers: { authorization },
+    })).json().revision as string;
+    const cases = [
+      ['Det ville være rart at holde forslagene til det personlige fremover.', { suggestionScope: 'personal' }],
+      ['Could we put my proactive nudges on hold for a while?', { paused: true }],
+      ['I would rather not receive more travel alerts after all.',
+        { categories: expect.arrayContaining([{ id: 'travel', enabled: false }]) }],
+    ] as const;
+
+    for (const [instruction, expected] of cases) {
+      const response = await app.inject({
+        method: 'PATCH',
+        url: '/proactive/settings',
+        headers: { authorization },
+        payload: { instruction, expectedRevision },
+      });
+      expect(response.statusCode, `${instruction}: ${response.body}`).toBe(200);
+      expect(response.json()).toMatchObject(expected);
+      expectedRevision = response.json().revision as string;
+    }
+
+    expect(questions.map(({ reply }) => reply)).toEqual(cases.map(([instruction]) => instruction));
+    expect(patch).toHaveBeenCalledTimes(3);
+  });
+
+  it.each([
+    'I want private travel suggestions.',
+    'I want more health suggestions.',
+    'I want more suggestions.',
+  ])('refuses ambiguous or unsupported semantic Settings instructions without writing: %s', async (instruction) => {
+    const interpreter: ApprovalInterpreter = vi.fn(async () => ({ verdict: 'approve', path: 'model' }));
+    const { app, store } = await appFixture(undefined, { approvalInterpreter: interpreter });
+    const patch = vi.spyOn(store.settings, 'patch');
+    const revision = (await app.inject({
+      method: 'GET', url: '/proactive/settings', headers: { authorization },
+    })).json().revision as string;
+
+    const response = await app.inject({
+      method: 'PATCH',
+      url: '/proactive/settings',
+      headers: { authorization },
+      payload: { instruction, expectedRevision: revision },
+    });
+
+    expect(response.statusCode).toBe(422);
+    expect(response.json()).toEqual({ error: 'unsupported_preference' });
+    expect(interpreter).not.toHaveBeenCalled();
+    expect(patch).not.toHaveBeenCalled();
+  });
+
+  it('does not write when semantic interpretation finds an uncertain direction', async () => {
+    const interpreter: ApprovalInterpreter = vi.fn(async () => ({ verdict: 'neither', path: 'model' }));
+    const { app, store } = await appFixture(undefined, { approvalInterpreter: interpreter });
+    const patch = vi.spyOn(store.settings, 'patch');
+    const revision = (await app.inject({
+      method: 'GET', url: '/proactive/settings', headers: { authorization },
+    })).json().revision as string;
+
+    const response = await app.inject({
+      method: 'PATCH',
+      url: '/proactive/settings',
+      headers: { authorization },
+      payload: {
+        instruction: 'Maybe I should have fewer travel updates, but I am not sure.',
+        expectedRevision: revision,
+      },
+    });
+
+    expect(response.statusCode).toBe(422);
+    expect(interpreter).toHaveBeenCalled();
+    expect(patch).not.toHaveBeenCalled();
   });
 
   it('returns status with no runs and reports sources in contract order', async () => {
