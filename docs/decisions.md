@@ -8076,6 +8076,30 @@ page's query keeps both views consistent and avoids creating a second read model
 
 ## Conversational proactive suggestion preferences (#1207)
 
+### Natural owner instructions (23 October 2026 follow-up)
+
+Reuse the bounded, tools-free approval meaning interpreter with a distinct
+preference-instruction family rather than expanding command regexes indefinitely.
+Keep canonical requests deterministic; interpret other Danish/English owner
+instructions independently against the exact candidate category/direction or
+scope. Bare agreement is not an instruction. Negative preferences, including
+“I do not want travel suggestions” without “anymore”, explicitly request a
+disable. Disclaimed authorization such as “do not change my preferences” takes
+precedence, including alongside a preference. Quoted/source text, hypothetical,
+conditional or ambiguous wording must not authorize writes. Negating an action
+such as “do not disable” requests neither a disable nor an enable.
+Recheck the current owner message after interpretation and fail closed on
+uncertainty, cancellation or unavailable model service.
+For voice, re-read persisted owner text and active session and verify the live
+source marker instead of comparing only the original request snapshot; a pending,
+revised or superseding transcript invalidates the write.
+
+Persistence, enforcement, defaults and reversal remain unchanged. Rolling back
+this follow-up restores canonical-only conversation wording without changing
+saved preferences or the Settings API. Synthetic dispatch/model-port tests are
+not evidence of live model comprehension or live voice-provider acceptance;
+those still require owner verification. No live preference change is authorized.
+
 Use the existing owner-scoped Proactive settings record and API for category and
 personal/work preferences; Settings, chat and voice must observe one durable
 state. Defaults preserve existing behavior: every category enabled and scope

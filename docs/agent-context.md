@@ -477,6 +477,52 @@ proactive generation/delivery only, not explicit owner tasks. Re-enabling does
 not alter pause, sources, budget or unrelated settings. Existing findings,
 todos and reminders are not deleted.
 
+The 23 October follow-up uses the existing bounded approval model for natural
+Danish/English preference instructions, with its own exact-change verification
+prompt and no approval-word shortcut. Without a configured model, canonical
+requests still work; other wording refuses with a focused clarification.
+Cancellation and current-message provenance are checked again before saving.
+No new configuration, migration or tool-budget change is needed. Reverting the
+follow-up preserves saved settings and restores canonical-only wording.
+Add `src/core/approval-interpreter.test.ts` to the focused checks below.
+Synthetic model-port tests verify dispatch and safeguards, not live language
+accuracy; live chat/voice acceptance remains owner verification.
+
+23 October follow-up local results:
+`npm test --workspace @jarvis/backend -- --run src/proactive/tools.test.ts src/core/approval-interpreter.test.ts`
+passed 199 tests. `npm test --workspaces` passed: contracts 174, web 2,262,
+backend 6,272 (one skipped), vault-mirror 237. Backend build and lint passed.
+The isolated SQL command below stopped before running tests because no loopback
+SQL Server test configuration was available. Secret scanning found no secrets;
+independent review found no blocking issues. Automated review was unavailable
+(missing binary), and CodeQL skipped analysis because its database was too large.
+No live preferences, provider sessions or deployments were exercised.
+
+24 October same-branch integration (Refs #1207): merged main `33f0ab9` with
+both task/stale-write protections (#1244) and food-review behavior (#1235)
+unchanged, preserving their documentation. Negative preferences such as
+“I do not want travel suggestions” explicitly disable that category;
+“do not change my preferences” disclaims authorization even alongside a preference.
+Voice preference writes also verify the live transcript source marker and
+persisted owner text/session; superseding, revised or pending transcripts refuse
+rather than relying on the original tool-call snapshot.
+Focused integrated backend checks passed 485 tests. All workspace builds and
+lint passed. With the existing CI SQL Server image in a disposable loopback-only
+container, `npm run test:database --workspace @jarvis/backend` passed all 278
+tests; the container was removed afterward.
+The first aggregate web run had one unchanged contrast-audit timeout (15 seconds);
+its isolated rerun passed all seven tests without changing its timeout or source.
+The same contended run also reported a Health upload admission test failure.
+Final aggregate reruns and exact-head CI must be reported separately from the
+23 October results above; they are not implied by those earlier green checks.
+
+Coordination: #1246/#1247 are merged into main and included in this integration.
+This preference follow-up adds no SQL schema/store edit, catalogue member or cap.
+The combined tree preserves the preference guard, feedback grounding, conditional
+SQL writes, optional reminder registration and all four advertised proactive
+tools. Fresh CI must qualify this integrated head. No #1249 or #1241 work is imported.
+Live speech/model comprehension and owner acceptance remain unverified.
+
 ## Owner-requested reminders (#1239)
 
 Explicit reminders are runtime-only owner requests, separate from automatic

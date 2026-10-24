@@ -1,5 +1,6 @@
 import type { FastifyRequest } from 'fastify';
 import type { BackendModule } from '../modules.js';
+import { approvalDeciderFor, safeDecision } from '../core/approval-interpreter.js';
 import { ToolFailure, ToolRefusal, type JarvisTool } from '../core/tool-registry.js';
 import type { ProactiveStore } from './store.js';
 import { createItemFeedbackCapability } from './feedback-tool.js';
@@ -164,11 +165,29 @@ function parsePreferenceInput(value: unknown):
     ? { operation: 'update', intent: { category, enabled } } : undefined;
 }
 
-async function currentOwnerMessage(request: FastifyRequest, ownerObjectId: string, signal: AbortSignal): Promise<string> {
+async function currentOwnerMessage(request: FastifyRequest, ownerObjectId: string, signal: AbortSignal): Promise<{
+  text: string; id?: string; sessionId?: string;
+}> {
   const direct = request.jarvisConversationMessage;
   if (direct?.role === 'dan' &&
       (request.principal?.objectId.toLowerCase() === ownerObjectId.toLowerCase() || request.agentPrincipal)) {
-    return direct.text;
+    if (direct.id) {
+      const store = request.server.conversationStore;
+      if (request.jarvisMemorySourceMessageId !== direct.id || !store) {
+        throw new ToolRefusal('The current owner request could not be verified. Nothing was changed.');
+      }
+      const page = await store.getHistory({ limit: 20 });
+      signal.throwIfAborted();
+      const latest = page.messages.filter((message) => message.role === 'dan').at(-1);
+      const session = await store.getSession(direct.sessionId);
+      signal.throwIfAborted();
+      if (!latest || latest.id !== direct.id || latest.sessionId !== direct.sessionId ||
+          latest.text !== direct.text || request.jarvisMemorySourceMessageId !== direct.id ||
+          !session || session.endedAt !== null || session.channel === 'phone') {
+        throw new ToolRefusal('The current owner request changed. Nothing was changed.');
+      }
+    }
+    return { text: direct.text, id: direct.id, sessionId: direct.sessionId };
   }
   const id = request.jarvisMemorySourceMessageId ?? request.headers['x-jarvis-message-id'];
   if (!request.agentPrincipal || typeof id !== 'string' || !/^[1-9]\d{0,18}$/u.test(id) ||
@@ -186,7 +205,7 @@ async function currentOwnerMessage(request: FastifyRequest, ownerObjectId: strin
   if (!session || session.endedAt !== null || session.channel === 'phone') {
     throw new ToolRefusal('An active chat or voice request is required. Nothing was changed.');
   }
-  return message.text;
+  return { text: message.text, id: message.id, sessionId: message.sessionId };
 }
 
 function preferencesTool(store: ProactiveStore, ownerObjectId: string): JarvisTool {
@@ -216,7 +235,17 @@ function preferencesTool(store: ProactiveStore, ownerObjectId: string): JarvisTo
       }
 
       const message = await currentOwnerMessage(request, ownerObjectId, signal);
-      const intent = explicitPreferenceIntent(message);
+      let intent = explicitPreferenceIntent(message.text);
+      if (!intent) {
+        const verdict = await safeDecision(approvalDeciderFor(request), {
+          family: 'proactive_preferences',
+          messageId: message.id ?? '',
+          ...(message.sessionId ? { sessionId: message.sessionId } : {}),
+          reply: message.text,
+          summary: JSON.stringify(input.intent),
+        }, signal);
+        if (verdict === 'approve') intent = input.intent;
+      }
       if (!intent) {
         throw new ToolRefusal('Which proactive suggestion category should I enable or disable, or should I show personal, work or all suggestions? Nothing was changed.');
       }
@@ -227,6 +256,12 @@ function preferencesTool(store: ProactiveStore, ownerObjectId: string): JarvisTo
       } else if (!('suggestionScope' in intent) || intent.suggestionScope !== input.intent.suggestionScope) {
         throw new ToolRefusal('The update must match your direct request for suggestion scope. Nothing was changed.');
       }
+      signal.throwIfAborted();
+      const current = await currentOwnerMessage(request, ownerObjectId, signal);
+      if (current.text !== message.text || current.id !== message.id || current.sessionId !== message.sessionId) {
+        throw new ToolRefusal('The current owner request changed. Nothing was changed.');
+      }
+      signal.throwIfAborted();
       try {
         const patch = 'category' in input.intent
           ? { categories: { [input.intent.category]: input.intent.enabled } }

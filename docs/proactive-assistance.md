@@ -29,6 +29,31 @@ provider accepting a notification is not proof that an iPhone displayed it.
 - The travel-disruption provider and key are undecided; travel remains a “no provider” placeholder until Dan chooses one.
 - **Unverified:** real-device iPhone delivery needs Dan's phone and the installed Home Screen app.
 
+## Conversational preferences (#1207; 23 October 2026 follow-up)
+
+Chat and voice share `proactive_preferences` and the existing Settings record.
+Natural Danish/English requests can disable or re-enable one suggestion
+category, or select personal, work or all suggestions. Examples:
+“Jeg vil ikke have rejseforslag længere”, “Slå vejrforslag fra”,
+“Jeg vil kun have personlige forslag”, and “Please bring back travel suggestions”.
+The server verifies the current owner message and exact requested change.
+Negative preferences such as “I do not want travel suggestions” are explicit
+disable requests, not refusals of authorization. Ambiguity, quoted/source
+instructions, hypothetical requests, disclaimed authorization (“do not change
+my preferences”), negated actions such as “do not disable”, and bare agreement
+do not authorize a save; uncertain or unavailable
+interpretation asks for clarification. Confirmation includes effective saved
+preferences and follows successful persistence only.
+
+These controls affect unsolicited output, never explicit trip/work requests.
+They do not change pause, sources, budgets, automatic-task restrictions or
+existing todos/reminders. Defaults remain all categories enabled and scope
+`all`; restricted scope excludes unknown/mixed findings. Re-enable is explicit.
+No migration is added by this wording follow-up. Reverting it retains saved
+preferences and Settings controls but restores canonical-only conversational
+wording. Local synthetic chat/voice dispatch tests do not verify live model
+understanding or a live voice-provider session; owner acceptance remains open.
+
 ## Build plan
 
 This table is the task-ID-to-issue mapping for proactive assistance and its
