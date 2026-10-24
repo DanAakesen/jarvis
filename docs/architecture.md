@@ -7034,10 +7034,13 @@ instructions. Settings and chat/voice share the same bounded explicit intent
 resolver and semantic verifier, not separate phrase-level acceptance rules. Its
 `proactive_preferences` family has a separate instruction
 prompt: independently interpret the verified owner message and compare it with
-the exact server-generated candidate category/direction or scope. Bare approval
-replies cannot authorize a preference write. Negative preferences explicitly
-request disabling their category; disclaimed authorization takes precedence even
-when accompanied by a preference. The tools-free model call shares
+the exact server-generated candidate category/direction, scope or automatic
+suggestion pause/resume. Pause/resume affects only unsolicited suggestions;
+explicitly owner-requested reminders are never cancelled or altered by this
+preference path. Source selection, access and configuration are unsupported.
+Bare approval replies cannot authorize a preference write. Negative preferences
+explicitly request disabling their category; disclaimed authorization takes
+precedence even when accompanied by a preference. The tools-free model call shares
 the existing five-second timeout, confidence threshold, bounded cache,
 concurrency/rate limits and usage accounting; no tool budget is increased.
 Missing model configuration, malformed/uncertain verdicts and interpreter

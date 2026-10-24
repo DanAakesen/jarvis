@@ -15,6 +15,9 @@
   proposed to the bounded preference interpreter; the interpreter must approve
   the exact candidate change. This keeps natural phrasing flexible without
   allowing source/budget edits, unsupported topics or multiple changes.
+- The production preference-interpreter prompt explicitly covers pause/resume
+  of automatic suggestions and keeps owner-requested reminders separate; source
+  management, ambiguity and bare agreement remain refusals.
 - Guard Settings writes with a revision of the full existing settings record.
   Preserve budget, cadence, quiet hours, sources, feeds, guidance, authorization
   and other advanced values when changing a preference; a stale write reports a

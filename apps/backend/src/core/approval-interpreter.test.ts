@@ -69,6 +69,44 @@ describe('createApprovalInterpreter', () => {
     }))).resolves.toEqual({ verdict: 'neither', path: 'fast' });
   });
 
+  it('uses the production preference prompt for pause/resume and refuses ambiguous, bare, and source requests', async () => {
+    const model = vi.fn<ApprovalModelPort>()
+      .mockResolvedValueOnce(verdictJson('approve'))
+      .mockResolvedValueOnce(verdictJson('approve'))
+      .mockResolvedValueOnce(verdictJson('neither'))
+      .mockResolvedValueOnce(verdictJson('neither'));
+    const interpret = createApprovalInterpreter({ model });
+
+    await expect(interpret(question('Sæt de automatiske forslag på pause.', {
+      family: 'proactive_preferences', summary: '{"paused":true}',
+    }))).resolves.toEqual({ verdict: 'approve', path: 'model' });
+    await expect(interpret(question('Turn automatic suggestions back on for me.', {
+      family: 'proactive_preferences', summary: '{"paused":false}',
+    }))).resolves.toEqual({ verdict: 'approve', path: 'model' });
+    await expect(interpret(question('Maybe pause them, or perhaps only make them personal?', {
+      family: 'proactive_preferences', summary: '{"paused":true}',
+    }))).resolves.toEqual({ verdict: 'neither', path: 'model' });
+    await expect(interpret(question('Please disable the travel source.', {
+      family: 'proactive_preferences', summary: '{"category":"travel","enabled":false}',
+    }))).resolves.toEqual({ verdict: 'neither', path: 'model' });
+    await expect(interpret(question('yes', {
+      family: 'proactive_preferences', summary: '{"paused":true}',
+    }))).resolves.toEqual({ verdict: 'neither', path: 'fast' });
+
+    expect(model).toHaveBeenCalledTimes(4);
+    const prompts = model.mock.calls.map(([prompt]) => prompt);
+    expect(prompts.every((prompt) => prompt.system === preferenceIntentSystemPrompt)).toBe(true);
+    expect(preferenceIntentSystemPrompt).toContain('pause/resume direction for automatic proactive suggestions');
+    expect(preferenceIntentSystemPrompt).toContain('Sæt de automatiske forslag på pause');
+    expect(preferenceIntentSystemPrompt).toContain('Turn automatic suggestions back on');
+    expect(preferenceIntentSystemPrompt).toContain('never cancel, snooze, delete or alter explicit owner-requested reminders');
+    expect(preferenceIntentSystemPrompt).toContain('Source selection, source access or source configuration is not a supported preference');
+    expect(preferenceIntentSystemPrompt).toContain('ambiguous categories or direction, multiple changes');
+    expect(preferenceIntentSystemPrompt).toContain('bare agreement such as yes/ja');
+    expect(prompts[0]!.user).toContain('{"paused":true}');
+    expect(prompts[1]!.user).toContain('{"paused":false}');
+  });
+
   it.each([
     ['yes', 'approve'], ['Yes please', 'approve'], ['ja tak', 'approve'], ['go ahead', 'approve'],
     ['no', 'decline'], ['nej tak', 'decline'], ['cancel', 'decline'],

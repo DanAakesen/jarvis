@@ -571,6 +571,16 @@ at a7e5205, before this semantic resolver change. CI for the corrected final
 head must be checked separately. Live-model/device acceptance remains
 unverified.
 
+24 October 2026 interpreter-contract correction:
+`npm test --workspace @jarvis/backend -- --run src/core/approval-interpreter.test.ts`
+exercises the real `createApprovalInterpreter` with a captured synthetic model
+boundary. It verifies the actual proactive prompt covers pause/resume of automatic
+suggestions, does not alter explicit owner-requested reminders, and directs
+ambiguous/source-management requests to refusal; bare agreement remains blocked
+by the deterministic fast path. Model responses are fixtures, not evidence of
+live-model language accuracy. Re-run aggregate CI on the corrected head;
+live-model/device acceptance remains outstanding.
+
 ## Owner-requested reminders (#1239)
 
 Explicit reminders are runtime-only owner requests, separate from automatic
