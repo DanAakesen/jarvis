@@ -46,7 +46,9 @@ async function fixture(options: {
     untilTaskDone: options.cadence !== undefined && options.cadence !== null,
   }, new Date(initialTime.getTime() - 60_000));
   const store = createMemoryProactiveStore(owner);
-  await store.settings.patch({ paused: true, categories: { todo: false }, suggestionScope: 'work' });
+  await store.settings.patch({
+    paused: true, sources: { todos: false }, categories: { todo: false }, suggestionScope: 'work',
+  });
   const send = vi.fn(async (request: SystemPushRequest) => options.send
     ? options.send(request)
     : { status: 'sent', reason: null, attempted: 1, accepted: 1, statusCode: 201 } satisfies SystemPushOutcome);
@@ -128,7 +130,9 @@ describe('owner reminder ticker', () => {
       localTime: '09:00',
       automatic,
     });
-    await f.store.settings.patch({ paused: false, categories: { todo: true }, suggestionScope: 'all' });
+    await f.store.settings.patch({
+      paused: false, sources: { todos: true }, categories: { todo: true }, suggestionScope: 'all',
+    });
     await f.ticker.tick();
 
     expect(f.send).toHaveBeenCalledOnce();

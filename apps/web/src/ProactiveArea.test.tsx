@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { appAreas } from './areas';
+import { JarvisActivityContext, type JarvisActivity } from './activity-context';
 import { ProactiveArea, ProactiveItemPage } from './ProactiveArea';
 import {
   copenhagenClock, formatTime, runReason, sourceReason, tomorrowAtSeven,
@@ -41,15 +42,24 @@ const itemEnvelope = (value = item) => response({ items: [value] });
 
 let fetchMock: ReturnType<typeof vi.fn<typeof fetch>>;
 
-function renderArea({ clock = () => Date.parse(at) }: { clock?: () => number } = {}) {
-  return render(<MemoryRouter initialEntries={['/proactive']}>
+function renderArea({ clock = () => Date.parse(at), latestActivity = null }: {
+  clock?: () => number;
+  latestActivity?: JarvisActivity['latestActivity'];
+} = {}) {
+  const renderTree = (activity: JarvisActivity['latestActivity']) =>
+    <JarvisActivityContext.Provider value={{
+      working: false, workText: null, voiceActivity: null, latestActivity: activity,
+      applyRuntimeActivity: vi.fn(), clearRuntimeActivities: vi.fn(),
+    }}><MemoryRouter initialEntries={['/proactive']}>
     <Routes>
       <Route path="/proactive" element={<ProactiveArea backendUrl={backendUrl} getAccessToken={token}
         signIn={vi.fn(async () => {})} now={clock} />} />
       <Route path="/proactive/:id" element={<ProactiveItemPage backendUrl={backendUrl} getAccessToken={token}
         signIn={vi.fn(async () => {})} proactiveEnabled now={clock} />} />
     </Routes>
-  </MemoryRouter>);
+  </MemoryRouter></JarvisActivityContext.Provider>;
+  const view = render(renderTree(latestActivity));
+  return { ...view, renderTree };
 }
 
 function stubPage() {
@@ -95,11 +105,37 @@ describe('Proactive area', () => {
     expect(screen.getByText('From Calendar and Todo list')).not.toBeNull();
     expect(screen.getByText('Close to the monthly limit')).not.toBeNull();
     expect(screen.getByText('Estimated 42 of 100 DKK this month.')).not.toBeNull();
+    expect(screen.queryByRole('link', { name: 'Manage sources in Settings' })).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Change the budget in Settings' })).toBeNull();
+    expect(screen.getByText('Source choices are preserved; source controls are not available here.')).not.toBeNull();
+    expect(screen.getByText('The current monthly limit is shown here and cannot be changed from this page.')).not.toBeNull();
     expect(screen.getByText('Stale, last read just now')).not.toBeNull();
 
     fireEvent.click(screen.getByText('Recent checks'));
     expect(await screen.findByText('Proactive check (07:00)')).not.toBeNull();
     expect(screen.getByText('1 finding')).not.toBeNull();
+  });
+
+  it('refreshes status and open items immediately after a successful chat preference change', async () => {
+    const view = renderArea();
+    await screen.findByText('Estimated 42 of 100 DKK this month.');
+    await screen.findByText('Synthetic calendar reminder');
+    const statusCalls = () => fetchMock.mock.calls.filter(([input]) =>
+      new URL(String(input)).pathname === '/proactive/status').length;
+    const itemCalls = () => fetchMock.mock.calls.filter(([input]) =>
+      new URL(String(input)).pathname === '/proactive/items').length;
+    const initialStatusCalls = statusCalls();
+    const initialItemCalls = itemCalls();
+
+    view.rerender(view.renderTree({
+      type: 'tool-call-finished', activityId: '33333333-3333-4333-8333-333333333333',
+      source: 'chat', toolName: 'proactive_preferences', outcome: 'ok',
+    }));
+
+    await waitFor(() => {
+      expect(statusCalls()).toBeGreaterThan(initialStatusCalls);
+      expect(itemCalls()).toBeGreaterThan(initialItemCalls);
+    });
   });
 
   it.each([[1, '1 finding'], [3, '3 findings']])('words the last check outcome for %i finding(s) in the right number', async (findingCount, text) => {

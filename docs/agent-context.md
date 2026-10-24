@@ -523,6 +523,64 @@ SQL writes, optional reminder registration and all four advertised proactive
 tools. Fresh CI must qualify this integrated head. No #1249 or #1241 work is imported.
 Live speech/model comprehension and owner acceptance remain unverified.
 
+## P13-22 proactive controls (24 October 2026; Refs #1252)
+
+Settings, chat and voice use the same owner-bound preference store and
+capability-backed help. Settings shows one automatic-suggestion switch, the
+preferences currently enforced, a natural-language editor and examples supported
+by the same backend capability source. Writes preserve hidden advanced settings,
+use a full-record revision to reject stale edits and confirm only after readback.
+Focus/reconnect/poll refreshes retain unsaved text; explicit reload is the
+discard path. Pause/source changes cancel ongoing automatic work and are checked
+again before automatic task writes and push delivery. Explicit owner-requested
+reminders stay separate.
+
+Focused synthetic checks passed locally:
+`npm test --workspace @jarvis/backend -- --run src/proactive/tools.test.ts src/proactive/routes.test.ts src/proactive/engine.test.ts src/proactive/alerts.test.ts src/proactive/todo-writer.test.ts src/proactive/reminder-ticker.test.ts src/proactive/owner-reminder-ticker.test.ts src/proactive/store.test.ts`
+(303 tests), and
+`npm test --workspace @jarvis/web -- --run src/stylesheets.test.tsx src/ProactiveSettings.test.tsx`
+(73 tests). These cover capability-backed help/state, failure and conflict
+handling, retained UI drafts, cancellation and final automatic side-effect
+checks. Aggregate `npm test --workspaces` passed: contracts 174, web 2,262,
+backend 6,449 (one skipped), and vault-mirror 237. The schema integration case
+also checks settings across store instances
+and rejects a stale revision. Using an isolated loopback SQL Server container,
+`NODE_ENV=test npm run test:database --workspace @jarvis/backend -- --run src/database/schema.integration.test.ts`
+passed 86 tests; the container was removed afterward. Scratch-only auth/API
+fixtures in actual-App Chromium verified Settings at 1440×900 and 390×844,
+capability examples, a persisted pause change, no horizontal overflow and no
+console errors. Aggregate checks, physical-device behavior and live provider
+acceptance are reported separately.
+
+What Dan tests:
+- Discover the supported examples in Settings and ask Jarvis what proactive help is available.
+- Change a supported preference by voice and see it appear in already-open Settings.
+- Edit a preference in Settings and ask chat to read it back.
+- Turn automatic suggestions off and verify automatic behavior stops without changing requested reminders.
+
+24 October review-gap follow-up:
+`npm test --workspace @jarvis/backend -- --run src/proactive/tools.test.ts src/proactive/routes.test.ts`
+passed all 198 tests after a corrected test assertion. Tests exercise the shared
+semantic resolver with synthetic model/interpreter fixtures for varied EN/DA
+scope, pause and category language; this proves dispatch, exact-candidate
+matching and fail-closed writes, not live model language accuracy.
+`npm test --workspace @jarvis/web -- --run src/ProactiveSettings.test.tsx src/ProactiveArea.test.tsx`
+passed 37 tests. Backend and web lint and builds passed; the web build reported
+its existing large-chunk advisory. Aggregate CI 40129098305 and CodeQL passed
+at a7e5205, before this semantic resolver change. CI for the corrected final
+head must be checked separately. Live-model/device acceptance remains
+unverified.
+
+24 October 2026 interpreter-contract correction:
+`npm test --workspace @jarvis/backend -- --run src/core/approval-interpreter.test.ts`
+exercises the real `createApprovalInterpreter` with a captured synthetic model
+boundary. It verifies the actual proactive prompt covers pause/resume of automatic
+suggestions, does not alter explicit owner-requested reminders, and directs
+ambiguous/source-management requests to refusal; bare agreement remains blocked
+by the deterministic fast path. Model responses are fixtures, not evidence of
+live-model language accuracy. Re-run aggregate CI on the corrected head;
+live-model/device acceptance remains outstanding.
+
 ## Owner-requested reminders (#1239)
 
 Explicit reminders are runtime-only owner requests, separate from automatic

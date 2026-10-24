@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { copenhagenDayStart } from './time.js';
+import { proactiveSettingsRevision, ProactiveSettingsConflictError } from './preferences.js';
 import {
   findingCategories, sourceIds, type FindingCategory, type Item, type ProactiveSettings,
   type RunSummary, type SourceId, type SourceStatus, type SuggestionScope, type SuggestionScopePreference,
@@ -77,7 +78,7 @@ export interface FindingWriteGuard {
 
 export interface ProactiveSettingsStore {
   read(): Promise<ProactiveSettings>;
-  patch(patch: ProactiveSettingsPatch): Promise<ProactiveSettings>;
+  patch(patch: ProactiveSettingsPatch, expectedRevision?: string): Promise<ProactiveSettings>;
   subscribePreferencesChanged(listener: () => void): () => void;
 }
 export interface ProactiveItemsStore {
@@ -154,9 +155,14 @@ export function createMemoryProactiveStore(ownerObjectId: string = randomUUID())
           newsFeeds: [...settings.newsFeeds],
         };
       },
-      async patch(patch) {
+      async patch(patch, expectedRevision) {
+        if (expectedRevision !== undefined && proactiveSettingsRevision(settings) !== expectedRevision) {
+          throw new ProactiveSettingsConflictError();
+        }
         const previousCategories = { ...settings.categories };
         const previousScope = settings.suggestionScope;
+        const previousPaused = settings.paused;
+        const previousSources = { ...settings.sources };
         settings = {
           ...settings,
           ...patch,
@@ -164,7 +170,9 @@ export function createMemoryProactiveStore(ownerObjectId: string = randomUUID())
           categories: { ...settings.categories, ...patch.categories },
           newsFeeds: patch.newsFeeds === undefined ? [...settings.newsFeeds] : [...patch.newsFeeds],
         };
-        if (previousScope !== settings.suggestionScope ||
+        if (previousPaused !== settings.paused ||
+            sourceIds.some((source) => previousSources[source] !== settings.sources[source]) ||
+            previousScope !== settings.suggestionScope ||
             findingCategories.some((category) => previousCategories[category] !== settings.categories[category])) {
           for (const listener of preferenceListeners) {
             try { listener(); } catch { /* A committed preference change remains successful. */ }

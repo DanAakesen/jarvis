@@ -319,6 +319,27 @@ describe('proactive alert hook', () => {
     expect(JSON.stringify(throwing.logger.warn.mock.calls)).not.toContain(canary);
   });
 
+  it('rechecks pause after reading alert details and immediately before push delivery', async () => {
+    const fixture = setup();
+    const item = await saveFinding(fixture.store, 'pause-before-send');
+    const originalGet = fixture.store.items.get.bind(fixture.store.items);
+    vi.spyOn(fixture.store.items, 'get').mockImplementation(async (...args) => {
+      const value = await originalGet(...args);
+      await fixture.store.settings.patch({ paused: true });
+      return value;
+    });
+    const context = contextFor([item], {
+      facts: [{ ref: 'synthetic-ref', source: 'todos', kind: 'todo', text: 'Synthetic task.' }],
+      findings: contextFor([item]).findings.map((finding) => ({
+        ...finding, evidenceRefs: ['synthetic-ref'],
+      })),
+    });
+
+    await fixture.hook(context);
+
+    expect(fixture.send).not.toHaveBeenCalled();
+  });
+
   it('reads no more than three stored details without marking loaded or seen', async () => {
     const fixture = setup();
     const items = await Promise.all(Array.from({ length: 5 }, (_, index) =>

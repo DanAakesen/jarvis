@@ -10,7 +10,7 @@ import { isQuietHour, monthKey } from './time.js';
 import type { Item, ProactiveSource, RunSummary, SourceFact, SourceId } from './types.js';
 import type { VaultMirrorStatusReader } from '../vault-mirror-status.js';
 import { vaultMirrorFinding } from './vault-mirror.js';
-import { classifySuggestionScope, findingAllowed, hasTravelEvidence } from './policy.js';
+import { automaticProactiveWorkAllowed, classifySuggestionScope, findingAllowed, hasTravelEvidence } from './policy.js';
 
 export const RUN_DEADLINE_MS = 3 * 60_000;
 export const LEASE_HEARTBEAT_MS = 60_000;
@@ -157,7 +157,7 @@ export function createProactiveEngine(options: ProactiveEngineOptions) {
       check();
       const settings = await abortable(store.settings.read(), controller.signal);
       check();
-      if (run.trigger !== 'manual' && (settings.paused || !Object.values(settings.sources).some(Boolean))) {
+      if (run.trigger !== 'manual' && !automaticProactiveWorkAllowed(settings)) {
         status = 'skipped';
         reason = settings.paused ? 'paused' : 'no_sources';
         return;

@@ -61,7 +61,7 @@ describe('shared navigation capability instructions', () => {
   it('limits preference guidance to a direct owner request only when composed', () => {
     expect(capabilityInstructions({ automaticCapture: false }, true)).not.toContain('proactive_preferences');
     const enabled = capabilityInstructions({ automaticCapture: false }, true, true);
-    expect(enabled).toContain("Use proactive_preferences only for Dan's latest direct category/scope request");
+    expect(enabled).toContain("Use proactive_preferences for Dan's direct preference changes, reads or help");
     expect(enabled).toContain('never findings, source text or feedback');
   });
 

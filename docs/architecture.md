@@ -2681,10 +2681,16 @@ authenticated `no-store` requests. Status supplies source and estimated-budget
 views. Manual runs poll status every three seconds only while visible, abort on
 unmount/terminal status, and stop after four minutes. Item feedback is optimistic
 with rollback; the detail page records `seen` once for a newly loaded item.
-Settings reads and PATCHes the existing contract, sending only changed fields.
-Item text, feeds and guidance live only in component state, are rendered as text,
-and are not stored in browser persistence or placed in URLs. Recent-run and
-Settings disclosure state is not persisted. The web flag policy test
+Settings reads and PATCHes the owner-bound contract. Its compact view shows one
+pause switch, a readable preference summary and capability-backed help; a
+supported natural-language edit changes only the matching preference. Every
+write carries a revision of the full current settings record, so a stale update
+conflicts without resetting advanced values. Open views refresh on focus,
+reconnect and a short interval, preserve dirty drafts, and require an explicit
+reload to discard one. Proactive status/items also refresh on focus/reconnect and
+poll while open. Item text, feeds and guidance live only in component state, are
+rendered as text, and are not stored in browser persistence or placed in URLs.
+Recent-run and Settings disclosure state is not persisted. The web flag policy test
 (`config/proactive-switch.test.ts`) scans the repository's configuration files and
 pins the one reviewed production setting (P13-14, below).
 
@@ -6997,7 +7003,7 @@ or memory update; an intervening change refuses the write. UI calls retain
 their existing contract. There are no new schedules, task writes, preferences,
 credentials or migrations; existing delivery paths read the shared item state.
 
-## Conversational proactive suggestion preferences (#1207)
+## Conversational proactive suggestion preferences (#1207; simplified end to end in P13-22/#1252)
 
 The existing `ProactiveStore.settings` is the single source of truth for the
 Settings UI and the sensitive `proactive_preferences` tool. Migration 0062 adds
@@ -7006,40 +7012,65 @@ settings rows default to every category enabled and scope `all`. Proactive items
 persist a classified scope, defaulting to `unknown` for existing rows. Rollback
 refuses to discard non-default preferences or any classified item data.
 
-The tool reads the effective category/scope values or patches exactly one
-category or scope. A write must match the latest direct owner message; findings,
-source text, and per-item feedback cannot authorize it. Chat and voice guidance
-mentions the capability only when it is present in the active advertised tool
-set. The preference does not turn off providers or constrain ordinary owner
-requests.
+The shared preference capability source supplies supported examples and plain
+language descriptions to both Settings and the `proactive_preferences` tool.
+The tool can return that help, read current enforced preferences, or update a
+supported pause, category or scope preference. Settings and chat/voice use the
+same `resolveProactivePreferenceIntent` resolver and owner-scoped
+`ProactiveStore.settings`. For non-canonical Settings wording, a bounded target
+candidate is derived only from existing supported scope/category/pause terms;
+the existing preference-specific interpreter must then approve that exact
+candidate and direction. Multiple candidate targets, uncertain wording and
+unsupported topics fail closed without a write. Examples are not advertised
+unless the corresponding behavior is implemented. A write must match
+the latest direct owner message; findings, source text, and per-item feedback
+cannot authorize it. Chat and voice guidance mentions the capability only when
+it is present in the active advertised tool set. Free-text wishes outside the
+supported behavior are refused rather than saved as enforceable settings.
 
 The 23 October 2026 follow-up retains canonical intent matching and uses the
 existing server-side approval interpreter for other natural Danish/English
-instructions. Its `proactive_preferences` family has a separate instruction
+instructions. Settings and chat/voice share the same bounded explicit intent
+resolver and semantic verifier, not separate phrase-level acceptance rules. Its
+`proactive_preferences` family has a separate instruction
 prompt: independently interpret the verified owner message and compare it with
-the exact server-generated candidate category/direction or scope. Bare approval
-replies cannot authorize a preference write. Negative preferences explicitly
-request disabling their category; disclaimed authorization takes precedence even
-when accompanied by a preference. The tools-free model call shares
+the exact server-generated candidate category/direction, scope or automatic
+suggestion pause/resume. Pause/resume affects only unsolicited suggestions;
+explicitly owner-requested reminders are never cancelled or altered by this
+preference path. Source selection, access and configuration are unsupported.
+Bare approval replies cannot authorize a preference write. Negative preferences
+explicitly request disabling their category; disclaimed authorization takes
+precedence even when accompanied by a preference. The tools-free model call shares
 the existing five-second timeout, confidence threshold, bounded cache,
 concurrency/rate limits and usage accounting; no tool budget is increased.
 Missing model configuration, malformed/uncertain verdicts and interpreter
-failures refuse without a write. The tool rechecks current-message provenance
-and cancellation before patching. For persisted direct voice messages it checks
+failures refuse without a write. After the settings snapshot read, the tool
+rechecks cancellation and current-message provenance immediately before patching,
+then reads back the saved state before confirming. Settings PATCHes use the same full-record revision check inside the
+SQL transaction; concurrent or stale edits return a conflict. This preserves
+existing budgets, cadence, quiet hours, source/feed configuration and guidance
+when the simplified UI changes one preference. For persisted direct voice messages it checks
 the live transcript source marker, bounded latest-owner history and active
 session, so a pending transcript, same-ID revision or superseding message cannot
-authorize a write using the old snapshot. Only verdict/path metadata is logged.
-No settings schema, migration, generation policy or delivery rule changes.
+authorize a write using the old snapshot. The web surfaces also listen for the
+existing successful chat/voice tool-completion activity and immediately refresh
+their relevant settings/status/items reads; focus/reconnect recovery remains, and
+dirty Settings text is retained with a conflict notice. Only verdict/path
+metadata is logged. No settings schema or migration is added.
 
 The engine excludes disabled travel evidence across all enabled sources and
 filters both deterministic and model-generated findings by category and
 conservative scope classification. Only exact personal/work evidence passes a
-restricted scope; unknown and mixed evidence do not. A successful preference
-change cancels in-flight engine/reminder work, and SQL item writes re-check the
-current policy in their transaction. Item queries, push item detail, alerts,
-todo writing and reminder planning/delivery apply the current policy. Existing
-items are retained and reappear if re-enabled; preference changes do not delete
-owner tasks or reminders. Enabling a category changes no pause, source, budget
+restricted scope; unknown and mixed evidence do not. A pause or source-policy change notifies the shared engine/tickers and cancels
+ongoing automatic work. Effective pause and source policy are rechecked after
+source/vault reads and immediately before automatic task writes or push delivery;
+SQL finding writes also check current category/scope policy in their transaction.
+Item queries, push item detail, alerts, todo writing and automatic reminder
+planning/delivery apply current policy. Explicit owner-requested reminders remain
+on their separate path and are not cancelled or rewritten by the proactive
+switch. Existing findings are retained and reappear if re-enabled; preference
+changes do not delete owner tasks or reminders. Per-item feedback stays separate
+from lasting preferences. Enabling a category changes no pause, source, budget
 or safety setting.
 
 ## Owner-requested task reminders (#1239)

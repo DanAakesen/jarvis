@@ -31,6 +31,7 @@ import type { TaskEventMessage } from '../factory/task-store.js';
 import { mapGithubWebhook } from '../github/webhook-mapping.js';
 import { createPushStore } from './push-store.js';
 import { createProactiveStore } from './proactive-store.js';
+import { proactiveSettingsRevision, ProactiveSettingsConflictError } from '../proactive/preferences.js';
 import { createProactiveAlertStore } from './proactive-alert-store.js';
 import { createProactiveTodoReceiptStore } from './proactive-todo-store.js';
 import { generateVapidKeyPair } from '../push/webpush.js';
@@ -566,6 +567,13 @@ describe('committed domain schema (groups 1-8)', () => {
     expect(await restarted.settings.read()).toMatchObject({
       paused: false, monthlyBudgetDkk: 100, sources: { travel: true },
       categories: { travel: false }, suggestionScope: 'personal',
+    });
+    const revision = proactiveSettingsRevision(await restarted.settings.read());
+    await restarted.settings.patch({ paused: true }, revision);
+    await expect(concurrent.settings.patch({ sources: { todos: false } }, revision))
+      .rejects.toBeInstanceOf(ProactiveSettingsConflictError);
+    expect(await first.settings.read()).toMatchObject({
+      paused: true, sources: { todos: true }, monthlyBudgetDkk: 100,
     });
     expect(await restarted.items.list('all', 20, now)).toEqual([]);
     expect(await restarted.items.get(finding.id)).toBeUndefined();

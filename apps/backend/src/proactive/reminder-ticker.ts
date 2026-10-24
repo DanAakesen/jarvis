@@ -12,7 +12,7 @@ import type { ProactiveStore } from './store.js';
 import { dayKey, isQuietHour, localDateTimeInstant, localTimeLabel } from './time.js';
 import type { FindingInput } from './store.js';
 import type { SuggestionScope } from './types.js';
-import { findingAllowed } from './policy.js';
+import { findingAllowed, proactiveSourceAllowed } from './policy.js';
 import type { OwnerReminderSchedule, OwnerReminderStore } from './owner-reminder-store.js';
 
 const tickIntervalMs = 30_000;
@@ -187,7 +187,7 @@ export function createReminderTicker(options: {
       await Promise.all(remaining.map((row) => update(row, { state: 'suppressed', reason: 'paused' })));
       return;
     }
-    if (!settings.categories.todo) return;
+    if (!proactiveSourceAllowed(settings, 'todos') || !settings.categories.todo) return;
 
     const subscriptions = await options.pushStore.listSubscriptions(options.ownerObjectId);
     if (subscriptions.length === 0) {
@@ -285,9 +285,8 @@ export function createReminderTicker(options: {
     if (items.length === 0 || signal.aborted) return;
 
     const latestSettings = await options.store.settings.read();
-    if (signal.aborted || !items.every(({ item }) => findingAllowed(
-      latestSettings, 'todo', item.suggestionScope,
-    ))) return;
+    if (signal.aborted || !proactiveSourceAllowed(latestSettings, 'todos') ||
+        !items.every(({ item }) => findingAllowed(latestSettings, 'todo', item.suggestionScope))) return;
 
     const dueTimes = items.map(({ row }) => row.dueAt.getTime());
     const kind: SystemPushRequest['kind'] = dueTimes.every((value) => value > now.getTime())

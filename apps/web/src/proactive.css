@@ -328,6 +328,45 @@
   min-height: 44px;
 }
 
+.proactive-understood {
+  margin-block: var(--space-4);
+}
+
+.proactive-understood p {
+  margin: 0 0 var(--space-2);
+}
+
+.proactive-understood ul,
+.proactive-preference-help ul {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding-left: var(--space-4);
+}
+
+.proactive-preference-help {
+  margin-top: var(--space-3);
+}
+
+.proactive-preference-help summary {
+  min-height: 44px;
+  padding-block: var(--space-3);
+  cursor: pointer;
+  font-weight: 650;
+}
+
+.proactive-preference-help ul {
+  padding-bottom: var(--space-3);
+}
+
+.proactive-preference-help li {
+  overflow-wrap: anywhere;
+}
+
+.proactive-settings textarea {
+  min-height: 6rem;
+}
+
 .proactive-settings .proactive-source-settings {
   display: grid;
   gap: var(--space-2);
