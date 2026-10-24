@@ -70,18 +70,55 @@ describe('internal nutrition review contracts', () => {
     expect(() => reviewedCorrection(row(), { occurredAt: '2027-01-01T00:00:00Z' }, origin, now)).toThrow('trusted time');
     expect(() => storedMeal({ ...row(), components_json: 'invalid-private-synthetic' })).toThrow('could not be read safely');
   });
-  it('shows actual before/after details, units, time zone, unknowns and exact target revision', () => {
+  it('shows changed values, units, time zone, unknowns and exact target revision without repeating snapshots', () => {
     const before = storedMeal(row());
     const after = reviewedCorrection(row(), { proteinGrams: null }, origin, now);
     const summary = foodReviewSummary('correct', before, after, '2');
     expect(summary).toContain('Nothing has changed');
-    expect(summary).toContain('"expectedRevision": "2"');
-    expect(summary).toContain('"idempotencyKey": "retained-key"');
-    expect(summary).toContain('"timeZone": "Europe/Copenhagen"');
-    expect(summary).toContain('"energyKcal": 123');
-    expect(summary).toContain('"proteinGrams": null');
+    expect(summary).toContain('Record revision: 2');
+    expect(summary).toContain('Europe/Copenhagen');
+    expect(summary).toContain('energy 123 kcal (unchanged)');
+    expect(summary).toContain('protein 10 → unknown (not zero) g');
     expect(summary).not.toContain('jarvisIntake');
-    expect(() => foodReviewSummary('log_estimate', null, { ...after, components: ['x'.repeat(4000)] })).toThrow('too large');
+    expect(summary).not.toContain('"before":');
+    expect(summary).not.toContain('"after":');
+    expect(() => foodReviewSummary('log_estimate', null, { ...after, components: ['x'.repeat(4000)] }))
+      .toThrow('Now’s 4,000-character review limit');
+  });
+  it('keeps long but accepted meal names and a 25-component estimate within the existing review bound', () => {
+    const before = storedMeal({ ...row(), meal_name: 'b'.repeat(1500) });
+    const after = reviewedCorrection(row(), { mealName: 'a'.repeat(1500) }, origin, now);
+    const renamed = foodReviewSummary('correct', before, after, '2');
+    expect(renamed.length).toBeLessThanOrEqual(4000);
+    expect(renamed).toContain('b'.repeat(1500));
+    expect(renamed).toContain('a'.repeat(1500));
+
+    const meal = { ...before, components: Array.from({ length: 25 }, (_, index) => ({
+      name: `Synthetic component ${index + 1}`, grams: 10, preparationMethod: null,
+    })) };
+    const estimate = foodReviewSummary('log_estimate', null, meal);
+    expect(estimate).toContain('Components (25)');
+    expect(estimate.length).toBeLessThanOrEqual(4000);
+  });
+  it('retains long uncertainty and component labels when they fit and refuses rather than hiding them when they do not', () => {
+    const component = (index: number, uncertaintyLength: number) => ({
+      name: `Synthetic component ${index} ${'l'.repeat(200)}`, grams: 10, preparationMethod: null,
+      unknowns: [`Synthetic uncertainty ${'u'.repeat(uncertaintyLength)}`],
+    });
+    const before = storedMeal({ ...row(), components_json: JSON.stringify([
+      component(1, 650), component(2, 650), component(3, 650),
+    ]) });
+    const nearLimit = foodReviewSummary('delete', before, null, '2');
+    expect(nearLimit.length).toBeGreaterThan(3000);
+    expect(nearLimit.length).toBeLessThanOrEqual(4000);
+    expect(nearLimit).toContain('Synthetic uncertainty');
+    expect(nearLimit).toContain('l'.repeat(200));
+
+    const tooLarge = storedMeal({ ...row(), components_json: JSON.stringify([
+      component(1, 900), component(2, 900), component(3, 900), component(4, 900),
+    ]) });
+    expect(() => foodReviewSummary('delete', tooLarge, null, '2'))
+      .toThrow('you do not need to split an existing meal');
   });
   it('binds replay to the actual source, exact operation and reviewed payload', () => {
     const change = foodReviewSchema.parse({ change: { operation: 'delete', idempotencyKey: 'retained-key', expectedRevision: '2' } }).change;

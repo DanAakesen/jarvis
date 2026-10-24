@@ -86,6 +86,11 @@ describe('responsive stylesheet contract', () => {
 describe('app-wide control contract', () => {
   const source = sharedStyles;
 
+  it('preserves the field lines in Now confirmation summaries and wraps long values', () => {
+    expect(ruleDeclaration(source, /\.confirmation-summary\s*\{([^}]*)\}/, 'white-space')).toBe('pre-line');
+    expect(ruleDeclaration(source, /\.confirmation-summary\s*\{([^}]*)\}/, 'overflow-wrap')).toBe('anywhere');
+  });
+
   it.each([
     'settings-back', 'signin-button',
     'presence-chip-trigger', 'presence-option', 'presence-mode-card',
