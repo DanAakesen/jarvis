@@ -738,8 +738,14 @@ with an optional due date and time, saved to that side's `Inbox.md` note. Each c
 to the owner's vault, made only for the owner, refused if the line (its text, date, priority or position) has changed since the
 list was read, and shown as an error with the tick rolled back when it fails. In the All view each row says Personal or Work in words, not only by colour. A pencil at the top
 right of each open task edits it in place in a multi-line field with its date, time and priority (Enter saves, Escape cancels); the tick state stays as written. Jarvis
-never reorders or deletes these tasks, never edits one except on the owner's own request, and the chat and voice
-`vault_search` tool stays read-only. Agent work remains on the Software Factory
+never reorders or deletes these tasks and never edits one except on the owner's own request.
+Chat and voice share the panel's task write service through `vault_task_create`,
+`vault_task_complete` (including reopen), and `vault_task_edit`. Ambiguous matches
+or scope require clarification; existing tasks require the exact path, line, text
+and version returned by the read-only `vault_search`. Explicit tasks go to the
+requested Personal or Work Inbox, not Factory or the proactive task generator.
+An open panel quietly reloads after a successful conversational task write.
+Agent work remains on the Software Factory
 board.
 
 A **notes tree** icon button beside **Show tasks** opens a tree of the vault's
@@ -756,6 +762,11 @@ open tasks match, a Tasks result group whose count opens the panel with that
 search. In chat and voice, task/to-do/reminder requests use the read-only tasks
 kind of `vault_search`; note searches use its default notes kind and `vault_read`.
 All reads are owner-only and treat vault content as untrusted data.
+Full-note replacement through `vault_write` requires `expectedSha` from
+`vault_read`; stale or missing versions require rereading and reapplying.
+Creation remains create-only without a version, and append can rebase once after
+a confirmed conflict. Uncertain write outcomes require rereading before another
+attempt, never a blind replay.
 
 The knowledge map opens centred on the notes and fitted to the window, and its idle
 motion is clearly alive (drifting notes, breathing stars, pulses along links). The
@@ -1442,8 +1453,11 @@ this is not complete internal food workflow or #724 acceptance.
 The inactive internal composition includes `daily_food_review` for portion
 estimates, revisioned corrections and soft deletion. It uses the existing
 owner-bound one-time approval in Now, not model confirmation flags or a new
-proposal dispatcher. Review shows the exact before/after food, units, unknown
-macros, occurrence/Copenhagen date and target revision. Model proposals remain
+proposal dispatcher. Review shows the exact operation and changed before/after
+values, with meal identity, portions, nutrients, source, uncertainty,
+occurrence/Copenhagen date and target revision. Unchanged details are summarized
+instead of repeated. The existing 4,000-character Now bound refuses a review
+that cannot be shown completely and gives a rename-safe recovery. Model proposals remain
 estimates; approval does not make them independently verified. Direct supported
 exact labels and actual saved favourites are routed back to the one-step tool.
 This initial reviewed path requires a present chat/voice session and a browser

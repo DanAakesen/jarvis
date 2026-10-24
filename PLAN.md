@@ -9,6 +9,20 @@ Synthetic chat/voice dispatcher, store and existing delivery tests pass locally.
 No live feedback, preference changes, migration or deployment was performed.
 Next: PR review and CI; live owner acceptance remains unverified.
 
+## Safe conversational task writes (#1236; 23 October 2026)
+
+- Implemented shared Tasks API/chat/voice create, complete/reopen and edit writes,
+  exact task identity/version checks, and version-required full-note replacement.
+- Local synthetic checks passed: 172 backend tests (including 26 shared-service
+  tests), 26 panel tests and 107 hosted-agent tests; backend/web builds and scoped
+  lint passed. Secret scanning found none. Python CodeQL found no alerts;
+  JavaScript analysis was skipped for database size and automated review was
+  unavailable.
+- Independent review identified a stale-draft rebase on panel refresh; edits now
+  retain their original identity/version, with a regression test.
+- Next: real iOS/Obsidian sync and live speech
+  acceptance remain owner-run and are not claimed by synthetic tests.
+
 Integration checkpoint: #883 merged on 17 October at
 `705af7c7c02c3154a646dda66d79790d71af8f54`, with its actual tree matching
 the qualified pipeline correction. This release candidate combines the
