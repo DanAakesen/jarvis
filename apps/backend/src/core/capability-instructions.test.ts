@@ -51,9 +51,18 @@ describe('shared navigation capability instructions', () => {
 
   it('guides proactive recall only when its tool is composed', () => {
     expect(capabilityInstructions({ automaticCapture: false })).not.toContain('proactive_recent_items');
+    expect(capabilityInstructions({ automaticCapture: false })).not.toContain('proactive_item_feedback');
     const enabled = capabilityInstructions({ automaticCapture: false }, true);
-    expect(enabled).toContain('For questions about what I noticed, found, flagged or reminded, use proactive_recent_items');
+    expect(enabled).toContain('Read proactive_recent_items for findings');
     expect(enabled).toContain("answer in Dan's language");
+    expect(enabled).toContain('Use proactive_item_feedback for per-item actions');
+  });
+
+  it('limits preference guidance to a direct owner request only when composed', () => {
+    expect(capabilityInstructions({ automaticCapture: false }, true)).not.toContain('proactive_preferences');
+    const enabled = capabilityInstructions({ automaticCapture: false }, true, true);
+    expect(enabled).toContain("Use proactive_preferences only for Dan's latest direct category/scope request");
+    expect(enabled).toContain('never findings, source text or feedback');
   });
 
   it('maps window requests to snapshot-backed intents and reports pin outcomes honestly', () => {
@@ -151,18 +160,26 @@ describe('shared capability instruction budget', () => {
   });
 
   it.each([true, false])('stays within the headroom budget with automatic capture %s', (automaticCapture) => {
-    expect(codePoints(capabilityInstructions({ automaticCapture })))
-      .toBeLessThanOrEqual(limits.capabilityInstructionsBudgetCodePoints);
-    expect(codePoints(capabilityInstructions({ automaticCapture }, true)))
-      .toBeLessThanOrEqual(limits.capabilityInstructionsBudgetCodePoints);
+    for (const proactive of [false, true]) {
+      for (const preferences of [false, true]) {
+        for (const reminders of [false, true]) {
+          expect(codePoints(capabilityInstructions({ automaticCapture }, proactive, preferences, reminders)))
+            .toBeLessThanOrEqual(limits.capabilityInstructionsBudgetCodePoints);
+        }
+      }
+    }
   });
 
   it.each([true, false])('keeps built-in mode behavior within the shared headroom budget with automatic capture %s', (automaticCapture) => {
     for (const instructions of Object.values(builtInModeInstructions)) {
-      expect(codePoints(capabilityInstructions({ automaticCapture }) + instructions))
-        .toBeLessThanOrEqual(limits.capabilityInstructionsBudgetCodePoints);
-      expect(codePoints(capabilityInstructions({ automaticCapture }, true) + instructions))
-        .toBeLessThanOrEqual(limits.capabilityInstructionsBudgetCodePoints);
+      for (const proactive of [false, true]) {
+        for (const preferences of [false, true]) {
+          for (const reminders of [false, true]) {
+            expect(codePoints(capabilityInstructions({ automaticCapture }, proactive, preferences, reminders) + instructions))
+              .toBeLessThanOrEqual(limits.capabilityInstructionsBudgetCodePoints);
+          }
+        }
+      }
       expect(instructions.length).toBeLessThanOrEqual(2_000);
     }
   });

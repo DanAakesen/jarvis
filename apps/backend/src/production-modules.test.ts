@@ -28,6 +28,7 @@ import { createProductionModules } from './production-modules.js';
 import { createToolRegistry } from './core/tool-registry.js';
 import { checkAgentContract } from './core/agent-contract.js';
 import { composeDaily } from './daily/composition.js';
+import { createMemoryOwnerReminderStore } from './proactive/owner-reminder-store.js';
 import { createMemoryProactiveStore } from './proactive/store.js';
 import { createProactiveToolsModule } from './proactive/tools.js';
 import { createRealtimeSessionUpdate, toModelToolSchema } from './voice/realtime.js';
@@ -41,7 +42,7 @@ const dailyToolNames = [
   'daily_query', 'daily_show', 'daily_food', 'daily_food_review', 'daily_saved_food', 'daily_nutrition_targets', 'daily_nutrition_suggest',
   'daily_health_summary', 'daily_nutrition_history', 'daily_coach_status',
 ];
-const proactiveToolNames = ['proactive_recent_items', 'proactive_preferences'];
+const proactiveToolNames = ['proactive_recent_items', 'proactive_preferences', 'proactive_item_feedback', 'owner_reminders'];
 const proactiveOwner = '11111111-1111-4111-8111-111111111111';
 
 // Daily is composed by default here so the size gates below always cover the largest catalogue the server can run.
@@ -78,7 +79,11 @@ function modulesWithEveryFeature(options: { daily?: boolean; proactive?: boolean
     proactive: createProactiveToolsModule({
       enabled: options.proactive !== false,
       ownerObjectId: proactiveOwner,
-      ...(options.proactive === false ? {} : { store: createMemoryProactiveStore(proactiveOwner) }),
+      ...(options.proactive === false ? {} : {
+        store: createMemoryProactiveStore(proactiveOwner),
+        ownerReminders: createMemoryOwnerReminderStore(),
+        vault: { tree: async () => [], read: async () => null },
+      }),
     }),
   });
 }
@@ -162,6 +167,7 @@ describe('production tool catalogue', () => {
 
   it('keeps every always-kept voice tool-budget tool in the catalogue and builds the English fallback ladder from it', () => {
     const registry = buildCatalogue(modulesWithEveryFeature());
+    const proactiveBudgetOmissions = ['proactive_recent_items', 'proactive_preferences'];
     for (const name of TOOL_BUDGET_ALWAYS_KEPT_TOOLS) {
       expect(registry.get(name), `${name} is listed in TOOL_BUDGET_ALWAYS_KEPT_TOOLS but not in the catalogue`).toBeDefined();
     }
@@ -180,10 +186,12 @@ describe('production tool catalogue', () => {
     const [r0, r1, r2, r3, r4, r5] = rungs.map(({ tools }) => tools.list());
     expect(r0).toEqual(registry.list());
     expect(r1!.map(({ name }) => name)).toEqual(registry.list().map(({ name }) => name)
-      .filter((name) => !proactiveToolNames.includes(name)));
+      .filter((name) => !proactiveBudgetOmissions.includes(name)));
     expect(r1!.some(({ name }) => name.startsWith('daily_'))).toBe(true);
+    expect(r1!.map(({ name }) => name)).toContain('proactive_item_feedback');
     expect(r2!.map(({ name }) => name)).toEqual(registry.list().map(({ name }) => name)
-      .filter((name) => !name.startsWith('daily_') && !proactiveToolNames.includes(name)));
+      .filter((name) => !name.startsWith('daily_') && !proactiveBudgetOmissions.includes(name)));
+    expect(r2!.map(({ name }) => name)).toContain('proactive_item_feedback');
     expect(r3!.map(({ name }) => name)).toEqual(expect.arrayContaining([...TOOL_BUDGET_ALWAYS_KEPT_TOOLS]));
     expect(bytes(r3!)).toBeLessThanOrEqual(bytes(r0!) / 2);
     expect(bytes(r3!)).toBeGreaterThan(bytes(r0!) * 0.45);
@@ -196,7 +204,7 @@ describe('production tool catalogue', () => {
     expect(r5).toEqual([]);
   });
 
-  it('preserves the catalogue with proactive off and registers every proactive capability when enabled', () => {
+  it('preserves registered capabilities with proactive off and adds exactly the proactive tools when enabled', () => {
     const on = modulesWithEveryFeature();
     const off = modulesWithEveryFeature({ proactive: false });
     const onTools = buildCatalogue(on).list();
@@ -205,16 +213,19 @@ describe('production tool catalogue', () => {
     const offNames = offTools.map(({ name }) => name);
     const registeredProactiveNames = on.find(({ id }) => id === 'proactive')!.tools.map(({ name }) => name);
 
+    expect(offNames).toEqual(off.flatMap(({ tools }) => tools.map(({ name }) => name)));
+    expect(onNames).toEqual(on.flatMap(({ tools }) => tools.map(({ name }) => name)));
+    expect(offNames.filter((name) => proactiveToolNames.includes(name))).toEqual([]);
+    expect(onNames.filter((name) => !offNames.includes(name))).toEqual(proactiveToolNames);
+    expect(onNames.length - offNames.length).toBe(proactiveToolNames.length);
     for (const tools of [offTools, onTools]) {
       expect(tools.filter(({ moduleId }) => moduleId === 'vault').map(({ name }) => name)).toEqual([
         'vault_task_create', 'vault_task_complete', 'vault_task_edit',
         'vault_search', 'show_knowledge', 'vault_read', 'vault_write', 'vault_delete',
       ]);
     }
-    expect(offNames.filter((name) => proactiveToolNames.includes(name))).toEqual([]);
-    expect(registeredProactiveNames).toEqual(expect.arrayContaining(proactiveToolNames));
-    expect(onNames.filter((name) => !offNames.includes(name))).toEqual(registeredProactiveNames);
-    expect(onNames.filter((name) => registeredProactiveNames.includes(name))).toEqual(registeredProactiveNames);
+    expect(onNames.filter((name) => !proactiveToolNames.includes(name))).toEqual(offNames);
+    expect(registeredProactiveNames).toEqual(proactiveToolNames);
     expect(off.some(({ id }) => id === 'proactive')).toBe(false);
   });
 

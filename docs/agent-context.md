@@ -1,5 +1,17 @@
 # Agent context
 
+## Per-finding feedback checks (#1240)
+
+From the repository root, use `npm run build --workspace @jarvis/backend` and
+`npm test --workspace @jarvis/backend -- src/proactive/feedback-tool.test.ts src/proactive/tools.test.ts src/proactive/routes.test.ts src/proactive/store.test.ts src/database/proactive-store.test.ts src/proactive/alerts.test.ts src/proactive/reminders.test.ts src/proactive/reminder-ticker.test.ts`.
+These synthetic checks exercise the actual chat dispatcher and realtime voice
+executor; they do not contact live providers or write real feedback/preferences.
+SQL query-shape checks are offline, not a live SQL Server concurrency check.
+Combined reminder/feedback integration also exercises `src/production-modules.test.ts`
+and `src/core/capability-instructions.test.ts`: the full catalogue contains recall,
+preferences, per-item feedback and owner reminders together, and instruction-budget
+checks include reminders in every existing feature/mode combination.
+
 ## Conversational task write checks (#1236; 23 October 2026)
 
 Use synthetic vaults only; no live settings, grants, credentials or deployment.

@@ -1,5 +1,15 @@
 # Product
 
+## Conversational finding feedback (#1240)
+
+The owner can mark one proactive finding seen, dismiss it, snooze it, or rate it
+useful/wrong through chat or voice, using the same feedback state as the UI.
+References must identify an actual finding; ambiguous “that one” requests ask
+which finding rather than guessing. Snooze requires an explicit date and
+24-hour Europe/Copenhagen time within seven days, with DST ambiguity resolved
+before saving and the exact local time confirmed afterward. Feedback never
+changes lasting preferences, completes a vault task, or creates a reminder.
+
 ## Vault mirror freshness (19 October 2026; P14-29)
 
 Status shows one compact **Vault mirror** row: not set up, healthy, stale,

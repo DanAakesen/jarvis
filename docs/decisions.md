@@ -8203,6 +8203,21 @@ unscoped legacy alerts remain, because their source scope cannot be proven.
 Do not infer the cause of a failed mint or production recovery from offline
 tests; no production state or credentials were inspected.
 
+## Per-finding conversational feedback (23 October 2026; #1240)
+
+Reuse UI feedback validation and the existing owner-scoped item store for one
+shared chat/voice tool. Require a current stored direct owner request; resolve
+pronouns/ordinals only from earlier bounded session recall, never from a
+same-turn model-selected list or source instructions. Ask on ambiguity. Use the
+existing seven-day snooze range and Europe/Copenhagen clock, rejecting DST gaps
+and requiring CET/CEST for folds. Confirm the saved exact local time.
+
+Use optional conditional item updates rather than a schema migration to avoid
+clobbering intervening UI/tool feedback. Short-lived in-memory request tracking
+prevents reapplying a completed request during its valid conversation lifetime.
+No preference, task-completion or independent reminder behavior is added.
+Offline synthetic checks establish local behavior only, not live acceptance.
+
 ## Chat tool chips hide after delivery (23 October 2026; #1085)
 
 Tool chips appear only while Jarvis is working. Once a reply is delivered the transcript keeps just the task link and any generated image, so a finished turn reads as plain conversation. While working, the status line names the actual activity (derived from the running tool) instead of rotating random phrases, and finished steps use a bare thin tick or cross. The transcript also stays pinned to the end while a reply grows after it was added (it watches the messages, not only the transcript box), without pulling back a reader who scrolled up. No backend or contract change.

@@ -1,5 +1,19 @@
 # Project plan
 
+## Per-finding chat and voice feedback (#1240)
+
+Implemented the shared `proactive_item_feedback` capability, UI/tool feedback
+validation reuse, owner-message grounding, bounded contextual references,
+local-time/DST validation, replay protection and conditional feedback writes.
+Synthetic chat/voice dispatcher, store and existing delivery tests pass locally.
+No live feedback, preference changes, migration or deployment was performed.
+Next: PR review and CI; live owner acceptance remains unverified.
+
+Current-main integration (24 October): retained the merged #1236 task-write/
+stale-write and #1235 food-review behavior alongside #1240. Combined instruction
+wording is compacted within the existing budget; qualification must use the new
+head, including SQL CI. Live acceptance remains separate.
+
 ## Safe conversational task writes (#1236; 23 October 2026)
 
 - Implemented shared Tasks API/chat/voice create, complete/reopen and edit writes,
