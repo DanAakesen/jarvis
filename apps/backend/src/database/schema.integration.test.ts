@@ -1295,15 +1295,35 @@ describe('committed domain schema (groups 1-8)', () => {
 
     const refreshed = vi.fn();
     const budgetAlerts = createAlertActivityStore(pool, refreshed);
-    const budgetAlert = {
+    const octoberBudgetAlert = {
       type: 'budget_threshold' as const,
-      dedupeKey: `budget-80:${new Date().toISOString().slice(0, 7)}`,
+      dedupeKey: 'budget-80:2026-10',
       title: 'Monthly Azure budget reached 80%',
       link: null,
     };
-    await expect(budgetAlerts.record(budgetAlert)).resolves.toBe(true);
-    await expect(budgetAlerts.record(budgetAlert)).resolves.toBe(false);
-    expect(refreshed).toHaveBeenCalledOnce();
+    const novemberBudgetAlert = { ...octoberBudgetAlert, dedupeKey: 'budget-80:2026-11' };
+    await expect(budgetAlerts.record(octoberBudgetAlert)).resolves.toBe(true);
+    await expect(budgetAlerts.record(octoberBudgetAlert)).resolves.toBe(false);
+    const concurrentResults = await Promise.all(
+      Array.from({ length: 5 }, () => budgetAlerts.record(novemberBudgetAlert)),
+    );
+    expect(concurrentResults.filter(Boolean)).toHaveLength(1);
+    const restartedBudgetAlerts = createAlertActivityStore(pool, refreshed);
+    await expect(restartedBudgetAlerts.record(novemberBudgetAlert)).resolves.toBe(false);
+    expect(refreshed).toHaveBeenCalledTimes(2);
+
+    const octoberActivity = (await pool.request()
+      .input('dedupeKey', sql.NVarChar(200), octoberBudgetAlert.dedupeKey)
+      .query<{ id: string }>('SELECT CAST(id AS varchar(19)) AS id FROM dbo.activity WHERE alert_key = @dedupeKey'))
+      .recordset[0];
+    if (!octoberActivity) throw new Error('October budget alert was not persisted');
+    await expect(createNowFeedStore(pool).dismiss(octoberActivity.id)).resolves.toBe(true);
+    await expect(restartedBudgetAlerts.record(octoberBudgetAlert)).resolves.toBe(false);
+    const budgetHistory = await pool.request().query<{ alerts: number; dismissed: number }>(`SELECT
+      COUNT(*) AS alerts,
+      SUM(CASE WHEN alert_key = N'budget-80:2026-10' AND dismissed_at IS NOT NULL THEN 1 ELSE 0 END) AS dismissed
+      FROM dbo.activity WHERE alert_key IN (N'budget-80:2026-10', N'budget-80:2026-11');`);
+    expect(budgetHistory.recordset[0]).toEqual({ alerts: 2, dismissed: 1 });
 
     const feed = await createNowFeedStore(pool).read();
     expect(feed.items).toEqual(expect.arrayContaining([
