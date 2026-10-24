@@ -190,6 +190,8 @@ describe('one shared Daily read contract', () => {
       trainingTargets: () => ({ read: f.targetRead, write: vi.fn() }) };
     const module = createDailyModules(true, data)[0]!;
     const tool = createToolRegistry([module]).get('daily_query')!;
+    expect(tool.description).toMatch(/intent in Danish or English/iu);
+    expect(tool.description).toMatch(/measurement history for the requested period and trainingTargets/iu);
     const query = { source: sources.trainingTargets };
     const result = await tool.execute(query, request(), signal());
     expect(result).toMatchObject({
@@ -205,6 +207,31 @@ describe('one shared Daily read contract', () => {
     expect(f.targetRead).toHaveBeenCalledOnce();
     expect(JSON.stringify(result)).not.toContain(owner);
     expect(createDailyModules(false, data)).toEqual([]);
+
+    f.targetRead.mockResolvedValueOnce({
+      targets: { gymSessionsPerWeek: null, runSessionsPerWeek: null, dailySteps: 8_500 },
+      updatedAt: '2026-10-17T07:00:00.000Z',
+    });
+    const configured = await tool.execute(query, request(), signal());
+    expect(configured).toMatchObject({
+      items: [{ targets: { dailySteps: 8_500 }, missing: ['gymSessionsPerWeek', 'runSessionsPerWeek'] }],
+    });
+    expect(f.targetRead).toHaveBeenCalledTimes(2);
+
+    f.history.mockResolvedValueOnce({ items: [{
+      metric_name: 'step_count', metric_date: '2026-10-17', value: 7_200, unit: 'count',
+      avg_value: null, updated_at: '2026-10-17T07:00:00Z',
+    }], next: null });
+    const steps = await tool.execute({
+      source: sources.metrics, startDate: '2026-10-17', endDate: '2026-10-17', metric: 'step_count',
+    }, request(), signal());
+    expect(steps).toMatchObject({
+      period: { startDate: '2026-10-17', endDate: '2026-10-17', timeZone: 'Europe/Copenhagen' },
+      items: [{ metric_name: 'step_count', metric_date: '2026-10-17', value: 7_200, unit: 'count' }],
+    });
+    expect(f.history).toHaveBeenLastCalledWith('metrics', {
+      startDate: '2026-10-17', endDate: '2026-10-17', metric: 'step_count', limit: 50,
+    }, expect.any(AbortSignal));
   });
   it('filters one exact measurement and exposes a paged metric catalogue with sorted mixed units', async () => {
     const f = fixture();

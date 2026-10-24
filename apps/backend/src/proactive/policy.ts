@@ -43,9 +43,11 @@ export function findingAllowed(
 export function itemAllowed(settings: ProactiveSettings, item: {
   kind: 'finding' | 'test';
   category: FindingCategory | null;
+  ownerRequested?: boolean;
   suggestionScope?: SuggestionScope;
   relatedCategories?: readonly FindingCategory[];
 }): boolean {
   if (item.kind === 'test' || item.category === null) return true;
+  if (item.ownerRequested === true) return true;
   return findingAllowed(settings, item.category, item.suggestionScope ?? 'unknown', item.relatedCategories);
 }

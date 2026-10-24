@@ -79,6 +79,23 @@ describe('committed SQL manifest', () => {
     const down = await readDownMigration('0064_owner_sessions.sql');
     expect(down.sql.trim()).toBe('DROP TABLE dbo.owner_sessions;');
   });
+  it('adds no-default owner reminder schedules with task identity and delivery leases', async () => {
+    const migration = (await readMigrations()).find(({ name }) => name === '0065_owner_reminder_schedules.sql');
+    expect(migration?.sql).toContain('CREATE TABLE dbo.owner_reminder_schedules');
+    expect(migration?.sql).toContain('owner_object_id uniqueidentifier NOT NULL');
+    expect(migration?.sql).toContain('idempotency_key char(64)');
+    expect(migration?.sql).toContain('task_identity char(64)');
+    expect(migration?.sql).toContain('claim_token uniqueidentifier NULL');
+    expect(migration?.sql).toContain('lease_until datetime2(7) NULL');
+    expect(migration?.sql).toContain('last_fire_at datetime2(7) NULL');
+    expect(migration?.sql).toContain('owner_requested bit NOT NULL');
+    expect(migration?.sql).toContain('DEFAULT 0');
+    expect(migration?.sql).not.toMatch(/\bINSERT\b|\bUPDATE\b/u);
+    const down = await readDownMigration('0065_owner_reminder_schedules.sql');
+    expect(down.sql).toContain('Owner reminder schedules must be retained');
+    expect(down.sql).toContain('Owner-requested reminder items must be retained');
+    expect(down.sql).toContain('DROP TABLE dbo.owner_reminder_schedules;');
+  });
   it('adds the proactive operational schema and a reversible proactive job kind', async () => {
     const foundation = (await readMigrations()).find(({ name }) => name === '0055_proactive_foundation.sql');
     expect(foundation?.sql).toContain("CHECK (kind IN (N'test', N'finding'))");
@@ -304,6 +321,7 @@ describe('committed SQL manifest', () => {
       '0062_github_app_mint_recovery.sql',
       '0063_proactive_suggestion_preferences.sql',
       '0064_owner_sessions.sql',
+      '0065_owner_reminder_schedules.sql',
     ]);
     for (const migration of migrations) await expect(readDownMigration(migration.name)).resolves.toMatchObject({ name: migration.name });
   });

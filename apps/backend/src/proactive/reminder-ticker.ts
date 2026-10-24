@@ -1,23 +1,26 @@
+import { createHash } from 'node:crypto';
 import type { ConversationStore } from '../core/conversation-store.js';
 import type { PushStore } from '../database/push-store.js';
 import type { createGitHubVaultClient } from '../vault/github-client.js';
 import { readVaultTasks } from './todo-discovery.js';
 import { detectLanguage } from './language.js';
-import { reminderDedupeKey, reminderKey } from './reminders.js';
+import { reminderDedupeKey, reminderKey, reminderTitle } from './reminders.js';
 import type { AlertLedgerStore } from './alert-ledger.js';
 import type { SystemPushOutcome, SystemPushRequest } from './push-delivery.js';
 import type { ProactiveReminderStore, ReminderRow } from './reminder-store.js';
 import type { ProactiveStore } from './store.js';
-import { dayKey, isQuietHour, localTimeLabel } from './time.js';
+import { dayKey, isQuietHour, localDateTimeInstant, localTimeLabel } from './time.js';
 import type { FindingInput } from './store.js';
 import type { SuggestionScope } from './types.js';
 import { findingAllowed } from './policy.js';
+import type { OwnerReminderSchedule, OwnerReminderStore } from './owner-reminder-store.js';
 
 const tickIntervalMs = 30_000;
 const retryDelayMs = 5 * 60_000;
 const verifyTimeoutMs = 20_000;
 const maxDueRows = 20;
 const maxDailyReminders = 8;
+const ownerClaimLeaseMs = 2 * 60_000;
 type VaultReader = Pick<ReturnType<typeof createGitHubVaultClient>, 'tree' | 'read'>;
 
 export interface ReminderTickerLogger {
@@ -38,6 +41,51 @@ async function readTodos(vault: VaultReader, signal: AbortSignal) {
   const timeout = AbortSignal.timeout(verifyTimeoutMs);
   const boundedSignal = AbortSignal.any([signal, timeout]);
   return abortable(readVaultTasks(vault, boundedSignal), boundedSignal);
+}
+
+function addCalendarDays(value: string, days: number): string {
+  const [year, month, day] = value.split('-').map(Number);
+  return new Date(Date.UTC(year!, month! - 1, day! + days)).toISOString().slice(0, 10);
+}
+
+function nextOwnerOccurrence(schedule: OwnerReminderSchedule, now: Date): Date | null {
+  if (!schedule.cadence || !schedule.anchorDate) return null;
+  const intervalDays = schedule.cadence === 'daily' ? 1 : 7;
+  for (let occurrence = 1; occurrence <= 3_660; occurrence += 1) {
+    const date = addCalendarDays(schedule.anchorDate, intervalDays * occurrence);
+    let next: Date;
+    try {
+      next = localDateTimeInstant(date, schedule.localTime);
+    } catch {
+      continue;
+    }
+    if (next.getTime() > now.getTime()) return next;
+  }
+  return null;
+}
+
+function ownerReminderFinding(
+  schedule: OwnerReminderSchedule,
+  task: Awaited<ReturnType<typeof readVaultTasks>>[number],
+  now: Date,
+  language: 'da' | 'en',
+): FindingInput {
+  return {
+    dedupeKey: createHash('sha256')
+      .update(`owner_reminder|${schedule.id}|${schedule.fireAt.toISOString()}`)
+      .digest('hex').slice(0, 32),
+    title: reminderTitle(task.text),
+    body: language === 'da' ? 'Ejeranmodet påmindelse om en opgave.' : 'Owner-requested reminder for a task.',
+    category: 'todo',
+    suggestionScope: task.path.startsWith('Personal/') ? 'personal'
+      : task.path.startsWith('Work/') ? 'work' : 'unknown',
+    ownerRequested: true,
+    urgency: 'normal',
+    dueAt: schedule.fireAt.toISOString(),
+    evidence: [{ source: 'todos', label: 'Todo list', observedAt: now.toISOString() }],
+    runId: null,
+    language,
+  };
 }
 
 function itemBody(row: ReminderRow, now: Date, language: 'da' | 'en'): string {
@@ -70,9 +118,10 @@ function findingFor(row: ReminderRow, now: Date, language: 'da' | 'en', suggesti
 export function createReminderTicker(options: {
   store: Pick<ProactiveStore, 'settings' | 'items'>;
   reminders: ProactiveReminderStore;
+  ownerReminders?: OwnerReminderStore;
   vault: VaultReader;
   pushStore: Pick<PushStore, 'listSubscriptions' | 'updateItemDelivery'>;
-  ledger: Pick<AlertLedgerStore, 'get'>;
+  ledger?: Pick<AlertLedgerStore, 'get'>;
   ownerObjectId: string;
   send: (request: SystemPushRequest, signal: AbortSignal) => Promise<SystemPushOutcome>;
   conversationStore?: Pick<ConversationStore, 'readRecentUserMessages'>;
@@ -120,6 +169,8 @@ export function createReminderTicker(options: {
   }
 
   async function processDue(now: Date, signal: AbortSignal): Promise<void> {
+    await processOwnerDue(now, controller.signal);
+    if (signal.aborted) return;
     const due = await options.reminders.listDue(now, maxDueRows);
     if (due.length === 0) return;
 
@@ -146,13 +197,15 @@ export function createReminderTicker(options: {
     }
     if (signal.aborted) return;
 
-    let verifiedKeys: Map<string, SuggestionScope> | undefined;
+    let verifiedKeys: Map<string, { scope: SuggestionScope; taskIdentity: string }> | undefined;
     try {
       const todos = await readTodos(options.vault, signal);
       verifiedKeys = new Map(todos.filter((todo) => !todo.done && todo.highPriority && todo.dueHasTime &&
         typeof todo.dueAt === 'string' && Number.isFinite(Date.parse(todo.dueAt)))
-        .map((todo) => [reminderKey(todo.text, new Date(todo.dueAt!).toISOString()),
-          todo.path.startsWith('Personal/') ? 'personal' : todo.path.startsWith('Work/') ? 'work' : 'unknown']));
+        .map((todo) => [reminderKey(todo.text, new Date(todo.dueAt!).toISOString()), {
+          scope: todo.path.startsWith('Personal/') ? 'personal' : todo.path.startsWith('Work/') ? 'work' : 'unknown',
+          taskIdentity: todo.taskIdentity,
+        }]));
     } catch {
       if (signal.aborted) return;
       const verifiedAt = options.now();
@@ -173,19 +226,26 @@ export function createReminderTicker(options: {
     const verifiedScopes = new Map<string, SuggestionScope>();
     if (verifiedKeys) {
       for (const row of remaining) {
-        const scope = verifiedKeys.get(row.reminderKey);
-        if (scope === undefined) {
+        const verified = verifiedKeys.get(row.reminderKey);
+        if (verified === undefined) {
           await update(row, { state: 'cancelled', reason: 'todo_changed' });
-        } else if (settings.suggestionScope === 'all' || scope === settings.suggestionScope) {
+        } else if (settings.suggestionScope === 'all' || verified.scope === settings.suggestionScope) {
           sendable.push(row);
-          verifiedScopes.set(row.reminderKey, scope);
+          verifiedScopes.set(row.reminderKey, verified.scope);
         }
       }
     }
     if (sendable.length === 0 || signal.aborted) return;
 
     const eligible: ReminderRow[] = [];
+    if (!options.ledger) return;
     for (const row of sendable) {
+      const taskIdentity = verifiedKeys?.get(row.reminderKey)?.taskIdentity;
+      if (taskIdentity && options.ownerReminders &&
+          await options.ownerReminders.hasTaskReminderNear(taskIdentity, row.fireAt, 5 * 60_000)) {
+        await update(row, { state: 'suppressed', reason: 'already_alerted' });
+        continue;
+      }
       if (row.deadlineAlertKey) {
         const alert = await options.ledger.get(row.deadlineAlertKey);
         const sentAt = alert?.status === 'sent' ? Date.parse(alert.updatedAt) : Number.NaN;
@@ -271,6 +331,128 @@ export function createReminderTicker(options: {
       now.getTime(), items.length);
   }
 
+  async function processOwnerDue(now: Date, signal: AbortSignal): Promise<void> {
+    const schedules = options.ownerReminders;
+    if (!schedules) return;
+    const claimed = await schedules.claimDue(now, maxDueRows, ownerClaimLeaseMs);
+    if (claimed.length === 0) return;
+    const active = claimed.filter((schedule) =>
+      schedule.cadence !== null || now.getTime() - schedule.fireAt.getTime() <= 7 * 24 * 60 * 60_000);
+    const missed = claimed.filter((schedule) => !active.includes(schedule));
+    await Promise.all(missed.map((schedule) => schedules.finishClaim(schedule.id, schedule.claimToken!, {
+      state: 'suppressed', reason: 'missed_time', lastDelivery: 'suppressed',
+    })));
+    if (active.length === 0 || signal.aborted) return;
+
+    let todos: Awaited<ReturnType<typeof readVaultTasks>>;
+    try {
+      todos = await readTodos(options.vault, signal);
+    } catch {
+      if (signal.aborted) return;
+      await Promise.all(active.map((schedule) => {
+        const verifyAttempts = Math.min(255, schedule.verifyAttempts + 1);
+        return schedules.finishClaim(schedule.id, schedule.claimToken!, {
+          state: verifyAttempts < 3 ? 'scheduled' : 'suppressed',
+          reason: verifyAttempts < 3 ? 'task_unavailable' : 'verification_exhausted',
+          verifyAttempts,
+          ...(verifyAttempts < 3 ? { fireAt: new Date(now.getTime() + retryDelayMs) } : {}),
+        });
+      }));
+      return;
+    }
+
+    let language: 'da' | 'en' = 'en';
+    try {
+      const messages = await options.conversationStore?.readRecentUserMessages(8);
+      if (messages?.length) language = detectLanguage(messages);
+    } catch { /* English is the safe default if recent-chat reading fails. */ }
+
+    for (const schedule of active) {
+      if (signal.aborted) return;
+      const current = await schedules.get(schedule.id);
+      if (current?.state !== 'sending' || current.claimToken !== schedule.claimToken) continue;
+      const matches = todos.filter(({ taskIdentity }) => taskIdentity === schedule.taskIdentity);
+      if (matches.length !== 1) {
+        await schedules.finishClaim(schedule.id, schedule.claimToken!, {
+          state: 'cancelled',
+          reason: matches.length === 0 ? 'task_missing' : 'task_ambiguous',
+        });
+        continue;
+      }
+      const [task] = matches;
+      if (task!.done) {
+        await schedules.finishClaim(schedule.id, schedule.claimToken!, {
+          state: 'cancelled', reason: 'task_completed',
+        });
+        continue;
+      }
+      const subscriptions = await options.pushStore.listSubscriptions(options.ownerObjectId);
+      if (signal.aborted) return;
+      const stillClaimed = await schedules.get(schedule.id);
+      if (stillClaimed?.state !== 'sending' || stillClaimed.claimToken !== schedule.claimToken) continue;
+      if (subscriptions.length === 0) {
+        await schedules.finishClaim(schedule.id, schedule.claimToken!, {
+          state: 'suppressed',
+          reason: 'no_subscription',
+          lastDelivery: 'suppressed',
+        });
+        continue;
+      }
+      const item = await options.store.items.upsertFinding(ownerReminderFinding(
+        schedule, task!, now, language,
+      ));
+      if (signal.aborted) return;
+      const latestClaim = await schedules.get(schedule.id);
+      if (latestClaim?.state !== 'sending' || latestClaim.claimToken !== schedule.claimToken) continue;
+      const outcome = await options.send({
+        kind: 'owner_reminder',
+        count: 1,
+        language,
+        itemId: item.id,
+        origin: 'proactive_reminder',
+        details: [{ title: reminderTitle(task!.text), dueAt: null }],
+      }, signal);
+      if (outcome.status === 'sent') {
+        await options.pushStore.updateItemDelivery(item.id, 'accepted', outcome.statusCode);
+        const next = nextOwnerOccurrence(schedule, now);
+        await schedules.finishClaim(schedule.id, schedule.claimToken!, {
+          state: schedule.cadence && next ? 'scheduled' : 'completed',
+          reason: null,
+          sendAttempts: 0,
+          itemId: item.id,
+          lastDelivery: 'provider_accepted',
+          lastFireAt: now,
+          ...(next ? { fireAt: next } : {}),
+          ...(task!.text !== schedule.taskTitle ? { taskTitle: task!.text } : {}),
+        });
+      } else if (outcome.status === 'failed') {
+        await options.pushStore.updateItemDelivery(item.id, 'failed', outcome.statusCode);
+        const sendAttempts = Math.min(255, schedule.sendAttempts + 1);
+        await schedules.finishClaim(schedule.id, schedule.claimToken!, {
+          state: sendAttempts < 2 ? 'scheduled' : 'failed',
+          reason: sendAttempts < 2 ? outcome.reason : 'retries_exhausted',
+          sendAttempts,
+          itemId: item.id,
+          lastDelivery: 'failed',
+          ...(sendAttempts < 2 ? { fireAt: new Date(options.now().getTime() + retryDelayMs) } : {}),
+        });
+      } else if (outcome.reason === 'no_subscription') {
+        await schedules.finishClaim(schedule.id, schedule.claimToken!, {
+          state: 'suppressed', reason: 'no_subscription', lastDelivery: 'suppressed', itemId: item.id,
+        });
+      } else if (outcome.reason === 'quiet_hours') {
+        const nextMorning = localDateTimeInstant(addCalendarDays(dayKey(options.now()), 1), '07:00');
+        await schedules.finishClaim(schedule.id, schedule.claimToken!, {
+          state: 'scheduled', reason: 'quiet_hours', fireAt: nextMorning,
+        });
+      } else if (!signal.aborted) {
+        await schedules.finishClaim(schedule.id, schedule.claimToken!, {
+          state: 'scheduled', fireAt: new Date(options.now().getTime() + retryDelayMs),
+        });
+      }
+    }
+  }
+
   async function runTick(): Promise<void> {
     if (stopped || controller.signal.aborted) return;
     const signal = AbortSignal.any([controller.signal, preferenceController.signal]);
@@ -281,7 +463,13 @@ export function createReminderTicker(options: {
       if (isQuietHour(now) || nextWakeAt === null || nextWakeAt.getTime() > now.getTime()) return;
       await processDue(now, signal);
       if (!stopped && !controller.signal.aborted) {
-        nextWakeAt = await options.reminders.earliestPendingFireAt();
+        const [automatic, explicit] = await Promise.all([
+          options.reminders.earliestPendingFireAt(),
+          options.ownerReminders?.earliestFireAt() ?? Promise.resolve(null),
+        ]);
+        nextWakeAt = automatic === null ? explicit
+          : explicit === null ? automatic
+            : automatic.getTime() <= explicit.getTime() ? automatic : explicit;
       }
     } catch {
       if (!signal.aborted) backoff('internal_error', startedAt);
@@ -309,7 +497,13 @@ export function createReminderTicker(options: {
     start(): Promise<void> {
       startup ??= (async () => {
         try {
-          nextWakeAt = await options.reminders.earliestPendingFireAt();
+          const [automatic, explicit] = await Promise.all([
+            options.reminders.earliestPendingFireAt(),
+            options.ownerReminders?.earliestFireAt() ?? Promise.resolve(null),
+          ]);
+          nextWakeAt = automatic === null ? explicit
+            : explicit === null ? automatic
+              : automatic.getTime() <= explicit.getTime() ? automatic : explicit;
         } catch {
           backoff('startup_read_failed', Date.now());
         }

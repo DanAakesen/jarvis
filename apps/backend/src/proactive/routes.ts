@@ -5,6 +5,7 @@ import type {
 import type { IncomingMessage, Server, ServerResponse } from 'node:http';
 import { budgetState, canRunWithinBudget, estimateCost } from './budget.js';
 import { copenhagenDayStart, monthKey, nextSlotAfter, isQuietHour } from './time.js';
+import { itemFeedback, itemIdPattern as uuidPattern } from './feedback.js';
 import {
   findingCategories, sourceIds, type Item, type RunSummary, type SourceId, type SourceStatus,
 } from './types.js';
@@ -14,7 +15,6 @@ import {
   type ProactiveStore,
 } from './store.js';
 
-const uuidPattern = /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/iu;
 const statusLabels = sourceLabels;
 
 export interface ProactiveRouteOptions {
@@ -100,28 +100,6 @@ function parseSettingsPatch(value: unknown): ProactiveSettingsPatch | undefined 
     patch.guidance = body.guidance;
   }
   return patch;
-}
-
-function itemFeedback(value: unknown, now: Date): { action: 'seen' | 'dismiss' | 'snooze' | 'useful' | 'wrong'; snoozeUntil?: string } | undefined {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) return undefined;
-  const body = value as Record<string, unknown>;
-  if (Object.keys(body).some((key) => !['action', 'snoozeUntil'].includes(key)) ||
-      !['seen', 'dismiss', 'snooze', 'useful', 'wrong'].includes(String(body.action))) return undefined;
-  if (body.action !== 'snooze') {
-    if (Object.hasOwn(body, 'snoozeUntil')) return undefined;
-    return { action: body.action as 'seen' | 'dismiss' | 'useful' | 'wrong' };
-  }
-  if (typeof body.snoozeUntil !== 'string' ||
-      !/^\d{4}-\d{2}-\d{2}T(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?Z$/u.test(body.snoozeUntil)) return undefined;
-  const until = new Date(body.snoozeUntil);
-  const parts = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})/u.exec(body.snoozeUntil);
-  if (!parts || !Number.isFinite(until.getTime()) ||
-      until.getUTCFullYear() !== Number(parts[1]) || until.getUTCMonth() + 1 !== Number(parts[2]) ||
-      until.getUTCDate() !== Number(parts[3]) || until.getUTCHours() !== Number(parts[4]) ||
-      until.getUTCMinutes() !== Number(parts[5]) || until.getUTCSeconds() !== Number(parts[6]) ||
-      until.getTime() <= now.getTime() ||
-      until.getTime() > now.getTime() + 7 * 24 * 60 * 60_000) return undefined;
-  return { action: 'snooze', snoozeUntil: until.toISOString() };
 }
 
 function responseSettings(settings: Awaited<ReturnType<ProactiveStore['settings']['read']>>) {

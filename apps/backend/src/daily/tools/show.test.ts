@@ -37,7 +37,7 @@ const stranger = '22222222-2222-4222-8222-222222222222';
 const observedAt = '2026-10-17T19:26:00.000Z';
 const week = { startDate: '2026-10-11', endDate: '2026-10-17' } as const;
 const ranged = { ...week, timeZone: 'Europe/Copenhagen' } as const;
-const dated = new Set<DailySourceId>([sources.metrics, sources.sleep, sources.workouts, sources.meals]);
+const dated = new Set<DailySourceId>([sources.metrics, sources.sleep, sources.workouts, sources.meals, sources.days]);
 const sleepWeek = { source: sources.sleep, ...week };
 
 afterEach(() => {
@@ -101,8 +101,10 @@ describe('daily_show descriptor', () => {
     expect(tool.bodyLimit).toBeLessThanOrEqual(4096);
     expect(tool.description.length).toBeLessThanOrEqual(4000);
     expect(tool.description).toContain('daily_query');
-    expect(tool.description).toMatch(/chart is drawn for workout duration/iu);
-    expect(tool.description).toContain('filtering is applied before the bounded row limit');
+    expect(tool.description).toMatch(/one per-day nutrient/iu);
+    expect(tool.description).toMatch(/Danish or English/iu);
+    expect(tool.description).toMatch(/not exact trigger phrases/iu);
+    expect(tool.description).toContain('filtering happens before the bounded page');
     expect(tool.description).not.toContain('from the page');
     expect(tool.description).toMatch(/adds no calculations/iu);
     expect(tool.description).toMatch(/never zero/iu);
@@ -124,8 +126,9 @@ describe('daily_show descriptor', () => {
     expect(schema.properties.source?.enum).toEqual([...dailyShowSources]);
     expect(Object.keys(schema.properties).sort()).toEqual(['display', 'endDate', 'limit', 'metric', 'source', 'startDate', 'workoutId']);
     expect(schema.properties.display?.enum).toEqual(['table', 'chart']);
-    expect(schema.properties.display?.description).toMatch(/workout duration/iu);
-    expect(schema.properties.metric?.description).toContain('before the bounded page');
+    expect(schema.properties.display?.description).toMatch(/honor an explicit table\/chart preference/iu);
+    expect(schema.properties.metric?.description).toContain('protein_grams');
+    expect(schema.properties.metric?.description).toContain('filtered before the page');
   });
 });
 
@@ -186,6 +189,7 @@ describe('daily_show input', () => {
     ['more than the most meals allowed', { source: sources.meals, ...week, limit: 101 }],
     ['more than the most favourites allowed', { source: sources.favorites, limit: 101 }],
     ['a display that is not offered', { ...sleepWeek, display: 'canary-display' }],
+    ['a nutrition selector for a table', { source: sources.days, ...week, metric: 'canary-protein' }],
     ['a blank measurement', { source: sources.metrics, ...week, metric: '   ' }],
     ['a measurement that is not text', { source: sources.metrics, ...week, metric: 5 }],
     ['a measurement that is too long', { source: sources.metrics, ...week, metric: `canary${'x'.repeat(256)}` }],
@@ -426,6 +430,32 @@ describe('daily_show publishing', () => {
     const outcome = await run(f, { source: sources.workouts, ...week, display: 'chart' });
     expect(firstRead(f).query).toEqual({ source: sources.workouts, ...week, limit: maxShownRows });
     expect(outcome.view).toMatchObject({ renderer: 'chart', viewId: 'daily-workouts-chart', rowsShown: 1, notes: [] });
+  });
+
+  it('charts a requested per-day nutrition trend without sending the display selector or nutrient as query data', async () => {
+    const rows: Row[] = [
+      { meal_date: '2026-10-16', meal_count: 2, protein_grams: 58, partial_nutrients: [], unknown_nutrients: [] },
+      { meal_date: '2026-10-17', meal_count: 1, protein_grams: 44, partial_nutrients: [], unknown_nutrients: [] },
+    ];
+    const f = fixture(answer(sources.days, rows));
+    const outcome = await run(f, { source: sources.days, ...week, metric: 'protein', display: 'chart' });
+
+    expect(firstRead(f).query).toEqual({ source: sources.days, ...week, limit: maxShownRows });
+    expect(outcome.view).toMatchObject({
+      renderer: 'chart', rowsShown: 2, rowsReturned: 2, partial: false,
+    });
+    expect(outcome.result.items).toEqual(rows);
+    expect(operations(f)).toEqual(['update', 'show']);
+  });
+
+  it('honors an explicit table preference for a selected nutrition period', async () => {
+    const f = fixture(answer(sources.days, [{
+      meal_date: '2026-10-17', meal_count: 1, protein_grams: 44, partial_nutrients: [], unknown_nutrients: [],
+    }]));
+    const outcome = await run(f, { source: sources.days, ...week, display: 'table' });
+
+    expect(firstRead(f).query).toEqual({ source: sources.days, ...week });
+    expect(outcome.view.renderer).toBe('table');
   });
 
   it('shows sync evidence as one detail view without dates', async () => {

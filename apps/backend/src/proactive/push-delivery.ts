@@ -2,7 +2,7 @@ import { generateVapidKeyPair, sendWebPush, type PushSendOrigin, type VapidKeyPa
 import type { PushStore, StoredPushSubscription } from '../database/push-store.js';
 import { copenhagenDayStart, dayKey, isQuietHour, localTimeLabel } from './time.js';
 
-export type SystemPushKind = 'alert' | 'due_soon' | 'overdue' | 'mixed';
+export type SystemPushKind = 'alert' | 'due_soon' | 'overdue' | 'mixed' | 'owner_reminder';
 
 export interface SystemPushRequest {
   kind: SystemPushKind;
@@ -50,6 +50,7 @@ function countHeadline(request: SystemPushRequest): string {
   const { kind, count, language } = request;
   const da = language === 'da';
   switch (kind) {
+    case 'owner_reminder': return da ? 'Påmindelse' : 'Reminder';
     case 'alert': return da
       ? count === 1 ? '1 tidskritisk ting kræver din opmærksomhed' : `${count} tidskritiske ting kræver din opmærksomhed`
       : count === 1 ? '1 time-critical item needs you' : `${count} time-critical items need you`;

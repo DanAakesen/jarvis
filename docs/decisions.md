@@ -1,5 +1,47 @@
 # Decisions
 
+## Owner-requested reminders reuse proactive delivery (#1239; 23 October 2026)
+
+Accepted for the direct owner request in #1239:
+
+- **Keep explicit schedules separate from automatic due reminders.** Persist
+  owner-requested schedules with their own time, cadence, repeat-until-done
+  choice, state, idempotency key and delivery lease. Never derive or modify the
+  task deadline from a requested reminder time.
+- **Reuse the existing ticker, Proactive item, push subscriptions and encrypted
+  Web Push sender.** A small `owner_requested` item marker bypasses only
+  automatic finding category/scope filters. It does not alter proactive
+  settings. Suppress an automatic reminder only for the same stable task
+  identity within five minutes of an explicit occurrence.
+- **Verify task identity conservatively.** Prefer an Obsidian task ID so wording
+  and path changes survive sync; otherwise use normalized task text and stop
+  when identity is missing or ambiguous. Completion cancels future occurrences;
+  dismissing a notification never completes the task.
+- **Preserve quiet hours.** Refuse a direct request for a quiet-window time
+  instead of moving it without consent. Report provider acceptance separately
+  from actual device display or acknowledgement.
+- **No activation or default schedule.** Migration 0065 adds durable structures
+  only. Schedule creation requires a verified runtime owner request; no
+  production settings, owner tasks or schedules are changed by implementation.
+  Rollback refuses to discard schedule or explicit-reminder item data.
+
+## Azure budget warning deduplication follows recurring months (#1238; 23 October 2026)
+
+- The ARM budget's `timeGrain: Monthly` defines recurring calendar-month periods;
+  `timePeriod.startDate` remains its activation date and is not reused as each
+  month's warning key. Use the current UTC `YYYY-MM` for the 80% activity key.
+- Keep the existing `budget-80:YYYY-MM` format so an October 2026 warning written
+  with the old logic remains the October warning; November and later months create
+  distinct rows without rewriting alert history. SQL's unique alert-key index keeps
+  polling, restarts, concurrent checks and dismissal from creating another row for
+  the same month.
+- Reject unsupported budget grains and invalid or future activation dates instead
+  of reporting a successful threshold check. The budget amount, resource, threshold,
+  polling, ARM permissions and infrastructure are unchanged.
+- **Evidence:** Azure [budget tutorial](https://learn.microsoft.com/en-us/azure/cost-management-billing/costs/tutorial-acm-create-budgets);
+  deterministic unit tests and isolated SQL integration coverage. Live Azure
+  polling and a future-month production warning have not been verified.
+
 ## Shared conversational task writes and versioned note replacement (23 October 2026; #1236)
 
 Use the existing vault task parser and marker-preserving edits in one service
@@ -2730,6 +2772,35 @@ appears on screen the way other generated views do.
   caught two defects, split table values and an empty read without a read time, both
   fixed. It is not live data, a physical phone, keyboard or reduced-motion coverage,
   provider acceptance or Daily acceptance. Rolling back means reverting this change.
+
+## Intent-led Health answers in chat and supported voice (23 October 2026; #1243)
+
+Owner-approved follow-on to #731 and the shared read/target coverage delivered in
+#1197/#1198. “nummer 6 skal være med sprogforståelsen og ikke være båndet til tabel
+eller chart” means Health assistance should understand the question before choosing
+its answer, rather than hardwire nutrition to tables or measurements to charts.
+
+- The existing model interprets Danish or English requests and conversational
+  follow-ups, choosing a source, period, metric and response form from intent.
+  Straightforward facts and explanations stay in the conversation; explicit table
+  or chart requests are honored where supported, and a useful trend may use a
+  visual. The shared tool descriptions keep this behavior consistent across chat
+  and supported browser voice.
+- The model's choice is not an authorization or a renderer contract. Existing
+  `daily_query` schema validation, `daily_show` source/date/selector/page checks,
+  owner and channel guards, generated-view validation and Workspace acknowledgments
+  remain authoritative. Missing target, unknown values, partial pages and
+  lower-bound nutrition totals stay explicit; the model cannot infer a cause from
+  differences alone.
+- Reuse `daily_query` for actual saved step targets and requested-period history.
+  Reuse existing per-day nutrition totals for a chart of one selected nutrient;
+  the chart does not sum values, fill missing dates or imply full-period coverage.
+  No new model pipeline, read tool, store, renderer, target write or Workspace
+  lifecycle is introduced.
+- Verification uses synthetic records, including selected nutrient charts,
+  unknown/partial values, explicit table preference, and configured/unset targets.
+  It does not establish live provider behavior, real Health data or physical-device
+  acceptance; preserve unsupported phone restrictions.
 
 ## Switch proactive todo additions, alerts and reminders (milestones 3 and 4) on in production (18 October 2026; P13-15 / #936)
 
@@ -8155,6 +8226,21 @@ Aggregate health is `failed` for any failing scope and `unknown` when only
 unscoped legacy alerts remain, because their source scope cannot be proven.
 Do not infer the cause of a failed mint or production recovery from offline
 tests; no production state or credentials were inspected.
+
+## Per-finding conversational feedback (23 October 2026; #1240)
+
+Reuse UI feedback validation and the existing owner-scoped item store for one
+shared chat/voice tool. Require a current stored direct owner request; resolve
+pronouns/ordinals only from earlier bounded session recall, never from a
+same-turn model-selected list or source instructions. Ask on ambiguity. Use the
+existing seven-day snooze range and Europe/Copenhagen clock, rejecting DST gaps
+and requiring CET/CEST for folds. Confirm the saved exact local time.
+
+Use optional conditional item updates rather than a schema migration to avoid
+clobbering intervening UI/tool feedback. Short-lived in-memory request tracking
+prevents reapplying a completed request during its valid conversation lifetime.
+No preference, task-completion or independent reminder behavior is added.
+Offline synthetic checks establish local behavior only, not live acceptance.
 
 ## Chat tool chips hide after delivery (23 October 2026; #1085)
 

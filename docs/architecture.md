@@ -883,7 +883,7 @@ Jarvis is one backend with a shared core and one module per area, a static web a
 | Files | Azure Blob Storage for artifacts, logs, and archived task events | Decided |
 | Secrets | Azure Key Vault (RBAC) | Decided |
 | Images | Azure Container Registry: backend and sandbox images | Decided |
-| Monitoring | Pino 10.4.0 JSON logs, Application Insights SDK 3.16.0 manual traces + Log Analytics workspace in the resource group (L8); allowlisted voice-turn and PC bridge timings; stateful Azure Monitor email alerts and 300 DKK budget thresholds | Timing fields are content-free and allowlisted; alert contracts, deduplication and Bicep compile offline; SQL Server integration, live ingestion, budget reads and email delivery remain unverified |
+| Monitoring | Pino 10.4.0 JSON logs, Application Insights SDK 3.16.0 manual traces + Log Analytics workspace in the resource group (L8); allowlisted voice-turn and PC bridge timings; stateful Azure Monitor email alerts and 300 DKK budget thresholds | Timing fields are content-free and allowlisted; Azure's monthly budget poll stores one 80% activity alert per UTC calendar month in SQL, independent of the budget activation date; alert contracts, deduplication and Bicep compile offline; SQL Server integration, live ingestion, budget reads and email delivery remain unverified |
 | Infrastructure as code | Bicep, deployed by GitHub Actions with OpenID Connect | Bicep provisions no Teams Bot or separate Speech F0 resources; local Bicep checks pass, live Azure setup remains pending |
 | Sign-in | Entra ID: tenant-specific MSAL Browser requests the delegated `jarvis-api` scope; backend verifies bearer tokens with jose 6.2.12 and Dan's object ID. `/me` returns only the validated display name. The hosted Jarvis agent's app-only token (`Jarvis.Tools`), runner identity, and P7-06 device-code bridge identity are restricted to explicitly opted-in routes; the bridge also requires its client ID, Dan's object ID, tenant and delegated API scope | Browser, agent, runner and bridge auth contracts are checked offline; live Dan sign-in, deployed chat invocation and the bridge's live Windows sign-in remain unverified |
 | Board updates | Authenticated server-sent events (SSE) over `fetch`, so the bearer token can be sent. Shared contracts type task-event records and stream messages; reconnects resume from `Last-Event-ID`, persisted task events replay before buffered live hub events, and duplicate IDs are suppressed. A typed backend formatter emits task frames and 25-second comment heartbeats. | Implemented and tested offline; SQL Server integration and deployed streaming remain unverified |
@@ -6275,15 +6275,23 @@ reading when `workspaceCommands.isConnected(owner)` is false. One
 `service.query` page then runs over the read model behind `POST /daily/query`
 (at most 366 days and 200 rows, 100 for meals, favourites and plans). A selected
 measurement is filtered by the shared read model before that row limit; exact
-keys take precedence over their readable labels. Its coverage and partial
-disclosures therefore describe the filtered page, not the full requested
-period. The pure
+keys take precedence over their readable labels. For nutrition days, `metric`
+selects one allowlisted nutrient for a chart but does not filter the returned
+daily rows. Its coverage and partial disclosures therefore describe the bounded
+page, not the full requested period. The pure
 `buildDailyView` (`apps/backend/src/daily/show/views.ts`) turns it into a view, and
 the tool publishes it through the workspace view lifecycle: `update` first, `create`
 when the view does not exist yet, and for a refresh a best-effort foreground `show`.
 The receipt says whether the view was created or refreshed. Refresh success
 depends on an applied broker acknowledgement; the following foreground `show`
 is best-effort and cannot turn a successful refresh into a failure.
+
+The shared query/show tool descriptions guide the existing model used for chat and
+supported browser voice: it interprets English or Danish intent, period, metric,
+format and follow-up context, and chooses a read or presentation. Tool arguments
+are still parsed and allowlisted by the backend; `daily_query` validates against
+`isDailyQuery`, and the generated view is checked by `isWorkspaceCommand` before
+publication. The model does not supply rendered records or bypass those guards.
 
 `buildDailyView` maps stored rows onto the existing `table`, `chart`, `detail` and
 `text` generated-view contracts and calculates nothing: values and units pass
@@ -6295,8 +6303,11 @@ one, and "Completeness and freshness are not established." View IDs are
 `daily-<source>-<table|chart>` or `daily-sync`. A measurement view filtered to one
 metric adds the form and a short digest of the metric name; a heart-rate view is
 keyed by its rendered form and workout, not by its date window, so asking again
-refreshes the same view. Only sleep hours, one measurement or heart rate can be
-drawn as a chart, and any other chart request becomes a table with a note. An empty
+refreshes the same view. A chart is drawn for workout duration, sleep hours, one
+measurement, one selected per-day nutrition nutrient, or heart rate. Nutrition
+charts plot the existing daily totals without summing or filling gaps; unknown
+values stay out, and partial totals are labelled and disclosed as lower bounds.
+Unselected or incomparable chart requests become a table with a note. An empty
 read becomes a `text` view carrying its own read time.
 
 The tool answers within 25 seconds overall, under the agent's 30-second default
@@ -6946,7 +6957,7 @@ variants and remaining component-specific layouts are listed in
 `index.ts` builds the `proactive` tool module only when the existing
 `JARVIS_PROACTIVE_ENABLED` flag is true. It shares the exact `ProactiveStore`
 instance with `registerProactive`; disabled composition adds no store or tool.
-The single `proactive_recent_items` tool reads through `items.list`, the same
+The `proactive_recent_items` tool reads through `items.list`, the same
 bounded query used by the Proactive page, with exact `new`, `seen` or `all`
 filters. SQL state filters are parameterized; the store remains owner-scoped.
 Shared chat/voice guidance mentions the tool only when it is in that catalogue.
@@ -6955,8 +6966,36 @@ The result projects only the nine requested item fields, truncates title/body on
 code-point boundaries, caps the serialized result at 8 KiB and marks it
 `untrusted: true`. The tool is sensitive so private item text is not persisted
 in generic tool-call audit records. Raw JSON validation runs before Fastify's
-AJV coercion; failures remain explicit tool refusals/errors. The module exposes
-no item mutation or approval capability.
+AJV coercion; failures remain explicit tool refusals/errors.
+
+### Per-finding conversational feedback (#1240)
+
+The sensitive `proactive_item_feedback` tool shares `feedback.ts` validation and
+`items.applyFeedback` with the UI. It verifies the latest stored owner message
+in an active chat/voice session (not phone), matches one direct English/Danish
+action and resolves its target server-side. Explicit IDs or unique recent
+titles/categories are supported; pronouns and ordinals require an earlier
+session-bound recall. A same-turn model-selected recall cannot authorize a
+pronoun. Source bodies, quoted instructions and model-supplied IDs do not
+authorize writes. Exact title matches take precedence over optional reference
+prefixes. The owner text is rechecked before saving, including voice transcript
+revisions that retain the same message ID.
+
+Recall snapshots expire after 15 minutes, retain at most ten reads of twenty
+items per session and at most 100 sessions. Restart loses contextual references
+and requires another recall or explicit owner reference. Material changes
+invalidate contextual references. Requests older than 15 minutes are refused;
+completed request IDs are bounded to 1,000 in memory for that lifetime, and
+duplicate requests report current state without writing again.
+
+Snooze parses explicit ISO local dates or today/tomorrow with a 24-hour time in
+Europe/Copenhagen. Nonexistent DST times are rejected; repeated times require
+CET/CEST. The existing future-only seven-day limit is unchanged. Confirmations
+come from the saved state, including local date, time, offset and timezone.
+Conversational writes pass an optional state/content guard to the atomic SQL
+or memory update; an intervening change refuses the write. UI calls retain
+their existing contract. There are no new schedules, task writes, preferences,
+credentials or migrations; existing delivery paths read the shared item state.
 
 ## Conversational proactive suggestion preferences (#1207)
 
@@ -7002,6 +7041,36 @@ todo writing and reminder planning/delivery apply the current policy. Existing
 items are retained and reappear if re-enabled; preference changes do not delete
 owner tasks or reminders. Enabling a category changes no pause, source, budget
 or safety setting.
+
+## Owner-requested task reminders (#1239)
+
+The shared owner-reminder tool is added to the active chat and voice tool
+catalogue only when proactive composition is enabled. A direct owner message
+authorizes create, update, snooze or cancel; read remains owner-scoped. Creation
+requires an exact open-task match and derives an identity from an Obsidian `🆔`
+marker when present, otherwise from normalized task text. The independent
+`owner_reminder_schedules` table stores requested Copenhagen time, recurrence,
+idempotency key, delivery/verification state and a lease. Migration 0065 creates
+no schedules. Its companion `owner_requested` item marker lets an explicit
+reminder bypass automatic finding category/scope filters without changing those
+preferences.
+
+The existing in-process reminder ticker claims these schedules with expiring
+leases, re-reads vault tasks before sending, and stops on a missing, ambiguous or
+completed task. Obsidian-ID matches survive task wording and path changes.
+Sends reuse the existing push subscription store, encrypted Web Push sender and
+Proactive item delivery record. The schedule distinguishes scheduled,
+suppressed, provider-accepted and failed outcomes; no device acknowledgement is
+inferred. A task's automatic due reminder is suppressed only when it matches the
+explicit task identity and falls within five minutes of that explicit
+occurrence. Quiet-hour requests are refused rather than silently shifted.
+
+The SQL store serializes creation per owner, deduplicates by source message,
+limits active schedules, and atomically claims due rows; expired leases permit
+restart recovery. Cancellation clears the claim so a stale worker cannot finish
+the cancelled row. The rollback refuses to drop schedule or owner-requested
+item data. No deployment setting, task, subscription or schedule is changed by
+this feature.
 
 ## Web Daily presentation kit and Workouts (18 October 2026; P12-30)
 

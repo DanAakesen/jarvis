@@ -136,6 +136,7 @@ import { composeDaily } from './daily/composition.js';
 import { createFoundryMailSemanticModel } from './daily/feeds/foundry-model.js';
 import { registerProactive } from './proactive/composition.js';
 import { createProactiveStore } from './database/proactive-store.js';
+import { createOwnerReminderStore } from './database/owner-reminder-store.js';
 import { createMemoryProactiveStore } from './proactive/store.js';
 import { createProactiveToolsModule } from './proactive/tools.js';
 import { createSqlHealthUpload } from './daily/health-upload/sql-composition.js';
@@ -891,10 +892,21 @@ try {
       ? createProactiveStore(database.pool, config.auth.ownerObjectId)
       : createMemoryProactiveStore(config.auth.ownerObjectId)
     : undefined;
+  let scheduleOwnerReminderWake: (fireAt: Date) => void = () => {};
+  const ownerReminderStore = config.proactiveEnabled && config.pushEnabled && config.staticWebAppOrigin &&
+      database && vaultClient
+    ? createOwnerReminderStore(database.pool, config.auth.ownerObjectId)
+    : undefined;
   const proactiveToolsModule = createProactiveToolsModule({
     enabled: config.proactiveEnabled,
     ownerObjectId: config.auth.ownerObjectId,
     ...(proactiveStore ? { store: proactiveStore } : {}),
+    ...(ownerReminderStore && vaultClient ? {
+      ownerReminders: ownerReminderStore,
+      vault: vaultClient,
+      now: () => new Date(),
+      onReminderScheduled: (fireAt: Date) => scheduleOwnerReminderWake(fireAt),
+    } : {}),
   });
   const modules: BackendModule[] = createProductionModules({
     core: coreModule,
@@ -1226,7 +1238,7 @@ try {
     } : {}),
     publicOrigin: config.staticWebAppOrigin!,
   }));
-  const alertPushStore = config.proactiveEnabled && config.proactiveAlertsEnabled && config.pushEnabled &&
+  const alertPushStore = config.proactiveEnabled && config.pushEnabled &&
       database && config.staticWebAppOrigin
     ? createPushStore(database.pool)
     : undefined;
@@ -1262,7 +1274,9 @@ try {
     ...(conversationStore ? { conversationStore } : {}),
     registerVaultPushHandler: (handler: () => void) => { vaultPushReminderHandler = handler; },
     ...(alertPushStore ? { pushStore: alertPushStore } : {}),
+    ...(ownerReminderStore ? { ownerReminderStore } : {}),
     ...(alertPushSender ? { systemPushSender: alertPushSender } : {}),
+    registerReminderWakeHandler: (handler: (fireAt: Date) => void) => { scheduleOwnerReminderWake = handler; },
     pushEnabled: config.pushEnabled,
     todoWritesEnabled: config.proactiveTodoWritesEnabled,
     alertsEnabled: config.proactiveAlertsEnabled,

@@ -20,6 +20,7 @@ export interface ParsedVaultTodo extends ParsedTodo {
   path: string;
   line: number;
   heading: string | null;
+  taskIdentity: string;
   /** Opaque SHA-256 of the exact raw line, so a write can prove the line is unchanged since it was read. */
   version: string;
 }
@@ -65,6 +66,14 @@ export function taskLineVersion(rawLine: string): string {
   return createHash('sha256').update(rawLine, 'utf8').digest('hex');
 }
 
+function taskIdentity(rawText: string, text: string): string {
+  const stableId = /🆔\s*([a-z\d-]{1,80})/iu.exec(rawText)?.[1]?.toLocaleLowerCase('en');
+  const identity = stableId
+    ? `obsidian:${stableId}`
+    : `text:${text.normalize('NFC').toLocaleLowerCase('en').replace(/\s+/gu, ' ').trim()}`;
+  return createHash('sha256').update(identity, 'utf8').digest('hex');
+}
+
 export function parseTodosWithContext(content: string, path: string): ParsedVaultTodo[] {
   const lines = content.replace(/^\uFEFF/u, '').split(/\r?\n/u);
   const todos: ParsedVaultTodo[] = [];
@@ -96,7 +105,7 @@ export function parseTodosWithContext(content: string, path: string): ParsedVaul
       .replace(/🕒\s*\d{2}:\d{2}/gu, ' ')
       .replace(/[⏳🛫➕✅❌]\s*\d{4}-\d{2}-\d{2}/gu, ' ')
       .replace(/🔁\s*[^📅⏳🛫➕✅❌🔁🏁⏫🔼🔽⏬🔺🆔⛔🕒[]*/gu, ' ')
-      .replace(/[🆔⛔]\s*[a-z\d]+(?:\s*,\s*[a-z\d]+)*/giu, ' ')
+      .replace(/[🆔⛔]\s*[a-z\d-]+(?:\s*,\s*[a-z\d-]+)*/giu, ' ')
       .replace(/🏁\s*(?:delete|keep)\b/giu, ' ')
       .replace(priorityMarkersPattern, ' ')
       .replace(taskMetadata, ' '));
@@ -113,6 +122,7 @@ export function parseTodosWithContext(content: string, path: string): ParsedVaul
       path,
       line: index + 1,
       heading,
+      taskIdentity: taskIdentity(rawText, text),
       version: taskLineVersion(line),
     });
   }
