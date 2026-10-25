@@ -840,7 +840,6 @@ try {
   }
   const voiceRelayModule = (config.voiceLiveEndpoint || config.foundryProjectEndpoint) && credential
     ? createVoiceRelayModule({
-      toolBudgetProbeEnabled: config.voiceToolBudgetProbeEnabled,
       frameStore,
       ...(screenVision && settingsStore ? {
         reserveImageBudget: async (input) => {

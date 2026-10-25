@@ -12,8 +12,9 @@ import {
   createEnglishSessionUpdate,
   createRealtimeSessionUpdate,
   DANISH_REALTIME_VOICE,
-  TOOLS_UNAVAILABLE_NOTICE,
   executeRealtimeToolCall,
+  VOICE_CAPABILITY_DISCOVERY_TOOL,
+  VOICE_CAPABILITY_EXECUTION_TOOL,
   resolveCalendarReply,
   calendarStatusQuestion,
   calendarTurnContext,
@@ -509,15 +510,22 @@ describe('English realtime session', () => {
     expect(session.tools).toEqual([expect.objectContaining({ name: 'echo' })]);
   });
 
-  it('uses the same versioned owner identity in full and reduced English voice instructions', () => {
+  it('uses the same owner identity and discovery protocol in full and compact voice instructions', () => {
     const identity = { description: 'Synthetic role: broad family and work assistant.' };
+    const customMode = 'Synthetic current-mode preference.';
+    const personality = {
+      ...defaultSettings.personality,
+      modeInstructions: { ...defaultSettings.personality.modeInstructions, on_the_move: customMode },
+    };
+    const presence = { ...defaultAwayModeState, mode: 'on_the_move' as const };
+    const projects = [{ id: 'synthetic', name: 'Synthetic project', repo: 'example/repo' }];
     const full = createRealtimeSessionUpdate(
-      registry, defaultSettings.personality, defaultAwayModeState, 'en', [], undefined, undefined,
+      registry, personality, presence, 'en', projects, undefined, undefined,
       undefined, 'full', identity,
     ).session.instructions;
     const reduced = createRealtimeSessionUpdate(
-      registry, defaultSettings.personality, defaultAwayModeState, 'en', [], undefined, undefined,
-      undefined, 'compact', identity,
+      registry, personality, presence, 'en', projects, undefined, undefined,
+      undefined, 'compact', identity, 'discovery',
     ).session.instructions;
 
     for (const instructions of [full, reduced]) {
@@ -525,8 +533,10 @@ describe('English realtime session', () => {
       expect(instructions).toContain(JSON.stringify(identity.description));
       expect(instructions).toContain('Fixed truthfulness and security kernel');
       expect(instructions).toContain('I am Jarvis, Dan\'s broad personal AI assistant');
+      expect(instructions).toContain(JSON.stringify(customMode));
+      expect(instructions).toContain('Synthetic project (example/repo, project ID synthetic)');
     }
-    expect(reduced).toContain(TOOLS_UNAVAILABLE_NOTICE);
+    expect(reduced).toContain(VOICE_CAPABILITY_DISCOVERY_TOOL);
   });
 
   it('validates and executes a registered tool, returning its result', async () => {

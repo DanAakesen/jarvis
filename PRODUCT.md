@@ -476,26 +476,23 @@ Presence has three modes: Present (`present`, green), Away (`away`, yellow), and
 
 English voice sessions use Ryan HD and the British butler persona. The backend owns the realtime session and executes registered tools; the browser never executes tool calls or supplies their results. Jarvis relays the backend-built confirmation for successful, refused, and failed actions.
 
-Voice startup must not silently wait for the browser's 60-second warm-up limit:
-the Danish route's upstream connection and readiness each have a 15-second relay
-deadline. English starts at R1, which includes configured Daily tools but
-omits proactive tools. This larger frame has not been verified live and is not
-the frame measured in the earlier startup probe. If it fails, the existing
-bounded fallback may select a rung without Daily tools; Jarvis must report that
-limitation and suggest chat rather than claim the capability succeeded. After a
-session becomes ready below R0, an independent background probe can test larger
-frames no more than once every 30 minutes per process. A ready probe remembers a
-larger rung for later sessions and queues that catalogue on the active session.
-The active dispatcher changes only after Voice Live acknowledges the session
-update; a failed acknowledgement follows the existing reconnect path. Probing is enabled by default and
-can be disabled with
-`JARVIS_VOICE_TOOL_BUDGET_PROBE_ENABLED=false`. A missed deadline, or every
-foreground size failing, closes the socket with code 4010 and shows “Voice
-service did not become ready. Retrying…” using the existing reconnect backoff.
-Readiness remains `session.updated` for English and `session.created` or
-`session.updated` for Danish. Content-free stage, attempt, probe and
-terminal-summary logs support diagnosis; real provider acceptance still
-requires an owner voice attempt after deployment.
+Browser voice uses the same canonical backend tool registry and execution policy
+for Danish and English. Voice Live first advertises every configured tool with
+its validated schema. If that bounded startup attempt fails, a second attempt
+advertises only paged capability discovery and execution functions; discovery
+reads the same registry, and dispatch still enters the existing validator,
+authorization and approval path. This representation does not remove Daily or
+proactive capabilities. The model must discover a capability before using it;
+an undiscovered or unregistered call is rejected. Large discovery responses
+fail explicitly rather than silently truncating the catalogue.
+
+Each Voice Live startup attempt uses a fresh socket and a six-second
+`session.updated` deadline. The process remembers the last acknowledged
+representation for reconnects. If both attempts fail, the relay closes with
+code 4010 and the browser uses its existing retry backoff. The hosted Danish
+voice-agent fallback retains its provider-owned setup and `session.created`
+readiness path. No background tool-budget probes run. Provider acceptance and
+real browser audio still require an owner attempt after deployment.
 
 During an English voice session, Jarvis announces task completion, tasks needing attention, ready pull requests, and failed deployments. The backend merges bursts and waits until Dan is no longer speaking or Jarvis has finished its current response. Announcements use fixed, short wording rather than task titles, messages, or logs. `get_status_summary` answers status questions with aggregate counts from the Now feed.
 

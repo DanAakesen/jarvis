@@ -9,7 +9,10 @@ import type { ConversationStore } from '../core/conversation-store.js';
 import { defaultAwayModeState } from '../core/away-mode.js';
 import { createLogger } from '../logging.js';
 import type { JarvisTool } from '../core/tool-registry.js';
-import { createRealtimeSessionUpdate, TOOLS_UNAVAILABLE_NOTICE } from './realtime.js';
+import {
+  VOICE_CAPABILITY_DISCOVERY_TOOL,
+  VOICE_CAPABILITY_EXECUTION_TOOL,
+} from './realtime.js';
 import { createVoiceRelayModule } from './relay.js';
 
 class FakeSocket extends EventEmitter {
@@ -53,7 +56,6 @@ function probeTool(name: string, size = 0, execute: JarvisTool['execute'] = asyn
 
 async function fixture(
   overrides: Partial<BuildAppOptions> = {}, language: 'en' | 'da' = 'en', extraTools: JarvisTool[] = [],
-  probeEnabled = false,
 ) {
   vi.useFakeTimers();
   const records: Record<string, unknown>[] = [];
@@ -85,7 +87,7 @@ async function fixture(
     endSession: vi.fn(async () => true),
   } as unknown as ConversationStore;
   const handlers = new Map<string, Handler>();
-  const voice = createVoiceRelayModule({ getToken: async () => 'unused', connect, toolBudgetProbeEnabled: probeEnabled });
+  const voice = createVoiceRelayModule({ getToken: async () => 'unused', connect });
   const config = { ...loadConfig({}), logLevel: 'info' as const };
   const app = buildApp(config, createLogger(config, undefined, output), {
     conversationStore: store,
@@ -139,21 +141,20 @@ const toolNames = (socket: FakeSocket) => frameOf(socket).session.tools.map(({ n
 const frameBytes = (socket: FakeSocket) => Buffer.byteLength(socket.sent[0]!);
 
 describe('voice startup without network', () => {
-  it('closes a silent accepted Danish upstream at 15 seconds with exactly one content-free summary', async () => {
+  it('closes a silent Danish Voice Live upstream after two capability-preserving attempts', async () => {
     const f = await fixture({}, 'da');
     f.upstream.open();
-    const payload = f.upstream.sent[0]!;
-    await vi.advanceTimersByTimeAsync(14_999);
+    await vi.advanceTimersByTimeAsync(11_999);
     expect(f.browser.close).not.toHaveBeenCalled();
     await vi.advanceTimersByTimeAsync(1);
     expect(f.browser.close).toHaveBeenCalledWith(4010, 'Voice service did not become ready');
-    expect(f.timeouts()).toEqual([expect.objectContaining({
-      stage: 'upstream_ready', lastStage: 'session_update_sent', timeoutMs: 15_000, elapsedMs: 15_000,
-    })]);
+    expect(f.attempts().map((record) => [record.rung, record.outcome])).toEqual([
+      ['R1', 'timeout'], ['R2', 'timeout'],
+    ]);
     expect(f.summaries()).toEqual([expect.objectContaining({
-      language: 'da', closedBy: 'relay', closeCode: 4010, durationMs: 15_000,
-      toolCount: 1, totalBytes: Buffer.byteLength(payload), events: [],
-      largestTools: [{ name: 'startup_probe', bytes: expect.any(Number) }],
+      language: 'da', closedBy: 'relay', closeCode: 4010, durationMs: 12_000,
+      events: [],
+      toolCount: 2,
       stages: expect.arrayContaining([
         { stage: 'session_created', elapsedMs: 0 },
         { stage: 'upstream_open', elapsedMs: 0 },
@@ -161,12 +162,11 @@ describe('voice startup without network', () => {
       ]),
     })]);
     expect(JSON.stringify(f.records)).not.toContain('private');
-    expect(f.records.some((record) => String(record.msg).startsWith('voice.tool_budget'))).toBe(false);
-    expect(f.summaries()[0]).not.toHaveProperty('toolBudgetRung');
+    expect(f.summaries()[0]!.totalBytes).toEqual(expect.any(Number));
     await vi.advanceTimersByTimeAsync(60_000);
     expect(f.summaries()).toHaveLength(1);
-    expect(f.timeouts()).toHaveLength(1);
-    expect(f.connect).toHaveBeenCalledOnce();
+    expect(f.timeouts()).toHaveLength(0);
+    expect(f.connect).toHaveBeenCalledTimes(2);
   });
 
   it('does not wait for session persistence before closing when every rung has failed', async () => {
@@ -185,15 +185,15 @@ describe('voice startup without network', () => {
     const f = await fixture({}, language);
     f.upstream.open();
     f.upstream.event('session.created');
-    if (language === 'en') f.upstream.event('session.updated');
+    f.upstream.event('session.updated');
     await vi.advanceTimersByTimeAsync(30_000);
     expect(f.browser.close).not.toHaveBeenCalled();
     f.browser.close(1000, 'private browser reason');
     expect(f.summaries()).toEqual([expect.objectContaining({
       closedBy: 'browser', closeCode: 1000,
-      events: language === 'en' ? ['session.created', 'session.updated'] : ['session.created'],
+      events: ['session.created', 'session.updated'],
       stages: expect.arrayContaining([expect.objectContaining({
-        stage: language === 'en' ? 'session_updated' : 'session_created_received',
+        stage: 'session_updated',
       })]),
     })]);
     expect(f.timeouts()).toEqual([]);
@@ -212,27 +212,26 @@ describe('voice startup without network', () => {
     expect(f.browser.sent).toEqual([]);
   });
 
-  it('summarizes an early Danish upstream close once with its original code', async () => {
+  it('falls back after an early Danish Voice Live close without exposing its private reason', async () => {
     const f = await fixture({}, 'da');
     f.upstream.open();
     f.upstream.close(1013, 'private upstream reason');
-    await vi.advanceTimersByTimeAsync(30_000);
-    expect(f.summaries()).toEqual([expect.objectContaining({
-      closedBy: 'upstream', closeCode: 1013, events: [], toolCount: 1,
-    })]);
-    expect(f.browser.close).toHaveBeenCalledWith(1011, 'Voice connection ended');
+    await vi.advanceTimersByTimeAsync(0);
+    expect(f.connect).toHaveBeenCalledTimes(2);
+    expect(f.attempts()).toEqual([expect.objectContaining({ rung: 'R1', outcome: 'closed' })]);
+    f.sockets[1]!.event('session.updated');
+    expect(f.selected()).toEqual([expect.objectContaining({ rung: 'R2' })]);
+    expect(f.browser.close).not.toHaveBeenCalled();
     expect(f.timeouts()).toEqual([]);
-    expect(JSON.stringify(f.summaries())).not.toContain('private');
+    expect(JSON.stringify(f.records)).not.toContain('private');
   });
 
-  it('bounds a Danish upstream that never opens', async () => {
+  it('bounds Danish Voice Live startup across both attempts when upstream never opens', async () => {
     const f = await fixture({}, 'da');
-    await vi.advanceTimersByTimeAsync(15_000);
+    await vi.advanceTimersByTimeAsync(12_000);
     expect(f.upstream.terminate).toHaveBeenCalledOnce();
     expect(f.browser.close).toHaveBeenCalledWith(4010, 'Voice service did not become ready');
-    expect(f.timeouts()).toEqual([expect.objectContaining({
-      stage: 'upstream_connecting', lastStage: 'upstream_connecting',
-    })]);
+    expect(f.attempts().map((record) => record.outcome)).toEqual(['timeout', 'timeout']);
     expect(f.summaries()).toHaveLength(1);
   });
 
@@ -379,24 +378,17 @@ const catalogue = () => [
 ];
 const names = (socket: FakeSocket) => toolNames(socket).sort();
 const rungOf = (record: Record<string, unknown> | undefined) => record?.rung;
-const emptyRegistry = { list: () => [], get: () => undefined };
-const compactBytes = Buffer.byteLength(JSON.stringify(createRealtimeSessionUpdate(
-  emptyRegistry, undefined, undefined, 'en', [], undefined, undefined, undefined, 'compact',
-)));
 
-describe('English voice tool-budget fallback', () => {
-  it('starts with Daily capabilities without an R0 foreground attempt', async () => {
+describe('Voice Live capability-preserving fallback', () => {
+  it('starts with direct canonical schemas while retaining the full registry', async () => {
     const f = await fixture({}, 'en', catalogue());
     f.upstream.open();
     f.upstream.event('session.created');
     f.upstream.event('session.updated');
-    expect(names(f.upstream)).toEqual(['daily_food', 'daily_food_review', 'daily_query', 'daily_show',
-      'github_write', 'set_away_mode', 'set_presence_mode', 'startup_probe', 'tiny_tool', 'workspace_command'].sort());
-    expect(names(f.upstream)).not.toContain('proactive_recent_items');
-    expect(names(f.upstream)).not.toContain('proactive_preferences');
-    expect(frameOf(f.upstream).session.instructions).toContain(TOOLS_UNAVAILABLE_NOTICE);
+    expect(names(f.upstream)).toEqual(f.app.jarvisTools.list().map(({ name }) => name).sort());
+    expect(frameOf(f.upstream).session.instructions).not.toContain(VOICE_CAPABILITY_DISCOVERY_TOOL);
     expect(f.attempts()).toEqual([expect.objectContaining({
-      rung: 'R1', outcome: 'ready', toolCount: 10, frameBytes: frameBytes(f.upstream),
+      rung: 'R1', outcome: 'ready', toolCount: f.app.jarvisTools.list().length, frameBytes: frameBytes(f.upstream),
       toolBytes: expect.any(Number), instructionsBytes: expect.any(Number), elapsedMs: 0,
     })]);
     expect(f.selected()).toEqual([expect.objectContaining({ rung: 'R1', remembered: false })]);
@@ -410,241 +402,137 @@ describe('English voice tool-budget fallback', () => {
     expect(f.connect).toHaveBeenCalledOnce();
   });
 
-  it('starts its independent full probe only after readiness and never forwards probe events', async () => {
-    const f = await fixture({}, 'en', catalogue(), true);
-    f.behaviour.onFrame = (socket) => {
-      socket.event('session.updated');
-      socket.event('response.audio.delta');
-    };
+  it('discovers bounded pages from the real compact fallback selected by the relay', async () => {
+    const f = await fixture({}, 'en', catalogue());
     f.upstream.open();
-    f.upstream.event('session.created');
+    f.upstream.event('error', { error: { code: 'schema_constraint' } });
     await vi.advanceTimersByTimeAsync(0);
-    expect(f.connect).toHaveBeenCalledOnce();
-    expect(f.records.some((record) => record.msg === 'voice.tool_budget_probe')).toBe(false);
-    expect(f.browser.sent).toEqual([]);
-
-    f.upstream.event('session.updated');
-    expect(f.browser.sent.map((data) => JSON.parse(data).type)).toEqual([
-      'session.created', 'jarvis.session.ready', 'session.updated',
-    ]);
-    await vi.advanceTimersByTimeAsync(0);
-    expect(f.connect).toHaveBeenCalledTimes(2);
-    expect(f.attempts().map((record) => record.rung)).toEqual(['R1']);
-    expect(f.records).toContainEqual(expect.objectContaining({
-      msg: 'voice.tool_budget_probe', probe: 'full', outcome: 'ready',
-    }));
-    expect(f.browser.sent.map((data) => JSON.parse(data).type)).not.toContain('response.audio.delta');
+    const active = f.sockets[1]!;
+    active.event('session.updated');
+    const discovered: string[] = [];
+    const toolOutput = (callId: string) => active.sent.map((data) => JSON.parse(data))
+      .find((message) => message.item?.call_id === callId)?.item.output;
+    let offset: number | null = 0;
+    let page = 0;
+    do {
+      const callId = `discover_${page++}`;
+      active.event('response.function_call_arguments.done', {
+        name: VOICE_CAPABILITY_DISCOVERY_TOOL, call_id: callId, arguments: JSON.stringify({ offset }),
+      });
+      await vi.advanceTimersByTimeAsync(0);
+      const output = JSON.parse(toolOutput(callId) as string) as {
+        outcome: string; result: { capabilities: { name: string }[]; nextOffset: number | null };
+      };
+      expect(output.outcome).toBe('ok');
+      expect(output.result.capabilities.length).toBeLessThanOrEqual(8);
+      discovered.push(...output.result.capabilities.map(({ name }) => name));
+      offset = output.result.nextOffset;
+    } while (offset !== null);
+    expect(discovered.sort()).toEqual(f.app.jarvisTools.list().map(({ name }) => name).sort());
+    expect(names(active)).toEqual([VOICE_CAPABILITY_DISCOVERY_TOOL, VOICE_CAPABILITY_EXECUTION_TOOL].sort());
   });
 
-  it('remembers a full-ready probe so the next live session starts at R0', async () => {
-    const f = await fixture({}, 'en', catalogue(), true);
-    f.behaviour.onFrame = (socket) => { if (socket !== f.upstream) socket.event('session.updated'); };
-    f.upstream.open();
-    f.upstream.event('session.updated');
-    await vi.advanceTimersByTimeAsync(0);
-    expect(f.records).toContainEqual(expect.objectContaining({
-      msg: 'voice.tool_budget_probe', probe: 'full', outcome: 'ready',
-    }));
-
-    const browser = new FakeSocket();
-    browser.readyState = WebSocket.OPEN;
-    await f.start(browser);
-    expect(names(f.sockets[2]!)).toContain('daily_show');
-    expect(names(f.sockets[2]!)).toContain('proactive_recent_items');
-    expect(names(f.sockets[2]!)).toContain('proactive_preferences');
-    expect(f.attempts().at(-1)).toEqual(expect.objectContaining({ rung: 'R0', outcome: 'ready' }));
-  });
-
-  it('promotes a ready no-proactive probe to Health for later sessions, updates, and dispatch', async () => {
-    const execute = vi.fn(async () => ({ status: 'available' }));
-    const outsideExecute = vi.fn(async () => ({}));
-    const f = await fixture({
-      awayModeStore: {
-        read: async () => ({ ...defaultAwayModeState, mode: 'away' }),
-      } as BuildAppOptions['awayModeStore'],
-    }, 'en', [
-      probeTool('proactive_recent_items', 0, outsideExecute),
-      {
-        name: 'daily_health_summary',
-        description: 'Read a Health summary.',
-        inputSchema: {
-          type: 'object', properties: { note: { type: 'string', minLength: 1 } },
-          required: ['note'], additionalProperties: false,
-        },
-        execute,
-      },
-    ], true);
-    f.behaviour.onFrame = (socket) => {
-      if (socket === f.upstream) {
-        socket.event('session.updated');
-        return;
-      }
-      const names = toolNames(socket);
-      if (names.includes('daily_health_summary') && !names.includes('proactive_recent_items')) {
-        socket.event('session.updated');
-      }
-    };
-
-    f.openFirst();
-    expect(f.selected()).toEqual([expect.objectContaining({ rung: 'R1' })]);
-    expect(toolNames(f.sockets[0]!)).toContain('daily_health_summary');
-    await vi.advanceTimersByTimeAsync(8_000);
-    expect(f.records).toContainEqual(expect.objectContaining({
-      msg: 'voice.tool_budget_probe', probe: 'full', outcome: 'timeout',
-    }));
-    expect(f.records).toContainEqual(expect.objectContaining({
-      msg: 'voice.tool_budget_probe', probe: 'no_proactive', outcome: 'ready',
-    }));
-
-    const browser = new FakeSocket();
-    browser.readyState = WebSocket.OPEN;
-    await f.start(browser);
-    const ready = f.sockets.at(-1)!;
-    expect(f.selected().at(-1)).toEqual(expect.objectContaining({ rung: 'R1' }));
-    expect(toolNames(ready)).toContain('daily_health_summary');
-    expect(toolNames(ready)).not.toContain('proactive_recent_items');
-    expect(toolNames(ready)).not.toContain('proactive_preferences');
-    expect(frameOf(ready).session.instructions).toContain(TOOLS_UNAVAILABLE_NOTICE);
-
-    f.app.nowEventHub.publish({
-      type: 'mode_changed', mode: 'away', away: true, source: 'manual', changedAt: null,
-    });
-    await vi.advanceTimersByTimeAsync(0);
-    const update = frameOf(ready, ready.sent.length - 1).session;
-    expect(update.tools).toEqual(expect.arrayContaining([
-      expect.objectContaining({ name: 'daily_health_summary' }),
-    ]));
-    expect(update.tools).not.toEqual(expect.arrayContaining([
-      expect.objectContaining({ name: 'proactive_recent_items' }),
-    ]));
-    expect(update.tools).not.toEqual(expect.arrayContaining([
-      expect.objectContaining({ name: 'proactive_preferences' }),
-    ]));
-    expect(update.instructions).toContain(TOOLS_UNAVAILABLE_NOTICE);
-
-    const activityEvents: unknown[] = [];
-    f.app.jarvisActivityHub.subscribe((event) => activityEvents.push(event));
-    ready.event('response.function_call_arguments.done', {
-      name: 'daily_health_summary', call_id: 'health_call', arguments: '{"note":"health"}',
-    });
-    ready.event('response.function_call_arguments.done', {
-      name: 'proactive_recent_items', call_id: 'outside_call', arguments: '{}',
-    });
-    await vi.advanceTimersByTimeAsync(0);
-    const outputs = ready.sent.map((data) => JSON.parse(data))
-      .filter((message) => message.item?.type === 'function_call_output')
-      .map((message) => ({ callId: message.item.call_id, ...JSON.parse(message.item.output) }));
-    expect(activityEvents).toContainEqual(expect.objectContaining({
-      type: 'tool-call-started', toolName: 'daily_health_summary',
-    }));
-    expect(outputs).toEqual(expect.arrayContaining([
-      expect.objectContaining({ callId: 'health_call', tool: 'daily_health_summary', outcome: 'ok' }),
-      expect.objectContaining({ callId: 'outside_call', tool: 'proactive_recent_items', outcome: 'refused' }),
-    ]));
-    expect(execute).toHaveBeenCalledOnce();
-    expect(outsideExecute).not.toHaveBeenCalled();
-
-    browser.emit('message', Buffer.from(JSON.stringify({ type: 'response.create' })), false);
-    await vi.advanceTimersByTimeAsync(0);
-    const responseCreate = JSON.parse(ready.sent.at(-1)!);
-    expect(responseCreate.response.instructions).toContain(TOOLS_UNAVAILABLE_NOTICE);
-  });
-
-  it('restores Daily in the active session and on reconnect after the no-proactive probe succeeds', async () => {
-    const execute = vi.fn(async () => ({ status: 'available' }));
+  it('dispatches Daily and proactive tools from the full real relay catalogue', async () => {
+    const foodExecute = vi.fn(async () => ({ status: 'committed' }));
+    const proactiveExecute = vi.fn(async () => ({ status: 'available' }));
     const f = await fixture({}, 'en', [
-      probeTool('daily_food', 100, execute), probeTool('proactive_recent_items', 100),
-    ], true);
-    f.behaviour.onFrame = (socket) => {
-      if (socket === f.upstream) {
-        socket.event('error', { error: { code: 'private_code' } });
-        return;
-      }
-      const names = toolNames(socket);
-      if (names.includes('daily_food') && names.includes('proactive_recent_items')) return;
-      socket.event('session.updated');
-    };
+      probeTool('daily_food', 100, foodExecute),
+      probeTool('proactive_recent_items', 100, proactiveExecute),
+      probeTool('vault_search'),
+      probeTool('calendar_get_pending_change'),
+    ]);
+    f.upstream.open();
+    f.upstream.event('session.updated');
+    const active = f.upstream;
+    const toolOutput = (callId: string) => active.sent.map((data) => JSON.parse(data))
+      .find((message) => message.item?.call_id === callId)?.item.output;
+    expect(names(active)).toEqual(f.app.jarvisTools.list().map(({ name }) => name).sort());
 
-    f.openFirst();
+    active.event('response.function_call_arguments.done', {
+      name: 'daily_food',
+      call_id: 'food',
+      arguments: JSON.stringify({ note: 'synthetic exact meal' }),
+    });
+    active.event('response.function_call_arguments.done', {
+      name: 'proactive_recent_items',
+      call_id: 'proactive',
+      arguments: '{}',
+    });
+    active.event('response.function_call_arguments.done', {
+      name: 'unregistered_tool', call_id: 'unadvertised', arguments: '{"note":"synthetic exact meal"}',
+    });
     await vi.advanceTimersByTimeAsync(0);
-    expect(f.selected()).toEqual([expect.objectContaining({ rung: 'R2' })]);
-    const abandoned = f.sockets[1]!;
-    expect(toolNames(abandoned)).not.toContain('daily_food');
+
+    expect(JSON.parse(toolOutput('food') as string)).toMatchObject({ tool: 'daily_food', outcome: 'ok' });
+    expect(JSON.parse(toolOutput('proactive') as string)).toMatchObject({
+      tool: 'proactive_recent_items', outcome: 'ok',
+    });
+    expect(JSON.parse(toolOutput('unadvertised') as string)).toMatchObject({ outcome: 'error' });
+    expect(foodExecute).toHaveBeenCalledOnce();
+    expect(proactiveExecute).toHaveBeenCalledOnce();
+  });
+
+  it('preserves discovery, execution, and reconnect behavior after the compact fallback is selected', async () => {
+    const execute = vi.fn(async () => ({ status: 'available' }));
+    const f = await fixture({}, 'en', [probeTool('daily_food', 100, execute)]);
+    f.upstream.open();
+    f.upstream.event('error', { error: { code: 'private_code' } });
     await vi.advanceTimersByTimeAsync(0);
+    const fallback = f.sockets[1]!;
+    expect(names(fallback)).toEqual([VOICE_CAPABILITY_DISCOVERY_TOOL, VOICE_CAPABILITY_EXECUTION_TOOL].sort());
+    fallback.event('session.updated');
+    expect(f.selected()).toEqual([expect.objectContaining({ rung: 'R2', remembered: false })]);
+
+    fallback.event('response.function_call_arguments.done', {
+      name: VOICE_CAPABILITY_DISCOVERY_TOOL, call_id: 'food_discovery', arguments: '{}',
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    fallback.event('response.function_call_arguments.done', {
+      name: VOICE_CAPABILITY_EXECUTION_TOOL,
+      call_id: 'food_call',
+      arguments: JSON.stringify({ capability: 'daily_food', arguments: { note: 'synthetic' } }),
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(JSON.parse(fallback.sent.map((data) => JSON.parse(data))
+      .find((message) => message.item?.call_id === 'food_call')!.item.output))
+      .toMatchObject({ tool: 'daily_food', outcome: 'ok' });
+    expect(execute).toHaveBeenCalledOnce();
+
     f.browser.close(1000, 'Reconnect');
     await vi.advanceTimersByTimeAsync(0);
     const reconnectBrowser = new FakeSocket();
     reconnectBrowser.readyState = WebSocket.OPEN;
+    f.behaviour.onFrame = (socket) => socket.event('session.updated');
     await f.start(reconnectBrowser);
-    const active = f.sockets[3]!;
-    expect(toolNames(active)).not.toContain('daily_food');
-
-    await vi.advanceTimersByTimeAsync(8_000);
-    expect(f.records).toContainEqual(expect.objectContaining({
-      msg: 'voice.tool_budget_probe', probe: 'no_proactive', outcome: 'ready',
-    }));
-    const promotion = frameOf(active, active.sent.length - 1).session;
-    expect(promotion.tools).toEqual(expect.arrayContaining([
-      expect.objectContaining({ name: 'daily_food' }),
-    ]));
-    expect(active.sent).toHaveLength(2);
-    expect(abandoned.sent).toHaveLength(1);
-
-    active.event('session.updated');
-    active.event('response.function_call_arguments.done', {
-      name: 'daily_food', call_id: 'food_call', arguments: '{"note":"synthetic"}',
-    });
-    await vi.advanceTimersByTimeAsync(0);
-    const output = active.sent.map((data) => JSON.parse(data))
-      .find((message) => message.item?.call_id === 'food_call');
-    expect(output).toMatchObject({
-      item: { output: expect.stringContaining('"outcome":"ok"') },
-    });
+    const reconnected = f.sockets[2]!;
+    expect(names(reconnected)).toEqual([VOICE_CAPABILITY_DISCOVERY_TOOL, VOICE_CAPABILITY_EXECUTION_TOOL].sort());
+    expect(f.selected().at(-1)).toEqual(expect.objectContaining({ rung: 'R2', remembered: true }));
     expect(execute).toHaveBeenCalledOnce();
-
-    const laterReconnect = new FakeSocket();
-    laterReconnect.readyState = WebSocket.OPEN;
-    await f.start(laterReconnect);
-    expect(toolNames(f.sockets.at(-1)!)).toContain('daily_food');
-    expect(f.selected().at(-1)).toEqual(expect.objectContaining({ rung: 'R1' }));
   });
 
-  it.each([
-    ['R1', 0], ['R2', 1], ['R3', 2], ['R4', 3], ['R5', 4],
-  ] as const)('selects %s, the first rung below a silent byte threshold', async (rung, index) => {
-    const f = await fixture({}, 'en', catalogue());
-    // Measure each rung's frame in a throwaway session, then answer only frames that fit.
-    const sizes: number[] = [];
-    f.behaviour.onFrame = (socket) => { sizes.push(frameBytes(socket)); };
-    f.upstream.open();
-    f.behaviour.onFrame(f.upstream);
-    await vi.advanceTimersByTimeAsync(6_000 * 5);
-    expect(sizes).toHaveLength(5);
-    expect(sizes.slice(1).every((size, i) => size < sizes[i]!)).toBe(true);
+  it.each(['en', 'da'] as const)('keeps the complete registry discoverable on cold start and compact fallback (%s)', async (language) => {
+    const f = await fixture({}, language, catalogue());
+    f.openFirst();
+    const initialDefinitions = frameOf(f.upstream).session.tools;
+    expect(names(f.upstream)).toEqual(f.app.jarvisTools.list().map(({ name }) => name).sort());
 
-    const g = await fixture({}, 'en', catalogue());
-    const threshold = sizes[index]!;
-    g.behaviour.onFrame = (socket) => { if (frameBytes(socket) <= threshold) socket.event('session.updated'); };
-    g.openFirst();
-    await vi.advanceTimersByTimeAsync(6_000 * 5);
-    expect(g.attempts().map(rungOf)).toEqual(['R1', 'R2', 'R3', 'R4', 'R5'].slice(0, index + 1));
-    expect(g.attempts().map((record) => record.outcome)).toEqual([
-      ...Array(index).fill('timeout'), 'ready',
-    ]);
-    expect(g.selected()).toEqual([expect.objectContaining({ rung, remembered: false })]);
-    const ready = g.sockets[index]!;
-    if (rung === 'R2') {
-      expect(names(ready)).not.toContain('daily_show');
-      expect(names(ready)).not.toContain('proactive_recent_items');
-      expect(names(ready)).not.toContain('proactive_preferences');
-    }
-    if (rung === 'R3') {
-      expect(names(ready)).toEqual(expect.arrayContaining(['set_presence_mode', 'set_away_mode']));
-      expect(names(ready)).not.toContain('workspace_command');
-    }
-    if (rung === 'R4' || rung === 'R5') expect(toolNames(ready)).toEqual([]);
-    expect(frameOf(ready).session.instructions).toContain(TOOLS_UNAVAILABLE_NOTICE);
-    expect(g.browser.close).not.toHaveBeenCalled();
+    f.upstream.event('error', { error: { code: 'schema_constraint' } });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(f.connect).toHaveBeenCalledTimes(2);
+    const fallback = f.sockets[1]!;
+    expect(names(fallback)).toEqual([VOICE_CAPABILITY_DISCOVERY_TOOL, VOICE_CAPABILITY_EXECUTION_TOOL].sort());
+    expect(frameOf(fallback).session.tools).not.toEqual(initialDefinitions);
+    fallback.event('session.updated');
+    fallback.event('response.function_call_arguments.done', {
+      name: VOICE_CAPABILITY_DISCOVERY_TOOL, call_id: 'discover_fallback', arguments: '{}',
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    const output = JSON.parse(fallback.sent.map((data) => JSON.parse(data))
+      .find((message) => message.item?.call_id === 'discover_fallback')!.item.output);
+    expect(output.result.capabilities.map(({ name }: { name: string }) => name))
+      .toEqual(expect.arrayContaining(['daily_food', 'proactive_recent_items']));
+    expect(f.selected().at(-1)).toEqual(expect.objectContaining({ rung: 'R2' }));
+    expect(f.browser.close).not.toHaveBeenCalled();
   });
 
   it('gives each fallback rung six seconds and closes the abandoned socket', async () => {
@@ -658,31 +546,32 @@ describe('English voice tool-budget fallback', () => {
     await vi.advanceTimersByTimeAsync(5_999);
     expect(f.connect).toHaveBeenCalledTimes(2);
     await vi.advanceTimersByTimeAsync(1);
-    expect(f.connect).toHaveBeenCalledTimes(3);
+    expect(f.connect).toHaveBeenCalledTimes(2);
     expect(f.sockets[1]!.close).toHaveBeenCalled();
     expect(f.attempts()).toEqual([
       expect.objectContaining({ rung: 'R1', outcome: 'timeout', elapsedMs: 6_000 }),
       expect.objectContaining({ rung: 'R2', outcome: 'timeout', elapsedMs: 6_000 }),
     ]);
+    expect(f.browser.close).toHaveBeenCalledWith(4010, 'Voice service did not become ready');
   });
 
-  it('closes 4010 within 30 seconds and logs exhaustion when no rung ever answers', async () => {
+  it('closes 4010 after both capability-preserving startup attempts fail', async () => {
     const f = await fixture({}, 'en', catalogue());
     f.upstream.open();
-    await vi.advanceTimersByTimeAsync(29_999);
+    await vi.advanceTimersByTimeAsync(11_999);
     expect(f.browser.close).not.toHaveBeenCalled();
     await vi.advanceTimersByTimeAsync(1);
     expect(f.browser.close).toHaveBeenCalledWith(4010, 'Voice service did not become ready');
-    expect(f.attempts().map(rungOf)).toEqual(['R1', 'R2', 'R3', 'R4', 'R5']);
-    expect(f.exhausted()).toEqual([expect.objectContaining({ attempts: 5 })]);
+    expect(f.attempts().map(rungOf)).toEqual(['R1', 'R2']);
+    expect(f.exhausted()).toEqual([expect.objectContaining({ attempts: 2 })]);
     expect(f.selected()).toEqual([]);
-    expect(f.sockets).toHaveLength(5);
+    expect(f.sockets).toHaveLength(2);
     expect(f.sockets.every((socket) => socket.readyState === WebSocket.CLOSED)).toBe(true);
     expect(f.summaries()).toEqual([expect.objectContaining({
-      closedBy: 'relay', closeCode: 4010, toolBudgetRung: null, toolBudgetAttempts: 5, durationMs: 30_000,
+      closedBy: 'relay', closeCode: 4010, toolBudgetRung: null, toolBudgetAttempts: 2, durationMs: 12_000,
     })]);
     await vi.advanceTimersByTimeAsync(60_000);
-    expect(f.connect).toHaveBeenCalledTimes(5);
+    expect(f.connect).toHaveBeenCalledTimes(2);
     expect(f.summaries()).toHaveLength(1);
   });
 
@@ -719,7 +608,7 @@ describe('English voice tool-budget fallback', () => {
     expect(f.selected()).toEqual([expect.objectContaining({ rung: 'R2' })]);
   });
 
-  it('remembers the working rung for the next session and steps down from it, updating the memory', async () => {
+  it('remembers the compact prompt fallback without changing advertised capabilities', async () => {
     const f = await fixture({}, 'en', catalogue());
     f.upstream.open();
     f.upstream.event('session.updated');
@@ -731,25 +620,29 @@ describe('English voice tool-budget fallback', () => {
     await f.start(second);
     const next = f.sockets[1]!;
     expect(f.connect).toHaveBeenCalledTimes(2);
-    expect(toolNames(next)).toContain('daily_show');
-    expect(frameOf(next).session.instructions).toContain(TOOLS_UNAVAILABLE_NOTICE);
+    expect(names(next)).toEqual(f.app.jarvisTools.list().map(({ name }) => name).sort());
     expect(f.selected().at(-1)).toEqual(expect.objectContaining({ rung: 'R1', remembered: true }));
 
-    // A third session fails at the remembered rung, steps down to R2 and remembers that.
-    f.behaviour.onFrame = (socket) => { if (frameBytes(socket) < frameBytes(next)) socket.event('session.updated'); };
+    let firstAttempt = true;
+    f.behaviour.onFrame = (socket) => {
+      if (firstAttempt) {
+        firstAttempt = false;
+        socket.event('error', { error: { code: 'schema_constraint' } });
+      } else socket.event('session.updated');
+    };
     const third = new FakeSocket();
     third.readyState = WebSocket.OPEN;
     await f.start(third);
-    expect(f.connect).toHaveBeenCalledTimes(3);
-    await vi.advanceTimersByTimeAsync(6_000);
+    expect(f.connect).toHaveBeenCalledTimes(4);
     expect(f.attempts().slice(-2).map((record) => [record.rung, record.outcome])).toEqual([
-      ['R1', 'timeout'], ['R2', 'ready'],
+      ['R1', 'error'], ['R2', 'ready'],
     ]);
     expect(f.selected().at(-1)).toEqual(expect.objectContaining({ rung: 'R2', remembered: false }));
 
     const fourth = new FakeSocket();
     fourth.readyState = WebSocket.OPEN;
     await f.start(fourth);
+    expect(names(f.sockets.at(-1)!)).toEqual([VOICE_CAPABILITY_DISCOVERY_TOOL, VOICE_CAPABILITY_EXECUTION_TOOL].sort());
     expect(f.attempts().at(-1)).toEqual(expect.objectContaining({ rung: 'R2', outcome: 'ready' }));
     expect(f.selected().at(-1)).toEqual(expect.objectContaining({ rung: 'R2', remembered: true }));
   });
@@ -757,13 +650,12 @@ describe('English voice tool-budget fallback', () => {
   it('keeps the known-good cold start when no session has ever reached session.updated', async () => {
     const f = await fixture({}, 'en', catalogue());
     f.upstream.open();
-    await vi.advanceTimersByTimeAsync(24_000);
+    await vi.advanceTimersByTimeAsync(12_000);
     const second = new FakeSocket();
     second.readyState = WebSocket.OPEN;
     await f.start(second);
-    expect(f.sockets).toHaveLength(6);
-    expect(names(f.sockets[5]!)).toContain('daily_show');
-    expect(frameOf(f.sockets[5]!).session.instructions).toContain(TOOLS_UNAVAILABLE_NOTICE);
+    expect(f.sockets).toHaveLength(3);
+    expect(names(f.sockets[2]!)).toEqual(f.app.jarvisTools.list().map(({ name }) => name).sort());
     expect(f.selected()).toEqual([]);
   });
 
@@ -809,27 +701,16 @@ describe('English voice tool-budget fallback', () => {
     expect(f.browser.close).not.toHaveBeenCalled();
   });
 
-  async function reduced(rung: 'R4' | 'R5', overrides: Partial<BuildAppOptions> = {}) {
-    const f = await fixture(overrides, 'en', catalogue());
-    const limit = rung === 'R5' ? compactBytes + 200 : 0;
-    f.behaviour.onFrame = (socket) => {
-      const frame = frameOf(socket).session;
-      if (rung === 'R5' ? frameBytes(socket) <= limit : frame.tools.length === 0) socket.event('session.updated');
-    };
-    f.openFirst();
-    await vi.advanceTimersByTimeAsync(8_000 + 6_000 * 4);
-    const ready = f.sockets.at(-1)!;
-    expect(f.selected()).toEqual([expect.objectContaining({ rung })]);
-    return { f, ready };
-  }
-
-  it.each(['R4', 'R5'] as const)('sends presence updates, camera updates and response.create at %s without the catalogue', async (rung) => {
+  it('keeps shared capability discovery through settings and camera session updates', async () => {
     const presenceReads = vi.fn()
       .mockResolvedValueOnce({ ...defaultAwayModeState, mode: 'present' })
       .mockResolvedValue({ ...defaultAwayModeState, mode: 'away' });
-    const { f, ready } = await reduced(rung, {
+    const f = await fixture({
       awayModeStore: { read: presenceReads } as unknown as BuildAppOptions['awayModeStore'],
-    });
+    }, 'en', catalogue());
+    f.upstream.open();
+    f.upstream.event('session.updated');
+    const ready = f.upstream;
     const before = ready.sent.length;
     f.app.nowEventHub.publish({
       type: 'mode_changed', mode: 'away', away: true, source: 'manual', changedAt: null,
@@ -837,9 +718,9 @@ describe('English voice tool-budget fallback', () => {
     await vi.advanceTimersByTimeAsync(0);
     expect(ready.sent).toHaveLength(before + 1);
     const presence = frameOf(ready, before).session;
-    expect(presence.tools).toEqual([]);
-    expect(presence.instructions).toContain(TOOLS_UNAVAILABLE_NOTICE);
-    expect(presence.instructions.includes('Visual grounding')).toBe(rung === 'R4');
+    expect(presence.tools.map(({ name }) => name).sort())
+      .toEqual(f.app.jarvisTools.list().map(({ name }) => name).sort());
+    expect(presence.instructions).toContain('I am Jarvis');
     ready.event('session.updated');
 
     f.browser.emit('message', Buffer.from(JSON.stringify({ type: 'jarvis.camera.state', on: true })), false);
@@ -853,31 +734,30 @@ describe('English voice tool-budget fallback', () => {
     await vi.advanceTimersByTimeAsync(0);
     const created = JSON.parse(ready.sent.at(-1)!) as { type: string; response: { instructions: string } };
     expect(created.type).toBe('response.create');
-    expect(created.response.instructions).toContain(TOOLS_UNAVAILABLE_NOTICE);
-    expect(created.response.instructions.includes('Visual grounding')).toBe(rung === 'R4');
+    expect(created.response.instructions).toContain('I am Jarvis');
   });
 
-  it('refuses a model call to a tool outside the active subset without executing it', async () => {
+  it('rejects direct calls on the compact fallback without executing canonical tools', async () => {
     const execute = vi.fn(async () => ({}));
     const f = await fixture({}, 'en', [
       probeTool('daily_show', 100), probeTool('proactive_recent_items', 100, execute), probeTool('allowed_tool', 100),
     ]);
-    f.behaviour.onFrame = (socket) => { if (!toolNames(socket).includes('proactive_recent_items')) socket.event('session.updated'); };
-    f.openFirst();
+    f.upstream.open();
+    f.upstream.event('error', { error: { code: 'schema_constraint' } });
     await vi.advanceTimersByTimeAsync(0);
-    await vi.advanceTimersByTimeAsync(0);
-    const ready = f.sockets[0]!;
-    expect(f.selected()).toEqual([expect.objectContaining({ rung: 'R1' })]);
+    const ready = f.sockets[1]!;
+    ready.event('session.updated');
+    expect(f.selected()).toEqual([expect.objectContaining({ rung: 'R2' })]);
     ready.event('response.function_call_arguments.done', { name: 'proactive_recent_items', call_id: 'call_1', arguments: '{}' });
     ready.event('response.function_call_arguments.done', { name: 'allowed_tool', call_id: 'call_2', arguments: '{}' });
     await vi.advanceTimersByTimeAsync(0);
     const outputs = ready.sent.map((data) => JSON.parse(data))
       .filter((message) => message.item?.type === 'function_call_output')
       .map((message) => ({ call: message.item.call_id, ...JSON.parse(message.item.output) }));
-    expect(outputs).toEqual([
-      expect.objectContaining({ call: 'call_1', tool: 'proactive_recent_items', outcome: 'refused' }),
-      expect.not.objectContaining({ call: 'call_2', outcome: 'refused' }),
-    ]);
+    expect(outputs).toEqual(expect.arrayContaining([
+      expect.objectContaining({ call: 'call_1', outcome: 'refused' }),
+      expect.objectContaining({ call: 'call_2', outcome: 'refused' }),
+    ]));
     expect(execute).not.toHaveBeenCalled();
   });
 
@@ -886,11 +766,11 @@ describe('English voice tool-budget fallback', () => {
     f.upstream.open();
     f.upstream.event('error', { error: { code: 'private_code', message: 'private message' } });
     f.behaviour.autoOpen = true;
-    await vi.advanceTimersByTimeAsync(32_000);
+    await vi.advanceTimersByTimeAsync(12_000);
     const budget = f.records.filter((record) => String(record.msg).startsWith('voice.tool_budget'));
-    expect(budget.length).toBeGreaterThanOrEqual(5);
+    expect(budget.length).toBeGreaterThanOrEqual(3);
     const text = JSON.stringify(budget);
-    for (const secret of ['private', 'startup_probe', 'daily_show', 'github_write', 'I am Jarvis', 'Dan', 'unavailable']) {
+    for (const secret of ['private', 'startup_probe', 'daily_show', 'github_write', 'I am Jarvis', 'Dan']) {
       expect(text).not.toContain(secret);
     }
     for (const record of budget) {
