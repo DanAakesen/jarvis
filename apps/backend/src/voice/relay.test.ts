@@ -31,6 +31,7 @@ import {
 import type { TaskController, TaskRecord, TaskStore } from '../factory/task-store.js';
 import { factoryModule } from '../factory/index.js';
 import type { BackendModule } from '../modules.js';
+import { createOwnerInteractionService } from '../core/owner-interactions.js';
 import {
   createDanishVoiceAgentEndpoint,
   DANISH_VOICE_AGENT_NAME,
@@ -3792,6 +3793,44 @@ describe('backend-relayed Voice Live WebSocket', () => {
     expect(outputs.get('voice-create')).toMatchObject({ result: { type: 'generated-view', view: hotels } });
     expect(delivered.map(({ operation }) => operation)).toEqual(['create', 'update', 'arrange', 'close']);
     tab.close();
+  });
+});
+
+describe('food estimate confirmation turns', () => {
+  it.each(['/voice', '/voice/da'])('binds the persisted natural reply to the pending food estimate in %s', async path => {
+    let upstream!: WebSocket;
+    const upstreamUrl = await echoServer(socket => { upstream = socket; });
+    const connect = (_token: string, signal: AbortSignal) => new WebSocket(upstreamUrl, { signal });
+    const { app, conversationStore } = appFor(connect, undefined, [], [], connect);
+    conversationStore.addMessage.mockImplementation(async input => ({
+      id: input.text === 'yes, log that' ? '43' : '44', sessionId: input.sessionId,
+      role: input.role, text: input.text, model: input.model, at: new Date(),
+    }));
+    const service = createOwnerInteractionService({ ownerObjectId: config.auth.ownerObjectId,
+      conversationStore: { getDanMessagesAfter: vi.fn(async () => [{ id: '43', text: 'yes, log that', language: 'en' }]) }, store: {
+      createConfirmation: vi.fn(async () => {}),
+      resolveConfirmation: vi.fn(async () => 'approved'),
+      consumeApproval: vi.fn(async () => true),
+      cancelConfirmation: vi.fn(async () => {}),
+      expireConfirmation: vi.fn(async () => false),
+      expirePendingConfirmations: vi.fn(async () => {}),
+    } });
+    app.ownerInteractions = service;
+    await app.listen({ host: '127.0.0.1', port: 0 });
+    await openBrowser(`ws://127.0.0.1:${(app.server.address() as AddressInfo).port}${path}`);
+    await vi.waitFor(() => expect(upstream).toBeDefined());
+    const action = vi.fn(async () => ({ status: 'committed', energyKcal: 200 }));
+    const operation = service.runConfirmed('other', 'Log synthetic portion: 200 kcal.', action, undefined,
+      { channel: 'browser', lifetimeSeconds: 120, foodEstimate: { sessionId: '41', sourceMessageId: '42' } });
+    await vi.waitFor(() => expect(service.pendingBrowserConfirmations()).toHaveLength(1));
+    upstream.send(JSON.stringify({ type: 'conversation.item.input_audio_transcription.completed',
+      item_id: 'food-approval', transcript: 'yes, log that' }));
+    await expect(operation).resolves.toEqual({ status: 'committed', energyKcal: 200 });
+    upstream.send(JSON.stringify({ type: 'conversation.item.input_audio_transcription.completed',
+      item_id: 'food-repeat', transcript: 'yes' }));
+    await vi.waitFor(() => expect(conversationStore.addMessage).toHaveBeenCalledTimes(2));
+    expect(action).toHaveBeenCalledOnce();
+    expect(service.pendingBrowserConfirmations()).toEqual([]);
   });
 });
 

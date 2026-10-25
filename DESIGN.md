@@ -230,6 +230,13 @@ whenever a background-work pair is present. Only the running icon rotates, and
 neither OS nor app reduced-motion mode allows that animation. Preserve the
 background-work popover contents, delivery and dismissal.
 
+Food-estimate confirmation (#1277) keeps this exact proposal and its existing
+Approve/Reject fallback, but no longer requires opening the popover to approve:
+the owner's next natural text/browser-voice reply can confirm the current
+estimate. No new control, layout or animation is introduced. Corrections and
+deletions retain the separate approval controls; expiry and cancellation remain
+visible through the existing feed.
+
 The summary remains in the header on phones instead of inside the windows
 sheet; the separate windows button counts windows only. Keep the existing
 individual desktop job tabs and phone window sheet. Settings, presence and
