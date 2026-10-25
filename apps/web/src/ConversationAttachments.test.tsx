@@ -36,6 +36,16 @@ const config = { ...__JARVIS_CONFIG__, backendUrl: 'https://api.example.com' };
 const session = { id: '41', language: 'en' as const };
 const fileId = '0b0f4a7e-3c1d-4f6a-8b2e-1a2b3c4d5e6f';
 const reply = { id: '52', sessionId: '41', role: 'jarvis' as const, text: 'Done.', model: null, at: '2026-10-03T12:02:00.000Z' };
+const NativeURL = URL;
+
+function stubObjectUrl(url: string) {
+  class TestURL extends NativeURL {
+    static createObjectURL = vi.fn(() => url);
+    static revokeObjectURL = vi.fn();
+  }
+  vi.stubGlobal('URL', TestURL);
+  return TestURL;
+}
 
 function renderConversation() {
   return render(
@@ -63,7 +73,7 @@ beforeEach(() => {
     id: fileId, name: file.name, contentType: file.type, size: file.size, status: 'ready',
   }));
 });
-afterEach(() => { vi.restoreAllMocks(); });
+afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
 describe('composer attachments', () => {
   it('uploads a picked file, shows its chip and sends its id with the message', async () => {
@@ -102,6 +112,8 @@ describe('composer attachments', () => {
   });
 
   it('keeps image uploads compact while retaining progress and removal', async () => {
+    const previewUrl = 'blob:preview/holiday.jpg';
+    stubObjectUrl(previewUrl);
     let finish!: () => void;
     uploadAttachment.mockImplementationOnce((_c, _cfg, file: File, options: { onProgress: (n: number) => void }) =>
       new Promise((resolve) => {
@@ -114,13 +126,32 @@ describe('composer attachments', () => {
     const chips = await screen.findByRole('list', { name: 'Files to send' });
     const chip = chips.querySelector('.attachment-chip');
     expect(chip?.classList.contains('attachment-chip--image')).toBe(true);
-    expect(within(chips).queryByText('holiday.jpg')).toBeNull();
+    expect(await within(chips).findByRole('img', { name: 'Preview of holiday.jpg' })).toHaveProperty('src', previewUrl);
+    expect(within(chips).getByText('holiday.jpg')).toBeTruthy();
     expect(within(chips).getByRole('progressbar', { name: 'Uploading holiday.jpg' })).toBeTruthy();
     expect(within(chips).getByRole('button', { name: 'Remove holiday.jpg' })).toBeTruthy();
+    const input = screen.getByRole('textbox', { name: 'Message Jarvis' });
+    expect(chips.compareDocumentPosition(input) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
     finish();
     await waitFor(() => expect(within(chips).queryByRole('progressbar')).toBeNull());
-    expect(within(chips).queryByText('holiday.jpg')).toBeNull();
+    expect(within(chips).getByText('holiday.jpg')).toBeTruthy();
     expect(within(chips).queryByText(/Ready|image\/jpeg/u)).toBeNull();
+  });
+
+  it('restores an image preview after an unsaved send fails', async () => {
+    const previewUrl = 'blob:preview/holiday.jpg';
+    const TestURL = stubObjectUrl(previewUrl);
+    const signedUrl = 'https://acct.blob.core.windows.net/x?sig=1';
+    loadAttachmentUrl.mockResolvedValue(signedUrl);
+    sendChatTurn.mockRejectedValueOnce(new Error('Could not send. Try again.'));
+    renderConversation();
+    await screen.findByRole('textbox', { name: 'Message Jarvis' });
+    pick(new File(['image'], 'holiday.jpg', { type: 'image/jpeg' }));
+    expect(await screen.findByRole('img', { name: 'Preview of holiday.jpg' })).toHaveProperty('src', previewUrl);
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await screen.findByText('Could not send. Try again.');
+    await waitFor(() => expect(screen.getByRole('img', { name: 'Preview of holiday.jpg' })).toHaveProperty('src', signedUrl));
+    expect(TestURL.revokeObjectURL).toHaveBeenCalledWith(previewUrl);
   });
 
   it('turns a pasted screenshot into an attachment and keeps pasted text', async () => {
@@ -202,12 +233,13 @@ describe('conversation attachments', () => {
     nextCursor: null,
   });
 
-  it('shows sent attachments from history and opens one through its signed URL', async () => {
+  it('previews sent images from their signed URL and opens one on demand', async () => {
     loadConversationHistory.mockResolvedValue(history());
     loadAttachmentUrl.mockResolvedValue('https://acct.blob.core.windows.net/x?sig=1');
     const tab = { location: { href: '' }, close: vi.fn(), opener: {} };
     vi.spyOn(window, 'open').mockReturnValue(tab as never);
     renderConversation();
+    expect(await screen.findByRole('img', { name: 'Preview of bug.png' })).toHaveProperty('src', 'https://acct.blob.core.windows.net/x?sig=1');
     fireEvent.click(await screen.findByRole('button', { name: 'Open bug.png' }));
     await waitFor(() => expect(tab.location.href).toBe('https://acct.blob.core.windows.net/x?sig=1'));
     expect(tab.opener).toBeNull();
@@ -218,7 +250,6 @@ describe('conversation attachments', () => {
     vi.spyOn(window, 'open').mockReturnValue(null);
     loadAttachmentUrl.mockRejectedValueOnce(new AttachmentExpiredError());
     renderConversation();
-    fireEvent.click(await screen.findByRole('button', { name: 'Open bug.png' }));
     expect((await screen.findByText(/Expired or removed/u))).toBeTruthy();
     expect((screen.getByRole('button', { name: 'Open bug.png' }) as HTMLButtonElement).disabled).toBe(true);
   });
