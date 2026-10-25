@@ -520,6 +520,7 @@ describe('English voice tool-budget fallback', () => {
 
     const activityEvents: unknown[] = [];
     f.app.jarvisActivityHub.subscribe((event) => activityEvents.push(event));
+    ready.event('response.created', { response: { id: 'budget_dispatch_response' } });
     ready.event('response.function_call_arguments.done', {
       name: 'daily_health_summary', call_id: 'health_call', arguments: '{"note":"health"}',
     });
@@ -527,9 +528,16 @@ describe('English voice tool-budget fallback', () => {
       name: 'proactive_recent_items', call_id: 'outside_call', arguments: '{}',
     });
     await vi.advanceTimersByTimeAsync(0);
+    expect(execute).not.toHaveBeenCalled();
+    expect(ready.sent.map((data) => JSON.parse(data))
+      .filter((message) => message.item?.type === 'function_call_output')).toEqual([]);
+
+    ready.event('response.done', { response: { id: 'budget_dispatch_response' } });
+    await vi.advanceTimersByTimeAsync(0);
     const outputs = ready.sent.map((data) => JSON.parse(data))
       .filter((message) => message.item?.type === 'function_call_output')
       .map((message) => ({ callId: message.item.call_id, ...JSON.parse(message.item.output) }));
+    expect(browser.sent.map((data) => JSON.parse(data).type)).toContain('response.done');
     expect(activityEvents).toContainEqual(expect.objectContaining({
       type: 'tool-call-started', toolName: 'daily_health_summary',
     }));
@@ -803,12 +811,20 @@ describe('English voice tool-budget fallback', () => {
     await vi.advanceTimersByTimeAsync(0);
     const ready = f.sockets[0]!;
     expect(f.selected()).toEqual([expect.objectContaining({ rung: 'R2' })]);
+    ready.event('response.created', { response: { id: 'outside_subset_response' } });
     ready.event('response.function_call_arguments.done', { name: 'daily_show', call_id: 'call_1', arguments: '{}' });
     ready.event('response.function_call_arguments.done', { name: 'allowed_tool', call_id: 'call_2', arguments: '{}' });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(execute).not.toHaveBeenCalled();
+    expect(ready.sent.map((data) => JSON.parse(data))
+      .filter((message) => message.item?.type === 'function_call_output')).toEqual([]);
+
+    ready.event('response.done', { response: { id: 'outside_subset_response' } });
     await vi.advanceTimersByTimeAsync(0);
     const outputs = ready.sent.map((data) => JSON.parse(data))
       .filter((message) => message.item?.type === 'function_call_output')
       .map((message) => ({ call: message.item.call_id, ...JSON.parse(message.item.output) }));
+    expect(f.browser.sent.map((data) => JSON.parse(data).type)).toContain('response.done');
     expect(outputs).toEqual([
       expect.objectContaining({ call: 'call_1', tool: 'daily_show', outcome: 'refused' }),
       expect.not.objectContaining({ call: 'call_2', outcome: 'refused' }),
