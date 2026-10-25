@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CameraPreview } from './CameraPreview';
 import type { CameraController } from './screen-sharing';
@@ -20,6 +20,22 @@ describe('Camera preview', () => {
     expect(screen.getByText(/Camera capture limit reached/u).getAttribute('role')).toBe('status');
     expect(screen.getByText(/each chat or voice turn/u)).not.toBeNull();
     expect(screen.queryByRole('button', { name: 'Look now' })).toBeNull();
+  });
+  it('overlays switch and close controls on the preview and closes capture', () => {
+    const controller = camera({ switchCamera: vi.fn(async () => {}) });
+    vi.stubGlobal('matchMedia', vi.fn(() => ({
+      matches: true,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    })));
+    const { container } = render(<CameraPreview camera={controller} />);
+    const picture = container.querySelector<HTMLDivElement>('.camera-preview-picture')!;
+    expect(picture.classList.contains('luminous-glass')).toBe(true);
+    expect(picture.querySelector('.camera-status')).not.toBeNull();
+    fireEvent.click(within(picture).getByRole('button', { name: 'Switch to back camera' }));
+    expect(controller.switchCamera).toHaveBeenCalledOnce();
+    fireEvent.click(within(picture).getByRole('button', { name: 'Close camera preview' }));
+    expect(controller.stop).toHaveBeenCalledOnce();
   });
   it('plays the existing muted stream locally and detaches without stopping capture on unmount', async () => {
     const controller = camera();

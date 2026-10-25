@@ -1206,7 +1206,7 @@ describe('App shell', () => {
       expect(within(topbar).queryByRole('button', { name: /share screen|camera/i })).toBeNull();
       await user.click(screen.getByRole('button', { name: 'More options' }));
       expect(screen.getByRole('menuitem', { name: 'Share screen' })).not.toBeNull();
-      expect(screen.getByRole('menuitem', { name: 'Turn camera on' })).not.toBeNull();
+      expect(screen.getByRole('menuitem', { name: 'Enable video' })).not.toBeNull();
     } finally {
       Reflect.deleteProperty(navigator, 'mediaDevices');
     }
@@ -1216,7 +1216,7 @@ describe('App shell', () => {
     await renderSignedIn();
     await user.click(screen.getByRole('button', { name: 'More options' }));
     expect(screen.queryByRole('menuitem', { name: 'Share screen' })).toBeNull();
-    expect(screen.getByRole('menuitem', { name: 'Turn camera on' })).not.toBeNull();
+    expect(screen.getByRole('menuitem', { name: 'Enable video' })).not.toBeNull();
   });
   it('keeps chat progress and tool feedback in the conversation, never in the header', async () => {
     const user = userEvent.setup();
@@ -2170,13 +2170,13 @@ describe('App shell', () => {
     await user.type(input, 'Keep my draft');
 
     await user.click(screen.getByRole('button', { name: 'More options' }));
-    await user.click(screen.getByRole('menuitem', { name: 'Turn camera on' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Enable video' }));
     expect(await screen.findByText('Front camera on')).not.toBeNull();
     const preview = screen.getByRole('article', { name: 'Camera preview' });
     const video = within(preview).getByLabelText('Live camera preview') as HTMLVideoElement;
     expect(video.srcObject).toBe(stream);
     expect(input.closest('.conversation-input')?.querySelector('.camera-status')).toBeNull();
-    expect(within(preview).getByRole('button', { name: 'Camera off' })).not.toBeNull();
+    expect(preview.querySelector('.camera-status-control')?.getAttribute('aria-label')).toBe('Close camera preview');
     expect(getUserMedia).toHaveBeenCalledWith({
       video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: { ideal: 'user' } },
       audio: false,
@@ -2184,7 +2184,7 @@ describe('App shell', () => {
     await waitFor(() => expect(fetchMock.mock.calls.some(([url, init]) => String(url).endsWith('/now/workspace/state') &&
       JSON.parse(String(init?.body)).windows.some((window: { viewId: string; title: string }) =>
         window.viewId === 'camera-preview' && window.title === 'Camera preview'))).toBe(true));
-    await user.click(within(preview).getByRole('button', { name: 'Minimise Camera preview' }));
+    expect(await workspace.command('minimise-camera', 'minimise', 'camera-preview')).toMatchObject({ applied: true });
     expect(preview.getAttribute('aria-hidden')).toBe('true');
     expect(track.stop).not.toHaveBeenCalled();
     expect(video.srcObject).toBe(stream);
@@ -2198,11 +2198,13 @@ describe('App shell', () => {
     expect(screen.queryByText('Front camera on')).toBeNull();
     expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith('/screen/frames'))).toBe(false);
     await user.click(screen.getByRole('button', { name: 'More options' }));
-    await user.click(screen.getByRole('menuitem', { name: 'Turn camera on' }));
-    expect(await screen.findByRole('article', { name: 'Camera preview' })).not.toBeNull();
+    await user.click(screen.getByRole('menuitem', { name: 'Enable video' }));
+    const restoredPreview = await screen.findByRole('article', { name: 'Camera preview' });
     await user.click(screen.getByRole('button', { name: 'Start voice' }));
     expect(voiceSessions[0]?.setCameraState).toHaveBeenCalledWith(true);
-    await user.click(screen.getByRole('button', { name: 'Camera off' }));
+    const cameraClose = restoredPreview.querySelector<HTMLButtonElement>('.camera-status-control')!;
+    expect(cameraClose.getAttribute('aria-label')).toBe('Close camera preview');
+    await user.click(cameraClose);
     await waitFor(() => expect(voiceSessions[0]?.setCameraState).toHaveBeenLastCalledWith(false));
     expect(screen.queryByRole('article', { name: 'Camera preview' })).toBeNull();
     await user.click(screen.getByRole('button', { name: 'End voice' }));

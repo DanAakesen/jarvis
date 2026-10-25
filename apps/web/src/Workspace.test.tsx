@@ -9,6 +9,8 @@ import type { WorkspacePinsClient } from './workspace-pins';
 import { conversationLayoutKey, phoneConversationLayoutKey } from './conversation-layout';
 import type { GeneratedView, WorkspacePin } from '@jarvis/contracts';
 import type { SessionCommandResult } from './session-commands';
+import { CameraPreview } from './CameraPreview';
+import type { CameraController } from './screen-sharing';
 
 const views: WorkspaceView[] = [
   { id: 'research', title: 'Research summary', content: { status: 'ready', content: <p>Source-linked findings</p> } },
@@ -79,7 +81,7 @@ function JarvisWorkspaceRequest() {
 }
 
 describe('Workspace', () => {
-  it('keeps a compact camera preview visible beside the foreground phone window, with tab docking and Jarvis commands', () => {
+  it('keeps a compact camera preview visible beside the foreground phone window, with workspace command docking', () => {
     phoneViewport();
     const ref = createRef<WorkspaceController>();
     const onClose = vi.fn();
@@ -94,7 +96,7 @@ describe('Workspace', () => {
     expect(shown).toHaveBeenLastCalledWith(['research', 'camera-preview']);
     expect(ref.current?.isViewVisible?.('camera-preview')).toBe(true);
     const cameraWindow = screen.getByRole('article', { name: 'Camera preview' });
-    fireEvent.click(within(cameraWindow).getByRole('button', { name: 'Minimise Camera preview' }));
+    act(() => { expect(ref.current?.dispatch({ commandId: 'minimise-preview', operation: 'minimise', viewId: 'camera-preview' })).toBe(true); });
     expect(onClose).not.toHaveBeenCalled();
     expect(screen.getByRole('article', { name: 'Research summary' })).not.toBeNull();
     expect(ref.current?.snapshot?.windows.find((window) => window.viewId === 'camera-preview'))
@@ -1880,7 +1882,50 @@ describe('Workspace', () => {
 
 
 describe('camera preview ownership', () => {
-it('keeps a compact camera preview visible beside the foreground phone window, with tab docking and Jarvis commands', () => {
+  it('composes the compact preview without workspace chrome and keeps close and switch controls on the video', () => {
+    phoneViewport();
+    const camera: CameraController = {
+      sharing: true, starting: false, inspecting: false, error: '', facing: 'user',
+      previewStream: null, start: vi.fn(async () => true), stop: vi.fn(),
+      inspect: vi.fn(async () => ({ description: 'Fixture.' })),
+      switchCamera: vi.fn(async () => {}),
+    };
+    const preview: WorkspaceView = {
+      id: 'camera-preview', title: 'Camera preview', presentation: 'camera-preview',
+      content: { status: 'ready', content: <CameraPreview camera={camera} /> },
+    };
+    render(<Workspace views={[preview]} />);
+    const cameraWindow = screen.getByRole('article', { name: 'Camera preview' });
+    const picture = cameraWindow.querySelector<HTMLElement>('.camera-preview-picture')!;
+
+    expect(cameraWindow.querySelector('.workspace-window-heading')).toBeNull();
+    expect(cameraWindow.classList.contains('luminous-glass')).toBe(false);
+    expect(picture.classList.contains('luminous-glass')).toBe(true);
+    expect(within(picture).getByRole('button', { name: 'Switch to back camera' })).not.toBeNull();
+    expect(within(picture).getByRole('button', { name: 'Close camera preview' })).not.toBeNull();
+    expect(within(cameraWindow).queryByRole('button', { name: 'Minimise Camera preview' })).toBeNull();
+    fireEvent.click(within(picture).getByRole('button', { name: 'Close camera preview' }));
+    expect(camera.stop).toHaveBeenCalledOnce();
+  });
+
+  it('keeps camera startup recovery visible without restoring workspace chrome', () => {
+    const camera: CameraController = {
+      sharing: false, starting: false, inspecting: false, error: 'No camera available.',
+      previewStream: null, start: vi.fn(async () => true), stop: vi.fn(),
+      inspect: vi.fn(async () => ({ description: 'Fixture.' })),
+    };
+    const preview: WorkspaceView = {
+      id: 'camera-preview', title: 'Camera preview', presentation: 'camera-preview',
+      content: { status: 'ready', content: <CameraPreview camera={camera} /> },
+    };
+    render(<Workspace views={[preview]} />);
+    const cameraWindow = screen.getByRole('article', { name: 'Camera preview' });
+    expect(within(cameraWindow).getByRole('alert').textContent).toBe('No camera available.');
+    expect(within(cameraWindow).getByRole('button', { name: 'Retry camera' })).not.toBeNull();
+    expect(cameraWindow.querySelector('.workspace-window-heading')).toBeNull();
+  });
+
+it('keeps a compact camera preview visible beside the foreground phone window, with workspace command docking', () => {
     phoneViewport();
     const ref = createRef<WorkspaceController>();
     const onClose = vi.fn();
@@ -1895,7 +1940,7 @@ it('keeps a compact camera preview visible beside the foreground phone window, w
     expect(shown).toHaveBeenLastCalledWith(['research', 'camera-preview']);
     expect(ref.current?.isViewVisible?.('camera-preview')).toBe(true);
     const cameraWindow = screen.getByRole('article', { name: 'Camera preview' });
-    fireEvent.click(within(cameraWindow).getByRole('button', { name: 'Minimise Camera preview' }));
+    act(() => { expect(ref.current?.dispatch({ commandId: 'minimise-preview', operation: 'minimise', viewId: 'camera-preview' })).toBe(true); });
     expect(onClose).not.toHaveBeenCalled();
     expect(screen.getByRole('article', { name: 'Research summary' })).not.toBeNull();
     expect(ref.current?.snapshot?.windows.find((window) => window.viewId === 'camera-preview'))
