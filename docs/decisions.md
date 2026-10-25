@@ -1,5 +1,6 @@
 # Decisions
 
+<<<<<<< HEAD
 ## Reuse the stream for a natural first reply before tool work (25 October 2026; P9-124 / #1258)
 
 - For a tool-backed request, Jarvis should give one short, truthful first-person
@@ -27,6 +28,24 @@
   response, first tool-only response and multiple silent rounds without blanket
   audio receipts. No live latency or physical audio playback is claimed. Owner
   acceptance remains separate; this task authorizes no merge or deployment.
+=======
+## Research completion is independent of Workspace delivery (25 October 2026; #1237)
+
+After a validated research artifact, its owner-scoped Folio entry, and the
+job's durable result reference are saved, the job is complete regardless of
+whether a Workspace tab is connected or acknowledges presentation. Persist
+delivery separately as pending, unknown, failed or delivered; only an applied
+Workspace acknowledgement permits delivered. That acknowledgement means the
+client applied the command, not that the owner viewed the report.
+
+Use the existing Folio and job records plus a single stable research view ID.
+The owner-only open-result route reuses the Folio reader and Workspace broker;
+reconnect/reload offers the existing artifact and never calls the provider
+again. Real artifact/Folio/job persistence failures remain failures. This is
+the approved delivery-boundary item only; the separate research-concurrency
+race is out of scope. Validation uses synthetic data; physical iPhone behavior
+remains a separate owner acceptance step.
+>>>>>>> origin/main
 
 ## Simplify proactive controls end to end (24 October 2026; P13-22 / #1252)
 
@@ -64,6 +83,41 @@
   cancellation. Database integration, full aggregate checks, browser/device
   behavior and live provider acceptance are reported separately; fixture success
   is not deployment acceptance.
+
+## Workspace content stays within its allocated width (25 October 2026; Refs #1260)
+
+- Wrap repository text by default and provide an accessible “Wrap lines” checkbox
+  to restore original horizontal code layout. Keep source text, line numbers,
+  highlighted ranges, search marks and link behavior unchanged.
+- Let prose and long values wrap in their window. Keep intentional table/chart
+  exploration inside named, focusable local regions; show full chart labels and
+  retain all source values. Fit images to the frame without distortion.
+- Bound only the host container and first-party Jarvis report document. Do not
+  claim control over arbitrary external documents, execute them for inspection,
+  or weaken the report's scripts-only sandbox, CSP or validated bridge.
+- Keep the document from forcing a 280px minimum width below that CSS width at
+  high zoom. This preserves the surrounding workspace and foreground-window
+  transitions while preventing page-level horizontal overflow.
+- **Evidence:** `scripts/check-workspace-content-browser.mjs` reuses the web
+  Vite setup with the synthetic fixture in
+  `apps/web/browser-tests/workspace-content.fixture.tsx`. It checks 320×700,
+  375×812 and 390×844 portrait; 844×390 touch landscape; a 160 CSS px viewport
+  at DPR 2; 1440×1000 desktop; a 520px allocated Workspace container; and
+  resizing open windows through 1024×900. It checks exact selected-code
+  clipboard text, wrapping/original lines, highlights/search marks, local
+  focusable table/chart scrolling and values, and verifies chart marks are visible
+  at the initial scroll position at each phone width. The 520px capture closes the
+  other desktop windows, resets page scroll and checks the README window heading
+  inside the viewport crop. It also
+  checks page overflow, theme changes, foreground switching and close/reopen.
+  Durable captures and the reproduction command are in
+  `docs/ui/screenshots/workspace-content/README.md`. Component
+  suites cover list/detail/timeline/image renderers and sandbox/CSP/bridge
+  contracts; those were not exercised in this browser fixture. DPR 2 is not
+  actual 200% browser zoom, and Chromium emulation is not physical iPhone or
+  iOS Safari acceptance. Dark mode was exercised but not captured. Voice/chat
+  transitions and live services were not tested. Physical iPhone acceptance
+  remains with the owner; keep #1260 open until it.
 
 ## Owner-requested reminders reuse proactive delivery (#1239; 23 October 2026)
 
@@ -122,6 +176,32 @@ content is create-only. Only append and task line operations can rebase once on
 a confirmed conflict. Unknown outcomes instruct a reread rather than a blind
 retry. Synthetic checks cover these boundaries; physical iOS/Obsidian sync and
 live speech acceptance remain separate owner checks.
+
+## Pace live chat acceptance and retry only rate limits (#1232; 25 October 2026)
+
+- **Decision.** Keep capacity at 150. Pace only acceptance hosted calls at eight
+  seconds between starts with at most three active calls, including approval
+  follow-ups and retries. Normal chat and retained Status reads are unchanged.
+- **Recovery.** Retry a check once only for `rate_limit_exceeded`. Wait a full
+  minute after rejection without a hint; use SSE `retry_after` seconds or HTTP
+  `Retry-After` when present, bounded to 30–60 seconds. Retry through the same
+  queue; the second result is final. Other failures never retry.
+- **Evidence.** The 25 October release failed both attempts at capacity 150,
+  with four throttled spans each. Thirteen agent calls started in about 2.6
+  seconds, and retries within the same minute were rejected again despite only
+  about 66K input tokens against a 150K/minute limit. This supersedes the earlier
+  wait-and-watch choice below; it does not authorize another capacity increase.
+- **Reporting and bounds.** Allow `rate_limit_exceeded` in smoke, aggregate
+  canary, log and artifact reasons without retaining provider messages or private
+  values. Eight hosted calls / roughly 15 model calls span at least 56 seconds;
+  expect 60–90 seconds normally. Use a 240-second suite deadline, 25 seconds per
+  active call and a 250-second deploy HTTP timeout within the existing five-minute
+  job. Keep the 60-second result cache.
+- **Verification.** Fake-timer tests cover spacing, concurrency, retry bounds,
+  non-retry failures and named second throttles. Production acceptance remains
+  unverified until two consecutive releases pass on their first attempt with
+  zero `rate_limit_exceeded` spans checked after each deployment. This change
+  does not deploy, merge or close the issue.
 
 ## Chat model rate limit raised for live acceptance (#1232; 23 October 2026)
 

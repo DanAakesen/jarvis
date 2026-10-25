@@ -19,6 +19,7 @@ import type { BackendModule } from '../modules.js';
 import { generatedViewValidationOptions } from './generated-view-validation.js';
 import { defaultSettings, readSettings } from './settings.js';
 import { ToolFailure, ToolRefusal } from './tool-registry.js';
+import { workspaceResultDelivery } from './jobs.js';
 import { runCodexToolResult, type WebResearchClient } from './web-research.js';
 import type { FolioStore } from '../database/folio-store.js';
 
@@ -73,6 +74,7 @@ interface ResearchArtifactStore {
     html: string,
     sources: HtmlArtifactSource[],
     signal: AbortSignal,
+    artifactId?: string,
   ): Promise<HtmlArtifact>;
 }
 
@@ -369,6 +371,7 @@ export function createHtmlResearchModule(
         const topic = safeTopic(input.topic);
         const windowTitle = researchWindowTitle(input.title, topic);
         const ownerId = request.server.ownerObjectId;
+        if (!folio) throw new ToolFailure('Research result storage is unavailable.');
         if (!request.agentPrincipal &&
             request.principal?.objectId.toLowerCase() !== ownerId.toLowerCase()) {
           throw new ToolRefusal('Research requires an authenticated workspace owner.');
@@ -390,32 +393,30 @@ export function createHtmlResearchModule(
         if (activeJobs >= maxConcurrentJobs || jobs.size >= maxJobs) {
           throw new ToolRefusal('Research is busy. Try again when a current report finishes.');
         }
-        const jobId = randomUUID();
-        const viewId = `research-${jobId.replaceAll('-', '')}`;
         const searches: SearchProgress[] = plans[depth].map(([label, suffix]) => ({
           label,
           query: boundedQuery(topic, suffix),
           status: 'pending',
         }));
-        const initialView = createProgressView(windowTitle, searches, [], 'running');
-        const initialCommand = workspaceCommand('create', viewId, initialView);
-        if (!isWorkspaceCommand(initialCommand, generatedViewValidationOptions(request.server))) {
-          throw new ToolFailure('Research progress did not pass workspace validation.');
-        }
         const controller = new AbortController();
         const job: ResearchJob = { controller, promise: Promise.resolve(), done: false };
         const tracker = await request.server.backgroundJobs.start(
           'research', windowTitle, searches.length + 1, () => controller.abort(), 'Starting research',
           { retryInput: { topic, depth }, ...(retryOf ? { retryOf } : {}) },
         );
+        const viewId = `research-${tracker.jobId.replaceAll('-', '')}`;
+        const initialCommand = workspaceCommand('create', viewId, createProgressView(windowTitle, searches, [], 'running'));
         try {
+          if (!isWorkspaceCommand(initialCommand, generatedViewValidationOptions(request.server))) {
+            throw new ToolFailure('Research progress did not pass workspace validation.');
+          }
           await request.server.workspaceCommands.execute(ownerId, initialCommand, signal);
         } catch (error) {
           job.done = true;
           await tracker.fail('Research could not be started. Try again shortly.');
           throw error;
         }
-        jobs.set(jobId, job);
+        jobs.set(tracker.jobId, job);
         job.promise = Promise.resolve().then(async () => {
           const timeoutSignal = AbortSignal.timeout(jobTimeoutMs);
           const jobSignal = AbortSignal.any([controller.signal, timeoutSignal]);
@@ -478,9 +479,9 @@ export function createHtmlResearchModule(
               (value) => parseReport(value, reportSources),
               { reasoningEffort: researchSettings.reasoningEffort },
             );
-            const artifact = await artifacts.create(ownerId, result.title, result.html, sources(), jobSignal);
+            const artifact = await artifacts.create(ownerId, result.title, result.html, sources(), jobSignal, tracker.jobId);
             if (!isHtmlArtifact(artifact)) throw new ToolFailure('The report failed artifact validation.');
-            await folio?.record(ownerId, {
+            const folioItem = await folio.record(ownerId, {
               id: `research:${artifact.id}`,
               kind: 'research',
               sourceId: artifact.id,
@@ -503,15 +504,31 @@ export function createHtmlResearchModule(
             if (!isWorkspaceCommand(command, generatedViewValidationOptions(app))) {
               throw new ToolFailure('The report did not pass workspace validation.');
             }
+            await tracker.done(
+              viewId,
+              partial ? 'Ready with partial findings' : 'Report saved',
+              { resultId: folioItem.id, resultDelivery: 'pending' },
+            );
+            notifyCompletion(announceCompletion, { status: 'complete', summary: result.spokenSummary });
+            let deliveryError: unknown;
             try {
               await app.workspaceCommands.execute(ownerId, command, jobSignal);
             } catch (error) {
-              // No open tab still has the progress window (reloaded or closed): open the report fresh.
-              if (!(error instanceof ToolRefusal)) throw error;
-              await app.workspaceCommands.execute(ownerId, workspaceCommand('create', viewId, view), jobSignal);
+              deliveryError = error;
+              if (error instanceof ToolRefusal && app.workspaceCommands.isConnected(ownerId)) {
+                try {
+                  await app.workspaceCommands.execute(ownerId, workspaceCommand('create', viewId, view), jobSignal);
+                  deliveryError = undefined;
+                } catch (createError) {
+                  deliveryError = createError;
+                }
+              }
             }
-            await tracker.done(viewId, partial ? 'Ready with partial findings' : 'Report ready');
-            notifyCompletion(announceCompletion, { status: 'complete', summary: result.spokenSummary });
+            if (deliveryError === undefined) {
+              await tracker.setResultDelivery('delivered').catch(() => undefined);
+            } else {
+              await tracker.setResultDelivery(workspaceResultDelivery(deliveryError)).catch(() => undefined);
+            }
           } catch (error) {
             if (!controller.signal.aborted) {
               const reason = error instanceof ToolRefusal

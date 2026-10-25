@@ -1,5 +1,6 @@
 # Project plan
 
+<<<<<<< HEAD
 ## P9-124: Natural first reply before tool work in chat and voice (#1258)
 
 Reuses the active model stream to deliver one contextual first-person
@@ -13,6 +14,17 @@ cancellation, stale receipts and silent rounds. The approach adds no model reque
 or artificial delay; live timing and physical audio acceptance remain unmeasured.
 Next: final-head aggregate CI and owner-run live/device acceptance. No merge or
 deployment is authorized.
+=======
+## Research result recovery (#1237; 25 October 2026)
+
+Implemented saved Folio/job references, separate Workspace delivery state and an
+owner-only reopen action using the existing stable report window. Focused backend,
+contract and web tests passed; the delivery-acknowledgement persistence regression
+also passes. Backend/web builds and lint pass. The SQL integration command could
+not start because this environment has no isolated loopback SQL Server
+configuration. Next: scan secrets, run CodeQL and review the final diff.
+Physical phone acceptance remains separate.
+>>>>>>> origin/main
 
 ## Per-finding chat and voice feedback (#1240)
 

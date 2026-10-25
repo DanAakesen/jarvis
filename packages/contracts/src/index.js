@@ -298,6 +298,7 @@ export const htmlArtifactSchema = Object.freeze(object({
 }));
 export const folioKinds = Object.freeze(['research', 'html_app', 'image', 'knowledge_graph']);
 const folioIdPattern = '^(?:research|html_app|image|knowledge_graph):[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$';
+const folioIdRegex = new RegExp(folioIdPattern, 'u');
 export const folioItemSchema = Object.freeze(object({
   id: { type: 'string', pattern: folioIdPattern },
   title: string(200, 1),
@@ -1632,7 +1633,8 @@ function isTimestamp(value) {
 
 export function isBackgroundJob(value) {
   if (!isObject(value)) return false;
-  const allowed = ['jobId', 'kind', 'title', 'status', 'step', 'steps', 'detail', 'viewId', 'startedAt', 'updatedAt'];
+  const allowed = ['jobId', 'kind', 'title', 'status', 'step', 'steps', 'detail', 'viewId',
+    'resultId', 'resultDelivery', 'startedAt', 'updatedAt'];
   if (Object.keys(value).some((key) => !allowed.includes(key))) return false;
   return typeof value.jobId === 'string' && jobIdPattern.test(value.jobId) &&
     backgroundJobKinds.includes(value.kind) && boundedText(value.title, 80) &&
@@ -1641,6 +1643,10 @@ export function isBackgroundJob(value) {
     Number.isSafeInteger(value.step) && value.step >= 0 && value.step <= value.steps &&
     (value.detail === undefined || boundedText(value.detail, 120)) &&
     (value.viewId === undefined || (typeof value.viewId === 'string' && viewIdPattern.test(value.viewId))) &&
+    (value.resultId === undefined && value.resultDelivery === undefined ||
+      value.kind === 'research' && value.status === 'done' &&
+      typeof value.resultId === 'string' && folioIdRegex.test(value.resultId) &&
+      value.resultDelivery !== undefined && ['pending', 'unknown', 'failed', 'delivered'].includes(value.resultDelivery)) &&
     isTimestamp(value.startedAt) && isTimestamp(value.updatedAt);
 }
 

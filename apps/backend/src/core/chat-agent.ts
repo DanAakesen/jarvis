@@ -137,7 +137,7 @@ function parseEvents(buffer: string): { events: { event: string; data: string }[
 }
 
 export class ChatAgentError extends Error {
-  constructor(readonly code: string | undefined) {
+  constructor(readonly code: string | undefined, readonly retryAfterMs?: number) {
     super(code ? `Chat agent failed (${code})` : 'Chat agent failed');
     this.name = 'ChatAgentError';
   }
@@ -191,9 +191,30 @@ function invocationFailure(
   return new ChatAgentInvocationError(message, reason, { cause: error });
 }
 
+<<<<<<< HEAD
 function chunkFromEvent(event: { event: string; data: string }): ConversationAgentChunk | undefined {
   if (event.event === 'error') throw new ChatAgentError(errorCode(event.data));
   if (event.event !== 'delta' && event.event !== 'acknowledgment') return undefined;
+=======
+function deltaFromEvent(event: { event: string; data: string }, headers: Headers): string | undefined {
+  if (event.event === 'error') {
+    let retryAfterMs: number | undefined;
+    const retryAfter = headers.get('retry-after');
+    if (retryAfter !== null) {
+      const seconds = Number(retryAfter);
+      const ms = Number.isFinite(seconds) ? seconds * 1_000 : Date.parse(retryAfter) - Date.now();
+      if (Number.isFinite(ms) && ms >= 0) retryAfterMs = ms;
+    }
+    try {
+      const payload = JSON.parse(event.data) as Record<string, unknown>;
+      if (typeof payload?.retry_after === 'number' && Number.isFinite(payload.retry_after) && payload.retry_after >= 0) {
+        retryAfterMs = payload.retry_after * 1_000;
+      }
+    } catch { /* Invalid error metadata is ignored. */ }
+    throw new ChatAgentError(errorCode(event.data), retryAfterMs);
+  }
+  if (event.event !== 'delta') return undefined;
+>>>>>>> origin/main
   let payload: unknown;
   try {
     payload = JSON.parse(event.data);
@@ -421,8 +442,13 @@ export function createFoundryInvocationConversationAgent(
           for (const event of parsed.events) {
             finish(event);
             if (completed) break;
+<<<<<<< HEAD
             const chunk = chunkFromEvent(event);
             if (chunk !== undefined) {
+=======
+            const delta = deltaFromEvent(event, response.headers);
+            if (delta !== undefined) {
+>>>>>>> origin/main
               firstDeltaMs ??= performance.now() - invocationStarted;
               yield chunk;
             }
@@ -435,8 +461,13 @@ export function createFoundryInvocationConversationAgent(
           for (const event of finalEvents) {
             finish(event);
             if (completed) break;
+<<<<<<< HEAD
             const chunk = chunkFromEvent(event);
             if (chunk !== undefined) {
+=======
+            const delta = deltaFromEvent(event, response.headers);
+            if (delta !== undefined) {
+>>>>>>> origin/main
               firstDeltaMs ??= performance.now() - invocationStarted;
               yield chunk;
             }

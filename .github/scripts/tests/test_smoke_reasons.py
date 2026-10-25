@@ -21,6 +21,17 @@ def backend_reason_set(name: str) -> set[str]:
 
 
 class SmokeReasonsTests(unittest.TestCase):
+    def test_rate_limit_is_named_for_every_chat_check_in_logs_and_artifacts(self):
+        report = {"entries": [
+            {"id": check, "status": "down" if check.startswith("chat_") else "ok",
+             "reason": "rate_limit_exceeded"} for check in sorted(CHECK_IDS)
+        ]}
+        retained = safe_report(report)
+        self.assertFalse(report_ok(retained))
+        self.assertEqual(failure_reasons(retained), [
+            f"smoke_reason {check}: rate_limit_exceeded" for check in sorted(SAFE_REASONS)
+        ])
+
     def test_hosted_origin_allowlist_matches_the_backend_exactly(self):
         self.assertEqual(backend_reason_set("chatAgentFailureReasons"), CHAT_AGENT_FAILURE_REASONS)
 
@@ -41,7 +52,7 @@ class SmokeReasonsTests(unittest.TestCase):
                 self.assertEqual(failure_reasons(retained), [f"smoke_reason chat_capabilities: {code}"])
                 self.assertFalse(report_ok(retained))
                 self.assertNotIn("never-retain", json.dumps(retained))
-                self.assertNotIn(code, SAFE_REASONS["chat_canary"])
+                self.assertEqual(code in SAFE_REASONS["chat_canary"], code == "rate_limit_exceeded")
                 for check in SAFE_REASONS.keys() - {"chat_canary"}:
                     self.assertIn(code, SAFE_REASONS[check])
 

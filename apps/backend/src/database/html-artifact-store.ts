@@ -53,15 +53,16 @@ function artifactFromRow(row: HtmlArtifactRow | undefined): HtmlArtifact | undef
   return artifact;
 }
 
-function validate(ownerObjectId: string, title: string, html: string, sources: HtmlArtifactSource[]): void {
+function validate(ownerObjectId: string, title: string, html: string, sources: HtmlArtifactSource[], artifactId?: string): void {
   if (!uuid.test(ownerObjectId)) throw new TypeError('Invalid HTML artifact owner');
-  if (typeof title !== 'string' || !title.trim() || title.length > 200 ||
+  if (artifactId !== undefined && !uuid.test(artifactId) ||
+      typeof title !== 'string' || !title.trim() || title.length > 200 ||
       !isValidHtmlArtifactHtml(html) || Buffer.byteLength(html, 'utf8') > htmlArtifactByteLimit ||
       !Array.isArray(sources) || sources.length > 50) {
     throw new TypeError('HTML artifact is invalid or exceeds its size limit');
   }
   if (!isHtmlArtifact({
-    id: randomUUID(),
+    id: artifactId ?? randomUUID(),
     kind: 'html',
     title: title.trim(),
     html,
@@ -95,9 +96,10 @@ export class HtmlArtifactStore {
     html: string,
     sources: HtmlArtifactSource[],
     signal: AbortSignal,
+    artifactId?: string,
   ): Promise<HtmlArtifact> {
-    validate(ownerObjectId, title, html, sources);
-    const id = randomUUID();
+    validate(ownerObjectId, title, html, sources, artifactId);
+    const id = artifactId ?? randomUUID();
     const request = this.pool.request()
       .input('id', sql.UniqueIdentifier, id)
       .input('owner', sql.UniqueIdentifier, ownerObjectId.toLowerCase())

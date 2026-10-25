@@ -109,7 +109,7 @@ function createHtmlViewTool(
 ): BackendModule['tools'][number] {
   return {
     name: 'create_html_view',
-    description: 'Create a self-contained HTML/JavaScript app in the active workspace sandbox for richer visuals. When Dan refers to an existing report or app, read it with read_html_view and edit it with update_html_view instead of creating another. Keep it within 512 KB and include up to 50 HTTPS sources used. The sandbox allows inline scripts and styles, img-src data: https:, and connect-src \'none\'; do not use external libraries, scripts, stylesheets or fetches. Draw charts or timelines with hand-written inline SVG or canvas.',
+    description: 'Create a self-contained HTML/JavaScript app in the active workspace sandbox for richer visuals. Keep its content readable at the available window width: wrap long text and make wide tables or charts scroll within a labelled, keyboard-focusable region. Fit images to their container without changing aspect ratio. When Dan refers to an existing report or app, read it with read_html_view and edit it with update_html_view instead of creating another. Keep it within 512 KB and include up to 50 HTTPS sources used. The sandbox allows inline scripts and styles, img-src data: https:, and connect-src \'none\'; do not use external libraries, scripts, stylesheets or fetches. Draw charts or timelines with hand-written inline SVG or canvas.',
     inputSchema: createHtmlViewSchema,
     bodyLimit: maxToolBodyBytes,
     sensitive: true,

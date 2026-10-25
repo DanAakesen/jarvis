@@ -670,14 +670,19 @@ export function ConversationHistory({
 
   function failedTurnFeedback(turn: FailedTurn) {
     return (
+<<<<<<< HEAD
       <div key={turn.id}>
         {turn.acknowledgment && <p className="streaming-acknowledgment">{turn.acknowledgment}</p>}
+=======
+      <li className="conversation-message" data-speaker="jarvis" key={turn.id} tabIndex={0}>
+        <strong className="message-author visually-hidden">Jarvis</strong>
+>>>>>>> origin/main
         {turn.partialReply && <div className="interrupted-reply">
           <p>Partial reply, interrupted:</p>
           <MarkdownContent source={turn.partialReply} gfm />
         </div>}
         <p className="chat-error" role="alert">{turn.error}</p>
-      </div>
+      </li>
     );
   }
 
@@ -860,8 +865,8 @@ export function ConversationHistory({
                       {voiceUsageText && <span className="visually-hidden">{`Voice${voiceUsageText}`}</span>}
                     </div>
                     {message.role === 'jarvis' && keptToolCalls(toolPlacement.reply.get(message.id)).length > 0 && renderToolCalls(toolPlacement.reply.get(message.id)!)}
-                    {failedTurns.filter((turn) => turn.messageId === message.id).map(failedTurnFeedback)}
                   </li>
+                  {failedTurns.filter((turn) => turn.messageId === message.id).map(failedTurnFeedback)}
                   {keptToolCalls(toolPlacement.unanswered.get(message.id)).length > 0 && (
                     <li className="conversation-message conversation-tools-only" data-speaker="jarvis">
                       <strong className="message-author visually-hidden">Jarvis</strong>
@@ -876,11 +881,13 @@ export function ConversationHistory({
         )}
 
         {failedTurns.filter((turn) => !turn.messageId).map((turn) => (
-          <div className="conversation-message" data-speaker="dan" key={turn.id}>
-            <strong className="message-author visually-hidden">Dan</strong>
-            <p>{turn.text}</p>
+          <ol className="conversation-messages" key={turn.id}>
+            <li className="conversation-message" data-speaker="dan" tabIndex={0}>
+              <strong className="message-author visually-hidden">Dan</strong>
+              <p>{turn.text}</p>
+            </li>
             {failedTurnFeedback(turn)}
-          </div>
+          </ol>
         ))}
         {activeMessage && <div className="conversation-message" data-speaker="dan">
           <strong className="message-author visually-hidden">Dan</strong>
@@ -924,7 +931,8 @@ export function ConversationHistory({
           </div>
         )}
         {turnError && (
-          <div>
+          <div className="conversation-message" data-speaker="jarvis" tabIndex={0}>
+            <strong className="message-author visually-hidden">Jarvis</strong>
             <p className="chat-error" role="alert">{turnError}</p>
           </div>
         )}

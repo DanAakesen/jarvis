@@ -88,7 +88,7 @@ export function JobsChip({ backendUrl, getAccessToken, onResult, accountId = nul
   attention?: FeedAttention | null;
   proactiveEnabled?: boolean;
 }) {
-  const { jobs, error, refresh, cancel, dismiss, dismissMany, dismissing, syncingDismissals, headerHiddenJobIds } = useJobs(backendUrl, getAccessToken, accountId);
+  const { jobs, error, refresh, cancel, openResult: openSavedResult, dismiss, dismissMany, dismissing, syncingDismissals, headerHiddenJobIds } = useJobs(backendUrl, getAccessToken, accountId);
   const { presence } = usePresence(backendUrl, getAccessToken);
   const [openId, setOpenId] = useState<string | null>(null);
   const [showHistory, setShowHistory] = useState(false);
@@ -99,6 +99,7 @@ export function JobsChip({ backendUrl, getAccessToken, onResult, accountId = nul
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [waiting, setWaiting] = useState<ReadonlySet<string>>(new Set());
   const [cancelling, setCancelling] = useState<ReadonlySet<string>>(new Set());
+  const [opening, setOpening] = useState<ReadonlySet<string>>(new Set());
   const [refreshing, setRefreshing] = useState(false);
   const headerScope = JSON.stringify([backendUrl, accountId]);
   const [hiddenRunning, setHiddenRunning] = useState<{ scope: string; ids: ReadonlySet<string> }>({ scope: headerScope, ids: new Set() });
@@ -116,7 +117,8 @@ export function JobsChip({ backendUrl, getAccessToken, onResult, accountId = nul
   useEffect(() => {
     for (const job of jobs) {
       if (handled.current.has(job.jobId) || deliveries.current.has(job.jobId) ||
-          job.restored || job.status !== 'done' || job.kind === 'embedding') continue;
+          job.restored || job.status !== 'done' || job.kind === 'embedding' ||
+          job.resultId && job.resultDelivery !== 'delivered') continue;
       if (job.viewId) {
         const viewId = job.viewId;
         const mode = away ? 'park' : 'open';
@@ -218,6 +220,22 @@ export function JobsChip({ backendUrl, getAccessToken, onResult, accountId = nul
   };
 
   const openResult = (job: JobEntry) => {
+    if (job.resultId) {
+      const id = job.jobId;
+      setOpening((current) => new Set(current).add(id));
+      void openSavedResult(id).then((message) => {
+        if (message) {
+          setErrors((current) => ({ ...current, [id]: message }));
+          return;
+        }
+        setErrors((current) => ({ ...current, [id]: '' }));
+        void dismiss(id);
+        closePopover();
+      }).finally(() => {
+        setOpening((current) => { const next = new Set(current); next.delete(id); return next; });
+      });
+      return;
+    }
     if (job.viewId && onResult(job.viewId, 'open')) {
       setErrors((current) => ({ ...current, [job.jobId]: '' }));
       const tab = root.current?.querySelector<HTMLElement>(`[data-job-id="${job.jobId}"]`) ?? null;
@@ -338,6 +356,11 @@ export function JobsChip({ backendUrl, getAccessToken, onResult, accountId = nul
                 {` · ${elapsed(peek.startedAt, peek.status === 'running' ? now : Date.parse(peek.updatedAt))}`}
               </span>
               {reason(peek) && <span className="jobs-item-detail">{reason(peek)}</span>}
+              {peek.resultId && peek.resultDelivery !== 'delivered' && <span className="jobs-item-detail">
+                {peek.resultDelivery === 'pending' ? 'Report saved. Workspace delivery is pending.'
+                  : peek.resultDelivery === 'unknown' ? 'Report saved. Workspace delivery is unconfirmed.'
+                    : 'Report saved. Workspace delivery failed.'}
+              </span>}
               {peek.status === 'failed' && <span className="jobs-item-meta">This is a previous run, not a check of current indexing or service health.</span>}
               {peek.status === 'done' && waiting.has(peek.jobId) && <span className="jobs-item-detail">Waiting here while you are away.</span>}
               {errors[peek.jobId] && <span className="jobs-item-error" role="alert">{errors[peek.jobId]}</span>}
@@ -352,7 +375,11 @@ export function JobsChip({ backendUrl, getAccessToken, onResult, accountId = nul
                   });
                 }}>{cancelling.has(peek.jobId) ? 'Cancelling…' : 'Cancel'}</button>
               )}
-              {peek.status === 'done' && peek.viewId && peek.kind !== 'embedding' && <button type="button" className="jobs-action jobs-action-primary" onClick={() => openResult(peek)}>Open</button>}
+              {peek.status === 'done' && peek.resultId && <button type="button" className="jobs-action jobs-action-primary"
+                disabled={opening.has(peek.jobId)} aria-busy={opening.has(peek.jobId)}
+                onClick={() => openResult(peek)}>{opening.has(peek.jobId) ? 'Opening…' : 'Open report'}</button>}
+              {peek.status === 'done' && !peek.resultId && peek.viewId && peek.kind !== 'embedding' &&
+                <button type="button" className="jobs-action jobs-action-primary" onClick={() => openResult(peek)}>Open</button>}
               {proactiveEnabled && peek.kind === 'proactive' &&
                 (peek.status === 'done' || peek.status === 'failed' || peek.status === 'cancelled') &&
                 <Link className="jobs-action jobs-action-primary" to="/proactive" onClick={closePopover}>Open</Link>}

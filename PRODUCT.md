@@ -102,6 +102,14 @@ not be presented as a successfully empty list.
   the existing history retention for Status, Usage and audit.
 - Existing browser dismissals are sent to the server once. A failed transfer
   remains visible as an error, with those entries hidden locally until confirmed.
+- Research generation completes when the validated artifact and owner-scoped
+  Folio entry are saved. Workspace delivery is separate: pending, unknown or
+  failed delivery does not turn a saved result into a failed research job.
+  Background work keeps an **Open report** action for the saved result; opening
+  it after reconnect or reload reuses the same report and never reruns research.
+  `Delivered` requires a Workspace acknowledgement and does not claim that a
+  person has seen the report. Artifact or Folio persistence failures remain
+  research failures, and partial findings remain identified as partial.
 
 ## Readable chat and attached phone typing (16 October 2026; local candidate)
 
@@ -1160,7 +1168,7 @@ Dan approved these after a gap audit. They are planned, not built.
   Selecting another page closes the pane rather than leaving Folio selected, including selecting the current page again. This applies to desktop links, the phone menu and Jarvis navigation; an area with multiple pages can open its own navigation instead.
 - **Routines.** Task recipes (saved PC/browser action sequences Jarvis can replay) are renamed Routines and can be edited and renamed. ([#529](https://github.com/DanAakesen/jarvis/issues/529))
 - **Connected features.** Persisted background jobs, the jobs chip, the knowledge graph page, wake-word events, renew-credential, a system status page including the PC bridge, watch mode for screen and camera sharing, phone-call status, complete cost coverage, and conversation search.
-- **Show work (P9-41).** In voice, selected tools publish a short, safe activity description and open their own window; typed chat opens nothing on its own (the chat answer carries the data, and Dan asks for a window with "show me", "open" or "put it on screen"). Successful vault reads/searches update one knowledge graph, repository tools update one bounded, redacted Code view per turn, task creation/steering/retry focus the Factory card, and calendar/mail tools show a readable agenda or their staged preview without bypassing confirmation. `presentation.showWork` defaults on and is suppressed in `on_the_move`; presentation is best effort and never blocks or fails a tool. The backend contract is implemented; status-line rendering, Code rendering, graph highlighting, and focus animation belong to the UI session.
+- **Show work (P9-41).** In voice, selected tools publish a short, safe activity description and open their own window; typed chat opens nothing on its own (the chat answer carries the data, and Dan asks for a window with "show me", "open" or "put it on screen"). Successful vault reads/searches update one knowledge graph, repository tools update one bounded, redacted Code view per turn, task creation/steering/retry focus the Factory card, and calendar/mail tools show a readable agenda or their staged preview without bypassing confirmation. Code wraps at its allocated window width by default; an accessible “Wrap lines” choice restores original horizontal code layout without changing the source text, line numbers, highlights or search marks. `presentation.showWork` defaults on and is suppressed in `on_the_move`; presentation is best effort and never blocks or fails a tool. The backend contract is implemented; status-line rendering, Code rendering, graph highlighting, and focus animation belong to the UI session.
 - **New abilities.** Calendar update and delete; mail drafts, archive and labels; project update and archive; Factory retry and release/deploy status; job detail and retry; a usage tool; clipboard read and write; vault note deletion; weather by home or named location.
 - **Declined:** verbosity and max-token settings, notification preferences, an effective-config view, settings history, access to arbitrary local folders or browser history, and outbound phone or desktop notifications.
 
